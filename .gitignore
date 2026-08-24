@@ -1,0 +1,14 @@
+# Build output
+bin/
+obj/
+*.user
+artifacts/
+
+# Local test data captured from the reference server
+traces/
+*.trace
+*.gg2trace
+
+# Session handoffs are disposable messages to the next session, not documentation.
+# See CLAUDE.md, "Where documentation goes".
+.claude/notes/
