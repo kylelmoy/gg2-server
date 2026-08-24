@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The parity harness: a passive recorder now, a trace replayer and drift
+       report next. Has I/O, so it is not Gg2.Simulation's problem.
+       docs/PARITY.md. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Gg2.Parity</RootNamespace>
+    <AssemblyName>gg2-parity</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Gg2.Protocol\Gg2.Protocol.csproj" />
+  </ItemGroup>
+
+</Project>

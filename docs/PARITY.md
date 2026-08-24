@@ -28,10 +28,50 @@ whole specification, and it is checkable in CI.
 
 ## Tier 0 — the recorder
 
+**Built** — `Gg2.Parity`, the `gg2-parity` console app. `record` joins a server
+as a passive spectator and writes its broadcast stream to a file; `diff`
+compares two recordings and reports the first differing byte with a window
+either side.
+
+It earned its place before the physics did. Pointed at the reference GM8 server
+and at this port in turn, on `ctf_truefort` with one spectator, the two
+recordings came back **569 bytes each and byte-identical except the CTFHUD round
+timer** — which turned "the client does not like my stream" from a guess into a
+four-byte value difference in about ten minutes. That comparison is worth
+re-running whenever the serialisation changes; it is much cheaper than a client.
+
 A ~200-line console app. Speak the handshake from `PROTOCOL.md`, `RESERVE_SLOT`,
 `PLAYER_JOIN`, then never send an `INPUTSTATE` of your own; just parse the
 inbound stream into a list of framed messages and write it to disk with a tick
 index.
+
+**Still to do:** framing. The recorder currently keeps raw bytes with arrival
+times, which is enough to diff two servers but not to replay a trace. Framing
+the server-to-client stream needs the roster size and the gamemode, because both
+change the width of a state update — that is the next piece, and it is what
+turns a recording into a fixture.
+
+### What a wedged client looks like
+
+Worth knowing before debugging one. `receiveCompleteMessage` is a **blocking
+spin**:
+
+```gml
+do {
+    if(socket_has_error(argument0)) return 2;
+} until(tcp_receive(argument0, argument1));
+```
+
+There is no `io_handle()` in it. A client waiting for bytes that will not come
+therefore pegs one core, stops running Draw events — so the window goes black,
+not frozen-looking — and stops servicing the agent bridge, so `gg2_evalx` hangs
+with no error. All three symptoms have the same cause, and none of them says
+*where* the stream went wrong. That is what the recorder is for.
+
+Note also that an unknown message byte does **not** wedge the client: it hits
+`default: promptRestartOrQuit("The Server sent unexpected data.")` at the bottom
+of `ClientBeginStep.gml` and puts up a dialog. A silent black screen means a
+*short* message, not an unrecognised one.
 
 Two things to get right:
 

@@ -83,6 +83,10 @@ internal static class Program
                     options.ServerName = Require(name, value);
                     i++;
                     break;
+                case "--server-player":
+                    options.ServerPlayerName = Require(name, value);
+                    i++;
+                    break;
                 case "--map":
                     options.Map = Require(name, value);
                     i++;
@@ -125,6 +129,8 @@ internal static class Program
 
           --port <n>        listen port (default 8190)
           --name <text>     server name shown to clients
+          --server-player <text>
+                            name of the reserved roster slot 0 (default Server)
           --map <name>      built-in map to serve (default ctf_truefort)
           --password <text> require a password
           --players <n>     seats for clients, 1..48 (default 10)
