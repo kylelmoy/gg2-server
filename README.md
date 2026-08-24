@@ -3,27 +3,28 @@
 A headless Gang Garrison 2 server in C#, wire-compatible with the stock Game
 Maker 8 client.
 
-**Status: phase 0 of [`docs/PLAN.md`](docs/PLAN.md) is done; phase 1 runs.**
+**Status: phases 0 and 1 of [`docs/PLAN.md`](docs/PLAN.md) are done.**
 
 | Project | What |
 |---|---|
-| `Gg2.Protocol` | The constant table, the wire types, the little-endian buffer reader/writer, command framing, `PlayerInput`. |
+| `Gg2.Protocol` | The constant table, the wire types, the little-endian buffer reader/writer, wire quantisation, command framing, `PlayerInput`. |
 | `Gg2.Maps` | Map PNG level-data extraction, the walkmask decoder, GGON, the entity list. |
 | `Gg2.Server` | Sockets, the join handshake, the roster, the 30 Hz broadcast. The only I/O. |
 | `Gg2.Host` | `gg2-server`, the console entry point. |
+| `Gg2.Parity` | `gg2-parity`: a passive stream recorder and a byte diff. |
 
-Phase 0's exit criterion is met: all 22 built-in maps decode **cell-for-cell**
-against `gg2-agent/tools/walkmask.js`, which is the decoder that has itself been
-checked against the running game.
+**Phase 0** — all 22 built-in maps decode **cell-for-cell** against
+`gg2-agent/tools/walkmask.js`, the decoder that has itself been checked against
+the running game.
 
-Phase 1 is built and tested against a real socket client on every shipped map —
-handshake, join burst, roster compaction, command framing and the
-`INPUTSTATE`/`QUICK_UPDATE` cadence over an empty world. Its exit criterion
-names the **stock GM8 client**, and that has not been run yet; until it has,
-phase 1 is not signed off.
+**Phase 1** — a stock GM8 client joins this server and reaches the team-select
+screen, indistinguishably from one joining the reference. Recording both
+servers' broadcast streams with `gg2-parity` and diffing them gives 569 bytes
+each, **byte-identical apart from four bytes of CTF round timer** — a value this
+port has no simulation to produce, not a layout difference.
 
 Nothing simulates anything. Phase 2, the parity harness, comes before any
-physics.
+physics; its recorder exists and its framer does not.
 
 ```powershell
 $env:PATH = "$env:LOCALAPPDATA\Microsoft\dotnet;$env:PATH"   # .NET 9, user-local

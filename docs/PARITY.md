@@ -73,6 +73,13 @@ Note also that an unknown message byte does **not** wedge the client: it hits
 of `ClientBeginStep.gml` and puts up a dialog. A silent black screen means a
 *short* message, not an unrecognised one.
 
+A wedge is also what a client looks like **after** it has disconnected itself and
+had its modal force-closed — which is what a spectator does at exactly five
+minutes, of its own accord (`docs/PLAN.md`, phase 1). Check the launcher log for
+a dismissed dialog before concluding the stream is at fault; `gg2-agent`'s
+launcher saves a screenshot of every dialog it clicks, and that picture is
+usually the whole answer.
+
 Two things to get right:
 
 - **Start the trace at a `FULL_UPDATE`.** It is the only message that carries
