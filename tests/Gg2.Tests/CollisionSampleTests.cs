@@ -62,6 +62,32 @@ public sealed class CollisionSampleTests
         [JsonPropertyName("free")] public required string Free { get; init; }
     }
 
+    /// <summary>
+    /// One solid rectangle instance, with the bounding box the game gave it.
+    /// </summary>
+    private sealed record SampleRect
+    {
+        [JsonPropertyName("object")] public required string Object { get; init; }
+
+        [JsonPropertyName("x")] public required double X { get; init; }
+
+        [JsonPropertyName("y")] public required double Y { get; init; }
+
+        [JsonPropertyName("xscale")] public required double XScale { get; init; }
+
+        [JsonPropertyName("yscale")] public required double YScale { get; init; }
+
+        [JsonPropertyName("left")] public required int Left { get; init; }
+
+        [JsonPropertyName("right")] public required int Right { get; init; }
+
+        [JsonPropertyName("top")] public required int Top { get; init; }
+
+        [JsonPropertyName("bottom")] public required int Bottom { get; init; }
+
+        public override string ToString() => $"{Object} at ({X}, {Y})";
+    }
+
     private sealed record SampleMap
     {
         [JsonPropertyName("name")] public required string Name { get; init; }
@@ -77,6 +103,8 @@ public sealed class CollisionSampleTests
         [JsonPropertyName("windows")] public required SampleWindow[] Windows { get; init; }
 
         [JsonPropertyName("sweeps")] public SampleSweep[] Sweeps { get; init; } = [];
+
+        [JsonPropertyName("rects")] public SampleRect[] Rects { get; init; } = [];
 
         public override string ToString() => Name;
     }
@@ -218,6 +246,126 @@ public sealed class CollisionSampleTests
         Assert.Equal(sample.MaskHeight, world.MaskHeight);
     }
 
+    /// <summary>
+    /// The map's gates and player walls land exactly where the game puts them.
+    /// </summary>
+    /// <remarks>
+    /// The fixture carries each instance's live <c>bbox_*</c>, so this checks
+    /// the whole chain: the entity's position and scale out of the map PNG, the
+    /// collider sprite's size, and the half-to-even rounding of a scaled extent.
+    /// Scales in the shipped maps include 0.3, 0.8, 1.7, 2, 3, 7.3 and 13, so
+    /// the rounding is genuinely exercised.
+    /// </remarks>
+    [Theory]
+    [MemberData(nameof(MapNames))]
+    public void SolidRectanglesMatchTheGamesBoundingBoxes(string name)
+    {
+        var sample = SampleFor(name);
+        var world = new CollisionWorld(LevelMap.FromPng(name, ReferenceTree.ReadMap(name)));
+
+        Assert.NotEmpty(sample.Rects);
+        Assert.Equal(sample.Rects.Length, world.Rects.Count);
+
+        // Both sides are in level-data / instance-creation order, so they pair
+        // up positionally — but match on position anyway, so a reordering shows
+        // up as a missing rectangle rather than a silent mismatch.
+        foreach (var expected in sample.Rects)
+        {
+            var matches = world.Rects
+                .Where(r => r.Left == expected.Left && r.Top == expected.Top)
+                .ToArray();
+
+            Assert.True(matches.Length > 0,
+                $"{name}: no rectangle at ({expected.Left}, {expected.Top}) for {expected}");
+
+            Assert.Contains(matches, r => r.Right == expected.Right && r.Bottom == expected.Bottom);
+        }
+    }
+
+    /// <summary>
+    /// A team gate blocks the other team, and blocks its own team when they are
+    /// carrying intel — which is what stops a team walking its own flag out
+    /// through its own gate.
+    /// </summary>
+    [Fact]
+    public void TeamGateSolidityFollowsTheAskingCharacter()
+    {
+        var gate = new SolidRect
+        {
+            Left = 0, Right = 5, Top = 0, Bottom = 59,
+            Kind = SolidKind.TeamGate,
+            Team = Gg2.Protocol.Team.Red,
+        };
+
+        // solid = (team != other.team or other.intel)
+        Assert.False(gate.IsSolidTo(Filter(Gg2.Protocol.Team.Red, intel: false)));
+        Assert.True(gate.IsSolidTo(Filter(Gg2.Protocol.Team.Red, intel: true)));
+        Assert.True(gate.IsSolidTo(Filter(Gg2.Protocol.Team.Blue, intel: false)));
+        Assert.True(gate.IsSolidTo(Filter(Gg2.Protocol.Team.Blue, intel: true)));
+    }
+
+    /// <summary>
+    /// An intel gate blocks only an enemy carrying intel. The un-teamed variants
+    /// carry <c>TEAM_ANY</c>, which never equals a character's team, so they
+    /// block every carrier.
+    /// </summary>
+    [Fact]
+    public void IntelGateSolidityFollowsTheAskingCharacter()
+    {
+        var red = new SolidRect
+        {
+            Left = 0, Right = 5, Top = 0, Bottom = 59,
+            Kind = SolidKind.IntelGate,
+            Team = Gg2.Protocol.Team.Red,
+        };
+
+        // solid = (team != other.team and other.intel)
+        Assert.False(red.IsSolidTo(Filter(Gg2.Protocol.Team.Red, intel: false)));
+        Assert.False(red.IsSolidTo(Filter(Gg2.Protocol.Team.Red, intel: true)));
+        Assert.False(red.IsSolidTo(Filter(Gg2.Protocol.Team.Blue, intel: false)));
+        Assert.True(red.IsSolidTo(Filter(Gg2.Protocol.Team.Blue, intel: true)));
+
+        var any = red with { Team = Gg2.Protocol.Team.Any };
+        Assert.True(any.IsSolidTo(Filter(Gg2.Protocol.Team.Red, intel: true)));
+        Assert.True(any.IsSolidTo(Filter(Gg2.Protocol.Team.Blue, intel: true)));
+        Assert.False(any.IsSolidTo(Filter(Gg2.Protocol.Team.Red, intel: false)));
+    }
+
+    private static CollisionFilter Filter(Gg2.Protocol.Team team, bool intel) =>
+        new() { Team = team, CarryingIntel = intel };
+
+    /// <summary>
+    /// A gate really does block a character standing in it, and really does not
+    /// block its own team — checked against map geometry rather than in the
+    /// abstract.
+    /// </summary>
+    [Fact]
+    public void GatesBlockThroughPlaceFree()
+    {
+        var world = new CollisionWorld(
+            LevelMap.FromPng("ctf_truefort", ReferenceTree.ReadMap("ctf_truefort")));
+
+        var gate = world.Rects.First(r => r.Kind == SolidKind.TeamGate);
+        var box = CharacterBox.For(Gg2.Protocol.PlayerClass.Scout);
+
+        // Stand in the middle of the gate.
+        double x = (gate.Left + gate.Right) / 2.0;
+        double y = (gate.Top + gate.Bottom) / 2.0;
+
+        var owner = Filter(gate.Team, intel: false);
+        var enemy = Filter(gate.Team == Gg2.Protocol.Team.Red ? Gg2.Protocol.Team.Blue : Gg2.Protocol.Team.Red, intel: false);
+
+        Assert.False(world.PlaceFree(box, x, y, enemy));
+
+        // The owning team passes — unless the walkmask itself is solid there,
+        // which would make this assertion meaningless.
+        if (world.PlaceFreeInMask(box, x, y))
+            Assert.True(world.PlaceFree(box, x, y, owner));
+
+        // And carrying its own flag, the owner is blocked too.
+        Assert.False(world.PlaceFree(box, x, y, owner with { CarryingIntel = true }));
+    }
+
     [Fact]
     public void GgDebugIsTheMapWhereArtAndMaskDisagree()
     {
@@ -269,7 +417,7 @@ public sealed class CollisionSampleTests
                 var y = sweep.Axis == "x" ? sweep.Y : sweep.Y + offset;
 
                 var expected = sweep.Free[step] == '1';
-                var actual = world.PlaceFree(box, x, y);
+                var actual = world.PlaceFreeInMask(box, x, y);
 
                 if (expected != actual)
                 {
@@ -327,10 +475,10 @@ public sealed class CollisionSampleTests
                     continue; // the two rules agree here
 
                 var underHalfUp = sweep.Axis == "x"
-                    ? world.PlaceFree(box, halfUp, y)
-                    : world.PlaceFree(box, x, halfUp);
+                    ? world.PlaceFreeInMask(box, halfUp, y)
+                    : world.PlaceFreeInMask(box, x, halfUp);
 
-                var actual = world.PlaceFree(box, x, y);
+                var actual = world.PlaceFreeInMask(box, x, y);
                 var expected = sweep.Free[step] == '1';
 
                 Assert.Equal(expected, actual);

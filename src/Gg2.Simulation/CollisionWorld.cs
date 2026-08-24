@@ -23,15 +23,27 @@ public sealed class CollisionWorld
 {
     private readonly Walkmask _mask;
 
+    private readonly SolidRect[] _rects;
+
     public CollisionWorld(LevelMap map)
     {
         ArgumentNullException.ThrowIfNull(map);
 
         Map = map;
         _mask = map.Walkmask;
+        _rects = [.. ColliderSprites.Build(map)];
     }
 
     public LevelMap Map { get; }
+
+    /// <summary>
+    /// The map's solid rectangles — gates, player walls — in level-data order.
+    /// </summary>
+    /// <remarks>
+    /// Whether any given one is solid depends on who is asking; see
+    /// <see cref="SolidRect.IsSolidTo"/>.
+    /// </remarks>
+    public IReadOnlyList<SolidRect> Rects => _rects;
 
     /// <summary>
     /// <c>map_width()</c> — the art's width, which is what the physics clamps
@@ -101,20 +113,29 @@ public sealed class CollisionWorld
     /// blocked.
     /// </para>
     /// <para>
-    /// <b>Walkmask only so far.</b> Gates, player walls and dropdown platforms
-    /// are separate solid rectangles whose solidity depends on the asking
-    /// character — see docs/ARCHITECTURE.md's <c>CollisionFilter</c>. They are
-    /// not implemented yet, so this answers the map-geometry half of
-    /// <c>place_free</c> and nothing else.
+    /// <b>Facing does not matter.</b> A character flips <c>image_xscale</c> to
+    /// -1 when facing left (<c>Character.events/End Step.xml:55-60</c>), and
+    /// GM8 then reports a <em>wider</em> <c>bbox_left</c> for it — a scout reads
+    /// -8 instead of -6. That inflated box is a broad-phase bound and
+    /// <c>place_free</c> does not use it: every class's mask rectangle is
+    /// symmetric about its origin, so mirroring it changes nothing. Measured
+    /// both ways against the same wall; the answers are identical. Do not
+    /// "fix" this by reading <c>bbox_left</c>.
     /// </para>
     /// </remarks>
-    public bool PlaceFree(in CharacterBox box, double x, double y)
+    /// <remarks>
+    /// <b>Map geometry only</b> — the walkmask, ignoring gates and player
+    /// walls. Separate from <see cref="PlaceFree(in CharacterBox, double, double, in CollisionFilter)"/>
+    /// rather than a default filter, because "which solids were enabled" is
+    /// exactly the question a caller must not answer by accident: the reference
+    /// brackets every check with <c>charSetSolids</c>/<c>charUnsetSolids</c>,
+    /// and outside that bracket even the map is not solid.
+    /// </remarks>
+    public bool PlaceFreeInMask(in CharacterBox box, double x, double y)
     {
         var originX = RoundPosition(x);
         var originY = RoundPosition(y);
 
-        // Inclusive on both ends, so the last cell is CellOf(right), not
-        // CellOf(right) - 1.
         var firstColumn = CellOf(originX + box.Left);
         var lastColumn = CellOf(originX + box.Right);
         var firstRow = CellOf(originY + box.Top);
@@ -123,6 +144,42 @@ public sealed class CollisionWorld
         for (var row = firstRow; row <= lastRow; row++)
         for (var column = firstColumn; column <= lastColumn; column++)
             if (_mask.IsSolid(column, row))
+                return false;
+
+        return true;
+    }
+
+    /// <summary>
+    /// <c>place_free</c> for a character described by
+    /// <paramref name="filter"/> — the walkmask plus whichever solid rectangles
+    /// are solid to it.
+    /// </summary>
+    public bool PlaceFree(in CharacterBox box, double x, double y, in CollisionFilter filter)
+    {
+        var originX = RoundPosition(x);
+        var originY = RoundPosition(y);
+
+        var left = originX + box.Left;
+        var right = originX + box.Right;
+        var top = originY + box.Top;
+        var bottom = originY + box.Bottom;
+
+        // Inclusive on both ends, so the last cell is CellOf(right), not
+        // CellOf(right) - 1.
+        var firstColumn = CellOf(left);
+        var lastColumn = CellOf(right);
+        var firstRow = CellOf(top);
+        var lastRow = CellOf(bottom);
+
+        for (var row = firstRow; row <= lastRow; row++)
+        for (var column = firstColumn; column <= lastColumn; column++)
+            if (_mask.IsSolid(column, row))
+                return false;
+
+        // Small and rarely more than a dozen, so a linear scan beats any index
+        // that would have to be rebuilt when a gate opens.
+        foreach (var rect in _rects)
+            if (rect.Overlaps(left, right, top, bottom) && rect.IsSolidTo(filter))
                 return false;
 
         return true;

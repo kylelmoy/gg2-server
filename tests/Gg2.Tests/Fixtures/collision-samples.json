@@ -269,6 +269,152 @@
           "steps": 64,
           "free": "1111111111111111111111111111100000000000000000000000000000000000"
         }
+      ],
+      "rects": [
+        {
+          "id": 100271,
+          "object": "RedTeamGate",
+          "x": 234,
+          "y": 498,
+          "xscale": 3,
+          "yscale": 0.8,
+          "left": 234,
+          "right": 251,
+          "top": 498,
+          "bottom": 545
+        },
+        {
+          "id": 100272,
+          "object": "RedTeamGate",
+          "x": 480,
+          "y": 486,
+          "xscale": 3,
+          "yscale": 1,
+          "left": 480,
+          "right": 497,
+          "top": 486,
+          "bottom": 545
+        },
+        {
+          "id": 100273,
+          "object": "RedTeamGate",
+          "x": 618,
+          "y": 348,
+          "xscale": 13,
+          "yscale": 0.3,
+          "left": 618,
+          "right": 695,
+          "top": 348,
+          "bottom": 365
+        },
+        {
+          "id": 100274,
+          "object": "RedTeamGate",
+          "x": 1578,
+          "y": 444,
+          "xscale": 3,
+          "yscale": 0.9,
+          "left": 1578,
+          "right": 1595,
+          "top": 444,
+          "bottom": 497
+        },
+        {
+          "id": 100275,
+          "object": "RedTeamGate",
+          "x": 1890,
+          "y": 444,
+          "xscale": 3,
+          "yscale": 0.9,
+          "left": 1890,
+          "right": 1907,
+          "top": 444,
+          "bottom": 497
+        },
+        {
+          "id": 100276,
+          "object": "RedTeamGate",
+          "x": 1770,
+          "y": 546,
+          "xscale": 3,
+          "yscale": 0.8,
+          "left": 1770,
+          "right": 1787,
+          "top": 546,
+          "bottom": 593
+        },
+        {
+          "id": 100279,
+          "object": "BlueTeamGate",
+          "x": 3438,
+          "y": 444,
+          "xscale": 3,
+          "yscale": 0.9,
+          "left": 3438,
+          "right": 3455,
+          "top": 444,
+          "bottom": 497
+        },
+        {
+          "id": 100280,
+          "object": "BlueTeamGate",
+          "x": 3750,
+          "y": 444,
+          "xscale": 3,
+          "yscale": 0.9,
+          "left": 3750,
+          "right": 3767,
+          "top": 444,
+          "bottom": 497
+        },
+        {
+          "id": 100283,
+          "object": "BlueTeamGate",
+          "x": 5094,
+          "y": 498,
+          "xscale": 3,
+          "yscale": 0.8,
+          "left": 5094,
+          "right": 5111,
+          "top": 498,
+          "bottom": 545
+        },
+        {
+          "id": 100284,
+          "object": "BlueTeamGate",
+          "x": 4848,
+          "y": 486,
+          "xscale": 3,
+          "yscale": 1,
+          "left": 4848,
+          "right": 4865,
+          "top": 486,
+          "bottom": 545
+        },
+        {
+          "id": 100285,
+          "object": "BlueTeamGate",
+          "x": 4650,
+          "y": 348,
+          "xscale": 13,
+          "yscale": 0.3,
+          "left": 4650,
+          "right": 4727,
+          "top": 348,
+          "bottom": 365
+        },
+        {
+          "id": 100286,
+          "object": "BlueTeamGate",
+          "x": 3558,
+          "y": 546,
+          "xscale": 3,
+          "yscale": 0.8,
+          "left": 3558,
+          "right": 3575,
+          "top": 546,
+          "bottom": 593
+        }
       ]
     },
     {
@@ -538,6 +684,56 @@
           "steps": 64,
           "free": "1111111111111111111111111111100000000000000000000000000000000000"
         }
+      ],
+      "rects": [
+        {
+          "id": 100319,
+          "object": "RedTeamGate",
+          "x": 522,
+          "y": 528,
+          "xscale": 3,
+          "yscale": 1.7,
+          "left": 522,
+          "right": 539,
+          "top": 528,
+          "bottom": 629
+        },
+        {
+          "id": 100313,
+          "object": "BlueTeamGate",
+          "x": 4128,
+          "y": 528,
+          "xscale": 3,
+          "yscale": 1.7,
+          "left": 4128,
+          "right": 4145,
+          "top": 528,
+          "bottom": 629
+        },
+        {
+          "id": 100311,
+          "object": "PlayerWall",
+          "x": 534,
+          "y": 0,
+          "xscale": 2,
+          "yscale": 7.3,
+          "left": 534,
+          "right": 545,
+          "top": 0,
+          "bottom": 437
+        },
+        {
+          "id": 100312,
+          "object": "PlayerWall",
+          "x": 4122,
+          "y": 0,
+          "xscale": 2,
+          "yscale": 7.3,
+          "left": 4122,
+          "right": 4133,
+          "top": 0,
+          "bottom": 437
+        }
       ]
     },
     {
@@ -806,6 +1002,80 @@
           "step": 0.125,
           "steps": 64,
           "free": "1111111111111111111111111111100000000000000000000000000000000000"
+        }
+      ],
+      "rects": [
+        {
+          "id": 100344,
+          "object": "RedTeamGate",
+          "x": 72,
+          "y": 156,
+          "xscale": 1,
+          "yscale": 1,
+          "left": 72,
+          "right": 77,
+          "top": 156,
+          "bottom": 215
+        },
+        {
+          "id": 100346,
+          "object": "BlueTeamGate",
+          "x": 186,
+          "y": 156,
+          "xscale": 1,
+          "yscale": 1,
+          "left": 186,
+          "right": 191,
+          "top": 156,
+          "bottom": 215
+        },
+        {
+          "id": 100345,
+          "object": "RedTeamGate2",
+          "x": 24,
+          "y": 312,
+          "xscale": 1,
+          "yscale": 1,
+          "left": 24,
+          "right": 83,
+          "top": 312,
+          "bottom": 317
+        },
+        {
+          "id": 100347,
+          "object": "BlueTeamGate2",
+          "x": 114,
+          "y": 312,
+          "xscale": 1,
+          "yscale": 1,
+          "left": 114,
+          "right": 173,
+          "top": 312,
+          "bottom": 317
+        },
+        {
+          "id": 100348,
+          "object": "PlayerWall",
+          "x": 372,
+          "y": 156,
+          "xscale": 1,
+          "yscale": 1,
+          "left": 372,
+          "right": 377,
+          "top": 156,
+          "bottom": 215
+        },
+        {
+          "id": 100349,
+          "object": "PlayerWallHorizontal",
+          "x": 276,
+          "y": 312,
+          "xscale": 1,
+          "yscale": 1,
+          "left": 276,
+          "right": 335,
+          "top": 312,
+          "bottom": 317
         }
       ]
     }

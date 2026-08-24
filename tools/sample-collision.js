@@ -240,6 +240,58 @@ async function placeFreeSweeps(mask) {
   return sweeps;
 }
 
+//---------------------------------------------------------------------------
+// The solid rectangles
+//
+// The walkmask is not everything solid. Gates and player walls are separate
+// instances, and whether one is solid depends on the character asking - a team
+// gate blocks anyone not on its team, and also blocks its own team when they
+// are carrying intel (charSetSolids.gml).
+//
+// This records where the game says each one's bounding box is, so the port's
+// entity-to-rectangle conversion can be checked without guessing at how a
+// scaled sprite rounds.
+//---------------------------------------------------------------------------
+
+const GATE_OBJECTS = [
+  'RedTeamGate', 'BlueTeamGate', 'RedTeamGate2', 'BlueTeamGate2',
+  'RedIntelGate', 'BlueIntelGate', 'IntelGateVertical', 'IntelGateHorizontal',
+  'PlayerWall', 'PlayerWallHorizontal', 'ControlPointSetupGate',
+];
+
+async function solidRects() {
+  const rects = [];
+
+  // De-duplicated by instance id, because instance_number and instance_find
+  // include an object's DESCENDANTS: PlayerWallHorizontal is a child of
+  // PlayerWall, so enumerating both lists the same instance twice.
+  const seen = new Set();
+
+  for (const object of GATE_OBJECTS) {
+    const count = Number(await evalx(`string(instance_number(${object}))`));
+
+    for (let i = 0; i < count; i++) {
+      const find = `instance_find(${object}, ${i})`;
+      const v = await evalx(
+        `string(${find}) + "," + string(object_get_name(${find}.object_index)) + "," +` +
+          `string(${find}.x) + "," + string(${find}.y) + "," +` +
+          `string(${find}.image_xscale) + "," + string(${find}.image_yscale) + "," +` +
+          `string(${find}.bbox_left) + "," + string(${find}.bbox_right) + "," +` +
+          `string(${find}.bbox_top) + "," + string(${find}.bbox_bottom)`
+      );
+      const parts = v.split(',');
+      const id = parts[0];
+      if (seen.has(id)) continue;
+      seen.add(id);
+
+      const [x, y, xscale, yscale, left, right, top, bottom] = parts.slice(2).map(Number);
+      rects.push({ id: Number(id), object: parts[1], x, y, xscale, yscale, left, right, top, bottom });
+    }
+  }
+
+  return rects;
+}
+
 async function main() {
   const out = { generated: new Date().toISOString().slice(0, 10), cell: CELL, maps: [] };
 
@@ -280,8 +332,10 @@ async function main() {
     }
 
     record.sweeps = await placeFreeSweeps(mask);
+    record.rects = await solidRects();
     out.maps.push(record);
-    process.stdout.write(` ${record.windows.length} windows, ${record.sweeps.length} sweeps\n`);
+    process.stdout.write(
+      ` ${record.windows.length} windows, ${record.sweeps.length} sweeps, ${record.rects.length} rects\n`);
   }
 
   const total = out.maps.reduce((n, m) => n + m.windows.length * WINDOW_W * WINDOW_H, 0);

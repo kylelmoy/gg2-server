@@ -375,6 +375,73 @@ netcode jitter:
 | A real onto the wire (`write_ushort` and friends) | half **away from zero**, then clamp | `Gg2.Protocol.WireQuantise` |
 | GML's own `round()` | half to **even** | `Gg2.Protocol.Gml.Round` |
 | A position into a collision box | half to **even** | `Gg2.Simulation.CollisionWorld.RoundPosition` |
+| A scaled sprite's extent into a bounding box | half to **even** | `Gg2.Simulation.SolidRect.FromEntity` |
+| `move_outside_solid`'s allowance into whole pixels | half to **even** | `Gg2.Simulation.Movement.MoveOutsideSolid` |
+
+Only the first is different. Everything GM8 itself rounds is half to even; the
+odd one out is the networking extension, which is not GM8 at all.
+
+### Settled: the solid rectangles
+
+Gates and player walls are instances, not mask cells, and their extent comes
+from a collider sprite stretched by the entity's scale. There are only four
+collider sprites, all plain filled rectangles with their origin at (0, 0):
+`sprite44` 60×6 (horizontal bars), `sprite45` 6×60 (vertical), `sprite3` 16×16
+(`Obstacle`), `SetupGateS` 32×32.
+
+GM8 works in half-open sprite space, so the covered pixels are
+
+```
+bbox_right = round(x + spriteWidth * xscale) - 1
+```
+
+with the usual half-to-even round. Checked against every gate and player wall on
+three maps — scales in the shipped maps include 0.3, 0.8, 1.7, 2, 3, 7.3 and 13.
+
+Solidity is per-query, from `charSetSolids.gml`:
+
+| Kind | Solid when |
+|---|---|
+| `Obstacle` (incl. the map itself) | always |
+| `PlayerWall`, `PlayerWallHorizontal` | always |
+| `TeamGate` | `team != asker.team` **or** the asker carries intel |
+| `IntelGate` | `team != asker.team` **and** the asker carries intel |
+| `ControlPointSetupGate` | the setup timer is running |
+
+`IntelGateVertical` and `IntelGateHorizontal` carry `TEAM_ANY`, which never
+equals a character's team, so they block every intel carrier. The "or intel" on
+a team gate is what stops a team walking its own flag out through its own gate.
+
+⚠️ `instance_number` and `instance_find` include an object's **descendants**, so
+enumerating `PlayerWall` also returns every `PlayerWallHorizontal`. Anything
+counting instances by object needs to de-duplicate by id.
+
+### Settled: `move_outside_solid`
+
+A GM8 built-in, and the one piece of `characterHitObstacle` that is not
+transcribable from GML. Measured:
+
+- It steps **whole pixels** and **keeps the fractional part** of where it
+  started. From x = 860.25 against a wall clear at 870 it lands on 870.25 — not
+  870, and not 869.75.
+- The allowance is rounded to whole pixels, half to even: 3.5 gives four steps
+  and 2.5 gives two.
+- **On failure it still moves the whole allowance**, and leaves the instance
+  stuck. This is load-bearing rather than incidental:
+  `characterHitObstacle` tries all four directions and takes the *shortest*
+  escape, so a failure has to report a *large* distance. If it reported zero it
+  would always win, the character would never be pushed anywhere, and the
+  reference's own `place_free` re-check would restore it every time.
+
+### Facing does not change the collision box
+
+A character flips `image_xscale` to -1 when facing left
+(`Character.events/End Step.xml:55-60`), and GM8 then reports a **wider**
+`bbox_left` for it — a scout reads -8 instead of -6. That inflated box is a
+broad-phase bound; `place_free` against a precise mask does not use it. Every
+class's mask rectangle is symmetric about its origin, so mirroring it changes
+nothing, and sweeping a flipped and an unflipped scout into the same wall gives
+the same answer to the quarter-pixel. Do not "fix" this by reading `bbox_left`.
 
 ### `map_width()` is the art, not the mask
 
