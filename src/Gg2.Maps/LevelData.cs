@@ -28,6 +28,33 @@ public static class LevelData
     private static ReadOnlySpan<byte> PngSignature => [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
 
     /// <summary>
+    /// The PNG's own pixel dimensions — the map <b>art</b>, which is not always
+    /// the same size as the walkmask inside it.
+    /// </summary>
+    /// <remarks>
+    /// This is what <c>map_width()</c> and <c>map_height()</c> measure:
+    /// <c>background_width[7] * background_xscale[7]</c>
+    /// (<c>Scripts/Maps/CustomMaps/map_width.gml</c>), the background, not the
+    /// collision sprite. Twenty-one of the twenty-two shipped maps have art and
+    /// mask the same size, which is why the difference is easy to miss;
+    /// <c>gg_debug</c> is 120x64 of art over a 118x69 mask.
+    /// </remarks>
+    public static (int Width, int Height) ReadImageSize(ReadOnlySpan<byte> png)
+    {
+        if (png.Length < 24 || !png[..PngSignature.Length].SequenceEqual(PngSignature))
+            throw new MapFormatException("not a PNG: signature mismatch");
+
+        // IHDR is required to be the first chunk, and its width and height are
+        // the first eight bytes of its data.
+        if (!png.Slice(12, 4).SequenceEqual("IHDR"u8))
+            throw new MapFormatException("PNG does not open with IHDR");
+
+        return (
+            (int)BinaryPrimitives.ReadUInt32BigEndian(png.Slice(16, 4)),
+            (int)BinaryPrimitives.ReadUInt32BigEndian(png.Slice(20, 4)));
+    }
+
+    /// <summary>
     /// Pulls the level-data text out of a map PNG's <c>zTXt</c> chunk.
     /// </summary>
     /// <remarks>

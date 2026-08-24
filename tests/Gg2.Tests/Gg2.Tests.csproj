@@ -15,6 +15,7 @@
     <ProjectReference Include="..\..\src\Gg2.Maps\Gg2.Maps.csproj" />
     <ProjectReference Include="..\..\src\Gg2.Server\Gg2.Server.csproj" />
     <ProjectReference Include="..\..\src\Gg2.Parity\Gg2.Parity.csproj" />
+    <ProjectReference Include="..\..\src\Gg2.Simulation\Gg2.Simulation.csproj" />
   </ItemGroup>
 
   <ItemGroup>

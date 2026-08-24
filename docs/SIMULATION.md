@@ -300,20 +300,51 @@ recorded in `gg2-agent/GML.md`.
 
 Be honest about these in the parity harness rather than assuming:
 
-1. **Precise-mask collision against a 6×-scaled sprite.** GM8's exact
-   rasterisation rule at the boundary (which world pixels a mask cell covers, and
-   whether the test is inclusive at the edge) has not been verified against the
-   engine here. It is very likely `floor(worldX / 6)`, but *verify it* — a
-   half-open interval error puts every wall one pixel out and every wall-run
-   subtly wrong.
-2. **Whether `sprite_add` sprites are precise in this GM8 build.** The signature
-   is `sprite_add(fname, imgnumb, removeback, smooth, xorig, yorig)` — there is
-   no `precise` argument, so the default applies. Confirm empirically.
-3. **Instance ordering under heavy churn** (projectiles created and destroyed in
+1. **Instance ordering under heavy churn** (projectiles created and destroyed in
    the same tick).
+2. **How GM8 turns a fractional instance position into a bounding box** for
+   `place_free`. The mask-cell rule below is settled; what is not is whether a
+   character at `x = 100.4` collides as though its rectangle were at 100, 100.4
+   or 101. It matters everywhere: a character is almost never on an integer
+   coordinate.
 
-All three are answerable in an afternoon with `gg2-agent`'s live bridge. Do that
-before building on a guess.
+Both are answerable with `gg2-agent`'s live bridge. Do that before building on a
+guess.
+
+### Settled: the collision boundary rule
+
+Was items 1 and 2 on this list. Measured against the running game on
+`ctf_truefort` with `collision_point` against `CollisionMapO`, then checked
+across **23,040 sampled points on three maps** — the fixture is
+`tests/Gg2.Tests/Fixtures/collision-samples.json` and
+`tools/sample-collision.js` regenerates it.
+
+- **A mask cell covers `[6c, 6c+6)` on both axes.** World pixel to cell is
+  `floor(v / 6)`, half-open at the top. Sweeping x across a known edge, the
+  first solid pixel is exactly `6 × 526 = 3156`; sweeping y, exactly
+  `6 × 58 = 348`. No off-by-one, and no inclusive edge.
+- **The floor must be a floor.** C#'s `/` on integers rounds toward zero, so
+  `-1 / 6 == 0` and a pixel left of the map would read cell 0 — which is often
+  solid. The game answers *open* for every negative coordinate.
+- **Off the mask is open, on every side.** Solid runs to `map_width() - 1` and
+  is open from `map_width()` up; likewise open for all negative coordinates.
+- **Runtime `sprite_add` sprites are precise.** If the collision sprite were
+  not, `collision_point` with `prec = 1` would fall back to its bounding box —
+  the whole map — and every probe would answer solid. They do not.
+
+### `map_width()` is the art, not the mask
+
+`Scripts/Maps/CustomMaps/map_width.gml` returns
+`background_width[7] * background_xscale[7]` — the **background image**, not the
+collision sprite. So a map's bounds and its collision geometry come from two
+different pictures, and they need not be the same size.
+
+Twenty-one of the twenty-two shipped maps have them equal, which is exactly why
+this is worth writing down. `gg_debug` is 120 × 64 of art over a 118 × 69 mask:
+its bounds reach twelve world pixels *past* the mask horizontally and stop
+thirty *short* of it vertically. `Character.events/End Step.xml` clamps
+positions into `map_width()` × `map_height()`, so the physics wants the art's
+number — `Gg2.Maps.LevelMap.Width` — and not the walkmask's extent.
 
 ### Settled: how a real becomes an integer on the wire
 

@@ -34,16 +34,47 @@ public sealed class WalkmaskTests
         Assert.Equal(expected.CellsSha256, Convert.ToHexStringLower(SHA256.HashData(cells)));
     }
 
+    /// <summary>
+    /// One mask cell is six world pixels square — the scale on the collision
+    /// instance (<c>CollisionMapO.events/Create.xml</c>), and also
+    /// <c>NAV_CELL_SIZE</c>.
+    /// </summary>
+    /// <remarks>
+    /// This is about the <b>walkmask's</b> extent. A map's bounds are a
+    /// different number: <c>map_width()</c> measures the background art, and on
+    /// <c>gg_debug</c> the two disagree. See
+    /// <see cref="CollisionSampleTests.MapBoundsComeFromTheArtAndCollisionFromTheMask"/>.
+    /// </remarks>
     [Theory]
     [MemberData(nameof(Maps))]
-    public void WorldDimensionsAreSixTimesTheMask(MapFixture expected)
+    public void WalkmaskExtentIsSixTimesTheMask(MapFixture expected)
     {
         var map = LevelMap.FromPng(expected.Name, ReferenceTree.ReadMap(expected.Name));
 
-        // One mask cell is six world pixels square: the scale on the collision
-        // instance (CollisionMapO.events/Create.xml), and also NAV_CELL_SIZE.
-        Assert.Equal(expected.Width * 6, map.Width);
-        Assert.Equal(expected.Height * 6, map.Height);
+        Assert.Equal(expected.Width * 6, map.Walkmask.WorldWidth);
+        Assert.Equal(expected.Height * 6, map.Walkmask.WorldHeight);
+    }
+
+    /// <summary>
+    /// The map's own bounds come from the art, and only <c>gg_debug</c> makes
+    /// that visible.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Maps))]
+    public void MapBoundsMatchTheWalkmaskOnEveryMapButGgDebug(MapFixture expected)
+    {
+        var map = LevelMap.FromPng(expected.Name, ReferenceTree.ReadMap(expected.Name));
+
+        if (expected.Name == "gg_debug")
+        {
+            Assert.Equal(720, map.Width);
+            Assert.Equal(384, map.Height);
+            Assert.NotEqual(map.Walkmask.WorldWidth, map.Width);
+            return;
+        }
+
+        Assert.Equal(map.Walkmask.WorldWidth, map.Width);
+        Assert.Equal(map.Walkmask.WorldHeight, map.Height);
     }
 
     [Fact]

@@ -13,12 +13,20 @@ namespace Gg2.Maps;
 /// </remarks>
 public sealed class LevelMap
 {
-    private LevelMap(string name, Walkmask walkmask, IReadOnlyList<LevelEntity> entities, GgonMap? metadata)
+    private LevelMap(
+        string name,
+        Walkmask walkmask,
+        IReadOnlyList<LevelEntity> entities,
+        GgonMap? metadata,
+        int artCellsWide,
+        int artCellsHigh)
     {
         Name = name;
         Walkmask = walkmask;
         Entities = entities;
         Metadata = metadata;
+        Width = artCellsWide * Gg2.Protocol.GameConstants.CellSize;
+        Height = artCellsHigh * Gg2.Protocol.GameConstants.CellSize;
     }
 
     /// <summary>The map's name, as the caller supplied it (e.g. "ctf_truefort").</summary>
@@ -49,22 +57,56 @@ public sealed class LevelMap
     /// </summary>
     public GgonMap? Metadata { get; }
 
-    /// <summary>Map width in world pixels (<c>Scripts/Maps/CustomMaps/map_width.gml</c>).</summary>
-    public int Width => Walkmask.WorldWidth;
+    /// <summary>
+    /// <c>map_width()</c> in world pixels — the map <b>art</b>'s width times
+    /// six, not the walkmask's.
+    /// </summary>
+    /// <remarks>
+    /// <c>Scripts/Maps/CustomMaps/map_width.gml</c> returns
+    /// <c>background_width[7] * background_xscale[7]</c>, which is the
+    /// background image. That is the number
+    /// <c>Character.events/End Step.xml</c> clamps positions into, so it is the
+    /// one the physics wants — and it is <b>not</b>
+    /// <see cref="Walkmask"/>'s extent. Twenty-one of the twenty-two shipped
+    /// maps have them equal, which is exactly why the difference is worth a
+    /// name: <c>gg_debug</c> is 120x64 of art over a 118x69 mask, so its
+    /// bounds reach past the mask horizontally and stop short of it vertically.
+    /// </remarks>
+    public int Width { get; }
 
-    /// <summary>Map height in world pixels.</summary>
-    public int Height => Walkmask.WorldHeight;
+    /// <summary><c>map_height()</c> in world pixels. See <see cref="Width"/>.</summary>
+    public int Height { get; }
 
     /// <summary>Decodes a map from the bytes of its PNG.</summary>
-    public static LevelMap FromPng(string name, ReadOnlySpan<byte> png) =>
-        FromLevelData(name, LevelData.Extract(png));
+    public static LevelMap FromPng(string name, ReadOnlySpan<byte> png)
+    {
+        var (artWidth, artHeight) = LevelData.ReadImageSize(png);
+        return FromLevelData(name, LevelData.Extract(png), artWidth, artHeight);
+    }
 
-    /// <summary>Decodes a map from already-extracted level-data text.</summary>
-    public static LevelMap FromLevelData(string name, string levelData)
+    /// <summary>
+    /// Decodes a map from already-extracted level-data text.
+    /// </summary>
+    /// <param name="artCellsWide">
+    /// The map PNG's pixel width. Defaults to the walkmask's, which is right for
+    /// every shipped map but <c>gg_debug</c> — pass it when the PNG is to hand.
+    /// </param>
+    public static LevelMap FromLevelData(
+        string name,
+        string levelData,
+        int artCellsWide = 0,
+        int artCellsHigh = 0)
     {
         var walkmask = Walkmask.Decode(levelData);
         var (entities, metadata) = ParseEntities(LevelData.GetBlock(levelData, "ENTITIES"));
-        return new LevelMap(name, walkmask, entities, metadata);
+
+        return new LevelMap(
+            name,
+            walkmask,
+            entities,
+            metadata,
+            artCellsWide > 0 ? artCellsWide : walkmask.Width,
+            artCellsHigh > 0 ? artCellsHigh : walkmask.Height);
     }
 
     /// <summary>
