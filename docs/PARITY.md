@@ -75,9 +75,27 @@ A recording of the real GM8 server on `ctf_truefort` is checked in as
 that frames it to the last byte is the one that would notice any of the above
 being wrong.
 
-**Still to do:** the trace *format* — a recording plus the tick index and the
-roster events, written in a form the replayer consumes — and the replayer
-itself.
+### The trace format
+
+**Built** — `Gg2.Protocol.Trace` and `TraceParser`.
+
+**The trace is the raw stream**, with a header in front naming the map, the
+reference version and where it came from. Not a parsed structure. Three reasons,
+and the third is the one that matters:
+
+1. It is lossless, so a change to the parser never invalidates a recording.
+2. It is bounded and cheap: a 30 Hz broadcast to a spectator watching two bots
+   is about 440 bytes a second.
+3. It means the parity recorder and a live server writing training data are the
+   **same path** (`docs/BOTAI.md`, item 3). A second logging format invented
+   later is exactly how the two drift apart.
+
+`TraceParser` turns it into ticks. A tick is delimited by its state update,
+which is always the *last* thing the server writes for that tick —
+`GameServerBeginStep.gml` queues command responses first and appends the update
+afterwards, and the whole buffer goes out in End Step. `FULL_UPDATE` and
+`CAPS_UPDATE` are not tick boundaries: the first is sent on the join path
+outside the cadence, the second goes out *in addition* to that tick's update.
 
 ### What a wedged client looks like
 
@@ -123,6 +141,17 @@ fixtures once they are small enough: flat ground running, a jump arc, a
 double-jump, a wall-run into a step-up, a fall onto a corner, a rocket jump, a
 drop-through platform, a gate transition.
 
+**The cheapest source of a populated trace is the reference's own bots.** Set
+`[Bots] Enabled=1` in the build directory's `gg2.ini`, run the dedicated server,
+and record — the bots walk, jump, shoot and die on their own, which is thirty
+seconds of real GM8 physics for no input driving at all.
+`tests/Gg2.Tests/Fixtures/reference-ctf_truefort-bots.trace` is one such
+recording: 13 KB, 898 ticks, two bots on `ctf_truefort`. Put the `gg2.ini` back
+afterwards.
+
+That covers walking and jumping but not the deliberate cases, which need
+scripted input rather than a bot's own judgement.
+
 ## Tier 1 — primitives, against the live engine
 
 Before any trajectory can match, `placeFree` must match. This is where the two
@@ -139,6 +168,30 @@ corners.
 
 ## Tier 2 — trace replay, the main event
 
+**Built** — `Gg2.Parity.Replayer` and `DriftReport`, driven by
+`gg2-parity replay <trace>`.
+
+The simulation it talks to is `ITraceSimulation`, which is deliberately tiny and
+deliberately lives in the harness rather than in the simulation: phase 4 writes
+the physics against `Tick(WorldState, ReadOnlySpan<PlayerInput>)` and an adapter
+bridges the two, so the shape of `WorldState` is not prejudged by an interface
+written before it exists. Everything crosses in **wire units**, because the
+comparison is about the integers a client can observe.
+
+`EmptySimulation` is the stand-in until then. It accepts characters and never
+moves them, so replaying the bot fixture against it reports the movement it
+failed to reproduce:
+
+```
+reference-ctf_truefort-bots.trace  [ClosedLoop]
+  37 ticks, 2 comparison(s), 2 resync(s) on spawn
+  8 mismatch(es), first at tick 36:
+    tick 36 slot 2 x: expected 18395, got 18510 (+115)
+    tick 36 slot 2 hspeed: expected -43, got 0 (+43)
+    ...
+  |dx| max 115, p99 115   |dy| max 90, p99 90   (wire units; 5 = one world pixel)
+```
+
 Replay the trace and diff. Two modes, and you want both:
 
 **Closed-loop (what the server must do).** Feed inputs, never correct. Divergence
@@ -148,10 +201,17 @@ is achievable: both sides are doing double-precision arithmetic in the same
 order, so drift means a real difference in the maths, not floating-point noise.
 
 **Open-loop segments (what the client actually experiences).** Reset the port's
-state from each `QUICK_UPDATE` and simulate forward 6 ticks, then compare against
-the next `QUICK_UPDATE`. This measures exactly the thing a player sees: the
-prediction error at the moment of correction. Report it as a distribution, not a
-pass/fail — max and 99th-percentile `|Δx|`, `|Δy|` in wire units (1/5 px).
+state from each `QUICK_UPDATE`, simulate forward to the next one, then compare.
+This measures exactly the thing a player sees: the prediction error at the moment
+of correction. Report it as a distribution, not a pass/fail — max and
+99th-percentile `|Δx|`, `|Δy|` in wire units (1/5 px).
+
+That gap is **7 ticks, not 6**. `QUICK_UPDATE` goes out when `frame mod 7 == 0`,
+so consecutive ones are seven ticks apart and six `INPUTSTATE`s sit between
+them — the ratio in a real recording is 6 : 1, and the tick indices in a drift
+report step 36, 43, 50. An earlier draft of this document said six; a replayer
+that believes it lands one tick short of the thing it is comparing against, and
+reports a drift that is really just a missing tick of gravity.
 
 Sensible gates for CI:
 

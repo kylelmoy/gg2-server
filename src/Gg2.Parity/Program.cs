@@ -28,6 +28,7 @@ internal static class Program
             {
                 "record" => Record(args[1..]),
                 "diff" => Diff(args[1..]),
+                "replay" => Replay(args[1..]),
                 _ => Unknown(args[0]),
             };
         }
@@ -62,13 +63,99 @@ internal static class Program
         recorder.RecordFor(TimeSpan.FromSeconds(seconds));
 
         var bytes = recorder.AllBytes();
-        File.WriteAllBytes(output, bytes);
+
+        // A .trace gets the header that makes it replayable; anything else is
+        // written raw, which is what a byte diff against another server wants.
+        if (output.EndsWith(".trace", StringComparison.OrdinalIgnoreCase))
+        {
+            var trace = new Gg2.Protocol.Trace
+            {
+                Header = new Gg2.Protocol.TraceHeader
+                {
+                    FormatVersion = Gg2.Protocol.TraceHeader.CurrentFormatVersion,
+                    ReferenceVersion = Gg2.Protocol.GameConstants.Version,
+                    Map = recorder.Map,
+                    MapMd5 = recorder.MapMd5,
+                    Source = Flag(args, "--source") ?? recorder.ServerName,
+                    RecordedUtc = DateTime.UtcNow,
+                },
+                Stream = bytes,
+            };
+
+            File.WriteAllBytes(output, trace.Encode());
+        }
+        else
+        {
+            File.WriteAllBytes(output, bytes);
+        }
 
         Console.WriteLine($"{bytes.Length} bytes in {recorder.Chunks.Count} reads over {seconds}s -> {output}");
 
         Summarise(bytes, recorder.Map, Flag(args, "--maps"));
         return 0;
     }
+
+    private static int Replay(string[] args)
+    {
+        if (args.Length < 1)
+        {
+            Console.Error.WriteLine("replay needs a trace file");
+            return 2;
+        }
+
+        var trace = Gg2.Protocol.Trace.Decode(File.ReadAllBytes(args[0]));
+        Console.WriteLine($"{args[0]}: {trace.Header}");
+
+        if (trace.Header.ReferenceVersion != Gg2.Protocol.GameConstants.Version)
+        {
+            Console.Error.WriteLine(
+                $"trace was recorded against reference version {trace.Header.ReferenceVersion}, " +
+                $"this build targets {Gg2.Protocol.GameConstants.Version}");
+            return 1;
+        }
+
+        var map = LoadMap(trace.Header.Map, Flag(args, "--maps"));
+        if (map is null)
+            return 1;
+
+        var shape = Gg2.Maps.GameModes.ShapeOf(map);
+        var ticks = Gg2.Protocol.TraceParser.Parse(trace, shape, out var start);
+
+        Console.WriteLine(
+            $"{ticks.Count} ticks, {shape.GameMode}" +
+            (start is null ? ", no FULL_UPDATE anchor" : $", anchored on a {start.PlayerCount}-player FULL_UPDATE"));
+
+        // Nothing simulates anything yet, so the replay runs against the empty
+        // simulation docs/PLAN.md phase 2 names. Phase 4 swaps this out.
+        var failed = false;
+
+        foreach (var mode in new[] { ReplayMode.ClosedLoop, ReplayMode.OpenLoop })
+        {
+            var report = new Replayer(new EmptySimulation()).Replay(args[0], trace.Header.Map, ticks, mode);
+            Console.WriteLine();
+            Console.Write(report.Render());
+            failed |= !report.Passed;
+        }
+
+        return failed ? 1 : 0;
+    }
+
+    private static Gg2.Maps.LevelMap? LoadMap(string map, string? mapDirectory)
+    {
+        var directory = mapDirectory ?? DefaultMapDirectory();
+        var png = Path.Combine(directory, map + ".png");
+
+        if (File.Exists(png))
+            return Gg2.Maps.LevelMap.FromPng(map, File.ReadAllBytes(png));
+
+        Console.Error.WriteLine($"no map at {png}; pass --maps or set GG2_REFERENCE");
+        return null;
+    }
+
+    private static string DefaultMapDirectory() =>
+        Environment.GetEnvironmentVariable("GG2_REFERENCE") is { Length: > 0 } reference
+            ? Path.Combine(reference, "Source", "gg2", "Included Files")
+            : @"D:\code\Gang-Garrison-2\Source\gg2\Included Files";
 
     /// <summary>
     /// Frames what was recorded and prints a message census.
@@ -80,10 +167,7 @@ internal static class Program
     /// </remarks>
     private static void Summarise(byte[] trace, string map, string? mapDirectory)
     {
-        var directory = mapDirectory
-                        ?? (Environment.GetEnvironmentVariable("GG2_REFERENCE") is { Length: > 0 } reference
-                            ? Path.Combine(reference, "Source", "gg2", "Included Files")
-                            : @"D:\code\Gang-Garrison-2\Source\gg2\Included Files");
+        var directory = mapDirectory ?? DefaultMapDirectory();
 
         var png = Path.Combine(directory, map + ".png");
         if (!File.Exists(png))
@@ -181,17 +265,23 @@ internal static class Program
 
     private static void Usage() => Console.WriteLine(
         """
-        gg2-parity - record and compare server broadcast streams
+        gg2-parity - record, compare and replay server broadcast streams
 
           record --host <h> --port <n> --seconds <s> --name <n> --out <file>
-          diff <a> <b>
+                 [--source <text>] [--maps <path>]
+          diff   <a> <b>
+          replay <trace> [--maps <path>]
 
         The recorder joins as a passive spectator and never sends an INPUTSTATE
         of its own, so what it writes down is the server's own broadcast: every
         player's keys and aim each tick, and every player's position, velocity
-        and hp each seventh tick.
+        and hp each seventh tick. One recording therefore holds both the inputs
+        a simulation consumed and the outputs it produced.
 
-        Point it at the reference GM8 server and at this port in turn, then diff
-        the two. See docs/PARITY.md.
+        An --out ending in .trace gets the header that makes it replayable.
+        Anything else is written raw, which is what a byte diff wants.
+
+        Point record at the reference GM8 server and at this port in turn, then
+        diff the two. See docs/PARITY.md.
         """);
 }

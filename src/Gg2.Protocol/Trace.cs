@@ -1,0 +1,176 @@
+using System.Globalization;
+
+namespace Gg2.Protocol;
+
+/// <summary>
+/// What a trace is a recording of.
+/// </summary>
+/// <remarks>
+/// Small and fixed on purpose. Everything here has to be known before a single
+/// byte of stream can be framed — the map decides a state update's shape — so
+/// the header is the part that cannot be reconstructed from the recording.
+/// </remarks>
+public sealed record TraceHeader
+{
+    /// <summary>Bumped whenever the on-disk layout changes.</summary>
+    public const int CurrentFormatVersion = 1;
+
+    public required int FormatVersion { get; init; }
+
+    /// <summary>
+    /// The reference's <c>VERSION</c> the recording was made against.
+    /// </summary>
+    /// <remarks>
+    /// A trace recorded against a different build of the game is not
+    /// comparable, and a wrong answer here is invisible — the same reasoning
+    /// behind <c>SIM_UUID</c> in docs/BOTAI.md, one layer out.
+    /// </remarks>
+    public required int ReferenceVersion { get; init; }
+
+    public required string Map { get; init; }
+
+    /// <summary>Empty for a built-in map.</summary>
+    public required string MapMd5 { get; init; }
+
+    /// <summary>Free text: which server produced it, and under what conditions.</summary>
+    public required string Source { get; init; }
+
+    public required DateTime RecordedUtc { get; init; }
+
+    public override string ToString() =>
+        $"{Map} from {Source}, v{ReferenceVersion}, {RecordedUtc.ToString("u", CultureInfo.InvariantCulture)}";
+}
+
+/// <summary>
+/// A recorded broadcast stream, with the header needed to read it back.
+/// </summary>
+/// <remarks>
+/// <b>The trace is the raw stream.</b> Not a parsed one — the bytes the server
+/// sent, kept verbatim, with a header in front. Three reasons, and the third is
+/// the one that matters:
+/// <list type="number">
+/// <item>It is lossless, so a format change never invalidates a recording.</item>
+/// <item>It is bounded and cheap to write: a 30 Hz broadcast to a spectator is
+/// a few hundred bytes a second.</item>
+/// <item>It means the parity recorder and a live server writing training data
+/// are the <em>same</em> path (docs/BOTAI.md, item 3). A second logging format
+/// invented later is how the two drift apart.</item>
+/// </list>
+/// <para>
+/// Parsing needs a <see cref="WorldShape"/>, which comes from the map named in
+/// the header.
+/// </para>
+/// </remarks>
+public sealed class Trace
+{
+    public required TraceHeader Header { get; init; }
+
+    /// <summary>The recorded stream, exactly as it arrived.</summary>
+    public required byte[] Stream { get; init; }
+
+    private static ReadOnlySpan<byte> Magic => "GG2TRACE"u8;
+
+    /// <summary>Serialises to the on-disk form. The caller does the writing.</summary>
+    public byte[] Encode()
+    {
+        var writer = new NetWriter(Stream.Length + 256);
+
+        writer.WriteBytes(Magic);
+        writer.WriteInt(Header.FormatVersion);
+        writer.WriteInt(Header.ReferenceVersion);
+        writer.WriteString1(Header.Map);
+        writer.WriteString1(Header.MapMd5);
+        writer.WriteString1(Header.Source);
+
+        // Unix seconds in a uint: good to 2106, and it keeps the trace header
+        // to the wire types NetWriter already has rather than adding a 64-bit
+        // one the GG2 protocol does not use.
+        writer.WriteUInt((uint)new DateTimeOffset(Header.RecordedUtc).ToUnixTimeSeconds());
+        writer.WriteInt(Stream.Length);
+        writer.WriteBytes(Stream);
+
+        return writer.WrittenSpan.ToArray();
+    }
+
+    public static Trace Decode(ReadOnlySpan<byte> bytes)
+    {
+        var reader = new NetReader(bytes);
+
+        if (!reader.ReadBytes(Magic.Length).SequenceEqual(Magic))
+            throw new ProtocolException("not a gg2 trace: magic mismatch");
+
+        var formatVersion = reader.ReadInt();
+        if (formatVersion != TraceHeader.CurrentFormatVersion)
+            throw new ProtocolException(
+                $"trace format version {formatVersion}, expected {TraceHeader.CurrentFormatVersion}");
+
+        var header = new TraceHeader
+        {
+            FormatVersion = formatVersion,
+            ReferenceVersion = reader.ReadInt(),
+            Map = reader.ReadString1(),
+            MapMd5 = reader.ReadString1(),
+            Source = reader.ReadString1(),
+            RecordedUtc = DateTimeOffset.FromUnixTimeSeconds(reader.ReadUInt()).UtcDateTime,
+        };
+
+        var length = reader.ReadInt();
+        if (length < 0 || length > reader.Remaining)
+            throw new ProtocolException($"trace claims {length} stream bytes, has {reader.Remaining}");
+
+        return new Trace { Header = header, Stream = reader.ReadBytes(length).ToArray() };
+    }
+}
+
+/// <summary>One roster slot's contribution to one tick.</summary>
+public readonly record struct TraceSlot
+{
+    /// <summary>False for a player with no character — spectating, or dead.</summary>
+    public required bool HasCharacter { get; init; }
+
+    /// <summary>
+    /// The action this player took on this tick. Present on every tier, which
+    /// is the whole reason a broadcast stream is a usable trace.
+    /// </summary>
+    public required PlayerInput Input { get; init; }
+
+    /// <summary>
+    /// What the server said the character's position and velocity were. Only on
+    /// a position-bearing tick.
+    /// </summary>
+    public CharacterBlock? Observed { get; init; }
+}
+
+/// <summary>One server tick, as the broadcast stream recorded it.</summary>
+/// <remarks>
+/// A tick is delimited by its state update, which is always the <em>last</em>
+/// thing the server writes for that tick: <c>GameServerBeginStep.gml</c> queues
+/// command responses first and appends the update afterwards, and the whole
+/// buffer goes out in End Step. So everything since the previous update belongs
+/// to this one.
+/// </remarks>
+public sealed class TraceTick
+{
+    /// <summary>Index from the start of the trace, not the server's own frame counter.</summary>
+    public required int Index { get; init; }
+
+    /// <summary><c>INPUTSTATE</c> or <c>QUICK_UPDATE</c>.</summary>
+    public required MessageType Tier { get; init; }
+
+    /// <summary>Whether this tick carries positions.</summary>
+    public bool HasPositions => Tier is MessageType.QuickUpdate or MessageType.FullUpdate;
+
+    public required TraceSlot[] Slots { get; init; }
+
+    /// <summary>
+    /// Everything else the server sent before this tick's update — roster
+    /// changes, spawns, deaths, weapon fire.
+    /// </summary>
+    /// <remarks>
+    /// A replay has to apply these rather than derive them: docs/PARITY.md is
+    /// explicit that team selection, spawn positions and respawn timing are
+    /// server-side RNG the port is free about, so they are taken from the trace
+    /// instead of being decided again.
+    /// </remarks>
+    public required ServerMessage[] Events { get; init; }
+}

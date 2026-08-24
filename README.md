@@ -3,7 +3,7 @@
 A headless Gang Garrison 2 server in C#, wire-compatible with the stock Game
 Maker 8 client.
 
-**Status: phases 0 and 1 of [`docs/PLAN.md`](docs/PLAN.md) are done.**
+**Status: phases 0-2 of [`docs/PLAN.md`](docs/PLAN.md) are done.**
 
 | Project | What |
 |---|---|
@@ -11,7 +11,7 @@ Maker 8 client.
 | `Gg2.Maps` | Map PNG level-data extraction, the walkmask decoder, GGON, the entity list. |
 | `Gg2.Server` | Sockets, the join handshake, the roster, the 30 Hz broadcast. The only I/O. |
 | `Gg2.Host` | `gg2-server`, the console entry point. |
-| `Gg2.Parity` | `gg2-parity`: a passive stream recorder, a stream framer and a byte diff. |
+| `Gg2.Parity` | `gg2-parity`: a stream recorder, a byte diff, and a trace replayer with drift reporting. |
 
 **Phase 0** — all 22 built-in maps decode **cell-for-cell** against
 `gg2-agent/tools/walkmask.js`, the decoder that has itself been checked against
@@ -23,10 +23,14 @@ servers' broadcast streams with `gg2-parity` and diffing them gives 569 bytes
 each, **byte-identical apart from four bytes of CTF round timer** — a value this
 port has no simulation to produce, not a layout difference.
 
-Nothing simulates anything. Phase 2, the parity harness, comes before any
-physics: its recorder and its stream framer exist, and the trace format and
-replayer do not. A recording of the real GM8 server is checked in as a fixture,
-and framing it to the last byte is a test.
+**Phase 2** — the parity harness. Recorder, stream framer, trace format,
+replayer and drift report all exist. A 30-second recording of the reference
+server with two bots playing `ctf_truefort` is checked in as a fixture; replaying
+it against the empty simulation names the tick, slot, field and signed delta of
+every divergence.
+
+Nothing simulates anything yet. Phase 3, collision, is next: `placeFree` has to
+agree with the engine exactly before any trajectory can.
 
 ```powershell
 $env:PATH = "$env:LOCALAPPDATA\Microsoft\dotnet;$env:PATH"   # .NET 9, user-local
