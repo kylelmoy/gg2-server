@@ -41,6 +41,19 @@ public interface ITraceSimulation
     /// <summary>Removes a slot's character — it left, died, or went spectator.</summary>
     void ClearCharacter(int slot);
 
+    /// <summary>
+    /// A slot's class, from the trace's <c>PLAYER_CHANGECLASS</c>.
+    /// </summary>
+    /// <remarks>
+    /// Not optional detail: a scout and a heavy have different collision boxes
+    /// and different run powers, so replaying one as the other is not a near
+    /// miss.
+    /// </remarks>
+    void SetPlayerClass(int slot, PlayerClass playerClass);
+
+    /// <summary>A slot's team, which decides which gates are solid to it.</summary>
+    void SetPlayerTeam(int slot, Team team);
+
     /// <summary>Advances one tick with the given per-slot inputs.</summary>
     void Tick(ReadOnlySpan<PlayerInput> inputs);
 
@@ -80,6 +93,10 @@ public sealed class EmptySimulation : ITraceSimulation
     public void SetCharacter(int slot, in CharacterBlock observed) => _characters[slot] = observed;
 
     public void ClearCharacter(int slot) => _characters.Remove(slot);
+
+    public void SetPlayerClass(int slot, PlayerClass playerClass) { }
+
+    public void SetPlayerTeam(int slot, Team team) { }
 
     public void Tick(ReadOnlySpan<PlayerInput> inputs) => Ticks++;
 

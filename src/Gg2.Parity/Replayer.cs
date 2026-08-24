@@ -18,8 +18,57 @@ namespace Gg2.Parity;
 /// rather than counting as a mismatch.
 /// </para>
 /// </remarks>
+/// <summary>Which wire fields a replay holds the simulation to.</summary>
+/// <remarks>
+/// Exists so a phase can be gated on what it claims to reproduce. Phase 4 is
+/// about trajectories, and comparing <c>ammo</c> against a simulation with no
+/// weapons in it would report a wall of failures that say nothing about the
+/// physics. docs/PARITY.md's advice is the same one from the other direction:
+/// start with the gates loose enough to be green, then tighten to zero as each
+/// behaviour lands.
+/// </remarks>
+[Flags]
+public enum Fields
+{
+    None = 0,
+    Position = 1 << 0,
+    Velocity = 1 << 1,
+    Hp = 1 << 2,
+    Ammo = 1 << 3,
+    Flags = 1 << 4,
+
+    /// <summary>What the character physics is responsible for.</summary>
+    Trajectory = Position | Velocity,
+
+    All = Position | Velocity | Hp | Ammo | Flags,
+}
+
 public sealed class Replayer(ITraceSimulation simulation)
 {
+    /// <summary>Which fields to hold the simulation to. Everything by default.</summary>
+    public Fields Compare { get; init; } = Fields.All;
+
+    /// <summary>
+    /// Whether a tick's update describes the state <em>before</em> that tick's
+    /// simulation ran.
+    /// </summary>
+    /// <remarks>
+    /// It does, and this is not a matter of taste. <c>GameServerBeginStep.gml</c>
+    /// calls <c>processClientCommands</c> and then <c>serializeState</c>, both in
+    /// the server's own Begin Step — and GM8 runs Begin Step for every instance
+    /// before any instance's Step. The <c>GameServer</c> is created before any
+    /// <c>Character</c>, so it serialises first: one update therefore carries
+    /// <b>this tick's input</b> alongside <b>last tick's position</b>. Which is
+    /// exactly the pairing a client needs to predict forward.
+    /// <para>
+    /// Left as an option because it was settled by measurement rather than by
+    /// reading — replaying the same trace both ways and keeping the one that
+    /// drifts less. Turning it off should make a working simulation look
+    /// systematically slow.
+    /// </para>
+    /// </remarks>
+    public bool UpdatesPrecedeTheirTick { get; init; } = true;
+
     /// <summary>
     /// Replays <paramref name="ticks"/> and reports what disagreed.
     /// </summary>
@@ -51,22 +100,31 @@ public sealed class Replayer(ITraceSimulation simulation)
         {
             ApplyEvents(tick);
 
-            // The trace's update for tick N describes the state *after* tick N
-            // ran, so the inputs go in first and the comparison comes after.
+            var bad = mismatches.Count;
+
+            // One update carries this tick's input and last tick's position, so
+            // the comparison happens before the inputs are consumed.
+            if (UpdatesPrecedeTheirTick && tick.HasPositions)
+            {
+                Reconcile(tick, mismatches, xErrors, yErrors, ref comparisons, ref resyncs);
+
+                if (mode == ReplayMode.OpenLoop)
+                    Anchor(tick);
+            }
+
             Advance(tick);
             replayed++;
 
-            if (!tick.HasPositions)
-                continue;
+            if (!UpdatesPrecedeTheirTick && tick.HasPositions)
+            {
+                Reconcile(tick, mismatches, xErrors, yErrors, ref comparisons, ref resyncs);
 
-            var bad = mismatches.Count;
-            Reconcile(tick, mismatches, xErrors, yErrors, ref comparisons, ref resyncs);
-
-            // Open-loop measures one prediction window at a time: compare, then
-            // put the truth back and let the next window start from a correct
-            // state. That is exactly what the client experiences.
-            if (mode == ReplayMode.OpenLoop)
-                Anchor(tick);
+                // Open-loop measures one prediction window at a time: compare,
+                // then put the truth back and let the next window start from a
+                // correct state. That is what the client experiences.
+                if (mode == ReplayMode.OpenLoop)
+                    Anchor(tick);
+            }
 
             if (stopAtFirstBadTick && mode == ReplayMode.ClosedLoop && mismatches.Count > bad)
                 break;
@@ -110,11 +168,17 @@ public sealed class Replayer(ITraceSimulation simulation)
 
                 case MessageType.PlayerChangeTeam when message.PlayerId is { } changedTeam:
                     // Destroys the character on the client
-                    // (ClientBeginStep.gml, case PLAYER_CHANGETEAM), so here too.
+                    // (ClientBeginStep.gml, case PLAYER_CHANGETEAM), so here too
+                    // — but the team itself is remembered, because it decides
+                    // which gates are solid to whatever spawns next.
+                    if (message.Payload.Length >= 2)
+                        simulation.SetPlayerTeam(changedTeam, (Team)message.Payload[1]);
                     simulation.ClearCharacter(changedTeam);
                     break;
 
                 case MessageType.PlayerChangeClass when message.PlayerId is { } changedClass:
+                    if (message.Payload.Length >= 2)
+                        simulation.SetPlayerClass(changedClass, (PlayerClass)message.Payload[1]);
                     simulation.ClearCharacter(changedClass);
                     break;
             }
@@ -184,19 +248,26 @@ public sealed class Replayer(ITraceSimulation simulation)
             xErrors.Add(Math.Abs(actual.X - expected.X));
             yErrors.Add(Math.Abs(actual.Y - expected.Y));
 
-            Check(mismatches, tick.Index, slot, "x", expected.X, actual.X);
-            Check(mismatches, tick.Index, slot, "y", expected.Y, actual.Y);
-            Check(mismatches, tick.Index, slot, "hspeed", expected.HSpeed, actual.HSpeed);
-            Check(mismatches, tick.Index, slot, "vspeed", expected.VSpeed, actual.VSpeed);
-            Check(mismatches, tick.Index, slot, "hp", expected.Hp, actual.Hp);
-            Check(mismatches, tick.Index, slot, "ammo", expected.Ammo, actual.Ammo);
-            Check(mismatches, tick.Index, slot, "flags", expected.Flags, actual.Flags);
+            Check(Fields.Position, mismatches, tick.Index, slot, "x", expected.X, actual.X);
+            Check(Fields.Position, mismatches, tick.Index, slot, "y", expected.Y, actual.Y);
+            Check(Fields.Velocity, mismatches, tick.Index, slot, "hspeed", expected.HSpeed, actual.HSpeed);
+            Check(Fields.Velocity, mismatches, tick.Index, slot, "vspeed", expected.VSpeed, actual.VSpeed);
+            Check(Fields.Hp, mismatches, tick.Index, slot, "hp", expected.Hp, actual.Hp);
+            Check(Fields.Ammo, mismatches, tick.Index, slot, "ammo", expected.Ammo, actual.Ammo);
+            Check(Fields.Flags, mismatches, tick.Index, slot, "flags", expected.Flags, actual.Flags);
         }
     }
 
-    private static void Check(List<Mismatch> mismatches, int tick, int slot, string field, long expected, long actual)
+    private void Check(
+        Fields field2,
+        List<Mismatch> mismatches,
+        int tick,
+        int slot,
+        string field,
+        long expected,
+        long actual)
     {
-        if (expected == actual)
+        if (expected == actual || (Compare & field2) == 0)
             return;
 
         mismatches.Add(new Mismatch

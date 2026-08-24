@@ -284,7 +284,7 @@ public sealed class TraceTests
     private sealed class OracleSimulation(IReadOnlyList<TraceTick> ticks) : ITraceSimulation
     {
         private readonly Dictionary<int, CharacterBlock> _characters = [];
-        private int _tick = -1;
+        private int _tick;
 
         public void LoadMap(string map) { }
 
@@ -292,13 +292,23 @@ public sealed class TraceTests
 
         public void ClearCharacter(int slot) => _characters.Remove(slot);
 
+        public void SetPlayerClass(int slot, PlayerClass playerClass) { }
+
+        public void SetPlayerTeam(int slot, Team team) { }
+
         public void Tick(ReadOnlySpan<PlayerInput> inputs)
         {
+            // The replayer compares before it advances, because one update
+            // carries this tick's input and last tick's position. So the state
+            // this call leaves behind is the state the *next* tick will be
+            // compared against.
             _tick++;
-            if (_tick >= ticks.Count)
+
+            var next = _tick + 1;
+            if (next >= ticks.Count)
                 return;
 
-            var tick = ticks[_tick];
+            var tick = ticks[next];
             if (!tick.HasPositions)
                 return;
 

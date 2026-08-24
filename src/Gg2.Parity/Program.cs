@@ -125,13 +125,34 @@ internal static class Program
             $"{ticks.Count} ticks, {shape.GameMode}" +
             (start is null ? ", no FULL_UPDATE anchor" : $", anchored on a {start.PlayerCount}-player FULL_UPDATE"));
 
-        // Nothing simulates anything yet, so the replay runs against the empty
-        // simulation docs/PLAN.md phase 2 names. Phase 4 swaps this out.
+        // --empty replays against the do-nothing stand-in, which is how the
+        // harness was shown to report a failure before there was any physics to
+        // disagree with.
+        var useEmpty = args.Contains("--empty");
+        var mapDirectory = Flag(args, "--maps");
+
+        ITraceSimulation Build() => useEmpty
+            ? new EmptySimulation()
+            : new PortedSimulation(name => LoadMap(name, mapDirectory)
+                ?? throw new IOException($"cannot load {name}"));
+
+        // Phase 4 owns trajectories; ammo and the flag byte belong to phases 5
+        // and 6, and holding a simulation with no weapons in it to an ammo
+        // count reports a wall of failures that say nothing.
+        var compare = args.Contains("--all-fields") ? Fields.All : Fields.Trajectory | Fields.Hp;
+
         var failed = false;
 
         foreach (var mode in new[] { ReplayMode.ClosedLoop, ReplayMode.OpenLoop })
         {
-            var report = new Replayer(new EmptySimulation()).Replay(args[0], trace.Header.Map, ticks, mode);
+            // --no-stop keeps a closed-loop replay going past its first bad
+            // tick. Normally that is noise — one divergence produces a mismatch
+            // on every tick after it — but it is the way to tell a real maths
+            // error from anchor quantisation: a maths error diverges, and
+            // quantisation stays bounded.
+            var report = new Replayer(Build()) { Compare = compare }
+                .Replay(args[0], trace.Header.Map, ticks, mode, stopAtFirstBadTick: !args.Contains("--no-stop"));
+
             Console.WriteLine();
             Console.Write(report.Render());
             failed |= !report.Passed;

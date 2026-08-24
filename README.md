@@ -3,7 +3,7 @@
 A headless Gang Garrison 2 server in C#, wire-compatible with the stock Game
 Maker 8 client.
 
-**Status: phases 0–3 of [`docs/PLAN.md`](docs/PLAN.md) are done.**
+**Status: phases 0–3 of [`docs/PLAN.md`](docs/PLAN.md) are done; phase 4 is close.**
 
 | Project | What |
 |---|---|
@@ -12,7 +12,7 @@ Maker 8 client.
 | `Gg2.Server` | Sockets, the join handshake, the roster, the 30 Hz broadcast. The only I/O. |
 | `Gg2.Host` | `gg2-server`, the console entry point. |
 | `Gg2.Parity` | `gg2-parity`: a stream recorder, a byte diff, and a trace replayer with drift reporting. |
-| `Gg2.Simulation` | Collision and the movement solver. Pure — no sockets, no clock, no files. |
+| `Gg2.Simulation` | Collision, the movement solver and the character update. Pure — no sockets, no clock, no files. |
 
 **Phase 0** — all 22 built-in maps decode **cell-for-cell** against
 `gg2-agent/tools/walkmask.js`, the decoder that has itself been checked against
@@ -37,7 +37,11 @@ in, behind a `CollisionFilter`, with every bounding box checked against the
 game. `good_move_contact_solid`, `move_outside_solid` and `characterHitObstacle`
 are transcribed.
 
-Nothing moves yet — phase 4, the character update itself, is next.
+**Phase 4** — the character update, close but not signed off. Replaying a
+recording of the reference with two bots, closed-loop and never corrected, the
+port tracks it for **218 ticks with horizontal error exactly zero**, then differs
+by one wire unit of `y` — a fifth of a world pixel. That last unit is a real
+difference and `docs/PLAN.md` records what has been ruled out.
 
 ```powershell
 $env:PATH = "$env:LOCALAPPDATA\Microsoft\dotnet;$env:PATH"   # .NET 9, user-local
