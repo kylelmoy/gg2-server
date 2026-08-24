@@ -81,6 +81,31 @@ public sealed class NetWriter
 
     public void WriteMessageType(MessageType type) => WriteUByte((byte)type);
 
+    // --- the GML write_* functions -------------------------------------------
+    //
+    // GML has one numeric type, so the reference routinely writes a fractional
+    // real into an integer field and lets the networking extension convert it.
+    // These are that conversion, spelled out at the call site so nobody has to
+    // remember which rounding applies. See WireQuantise.
+
+    /// <summary>GML <c>write_ubyte</c> of a real.</summary>
+    public void WriteUByteFromReal(double value) => WriteUByte(WireQuantise.ToUByte(value));
+
+    /// <summary>GML <c>write_byte</c> of a real.</summary>
+    public void WriteByteFromReal(double value) => WriteByte(WireQuantise.ToByte(value));
+
+    /// <summary>GML <c>write_ushort</c> of a real.</summary>
+    public void WriteUShortFromReal(double value) => WriteUShort(WireQuantise.ToUShort(value));
+
+    /// <summary>GML <c>write_short</c> of a real.</summary>
+    public void WriteShortFromReal(double value) => WriteShort(WireQuantise.ToShort(value));
+
+    /// <summary>GML <c>write_uint</c> of a real.</summary>
+    public void WriteUIntFromReal(double value) => WriteUInt(WireQuantise.ToUInt(value));
+
+    /// <summary>GML <c>write_int</c> of a real.</summary>
+    public void WriteIntFromReal(double value) => WriteInt(WireQuantise.ToInt(value));
+
     public void WriteBytes(ReadOnlySpan<byte> value) => value.CopyTo(Advance(value.Length));
 
     /// <summary>A <c>ubyte</c> length followed by that many raw bytes.</summary>

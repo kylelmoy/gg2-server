@@ -35,7 +35,7 @@ public sealed class StateUpdateWriter(MatchState match)
         writer.WriteMessageType(tier);
 
         if (tier == MessageType.FullUpdate)
-            writer.WriteUShort(match.TdmInvulnerabilityTicks);
+            writer.WriteUShortFromReal(match.TdmInvulnerabilityTicks);
 
         // The client aborts with "Wrong number of players while deserializing
         // state" if this disagrees with its own roster size, so every
@@ -124,8 +124,11 @@ public sealed class StateUpdateWriter(MatchState match)
         if (tier is not (MessageType.QuickUpdate or MessageType.FullUpdate))
             return;
 
-        writer.WriteUShort((ushort)(platform.X * 5));
-        writer.WriteUShort((ushort)(platform.Y * 5));
+        // x_ * 5 with no GML round(): the extension's own conversion is the
+        // whole quantisation. Note the underscored x_, which is the platform's
+        // real position — x is the rounded copy GM8 draws.
+        writer.WriteUShortFromReal(platform.X * 5);
+        writer.WriteUShortFromReal(platform.Y * 5);
         writer.WriteUByte(platform.MovementState);
     }
 
@@ -143,8 +146,13 @@ public sealed class StateUpdateWriter(MatchState match)
         }
 
         writer.WriteUShort(1);
-        writer.WriteUShort((ushort)Math.Round(intel.X * 5, MidpointRounding.ToEven));
-        writer.WriteUShort((ushort)Math.Round(intel.Y * 5, MidpointRounding.ToEven));
+
+        // round(x*5), unlike Character's plain x*5: GML's round is half-to-even
+        // and runs first, after which the extension's own half-away-from-zero
+        // round has nothing left to do. Two objects, two quantisations, one
+        // wire — see WireQuantise.
+        writer.WriteUShortFromReal(Gml.Round(intel.X * 5));
+        writer.WriteUShortFromReal(Gml.Round(intel.Y * 5));
         writer.WriteShort(intel.RecoverTimer);
     }
 
@@ -192,7 +200,7 @@ public sealed class StateUpdateWriter(MatchState match)
                 writer.WriteUByte(match.TimeLimitMinutes);
                 writer.WriteUInt(match.Timer);
                 writer.WriteUShort(match.ControlPointUnlock);
-                writer.WriteUByte((byte)(match.ArenaRoundStart / 2));
+                writer.WriteUByteFromReal(Gml.Floor(match.ArenaRoundStart / 2.0));
                 foreach (var point in match.ControlPoints)
                     WriteControlPoint(writer, point);
                 break;
@@ -233,7 +241,9 @@ public sealed class StateUpdateWriter(MatchState match)
         // team and cappingTeam are signed: -1 means neutral / nobody capping.
         writer.WriteByte(point.Team);
         writer.WriteByte(point.CappingTeam);
-        writer.WriteUShort(point.Capping);
+
+        // round(capping) in the reference: GML's half-to-even.
+        writer.WriteUShortFromReal(Gml.Round(point.Capping));
     }
 
     /// <summary>
@@ -241,7 +251,9 @@ public sealed class StateUpdateWriter(MatchState match)
     /// </summary>
     private static void WriteGenerator(NetWriter writer, GeneratorState generator)
     {
-        writer.WriteUShort(generator.Hp);
-        writer.WriteUShort(generator.ShieldHp);
+        // ceil(hp) in the reference: a generator on 0.1 hp is still standing,
+        // and the client must not draw it dead.
+        writer.WriteUShortFromReal(Gml.Ceil(generator.Hp));
+        writer.WriteUShortFromReal(Gml.Ceil(generator.ShieldHp));
     }
 }

@@ -311,15 +311,45 @@ Be honest about these in the parity harness rather than assuming:
    no `precise` argument, so the default applies. Confirm empirically.
 3. **Instance ordering under heavy churn** (projectiles created and destroyed in
    the same tick).
-4. **How Faucet Networking's `write_ushort`/`write_ubyte` convert a fractional
-   real.** The client sends `point_direction(...) * 65536 / 360` and
-   `min(255, point_distance(...) / 2)` without rounding either first
-   (`Scripts/Message Builders/ClientInputstate.gml`), so the extension decides.
-   This does **not** affect wire compatibility — inbound aim is carried verbatim
-   and decoded exactly as `netAimDirection * 360 / 65536` — but it decides
-   whether a ported bot aiming at a given angle produces the same byte a human
-   would. Only matters once bots aim; `Gg2.Protocol.PlayerInput.FromAim` says so
-   at the call site.
 
-All four are answerable in an afternoon with `gg2-agent`'s live bridge. Do that
+All three are answerable in an afternoon with `gg2-agent`'s live bridge. Do that
 before building on a guess.
+
+### Settled: how a real becomes an integer on the wire
+
+Was on this list; is not any more. Read out of the networking extension's own
+source ([Faucet Networking](https://github.com/Medo42/Faucet-Networking-Extension),
+`faucet/ReadWritable.hpp` and `faucet/clipped_cast.hpp`):
+
+```cpp
+template<typename IntType>
+void writeIntValue(double value) {
+    IntType converted = clipped_cast<IntType>(round(value));
+    ...
+}
+```
+
+So every `write_ubyte` / `write_byte` / `write_ushort` / `write_short` /
+`write_uint` / `write_int` of a fractional real:
+
+1. **rounds half away from zero** — C++ `std::round`, so `2.5 -> 3` and
+   `-2.5 -> -3`; and
+2. **clamps to the target type's range** rather than wrapping.
+
+Both defaults in C# are the other answer: `Math.Round` is half-to-even and an
+integer cast wraps. `Gg2.Protocol.WireQuantise` is the transcription; use it,
+and do not spell the conversion out by hand at a call site.
+
+**This is not GML's `round()`**, which *is* half-to-even, and the reference
+applies that one to some fields and not others. The two consequences worth
+holding on to:
+
+- `Character` writes its position as plain `x*5`
+  (`Character.events/User Event 12.xml`), so half-integral coordinates round
+  away from zero. `Intelligence` writes `round(x*5)`
+  (`Intelligence.events/User Event 10.xml`), so the same coordinate rounds to
+  even. **Two objects, two quantisations, one wire.**
+- The velocity field is asymmetric. `hspeed` is clamped to ±15 and written as
+  `hspeed*8.5` in a signed byte: `+15 -> 127.5 -> 128 -> clamps to 127`, while
+  `-15 -> -127.5 -> -128`, which fits. A parity harness that expects ±127 will
+  report a phantom mismatch at terminal leftward speed.

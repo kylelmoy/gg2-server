@@ -180,6 +180,54 @@ all, and it is worth more day-to-day than any learned policy.
 `ARCHITECTURE.md`'s control surface is the interactive version of this; this is
 the batch version, and the two should share their hosting code.
 
+## 9. `SIM_UUID`, and refusing a policy that does not match it
+
+**Requirement.** The simulation carries a version stamp. Every policy file
+records the `SIM_UUID` it was trained against and the `gg2-server` commit SHA,
+and the server **refuses** to load one that does not match its own. Refuse, do
+not warn.
+
+**Why.** A policy trained against physics that has since changed does not error
+and does not warn. It plays slightly worse forever and the cause is invisible.
+GG2 already has the idiom one layer up: the reference refuses a client whose
+`PROTOCOL_UUID` does not match rather than letting it connect and desync.
+
+**Derived from**, at minimum: the physics constants and the `BOT_*` block of
+`Constants.xml`; the items `SIMULATION.md` marks as contract rather than
+incidental; the observation layout version; the action encoding version. Bumped
+whenever any of those changes — which will be often and early, and every bump
+invalidates every checkpoint. That is correct.
+
+**Where it lands.** Naturally with phase 4 in `PLAN.md`, since there is nothing
+to stamp before the physics exists. Do not defer it past that: a stamp added
+after the first checkpoints are trained cannot tell you which ones were valid.
+
+## 10. A `Gg2.Env` project
+
+**Requirement.** A batch-stepping surface: N worlds advanced by one decision
+step per call, observations and rewards returned as one contiguous block; reset
+per world independently; snapshot and restore (item 2); seeded and reproducible
+regardless of batch size or thread count; damage-with-attribution, kills, deaths
+and termination reason out (item 7).
+
+**Why here rather than in the trainer.** It needs `WorldState` internals and it
+has to be fast in the tick loop. Extracting features across a process boundary
+means shipping raw world state per bot per tick, which is the one thing the
+batching exists to avoid. `Gg2.Parity` is the precedent for a non-serving
+project living in this repo.
+
+Start with a local socket and length-prefixed binary frames. Shared memory is an
+optimisation to make once there is a measurement that justifies it.
+
+## 11. Scenario construction without a gamemode
+
+**Requirement.** Spawn two characters of given classes at given positions on a
+given map, with no gamemode running, and step them.
+
+**Why.** Duel training and rollout search both want a fight, not a match. Item 8
+asks for a socket-free runner of *full matches*; this is the smaller case, and
+it is the one the sample budget actually spends its time in.
+
 ## Not asking for
 
 To keep the scope honest:
@@ -195,6 +243,15 @@ To keep the scope honest:
   dense reward, and it is exactly the part scripting is bad at.
 - Nothing here changes the wire protocol or the simulation's observable
   behaviour. Every constraint above is on structure, not on what the game does.
+
+## Where items 9-11 came from
+
+They are `gg2-rl/docs/CONTRACT.md`'s "What gg2-server does not yet promise".
+That repo is the trainer; this one owns the simulation, the env surface, the
+observation layout and the version stamp. The split is deliberate and the
+asymmetry is the point: anything needing `WorldState` internals, or needing to
+be fast in the tick loop, belongs here, and `gg2-rl` should be deletable without
+this repo losing a feature.
 
 ## Reference
 

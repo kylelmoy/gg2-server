@@ -36,6 +36,26 @@ right and this file has a bug — fix it here.
 | `string1` | 1 + n | ubyte length, then n raw bytes |
 | `string2` | 2 + n | ushort length, then n raw bytes |
 
+### How a number becomes those bytes
+
+GML has one numeric type — an IEEE-754 double — so the reference routinely
+writes a *fractional* value into an integer field and lets the networking
+extension decide what that is. It is not a cast.
+[Faucet Networking](https://github.com/Medo42/Faucet-Networking-Extension),
+`faucet/ReadWritable.hpp`:
+
+```cpp
+IntType converted = clipped_cast<IntType>(round(value));
+```
+
+**Round half away from zero, then clamp to the type's range.** Both C# defaults
+are the opposite answer — `Math.Round` is half-to-even, and an integer cast
+wraps — so this has its own transcription in `Gg2.Protocol.WireQuantise` and
+`NetWriter.Write*FromReal`. `docs/SIMULATION.md`, "Settled: how a real becomes
+an integer on the wire", has the consequences, including the two that bite:
+`Character` and `Intelligence` quantise the same coordinate differently, and the
+velocity byte saturates asymmetrically.
+
 ## Handshake
 
 Driven by `JoiningPlayer` (`Objects/InGameElements/JoiningPlayer.events/Create.xml`

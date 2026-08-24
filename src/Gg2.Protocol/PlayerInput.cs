@@ -71,17 +71,20 @@ public readonly record struct PlayerInput
     /// the client does before sending them.
     /// </summary>
     /// <remarks>
-    /// Distance saturates at 255 rather than wrapping — the client writes
-    /// <c>min(255, distance / 2)</c> (<c>Scripts/Message Builders/ClientInputstate.gml</c>),
-    /// and a wrap would turn a long-range shot into a point-blank one.
+    /// Reproduces what the client writes
+    /// (<c>Scripts/Message Builders/ClientInputstate.gml</c>):
+    /// <code>
+    /// write_ushort(s, point_direction(...) * 65536 / 360);
+    /// write_ubyte (s, min(255, point_distance(...) / 2));
+    /// </code>
+    /// Neither is rounded in GML, so both go through the networking extension's
+    /// conversion — round half away from zero, then clamp — which is what
+    /// <see cref="WireQuantise"/> does. The explicit <c>min(255, …)</c> on the
+    /// distance is therefore belt and braces: the cast would clamp anyway.
     /// <para>
-    /// <b>The rounding here is not verified against GM8.</b> The client passes a
-    /// fractional real to the Faucet Networking <c>write_ushort</c>/<c>write_ubyte</c>
-    /// and how that extension converts to an integer has not been checked
-    /// (docs/SIMULATION.md, "What is genuinely uncertain"). It does not affect
-    /// wire compatibility: inbound aim is carried verbatim and decoded exactly,
-    /// and this direction is only used when the port <em>chooses</em> an aim for
-    /// a bot — where any consistent quantisation is a valid action.
+    /// A direction of exactly 360 degrees quantises to 65536, which clamps to
+    /// 65535 rather than wrapping to 0 — so the angle is normalised into
+    /// <c>[0, 360)</c> first, as <c>point_direction</c> already guarantees.
     /// </para>
     /// </remarks>
     public static PlayerInput FromAim(PlayerKeys keys, double directionDegrees, double distancePixels)
@@ -90,10 +93,10 @@ public readonly record struct PlayerInput
         if (wrapped < 0)
             wrapped += 360.0;
 
-        var net = (ushort)((int)Math.Round(wrapped * 65536.0 / 360.0) & 0xFFFF);
-        var distance = (byte)Math.Clamp(Math.Round(distancePixels / 2.0), 0, 255);
-
-        return new PlayerInput(keys, net, distance);
+        return new PlayerInput(
+            keys,
+            WireQuantise.ToUShort(wrapped * 65536.0 / 360.0),
+            WireQuantise.ToUByte(Math.Min(255, distancePixels / 2.0)));
     }
 
     /// <summary>Reads the four payload bytes of an <c>INPUTSTATE</c>.</summary>

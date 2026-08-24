@@ -27,15 +27,21 @@ public sealed class ControlPointState
     /// <summary>Team currently capturing, or -1.</summary>
     public sbyte CappingTeam { get; set; } = -1;
 
-    /// <summary>Capture progress.</summary>
-    public ushort Capping { get; set; }
+    /// <summary>
+    /// Capture progress. A real in the reference, rounded on the way out.
+    /// </summary>
+    public double Capping { get; set; }
 }
 
+/// <summary>
+/// A generator's health. Reals, because damage is fractional and the reference
+/// sends <c>ceil(hp)</c> — a generator on 0.1 hp is still standing.
+/// </summary>
 public sealed class GeneratorState
 {
-    public ushort Hp { get; set; }
+    public double Hp { get; set; }
 
-    public ushort ShieldHp { get; set; }
+    public double ShieldHp { get; set; }
 }
 
 public sealed class MovingPlatformState
