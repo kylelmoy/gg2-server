@@ -39,6 +39,29 @@ public sealed class CollisionSampleTests
         [JsonPropertyName("solid")] public required string Solid { get; init; }
     }
 
+    /// <summary>
+    /// A character box swept across real geometry an eighth of a pixel at a
+    /// time, with the live game's <c>place_free</c> answer at each step.
+    /// </summary>
+    private sealed record SampleSweep
+    {
+        [JsonPropertyName("class")] public required string Class { get; init; }
+
+        /// <summary>"x" or "y" — which coordinate moves.</summary>
+        [JsonPropertyName("axis")] public required string Axis { get; init; }
+
+        [JsonPropertyName("x")] public required double X { get; init; }
+
+        [JsonPropertyName("y")] public required double Y { get; init; }
+
+        [JsonPropertyName("step")] public required double Step { get; init; }
+
+        [JsonPropertyName("steps")] public required int Steps { get; init; }
+
+        /// <summary>'1' where the game said free.</summary>
+        [JsonPropertyName("free")] public required string Free { get; init; }
+    }
+
     private sealed record SampleMap
     {
         [JsonPropertyName("name")] public required string Name { get; init; }
@@ -52,6 +75,8 @@ public sealed class CollisionSampleTests
         [JsonPropertyName("maskHeight")] public required int MaskHeight { get; init; }
 
         [JsonPropertyName("windows")] public required SampleWindow[] Windows { get; init; }
+
+        [JsonPropertyName("sweeps")] public SampleSweep[] Sweeps { get; init; } = [];
 
         public override string ToString() => Name;
     }
@@ -202,6 +227,121 @@ public sealed class CollisionSampleTests
         Assert.Equal(384, debug.MapHeight);
         Assert.Equal(708, debug.MaskWidth);
         Assert.Equal(414, debug.MaskHeight);
+    }
+
+    /// <summary>
+    /// <c>PlaceFree</c> agrees with the live game's, at fractional positions.
+    /// </summary>
+    /// <remarks>
+    /// Each sweep moves a real character box an eighth of a pixel at a time
+    /// across real geometry, anchored so the flip from free to blocked falls in
+    /// the middle. Three classes with three different box widths, because a rule
+    /// that happens to work for one box size is not a rule.
+    /// <para>
+    /// The eighth-pixel step is chosen so every sweep lands on the halves, which
+    /// is the only place round-half-to-even and round-half-up disagree.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [MemberData(nameof(MapNames))]
+    public void PlaceFreeAgreesWithTheLiveGameAtFractionalPositions(string name)
+    {
+        var sample = SampleFor(name);
+        var world = new CollisionWorld(LevelMap.FromPng(name, ReferenceTree.ReadMap(name)));
+
+        Assert.NotEmpty(sample.Sweeps);
+        var queries = 0;
+
+        foreach (var sweep in sample.Sweeps)
+        {
+            var box = CharacterBox.For(Enum.Parse<Gg2.Protocol.PlayerClass>(sweep.Class));
+            Assert.Equal(sweep.Steps, sweep.Free.Length);
+
+            // Every sweep must actually cross the boundary, or it agrees with
+            // anything.
+            Assert.Contains('1', sweep.Free);
+            Assert.Contains('0', sweep.Free);
+
+            for (var step = 0; step < sweep.Steps; step++)
+            {
+                var offset = step * sweep.Step;
+                var x = sweep.Axis == "x" ? sweep.X + offset : sweep.X;
+                var y = sweep.Axis == "x" ? sweep.Y : sweep.Y + offset;
+
+                var expected = sweep.Free[step] == '1';
+                var actual = world.PlaceFree(box, x, y);
+
+                if (expected != actual)
+                {
+                    Assert.Fail(
+                        $"{name} {sweep.Class} sweep along {sweep.Axis}: at ({x}, {y}) " +
+                        $"(rounded to {CollisionWorld.RoundPosition(x)}, {CollisionWorld.RoundPosition(y)}) " +
+                        $"game says {(expected ? "free" : "blocked")}, port says {(actual ? "free" : "blocked")}");
+                }
+
+                queries++;
+            }
+        }
+
+        Assert.True(queries > 1000, $"only {queries} place_free queries for {name}");
+    }
+
+    /// <summary>
+    /// The rounding is half to <b>even</b>, and the sweeps prove it rather than
+    /// merely being consistent with it.
+    /// </summary>
+    /// <remarks>
+    /// Round-half-up and round-half-to-even differ only at exact halves, so a
+    /// sweep only discriminates where a half sits on the boundary. Each of the
+    /// three classes has a different box width, which puts the threshold at a
+    /// different parity — so between them the sweeps cover both the case where
+    /// the even neighbour is below and where it is above.
+    /// </remarks>
+    [Theory]
+    [MemberData(nameof(MapNames))]
+    public void HalvesRoundToEvenAndTheSamplesProveIt(string name)
+    {
+        var sample = SampleFor(name);
+        var world = new CollisionWorld(LevelMap.FromPng(name, ReferenceTree.ReadMap(name)));
+
+        var discriminating = 0;
+
+        foreach (var sweep in sample.Sweeps)
+        {
+            var box = CharacterBox.For(Enum.Parse<Gg2.Protocol.PlayerClass>(sweep.Class));
+
+            for (var step = 0; step < sweep.Steps; step++)
+            {
+                var offset = step * sweep.Step;
+                var x = sweep.Axis == "x" ? sweep.X + offset : sweep.X;
+                var y = sweep.Axis == "x" ? sweep.Y : sweep.Y + offset;
+
+                var moving = sweep.Axis == "x" ? x : y;
+                if (Math.Abs(moving - Math.Truncate(moving) - 0.5) > 1e-9)
+                    continue; // not an exact half
+
+                // What half-up would have decided.
+                var halfUp = (int)Math.Round(moving, MidpointRounding.AwayFromZero);
+                var toEven = CollisionWorld.RoundPosition(moving);
+                if (halfUp == toEven)
+                    continue; // the two rules agree here
+
+                var underHalfUp = sweep.Axis == "x"
+                    ? world.PlaceFree(box, halfUp, y)
+                    : world.PlaceFree(box, x, halfUp);
+
+                var actual = world.PlaceFree(box, x, y);
+                var expected = sweep.Free[step] == '1';
+
+                Assert.Equal(expected, actual);
+
+                if (underHalfUp != expected)
+                    discriminating++;
+            }
+        }
+
+        Assert.True(discriminating > 0,
+            $"{name}: no sampled half distinguishes round-half-to-even from round-half-up");
     }
 
     /// <summary>

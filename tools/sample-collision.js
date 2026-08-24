@@ -120,6 +120,126 @@ function windowsFor(mask) {
   return spots;
 }
 
+//---------------------------------------------------------------------------
+// place_free, at fractional positions
+//
+// collision_point pins where a cell is. It says nothing about how GM8 turns a
+// character's real-valued position into the integer bounding box it collides
+// with, and a character is almost never on an integer coordinate - so that rule
+// is wrong nearly always if it is wrong at all.
+//
+// These sweep a real character box across real geometry an eighth of a pixel at
+// a time, which lands on every quarter and half. The half is the interesting
+// one: it is the only place round-half-to-even and round-half-up disagree.
+//---------------------------------------------------------------------------
+
+const SWEEP_STEPS = 64;
+const SWEEP_STEP = 0.125;
+
+// Querly, not Quote: the sprite does not share the class's name. The offsets
+// are the box's right and bottom, which is where the sweep's threshold is.
+// Three different widths on purpose - a rule that happens to work for one box
+// size is not a rule.
+const CLASS_SPRITES = [
+  { name: 'Scout', sprite: 'ScoutRedS', right: 6, bottom: 23 },
+  { name: 'Heavy', sprite: 'HeavyRedS', right: 9, bottom: 23 },
+  { name: 'Pyro', sprite: 'PyroRedS', right: 7, bottom: 23 },
+];
+
+async function sweep(sprite, axis, x, y) {
+  const moving = axis === 'x' ? `${x} + qx*${SWEEP_STEP}` : String(x);
+  const other = axis === 'x' ? String(y) : `${y} + qx*${SWEEP_STEP}`;
+
+  const code = [
+    `global.dummy.sprite_index = ${sprite};`,
+    'CollisionMapO.solid = true;',
+    'global.sweep = "";',
+    'with(global.dummy) {',
+    `    for(qx=0; qx<${SWEEP_STEPS}; qx+=1)`,
+    `        global.sweep += string(place_free(${moving}, ${other}));`,
+    '}',
+    'CollisionMapO.solid = false;',
+  ].join('\n');
+
+  await mcp.callTool('gg2_eval', { code });
+  const bits = await evalx('global.sweep');
+  if (bits.length !== SWEEP_STEPS) throw new Error(`sweep returned ${bits.length} of ${SWEEP_STEPS}`);
+  return bits;
+}
+
+// Sweep lines are placed so the box starts free and ends blocked: a sweep that
+// is all one value pins nothing.
+function sweepSites(mask) {
+  const sites = [];
+  const openAt = (cx, cy, w, h) => {
+    for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) if (mask.solid(cx + i, cy + j)) return false;
+    return true;
+  };
+  const solidColumn = (cx, cy, h) => {
+    for (let j = 0; j < h; j++) if (!mask.solid(cx, cy + j)) return false;
+    return true;
+  };
+  const solidRow = (cx, cy, w) => {
+    for (let i = 0; i < w; i++) if (!mask.solid(cx + i, cy)) return false;
+    return true;
+  };
+
+  // Horizontal: open run with a wall on its right.
+  for (let cy = 4; cy < mask.height - 12 && sites.length < 3; cy++)
+    for (let cx = 4; cx < mask.width - 14; cx++)
+      if (openAt(cx, cy, 10, 8) && solidColumn(cx + 10, cy, 8)) {
+        sites.push({ axis: 'x', x: cx * CELL + 12, y: cy * CELL + 20, wall: (cx + 10) * CELL });
+        break;
+      }
+
+  // Vertical: open column with a floor under it.
+  for (let cy = 4; cy < mask.height - 14 && sites.length < 6; cy++)
+    for (let cx = 4; cx < mask.width - 8; cx++)
+      if (openAt(cx, cy, 5, 9) && solidRow(cx, cy + 9, 5)) {
+        sites.push({ axis: 'y', x: cx * CELL + 15, y: cy * CELL + 12, wall: (cy + 9) * CELL });
+        break;
+      }
+
+  return sites;
+}
+
+async function placeFreeSweeps(mask) {
+  const sweeps = [];
+
+  // Recreated per map, not once: changing map destroys every instance, and a
+  // `with` on a dead one runs zero times and silently produces nothing.
+  await mcp.callTool('gg2_eval', {
+    code: 'global.dummy = instance_create(0, 0, CollisionDummy);',
+  });
+
+  for (const site of sweepSites(mask)) {
+    for (const cls of CLASS_SPRITES) {
+      // Centre the sweep on this class's own threshold, so it always starts
+      // free and ends blocked with the flip in the middle. A sweep that never
+      // reaches the wall agrees with anything.
+      const offset = site.axis === 'x' ? cls.right : cls.bottom;
+      const start = site.wall - offset - SWEEP_STEPS * SWEEP_STEP / 2;
+
+      const x = site.axis === 'x' ? start : site.x;
+      const y = site.axis === 'x' ? site.y : start;
+
+      const free = await sweep(cls.sprite, site.axis, x, y);
+      sweeps.push({
+        class: cls.name,
+        axis: site.axis,
+        x,
+        y,
+        step: SWEEP_STEP,
+        steps: SWEEP_STEPS,
+        free,
+      });
+      process.stdout.write('+');
+    }
+  }
+
+  return sweeps;
+}
+
 async function main() {
   const out = { generated: new Date().toISOString().slice(0, 10), cell: CELL, maps: [] };
 
@@ -159,8 +279,9 @@ async function main() {
       process.stdout.write('.');
     }
 
+    record.sweeps = await placeFreeSweeps(mask);
     out.maps.push(record);
-    process.stdout.write(` ${record.windows.length} windows\n`);
+    process.stdout.write(` ${record.windows.length} windows, ${record.sweeps.length} sweeps\n`);
   }
 
   const total = out.maps.reduce((n, m) => n + m.windows.length * WINDOW_W * WINDOW_H, 0);

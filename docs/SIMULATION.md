@@ -124,13 +124,32 @@ quote          1.07        140       6.063
 ```
 
 Character collision boxes are **rectangles**, taken from the sprite's manual
-mask bounds relative to its origin (`Character.events/Create.xml:20-23`). Two
-samples, and the rest are in `Sprites/**/<Class><Team>S.xml`:
+mask bounds relative to its origin (`Character.events/Create.xml:5-8`). All ten,
+read out of the running game — they do **not** follow a pattern, so do not
+extrapolate from one:
 
 ```
-scout:  left -6  right +6  top -10  bottom +23     (origin 30,40; bounds 24,36,30,63)
-heavy:  left -9  right +9  top -12  bottom +23     (origin 19,40; bounds 10,28,28,63)
+class      left  right   top  bottom
+scout       -6     +6    -10    +23
+soldier     -6     +6     -8    +23
+sniper      -6     +6     -8    +23
+demoman     -7     +7    -10    +23
+medic       -7     +7     -8    +23
+engineer    -6     +6    -10    +23
+heavy       -9     +9    -12    +23
+spy         -6     +6    -10    +23
+pyro        -7     +7     -6    +23
+quote       -7     +7    -12    +11
 ```
+
+Widths are 6, 7 or 9; tops range from -6 to -12; and Quote is a different shape
+altogether, ending at +11 where every other class ends at +23. Red and blue
+share a mask on every class. Quote's sprites are named `Querly*`, which is why
+they do not turn up under a `<Class><Team>S` search.
+
+Both ends of the box are **inclusive**, and the position is rounded to an
+integer before the box is built — see "Settled: `place_free` rounds the
+position" below. `Gg2.Simulation.CharacterBox` is the transcription.
 
 ### Order of operations
 
@@ -302,14 +321,9 @@ Be honest about these in the parity harness rather than assuming:
 
 1. **Instance ordering under heavy churn** (projectiles created and destroyed in
    the same tick).
-2. **How GM8 turns a fractional instance position into a bounding box** for
-   `place_free`. The mask-cell rule below is settled; what is not is whether a
-   character at `x = 100.4` collides as though its rectangle were at 100, 100.4
-   or 101. It matters everywhere: a character is almost never on an integer
-   coordinate.
 
-Both are answerable with `gg2-agent`'s live bridge. Do that before building on a
-guess.
+That is the only one left, and it is answerable with `gg2-agent`'s live bridge.
+Do that before building on a guess.
 
 ### Settled: the collision boundary rule
 
@@ -331,6 +345,36 @@ across **23,040 sampled points on three maps** — the fixture is
 - **Runtime `sprite_add` sprites are precise.** If the collision sprite were
   not, `collision_point` with `prec = 1` would fall back to its bounding box —
   the whole map — and every probe would answer solid. They do not.
+
+### Settled: `place_free` rounds the position, half to even
+
+The cell rule says where a wall is. This says where the *character* is, and it
+was the last thing in the way of a collision implementation — a character is
+almost never on an integer coordinate, so a wrong rule here is wrong nearly
+always.
+
+**GM8 rounds the instance position to an integer before building the bounding
+box it collides with, half to even.** The box then covers
+`[round(x) + left, round(x) + right]` **inclusive** on both ends.
+
+Measured by sweeping a real character box toward a wall an eighth of a pixel at
+a time. With a Heavy box (right offset +9) and a wall whose first solid pixel is
+1572, the threshold is `1572 - 9 = 1563` and the flip falls between
+`x = 1562.5` (free) and `x = 1562.625` (blocked). Only half-to-even explains
+that: 1562.5 rounds *down* to the even 1562, where half-up would give 1563 and
+block. Floor and ceiling are ruled out outright — floor would leave 1565.5 free
+for a Scout, ceiling would block 1565.25. Confirmed on both axes and across
+three classes whose box widths put the threshold at different parities.
+
+**Three different roundings live in this codebase and they are not the same
+one.** Getting them crossed produces a one-unit error that looks exactly like
+netcode jitter:
+
+| Where | Rule | In C# |
+|---|---|---|
+| A real onto the wire (`write_ushort` and friends) | half **away from zero**, then clamp | `Gg2.Protocol.WireQuantise` |
+| GML's own `round()` | half to **even** | `Gg2.Protocol.Gml.Round` |
+| A position into a collision box | half to **even** | `Gg2.Simulation.CollisionWorld.RoundPosition` |
 
 ### `map_width()` is the art, not the mask
 

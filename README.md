@@ -3,7 +3,7 @@
 A headless Gang Garrison 2 server in C#, wire-compatible with the stock Game
 Maker 8 client.
 
-**Status: phases 0-2 of [`docs/PLAN.md`](docs/PLAN.md) are done.**
+**Status: phases 0–2 of [`docs/PLAN.md`](docs/PLAN.md) are done; phase 3 is in progress.**
 
 | Project | What |
 |---|---|
@@ -12,6 +12,7 @@ Maker 8 client.
 | `Gg2.Server` | Sockets, the join handshake, the roster, the 30 Hz broadcast. The only I/O. |
 | `Gg2.Host` | `gg2-server`, the console entry point. |
 | `Gg2.Parity` | `gg2-parity`: a stream recorder, a byte diff, and a trace replayer with drift reporting. |
+| `Gg2.Simulation` | Collision so far. Pure — no sockets, no clock, no files. |
 
 **Phase 0** — all 22 built-in maps decode **cell-for-cell** against
 `gg2-agent/tools/walkmask.js`, the decoder that has itself been checked against
@@ -29,8 +30,13 @@ server with two bots playing `ctf_truefort` is checked in as a fixture; replayin
 it against the empty simulation names the tick, slot, field and signed delta of
 every divergence.
 
-Nothing simulates anything yet. Phase 3, collision, is next: `placeFree` has to
-agree with the engine exactly before any trajectory can.
+**Phase 3** — collision, in progress. `PlaceFree` agrees with the running game
+exactly across 26,496 samples on three maps: 23,040 `collision_point` probes and
+3,456 fractional-position sweeps of real character boxes. That settles the map
+geometry; the solid rectangles — gates, player walls, dropdown platforms — are
+next.
+
+Nothing moves yet. Phase 4, the character physics, comes after.
 
 ```powershell
 $env:PATH = "$env:LOCALAPPDATA\Microsoft\dotnet;$env:PATH"   # .NET 9, user-local
