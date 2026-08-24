@@ -1,46 +1,15 @@
-using Gg2.Maps;
+using Gg2.Protocol;
 
-namespace Gg2.Server;
+namespace Gg2.Maps;
 
 /// <summary>
-/// Which gamemode a map is, and therefore which HUD block its state updates
-/// carry.
+/// Which gamemode a map is, decided the way the reference decides it.
 /// </summary>
 /// <remarks>
-/// There is no stored mode: the reference decides from which objects the map
-/// created (<c>Scripts/Maps/basicRoomSetup.gml:36-70</c>), and so does this.
-/// <b>The order of the tests is load-bearing</b> — every control point is a
-/// child of <c>ControlPoint</c>, so the specific kinds have to be ruled out
-/// before the generic branch, and a CTF map with a setup gate is Invasion
-/// rather than CTF.
+/// Lives with the maps because it is a fact about a map's entity list, and is
+/// needed by anything that has to frame a state update — the server, and the
+/// parity harness. <see cref="Gg2.Protocol.GameMode"/> is the selector itself.
 /// </remarks>
-public enum GameMode
-{
-    /// <summary>Intel present, no setup gate. <c>CTFHUD</c>.</summary>
-    CaptureTheFlag,
-
-    /// <summary>Intel present <em>and</em> a setup gate. <c>InvasionHUD</c>.</summary>
-    Invasion,
-
-    /// <summary><c>GeneratorHUD</c>.</summary>
-    Generator,
-
-    /// <summary><c>ArenaHUD</c>.</summary>
-    Arena,
-
-    /// <summary><c>KothHUD</c>.</summary>
-    KingOfTheHill,
-
-    /// <summary><c>DKothHUD</c>.</summary>
-    DualKingOfTheHill,
-
-    /// <summary>Numbered control points. <c>ControlPointHUD</c>.</summary>
-    ControlPoints,
-
-    /// <summary>Nothing else matched. <c>TeamDeathmatchHUD</c>.</summary>
-    TeamDeathmatch,
-}
-
 public static class GameModes
 {
     private static readonly string[] NumberedControlPoints =
@@ -87,6 +56,44 @@ public static class GameModes
     /// (<c>basicRoomSetup.gml:7</c>).
     /// </summary>
     public static int TotalAreas(LevelMap map) => 1 + Count(map, EntityTypes.NextArea);
+
+    /// <summary>
+    /// Everything a state update's shape depends on, beyond the roster.
+    /// </summary>
+    public static WorldShape ShapeOf(LevelMap map)
+    {
+        var mode = Of(map);
+
+        return new WorldShape
+        {
+            GameMode = mode,
+            ControlPointCount = ControlPointsFor(map, mode),
+            MovingPlatformCount = Count(map, EntityTypes.MovingPlatform),
+        };
+    }
+
+    /// <summary>
+    /// How many control-point blocks the mode's HUD writes. Not "how many
+    /// control points the map has": <c>CTFHUD</c> and <c>TeamDeathmatchHUD</c>
+    /// write none whatever the map contains.
+    /// </summary>
+    public static int ControlPointsFor(LevelMap map, GameMode mode) => mode switch
+    {
+        GameMode.Arena => Count(map, EntityTypes.ArenaControlPoint),
+        GameMode.KingOfTheHill => Count(map, EntityTypes.KothControlPoint),
+        GameMode.DualKingOfTheHill =>
+            Count(map, EntityTypes.KothRedControlPoint) + Count(map, EntityTypes.KothBlueControlPoint),
+        GameMode.ControlPoints => NumberedControlPointCount(map),
+        _ => 0,
+    };
+
+    private static int NumberedControlPointCount(LevelMap map)
+    {
+        var count = 0;
+        foreach (var type in NumberedControlPoints)
+            count += Count(map, type);
+        return count;
+    }
 
     private static bool Has(LevelMap map, string type)
     {

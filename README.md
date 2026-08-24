@@ -11,7 +11,7 @@ Maker 8 client.
 | `Gg2.Maps` | Map PNG level-data extraction, the walkmask decoder, GGON, the entity list. |
 | `Gg2.Server` | Sockets, the join handshake, the roster, the 30 Hz broadcast. The only I/O. |
 | `Gg2.Host` | `gg2-server`, the console entry point. |
-| `Gg2.Parity` | `gg2-parity`: a passive stream recorder and a byte diff. |
+| `Gg2.Parity` | `gg2-parity`: a passive stream recorder, a stream framer and a byte diff. |
 
 **Phase 0** — all 22 built-in maps decode **cell-for-cell** against
 `gg2-agent/tools/walkmask.js`, the decoder that has itself been checked against
@@ -24,7 +24,9 @@ each, **byte-identical apart from four bytes of CTF round timer** — a value th
 port has no simulation to produce, not a layout difference.
 
 Nothing simulates anything. Phase 2, the parity harness, comes before any
-physics; its recorder exists and its framer does not.
+physics: its recorder and its stream framer exist, and the trace format and
+replayer do not. A recording of the real GM8 server is checked in as a fixture,
+and framing it to the last byte is a test.
 
 ```powershell
 $env:PATH = "$env:LOCALAPPDATA\Microsoft\dotnet;$env:PATH"   # .NET 9, user-local

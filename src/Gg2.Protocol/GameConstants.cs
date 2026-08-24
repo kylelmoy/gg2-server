@@ -34,6 +34,13 @@ public static class GameConstants
 
     public const int MaxPlayerNameLength = 20;
 
+    /// <summary>
+    /// The reference's <c>STATE_UPDATE</c>, which is an alias of
+    /// <c>FULL_UPDATE</c> rather than a message of its own — see
+    /// <see cref="MessageType"/>.
+    /// </summary>
+    public const byte StateUpdate = (byte)MessageType.FullUpdate;
+
     public const int CharacterAnimationNormal = 0;
     public const int CharacterAnimationIntel = 2;
     public const int CharacterAnimationLen = 4;

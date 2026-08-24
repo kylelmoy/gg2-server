@@ -68,6 +68,29 @@ public sealed class ReceiveBuffer
     /// <summary>The next byte without consuming it. Only valid when not empty.</summary>
     public byte Peek() => _buffer[_start];
 
+    /// <summary>
+    /// Everything buffered, without consuming any of it.
+    /// </summary>
+    /// <remarks>
+    /// For readers whose message length is not known until the message has been
+    /// parsed — a state update's width depends on bytes inside it — the only
+    /// way to frame one is to try, and to consume nothing if it turns out to be
+    /// truncated. Parse this span, then <see cref="Consume"/> what the parse
+    /// used. Invalidated by any mutation.
+    /// </remarks>
+    public ReadOnlySpan<byte> Buffered => _buffer.AsSpan(_start, Count);
+
+    /// <summary>Drops <paramref name="count"/> bytes from the front.</summary>
+    public void Consume(int count)
+    {
+        if ((uint)count > (uint)Count)
+            throw new ArgumentOutOfRangeException(nameof(count));
+
+        _start += count;
+        if (_start == _end)
+            _start = _end = 0;
+    }
+
     /// <summary>Discards everything buffered.</summary>
     public void Clear() => _start = _end = 0;
 

@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Gg2.Protocol\Gg2.Protocol.csproj" />
+    <ProjectReference Include="..\Gg2.Maps\Gg2.Maps.csproj" />
   </ItemGroup>
 
 </Project>

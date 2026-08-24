@@ -34,7 +34,6 @@ public sealed class ConstantsTests
         ("INPUTSTATE", MessageType.InputState),
         ("CHANGE_MAP", MessageType.ChangeMap),
         ("FULL_UPDATE", MessageType.FullUpdate),
-        ("STATE_UPDATE", MessageType.StateUpdate),
         ("QUICK_UPDATE", MessageType.QuickUpdate),
         ("PLAYER_DEATH", MessageType.PlayerDeath),
         ("SERVER_FULL", MessageType.ServerFull),
@@ -87,6 +86,7 @@ public sealed class ConstantsTests
 
     private static readonly (string Name, double Value)[] Scalars =
     [
+        ("STATE_UPDATE", GameConstants.StateUpdate),
         ("VERSION", GameConstants.Version),
         ("LOBBY_SERVER_PORT", GameConstants.LobbyServerPort),
         ("AUTH_SERVER_PORT", GameConstants.AuthServerPort),
@@ -192,7 +192,7 @@ public sealed class ConstantsTests
 
     [Fact]
     public void StateUpdateIsAnAliasOfFullUpdate() =>
-        Assert.Equal(MessageType.FullUpdate, MessageType.StateUpdate);
+        Assert.Equal((byte)MessageType.FullUpdate, GameConstants.StateUpdate);
 
     [Fact]
     public void KickReasonsShareTheMessageIdSpace()

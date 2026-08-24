@@ -75,4 +75,14 @@ public ref struct NetReader
 
     /// <summary>Skips <paramref name="count"/> bytes without decoding them.</summary>
     public void Skip(int count) => Take(count);
+
+    /// <summary>
+    /// An arbitrary window of the underlying buffer, ignoring the read
+    /// position.
+    /// </summary>
+    /// <remarks>
+    /// For a framer that wants to report a message's whole body after decoding
+    /// it field by field. Does not move the position.
+    /// </remarks>
+    public readonly ReadOnlySpan<byte> Window(int start, int length) => _buffer.Slice(start, length);
 }

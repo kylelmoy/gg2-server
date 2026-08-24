@@ -65,7 +65,60 @@ internal static class Program
         File.WriteAllBytes(output, bytes);
 
         Console.WriteLine($"{bytes.Length} bytes in {recorder.Chunks.Count} reads over {seconds}s -> {output}");
+
+        Summarise(bytes, recorder.Map, Flag(args, "--maps"));
         return 0;
+    }
+
+    /// <summary>
+    /// Frames what was recorded and prints a message census.
+    /// </summary>
+    /// <remarks>
+    /// Worth doing at record time rather than later: a trace that cannot be
+    /// framed is not a trace, and finding that out while the server is still
+    /// running is much cheaper than finding it out in CI.
+    /// </remarks>
+    private static void Summarise(byte[] trace, string map, string? mapDirectory)
+    {
+        var directory = mapDirectory
+                        ?? (Environment.GetEnvironmentVariable("GG2_REFERENCE") is { Length: > 0 } reference
+                            ? Path.Combine(reference, "Source", "gg2", "Included Files")
+                            : @"D:\code\Gang-Garrison-2\Source\gg2\Included Files");
+
+        var png = Path.Combine(directory, map + ".png");
+        if (!File.Exists(png))
+        {
+            Console.WriteLine($"(no framing: {png} not found; pass --maps)");
+            return;
+        }
+
+        var shape = Gg2.Maps.GameModes.ShapeOf(Gg2.Maps.LevelMap.FromPng(map, File.ReadAllBytes(png)));
+        var stream = new Gg2.Protocol.ServerStream();
+        stream.SetShape(shape);
+
+        var counts = new SortedDictionary<string, int>(StringComparer.Ordinal);
+        var reader = new Gg2.Protocol.NetReader(trace);
+
+        try
+        {
+            while (reader.Remaining > 0)
+            {
+                var message = stream.Read(ref reader);
+                var name = message.Type.ToString();
+                counts[name] = counts.GetValueOrDefault(name) + 1;
+            }
+        }
+        catch (Gg2.Protocol.ProtocolException e)
+        {
+            Console.WriteLine($"framing stopped at byte {reader.Position} of {trace.Length}: {e.Message}");
+            return;
+        }
+
+        Console.WriteLine($"{shape.GameMode}, {shape.ControlPointCount} control point(s), " +
+                          $"{shape.MovingPlatformCount} platform(s); framed cleanly to the last byte");
+
+        foreach (var (name, count) in counts)
+            Console.WriteLine($"  {count,5}  {name}");
     }
 
     private static int Diff(string[] args)

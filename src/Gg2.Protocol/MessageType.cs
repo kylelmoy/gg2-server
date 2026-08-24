@@ -9,8 +9,11 @@ namespace Gg2.Protocol;
 /// commands and a few reason codes, exactly as the reference does. The gaps
 /// (26, 29, 48, 49) are unallocated there too; do not reuse them.
 /// <para>
-/// <see cref="Gg2.Protocol.MessageType.StateUpdate"/> is the reference's
-/// <c>STATE_UPDATE</c>, which is an alias of <c>FULL_UPDATE</c>.
+/// The reference's <c>STATE_UPDATE</c> is <b>not</b> here. It is an alias of
+/// <c>FULL_UPDATE</c> — same value, same message — and a second enum member
+/// sharing a value only makes <c>ToString()</c> pick unpredictably between the
+/// two names. It lives as <see cref="GameConstants.StateUpdate"/> instead, so
+/// the transcription is still complete.
 /// </para>
 /// </remarks>
 public enum MessageType : byte
@@ -24,7 +27,6 @@ public enum MessageType : byte
     InputState = 6,
     ChangeMap = 7,
     FullUpdate = 8,
-    StateUpdate = 8,
     QuickUpdate = 9,
     PlayerDeath = 10,
     ServerFull = 11,

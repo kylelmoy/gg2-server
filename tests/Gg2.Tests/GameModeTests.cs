@@ -1,4 +1,5 @@
 using Gg2.Maps;
+using Gg2.Protocol;
 using Gg2.Server;
 
 namespace Gg2.Tests;

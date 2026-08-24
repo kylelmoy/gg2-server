@@ -45,11 +45,39 @@ A ~200-line console app. Speak the handshake from `PROTOCOL.md`, `RESERVE_SLOT`,
 inbound stream into a list of framed messages and write it to disk with a tick
 index.
 
-**Still to do:** framing. The recorder currently keeps raw bytes with arrival
-times, which is enough to diff two servers but not to replay a trace. Framing
-the server-to-client stream needs the roster size and the gamemode, because both
-change the width of a state update — that is the next piece, and it is what
-turns a recording into a fixture.
+**Framing is built too** — `Gg2.Protocol.ServerStream` and
+`StateUpdateReader`. `record` now frames what it captured and prints a message
+census before it exits, because a trace that cannot be framed is not a trace and
+finding that out while the server is still up is much cheaper than finding it
+out in CI.
+
+The stream is **not self-delimiting**, and this is the part worth knowing before
+writing a reader: a state update's width comes from three places at once.
+
+1. **The roster**, which the reader has to track exactly as the client does —
+   including the compaction on `PLAYER_LEAVE`.
+2. **The map**, via `WorldShape`: the gamemode picks the HUD block, and both the
+   control-point count and the `MovingPlatform` count are map facts that appear
+   on the wire with no count prefix.
+3. **Bytes inside the update.** A player's `subobjects` byte decides whether a
+   character and a sentry follow; a sentry's hp byte carries "built" in bit 7
+   and an unbuilt one has an extra `vspeed` byte on a `FULL_UPDATE`; a demoman's
+   `Minegun` writes `lobbed` and then that many seven-byte mine blocks.
+
+Point 3 has a consequence that is easy to miss: **the reader must know each
+player's class**, because the weapon block that closes a character's
+`FULL_UPDATE` is class-dependent. Only `Medigun` and `Minegun` define a
+`User Event 12` at all, so it is zero bytes for eight classes out of ten — and
+then suddenly is not.
+
+A recording of the real GM8 server on `ctf_truefort` is checked in as
+`tests/Gg2.Tests/Fixtures/reference-ctf_truefort-spectator.bin`, and the test
+that frames it to the last byte is the one that would notice any of the above
+being wrong.
+
+**Still to do:** the trace *format* — a recording plus the tick index and the
+roster events, written in a form the replayer consumes — and the replayer
+itself.
 
 ### What a wedged client looks like
 
