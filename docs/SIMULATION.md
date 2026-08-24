@@ -311,6 +311,15 @@ Be honest about these in the parity harness rather than assuming:
    no `precise` argument, so the default applies. Confirm empirically.
 3. **Instance ordering under heavy churn** (projectiles created and destroyed in
    the same tick).
+4. **How Faucet Networking's `write_ushort`/`write_ubyte` convert a fractional
+   real.** The client sends `point_direction(...) * 65536 / 360` and
+   `min(255, point_distance(...) / 2)` without rounding either first
+   (`Scripts/Message Builders/ClientInputstate.gml`), so the extension decides.
+   This does **not** affect wire compatibility — inbound aim is carried verbatim
+   and decoded exactly as `netAimDirection * 360 / 65536` — but it decides
+   whether a ported bot aiming at a given angle produces the same byte a human
+   would. Only matters once bots aim; `Gg2.Protocol.PlayerInput.FromAim` says so
+   at the call site.
 
-All three are answerable in an afternoon with `gg2-agent`'s live bridge. Do that
+All four are answerable in an afternoon with `gg2-agent`'s live bridge. Do that
 before building on a guess.

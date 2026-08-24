@@ -58,8 +58,18 @@ Then, if a password is set:
 ```
 server -> client   PASSWORD_REQUEST (25)
 client -> server   string1 password
-server -> client   PASSWORD_WRONG (27)     on mismatch; connection stays open
+server -> client   PASSWORD_WRONG (27)     on mismatch; connection is then dropped
 ```
+
+A wrong password is **not** retryable. `serviceJoiningPlayer.gml:70-78` writes
+`PASSWORD_WRONG` without assigning `newState`, and the `state = newState` at
+line 186 then destroys the `JoiningPlayer` and its socket. The client agrees:
+its `PASSWORD_WRONG` case shows a message and destroys the `Client`
+(`ClientBeginStep.gml:420-423`). The same "fall through with `newState == -1`"
+rule ends the connection after `INCOMPATIBLE_PROTOCOL`, after `SERVER_FULL`, on
+a `PLAYER_JOIN` with no prior `RESERVE_SLOT`, and on any unrecognised byte in
+`STATE_EXPECT_COMMAND` — that last one is the opposite of the in-game command
+loop's behaviour, which silently ignores unknown bytes.
 
 On success (or immediately, with no password) the server sends its greeting:
 
@@ -90,13 +100,33 @@ reading one byte at a time:
 Names are truncated to `MAX_PLAYERNAME_LENGTH` = 20.
 
 On `PLAYER_JOIN` the server does this, in order
-(`serviceJoiningPlayer.gml:106-125`):
+(`serviceJoiningPlayer.gml:108-129`):
 
-1. sends `JOIN_UPDATE` on the joining socket alone —
-   `ubyte playerId`, `ubyte currentMapArea` — followed by a `FULL_UPDATE`
-   (`Scripts/Message Builders/ServerJoinUpdate.gml`);
+1. sends the whole join burst on the joining socket alone
+   (`Scripts/Message Builders/ServerJoinUpdate.gml`) — this is **more than a
+   `JOIN_UPDATE`**, and a port that sends only the header desynchronises the
+   client immediately:
+
+   ```
+   JOIN_UPDATE (44)   ubyte playerId        // = roster size *before* the join
+                      ubyte currentMapArea
+   CHANGE_MAP  (7)    string1 map, string1 md5
+   for each existing roster entry i, in order:
+       PLAYER_JOIN        (1)  string1 name
+       PLAYER_CHANGECLASS (4)  ubyte i, ubyte class
+       PLAYER_CHANGETEAM  (3)  ubyte i, ubyte team
+   FULL_UPDATE (8)    ...
+   ```
+
+   The `CHANGE_MAP` is what makes the client load the map
+   (`ClientBeginStep.gml:471`), and the per-player replay is the only way the
+   joiner learns the existing roster — the `FULL_UPDATE` that follows carries
+   state for players it must already know about, and aborts with "Wrong number
+   of players while deserializing state" if it does not.
+
 2. creates the `Player` and appends it to the roster;
-3. broadcasts `PLAYER_JOIN` + `string1 name` **to everyone, including the joiner**;
+3. broadcasts `PLAYER_JOIN` + `string1 name` **to everyone, including the joiner**
+   — so the joiner learns about *itself* here, after the replay of everyone else;
 4. optionally sends `MESSAGE_STRING` with the welcome message, to that socket only.
 
 ## Roster indexing — the thing that breaks everything if you get it wrong

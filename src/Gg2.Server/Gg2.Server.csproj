@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The only project with I/O in it. docs/ARCHITECTURE.md:
+       Gg2.Simulation must never reference this one. -->
+  <PropertyGroup>
+    <RootNamespace>Gg2.Server</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Gg2.Protocol\Gg2.Protocol.csproj" />
+    <ProjectReference Include="..\Gg2.Maps\Gg2.Maps.csproj" />
+  </ItemGroup>
+
+</Project>

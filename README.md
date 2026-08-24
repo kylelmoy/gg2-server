@@ -3,8 +3,33 @@
 A headless Gang Garrison 2 server in C#, wire-compatible with the stock Game
 Maker 8 client.
 
-**Status: documentation only.** No code has been written yet. Everything here is
-the specification and plan for an implementation that has not started.
+**Status: phase 0 of [`docs/PLAN.md`](docs/PLAN.md) is done; phase 1 runs.**
+
+| Project | What |
+|---|---|
+| `Gg2.Protocol` | The constant table, the wire types, the little-endian buffer reader/writer, command framing, `PlayerInput`. |
+| `Gg2.Maps` | Map PNG level-data extraction, the walkmask decoder, GGON, the entity list. |
+| `Gg2.Server` | Sockets, the join handshake, the roster, the 30 Hz broadcast. The only I/O. |
+| `Gg2.Host` | `gg2-server`, the console entry point. |
+
+Phase 0's exit criterion is met: all 22 built-in maps decode **cell-for-cell**
+against `gg2-agent/tools/walkmask.js`, which is the decoder that has itself been
+checked against the running game.
+
+Phase 1 is built and tested against a real socket client on every shipped map —
+handshake, join burst, roster compaction, command framing and the
+`INPUTSTATE`/`QUICK_UPDATE` cadence over an empty world. Its exit criterion
+names the **stock GM8 client**, and that has not been run yet; until it has,
+phase 1 is not signed off.
+
+Nothing simulates anything. Phase 2, the parity harness, comes before any
+physics.
+
+```powershell
+$env:PATH = "$env:LOCALAPPDATA\Microsoft\dotnet;$env:PATH"   # .NET 9, user-local
+dotnet test Gg2.sln
+dotnet run --project src/Gg2.Host -- --map ctf_truefort
+```
 
 ## Why
 
@@ -44,8 +69,9 @@ should be discarded in favour of whatever is fastest and most testable in C#.
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Proposed C# structure, shaped for performance and testability. |
 | [`docs/PLAN.md`](docs/PLAN.md) | Phased implementation plan with exit criteria. |
 | [`docs/SOURCEMAP.md`](docs/SOURCEMAP.md) | Where everything lives in the reference tree. |
+| [`docs/BOTAI.md`](docs/BOTAI.md) | Constraints the port must honour to keep search-based and learned bots possible. Structure only; no ML in this repo. |
 
-## The four repositories
+## The five repositories
 
 | Repo | What |
 |---|---|
@@ -53,6 +79,7 @@ should be discarded in favour of whatever is fastest and most testable in C#.
 | `Gang-Garrison-2` | The reference implementation and the client. **Read-only from here.** |
 | `gg2-agent` | Tooling for the GM8 game: build scripts, the agent bridge, the MCP server, nav analysis. The parity harness leans on it. |
 | `gg2-nav-gen` | Offline bot nav-graph generator. Already outside the game; the port reads its cache. |
+| `gg2-rl` | Bot-policy trainer. Documentation only and blocked on this repo; see its `docs/CONTRACT.md` for what it needs from here. |
 
 Never copy reference GML into this repo. Cite it by path — `SOURCEMAP.md` is the
 index — and write C# that does the same thing.
