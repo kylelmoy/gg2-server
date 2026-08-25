@@ -34,6 +34,18 @@ public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSim
     private CollisionWorld? _world;
     private SpawnPoints? _spawnPoints;
 
+    /// <summary>
+    /// The tick's event channel, kept across ticks so a seed can be supplied
+    /// before the tick that consumes it.
+    /// </summary>
+    /// <remarks>
+    /// Reused rather than recreated because it is the thing carrying the forced
+    /// seeds: <see cref="SetFireSeed"/> writes into it and
+    /// <see cref="Tick"/> hands the same buffer to the simulation, which clears
+    /// only the outputs.
+    /// </remarks>
+    private TickEvents _events;
+
     /// <summary>Each slot's class, which decides its box and its run power.</summary>
     /// <remarks>
     /// Taken from the trace's <c>PLAYER_CHANGECLASS</c> messages rather than
@@ -73,6 +85,10 @@ public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSim
         _world = new CollisionWorld(level);
         _spawnPoints = new SpawnPoints(level);
         _state = default;
+
+        // Including any seed supplied for a tick that a map change has now
+        // cancelled — the shot it was meant for cannot happen.
+        _events = default;
     }
 
     public void SetCharacter(int slot, in CharacterBlock observed)
@@ -117,8 +133,19 @@ public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSim
         // meant to remove. Only ammo is on the wire in a QUICK_UPDATE; the rest
         // of the weapon keeps whatever it had, or starts as the reference's own
         // Create-event state if this slot had nothing.
-        var weapon = _state.Alive[slot] ? _state.Weapons[slot] : WeaponState.Spawn(character.Class);
+        var weapon = _state.Alive[slot]
+            ? _state.Weapons[slot]
+            : WeaponState.Spawn(character.Class, character.X, character.Y);
+
         weapon.AmmoCount = observed.Ammo;
+
+        // The muzzle follows the anchor. A weapon's position is normally set by
+        // its owner's End Step and would catch up within a tick anyway — but an
+        // open-loop replay resyncs every seventh tick and the character may fire
+        // on the very next one, from wherever the weapon was left. Anchoring it
+        // too costs nothing and removes a tick of stale aim from every window.
+        Weapons.FollowOwner(character, ref weapon);
+
         _state.Weapons[slot] = weapon;
 
         _state.Alive[slot] = true;
@@ -138,6 +165,36 @@ public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSim
     public void SetPlayerClass(int slot, PlayerClass playerClass) => Classes[slot] = playerClass;
 
     public void SetPlayerTeam(int slot, Team team) => Teams[slot] = team;
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Counted as well as stored, so a test can assert that the shots the
+    /// recording contains were actually taken: a seed that is supplied and never
+    /// used means the replay did not fire when the reference did, which is a
+    /// divergence the hp comparison would report only indirectly.
+    /// </remarks>
+    public void SetFireSeed(int slot, ushort seed)
+    {
+        _events.ForceFireSeed(slot, seed);
+        SeedsSupplied++;
+    }
+
+    /// <summary>How many recorded fire seeds have been handed to the simulation.</summary>
+    public int SeedsSupplied { get; private set; }
+
+    /// <summary>How many shots the simulation has actually taken.</summary>
+    public int ShotsFired { get; private set; }
+
+    /// <summary>
+    /// Seeds that were supplied and never consumed, because no shot was taken on
+    /// the tick they were meant for.
+    /// </summary>
+    /// <remarks>
+    /// The direct measurement of "did the port fire when the reference did".
+    /// Non-zero means the replay's firing decisions have drifted from the
+    /// recording's, whatever the position comparison says.
+    /// </remarks>
+    public int SeedsUnused => SeedsSupplied - ShotsFired;
 
     /// <inheritdoc />
     /// <remarks>
@@ -172,7 +229,13 @@ public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSim
         if (_world is null)
             throw new InvalidOperationException("LoadMap must run before Tick");
 
-        MatchSimulation.Tick(_world, ref _state, inputs);
+        MatchSimulation.Tick(_world, ref _state, inputs, ref _events);
+
+        for (var slot = 0; slot < WorldState.MaxSlots; slot++)
+        {
+            if (_events.Fired[slot])
+                ShotsFired++;
+        }
     }
 
     public bool TryGetCharacter(int slot, out CharacterBlock character)

@@ -292,6 +292,12 @@ public sealed class WorldStateTests
     public void ACloneStaysWithinItsBudget()
     {
         var size = System.Runtime.CompilerServices.Unsafe.SizeOf<WorldState>();
+
+        // 53,896 bytes at the end of phase 5 stage 2; 67,208 after stage 3 grew
+        // a projectile by the fields a Shot needs. The ceiling is a budget
+        // rather than a measurement, so it does not move with each addition —
+        // but a change that doubled the state would trip it, which is the
+        // point.
         Assert.True(size < 96 * 1024, $"WorldState is {size} bytes");
     }
 

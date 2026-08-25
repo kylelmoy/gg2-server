@@ -157,6 +157,68 @@ public sealed class SimulatedServerTests
         Assert.Equal(0, NextCharacter(harness, reader, client, slot).VSpeed);
     }
 
+    /// <summary>
+    /// Holding the attack key makes the server broadcast a <c>WEAPON_FIRE</c>,
+    /// and exactly one per refire period.
+    /// </summary>
+    /// <remarks>
+    /// The server's half of phase 5 stage 3. <see cref="ScattergunTests"/> and
+    /// <see cref="PhysicsParityTests"/> both drive
+    /// <see cref="MatchSimulation"/> directly, so neither would notice if the
+    /// server never told anybody a shot happened — and a client that is not told
+    /// draws no pellets at all, because the server sends the seed rather than
+    /// the pellets.
+    /// <para>
+    /// The cadence is asserted as well as the message, because a fire message
+    /// per tick is exactly what a missing <c>readyToShoot</c> would produce and
+    /// it would look correct in a screenshot.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void HoldingTheAttackKeyBroadcastsOneWeaponFirePerRefirePeriod()
+    {
+        var map = LoadMap();
+
+        using var harness = new ServerHarness(o => o.Map = Map);
+        var client = harness.JoinClient("shooter");
+        var reader = new BroadcastReader(map);
+
+        harness.Tick();
+        reader.Drain(client);
+
+        client.SendChangeTeam(Team.Red);
+        harness.Tick();
+
+        var spawn = reader.Drain(client).Single(m => m.Type == MessageType.PlayerSpawn);
+        var slot = spawn.Payload[0];
+
+        // A scattergun spawns with alarm[0] already on the clock, so the first
+        // shot cannot come before it expires; sixty ticks is three refire
+        // periods of twenty once it does.
+        var fires = new List<ServerMessage>();
+
+        for (var tick = 0; tick < 80; tick++)
+        {
+            client.SendInputState(new PlayerInput(PlayerKeys.Attack, 0, 0));
+            harness.Tick();
+            fires.AddRange(reader.Drain(client).Where(m => m.Type == MessageType.WeaponFire));
+        }
+
+        Assert.NotEmpty(fires);
+        Assert.All(fires, f => Assert.Equal(slot, f.PlayerId));
+        Assert.All(fires, f => Assert.Equal(9, f.Payload.Length));
+
+        // Six rounds in the magazine, and eighty ticks is not long enough to
+        // reload more than one of them back — so a held trigger cannot produce
+        // more than seven blasts however the timing lands.
+        Assert.InRange(fires.Count, 2, 7);
+
+        // Not every seed the same, which is what a generator that never advances
+        // would give.
+        Assert.True(fires.Select(f => f.Payload[7] | (f.Payload[8] << 8)).Distinct().Count() > 1,
+            "every shot carried the same seed");
+    }
+
     /// <summary>A spectator has no character, and picking spectator removes one.</summary>
     /// <remarks>
     /// The client destroys the character on <c>PLAYER_CHANGETEAM</c>

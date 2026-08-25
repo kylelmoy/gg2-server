@@ -186,6 +186,42 @@ public sealed class CollisionWorld
     }
 
     /// <summary>
+    /// <c>place_free</c> for an instance whose bounding box is already known.
+    /// </summary>
+    /// <remarks>
+    /// <b>The box, not a position and an offset.</b> A character's box is a
+    /// fixed rectangle around its position, so
+    /// <see cref="PlaceFree(in CharacterBox, double, double, in CollisionFilter)"/>
+    /// can take the position and build it; a projectile's is the rotated bound
+    /// of its sprite (<see cref="Aabb.ForRotatedSprite"/>) and there is no
+    /// offset that describes it. The position rounding has already happened by
+    /// the time a box exists, which is why none is applied here.
+    /// <para>
+    /// This is what <c>Shot.events/Collision with Character.xml</c> opens with,
+    /// bracketed by <c>gunSetSolids</c> — so pass
+    /// <see cref="CollisionFilter.ForBullet"/>, not a character's filter.
+    /// </para>
+    /// </remarks>
+    public bool PlaceFree(in Aabb box, in CollisionFilter filter)
+    {
+        var firstColumn = CellOf(box.Left);
+        var lastColumn = CellOf(box.Right);
+        var firstRow = CellOf(box.Top);
+        var lastRow = CellOf(box.Bottom);
+
+        for (var row = firstRow; row <= lastRow; row++)
+        for (var column = firstColumn; column <= lastColumn; column++)
+            if (_mask.IsSolid(column, row))
+                return false;
+
+        foreach (var rect in _rects)
+            if (rect.Overlaps(box.Left, box.Right, box.Top, box.Bottom) && rect.IsSolidTo(filter))
+                return false;
+
+        return true;
+    }
+
+    /// <summary>
     /// The map's walkmask as a <see cref="CollisionLine"/> mask lookup.
     /// </summary>
     /// <remarks>

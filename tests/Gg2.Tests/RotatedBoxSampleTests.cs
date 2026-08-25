@@ -223,4 +223,64 @@ public sealed class RotatedBoxSampleTests
         Assert.Equal(2, upright.Right - upright.Left + 1);
         Assert.Equal(18, upright.Bottom - upright.Top + 1);
     }
+
+    /// <summary>
+    /// <see cref="ProjectileSprites"/> holds the same numbers this fixture was
+    /// measured with.
+    /// </summary>
+    /// <remarks>
+    /// The simulation cannot read the fixture — it has no I/O — so the sprite
+    /// metadata is a small hand-written table beside the code that uses it. That
+    /// makes it the one thing here that could silently drift away from the
+    /// oracle, which is exactly what this closes: the table and the measurement
+    /// are checked against each other rather than merely descended from the same
+    /// afternoon.
+    /// <para>
+    /// Every sampled sprite is at scale 1, so a non-unit scale in the fixture
+    /// would mean the table is describing something else and is asserted away
+    /// rather than quietly folded in.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void TheSpriteTableMatchesWhatWasMeasured()
+    {
+        var kinds = new Dictionary<string, ProjectileKind>(StringComparer.Ordinal)
+        {
+            ["Shot"] = ProjectileKind.Shot,
+            ["Rocket"] = ProjectileKind.Rocket,
+            ["Needle"] = ProjectileKind.Needle,
+            ["Flare"] = ProjectileKind.Flare,
+            ["Mine"] = ProjectileKind.Mine,
+            ["Flame"] = ProjectileKind.Flame,
+            ["BladeB"] = ProjectileKind.Blade,
+        };
+
+        var checkedSprites = 0;
+
+        foreach (var samples in Load().Objects)
+        {
+            Assert.True(kinds.TryGetValue(samples.Object, out var kind),
+                $"{samples.Object} is in the fixture and not in the table");
+
+            Assert.Equal(1, samples.Sprite.XScale);
+            Assert.Equal(1, samples.Sprite.YScale);
+
+            var sprite = ProjectileSprites.For(kind);
+
+            Assert.Equal(
+                new Aabb(
+                    samples.Sprite.BboxLeft,
+                    samples.Sprite.BboxTop,
+                    samples.Sprite.BboxRight,
+                    samples.Sprite.BboxBottom),
+                sprite.Bbox);
+
+            Assert.Equal(samples.Sprite.XOrigin, sprite.OriginX);
+            Assert.Equal(samples.Sprite.YOrigin, sprite.OriginY);
+
+            checkedSprites++;
+        }
+
+        Assert.Equal(kinds.Count, checkedSprites);
+    }
 }

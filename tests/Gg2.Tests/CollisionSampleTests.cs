@@ -255,6 +255,16 @@ public sealed class CollisionSampleTests
     /// collider sprite's size, and the half-to-even rounding of a scaled extent.
     /// Scales in the shipped maps include 0.3, 0.8, 1.7, 2, 3, 7.3 and 13, so
     /// the rounding is genuinely exercised.
+    /// <para>
+    /// <b>Bullet walls are held out, because the fixture does not contain
+    /// them.</b> <c>tools/sample-collision.js</c> enumerates the objects
+    /// <c>charSetSolids</c> names, and <c>BulletWall</c> is in
+    /// <c>gunSetSolids</c> instead — so the oracle has nothing to say about it.
+    /// The sampler now lists it and a regeneration will pick it up; until then
+    /// this compares the character-solid rectangles it does cover, and holding
+    /// them out is what keeps the count assertion meaningful rather than
+    /// loosened.
+    /// </para>
     /// </remarks>
     [Theory]
     [MemberData(nameof(MapNames))]
@@ -263,15 +273,17 @@ public sealed class CollisionSampleTests
         var sample = SampleFor(name);
         var world = new CollisionWorld(LevelMap.FromPng(name, ReferenceTree.ReadMap(name)));
 
+        var characterSolids = world.Rects.Where(r => r.Kind != SolidKind.BulletWall).ToArray();
+
         Assert.NotEmpty(sample.Rects);
-        Assert.Equal(sample.Rects.Length, world.Rects.Count);
+        Assert.Equal(sample.Rects.Length, characterSolids.Length);
 
         // Both sides are in level-data / instance-creation order, so they pair
         // up positionally — but match on position anyway, so a reordering shows
         // up as a missing rectangle rather than a silent mismatch.
         foreach (var expected in sample.Rects)
         {
-            var matches = world.Rects
+            var matches = characterSolids
                 .Where(r => r.Left == expected.Left && r.Top == expected.Top)
                 .ToArray();
 
@@ -302,6 +314,55 @@ public sealed class CollisionSampleTests
         Assert.True(gate.IsSolidTo(Filter(Gg2.Protocol.Team.Red, intel: true)));
         Assert.True(gate.IsSolidTo(Filter(Gg2.Protocol.Team.Blue, intel: false)));
         Assert.True(gate.IsSolidTo(Filter(Gg2.Protocol.Team.Blue, intel: true)));
+    }
+
+    /// <summary>
+    /// A bullet and a character disagree about three of the five kinds of
+    /// solid.
+    /// </summary>
+    /// <remarks>
+    /// <c>charSetSolids</c> and <c>gunSetSolids</c> are different lists, and the
+    /// differences are not edge cases: a player wall stops people and not
+    /// bullets, a bullet wall does the reverse, and a gate that lets its own
+    /// team walk through stops <em>every</em> bullet. Getting this backwards
+    /// makes shots stop at thin air on one side of a map and fly through walls
+    /// on the other.
+    /// </remarks>
+    [Fact]
+    public void ABulletAndACharacterCollideWithDifferentThings()
+    {
+        var bullet = CollisionFilter.ForBullet();
+        var red = Filter(Gg2.Protocol.Team.Red, intel: false);
+
+        SolidRect Rect(SolidKind kind, Gg2.Protocol.Team team = Gg2.Protocol.Team.Spectator) => new()
+        {
+            Left = 0, Right = 5, Top = 0, Bottom = 59, Kind = kind, Team = team,
+        };
+
+        // charSetSolids sets PlayerWall; gunSetSolids never mentions it.
+        Assert.True(Rect(SolidKind.PlayerWall).IsSolidTo(red));
+        Assert.False(Rect(SolidKind.PlayerWall).IsSolidTo(bullet));
+
+        // And the mirror image.
+        Assert.False(Rect(SolidKind.BulletWall).IsSolidTo(red));
+        Assert.True(Rect(SolidKind.BulletWall).IsSolidTo(bullet));
+
+        // gunSetSolids: `with(TeamGate) solid = true` — a red player walks
+        // through their own gate and their own bullets do not.
+        Assert.False(Rect(SolidKind.TeamGate, Gg2.Protocol.Team.Red).IsSolidTo(red));
+        Assert.True(Rect(SolidKind.TeamGate, Gg2.Protocol.Team.Red).IsSolidTo(bullet));
+
+        // Likewise an intel gate, which lets an empty-handed character of any
+        // team through and stops every bullet.
+        Assert.False(Rect(SolidKind.IntelGate, Gg2.Protocol.Team.Blue).IsSolidTo(red));
+        Assert.True(Rect(SolidKind.IntelGate, Gg2.Protocol.Team.Blue).IsSolidTo(bullet));
+
+        // The map itself, and the setup gates, are on both lists.
+        Assert.True(Rect(SolidKind.Obstacle).IsSolidTo(red));
+        Assert.True(Rect(SolidKind.Obstacle).IsSolidTo(bullet));
+
+        Assert.False(Rect(SolidKind.SetupGate).IsSolidTo(bullet));
+        Assert.True(Rect(SolidKind.SetupGate).IsSolidTo(CollisionFilter.ForBullet(setupGatesClosed: true)));
     }
 
     /// <summary>

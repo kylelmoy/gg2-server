@@ -81,6 +81,28 @@ public interface ITraceSimulation
     /// <summary>A slot's team, which decides which gates are solid to it.</summary>
     void SetPlayerTeam(int slot, Team team);
 
+    /// <summary>
+    /// Supplies the random seed the reference used for a slot's shot on the
+    /// tick that is about to run.
+    /// </summary>
+    /// <remarks>
+    /// <b>An injection, and the only one the harness makes into the
+    /// simulation's own decisions.</b> A weapon's <c>User Event 1</c> draws
+    /// <c>irandom(65535)</c> and broadcasts it; every client then re-derives the
+    /// shot spread from it (<c>Scripts/Events/doEventFireWeapon.gml</c>). Which
+    /// seed is drawn is server-side RNG the port is free about
+    /// (docs/PARITY.md), so a replay takes the recorded one — otherwise it would
+    /// scatter its pellets differently and disagree about hp for a reason that
+    /// has nothing to do with the arithmetic under test.
+    /// <para>
+    /// <b>It does not decide <em>whether</em> to fire.</b> That stays the
+    /// simulation's job and is exactly what the gate is measuring: a supplied
+    /// seed that no shot consumes is a replay firing on the wrong tick, and it
+    /// shows up as a divergence rather than being papered over.
+    /// </para>
+    /// </remarks>
+    void SetFireSeed(int slot, ushort seed);
+
     /// <summary>Advances one tick with the given per-slot inputs.</summary>
     void Tick(ReadOnlySpan<PlayerInput> inputs);
 
@@ -131,6 +153,9 @@ public sealed class EmptySimulation : ITraceSimulation
     public void SetPlayerClass(int slot, PlayerClass playerClass) { }
 
     public void SetPlayerTeam(int slot, Team team) { }
+
+    /// <remarks>Nothing here fires, so a seed has nothing to seed.</remarks>
+    public void SetFireSeed(int slot, ushort seed) { }
 
     public void Tick(ReadOnlySpan<PlayerInput> inputs) => Ticks++;
 

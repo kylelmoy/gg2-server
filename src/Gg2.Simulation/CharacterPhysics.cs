@@ -241,7 +241,22 @@ public static class CharacterPhysics
     /// <summary>
     /// Stair descent, the facing, and the clamp into the map.
     /// </summary>
+    /// <remarks>
+    /// The weaponless overload, for the tests and callers that have no weapon to
+    /// move. A real character always has one — <c>Character.events/Create.xml</c>
+    /// makes it — so the live path is the three-argument form.
+    /// </remarks>
     public static void EndStep(CollisionWorld world, ref CharacterState character)
+    {
+        var discarded = default(WeaponState);
+        EndStep(world, ref character, ref discarded);
+    }
+
+    /// <summary>
+    /// Stair descent, the facing, the weapon that trails the character, and the
+    /// clamp into the map.
+    /// </summary>
+    public static void EndStep(CollisionWorld world, ref CharacterState character, ref WeaponState weapon)
     {
         var box = character.Box;
         var filter = character.Filter;
@@ -273,6 +288,12 @@ public static class CharacterPhysics
         // Facing, from the aim. Note this is the only thing that writes Facing,
         // and the spinjump test in Step compares against the previous value.
         character.Facing = (character.AimDirection + 270) % 360 > 180 ? 1 : -1;
+
+        // The weapon catches up, at round(x). Its position here is where the
+        // *next* tick's shot will leave from, because a weapon fires in Begin
+        // Step — see WeaponState.X. It happens before the clamp below, which is
+        // the reference's order (End Step.xml:64-65, then 67-79).
+        Weapons.FollowOwner(character, ref weapon);
 
         // Clamp into the map. map_width() measures the ART, not the walkmask —
         // on gg_debug those differ (docs/SIMULATION.md).

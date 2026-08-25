@@ -26,12 +26,29 @@ public static class ColliderSprites
 
     /// <summary>The rectangle an entity becomes, or null if it is not solid to characters.</summary>
     /// <remarks>
-    /// <c>BulletWall</c> and its horizontal twin are deliberately absent: they
-    /// block bullets and not players, and <c>charSetSolids</c> never touches
-    /// them. So are the drop-through platforms — they are not in
-    /// <c>charSetSolids</c> either, and the physics handles them separately in
+    /// The drop-through platforms are deliberately absent: they are not in
+    /// <c>charSetSolids</c>, and the physics handles them separately in
     /// <c>Character.events/Begin Step.xml</c> because a character stands on one
     /// only when falling onto it and not holding <c>KEY_DOWN</c>.
+    /// <para>
+    /// <c>BulletWall</c> <em>is</em> here, and used to not be. It is solid to
+    /// nothing a character does — which is why phase 3 could leave it out — and
+    /// solid to every projectile, because <c>gunSetSolids</c> ends with it.
+    /// Whether a given rectangle is solid to a given asker is
+    /// <see cref="SolidRect.IsSolidTo"/>'s business, not this function's.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>A bullet wall can open, and that is not modelled.</b>
+    /// <c>BulletWall.events/Begin Step.xml</c> clears its mask while any
+    /// character is within a <c>distance</c> property the map may set, so a map
+    /// can build a window that closes when nobody is near it. The property
+    /// defaults to -1, meaning never — and no built-in map sets it (checked
+    /// across all 22 in <c>maps.json</c>; the two that place bullet walls,
+    /// <c>arena_lumberyard</c> and <c>koth_harvest</c>, carry no properties at
+    /// all). Every rectangle here is therefore permanently closed, which is
+    /// exact for the shipped maps and wrong for a custom map that uses the
+    /// trigger.
+    /// </para>
     /// </remarks>
     public static SolidRect? Of(LevelEntity entity) => entity.Type switch
     {
@@ -40,6 +57,11 @@ public static class ColliderSprites
             Bar(entity, vertical: true, SolidKind.PlayerWall),
         EntityTypes.PlayerWallHorizontal =>
             Bar(entity, vertical: false, SolidKind.PlayerWall),
+
+        EntityTypes.BulletWall =>
+            Bar(entity, vertical: true, SolidKind.BulletWall),
+        EntityTypes.BulletWallHorizontal =>
+            Bar(entity, vertical: false, SolidKind.BulletWall),
 
         // Team gates. The "2" variants are the horizontal ones.
         EntityTypes.RedTeamGate =>

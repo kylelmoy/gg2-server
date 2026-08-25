@@ -106,6 +106,47 @@ public static class ServerMessages
         writer.WriteUByte(group);
     }
 
+    /// <summary>
+    /// <c>WEAPON_FIRE</c>: somebody pulled the trigger, and here is the seed.
+    /// </summary>
+    /// <remarks>
+    /// <b>The one message whose payload is an instruction to run a random
+    /// generator.</b> The server does not send where the pellets went; it sends
+    /// the seed it drew, and every client runs <c>random_set_seed</c> and
+    /// derives the spread itself (<c>Scripts/Events/doEventFireWeapon.gml</c>).
+    /// So the position and speeds here are not decoration either — a client
+    /// snaps the shooter to them before firing, so that its pellets start where
+    /// the server's did.
+    /// <para>
+    /// Sent from <c>sendEventFireWeapon.gml</c>, which the weapon's
+    /// <c>User Event 1</c> calls in the <em>character's</em> Begin Step — after
+    /// the tick's state update, which the <c>GameServer</c> instance wrote in
+    /// its own. That ordering is what puts a fire message after the update of
+    /// the tick it happened on, and docs/PARITY.md's replayer relies on it.
+    /// </para>
+    /// <para>
+    /// Note the speed scale: <c>8.5</c>, the character's, not the <c>5</c> a
+    /// mine's block uses.
+    /// </para>
+    /// </remarks>
+    public static void WeaponFire(
+        NetWriter writer,
+        byte playerId,
+        double x,
+        double y,
+        double hspeed,
+        double vspeed,
+        ushort seed)
+    {
+        writer.WriteMessageType(MessageType.WeaponFire);
+        writer.WriteUByte(playerId);
+        writer.WriteUShortFromReal(x * 5);
+        writer.WriteUShortFromReal(y * 5);
+        writer.WriteByteFromReal(hspeed * 8.5);
+        writer.WriteByteFromReal(vspeed * 8.5);
+        writer.WriteUShort(seed);
+    }
+
     public static void PlayerChangeName(NetWriter writer, byte playerId, string name)
     {
         writer.WriteMessageType(MessageType.PlayerChangeName);

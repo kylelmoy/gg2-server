@@ -48,6 +48,36 @@ public static class Timers
     }
 
     /// <summary>
+    /// The whole number of ticks GM8 stores when an alarm is assigned a real.
+    /// </summary>
+    /// <remarks>
+    /// <b>Most alarms in GG2 are set to integers and this changes nothing for
+    /// them. One is not.</b>
+    /// <c>Objects/Weapons/Scattergun.events/User Event 3.xml</c> ends every
+    /// pellet with
+    /// <c>alarm[0] = 35 * ((min(1, ...) - 1)/2 + 1)</c>, which is 35 times a
+    /// factor in <c>[0.5, 1]</c> — a whole number only when the shooter's
+    /// <c>hspeed</c> is zero. A counter that stepped down from 30.45 would pass
+    /// 0.45 and then -0.55 without ever landing on zero, and
+    /// <see cref="Advance(ref int)"/>'s "fires only on exactly zero" rule would
+    /// mean the pellet never expired.
+    /// <para>
+    /// ⚠️ <b>Half to even, and this specific choice is not measured.</b> GM8's
+    /// alarms are a Delphi array of integers and an assignment converts; the
+    /// rounding it uses is the one thing about
+    /// <see cref="Timers"/> still taken from the OpenGMK transcription rather
+    /// than from the running game, along with the phase itself. Half to even is
+    /// this codebase's default for every GML-side rounding except the wire's
+    /// (CLAUDE.md's table), so it is what the transcription assumes. A pellet
+    /// hits within a handful of ticks and a whole tick of lifetime is only
+    /// visible on a shot that reaches its maximum range, so the cost of being
+    /// wrong is small — but it <em>is</em> observable, and it is on
+    /// docs/SIMULATION.md's list of things still to measure.
+    /// </para>
+    /// </remarks>
+    public static int SetAlarm(double ticks) => (int)Gml.Round(ticks);
+
+    /// <summary>
     /// Advances every counter in the world, in GM8's own order.
     /// </summary>
     /// <remarks>
@@ -77,6 +107,25 @@ public static class Timers
             // through the action_inherited their event carries.
             if (Advance(ref state.Weapons[slot].RefireTimer))
                 state.Weapons[slot].ReadyToShoot = true;
+        }
+
+        // Shot.events/Alarm 0.xml is a bare instance_destroy, and every other
+        // projectile's alarm 0 is a lifetime too. The projectiles come after
+        // the characters because their instances are younger — a pellet is
+        // created by a character that already existed — and GM8 runs one alarm
+        // index across instances in id order.
+        //
+        // The index is advanced only when nothing was freed: FreeProjectile
+        // compacts the creation-order array, so the entry that slid into i is
+        // the next one to look at and i++ would step over it.
+        for (var i = 0; i < state.LiveProjectileCount;)
+        {
+            var handle = state.LiveProjectileHandle(i);
+
+            if (Advance(ref state.Projectiles[handle.Index].Lifetime))
+                state.FreeProjectile(handle);
+            else
+                i++;
         }
 
         // --- alarm 1: intel grabability --------------------------------------
@@ -128,13 +177,57 @@ public static class Timers
                 state.Characters[slot].SecondToLastDamageDealer = CharacterState.Nobody;
         }
 
-        // --- alarm 5 is a weapon's reload, and its body differs per weapon -----
+        // --- alarm 5: a weapon's reload, and its body differs per weapon ------
         //
-        // Scattergun.events/Alarm 5.xml puts a round back and re-arms itself;
-        // Minigun's and Flamethrower's refill instead; Blade's replenishes
-        // bubbles. There is no shared body to run, so WeaponState.ReloadTimer is
-        // advanced by the weapon that owns it, in stage 3. Nothing sets it yet,
-        // so nothing is being dropped here.
+        // Four weapons share one body to the line — Scattergun, Shotgun,
+        // Rocketlauncher and Minegun each put a single round back and re-arm the
+        // alarm if the magazine is still short. The Revolver refills the whole
+        // magazine at once. Minigun and Flamethrower have no reload cycle at all
+        // (reloadTime 0); Rifle, Medigun and Blade have their own bodies and
+        // arrive with their weapons.
+        //
+        // Nothing sets ReloadTimer for a weapon not listed below, so the switch
+        // cannot silently drop one: an unimplemented weapon's counter is never
+        // started.
+        for (var slot = 0; slot < WorldState.MaxSlots; slot++)
+        {
+            if (!state.Alive[slot])
+                continue;
+
+            ref var weapon = ref state.Weapons[slot];
+
+            if (!Advance(ref weapon.ReloadTimer))
+                continue;
+
+            var playerClass = state.Characters[slot].Class;
+            var stats = WeaponStats.For(playerClass);
+
+            switch (WeaponStats.KindFor(playerClass))
+            {
+                case WeaponKind.Scattergun:
+                case WeaponKind.Shotgun:
+                case WeaponKind.Rocketlauncher:
+                case WeaponKind.Minegun:
+                    // Two separate `if`s in the reference, not an else: the
+                    // round goes in first and the re-arm then asks about the
+                    // *new* count, so the last round loaded does not schedule a
+                    // pointless reload.
+                    if (Gml.Less(weapon.AmmoCount, stats.MaxAmmo))
+                        weapon.AmmoCount += 1;
+
+                    if (Gml.Less(weapon.AmmoCount, stats.MaxAmmo))
+                        weapon.ReloadTimer = stats.ReloadTime;
+
+                    break;
+
+                case WeaponKind.Revolver:
+                    // The whole cylinder at once, and it does not re-arm.
+                    if (Gml.Less(weapon.AmmoCount, stats.MaxAmmo))
+                        weapon.AmmoCount = stats.MaxAmmo;
+
+                    break;
+            }
+        }
 
         // --- alarm 7: cloak flicker -------------------------------------------
         for (var slot = 0; slot < WorldState.MaxSlots; slot++)

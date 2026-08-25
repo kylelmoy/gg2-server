@@ -303,6 +303,9 @@ public sealed class TraceTests
 
         public void SetPlayerTeam(int slot, Team team) { }
 
+        /// <remarks>The oracle replays recorded positions; it has nothing to seed.</remarks>
+        public void SetFireSeed(int slot, ushort seed) { }
+
         public void Tick(ReadOnlySpan<PlayerInput> inputs)
         {
             // The replayer compares before it advances, because one update

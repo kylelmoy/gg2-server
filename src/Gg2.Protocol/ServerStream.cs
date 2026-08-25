@@ -231,7 +231,15 @@ public sealed class ServerStream
                 return Fixed(type, ref reader, start, 5);
 
             case MessageType.WeaponFire:
-                return Fixed(type, ref reader, start, 9);
+            {
+                // Body is [player, x, y, hspeed, vspeed, seed]
+                // (sendEventFireWeapon.gml) — nine bytes. The position and the
+                // seed stay in Payload for the caller; naming the player here
+                // matches every other message that names one.
+                var id = reader.ReadUByte();
+                reader.Skip(8);
+                return Done(type, ref reader, start, playerId: id);
+            }
 
             case MessageType.GrabIntel:
             case MessageType.ScoreIntel:

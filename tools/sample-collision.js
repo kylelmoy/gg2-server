@@ -257,6 +257,12 @@ const GATE_OBJECTS = [
   'RedTeamGate', 'BlueTeamGate', 'RedTeamGate2', 'BlueTeamGate2',
   'RedIntelGate', 'BlueIntelGate', 'IntelGateVertical', 'IntelGateHorizontal',
   'PlayerWall', 'PlayerWallHorizontal', 'ControlPointSetupGate',
+
+  // Not a character solid: BulletWall is in gunSetSolids rather than
+  // charSetSolids, and it is here because a projectile has to stop at one.
+  // BulletWallHorizontal is its child and instance_find already includes
+  // descendants, so listing the parent alone covers both.
+  'BulletWall',
 ];
 
 async function solidRects() {

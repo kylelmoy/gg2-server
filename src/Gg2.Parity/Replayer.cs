@@ -101,9 +101,16 @@ public sealed class Replayer(ITraceSimulation simulation)
         var resyncs = 0;
         var replayed = 0;
 
-        foreach (var tick in ticks)
+        for (var index = 0; index < ticks.Count; index++)
         {
+            var tick = ticks[index];
+
             ApplyEvents(tick);
+
+            // The seeds for the tick about to run are recorded in the *next*
+            // tick's events; see SupplyFireSeeds.
+            if (index + 1 < ticks.Count)
+                SupplyFireSeeds(ticks[index + 1]);
 
             var bad = mismatches.Count;
 
@@ -201,6 +208,53 @@ public sealed class Replayer(ITraceSimulation simulation)
                     simulation.ClearCharacter(changedClass);
                     break;
             }
+        }
+    }
+
+    /// <summary>
+    /// Hands the simulation the seeds the reference drew for the tick that is
+    /// about to run.
+    /// </summary>
+    /// <remarks>
+    /// <b>The seeds live one tick later in the stream than the shots they
+    /// belong to, and that is the reference's own ordering rather than a quirk
+    /// of this harness.</b> <c>GameServerBeginStep.gml</c> serialises the state
+    /// in the <em>server's</em> Begin Step, and a character fires in the
+    /// <em>character's</em> — and the <c>GameServer</c> instance is older than
+    /// any <c>Character</c>, so GM8 runs it first. One tick therefore writes its
+    /// state update and then, further down the same buffer, any
+    /// <c>WEAPON_FIRE</c> the same tick produced. <see cref="TraceParser"/>
+    /// closes a tick at each state update, so those messages land in the
+    /// <em>following</em> tick's <see cref="TraceTick.Events"/>.
+    /// <para>
+    /// Cross-checked against the fixture rather than reasoned about alone: in
+    /// <c>reference-ctf_truefort-bots.trace</c> the fire attributed to tick 389
+    /// names a position 2542.2, and slot 3 — travelling at the 2.588 px/tick the
+    /// same message reports — is at that position at the end of tick 387, which
+    /// is what a Begin Step on tick 388 reads.
+    /// </para>
+    /// <para>
+    /// A tick whose successor was truncated off the end of the recording gets no
+    /// seed. That is correct: the recording does not say whether it fired.
+    /// </para>
+    /// </remarks>
+    private void SupplyFireSeeds(TraceTick next)
+    {
+        foreach (var message in next.Events)
+        {
+            if (message.Type != MessageType.WeaponFire)
+                continue;
+
+            // [player, x, y, hspeed, vspeed, seed] — sendEventFireWeapon.gml,
+            // nine bytes, with the seed as the trailing little-endian ushort.
+            if (message.Payload.Length < 9)
+                continue;
+
+            var reader = new NetReader(message.Payload);
+            var slot = reader.ReadUByte();
+            reader.Skip(6);
+
+            simulation.SetFireSeed(slot, reader.ReadUShort());
         }
     }
 

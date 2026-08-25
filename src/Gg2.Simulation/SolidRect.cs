@@ -41,6 +41,18 @@ public enum SolidKind
 
     /// <summary>Solid only while the setup timer is running.</summary>
     SetupGate,
+
+    /// <summary>
+    /// Solid to bullets and to nothing else. <c>BulletWall</c>,
+    /// <c>BulletWallHorizontal</c>.
+    /// </summary>
+    /// <remarks>
+    /// The mirror image of <see cref="PlayerWall"/>: <c>charSetSolids</c> never
+    /// mentions it and <c>gunSetSolids</c> ends with it. Maps use the pair to
+    /// make a window a player cannot climb through but can shoot through, and
+    /// the other way round.
+    /// </remarks>
+    BulletWall,
 }
 
 /// <summary>
@@ -66,12 +78,42 @@ public readonly record struct CollisionFilter
     /// <summary>Whether the map's setup gates are currently closed.</summary>
     public bool SetupGatesClosed { get; init; }
 
+    /// <summary>
+    /// The asker is a bullet, not a character:
+    /// <c>Scripts/Physics/gunSetSolids.gml</c> rather than
+    /// <c>charSetSolids.gml</c>.
+    /// </summary>
+    /// <remarks>
+    /// <b>Three differences, and none of them is a detail.</b> A bullet passes
+    /// straight through a <see cref="SolidKind.PlayerWall"/>, is stopped by a
+    /// <see cref="SolidKind.BulletWall"/> that a character walks through, and is
+    /// stopped by <em>every</em> gate regardless of team or intel — where a
+    /// character's gates depend on both. Getting this wrong makes bullets stop
+    /// at thin air on one side of a map and fly through walls on the other.
+    /// </remarks>
+    public bool Bullet { get; init; }
+
     /// <summary>A filter that collides with everything that can ever be solid.</summary>
     public static CollisionFilter Everything => new()
     {
         Team = Team.Spectator,
         CarryingIntel = true,
         SetupGatesClosed = true,
+    };
+
+    /// <summary>
+    /// What a projectile or a hitscan collides with —
+    /// <c>gunSetSolids</c>'s list.
+    /// </summary>
+    /// <param name="setupGatesClosed">Whether the setup timer is still running.</param>
+    public static CollisionFilter ForBullet(bool setupGatesClosed = false) => new()
+    {
+        // The team and the intel flag are read only by the gate rules, and a
+        // bullet's gates ignore both — so any value here is the same answer.
+        Team = Team.Spectator,
+        CarryingIntel = false,
+        SetupGatesClosed = setupGatesClosed,
+        Bullet = true,
     };
 }
 
@@ -110,15 +152,23 @@ public readonly record struct SolidRect
     public bool IsSolidTo(in CollisionFilter filter) => Kind switch
     {
         SolidKind.Obstacle => true,
-        SolidKind.PlayerWall => true,
 
-        // solid = (team != other.team or other.intel)
-        SolidKind.TeamGate => Team != filter.Team || filter.CarryingIntel,
+        // charSetSolids sets it; gunSetSolids does not mention it at all.
+        SolidKind.PlayerWall => !filter.Bullet,
 
-        // solid = (team != other.team and other.intel)
-        SolidKind.IntelGate => Team != filter.Team && filter.CarryingIntel,
+        // gunSetSolids: `with(TeamGate) solid = true` — unconditionally, where
+        // charSetSolids asks (team != other.team or other.intel).
+        SolidKind.TeamGate => filter.Bullet || Team != filter.Team || filter.CarryingIntel,
 
+        // Likewise: solid = (team != other.team and other.intel) for a
+        // character, and simply solid for a bullet.
+        SolidKind.IntelGate => filter.Bullet || (Team != filter.Team && filter.CarryingIntel),
+
+        // The one both lists agree on: closed while the setup timer runs, open
+        // afterwards, for characters and bullets alike.
         SolidKind.SetupGate => filter.SetupGatesClosed,
+
+        SolidKind.BulletWall => filter.Bullet,
 
         _ => false,
     };

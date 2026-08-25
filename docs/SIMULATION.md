@@ -344,9 +344,17 @@ Be honest about these in the parity harness rather than assuming:
 
 1. **Instance ordering under heavy churn** (projectiles created and destroyed in
    the same tick).
+2. **How an alarm assigned a fractional number of ticks rounds.** GM8 stores
+   alarms as integers — it has to, or an alarm set to 30.45 would step past zero
+   and never fire — and `Gg2.Simulation.Timers.SetAlarm` rounds half to even
+   because that is this codebase's default for every GML-side rounding. It has
+   not been measured. It is reachable: the scattergun sets a pellet's lifetime
+   to `35` times a factor in `[0.5, 1]`, so every shot from a moving scout
+   assigns a fraction. The cost of being wrong is one tick of a pellet's maximum
+   range, which no fixture reaches.
 
-That is the only one left, and it is answerable with `gg2-agent`'s live bridge.
-Do that before building on a guess.
+Both are answerable with `gg2-agent`'s live bridge. Do that before building on a
+guess.
 
 ### Settled: the collision boundary rule
 
@@ -1020,5 +1028,103 @@ then the next instance's. Nothing in the port crosses instances from an alarm
 yet; it will stop being invisible the moment an expiry damages somebody.
 
 The stage sits between Begin Step and Step, which is where
-`MatchSimulation.Tick` calls it. That matters for a weapon: an input arriving
-this tick is tested against a refire counter that has *already* advanced.
+`MatchSimulation.Tick` calls it. That matters for a weapon, and **in the
+opposite direction to the obvious reading**: a weapon fires in *Begin Step*,
+which runs before this stage, so an input arriving this tick is tested against
+the refire counter **last tick left behind** and the decrement that may re-arm
+the weapon happens afterwards. This document said the reverse until phase 5
+stage 3.
+
+An alarm assigned a *real* is stored as a whole number; see "What is genuinely
+uncertain" for the part of that which is not measured.
+
+### Settled: where a shot comes from, and where its box points
+
+Phase 5 stage 3, transcribed from `Objects/Weapons/Scattergun.events/{User Event
+1, User Event 3}.xml`, `Objects/Projectiles/Shot.events/*` and
+`Scripts/Object Creation/createShot.gml`. All of it is confirmed by an exact
+898-tick closed-loop replay of `reference-ctf_truefort-bots.trace`, which
+contains six scattergun blasts.
+
+**A weapon is a separate instance that trails its owner, and a shot leaves from
+*it*.** `Character.events/End Step.xml:64-65` is the only thing that writes the
+weapon's position, as `round(x)` and `round(y)` — GML's round, half to even. A
+weapon fires in Begin Step. So the muzzle is the character's position **at the
+end of the previous tick, rounded to a whole pixel**: up to half a pixel and one
+tick of travel away from where the character is when the trigger is pulled.
+Using the character's own coordinates instead moves every pellet.
+
+**`image_angle` is the aim; `direction` is where the pellet actually goes.**
+`createShot` sets both to `owner.aimDirection`, and then the Scattergun scatters
+`direction` by `random(15)-7.5` and leaves `image_angle` alone. `Shot` has no
+Step event, so nothing writes it again. Since a projectile's bounding box is the
+rotated sprite's (see "Settled: a rotated sprite's bounding box"), **all six
+pellets of one blast carry the same box shape while flying along six different
+headings**.
+
+**The seeded window costs exactly three RNG advances per pellet**, in this
+order:
+
+1. `choose(0, 0, 1)` in `Shot.events/Create.xml` — `instance_create` runs the
+   Create event before `createShot`'s own `with` block, so this comes first.
+2. `random(4) - 2`, added to `speed`.
+3. `random(15) - 7.5`, added to `direction`.
+
+Every client re-derives the blast from the seed on the wire, so the *count* is
+as much a contract as the use. `perseverant` is stored and read by nothing until
+Quote's bubbles land — dropping the draw because of that would leave pellet 1
+correct and desync every pellet after it.
+
+**The motion round trip is three writes and cannot be collapsed.** A pellet is
+created with `direction`, then `speed`, then has `hspeed` added (a *component*
+write), then `speed` adjusted, then `direction` adjusted. Each round trip
+re-derives the other representation and snaps it — see "Settled: the four motion
+variables" — so writing one polar assignment instead gives different last bits
+and, near an axis, a different answer. The fifteen-pixel forward nudge uses
+`lengthdir_x`/`lengthdir_y`, which snap; a bare `cos * 15` does not.
+
+**A `Shot` has no Step event and does not collide with walls in flight.** Its
+whole per-tick behaviour is GM8's automatic movement. The only `place_free` is
+the first line of its collision events, bracketed by `gunSetSolids` — so a pellet
+that reaches a character *through* a wall dies at that moment having dealt no
+damage, and a pellet fired into a wall with nobody behind it sails on until its
+alarm expires. Do not "fix" this.
+
+**Measured: an instance created in Begin Step moves in the same frame.** GM8's
+automatic-movement pass walks the instances present when it runs, not the ones
+present when the frame started. Delaying a pellet's first move by one tick and
+replaying the bot trace closed-loop diverges at tick 393: the same six pellets
+land, a tick late, and both scouts' `hspeed` at the next broadcast is wrong by
+the knockback. With the move in the right phase the whole recording is exact.
+
+**The knockback arguments come from the shot, not from the victim.** The
+collision event ends with `with(other) { motion_add(other.direction,
+other.speed*0.03); }` — and inside a `with`, `other` is the *caller*. So a
+standing target is pushed along the pellet's heading at 3% of the pellet's
+speed, rather than accelerated along its own.
+
+### Settled: bullets and characters collide with different things
+
+`Scripts/Physics/charSetSolids.gml` and `gunSetSolids.gml` are different lists,
+and three of the five kinds of solid differ:
+
+| Kind | Character | Bullet |
+|---|---|---|
+| `Obstacle` (includes the map) | solid | solid |
+| `PlayerWall` | solid | **not solid** |
+| `BulletWall` | **not solid** | solid |
+| `TeamGate` | `team != mine or carrying intel` | **always solid** |
+| `IntelGate` | `team != mine and carrying intel` | **always solid** |
+| `ControlPointSetupGate` | while setup runs | while setup runs |
+
+`Gg2.Simulation.CollisionFilter.ForBullet()` selects the right column;
+`SolidRect.IsSolidTo` is the predicate. Maps use the `PlayerWall`/`BulletWall`
+pair to build a window that stops people but not shots, and the reverse.
+
+⚠️ A `BulletWall` can also *open*: `BulletWall.events/Begin Step.xml` clears its
+mask while any character is within a `distance` property. The property defaults
+to -1 (never) and **no built-in map sets it** — checked across all 22 in
+`maps.json`; the two that place bullet walls, `arena_lumberyard` and
+`koth_harvest`, carry no properties at all. The port treats every bullet wall as
+permanently closed, which is exact for the shipped maps and wrong for a custom
+map that uses the trigger.

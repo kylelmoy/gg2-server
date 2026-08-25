@@ -156,4 +156,70 @@ public sealed class TimerTests
         Assert.True(state.Characters[0].Ubered);
         Assert.Equal(1, state.Characters[0].UberTimer);
     }
+
+    /// <summary>
+    /// An alarm assigned a fractional number of ticks becomes a whole one.
+    /// </summary>
+    /// <remarks>
+    /// <b>Not a tidying-up: a counter that never lands on zero never fires.</b>
+    /// <see cref="Timers.Advance(ref int)"/> runs the event only on an exact
+    /// zero, so a lifetime of 30.45 would step past it to -0.55 and the thing
+    /// holding it would live forever. The scattergun is the one place in GG2
+    /// that assigns a real — <c>35</c> times a movement-compensation factor —
+    /// and it is on the live path for every shot a moving scout takes.
+    /// <para>
+    /// ⚠️ Half to even is the codebase's default for GML-side rounding
+    /// (CLAUDE.md's table) and is <em>not</em> measured for this particular
+    /// conversion; see <see cref="Timers.SetAlarm"/>.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData(35.0, 35)]
+    [InlineData(30.45, 30)]
+    [InlineData(17.5, 18)]
+    [InlineData(18.5, 18)]
+    [InlineData(0.4, 0)]
+    public void AFractionalAlarmBecomesAWholeNumberOfTicks(double assigned, int stored)
+    {
+        Assert.Equal(stored, Timers.SetAlarm(assigned));
+    }
+
+    /// <summary>
+    /// A projectile whose lifetime expires is removed from the pool, and its
+    /// neighbours are not skipped.
+    /// </summary>
+    /// <remarks>
+    /// Freeing one compacts the creation-order array, so a loop that advanced
+    /// its index unconditionally would step over whatever slid down into the
+    /// gap — and half a blast would outlive the other half by a tick. Three
+    /// pellets expiring together is the smallest case that catches it.
+    /// </remarks>
+    [Fact]
+    public void ExpiringProjectilesAreAllRemovedInOnePass()
+    {
+        var state = default(WorldState);
+
+        for (var i = 0; i < 3; i++)
+        {
+            state.SpawnProjectile(new ProjectileState
+            {
+                Kind = ProjectileKind.Shot,
+                OwnerSlot = ProjectileState.NoOwner,
+                Lifetime = 1,
+            });
+        }
+
+        // One that outlives them, so an over-eager sweep is caught too.
+        var survivor = state.SpawnProjectile(new ProjectileState
+        {
+            Kind = ProjectileKind.Shot,
+            OwnerSlot = ProjectileState.NoOwner,
+            Lifetime = 5,
+        });
+
+        Timers.Advance(ref state);
+
+        Assert.Equal(1, state.LiveProjectileCount);
+        Assert.True(state.IsLive(survivor));
+    }
 }

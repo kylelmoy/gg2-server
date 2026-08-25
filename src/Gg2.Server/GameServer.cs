@@ -48,6 +48,12 @@ public sealed class GameServer : IDisposable
     private SpawnPoints _spawnPoints = null!;
     private WorldState _world;
 
+    // The tick's outbound event channel, reused rather than recreated: it is a
+    // few kilobytes of inline buffers and allocating one per tick is exactly
+    // what the no-allocation rule rules out. The server never uses its forced
+    // seeds — only the parity replayer does — so it stays a pure output here.
+    private TickEvents _events;
+
     // Which spawn point a player gets. Server-side RNG the port is explicitly
     // free about (docs/PARITY.md) — the choice is broadcast in PLAYER_SPAWN, so
     // clients and a replay follow it rather than reproducing it.
@@ -89,6 +95,14 @@ public sealed class GameServer : IDisposable
         _collision = new CollisionWorld(map);
         _spawnPoints = new SpawnPoints(map);
         _world = default;
+
+        // The reference's randomize(), and the only place the simulation's
+        // random stream is ever written from outside it. A default WorldState
+        // starts at seed 0, which is deterministic and right for a test or a
+        // bot rollout and wrong for a live match — every server would then
+        // scatter its first blast identically. Seeding it here keeps the clock
+        // out of Gg2.Simulation, where it does not belong.
+        _world.Random = new GmlRandom((uint)_spawnRandom.Next());
 
         _stateWriter = new StateUpdateWriter(_match, TryGetCharacter);
 
@@ -178,7 +192,49 @@ public sealed class GameServer : IDisposable
         for (var i = 0; i < count; i++)
             _inputs[i] = _roster[i].Input;
 
-        MatchSimulation.Tick(_collision, ref _world, _inputs.AsSpan(0, count));
+        MatchSimulation.Tick(_collision, ref _world, _inputs.AsSpan(0, count), ref _events);
+
+        BroadcastWeaponFire(count);
+    }
+
+    /// <summary>
+    /// Tells every client about the shots this tick took, and with what seed.
+    /// </summary>
+    /// <remarks>
+    /// <b>After the tick, not before, and that is the reference's order.</b> The
+    /// <c>GameServer</c> instance is older than every <c>Character</c>, so GM8
+    /// runs its Begin Step first: the state update goes into the send buffer,
+    /// and then each character's Begin Step appends any <c>WEAPON_FIRE</c> it
+    /// produced. A client therefore reads the update for tick <c>n</c> and only
+    /// then learns that a shot was fired during it. Moving this above
+    /// <see cref="WriteStateUpdate"/> would change the byte order of the stream
+    /// and shift every client's pellets by a tick.
+    /// <para>
+    /// It is a broadcast rather than per-client because the seed is the same for
+    /// everyone — that is the entire point of sending a seed instead of six
+    /// pellet vectors.
+    /// </para>
+    /// <para>
+    /// Note where these bytes actually leave: <see cref="FlushBroadcast"/> has
+    /// already run for this tick, so a fire message sits in the buffer until the
+    /// <em>next</em> tick's flush and goes out ahead of that tick's update. The
+    /// stream a client reads is therefore update <c>n</c>, fire <c>n</c>, update
+    /// <c>n+1</c> — the reference's own byte order, and the one
+    /// <c>Gg2.Protocol.TraceParser</c> assumes when it files a fire message
+    /// under the following tick.
+    /// </para>
+    /// </remarks>
+    private void BroadcastWeaponFire(int count)
+    {
+        for (var slot = 0; slot < count; slot++)
+        {
+            if (!_events.Fired[slot])
+                continue;
+
+            var fire = _events.Fires[slot];
+            ServerMessages.WeaponFire(
+                _broadcast, (byte)slot, fire.X, fire.Y, fire.HSpeed, fire.VSpeed, fire.Seed);
+        }
     }
 
     /// <summary>The wire view of a slot's character, for the state writer.</summary>

@@ -48,6 +48,35 @@ public struct WeaponState
     /// </remarks>
     public const byte NoTarget = 255;
 
+    /// <summary>
+    /// The weapon instance's own position — <b>where a projectile is created</b>.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Not the character's position, and not even this tick's.</b>
+    /// <c>Character.events/End Step.xml:64-65</c> is the only thing that writes
+    /// it, as <c>round(x)</c> and <c>round(y)</c> — GML's round, half to even —
+    /// and a weapon fires in <em>Begin Step</em>. So a shot leaves from the
+    /// character's position at the end of the <em>previous</em> tick, rounded to
+    /// a whole pixel, which is up to half a pixel and one tick of travel away
+    /// from where the character is when it pulls the trigger.
+    /// <para>
+    /// The reference gets this for free by keeping the weapon a separate
+    /// instance that trails its owner. Reproducing it is not optional: the
+    /// muzzle is the origin of every pellet's fifteen-pixel nudge and of every
+    /// hitscan, so half a pixel here is half a pixel of aim.
+    /// </para>
+    /// <para>
+    /// It is set to the character's unrounded position at creation
+    /// (<c>Character.events/Create.xml:199</c> passes <c>x, y</c> to
+    /// <c>instance_create</c>) and only becomes a rounded trailing copy after
+    /// the first End Step.
+    /// </para>
+    /// </remarks>
+    public double X;
+
+    /// <summary>The weapon instance's own position. See <see cref="X"/>.</summary>
+    public double Y;
+
     /// <summary>Rounds left in the magazine. On the wire in every character block.</summary>
     /// <remarks>
     /// A <c>double</c> because the minigun and the flamethrower drain and refill
@@ -109,7 +138,7 @@ public struct WeaponState
     /// <c>ammoCount = maxAmmo</c>. Everything else starts at its zero, which is
     /// what <c>default</c> already gives.
     /// </remarks>
-    public static WeaponState Spawn(PlayerClass playerClass)
+    public static WeaponState Spawn(PlayerClass playerClass, double x = 0, double y = 0)
     {
         var stats = WeaponStats.For(playerClass);
 
@@ -120,6 +149,12 @@ public struct WeaponState
             RefireTimer = stats.RefireTime,
             ReloadTimer = Inactive,
             HealTarget = NoTarget,
+
+            // instance_create(x, y, weapons[0]) — the character's own
+            // coordinates, unrounded. End Step replaces them with round(x) from
+            // this tick onward.
+            X = x,
+            Y = y,
         };
     }
 }

@@ -73,34 +73,39 @@ public sealed class PhysicsParityTests
     }
 
     /// <summary>
-    /// The ported physics reproduces the reference <b>exactly</b>, closed-loop,
-    /// for every tick up to the moment combat first touches a character.
+    /// The ported simulation reproduces the reference <b>exactly</b>,
+    /// closed-loop, for the whole recording — combat included.
     /// </summary>
     /// <remarks>
     /// Closed-loop: anchored once, then never told the answer again, so errors
     /// compound instead of being wiped every seventh tick. Both axes are zero —
-    /// not "within a wire unit", zero — across 393 ticks of two bots running,
-    /// jumping, falling and landing.
+    /// not "within a wire unit", zero — and so is every hp, across 898 ticks of
+    /// two scouts running, jumping, falling, landing and shooting each other.
     /// <para>
-    /// <b>This used to be within one wire unit of <c>y</c>, and the unit was the
-    /// anchor.</b> A replay used to start every character from a broadcast
-    /// position, which carries a fifth of a pixel of position and <c>1/8.5</c>
-    /// px/tick of velocity, so it began somewhere inside a bin rather than on the
-    /// state the reference was in. Resolving <c>PLAYER_SPAWN</c> against the
-    /// map's own spawn points instead (<see cref="SpawnPoints"/>) starts them on
-    /// an integer coordinate with both speeds zero — a state that passed through
-    /// no wire — and the residual disappeared. docs/PLAN.md phase 4 has the
-    /// history.
+    /// <b>This test used to stop at tick 393</b>, the first tick on which
+    /// anything took damage, because phase 4 implemented no weapons: the
+    /// divergence from there on was the scattergun, arriving as hp and hspeed
+    /// together. It now runs to the end of the fixture, which is phase 5 stage
+    /// 3's exit criterion — and that it went from "exact until 393" to "exact
+    /// throughout" in one step is the result worth noticing, because the six
+    /// blasts in this recording exercise the muzzle position, the seeded RNG
+    /// stream, <c>lengthdir</c>'s snap, the rotated bounding box, the overlap
+    /// test, the damage and the knockback all at once. Any one of them wrong
+    /// shows up here.
     /// </para>
     /// <para>
-    /// The divergence that remains is <b>not</b> physics. It begins on the exact
-    /// tick the first character's <c>hp</c> drops below full, and it arrives as
-    /// hp and hspeed together: damage and its knockback, which phase 5
-    /// implements and this one does not.
+    /// <b>The anchor is what makes a gate of zero reachable.</b> A replay used
+    /// to start every character from a broadcast position, which carries a fifth
+    /// of a pixel of position and <c>1/8.5</c> px/tick of velocity, so it began
+    /// somewhere inside a bin rather than on the state the reference was in.
+    /// Resolving <c>PLAYER_SPAWN</c> against the map's own spawn points instead
+    /// (<see cref="SpawnPoints"/>) starts them on an integer coordinate with both
+    /// speeds zero — a state that passed through no wire. docs/PLAN.md phase 4
+    /// has the history.
     /// </para>
     /// </remarks>
     [Fact]
-    public void ClosedLoopIsExactUntilCombatStarts()
+    public void ClosedLoopIsExactAcrossTheWholeTrace()
     {
         var (trace, ticks) = Load();
         var damaged = FirstDamagedTick(ticks);
@@ -110,28 +115,115 @@ public sealed class PhysicsParityTests
         var report = Replay(ticks, trace.Header.Map, ReplayMode.ClosedLoop, stopAtFirstBadTick: false);
 
         Assert.True(report.Comparisons > 100, $"only {report.Comparisons} comparisons");
+        Assert.Equal(ticks.Count, report.TicksReplayed);
 
-        // Every mismatch is at or after the first damage. Nothing before it.
-        foreach (var mismatch in report.Mismatches)
-        {
-            Assert.True(mismatch.Tick >= damaged,
-                $"a mismatch at tick {mismatch.Tick} predates the first damage at {damaged}: " +
-                $"slot {mismatch.Slot} {mismatch.Field} expected {mismatch.Expected}, got {mismatch.Actual}");
-        }
+        Assert.Empty(report.Mismatches);
+        Assert.Equal(0, report.MaxXError);
+        Assert.Equal(0, report.MaxYError);
 
-        // And the run really did get that far before anything went wrong.
+        // The recording really does contain the combat this claim is about, so
+        // a re-recording without any cannot quietly turn this back into the
+        // phase-4 gate.
         Assert.True(damaged > 380, $"combat started at tick {damaged}, earlier than expected");
     }
 
     /// <summary>
-    /// Stopping at the first bad tick, the replay reaches the first damaged tick
-    /// with both axes exactly zero.
+    /// Every shot the reference took, the port takes — on the same tick, with
+    /// the same seed.
     /// </summary>
     /// <remarks>
-    /// The same claim as above stated as the gate rather than as a survey, and
-    /// the one that would catch a regression soonest: any arithmetic error at
-    /// all shows up here as a non-zero max, because a closed loop never gets
-    /// corrected.
+    /// The direct form of a claim the position comparison only makes indirectly.
+    /// The replayer hands over a seed for each recorded <c>WEAPON_FIRE</c>, and
+    /// a seed is consumed only by a shot the simulation decided to take by
+    /// itself — so an unused seed means the port did not fire when the reference
+    /// did, and a shot without a seed means it fired when the reference did not.
+    /// Both are zero.
+    /// </remarks>
+    [Fact]
+    public void EveryRecordedShotIsFiredOnTheTickItWasRecordedFor()
+    {
+        var (trace, ticks) = Load();
+
+        var simulation = new PortedSimulation(MapLoader);
+        new Replayer(simulation) { Compare = Fields.Trajectory | Fields.Hp }
+            .Replay(BotTrace, trace.Header.Map, ticks, ReplayMode.ClosedLoop, stopAtFirstBadTick: false);
+
+        Assert.True(simulation.SeedsSupplied > 0, "the fixture contains no weapon fire at all");
+        Assert.Equal(0, simulation.SeedsUnused);
+        Assert.Equal(simulation.SeedsSupplied, simulation.ShotsFired);
+    }
+
+    /// <summary>
+    /// The seed is load-bearing: replaying with the wrong one diverges, and it
+    /// diverges exactly where combat starts.
+    /// </summary>
+    /// <remarks>
+    /// Without this, <see cref="ClosedLoopIsExactAcrossTheWholeTrace"/> could
+    /// pass for an uninteresting reason — six pellets fired point-blank might
+    /// all land whatever the spread. They do not: flipping the seed moves enough
+    /// pellets that hp, and the knockback that comes with it, disagree from the
+    /// first damaged tick on. So the exact pass really is a statement about
+    /// <c>GmlRandom</c> and about the order the scattergun draws from it.
+    /// </remarks>
+    [Fact]
+    public void ADifferentSeedProducesADifferentFight()
+    {
+        var (trace, ticks) = Load();
+        var damaged = FirstDamagedTick(ticks);
+
+        var report = new Replayer(new MangledSeeds(new PortedSimulation(MapLoader)))
+        {
+            Compare = Fields.Trajectory | Fields.Hp,
+        }.Replay(BotTrace, trace.Header.Map, ticks, ReplayMode.ClosedLoop, stopAtFirstBadTick: false);
+
+        Assert.NotEmpty(report.Mismatches);
+        Assert.Equal(damaged, report.Mismatches.Min(m => m.Tick));
+    }
+
+    /// <summary>
+    /// A real simulation with the recorded seeds replaced by wrong ones.
+    /// </summary>
+    /// <remarks>
+    /// A delegating wrapper rather than a flag on <c>PortedSimulation</c>: the
+    /// ability to corrupt a replay belongs to the one test that wants it, not to
+    /// the harness every other test shares.
+    /// </remarks>
+    private sealed class MangledSeeds(PortedSimulation inner) : ITraceSimulation
+    {
+        public void LoadMap(string map) => inner.LoadMap(map);
+
+        public void SetCharacter(int slot, in CharacterBlock observed) => inner.SetCharacter(slot, observed);
+
+        public bool SpawnCharacter(int slot, int spawnpointId, int group) =>
+            inner.SpawnCharacter(slot, spawnpointId, group);
+
+        public void ClearCharacter(int slot) => inner.ClearCharacter(slot);
+
+        public void SetPlayerClass(int slot, PlayerClass playerClass) => inner.SetPlayerClass(slot, playerClass);
+
+        public void SetPlayerTeam(int slot, Team team) => inner.SetPlayerTeam(slot, team);
+
+        // Still a legal 16-bit seed, and still supplied on the right tick — so
+        // the only thing this changes is where the pellets go.
+        public void SetFireSeed(int slot, ushort seed) => inner.SetFireSeed(slot, (ushort)(seed ^ 0x5A5A));
+
+        public void Tick(ReadOnlySpan<PlayerInput> inputs) => inner.Tick(inputs);
+
+        public bool TryGetCharacter(int slot, out CharacterBlock character) =>
+            inner.TryGetCharacter(slot, out character);
+    }
+
+    /// <summary>
+    /// The stretch before any damage, on its own: exact on both axes.
+    /// </summary>
+    /// <remarks>
+    /// <b>Subsumed by <see cref="ClosedLoopIsExactAcrossTheWholeTrace"/> and
+    /// kept anyway, because it splits a failure in half.</b> This segment
+    /// contains no weapon fire at all, so if it fails the fault is in the
+    /// character physics; if it passes and the whole-trace gate does not, the
+    /// fault is in combat. Without it, one regression looks exactly like the
+    /// other and the first thing anyone would do is re-derive this split by
+    /// hand.
     /// </remarks>
     [Fact]
     public void ClosedLoopReachesCombatWithNoPositionErrorOnEitherAxis()

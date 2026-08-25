@@ -88,9 +88,19 @@ public struct WorldState
     /// <para>
     /// The cost is paid on every clone, which is why it is not larger still:
     /// each slot is a <see cref="ProjectileState"/> plus a generation plus an
-    /// order entry, and at this capacity the pool is about 31 KB of the whole
-    /// state's 53 KB. <c>WorldStateTests.ACloneStaysWithinItsBudget</c> is the
+    /// order entry, and at this capacity the pool is about 43 KB of the whole
+    /// state's 66 KB. <c>WorldStateTests.ACloneStaysWithinItsBudget</c> is the
     /// tripwire on that number.
+    /// </para>
+    /// <para>
+    /// <b>The pool is now the majority of a clone, and that changes where to
+    /// look for savings.</b> Stage 3 grew a projectile from 48 bytes to 80 —
+    /// an <c>image_angle</c>, a lifetime, a damage figure and a perseverance
+    /// flag — which put two thirds of the state into a structure that is almost
+    /// always mostly empty. Before raising the capacity again, the thing to
+    /// weigh is a smaller <see cref="ProjectileState"/> rather than a smaller
+    /// pool: the reference has no ceiling, and a shot that does not exist is a
+    /// divergence.
     /// </para>
     /// </remarks>
     public const int MaxProjectiles = 512;
@@ -161,6 +171,33 @@ public struct WorldState
 
     /// <summary>How many projectiles are in the air.</summary>
     public int LiveProjectileCount;
+
+    /// <summary>
+    /// The match's own random stream — GM8's global one, as the host uses it.
+    /// </summary>
+    /// <remarks>
+    /// <b>In the state rather than beside it, and it is four bytes.</b> A weapon
+    /// draws <c>irandom(65535)</c> from the global stream and broadcasts the
+    /// result (<c>Scattergun.events/User Event 1.xml</c>), so the tick needs a
+    /// source of seeds. Keeping it here rather than in a field of the server
+    /// means <see cref="MatchSimulation.Tick"/> stays a pure function of state
+    /// and inputs, and a bot rollout that forks the world forks the stream with
+    /// it — otherwise two rollouts from the same state would diverge for a
+    /// reason that has nothing to do with the actions being compared
+    /// (docs/BOTAI.md items 1 and 2).
+    /// <para>
+    /// <b>Which seeds come out is free.</b> docs/SIMULATION.md's "server-side
+    /// RNG is free" covers the <em>draw</em>: no client can predict it and every
+    /// client is told the answer. What is not free is what the seed is then used
+    /// for, which is <see cref="Gg2.Protocol.GmlRandom"/>'s business.
+    /// </para>
+    /// <para>
+    /// A zeroed world therefore starts at seed 0, which is a legal GM8 state
+    /// (<c>random_set_seed(0)</c>) and makes a default state fully
+    /// deterministic.
+    /// </para>
+    /// </remarks>
+    public GmlRandom Random;
 
     /// <summary>Whether the given slot currently has a character.</summary>
     public readonly bool IsAlive(int slot) => (uint)slot < MaxSlots && Alive[slot];
@@ -351,7 +388,10 @@ public struct WorldState
             NutsNBolts = 100,
         };
 
-        Weapons[slot] = WeaponState.Spawn(playerClass);
+        // The weapon starts where instance_create put it: on the character's
+        // own unrounded coordinates. End Step moves it to round(x) from this
+        // tick onward — see WeaponState.X.
+        Weapons[slot] = WeaponState.Spawn(playerClass, x, y);
         Alive[slot] = true;
         return true;
     }
