@@ -21,12 +21,13 @@ namespace Gg2.Simulation;
 /// misses from the other.
 /// </para>
 /// <para>
-/// Measured across 9,014 samples on <c>ctf_truefort</c> —
+/// Measured across 13,702 samples on <c>ctf_truefort</c> —
 /// <c>tests/Gg2.Tests/Fixtures/collision-line-samples.json</c>, regenerate with
 /// <c>node tools/sample-collision-line.js</c> — covering seven probe boxes at
 /// both coordinate parities, positive, fractional and <b>negative</b> scales,
-/// an off-centre sprite origin, and the map's own precise 6× mask. Exact on all
-/// of them, with no tolerance.
+/// an off-centre sprite origin, four classes of live character at both facings,
+/// and the map's own precise 6× mask. Exact on all of them, with no
+/// tolerance.
 /// </para>
 /// <para>
 /// The structure follows GM8's, which the rest of this repo would normally
@@ -218,4 +219,44 @@ public readonly record struct LineCollider(
     Aabb Bbox,
     int OriginX,
     int OriginY,
-    Aabb Mask);
+    Aabb Mask)
+{
+    /// <summary>
+    /// The collider a character presents to a hitscan.
+    /// </summary>
+    /// <remarks>
+    /// <b><paramref name="facing"/> changes two separate things here, and only
+    /// one of them is the one people remember.</b> It widens
+    /// <c>bbox_left</c> by two pixels, which
+    /// <see cref="Aabb.ForCharacter"/> applies — and it is also the
+    /// <c>image_xscale</c> the mask lookup <em>divides</em> by, which flips
+    /// which end of the acceptance interval is open. A right-facing character
+    /// is reached over <c>[left, right + 1)</c> and a left-facing one over
+    /// <c>(left - 1, right]</c>.
+    /// <para>
+    /// The sprite origin is dropped rather than carried: the mask bounds are
+    /// given relative to it, so it cancels out of the only comparison it takes
+    /// part in. That is what lets this be built from
+    /// <see cref="CharacterBox"/> — whose numbers are already
+    /// <c>sprite_get_bbox_* - sprite_get_*offset</c>
+    /// (<c>Character.events/Create.xml:5-8</c>) — instead of needing the sprite
+    /// metadata the repo does not keep.
+    /// </para>
+    /// <para>
+    /// <c>sprite_index</c> is set once in a class's Create event and never
+    /// reassigned — <c>Character.events/Draw.xml</c> picks the animation frame
+    /// into a local and draws that — so a character's bounding box does not
+    /// change with what it is doing. Checked live across four classes.
+    /// </para>
+    /// </remarks>
+    public static LineCollider ForCharacter(in CharacterBox box, double x, double y, int facing = 1) =>
+        new(
+            x,
+            y,
+            facing < 0 ? -1.0 : 1.0,
+            1.0,
+            Aabb.ForCharacter(box, x, y, facing),
+            0,
+            0,
+            new Aabb(box.Left, box.Top, box.Right, box.Bottom));
+}

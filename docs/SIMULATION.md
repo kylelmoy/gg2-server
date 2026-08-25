@@ -711,9 +711,11 @@ facing when computing a splash distance; leave it out when testing an overlap.
 The inflation is `-2` on the left for every class, because every class's mask is
 symmetric about its origin. Derived from the sprite metadata — with
 `image_xscale = -1` GM8 computes `bbox_left = x - (spriteBboxRight - xoffset) - 2`
-and `bbox_right = x - (spriteBboxLeft - xoffset)` — and **measured on Scout and
-Soldier only**, which share one sprite geometry. Confirm on Heavy and Quote
-before trusting a splash number for those two.
+and `bbox_right = x - (spriteBboxLeft - xoffset)` — and now **measured on six
+classes**: Scout, Soldier, Medic, Engineer, Pyro, and the two the derivation was
+least safe for, Heavy (the widest box at 19 px) and Quote (the one that ends at
++11 where every other class ends at +23). All six shift `bbox_left` by exactly
+-2 and leave the other three sides alone.
 
 **2. Do not use .NET's `double.Hypot`.** It rescales its arguments to avoid
 overflow, and that changes the last bit. Against the same fixture,
@@ -723,7 +725,7 @@ matches 636. GML's `point_distance` is the naive form; write the naive form.
 ### Settled: `collision_line`
 
 Was the last unmeasured primitive and the one the hitscan waits on. Measured
-across **9,014 segments** on `ctf_truefort` —
+across **13,702 segments** on `ctf_truefort` —
 `tests/Gg2.Tests/Fixtures/collision-line-samples.json`, regenerate with
 `node tools/sample-collision-line.js`. `Gg2.Simulation.CollisionLine` reproduces
 every one of them, exactly.
@@ -777,6 +779,39 @@ The map is reached through `Obstacle`: `CustomMapO` descends from
 ever naming the map. Its instance sits at (0, 0) with
 `image_xscale = image_yscale = 6` and origin (0, 0), so the mask index is
 `floor(x / 6)` — the same cell arithmetic as `CollisionWorld.CellOf`.
+
+#### What this means for shooting a character
+
+`LineCollider.ForCharacter` builds the collider, and two things about it are
+measured rather than assumed — against live Scout, Heavy, Quote and Soldier bots
+at both facings, 4,688 of the segments above.
+
+- **The two pixels `image_xscale = -1` adds to `bbox_left` are not reachable.**
+  They are in the box the engine reports and the broad-phase check lets them
+  through; the mask lookup then rejects them, because the mask itself was never
+  widened. A Heavy at x = 3000 facing left reports `bbox_left = 2989`, and a
+  vertical line at 2989 or at 2990 misses it. **Sizing a hitscan off `bbox_left`
+  makes a left-facing character two pixels wider to shoot at than the engine
+  makes it** — the opposite of the `distance_to_object` case above, where the
+  inflated box is exactly what the engine uses. The two combat primitives
+  disagree about the same character, and both are right.
+- **Facing flips which end of the span is open**, and it takes a diagonal to
+  see. `[left, right + 1)` facing right against `(left - 1, right]` facing left.
+  On an axis-aligned line the walk rounds its endpoints first and both spans
+  hold the same integers; on a diagonal the minor axis interpolates to a
+  fraction, and a sample at x = 3009.5 floors to mask column 9 facing right and
+  to -10 facing left. Measured both ways round on the same character in the same
+  tick.
+
+The sprite origin does not need to be carried. The mask bounds are given
+relative to it, so it cancels out of the only comparison it enters — which is
+what lets the collider be built from `CharacterBox`, whose numbers are already
+`sprite_get_bbox_* - sprite_get_*offset`.
+
+And a character's box does not change with what it is doing: a class sets
+`sprite_index` once in its Create event, and `Character.events/Draw.xml` picks
+the animation frame into a *local* to draw rather than reassigning it. Checked
+live across four classes.
 
 The structure of `CollisionLine` follows GM8's, which this document otherwise
 tells you not to do. It is transcribed because **the walk is the arithmetic**:

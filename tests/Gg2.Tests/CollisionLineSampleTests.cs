@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Gg2.Maps;
+using Gg2.Protocol;
 using Gg2.Simulation;
 
 namespace Gg2.Tests;
@@ -15,12 +16,13 @@ namespace Gg2.Tests;
 /// entire hitscan and it gates every rocket fired, so a wrong answer here is a
 /// shot that hits a wall the reference shot through.
 /// <para>
-/// The fixture is 9,014 segments asked of the running game
+/// The fixture is 13,702 segments asked of the running game
 /// (<c>node tools/sample-collision-line.js</c>): seven probe boxes at both
 /// coordinate parities, at positive, fractional and negative image scales and
-/// with an off-centre sprite origin, plus the map's own precise 6× mask. Each
-/// probe records the bounding box the engine actually gave it, so a row is a
-/// self-contained statement about a rectangle the engine named.
+/// with an off-centre sprite origin; four classes of live bot at both facings;
+/// and the map's own precise 6× mask. Each probe records the bounding box the
+/// engine actually gave it, so a row is a self-contained statement about a
+/// rectangle the engine named.
 /// </para>
 /// <para>
 /// <b>Both parities of every edge are in here on purpose.</b> The walk rounds
@@ -65,6 +67,26 @@ public sealed class CollisionLineSampleTests
         [JsonPropertyName("rows")] public required double[][] Rows { get; init; }
     }
 
+    private sealed record CharacterProbe
+    {
+        [JsonPropertyName("label")] public required string Label { get; init; }
+
+        /// <summary>The class name, as the sampler's own table spells it.</summary>
+        [JsonPropertyName("class")] public required string Class { get; init; }
+
+        [JsonPropertyName("x")] public required double X { get; init; }
+
+        [JsonPropertyName("y")] public required double Y { get; init; }
+
+        /// <summary><c>image_xscale</c>: 1 facing right, -1 facing left.</summary>
+        [JsonPropertyName("xscale")] public required int XScale { get; init; }
+
+        /// <summary>The instance bounding box the engine reported.</summary>
+        [JsonPropertyName("box")] public required int[] Box { get; init; }
+
+        [JsonPropertyName("rows")] public required double[][] Rows { get; init; }
+    }
+
     private sealed record Walkmask
     {
         [JsonPropertyName("box")] public required int[] Box { get; init; }
@@ -79,6 +101,8 @@ public sealed class CollisionLineSampleTests
         [JsonPropertyName("sprites")] public required Dictionary<string, Sprite> Sprites { get; init; }
 
         [JsonPropertyName("probes")] public required Probe[] Probes { get; init; }
+
+        [JsonPropertyName("characters")] public required CharacterProbe[] Characters { get; init; }
 
         [JsonPropertyName("walkmask")] public required Walkmask Walkmask { get; init; }
     }
@@ -135,6 +159,111 @@ public sealed class CollisionLineSampleTests
         }
 
         Assert.True(checkedSamples > 7000, $"only {checkedSamples} samples");
+    }
+
+    /// <summary>
+    /// Real characters of four classes, at both facings, agree with the engine.
+    /// </summary>
+    /// <remarks>
+    /// The probes above are BulletWalls shaped to order, which pins the
+    /// algorithm but says nothing about whether this repo hands a <em>real</em>
+    /// character to it correctly. The Rifle's whole point is hitting
+    /// characters, so this closes that gap with live bots: Scout for the
+    /// ordinary box, Heavy for the widest, Quote for the one that is a
+    /// different shape entirely, and Soldier.
+    /// <para>
+    /// It also checks the box <see cref="LineCollider.ForCharacter"/> builds
+    /// against the one the engine reported, which is what would catch the
+    /// facing inflation being applied to the wrong side or not at all.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void CharactersMatchTheEngine()
+    {
+        var document = Load();
+        var checkedSamples = 0;
+
+        foreach (var probe in document.Characters)
+        {
+            var playerClass = Enum.Parse<PlayerClass>(probe.Class, ignoreCase: true);
+            var box = CharacterBox.For(playerClass);
+            var collider = LineCollider.ForCharacter(box, probe.X, probe.Y, probe.XScale);
+
+            Assert.True(
+                collider.Bbox == ToAabb(probe.Box),
+                $"{probe.Label}: engine box {ToAabb(probe.Box)}, port {collider.Bbox}");
+
+            foreach (var row in probe.Rows)
+            {
+                var actual = CollisionLine.Hits(
+                    collider, default(CollisionLine.FilledMask), row[0], row[1], row[2], row[3]);
+
+                Assert.True(
+                    actual == (row[4] != 0),
+                    $"{probe.Label} ({row[0]}, {row[1]}) -> ({row[2]}, {row[3]}): " +
+                    $"engine {row[4] != 0}, port {actual}");
+
+                checkedSamples++;
+            }
+        }
+
+        Assert.Equal(8, document.Characters.Length);
+        Assert.True(checkedSamples > 4000, $"only {checkedSamples} samples");
+    }
+
+    /// <summary>
+    /// Facing decides which end of a character rounds away, and it takes a
+    /// diagonal to see it.
+    /// </summary>
+    /// <remarks>
+    /// GM8 <em>divides</em> the walk step by <c>image_xscale</c> to index the
+    /// mask, so flipping the sign flips which end of the span is open:
+    /// <c>[left, right + 1)</c> facing right against <c>(left - 1, right]</c>
+    /// facing left. On a vertical or horizontal line that is invisible, because
+    /// the walk rounds its endpoints to integers first and the two spans hold
+    /// the same integers. It shows on a <b>diagonal</b>, where the minor axis
+    /// interpolates to a fraction: a sample at x = 3009.5 floors to mask column
+    /// 9 facing right and to -10 facing left. Every case below was read off a
+    /// live Heavy at both facings in the same tick, not derived.
+    /// <para>
+    /// The corollary is the one to remember: the two pixels
+    /// <c>image_xscale = -1</c> adds to <c>bbox_left</c> are <b>not</b>
+    /// reachable. They are in the box the engine reports, the broad-phase check
+    /// lets them through, and the mask lookup then rejects them. Sizing a
+    /// hitscan off <c>bbox_left</c> would make a left-facing character two
+    /// pixels wider to shoot at than the engine makes it.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void FacingDecidesWhichEndRoundsAway()
+    {
+        var box = CharacterBox.For(PlayerClass.Heavy);
+
+        var right = LineCollider.ForCharacter(box, 3000, 620, 1);
+        var left = LineCollider.ForCharacter(box, 3000, 620, -1);
+
+        static bool Hits(in LineCollider c, double x1, double y1, double x2, double y2) =>
+            CollisionLine.Hits(c, default(CollisionLine.FilledMask), x1, y1, x2, y2);
+
+        // The engine's boxes differ, and only on the left.
+        Assert.Equal(new Aabb(2991, 608, 3009, 643), right.Bbox);
+        Assert.Equal(new Aabb(2989, 608, 3009, 643), left.Bbox);
+
+        // A near-vertical line grazing the right edge: its walk passes through
+        // x = 3009.5, which is inside facing right and outside facing left.
+        Assert.True(Hits(right, 3009, 600, 3010, 620));
+        Assert.False(Hits(left, 3009, 600, 3010, 620));
+
+        // And the mirror, grazing the left edge through x = 2990.5.
+        Assert.False(Hits(right, 2991, 600, 2990, 620));
+        Assert.True(Hits(left, 2991, 600, 2990, 620));
+
+        // The two pixels the flip adds to bbox_left are in the box and out of
+        // reach. A vertical line's x is whatever it rounds to, so these are the
+        // engine's own answer for the columns the inflation invented.
+        Assert.False(Hits(left, left.Bbox.Left, 600, left.Bbox.Left, 640));
+        Assert.False(Hits(left, left.Bbox.Left + 1, 600, left.Bbox.Left + 1, 640));
+        Assert.True(Hits(left, left.Bbox.Left + 2, 600, left.Bbox.Left + 2, 640));
     }
 
     /// <summary>
