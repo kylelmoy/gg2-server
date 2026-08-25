@@ -4,24 +4,34 @@ using Gg2.Protocol;
 namespace Gg2.Server;
 
 /// <summary>
+/// Answers what a roster slot's character looks like on the wire, if it has one.
+/// </summary>
+/// <remarks>
+/// A delegate rather than the world itself so the writer never copies a
+/// <c>WorldState</c> — it is a large value type by design (docs/BOTAI.md item
+/// 1), and serialisation runs every tick.
+/// </remarks>
+public delegate bool CharacterLookup(int slot, out CharacterBlock character);
+
+/// <summary>
 /// Writes the four state-update tiers, transcribed from
 /// <c>Scripts/Serialization/serializeState.gml</c> and the <c>User Event 12</c>
 /// of everything it visits.
 /// </summary>
 /// <remarks>
-/// <b>This serialises an empty world.</b> Phase 1 of docs/PLAN.md has no
-/// simulation, so no player owns a character or a sentry and the per-player
-/// block is a single zero byte. The tiers, the cadence and every tail field are
-/// real, because those are what the client's <c>deserializeState</c> reads and
-/// getting one wrong desynchronises the stream permanently rather than
-/// producing a visible glitch.
+/// <b>Characters are real; everything else is not yet.</b> Phase 4 simulates
+/// the character update, so a player who has spawned serialises a full block
+/// straight out of <c>Gg2.Simulation</c>. Sentries, weapons, scores and the
+/// objective state are still placeholders at their initial values, waiting on
+/// the phases that own them.
 /// <para>
-/// When <c>Gg2.Simulation</c> exists this moves next to it and takes a world
-/// rather than a <see cref="MatchState"/>. The layout below does not change;
-/// only the source of the numbers does.
+/// The tiers, the cadence and every tail field are real regardless, because
+/// those are what the client's <c>deserializeState</c> reads and getting one
+/// wrong desynchronises the stream permanently rather than producing a visible
+/// glitch.
 /// </para>
 /// </remarks>
-public sealed class StateUpdateWriter(MatchState match)
+public sealed class StateUpdateWriter(MatchState match, CharacterLookup characters)
 {
     /// <summary>
     /// Writes one update of the given tier.
@@ -111,8 +121,84 @@ public sealed class StateUpdateWriter(MatchState match)
                     writer.WriteUByte(0);
         }
 
-        // 0x01 = has a Character, 0x02 = has a Sentry. Nothing has either yet.
-        writer.WriteUByte(0);
+        // 0x01 = has a Character, 0x02 = has a Sentry. No sentries yet.
+        var hasCharacter = characters(index, out var character);
+        writer.WriteUByte(hasCharacter ? (byte)0x01 : (byte)0x00);
+
+        if (hasCharacter)
+            WriteCharacter(writer, tier, character, player.Class);
+    }
+
+    /// <summary>
+    /// <c>Objects/InGameElements/Character.events/User Event 12.xml</c>.
+    /// </summary>
+    /// <remarks>
+    /// The three tiers are nested rather than separate: an <c>INPUTSTATE</c>
+    /// block is the first three fields, a <c>QUICK_UPDATE</c> adds position
+    /// through flags, and a <c>FULL_UPDATE</c> adds the tail and is followed by
+    /// the current weapon's own block.
+    /// </remarks>
+    private static void WriteCharacter(
+        NetWriter writer,
+        MessageType tier,
+        in CharacterBlock character,
+        PlayerClass playerClass)
+    {
+        writer.WriteUByte((byte)character.Keys);
+        writer.WriteUShort(character.NetAimDirection);
+        writer.WriteUByte(character.AimDistance);
+
+        if (tier is not (MessageType.QuickUpdate or MessageType.FullUpdate))
+            return;
+
+        // Already quantised by Gg2.Simulation.CharacterWire, which is the same
+        // conversion the parity replayer compares against — deliberately not
+        // repeated here.
+        writer.WriteUShort(character.X);
+        writer.WriteUShort(character.Y);
+        writer.WriteByte(character.HSpeed);
+        writer.WriteByte(character.VSpeed);
+        writer.WriteUByte(character.Hp);
+        writer.WriteUByte(character.Ammo);
+        writer.WriteUByte(character.Flags);
+
+        if (tier != MessageType.FullUpdate)
+            return;
+
+        writer.WriteUByte(0); // animation offset: cosmetic, client-side.
+        writer.WriteUByte(0); // cloak alpha / uber / charge — phase 5.
+        writer.WriteShort(0); // alarm[1]
+        writer.WriteUByte(0); // intel carried
+        writer.WriteShort(0); // intel recharge
+
+        WriteWeapon(writer, playerClass);
+    }
+
+    /// <summary>
+    /// The <c>with(currentWeapon) event_user(12)</c> closing a FULL_UPDATE
+    /// character block.
+    /// </summary>
+    /// <remarks>
+    /// Only <c>Medigun</c> and <c>Minegun</c> define one, so this is zero bytes
+    /// for eight of the ten classes. It is not optional for the other two: the
+    /// client reads these unconditionally by class, and a missing byte
+    /// desynchronises the rest of the stream rather than losing one field.
+    /// </remarks>
+    private static void WriteWeapon(NetWriter writer, PlayerClass playerClass)
+    {
+        switch (playerClass)
+        {
+            case PlayerClass.Medic:
+                writer.WriteUByte(0); // heal target; 0 is "nobody".
+                break;
+
+            case PlayerClass.Demoman:
+                writer.WriteUByte(0); // mines lobbed, and so no mine blocks.
+                break;
+
+            default:
+                break;
+        }
     }
 
     /// <summary>

@@ -88,6 +88,24 @@ public static class ServerMessages
         writer.WriteUByte((byte)playerClass);
     }
 
+    /// <summary>
+    /// <c>PLAYER_SPAWN</c>: which spawn point, not where.
+    /// </summary>
+    /// <remarks>
+    /// <c>sendEventSpawn.gml</c> sends the point id and the group and lets every
+    /// client resolve them against its own copy of the map
+    /// (<c>doEventSpawn.gml</c>). That is why a spawn is the one moment a
+    /// character's position crosses the wire exactly rather than quantised to a
+    /// fifth of a pixel — see docs/PARITY.md.
+    /// </remarks>
+    public static void PlayerSpawn(NetWriter writer, byte playerId, byte spawnPointId, byte group)
+    {
+        writer.WriteMessageType(MessageType.PlayerSpawn);
+        writer.WriteUByte(playerId);
+        writer.WriteUByte(spawnPointId);
+        writer.WriteUByte(group);
+    }
+
     public static void PlayerChangeName(NetWriter writer, byte playerId, string name)
     {
         writer.WriteMessageType(MessageType.PlayerChangeName);

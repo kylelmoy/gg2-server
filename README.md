@@ -11,10 +11,10 @@ combat, is next.**
 |---|---|
 | `Gg2.Protocol` | The constant table, the wire types, the little-endian buffer reader/writer, wire quantisation, command framing, `PlayerInput`. |
 | `Gg2.Maps` | Map PNG level-data extraction, the walkmask decoder, GGON, the entity list. |
-| `Gg2.Server` | Sockets, the join handshake, the roster, the 30 Hz broadcast. The only I/O. |
+| `Gg2.Server` | Sockets, the join handshake, the roster, the 30 Hz broadcast, and the tick that drives the simulation. The only I/O. |
 | `Gg2.Host` | `gg2-server`, the console entry point. |
 | `Gg2.Parity` | `gg2-parity`: a stream recorder, a byte diff, and a trace replayer with drift reporting. |
-| `Gg2.Simulation` | Collision, the movement solver and the character update. Pure — no sockets, no clock, no files. |
+| `Gg2.Simulation` | `WorldState`, collision, the movement solver and the character update. Pure — no sockets, no clock, no files. |
 
 **Phase 0** — all 22 built-in maps decode **cell-for-cell** against
 `gg2-agent/tools/walkmask.js`, the decoder that has itself been checked against
@@ -55,6 +55,13 @@ The last wire unit of drift, though, was none of those — it was **where a
 replayed character starts**. A `PLAYER_SPAWN` carries a spawn point id rather
 than a position, so resolving it against the map the way the client does starts
 the character on an exact integer instead of inside a fifth-of-a-pixel bin.
+
+The server runs that simulation now: pick a team and you get a character at a
+real spawn point, advanced every tick and serialised to every client. The tick
+and the wire conversion have exactly one implementation each, shared with the
+parity replayer — two copies would let a recording pass every gate while the
+server shipped different bytes. What is left of phase 4 is watching a stock GM8
+client walk around and confirming it never gets corrected.
 
 ```powershell
 $env:PATH = "$env:LOCALAPPDATA\Microsoft\dotnet;$env:PATH"   # .NET 9, user-local

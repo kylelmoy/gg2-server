@@ -263,7 +263,7 @@ public sealed class JoinAndBroadcastTests
             case MessageType.QuickUpdate:
                 Assert.Equal(playerCount, client.TakeByte());
                 for (var i = 0; i < playerCount; i++)
-                    Assert.Equal(0, client.TakeByte()); // subobjects: no character, no sentry
+                    TakeSubobjects(client, tier);
                 return tier;
 
             case MessageType.FullUpdate:
@@ -295,7 +295,7 @@ public sealed class JoinAndBroadcastTests
             client.TakeByte();   // queueJump
             Assert.Equal(string.Empty, client.TakeString2()); // rewards
             client.Take(playerCount - 1);                     // domination kills
-            Assert.Equal(0, client.TakeByte());               // subobjects
+            TakeSubobjects(client, MessageType.FullUpdate);
         }
 
         // No moving platforms on any shipped map, so no platform blocks.
@@ -315,6 +315,39 @@ public sealed class JoinAndBroadcastTests
         client.Take(10); // class limits
     }
 
+    /// <summary>
+    /// Consumes one player's subobjects byte and whatever it says follows.
+    /// </summary>
+    /// <remarks>
+    /// A player who has picked a team has a character now — phase 4 wired the
+    /// simulation into the server — so this is no longer the single zero byte it
+    /// was through phases 1 to 3. Sentries are still phase 5, so bit 1 never
+    /// appears.
+    /// </remarks>
+    private static void TakeSubobjects(LoopbackClient client, MessageType tier)
+    {
+        var subobjects = client.TakeByte();
+        Assert.True(subobjects is 0 or 1, $"unexpected subobjects byte {subobjects}");
+
+        if (subobjects == 0)
+            return;
+
+        client.Take(4); // keys, aimDirection, aimDistance
+
+        if (tier is not (MessageType.QuickUpdate or MessageType.FullUpdate))
+            return;
+
+        client.Take(9); // x, y, hspeed, vspeed, hp, ammo, flags
+
+        if (tier != MessageType.FullUpdate)
+            return;
+
+        client.Take(7); // animation offset, class-specific, alarm[1], intel, recharge
+
+        // Every player in these tests is a scout, and only Medigun and Minegun
+        // write a weapon block — so there is nothing more to consume here.
+    }
+
     private static int PlayerCountOfNextUpdate(LoopbackClient client)
     {
         var tier = client.TakeMessageType();
@@ -332,6 +365,14 @@ public sealed class JoinAndBroadcastTests
             {
                 client.Take(3);
                 count++;
+                continue;
+            }
+
+            // Picking a team spawns a character, and the spawn is announced
+            // before the next update goes out.
+            if ((MessageType)client.Received[0] == MessageType.PlayerSpawn)
+            {
+                client.Take(4);
                 continue;
             }
 

@@ -30,7 +30,7 @@ public readonly record struct AnchorNudge(double X, double Y, double HSpeed, dou
 
 public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSimulation
 {
-    private readonly Dictionary<int, CharacterState> _characters = [];
+    private WorldState _state;
     private CollisionWorld? _world;
     private SpawnPoints? _spawnPoints;
 
@@ -72,12 +72,15 @@ public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSim
         var level = loadMap(map);
         _world = new CollisionWorld(level);
         _spawnPoints = new SpawnPoints(level);
-        _characters.Clear();
+        _state = default;
     }
 
     public void SetCharacter(int slot, in CharacterBlock observed)
     {
-        var character = _characters.TryGetValue(slot, out var existing) ? existing : new CharacterState();
+        if ((uint)slot >= WorldState.MaxSlots)
+            return;
+
+        var character = _state.Alive[slot] ? _state.Characters[slot] : new CharacterState();
 
         character.Class = Classes.GetValueOrDefault(slot, PlayerClass.Scout);
         character.Team = Teams.GetValueOrDefault(slot, Team.Red);
@@ -106,7 +109,8 @@ public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSim
         character.Facing = (character.AimDirection + 270) % 360 > 180 ? 1 : -1;
         character.LastFacing = character.Facing;
 
-        _characters[slot] = character;
+        _state.Characters[slot] = character;
+        _state.Alive[slot] = true;
     }
 
     /// <summary>The full double-precision state of a slot, for diagnostics.</summary>
@@ -114,7 +118,11 @@ public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSim
     /// The wire view in <see cref="TryGetCharacter"/> is quantised, which is
     /// exactly what a hunt for a sub-wire-unit difference cannot see through.
     /// </remarks>
-    public bool TryGetState(int slot, out CharacterState state) => _characters.TryGetValue(slot, out state);
+    public bool TryGetState(int slot, out CharacterState state)
+    {
+        state = _state.IsAlive(slot) ? _state.Characters[slot] : default;
+        return _state.IsAlive(slot);
+    }
 
     public void SetPlayerClass(int slot, PlayerClass playerClass) => Classes[slot] = playerClass;
 
@@ -130,103 +138,46 @@ public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSim
     /// default of +1. Speeds are whatever <c>instance_create</c> leaves them,
     /// which is zero.
     /// </remarks>
-    public bool SpawnCharacter(int slot, int spawnpointId, int group)
-    {
-        var team = Teams.GetValueOrDefault(slot, Team.Red);
+    public bool SpawnCharacter(int slot, int spawnpointId, int group) =>
+        _spawnPoints is not null
+        && _state.Spawn(
+            _spawnPoints,
+            slot,
+            Classes.GetValueOrDefault(slot, PlayerClass.Scout),
+            Teams.GetValueOrDefault(slot, Team.Red),
+            spawnpointId,
+            group);
 
-        if (_spawnPoints is null || !_spawnPoints.TryGet(team, group, spawnpointId, out var x, out var y))
-            return false;
+    public void ClearCharacter(int slot) => _state.Clear(slot);
 
-        var playerClass = Classes.GetValueOrDefault(slot, PlayerClass.Scout);
-
-        _characters[slot] = new CharacterState
-        {
-            Class = playerClass,
-            Team = team,
-            X = x,
-            Y = y,
-            Hp = ClassStats.For(playerClass).MaxHp,
-            Facing = 1,
-            LastFacing = 1,
-        };
-
-        return true;
-    }
-
-    public void ClearCharacter(int slot) => _characters.Remove(slot);
-
+    /// <remarks>
+    /// Straight through to <see cref="MatchSimulation.Tick"/> — the same call the
+    /// live server makes. That is the point of the seam: a trace that passes
+    /// here has exercised the code the server actually runs, not a replica of
+    /// it that can drift away in maintenance.
+    /// </remarks>
     public void Tick(ReadOnlySpan<PlayerInput> inputs)
     {
         if (_world is null)
             throw new InvalidOperationException("LoadMap must run before Tick");
 
-        // The phase split is observable, so every character finishes a phase
-        // before any starts the next — see CharacterPhysics.
-        var slots = _characters.Keys.Order().ToArray();
-
-        foreach (var slot in slots)
-        {
-            if (slot >= inputs.Length)
-                continue;
-
-            var character = _characters[slot];
-            character.ApplyInput(inputs[slot]);
-            _characters[slot] = character;
-        }
-
-        foreach (var slot in slots)
-        {
-            var character = _characters[slot];
-            CharacterPhysics.BeginStep(_world, ref character);
-            _characters[slot] = character;
-        }
-
-        foreach (var slot in slots)
-        {
-            var character = _characters[slot];
-            CharacterPhysics.Step(_world, ref character);
-            _characters[slot] = character;
-        }
-
-        foreach (var slot in slots)
-        {
-            var character = _characters[slot];
-            CharacterPhysics.EndStep(_world, ref character);
-            _characters[slot] = character;
-        }
+        MatchSimulation.Tick(_world, ref _state, inputs);
     }
 
     public bool TryGetCharacter(int slot, out CharacterBlock character)
     {
-        if (!_characters.TryGetValue(slot, out var state))
+        if (!_state.IsAlive(slot))
         {
             character = default;
             return false;
         }
 
-        character = new CharacterBlock
-        {
-            Keys = state.KeyState,
-            NetAimDirection = state.NetAimDirection,
-            AimDistance = state.AimDistance,
-            HasPosition = true,
+        var state = _state.Characters[slot];
 
-            // Quantised exactly the way Character.events/User Event 12.xml
-            // does it: plain x*5, with no GML round() first, so the extension's
-            // half-away-from-zero rule applies.
-            X = WireQuantise.ToUShort(state.X * 5),
-            Y = WireQuantise.ToUShort(state.Y * 5),
-            HSpeed = WireQuantise.ToByte(state.HSpeed * 8.5),
-            VSpeed = WireQuantise.ToByte(state.VSpeed * 8.5),
-            Hp = WireQuantise.ToUByte(Math.Ceiling(state.Hp)),
-
-            // Not simulated yet, so they are copied from the anchor rather than
-            // reported as zero — otherwise every comparison would fail on a
-            // field this phase does not claim to reproduce.
-            Ammo = 0,
-            Flags = (byte)((state.MoveStatus & 0x07) << 1),
-        };
-
+        // Shared with the live server rather than reimplemented here: see
+        // CharacterWire, and why having two copies would make this harness
+        // prove the wrong program.
+        character = CharacterWire.ToBlock(state);
         return true;
     }
 }

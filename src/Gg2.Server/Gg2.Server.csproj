@@ -1,7 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!-- The only project with I/O in it. docs/ARCHITECTURE.md:
-       Gg2.Simulation must never reference this one. -->
+       Gg2.Simulation must never reference this one. The dependency runs one
+       way, which is what keeps the simulation runnable with no server at all
+       and therefore replayable by Gg2.Parity. -->
   <PropertyGroup>
     <RootNamespace>Gg2.Server</RootNamespace>
   </PropertyGroup>
@@ -9,6 +11,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Gg2.Protocol\Gg2.Protocol.csproj" />
     <ProjectReference Include="..\Gg2.Maps\Gg2.Maps.csproj" />
+    <ProjectReference Include="..\Gg2.Simulation\Gg2.Simulation.csproj" />
   </ItemGroup>
 
 </Project>

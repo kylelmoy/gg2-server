@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Sockets;
 using Gg2.Maps;
 using Gg2.Protocol;
+using Gg2.Simulation;
 
 namespace Gg2.Server;
 
@@ -40,6 +41,21 @@ public sealed class GameServer : IDisposable
     private MatchState _match = null!;
     private StateUpdateWriter _stateWriter = null!;
 
+    // The simulation and the read-only geometry it runs against. WorldState is
+    // a value type and is held by value on purpose: docs/BOTAI.md item 1 wants
+    // cloning a match to be a copy of bytes, and a field is where that starts.
+    private CollisionWorld _collision = null!;
+    private SpawnPoints _spawnPoints = null!;
+    private WorldState _world;
+
+    // Which spawn point a player gets. Server-side RNG the port is explicitly
+    // free about (docs/PARITY.md) — the choice is broadcast in PLAYER_SPAWN, so
+    // clients and a replay follow it rather than reproducing it.
+    private readonly Random _spawnRandom = new();
+
+    // Reused every tick; see AdvanceSimulation.
+    private readonly PlayerInput[] _inputs = new PlayerInput[WorldState.MaxSlots];
+
     /// <summary>
     /// Ticks since start. <c>frame</c> in <c>GameServerBeginStep.gml</c>, and it
     /// is incremented <em>before</em> the cadence is tested — so the first tick
@@ -69,7 +85,12 @@ public sealed class GameServer : IDisposable
 
         _roster = new Roster(_options.ServerPlayerName);
         _match = new MatchState(map, _roster, _options);
-        _stateWriter = new StateUpdateWriter(_match);
+
+        _collision = new CollisionWorld(map);
+        _spawnPoints = new SpawnPoints(map);
+        _world = default;
+
+        _stateWriter = new StateUpdateWriter(_match, TryGetCharacter);
 
         _listener = new TcpListener(IPAddress.Any, _options.Port);
         _listener.Server.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, false);
@@ -113,7 +134,7 @@ public sealed class GameServer : IDisposable
 
     /// <summary>
     /// One server tick. Exposed so tests can drive the server without a clock —
-    /// the same reason the simulation will be a pure function.
+    /// the same reason the simulation is a pure function.
     /// </summary>
     public void Tick()
     {
@@ -122,14 +143,101 @@ public sealed class GameServer : IDisposable
         _frame++;
 
         ServiceClients();
+
+        // Order matters and is the reference's. GameServerBeginStep.gml
+        // serialises the update *before* any Character's Step runs, so one
+        // update carries this tick's input alongside last tick's position — the
+        // pairing docs/PARITY.md's replayer calls UpdatesPrecedeTheirTick, and
+        // getting it the other way round makes the port look systematically
+        // slow to every client.
         WriteStateUpdate();
         FlushBroadcast();
+
+        AdvanceSimulation();
 
         AcceptConnections(now);
         ServiceJoiningConnections(now);
 
         foreach (var client in _clients)
             client.Connection.Flush();
+    }
+
+    // --- the simulation ------------------------------------------------------
+
+    /// <summary>Runs one tick of physics for every character in the world.</summary>
+    /// <remarks>
+    /// Inputs are gathered per roster slot into a scratch buffer that lives for
+    /// the life of the server: <c>Tick</c> allocating on the steady-state path
+    /// is what docs/BOTAI.md item 1 rules out, and a per-tick array here would
+    /// be exactly that.
+    /// </remarks>
+    private void AdvanceSimulation()
+    {
+        var count = Math.Min(_roster.Count, WorldState.MaxSlots);
+
+        for (var i = 0; i < count; i++)
+            _inputs[i] = _roster[i].Input;
+
+        MatchSimulation.Tick(_collision, ref _world, _inputs.AsSpan(0, count));
+    }
+
+    /// <summary>The wire view of a slot's character, for the state writer.</summary>
+    private bool TryGetCharacter(int slot, out CharacterBlock character)
+    {
+        if (!_world.IsAlive(slot))
+        {
+            character = default;
+            return false;
+        }
+
+        character = CharacterWire.ToBlock(_world.Characters[slot]);
+        return true;
+    }
+
+    /// <summary>
+    /// Spawns a player who is on a team and has no character, announcing it
+    /// first.
+    /// </summary>
+    /// <remarks>
+    /// The reference does this by setting <c>alarm[5] = 1</c> on a class or team
+    /// change and letting <c>Player.events/Alarm 5.xml</c> call
+    /// <c>PlayerSpawn()</c> between Begin Step and Step
+    /// (<c>processClientCommands.gml:107</c>). A headless port has no alarms, so
+    /// it spawns at the same point in the tick directly. Respawn *timing* after
+    /// a death is phase 6's, along with the respawn timer this ignores.
+    /// <para>
+    /// <c>PLAYER_SPAWN</c> carries the point id and group rather than
+    /// coordinates (<c>sendEventSpawn.gml</c>), so the message must go out
+    /// before the character moves — every client resolves the pair against its
+    /// own copy of the map and would otherwise place it a tick behind.
+    /// </para>
+    /// </remarks>
+    private void TrySpawn(RosterEntry entry)
+    {
+        var slot = _roster.IndexOf(entry);
+
+        if (slot < 0 || slot >= WorldState.MaxSlots || _world.IsAlive(slot))
+            return;
+
+        if (entry.Team is not (Team.Red or Team.Blue))
+            return;
+
+        // selectSpawnGroup.gml picks a forward spawn group by gamemode state.
+        // Group 0 is the answer for every mode without control points, and no
+        // shipped map defines any other group at all.
+        const int Group = 0;
+
+        var available = _spawnPoints.Count(entry.Team, Group);
+        if (available == 0)
+            return;
+
+        // floor(random(numSpawnPoints)) — PlayerSpawn.gml.
+        var point = _spawnRandom.Next(available);
+
+        if (!_world.Spawn(_spawnPoints, slot, entry.Class, entry.Team, point, Group))
+            return;
+
+        ServerMessages.PlayerSpawn(_broadcast, (byte)slot, (byte)point, Group);
     }
 
     // --- the roster and its clients -----------------------------------------
@@ -210,6 +318,14 @@ public sealed class GameServer : IDisposable
                     : Team.Spectator;
 
                 ServerMessages.PlayerChangeTeam(_broadcast, IdOf(entry), entry.Team);
+
+                // The client destroys the character on PLAYER_CHANGETEAM
+                // (ClientBeginStep.gml), so the server must too or the two
+                // disagree about who exists. Changing team also decides which
+                // gates are solid, so keeping the old body would be wrong even
+                // if the client kept it.
+                _world.Clear(IdOf(entry));
+                TrySpawn(entry);
                 break;
             }
 
@@ -221,6 +337,12 @@ public sealed class GameServer : IDisposable
 
                 entry.Class = requested;
                 ServerMessages.PlayerChangeClass(_broadcast, IdOf(entry), entry.Class);
+
+                // A live character keeps playing as the class it spawned as —
+                // the reference only queues a respawn when the player has no
+                // character (processClientCommands.gml:107). Changing class
+                // mid-life is a death in the reference, and death is phase 5.
+                TrySpawn(entry);
                 break;
             }
 
@@ -277,7 +399,12 @@ public sealed class GameServer : IDisposable
             _roster.RemoveAt(rosterIndex);
 
             // Both sides compact the list, so every index above this one shifts
-            // down by one. The client does it in its PLAYER_LEAVE case.
+            // down by one. The client does it in its PLAYER_LEAVE case, and the
+            // world has to shift with it — a slot index IS a roster index, so a
+            // character left in place would belong to the wrong player from here
+            // on.
+            _world.RemoveSlot(rosterIndex);
+
             ServerMessages.PlayerLeave(_broadcast, (byte)rosterIndex);
         }
 
