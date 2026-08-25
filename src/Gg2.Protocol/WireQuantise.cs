@@ -109,6 +109,85 @@ public static class Gml
 
     public static double Ceil(double value) => Math.Ceiling(value);
 
+    // -- The motion snap ------------------------------------------------------
+    //
+    // Game Maker replaces a computed motion value with a nearby whole number
+    // when it lands within 1e-4 of one. It is why a shot fired at ninety
+    // degrees has an `hspeed` of exactly 0 rather than 8e-16, and why
+    // `lengthdir_x(1, 89.999)` is 0 rather than 1.7e-5.
+    //
+    // Measured against the running game, and both halves of that matter:
+    //
+    //   * the threshold is 1e-4 and the test is strict. Stepping the offset from
+    //     an integer in units of 2^-30, an offset of 107374 of them snaps and
+    //     107375 does not, and 1e-4 is 107374.1824 of them.
+    //   * it applies to `lengthdir_x` and `lengthdir_y`, and to an instance's
+    //     `hspeed`, `vspeed`, `direction` and `speed` when they are *recomputed*
+    //     from each other. It does NOT apply to `cos`, `sin`, `sqrt`,
+    //     `point_distance`, `point_direction`, or to a value written straight
+    //     into one of those four variables.
+    //
+    // Do not widen it to the other built-ins on the strength of the name. See
+    // tests/Gg2.Tests/MotionSampleTests.cs.
+
+    /// <summary>How close a computed motion value must land to a whole number before GM8 snaps it there.</summary>
+    /// <remarks>
+    /// A billion times <see cref="Epsilon"/>, and the two are unrelated: this
+    /// one replaces a value, the other decides a comparison. Confusing them
+    /// moves a projectile.
+    /// </remarks>
+    public const double MotionSnapThreshold = 0.0001;
+
+    /// <summary>The nearest whole number if it is within <see cref="MotionSnapThreshold"/>, else the value unchanged.</summary>
+    public static double SnapToNearInteger(double value)
+    {
+        // GML's own round, which is half to even — though the tie can never be
+        // reached through a 1e-4 window, so it is here for provenance rather
+        // than for effect.
+        var rounded = Round(value);
+        return Math.Abs(rounded - value) < MotionSnapThreshold ? rounded : value;
+    }
+
+    // -- lengthdir ------------------------------------------------------------
+
+    /// <summary>
+    /// GML <c>lengthdir_x(len, dir)</c>: the horizontal component of a vector
+    /// of <paramref name="length"/> pointing at <paramref name="direction"/>
+    /// degrees.
+    /// </summary>
+    /// <remarks>
+    /// <b>The snap is part of it.</b> Every scattergun pellet is nudged fifteen
+    /// pixels along its own direction with this before it is allowed to fly
+    /// (<c>Objects/Weapons/Scattergun.events/User Event 3.xml</c>), so a pellet
+    /// fired straight up is nudged by exactly zero horizontally rather than by
+    /// 2.6e-5.
+    /// </remarks>
+    public static double LengthDirX(double length, double direction) =>
+        SnapToNearInteger(Math.Cos(DegToRad(direction)) * length);
+
+    /// <summary>
+    /// GML <c>lengthdir_y(len, dir)</c>. Negated, because Game Maker's y axis
+    /// points down and its angles do not.
+    /// </summary>
+    public static double LengthDirY(double length, double direction) =>
+        SnapToNearInteger(-Math.Sin(DegToRad(direction)) * length);
+
+    /// <summary>
+    /// GML <c>degtorad()</c>: one multiply by <c>pi/180</c>.
+    /// </summary>
+    /// <remarks>
+    /// The engine computes this on the x87 stack with an 80-bit pi, so for a
+    /// couple of angles in every hundred its result is one ULP away from this
+    /// one. No spelling in IEEE double arithmetic closes that gap — eight were
+    /// measured — and the residual is bounded at about seven machine epsilons,
+    /// far below GML's own 1e-13 comparison fuzz. docs/SIMULATION.md,
+    /// "Settled: the four motion variables".
+    /// </remarks>
+    public static double DegToRad(double degrees) => degrees * (Math.PI / 180.0);
+
+    /// <summary>GML <c>radtodeg()</c>.</summary>
+    public static double RadToDeg(double radians) => radians * (180.0 / Math.PI);
+
     // -- Decimal literals -----------------------------------------------------
     //
     // Game Maker 8 does not parse every decimal literal to the IEEE-754 double

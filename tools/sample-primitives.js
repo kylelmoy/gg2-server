@@ -63,6 +63,17 @@ async function batch(body) {
 // that can only express six decimals cannot say so. Every step below is a
 // power-of-two scale or a floor, and every chunk stays under 2^19 because GM8's
 // floor() truncates through a 32-bit integer.
+// ⚠️ The `if (v == 0)` below and the two `while` loops after it use GML's
+// COMPARISON operators, which are fuzzy to 1e-13 (docs/SIMULATION.md). So this
+// encoder reports a hard zero for any value under 1e-13 - cos(degtorad(90)),
+// for one - and its normalisation loops can exit with the mantissa outside
+// [1, 2) and lose the last bit. tools/sample-motion.js has the corrected
+// version: it scales by 2^400 before testing the sign or the zero, and it has
+// no normalisation loops at all.
+//
+// Every row in this tool's checked-in fixture was audited and none of them took
+// the fuzzy branch, so the oracle is sound as it stands. Port the fixed encoder
+// across before regenerating anything that can produce a value near zero.
 const ENCODE = (dst, src) => `
 {
     var v, s, a, e, m, f, c1, c2, c3;

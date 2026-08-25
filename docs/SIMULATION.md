@@ -842,7 +842,7 @@ set speed:      speed = v, then the same two lines
 
 set hspeed:     NO-OP if unchanged; otherwise
                 direction = snap(deg(atan2(-vspeed, hspeed)) mod 360)
-                speed     = sqrt(hspeed^2 + vspeed^2)      -- not snapped
+                speed     = snap(sqrt(hspeed^2 + vspeed^2))
 set vspeed:     the same
 
 snap(v)         = round(v) if |round(v) - v| < 1e-4, else v      -- round is
@@ -850,11 +850,14 @@ snap(v)         = round(v) if |round(v) - v| < 1e-4, else v      -- round is
                   a tie
 ```
 
-Three of those details change results rather than last digits:
+Four of those details change results rather than last digits:
 
 - **The snap.** `cos(90 degrees)` is 6.1e-17, so without it a shot fired
   straight up carries a residue in `hspeed` forever. The snap window is 1e-4,
   which is a *billion* times wider than `Gml.Epsilon` — do not confuse the two.
+- **A *recomputed* value snaps; a value written straight in does not.**
+  `speed = 3.00005` stores 3.00005 and gives `hspeed` exactly 3.
+  `hspeed = 3.00005` stores 3.00005 and gives `speed` exactly 3. Both measured.
 - **Writing a component the value it already holds is a no-op**, so
   `hspeed = hspeed` does not collapse a direction that a zero speed can no
   longer encode. An instance brought to rest still knows where it was pointing.
@@ -862,16 +865,86 @@ Three of those details change results rather than last digits:
   (`instance.set_hvspeed(hspeed + dx, vspeed + dy)`), so a knockback straight up
   leaves the 2.4e-16 that an identical-looking `direction = 90; speed = 4;`
   would have cleaned away. Small enough for `Gml.Equal` to absorb, big enough to
-  be worth not "fixing".
+  be worth not "fixing". Note the asymmetry with the line above: the residue
+  survives in the components and is snapped out of `speed`.
 
-**Status: transcribed, not measured.** The source is OpenGMK's
-`gm8emulator/src/instance.rs` and `gml/kernel.rs` — the same route that settled
-`collision_line`, and the same caveat: it is a faithful reimplementation, not the
-engine. Nothing in phase 4 writes `direction` or `speed`, so no existing fixture
-can see any of it. **The first projectile oracle must confirm the snap threshold
-and the degree/radian conversions before a trajectory is trusted.**
-`tests/Gg2.Tests/MotionTests.cs` pins the model so that a disagreement shows up
-as a failing test rather than as drift.
+**Status: measured.** `tools/sample-motion.js`, 399 write sequences and 27
+angles against the running game, replayed by
+`tests/Gg2.Tests/MotionSampleTests.cs`. The starting point was OpenGMK's
+`gm8emulator/src/instance.rs`, and the measurement moved it: **the transcription
+snapped `direction` and not `speed`, and the engine snaps both.** That is a
+1e-4-sized correction, not a last-bit one.
+
+#### `lengthdir_x` and `lengthdir_y` snap; `cos`, `sin` and the rest do not
+
+The same 1e-4 rule, applied by the same engine helper, and it is easy to miss
+because it lives inside two functions that look like plain trig:
+
+| Snaps | Does not snap |
+|---|---|
+| `lengthdir_x`, `lengthdir_y` | `cos`, `sin`, `sqrt`, `abs` |
+| `hspeed`, `vspeed`, `direction`, `speed` when **recomputed** | `point_distance`, `point_direction`, `radtodeg(arctan2(...))` |
+| | any of the four written **directly** |
+
+Measured: `lengthdir_x(1, 89.999)` is **0** where `1*cos(degtorad(89.999))` is
+1.7e-5, and `lengthdir_y(15, 89.999)` is **-15** where the product is
+-14.999999998. Each scattergun pellet is nudged fifteen pixels along its own
+direction with `lengthdir` before it flies, so this is on the live path.
+`Gg2.Protocol.Gml.LengthDirX`/`LengthDirY` are the ones to call — never a bare
+`Math.Cos(...) * length`.
+
+#### ⚠️ This is the one primitive that is not bit-exact, and it cannot be made so
+
+GM8 is a Delphi program. Its motion conversions run on the **x87 stack at 80-bit
+extended precision**, using Intel's `FSIN`/`FCOS` and their 66-bit argument
+reduction; the port runs on IEEE doubles. The difference is visible three ways,
+all measured:
+
+- `cos(degtorad(90))` is **6.123031769111886e-17** in the game and
+  6.123233995736766e-17 in .NET. The gap, 2e-20 per quadrant of argument
+  reduction, is x87's internal pi being 66 bits.
+- `degtorad(30)` is one ULP **above** `30 * (pi/180)` in double arithmetic,
+  because the engine multiplies by an 80-bit pi.
+- The engine's *internal* `update_hvspeed` is not `cos(degtorad(d)) * speed`
+  either — it keeps the whole chain in registers and rounds once at the store,
+  so it lands up to 1e-14 away from any two-step double computation.
+
+Eight spellings of degrees-to-radians were measured against 486 components —
+`d*(pi/180)`, `(d*pi)/180`, `(d/180)*pi`, `d/(180/pi)`, a double-double
+correction, and others — and **none reproduced the engine**. The best of them is
+the obvious one, which is what `Motion` uses.
+
+What that costs, measured over 1,197 sampled values:
+
+| | |
+|---|---|
+| components and `speed` bit-exact | 87% |
+| worst residual | **1.5e-15 per unit of speed** (about 7 machine epsilons) |
+| `direction` bit-exact | 95% |
+| worst residual | 1.1e-13 degrees |
+
+And why it is safe to build on: GML's own comparison operators are fuzzy to
+**1e-13**, so the reference itself cannot distinguish a difference this small; a
+projectile lives at most 40 ticks, so under 1e-12 of a pixel accumulates over
+its whole life; positions reach the wire quantised to a fifth of a pixel; and
+collision runs on integer bounding boxes. The part that *is* discrete — the
+snap — is exact, and `MotionSampleTests` asserts it exactly on rows aimed along
+an axis, where `cos` is exactly 1 and no trig error can reach them.
+
+Do not try to close the last bit. Three intersection tests were tried and
+discarded before `collision_line`'s walk was found; this is the same shape of
+trap, and here the answer is that the gap is in the FPU rather than in the
+formula.
+
+**One trap that cost this session an hour, and which the other samplers still
+carry.** The mantissa encoder in `sample-rng.js`, `sample-physics.js` and
+`sample-primitives.js` opens with `if (v == 0)` — and *that is GML's fuzzy
+comparison*, true for anything under 1e-13. It reports a hard zero for
+`cos(degtorad(90))`. `sample-motion.js` has the fixed version, which scales by
+2^400 before testing the sign or the zero and has no normalisation loops at all.
+Every row of the three older fixtures was audited and none took the fuzzy
+branch, so those oracles are sound — but port the fix across before regenerating
+any of them.
 
 ### Settled: the alarm stage
 
