@@ -186,6 +186,60 @@ public sealed class CollisionWorld
     }
 
     /// <summary>
+    /// The map's walkmask as a <see cref="CollisionLine"/> mask lookup.
+    /// </summary>
+    /// <remarks>
+    /// A struct so <see cref="CollisionLine.Hits{TMask}"/> stays allocation-free
+    /// and the lookup inlines. It holds a reference, which is fine here and
+    /// would not be in <see cref="WorldState"/> — this is a read-only input
+    /// passed <em>to</em> a query, never state (docs/BOTAI.md, item 1).
+    /// </remarks>
+    public readonly struct WalkmaskLookup(Walkmask mask) : CollisionLine.IMask
+    {
+        public bool IsSolid(int x, int y) => mask.IsSolid(x, y);
+    }
+
+    /// <summary>
+    /// The map's collision sprite, as GM8 sees it.
+    /// </summary>
+    /// <remarks>
+    /// One instance of <c>CustomMapO</c> at the origin with
+    /// <c>image_xscale = image_yscale = 6</c>, whose sprite is built at runtime
+    /// from the map's walkmask
+    /// (<c>Scripts/Maps/CustomMaps/CustomMapProcessLevelData.gml:22</c>). Read
+    /// out of the running game: position (0, 0), origin (0, 0), and a bounding
+    /// box of <c>[0, 6·width) × [0, 6·height)</c> — which is the mask's extent,
+    /// not <see cref="Width"/>.
+    /// <para>
+    /// <c>CustomMapO</c> descends from <c>CollisionMapO</c> and so from
+    /// <c>Obstacle</c>, which is why <c>collision_line_bulletblocking</c>'s
+    /// first line — <c>collision_line(..., Obstacle, 1, 0)</c> — is what stops
+    /// a bullet at a wall even though the map is never named.
+    /// </para>
+    /// </remarks>
+    public LineCollider MapCollider => new(
+        0,
+        0,
+        GameConstants.CellSize,
+        GameConstants.CellSize,
+        new Aabb(0, 0, MaskWidth - 1, MaskHeight - 1),
+        0,
+        0,
+        new Aabb(0, 0, _mask.Width - 1, _mask.Height - 1));
+
+    /// <summary>
+    /// <c>collision_line</c> against the map's walkmask.
+    /// </summary>
+    /// <remarks>
+    /// <b>Map geometry only</b>, the same split as
+    /// <see cref="PlaceFreeInMask"/>: gates and bullet walls are separate
+    /// instances and the reference asks about them separately, in the order
+    /// <c>collision_line_bulletblocking</c> lists them.
+    /// </remarks>
+    public bool CollisionLineHitsMask(double x1, double y1, double x2, double y2) =>
+        CollisionLine.Hits(MapCollider, new WalkmaskLookup(_mask), x1, y1, x2, y2);
+
+    /// <summary>
     /// The integer position GM8 collides at, for a real one.
     /// </summary>
     /// <remarks>

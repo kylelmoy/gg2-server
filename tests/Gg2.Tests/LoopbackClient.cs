@@ -94,6 +94,14 @@ public sealed class LoopbackClient : IDisposable
         Send(writer.WrittenSpan);
     }
 
+    public void SendChangeClass(PlayerClass playerClass)
+    {
+        var writer = new NetWriter(4);
+        writer.WriteMessageType(MessageType.PlayerChangeClass);
+        writer.WriteUByte((byte)playerClass);
+        Send(writer.WrittenSpan);
+    }
+
     public void Send(ReadOnlySpan<byte> bytes)
     {
         var sent = 0;

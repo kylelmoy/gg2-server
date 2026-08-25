@@ -157,6 +157,27 @@ public sealed class PlayerBlock
 
     /// <summary>A demoman's lobbed mines.</summary>
     public MineBlock[] Mines { get; init; } = [];
+
+    /// <summary>
+    /// Whether the weapon may fire this tick — <c>Weapon.events/User Event
+    /// 12.xml</c>'s first byte.
+    /// </summary>
+    /// <remarks>
+    /// Null for a medic, whose <c>Medigun</c> is the one weapon that overrides
+    /// <c>User Event 12</c> <em>without</em> an inherited action and so writes
+    /// neither of the parent's two bytes.
+    /// </remarks>
+    public byte? ReadyToShoot { get; init; }
+
+    /// <summary>
+    /// Ticks left on the weapon's refire alarm, <c>alarm[0]</c>.
+    /// </summary>
+    /// <remarks>
+    /// Written as a <c>ubyte</c>, so a reload longer than 255 ticks would clamp
+    /// — none is. Null for a medic, for the same reason as
+    /// <see cref="ReadyToShoot"/>.
+    /// </remarks>
+    public byte? RefireAlarm { get; init; }
 }
 
 /// <summary>A <c>MovingPlatform</c> block. Absent from an <c>INPUTSTATE</c>.</summary>

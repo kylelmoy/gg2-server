@@ -70,6 +70,19 @@ public sealed class Trace
 
     private static ReadOnlySpan<byte> Magic => "GG2TRACE"u8;
 
+    /// <summary>
+    /// Whether these bytes carry the trace header, rather than being a raw
+    /// recording.
+    /// </summary>
+    /// <remarks>
+    /// The recorder writes both forms — a <c>.trace</c> with the header that
+    /// makes it replayable, anything else raw for a byte diff — so a tool handed
+    /// a file has to ask. Cheaper and clearer than catching the exception
+    /// <see cref="Decode"/> throws.
+    /// </remarks>
+    public static bool LooksLikeTrace(ReadOnlySpan<byte> bytes) =>
+        bytes.Length >= Magic.Length && bytes[..Magic.Length].SequenceEqual(Magic);
+
     /// <summary>Serialises to the on-disk form. The caller does the writing.</summary>
     public byte[] Encode()
     {

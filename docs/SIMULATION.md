@@ -54,11 +54,24 @@ observable simulation; owe GM8 nothing else. Concretely:
   the round trip; see "Settled: the automatic-movement round trip" below.
 - The loopback TCP socket the host uses to talk to itself.
 - Drawing, sprites, particles, sounds, the HUD, the view/camera.
-- Server-side RNG. `random()` and `choose()` appear in spawn-team selection,
-  chat bubbles and particle emission. None of it is shared with client
-  prediction — the server decides and broadcasts the result — so the port may
-  use any RNG it likes. This removes a whole class of determinism worry; do not
-  invent a GM8-compatible RNG.
+- ~~Server-side RNG.~~ **Mostly, but not all of it, and the exception is
+  weapons.** Spawn-point choice, spawn-team selection, chat bubbles and particle
+  emission are free: the server decides and broadcasts the *result*, so the port
+  may use any generator it likes for those.
+
+  Weapon fire is the other way round. A weapon's `User Event 1` draws
+  `irandom(65535)` and puts **the seed** on the wire
+  (`Scripts/Events/sendEventFireWeapon.gml`); `doEventFireWeapon.gml` then runs
+  `random_set_seed(seed)` on the server *and on every client*, and each derives
+  the shot spread itself. No pellet position is ever transmitted. So GM8's
+  generator is shared with client prediction after all, and the port has to be
+  the same generator — see "Settled: the random number generator" below, where
+  it is measured.
+
+  Two weapons are exempt because the reference exempts them: `Minigun` and
+  `Blade` call `randomize()` and fire with no seed and no `sendEventFireWeapon`,
+  so their spread genuinely differs on every machine and the server is simply
+  authoritative.
 - Per-frame recomputation the reference does because it has nowhere to cache.
 
 **Explicitly free, and worth using:** structure the C# for performance and
@@ -517,7 +530,17 @@ the seventeenth is noise, which is useless when the question is a single ULP).
 | `1.15` | `1.1500000000000001` | `1.15` | **+1 ULP** |
 | `0.65` | `0.6500000000000001` | `0.65` | **+1 ULP** |
 | `0.35` | `0.35000000000000003` | `0.35` | **+1 ULP** |
-| `0.1` `0.2` `0.45` `0.54` `0.9` `1.05` `1.4` `8.3` `0.195` | same | same | |
+| `1.75` | `1.7500000000000002` | `1.75` | **+1 ULP** |
+| `0.1` `0.2` `0.25` `0.45` `0.5` `0.54` `0.9` `1.05` `1.4` `8.3` `0.195` | same | same | |
+
+`1.75` was added on 2026-08-25 while measuring the RNG, and it is the entry that
+kills the tempting theory. `1.75` is **exactly representable** — it is 7/4 — so
+this is not a decimal that cannot be written in binary being rounded. GM8 gets a
+value one ULP above a number it could have parsed exactly. Whatever the parser
+is doing, "is the literal dyadic?" does not predict it, and neither does "how
+many decimal places". The only safe rule is the one already in force: **never
+write a physics constant as a plain C# decimal; measure it, and take it from
+`Gml`.**
 
 Computing the same value instead of writing it — `3/5`, `23/20`, `17/20` — gives
 the IEEE-nearest double, so this is the literal parser and not the arithmetic.
@@ -599,3 +622,163 @@ one unit away from what its own recording said at that tick. Over the same 201
 ticks the port and the engine agree on `x`, `y`, `hspeed` and `vspeed` to the
 last bit on every one. The engine disagrees with its own recording by exactly
 the amount the replay does, for exactly the same reason.
+
+### Settled: the random number generator
+
+Measured on 2026-08-25, and the answer is short: **Game Maker 8 uses Delphi's
+`Random`**, which is what you would expect of a Delphi program.
+
+```
+seed'      = (seed * 0x08088405 + 1)  mod 2^32       // 134775813, Borland's
+random(x)  = x * seed' / 2^32
+irandom(n) = floor((n + 1) * seed' / 2^32)           // n is INCLUSIVE
+choose(..) = argument[floor(count * seed' / 2^32)]   // exactly one advance
+```
+
+`Gg2.Protocol.GmlRandom` is the transcription and
+`tests/Gg2.Tests/Fixtures/rng-samples.json` is the evidence — 15 seeds × 8
+advances of the chain, 225 `random(x)` values compared **bit for bit** through
+the mantissa encoder, and every `irandom`/`choose` draw. Regenerate with
+`node tools/sample-rng.js`. Four properties are worth stating because each one
+could have gone the other way:
+
+- **The seed advances before the value is taken.** `random_set_seed(s)` followed
+  by `random_get_seed()` gives back `s`, but the first draw does not use `s` —
+  it uses the seed after one step.
+- **The arithmetic is exact.** Dividing by 2^32 is a power-of-two scale, and
+  every product GG2 asks for stays under 2^53, so `x * u / 2^32` and
+  `x * (u / 2^32)` are the same double. All 210 integer-argument samples agree
+  under both orders; there is no rounding rule to get wrong here.
+- **`choose()` costs exactly one advance**, the same as one `random()`. This
+  matters more than which value it returns: `Shot`'s Create draws a
+  `choose(0, 0, 1)` *inside the seeded window* between one pellet and the next,
+  so a `choose` that stepped the seed a different number of times would leave
+  every pellet after the first somewhere else.
+- **`irandom`'s ceiling is inclusive**, so `irandom(65535)` — the weapon fire
+  seed — really does span the whole `ushort` range.
+
+The reference reads the seed back through GML's one numeric type, so a seed
+above 2^31 prints negative. That is the *display*, not the value; the tool
+unsigns it on the way into the fixture.
+
+⚠️ Do not conclude from this that all GM8 randomness is now reproducible and
+therefore contract. It is reproducible; it is only **contract** where the seed is
+on the wire, which is weapon fire and nothing else so far. Everything in the
+"Incidental" list above stays free, and reproducing it there would be work that
+buys nothing.
+
+### Settled: `distance_to_object`, `place_meeting`, and the one place facing matters
+
+Phase 3 pinned `place_free` and stopped there on purpose. Combat needs two more
+primitives, and both were measured on 2026-08-25 against the running game —
+`tools/sample-primitives.js` regenerates
+`tests/Gg2.Tests/Fixtures/primitive-samples.json`, which is a grid of offsets of
+a real `Rocket` and a real `Shot` around a real character, **with both bounding
+boxes recorded per sample** rather than assumed.
+
+```
+place_meeting(a, b)      = inclusive AABB overlap; touching counts
+distance_to_object(a, b) = sqrt(gapx^2 + gapy^2)
+    gapx = max(0, a.left - b.right, b.left - a.right)
+    gapy = max(0, a.top  - b.bottom, b.top  - a.bottom)
+```
+
+Both exact on all 722 samples, with no rounding rule and no epsilon.
+`Gg2.Simulation.Aabb` is the transcription.
+
+**Two things that are not obvious and cost real accuracy:**
+
+**1. `distance_to_object` uses the facing-inflated bounding box. `place_meeting`
+does not.** This document already records that a character facing left gets
+`image_xscale = -1` and that GM8 then reports a `bbox_left` two pixels wider
+than the mask — and says, correctly, that `place_free` ignores it. It does. But
+`distance_to_object` is a *bounding-box* primitive and uses exactly the box GM8
+reports, inflation included. Measured as a direct A/B, same character, same
+coordinates, same tick, one rocket at 2979..2986:
+
+```
+image_xscale =  1   box 2994..3006   distance_to_object = 8
+image_xscale = -1   box 2992..3006   distance_to_object = 6
+```
+
+`Rocket.events/User Event 5.xml` gates a splash hit on
+`distance_to_object(other) < other.blastRadius` and then scales the damage by
+`1 - distance/blastRadius`, so **splash damage in GG2 depends on which way the
+victim is facing**. It is not a rounding artefact and it is not cosmetic: two
+pixels out of a 65-pixel blast radius is about 3% of a rocket's splash. Pass the
+facing when computing a splash distance; leave it out when testing an overlap.
+
+The inflation is `-2` on the left for every class, because every class's mask is
+symmetric about its origin. Derived from the sprite metadata — with
+`image_xscale = -1` GM8 computes `bbox_left = x - (spriteBboxRight - xoffset) - 2`
+and `bbox_right = x - (spriteBboxLeft - xoffset)` — and **measured on Scout and
+Soldier only**, which share one sprite geometry. Confirm on Heavy and Quote
+before trusting a splash number for those two.
+
+**2. Do not use .NET's `double.Hypot`.** It rescales its arguments to avoid
+overflow, and that changes the last bit. Against the same fixture,
+`sqrt(x*x + y*y)` matches the engine on all 722 samples and `double.Hypot`
+matches 636. GML's `point_distance` is the naive form; write the naive form.
+
+### Settled: `collision_line`
+
+Was the last unmeasured primitive and the one the hitscan waits on. Measured
+across **9,014 segments** on `ctf_truefort` —
+`tests/Gg2.Tests/Fixtures/collision-line-samples.json`, regenerate with
+`node tools/sample-collision-line.js`. `Gg2.Simulation.CollisionLine` reproduces
+every one of them, exactly.
+
+**It is not a segment-versus-rectangle intersection, and writing one gives wrong
+answers.** GM8 clips, rounds, and then walks:
+
+```
+1. reject unless the segment's bounding box overlaps
+   [bbox_left, bbox_right + 1) x [bbox_top, bbox_bottom + 1)
+2. order the endpoints by x, and clip the segment to that horizontal span
+   — horizontally only; there is no vertical clip
+3. reject if both clipped endpoints are above bbox_top, or both at or below
+   bbox_bottom + 1
+4. round the clipped endpoints and the instance position to integers,
+   half to even
+5. step whole pixels along whichever rounded axis is longer (ties go to x),
+   and for each step look up
+       floor((px - round(inst.x)) / image_xscale) + sprite origin
+   in the mask
+```
+
+The consequences, each of which decides an answer somewhere:
+
+- **The box is half-open, and only at the high end.** A segment reaches an
+  instance over `[bbox_left, bbox_right + 1)`. Combined with the half-to-even
+  rounding in step 4, a coordinate ending in `.5` gets in or does not
+  **depending on the parity of the pixel it rounds to**: against a one-pixel box
+  at x = 3005, x = 3005.5 misses; against one at 3006, x = 3006.5 hits. Both
+  parities are in the fixture for exactly this reason.
+- **Rounding before walking makes it inexact, and asymmetrically so.** A line
+  can register against a box it never geometrically enters, by up to half a
+  pixel. Sweeping a 45° line across a 1x1 box at eighth-pixel offsets, the band
+  of offsets that hit is a full pixel wide going down-right and **half** a pixel
+  wide going down-left. No exact intersection test reproduces that, and three
+  plausible ones were tried and discarded before the walk was found.
+- **`image_xscale` is divided by, not just compared against.** A character
+  facing left has `image_xscale = -1`, and the division flips which end of the
+  acceptance interval is open. This is a second, independent way facing changes
+  a combat answer — the first being `distance_to_object` above.
+- **`prec` does not gate on the sprite's mask shape.** GG2 passes `prec = 1`
+  everywhere (`Rifle.events/User Event 3.xml`,
+  `collision_line_bulletblocking.gml`), so the walk runs even for the
+  rectangle-masked colliders, where the mask lookup is just the bounds test.
+  The one mask that is genuinely per-pixel is the map's, and it is the one the
+  Rifle asks about most.
+
+The map is reached through `Obstacle`: `CustomMapO` descends from
+`CollisionMapO` which descends from `Obstacle`, which is why
+`collision_line_bulletblocking`'s first line stops a bullet at a wall without
+ever naming the map. Its instance sits at (0, 0) with
+`image_xscale = image_yscale = 6` and origin (0, 0), so the mask index is
+`floor(x / 6)` — the same cell arithmetic as `CollisionWorld.CellOf`.
+
+The structure of `CollisionLine` follows GM8's, which this document otherwise
+tells you not to do. It is transcribed because **the walk is the arithmetic**:
+the order of clip, round and step decides the answer and there is no closed form
+that reproduces it.

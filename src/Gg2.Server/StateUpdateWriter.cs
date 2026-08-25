@@ -179,26 +179,38 @@ public sealed class StateUpdateWriter(MatchState match, CharacterLookup characte
     /// character block.
     /// </summary>
     /// <remarks>
-    /// Only <c>Medigun</c> and <c>Minegun</c> define one, so this is zero bytes
-    /// for eight of the ten classes. It is not optional for the other two: the
-    /// client reads these unconditionally by class, and a missing byte
-    /// desynchronises the rest of the stream rather than losing one field.
+    /// <b>Every class writes one.</b> This said "zero bytes for eight of the ten
+    /// classes" and that was wrong: GM8 inherits an event a child does not
+    /// define, and every weapon's parent is <c>Weapon</c>, whose
+    /// <c>User Event 12</c> writes <c>readyToShoot</c> and <c>alarm[0]</c>. The
+    /// client reads them unconditionally
+    /// (<c>Weapon.events/User Event 13.xml</c>, a two-byte
+    /// <c>receiveCompleteMessage</c>), so a missing byte does not lose a field —
+    /// it desynchronises the rest of the stream. See
+    /// <c>Gg2.Protocol.StateUpdateReader.ReadWeapon</c> for the measurement.
+    /// <para>
+    /// The values are still placeholders, because weapons are not simulated yet.
+    /// "Ready, nothing pending" is the least wrong pair to send: it is what a
+    /// weapon at rest looks like, and what the client will predict from.
+    /// </para>
     /// </remarks>
     private static void WriteWeapon(NetWriter writer, PlayerClass playerClass)
     {
-        switch (playerClass)
+        // Medigun overrides User Event 12 *without* an inherited action — the
+        // only weapon that does — so a medic's block is the heal target alone.
+        if (playerClass == PlayerClass.Medic)
         {
-            case PlayerClass.Medic:
-                writer.WriteUByte(0); // heal target; 0 is "nobody".
-                break;
-
-            case PlayerClass.Demoman:
-                writer.WriteUByte(0); // mines lobbed, and so no mine blocks.
-                break;
-
-            default:
-                break;
+            // 255, not 0. Zero is roster slot 0, so writing it tells every
+            // client the medic is beaming the server's own reserved player.
+            writer.WriteUByte(255);
+            return;
         }
+
+        writer.WriteUByte(1); // readyToShoot
+        writer.WriteUByte(0); // alarm[0]: no refire pending
+
+        if (playerClass == PlayerClass.Demoman)
+            writer.WriteUByte(0); // mines lobbed, and so no mine blocks
     }
 
     /// <summary>

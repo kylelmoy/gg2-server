@@ -1,0 +1,221 @@
+namespace Gg2.Simulation;
+
+/// <summary>
+/// GM8's <c>collision_line</c>: does a segment reach an instance?
+/// </summary>
+/// <remarks>
+/// The Rifle's whole hitscan is eleven calls to this
+/// (<c>Rifle.events/User Event 3.xml</c>), and
+/// <c>Scripts/Physics/collision_line_bulletblocking.gml</c> asks it five times
+/// before any rocket is allowed to fly. Both pass <c>prec = true</c>, so the
+/// precise path below is the only one GG2 ever takes.
+/// <para>
+/// <b>This is not a segment-versus-rectangle intersection and writing one
+/// gives wrong answers.</b> GM8 clips the segment to the instance's bounding
+/// box horizontally, <em>rounds the clipped endpoints to integers</em>, walks
+/// whole pixels along the longer axis and looks each step up in the sprite's
+/// collision mask. Rounding before walking is what makes it inexact: a line can
+/// register against a box it never geometrically enters, by up to half a pixel,
+/// and it does so asymmetrically — measured against the running game, a line
+/// that only grazes the corner of a one-pixel box hits from one diagonal and
+/// misses from the other.
+/// </para>
+/// <para>
+/// Measured across 9,014 samples on <c>ctf_truefort</c> —
+/// <c>tests/Gg2.Tests/Fixtures/collision-line-samples.json</c>, regenerate with
+/// <c>node tools/sample-collision-line.js</c> — covering seven probe boxes at
+/// both coordinate parities, positive, fractional and <b>negative</b> scales,
+/// an off-centre sprite origin, and the map's own precise 6× mask. Exact on all
+/// of them, with no tolerance.
+/// </para>
+/// <para>
+/// The structure follows GM8's, which the rest of this repo would normally
+/// refuse to do (CLAUDE.md: "transcribe GML arithmetic, not GML structure").
+/// It is transcribed here because the walk <em>is</em> the arithmetic: the
+/// order of clip, round and step decides the answer, and there is no closed
+/// form that reproduces it.
+/// </para>
+/// </remarks>
+public static class CollisionLine
+{
+    /// <summary>The per-pixel lookup into an instance's collision mask.</summary>
+    /// <remarks>
+    /// A struct type parameter rather than an interface reference, so the walk
+    /// stays allocation-free and the lookup inlines — this runs a few hundred
+    /// times per shot.
+    /// </remarks>
+    public interface IMask
+    {
+        /// <summary>Whether the mask covers a pixel, in sprite coordinates.</summary>
+        bool IsSolid(int x, int y);
+    }
+
+    /// <summary>
+    /// The mask of a sprite whose bounding box is filled — every GG2 collider
+    /// except the map.
+    /// </summary>
+    /// <remarks>
+    /// Characters, gates, obstacles and bullet walls all use rectangle-shaped
+    /// masks (<c>&lt;shape&gt;RECTANGLE&lt;/shape&gt;</c> in the sprite XML), so
+    /// the bounds test in <see cref="Hits{TMask}"/> is the whole answer and this
+    /// adds nothing to it.
+    /// </remarks>
+    public readonly struct FilledMask : IMask
+    {
+        public bool IsSolid(int x, int y) => true;
+    }
+
+    /// <summary>
+    /// Whether the segment from (<paramref name="x1"/>, <paramref name="y1"/>)
+    /// to (<paramref name="x2"/>, <paramref name="y2"/>) collides with
+    /// <paramref name="collider"/>.
+    /// </summary>
+    public static bool Hits<TMask>(in LineCollider collider, TMask mask, double x1, double y1, double x2, double y2)
+        where TMask : struct, IMask
+    {
+        double left = collider.Bbox.Left;
+        double top = collider.Bbox.Top;
+
+        // The instance covers [bbox_left, bbox_right + 1) horizontally and
+        // [bbox_top, bbox_bottom + 1) vertically: GM8's bbox_right is the last
+        // covered pixel, and a pixel is a unit square. Inclusive at the low
+        // end, exclusive at the high end, and that asymmetry is load-bearing —
+        // see the measurements in docs/SIMULATION.md.
+        double right = collider.Bbox.Right + 1.0;
+        double bottom = collider.Bbox.Bottom + 1.0;
+
+        var rectLeft = Math.Min(x1, x2);
+        var rectRight = Math.Max(x1, x2);
+        var rectTop = Math.Min(y1, y2);
+        var rectBottom = Math.Max(y1, y2);
+
+        if (right <= rectLeft || rectRight < left || bottom <= rectTop || rectBottom < top)
+            return false;
+
+        // Order the endpoints by x, then trim the segment to the instance's
+        // horizontal span. Only horizontally: GM8 does not clip vertically, and
+        // that is why a near-vertical line against a character still walks the
+        // whole thing.
+        if (x2 < x1)
+        {
+            (x1, x2) = (x2, x1);
+            (y1, y2) = (y2, y1);
+        }
+
+        // Neither division can be by zero. A segment with x1 == x2 that needed
+        // clipping would have failed the horizontal rejection above, and after
+        // the first clip x1 is bbox_left while x2 is past bbox_right + 1.
+        if (x1 < left)
+        {
+            y1 = ((y2 - y1) * (left - x1) / (x2 - x1)) + y1;
+            x1 = left;
+        }
+
+        if (x2 > right)
+        {
+            y2 = ((y2 - y1) * (right - x2) / (x2 - x1)) + y2;
+            x2 = right;
+        }
+
+        // Both endpoints of the clipped segment above the box, or both below.
+        // Not a full vertical clip — a segment that straddles the span survives
+        // here and is settled by the walk.
+        if ((top > y1 && top > y2) || (y1 >= bottom && y2 >= bottom))
+            return false;
+
+        return Walk(collider, mask, x1, y1, x2, y2);
+    }
+
+    private static bool Walk<TMask>(in LineCollider collider, TMask mask, double x1, double y1, double x2, double y2)
+        where TMask : struct, IMask
+    {
+        // Round everything, as GM8 does. Half to even — the same rule as GML's
+        // round() and as place_free's position rounding, and *not* the wire's
+        // half-away-from-zero (CLAUDE.md, "Five roundings").
+        var instX = CollisionWorld.RoundPosition(collider.X);
+        var instY = CollisionWorld.RoundPosition(collider.Y);
+
+        var ix1 = CollisionWorld.RoundPosition(x1);
+        var iy1 = CollisionWorld.RoundPosition(y1);
+        var ix2 = CollisionWorld.RoundPosition(x2);
+        var iy2 = CollisionWorld.RoundPosition(y2);
+
+        // Step along whichever axis the rounded segment is longer on, so the
+        // walk never skips a pixel column or row. Ties go to x: the comparison
+        // is strict.
+        var vertical = Math.Abs(ix2 - ix1) < Math.Abs(iy2 - iy1);
+
+        if (vertical && iy2 < iy1)
+        {
+            (ix1, ix2) = (ix2, ix1);
+            (iy1, iy2) = (iy2, iy1);
+        }
+
+        var count = (vertical ? iy2 - iy1 : ix2 - ix1) + 1;
+
+        // A single step means the two rounded endpoints landed on the same
+        // pixel; the slope below would be 0/0.
+        var slope = count == 1
+            ? 0.0
+            : vertical
+                ? (double)(ix2 - ix1) / (iy2 - iy1)
+                : (double)(iy2 - iy1) / (ix2 - ix1);
+
+        for (var i = 0; i < count; i++)
+        {
+            double px, py;
+
+            if (vertical)
+            {
+                px = ix1 + (i * slope);
+                py = iy1 + i;
+            }
+            else
+            {
+                px = ix1 + i;
+                py = iy1 + (i * slope);
+            }
+
+            // World pixel to mask pixel. The division by the image scale is
+            // what makes a left-facing character (image_xscale = -1) accept a
+            // different half-open interval from a right-facing one, so this
+            // cannot be simplified into a comparison against the bounding box.
+            var mx = collider.OriginX + (int)Math.Floor((px - instX) / collider.XScale);
+            var my = collider.OriginY + (int)Math.Floor((py - instY) / collider.YScale);
+
+            if (mx >= collider.Mask.Left && my >= collider.Mask.Top &&
+                mx <= collider.Mask.Right && my <= collider.Mask.Bottom &&
+                mask.IsSolid(mx, my))
+                return true;
+        }
+
+        return false;
+    }
+}
+
+/// <summary>
+/// Everything <see cref="CollisionLine"/> needs about one instance.
+/// </summary>
+/// <param name="X">The instance's unrounded position; GM8 rounds it itself.</param>
+/// <param name="XScale">
+/// <c>image_xscale</c>. May be negative — that is a character facing left — and
+/// may be fractional.
+/// </param>
+/// <param name="Bbox">
+/// The bounding box GM8 reports for the instance, inclusive on all four sides.
+/// </param>
+/// <param name="OriginX">
+/// The mask sprite's origin. It cancels out of the bounds test, because
+/// <paramref name="Mask"/> is in the same coordinates — it is carried only so
+/// the index handed to a real mask lookup is the sprite's own.
+/// </param>
+/// <param name="Mask">The mask sprite's bounding box, in sprite pixels.</param>
+public readonly record struct LineCollider(
+    double X,
+    double Y,
+    double XScale,
+    double YScale,
+    Aabb Bbox,
+    int OriginX,
+    int OriginY,
+    Aabb Mask);

@@ -9,6 +9,13 @@ traces/
 *.trace
 *.gg2trace
 
+# ...except the recordings the tests are built on. Those are oracles, not
+# scratch data: WeaponBlockTests and PhysicsParityTests assert they exist, so
+# without this a fresh clone fails two tests that pass on the machine that
+# recorded them. docs/PARITY.md says parity fixtures live with the tests and
+# run in CI; this is what makes that true.
+!tests/Gg2.Tests/Fixtures/*.trace
+
 # Session handoffs are disposable messages to the next session, not documentation.
 # See CLAUDE.md, "Where documentation goes".
 .claude/notes/

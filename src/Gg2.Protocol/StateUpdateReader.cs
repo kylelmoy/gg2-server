@@ -21,9 +21,9 @@ namespace Gg2.Protocol;
 /// <para>
 /// The per-player weapon block on a <c>FULL_UPDATE</c> is therefore
 /// class-dependent, which is why the reader has to be told each player's class.
-/// Only two classes write one at all: <c>Medic</c>'s <c>Medigun</c> and
-/// <c>Demoman</c>'s <c>Minegun</c> are the only weapons in
-/// <c>Objects/Weapons/</c> with a <c>User Event 12</c>.
+/// <b>Every</b> class writes one — two bytes for eight of them, one for a medic,
+/// and three plus seven per mine for a demoman. See <c>ReadWeapon</c>, which
+/// carries the measurement and the mistake it corrects.
 /// </para>
 /// </remarks>
 public static class StateUpdateReader
@@ -161,15 +161,14 @@ public static class StateUpdateReader
         var subobjects = reader.ReadUByte();
 
         CharacterBlock? character = null;
-        byte? healTarget = null;
-        var mines = Array.Empty<MineBlock>();
+        var weapon = default(WeaponBlock);
 
         if ((subobjects & 0x01) != 0)
         {
             character = ReadCharacter(ref reader, tier);
 
             if (tier == MessageType.FullUpdate)
-                (healTarget, mines) = ReadWeapon(ref reader, playerClass);
+                weapon = ReadWeapon(ref reader, playerClass);
         }
 
         SentryBlock? sentry = null;
@@ -195,8 +194,10 @@ public static class StateUpdateReader
             QueueJump = queueJump,
             UnparsedRewards = rewards,
             DominationKills = dominations,
-            HealTarget = healTarget,
-            Mines = mines,
+            HealTarget = weapon.HealTarget,
+            Mines = weapon.Mines ?? [],
+            ReadyToShoot = weapon.ReadyToShoot,
+            RefireAlarm = weapon.RefireAlarm,
         };
     }
 
@@ -243,40 +244,82 @@ public static class StateUpdateReader
     /// <c>FULL_UPDATE</c> block.
     /// </summary>
     /// <remarks>
-    /// Only <c>Medigun</c> and <c>Minegun</c> define one; every other weapon
-    /// writes nothing at all, so the block is zero bytes for eight of the ten
-    /// classes.
+    /// <b>Every class writes one, and this file and docs/PARITY.md both used to
+    /// say eight of them wrote nothing.</b> That was wrong, and it was wrong in
+    /// the direction that hides: no checked-in fixture contained a
+    /// <c>FULL_UPDATE</c> with a character in it, because the recorder joins
+    /// before the bots spawn, so nothing ever exercised the path.
+    /// <para>
+    /// The mistake was reading <c>Objects/Weapons/</c> and finding a
+    /// <c>User Event 12</c> only on <c>Medigun</c> and <c>Minegun</c>. GM8
+    /// <b>inherits an event a child does not define</b>, and every weapon has
+    /// <c>&lt;parent&gt;Weapon&lt;/parent&gt;</c> — so the eight silent ones run
+    /// <c>Objects/InGameElements/Weapon.events/User Event 12.xml</c>, which
+    /// writes <c>readyToShoot</c> and <c>alarm[0]</c>. The client's own
+    /// <c>Weapon.events/User Event 13.xml</c> confirms it from the other side:
+    /// <c>receiveCompleteMessage(..., 2, ...)</c>.
+    /// </para>
+    /// <para>
+    /// Measured on the running engine on 2026-08-25, by swapping
+    /// <c>global.serializeBuffer</c> for a fresh one and reading
+    /// <c>buffer_size</c> either side of the call:
+    /// </para>
+    /// <code>
+    /// Medigun      1     own event, and the only one with NO inherited action
+    /// Minegun      3 + 7n   inherited action, then lobbed, then n mine blocks
+    /// every other  2     inherited from Weapon
+    /// </code>
+    /// <para>
+    /// The difference between <c>Medigun</c> and <c>Minegun</c> is a single
+    /// <c>action_inherited</c> in the event's XML, which is invisible in the GML
+    /// text — <c>Minegun</c>'s <c>User Event 12</c> has one and
+    /// <c>Medigun</c>'s does not.
+    /// </para>
     /// </remarks>
-    private static (byte? HealTarget, MineBlock[] Mines) ReadWeapon(ref NetReader reader, PlayerClass playerClass)
+    private static WeaponBlock ReadWeapon(ref NetReader reader, PlayerClass playerClass)
     {
-        switch (playerClass)
+        // Medigun overrides without inheriting, so it is the one class that does
+        // not open with the parent's two bytes.
+        if (playerClass == PlayerClass.Medic)
+            return new WeaponBlock { HealTarget = reader.ReadUByte() };
+
+        var block = new WeaponBlock
         {
-            case PlayerClass.Medic:
-                return (reader.ReadUByte(), []);
+            ReadyToShoot = reader.ReadUByte(),
+            RefireAlarm = reader.ReadUByte(),
+        };
 
-            case PlayerClass.Demoman:
+        if (playerClass != PlayerClass.Demoman)
+            return block;
+
+        var lobbed = reader.ReadUByte();
+        var mines = new MineBlock[lobbed];
+
+        for (var i = 0; i < lobbed; i++)
+        {
+            mines[i] = new MineBlock
             {
-                var lobbed = reader.ReadUByte();
-                var mines = new MineBlock[lobbed];
-
-                for (var i = 0; i < lobbed; i++)
-                {
-                    mines[i] = new MineBlock
-                    {
-                        X = reader.ReadUShort(),
-                        Y = reader.ReadUShort(),
-                        HSpeed = reader.ReadByte(),
-                        VSpeed = reader.ReadByte(),
-                        Stickied = reader.ReadUByte(),
-                    };
-                }
-
-                return (null, mines);
-            }
-
-            default:
-                return (null, []);
+                X = reader.ReadUShort(),
+                Y = reader.ReadUShort(),
+                HSpeed = reader.ReadByte(),
+                VSpeed = reader.ReadByte(),
+                Stickied = reader.ReadUByte(),
+            };
         }
+
+        return block with { Mines = mines };
+    }
+
+    /// <summary>What the weapon block contributed to a player's block.</summary>
+    private readonly record struct WeaponBlock
+    {
+        public byte? ReadyToShoot { get; init; }
+
+        public byte? RefireAlarm { get; init; }
+
+        public byte? HealTarget { get; init; }
+
+        public MineBlock[] Mines { get; init; }
     }
 
     private static SentryBlock ReadSentry(ref NetReader reader, MessageType tier)

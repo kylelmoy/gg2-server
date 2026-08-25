@@ -266,7 +266,14 @@ public sealed class ServerStreamTests
         writer.WriteUByte(0);
         writer.WriteShort(0);
 
-        // Minegun: lobbed, then two seven-byte mines.
+        // Minegun's User Event 12 opens with an inherited action, so the
+        // Weapon parent's two bytes come first — readyToShoot, then alarm[0].
+        // Leaving these out is the bug this layout was written with, and the
+        // reason a real recording of the reference could not be framed.
+        writer.WriteUByte(1);
+        writer.WriteUByte(12);
+
+        // Then the Minegun's own: lobbed, and that many seven-byte mines.
         writer.WriteUByte(2);
         for (var i = 0; i < 2; i++)
         {
@@ -316,6 +323,10 @@ public sealed class ServerStreamTests
         Assert.Equal(500, player.Mines[0].X);
         Assert.Equal(601, player.Mines[1].Y);
         Assert.Equal(120, player.Character!.Value.Hp);
+
+        // The inherited half of the same block, read back.
+        Assert.Equal((byte)1, player.ReadyToShoot);
+        Assert.Equal((byte)12, player.RefireAlarm);
     }
 
     /// <summary>

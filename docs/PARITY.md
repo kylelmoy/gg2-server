@@ -66,9 +66,48 @@ writing a reader: a state update's width comes from three places at once.
 
 Point 3 has a consequence that is easy to miss: **the reader must know each
 player's class**, because the weapon block that closes a character's
-`FULL_UPDATE` is class-dependent. Only `Medigun` and `Minegun` define a
-`User Event 12` at all, so it is zero bytes for eight classes out of ten — and
-then suddenly is not.
+`FULL_UPDATE` is class-dependent.
+
+⚠️ **This document used to say that block was zero bytes for eight classes out
+of ten, and it is not. It is never zero.** The reasoning was that only `Medigun`
+and `Minegun` have a `User Event 12` in `Objects/Weapons/` — true, and
+irrelevant, because **GM8 runs a parent's event when the child does not define
+one**. Every weapon has `<parent>Weapon</parent>`, and
+`Objects/InGameElements/Weapon.events/User Event 12.xml` writes `readyToShoot`
+and `alarm[0]`. The client agrees from the other side: `Weapon`'s
+`User Event 13` is a two-byte `receiveCompleteMessage`.
+
+Measured on the running engine on 2026-08-25 — swap `global.serializeBuffer` for
+a fresh one, call `with(currentWeapon) event_user(12)`, and read `buffer_size`
+either side:
+
+| class | weapon | bytes |
+|---|---|---|
+| Medic | `Medigun` | **1** — heal target only |
+| Demoman | `Minegun` | **3 + 7n** — the parent's two, `lobbed`, then the mines |
+| every other class | | **2** |
+
+`Medigun` and `Minegun` differ by one thing that is invisible in the GML text:
+`Minegun`'s `User Event 12` opens with an `action_inherited` in its XML and
+`Medigun`'s does not. Reading the code alone cannot tell you that; reading the
+`.xml` — or measuring — can.
+
+**The reason this survived four phases is worth more than the fix.** Every
+recording in the repo was made by `gg2-parity record`, which joins immediately,
+and a `FULL_UPDATE` is sent *on join* — so every fixture was captured before any
+bot had spawned, and not one of them contained a character inside a full update.
+The path was not undertested; it was unreachable by the fixtures that existed. A
+recording made after the bots spawned fails to frame on its very first
+`FULL_UPDATE`.
+
+`tests/Gg2.Tests/Fixtures/reference-ctf_truefort-combat.trace` closes the hole:
+six bots already spawned, classes forced so a medic, a demoman and four
+ordinary weapons all appear in one update, plus eight `WEAPON_FIRE`s and a
+`PLAYER_LEAVE` roster compaction. `gg2-parity census <trace>` prints what a
+recording contains and where framing stopped, which is how this was found.
+
+**When adding a fixture, ask what state it cannot reach.** That is the question
+that would have caught this one.
 
 A recording of the real GM8 server on `ctf_truefort` is checked in as
 `tests/Gg2.Tests/Fixtures/reference-ctf_truefort-spectator.bin`, and the test
