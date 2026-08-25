@@ -49,116 +49,148 @@ public sealed class PhysicsParityTests
     }
 
     /// <summary>
-    /// The ported physics tracks the reference exactly for hundreds of ticks
-    /// with no correction at all.
+    /// The first tick of this trace on which any character has taken damage.
     /// </summary>
     /// <remarks>
-    /// Closed-loop: anchored once, then never told the answer again. This is the
-    /// honest measure of "is the physics the same", and it is a far stronger
-    /// statement than the open-loop one — errors compound rather than being
-    /// wiped every seventh tick.
+    /// Phase 4 is trajectories, and it implements no combat at all — so this is
+    /// the tick from which the recording stops being a statement about the
+    /// physics and starts being one about weapons. Derived from the fixture
+    /// rather than hard-coded, so a re-recording moves it without a mystery.
     /// </remarks>
-    [Fact]
-    public void ClosedLoopTracksTheReferenceForHundredsOfTicks()
+    private static int FirstDamagedTick(IReadOnlyList<TraceTick> ticks)
     {
-        var (trace, ticks) = Load();
-        var report = Replay(ticks, trace.Header.Map, ReplayMode.ClosedLoop);
+        foreach (var tick in ticks)
+        {
+            foreach (var slot in tick.Slots)
+            {
+                // Zero is a dead character's block, not a damaged one.
+                if (slot.Observed is { } observed && observed.Hp is not 100 and not 0)
+                    return tick.Index;
+            }
+        }
 
-        Assert.True(report.Comparisons > 40, $"only {report.Comparisons} comparisons");
-
-        // Horizontal is exact over the whole run: friction is contractive, so a
-        // sub-quantisation error in the anchor shrinks rather than compounds.
-        Assert.Equal(0, report.MaxXError);
-
-        // Vertical is within one wire unit — a fifth of a world pixel, which is
-        // the resolution the anchor itself was quantised to.
-        Assert.True(report.MaxYError <= 1, $"max |dy| was {report.MaxYError}: {report.Render()}");
-        Assert.True(report.TicksReplayed > 200, $"only reached tick {report.TicksReplayed}");
+        return int.MaxValue;
     }
 
     /// <summary>
-    /// The residual mismatch <b>is</b> the anchor's quantisation, not the
-    /// arithmetic.
+    /// The ported physics reproduces the reference <b>exactly</b>, closed-loop,
+    /// for every tick up to the moment combat first touches a character.
     /// </summary>
     /// <remarks>
-    /// A trace anchors from the wire, which carries position to a fifth of a
-    /// pixel and velocity to <c>1/8.5</c> px/tick, so a replay necessarily
-    /// starts somewhere inside those bins rather than on the state the reference
-    /// was actually in. That makes a closed-loop replay of a <em>mid-game</em>
-    /// recording unable to reach zero by construction, and it is why
-    /// <see cref="PhysicsSampleTests"/> exists: there the start state is chosen
-    /// exactly and the gate is bit equality.
+    /// Closed-loop: anchored once, then never told the answer again, so errors
+    /// compound instead of being wiped every seventh tick. Both axes are zero —
+    /// not "within a wire unit", zero — across 393 ticks of two bots running,
+    /// jumping, falling and landing.
     /// <para>
-    /// <b>This test used to assert the opposite</b>, on a sweep that nudged only
-    /// the slot that failed first. That sweep never reached zero — but not
-    /// because the arithmetic was wrong: it bottomed out on the <em>next</em>
-    /// slot's residual, which no offset applied to this slot can touch. Every
-    /// anchored character has its own independent bin, so the experiment has to
-    /// be per-slot.
+    /// <b>This used to be within one wire unit of <c>y</c>, and the unit was the
+    /// anchor.</b> A replay used to start every character from a broadcast
+    /// position, which carries a fifth of a pixel of position and <c>1/8.5</c>
+    /// px/tick of velocity, so it began somewhere inside a bin rather than on the
+    /// state the reference was in. Resolving <c>PLAYER_SPAWN</c> against the
+    /// map's own spawn points instead (<see cref="SpawnPoints"/>) starts them on
+    /// an integer coordinate with both speeds zero — a state that passed through
+    /// no wire — and the residual disappeared. docs/PLAN.md phase 4 has the
+    /// history.
     /// </para>
     /// <para>
-    /// Settled live, and this is the measurement that matters: driving the
-    /// reference engine's own <c>Character</c> events through this trace's
-    /// recorded inputs, from this same wire-quantised anchor, the engine
-    /// produces <c>y = 516.6899190010863</c> entering tick 218 — wire 2583, the
-    /// port's answer, and one unit away from what its own recording said. The
-    /// engine disagrees with itself by exactly the amount this replay does. See
-    /// docs/SIMULATION.md.
+    /// The divergence that remains is <b>not</b> physics. It begins on the exact
+    /// tick the first character's <c>hp</c> drops below full, and it arrives as
+    /// hp and hspeed together: damage and its knockback, which phase 5
+    /// implements and this one does not.
     /// </para>
     /// </remarks>
     [Fact]
-    public void NudgingEachSlotInsideItsOwnBinPushesTheDivergenceLater()
+    public void ClosedLoopIsExactUntilCombatStarts()
     {
         var (trace, ticks) = Load();
+        var damaged = FirstDamagedTick(ticks);
 
-        var baseline = Replay(ticks, trace.Header.Map, ReplayMode.ClosedLoop);
-        Assert.NotEmpty(baseline.Mismatches);
+        Assert.True(damaged < ticks.Count, "the fixture has no combat in it at all");
 
-        // Greedy, one slot at a time: fix whichever slot fails first by sweeping
-        // its own y across its own bin, then look at what fails next.
-        var nudges = new Dictionary<int, AnchorNudge>();
-        var reached = baseline.TicksReplayed;
+        var report = Replay(ticks, trace.Header.Map, ReplayMode.ClosedLoop, stopAtFirstBadTick: false);
 
-        for (var round = 0; round < 4; round++)
+        Assert.True(report.Comparisons > 100, $"only {report.Comparisons} comparisons");
+
+        // Every mismatch is at or after the first damage. Nothing before it.
+        foreach (var mismatch in report.Mismatches)
         {
-            var report = Run(ticks, trace.Header.Map, nudges);
-            if (report.Mismatches.Count == 0)
-                break;
-
-            var slot = report.Mismatches[0].Slot;
-            var best = report.TicksReplayed;
-            AnchorNudge? bestNudge = null;
-
-            // The bin is a fifth of a pixel wide, so ±0.1 covers it.
-            for (var nudge = -0.1; nudge <= 0.1001; nudge += 0.002)
-            {
-                var candidate = new AnchorNudge(0, Math.Round(nudge, 4), 0, 0);
-                nudges[slot] = candidate;
-
-                var swept = Run(ticks, trace.Header.Map, nudges);
-                if (swept.TicksReplayed <= best)
-                    continue;
-
-                best = swept.TicksReplayed;
-                bestNudge = candidate;
-            }
-
-            nudges.Remove(slot);
-            if (bestNudge is null)
-                break;
-
-            nudges[slot] = bestNudge.Value;
-            reached = best;
+            Assert.True(mismatch.Tick >= damaged,
+                $"a mismatch at tick {mismatch.Tick} predates the first damage at {damaged}: " +
+                $"slot {mismatch.Slot} {mismatch.Field} expected {mismatch.Expected}, got {mismatch.Actual}");
         }
 
-        // The measured result. Each slot's first divergence is inside its own
-        // anchor bin and clears when the anchor moves within it; what stops the
-        // greedy walk at the end is a later divergence on a slot it has already
-        // spent its one offset on, not a residual it cannot explain.
-        Assert.True(reached > 380,
-            $"nudging inside the bins only reached tick {reached}, was expecting past 380");
-        Assert.True(reached > baseline.TicksReplayed,
-            $"nudging did not help at all: {reached} vs {baseline.TicksReplayed}");
+        // And the run really did get that far before anything went wrong.
+        Assert.True(damaged > 380, $"combat started at tick {damaged}, earlier than expected");
+    }
+
+    /// <summary>
+    /// Stopping at the first bad tick, the replay reaches the first damaged tick
+    /// with both axes exactly zero.
+    /// </summary>
+    /// <remarks>
+    /// The same claim as above stated as the gate rather than as a survey, and
+    /// the one that would catch a regression soonest: any arithmetic error at
+    /// all shows up here as a non-zero max, because a closed loop never gets
+    /// corrected.
+    /// </remarks>
+    [Fact]
+    public void ClosedLoopReachesCombatWithNoPositionErrorOnEitherAxis()
+    {
+        var (trace, ticks) = Load();
+        var damaged = FirstDamagedTick(ticks);
+
+        // Truncated at the first damage, so the gate is a plain "zero on both
+        // axes" over everything phase 4 claims to reproduce. Replaying past it
+        // would fold the knockback this phase does not implement into the same
+        // number and there would be nothing to assert.
+        var beforeCombat = ticks.Take(damaged).ToList();
+
+        var report = Replay(beforeCombat, trace.Header.Map, ReplayMode.ClosedLoop, stopAtFirstBadTick: false);
+
+        Assert.True(report.Comparisons > 100, $"only {report.Comparisons} comparisons");
+        Assert.Empty(report.Mismatches);
+        Assert.Equal(0, report.MaxXError);
+        Assert.Equal(0, report.MaxYError);
+    }
+
+    /// <summary>
+    /// The anchor is on the reference's own value, not merely inside the right
+    /// quantisation bin — so moving it can only make things worse.
+    /// </summary>
+    /// <remarks>
+    /// <b>This test asserts the inverse of what it used to.</b> While a replay
+    /// anchored from the wire, the honest question was "is the residual the
+    /// arithmetic or the anchor?", and the answer was found by sweeping each
+    /// slot's anchor across its own bin to see the divergence move later. There
+    /// is no bin left to sweep: a spawn resolves to an integer coordinate with
+    /// both speeds zero.
+    /// <para>
+    /// So the experiment inverts. Nudging now starts a character somewhere the
+    /// reference never was, and every offset must be strictly worse than none.
+    /// A nudge that <em>helped</em> would mean the spawn lookup is putting
+    /// characters in the wrong place and something else is absorbing the error.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void NudgingTheAnchorOffTheSpawnPointOnlyMakesItWorse()
+    {
+        var (trace, ticks) = Load();
+        var baseline = Replay(ticks, trace.Header.Map, ReplayMode.ClosedLoop);
+
+        // Well inside what used to be a wire bin, so this is not a test that a
+        // large displacement breaks things — a fiftieth of a pixel is far below
+        // the resolution the wire could even express.
+        foreach (var offset in new[] { -0.1, -0.02, 0.02, 0.1 })
+        {
+            var nudged = Run(ticks, trace.Header.Map, new Dictionary<int, AnchorNudge>
+            {
+                [2] = new AnchorNudge(0, offset, 0, 0),
+            });
+
+            Assert.True(nudged.TicksReplayed <= baseline.TicksReplayed,
+                $"nudging slot 2 by {offset} reached tick {nudged.TicksReplayed}, " +
+                $"further than the un-nudged {baseline.TicksReplayed} — the spawn anchor is not on the true value");
+        }
     }
 
     private static DriftReport Run(
@@ -236,5 +268,97 @@ public sealed class PhysicsParityTests
 
         Assert.False(report.Passed);
         Assert.True(report.MaxXError > 50, $"a still simulation only drifted {report.MaxXError}");
+    }
+
+    /// <summary>
+    /// A <c>PLAYER_SPAWN</c> anchors on the map's own spawn point, exactly,
+    /// rather than on the next broadcast position.
+    /// </summary>
+    /// <remarks>
+    /// This is the change that makes a closed-loop gate of zero reachable, and
+    /// the assertion is deliberately about <em>exactness</em> rather than
+    /// closeness. The wire the test feeds in says the character is somewhere
+    /// else entirely; the replay must ignore that and take the spawn point,
+    /// because that is what the reference did and what every client does
+    /// (<c>doEventSpawn.gml</c>).
+    /// <para>
+    /// Note the ordering it also pins: the spawn is applied before the tick's
+    /// own comparison, so the character exists to be compared from its first
+    /// tick instead of being resynchronised into place.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ASpawnAnchorsOnTheSpawnPointAndNotOnTheWire()
+    {
+        const int Slot = 0;
+
+        var simulation = new PortedSimulation(MapLoader);
+        simulation.LoadMap("ctf_truefort");
+        simulation.SetPlayerTeam(Slot, Team.Red);
+        simulation.SetPlayerClass(Slot, PlayerClass.Scout);
+
+        // Spawn point 2 of red's group 0. Deliberately not the first, so an
+        // implementation that ignores the id and takes the head of the list
+        // fails here.
+        simulation.SpawnCharacter(Slot, 2, 0);
+
+        Assert.True(simulation.TryGetState(Slot, out var state));
+
+        var map = LevelMap.FromPng("ctf_truefort", ReferenceTree.ReadMap("ctf_truefort"));
+        var expected = new SpawnPoints(map);
+        Assert.True(expected.TryGet(Team.Red, 0, 2, out var x, out var y));
+
+        // Exact, not near: these came from the map, not through the wire's
+        // fifths of a pixel.
+        Assert.Equal(x, state.X);
+        Assert.Equal(y, state.Y);
+        Assert.Equal(0, state.HSpeed);
+        Assert.Equal(0, state.VSpeed);
+
+        // 1656, from the entity block — the value a wire anchor could only have
+        // reached to within a fifth of a pixel.
+        Assert.Equal(1656, state.X);
+        Assert.Equal(456, state.Y);
+    }
+
+    /// <summary>
+    /// An unresolvable spawn leaves the replay on its old behaviour rather than
+    /// placing a character somewhere wrong.
+    /// </summary>
+    /// <remarks>
+    /// Silently falling back is right here: a trace can name a spawn group a
+    /// map does not have, and anchoring on the next observed position is what
+    /// the harness did for all of phase 2. Placing a character at (0, 0)
+    /// instead would report a wall of mismatches that say nothing.
+    /// </remarks>
+    [Fact]
+    public void AnUnresolvableSpawnPlacesNothing()
+    {
+        var simulation = new PortedSimulation(MapLoader);
+        simulation.LoadMap("ctf_truefort");
+        simulation.SetPlayerTeam(0, Team.Red);
+
+        Assert.False(simulation.SpawnCharacter(0, 99, 0));
+        Assert.False(simulation.TryGetCharacter(0, out _));
+
+        Assert.False(simulation.SpawnCharacter(0, 0, 4));
+        Assert.False(simulation.TryGetCharacter(0, out _));
+    }
+
+    /// <summary>
+    /// A spawned character starts on its class's full health, as
+    /// <c>Character.events/Create.xml:37</c> does it.
+    /// </summary>
+    [Fact]
+    public void ASpawnedCharacterStartsOnFullHealth()
+    {
+        var simulation = new PortedSimulation(MapLoader);
+        simulation.LoadMap("ctf_truefort");
+        simulation.SetPlayerTeam(0, Team.Red);
+        simulation.SetPlayerClass(0, PlayerClass.Heavy);
+
+        Assert.True(simulation.SpawnCharacter(0, 0, 0));
+        Assert.True(simulation.TryGetCharacter(0, out var block));
+        Assert.Equal(200, block.Hp);
     }
 }

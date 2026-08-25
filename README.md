@@ -3,7 +3,9 @@
 A headless Gang Garrison 2 server in C#, wire-compatible with the stock Game
 Maker 8 client.
 
-**Status: phases 0–3 of [`docs/PLAN.md`](docs/PLAN.md) are done; phase 4 is close.**
+**Status: phases 0–4 of [`docs/PLAN.md`](docs/PLAN.md) are done, apart from phase
+4's stock-client check — the server does not run the simulation yet. Phase 5,
+combat, is next.**
 
 | Project | What |
 |---|---|
@@ -37,11 +39,22 @@ in, behind a `CollisionFilter`, with every bounding box checked against the
 game. `good_move_contact_solid`, `move_outside_solid` and `characterHitObstacle`
 are transcribed.
 
-**Phase 4** — the character update, close but not signed off. Replaying a
-recording of the reference with two bots, closed-loop and never corrected, the
-port tracks it for **218 ticks with horizontal error exactly zero**, then differs
-by one wire unit of `y` — a fifth of a world pixel. That last unit is a real
-difference and `docs/PLAN.md` records what has been ruled out.
+**Phase 4** — the character update, and it is exact on both kinds of evidence.
+Against the running engine, 48 trajectories driven inside the game itself and
+read back to the last bit are reproduced **bit for bit**. Against a recording,
+the 898-tick two-bot `ctf_truefort` trace replays **closed-loop — anchored once
+at tick 0 and never corrected — with zero error on both axes** for every
+comparison up to tick 393, which is the first tick on which any character takes
+damage. Combat is phase 5; there are no nudges or tolerances in that statement.
+
+Getting there turned up three things GM8 does that no amount of careful
+transcription would have predicted: it parses some decimal literals one ULP
+above the IEEE nearest (and they are the physics constants), its comparisons are
+fuzzy to `1e-13`, and subtracting `hspeed` and adding it back is not a no-op.
+The last wire unit of drift, though, was none of those — it was **where a
+replayed character starts**. A `PLAYER_SPAWN` carries a spawn point id rather
+than a position, so resolving it against the map the way the client does starts
+the character on an exact integer instead of inside a fifth-of-a-pixel bin.
 
 ```powershell
 $env:PATH = "$env:LOCALAPPDATA\Microsoft\dotnet;$env:PATH"   # .NET 9, user-local

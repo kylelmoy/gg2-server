@@ -30,13 +30,40 @@ public interface ITraceSimulation
     /// Forces a slot's character to a known state, in wire units.
     /// </summary>
     /// <remarks>
-    /// Used to anchor a replay at the start, to resynchronise on a
-    /// <c>PLAYER_SPAWN</c>, and to reset before each open-loop segment.
-    /// docs/PARITY.md is explicit that spawn positions and respawn timing are
-    /// server-side RNG the port is free about, so they are taken from the trace
-    /// rather than decided again.
+    /// Used to anchor a replay at the start, to reset before each open-loop
+    /// segment, and as the fallback when a <c>PLAYER_SPAWN</c> cannot be
+    /// resolved to a spawn point. docs/PARITY.md is explicit that respawn
+    /// timing and the choice of spawn point are server-side RNG the port is
+    /// free about, so both are taken from the trace rather than decided again.
+    /// <para>
+    /// This anchor is <b>lossy</b> — see <see cref="SpawnCharacter"/>, which is
+    /// not.
+    /// </para>
     /// </remarks>
     void SetCharacter(int slot, in CharacterBlock observed);
+
+    /// <summary>
+    /// Places a freshly spawned character from a <c>PLAYER_SPAWN</c>'s own
+    /// spawn point id and group. False if it cannot be resolved, in which case
+    /// the replayer falls back to anchoring on the next observed position.
+    /// </summary>
+    /// <remarks>
+    /// This is the <b>exact</b> anchor, and it is the only one a closed-loop
+    /// gate can start from. <c>sendEventSpawn.gml</c> sends the pair rather than
+    /// a position and every client resolves it in <c>doEventSpawn.gml</c>, so
+    /// reproducing the lookup is not guessing at RNG — the server already made
+    /// the random choice and told everyone which point it picked. The resulting
+    /// position is an integer (every spawn entity in the built-in maps sits on
+    /// one) and <c>instance_create</c> leaves both speeds at zero, so nothing
+    /// here passes through the wire's quantisation.
+    /// <para>
+    /// Contrast <see cref="SetCharacter"/>, which anchors on a broadcast
+    /// position: those arrive only every seventh tick, so by the time one names
+    /// a newly spawned character it has already fallen, and the value is
+    /// rounded to a fifth of a pixel.
+    /// </para>
+    /// </remarks>
+    bool SpawnCharacter(int slot, int spawnpointId, int group);
 
     /// <summary>Removes a slot's character — it left, died, or went spectator.</summary>
     void ClearCharacter(int slot);
@@ -91,6 +118,13 @@ public sealed class EmptySimulation : ITraceSimulation
     public void LoadMap(string map) => Map = map;
 
     public void SetCharacter(int slot, in CharacterBlock observed) => _characters[slot] = observed;
+
+    /// <remarks>
+    /// Always false: this stand-in has no map, so it has no spawn points to
+    /// resolve against and the replayer anchors from the wire instead. That is
+    /// the phase-2 behaviour, kept as it was.
+    /// </remarks>
+    public bool SpawnCharacter(int slot, int spawnpointId, int group) => false;
 
     public void ClearCharacter(int slot) => _characters.Remove(slot);
 

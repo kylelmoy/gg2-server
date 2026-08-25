@@ -11,11 +11,16 @@ namespace Gg2.Parity;
 /// honest measure of whether the physics is the same, open-loop is what a
 /// player actually experiences.
 /// <para>
-/// <b>What is deliberately not compared.</b> Spawn positions, respawn timing and
-/// team selection come from server-side RNG that the port is explicitly free
-/// about (docs/SIMULATION.md), so the replay takes them from the trace instead
-/// of deciding them again — every <c>PLAYER_SPAWN</c> resynchronises that slot
-/// rather than counting as a mismatch.
+/// <b>What is deliberately not compared.</b> The <em>choice</em> of spawn point,
+/// respawn timing and team selection come from server-side RNG that the port is
+/// explicitly free about (docs/SIMULATION.md), so the replay takes them from the
+/// trace instead of deciding them again rather than counting them as mismatches.
+/// <para>
+/// Note what that does <b>not</b> excuse. A <c>PLAYER_SPAWN</c> carries the
+/// point the server picked, so the resulting <em>position</em> is not RNG at
+/// all — it is a lookup, this replay does it, and the character it places is
+/// held to the gate from its first tick.
+/// </para>
 /// </para>
 /// </remarks>
 /// <summary>Which wire fields a replay holds the simulation to.</summary>
@@ -147,10 +152,11 @@ public sealed class Replayer(ITraceSimulation simulation)
     /// Applies the roster and spawn events recorded before this tick's update.
     /// </summary>
     /// <remarks>
-    /// A <c>PLAYER_SPAWN</c> resynchronises rather than being simulated: the
-    /// position it puts a character at is chosen by RNG this port does not
-    /// reproduce. The actual resync happens on the next position-bearing tick,
-    /// because the spawn message itself carries no coordinates.
+    /// A <c>PLAYER_SPAWN</c> is placed rather than simulated, but it is placed
+    /// <em>exactly</em>: the message carries the spawn point id and group the
+    /// server chose, and resolving that pair against the map is what every
+    /// client does too (<c>doEventSpawn.gml</c>). Only the choice of point is
+    /// RNG this port does not reproduce, and the choice is on the wire.
     /// </remarks>
     private void ApplyEvents(TraceTick tick)
     {
@@ -160,6 +166,19 @@ public sealed class Replayer(ITraceSimulation simulation)
             {
                 case MessageType.ChangeMap when message.Text is { } map:
                     simulation.LoadMap(map);
+                    break;
+
+                case MessageType.PlayerSpawn when message.PlayerId is { } spawned:
+                    // The exact anchor. Payload is [player, spawnpointId,
+                    // group]; resolving it against the map's own spawn point
+                    // lists places the character on the integer coordinate the
+                    // reference used, with both speeds zero, rather than on the
+                    // next broadcast position — which arrives up to six ticks
+                    // later, already fallen and rounded to a fifth of a pixel.
+                    // A simulation that cannot resolve it returns false and
+                    // Reconcile anchors from the wire as before.
+                    if (message.Payload.Length >= 3)
+                        simulation.SpawnCharacter(spawned, message.Payload[1], message.Payload[2]);
                     break;
 
                 case MessageType.PlayerLeave when message.PlayerId is { } slot:
@@ -214,10 +233,12 @@ public sealed class Replayer(ITraceSimulation simulation)
     /// ones it cannot.
     /// </summary>
     /// <remarks>
-    /// A slot the trace has a character for and the simulation does not has
-    /// just spawned — and spawn position is server-side RNG this port is free
-    /// about (docs/PARITY.md, "Where replay legitimately diverges"), so it is
-    /// taken from the trace rather than counted as a mismatch. A slot the
+    /// A slot the trace has a character for and the simulation does not is one
+    /// <see cref="ITraceSimulation.SpawnCharacter"/> could not place — an
+    /// unresolvable spawn point, or a character that was already alive when the
+    /// recording started. Its position is taken from the trace rather than
+    /// counted as a mismatch, which is lossy but is the only anchor available
+    /// (docs/PARITY.md, "Where replay legitimately diverges"). A slot the
     /// simulation has and the trace does not has died or gone spectator.
     /// </remarks>
     private void Reconcile(

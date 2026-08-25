@@ -229,11 +229,24 @@ you nothing.
 
 Do not chase these — exclude them and say so in the report:
 
-- **Server-side RNG**: spawn team selection, chat bubbles. `SIMULATION.md`
-  establishes the port is free here. Replay should take roster/team/spawn events
-  from the trace rather than deciding them.
-- **Spawn positions and respawn timing**, for the same reason. Resynchronise the
-  character's state on every `PLAYER_SPAWN`.
+- **Server-side RNG**: team selection, chat bubbles, respawn timing, and *which*
+  spawn point a character gets. `SIMULATION.md` establishes the port is free
+  here. Replay should take roster/team/spawn events from the trace rather than
+  deciding them.
+- ⚠️ **A spawn *position* is not on that list, and this document used to say it
+  was.** The advice here was "resynchronise the character's state on every
+  `PLAYER_SPAWN`", and following it is what made phase 4 look like it had a
+  one-wire-unit arithmetic bug for as long as it did. A resync anchors on a
+  broadcast position, which is quantised to a fifth of a pixel and only sent
+  every seventh tick (`GameServerBeginStep.gml:96`) — so it starts the character
+  somewhere inside a bin, several ticks after it actually spawned.
+
+  `PLAYER_SPAWN` carries a **spawn point id and a group**, not coordinates
+  (`sendEventSpawn.gml`), and the client resolves the pair against the map
+  itself (`doEventSpawn.gml`). Do the same: `Gg2.Maps.SpawnPoints` reproduces
+  `offloadSpawnPoints.gml`'s lists, and the result is an integer coordinate with
+  both speeds zero — an anchor that passed through no wire at all. Only the
+  choice is RNG, and the choice is on the wire.
 - **Anything after a divergence.** Report the first mismatching tick and stop;
   100 downstream mismatches are one bug.
 

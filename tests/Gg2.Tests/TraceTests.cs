@@ -290,6 +290,13 @@ public sealed class TraceTests
 
         public void SetCharacter(int slot, in CharacterBlock observed) => _characters[slot] = observed;
 
+        /// <remarks>
+        /// The oracle reads positions out of the trace, so it has no map and
+        /// nothing to resolve a spawn point against. False keeps the replayer
+        /// on the wire anchor, which is the behaviour this control is testing.
+        /// </remarks>
+        public bool SpawnCharacter(int slot, int spawnpointId, int group) => false;
+
         public void ClearCharacter(int slot) => _characters.Remove(slot);
 
         public void SetPlayerClass(int slot, PlayerClass playerClass) { }

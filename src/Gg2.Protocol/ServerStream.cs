@@ -203,11 +203,19 @@ public sealed class ServerStream
                 return Done(type, ref reader, start, playerId: id, text: name);
             }
 
+            case MessageType.PlayerSpawn:
+            {
+                // Body is [player, spawnpointId, group] (sendEventSpawn.gml).
+                // The id and group stay in Payload for the caller to resolve
+                // against the map's spawn point lists; naming the player here
+                // just matches every other message that names one.
+                var id = reader.ReadUByte();
+                reader.Skip(2);
+                return Done(type, ref reader, start, playerId: id);
+            }
+
             // --- fixed-width bodies -------------------------------------------
             // Sizes are the receiveCompleteMessage in each ClientBeginStep case.
-            case MessageType.PlayerSpawn:
-                return Fixed(type, ref reader, start, 3);
-
             case MessageType.PlayerDeath:
             case MessageType.DestroySentry:
                 return Fixed(type, ref reader, start, 4);

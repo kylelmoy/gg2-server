@@ -32,6 +32,7 @@ public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSim
 {
     private readonly Dictionary<int, CharacterState> _characters = [];
     private CollisionWorld? _world;
+    private SpawnPoints? _spawnPoints;
 
     /// <summary>Each slot's class, which decides its box and its run power.</summary>
     /// <remarks>
@@ -68,7 +69,9 @@ public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSim
 
     public void LoadMap(string map)
     {
-        _world = new CollisionWorld(loadMap(map));
+        var level = loadMap(map);
+        _world = new CollisionWorld(level);
+        _spawnPoints = new SpawnPoints(level);
         _characters.Clear();
     }
 
@@ -116,6 +119,39 @@ public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSim
     public void SetPlayerClass(int slot, PlayerClass playerClass) => Classes[slot] = playerClass;
 
     public void SetPlayerTeam(int slot, Team team) => Teams[slot] = team;
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// The one anchor in the harness that loses nothing. Everything here is
+    /// <c>Character.events/Create.xml</c>'s own initial state: <c>hp = maxHp</c>
+    /// (line 37), <c>moveStatus = 0</c> (line 166), and
+    /// <c>_last_xscale = image_xscale</c> (line 120) with no assignment to
+    /// <c>image_xscale</c> anywhere before it, so both facings start at GM8's
+    /// default of +1. Speeds are whatever <c>instance_create</c> leaves them,
+    /// which is zero.
+    /// </remarks>
+    public bool SpawnCharacter(int slot, int spawnpointId, int group)
+    {
+        var team = Teams.GetValueOrDefault(slot, Team.Red);
+
+        if (_spawnPoints is null || !_spawnPoints.TryGet(team, group, spawnpointId, out var x, out var y))
+            return false;
+
+        var playerClass = Classes.GetValueOrDefault(slot, PlayerClass.Scout);
+
+        _characters[slot] = new CharacterState
+        {
+            Class = playerClass,
+            Team = team,
+            X = x,
+            Y = y,
+            Hp = ClassStats.For(playerClass).MaxHp,
+            Facing = 1,
+            LastFacing = 1,
+        };
+
+        return true;
+    }
 
     public void ClearCharacter(int slot) => _characters.Remove(slot);
 
