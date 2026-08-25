@@ -182,15 +182,17 @@ public sealed class GameServer : IDisposable
     }
 
     /// <summary>The wire view of a slot's character, for the state writer.</summary>
-    private bool TryGetCharacter(int slot, out CharacterBlock character)
+    private bool TryGetCharacter(int slot, out CharacterBlock character, out WeaponBlock weapon)
     {
         if (!_world.IsAlive(slot))
         {
             character = default;
+            weapon = default;
             return false;
         }
 
-        character = CharacterWire.ToBlock(_world.Characters[slot]);
+        character = CharacterWire.ToBlock(_world.Characters[slot], _world.Weapons[slot]);
+        weapon = CharacterWire.ToWeaponBlock(_world.Weapons[slot], _world.Characters[slot].Class);
         return true;
     }
 

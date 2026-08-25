@@ -1,0 +1,306 @@
+using Gg2.Protocol;
+using Gg2.Simulation;
+
+namespace Gg2.Tests;
+
+/// <summary>
+/// The state a match lives in: roster slots, weapons, sentries and the
+/// projectile pool.
+/// </summary>
+/// <remarks>
+/// Two properties are load-bearing beyond the obvious ones and are what most of
+/// this file is about.
+/// <para>
+/// <b>A slot index is a roster index.</b> Every field that names another player
+/// stores one, and the roster compacts on <c>PLAYER_LEAVE</c>. CLAUDE.md's
+/// warning — "off by one, intermittently" — is precisely the failure mode of
+/// forgetting to renumber one of them, so each is checked here.
+/// </para>
+/// <para>
+/// <b>Projectiles are walked in creation order.</b> Pool slots are recycled and
+/// so say nothing about when a projectile was fired; docs/SIMULATION.md makes
+/// creation order observable wherever instances interact.
+/// </para>
+/// </remarks>
+public sealed class WorldStateTests
+{
+    private static ProjectileState Shot(byte owner, Team team = Team.Red) => new()
+    {
+        Kind = ProjectileKind.Shot,
+        Team = team,
+        OwnerSlot = owner,
+        Source = DamageSource.Scattergun,
+    };
+
+    // --- the projectile pool -------------------------------------------------
+
+    [Fact]
+    public void SpawnedProjectilesResolveThroughTheirHandles()
+    {
+        var state = default(WorldState);
+        var handle = state.SpawnProjectile(Shot(3));
+
+        Assert.True(state.TryGetProjectile(handle, out var projectile));
+        Assert.Equal(ProjectileKind.Shot, projectile.Kind);
+        Assert.Equal(3, projectile.OwnerSlot);
+        Assert.Equal(1, state.LiveProjectileCount);
+    }
+
+    /// <summary>
+    /// The whole reason a handle carries a generation. Freeing and respawning
+    /// reuses the slot, and the old handle must not follow it.
+    /// </summary>
+    [Fact]
+    public void AStaleHandleDoesNotResolveToTheProjectileThatReplacedIt()
+    {
+        var state = default(WorldState);
+        var first = state.SpawnProjectile(Shot(1));
+        Assert.True(state.FreeProjectile(first));
+
+        var second = state.SpawnProjectile(Shot(2));
+
+        Assert.Equal(first.Index, second.Index);
+        Assert.False(state.IsLive(first));
+        Assert.False(state.TryGetProjectile(first, out _));
+        Assert.True(state.TryGetProjectile(second, out var projectile));
+        Assert.Equal(2, projectile.OwnerSlot);
+    }
+
+    /// <summary>
+    /// Generation 0 is never issued, so a defaulted handle field — a mine that
+    /// nothing has reflected — cannot accidentally name pool slot 0.
+    /// </summary>
+    [Fact]
+    public void TheDefaultHandleNamesNothingEvenWhenSlotZeroIsLive()
+    {
+        var state = default(WorldState);
+        var handle = state.SpawnProjectile(Shot(0));
+
+        Assert.Equal(0, handle.Index);
+        Assert.True(ProjectileHandle.None.IsNone);
+        Assert.False(state.IsLive(ProjectileHandle.None));
+        Assert.False(state.IsLive(default));
+    }
+
+    [Fact]
+    public void FreeingIsIdempotentAndReportsIt()
+    {
+        var state = default(WorldState);
+        var handle = state.SpawnProjectile(Shot(1));
+
+        Assert.True(state.FreeProjectile(handle));
+        Assert.False(state.FreeProjectile(handle));
+        Assert.Equal(0, state.LiveProjectileCount);
+    }
+
+    /// <summary>
+    /// Removing from the middle keeps the rest in the order they were fired —
+    /// which is what a swap-with-last would have thrown away.
+    /// </summary>
+    [Fact]
+    public void TheLiveWalkStaysInCreationOrderAcrossAFreeInTheMiddle()
+    {
+        var state = default(WorldState);
+        var handles = new ProjectileHandle[5];
+        for (byte i = 0; i < 5; i++)
+            handles[i] = state.SpawnProjectile(Shot(i));
+
+        Assert.True(state.FreeProjectile(handles[1]));
+        Assert.True(state.FreeProjectile(handles[3]));
+
+        Assert.Equal([0, 2, 4], Owners(state));
+
+        // The recycled slots are handed back out lowest-first, and the new
+        // arrivals go on the end of the walk rather than into the gaps.
+        state.SpawnProjectile(Shot(9));
+        Assert.Equal([0, 2, 4, 9], Owners(state));
+    }
+
+    [Fact]
+    public void AFullPoolReturnsTheNullHandleRatherThanOverwriting()
+    {
+        var state = default(WorldState);
+        for (var i = 0; i < WorldState.MaxProjectiles; i++)
+            Assert.False(state.SpawnProjectile(Shot(0)).IsNone);
+
+        Assert.True(state.SpawnProjectile(Shot(0)).IsNone);
+        Assert.Equal(WorldState.MaxProjectiles, state.LiveProjectileCount);
+    }
+
+    [Fact]
+    public void AProjectileWithNoKindIsRejected() =>
+        Assert.Throws<ArgumentException>(() =>
+        {
+            var state = default(WorldState);
+            state.SpawnProjectile(default);
+        });
+
+    // --- cloning -------------------------------------------------------------
+
+    /// <summary>
+    /// docs/BOTAI.md item 1: a clone is a copy of bytes. If any part of the
+    /// state were behind a reference, mutating the copy would be visible through
+    /// the original — and rollout search would silently score the wrong world.
+    /// </summary>
+    [Fact]
+    public void ACloneSharesNothingWithItsOriginal()
+    {
+        var original = default(WorldState);
+        original.Characters[2].Hp = 100;
+        original.Weapons[2].AmmoCount = 6;
+        original.Sentries[2].Hp = 25;
+        var handle = original.SpawnProjectile(Shot(2));
+
+        var clone = original;
+        clone.Characters[2].Hp = 1;
+        clone.Weapons[2].AmmoCount = 0;
+        clone.Sentries[2].Hp = 1;
+        Assert.True(clone.FreeProjectile(handle));
+
+        Assert.Equal(100, original.Characters[2].Hp);
+        Assert.Equal(6, original.Weapons[2].AmmoCount);
+        Assert.Equal(25, original.Sentries[2].Hp);
+        Assert.Equal(1, original.LiveProjectileCount);
+        Assert.True(original.IsLive(handle));
+    }
+
+    // --- roster compaction ---------------------------------------------------
+
+    [Fact]
+    public void RemovingASlotShiftsCharactersWeaponsAndSentriesTogether()
+    {
+        var state = default(WorldState);
+        for (var slot = 0; slot < 3; slot++)
+        {
+            state.Alive[slot] = true;
+            state.Characters[slot].Hp = 10 + slot;
+            state.Weapons[slot].AmmoCount = 20 + slot;
+            state.HasSentry[slot] = true;
+            state.Sentries[slot].Hp = 30 + slot;
+        }
+
+        state.RemoveSlot(1);
+
+        Assert.Equal(10, state.Characters[0].Hp);
+        Assert.Equal(12, state.Characters[1].Hp);
+        Assert.Equal(22, state.Weapons[1].AmmoCount);
+        Assert.Equal(32, state.Sentries[1].Hp);
+        Assert.False(state.Alive[2]);
+        Assert.False(state.HasSentry[2]);
+    }
+
+    /// <summary>
+    /// The intermittent off-by-one CLAUDE.md warns about, in every field that
+    /// can carry it: a stored roster index above the departing slot moves down
+    /// with the roster.
+    /// </summary>
+    [Fact]
+    public void EveryStoredRosterIndexRenumbersWhenSomebodyLeaves()
+    {
+        var state = default(WorldState);
+        state.Alive[0] = true;
+        state.Characters[0].LastDamageDealer = 5;
+        state.Characters[0].SecondToLastDamageDealer = 4;
+        state.Characters[0].BurnedBy = 6;
+        state.Characters[0].Healer = 3;
+        state.HasSentry[0] = true;
+        state.Sentries[0].LastDamageDealer = 5;
+        state.Weapons[0].HealTarget = 5;
+        var handle = state.SpawnProjectile(Shot(5));
+
+        state.RemoveSlot(2);
+
+        Assert.Equal(4, state.Characters[0].LastDamageDealer);
+        Assert.Equal(3, state.Characters[0].SecondToLastDamageDealer);
+        Assert.Equal(5, state.Characters[0].BurnedBy);
+        Assert.Equal(2, state.Characters[0].Healer);
+        Assert.Equal(4, state.Sentries[0].LastDamageDealer);
+        Assert.Equal(4, state.Weapons[0].HealTarget);
+        Assert.True(state.TryGetProjectile(handle, out var projectile));
+        Assert.Equal(4, projectile.OwnerSlot);
+    }
+
+    /// <summary>
+    /// A reference to the player who actually left becomes nobody. Following the
+    /// compaction instead would hand their rocket — and the kill it is about to
+    /// get — to whoever slid into their index.
+    /// </summary>
+    [Fact]
+    public void AReferenceToTheDepartingSlotBecomesNobody()
+    {
+        var state = default(WorldState);
+        state.Alive[0] = true;
+        state.Characters[0].LastDamageDealer = 2;
+        var handle = state.SpawnProjectile(Shot(2));
+
+        state.RemoveSlot(2);
+
+        Assert.Equal(CharacterState.Nobody, state.Characters[0].LastDamageDealer);
+        Assert.True(state.TryGetProjectile(handle, out var projectile));
+        Assert.Equal(ProjectileState.NoOwner, projectile.OwnerSlot);
+    }
+
+    [Fact]
+    public void NobodyStaysNobody()
+    {
+        var state = default(WorldState);
+        state.Alive[0] = true;
+        state.Characters[0].LastDamageDealer = CharacterState.Nobody;
+        state.Characters[0].Healer = CharacterState.Nobody;
+
+        state.RemoveSlot(1);
+
+        Assert.Equal(CharacterState.Nobody, state.Characters[0].LastDamageDealer);
+        Assert.Equal(CharacterState.Nobody, state.Characters[0].Healer);
+    }
+
+    /// <summary>
+    /// <c>Clear</c> is a death, not a departure: the weapon dies with the
+    /// character, the sentry does not, and neither does a rocket already in the
+    /// air.
+    /// </summary>
+    [Fact]
+    public void ClearingASlotKeepsTheSentryAndAnyProjectilesInFlight()
+    {
+        var state = default(WorldState);
+        state.Alive[1] = true;
+        state.Characters[1].Hp = 100;
+        state.Weapons[1].AmmoCount = 4;
+        state.HasSentry[1] = true;
+        state.Sentries[1].Hp = 100;
+        var handle = state.SpawnProjectile(Shot(1));
+
+        state.Clear(1);
+
+        Assert.False(state.Alive[1]);
+        Assert.Equal(0, state.Characters[1].Hp);
+        Assert.Equal(0, state.Weapons[1].AmmoCount);
+        Assert.True(state.HasSentry[1]);
+        Assert.Equal(100, state.Sentries[1].Hp);
+        Assert.True(state.TryGetProjectile(handle, out var projectile));
+        Assert.Equal(1, projectile.OwnerSlot);
+    }
+
+    /// <summary>
+    /// Not a correctness test — a budget. Rollout search clones this thousands
+    /// of times per decision (docs/BOTAI.md item 1), so its size is a cost that
+    /// should move deliberately rather than by accident. If this fails, decide
+    /// whether the field that grew it is worth the clone before raising the
+    /// number.
+    /// </summary>
+    [Fact]
+    public void ACloneStaysWithinItsBudget()
+    {
+        var size = System.Runtime.CompilerServices.Unsafe.SizeOf<WorldState>();
+        Assert.True(size < 96 * 1024, $"WorldState is {size} bytes");
+    }
+
+    private static byte[] Owners(in WorldState state)
+    {
+        var owners = new byte[state.LiveProjectileCount];
+        for (var i = 0; i < owners.Length; i++)
+            owners[i] = state.Projectiles[state.LiveProjectileSlot(i)].OwnerSlot;
+
+        return owners;
+    }
+}

@@ -243,3 +243,36 @@ public sealed class StateUpdate
     /// <summary><c>FULL_UPDATE</c> only. Ten of them.</summary>
     public byte[] ClassLimits { get; init; } = [];
 }
+
+/// <summary>
+/// The block a character's <c>currentWeapon</c> writes after it, as a value
+/// type for the serialiser.
+/// </summary>
+/// <remarks>
+/// The same four fields <see cref="PlayerBlock"/> flattens on the reading side.
+/// A separate struct because the writer runs every tick and must not allocate,
+/// and <see cref="PlayerBlock"/> is a class.
+/// <para>
+/// <b>Three shapes, not one.</b> A medic writes the heal target alone, a demoman
+/// writes the pair plus a mine count plus a block per mine, and everybody else
+/// writes the pair. See <c>Gg2.Protocol.StateUpdateReader.ReadWeapon</c> for the
+/// measurement and the four phases this repo had it wrong for.
+/// </para>
+/// </remarks>
+public readonly record struct WeaponBlock
+{
+    /// <summary>Which of the three shapes this is.</summary>
+    public required PlayerClass Class { get; init; }
+
+    /// <summary><c>readyToShoot</c>. Not written for a medic.</summary>
+    public byte ReadyToShoot { get; init; }
+
+    /// <summary><c>alarm[0]</c>, saturating into a ubyte. Not written for a medic.</summary>
+    public byte RefireAlarm { get; init; }
+
+    /// <summary>A medic's heal target, or 255. Written only for a medic.</summary>
+    public byte HealTarget { get; init; }
+
+    /// <summary>A demoman's <c>lobbed</c>, and so how many mine blocks follow.</summary>
+    public byte MinesLobbed { get; init; }
+}

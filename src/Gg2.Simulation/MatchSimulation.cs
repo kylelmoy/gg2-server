@@ -58,6 +58,11 @@ public static class MatchSimulation
                 CharacterPhysics.BeginStep(world, ref state.Characters[slot]);
         }
 
+        // Game Maker's alarm stage sits between Begin Step and Step, and it is
+        // where a weapon becomes able to fire again — so an input arriving this
+        // tick is tested against a refire counter that has already advanced.
+        Timers.Advance(ref state);
+
         for (var slot = 0; slot < WorldState.MaxSlots; slot++)
         {
             if (state.Alive[slot])

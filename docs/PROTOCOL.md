@@ -235,7 +235,7 @@ the client understands. The ones with non-obvious framing:
 | `JOIN_UPDATE` (44) | `ubyte playerId`, `ubyte currentMapArea` |
 | `PLAYER_JOIN` (1) | `string1 name` |
 | `PLAYER_LEAVE` (2) | `ubyte playerId` |
-| `PLAYER_DEATH` (10) | `ubyte victim`, `ubyte killer`, `ubyte assistant`, `ubyte cause` |
+| `PLAYER_DEATH` (10) | `ubyte victim`, `ubyte killer`, `ubyte assistant`, `ubyte cause` (see below) |
 | `PLAYER_SPAWN` (5) | `ubyte playerId`, `ubyte`, `ubyte` |
 | `PLAYER_CHANGENAME` (31) | `ubyte playerId`, `string1 name` |
 | `CHAT_BUBBLE` (15) | `ubyte playerId`, `ubyte image` |
@@ -244,6 +244,21 @@ the client understands. The ones with non-obvious framing:
 | `CHANGE_MAP` (7) | `string1 map`, `string1 md5` |
 | `INPUTSTATE` / `QUICK_UPDATE` / `FULL_UPDATE` / `CAPS_UPDATE` | see next section |
 | `KICK` (38) | `ubyte reason` (`KICK_NAME` 39, `KICK_BAD_PLUGIN_PACKET` 56, `KICK_MULTI_CLIENT` 59) |
+
+`PLAYER_DEATH`'s `killer` and `assistant` are **255 for nobody**, not 0 — zero
+is roster slot 0, which is the server's own reserved player.
+
+Its `cause` is a damage-source id, and **there is no table of those in the
+reference**. `Scripts/Kill Log/initializeDamageSources.gml` calls
+`createGlobalDamageSource` once per source and `createDamageSource` returns
+`ds_list_size` *after* the add, so the ids are the order of those calls starting
+at **1**: needlegun, rifle, charged rifle, minegun, minigun, flamethrower,
+scattergun, shotgun, rocketlauncher, revolver, sentry turret, blade, bubble,
+reflected rocket, reflected sticky, knife, backstab, flare, reflected flare, kill
+box, frag box, pitfall, finished off, finished off gib, bid farewell, generator
+explosion. `Gg2.Protocol.DamageSource` has them; 0 is free and is used there for
+the reference's `lastDamageSource = -1`. Reordering that script renumbers the
+wire.
 
 For anything not listed, read the matching `case` in `ClientBeginStep.gml`
 together with the server-side `write_*` calls that produce it — that pair is the

@@ -330,10 +330,13 @@ recorded in `gg2-agent/GML.md`.
   manual rectangles that do not match the drawn sprite.
 - **Alarms count down by exactly 1 per frame**, which is why the reference
   divides initial values by `delta_factor` instead of scaling the decrement. At a
-  fixed 30 fps they are plain tick counters.
-- **`speed` and `direction` are derived from `hspeed`/`vspeed`** and writing
-  either rewrites both. The GML reads `speed` in a couple of places
-  (`End Step`'s stair descent, the intel trail); that is `hypot(hspeed, vspeed)`.
+  fixed 30 fps they are plain tick counters. The firing rule is narrower than it
+  looks — see "Settled: the alarm stage" below.
+- **All four of `hspeed`, `vspeed`, `direction` and `speed` are stored**, and
+  writing any of them rewrites the others. This bullet used to say `speed` and
+  `direction` were *derived*; that is true only of an instance which never
+  writes them, which is every character and no projectile. See "Settled: the
+  four motion variables" below.
 
 ## What is genuinely uncertain
 
@@ -817,3 +820,83 @@ The structure of `CollisionLine` follows GM8's, which this document otherwise
 tells you not to do. It is transcribed because **the walk is the arithmetic**:
 the order of clip, round and step decides the answer and there is no closed form
 that reproduces it.
+
+### Settled: the four motion variables
+
+Was the bullet in "Other engine behaviours to preserve" that called `speed` and
+`direction` *derived*. They are not derived; **all four of `hspeed`, `vspeed`,
+`direction` and `speed` are stored on the instance**, and writing any of them
+rewrites the others. `Gg2.Simulation.Motion`.
+
+The old wording was harmless for phase 4 because no character ever writes
+`direction` or `speed` — but a projectile does. `Scattergun.events/User Event
+3.xml` sets `direction` and `speed` through `createShot`, then adds the owner's
+`hspeed`, then adjusts `speed`, then adjusts `direction` — four writes that
+round-trip between the two representations three times before the shot moves.
+
+```
+set direction:  direction = direction mod 360 (never negative), then
+                hspeed = snap(cos(rad(direction)) * speed)
+                vspeed = snap(-sin(rad(direction)) * speed)
+set speed:      speed = v, then the same two lines
+
+set hspeed:     NO-OP if unchanged; otherwise
+                direction = snap(deg(atan2(-vspeed, hspeed)) mod 360)
+                speed     = sqrt(hspeed^2 + vspeed^2)      -- not snapped
+set vspeed:     the same
+
+snap(v)         = round(v) if |round(v) - v| < 1e-4, else v      -- round is
+                  GM8's own half-to-even, though a 1e-4 window can never reach
+                  a tie
+```
+
+Three of those details change results rather than last digits:
+
+- **The snap.** `cos(90 degrees)` is 6.1e-17, so without it a shot fired
+  straight up carries a residue in `hspeed` forever. The snap window is 1e-4,
+  which is a *billion* times wider than `Gml.Epsilon` — do not confuse the two.
+- **Writing a component the value it already holds is a no-op**, so
+  `hspeed = hspeed` does not collapse a direction that a zero speed can no
+  longer encode. An instance brought to rest still knows where it was pointing.
+- **`motion_add` does not snap.** It goes through the *component* path
+  (`instance.set_hvspeed(hspeed + dx, vspeed + dy)`), so a knockback straight up
+  leaves the 2.4e-16 that an identical-looking `direction = 90; speed = 4;`
+  would have cleaned away. Small enough for `Gml.Equal` to absorb, big enough to
+  be worth not "fixing".
+
+**Status: transcribed, not measured.** The source is OpenGMK's
+`gm8emulator/src/instance.rs` and `gml/kernel.rs` — the same route that settled
+`collision_line`, and the same caveat: it is a faithful reimplementation, not the
+engine. Nothing in phase 4 writes `direction` or `speed`, so no existing fixture
+can see any of it. **The first projectile oracle must confirm the snap threshold
+and the degree/radian conversions before a trajectory is trusted.**
+`tests/Gg2.Tests/MotionTests.cs` pins the model so that a disagreement shows up
+as a failing test rather than as drift.
+
+### Settled: the alarm stage
+
+`Gg2.Simulation.Timers`, from OpenGMK's `run_alarms`. Two parts, both narrower
+than the obvious reading:
+
+**The firing rule.** Per alarm, per frame:
+
+```
+if alarm >= 0 { alarm -= 1; if alarm == 0 { run the event } }
+```
+
+- An alarm set to `n` fires `n` ticks later, not `n+1`.
+- An alarm set to **0 never fires at all** — it goes straight to -1.
+  `Character.events/Create.xml` writes `alarm[1] = 0`, and that is how GM8
+  spells "off", not "fire immediately".
+- After firing it rests at 0, not -1, and is consumed on the following tick.
+  That is what makes it fire once.
+
+**The order is alarm-index major.** `run_alarms` loops `for alarm_id in 0..=11`
+on the outside and over instances on the inside, so *every* instance's alarm 0
+fires before *any* instance's alarm 1 — not one instance's alarms in order and
+then the next instance's. Nothing in the port crosses instances from an alarm
+yet; it will stop being invisible the moment an expiry damages somebody.
+
+The stage sits between Begin Step and Step, which is where
+`MatchSimulation.Tick` calls it. That matters for a weapon: an input arriving
+this tick is tested against a refire counter that has *already* advanced.

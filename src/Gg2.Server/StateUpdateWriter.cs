@@ -11,7 +11,7 @@ namespace Gg2.Server;
 /// <c>WorldState</c> — it is a large value type by design (docs/BOTAI.md item
 /// 1), and serialisation runs every tick.
 /// </remarks>
-public delegate bool CharacterLookup(int slot, out CharacterBlock character);
+public delegate bool CharacterLookup(int slot, out CharacterBlock character, out WeaponBlock weapon);
 
 /// <summary>
 /// Writes the four state-update tiers, transcribed from
@@ -122,11 +122,11 @@ public sealed class StateUpdateWriter(MatchState match, CharacterLookup characte
         }
 
         // 0x01 = has a Character, 0x02 = has a Sentry. No sentries yet.
-        var hasCharacter = characters(index, out var character);
+        var hasCharacter = characters(index, out var character, out var weapon);
         writer.WriteUByte(hasCharacter ? (byte)0x01 : (byte)0x00);
 
         if (hasCharacter)
-            WriteCharacter(writer, tier, character, player.Class);
+            WriteCharacter(writer, tier, character, weapon);
     }
 
     /// <summary>
@@ -142,7 +142,7 @@ public sealed class StateUpdateWriter(MatchState match, CharacterLookup characte
         NetWriter writer,
         MessageType tier,
         in CharacterBlock character,
-        PlayerClass playerClass)
+        in WeaponBlock weapon)
     {
         writer.WriteUByte((byte)character.Keys);
         writer.WriteUShort(character.NetAimDirection);
@@ -165,13 +165,13 @@ public sealed class StateUpdateWriter(MatchState match, CharacterLookup characte
         if (tier != MessageType.FullUpdate)
             return;
 
-        writer.WriteUByte(0); // animation offset: cosmetic, client-side.
-        writer.WriteUByte(0); // cloak alpha / uber / charge — phase 5.
-        writer.WriteShort(0); // alarm[1]
-        writer.WriteUByte(0); // intel carried
-        writer.WriteShort(0); // intel recharge
+        writer.WriteUByte(character.AnimationOffset);
+        writer.WriteUByte(character.ClassSpecific);
+        writer.WriteShort(character.Alarm1);
+        writer.WriteUByte(character.Intel);
+        writer.WriteShort(character.IntelRecharge);
 
-        WriteWeapon(writer, playerClass);
+        WriteWeapon(writer, weapon);
     }
 
     /// <summary>
@@ -188,29 +188,38 @@ public sealed class StateUpdateWriter(MatchState match, CharacterLookup characte
     /// <c>receiveCompleteMessage</c>), so a missing byte does not lose a field —
     /// it desynchronises the rest of the stream. See
     /// <c>Gg2.Protocol.StateUpdateReader.ReadWeapon</c> for the measurement.
-    /// <para>
-    /// The values are still placeholders, because weapons are not simulated yet.
-    /// "Ready, nothing pending" is the least wrong pair to send: it is what a
-    /// weapon at rest looks like, and what the client will predict from.
-    /// </para>
     /// </remarks>
-    private static void WriteWeapon(NetWriter writer, PlayerClass playerClass)
+    private static void WriteWeapon(NetWriter writer, in WeaponBlock weapon)
     {
         // Medigun overrides User Event 12 *without* an inherited action — the
         // only weapon that does — so a medic's block is the heal target alone.
-        if (playerClass == PlayerClass.Medic)
+        if (weapon.Class == PlayerClass.Medic)
         {
             // 255, not 0. Zero is roster slot 0, so writing it tells every
             // client the medic is beaming the server's own reserved player.
-            writer.WriteUByte(255);
+            writer.WriteUByte(weapon.HealTarget);
             return;
         }
 
-        writer.WriteUByte(1); // readyToShoot
-        writer.WriteUByte(0); // alarm[0]: no refire pending
+        writer.WriteUByte(weapon.ReadyToShoot);
+        writer.WriteUByte(weapon.RefireAlarm);
 
-        if (playerClass == PlayerClass.Demoman)
-            writer.WriteUByte(0); // mines lobbed, and so no mine blocks
+        if (weapon.Class != PlayerClass.Demoman)
+            return;
+
+        // A mine count is a promise of that many seven-byte blocks
+        // (Minegun.events/User Event 12.xml walks every Mine belonging to this
+        // player). Nothing lobs a mine yet, so the count can only be zero — and
+        // if it ever is not, the Minegun landed without its serialisation and
+        // every client after this byte is reading the wrong thing.
+        if (weapon.MinesLobbed != 0)
+        {
+            throw new InvalidOperationException(
+                $"{weapon.MinesLobbed} mine(s) lobbed but no mine blocks to write: " +
+                "Minegun.events/User Event 12.xml needs its Mine loop porting alongside the weapon");
+        }
+
+        writer.WriteUByte(0);
     }
 
     /// <summary>

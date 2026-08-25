@@ -101,6 +101,7 @@ public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSim
         character.AimDistance = observed.AimDistance;
 
         character.MoveStatus = observed.MoveStatus;
+        character.Cloak = observed.Cloaked;
 
         // Facing follows the aim, and the spinjump test compares it against its
         // previous value — so an anchor that left LastFacing at zero would read
@@ -110,6 +111,16 @@ public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSim
         character.LastFacing = character.Facing;
 
         _state.Characters[slot] = character;
+
+        // The weapon is anchored too, or every resync would put a full magazine
+        // back and the ammo comparison would report the drift the anchor was
+        // meant to remove. Only ammo is on the wire in a QUICK_UPDATE; the rest
+        // of the weapon keeps whatever it had, or starts as the reference's own
+        // Create-event state if this slot had nothing.
+        var weapon = _state.Alive[slot] ? _state.Weapons[slot] : WeaponState.Spawn(character.Class);
+        weapon.AmmoCount = observed.Ammo;
+        _state.Weapons[slot] = weapon;
+
         _state.Alive[slot] = true;
     }
 
@@ -172,12 +183,10 @@ public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSim
             return false;
         }
 
-        var state = _state.Characters[slot];
-
         // Shared with the live server rather than reimplemented here: see
         // CharacterWire, and why having two copies would make this harness
         // prove the wrong program.
-        character = CharacterWire.ToBlock(state);
+        character = CharacterWire.ToBlock(_state.Characters[slot], _state.Weapons[slot]);
         return true;
     }
 }

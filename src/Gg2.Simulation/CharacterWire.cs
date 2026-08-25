@@ -26,7 +26,13 @@ public static class CharacterWire
     /// <c>round(x*5)</c>. CLAUDE.md's rounding table has the five cases and why
     /// they differ; this is the one that matters most often.
     /// </remarks>
-    public static CharacterBlock ToBlock(in CharacterState state) => new()
+    /// <param name="state">The character.</param>
+    /// <param name="weapon">
+    /// Its weapon. The ammo byte and — for three of the ten classes — the
+    /// class-specific byte come out of it, so a character cannot be serialised
+    /// without one. The reference cannot have a character without one either.
+    /// </param>
+    public static CharacterBlock ToBlock(in CharacterState state, in WeaponState weapon) => new()
     {
         Keys = state.KeyState,
         NetAimDirection = state.NetAimDirection,
@@ -38,10 +44,59 @@ public static class CharacterWire
         HSpeed = WireQuantise.ToByte(state.HSpeed * 8.5),
         VSpeed = WireQuantise.ToByte(state.VSpeed * 8.5),
         Hp = WireQuantise.ToUByte(Math.Ceiling(state.Hp)),
+        Ammo = WireQuantise.ToUByte(weapon.AmmoCount),
 
-        // Weapons are phase 5, so there is no ammo to report and no cloak bit
-        // to set. moveStatus is real and occupies bits 1..3.
-        Ammo = 0,
-        Flags = (byte)((state.MoveStatus & 0x07) << 1),
+        // Bit 0 is the cloak; bits 1..3 are moveStatus.
+        Flags = (byte)((state.Cloak ? 0x01 : 0x00) | ((state.MoveStatus & 0x07) << 1)),
+
+        HasFullDetail = true,
+
+        // animationOffset picks which of the character's sprite sets the client
+        // draws (CHARACTER_ANIMATION_NORMAL / _INTEL). It is a drawing
+        // selector, and no phase owns it yet.
+        AnimationOffset = 0,
+
+        ClassSpecific = ClassSpecificByte(state, weapon),
+        Alarm1 = WireQuantise.ToShort(state.IntelGrabTimer),
+        Intel = state.CarryingIntel ? (byte)1 : (byte)0,
+        IntelRecharge = WireQuantise.ToShort(state.IntelRecharge),
+    };
+
+    /// <summary>
+    /// The one byte four classes use for something and six write as zero.
+    /// </summary>
+    /// <remarks>
+    /// <c>Character.events/User Event 12.xml</c>'s <c>switch(player.class)</c>.
+    /// Note that three of the four read it off the <em>weapon</em> and one off
+    /// the character, and that only the medic's is scaled — the sniper's charge
+    /// and the engineer's nuts and bolts go out unscaled because both already
+    /// fit in a byte.
+    /// </remarks>
+    private static byte ClassSpecificByte(in CharacterState state, in WeaponState weapon) => state.Class switch
+    {
+        PlayerClass.Spy => WireQuantise.ToUByte(state.CloakAlpha * 255),
+        PlayerClass.Medic => WireQuantise.ToUByte(weapon.UberCharge * 255 / WeaponState.MaxUberCharge),
+        PlayerClass.Engineer => WireQuantise.ToUByte(state.NutsNBolts),
+        PlayerClass.Sniper => WireQuantise.ToUByte(weapon.Charge),
+        _ => 0,
+    };
+
+    /// <summary>
+    /// Quantises a weapon into the block that closes a <c>FULL_UPDATE</c>
+    /// character.
+    /// </summary>
+    /// <remarks>
+    /// <c>alarm[0]</c> rests at -1 when nothing is pending and the reference
+    /// writes it through <c>write_ubyte</c>, which clamps — so an idle weapon
+    /// sends 0 and a client reading it back gets "no refire pending", which is
+    /// what it is.
+    /// </remarks>
+    public static WeaponBlock ToWeaponBlock(in WeaponState weapon, PlayerClass playerClass) => new()
+    {
+        Class = playerClass,
+        ReadyToShoot = weapon.ReadyToShoot ? (byte)1 : (byte)0,
+        RefireAlarm = WireQuantise.ToUByte(weapon.RefireTimer),
+        HealTarget = weapon.HealTarget,
+        MinesLobbed = WireQuantise.ToUByte(weapon.MinesLobbed),
     };
 }
