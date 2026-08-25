@@ -3,9 +3,8 @@
 A headless Gang Garrison 2 server in C#, wire-compatible with the stock Game
 Maker 8 client.
 
-**Status: phases 0–4 of [`docs/PLAN.md`](docs/PLAN.md) are done, apart from phase
-4's stock-client check — the server does not run the simulation yet. Phase 5,
-combat, is next.**
+**Status: phases 0–4 of [`docs/PLAN.md`](docs/PLAN.md) are done and checked against
+a stock GM8 client. Phase 5, combat, is next.**
 
 | Project | What |
 |---|---|
@@ -60,8 +59,14 @@ The server runs that simulation now: pick a team and you get a character at a
 real spawn point, advanced every tick and serialised to every client. The tick
 and the wire conversion have exactly one implementation each, shared with the
 parity replayer — two copies would let a recording pass every gate while the
-server shipped different bytes. What is left of phase 4 is watching a stock GM8
-client walk around and confirming it never gets corrected.
+server shipped different bytes.
+
+And a stock GM8 client confirms it: pointed at this server it joins, renders the
+whole CTF HUD, spawns at a real spawn point and walks around with no correction.
+Sampling the client's own position every frame against a wall shows a 0.094px
+wobble at the update cadence — which is the wire's `x*5` quantisation, not a
+disagreement. The server's recorded state replayed offline reproduces the
+client's trajectory bit for bit.
 
 ```powershell
 $env:PATH = "$env:LOCALAPPDATA\Microsoft\dotnet;$env:PATH"   # .NET 9, user-local
