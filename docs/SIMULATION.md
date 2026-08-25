@@ -946,6 +946,55 @@ Every row of the three older fixtures was audited and none took the fuzzy
 branch, so those oracles are sound — but port the fix across before regenerating
 any of them.
 
+### Settled: a rotated sprite's bounding box
+
+`Gg2.Simulation.Aabb.ForRotatedSprite`, regenerate with
+`node tools/sample-rotated-box.js`. Phase 4 never needed it and phase 5 cannot
+start without it.
+
+A character's `image_angle` is always 0, so its box is a fixed rectangle offset
+by its position. **Every projectile is different**: `createShot.gml` does
+`image_angle = dir` on whatever it creates, and GM8 reports the axis-aligned
+bound of the *rotated* sprite. A scattergun pellet fired flat has an 18x2 box;
+the same pellet at 45 degrees has a 13x13 one. That box is what every hit is
+decided against, so the angle decides who a pellet can reach.
+
+```
+corners = the SPRITE's own bbox, relative to the origin, times the scale
+rotate each about the origin:
+    x' =  dx*cos(a) + dy*sin(a)
+    y' = -dx*sin(a) + dy*cos(a)         -- y down, angles counter-clockwise
+bbox = round(min x'), round(min y'), round(max x'), round(max y')
+                                        -- half to EVEN, each edge on its own
+```
+
+Two things it is easy to get wrong:
+
+- It rotates the **sprite's bbox**, not the sprite's full rectangle. `ShotS` is
+  20x6 with a bbox of (2, 2, 19, 3) and an origin at (19, 4), and at angle 0 the
+  instance box is exactly that bbox offset by the origin — 18x2 and not 20x6.
+- **Each edge is rounded on its own**, after the min/max. It is not a rounded
+  position plus a rounded extent, and the two differ wherever the roundings
+  disagree.
+
+Measured over 1,008 boxes — `Shot`, `Rocket`, `Needle`, `Flare`, `Mine`,
+`Flame`, `BladeB`, 144 angles each. **1,002 exact.**
+
+⚠️ **The six that are not are the one place the x87 gap becomes visible.**
+Rounding is a discontinuity, so a corner that lands on a precise half pixel has
+its tie broken by the last bit of `sin` — and that last bit is the one thing the
+port cannot reproduce (see "the four motion variables" above). All six are 210
+and 330 degrees, where `sin` is analytically exactly -0.5, on the three sprites
+whose box is asymmetric. Everywhere else the 1e-15 difference is nowhere near a
+tie and the boxes agree exactly.
+
+It is unreachable in play: the scattergun adds `random(15)-7.5` to every
+pellet's direction, so a direction of exactly 210.000 has probability zero.
+**Do not add a fudge factor for it** — a fudge would be wrong at every angle
+instead of at two. `RotatedBoxSampleTests` grants the one-pixel exemption only
+on rows where the model itself says a corner is on a half, so it cannot quietly
+cover an ordinary mistake.
+
 ### Settled: the alarm stage
 
 `Gg2.Simulation.Timers`, from OpenGMK's `run_alarms`. Two parts, both narrower

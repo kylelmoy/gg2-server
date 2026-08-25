@@ -1,3 +1,5 @@
+using Gg2.Protocol;
+
 namespace Gg2.Simulation;
 
 /// <summary>
@@ -42,6 +44,94 @@ public readonly record struct Aabb(int Left, int Top, int Right, int Bottom)
         var left = facing < 0 ? box.Left - 2 : box.Left;
 
         return new Aabb(ix + left, iy + box.Top, ix + box.Right, iy + box.Bottom);
+    }
+
+    /// <summary>
+    /// The box a rotated sprite occupies: GM8's <c>bbox_*</c> for an instance
+    /// whose <c>image_angle</c> is not zero.
+    /// </summary>
+    /// <remarks>
+    /// <b>Every projectile needs this and no character does.</b> A character's
+    /// <c>image_angle</c> is always 0, so <see cref="ForCharacter"/> can offset a
+    /// fixed box; but <c>Scripts/Object Creation/createShot.gml</c> sets
+    /// <c>image_angle = dir</c> on whatever it creates, and GM8 then reports the
+    /// axis-aligned bound of the <em>rotated</em> sprite. A scattergun pellet
+    /// fired flat has an 18x2 box and the same pellet fired at 45 degrees has a
+    /// 13x13 one — so the angle decides who it can hit.
+    /// <para>
+    /// The rule, measured over 1,008 boxes across all seven projectile sprites
+    /// (<c>tests/Gg2.Tests/Fixtures/rotated-box-samples.json</c>, regenerate with
+    /// <c>node tools/sample-rotated-box.js</c>): take the sprite's own bbox
+    /// corners relative to the origin, scale them, rotate each about the origin,
+    /// take the extremes, and round each half to <b>even</b> — the same rounding
+    /// as <see cref="SolidRect.FromEntity"/>, and the fourth row of CLAUDE.md's
+    /// rounding table.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Exact except on a rounding tie.</b> Six of those 1,008 boxes differ
+    /// by one pixel, and every one of them is an angle where a rotated corner
+    /// lands on a precise half — 210 and 330 degrees, where <c>sin</c> is
+    /// analytically -0.5. There the x87 gap in docs/SIMULATION.md's "four motion
+    /// variables" decides the tie the other way. It is unreachable in play: the
+    /// scattergun adds <c>random(15)-7.5</c> to every pellet's direction, so an
+    /// exact 210.000 has probability zero. Do not add a fudge for it — a fudge
+    /// would be wrong at every angle instead of at two.
+    /// </para>
+    /// </remarks>
+    /// <param name="sprite">The sprite's own bbox, in sprite pixels.</param>
+    /// <param name="xOrigin">The sprite's origin, in sprite pixels.</param>
+    /// <param name="yOrigin">The sprite's origin, in sprite pixels.</param>
+    /// <param name="x">The instance's position. Not rounded — the rotation is.</param>
+    /// <param name="y">The instance's position.</param>
+    /// <param name="angle">GM8's <c>image_angle</c>, in degrees, counter-clockwise.</param>
+    public static Aabb ForRotatedSprite(
+        in Aabb sprite,
+        double xOrigin,
+        double yOrigin,
+        double x,
+        double y,
+        double angle,
+        double xScale = 1,
+        double yScale = 1)
+    {
+        var radians = Gml.DegToRad(angle);
+        var cos = Math.Cos(radians);
+        var sin = Math.Sin(radians);
+
+        // The sprite's bbox corners, relative to the origin and scaled. The
+        // right and bottom edges are inclusive pixel indices in GM8 and stay
+        // that way through the rotation — the engine rotates the reported box,
+        // not a half-open one.
+        var left = (sprite.Left - xOrigin) * xScale;
+        var right = (sprite.Right - xOrigin) * xScale;
+        var top = (sprite.Top - yOrigin) * yScale;
+        var bottom = (sprite.Bottom - yOrigin) * yScale;
+
+        // Game Maker's y axis points down and its angles do not, hence the
+        // negated sine in the y row.
+        var x0 = (left * cos) + (top * sin);
+        var x1 = (right * cos) + (top * sin);
+        var x2 = (left * cos) + (bottom * sin);
+        var x3 = (right * cos) + (bottom * sin);
+
+        var y0 = (-left * sin) + (top * cos);
+        var y1 = (-right * sin) + (top * cos);
+        var y2 = (-left * sin) + (bottom * cos);
+        var y3 = (-right * sin) + (bottom * cos);
+
+        var minX = Math.Min(Math.Min(x0, x1), Math.Min(x2, x3));
+        var maxX = Math.Max(Math.Max(x0, x1), Math.Max(x2, x3));
+        var minY = Math.Min(Math.Min(y0, y1), Math.Min(y2, y3));
+        var maxY = Math.Max(Math.Max(y0, y1), Math.Max(y2, y3));
+
+        // Half to even, and each edge rounded on its own: the box is not the
+        // rounded position plus a rounded extent, which would be off by one
+        // wherever the two roundings disagree.
+        return new Aabb(
+            (int)(CollisionWorld.RoundPosition(x) + Gml.Round(minX)),
+            (int)(CollisionWorld.RoundPosition(y) + Gml.Round(minY)),
+            (int)(CollisionWorld.RoundPosition(x) + Gml.Round(maxX)),
+            (int)(CollisionWorld.RoundPosition(y) + Gml.Round(maxY)));
     }
 
     /// <summary>
