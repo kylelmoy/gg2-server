@@ -108,4 +108,95 @@ public static class Gml
     public static double Floor(double value) => Math.Floor(value);
 
     public static double Ceil(double value) => Math.Ceiling(value);
+
+    // -- Decimal literals -----------------------------------------------------
+    //
+    // Game Maker 8 does not parse every decimal literal to the IEEE-754 double
+    // nearest it. For some values it lands one ULP high, and the physics
+    // constants are full of them. Measured against the running game by pulling
+    // the mantissa out a chunk at a time (docs/SIMULATION.md, "GM8's decimal
+    // literals"):
+    //
+    //     GML text   GM8 holds             C# "0.6" holds
+    //     0.6        0.6000000000000001    0.6                (one ULP lower)
+    //     0.85       0.8500000000000001    0.85
+    //     1.15       1.1500000000000001    1.15
+    //     0.65       0.6500000000000001    0.65
+    //     0.35       0.35000000000000003   0.35
+    //
+    // while 0.1, 0.2, 0.45, 0.54, 0.9, 1.05, 1.4 and 8.3 come out the same in
+    // both. Writing the C# decimal that rounds to GM8's double is the whole fix:
+    // each constant below parses to exactly the bits the game has.
+    //
+    // This is not pedantry. `baseFriction - 1` subtracts almost all of the
+    // value away, so one ULP in 1.15 becomes fourteen in `basemaxspeed`; and a
+    // landing crawl backs off in eighths until a position is free, so an
+    // arbitrarily small difference either side of a boundary moves a character
+    // by a sixteenth of a pixel and keeps it there.
+
+    /// <summary>The double GM8 holds for the literal <c>0.6</c>.</summary>
+    public const double PointSix = 0.6000000000000001;
+
+    /// <summary>The double GM8 holds for the literal <c>0.85</c>.</summary>
+    public const double PointEightFive = 0.8500000000000001;
+
+    /// <summary>The double GM8 holds for the literal <c>1.15</c>.</summary>
+    public const double OnePointOneFive = 1.1500000000000001;
+
+    /// <summary>The double GM8 holds for the literal <c>0.65</c>.</summary>
+    public const double PointSixFive = 0.6500000000000001;
+
+    /// <summary>The double GM8 holds for the literal <c>0.35</c>.</summary>
+    public const double PointThreeFive = 0.35000000000000003;
+
+    // -- Comparisons ----------------------------------------------------------
+    //
+    // GML's comparison operators are FUZZY. Two reals compare equal when they
+    // are within 1e-13 of each other, and every other operator is built on that
+    // — so `a > b` is false for a difference smaller than the epsilon, and
+    // `sign(x)` is 0 for any x below it. Measured against the running game:
+    // 1e-13 is non-zero, 1e-14 is zero, and 1e6 differs from 1e6 + 1e-10, so the
+    // epsilon is absolute rather than relative.
+    //
+    // C# has none of this, and the difference is not academic. A crawl that
+    // consumes all of its allowance leaves `hleft` at about -2.7e-14 through
+    // ordinary cancellation; GML calls that zero and skips the wall check, while
+    // a literal `!= 0` takes it and slides the character six pixels down a
+    // sloping ceiling. That is one tick of input turning into a visible
+    // teleport, from a difference of 3e-14.
+    //
+    // Use these wherever the reference compares two reals. Integers, and
+    // anything already rounded to a collision box, do not need them.
+
+    /// <summary>How close two reals have to be before GML calls them equal.</summary>
+    public const double Epsilon = 1e-13;
+
+    /// <summary>GML <c>a == b</c>.</summary>
+    public static bool Equal(double a, double b) => Math.Abs(a - b) < Epsilon;
+
+    /// <summary>GML <c>a != b</c>.</summary>
+    public static bool NotEqual(double a, double b) => !Equal(a, b);
+
+    /// <summary>GML <c>a &gt; b</c>: greater, and by more than the epsilon.</summary>
+    public static bool Greater(double a, double b) => a > b && !Equal(a, b);
+
+    /// <summary>GML <c>a &lt; b</c>.</summary>
+    public static bool Less(double a, double b) => a < b && !Equal(a, b);
+
+    /// <summary>GML <c>a &gt;= b</c>: greater, or equal within the epsilon.</summary>
+    public static bool GreaterOrEqual(double a, double b) => a > b || Equal(a, b);
+
+    /// <summary>GML <c>a &lt;= b</c>.</summary>
+    public static bool LessOrEqual(double a, double b) => a < b || Equal(a, b);
+
+    /// <summary>
+    /// GML <c>sign()</c>, which is <b>0</b> for anything inside the epsilon.
+    /// </summary>
+    /// <remarks>
+    /// <c>Math.Sign</c> is only 0 for a true zero, and the movement solver feeds
+    /// <c>sign()</c> straight into a <c>place_free</c> probe offset — so the
+    /// difference is whether the character checks the cell beside it or the one
+    /// it is standing in.
+    /// </remarks>
+    public static int Sign(double value) => Equal(value, 0) ? 0 : Math.Sign(value);
 }

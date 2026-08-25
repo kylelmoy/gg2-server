@@ -1,3 +1,5 @@
+using Gg2.Protocol;
+
 namespace Gg2.Simulation;
 
 /// <summary>
@@ -57,7 +59,12 @@ public static class CharacterHitObstacle
 
         // "while we still have distance to travel". The 0.1 is the reference's:
         // below a tenth of a pixel there is nothing worth resolving.
-        while ((Math.Abs(hLeft) > 0.1 || Math.Abs(vLeft) > 0.1) && !stuck)
+        // Every comparison of two reals below goes through Gml, because GML's
+        // are fuzzy to 1e-13 and C#'s are not. This loop is where that stopped
+        // being academic: a crawl that uses up its whole allowance leaves hLeft
+        // at about -2.7e-14 from ordinary cancellation, and a literal `!= 0`
+        // then takes the wall branch the reference skips.
+        while ((Gml.Greater(Math.Abs(hLeft), 0.1) || Gml.Greater(Math.Abs(vLeft), 0.1)) && !stuck)
         {
             iterations++;
             if (iterations > MaxIterations)
@@ -81,11 +88,11 @@ public static class CharacterHitObstacle
             vLeft -= mover.Y - prevY;
 
             // A ceiling or a floor.
-            if (vLeft != 0 && !world.PlaceFree(box, mover.X, mover.Y + Math.Sign(vLeft), filter))
+            if (Gml.NotEqual(vLeft, 0) && !world.PlaceFree(box, mover.X, mover.Y + Gml.Sign(vLeft), filter))
             {
                 // Floors reset moveStatus; ceilings do not. Being knocked into a
                 // ceiling should not end a rocket jump.
-                if (vLeft > 0)
+                if (Gml.Greater(vLeft, 0))
                     mover.MoveStatus = 0;
 
                 vLeft = 0;
@@ -95,17 +102,17 @@ public static class CharacterHitObstacle
 
             // A wall to the left or right. Note this runs after the vertical
             // check, so vLeft may already be zero.
-            if (hLeft != 0 && !world.PlaceFree(box, mover.X + Math.Sign(hLeft), mover.Y, filter))
+            if (Gml.NotEqual(hLeft, 0) && !world.PlaceFree(box, mover.X + Gml.Sign(hLeft), mover.Y, filter))
             {
-                if (world.PlaceFree(box, mover.X + Math.Sign(hLeft), mover.Y - StepHeight, filter))
+                if (world.PlaceFree(box, mover.X + Gml.Sign(hLeft), mover.Y - StepHeight, filter))
                 {
                     // Walk up the step.
                     mover.Y -= StepHeight;
                     rectified = true;
                     mover.MoveStatus = 0;
                 }
-                else if (world.PlaceFree(box, mover.X + Math.Sign(hLeft), mover.Y + StepHeight, filter)
-                         && Math.Abs(mover.HSpeed) >= Math.Abs(mover.VSpeed))
+                else if (world.PlaceFree(box, mover.X + Gml.Sign(hLeft), mover.Y + StepHeight, filter)
+                         && Gml.GreaterOrEqual(Math.Abs(mover.HSpeed), Math.Abs(mover.VSpeed)))
                 {
                     // Sloping ceiling. Only taken when moving more sideways than
                     // vertically, or a fall would duck under every overhang.
@@ -125,7 +132,7 @@ public static class CharacterHitObstacle
             // left: the common case is falling sideways onto a corner, where
             // neither the floor test nor the wall test fires because the
             // obstruction is diagonal. Give up the vertical component.
-            if (!rectified && (Math.Abs(hLeft) >= 1 || Math.Abs(vLeft) >= 1))
+            if (!rectified && (Gml.GreaterOrEqual(Math.Abs(hLeft), 1) || Gml.GreaterOrEqual(Math.Abs(vLeft), 1)))
             {
                 mover.VSpeed = 0;
                 vLeft = 0;
@@ -175,11 +182,11 @@ public static class CharacterHitObstacle
         var leftX = probe.X;
         probe.X = oldX;
 
-        if (distanceUp < distanceDown && distanceUp < distanceRight && distanceUp < distanceLeft)
+        if (Gml.Less(distanceUp, distanceDown) && Gml.Less(distanceUp, distanceRight) && Gml.Less(distanceUp, distanceLeft))
             mover.Y = upY;
-        else if (distanceDown < distanceRight && distanceDown < distanceLeft)
+        else if (Gml.Less(distanceDown, distanceRight) && Gml.Less(distanceDown, distanceLeft))
             mover.Y = downY;
-        else if (distanceRight < distanceLeft)
+        else if (Gml.Less(distanceRight, distanceLeft))
             mover.X = rightX;
         else
             mover.X = leftX;

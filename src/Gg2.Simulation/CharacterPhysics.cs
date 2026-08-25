@@ -62,7 +62,10 @@ public static class CharacterPhysics
         // still counts.
         var downOrPressed = character.KeyState | character.PressedKeys;
 
-        if (character.VSpeed >= 0 && character.ObstacleBelow)
+        // Real-to-real comparisons go through Gml throughout this file: GML's
+        // are fuzzy to 1e-13 and C#'s are not, and `vspeed == 0` below decides
+        // whether a character walks down a step (see Gml.Equal).
+        if (Gml.GreaterOrEqual(character.VSpeed, 0) && character.ObstacleBelow)
         {
             character.OnGround = true;
             onNonSurfingGround = true;
@@ -87,7 +90,7 @@ public static class CharacterPhysics
         // The vspeed guard stops a jump re-launching a character already rising
         // faster than a jump would.
         if ((character.PressedKeys & PlayerKeys.Jump) != 0
-            && character.VSpeed > -ClassStats.BaseJumpStrength)
+            && Gml.Greater(character.VSpeed, -ClassStats.BaseJumpStrength))
         {
             if (character.OnGround && !stuckInWall)
             {
@@ -116,13 +119,13 @@ public static class CharacterPhysics
         // (Documentation/RateController.md). Do not "simplify" it away.
         for (var skip = 0; skip < 2; skip++)
         {
-            if ((downOrPressed & PlayerKeys.Left) != 0 && character.HSpeed >= -stats.BaseMaxSpeed)
+            if ((downOrPressed & PlayerKeys.Left) != 0 && Gml.GreaterOrEqual(character.HSpeed, -stats.BaseMaxSpeed))
             {
                 character.HSpeed -= stats.RunPower * controlFactor * 0.5;
                 character.Controlling = true;
             }
 
-            if ((downOrPressed & PlayerKeys.Right) != 0 && character.HSpeed <= stats.BaseMaxSpeed)
+            if ((downOrPressed & PlayerKeys.Right) != 0 && Gml.LessOrEqual(character.HSpeed, stats.BaseMaxSpeed))
             {
                 character.HSpeed += stats.RunPower * controlFactor * 0.5;
                 character.Controlling = true;
@@ -136,9 +139,9 @@ public static class CharacterPhysics
             // Way too fast, or being pushed while under the cap: use the base
             // friction rather than the moveStatus's. This is what stops a rocket
             // jump's low friction from making a running player unstoppable.
-            var overspeed = Math.Abs(character.HSpeed) > stats.BaseMaxSpeed * 2;
+            var overspeed = Gml.Greater(Math.Abs(character.HSpeed), stats.BaseMaxSpeed * 2);
             var pushingUnderCap = (downOrPressed & (PlayerKeys.Left | PlayerKeys.Right)) != 0
-                                  && Math.Abs(character.HSpeed) < stats.BaseMaxSpeed;
+                                  && Gml.Less(Math.Abs(character.HSpeed), stats.BaseMaxSpeed);
 
             character.HSpeed /= ClassStats.DeltaMultSkip(
                 overspeed || pushingUnderCap ? ClassStats.BaseFriction : frictionFactor);
@@ -148,7 +151,7 @@ public static class CharacterPhysics
         character.ReleasedKeys = PlayerKeys.None;
 
         // Anti ice-skating.
-        if (Math.Abs(character.HSpeed) < ClassStats.RestSpeed && !character.Controlling)
+        if (Gml.Less(Math.Abs(character.HSpeed), ClassStats.RestSpeed) && !character.Controlling)
             character.HSpeed = 0;
 
         if (!character.OnGround && !stuckInWall)
@@ -165,8 +168,10 @@ public static class CharacterPhysics
 
         // Per axis, independently: clamping the vector would let one component
         // shrink the other.
-        character.HSpeed = Math.Min(Math.Abs(character.HSpeed), ClassStats.MaxSpeed) * Math.Sign(character.HSpeed);
-        character.VSpeed = Math.Min(Math.Abs(character.VSpeed), ClassStats.MaxSpeed) * Math.Sign(character.VSpeed);
+        // min() and max() do NOT take the epsilon — measured — but sign() does,
+        // so a speed inside it is zeroed here rather than kept.
+        character.HSpeed = Math.Min(Math.Abs(character.HSpeed), ClassStats.MaxSpeed) * Gml.Sign(character.HSpeed);
+        character.VSpeed = Math.Min(Math.Abs(character.VSpeed), ClassStats.MaxSpeed) * Gml.Sign(character.VSpeed);
 
         UpdateSpinjump(world, ref character);
 
@@ -174,7 +179,7 @@ public static class CharacterPhysics
         // and that split is what makes the arc framerate-independent — it is
         // not stylistic, it defines the trajectory.
         character.VSpeed += character.AppliedGravity / 2;
-        if (character.VSpeed > ClassStats.TerminalVSpeed)
+        if (Gml.Greater(character.VSpeed, ClassStats.TerminalVSpeed))
             character.VSpeed = ClassStats.TerminalVSpeed;
 
         var target = world.PlaceFree(box, character.X + character.HSpeed, character.Y + character.VSpeed, filter);
@@ -210,12 +215,27 @@ public static class CharacterPhysics
         if (world.PlaceFree(box, character.X, character.Y + 1, filter))
             character.VSpeed += character.AppliedGravity / 2;
 
-        if (character.VSpeed > ClassStats.TerminalVSpeed)
+        if (Gml.Greater(character.VSpeed, ClassStats.TerminalVSpeed))
             character.VSpeed = ClassStats.TerminalVSpeed;
 
         character.AppliedGravity = 0;
 
         // Dropdown platform push-out goes here. Not implemented; see BeginStep.
+
+        // The GM8 automatic-movement round trip, and it is NOT decoration.
+        //
+        // Step.xml ends with `x -= hspeed; y -= vspeed;` purely to cancel the
+        // move GM8 makes on its own between Step and End Step. It is tempting to
+        // delete both halves as a no-op — but subtracting a value from a double
+        // and adding it straight back is not the identity in IEEE arithmetic. It
+        // loses a ULP whenever the intermediate needs more precision than the
+        // result: 511.490625 with vspeed -2.3000000000000034 comes back as
+        // 511.49062499999997, and the reference is running on that value.
+        //
+        // Note which hspeed/vspeed: the ones as of the END of Step, after the
+        // second half of gravity and the terminal clamp above.
+        character.X = character.X - character.HSpeed + character.HSpeed;
+        character.Y = character.Y - character.VSpeed + character.VSpeed;
     }
 
     /// <summary>
@@ -228,7 +248,7 @@ public static class CharacterPhysics
 
         // Climbing down stairs. Only when not falling — otherwise every fall
         // would snap to the next ledge down.
-        if (character.VSpeed == 0)
+        if (Gml.Equal(character.VSpeed, 0))
         {
             if (world.PlaceFree(box, character.X, character.Y + 6, filter))
             {
@@ -236,7 +256,7 @@ public static class CharacterPhysics
                 {
                     character.Y += 6;
                 }
-                else if (character.Speed > 6
+                else if (Gml.Greater(character.Speed, 6)
                          && world.PlaceFree(box, character.X, character.Y + 12, filter)
                          && !world.PlaceFree(box, character.X, character.Y + 13, filter))
                 {
@@ -247,7 +267,7 @@ public static class CharacterPhysics
             }
         }
 
-        if (character.Hp > character.Stats.MaxHp)
+        if (Gml.Greater(character.Hp, character.Stats.MaxHp))
             character.Hp = character.Stats.MaxHp;
 
         // Facing, from the aim. Note this is the only thing that writes Facing,
@@ -256,8 +276,16 @@ public static class CharacterPhysics
 
         // Clamp into the map. map_width() measures the ART, not the walkmask —
         // on gg_debug those differ (docs/SIMULATION.md).
-        character.X = Math.Clamp(character.X, 0, world.Width);
-        character.Y = Math.Clamp(character.Y, 0, world.Height);
+        // Written out as four tests rather than a clamp, because that is what
+        // the reference does and GML's comparisons carry the epsilon.
+        if (Gml.Less(character.X, 0))
+            character.X = 0;
+        if (Gml.Greater(character.X, world.Width))
+            character.X = world.Width;
+        if (Gml.Less(character.Y, 0))
+            character.Y = 0;
+        if (Gml.Greater(character.Y, world.Height))
+            character.Y = world.Height;
     }
 
     /// <summary>
@@ -267,9 +295,11 @@ public static class CharacterPhysics
     private static (double Control, double Friction) ControlAndFriction(in CharacterState character) =>
         character.MoveStatus switch
         {
-            1 => (0.65, 1.0),       // rocketing myself
-            2 => (0.45, 1.05),      // rocketed by an enemy
-            3 => (0.35, 1.05),      // airblast
+            // The two odd-looking literals are GM8's own doubles for 0.65 and
+            // 0.35, which it parses one ULP above the IEEE nearest — see Gml.
+            1 => (Gml.PointSixFive, 1.0),   // rocketing myself
+            2 => (0.45, 1.05),              // rocketed by an enemy
+            3 => (Gml.PointThreeFive, 1.05), // airblast
             4 => (ClassStats.BaseControl, 1.0), // rocketed by a team-mate
 
             // Humiliation costs 0.2 of control and is not modelled yet; intel
@@ -293,12 +323,12 @@ public static class CharacterPhysics
         var box = character.Box;
         var filter = character.Filter;
 
-        var turned = Math.Sign(character.HSpeed) > 0
+        var turned = Gml.Sign(character.HSpeed) > 0
             ? character.LastFacing > character.Facing
             : character.LastFacing < character.Facing;
 
         var rubbingWall = !world.PlaceFree(
-            box, character.X + Math.Sign(character.HSpeed), character.Y, filter);
+            box, character.X + Gml.Sign(character.HSpeed), character.Y, filter);
 
         character.Spinjumping = turned && rubbingWall;
         character.LastFacing = character.Facing;
@@ -312,7 +342,7 @@ public static class CharacterPhysics
 
         var valid = world.PlaceFree(box, character.X, character.Y - gravity, filter);
         var airborneOrRising = world.PlaceFree(box, character.X, character.Y + 1, filter)
-                               || character.VSpeed < 0;
+                               || Gml.Less(character.VSpeed, 0);
 
         if (valid && airborneOrRising)
             character.AppliedGravity -= gravity;

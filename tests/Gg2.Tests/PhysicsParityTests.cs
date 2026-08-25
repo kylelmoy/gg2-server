@@ -40,7 +40,9 @@ public sealed class PhysicsParityTests
         double nudgeY = 0,
         bool stopAtFirstBadTick = true)
     {
-        var simulation = new PortedSimulation(MapLoader) { AnchorNudgeX = nudgeX, AnchorNudgeY = nudgeY };
+        var simulation = new PortedSimulation(MapLoader);
+        if (nudgeX != 0 || nudgeY != 0)
+            simulation.Nudges[0] = new AnchorNudge(nudgeX, nudgeY, 0, 0);
 
         return new Replayer(simulation) { Compare = Fields.Trajectory | Fields.Hp }
             .Replay(BotTrace, map, ticks, mode, stopAtFirstBadTick);
@@ -75,69 +77,101 @@ public sealed class PhysicsParityTests
     }
 
     /// <summary>
-    /// The residual mismatch is <b>not</b> explained by the anchor's position
-    /// quantisation — which is worth knowing, because it was the obvious
-    /// explanation and it is wrong.
+    /// The residual mismatch <b>is</b> the anchor's quantisation, not the
+    /// arithmetic.
     /// </summary>
     /// <remarks>
     /// A trace anchors from the wire, which carries position to a fifth of a
-    /// pixel, so a replay necessarily starts somewhere inside that bin rather
-    /// than on the reference's own value. If that were the whole story, some
-    /// offset inside the bin would replay exactly. None does.
+    /// pixel and velocity to <c>1/8.5</c> px/tick, so a replay necessarily
+    /// starts somewhere inside those bins rather than on the state the reference
+    /// was actually in. That makes a closed-loop replay of a <em>mid-game</em>
+    /// recording unable to reach zero by construction, and it is why
+    /// <see cref="PhysicsSampleTests"/> exists: there the start state is chosen
+    /// exactly and the gate is bit equality.
     /// <para>
-    /// So this test pins the negative result rather than pretending it is a
-    /// positive one: sweeping ±0.1px on the affected slot never reaches zero,
-    /// which means there is a genuine sub-pixel difference in the arithmetic
-    /// still to find. docs/PLAN.md phase 4 is explicit that a persistent
-    /// one-unit difference is a real ordering bug rather than noise, and the
-    /// gate stays un-loosened until it is found.
+    /// <b>This test used to assert the opposite</b>, on a sweep that nudged only
+    /// the slot that failed first. That sweep never reached zero — but not
+    /// because the arithmetic was wrong: it bottomed out on the <em>next</em>
+    /// slot's residual, which no offset applied to this slot can touch. Every
+    /// anchored character has its own independent bin, so the experiment has to
+    /// be per-slot.
     /// </para>
     /// <para>
-    /// Still to rule out: the anchor's <em>velocity</em>, which the wire
-    /// quantises far more coarsely than position — a whole 1/8.5 px/tick — and
-    /// which decides where a landing crawl stops.
+    /// Settled live, and this is the measurement that matters: driving the
+    /// reference engine's own <c>Character</c> events through this trace's
+    /// recorded inputs, from this same wire-quantised anchor, the engine
+    /// produces <c>y = 516.6899190010863</c> entering tick 218 — wire 2583, the
+    /// port's answer, and one unit away from what its own recording said. The
+    /// engine disagrees with itself by exactly the amount this replay does. See
+    /// docs/SIMULATION.md.
     /// </para>
     /// </remarks>
     [Fact]
-    public void ResidualMismatchIsNotTheAnchorsPositionQuantisation()
+    public void NudgingEachSlotInsideItsOwnBinPushesTheDivergenceLater()
     {
         var (trace, ticks) = Load();
 
-        // Which slot the residual mismatch is on. Nudging every character at
-        // once is the wrong experiment: an offset that fixes one can break
-        // another, and the total never reaches zero for reasons that have
-        // nothing to do with either.
         var baseline = Replay(ticks, trace.Header.Map, ReplayMode.ClosedLoop);
         Assert.NotEmpty(baseline.Mismatches);
-        var slot = baseline.Mismatches[0].Slot;
 
-        var best = baseline.Mismatches.Count;
-        double bestOffset = 0;
+        // Greedy, one slot at a time: fix whichever slot fails first by sweeping
+        // its own y across its own bin, then look at what fails next.
+        var nudges = new Dictionary<int, AnchorNudge>();
+        var reached = baseline.TicksReplayed;
 
-        // The bin is one fifth of a pixel wide, so ±0.1 covers it.
-        for (var nudge = -0.1; nudge <= 0.1001; nudge += 0.002)
+        for (var round = 0; round < 4; round++)
         {
-            var simulation = new PortedSimulation(MapLoader) { AnchorNudgeY = nudge, NudgeSlot = slot };
-
-            var report = new Replayer(simulation) { Compare = Fields.Trajectory | Fields.Hp }
-                .Replay(BotTrace, trace.Header.Map, ticks, ReplayMode.ClosedLoop);
-
-            if (report.Mismatches.Count >= best)
-                continue;
-
-            best = report.Mismatches.Count;
-            bestOffset = nudge;
-
-            if (best == 0)
+            var report = Run(ticks, trace.Header.Map, nudges);
+            if (report.Mismatches.Count == 0)
                 break;
+
+            var slot = report.Mismatches[0].Slot;
+            var best = report.TicksReplayed;
+            AnchorNudge? bestNudge = null;
+
+            // The bin is a fifth of a pixel wide, so ±0.1 covers it.
+            for (var nudge = -0.1; nudge <= 0.1001; nudge += 0.002)
+            {
+                var candidate = new AnchorNudge(0, Math.Round(nudge, 4), 0, 0);
+                nudges[slot] = candidate;
+
+                var swept = Run(ticks, trace.Header.Map, nudges);
+                if (swept.TicksReplayed <= best)
+                    continue;
+
+                best = swept.TicksReplayed;
+                bestNudge = candidate;
+            }
+
+            nudges.Remove(slot);
+            if (bestNudge is null)
+                break;
+
+            nudges[slot] = bestNudge.Value;
+            reached = best;
         }
 
-        // The measured result, pinned so it is noticed if it changes in either
-        // direction. If a later fix makes this reach zero, this test should be
-        // turned back into the positive assertion it was written as.
-        Assert.Equal(1, best);
-        Assert.True(Math.Abs(bestOffset) <= 0.1, $"best offset {bestOffset} left the bin");
-        Assert.True(slot >= 0);
+        // The measured result. Each slot's first divergence is inside its own
+        // anchor bin and clears when the anchor moves within it; what stops the
+        // greedy walk at the end is a later divergence on a slot it has already
+        // spent its one offset on, not a residual it cannot explain.
+        Assert.True(reached > 380,
+            $"nudging inside the bins only reached tick {reached}, was expecting past 380");
+        Assert.True(reached > baseline.TicksReplayed,
+            $"nudging did not help at all: {reached} vs {baseline.TicksReplayed}");
+    }
+
+    private static DriftReport Run(
+        IReadOnlyList<TraceTick> ticks,
+        string map,
+        IReadOnlyDictionary<int, AnchorNudge> nudges)
+    {
+        var simulation = new PortedSimulation(MapLoader);
+        foreach (var (slot, nudge) in nudges)
+            simulation.Nudges[slot] = nudge;
+
+        return new Replayer(simulation) { Compare = Fields.Trajectory | Fields.Hp }
+            .Replay(BotTrace, map, ticks, ReplayMode.ClosedLoop);
     }
 
     /// <summary>

@@ -44,11 +44,14 @@ observable simulation; owe GM8 nothing else. Concretely:
 - Objects, events, `with()` blocks, alarms, user events, `instance_deactivate`.
   These are how GM8 expresses control flow; C# has better ones.
 - `ds_list` / `ds_grid` / `buffer_*` and the whole GM8 data-structure layer.
-- The automatic-movement dance. GM8 adds `hspeed`/`vspeed` to `x`/`y` between
-  the Step and End Step events, so `Character.events/Step.xml` ends with
-  `x -= hspeed; y -= vspeed;` purely to cancel it. **In C# you apply the
-  movement once and delete both lines.** Any GML that looks nonsensical is
-  usually this kind of thing.
+- ~~The automatic-movement dance.~~ **This was wrong, and it is measured.** GM8
+  adds `hspeed`/`vspeed` to `x`/`y` between the Step and End Step events, so
+  `Character.events/Step.xml` ends with `x -= hspeed; y -= vspeed;` to cancel it
+  — but subtracting a double and adding it straight back **is not the identity**.
+  It loses a ULP whenever the intermediate needs more precision than the result:
+  `y = 511.490625` with `vspeed = -2.3000000000000034` comes back as
+  `511.49062499999997`, and the reference carries on from that value. Reproduce
+  the round trip; see "Settled: the automatic-movement round trip" below.
 - The loopback TCP socket the host uses to talk to itself.
 - Drawing, sprites, particles, sounds, the HUD, the view/camera.
 - Server-side RNG. `random()` and `choose()` appear in spawn-team selection,
@@ -288,6 +291,9 @@ Port that decoder rather than re-deriving the format.
 - SIMD and parallelism are fine *across* independent characters, but never let a
   vectorised reduction change the order of a floating-point accumulation that
   the client also performs.
+- **GM8 does not parse every decimal literal to the nearest double, and GML's
+  comparisons are fuzzy.** Both are measured; both change trajectories. See the
+  two sections below.
 
 ## GM8 semantics that will bite
 
@@ -296,7 +302,8 @@ recorded in `gg2-agent/GML.md`.
 
 - **Automatic movement.** Described above — GM8 adds velocity to position
   between Step and End Step. `x -= hspeed` at the end of a Step event means "undo
-  the engine's move", not "move backwards".
+  the engine's move", not "move backwards". It does **not** cancel exactly, so
+  both halves have to be reproduced.
 - **Event phases are global, not per-instance.** GM8 runs Begin Step for *every*
   instance, then Step for every instance, then the automatic move, then End Step.
   A character's Begin Step therefore sees every other character's *previous*
@@ -495,3 +502,100 @@ holding on to:
   `hspeed*8.5` in a signed byte: `+15 -> 127.5 -> 128 -> clamps to 127`, while
   `-15 -> -127.5 -> -128`, which fits. A parity harness that expects ±127 will
   report a phantom mismatch at terminal leftward speed.
+
+### Settled: GM8's decimal literals are not always the nearest double
+
+Measured against the running game on 2026-08-25, by pulling the mantissa out of
+a live value a chunk at a time (`tools/sample-physics.js` has the encoder; the
+game's own `string_format` is only good to about sixteen significant digits and
+the seventeenth is noise, which is useless when the question is a single ULP).
+
+| GML text | GM8 holds | IEEE nearest | |
+|---|---|---|---|
+| `0.6` | `0.6000000000000001` | `0.6` | **+1 ULP** |
+| `0.85` | `0.8500000000000001` | `0.85` | **+1 ULP** |
+| `1.15` | `1.1500000000000001` | `1.15` | **+1 ULP** |
+| `0.65` | `0.6500000000000001` | `0.65` | **+1 ULP** |
+| `0.35` | `0.35000000000000003` | `0.35` | **+1 ULP** |
+| `0.1` `0.2` `0.45` `0.54` `0.9` `1.05` `1.4` `8.3` `0.195` | same | same | |
+
+Computing the same value instead of writing it — `3/5`, `23/20`, `17/20` — gives
+the IEEE-nearest double, so this is the literal parser and not the arithmetic.
+
+Those five are gravity, `baseControl`, `baseFriction`, and two of the rocket
+jump's control factors. `Gg2.Protocol.Gml` holds each of them as the C# decimal
+that rounds to GM8's double, and `ClassStats` takes them from there.
+
+**One ULP is not cosmetic here, for two reasons.** `basemaxspeed` is
+`abs(baseRunPower * baseControl / (baseFriction - 1))`, and that subtraction
+throws away almost the whole value: one ULP in `baseFriction` comes out as
+**fourteen** in `basemaxspeed` (`7.933333333333326` against
+`7.933333333333338` for a scout). And `good_move_contact_solid` backs out of an
+obstruction in eighths of a pixel until a position is free, so a difference far
+below any sensible epsilon lands on the other side of a boundary and stays there
+as a sixteenth of a pixel.
+
+### Settled: GML's comparisons are fuzzy, to 1e-13
+
+`a == b` in GML is true when `|a - b| < 1e-13`, and every other comparison is
+built on that. Measured: `1e-13 != 0` is true, `1e-14 != 0` is false,
+`sign(1e-14)` is `0`, and `1e6` still differs from `1e6 + 1e-10` — so the epsilon
+is **absolute**, not relative. `min()` and `max()` do *not* use it and return the
+raw value.
+
+The rules that reproduce every measured case:
+
+| GML | C# |
+|---|---|
+| `a == b` | `Math.Abs(a - b) < 1e-13` |
+| `a > b` | `a > b && !Equal(a, b)` |
+| `a >= b` | `a > b \|\| Equal(a, b)` |
+| `sign(x)` | `Equal(x, 0) ? 0 : Math.Sign(x)` |
+
+`Gg2.Protocol.Gml` has all of them, and every real-to-real comparison in
+`Gg2.Simulation` goes through them.
+
+**What this costs if you skip it.** In `characterHitObstacle`, a crawl that uses
+up its whole allowance leaves `hleft` at about `-2.7e-14` through ordinary
+cancellation. GML calls that zero and skips the wall check entirely. C#'s
+`hleft != 0` takes it, finds a wall, and slides the character **six pixels** down
+a sloping ceiling — one tick of input turning into a visible teleport, from a
+difference of 3e-14.
+
+### Settled: the automatic-movement round trip
+
+`Character.events/Step.xml` ends with `x -= hspeed; y -= vspeed;`, and GM8 adds
+both back before End Step. That pair is **not** a no-op: `(y - v) + v` differs
+from `y` by a ULP whenever the intermediate needs more precision. Reproduce it at
+the end of the Step phase, using `hspeed`/`vspeed` as of that point — after the
+second half of gravity and the terminal clamp, not the values the move used.
+
+### Settled: `floor()` truncates through a 32-bit integer
+
+GM8's `floor` wraps above 2^31: `floor(5153960755.2)` returns `858993459`. It
+does not come up in the physics, where every floored value is a screen
+coordinate, but it does come up in any tool that pulls bits out of a double, and
+it fails silently.
+
+### Settled: the character update matches the engine exactly
+
+`tests/Gg2.Tests/Fixtures/physics-samples.json` is 48 whole trajectories — three
+classes, two maps, 48 ticks each — driven inside the running game from start
+states chosen exactly, with position and velocity read back to the last bit. The
+port reproduces every one of them **bit for bit**. Regenerate with
+`node tools/sample-physics.js` against a running dedicated server with bots.
+
+This is the gate phase 4 is actually held to, and it exists because a recorded
+trace cannot do the job: the wire carries position to a fifth of a pixel and
+velocity to `1/8.5` px/tick, so a closed-loop replay of a *mid-game* recording
+starts inside those bins rather than on the reference's own state, and a residual
+of one wire unit cannot be attributed to either side.
+
+That is not a guess. Driving the reference engine's own `Character` events
+through `reference-ctf_truefort-bots.trace`'s recorded inputs, from the same
+wire-quantised anchor the replayer uses, the engine lands on
+`y = 516.6899190010863` entering tick 218 — wire **2583**, the port's answer, and
+one unit away from what its own recording said at that tick. Over the same 201
+ticks the port and the engine agree on `x`, `y`, `hspeed` and `vspeed` to the
+last bit on every one. The engine disagrees with its own recording by exactly
+the amount the replay does, for exactly the same reason.

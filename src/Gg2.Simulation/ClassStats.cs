@@ -8,29 +8,35 @@ namespace Gg2.Simulation;
 /// </summary>
 public readonly record struct ClassStats
 {
-    /// <summary>Every class shares this. <c>Character.events/Create.xml:168</c>.</summary>
-    public const double BaseControl = 0.85;
+    /// <summary>
+    /// <c>Character.events/Create.xml:168</c> writes <c>0.85</c>. This is the
+    /// double Game Maker 8 actually ends up holding, which is one ULP higher —
+    /// see <see cref="Gml"/>.
+    /// </summary>
+    public const double BaseControl = Gml.PointEightFive;
 
     /// <summary>
     /// Every class shares this too. It must never be 0 or 1 — the reference
     /// says so in a comment, because <see cref="BaseMaxSpeed"/> divides by
-    /// <c>baseFriction - 1</c>.
+    /// <c>baseFriction - 1</c>, and that subtraction is where the ULP below
+    /// stops being cosmetic.
     /// </summary>
-    public const double BaseFriction = 1.15;
+    public const double BaseFriction = Gml.OnePointOneFive;
 
     /// <summary>
-    /// <c>8 + 0.6/2</c>. The half-gravity term compensates for the split
-    /// gravity: half a tick's worth is applied before the move and half after,
-    /// so the launch has to be larger by the half that no longer lands on the
-    /// first frame. Get this wrong and every jump in the game is the wrong
-    /// height.
+    /// <c>8 + (0.6/2)</c>, exactly as <c>Character.events/Create.xml:29</c>
+    /// writes it. The half-gravity term compensates for the split gravity: half
+    /// a tick's worth is applied before the move and half after, so the launch
+    /// has to be larger by the half that no longer lands on the first frame. Get
+    /// this wrong and every jump in the game is the wrong height.
     /// </summary>
-    public const double BaseJumpStrength = 8 + (0.6 / 2);
+    public const double BaseJumpStrength = 8 + (Gravity / 2);
 
     /// <summary>Gravity per tick, normal.</summary>
-    public const double Gravity = 0.6;
+    public const double Gravity = Gml.PointSix;
 
     /// <summary>Gravity per tick while rocket-jumping — lighter, so the arc carries.</summary>
+    /// <remarks><c>0.54</c> is one of the literals GM8 parses to the IEEE nearest.</remarks>
     public const double RocketJumpGravity = 0.54;
 
     /// <summary>Terminal fall speed. Note it clamps only downward.</summary>

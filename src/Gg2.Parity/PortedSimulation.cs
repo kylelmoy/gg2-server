@@ -18,6 +18,16 @@ namespace Gg2.Parity;
 /// written before it existed.
 /// </para>
 /// </remarks>
+/// <summary>
+/// How far inside its wire quantisation bin an anchored character is placed.
+/// </summary>
+/// <remarks>
+/// All four components are the amount to <em>add</em> to what the wire said, in
+/// world pixels and pixels per tick. Zero is the naive anchor: the bottom of the
+/// bin, which is where a replay lands if it simply divides the wire value back.
+/// </remarks>
+public readonly record struct AnchorNudge(double X, double Y, double HSpeed, double VSpeed);
+
 public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSimulation
 {
     private readonly Dictionary<int, CharacterState> _characters = [];
@@ -34,24 +44,27 @@ public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSim
     public Dictionary<int, Team> Teams { get; } = [];
 
     /// <summary>
-    /// A sub-quantisation nudge applied to the anchored position, in world
-    /// pixels.
+    /// A per-slot offset applied to an anchored character, inside the wire's own
+    /// quantisation.
     /// </summary>
     /// <remarks>
     /// A diagnostic, not a fudge. A trace anchors from the wire, which carries
-    /// position to a fifth of a pixel — so the true state the reference was in
-    /// is only known to within ±0.1px, and a replay starts from somewhere inside
-    /// that bin rather than on the reference's own value. Sweeping the nudge
-    /// across the bin answers the question the gate actually cares about: is a
-    /// residual mismatch a difference in the arithmetic, or just the anchor? If
-    /// some offset inside the bin replays exactly, the arithmetic agrees.
+    /// position to a fifth of a pixel and velocity to <c>1/8.5</c> px/tick — so
+    /// the state the reference was actually in is only known to within
+    /// <c>±0.1</c>px and <c>±1/17</c>px/tick, and a replay starts from somewhere
+    /// inside those bins rather than on the reference's own values. Sweeping the
+    /// offset across a bin answers the question the gate actually cares about: is
+    /// a residual mismatch a difference in the arithmetic, or just the anchor?
+    /// <para>
+    /// <b>Per slot, and that matters.</b> Every anchored character has its own
+    /// independent bin, so one shared offset is not the experiment — it asks
+    /// whether one number happens to suit every character at once, which is a
+    /// much stronger and quite different claim. Sweeping a single slot while the
+    /// others stay wrong measures the same thing from the other side: the sweep
+    /// bottoms out at the *next* slot's residual, not at zero.
+    /// </para>
     /// </remarks>
-    public double AnchorNudgeY { get; init; }
-
-    public double AnchorNudgeX { get; init; }
-
-    /// <summary>Which slot the nudge applies to. All of them when null.</summary>
-    public int? NudgeSlot { get; init; }
+    public Dictionary<int, AnchorNudge> Nudges { get; } = [];
 
     public void LoadMap(string map)
     {
@@ -69,11 +82,11 @@ public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSim
         // Wire units back to world units. The wire is the lossy side, so this
         // is the best anchor available — and it is exactly what the client does
         // when it applies a QUICK_UPDATE.
-        var nudged = NudgeSlot is null || NudgeSlot == slot;
-        character.X = observed.X / 5.0 + (nudged ? AnchorNudgeX : 0);
-        character.Y = observed.Y / 5.0 + (nudged ? AnchorNudgeY : 0);
-        character.HSpeed = observed.HSpeed / 8.5;
-        character.VSpeed = observed.VSpeed / 8.5;
+        var nudge = Nudges.GetValueOrDefault(slot);
+        character.X = observed.X / 5.0 + nudge.X;
+        character.Y = observed.Y / 5.0 + nudge.Y;
+        character.HSpeed = observed.HSpeed / 8.5 + nudge.HSpeed;
+        character.VSpeed = observed.VSpeed / 8.5 + nudge.VSpeed;
         character.Hp = observed.Hp;
 
         character.KeyState = observed.Keys;
@@ -92,6 +105,13 @@ public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSim
 
         _characters[slot] = character;
     }
+
+    /// <summary>The full double-precision state of a slot, for diagnostics.</summary>
+    /// <remarks>
+    /// The wire view in <see cref="TryGetCharacter"/> is quantised, which is
+    /// exactly what a hunt for a sub-wire-unit difference cannot see through.
+    /// </remarks>
+    public bool TryGetState(int slot, out CharacterState state) => _characters.TryGetValue(slot, out state);
 
     public void SetPlayerClass(int slot, PlayerClass playerClass) => Classes[slot] = playerClass;
 

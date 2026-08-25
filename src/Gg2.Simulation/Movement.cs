@@ -1,3 +1,5 @@
+using Gg2.Protocol;
+
 namespace Gg2.Simulation;
 
 /// <summary>Where a character is, for the movement primitives.</summary>
@@ -74,7 +76,10 @@ public static class Movement
     {
         contact = default;
 
-        if (maxDistance <= 0)
+        // GML's comparisons are fuzzy — see Gml.Equal. A maxDistance inside the
+        // epsilon counts as zero here, which is how a crawl with nothing left to
+        // do returns without moving.
+        if (Gml.LessOrEqual(maxDistance, 0))
             return 0;
 
         var radians = directionDegrees * Math.PI / 180.0;
@@ -83,13 +88,13 @@ public static class Movement
 
         // Scales the vector so its dominant axis is one pixel per full step.
         var sfac = Math.Max(Math.Abs(hvec), Math.Abs(vvec));
-        if (sfac == 0)
+        if (Gml.Equal(sfac, 0))
             return 0;
 
         var totalMoved = 0.0;
         var i = MaxI;
 
-        while (totalMoved < maxDistance && i > 0)
+        while (Gml.Less(totalMoved, maxDistance) && i > 0)
         {
             var remaining = Math.Min(1, maxDistance - totalMoved);
 
