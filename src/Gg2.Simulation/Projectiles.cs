@@ -1841,8 +1841,15 @@ public static class Projectiles
         {
             var bubbleHandle = state.LiveProjectileHandle(i);
 
+            // ⚠️ Both masks, not both boxes. A pellet arriving at a bubble is
+            // rotated to its heading, so its box answers yes for pairs that
+            // never touch. See ProjectileMask.
             if (state.Projectiles[bubbleHandle.Index].Kind != ProjectileKind.Bubble
-                || !projectileBox.Overlaps(state.Projectiles[bubbleHandle.Index].Box))
+                || !ProjectileMask.Overlaps(
+                        in state.Projectiles[handle.Index],
+                        in projectileBox,
+                        in state.Projectiles[bubbleHandle.Index],
+                        state.Projectiles[bubbleHandle.Index].Box))
             {
                 i++;
                 continue;
@@ -2163,8 +2170,13 @@ public static class Projectiles
         {
             var otherHandle = state.LiveProjectileHandle(i);
 
+            // Both masks, the same as HitBubble's side of the pair.
             if (otherHandle == handle
-                || !bubbleBox.Overlaps(state.Projectiles[otherHandle.Index].Box))
+                || !ProjectileMask.Overlaps(
+                        in state.Projectiles[handle.Index],
+                        in bubbleBox,
+                        in state.Projectiles[otherHandle.Index],
+                        state.Projectiles[otherHandle.Index].Box))
             {
                 i++;
                 continue;

@@ -158,6 +158,60 @@ public static class ProjectileMask
         new Transform(projectile).Covers(px, py);
 
     /// <summary>
+    /// <c>place_meeting</c> between two projectiles, where <b>both</b> masks are
+    /// rotated rectangles and a pixel has to be inside each.
+    /// </summary>
+    /// <remarks>
+    /// The last overlap in the port that was still comparing two bounding boxes.
+    /// Only Quote's bubbles ever meet another projectile
+    /// (<see cref="Projectiles"/>'s <c>HitBubble</c> and
+    /// <c>BubbleHitProjectiles</c>), and a pellet arriving at one is rotated to
+    /// its heading — so the box answered yes for pairs that never touched.
+    /// <para>
+    /// ⚠️ <b>Both boxes are the broad phase, and their intersection bounds the
+    /// scan.</b> Neither mask reaches outside its own box, so a pixel outside
+    /// either box cannot be in both masks — which is what makes walking only the
+    /// overlap correct rather than merely cheaper.
+    /// </para>
+    /// </remarks>
+    public static bool Overlaps(
+        in ProjectileState first,
+        in Aabb firstBox,
+        in ProjectileState second,
+        in Aabb secondBox)
+    {
+        var left = Math.Max(firstBox.Left, secondBox.Left);
+        var right = Math.Min(firstBox.Right, secondBox.Right);
+        var top = Math.Max(firstBox.Top, secondBox.Top);
+        var bottom = Math.Min(firstBox.Bottom, secondBox.Bottom);
+
+        if (left > right || top > bottom)
+            return false;
+
+        // Both unrotated: each mask fills its box, so the boxes overlapping is
+        // the whole answer and the scan would only confirm it.
+        var firstFlat = Gml.Equal(first.ImageAngle % 360, 0);
+        var secondFlat = Gml.Equal(second.ImageAngle % 360, 0);
+
+        if (firstFlat && secondFlat)
+            return true;
+
+        var a = new Transform(first);
+        var b = new Transform(second);
+
+        for (var y = top; y <= bottom; y++)
+        {
+            for (var x = left; x <= right; x++)
+            {
+                if ((firstFlat || a.Covers(x, y)) && (secondFlat || b.Covers(x, y)))
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// <c>place_free</c> against the MAP: whether the projectile's mask clears
     /// every solid, rather than whether its bounding box does.
     /// </summary>

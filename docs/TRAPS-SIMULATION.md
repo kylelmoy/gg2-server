@@ -2259,6 +2259,20 @@ list. Attribution checked by mutation: forcing the narrow phase to block
 reproduces **exactly 330** on `koth_valley`, the pre-change number, so the whole
 gain is this and nothing else.
 
-⬅️ **Still on the box: projectile vs projectile** — the two Bubble sites. Those
-need *both* masks, so they want a two-projectile overload rather than either
-existing one.
+✅ **And projectile vs projectile closed with it** — the two Bubble sites, where
+**both** masks are rotated rectangles and a pixel has to be inside each. Only
+Quote's bubbles ever meet another projectile, and a pellet arriving at one is
+rotated to its heading, so the box answered yes for pairs that never touched.
+
+⚠️ **That one moved no fixture window at all**, and neither did the sentry and
+bubble *ordering* changes. **Three of this session's changes are rule
+consistency with no measurement behind them**, and each says so where it lives:
+no recording has a pellet grazing a bubble, or two sentries overlapping one
+projectile. They rest on the character and map cases, which were measured.
+`RotatedMaskSampleTests.TwoProjectilesCanShareABoxCornerWithoutTheirMasksMeeting`
+is the only thing that would notice a regression in the bubble pair — a rocket at
+45° and a bubble sharing exactly one box pixel, which is the corner of the
+rocket's box its diagonal mask does not reach.
+
+**Every overlap in the port now tests the mask.** The box survives only as the
+broad phase in front of each one.

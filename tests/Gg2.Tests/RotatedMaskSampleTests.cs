@@ -514,4 +514,62 @@ public sealed class RotatedMaskSampleTests
 
         return (wrong, total, structural);
     }
+
+    /// <summary>
+    /// ⚠️ <b>Two projectiles whose boxes overlap and whose masks do not — the
+    /// case the bubble sites were getting wrong.</b>
+    /// </summary>
+    /// <remarks>
+    /// <b>This is the only gate the two-projectile overload has, and it needs
+    /// one.</b> Wiring it into <c>HitBubble</c> and <c>BubbleHitProjectiles</c>
+    /// moved <b>no</b> fixture window — Quote's blade is the only source of
+    /// bubbles and no recording has a pellet grazing one — so unlike the
+    /// character path there is no recording to notice a regression here.
+    /// <para>
+    /// The geometry is chosen so the two boxes touch at exactly one pixel, and
+    /// that pixel is the corner of the rocket's box furthest from its mask: a
+    /// rocket at 45° is a diagonal bar, and its box's top-left corner is empty.
+    /// The control below asserts the boxes really do overlap, because without it
+    /// this test would pass just as well against geometry that never touched at
+    /// all.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void TwoProjectilesCanShareABoxCornerWithoutTheirMasksMeeting()
+    {
+        var rocket = new ProjectileState
+        {
+            Kind = ProjectileKind.Rocket,
+            X = 1000,
+            Y = 1000,
+            ImageAngle = 45,
+        };
+
+        // Placed so its box's bottom-right corner is the rocket box's top-left.
+        var bubble = new ProjectileState
+        {
+            Kind = ProjectileKind.Bubble,
+            X = 994,
+            Y = 990,
+        };
+
+        var rocketBox = rocket.Box;
+        var bubbleBox = bubble.Box;
+
+        // The control: one shared pixel, so the box test says they meet.
+        Assert.Equal(999, rocketBox.Left);
+        Assert.Equal(995, rocketBox.Top);
+        Assert.Equal(999, bubbleBox.Right);
+        Assert.Equal(995, bubbleBox.Bottom);
+        Assert.True(rocketBox.Overlaps(bubbleBox), "the boxes must overlap or this proves nothing");
+
+        // The bubble is unrotated, so its mask fills its box and it covers the
+        // shared pixel. The rocket does not: at 45° that corner is empty.
+        Assert.True(ProjectileMask.Covers(bubble, 999, 995));
+        Assert.False(ProjectileMask.Covers(rocket, 999, 995));
+
+        Assert.False(
+            ProjectileMask.Overlaps(in rocket, in rocketBox, in bubble, in bubbleBox),
+            "the masks do not share a pixel, so the projectiles are not touching");
+    }
 }
