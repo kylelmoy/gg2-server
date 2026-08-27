@@ -70,6 +70,40 @@ public static class BotClassKeys
         // reach — without it a pyro with no target holds the trigger for ever.
         var hasSubject = state.Target.Exists || subjectIsAlly;
 
+        // Does the shot this bot is lined up on actually have a path to what it is
+        // aimed at?
+        //
+        // ⚠️ Nothing else in the bot layer ever asks. Every sight test is a straight
+        // chest-to-chest line, while the aim solver deliberately aims ABOVE the
+        // target to compensate for drop — ~178px of it at 500px for a Minegun round.
+        // So a demoman with a clear straight line to a target across a room is aiming
+        // a whole storey above it, and indoors that is the reported "sometimes
+        // shooting at the ceiling". See BotArc.
+        //
+        // ⚠️ Only for the two classes whose shot kills them if it goes off next to
+        // them, and only with a subject. Everyone else pays nothing: a scattergun
+        // round that clips a lintel costs ammo the class has plenty of, and
+        // withholding would make a scout stop firing in exactly the corridors it
+        // wants to be firing in.
+        //
+        // Computed once here rather than in the two branches, because it is the same
+        // test for both.
+        var arcClear = true;
+
+        if (state.Target.Exists
+            && world.Character(slot).Class is PlayerClass.Soldier or PlayerClass.Demoman)
+        {
+            var (speed, gravity, _) = BotAim.Ballistics(in world.Character(slot));
+
+            if (speed > 0)
+            {
+                arcClear = BotArc.Clear(
+                    world.Collision, in world.Character(slot),
+                    world.Character(slot).AimDirection, speed, gravity,
+                    state.Target.X, state.Target.Y);
+            }
+        }
+
         ref readonly var self = ref world.Character(slot);
         ref readonly var weapon = ref world.Weapon(slot);
 
@@ -80,14 +114,31 @@ public static class BotClassKeys
                 // kills the shooter. The band is the class's own minimum, so
                 // this and the targeting penalty are the same number by
                 // construction.
-                return hasSubject && distance >= BotTargeting.ClassMinBand(PlayerClass.Soldier)
+                // ⚠️ Rockets fly flat, so arcClear is very nearly the straight-line
+                // test the target search already passed — but NOT quite, because a
+                // rocket fired with lead does not go down the line the target was
+                // cleared on.
+                //
+                // ⚠️ UNGATED for the soldier, and deliberately recorded as such:
+                // dropping `arcClear` from this branch alone leaves every test green,
+                // because the only fixtures that separate it from the straight line
+                // need a MOVING target for the aim solver to lead. The demoman's half
+                // is gated (BotArcTests), and the two share the one computation
+                // above, so a change that breaks this breaks that.
+                return hasSubject && arcClear
+                    && distance >= BotTargeting.ClassMinBand(PlayerClass.Soldier)
                     ? PlayerKeys.Attack
                     : PlayerKeys.None;
 
             case PlayerClass.Demoman:
                 // The detonation (SPECIAL) waits on botMinesArmed, which is not
                 // ported — see this type's remarks.
-                return hasSubject && distance >= BotTargeting.ClassMinBand(PlayerClass.Demoman)
+                // ⚠️ Withholding rather than re-solving for a flatter shot is
+                // deliberate: a flatter solution generally means closing the
+                // distance, and where this bot stands is the objective layer's
+                // decision rather than this one's.
+                return hasSubject && arcClear
+                    && distance >= BotTargeting.ClassMinBand(PlayerClass.Demoman)
                     ? PlayerKeys.Attack
                     : PlayerKeys.None;
 
