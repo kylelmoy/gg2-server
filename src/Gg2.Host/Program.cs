@@ -13,6 +13,33 @@ internal static class Program
 
     private static int Main(string[] args)
     {
+        // `gg2-server eval ...` plays bot matches instead of serving one —
+        // phase 8's exit criterion. A subcommand rather than a flag, because it
+        // shares almost none of the server's options and every one it did share
+        // would have to mean the same thing in both.
+        if (args.Length > 0 && args[0] == "eval")
+        {
+            var rest = args[1..];
+
+            if (rest.Contains("--help") || rest.Contains("-h"))
+            {
+                Evaluate.PrintUsage();
+                return 0;
+            }
+
+            try
+            {
+                return Evaluate.Run(rest);
+            }
+            catch (Exception e) when (e is ArgumentException or FormatException or IOException)
+            {
+                Console.Error.WriteLine(e.Message);
+                Console.Error.WriteLine();
+                Evaluate.PrintUsage();
+                return 2;
+            }
+        }
+
         if (args.Contains("--help") || args.Contains("-h"))
         {
             PrintUsage();
@@ -265,6 +292,10 @@ internal static class Program
         people in it is training data as well as a parity fixture, and it is the
         same format gg2-parity replays. It rolls a new file per map and caps
         itself at a gigabyte. See docs/BOTAI.md item 3.
+
+        `gg2-server eval` plays bot matches across maps instead of serving one,
+        faster than real time and with nobody watching - phase 8's exit
+        criterion. See `gg2-server eval --help`.
 
         The world is simulated: characters, weapons, all eight gamemodes and the
         map rotation. See docs/PLAN.md.
