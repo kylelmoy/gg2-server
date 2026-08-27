@@ -80,7 +80,7 @@ public sealed class BotCombatTests
         for (var tick = 0; tick < ticks; tick++)
         {
             var keys = BotCombat.Step(
-                combat, new WorldView(in state, collision), 0, tick, skill, ref random,
+                combat, new WorldView(in state, collision), 0, tick, skill, ref random, null,
                 out var aim, out _);
 
             if (acquired < 0 && combat.Target.Exists)
@@ -211,7 +211,7 @@ public sealed class BotCombatTests
         for (var tick = 0; tick < 60; tick++)
         {
             BotCombat.Step(
-                combat, new WorldView(in state, collision), 0, tick, skill, ref random, out _, out _);
+                combat, new WorldView(in state, collision), 0, tick, skill, ref random, null, out _, out _);
         }
 
         Assert.Equal(90, combat.AimDir, 9);
@@ -225,7 +225,7 @@ public sealed class BotCombatTests
         for (var tick = 400; tick < 460; tick++)
         {
             BotCombat.Step(
-                combat, new WorldView(in state, collision), 0, tick, skill, ref random, out _, out _);
+                combat, new WorldView(in state, collision), 0, tick, skill, ref random, null, out _, out _);
         }
 
         Assert.Equal(90, combat.AimDir, 9);
@@ -236,7 +236,7 @@ public sealed class BotCombatTests
         for (var tick = 60; tick < 200; tick++)
         {
             BotCombat.Step(
-                combat, new WorldView(in state, collision), 0, tick, skill, ref random, out _, out _);
+                combat, new WorldView(in state, collision), 0, tick, skill, ref random, null, out _, out _);
         }
 
         Assert.Equal(0, combat.AimDir, 9);
@@ -247,7 +247,7 @@ public sealed class BotCombatTests
         for (var tick = 200; tick < 340; tick++)
         {
             BotCombat.Step(
-                combat, new WorldView(in state, collision), 0, tick, skill, ref random, out _, out _);
+                combat, new WorldView(in state, collision), 0, tick, skill, ref random, null, out _, out _);
         }
 
         Assert.Equal(180, combat.AimDir, 9);
@@ -296,7 +296,7 @@ public sealed class BotCombatTests
         // Pointing 180 degrees away: still turning, so no trigger.
         var turning = Unsettled(180);
         var keys = BotCombat.Step(
-            turning, new WorldView(in state, collision), 0, 0, skill, ref random, out _, out _);
+            turning, new WorldView(in state, collision), 0, 0, skill, ref random, null, out _, out _);
 
         Assert.False(
             keys.HasFlag(PlayerKeys.Attack),
@@ -305,7 +305,7 @@ public sealed class BotCombatTests
         // Already on target: it fires.
         var settled = Unsettled(0);
         var onTarget = BotCombat.Step(
-            settled, new WorldView(in state, collision), 0, 0, skill, ref random, out _, out _);
+            settled, new WorldView(in state, collision), 0, 0, skill, ref random, null, out _, out _);
 
         Assert.True(
             onTarget.HasFlag(PlayerKeys.Attack),
@@ -333,7 +333,7 @@ public sealed class BotCombatTests
         state.Characters[0].HSpeed = 5; // wants 0
 
         var before = combat.AimDir;
-        BotCombat.Step(combat, new WorldView(in state, collision), 0, 0, skill, ref random, out _, out _);
+        BotCombat.Step(combat, new WorldView(in state, collision), 0, 0, skill, ref random, null, out _, out _);
 
         var moved = Math.Abs(BotTargeting.AngleDelta(combat.AimDir, before));
 
@@ -343,7 +343,7 @@ public sealed class BotCombatTests
         // aim oscillates either side of the target for ever and the settle gate
         // never opens.
         var nearly = new BotCombatState { AimDir = skill.TurnRate / 2, AimWant = skill.TurnRate / 2 };
-        BotCombat.Step(nearly, new WorldView(in state, collision), 0, 0, skill, ref random, out _, out _);
+        BotCombat.Step(nearly, new WorldView(in state, collision), 0, 0, skill, ref random, null, out _, out _);
 
         Assert.Equal(0, nearly.AimDir, 9);
     }
@@ -372,7 +372,7 @@ public sealed class BotCombatTests
         var skill = BotSkill.ForTier(5);
 
         // It is acquired blind, so it is a target with Visible false.
-        BotCombat.Step(combat, new WorldView(in state, collision), 0, 0, skill, ref random, out _, out _);
+        BotCombat.Step(combat, new WorldView(in state, collision), 0, 0, skill, ref random, null, out _, out _);
 
         Assert.True(combat.Target.Exists, "a blocked target inside the blind radius was never picked");
 
@@ -382,7 +382,7 @@ public sealed class BotCombatTests
         for (var tick = 1; tick < 200 && heldFor < 0; tick++)
         {
             BotCombat.Step(
-                combat, new WorldView(in state, collision), 0, tick, skill, ref random, out _, out _);
+                combat, new WorldView(in state, collision), 0, tick, skill, ref random, null, out _, out _);
 
             if (!combat.Target.Exists)
                 heldFor = tick - seenAt;

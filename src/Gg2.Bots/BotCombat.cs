@@ -74,6 +74,7 @@ public static class BotCombat
         int tick,
         in BotSkill skill,
         ref GmlRandom random,
+        NavGraph? graph,
         out double aim,
         out double aimDistance)
     {
@@ -129,7 +130,7 @@ public static class BotCombat
         }
 
         Perceive(state, in world, tick, in skill);
-        SolveAim(state, in world, slot, tick, sinceSeen, distance, in skill, ref random);
+        SolveAim(state, in world, slot, tick, sinceSeen, distance, in skill, ref random, graph);
         Slew(state, in skill);
 
         aim = state.AimDir;
@@ -367,7 +368,7 @@ public static class BotCombat
     /// <summary>Recomputes the desired direction on the aim cadence.</summary>
     private static void SolveAim(
         BotCombatState state, in WorldView world, int slot, int tick,
-        int sinceSeen, double distance, in BotSkill skill, ref GmlRandom random)
+        int sinceSeen, double distance, in BotSkill skill, ref GmlRandom random, NavGraph? graph)
     {
         if (tick < state.AimAt)
             return;
@@ -395,13 +396,18 @@ public static class BotCombat
 
         state.AimWant = BotAim.Solve(
             in self, aimX, aimY, state.SeeVx, state.SeeVy, skill.LeadMode,
-            // ⚠️ No floor lookup: WorldView carries the collision world but not
-            // the nav graph, and the clamp only ever matters for a target that is
-            // actually falling — a grounded one is snapshotted with a vertical
-            // speed of zero, so the prediction does not move. A caller that has a
-            // graph and wants the sharper answer can pass one through
-            // BotAim.Solve directly.
-            BotAim.NoFloor);
+            // ⚠️ <b>The floor under the TARGET, and it is load-bearing.</b>
+            // BotAim.FallPredict applies gravity whatever the target's vertical
+            // speed is, so without the clamp a target standing perfectly still is
+            // predicted to keep falling — and the bot aims BELOW its feet, into
+            // the ground. A first draft passed BotAim.NoFloor here on the
+            // reasoning that a grounded target is snapshotted with zero vertical
+            // speed and so cannot move: that is wrong, and the symptom was a
+            // soldier that acquired, fired, and never damaged anything.
+            //
+            // A null graph gives NoFloor, which is the right answer over a pit
+            // and the only one available without one.
+            BotAim.FloorUnder(graph, aimX, aimY));
 
         var moving = Math.Abs(state.SeeVx) > 0.5 || Math.Abs(state.SeeVy) > 0.5;
         var spread = Spread(
