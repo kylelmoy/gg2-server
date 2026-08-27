@@ -88,6 +88,12 @@ public static class ColliderSprites
         EntityTypes.IntelGateHorizontal =>
             Bar(entity, vertical: false, SolidKind.IntelGate, Team.Any),
 
+        // ⚠️ A horizontal bar like a floor, and NOT solid — see
+        // SolidKind.DropdownPlatform. It is here so the physics can ask where
+        // the platforms are, not so anything collides with them.
+        EntityTypes.DropdownPlatform =>
+            Bar(entity, vertical: false, SolidKind.DropdownPlatform),
+
         EntityTypes.SetupGate => SolidRect.FromEntity(
             entity.X, entity.Y, entity.XScale, entity.YScale, SetupGate, SetupGate, SolidKind.SetupGate),
 

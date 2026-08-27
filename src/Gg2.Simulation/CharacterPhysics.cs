@@ -97,10 +97,43 @@ public static class CharacterPhysics
             onNonSurfingGround = true;
         }
 
-        // Dropdown platforms are the other way to be on the ground. Not
-        // implemented: no shipped map has a MovingPlatform, and the standalone
-        // dropdown platforms need place_meeting. Phase 3 left both out
-        // deliberately (docs/PLAN.md).
+        // Dropdown platforms are the other way to be on the ground —
+        // Character.events/Begin Step.xml:32-49.
+        //
+        // ⚠️ The two inner tests are written from the PLATFORM's frame in the
+        // reference (`with(DropdownPlatform)`, so `other` is the character).
+        // Overlap is symmetric, so "the platform moved up one meets the
+        // character" is the same question as "the character moved down one meets
+        // the platform", which is what is asked here.
+        //
+        // ⚠️ MovingPlatform is still not modelled, and no shipped map places
+        // one.
+        else if ((character.KeyState & PlayerKeys.Down) == 0)
+        {
+            foreach (ref readonly var rect in world.RectSpan)
+            {
+                if (rect.Kind != SolidKind.DropdownPlatform)
+                    continue;
+
+                // Only a platform immediately below counts...
+                if (!Overlaps(rect, box, character.X, character.Y + 1))
+                    continue;
+
+                // ...and never one already overlapped, or a character rising
+                // through a platform would be caught on it.
+                if (Overlaps(rect, box, character.X, character.Y))
+                    continue;
+
+                character.OnGround = true;
+
+                // `resetMoveStatus` defaults to 1 and is a map property. ⚠️ No
+                // shipped map sets it — checked across all 22 in maps.json — so
+                // it is always true here; a custom map that clears it would get
+                // a surfing platform, which is not modelled.
+                onNonSurfingGround = true;
+                break;
+            }
+        }
 
         if (onNonSurfingGround)
             character.MoveStatus = 0;
@@ -310,7 +343,45 @@ public static class CharacterPhysics
 
         character.AppliedGravity = 0;
 
-        // Dropdown platform push-out goes here. Not implemented; see BeginStep.
+        // Dropdown platforms, Character.events/Step.xml:90-107. ⚠️ This is what
+        // actually holds a character up: the platform is never solid, so nothing
+        // in the movement solver stops it, and without this branch the Begin
+        // Step ground test above would say "on the ground" while the character
+        // fell straight through.
+        if ((character.KeyState & PlayerKeys.Down) == 0)
+        {
+            foreach (ref readonly var rect in world.RectSpan)
+            {
+                if (rect.Kind != SolidKind.DropdownPlatform)
+                    continue;
+
+                // ⚠️ Only a character moving DOWN is caught. Rising through one
+                // is the whole point of a drop-through platform.
+                if (Gml.Less(character.Y, character.YPrevious))
+                    continue;
+
+                if (!Overlaps(rect, box, character.X, character.Y))
+                    continue;
+
+                // ⚠️ Already inside it before this tick's move: leave it alone.
+                // The reference asks this by shifting the PLATFORM by the
+                // character's own dy, which is the same as asking whether the
+                // character was overlapping at its previous y.
+                if (Overlaps(rect, box, character.X, character.Y + (character.Y - character.YPrevious)))
+                    continue;
+
+                // Lift out in tenths of a pixel, exactly as the reference does —
+                // the loop is observable, because it stops on the first free
+                // tenth rather than snapping to the platform's top edge.
+                while (Overlaps(rect, box, character.X, character.Y)
+                       && world.PlaceFree(box, character.X, character.Y - 0.1, filter))
+                {
+                    character.Y -= 0.1;
+                }
+
+                character.VSpeed = 0;
+            }
+        }
 
         // The GM8 automatic-movement round trip, and it is NOT decoration.
         //
@@ -432,7 +503,12 @@ public static class CharacterPhysics
 
         // Climbing down stairs. Only when not falling — otherwise every fall
         // would snap to the next ledge down.
-        if (Gml.Equal(character.VSpeed, 0))
+        //
+        // ⚠️ And not while standing on a dropdown platform (End Step.xml:21),
+        // or the snap would drop a character straight through the thing holding
+        // it up. Holding KEY_DOWN re-enables it, which is how you step down off
+        // one deliberately.
+        if (Gml.Equal(character.VSpeed, 0) && !StandingOnDropdown(world, in character, box))
         {
             if (world.PlaceFree(box, character.X, character.Y + 6, filter))
             {
@@ -450,6 +526,11 @@ public static class CharacterPhysics
                 }
             }
         }
+
+        // End Step.xml:29-30, and the position matters: after the stair descent,
+        // so it records where the character actually ended up, and BEFORE the
+        // death exit below, so a character that dies this tick still gets one.
+        character.YPrevious = character.Y;
 
         // End Step.xml:34-47. Note where it sits: after the stair descent and
         // *before* the hp clamp below, and it `exit`s — so a character that dies
@@ -704,5 +785,53 @@ public static class CharacterPhysics
             character.AppliedGravity -= gravity;
         else
             character.Spinjumping = false;
+    }
+
+    /// <summary>
+    /// <c>place_meeting(x, y, DropdownPlatform)</c> against one platform.
+    /// </summary>
+    /// <remarks>
+    /// Position rounding is the collision world's — a fractional position
+    /// becomes a bounding box the same way for a platform as for anything else.
+    /// </remarks>
+    private static bool Overlaps(in SolidRect rect, in CharacterBox box, double x, double y)
+    {
+        var originX = CollisionWorld.RoundPosition(x);
+        var originY = CollisionWorld.RoundPosition(y);
+
+        return rect.Overlaps(
+            originX + box.Left,
+            originX + box.Right,
+            originY + box.Top,
+            originY + box.Bottom);
+    }
+
+    /// <summary>
+    /// The stair descent's dropdown guard, <c>End Step.xml:21</c>.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ The reference spells it as "may descend", which is
+    /// <c>KEY_DOWN or not on one or already inside one</c>. This is its
+    /// negation, and the third clause matters: a character whose box already
+    /// overlaps a platform is not standing <em>on</em> it and may step down.
+    /// </remarks>
+    private static bool StandingOnDropdown(CollisionWorld world, in CharacterState character, in CharacterBox box)
+    {
+        if ((character.KeyState & PlayerKeys.Down) != 0)
+            return false;
+
+        foreach (ref readonly var rect in world.RectSpan)
+        {
+            if (rect.Kind != SolidKind.DropdownPlatform)
+                continue;
+
+            if (Overlaps(rect, box, character.X, character.Y + 1)
+                && !Overlaps(rect, box, character.X, character.Y))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

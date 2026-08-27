@@ -39,6 +39,21 @@ public enum SolidKind
     /// </remarks>
     IntelGate,
 
+    /// <summary>
+    /// <c>DropdownPlatform</c> — <b>never solid, to anything.</b>
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ It is in the rectangle list purely so <c>PlaceMeetingKind</c> can find
+    /// it, and <see cref="IsSolidFor"/> deliberately has no case for it: the
+    /// object's own <c>solid</c> is false and it is not in <c>charSetSolids</c>,
+    /// so <c>place_free</c> passes straight through one in every direction. A
+    /// character stands on it only through <c>CharacterPhysics</c>'s two
+    /// explicit dropdown branches — the Begin Step ground test and the Step
+    /// push-out — which is why adding a case here would break jumping up through
+    /// one.
+    /// </remarks>
+    DropdownPlatform,
+
     /// <summary>Solid only while the setup timer is running.</summary>
     SetupGate,
 

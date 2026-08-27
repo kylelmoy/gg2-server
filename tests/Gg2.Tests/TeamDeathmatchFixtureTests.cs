@@ -27,7 +27,7 @@ namespace Gg2.Tests;
 /// <c>tdm_mantic</c> replays exactly for <b>3,043</b> ticks — the longest
 /// closed-loop window in the project — and <c>gg_debug</c> for <b>23</b> (it was
 /// 2 until the alarm-stage spawn seam landed on 2026-08-27). See
-/// <see cref="GgDebugStopsOnTheUnimplementedDropdownPlatform"/>.
+/// <see cref="GgDebugReplaysPastItsDropdownPlatformsAndStopsOnDamage"/>.
 /// </para>
 /// </remarks>
 public sealed class TeamDeathmatchFixtureTests
@@ -183,40 +183,46 @@ public sealed class TeamDeathmatchFixtureTests
     /// <c>ctf_2dfort</c> went from 5 ticks to 362.
     /// </para>
     /// <para>
-    /// ⚠️ <b>What is left on <c>gg_debug</c> is a different thing entirely: the
-    /// DROPDOWN PLATFORM, which the port does not implement.</b>
-    /// <c>CharacterPhysics</c> says so in two places
-    /// (<c>"Dropdown platforms are the other way to be on the ground. Not …"</c>
-    /// and <c>"Dropdown platform push-out goes here. Not implemented"</c>), and
-    /// this recording is the first evidence that it matters. The map places
-    /// <b>two</b>, at <c>438,216</c> and <c>498,216</c>, and the divergence is
-    /// slots 1 and 3 sitting at rest on <c>y = 192</c> in the reference while the
-    /// port falls past — a soldier's box is 34 tall about an origin 22.6 above
-    /// its foot, so <c>192 + 22.6 = 214.6</c> is a character standing exactly on
-    /// a platform whose top is 216.
+    /// ✅ <b>The DROPDOWN PLATFORMS are implemented (2026-08-27) and this window
+    /// is no longer about them.</b> <c>gg_debug</c> places two, at
+    /// <c>438,216</c> and <c>498,216</c>, and slots 1 and 3 used to fall past
+    /// them while the reference rested on <c>y = 192</c>. Implementing the
+    /// reference's three branches — the Begin Step ground test, the Step
+    /// push-out and the End Step stair guard — took the window from <b>23 ticks
+    /// to 100</b>.
     /// </para>
     /// <para>
-    /// ⚠️ <b>And it is why the old reasoning about this pair was wrong.</b> The
-    /// note here used to rule dropdown platforms out because "<c>tdm_mantic</c>
-    /// has four and is exact" — but a map placing a feature is not the same as
-    /// its bots touching one, the same mistake the move-box recording made.
+    /// ⚠️ <b>And the trajectories inside it are now EXACT</b> — the closed-loop
+    /// replay reports <c>|dx| max 0, |dy| max 0</c> over 132 ticks and 86
+    /// comparisons. What stops it is a single <b>damage</b> mismatch, not a
+    /// position one: <c>tick 131 slot 2 hp: expected 160, got 140</c>. That is a
+    /// different subsystem and an open finding of its own — twenty hp, on a map
+    /// of six soldiers, so a rocket that hit in the reference and missed here or
+    /// landed for a different amount.
     /// </para>
     /// <para>
-    /// <b>An open finding for the lane that owns <c>src/Gg2.Simulation</c>.</b>
-    /// ⚠️ If this test fails, that is good news.
+    /// ⚠️ <b>The platform's BOX is inferred rather than measured.</b>
+    /// <c>DropdownPlatform.xml</c> names sprite44 and <c>sprite44.xml</c> puts
+    /// its origin at (0,0); sprite44's 60x6 is itself measured, because floors
+    /// and walls share it. But the collision oracle never sampled a dropdown
+    /// platform — <c>sample-collision.js</c> enumerates what
+    /// <c>charSetSolids</c> names, and a platform is never solid — so confirming
+    /// it against the running game is owed to the next live session. This
+    /// window replaying exactly is strong evidence and not proof: CLAUDE.md's
+    /// "a green fixture is not confirmation of a box".
     /// </para>
     /// </remarks>
     [Fact]
-    public void GgDebugStopsOnTheUnimplementedDropdownPlatform()
+    public void GgDebugReplaysPastItsDropdownPlatformsAndStopsOnDamage()
     {
         var (exact, anchor) = ExactWindow(Debug, Fields.Trajectory);
 
         Assert.True(
-            exact is >= 20 and <= 40,
-            $"{Debug}: the window is now {exact} ticks after t{anchor}, not the pinned 23 — "
-                + "if it has grown, the dropdown platform is implemented and this recording's "
-                + "52 deaths can become real assertions; if it has shrunk, the alarm-stage "
-                + "spawn seam has regressed");
+            exact is >= 90 and <= 140,
+            $"{Debug}: the window is now {exact} ticks after t{anchor}, not the pinned 100 — "
+                + "if it has shrunk to about 23 the dropdown platforms have regressed; if it "
+                + "has grown a long way, the t131 damage divergence is fixed and this "
+                + "recording's 52 deaths can become real assertions");
     }
 
     /// <summary>

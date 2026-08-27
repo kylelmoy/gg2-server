@@ -271,7 +271,24 @@ public sealed class CollisionSampleTests
         var sample = SampleFor(name);
         var world = new CollisionWorld(LevelMap.FromPng(name, ReferenceTree.ReadMap(name)));
 
-        var rects = world.Rects.ToArray();
+        // ⚠️ SOLID rectangles only, and the exclusion is the oracle's rather than
+        // this test's. `tools/sample-collision.js` enumerates the objects
+        // `charSetSolids` names (plus BulletWall, added 2026-08-25), and
+        // `DropdownPlatform` is in neither list because it is never solid — you
+        // walk and jump straight through one in every direction. So the game was
+        // never asked for its bounding box, and comparing against it here would
+        // fail for a rectangle the oracle does not contain rather than for one
+        // the port gets wrong.
+        //
+        // ⚠️ Which means the dropdown platform's box is INFERRED, not measured:
+        // `DropdownPlatform.xml` names sprite44 and `sprite44.xml` puts its
+        // origin at (0,0), and sprite44's 60x6 *is* measured because floors and
+        // walls share it. `DropdownPlatformRectanglesComeFromTheEntityList`
+        // below pins what the port builds; confirming it against the running
+        // game is a job for the next live session.
+        var rects = world.Rects
+            .Where(r => r.Kind != SolidKind.DropdownPlatform)
+            .ToArray();
 
         Assert.NotEmpty(sample.Rects);
         Assert.Equal(sample.Rects.Length, rects.Length);

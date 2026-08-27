@@ -58,6 +58,18 @@ public sealed class CollisionWorld
     public IReadOnlyList<SolidRect> Rects => _rects;
 
     /// <summary>
+    /// The same rectangles, as a span.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The tick path must use this and not <see cref="Rects"/>.</b> A
+    /// <c>foreach</c> over <c>IReadOnlyList&lt;T&gt;</c> boxes the enumerator,
+    /// which is an allocation per character per tick — docs/BOTAI.md item 1's
+    /// whole subject, and `BotAiConstraintsTests.ASteadyStateTickAllocatesNothing`
+    /// caught it the moment the dropdown-platform scan landed.
+    /// </remarks>
+    public ReadOnlySpan<SolidRect> RectSpan => _rects;
+
+    /// <summary>
     /// The map's <c>CaptureZone</c> rectangles, each tagged with the control
     /// point it belongs to.
     /// </summary>

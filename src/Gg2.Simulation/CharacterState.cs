@@ -157,6 +157,20 @@ public struct CharacterState
     /// </remarks>
     public int Facing;
 
+    /// <summary>
+    /// <c>yprevious</c>: the y this character finished the previous End Step at.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Written by <c>End Step</c> and read only by the dropdown-platform
+    /// push-out</b>, which needs to know whether the character was already
+    /// inside a platform before this tick's move. <c>End Step.xml:29-30</c>
+    /// assigns <c>xprevious</c> and <c>yprevious</c> explicitly, straight after
+    /// the stair descent and <em>before</em> the death exit, so a dead character
+    /// gets one too. <c>xprevious</c> is not carried here because nothing reads
+    /// it.
+    /// </remarks>
+    public double YPrevious;
+
     /// <summary><c>_last_xscale</c>: the facing as of the previous tick's Step.</summary>
     public int LastFacing;
 
