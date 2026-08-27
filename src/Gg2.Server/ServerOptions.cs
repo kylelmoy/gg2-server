@@ -95,7 +95,12 @@ public sealed class ServerOptions
     public string NavCacheDirectory { get; set; } = string.Empty;
 
     /// <summary>The <c>[Bots]</c> section. Off by default, as in the reference.</summary>
-    public BotPopulationOptions Bots { get; set; } = new();
+    /// <remarks>
+    /// ⚠️ <see cref="BotPopulationOptions.Default"/>, never <c>new()</c> — see the
+    /// warning there. A zeroed one has a fill target of 0, a difficulty of 0 and a
+    /// null name prefix, and every one of those is silent.
+    /// </remarks>
+    public BotPopulationOptions Bots { get; set; } = BotPopulationOptions.Default;
 
     public void Validate()
     {

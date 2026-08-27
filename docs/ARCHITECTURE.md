@@ -209,11 +209,22 @@ having, and now available:
   most likely under heavy bot logic.
 
 The headroom argument is concrete: GM8 interprets its GML, and the existing bot
-layer is ~7,100 lines of it (`Scripts/Bots/` + `Scripts/BotNav/`) running for
+layer is 7,202 lines of it (`Scripts/Bots/` + `Scripts/BotNav/`) running for
 every bot every tick. Compiled C# on the same work should leave one to two
 orders of magnitude of budget, which is what buys real pathfinding, prediction
-and coordination instead of the current per-tick approximations. ⚠️ **That
-figure has never been measured**, and measuring it is phase 7's exit criterion.
+and coordination instead of the current per-tick approximations.
+
+✅ **Measured 2026-08-27, and it is phase 7's exit criterion: twelve bots cost
+0.20ms of a 33.3ms tick — 0.6% of the budget.** 600 steady-state ticks of a real
+server on `ctf_truefort`, with the population manager, twelve policies each
+planning and fighting, the whole simulation, the state serialiser and the
+broadcast in the loop. `BotPopulationTests.TwelveBotsRunWellUnderTheTickBudget`.
+
+⚠️ **That measures this port's cost, not the ratio to GM8.** Nobody has
+benchmarked the reference's bot layer here, so the "one to two orders of
+magnitude" above is still a design intention — what the number establishes is
+that a bot can be made roughly two orders of magnitude heavier before the tick
+is at risk, which is the claim the project actually needs.
 
 Two things to carry over rather than reinvent:
 

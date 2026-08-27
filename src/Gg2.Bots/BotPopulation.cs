@@ -27,7 +27,41 @@ public readonly record struct BotPopulationOptions(
     int MaxBots = 8,
     int MinHumans = 1,
     int Difficulty = 3,
-    string NamePrefix = "[BOT] ");
+    string NamePrefix = "[BOT] ")
+{
+    /// <summary>
+    /// The reference's own <c>[Bots]</c> defaults.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Use this, never <c>new BotPopulationOptions()</c> or
+    /// <c>default</c>.</b> A record struct's primary-constructor defaults do NOT
+    /// apply to its parameterless form — that one zero-initialises — so a defaulted
+    /// value has a fill target of 0, a difficulty of 0 and a <b>null</b> name
+    /// prefix. Measured: a server started with <c>--bots 12</c> named its bots
+    /// "1".."12" instead of "[BOT] 1".."[BOT] 12", because the flag handler built
+    /// its options with <c>with</c> from a zeroed one.
+    /// <para>
+    /// The same shape as <c>CharacterState.Fresh</c> and <c>PlayerState.Fresh</c>,
+    /// and for the same reason: in this codebase a zeroed value type is routinely
+    /// not a valid one, and the fix is always a named factory rather than a rule
+    /// nobody remembers.
+    /// </para>
+    /// </remarks>
+    /// <remarks>
+    /// ⚠️ The values are spelled out rather than delegating to <c>new()</c> —
+    /// <c>new BotPopulationOptions()</c> resolves to the struct's implicit
+    /// parameterless constructor, which is the zeroing one this factory exists to
+    /// avoid. Writing <c>new()</c> here would make the factory a no-op that reads
+    /// exactly like a fix.
+    /// </remarks>
+    public static BotPopulationOptions Default => new(
+        Enabled: false,
+        FillToPlayers: 8,
+        MaxBots: 8,
+        MinHumans: 1,
+        Difficulty: 3,
+        NamePrefix: "[BOT] ");
+}
 
 /// <summary>
 /// <c>botPopulationUpdate</c>, <c>botPickTeam</c> and <c>botPickClass</c>: how

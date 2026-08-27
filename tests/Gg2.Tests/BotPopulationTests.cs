@@ -138,6 +138,69 @@ public sealed class BotPopulationTests(ITestOutputHelper output)
         Assert.True(red > 150 && blue > 150, $"the tie is not a coin: {red} red, {blue} blue");
     }
 
+    /// <summary>
+    /// A defaulted options value is the reference's defaults, not a zeroed struct.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>A record struct's primary-constructor defaults do NOT apply to its
+    /// parameterless form.</b> <c>new BotPopulationOptions()</c> resolves to the
+    /// implicit zeroing constructor, so a "defaulted" value has a fill target of 0,
+    /// a difficulty of 0 and a <b>null</b> name prefix — and every one of those is
+    /// silent.
+    /// <para>
+    /// Measured, by running the thing: a server started with <c>--bots 12</c> named
+    /// its bots "1".."12" instead of "[BOT] 1".."[BOT] 12", because the flag handler
+    /// built its options with <c>with</c> from <c>ServerOptions.Bots</c>, which was
+    /// initialised with <c>new()</c>. Nothing in the suite noticed, because every
+    /// test that cared constructed its options explicitly.
+    /// </para>
+    /// <para>
+    /// The same shape as <c>CharacterState.Fresh</c> and <c>PlayerState.Fresh</c>:
+    /// in this codebase a zeroed value type is routinely not a valid one.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ADefaultedOptionsValueCarriesTheReferencesDefaults()
+    {
+        var options = new ServerOptions().Bots;
+
+        Assert.False(options.Enabled);
+        Assert.Equal(8, options.FillToPlayers);
+        Assert.Equal(8, options.MaxBots);
+        Assert.Equal(1, options.MinHumans);
+        Assert.Equal(3, options.Difficulty);
+        Assert.Equal("[BOT] ", options.NamePrefix);
+
+        // ⚠️ The control, and the whole reason this test exists: the zeroed form is
+        // reachable and is NOT the same thing. If these two ever agree, the factory
+        // has stopped doing anything and the trap is back.
+        var zeroed = default(BotPopulationOptions);
+
+        Assert.NotEqual(options, zeroed);
+        Assert.Null(zeroed.NamePrefix);
+        Assert.Equal(0, zeroed.FillToPlayers);
+    }
+
+    /// <summary>
+    /// A bot the server added is named with the configured prefix.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ The end of the same story: the prefix is the only part of the config a
+    /// human sees in the scoreboard, and a null one reads as a player called "7".
+    /// </remarks>
+    [Fact]
+    public void ABotIsNamedWithTheConfiguredPrefix()
+    {
+        using var harness = Filled(fill: 2, maxBots: 2);
+
+        harness.Tick(5);
+
+        var names = harness.Log.Lines.Where(l => l.StartsWith("bot ", StringComparison.Ordinal)).ToArray();
+
+        Assert.Equal(2, names.Length);
+        Assert.All(names, n => Assert.StartsWith("bot [BOT] ", n, StringComparison.Ordinal));
+    }
+
     // ------------------------------------------------------------------
     // The server
     // ------------------------------------------------------------------
