@@ -25,17 +25,20 @@ namespace Gg2.Tests;
 public sealed class BotLayerCoverageTests
 {
     /// <summary>
-    /// The one script phase 7 left unported, conservative when absent.
+    /// The scripts phase 7 left unported. ✅ <b>Empty.</b>
     /// </summary>
     /// <remarks>
     /// ⚠️ <b>Kept in the same order and the same words as <c>docs/PLAN.md</c>'s
     /// list</b>, so the two can be diffed by eye. Porting one means deleting it
-    /// from both.
+    /// from both — and it emptied on <c>botStabWindow</c>, the last of ten.
+    /// <para>
+    /// ⚠️ <b>An empty list is a claim, not the absence of one.</b> The test below
+    /// still runs: what it now asserts is that nothing has been ADDED here without
+    /// the plan growing to match, which is the direction the decay runs once
+    /// everything is ported.
+    /// </para>
     /// </remarks>
-    private static readonly string[] Unported =
-    [
-        "botStabWindow",          // a spy never stabs
-    ];
+    private static readonly string[] Unported = [];
 
     private static string[] Scripts(string folder)
     {
@@ -93,12 +96,12 @@ public sealed class BotLayerCoverageTests
         foreach (var script in Unported)
             Assert.Contains(script, bots);
 
-        // ⚠️ And the list is exactly one — ten before the rocket jump, nine before
+        // ⚠️ And the list is EMPTY — ten before the rocket jump, nine before
         // botFindAlly, eight before the projectile reflexes took three at once, five
         // before botSuppressSpot, four before botArcClear, three before
-        // botMinesArmed, two before botStepSafe. A list that grows without the plan
-        // growing with it is the same decay from the other direction.
-        Assert.Single(Unported);
-        Assert.Single(Unported.Distinct(StringComparer.Ordinal));
+        // botMinesArmed, two before botStepSafe, one before botStabWindow. A list
+        // that grows without the plan growing with it is the same decay from the
+        // other direction, and that is what this now guards.
+        Assert.Empty(Unported);
     }
 }

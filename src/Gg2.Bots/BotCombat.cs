@@ -152,7 +152,7 @@ public static class BotCombat
                 // pyro with an empty screen unable to deflect a rocket at all.
                 // Every branch that would otherwise fire at nothing carries its own
                 // subject test — see BotClassKeys.
-                var idle = BotClassKeys.For(state, in world, slot, 0, tick);
+                var idle = BotClassKeys.For(state, in world, slot, 0, tick, graph: graph);
 
                 state.AttackKeys = idle;
                 return idle;
@@ -202,7 +202,7 @@ public static class BotCombat
         var settled = Math.Abs(BotTargeting.AngleDelta(state.AimWant, state.AimDir))
             <= BotConstants.AimSettleDeg * BotClassProfile.AimSettle(self.Class);
 
-        var keys = BotClassKeys.For(state, in world, slot, distance, tick, subjectIsAlly);
+        var keys = BotClassKeys.For(state, in world, slot, distance, tick, subjectIsAlly, graph);
 
         var canFire = sinceSeen >= skill.AcquireTicks + skill.FireDelayTicks;
 

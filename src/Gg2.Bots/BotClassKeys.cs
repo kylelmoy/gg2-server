@@ -45,9 +45,16 @@ public static class BotClassKeys
     /// </remarks>
     private const double AirblastAmmo = 40;
 
+    /// <param name="graph">
+    /// ⚠️ For the spy's stab window alone, which predicts where the target will
+    /// have fallen to. Null is the answer a target over a pit gets anyway, so a
+    /// caller with no nav cache loses nothing else. It is a parameter rather than
+    /// something on <see cref="WorldView"/> because the simulation must not know
+    /// the nav graph exists.
+    /// </param>
     public static PlayerKeys For(
         BotCombatState state, in WorldView world, int slot, double distance, int tick,
-        bool subjectIsAlly = false)
+        bool subjectIsAlly = false, NavGraph? graph = null)
     {
         // ⚠️ NOT a blanket "no subject, no keys". `botCombatUpdate`'s own
         // no-subject branch still calls this — "nothing to aim at is a state a class
@@ -205,7 +212,7 @@ public static class BotClassKeys
                 return beam;
 
             case PlayerClass.Spy:
-                return SpyKeys(state, in self, tick);
+                return SpyKeys(state, in world, in self, in weapon, tick, graph);
 
             case PlayerClass.Sniper:
                 // ⚠️ Unscoped, fire immediately; scoped, wait for a charge
@@ -247,13 +254,36 @@ public static class BotClassKeys
     /// boundary flickers.
     /// </para>
     /// <para>
-    /// The stab branch waits on <c>botStabWindow</c>, which is not ported, so a
-    /// cloaked spy currently never stabs.
+    /// ⚠️ <b>The stab is the ordinary attack while cloaked</b>, and it is gated on
+    /// where the target will be in 32-38 ticks rather than on where it is now —
+    /// see <see cref="BotStab"/> for why those are a second apart.
+    /// <c>readyToStab</c> is tested here rather than inside that helper because it
+    /// is much the cheaper of the two and gates the press regardless of geometry.
     /// </para>
     /// </remarks>
-    private static PlayerKeys SpyKeys(BotCombatState state, in CharacterState self, int tick)
+    private static PlayerKeys SpyKeys(
+        BotCombatState state, in WorldView world, in CharacterState self,
+        in WeaponState weapon, int tick, NavGraph? graph)
     {
         var enemyNear = state.Target.Kind == BotTargetKind.Character;
+
+        // Cloaked, with a real enemy, and the knife is predicted to land: stab.
+        //
+        // ⚠️ The `Cloak` clause is UNOBSERVABLE from the keys and is kept as a cost
+        // guard, not as a rule — checked by mutation. A stab and a shot are the
+        // SAME key (the Revolver's User Event 1 is an if/else on the cloak and
+        // there is no separate melee input), so an uncloaked spy that took this
+        // branch would press exactly what the shooting branch below presses. What
+        // it buys is not computing a 7-tick prediction and a graph walk for a spy
+        // that cannot use the answer. The reference's condition carries it too.
+        if (self.Cloak
+            && enemyNear
+            && weapon.ReadyToStab
+            && world.IsAlive(state.Target.Slot)
+            && BotStab.Window(graph, in self, in world.Character(state.Target.Slot)))
+        {
+            return PlayerKeys.Attack;
+        }
 
         // ⚠️ `canCloak` in the reference is a Character field the spy's Create
         // event sets; here the class IS the test, because the spy is the only one
