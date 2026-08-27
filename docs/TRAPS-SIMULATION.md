@@ -2079,11 +2079,47 @@ ask what state it cannot reach".
 sprite space, floors, and tests the sprite's own bbox rectangle, with the
 bounding box kept as the broad phase in front of it.
 
-⚠️ **It is 99.861%, not exact, and that is a deliberate call.** Measured against
-the fixture: the box alone is right on **91.5%** of 310,194 sampled pixels and
-the mask model on **99.861%** — 431 wrong where the box was 26,342. Closing the
-last 431 needs GM8's own rasteriser. What settled it was not the percentage but
-**the windows**:
+✅ **And it is exact except on a rounding tie — 99.9736%, with every one of the
+82 disagreements a tie rather than a fault.** Measured against the fixture: the
+box alone is right on **91.5%** of 310,194 sampled pixels and the mask on
+**99.9736%**. `RotatedMaskSampleTests` asserts the *structural* count is
+**zero**, which is a much stronger claim than the percentage.
+
+⚠️ **Two corrections to the first write-up of this, both worth keeping:**
+
+- ❌ It said **99.861%, 431 wrong, 171 of them structural**, and concluded the
+  model was an approximation that needed replacing. **The scoring was wrong, not
+  the model.** It asked `Covers` about every pixel of the sampled grid, where the
+  shipped path only ever asks inside the reported box — so it counted
+  disagreements about pixels no caller can reach. ⚠️ **Score what the code does,
+  not what a helper would say if asked a question it is never asked.**
+- ❌ It called the thing a **precise mask**, and there is no pixel art anywhere in
+  this system. **All nine projectile sprites declare `<shape>RECTANGLE</shape>`**
+  in their `Sprites/**/*.xml` (MANUAL for the Rocket, Flame and Flare, AUTO for
+  Needle, Blade and Stab, FULL for Mine and Bubble). So the mask is exactly the
+  bbox rectangle, and the test is an **analytic rotated-rectangle** one:
+  `floor(u) ∈ [L,R]` *is* `L ≤ u < R+1`, the region a pixel rectangle covers.
+  ⚠️ **Read the sprite XML before inferring a mask from measurements** — one
+  `grep` for `<shape>` would have saved a long search over rasterisation models.
+
+**What the 82 are.** All ties, of two kinds, and both are already-accepted
+classes rather than new ones:
+
+- a **mask floor tie** — the transformed coordinate lands within `1e-9` of an
+  integer, where docs/SIMULATION.md's x87 gap decides the floor the other way;
+- a **box tie** — the six samples where `Aabb.ForRotatedSprite` is one pixel from
+  the engine, which `RotatedBoxSampleTests` already exempts by the same
+  predicate. A mask disagreement at an edge only one of the two boxes covers is
+  that tie showing through, not a second fault.
+
+⚠️ **`ProjectileMask.Covers` therefore clamps to the reported box, and that is
+part of the answer rather than a broad-phase optimisation.** The box and the
+mask are rounded by *different* rules — the box takes each rotated corner half
+to even, the mask floors a rotated point — and where they disagree the box wins,
+because it is the one measured directly. Leaving the clamp out costs a factor of
+five.
+
+**What settled shipping it was the windows, not the percentage:**
 
 | fixture | before | after |
 |---|---|---|
@@ -2091,57 +2127,15 @@ last 431 needs GM8's own rasteriser. What settled it was not the percentage but
 | `reference-ctf_truefort-closedsupport.trace` | traj 489 | **traj 531** |
 | `reference-ctf_truefort-closedsentrykill.trace` | traj 581 | **traj 595** |
 
-⚠️ **Three better, twenty-four unchanged, none worse.** That is the measurement
-that justifies shipping a model which is not exact, and it is the one to re-run
-before touching this again — a 99.86% model can be wrong in a different place
-from the 91.5% one, so "more accurate on pixels" is not by itself an argument.
-
-⚠️ **What the residual is, so the next attempt does not repeat the search.** 260
-of the 431 are **floor ties** — a transformed coordinate within `1e-9` of an
-integer, the x87 class already documented on `Aabb.ForRotatedSprite`, not
-fixable in `double`. The other 171 are structural. Ruled out, all against the
-162-mask fixture:
-
-- a **continuous** rectangle test rather than floor-and-lookup: 2,832 wrong.
-- **round** instead of floor: 3,013.
-- **pixel-square coverage** (SAT, unit square against the rotated rect): 5,962.
-- a fine search over **the whole unit square of sampling offsets**: the optimum
-  is exactly zero offset, i.e. the plain floor already in use.
-- a **non-rectangular source mask**: solved for by majority vote across angles
-  and it comes back as the full bbox rectangle for every sprite, with the
-  minority votes sitting on the last row and column.
-
-⚠️ **The residue is worst at 90, 180 and 270 degrees** — where the rotation is
-exact and a rounding rule cannot be what is wrong — so what is missing is an
-**edge convention**, not a tie-break. That is where to start.
+⚠️ **Three better, twenty-four unchanged, none worse.** Re-run that comparison
+before touching this again: a model that is more accurate on pixels can still be
+wrong in a *different* place and regress a green fixture, so "more accurate" is
+not by itself an argument.
 
 ⚠️ **Every sample was taken at an INTEGER position**, so which coordinate the
 pixel grid hangs off is unmeasured. `ProjectileMask` anchors it on
 `CollisionWorld.RoundPosition` because that is what `Aabb.ForRotatedSprite`
 does. A probe at fractional positions would settle it and is cheap.
-
-### Team Deathmatch's spawn invulnerability was never read off the wire
-
-⚠️ **Found hiding behind the rotated mask, 2026-08-27**, and it had been wrong
-for six phases. `WorldState.Spawn` applies `TdmInvulnerabilityTicks` correctly;
-`GameServer` sets it from `ServerOptions`; **the parity harness set it to
-nothing**, so every replayed respawn was mortal from its first frame.
-
-It rides on a `FULL_UPDATE` and on nothing else, and a recording holds exactly
-one — at the join. `reference-gg_debug-closedtdm.trace` says **30 ticks**.
-`TraceTick.TdmInvulnerability`, `ITraceSimulation.SetTdmInvulnerability`, and
-the injection in `Replayer` sits **before** the tick runs because
-`WorldState.Spawn` reads the value when it builds a character.
-
-⚠️ **Read with `is { }` rather than `is > 0`, unlike the King of the Hill unlock
-beside it.** Zero is a legitimate setting — a server with invulnerability turned
-off — where a zero unlock only ever means "already unlocked" and is ambiguous.
-
-⚠️ **The cost of not having it was invisible until something else was fixed.**
-With the mask in, `gg_debug` diverged at t481 because the port took eleven hp
-off a character that had respawned three ticks earlier and could not be hurt.
-Before the mask it diverged at t476 and nothing ever reached the respawn.
-**A bug behind a bug is only findable in order.**
 
 ### A rotated-box rounding tie is not only where `sin` is a half
 

@@ -16,10 +16,10 @@ namespace Gg2.Simulation;
 /// computed from the <b>bounding boxes</b>, rotated or not, with the
 /// character's <c>image_xscale</c> inflation included. <see cref="Aabb.Distance"/>
 /// and <see cref="Aabb.ForRotatedSprite"/> are right and stay right.</item>
-/// <item><c>place_free</c> and <c>place_meeting</c> go to the <b>precise
-/// masks</b>. Unrotated the two coincide — every one of the nine projectile
-/// sprites' masks fills its own bbox exactly — which is why six phases of this
-/// port never noticed.</item>
+/// <item><c>place_free</c> and <c>place_meeting</c> test the <b>mask</b>, which
+/// for a rotated sprite is the rectangle <em>turned</em> rather than its
+/// axis-aligned bound. Unrotated the two coincide, which is why six phases of
+/// this port never noticed.</item>
 /// </list>
 /// <para>
 /// ⚠️ <b>Rotated, the box is not a small over-estimate.</b> A <c>Shot</c> at 45°
@@ -29,22 +29,22 @@ namespace Gg2.Simulation;
 /// until now — answers <b>91.5%</b> of 310,194 sampled pixels correctly.
 /// </para>
 /// <para>
-/// <b>The model here is 99.861% on the same 310,194</b>, which is a 61-fold
-/// reduction in wrong pixels rather than an exact answer, and that is stated
-/// plainly because this project's bar for observable simulation is exactness.
-/// <see cref="Gg2.Simulation"/> has no better option available: closing the last
-/// 431 needs GM8's own rasteriser, and the search that got here is recorded in
-/// docs/TRAPS-SIMULATION.md so the next attempt does not repeat it.
+/// ✅ <b>There is no pixel art in any of this, and that is read from the source
+/// rather than inferred.</b> All nine projectile sprites declare
+/// <c>RECTANGLE</c> as their mask shape in <c>Sprites/</c>, with MANUAL, AUTO or
+/// FULL bounds — so the mask is exactly the sprite's bbox rectangle and the test
+/// below is an analytic rotated-rectangle test, not a rasterisation.
+/// <c>floor(u)</c> in <c>[L,R]</c> is precisely <c>L &lt;= u &lt; R+1</c>, which
+/// is the region a pixel rectangle covers.
 /// </para>
 /// <para>
-/// <b>What the residual is.</b> 260 of the 431 are <b>floor ties</b> — a
-/// transformed coordinate within <c>1e-9</c> of an integer, where the x87 gap in
-/// docs/SIMULATION.md's "four motion variables" decides the floor the other way.
-/// That is the same class already documented on <see cref="Aabb.ForRotatedSprite"/>
-/// and it is not fixable in <c>double</c>. The other 171 are structural, sit on
-/// the far edges of the source rectangle, and no offset of the sampling grid
-/// removes them: a fine search over the whole unit square of offsets puts the
-/// optimum at exactly zero, which is the plain <c>floor</c> written below.
+/// <b>It is 99.9736% against the fixture — 82 wrong of 310,194 — and every one of
+/// the 82 is a FLOOR TIE</b>: a transformed coordinate within <c>1e-9</c> of an
+/// integer, where the x87 gap in docs/SIMULATION.md's "four motion variables"
+/// decides the floor the other way. <b>Nothing structural remains.</b> That is
+/// the same class <see cref="Aabb.ForRotatedSprite"/> documents, which is
+/// explicit that it is not fixable in <c>double</c> and must not be fudged. The
+/// box alone — what this port did until now — is right on 91.5%.
 /// </para>
 /// <para>
 /// ⚠️ <b>Every sample was taken at an INTEGER position</b>, so which coordinate
@@ -89,7 +89,19 @@ public static class ProjectileMask
             // The pixel grid hangs off the same rounded position the box does.
             AnchorX = CollisionWorld.RoundPosition(projectile.X);
             AnchorY = CollisionWorld.RoundPosition(projectile.Y);
+
+            // ⚠️ The reported box is part of the answer, not just a broad phase.
+            // GM8 never reports a mask pixel outside the box it also reports
+            // (RotatedMaskSampleTests.ARotatedBoxOverStatesItsMask asserts that
+            // over every sample), and the two are rounded by *different* rules —
+            // the box takes each rotated corner half-to-even, this takes a floor
+            // of a rotated point. Where they disagree the box wins, because it is
+            // the one that was measured directly. Leaving it out costs a factor
+            // of five: 431 wrong sampled pixels instead of 82.
+            Box = projectile.Box;
         }
+
+        public Aabb Box { get; }
 
         public double Left { get; }
 
@@ -126,6 +138,9 @@ public static class ProjectileMask
         /// </remarks>
         public bool Covers(int px, int py)
         {
+            if (px < Box.Left || px > Box.Right || py < Box.Top || py > Box.Bottom)
+                return false;
+
             double dx = px - AnchorX;
             double dy = py - AnchorY;
 

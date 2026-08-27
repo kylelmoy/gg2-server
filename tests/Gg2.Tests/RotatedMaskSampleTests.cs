@@ -361,39 +361,52 @@ public sealed class RotatedMaskSampleTests
     }
 
     /// <summary>
-    /// ⚠️ <b><see cref="ProjectileMask"/> against every sampled pixel: 99.861%,
-    /// and the shortfall is pinned rather than tolerated.</b>
+    /// ✅ <b><see cref="ProjectileMask"/> against every sampled pixel: 99.9736%,
+    /// and every single mismatch is a rounding tie.</b>
     /// </summary>
     /// <remarks>
     /// <b>The number that justifies the model is the one it replaced.</b>
     /// Treating the reported bounding box as solid — what this port did until
     /// 2026-08-27, and what <see cref="BoundingBoxAloneIsWrongOnOneSampledPixelInTwelve"/>
-    /// measures — is right on 91.5% of these pixels. The mask model is right on
-    /// 99.861%, which is 431 wrong where the box was 26,342.
+    /// measures — is right on 91.5% of these pixels. The mask is right on
+    /// 99.9736%: 82 wrong where the box was 26,342.
     /// <para>
-    /// ⚠️ <b>It is not exact, and that is stated rather than smoothed over.</b>
-    /// 260 of the 431 are floor ties — a transformed coordinate within
-    /// <c>1e-9</c> of an integer, the same x87 class already documented on
-    /// <see cref="Aabb.ForRotatedSprite"/> and not fixable in <c>double</c>.
-    /// The other 171 are structural. A fine search over the whole unit square
-    /// of sampling offsets puts the optimum at exactly zero offset, so the
-    /// plain <c>floor</c> the model uses is the best this family can do.
+    /// ⚠️ <b>And the 82 are not a residue traded away — every one is a rounding
+    /// tie</b>, asserted below rather than counted. A transformed coordinate
+    /// within <c>1e-9</c> of an integer is where docs/SIMULATION.md's x87 gap
+    /// decides a floor the other way; it is the class
+    /// <see cref="Aabb.ForRotatedSprite"/> documents and the same instruction
+    /// applies — <b>do not fudge it</b>. A structural mismatch would mean the
+    /// model itself is wrong, and there are none.
     /// </para>
     /// <para>
-    /// The bound is an inequality so that a genuine improvement is not a
-    /// failure, but tight enough that losing the model entirely cannot pass —
-    /// the box alone is nowhere near it.
+    /// ⚠️ <b>An earlier version of this test scored 431 and blamed 171 of them
+    /// on the model.</b> It scored <c>Covers</c> across the whole sampled grid
+    /// while the shipped path only ever asks inside the reported box, so it
+    /// counted disagreements about pixels no caller can reach. <b>Score what the
+    /// code does, not what a helper would say if asked a question it is never
+    /// asked.</b>
     /// </para>
     /// </remarks>
     [Fact]
     public void TheMaskModelMatchesTheEngineOnAlmostEverySampledPixel()
     {
-        var (wrong, total) = ScoreEveryPixel(mask: true);
+        var (wrong, total, structural) = ScoreEveryPixel(mask: true);
 
         Assert.Equal(310194, total);
+
+        // ⚠️ The assertion with the content. A tie is arithmetic this project
+        // has already decided it cannot win; a structural mismatch is the model
+        // being wrong, and there are none.
         Assert.True(
-            wrong <= 460,
-            $"the mask model is wrong on {wrong} of {total} sampled pixels; that was 431 when measured");
+            structural == 0,
+            $"{structural} of the {wrong} mismatches are not rounding ties — the model is wrong, "
+                + "not merely out-rounded. docs/TRAPS-SIMULATION.md lists the families already "
+                + "ruled out; do not start from scratch.");
+
+        Assert.True(
+            wrong <= 100,
+            $"the mask is wrong on {wrong} of {total} sampled pixels; that was 82 when measured");
     }
 
     /// <summary>
@@ -409,7 +422,7 @@ public sealed class RotatedMaskSampleTests
     [Fact]
     public void BoundingBoxAloneIsWrongOnOneSampledPixelInTwelve()
     {
-        var (wrong, total) = ScoreEveryPixel(mask: false);
+        var (wrong, total, _) = ScoreEveryPixel(mask: false);
 
         Assert.Equal(310194, total);
         Assert.True(
@@ -420,11 +433,16 @@ public sealed class RotatedMaskSampleTests
     /// <summary>
     /// Every sampled pixel of every mask, against either the model or the box.
     /// </summary>
-    private static (int Wrong, int Total) ScoreEveryPixel(bool mask)
+    /// <returns>
+    /// How many pixels disagreed, how many were compared, and how many of the
+    /// disagreements are <em>not</em> explained by a rounding tie.
+    /// </returns>
+    private static (int Wrong, int Total, int Structural) ScoreEveryPixel(bool mask)
     {
         var document = Load();
         var wrong = 0;
         var total = 0;
+        var structural = 0;
 
         foreach (var (name, samples) in document.Sprites)
         {
@@ -440,6 +458,17 @@ public sealed class RotatedMaskSampleTests
                     ImageAngle = sample.Angle,
                 };
 
+                // The port's own box, which on six of these 162 samples is one
+                // pixel from the engine's. Those are the rounding ties
+                // RotatedBoxSampleTests already exempts, and a mask disagreement
+                // at an edge only one of the two boxes covers is that same tie
+                // showing through rather than a second fault.
+                var portBox = projectile.Box;
+                var boxAgrees = portBox.Left - 3000 == sample.Box.Left
+                    && portBox.Right - 3000 == sample.Box.Right
+                    && portBox.Top - 600 == sample.Box.Top
+                    && portBox.Bottom - 600 == sample.Box.Bottom;
+
                 for (var dy = -sample.Reach; dy <= sample.Reach; dy++)
                 {
                     for (var dx = -sample.Reach; dx <= sample.Reach; dx++)
@@ -452,13 +481,37 @@ public sealed class RotatedMaskSampleTests
                                 && dy >= sample.Box.Top && dy <= sample.Box.Bottom;
 
                         total++;
-                        if (actual != expected)
-                            wrong++;
+
+                        if (actual == expected)
+                            continue;
+
+                        wrong++;
+
+                        // The same 1e-9 window RotatedBoxSampleTests uses, on the
+                        // coordinate this model floors rather than on a rotated
+                        // corner.
+                        var radians = Gg2.Protocol.Gml.DegToRad(sample.Angle);
+                        var u = (dx * Math.Cos(radians)) - (dy * Math.Sin(radians));
+                        var v = (dx * Math.Sin(radians)) + (dy * Math.Cos(radians));
+
+                        var maskTie = Math.Abs(u - Math.Round(u)) < 1e-9
+                            || Math.Abs(v - Math.Round(v)) < 1e-9;
+
+                        // A pixel the two boxes disagree about, on a sample whose
+                        // boxes disagree at all.
+                        var boxTie = !boxAgrees
+                            && (dx >= sample.Box.Left && dx <= sample.Box.Right
+                                && dy >= sample.Box.Top && dy <= sample.Box.Bottom)
+                                != (3000 + dx >= portBox.Left && 3000 + dx <= portBox.Right
+                                    && 600 + dy >= portBox.Top && 600 + dy <= portBox.Bottom);
+
+                        if (!maskTie && !boxTie)
+                            structural++;
                     }
                 }
             }
         }
 
-        return (wrong, total);
+        return (wrong, total, structural);
     }
 }
