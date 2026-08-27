@@ -157,6 +157,18 @@ public sealed class ScriptedBot : IInputSource, IScenarioSubject
     public BotObjective? Objective { get; set; }
 
     /// <summary>
+    /// The team-wide edge crowding this bot plans against, or null for a bot that
+    /// plans in isolation.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Shared between every bot on the server</b>, not per bot — that is
+    /// what makes it model bots bunching up rather than approximating it with
+    /// per-bot noise. Null is the honest default for a hand-built bot in a test:
+    /// with nothing else walking, occupancy answers nothing anyway.
+    /// </remarks>
+    public BotOccupancy? Occupancy { get; set; }
+
+    /// <summary>
     /// Which half of the team this bot is on. ⚠️ <b>Assigned once at join, never
     /// per tick</b> — see <see cref="BotRoles"/>.
     /// </summary>
@@ -224,6 +236,17 @@ public sealed class ScriptedBot : IInputSource, IScenarioSubject
         _graph = graph;
         _follower = graph is null ? null! : new PathFollower(graph);
 
+        // ⚠️ The counts go with the route: keys are node indices, which only mean
+        // anything to ONE build of the graph.
+        //
+        // `botOccupancyReset` clears the shared maps AND every bot's flag, because
+        // there they are two separate operations and dropping the maps alone would
+        // leave a bot believing its route is still counted — so its next removal
+        // declines to decrement and the route is added a SECOND time on the next
+        // plan. Here the removal is what clears the flag, so one call does both,
+        // and the shared Reset is the population manager's half.
+        Occupancy?.Remove(Path);
+
         Path.FreePath();
         Path.HasGoal = false;
         Path.Blacklist.Clear();
@@ -256,7 +279,9 @@ public sealed class ScriptedBot : IInputSource, IScenarioSubject
         if (!world.IsAlive(slot))
         {
             // ⚠️ A dead bot gives up its route rather than resuming one from
-            // where it died: it will come back somewhere else entirely.
+            // where it died: it will come back somewhere else entirely — and its
+            // edges stop being crowded the moment it stops walking them.
+            Occupancy?.Remove(Path);
             Path.FreePath();
             AliveLast = false;
             return PlayerInput.None;
@@ -287,7 +312,7 @@ public sealed class ScriptedBot : IInputSource, IScenarioSubject
 
         var navKeys = _graph is null
             ? PlayerKeys.None
-            : _follower.Step(Path, in self, in world.Weapon(slot), tick, Query);
+            : _follower.Step(Path, in self, in world.Weapon(slot), tick, Query, Occupancy);
 
         var fireKeys = BotCombat.Step(
             Combat, in world, slot, tick, Skill, ref Random, _graph, out var aim, out var aimDistance);

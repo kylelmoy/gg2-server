@@ -110,7 +110,7 @@ public sealed class PathFollower
         in CharacterState character,
         int tick,
         in NavQuery query,
-        IReadOnlyDictionary<long, int>? occupancy = null)
+        BotOccupancy? occupancy = null)
     {
         var none = default(WeaponState);
         return Step(state, in character, in none, tick, in query, occupancy);
@@ -122,7 +122,7 @@ public sealed class PathFollower
         in WeaponState weapon,
         int tick,
         in NavQuery query,
-        IReadOnlyDictionary<long, int>? occupancy = null)
+        BotOccupancy? occupancy = null)
     {
         ArgumentNullException.ThrowIfNull(state);
 
@@ -267,7 +267,7 @@ public sealed class PathFollower
     /// </remarks>
     private PlayerKeys OffRoute(
         BotPathState state, double x, double y, int tick,
-        in NavQuery query, IReadOnlyDictionary<long, int>? occupancy)
+        in NavQuery query, BotOccupancy? occupancy)
     {
         state.OffRouteFires++;
         state.OffPathTicks = 0;
@@ -315,7 +315,7 @@ public sealed class PathFollower
     /// </remarks>
     private PlayerKeys WalkToGoal(
         BotPathState state, double x, double hSpeed, bool onGround, bool moved, int tick,
-        in NavQuery query, IReadOnlyDictionary<long, int>? occupancy)
+        in NavQuery query, BotOccupancy? occupancy)
     {
         state.EdgeFrom = -1;
         state.EdgeTo = -1;
@@ -340,6 +340,13 @@ public sealed class PathFollower
                 state.Arrived = true;
                 state.ArrivedAt = tick;
                 state.HasGoal = false;
+
+                // ⚠️ Off the counts BEFORE the route is freed — the edges can only
+                // be found through the path that is about to be cleared.
+                // `botPathFree` does this on arrival, on every re-plan and on
+                // death; the re-plan case is already covered above, and the
+                // idempotence flag is what makes the overlap harmless.
+                occupancy?.Remove(state);
                 state.FreePath();
                 return PlayerKeys.None;
             }
@@ -435,7 +442,7 @@ public sealed class PathFollower
     /// <summary>Steers along the edge between the current node and the next.</summary>
     private PlayerKeys FollowEdge(
         BotPathState state, in CharacterState character, in WeaponState weapon, bool moved, int tick,
-        in NavQuery query, IReadOnlyDictionary<long, int>? occupancy)
+        in NavQuery query, BotOccupancy? occupancy)
     {
         var x = character.X;
         var hSpeed = character.HSpeed;
@@ -747,7 +754,7 @@ public sealed class PathFollower
         BotPathState state, in CharacterState character, in WeaponState weapon, in NavEdge edge,
         in NavNode from, in NavNode to, int current, int next,
         int column, int dirToNext, int tick,
-        in NavQuery query, IReadOnlyDictionary<long, int>? occupancy, ref Steering steer)
+        in NavQuery query, BotOccupancy? occupancy, ref Steering steer)
     {
         // ⚠️ The takeoff column is carried ON THE EDGE because the generator
         // SEARCHED for it rather than assuming it. It is usually the end of the
@@ -960,7 +967,7 @@ public sealed class PathFollower
         int from, int to,
         in NavNode fromNode, int takeoff, double needVx, double flightTicks, int jumpDir,
         double along, int tick, in NavQuery query,
-        IReadOnlyDictionary<long, int>? occupancy, ref Steering steer)
+        BotOccupancy? occupancy, ref Steering steer)
     {
         // ⚠️ Counted here and nowhere else. The budget is ticks spent AT the gate
         // refusing to leave; counting the approach as well would spend it on a
@@ -1209,7 +1216,7 @@ public sealed class PathFollower
     /// <returns>Whether a route was found.</returns>
     public bool Plan(
         BotPathState state, double x, double y, int tick,
-        in NavQuery query, IReadOnlyDictionary<long, int>? occupancy = null)
+        in NavQuery query, BotOccupancy? occupancy = null)
     {
         ArgumentNullException.ThrowIfNull(state);
 
@@ -1257,6 +1264,17 @@ public sealed class PathFollower
         // ban could affect anything, so it needs no timer of its own.
         state.SweepBlacklist(tick);
 
+        // ⚠️ This bot's OWN route comes out of the counts before it searches, and
+        // that is not an optimisation — it is what makes a route stable across
+        // re-plans. A bot that can see its own route in the occupancy counts is
+        // charged extra for the path it is already walking, so every re-plan tries
+        // to move it somewhere else and the whole team churns lanes every
+        // BOT_REPLAN_TICKS. Measured in the reference on ctf_truefort: with self
+        // excluded, 2 of 16 re-plans changed a route; with a node-keyed penalty —
+        // which cannot exclude self cleanly, since a bot stands on its own nodes —
+        // it was 15 of 16.
+        occupancy?.Remove(state);
+
         var start = _graph.NodeFromWorld(x, y);
         if (start < 0)
         {
@@ -1273,7 +1291,7 @@ public sealed class PathFollower
 
         state.Replans++;
 
-        if (!_search.Find(start, goal, query, _scratch, state.Blacklist, occupancy))
+        if (!_search.Find(start, goal, query, _scratch, state.Blacklist, occupancy?.Counts(query.Team)))
         {
             state.PlanFailUntil = tick + BotConstants.ReplanTicks;
             return false;
@@ -1287,6 +1305,15 @@ public sealed class PathFollower
         state.PathAt = 0;
         state.PathStale = false;
         state.PlanFailUntil = 0;
+
+        // The one place a route is ever added. ⚠️ Against the team asking, which
+        // is what the removal above will NOT read back — see BotOccupancy.Remove.
+        //
+        // The route behind the bot is never trimmed as it advances, and does not
+        // need to be: a re-plan re-installs it from wherever the bot is standing
+        // now, so the tail drops out of the counts on its own every
+        // BOT_REPLAN_TICKS.
+        occupancy?.Add(state, query.Team);
         return true;
     }
 

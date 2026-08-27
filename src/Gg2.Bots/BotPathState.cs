@@ -32,6 +32,35 @@ public sealed class BotPathState
     /// </remarks>
     public List<int> Path { get; } = [];
 
+    /// <summary>
+    /// The team <see cref="Path"/> is currently counted against in edge occupancy
+    /// — <c>player.botOccupiedTeam</c>, <see cref="Team.Spectator"/> for "counted
+    /// nowhere".
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Not the same as the bot's team now.</b> Autobalance can switch a bot
+    /// mid-round and a rotation re-teams every one of them, so a removal that read
+    /// the current team would subtract from the wrong map and leave the old one
+    /// raised for ever.
+    /// <para>
+    /// ⚠️ <b>One field where the reference has two.</b> <c>botOccupied</c> and
+    /// <c>botOccupiedTeam</c> carry the same information there and can disagree;
+    /// here the team IS the flag, so the state that would have to be kept in step
+    /// does not exist. <see cref="BotOccupancy"/> owns it; nothing else writes it.
+    /// </para>
+    /// </remarks>
+    public Team OccupiedTeam { get; internal set; } = Team.Spectator;
+
+    /// <summary>Whether <see cref="Path"/> is counted anywhere.</summary>
+    /// <remarks>
+    /// ⚠️ <b>A route is added once and removed in three places</b> — on every
+    /// re-plan, arrival and death; when the bot leaves or the map changes; and by
+    /// the planner itself before it searches — so without this an edge two bots
+    /// are on would be decremented twice by one of them and the other's count
+    /// silently lost.
+    /// </remarks>
+    public bool Occupied => OccupiedTeam is Team.Red or Team.Blue;
+
     /// <summary>How far along <see cref="Path"/> the bot has got.</summary>
     /// <remarks>
     /// ⚠️ Advanced forward only. A bot only ever moves along its own route, and

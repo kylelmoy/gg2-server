@@ -50,6 +50,18 @@ public sealed class BotPopulationService
     /// <summary>The map's nav graph, or null where no cache was found.</summary>
     public NavGraph? Nav { get; private set; }
 
+    /// <summary>
+    /// The edge crowding every bot on this server plans against.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>One store for the whole server, and it lives here because it is the
+    /// only object that outlives a bot and knows about all of them.</b> Sharing is
+    /// the point: it is what makes the mechanism model bots bunching up rather
+    /// than approximating it with per-bot noise, and it is why the penalty is the
+    /// same for every bot asking at the same moment.
+    /// </remarks>
+    public BotOccupancy Occupancy { get; } = new();
+
     /// <summary>The spawn points the objective layer measures a push against.</summary>
     public SpawnPoints? Spawns { get; private set; }
 
@@ -89,6 +101,14 @@ public sealed class BotPopulationService
         // so a bot that crosses a rotation carrying them is holding numbers that
         // now mean somewhere else — and its BotObjective holds the old graph and
         // the old map's spawn points too.
+        // ⚠️ The counts go first, and the bots' flags go with SetMap. Occupancy
+        // keys are node indices, which only mean anything to ONE build of the
+        // graph, so counts from the previous map would otherwise sit here making
+        // arbitrary edges of the new one look busy — and dropping the maps without
+        // clearing the flags is worse still, because a bot that believes its route
+        // is counted declines the next removal and is then added twice.
+        Occupancy.Reset();
+
         foreach (var slot in _server.BotSlots)
         {
             if (_server.SourceOf(slot) is ScriptedBot bot)
@@ -167,6 +187,7 @@ public sealed class BotPopulationService
         var bot = new ScriptedBot(Nav, new NavQuery(team), BotSkill.ForTier(options.Difficulty), stagger)
         {
             SpreadX = BotRoles.SpreadX(stagger),
+            Occupancy = Occupancy,
         };
 
         // Null where the map has no cache, which leaves the bot fighting whatever
@@ -208,6 +229,13 @@ public sealed class BotPopulationService
 
         if (pick < 0)
             pick = slots[^1];
+
+        // ⚠️ `botNavRelease`'s half of the bookkeeping: a bot that is gone is no
+        // longer walking its route, and leaving the counts up charges every future
+        // search on that team extra for an edge nothing is on. This is the third
+        // of the three removal sites the idempotence flag exists for.
+        if (_server.SourceOf(pick) is ScriptedBot leaving)
+            Occupancy.Remove(leaving.Path);
 
         _server.RemoveBot(pick);
     }
