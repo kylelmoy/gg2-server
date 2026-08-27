@@ -273,6 +273,72 @@ public sealed class HeadlessMatchTests
         Assert.True(real.MaxTicks > 0);
     }
 
+    /// <summary>
+    /// Explicit teams put exactly that many bots on each side.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>This is what makes a bot change measurable against another</b> —
+    /// "red runs the new one, blue runs the old" is the comparison
+    /// <c>docs/BOTAI.md</c> item 8 exists for, and an evenly-filled match cannot
+    /// express it. It is also what settled whether the bots could return a flag
+    /// at all: <c>RedBots: 6, BlueBots: 0</c> is an uncontested attack.
+    /// </remarks>
+    [Theory]
+    [InlineData(6, 0)]
+    [InlineData(1, 5)]
+    [InlineData(3, 3)]
+    public void ExplicitTeamsArePlacedExactly(int red, int blue)
+    {
+        ReferenceTree.RequireAvailable();
+
+        var match = HeadlessMatch.On(
+            Short with { RedBots = red, BlueBots = blue },
+            Map(),
+            nav: null);
+
+        var placedRed = 0;
+        var placedBlue = 0;
+
+        // Slot 0 is the server's own reserved player and is always a spectator.
+        for (var slot = 1; slot < red + blue + 1; slot++)
+        {
+            if (match.State.Players[slot].Team == Team.Red)
+                placedRed++;
+            else if (match.State.Players[slot].Team == Team.Blue)
+                placedBlue++;
+        }
+
+        Assert.Equal(red, placedRed);
+        Assert.Equal(blue, placedBlue);
+    }
+
+    /// <summary>
+    /// ⚠️ Zero on a side is a value, not "unspecified" — which is why the
+    /// fields are nullable.
+    /// </summary>
+    /// <remarks>
+    /// An uncontested attack is <c>RedBots: 6, BlueBots: 0</c>, and if 0 meant
+    /// "fill this side evenly" that experiment could not be written at all. This
+    /// codebase's own rule is that a zeroed field meaning "off" is a trap; here
+    /// the nullable says "unset" and 0 says 0.
+    /// </remarks>
+    [Fact]
+    public void AnEmptyTeamIsDifferentFromAnUnspecifiedOne()
+    {
+        ReferenceTree.RequireAvailable();
+
+        Assert.False(HeadlessMatchOptions.Default.HasExplicitTeams);
+        Assert.True((HeadlessMatchOptions.Default with { BlueBots = 0 }).HasExplicitTeams);
+
+        var uncontested = HeadlessMatch.On(
+            Short with { RedBots = 4, BlueBots = 0 },
+            Map(),
+            nav: null);
+
+        for (var slot = 1; slot <= 4; slot++)
+            Assert.Equal(Team.Red, uncontested.State.Players[slot].Team);
+    }
+
     /// <summary>The summary reports draws and unfinished matches rather than folding them away.</summary>
     /// <remarks>
     /// ⚠️ A bot change that makes capturing worse shows up FIRST as more

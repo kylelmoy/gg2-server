@@ -27,7 +27,9 @@ public readonly record struct HeadlessMatchOptions(
     int KillLimit,
     int RespawnTimeSeconds,
     int MaxTicks,
-    uint Seed)
+    uint Seed,
+    int? RedBots = null,
+    int? BlueBots = null)
 {
     /// <summary>
     /// A short match on <c>ctf_truefort</c> with twelve bots. ⚠️ The values are
@@ -51,6 +53,20 @@ public readonly record struct HeadlessMatchOptions(
         // exactly this once bots started reaching the enemy flag.
         MaxTicks: 30 * 60 * 20,
         Seed: 1);
+
+    /// <summary>
+    /// Whether this configuration names the teams explicitly rather than
+    /// filling <see cref="Bots"/> evenly.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Nullable rather than "0 means unset"</b>, because <b>0 is a value
+    /// somebody wants</b> — <c>RedBots: 8, BlueBots: 0</c> is an uncontested
+    /// attack, which is exactly the experiment that separates "the bots cannot
+    /// return the flag" from "the bots cannot get past six defenders". An
+    /// unspecified team and an empty one have to be different things, and this
+    /// codebase's own rule is that a zeroed field meaning "off" is a trap.
+    /// </remarks>
+    public bool HasExplicitTeams => RedBots is not null || BlueBots is not null;
 }
 
 /// <summary>Why a match stopped.</summary>
@@ -414,18 +430,45 @@ public sealed class HeadlessMatch
     /// </remarks>
     private void AddBots()
     {
-        var wanted = Math.Min(Options.Bots, WorldState.MaxSlots - 1);
         var skill = BotSkill.ForTier(Options.Difficulty);
 
         // ⚠️ A stream of its own, not the world's. Which team and class a bot
         // takes must not move the weapon-seed stream — see Reset's remark.
         var picker = new GmlRandom(Options.Seed ^ 0x9E3779B9);
 
+        // Explicit teams, or an even fill. ⚠️ The explicit form is what makes a
+        // bot change measurable against another: "red runs the new one, blue
+        // runs the old" is the comparison docs/BOTAI.md item 8 exists for, and
+        // an evenly-filled match cannot express it.
+        var reds = Options.HasExplicitTeams ? Options.RedBots ?? 0 : -1;
+        var blues = Options.HasExplicitTeams ? Options.BlueBots ?? 0 : -1;
+
+        var wanted = Options.HasExplicitTeams
+            ? Math.Min(reds + blues, WorldState.MaxSlots - 1)
+            : Math.Min(Options.Bots, WorldState.MaxSlots - 1);
+
         for (var i = 0; i < wanted; i++)
         {
-            CountTeams(out var red, out var blue);
+            Team team;
 
-            var team = BotPopulation.PickTeam(red, blue, ref picker);
+            if (Options.HasExplicitTeams)
+            {
+                // Alternate while both still owe bots, so the roster order does
+                // not put one whole team before the other — slot order phases
+                // the objective and combat cadences, and a block of one team
+                // would give that team every early phase.
+                CountTeams(out var placedRed, out var placedBlue);
+
+                team = placedRed < reds && (placedBlue >= blues || placedRed <= placedBlue)
+                    ? Team.Red
+                    : Team.Blue;
+            }
+            else
+            {
+                CountTeams(out var red, out var blue);
+                team = BotPopulation.PickTeam(red, blue, ref picker);
+            }
+
             var playerClass = BotPopulation.PickClass(ref picker);
 
             // ⚠️ The stagger is the roster slot the bot lands in, which is what
