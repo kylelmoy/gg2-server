@@ -841,9 +841,11 @@ public sealed class PhysicsParityTests
     /// </para>
     /// <para>
     /// <b>The bound is deliberately loose and the numbers are recorded here so
-    /// that an improvement is visible.</b> As of 2026-08-25 this replays with
-    /// <c>|dx|</c> max 77 / p99 11 and <c>|dy|</c> max 75 / p99 30 wire units
-    /// over 1,000 comparisons. Those are much worse than the combat trace's p99
+    /// that an improvement is visible.</b> ✅ <b>Re-measured 2026-08-27: max
+    /// <c>|dx|</c> 77 and max <c>|dy|</c> 75 are unchanged, but both p99s are now
+    /// <b>2</b>, down from 11 and 30 on 2026-08-25</b> — the maxima are single
+    /// discrete events and the percentiles are the part that improved as the
+    /// weapons landed. Those are much worse than the combat trace's p99
     /// of 2, and that is the point of having it: the residual is combat and
     /// airborne physics, which nothing else exercises. Three leads are written up
     /// in the handoff — a repeating six-pixel vertical offset, an assist
@@ -1099,6 +1101,15 @@ public sealed class PhysicsParityTests
 
         public IReadOnlyList<IntelRecord> IntelLastTick => inner.IntelLastTick;
 
+        public IReadOnlyList<SentryRecord> SentriesLastTick => inner.SentriesLastTick;
+
+        public bool TryGetControlPoint(int index, out ControlPointBlock point)
+        {
+            return inner.TryGetControlPoint(index, out point);
+        }
+
+        public void SetControlPointUnlock(int ticks) => inner.SetControlPointUnlock(ticks);
+
         public bool TryGetCharacter(int slot, out CharacterBlock character) =>
             inner.TryGetCharacter(slot, out character);
     }
@@ -1133,6 +1144,16 @@ public sealed class PhysicsParityTests
         public IReadOnlyList<UberRecord> UbersLastTick => [];
 
         public IReadOnlyList<IntelRecord> IntelLastTick => [];
+
+        public IReadOnlyList<SentryRecord> SentriesLastTick => [];
+
+        public bool TryGetControlPoint(int index, out ControlPointBlock point)
+        {
+            point = default;
+            return false;
+        }
+
+        public void SetControlPointUnlock(int ticks) { }
 
         public bool TryGetCharacter(int slot, out CharacterBlock character) =>
             inner.TryGetCharacter(slot, out character);
@@ -1228,6 +1249,15 @@ public sealed class PhysicsParityTests
         public IReadOnlyList<UberRecord> UbersLastTick => inner.UbersLastTick;
 
         public IReadOnlyList<IntelRecord> IntelLastTick => inner.IntelLastTick;
+
+        public IReadOnlyList<SentryRecord> SentriesLastTick => inner.SentriesLastTick;
+
+        public bool TryGetControlPoint(int index, out ControlPointBlock point)
+        {
+            return inner.TryGetControlPoint(index, out point);
+        }
+
+        public void SetControlPointUnlock(int ticks) => inner.SetControlPointUnlock(ticks);
 
         public bool TryGetCharacter(int slot, out CharacterBlock character) =>
             inner.TryGetCharacter(slot, out character);

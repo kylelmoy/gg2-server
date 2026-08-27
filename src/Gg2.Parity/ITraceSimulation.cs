@@ -99,6 +99,34 @@ public enum IntelEvent : byte
 /// <param name="Event">Which message it was.</param>
 public readonly record struct IntelRecord(byte Id, IntelEvent Event);
 
+/// <summary>
+/// One <c>DESTROY_SENTRY</c>, as either side of the comparison states it.
+/// </summary>
+/// <remarks>
+/// <b>The same shape as a <see cref="DeathRecord"/> and for the same reason: a
+/// state update cannot see it.</b> A destroyed sentry is merely <em>absent</em>
+/// from the next update's subobject bit, updates come every seventh tick, and
+/// nothing in one names a killer — so a port that destroyed the wrong sentry, or
+/// none, or credited the wrong player, replays a recording without a murmur.
+/// <para>
+/// ⚠️ <b>And a sentry contributes nothing at all to an <c>INPUTSTATE</c>-tier
+/// update, not even its hp</b> (docs/PROTOCOL.md, "Per sentry"), which is the
+/// bug that shipped for six phases. That makes the message the only per-tick
+/// evidence a recording carries about a sentry's fate.
+/// </para>
+/// <para>
+/// The assistant is the <b>killer's healer</b> rather than a second damage
+/// dealer — a sentry has none to demote — and <see cref="Cause"/> is 0 for the
+/// Begin Step self-destruct. ⚠️ An owner detonating their own sentry broadcasts
+/// <em>nothing</em>, so no record is produced by either side for that.
+/// </para>
+/// </remarks>
+/// <param name="Slot">The roster index whose sentry was destroyed.</param>
+/// <param name="Killer">Who dealt the fatal damage, or 255 for nobody.</param>
+/// <param name="Assistant">The killer's healer, or 255 for nobody.</param>
+/// <param name="Cause">The damage source id.</param>
+public readonly record struct SentryRecord(byte Slot, byte Killer, byte Assistant, byte Cause);
+
 public interface ITraceSimulation
 {
     /// <summary>
@@ -145,6 +173,51 @@ public interface ITraceSimulation
     /// </para>
     /// </remarks>
     bool SpawnCharacter(int slot, int spawnpointId, int group);
+
+    /// <summary>
+    /// Asks for a spawn to happen <b>inside the next tick's alarm stage</b>, at
+    /// a given spawn point, rather than being placed before the tick runs.
+    /// False if the simulation cannot express that, in which case the replayer
+    /// falls back to <see cref="SpawnCharacter"/>.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Where a character is created is observable, and
+    /// <see cref="SpawnCharacter"/> gets it wrong by one stage.</b> The
+    /// reference creates one from <c>player.alarm[5]</c>
+    /// (<c>Scripts/Spawning/PlayerSpawn.gml</c>), and the alarm stage runs
+    /// <em>between</em> Begin Step and Step — so on its first tick a character
+    /// gets a Step and an End Step but <b>no Begin Step</b>, which is where
+    /// gravity is applied. Its first End Step therefore still sees
+    /// <c>vspeed == 0</c>, the guard on the stair descent
+    /// (<c>Character.events/End Step.xml</c>), and it <b>snaps</b> up to six
+    /// pixels onto the floor instead of falling.
+    /// <para>
+    /// Placing the character before the tick gives it that tick's gravity and
+    /// misses the snap. On <c>ctf_truefort</c> nothing notices — its markers are
+    /// eighteen pixels above the floor, outside the snap, so both sides
+    /// genuinely fall — but on a map whose markers are exactly six pixels up
+    /// (<c>gg_debug</c> 162→168, <c>ctf_2dfort</c> 894→900) the reference lands
+    /// on the tick and a replay is left 0.4 px high for ever.
+    /// docs/PARITY.md, "the first fixture on a second map lands 0.4 px low".
+    /// </para>
+    /// <para>
+    /// The default is false, so a stand-in keeps the pre-placing behaviour.
+    /// </para>
+    /// </remarks>
+    bool QueueSpawn(int slot, int spawnpointId, int group) => false;
+
+    /// <summary>
+    /// True while <see cref="QueueSpawn"/> has accepted a spawn for this slot
+    /// that has not run yet.
+    /// </summary>
+    /// <remarks>
+    /// The replayer must neither compare nor anchor such a slot: the trace
+    /// already shows the character and the simulation deliberately does not have
+    /// it yet. Anchoring would replace the exact spawn-point placement with a
+    /// wire-quantised one, which is the very loss <see cref="QueueSpawn"/>
+    /// exists to avoid.
+    /// </remarks>
+    bool HasPendingSpawn(int slot) => false;
 
     /// <summary>Removes a slot's character — it left, died, or went spectator.</summary>
     void ClearCharacter(int slot);
@@ -201,6 +274,29 @@ public interface ITraceSimulation
     /// </para>
     /// </remarks>
     void BuildSentry(int slot, double x, double y, int direction);
+
+    /// <summary>
+    /// A <c>DROP_INTEL</c>: the carrier puts the briefcase down where they stand.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>A client command, like <c>BUILD_SENTRY</c> and unlike everything
+    /// else about the objective.</b> <c>processClientCommands.gml:221-229</c>
+    /// handles it — a replay cannot derive it, because nothing in an
+    /// <c>INPUTSTATE</c> says the player pressed drop, so it has to be injected
+    /// the way a spawn is.
+    /// <para>
+    /// ⚠️ <b>Not to be confused with the drop a death causes</b>, which
+    /// broadcasts nothing at all: <c>sendEventDropIntel.gml</c>'s own docstring
+    /// says the event is skipped on death "to avoid issues with order of
+    /// execution", and the client infers it from the <c>PLAYER_DEATH</c> it
+    /// already has. The port does that one in <c>WorldState.Clear</c> and it
+    /// needs no injection.
+    /// </para>
+    /// <para>
+    /// The default is a no-op, so a stand-in simply does not drop.
+    /// </para>
+    /// </remarks>
+    void DropIntel(int slot) { }
 
     /// <summary>
     /// Supplies the random seed the reference used for a slot's shot on the
@@ -276,10 +372,51 @@ public interface ITraceSimulation
     IReadOnlyList<IntelRecord> IntelLastTick { get; }
 
     /// <summary>
+    /// The <c>DESTROY_SENTRY</c> messages the tick just run produced, in slot
+    /// order.
+    /// </summary>
+    /// <remarks>
+    /// An output and never an input, for the same reason as
+    /// <see cref="DeathsLastTick"/>. See <see cref="SentryRecord"/> for why a
+    /// state comparison cannot stand in for it.
+    /// </remarks>
+    IReadOnlyList<SentryRecord> SentriesLastTick { get; }
+
+    /// <summary>
     /// What this simulation now believes a slot's character is, in wire units.
     /// False when it has no character in that slot.
     /// </summary>
     bool TryGetCharacter(int slot, out CharacterBlock character);
+
+    /// <summary>
+    /// What this simulation now believes a control point is, in wire units.
+    /// False when it has no point at that index.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>State rather than a message, so unlike <see cref="DeathsLastTick"/>
+    /// this is compared on every position-bearing tick.</b> A point's index is
+    /// its load order, which <c>ControlPoints.Place</c> fixes once — the same
+    /// order the wire uses, because the block carries no identifier of its own.
+    /// </remarks>
+    bool TryGetControlPoint(int index, out ControlPointBlock point);
+
+    /// <summary>
+    /// Anchors the King of the Hill pregame timer, in ticks.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>An input, unlike everything else about a control point</b>, and for
+    /// the same reason a <c>PLAYER_SPAWN</c>'s position is: a replay cannot
+    /// derive it. The timer starts when the server restarts the room, and a
+    /// recording's only landmark is the <c>CHANGE_MAP</c> that announced the
+    /// change several hundred ticks earlier — measured, on two recordings.
+    /// <para>
+    /// Applied <b>once</b>, on the first update that carries it. After that the
+    /// simulation counts it down itself and the unlock it produces is compared
+    /// like anything else, so this anchors the round without conceding the
+    /// behaviour.
+    /// </para>
+    /// </remarks>
+    void SetControlPointUnlock(int ticks);
 }
 
 /// <summary>
@@ -355,6 +492,18 @@ public sealed class EmptySimulation : ITraceSimulation
     /// <remarks>Nothing here has an objective, so nothing here touches a flag.</remarks>
     public IReadOnlyList<IntelRecord> IntelLastTick => [];
 
+    /// <remarks>Nothing here builds anything, so nothing here can be destroyed.</remarks>
+    public IReadOnlyList<SentryRecord> SentriesLastTick => [];
+
     public bool TryGetCharacter(int slot, out CharacterBlock character) =>
         _characters.TryGetValue(slot, out character);
+
+    /// <remarks>Nothing here has an objective, so nothing here holds a hill.</remarks>
+    public bool TryGetControlPoint(int index, out ControlPointBlock point)
+    {
+        point = default;
+        return false;
+    }
+
+    public void SetControlPointUnlock(int ticks) { }
 }

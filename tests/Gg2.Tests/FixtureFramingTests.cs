@@ -46,9 +46,31 @@ public sealed class FixtureFramingTests
     {
         var path = Path.Combine(AppContext.BaseDirectory, "Fixtures", fixture);
         var trace = Trace.Decode(File.ReadAllBytes(path));
-        var map = LevelMap.FromPng(trace.Header.Map, ReferenceTree.ReadMap(trace.Header.Map));
 
-        var ticks = TraceParser.Parse(trace, GameModes.ShapeOf(map), out var start, out var stopped);
+        // ⚠️ NARROWED to area 1, and the stream cannot be read without it. A
+        // tall map is several rounds stacked vertically and only one area's
+        // entities exist — cp_dirtbowl writes six control points and plays two —
+        // and the HUD block carries no count prefix, so a reader framing by the
+        // wrong number desynchronises on the first update. Measured on
+        // reference-cp_dirtbowl-closedcp.trace: 458 of 138,406 bytes framed
+        // un-narrowed, all of them narrowed.
+        //
+        // A no-op for every single-area map, which is every other fixture here.
+        var map = LevelMap
+            .FromPng(trace.Header.Map, ReferenceTree.ReadMap(trace.Header.Map))
+            .ForArea(1);
+
+        // ⚠️ And re-shaped on CHANGE_MAP, or a recording that rotates to
+        // another gamemode desynchronises the moment a CAPS_UPDATE or
+        // FULL_UPDATE arrives on the new map — the only two tiers that carry
+        // the HUD block. See ModeChangeFramingTests.
+        var ticks = TraceParser.Parse(
+            trace,
+            GameModes.ShapeOf(map),
+            out var start,
+            out var stopped,
+            name => GameModes.ShapeOf(
+                LevelMap.FromPng(name, ReferenceTree.ReadMap(name)).ForArea(1)));
 
         Assert.True(stopped is null, $"{fixture}: {stopped}");
 

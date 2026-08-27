@@ -473,6 +473,1389 @@ That matters twice over:
 list**, and the roster-forcing recipe in "how to record a fixture for a class the
 bots will not reliably pick" is exactly the tool for it.
 
+### Settled: the four recordings, and what they found
+
+✅ **Recorded 2026-08-27** — `reference-ctf_truefort-closedheavy.trace`,
+`-closedsniper.trace`, `-closedquote.trace`, `-closedspy.trace`. Six of one
+class each, three a side, forced with `botAdd`; map reloaded under a connected
+recorder, so **all four are spawn-anchored and closed-loop**.
+`NewClassFixtureTests`.
+
+**The headline is a negative: all four frame cleanly to the last byte.** There
+is no `INPUTSTATE`-style layout bug for the heavy, the sniper, Quote or the spy.
+Six of one class per recording is CLAUDE.md's bisect-the-roster shape used
+*before* there is a bug rather than after — a stream that had desynchronised
+would have named the class by construction.
+
+| fixture | ticks | anchor | exact (trajectory) | fires | deaths |
+|---|---|---|---|---|---|
+| `closedheavy` | 2,235 | t499 | **270** | 0 | 3 |
+| `closedsniper` | 2,231 | t613 | **362** | 32 | 5 |
+| `closedquote` | 2,227 | t486 | **1,756** | 0 | 0 |
+| `closedspy` | 2,229 | t406 | **1,829** | 0 | 0 |
+
+⚠️ **The spy's 1,829 and Quote's 1,756 are the longest closed-loop windows in the
+project by a factor of three** — the best before them was `closedsupport`'s 489.
+Do not read that as those two classes being better implemented. It is that a
+bubble barely pushes anybody and a cloaked spy is not fighting, so almost nothing
+in either recording depends on a weapon at all. **A long window on a quiet
+recording is worth less than a short one on a loud one**, which is the
+`reference-ctf_truefort-combat.trace` lesson in a new costume.
+
+⚠️ **An unseeded weapon caps a *trajectory* window, not only an hp window.**
+That section below is written about hp, and the heavy is the counterexample: the
+Minigun broadcasts no seed, so the port lands its pellets somewhere else, shoves
+people somewhere else and diverges on **position** at t769. The sniper's Rifle is
+seeded and reaches 362. Both are short for the weapon's reason, not the class's —
+which is why `NewClassFixtureTests` compares trajectory only and says so.
+
+⚠️ **Three of the four record no `WEAPON_FIRE` at all, and a zero there is not a
+quiet recording.** The Minigun and the Blade call `randomize()`; only the Rifle
+is seeded. A heavy-only recording with three deaths in it still shows `0 fires`.
+Read the hp instead — `NewClassFixtureTests` asserts `MinObservedHp` for exactly
+this reason.
+
+**States no earlier fixture could reach**, each now asserted:
+
+- **A cloaked spy.** `cloak` rides in bit 0 of the flags byte of every
+  `QUICK_UPDATE`; until this recording the bit had only ever been written by the
+  port and read back by the port's own reader.
+- **`TOGGLE_ZOOM`** — 22 of them. Zoom is never serialised as state, so this is
+  the first recorded evidence the message exists on the wire here at all.
+- **`OMNOMNOMNOM`** — the heavy's sandvich.
+- **`RETURN_INTEL`** in the Quote recording, an objective event inside a trace.
+
+⚠️ **The recorder contributes a `PLAYER_CHANGECLASS` of its own.** It joins as a
+passive spectator and its class byte is the default **Scout**, so the set of
+classes a single-class recording names is always `{the class, Scout}` and never
+`{the class}`. Assert the pair rather than filtering the Scout out — a
+*seventh* class appearing there means the roster forcing did not hold.
+
+**The gate bites sharply and per class:** changing the spy's `RunPower` from
+1.08 to 1.09 takes `closedspy` from 1,829 exact ticks to **10**, and leaves the
+other three untouched.
+
+### Settled: the airblast can be gated by a recording after all
+
+✅ **`reference-ctf_truefort-closedairblast.trace`**, recorded 2026-08-27:
+**three pyros against three soldiers** on `ctf_truefort`, 2,666 ticks,
+spawn-anchored, framed cleanly. `AirblastFixtureTests`.
+
+| compared | anchor | exact | with `Weapons.AirBlast` stubbed |
+|---|---|---|---|
+| trajectory | t471 | **1,266** | **286** |
+| trajectory + hp | t471 | **1,133** | — |
+
+⚠️ **docs/SIMULATION.md said "the Flamethrower is unseeded, so no recording can
+gate it" and that was a statement about the fixtures that existed.** Two
+corrections, and the second generalises:
+
+1. **The reflectable set is `Rocket`, `Flare` and `Mine`**
+   (`Flamethrower.events/User Event 2.xml`). `closedsupport` is the only earlier
+   fixture containing pyros and it is medic/pyro/engineer — **no rockets, no
+   mines** — so its pyros could never press the key. Implementing the airblast
+   moved no bound because no bound could have moved. **The roster decides which
+   behaviours a recording can even reach; ask that before concluding a
+   subsystem is ungateable.**
+2. ⚠️ **An unseeded weapon caps an hp window; whether it caps a *trajectory*
+   window depends on whether it moves people.**
+   `Projectiles.BurningHitCharacter` deals damage and calls no `motion_add` at
+   all, so a flame landing somewhere else cannot shift a trajectory — where a
+   Minigun's pellets can, which is exactly why `closedheavy` stops at 270. Both
+   weapons are unseeded and only one of them caps a trajectory.
+
+**Its hp window is unusually long for a recording with a pyro in it** — 1,133
+against `closedsupport`'s 328 — because the damage here is overwhelmingly seeded
+rocket damage and a pyro has to be close to burn anybody. That 1,133 is second
+only to `closedcombat`'s 1,204 and is still capped by the first flame that
+connects and lands differently; **do not try to raise it by implementing
+something.**
+
+It also holds two `GRAB_INTEL`s, which no earlier fixture had.
+
+### Settled: `Fields.Sentries`, and the divergence it found on its first run
+
+✅ **`reference-ctf_truefort-closedsentrykill.trace`**, recorded 2026-08-27:
+**three engineers against three soldiers**, 3,592 ticks, spawn-anchored, framed
+cleanly. Six sentries built, five landed, **three destroyed** — the first
+`DESTROY_SENTRY` in any recording in this project. 125 seeded rocket fires,
+eleven deaths. Trajectory window **581** ticks from t427.
+`SentryKillFixtureTests`.
+
+⚠️ **The harness could not see any of it, so `Fields.Sentries` was added.**
+`Replayer` *injected* `BUILD_SENTRY` like a spawn and compared **no sentry state
+whatever** — a port that destroyed the wrong sentry, or none at all, replayed
+every fixture in the project without a murmur. It is the `Fields.Deaths`
+argument only stronger: **a sentry writes no bytes at all on an `INPUTSTATE`,
+not even its hp**, so on six ticks in seven a recording says nothing about one,
+and on the seventh a destroyed sentry is an unset subobject bit naming nobody.
+`SentryRecord` mirrors `DeathRecord`; `TickEvents.SentryDestroyed` already
+existed and was simply never collected.
+
+**The three destroys are not alike, and the difference is the whole finding:**
+
+| tick | killer | assistant | cause | port |
+|---|---|---|---|---|
+| t496 | 255 | 255 | **0** (self-destruct) | ❌ missed |
+| t1691 | 4 | 255 | **9** (a soldier shot it down) | ✅ reproduced exactly |
+| t2296 | 255 | 255 | **0** (self-destruct) | ❌ missed |
+
+✅ **The weapon kill — the thing the recording was made for — the port
+reproduces on the tick, with the killer.** It is inside the trajectory window.
+
+⚠️ **The port reproduces neither self-destruct, and one of them is a real
+divergence.** `Sentries.BeginStep`'s three-clause guard destroys a sentry with
+`killer 255, cause 0`; the reference fires it **one tick after the sentry is
+built**, twice, both for slot 1. **Only t496 is evidence** — it is inside the
+window (t427 + 581 = t1008), so both sides still agree about where everything
+is. t2296 is thirteen hundred ticks past the window, where the port's sentries
+are elsewhere entirely, and proves nothing on its own.
+
+Two candidate causes, neither run down, both in `src/Gg2.Simulation` and so not
+this lane's to fix: either the port never built that sentry (nothing to destroy)
+or it built one and `AnySentryInCircle`/the class-and-team clauses did not fire
+where the reference's did. **A blanket "Build never works" is already ruled
+out**, because the port builds at t1125 — that is the sentry it correctly kills
+at t1691.
+
+`SentryKillFixtureTests.ThePortStillMissesBothOfTheReferencesSentrySelfDestructs`
+pins the two ticks, so **fixing it fails the test on purpose**. Delete the pin
+and fold the ticks into the test above when it does.
+
+**The gate bites:** making `Sentries.ReportDestruction` not set
+`events.SentryDestroyed` fails both sentry tests.
+
+### Settled: a replay gave a spawning character one Begin Step too many — FIXED
+
+✅ **2026-08-27, in the harness.** The section below is how the divergence was
+found and diagnosed; this is what closed it.
+
+**`ITraceSimulation.QueueSpawn`** asks the simulation to build a spawning
+character **inside the next tick's alarm stage** instead of placing it before the
+tick runs. `PortedSimulation` arms `player.alarm[5]` and hands
+`MatchSimulation.Tick` the map's spawn points, so the tick itself creates the
+character exactly where `PlayerSpawn.gml` does.
+
+⚠️ **The spawn point still has to be the recorded one, and the alarm stage draws
+it from the shared stream.** The harness cannot reach into the middle of a tick,
+so it arranges the stream beforehand: GM8's generator is Delphi's
+`seed' = seed*0x08088405 + 1` with `random(x) = x*seed'/2^32`, so the seeds
+producing a wanted first result form **one contiguous run**, every later draw
+follows from it, and walking that run finds a seed for a whole six-slot spawn
+wave in a few thousand steps. `PortedSimulation.TryForceSpawnPointDraws`, which
+verifies each candidate by running a real `GmlRandom` rather than by re-deriving
+the algebra. **Overwriting the stream is free here and nowhere else** — the
+spawn-point choice is broadcast, and a replay already forces every weapon seed,
+which is the one place the stream is contract.
+
+⚠️ **The spawn must be queued a tick EARLY**, off the *next* tick's messages —
+the same off-by-one a fire seed and a death have. `GameServerBeginStep.gml`
+serialises the state inside Begin Step and the alarm stage runs after it, so a
+character created on a tick cannot appear in that tick's own update. **Queueing
+when the message arrives is a tick late and breaks every spawn-anchored fixture**;
+measured both ways, and the wrong way failed twenty tests at once.
+
+| Fixture | Window before | Window after |
+|---|---|---|
+| `reference-ctf_2dfort-closedrespawn.trace` | 5 | **362** |
+| `reference-gg_debug-closedtdm.trace` | 2 | **23** |
+| every other fixture | — | unchanged |
+
+Mutation-checked: stopping the replayer from queueing fails exactly the two tests
+that assert those windows and nothing else.
+
+⚠️ **What is left on `gg_debug` is a different finding: the DROPDOWN PLATFORM.**
+The port does not implement one — `CharacterPhysics` says so in two comments —
+and this recording is the first evidence that it matters. `gg_debug` places
+**two**, at `438,216` and `498,216`, and the residual is slots 1 and 3 at rest on
+`y = 192` in the reference while the port falls past; a soldier's origin sits
+22.6 above its foot, so `192 + 22.6 = 214.6` is a character standing exactly on a
+platform whose top is 216. ⚠️ **The earlier note ruled dropdown platforms out
+because "`tdm_mantic` has four and is exact"** — but a map placing a feature is
+not its bots touching one, which is the same mistake the `tdm_mantic` move-box
+recording made. **Open, and owed to the lane that owns `src/Gg2.Simulation`.**
+
+⚠️ **`ctf_2dfort`'s capture is still out of reach**, and no longer for this
+reason: its `GRAB_INTEL` is at t1404 and the window now ends at t877, so what
+separates them is ordinary drift. A fixture that gates `doEventScoreIntel` needs
+the objective to happen **early**, not another physics fix.
+
+### How that divergence was found: the first fixture on a second map lands 0.4 px low
+
+⚠️ **`reference-ctf_2dfort-closedrespawn.trace`**, recorded 2026-08-27: three
+scouts against three soldiers on **`ctf_2dfort`**, the narrowest CTF map, chosen
+so the bots would meet early enough for a death and its 150-tick respawn to sit
+inside a closed-loop window. **It does not deliver that**, because its window is
+**five ticks**. `SecondMapFixtureTests`.
+
+**Every character lands 0.4 world pixels low, on its very first fall.**
+`ctf_2dfort`'s spawn points are at `y = 894` and the floor beneath them stops a
+scout at `y = 900`, so everybody drops six pixels the moment they spawn. The
+reference lands on exactly **900**; the port lands on **900.4** — all six slots,
+on the same tick (five after the wave), and it stays there. Every mismatch reads
+`y expected 4500, got 4502`.
+
+**The map layer is exonerated, and that was measured rather than assumed:**
+
+- The engine, asked with a live scout's own box at the red spawn column, answers
+  `place_free` **true for y ≤ 900 and false for y ≥ 901**.
+- The port's `CollisionWorld.PlaceFree` answers **identically**. That is now a
+  permanent test, and it is a fifth map for the collision layer —
+  `collision-samples.json` covers `ctf_truefort`, `koth_valley`, `gg_debug` and
+  `arena_lumberyard`, and never this one.
+- `maps.json` already gates this map's mask cell-for-cell, and the map places
+  **no gates, no player walls and no dropdown platforms** — one `Obstacle` and
+  nothing else. Checked live: `instance_number(DropdownPlatform) = 0`.
+
+⚠️ **So it is the landing, and the reason no earlier fixture caught it is that
+no earlier fixture ever dropped anybody.** On `ctf_truefort` the spawn wave
+produces no such offset — six fixtures there stay exact for hundreds of ticks
+past their anchors — so a spawn-drop is a path phase 4's 48 trajectories
+evidently never took. **An open finding for the lane that owns
+`src/Gg2.Simulation`.**
+
+`SecondMapFixtureTests.ThePortLandsFourTenthsOfAPixelLowOnThisMap` pins the
+five-tick window, so **fixing it fails that test on purpose**.
+
+#### ✅ ROOT CAUSE, 2026-08-27: a replay gives a spawning character one Begin Step too many
+
+**The reference creates a character in the ALARM STAGE.** `player.alarm[5]`
+fires `PlayerSpawn`, which runs between Begin Step and Step — so on its spawn
+tick the character gets a Step and an End Step but **no Begin Step**, and Begin
+Step is where gravity is applied. Its very first End Step therefore still sees
+`vspeed == 0`, which is the guard on the stair descent in
+`Character.events/End Step.xml`:
+
+```
+if(vspeed == 0 and ...)
+    if(place_free(x,y+6)) if(!place_free(x,y+7)) y += 6;
+```
+
+**So a character spawning within six pixels of the floor is snapped onto it on
+its first tick, not dropped onto it over four or five.**
+
+⚠️ **A replay places the character BEFORE running the tick** —
+`Replayer` applies a recorded `PLAYER_SPAWN` by calling
+`ITraceSimulation.SpawnCharacter`, so the character exists for that tick's Begin
+Step, takes gravity there, arrives at End Step with a non-zero `vspeed`, and
+falls instead.
+
+**Verified both ways** (`SpawnTickTimingTests`, on `gg_debug`, marker (570,162),
+floor blocked from 169):
+
+| how the character is created | first tick |
+|---|---|
+| **alarm stage** (`RespawnTimer = 1`), as the reference does | **y = 168, vspeed 0** |
+| **pre-placed then ticked**, as the replay does | still airborne, vspeed ≠ 0 |
+
+The recording agrees with the first row exactly: slot 1 is observed at y = 168
+with zero vspeed two ticks after the wave, and stays there.
+
+⚠️ **Which is why `ctf_truefort` never caught it**: its markers are **eighteen**
+pixels above the floor — outside the six-pixel snap — so both sides genuinely
+fall and agree. `gg_debug` (162 → 168) and `ctf_2dfort` (894 → 900) are exactly
+six.
+
+**The fix needs a seam that does not exist**: a way to spawn at a *given* point
+through the alarm stage. Arming `RespawnTimer` alone is not enough, because the
+stage picks its own point and would race the recorded choice — which is exactly
+why `PortedSimulation` places directly today. **So the simulation is correct and
+the harness cannot currently express what the reference does**; closing it means
+adding that seam.
+
+#### Narrowed by the two Team Deathmatch recordings
+
+Two more maps were recorded on 2026-08-27 and they cut the search space hard.
+
+| fixture | map | window | note |
+|---|---|---|---|
+| `closedtdm` | `tdm_mantic` | **3,043** | exact on `Trajectory｜Hp｜Deaths`, and quiet |
+| `closedtdm` | `gg_debug` | **2** | same signature as `ctf_2dfort`, much larger |
+
+On `gg_debug`, two ticks after the anchor and **all six slots at once**: the
+reference has them at rest at `y = 168` with `vspeed 0`, the port at `163.2`
+still falling at ~1.18 px a tick — exactly where a character dropped from the
+spawn marker at `y = 162` sits after two ticks of gravity.
+
+**What that rules out:**
+
+- ❌ **"Any map that is not `ctf_truefort`."** `tdm_mantic` is a third map and
+  is exact for 3,043 ticks.
+- ❌ **The collision mask.** Established for `ctf_2dfort` by asking the engine
+  and the port the same column.
+- ❌ **Dropdown platforms**, which the port does not implement: `tdm_mantic` has
+  **four** and is exact, `ctf_2dfort` has **none** and diverges.
+- ❌ **Player walls and bullet walls**: `gg_debug` has 2/1/2 of them,
+  `ctf_2dfort` has none, and both diverge.
+
+**The signature both failing maps share:** the reference is at rest on an
+**integer** `y` shortly after the anchor while the port is still falling from a
+spawn marker **six pixels** above it (894→900, 162→168). On `ctf_truefort`,
+where the port is exact, the reference instead comes to rest on a
+**fractional** y (474.47) after an eighteen-pixel drop — which is what a fall
+that really happened looks like.
+
+⚠️ **Root cause deliberately not claimed.** `doEventSpawn.gml` and
+`offloadSpawnPoints.gml` were both read and neither applies any offset — a
+character is created at the spawn marker verbatim — so the next step is on the
+port's side of the replay and belongs to whoever owns `src/Gg2.Simulation` and
+`src/Gg2.Parity`.
+
+### Settled: the first King of the Hill fixture, and the gap it exposes
+
+✅ **`reference-koth_valley-closedkoth.trace`**, 2026-08-27: three scouts against
+three soldiers, 3,598 ticks, spawn-anchored, **framed cleanly**, reported by
+census as `KingOfTheHill, 1 control point(s)`. `KothFixtureTests`.
+
+**The framing is the sharp result, and it is sharper than it looks.** The
+control-point block carries **no count prefix** — a reader has to build the same
+points from the same map, in the same order, or every update after the first is
+misframed. Nothing had ever tested that against a real stream.
+
+**Proved by mutation:** making `GameModes.ControlPointsFor` return 2 for KotH
+fails `FixtureFramingTests` on this fixture and all four `KothFixtureTests` —
+and **no other fixture in the project fails**, because none of them has a
+control point. This recording is the only thing here that can catch that class
+of bug.
+
+| what | value |
+|---|---|
+| exact window (`Trajectory｜Hp｜Deaths`) | **330** ticks, t409 → t739 |
+| `UNLOCKCP` | **1** — the project's first |
+| `CAPS_UPDATE` | **39** (a CTF fixture holds one or two) |
+| weapon fires / deaths | 118 / 14 |
+
+The roster is scouts against soldiers on purpose: **a scout's `capStrength` is 2
+and every other class's is 1**, the only class override in the capture rules.
+`UNLOCKCP` is contract rather than decoration — KotH always sends it and DKotH
+never does, so it is the one message separating the two modes on the wire.
+
+⚠️ **It is also a useful negative for the landing finding**: `koth_valley` is a
+fifth map and behaves normally — the first divergence is ordinary single-slot
+drift of two wire units at t739, not six characters falling at once.
+
+#### ⚠️ Nothing in the harness compares a control point
+
+`StateUpdateReader` parses the block into
+`ControlPointBlock(Team, CappingTeam, Capping)` and **`TraceParser` then throws
+it away** — a `TraceTick` carries character slots and messages and nothing else.
+So a port that never captured the hill, captured it for the wrong team, or moved
+the meter at the wrong rate replays this fixture exactly as well as a correct
+one. `ControlPointTests` and `DualKothTests` remain the whole gate for two
+gamemodes.
+
+✅ **Closed on 2026-08-27**: `TraceTick.ControlPoints`, `Fields.ControlPoints`,
+`ITraceSimulation.TryGetControlPoint`, `Replayer.ReconcileControlPoints`.
+
+⚠️ **The block rides on a `CAPS_UPDATE` or the join `FULL_UPDATE` and on
+nothing else** — `StateUpdateReader` returns before the HUD tail on any other
+tier. Three consequences, each of which cost an attempt:
+
+- **`TraceParser` must take it from `pending`, not from the tick's own update.**
+  Neither a `FULL_UPDATE` nor a `CAPS_UPDATE` delimits a tick, so both are
+  sitting in the pending list when the tick is built. Reading `state.ControlPoints`
+  gives an empty array on every tick.
+- ⚠️ **The comparison must NOT be gated on `HasPositions`.** A `CAPS_UPDATE`
+  arrives independently of the positional cadence, so gating on it silently
+  skipped **every** observation — the comparison reported zero mismatches and
+  looked like a pass.
+- **A recording observes a hill a few dozen times in several thousand ticks**,
+  on no fixed cadence. `koth_valley` holds 40 observations, 9 of them after the
+  anchor.
+
+#### ⚠️ It found two harness bugs immediately, and neither could have been seen before
+
+1. **`PortedSimulation.LoadMap` never called `ControlPoints.Place`.** It placed
+   the briefcases and stopped, so **a replay of any KotH, Control Points or
+   Arena map ran with no control point and no capture zone at all** — a
+   character standing on the hill was standing on nothing.
+2. ⚠️ **Fixing that alone was not enough.** `ControlPoints.Place` switches on
+   `state.GameMode` to decide which entity types are points, and a defaulted
+   `WorldState` is Capture the Flag — which places **none** of a KotH map's. The
+   mode has to be set from the map first, as `GameServer` does.
+   `KothFixtureTests.AReplayNowHasTheHillItIsSupposedToHave` gates both;
+   removing either line fails it.
+
+#### ⚠️ What it still cannot gate
+
+**Every one of `koth_valley`'s nine post-anchor observations falls outside its
+330-tick trajectory window** — the earliest is t1010 and the window ends at
+t739. By then the port's characters have drifted, so which of them stands on the
+point can differ for reasons unrelated to the capture rules, and the eleven
+differences the comparison reports (`cappingTeam`, and `capping` off by ±1)
+cannot distinguish a wrong rule from positional drift.
+
+**So the plumbing is proven and the rules are not** — for that recording.
+
+### Settled: the uncontested KotH fixture, and what it caught
+
+✅ **`reference-koth_valley-uncontested.trace`**, 2026-08-27: **six red scouts
+and no blue team**, spawn-anchored, framed cleanly, **zero weapon fire and zero
+deaths**. `KothCaptureFixtureTests`.
+
+⚠️ **The one-sided roster is the design.** The hill cannot be captured before
+its unlock timer fires (~900 ticks), and the unlock **cannot be forced** — the
+port simulates its own, so forcing the reference's early manufactures a mismatch
+rather than exposing one. So the *window* had to grow instead, and what ends
+these windows is **weapon knockback**. With nobody to fight:
+
+| | contested (`closedkoth`) | uncontested |
+|---|---|---|
+| trajectory window | 330 | **3,111** |
+| earliest CP observation after anchor | t1010 (**outside**) | **all inside** |
+| can it gate the capture rules? | no | **yes** |
+
+#### ⚠️ A third harness bug, and then a real finding
+
+**`PortedSimulation.LoadMap` also never called `Rounds.Start`** — the third
+omission in that method, after `ControlPoints.Place` and `GameMode`.
+`GameServer.OpenMap` calls it immediately after `Place` and says why: it is
+"everything a gamemode's HUD sets in its Create event ... **the pregame lock**".
+Without it a replay's hill is capturable from the first tick, so six characters
+standing on it took it at once. Fixed.
+
+**What is left is a genuine control-point divergence, and it is not drift.**
+With trajectories exact for 3,111 ticks — every character where the reference
+put it — **the port starts capturing about 180 ticks early**. Recorded: neutral
+at t1086, capturing from ~t1240 (30 at t1246, 75 at t1261, 225 at t1311),
+captured at t1336. The port already has the meter at **177 at t1086**.
+
+Ownership is now right (that was the missing lock). ✅ **The rest was run down
+on 2026-08-27 and it is a HARNESS limitation, not a simulation bug** — see
+below. `KothCaptureFixtureTests.ThePortStillCapturesTheHillTooEarly` pins it.
+
+### Settled: the objective is gated at last — a grab AND a capture inside a window
+
+✅ **`reference-ctf_2dfort-uncontestedcap.trace`** (2026-08-27): **six red scouts
+and no blue team**, spawn-anchored by the map-reload recipe, with the bots
+steered to blue's briefcase and then home again. `IntelCaptureFixtureTests`.
+
+**It replays with no mismatches at all, over its whole 4,934 ticks** — the
+longest exact window in the project — and the objective happens in the middle of
+it: anchor **t618**, `GRAB_INTEL` **t1355**, `SCORE_INTEL` **t2867**, last tick
+t4933. Zero weapon fires, zero deaths.
+
+⚠️ **This is the first fixture for which deleting the objective would fail a
+test.** Adding the whole of it in phase 6 moved none of the five closed-loop
+windows by a tick, because every earlier fixture observed the objective *outside*
+its window — `reference-ctf_2dfort-closedrespawn.trace` holds a grab at t1404
+against a window ending at t877. Mutation-checked: breaking the grab guard fails
+`ThePortGrabsAndCapturesOnTheReferencesTicks`.
+
+⚠️ **`Fields.Intel` compares the objective's MESSAGES, not wire state.** A
+briefcase and a carrier's `intel` byte are `FULL_UPDATE`-only and a recording
+holds exactly one of those, on the join path before anything has happened. What
+is gated is that the port emits a `GRAB_INTEL` and a `SCORE_INTEL` on the
+reference's own ticks — which is what `doEventGrabIntel` and `doEventScoreIntel`
+amount to from outside.
+
+**The recipe generalises, and this is now the second time it has paid:** a
+one-sided roster buys a window long enough to reach a slow objective, because
+**what ends a closed-loop window is weapon knockback**. Removing the enemy team
+took the KotH capture from unreachable to gated, and it has now done the same for
+the flag. ⚠️ It costs what it buys — a long window on a quiet recording is worth
+far less per tick than a short one on a loud one — so use it for objectives, not
+for physics.
+
+⚠️ **And steering the bots there is legitimate.** A replay consumes recorded
+`INPUTSTATE`s and simulates no bot AI, so `botGoalLocked`/`botSetGoal` change
+what gets recorded and nothing about how it replays. A **teleport** would break
+the anchor; a goal does not.
+
+### Settled: when a KotH point unlocks, and why a replay is early
+
+`KothHUD.events/Create.xml` sets `cpUnlock = 900`; its Step fires
+`doEventUnlockCP` on the tick it reads `cpUnlock == 0` and decrements
+**afterwards**, so the unlock lands **901 ticks after the HUD was created** —
+which is when the server restarts the room.
+
+✅ **Measured, and the model is exact on two independent recordings:**
+
+> **unlock = (spawn wave − 150) + 901**
+
+| fixture | wave | implied round start | predicted | recorded |
+|---|---|---|---|---|
+| `uncontested` | t485 | t335 | t1236 | **t1236** |
+| `closedkoth` | t404 | t254 | t1155 | **t1160** |
+
+The 150 is the ordinary respawn time — a reload destroys every character and
+they come back on the usual timer, which `RespawnTimingTests` measures
+independently. The five-tick slack on the second is the wave's own stagger
+(t404 and t409).
+
+⚠️ **`CHANGE_MAP` is NOT the round start, and a replay assumes it is.** Both
+recordings carry exactly one `CHANGE_MAP`, at **t0**, and unlock 1236 and 1160
+ticks later — two different offsets, neither of them 901. If `CHANGE_MAP` were
+the round start both would be 901.
+
+**So the port was right and the replay was early.** ✅ **Fixed 2026-08-27**:
+`Replayer` anchors `cpUnlock` from the wire, and with it the port reproduces
+`reference-koth_valley-uncontested.trace`'s hill **exactly — zero mismatches**
+on ownership, capping team and meter, with the trajectories exact throughout.
+`KothCaptureFixtureTests.ThePortReproducesTheHillExactly`.
+
+**The capture arithmetic is gated against the engine for the first time.** By
+mutation, halving a scout's `capStrength` from 2 to 1 gives
+`capping exp 30 got 20`, `exp 75 got 50`, `exp 225 got 150` — the 2:1 ratio,
+visible directly — and the capture then never completes. Dropping the
+"`pointCapture` leaves `cappingTeam` set" quirk fails it too.
+
+#### Four things that had to be right, each of which cost an attempt
+
+1. ⚠️ **`CHANGE_MAP` is not the round start and the delay is not a constant.**
+   The two recordings restart their rounds **335** and **254** ticks after it, so
+   there is nothing to subtract.
+2. ⚠️ **The first HUD readings are stale.** The server keeps serialising the old
+   round's HUD after announcing the change: `uncontested` reads `cpUnlock = 0` at
+   t0 and t62 and does not show the new round's countdown until **t1086, reading
+   149** (which lands the unlock on t1236, as recorded).
+3. ⚠️ **So only a POSITIVE reading may be taken.** A zero is ambiguous — it means
+   "already unlocked", true of both rounds. A positive value is unambiguous,
+   because `KothHUD.events/Step.xml` fires the unlock on the tick the counter
+   reads 0: it says both "this many ticks left" **and** "still locked", which is
+   why the simulation re-locks on it.
+4. ⚠️ **The unlock is a latch, and re-locking must discard the meter.** Setting
+   the counter back does not re-lock a point that has already unlocked; and a
+   lock that left the meter standing is a state the reference cannot be in —
+   `ControlPoint`'s Step does `capping = 0; exit;`. Without that the anchor tick
+   itself mismatched by `capping 177`.
+
+**What is conceded** is the countdown, which is `-1` a tick, unit-tested, and
+gated against the recordings directly by `KothUnlockTimingTests`. **What is now
+gated** is everything downstream — presence, capture rate, ownership — so
+`ControlPointTests` and `DualKothTests` are no longer the *whole* gate for King
+of the Hill.
+
+⚠️ **A recorder that joins before a map reload cannot see the new round's
+countdown for several hundred ticks.** That is a property of the recipe, not a
+bug: the closed-loop recipe deliberately reloads *under* a connected recorder so
+the spawns anchor. The positive-reading rule is what makes both work at once.
+
+### Settled: `tdm_mantic`'s move boxes cannot be recorded, and the MAP is why
+
+⚠️ **Three attempts now, and the third measured the cause.** Two with bots, and
+one on 2026-08-27 with the **driven client** the second attempt concluded was
+needed. The driven attempt failed too — and it established that the obstacle is
+the map's own geometry rather than the tooling, which is what makes this a
+closed question rather than an open one.
+
+Measured against the running game by enumerating `MoveBoxUp`/`MoveBoxDown`; the
+port's map layer agrees, and `MoveBoxTests` pins every row:
+
+| Fact | Measured |
+|---|---|
+| Up boxes cancelled by a down box at the same `bbox_left`, `bbox_top + 6` | **6 of 9** (the engine answered `111111000`) |
+| Up boxes that actually lift | 3, at `(2028,1014)`, `(2100,1266)`, `(2160,852)` |
+| `pushPower` | 5 on every box; no `speed` override anywhere |
+| A character dropped into `(2028,1014)` | **hovers indefinitely**, y ≈ 915 ↔ 1003, ~30-frame period |
+| Scout jump apex | **58 px** |
+| Platform below the middle fan → its catch window | 75 px short |
+| Floor below the lowest fan → its catch window | 123 px short |
+
+⚠️ **Two thirds of this map's move boxes are inert.** A character's box is 34
+tall against the box's 42, so one overlapping an up box overlaps its down partner
+as well, and five up plus five down is exactly zero. That alone explains both bot
+attempts: most of what the bots were being steered at does nothing at all.
+
+⚠️ **And the three that work hang in open air** — a diagonal chain of updraft
+fans with no floor near them, which is not somewhere a bot goes. ✅ **They do
+work**: a character placed in one hovers forever, so the rule is right and the
+*approach* is what is impossible.
+
+⚠️ **A driven scout cannot reach them either.** A straight jump falls 17 px short
+of the fan above the platform, and walking off the platform edge at run speed
+overshoots the fan below — measured, the character passes `x ≈ 2210` at the fan's
+`y`, where the catch window ends at 2147.
+
+**What is left to try:** a driven **soldier or demoman** entering a fan on a
+rocket or mine jump, with the aim written into the client's own input — aim rides
+in `INPUTSTATE`, so it is an input rather than a teleport. ⚠️ **A teleport is not
+an option**: it moves a character the port would have had to derive, which breaks
+the closed-loop anchor.
+
+The two new gates are
+`MoveBoxTests.SixOfManticsNineUpBoxesAreCancelledByADownBoxSixPixelsBelow` and
+`ACharacterCentredOnACancelledUpBoxIsPushedNowhere`. Mutation-checked: making a
+down box push nothing fails the second.
+
+#### The two bot attempts, kept for the technique
+
+`tdm_mantic` is the only shipped map placing move boxes (fifteen, confirmed
+live, clustered at x 1968–2237, y 852–1499 — including the exactly-cancelling
+stacked pairs docs/SIMULATION.md describes) or pit falls (six). Two attempts to
+get a character onto one:
+
+1. **A 110-second recording with six bots' goals locked across the lift column**
+   (`botGoalLocked` plus `botSetGoal` above and below it). Framed cleanly,
+   2,859 exact ticks — and **zero observations anywhere inside the box
+   rectangle**. Deleted rather than checked in: it gates nothing that
+   `reference-tdm_mantic-closedtdm.trace` does not already.
+2. **Goals set directly ON individual boxes**, then sixty seconds watched live
+   with `collision_rectangle` over the whole column. **No character ever entered
+   it.**
+
+**So the bots will not path there**, and whether that is a missing nav route or
+something else was not determined. `MoveBoxTests` and `KillBoxTests` remain the
+whole gate for both families. **The next attempt needs a driven client, not
+bots** — CLAUDE.md, "Driving a real client".
+
+✅ **One technique worth keeping from the attempt: steering bots cannot
+invalidate a closed-loop fixture.** A replay consumes the recorded
+`INPUTSTATE`s and simulates no bot AI at all, so `botGoalLocked` and
+`botSetGoal` change *what inputs get recorded* and nothing about how they are
+replayed. That makes goal-locking a legitimate way to aim a recording at a
+behaviour — unlike teleporting, which moves a character the port would have to
+have derived and breaks the anchor.
+
+### Settled: Arena has a fixture, and the last unreached framing risk is reached
+
+✅ **`reference-arena_lumberyard-closedarena.trace`** (2026-08-27): three
+soldiers a side, spawn-anchored by the map-reload recipe. **Arena was the only
+gamemode never recorded**, and it carried the project's oldest unreached framing
+risk. `ArenaFixtureTests`.
+
+⚠️ **`ARENA_ENDROUND` is not a bodyless message and this port framed it as one**
+until phase 6's arena work. It carries five bytes and then five more *per MVP*,
+so the counts must be read to know the length — a reader that skipped the body
+would have lost the stream the first time a round ended. It survived because no
+recording reached the state, exactly as the sentry `INPUTSTATE` bug did for six
+phases.
+
+✅ **The recording frames to the last byte, three round-ends and all**: 3
+`ARENA_ENDROUND`, 5 `ARENA_STARTROUND`, 4 `ARENA_RESTART`, 9 deaths, 72 weapon
+fires over 4,495 ticks. Every `ARENA_ENDROUND`'s length is exactly
+`5 + 5 × (mvpsRed + mvpsBlue)` as re-derived from the counts inside its own
+payload, and at least one carries MVP records — **which is the control that
+matters**: if every round had ended with both lists empty, a fixed-length reader
+would frame this recording perfectly and the bug would still be unreached.
+
+⚠️ **What this adds over the synthetic gates.** `ArenaTests` and
+`PlayerStatsLayoutTests` already round-trip the same arithmetic through the
+port's own writer and reader, so they agree with each other whether or not either
+agrees with the engine. This is the reference's bytes. Mutation-checked: dropping
+the MVP skip fails all five fixture tests and both synthetic ones — the
+difference is what a *pass* means, not what a failure catches.
+
+⚠️ **Its trajectory window is short by construction and is not the point.**
+Arena re-spawns everybody at the start of every round (`respawnEveryone()` calls
+`PlayerSpawn()` directly rather than arming `alarm[5]`), so the recording holds
+**54** `PLAYER_SPAWN`s across five round starts and its last exact anchor is very
+late.
+
+**Of the four self-shortening messages, three are now reached by a recording**
+— the sentry `INPUTSTATE` block, the generator HUD block and `ARENA_ENDROUND`.
+⚠️ **`BALANCE` is the one left**: one body byte for a notice, two for a switch,
+and no fixture reaches it. `ServerBalanceTeams` is called only on a death, a
+departure and a team change, so a recording would need autobalance on and lopsided
+teams.
+
+### Settled: `BALANCE` is reached, and all four self-shortening messages are done
+
+✅ **`reference-ctf_2dfort-autobalance.trace`** (2026-08-27): four soldiers
+against two, spawn-anchored, with the roster forced lopsided. **Three `BALANCE`
+messages and it frames to the last byte.** `AutobalanceFixtureTests`.
+
+⚠️ **`BALANCE` is not a fixed-width message and this port framed it as one** —
+two body bytes — until phase 6. `BALANCE, 255` is the "teams are uneven" notice
+and `BALANCE, playerId, class` says somebody was moved; the client reads one byte
+and only then decides whether to read a second
+(`ClientBeginStep.gml:244-253`), so a reader that always takes two is **one byte
+ahead from the first notice onwards**.
+
+**Both shapes are in this stream**, which is the property that matters — a
+recording holding only notices would frame perfectly under the old reader for the
+wrong reason, and one holding only switches for the right one. Mutation-checked:
+forcing the reader back to a fixed two fails all four fixture tests, the two
+`TeamBalanceTests`, and `FixtureFramingTests` for this file.
+
+**How to reach it**, because it took three conditions at once:
+
+1. **A team two players larger than the other** (`ServerBalanceTeams.gml`). Every
+   other fixture here is a balanced bot roster, which is why it was never
+   reached.
+2. **Deaths.** The script is called only on a death, a departure or a team
+   change — the fuse (`balancecounter`) runs every tick, the check does not.
+3. **The fuse expired, with a dead player available.** The switch needs
+   `balancecounter >= Server_Respawntime + 30*2` — 210 ticks at the default — and
+   only **dead** players are eligible, the guard reading the *character*, so a
+   player awaiting respawn qualifies.
+
+⚠️ **And the map reload re-balances the roster underneath you.** A map change
+puts every player back to spectator and the bots re-pick, which turned a forced
+4/2 into **3/3** — measured. **Force the roster _after_ the reload**, not before.
+The existing recipe above says to force it first, which is right for classes
+(every class-forced fixture's class set survives the reload) and wrong for teams.
+The `PLAYER_LEAVE` in this recording is that second forcing, and it is the only
+fixture other than `combat` to hold one.
+
+**All four self-shortening messages are now reached by a recording** — the sentry
+`INPUTSTATE` block, `ARENA_ENDROUND`, the generator HUD block and `BALANCE`.
+⚠️ **When adding a message, ask what makes its length change** — that family has
+produced four framing bugs and every one of them survived until a recording
+reached the state.
+
+### Settled: every bound re-measured after the alarm-stage spawn seam
+
+✅ **2026-08-27, all 25 fixtures.** The seam
+(`ITraceSimulation.QueueSpawn`) changed how *every* spawn-anchored fixture
+starts, so the rule at the top of this section applied: **re-measure after any
+change, not only when a window is expected to move.**
+
+**Fourteen closed-loop windows, and thirteen are unchanged to the tick:**
+`closedcombat` 357 traj / **1,204 hp** / 1,325 deaths, `closedsupport` 489 / 328
+/ 373, `closedairblast` 1,266 / 1,112 / 1,213, `closedspy` 1,829,
+`closedquote` 1,756, `closedsniper` 362, `closedsentrykill` 581,
+`cp_dirtbowl` 905, `koth_valley` 330, `uncontested` 3,111, `tdm_mantic` 3,043,
+`closedgen` 408, `bots` 869.
+
+⚠️ **The one that moved is the heavy: 270 → 396**, and it is attributed by
+measurement rather than guessed — switching the queueing off reproduces 270
+exactly. That the other thirteen did **not** move is the control: a seam that
+shifted every fixture by a tick would have moved all of them.
+
+**New windows from this session's fixtures:** `ctf_2dfort-closedrespawn` 362 (was
+5), `gg_debug-closedtdm` 23 (was 2), `uncontestedcap` **4,315 — the whole
+recording after its anchor**, `arena_lumberyard` 207, `autobalance` 4.
+⚠️ **The last two are short by construction and are framing fixtures, not physics
+ones**: Arena re-spawns everybody every round and the autobalance recording has
+its roster re-forced mid-stream, so in both the *last* spawn anchor is a late
+single spawn in the middle of an ongoing fight.
+
+**Open loop:** `combat` max 33/20 p99 2/2; `hotcombat` max 77/75 p99 **2/2**
+(down from 11 and 30 on 2026-08-25 — the maxima are single events and the
+percentiles are what improved as the weapons landed); `hotsupport` p99 9/17,
+unchanged, against ceilings of 15 and 25.
+
+#### ✅ Diagnosed and fixed: an unseeded weapon moves the spawn-point draw
+
+**The artefact was `hotsupport`'s open-loop max `|dx|` at 120 wire units with the
+alarm-stage seam and 10 without it** — one comparison, t1287 slot 2, two ticks
+after the spawn at t1285, expected 18402 got 18522. **24 world pixels, which is
+exactly the spacing of `ctf_truefort`'s spawn markers** (1608, 1632, 1656, 1680,
+1704). The port had spawned that character **one marker along**.
+
+⚠️ **Because forcing the RNG before a tick is fragile, and this is the thing that
+breaks it.** `TryForceSpawnPointDraws` arranges the stream so the alarm stage's
+`floor(random(numSpawnPoints))` lands on the recorded id — but the alarm stage is
+not the first thing in a tick. **Weapons fire in Begin Step, and an unseeded one
+draws from the same shared stream.** A replay forces every *seeded* weapon's seed
+from the recording, so those never disturb it; the Flamethrower, the Minigun and
+the Blade do. `hotsupport`'s pyros fire constantly, so a respawn in the middle of
+that fight came out on the wrong marker.
+
+✅ **The fix removes the dependency instead of fighting it.**
+`PortedSimulation.SeedIndependentSpawnPoints` hands the tick a spawn point list
+whose every index for a spawning team resolves to the point the recording named —
+`floor(random(n))` can return anything and the coordinates are the same. The
+*count* is left alone so the same single draw is consumed and the stream ends
+where the reference's did. `LevelMap.WithEntities` is the seam that makes it
+possible. ⚠️ **Only when at most one slot per team is spawning**; a wave wants a
+different point per slot out of one shared list, so those keep the seed search,
+which is sound for them because a wave happens at a round start with nothing
+shooting yet.
+
+**Measured after: `hotsupport`'s max `|dx|` is 10 again and every one of the
+twenty-two closed-loop windows is unchanged to the tick.** Mutation-checked:
+disabling the narrowed list fails exactly one test, the max `|dx|` assertion
+added to `SupportClassFixtureTests` for this — **no percentile and no window
+notices**, which is why the maximum is asserted at all.
+
+✅ **And there is a gate on it now: `SpawnPlacementTests`**, which replays every
+fixture in both modes and asserts that no queued spawn lands anywhere but the
+marker the recording named (`PortedSimulation.MisplacedSpawns`). It passes on all
+25 today, five mid-fight Arena round starts included.
+
+⚠️ **Its control says something the original diagnosis could not.** Disabling the
+narrowed list misplaces spawns in **three** fixtures — `closedsupport`,
+`closedairblast` and `hotsupport` — and those are **exactly the three recordings
+with a pyro in them**. The unseeded Flamethrower is the whole mechanism, and it
+is now three data points rather than one.
+
+⚠️ **Two of those three are closed-loop fixtures whose windows do not move
+either way.** So a wrong-marker spawn is invisible to a closed-loop window as
+well as to a percentile: of everything this project measures, one open-loop
+maximum and this counter are the only things that see it.
+
+⚠️ **A wave is still on the fragile route.** `SeedIndependentSpawnPoints` cannot
+serve several slots of one team from a single list, so those keep the seed
+search. Nothing shoots at a round start, which is why it holds today — and
+`SpawnPlacementTests` is what will say so if a recording ever puts a wave next to
+an unseeded weapon.
+
+⚠️ **And the tick-early queueing is now properly controlled.** The first attempt
+at the seam queued a spawn from the tick its message arrives on and failed twenty
+tests; that could have been the missing `HasPendingSpawn` guards rather than the
+timing. Re-run 2026-08-27 **with the guards in place**: same-tick queueing still
+fails, on the same fixtures. The timing is the cause.
+
+### Settled: Dual King of the Hill has a fixture, and every gamemode with a map now does
+
+✅ **`reference-dkoth_atalia-closeddkoth.trace`** (2026-08-27): three soldiers a
+side, spawn-anchored, teams forced *after* the reload. `DualKothFixtureTests`.
+
+**It was the last gamemode with a shipped map and no recording.** ⚠️ The earlier
+claim that "every gamemode has a fixture" was **wrong** — it was made after
+Arena landed and missed DKotH, which has two shipped maps (`dkoth_atalia`,
+`dkoth_sixties`). The claim is true now.
+
+⚠️ ~~**Invasion has no shipped map at all**~~ — **that was wrong, and it was
+wrong for an instructive reason.** It came from looking for an `inv_*` map and
+finding none. **Invasion is not a map-name prefix**: it is a Capture the Flag map
+that places a `ControlPointSetupGate` (`GameModes.HasSetupGate`, from
+`ControlPointHUD.events/Create.xml`), and the only shipped map that does is
+called **`ctf_avanti`**. ✅ Recorded the same day — see below.
+**Classify a map by asking the code, never by reading its name.**
+
+**What it gates that nothing else could:**
+
+- ⚠️ **DKotH never sends `UNLOCKCP` and KotH always does** — the one message
+  that tells the two modes apart on the wire. A KotH hill is unlocked by
+  `KothHUD` calling `doEventUnlockCP`; DKotH's hills unlock themselves in their
+  own Step, which runs before the HUD's, so nothing is broadcast. **That was a
+  reading of the reference with no evidence behind it until now**, and the KotH
+  fixture is the control that makes the negative mean something.
+- ✅ **Both hills start owned by their own team**, from `DKothHUD`'s Create event
+  rather than `User Event 0`. Every other mode starts its points neutral, so this
+  is the one place a port could reasonably have gone the other way — and with the
+  clocks crossed (you win by holding the *enemy's* hill) starting them wrong runs
+  both timers backwards.
+- **Two control points frame cleanly.** The block has no count prefix, so a
+  reader rebuilds the points from the map in the same order or desynchronises;
+  `koth_valley` proved that for one point. Controlled: parsing this recording at
+  a count of 1 or 3 fails, at 2 it is clean.
+
+### Settled: Invasion has a fixture, and its map is called `ctf_avanti`
+
+✅ **`reference-ctf_avanti-closedinvasion.trace`** (2026-08-27): three soldiers a
+side, spawn-anchored, teams forced after the reload. **Framed cleanly**, and it
+is the last gamemode to get a recording. `InvasionFixtureTests`.
+
+⚠️ **The finding is the map, not the fixture.** This project stated on the same
+day that Invasion had no shipped map — reached by grepping the map list for
+`inv_*`. It has one, and it is named `ctf_avanti`, because the mode is decided by
+an **entity** and not by a name. `ExactlyOneShippedMapPlaysInvasion` asserts the
+whole classification across all 22 maps, with the other eight `ctf_` maps as its
+control, so the mistake cannot be made again quietly.
+
+**What it holds:** three `GRAB_INTEL` and three `SCORE_INTEL` — red capturing,
+which is the only way red can win, since **blue wins by surviving the clock** —
+95 weapon fires, six deaths, and a sentry built and destroyed. It is also the
+first recording in which a character is held behind a **setup gate**: Invasion
+opens with a full minute of setup against attack/defend's thirty seconds.
+
+⚠️ **And the same audit found a second gap.** `cp_egypt` has **no** setup gate and
+**five** control points, where `cp_dirtbowl` has one and two — so they are the
+*two different control-point arrangements* (symmetrical and attack/defend), and
+only attack/defend had a fixture. ✅ **Recorded the same day — see below.**
+
+### Settled: the symmetrical control points, and the first in-window meter reading
+
+✅ **`reference-cp_egypt-closedsymmetric.trace`** (2026-08-27): three soldiers a
+side, spawn-anchored, framed cleanly with **five** control points — the largest
+block anywhere, and the block has no count prefix, so parsing at 4 or 6 fails and
+at 5 is clean. `SymmetricControlPointFixtureTests`.
+
+**Measured live off `cp_egypt` and now pinned:**
+
+| | |
+|---|---|
+| Starting owners | red, red, **neutral**, blue, blue |
+| `capTime` per point | **210, 420, 630, 420, 210** — `1,2,3,2,1 × 7 s` |
+| Locked at the start | the four owned; **the neutral middle is not** |
+| Attack/defend, for contrast | a `5,4,3,2,1` ramp on a six-second base |
+
+⚠️ **The wire cannot show `locked`** — the block is team, capping team and meter
+— so the neighbour rule stays unobservable and the ownership is what a recording
+can hold. And ⚠️ **reading a fact off a fixture is not a gate on the port**: the
+ownership is asserted twice, once against the recording and once by loading the
+map into `PortedSimulation` and asking it. Only the second bites, and it is
+mutation-checked.
+
+#### ⚠️ OPEN: with trajectories exact, the port's meter is two ahead
+
+**This is the first fixture whose control-point observation lands inside its
+trajectory window.** The window is **892 ticks** (t709–t1601) and the observation
+at **t1599** is inside it, where `koth_valley`'s earliest is three hundred ticks
+past the end.
+
+**The reference reads 63 and the port reads 65.** With every character exactly
+where the reference put them, **drift is not available as an explanation** — and
+drift is what explains every other control-point disagreement this project has
+measured. Something starts the middle point's meter about two ticks early, or
+counts one capper too many for two ticks.
+
+The later observations are outside the window and prove nothing: 146 against 158
+at t1688, 445 against 472 at t1969, and the reference completing the capture at
+t2033 where the port is still 605 in.
+
+✅ **Chased, and the answer is two ticks — `reference-cp_egypt-uncontestedcp.trace`.**
+Six red scouts, no blue, bots steered onto the neutral middle point:
+**4,617 exact ticks** and **all three post-anchor observations inside the
+window**. `UncontestedControlPointFixtureTests`.
+
+⚠️ **The port starts the capture meter TWO TICKS before the reference does**, and
+the two recordings prove it is a *timing* error rather than a rate one:
+
+| Recording | Class | `capStrength` | Reference | Port | Δ |
+|---|---|---|---|---|---|
+| `closedsymmetric` | soldier | 1 | 63 | 65 | **+2** |
+| `uncontestedcp` | scout | **2** | 157 | 161 | **+4** |
+
+A meter advances by the cappers' `capStrength` each tick, so a fixed head start
+shows up **doubled** on a scout recording — which is what happens. A wrong *rate*
+would scale with the meter, and it does not: by t2723 the two agree again,
+because both have finished.
+
+The same error seen from the other end: at t1577 the reference still reads
+`cappingTeam = 0` — red is still capturing — and the port has already cleared it
+to -1, having finished first.
+
+⚠️ **Drift was not available as an explanation** — the window is 4,617 ticks and
+every observation is inside it — which made it look like a simulation bug.
+
+#### ✅ It was the harness: the capture meter was compared one tick late
+
+**Fixed 2026-08-27, and the harness was eliminated first exactly as the note above
+said to.** `Replayer` compared the control-point block **after** running the tick.
+The block rides in that tick's state update, which — like the positions beside it
+— was serialised in the server's Begin Step and therefore describes the **end of
+the previous tick**. So the port's end-of-this-tick meter was being held against
+the reference's end-of-last-tick one: **one tick of capture, read as a rule
+error**.
+
+Every other comparison in the loop already respected that rule. The character
+`Reconcile` runs before `Advance`; deaths, ubers, intel and sentries are read out
+of the *following* tick's messages after it. The control-point comparison was the
+one that did neither.
+
+**The order that is right, and all three parts are measured:**
+
+| Order | `koth_valley` uncontested | `cp_egypt` |
+|---|---|---|
+| inject unlock → **compare** → advance | exact | **exact** |
+| inject → advance → compare (the bug) | exact | +2 / +4 |
+| compare → advance → inject | **7 mismatches** | exact |
+
+⚠️ **The unlock injection must stay ahead of the comparison**, because it
+re-locks and zeroes the meter — comparing first holds the port against a value
+the injection is about to wipe, which is the third row.
+
+⚠️ **And note what nearly hid it: the wrong order made `koth_valley` exact.** One
+fixture agreeing is not evidence an ordering is right. It took a second
+control-point recording, on a different mode, with a different `capStrength`, to
+make the shape of the error legible — `+2` at strength 1 and `+4` at strength 2 is
+one tick, not a rate.
+
+Gated by `UncontestedControlPointFixtureTests.ThePortCapturesThePointExactlyAsTheReferenceDoes`,
+`SymmetricControlPointFixtureTests.ThePortsMeterAgreesOnTheObservationInsideTheWindow`
+and `KothCaptureFixtureTests.ThePortReproducesTheHillExactly`; moving the
+comparison back fails all three.
+
+✅ **And the uncontested recipe has now paid four times** — `koth_valley`'s hill,
+`ctf_2dfort`'s capture, and both halves of this. **When an objective is too slow
+to fit inside a window, remove the enemy team rather than looking for a physics
+fix.** ⚠️ It is not silent, and that is worth knowing: this recording still holds
+fourteen weapon fires and four deaths (a scout shooting a wall, and falls). What
+buys the window is that nothing shoves anybody *else*.
+
+### Settled: every comparison family is now pinned to its tick AND proved alive
+
+✅ **2026-08-27**, prompted by the control-point comparison turning out to read a
+tick late. If one family's alignment was wrong and no test noticed, the others
+were worth auditing the same way — by mutation rather than by reading.
+
+**Two mutations per family**: shift it a tick, and delete it (route its
+mismatches to a discarded list). A family that survives either is not gated.
+
+| Family | shift, before | delete, before | after |
+|---|---|---|---|
+| Deaths | 3 fail | 1 fail | gated |
+| Intel | 2 fail | **0 fail** | gated |
+| Sentries | 2 fail | 1 fail | gated |
+| Control points | 3 fail | **0 fail** | gated |
+| **Ubers** | **0 fail** | **0 fail** | gated |
+
+⚠️ **`Fields.Ubers` was used by no test at all.** It has existed since phase 5,
+carries a documented argument for why it is a strong claim, and nothing ever
+passed it to a `Replayer` — so both mutations were free.
+`SupportClassFixtureTests.ThePortNeverChargesAnUberEarlierThanTheReference` looks
+like its gate and is not: it replays with `Fields.None` and watches the
+simulation through a decorator, so the comparison never runs.
+
+⚠️ **And the deeper hole: "no mismatches" is satisfied by a comparison that never
+runs.** Three of the five families asserted exactly that and nothing else, so
+deleting the comparison was free even where a shift was caught. **Every
+`Assert(mismatches.Length == 0)` needs a liveness control beside it** — a second
+replay against a doctored trace, with the messages stripped or the blocks
+altered, asserting the comparison *does* report a difference. All five have one
+now.
+
+⚠️ **Note what this is not.** A liveness control proves the comparison runs and
+can report; it does not prove the fixture reaches the behaviour. Those are two
+different holes and this project has now fallen into both — the first here, the
+second in `KothFixtureTests`, whose observations all fell outside its window.
+
+**The uber gate's own trade**, worth keeping: whether `closedsupport`'s medic
+lives long enough to charge is decided by unseeded pyro flames, so a *missing*
+uber is not evidence of anything. The gate asserts both directions anyway,
+because the weak version does not catch deletion — with the remedy written into
+the failure message, so a future session that hits it knows to weaken rather than
+chase.
+
+### Settled: ammo and flags are compared at last, and they were never compared before
+
+✅ **2026-08-27**, and found by census rather than suspicion. After
+`Fields.Ubers` turned out to be used by no test, the obvious follow-up was to
+count which members of `Fields` any test passes to a `Replayer`:
+
+```
+34 Fields.Trajectory   10 Fields.Deaths    5 Fields.Intel          4 Fields.Sentries
+21 Fields.Hp            7 Fields.Ubers     5 Fields.ControlPoints  2 Fields.Position
+```
+
+⚠️ **`Fields.Ammo` and `Fields.Flags` appear nowhere.** Every phase has
+serialised both and nothing has ever held the port to either. They are not
+decorative: **ammo** is the whole of the magazine accounting on the wire — refire,
+reload, the pyro's tank resting at 201.8 and the heavy's at 201 — and **flags**
+carries the cloak bit and `moveStatus`, so a rocket jump and a cloaked spy are
+visible in it and nowhere else.
+
+**Both are now gated, and both were already correct:**
+
+| Gate | Fixture | Window | Why that fixture |
+|---|---|---|---|
+| Ammo | `closedcombat` | **1,325** ticks, zero mismatches | scout/soldier/demoman — **every weapon broadcasts a seed**, so no excuse is available |
+| Flags | `closedspy` | **1,829** ticks, zero mismatches | the only recording in which anybody cloaks |
+
+Mutation-checked against real regressions, not just against the harness: making a
+scattergun shot cost two ammo fails two tests, and suppressing the cloak bit in
+`CharacterWire` fails two. Each gate also carries a **liveness control** —
+a replay against blocks whose ammo and flags are XORed — because
+`Assert(mismatches.Length == 0)` is satisfied by a comparison that never runs.
+
+⚠️ **And a third field falls under the unseeded-weapon rule.** It was established
+for hp and then for trajectory; `closedheavy` shows it for ammo. Its Minigun
+calls `randomize()` and broadcasts no seed, so who shoots and how much they spend
+cannot be reproduced: **ammo 760 ticks against flags 1,744**, same recording, same
+anchor. Asserted, because it is the cheapest demonstration that the ammo
+comparison is sensitive to something real — if the two ever converge, either the
+Minigun became reproducible, which it cannot, or the comparison stopped working.
+
+⚠️ **The general lesson, now paid for twice: census the seams.** Two rounds of
+"which of these does any test actually use?" found three unexercised comparisons
+(`Ubers`, `Ammo`, `Flags`) that had existed for phases. A seam that is never
+called is indistinguishable from one that is wrong.
+
+### Settled: which message types the corpus reaches, and four that cannot exist
+
+✅ **2026-08-27**, the third and largest application of "census the seams". The
+question that has found every framing bug here is **"what state can no recording
+reach?"**, and `MessageCoverageTests` makes it mechanical instead of a matter of
+memory: it walks all 27 fixtures and pins the set of message types they contain.
+
+**Thirty types are reached.** The census also settles the other 27, and they fall
+into three groups:
+
+⚠️ **Four are DEAD PROTOCOL and can never appear on any wire** — declared in the
+reference's `Constants.xml` and referenced **nowhere** in its scripts or object
+events, measured by grepping the tree:
+
+| | |
+|---|---|
+| `RED_TEAM_CAP` | 12 |
+| `BLUE_TEAM_CAP` | 13 |
+| `CP_CAPTURED` | 30 |
+| `SERVER_KICK` | 37 |
+
+⚠️ **`CP_CAPTURED` is the one that looks like an oversight and is not.** This
+corpus captures control points on `koth_valley`, `cp_egypt` and `dkoth_atalia`
+and none of them sends it: **a capture reaches the wire as a `CAPS_UPDATE` and
+nothing else.** Asserted, so nobody spends a day trying to record one.
+(⚠️ Two spellings differ from the port's names and cost a first pass:
+`KICK_MULTI_CLIENT` and `ARENA_WAIT_FOR_PLAYERS` **are** used — grep the constant
+name from `Constants.xml`, not the C# member name.)
+
+**Most of the rest are structural**: the handshake (`HELLO`, `RESERVE_SLOT`,
+`PASSWORD_REQUEST`, `PASSWORD_WRONG`, `INCOMPATIBLE_PROTOCOL`, `SERVER_FULL`,
+`DOWNLOAD_MAP`) happens before `gg2-parity record` starts writing ticks, and the
+kick, plugin and reward families need an operator, a plugin or the medal server.
+
+✅ **Five are reachable and simply unreached — the candidates for the next
+fixture**: `DROP_INTEL` (an ubered carrier dropping, or a client's own drop
+command — a death-caused drop broadcasts nothing), `ARENA_WAIT_FOR_PLAYERS`,
+`CHAT_BUBBLE`, `MESSAGE_STRING` and `PLAYER_CHANGENAME`. **Only the first two are
+gameplay.**
+
+⚠️ **The census asserts both directions, and the second is the one that will
+matter.** Several types are held by **exactly one fixture** — `Balance`,
+`ArenaEndRound`, `GeneratorDestroy`, `UnlockCp`, `Uber` — so a re-recording that
+came out quiet would silently stop exercising a whole message family. Adding a
+type fails with "good news, add it here"; losing one fails with "a recording has
+stopped exercising a family".
+
+### Settled: `DROP_INTEL` is reached, and it is a client command like a sentry
+
+✅ **`reference-ctf_2dfort-dropintel.trace`** (2026-08-27): six red scouts, no
+blue, steered to blue's briefcase, and the carrier then made to drop it. The last
+*gameplay* message the corpus could reach and did not.
+`DropIntelFixtureTests`.
+
+**How, and why it is the reference's own behaviour**: `processClientCommands.gml`
+handles a client's `DROP_INTEL` with two calls behind one guard —
+`sendEventDropIntel(player); doEventDropIntel(player);` — and those two lines were
+invoked over the bridge for the carrying bot. A driven client pressing drop
+reaches the identical pair; what is bypassed is only the client-to-server half,
+and a recording is of the server's broadcast.
+
+⚠️ **A death-caused drop broadcasts nothing** — `sendEventDropIntel.gml`'s own
+docstring says the event is skipped on death "to avoid issues with order of
+execution" — which is why no earlier fixture had one despite dozens of deaths
+with the flag in play.
+
+✅ **`ITraceSimulation.DropIntel` is the new seam.** A `DROP_INTEL` has to be
+**injected**, like a `BUILD_SENTRY` and a `PLAYER_SPAWN`: nothing in an
+`INPUTSTATE` says the player pressed drop, so a replay cannot derive it, and a
+port that ignored the message would carry the flag on for ever while the
+reference put it down.
+
+⚠️ **It is applied BEFORE the tick — the opposite of a grab.**
+`processClientCommands` runs inside the server's Begin Step, ahead of
+`serializeState`, so the message lands in its *own* tick's block; a `GRAB_INTEL`
+comes out of the collision stage, after the update, and lands in the next one's.
+**The two halves of the same objective use opposite tick conventions.**
+
+#### Two traps, both of which cost an attempt
+
+⚠️ **`message.PlayerId` is null for this whole message family.** `ServerStream`
+frames `DROP_INTEL`, `GRAB_INTEL`, `SCORE_INTEL`, `UBER`, `OMNOMNOMNOM` and the
+rest through `Fixed()`, which *skips* the body without decoding it — so a
+`case ... when message.PlayerId is { } slot` guard **silently never matches** and
+the injection does nothing. Read `Payload[0]`. The test's first assertion is now
+that the seam was reached at all, precisely to catch that shape of failure.
+
+⚠️ **A drop can be followed by an instant re-grab, and that is correct.** The
+first version of the gate asserted "nobody carries the flag afterwards" and
+failed: slot 5 dropped it and **slot 2 had it by the end of the same tick**. A
+flag taken off its base gives its carrier a return timer of 0, a drop writes that
+straight into the new instance's `alarm[0]`, and the grab guard's `alarm[0] <= 1`
+arm lets anyone pick it straight back up (docs/SIMULATION.md, "Settled: the
+intel"). The recording corroborates it — that re-grab is the second of its two
+`GRAB_INTEL`s. **Assert on the named slot, not on the flag.**
+
+### Settled: `ARENA_WAIT_FOR_PLAYERS`, and every gameplay message is now recorded
+
+✅ **`reference-arena_lumberyard-waitforplayers.trace`** (2026-08-27): three
+soldiers a side, with blue removed while the scoreboard was up.
+`ArenaWaitFixtureTests`. **With it, no gameplay message the reference can send is
+left unreached by the corpus** — what remains is handshake, admin, plugin and
+reward traffic, plus the four dead constants.
+
+**The recipe comes from the branch.** `ArenaHUD.events/Step.xml` decides what
+happens when a scoreboard runs out in a fixed order: the cap limit, the clock,
+then `redteam == 0 or blueteam == 0` → wait for players, and only otherwise
+`serverArenaRestart()`. ⚠️ **So it needs a round to end with one team having no
+PLAYERS** — not merely no living characters, which is what wiping a team out
+gives and what every earlier arena round produced. Removing blue's bots during
+the scoreboard is the reference's own path: a server whose blue team all
+disconnect between rounds takes exactly this branch.
+
+**What it gates:** the message is **bodyless** — asserted against its two
+bodyless siblings and, as the control, against `ARENA_ENDROUND` in the same
+stream, which is not and was framed as though it were for a phase. And the last
+round **ends into a wait rather than a restart**, with no restart after it, which
+is the exclusive branch rather than the message merely existing.
+
+### Settled: a mode change is invisible unless a HUD-bearing update follows it
+
+✅ **`reference-gen_destroy-rotation.trace`**, 2026-08-27: `gen_destroy`
+rotating to **`ctf_2dfort`** at t2622 — the first recording in the project that
+changes to a **different map in a different gamemode** mid-stream, with 669
+ticks of play after it. `MapRotationFixtureTests`.
+
+**Two things had to be arranged, and both are worth knowing:**
+
+- ⚠️ **`MapRotation` in the ini is a FILE PATH, not a list**
+  (`game_init.gml:94`). With no file the server's rotation held a single entry —
+  the current map — which is why `reference-gen_destroy-closedgen.trace` rotated
+  back to itself. The list was extended over the bridge.
+- ⚠️ **Red winning does not rotate.** `GameServerBeginStep.gml:107`: if red wins
+  and the map has another area it advances the *area* and keeps the same map.
+  Only the `else` arm calls `nextMapInRotation()`, so **blue has to win**.
+
+⚠️ **The reader survived the mode change — and the reason is the finding.**
+`TraceParser` takes **one shape for the whole trace**, and the two shapes are
+genuinely incompatible: `Generator`'s HUD is **thirteen** bytes and
+`CaptureTheFlag`'s is **five**, and parsing this trace with the CTF shape fails
+at byte 432. It framed anyway because:
+
+> **Only `FULL_UPDATE` and `CAPS_UPDATE` carry the HUD block.**
+> `StateUpdateReader` returns before the tail on every other tier, so an
+> `INPUTSTATE` and a `QUICK_UPDATE` never read it.
+
+In this recording the caps updates land at **t389, t2188, t2189 — all before the
+rotation** — and the only full update is the join at t0. The 95 quick updates
+after the change read no HUD at all.
+
+**So the wrong-shape risk is real but latent**: it needs a `CAPS_UPDATE` or
+`FULL_UPDATE` *after* a mode change, which means a capture, a join, or a
+scoreboard sync on the new map.
+`MapRotationFixtureTests.NothingAfterTheRotationReadsTheHudBlock` asserts the
+absence so it stops being true loudly.
+
+#### ✅ Reached, and fixed, the same day
+
+**`reference-gen_destroy-rotationcaps.trace`** is the same rotation with a
+`CAPS_UPDATE` forced *after* the change (`GameServer.syncTimer = 1`, which is
+exactly what a capture does). **It does not frame**: a single shape stops at
+**byte 79,467 of 124,340**, discarding two thirds of the file — the
+thirteen-byte Generator HUD read out of a five-byte Capture the Flag one.
+
+✅ **`TraceParser.Parse` takes an optional `Func<string, WorldShape>` and
+re-shapes on `CHANGE_MAP`.** With it the recording frames whole, 3,483
+messages. `gg2-parity`'s census and replay and `FixtureFramingTests` all pass a
+resolver now; passing null keeps the old single-shape behaviour, which is
+correct for every recording that never changes map.
+`ModeChangeFramingTests` is the gate, and its first test is the control — it
+asserts that a single shape *cannot* frame this recording, so the fix cannot be
+reverted unnoticed.
+
+⚠️ **The census's message counts were wrong before the fix, not merely
+truncated**: it reported 2 `CAPS_UPDATE`s where there are **4**. A desynchronised
+reader does not just stop — everything it reported up to that point is the only
+part worth trusting.
+
+✅ **And the ten-second map change is confirmed a second time**, on the other
+branch: 300 ticks from `MAP_END` to `CHANGE_MAP`, with blue winning and the map
+actually changing, where `GeneratorFixtureTests` measured it with red winning
+and the same map reloading.
+
+### Settled: the generator block does not shorten, and probably cannot
+
+✅ **`reference-gen_destroy-closedgen.trace`**, 2026-08-27: three soldiers a
+side on the only shipped generator map, 3,297 ticks, spawn-anchored, framed
+cleanly. Both generators took real bot damage (to 1846 and 1755 of 2100) before
+blue's was finished off over the bridge at t2027. **408-tick** window on
+`Trajectory｜Hp｜Deaths`. `GeneratorFixtureTests`.
+
+**Four things reach a fixture for the first time**: a `GENERATOR_DESTROY`, a
+`MAP_END`, a `CHANGE_MAP` that is not the recorder's own join, and the generator
+HUD block.
+
+⚠️ **The headline is a negative that contradicts the standing risk.**
+docs/PROTOCOL.md records that the block carries one record per *surviving*
+generator, so a destruction shortens every later update by four bytes — making
+`WorldShape.GeneratorCount` the one shape field a map cannot settle for good and
+requiring a reader to decrement it. **Nothing in `ServerStream` decrements it,
+and this recording shows it does not have to.**
+
+**Measured:** the wire carries **two** records for the whole recording,
+including the 300 ticks between the destruction and the map change.
+
+| `GeneratorCount` | result |
+|---|---|
+| 1 (a reader that decremented) | desync at byte 436 |
+| **2** | **clean to the last byte** |
+| 3 | desync at byte 444 |
+
+Those two controls matter: without them "it framed" would be equally consistent
+with a reader that never looked at the block.
+
+⚠️ **Why, and why it may be unreachable:** destroying a generator ends the round
+immediately (t2027, `MAP_END` at t2028) and **a round ending does not sweep the
+map** — the dead generator's instance survives the scoreboard, so the HUD still
+writes it. On `gen_destroy` each team has exactly one generator, so destroying
+one *always* ends the round. **A custom map with two per team could still reach
+the shortened block; no shipped one can.**
+
+**Two more numbers, measured rather than read:**
+
+- ⚠️ **`GENERATOR_DESTROY` names the team that LOST one** — the payload is
+  team 1 (blue, whose generator died) and the `MAP_END` a tick later names red
+  as the winner. `sendEventGeneratorDestroy.gml`'s own docstring says the
+  opposite; the pair of messages settles it.
+- ✅ **The map changes exactly 300 ticks after `MAP_END`** — the documented ten
+  seconds, now measured.
+
+⚠️ **The rotation goes back to the same map, so the wire shape never changes.**
+`TraceParser` takes **one shape for the whole trace**, so a rotation to a map of
+a different mode would frame the rest of the recording wrongly. Still unreached.
+
+### Settled: the first multi-area fixture, and the reader bug it found
+
+⚠️ **`reference-cp_dirtbowl-closedcp.trace`**, 2026-08-27: three soldiers a
+side, 3,585 ticks, spawn-anchored, attack/defend. **It did not frame at all on
+its first outing**, which is what it was recorded to find.
+`CpDirtbowlFixtureTests`.
+
+**A tall map is several rounds stacked vertically and only one area's entities
+exist.** `cp_dirtbowl` writes **six** control points and plays **two**. The HUD
+block carries **no count prefix**, so a reader framing by the wrong number
+desynchronises on the very first update:
+
+| shape from | `ControlPointCount` | framed |
+|---|---|---|
+| the map | 6 | **458 of 138,406 bytes**, 137,948 silently dropped |
+| `map.ForArea(1)` | 2 | **all of it**, 3,585 ticks |
+
+⚠️ **`PortedSimulation.LoadMap` had narrowed since phase 6** and carried a
+comment saying it "would need the recording's own currentMapArea if one were
+ever made on cp_dirtbowl". One has been now — **and the gap was not there.** It
+was in every *reader*: `gg2-parity`'s three `ShapeOf` call sites (census, replay,
+diff) and `FixtureFramingTests` all passed the un-narrowed map. All four fixed.
+
+**The window is 905 ticks** on `Trajectory | Hp | Deaths` (t417 → t1322), with 85
+weapon fires and ten deaths — which is also the first evidence that `ForArea`
+produces the right *world* and not merely the right block count: a character on
+the wrong area's terrain would be somewhere else entirely.
+
+⚠️ **Narrowing is a no-op for every single-area map**, which is every other
+fixture — so this could only ever have been caught by a recording on a map like
+this one. `CpDirtbowlFixtureTests.TheUnNarrowedShapeCannotFrameThisRecording` is
+the control that keeps the fix honest: without it the narrowing could be
+reverted and every other test in that file would still pass.
+
+⚠️ **Still not handled: an area that advances mid-recording.** Area 1 is right
+for a fresh round, and attack/defend advances the area when the attackers win —
+which would change the control-point count underneath the reader, the same shape
+as the generator's self-shortening HUD block. No recording reaches it yet.
+
+### Settled: the first Team Deathmatch fixtures
+
+✅ **`reference-tdm_mantic-closedtdm.trace`** and
+**`reference-gg_debug-closedtdm.trace`**, both 2026-08-27, six soldiers, both
+spawn-anchored, **both framed cleanly** and both reported as `TeamDeathmatch` by
+census. Until then every fixture was Capture the Flag, so `GameModes.ShapeOf`
+had never produced a TDM shape for a real reader. **No framing bug** — the same
+class of negative the four single-class recordings bought.
+
+- ⚠️ **`gg_debug` is the busiest recording in the project**: 52 deaths, 59
+  spawns and 262 seeded weapon fires in a hundred seconds, and the first
+  recorded evidence that Team Deathmatch scores at all. **None of it is
+  assertable yet** — the window is two ticks — which is exactly why the landing
+  finding above is worth fixing.
+- ⚠️ **`tdm_mantic` was chosen because it is the only shipped map placing pit
+  falls (six) or move boxes (fifteen), and it gates neither.** Checked by
+  mutation: commenting out `MoveBoxes.CollisionStep` leaves the window at 3,043
+  ticks, so no bot ever rode one; and with no deaths there were no pit falls.
+  **A recording existing on the right map is not the same as it reaching the
+  behaviour** — ask which of the map's features the bots actually touched.
+
+**The recording is kept rather than re-taken.** It holds eight deaths, sixteen
+spawns, and a `GRAB_INTEL` with the `SCORE_INTEL` that follows it — **the first
+capture-with-its-grab in any fixture in this project**, so `doEventScoreIntel`
+finally has recorded evidence to be gated against. None of it is assertable
+while the window is five ticks; all of it becomes assertable the moment the
+landing agrees.
+
+⚠️ **A recording can never gate respawn *timing* closed-loop**, whatever the
+window. `Replayer` **injects** each `PLAYER_SPAWN` and `PortedSimulation` keeps
+`RespawnTime = 0` so the port never respawns on its own — deliberately, so the
+replay does not race the recording with spawn-point picks of its own. What a
+death-and-respawn inside a window buys is that the port reproduces the *death*
+on the tick and the trajectory survives the character being cleared and
+replaced. `RespawnTimingTests` measures the **reference's** 150-tick gaps; the
+port's respawn counter is gated by unit tests alone.
+
 ### Settled: a recording of players who were already alive is open-loop only
 
 **A closed-loop replay needs an anchor that never passed through the wire.** If
@@ -854,6 +2237,99 @@ standard error is far smaller than the sample count suggests. Run on this
 fixture it reports the vertical residual as biased at *z = 16*, which is an
 artefact of that autocorrelation and not a finding. The horizontal residual,
 which does change every tick, shows no significant bias (z = 0.7).
+
+### Settled: a stock client plays a round on the C# server, start to finish
+
+✅ **Demonstrated 2026-08-27** — phase 6's owed exit criterion, on
+`ctf_truefort`. `gg2-server --port 8191 --map ctf_truefort --time-limit 1`, a
+stock GM8 client launched with `-server 127.0.0.1 -port 8191`, AFK timer off:
+
+| step | result |
+|---|---|
+| client joins | roster shows the server's reserved slot 0 and the client, both spectator |
+| map loads | `CustomMapRoom`, `isHost = 0` |
+| picks red | character spawns at **(1704, 474.40)** — a real `ctf_truefort` red marker |
+| round runs | ends on the clock after ~1,124 frames |
+| winner | **`TEAM_SPECTATOR` (2)** — a **draw**, correct: nobody capped and both flags were home |
+| map change | client survives it, stays connected |
+| re-picks blue | spawns at **(3702, 474.40)**, the far side, second round runs |
+
+⚠️ **Being returned to spectator across a map change is the reference's own
+behaviour**, not a port bug: `reference-gen_destroy-closedgen.trace` carries
+**13** `PLAYER_CHANGETEAM`s where a non-rotating recording carries 7 — the bots
+re-pick after the change too. A driven client simply has to re-pick as a human
+would.
+
+**`gg2-server` gained `--time-limit`, `--cap-limit` and `--respawn-time`**,
+without which no round can be played to completion in a session — the default
+clock is fifteen minutes. Its help text also claimed "No simulation yet", which
+had been wrong since phase 4.
+
+#### ✅ `koth_valley` is demonstrated in full (2026-08-27)
+
+A stock GM8 client joined `gg2-server --map koth_valley --time-limit 255
+--respawn-time 1`, walked to the hill, captured it and held it to the end of the
+round. The whole King of the Hill loop runs against a real client:
+
+| Event | Observed |
+|---|---|
+| Join | 1 control point and the KotH HUD built from the port's wire |
+| Unlock | `cpUnlock` → 0, `locked = 0`, `UNLOCKCP` sent |
+| Capture | client at **(2344.40, 606.40)**, `collision_point` against the `CaptureZone` returns an instance; `ControlPoint.team` = red |
+| Hold | red's `redTimer` runs **5400 → 0** while the point is owned and uncontested |
+| Win | server logs **`round over: Red wins`** |
+| Victory screen | map change **exactly ten seconds later**, `now playing koth_valley` |
+| Next round | point **locked** and neutral, `cpUnlock` counting from 900, `redTimer` back at 5400, player returned to spectator |
+
+⚠️ **The three-minute hold is what made this expensive, and the hill is what made
+it hard to reach** — see the driving notes below. A live **class change** was
+exercised on the way (`ClientPlayerChangeclass` mid-match, answered with a death
+and a respawn on the marker), which is a second path through the server that no
+recording gates.
+
+⚠️ **`KothHUD`'s `hostTimer` only counts down while the point is owned and
+uncontested**, so a neutral hill never runs the clock out — which is why the
+earlier half-demonstration stopped where it did, and is correct GG2 rather than a
+port defect.
+
+✅ **The client-driving blocker is answered (2026-08-27), and it was the
+team-select overlay.** `PlayerControl.events/Begin Step.xml` gates every movement
+key behind `if(!menuOpen)`, and `menuOpen` is true while `TeamSelectController`
+or `ClassSelectController` exists. Picking a team by injecting
+`ClientPlayerChangeteam` over the socket bypasses the UI, so the overlay never
+closes: the server hands out a character, the mask reaches the bridge, and
+`keyState` stays 0. Destroying both controllers after the pick takes `keyState`
+0 → 32 and the character walks (x 1704 → 1967) — verified before and after.
+CLAUDE.md, "Driving a client: `menuOpen` eats every movement key".
+
+✅ **And the second half of driving a client is a per-frame hook** (2026-08-27),
+which is what finally got a character onto the hill. A tool round trip is 30-100
+game frames, so a jump or a stop inside a 60-pixel window cannot be issued from
+outside — but **`gg2_watch` evaluates its expression every frame**, and
+`execute_string` is a function, so a watch expression can run statements. One
+line gives a bunny-hop with an automatic stop; CLAUDE.md, "Driving a client: a
+watch expression is the only per-frame hook there is", has it, along with the two
+traps: **GG2 jumps on the pressed edge, so a held jump fires once** (a character
+climbs one step and then looks wedged), and the mask must be written
+**absolutely** — an `|` leaves an earlier direction bit set and the character
+walks the wrong way.
+
+⚠️ **And a client returning to spectator is usually NOT the AFK timer.**
+Measured with `afktimer` pinned at 9,999,999 and `TeamSelectController.afk = 0`,
+the revert still happened — it comes from the **server**, which sets every roster
+entry to `Team.Spectator` on a map change (`GameServer.cs`, citing the
+reference's `with(Player) ... team = TEAM_SPECTATOR`).
+
+✅ **And the thing that looked unexplained is settled: `--time-limit 0` is a
+ONE-MINUTE round.** The flag reached the round rules perfectly — `GameServer`
+floors it with the reference's own `max(1, min(255, ...))` (`game_init.gml:96,
+101`), so the round ended on time and the map change swept the client back to
+spectator. **The "0 means no limit" escape belongs to `WorldState` and nothing
+above it**, which is what made the flag look broken. For a long live session pass
+a large number. Gated by
+`MapRotationTests.AZeroTimeLimitIsFlooredToOneMinuteRatherThanMeaningNoLimit`
+and its control `ALimitAboveTheFloorIsNotFlooredToIt` — the pair fails, one
+test, if the floor is removed.
 
 ## Tier 3 — a real client, watched
 
@@ -1281,15 +2757,36 @@ armed the counter one tick early would move all twenty-eight pairs at once, so
 the port test catches an off-by-one in either direction — checked by mutation,
 both ways.
 
-⚠️ **And not one of those twenty-eight deaths happened inside a spawn room.** So
-the fast-respawn arm of `Character.events/Destroy.xml:37` — the one added in
-iteration 43 — has **no fixture evidence at all** and is gated only by unit
-tests. That is written as an assertion rather than a comment
-(`NoRecordedDeathHappensInASpawnRoom`) so that it stops being true *loudly*: the
-first recording that does contain such a death fails it, and that recording is
-then the first thing in the project able to gate the fast respawn against the
-engine. **A failure there is good news, not a regression**, and the test says so
-in its message.
+✅ **And the spawn-room arm is measured now too, at one tick.** This used to say
+that not one of those twenty-eight deaths happened inside a spawn room, so the
+fast-respawn arm of `Character.events/Destroy.xml:37` had **no fixture evidence
+at all** — written as `NoRecordedDeathHappensInASpawnRoom`, an assertion
+designed to stop being true *loudly*. It stopped being true on **2026-08-27**,
+on purpose: `reference-ctf_truefort-spawnroomdeath.trace` was recorded to break
+it, and `ADeathInsideASpawnRoomIsAnsweredOnTheVeryNextTick` replaces it.
+
+**A death inside a spawn room is answered on the very next tick — a gap of 1,
+against 150 outside.** That arm writes `player.alarm[5] = 1` rather than the
+respawn time, and an alarm set to `n` fires `n` ticks later, so the
+`PLAYER_DEATH` and the `PLAYER_SPAWN` answering it land on consecutive ticks.
+It confirms the alarm rule end to end through the wire as a side effect.
+
+⚠️ **The recording carries its own control, and it needs one**: the same ninety
+seconds hold two ordinary deaths, both outside a spawn room and both answered
+after the full 150 (`OneRecordingHoldsBothRules`). Without that, a one-tick gap
+is equally well explained by a server whose respawn time simply *is* one tick.
+
+⚠️ **Bots do not die in spawn rooms on their own, so the death had to be forced
+— and the obvious way does not work.** Setting a character's `hp` to 0 over the
+bridge produced **no death at all**: a character standing in a spawn room is on
+a **healing cabinet**, which tops it back above zero before End Step ever tests
+`hp <= 0`. Use a value the cabinet cannot undo in one tick (`hp = -1000`), and
+check `place_meeting(x, y, SpawnRoom)` in the *same* eval that assigns it, or
+the bot walks out between the two calls.
+
+**The pair count is 60 now, not 28**, across eleven recordings — the six 2026-08-27
+fixtures with deaths in them were added to `RespawnTimingTests.Fixtures` so that
+"every recorded death" keeps meaning every one of them.
 
 **The fixture-side half is a gate too, on a narrower thing**: it pins
 `TraceParser`'s tick indexing and the fixtures' own configuration. Doubling the

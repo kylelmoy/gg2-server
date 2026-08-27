@@ -168,9 +168,13 @@ public sealed class TimerTests
     /// that assigns a real — <c>35</c> times a movement-compensation factor —
     /// and it is on the live path for every shot a moving scout takes.
     /// <para>
-    /// ⚠️ Half to even is the codebase's default for GML-side rounding
-    /// (CLAUDE.md's table) and is <em>not</em> measured for this particular
-    /// conversion; see <see cref="Timers.SetAlarm"/>.
+    /// ✅ <b>Measured 2026-08-27</b>, against the running game: assigning an
+    /// alarm and reading it straight back in the same frame gives 0.5 → 0,
+    /// 1.5 → 2, 2.5 → 2, 3.5 → 4, 30.5 → 30, 31.5 → 32, 17.5 → 18, 26.25 → 26,
+    /// 26.75 → 27 and 30.4 → 30. Half to even, which is what the codebase's
+    /// default for GML-side rounding (CLAUDE.md's table) already assumed. The
+    /// rows below marked "measured" are that reading; docs/SIMULATION.md's
+    /// "What is genuinely uncertain" carried this as open until then.
     /// </para>
     /// </remarks>
     [Theory]
@@ -179,6 +183,16 @@ public sealed class TimerTests
     [InlineData(17.5, 18)]
     [InlineData(18.5, 18)]
     [InlineData(0.4, 0)]
+    // measured
+    [InlineData(0.5, 0)]
+    [InlineData(1.5, 2)]
+    [InlineData(2.5, 2)]
+    [InlineData(3.5, 4)]
+    [InlineData(30.5, 30)]
+    [InlineData(31.5, 32)]
+    [InlineData(26.25, 26)]
+    [InlineData(26.75, 27)]
+    [InlineData(30.4, 30)]
     public void AFractionalAlarmBecomesAWholeNumberOfTicks(double assigned, int stored)
     {
         Assert.Equal(stored, Timers.SetAlarm(assigned));

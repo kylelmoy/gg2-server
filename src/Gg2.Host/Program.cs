@@ -107,6 +107,25 @@ internal static class Program
                     options.MapDirectory = Require(name, value);
                     i++;
                     break;
+
+                // The round rules. Without these a round cannot be played to
+                // completion in a session — the default clock is fifteen
+                // minutes — which is what docs/PLAN.md's phase 6 exit criterion
+                // asks for. The reference floors both limits at 1 in
+                // game_init.gml, so 0 is unreachable there and means "no limit"
+                // here; see docs/SIMULATION.md, "Settled: the round".
+                case "--time-limit":
+                    options.TimeLimitMinutes = (byte)RequireInt(name, value);
+                    i++;
+                    break;
+                case "--cap-limit":
+                    options.CapLimit = (byte)RequireInt(name, value);
+                    i++;
+                    break;
+                case "--respawn-time":
+                    options.RespawnTimeSeconds = (byte)RequireInt(name, value);
+                    i++;
+                    break;
                 default:
                     throw new ArgumentException($"unknown option '{name}'");
             }
@@ -136,11 +155,20 @@ internal static class Program
           --players <n>     seats for clients, 1..48 (default 10)
           --welcome <text>  message sent to each joiner
           --maps <path>     where the built-in map PNGs live
+          --time-limit <n>  round clock in minutes, 1..255 (default 15)
+          --cap-limit <n>   captures to win, 1..255 (default 5)
+          --respawn-time <n>
+                            seconds a death lasts (default 5)
+
+        --time-limit and --cap-limit are floored at 1, exactly as the
+        reference's own ini is (game_init.gml:96, 101), so a zero is a
+        one-minute round rather than an endless one. There is no "no limit" —
+        for a long session pass a large number.
 
         The maps ship inside the reference Game Maker project, so --maps (or
         GG2_REFERENCE) has to point at a Gang-Garrison-2 checkout.
 
-        No simulation yet: clients join, sit in spectator and receive the state
-        cadence over an empty world. See docs/PLAN.md, phase 1.
+        The world is simulated: characters, weapons, all eight gamemodes and the
+        map rotation. See docs/PLAN.md.
         """);
 }

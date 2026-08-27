@@ -570,6 +570,94 @@ public sealed class BladeTests
         Assert.Equal(1, CountOf(state, ProjectileKind.Shot));
     }
 
+    /// <summary>Where <see cref="Attack"/> puts a Quote's first bubble.</summary>
+    /// <remarks>
+    /// Read off a scratch world so a test can put something at that spot
+    /// <em>before</em> the bubble exists. A Blade's bubble draws nothing from
+    /// the shared RNG stream, so this is deterministic.
+    /// </remarks>
+    private static (double X, double Y) BubbleSpot()
+    {
+        var scratch = default(WorldState);
+        Put(ref scratch, 1, keys: PlayerKeys.Attack);
+        Attack(ref scratch);
+
+        var bubble = Live(scratch, 0);
+        return (bubble.X, bubble.Y);
+    }
+
+    /// <summary>
+    /// The whole pellet-versus-bubble truth table, from both creation orders.
+    /// </summary>
+    /// <remarks>
+    /// ✅ <b>Measured against the running game on 2026-08-27</b>, by putting a
+    /// real <c>Bubble</c> and a real <c>Shot</c> on the same point in open space
+    /// and reading back which survived one frame later
+    /// (<c>tools/probes/probe-bubble-pair.js</c>). All four rows agreed with
+    /// the port. That settles the question docs/SIMULATION.md had open: <b>GM8
+    /// runs both instances' collision events</b>, and a projectile that
+    /// destroyed itself in its own event is still seen by the other side's, so
+    /// an enemy ordinary pellet and a bubble really do annihilate each other.
+    /// The alternative — the instance the stage reaches first wins and the other
+    /// survives — is refuted by the enemy/ordinary row, where <em>both</em> die.
+    /// <para>
+    /// ⚠️ <b>The two orders take different entry points.</b>
+    /// <c>Projectiles.Collide</c> walks in creation order, so a bubble fired
+    /// first is reached through <c>BubbleHitProjectiles</c> and a pellet fired
+    /// first through <c>HitBubble</c>. Every other test in this file creates the
+    /// bubble first, so the pellet-side entry had no coverage of this table at
+    /// all — and a Quote throwing a screen up in front of pellets already in the
+    /// air is the ordinary case, not the exotic one.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    // enemy + ordinary: the pair annihilates. This is the row that proves both
+    // events run — one side alone cannot destroy both instances.
+    [InlineData(Team.Blue, false, false, 0, 0)]
+    [InlineData(Team.Blue, false, true, 0, 0)]
+    // enemy + perseverant: the pellet flies on and the bubble pops anyway.
+    [InlineData(Team.Blue, true, false, 0, 1)]
+    [InlineData(Team.Blue, true, true, 0, 1)]
+    // friendly + perseverant: the bubble's condition is an `or`, so a team-mate
+    // clears the screen by luck.
+    [InlineData(Team.Red, true, false, 0, 1)]
+    [InlineData(Team.Red, true, true, 0, 1)]
+    // friendly + ordinary: neither side's condition is true and nothing happens.
+    [InlineData(Team.Red, false, false, 1, 1)]
+    [InlineData(Team.Red, false, true, 1, 1)]
+    public void ThePelletAndBubbleTableHoldsWhicheverWasFiredFirst(
+        Team shotTeam, bool perseverant, bool pelletFirst, int bubbles, int shots)
+    {
+        var state = default(WorldState);
+
+        if (pelletFirst)
+        {
+            var spot = BubbleSpot();
+            SpawnShot(ref state, spot.X, spot.Y, shotTeam, perseverant);
+            Put(ref state, 1, keys: PlayerKeys.Attack);
+            Attack(ref state);
+        }
+        else
+        {
+            Put(ref state, 1, keys: PlayerKeys.Attack);
+            Attack(ref state);
+
+            var bubble = Live(state, 0);
+            SpawnShot(ref state, bubble.X, bubble.Y, shotTeam, perseverant);
+        }
+
+        // The pair really is overlapping, whichever way round it was built —
+        // otherwise a row asserting "both survive" would pass for the wrong
+        // reason.
+        Assert.Equal(1, CountOf(state, ProjectileKind.Bubble));
+        Assert.Equal(1, CountOf(state, ProjectileKind.Shot));
+
+        Projectiles.Collide(World, ref state);
+
+        Assert.Equal(bubbles, CountOf(state, ProjectileKind.Bubble));
+        Assert.Equal(shots, CountOf(state, ProjectileKind.Shot));
+    }
+
     /// <summary>
     /// ⚠️ <b>A mine is turned around rather than popped</b>, and the bubble
     /// spends half its life doing it.

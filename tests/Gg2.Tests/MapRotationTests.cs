@@ -428,4 +428,93 @@ public sealed class MapRotationTests
         Assert.NotNull(end);
         Assert.Equal(Map, System.Text.Encoding.ASCII.GetString(end!.Payload, 1, end.Payload[0]));
     }
+    /// <summary>
+    /// ⚠️ <b><c>--time-limit 0</c> is a ONE-MINUTE round, not an unlimited
+    /// one</b> — and that is correct, because the reference cannot express "no
+    /// limit" at all.
+    /// </summary>
+    /// <remarks>
+    /// <c>game_init.gml:96</c> reads the ini through <c>max(1, min(255, ...))</c>,
+    /// so a zero there is a one-minute round and the shortest match the
+    /// reference permits is a minute. <c>GameServer</c> applies the same floor
+    /// (see its round-configuration block), which is what keeps the port
+    /// wire-compatible with an operator who writes <c>Time Limit = 0</c>.
+    /// <para>
+    /// ⚠️ <b>Zero means "no limit" one layer down, in
+    /// <c>WorldState.TimeLimitMinutes</c>, and only there.</b> That escape exists
+    /// so a defaulted world — every unit test and every bot rollout — is not a
+    /// round whose clock already reads 0:00. The two conventions meet at this
+    /// floor, and confusing them is not academic: a live session on 2026-08-27
+    /// started <c>gg2-server --time-limit 0</c> expecting an endless round,
+    /// watched the driven client get put back on the team-select screen about
+    /// fifty seconds in, and spent the time on the AFK timer before finding the
+    /// map change that had actually caused it.
+    /// </para>
+    /// <para>
+    /// The gate is the wire reading as much as the <c>MAP_END</c>: if the floor
+    /// were dropped the HUD would carry 0 and no round would ever end, so both
+    /// halves of this fail. <see cref="ALimitAboveTheFloorIsNotFlooredToIt"/> is
+    /// the control proving it is the floor being tested and not "any server ends
+    /// a round at 1,800 ticks".
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void AZeroTimeLimitIsFlooredToOneMinuteRatherThanMeaningNoLimit()
+    {
+        var map = LoadMap();
+        using var harness = new ServerHarness(o =>
+        {
+            o.Map = Map;
+            o.TimeLimitMinutes = 0;
+        });
+
+        var client = harness.JoinClient("watcher");
+        var reader = new BroadcastReader(map);
+
+        harness.Tick();
+        var joined = reader.Drain(client)
+            .Last(m => m.State is { Tier: MessageType.FullUpdate }).State!;
+
+        // The floor as the client sees it. A zero here would be a clock the
+        // client draws as 0:00 and a round that never ends.
+        Assert.Equal(1, joined.HudScalars[0]);
+
+        harness.Tick(OneMinute + 8);
+        var end = reader.Drain(client).SingleOrDefault(m => m.Type == MessageType.MapEnd);
+
+        Assert.True(end is not null, "--time-limit 0 produced a round that never ends");
+    }
+
+    /// <summary>
+    /// The control: a limit above the floor is left alone, so the test above is
+    /// measuring the floor rather than the harness.
+    /// </summary>
+    /// <remarks>
+    /// Without this, deleting the <c>max(1, ...)</c> and hard-coding a
+    /// one-minute round everywhere would pass
+    /// <see cref="AZeroTimeLimitIsFlooredToOneMinuteRatherThanMeaningNoLimit"/>.
+    /// </remarks>
+    [Fact]
+    public void ALimitAboveTheFloorIsNotFlooredToIt()
+    {
+        var map = LoadMap();
+        using var harness = new ServerHarness(o =>
+        {
+            o.Map = Map;
+            o.TimeLimitMinutes = 2;
+        });
+
+        var client = harness.JoinClient("watcher");
+        var reader = new BroadcastReader(map);
+
+        harness.Tick();
+        var joined = reader.Drain(client)
+            .Last(m => m.State is { Tier: MessageType.FullUpdate }).State!;
+
+        Assert.Equal(2, joined.HudScalars[0]);
+
+        // Well past where the floored round would have ended, and nothing yet.
+        harness.Tick(OneMinute + 8);
+        Assert.DoesNotContain(reader.Drain(client), m => m.Type == MessageType.MapEnd);
+    }
 }

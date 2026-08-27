@@ -15,6 +15,24 @@ public sealed record TraceHeader
     /// <summary>Bumped whenever the on-disk layout changes.</summary>
     public const int CurrentFormatVersion = 1;
 
+    /// <summary>
+    /// The longest string a header field can hold.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Every header string is written with a one-byte length prefix</b>
+    /// (<see cref="Trace.Encode"/>), so 255 is a hard limit rather than a
+    /// convention — and it is <b>not</b> raised, because the prefix is the
+    /// checked-in trace format and every fixture in the corpus is written in it.
+    /// <para>
+    /// Named so a caller can refuse an over-long value <em>before</em> doing the
+    /// work: <c>Encode</c> runs after a recording has finished, and a throw there
+    /// discards however many minutes of capture produced it. Measured on
+    /// 2026-08-27 by losing a 175-second recording to a 284-character
+    /// <c>--source</c>.
+    /// </para>
+    /// </remarks>
+    public const int MaxStringLength = 255;
+
     public required int FormatVersion { get; init; }
 
     /// <summary>
@@ -174,6 +192,41 @@ public sealed class TraceTick
     public bool HasPositions => Tier is MessageType.QuickUpdate or MessageType.FullUpdate;
 
     public required TraceSlot[] Slots { get; init; }
+
+    /// <summary>
+    /// The control points, as the update described them. Empty on an
+    /// <c>INPUTSTATE</c>.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Kept because nothing else in a recording says anything about a
+    /// control point.</b> The block rides on the same tiers as positions, and
+    /// carries <b>no count prefix</b> — a reader rebuilds the points from the
+    /// map (docs/PROTOCOL.md, "The KotH HUD block"). Until 2026-08-27
+    /// <c>TraceParser</c> parsed it and threw it away, so a port that never
+    /// captured a hill replayed a King of the Hill recording exactly as well as
+    /// a correct one.
+    /// </remarks>
+    public ControlPointBlock[] ControlPoints { get; init; } = [];
+
+    /// <summary>
+    /// <c>cpUnlock</c>, when this tick carried a King of the Hill HUD block.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The one thing a replay cannot derive about a King of the Hill
+    /// round.</b> <c>KothHUD.events/Create.xml</c> starts it at 900 and the
+    /// unlock fires 901 ticks later — but the HUD is created when the server
+    /// <em>restarts the room</em>, and a recording's only landmark is the
+    /// <c>CHANGE_MAP</c> that announced the change several hundred ticks
+    /// earlier. Measured on two recordings: both carry one <c>CHANGE_MAP</c> at
+    /// t0 and unlock at t1236 and t1160, so the announcement is demonstrably not
+    /// the round start. See <c>KothUnlockTimingTests</c>.
+    /// <para>
+    /// So it is anchored from the wire, exactly as a <c>PLAYER_SPAWN</c>'s
+    /// position is: the server already made the choice and is telling everyone
+    /// what it was.
+    /// </para>
+    /// </remarks>
+    public int? ControlPointUnlock { get; init; }
 
     /// <summary>
     /// Everything else the server sent before this tick's update — roster

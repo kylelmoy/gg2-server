@@ -1,3 +1,4 @@
+using System.Linq;
 using Gg2.Maps;
 using Gg2.Protocol;
 using Gg2.Simulation;
@@ -326,5 +327,106 @@ public sealed class MoveBoxTests
         // rising at the end of the tick can only have been pushed.
         Assert.True(state.Characters[1].VSpeed < 0,
             $"the lift did not lift: vspeed {state.Characters[1].VSpeed}");
+    }
+    // --- what tdm_mantic actually places, measured against the running game ---
+
+    /// <summary>
+    /// ⚠️ <b>Six of <c>tdm_mantic</c>'s nine up boxes are cancelled by a down box
+    /// at the same left edge, six pixels below.</b> Only three of them lift
+    /// anything at all.
+    /// </summary>
+    /// <remarks>
+    /// <b>Measured 2026-08-27 against the running game</b>, by enumerating
+    /// <c>MoveBoxUp</c> and <c>MoveBoxDown</c> and matching each up box against a
+    /// down box with the same <c>bbox_left</c> and <c>bbox_top + 6</c>: the
+    /// engine answered <c>111111000</c>, and the port's map layer agrees here.
+    /// <para>
+    /// ⚠️ <b>This is the fact that explains two failed recording attempts.</b>
+    /// The notes carried "fifteen move boxes on <c>tdm_mantic</c>" and read that
+    /// as a lift column worth steering bots into. Two thirds of them do
+    /// <em>nothing</em>: a character overlapping the up box overlaps the down box
+    /// as well, and five up plus five down is exactly zero
+    /// (<see cref="ACharacterCentredOnACancelledUpBoxIsPushedNowhere"/>). The
+    /// three that work are single boxes hanging in open air, listed below, and
+    /// no bot has any reason to go near them.
+    /// </para>
+    /// <para>
+    /// Asserted rather than commented because it is the premise of every future
+    /// attempt to record this map: if a shipped map ever changes, whoever is
+    /// planning that recording should be told by a red test rather than by
+    /// another wasted session.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void SixOfManticsNineUpBoxesAreCancelledByADownBoxSixPixelsBelow()
+    {
+        var boxes = ManticBoxes();
+
+        var ups = boxes.Where(b => b.Direction == PushDirection.Up).ToArray();
+        var downs = boxes.Where(b => b.Direction == PushDirection.Down).ToArray();
+
+        Assert.Equal(9, ups.Length);
+        Assert.Equal(6, downs.Length);
+
+        // Every down box is exactly under an up box — none of the six stands
+        // alone, which is what makes the count of cancelled ups six and not less.
+        Assert.All(downs, d => Assert.Contains(ups, u => u.Left == d.Left && u.Top + 6 == d.Top));
+
+        var free = ups
+            .Where(u => !downs.Any(d => d.Left == u.Left && d.Top == u.Top + 6))
+            .Select(u => (u.Left, u.Top))
+            .OrderBy(p => p.Left)
+            .ToArray();
+
+        Assert.Equal([(2028, 1014), (2100, 1266), (2160, 852)], free);
+    }
+
+    /// <summary>
+    /// ⚠️ <b>A character standing in one of the six cancelled boxes is pushed
+    /// nowhere at all</b>, through the real map's own geometry.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="TwoBoxesCompose"/> gates the composition rule on boxes built by
+    /// hand; this gates that <c>tdm_mantic</c>'s pairs really do compose to zero,
+    /// which is the claim the recording attempts foundered on. The unpaired box
+    /// is the control: without it a port whose <c>CollisionStep</c> did nothing
+    /// whatever would pass the first half.
+    /// </remarks>
+    [Fact]
+    public void ACharacterCentredOnACancelledUpBoxIsPushedNowhere()
+    {
+        var boxes = ManticBoxes();
+
+        var cancelled = boxes.First(b =>
+            b.Direction == PushDirection.Up
+            && boxes.Any(d => d.Direction == PushDirection.Down && d.Left == b.Left && d.Top == b.Top + 6));
+
+        var free = boxes.First(b =>
+            b.Direction == PushDirection.Up
+            && !boxes.Any(d => d.Direction == PushDirection.Down && d.Left == b.Left && d.Top == b.Top + 6));
+
+        Assert.Equal((0, 0), PushAt(boxes, cancelled));
+
+        // The control. Same call, same map, one box that has no partner.
+        Assert.Equal((0, -5), PushAt(boxes, free));
+    }
+
+    private static MoveBoxRect[] ManticBoxes()
+    {
+        const string Mantic = "tdm_mantic";
+        return MoveBoxes.Build(LevelMap.FromPng(Mantic, ReferenceTree.ReadMap(Mantic)).ForArea(1));
+    }
+
+    /// <summary>What one tick of the box stage does to a character centred on one.</summary>
+    private static (double HSpeed, double VSpeed) PushAt(MoveBoxRect[] boxes, MoveBoxRect box)
+    {
+        var state = default(WorldState);
+        Put(ref state, 1, (box.Left + box.Right) / 2.0, (box.Top + box.Bottom) / 2.0);
+
+        // The whole map's boxes, so a neighbour gets its say exactly as it does
+        // in a real tick — which is the entire point here.
+        MoveBoxes.CollisionStep(World, ref state, boxes);
+
+        return (state.Characters[1].HSpeed, state.Characters[1].VSpeed);
     }
 }
