@@ -402,8 +402,15 @@ public static class ControlPoints
         var x = CollisionWorld.RoundPosition(character.X);
         var y = CollisionWorld.RoundPosition(character.Y);
 
-        foreach (var zone in world.CaptureZones)
+        // ⚠️ Indexed rather than `foreach`, and for the same reason as the boxes:
+        // CaptureZones is an INTERFACE, and enumerating one allocates a boxed
+        // enumerator per live character per tick. docs/BOTAI.md item 1.
+        var zones = world.CaptureZones;
+
+        for (var i = 0; i < zones.Count; i++)
         {
+            var zone = zones[i];
+
             if (x < zone.Left || x > zone.Right || y < zone.Top || y > zone.Bottom)
                 continue;
 

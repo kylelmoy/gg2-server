@@ -228,8 +228,16 @@ public static class Cabinets
             ref var character = ref state.Characters[slot];
             var box = Aabb.ForCharacter(character.Box, character.X, character.Y);
 
-            foreach (var cabinet in cabinets)
+                // ⚠️ Indexed rather than `foreach`: this list arrives as an
+                // INTERFACE, and enumerating one allocates a boxed enumerator —
+                // measured at 32 bytes per live character per tick, every tick,
+                // which is exactly what docs/BOTAI.md item 1 forbids. Indexing an
+                // IReadOnlyList costs an interface call per element and allocates
+                // nothing, and these lists are a handful of rectangles.
+                for (var i = 0; i < cabinets.Count; i++)
             {
+                var cabinet = cabinets[i];
+
                 if (!box.Overlaps(new Aabb(cabinet.Left, cabinet.Top, cabinet.Right, cabinet.Bottom)))
                     continue;
 

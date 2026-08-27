@@ -639,7 +639,16 @@ public static class CharacterPhysics
     /// Which control and friction factors this character's <c>moveStatus</c>
     /// selects.
     /// </summary>
-    private static (double Control, double Friction) ControlAndFriction(in CharacterState character) =>
+    /// <remarks>
+    /// ⚠️ <b>Public because the bot layer's takeoff gate has to read it live.</b>
+    /// Begin Step sets these from <c>moveStatus</c> and <b>not</b> from
+    /// <c>onground</c>, so the same control factor applies in the air — which is
+    /// the whole reason a slow takeoff can be corrected by an in-flight tracker
+    /// at all. <c>botJumpReach.gml</c> replays this law to answer "would this arc
+    /// reach", and a second copy of the switch would be a second copy of a
+    /// measured fact.
+    /// </remarks>
+    public static (double Control, double Friction) ControlAndFriction(in CharacterState character) =>
         character.MoveStatus switch
         {
             // The two odd-looking literals are GM8's own doubles for 0.65 and

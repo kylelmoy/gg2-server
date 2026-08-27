@@ -235,7 +235,13 @@ public static class Weapons
     private const double RifleMaxDamage = 75;
 
     /// <summary>Ticks of scoping to reach <see cref="RifleMaxDamage"/>.</summary>
-    private const double RifleChargeTime = 105;
+    /// <remarks>
+    /// ⚠️ Public because the bot layer's sniper rule reads it: a scoped bot waits
+    /// for a charge proportional to the range before it fires, because the
+    /// Rifle's damage <em>is</em> its range. A second copy of the number would be
+    /// a bot that fires at the wrong moment for ever after this one changed.
+    /// </remarks>
+    public const double RifleChargeTime = 105;
 
     /// <summary>
     /// Extra ticks a scoped shot adds to the refire, and to the shell eject.

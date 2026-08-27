@@ -1,4 +1,5 @@
 using Gg2.Protocol;
+using Gg2.Simulation;
 
 namespace Gg2.Server;
 
@@ -21,8 +22,23 @@ public sealed class RosterEntry
 
     public bool IsBot { get; init; }
 
-    /// <summary>The most recent input this player produced.</summary>
-    public PlayerInput Input { get; set; }
+    /// <summary>
+    /// Where this player's per-tick input comes from.
+    /// </summary>
+    /// <remarks>
+    /// <b>The seam.</b> A socket-fed <see cref="NetworkInputSource"/>, a bot, or
+    /// — for the reserved slot 0, which nobody plays — a source that never
+    /// presses anything. <c>GameServerBeginStep.gml:79-85</c> chooses between
+    /// <c>botInputUpdate(player)</c> and <c>processClientCommands(player, i)</c>
+    /// at exactly this point in exactly this loop; here there is one call and
+    /// the difference is which object is behind it.
+    /// <para>
+    /// May also implement <see cref="ICommandSource"/>, for the actions that are
+    /// not keys, and <see cref="IBatchInputSource"/>, for a policy that would
+    /// rather decide for all of its slots at once.
+    /// </para>
+    /// </remarks>
+    public IInputSource Source { get; init; } = new NetworkInputSource();
 
     /// <summary>
     /// The client's <c>CLIENT_SETTINGS</c> queue-jump preference, echoed back in

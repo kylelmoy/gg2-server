@@ -47,6 +47,14 @@ Gg2.Host          console entry point.
 references and keep it that way — the moment the physics can read a socket, the
 parity harness stops being able to run it.
 
+⚠️ **`Gg2.Server` references `Gg2.Bots`, and not the other way round.** The bot
+*population manager* is server-side in the reference (`botPopulationUpdate` is
+called from `GameServer`'s Begin Step) because only the server has a roster, a
+config file and a socket to broadcast a join on — so `Gg2.Server.BotPopulationService`
+drives `Gg2.Bots.BotPopulation`'s decisions. `Gg2.Bots` stays pure and gains
+nothing from the edge, and the rule above is untouched. The `IInputSource` seam
+still means the *simulation* never special-cases a bot.
+
 ## Threading
 
 - **One thread owns the tick**, at a fixed 30 Hz. It never blocks on I/O.
@@ -115,37 +123,130 @@ of a hidden mutation.
 ## Bots: the actual point of the project
 
 Bots are already, in the reference, just players whose `keyState` is written by
-code instead of arriving on a socket (`Scripts/Bots/botInputUpdate.gml`). Keep
-that, and make it the seam:
+code instead of arriving on a socket (`Scripts/Bots/botInputUpdate.gml`). That
+is the seam, and **it is built** (phase 7 item 1):
 
 ```csharp
-interface IInputSource {
+public interface IInputSource {
     PlayerInput Poll(in WorldView world, int slot, int tick);
 }
 ```
 
-A network client and a bot are both `IInputSource`. Consequences worth having:
+`Gg2.Simulation.IInputSource`, `WorldView`, `PlayerCommand`;
+`Gg2.Server.NetworkInputSource`, `GameServer.GatherInputs` / `ServiceBots` /
+`AddBot` / `RemoveBot`. Gated by `InputSourceTests` and `WorldViewTests`.
+
+**It is a transcription of a shape the reference already has.**
+`GameServerBeginStep.gml:79-85` calls `botInputUpdate(player)` in exactly the
+position, and in the same roster loop, that it calls
+`processClientCommands(player, i)` for a socket. The port keeps that: one input
+gather over the whole roster, one set of command handlers, one roster.
+
+### The five things it settled
+
+- **A network client is an `IInputSource` too.** `NetworkInputSource` holds the
+  last `INPUTSTATE` that arrived and returns it. ⚠️ **Holding it is the
+  behaviour, not laziness** — `processClientCommands.gml:267` writes `keyState`
+  when a packet arrives and nothing clears it, so a dropped packet must leave
+  the player pressing what they last pressed. Returning `PlayerInput.None`
+  between packets would turn every lost packet into a stutter, and the client
+  dead-reckons on the opposite assumption.
+
+- **⚠️ The actions that are not keys have their own channel.** Building a
+  sentry is a client *command* (`serverBuildSentry.gml`), and so are the zoom,
+  the class and team changes and `DROP_INTEL` — none of them reaches
+  `MatchSimulation.Tick` at all, so none can be expressed as a `PlayerInput`.
+  They are `PlayerCommand`s, pushed into a `PlayerCommandBuffer` by an optional
+  `ICommandSource`. **The buffer's capacity is `ClientCommands.PerTickLimit`,
+  on purpose**: a bot gets exactly the socket's flood budget, enforced by there
+  being nowhere to put an eleventh.
+
+- **⚠️ Each command has one handler, reached from both sides.** `GameServer`'s
+  `ExecuteBuildSentry`, `ExecuteToggleZoom`, `ExecuteChangeClass`,
+  `ExecuteChangeTeam`, `ExecuteDropIntel`, `ExecuteDestroySentry` are called by
+  the socket switch *and* by `ServiceBots`. `botServerActions.gml` says why in
+  its own header — a bot "performs them by calling the same server-side scripts
+  the network path calls … each of which re-checks its own preconditions" — and
+  a second copy would let a bot build a sentry a client could not. A failed
+  precondition is silence, never an error.
+
+- **`WorldView` is a `ref struct`.** It carries a `ref readonly WorldState`, so
+  constructing one is free rather than a kilobyte copy per bot per tick, and the
+  language then refuses to let a source stash it in a field or keep it past the
+  call. The read-only guarantee is structural instead of documented.
+
+- **The batched shape is wired at the call site, not just declared.**
+  `GatherInputs` groups slots by source *identity* and calls
+  `IBatchInputSource.PollMany` once with all of them. docs/BOTAI.md item 5 asks
+  for the interface; the grouping is here because that item's warning is about
+  the call site — "adding it after every call site assumes per-slot polling is a
+  wide change".
+
+### Two divergences from the reference, both deliberate
+
+- **Bots are serviced in a pass of their own, after the clients.** The reference
+  interleaves them by roster index; `ServiceClients` walks its clients
+  *backwards* so a disconnect cannot skip the next one, and a departure compacts
+  the roster, so running the bots afterwards is what keeps every slot index
+  stable. The cost is that a bot's broadcasts follow the humans' within a tick.
+  Nothing observes it: commands from different players produce independent
+  messages.
+
+- **`AddBot` sends no `FULL_UPDATE` burst.** That exists to catch a joining
+  socket up; a bot has no socket. Otherwise it is `botAdd.gml` exactly — roster
+  first, then `PLAYER_JOIN`, then `checkClasslimits`, then ⚠️ **`CHANGETEAM`
+  before `CHANGECLASS`**, which is the opposite of the order `CompleteJoin`
+  replays an existing roster in, and then `alarm[5] = 1` for anything but a
+  spectator.
+
+A network client and a bot are both an `IInputSource`. Consequences worth
+having, and now available:
 
 - Bot logic is testable without a server, a socket or a client.
 - A bot can be swapped, A/B'd, or run at a different think-rate per slot.
-- `WorldView` can be a read-only projection, which stops bot code from mutating
+- `WorldView` is a read-only projection, which stops bot code from mutating
   simulation state by accident — the failure mode that is hardest to debug and
   most likely under heavy bot logic.
 
 The headroom argument is concrete: GM8 interprets its GML, and the existing bot
-layer is ~7,100 lines of it (`Scripts/Bots/` + `Scripts/BotNav/`) running for
-every bot every tick. Compiled C# on the same work should leave one to two orders
-of magnitude of budget, which is what buys real pathfinding, prediction and
-coordination instead of the current per-tick approximations.
+layer is 7,202 lines of it (`Scripts/Bots/` + `Scripts/BotNav/`) running for
+every bot every tick. Compiled C# on the same work should leave one to two
+orders of magnitude of budget, which is what buys real pathfinding, prediction
+and coordination instead of the current per-tick approximations.
+
+✅ **Measured 2026-08-27, and it is phase 7's exit criterion: twelve bots cost
+0.151ms of a 33.3ms tick — 0.5% of the budget.** 600 steady-state ticks of a real
+server on `ctf_truefort`, with the population manager, twelve policies each
+planning and fighting, the whole simulation, the state serialiser and the
+broadcast in the loop. `BotPopulationTests.TwelveBotsRunWellUnderTheTickBudget`.
+
+⚠️ **That is a Release measurement and the build matters: the same test in the
+default Debug build reads 0.307ms, 0.9%.** Twice the cost, so a re-measure that
+forgets to say which build it ran looks like a regression that is not one. The
+test's own bound is a quarter of the budget, which both builds clear comfortably,
+because the claim is an order of magnitude rather than a digit and a CI machine
+under load is not a benchmark.
+
+⚠️ **That measures this port's cost, not the ratio to GM8.** Nobody has
+benchmarked the reference's bot layer here, so the "one to two orders of
+magnitude" above is still a design intention — what the number establishes is
+that a bot can be made roughly two orders of magnitude heavier before the tick
+is at risk, which is the claim the project actually needs.
 
 Two things to carry over rather than reinvent:
 
-- **The nav graph generator already lives outside the game.** `gg2-nav-gen`
-  builds `Source/build/botnav/<map>_a<area>.txt` offline. The port can read the
-  same cache — `gg2-agent/tools/navgraph.js` documents the format, including the
-  non-obvious `ds_grid_write` column-major layout with sixteen-byte cells.
-  Longer term, moving generation into `Gg2.Bots` is a natural consolidation, but
-  reading the existing cache is the cheap first step.
+- **The nav graph generator already lives outside the game**, and the port
+  **reads its cache** (phase 7 item 2): `gg2-nav-gen` builds
+  `Source/build/botnav/<map>_a<area>.txt` offline; `Gg2.Bots.NavCache` loads it
+  and `Gg2.Bots.NavGraph` is the model, with the coordinate conversions, the
+  node lookup, the gate rules and the two indices `navCacheLoad.gml` derives
+  rather than stores. Moving *generation* into `Gg2.Bots` is a natural
+  consolidation later; it is not done and is not needed.
+  ⚠️ `gg2-agent/tools/navgraph.js` documents the format and is right about it —
+  including the non-obvious `ds_grid_write` column-major layout with
+  sixteen-byte cells — but it **floors the feet row where the game rounds it**,
+  which is a whole row on stepped terrain. CLAUDE.md, "the nav cache reader",
+  has that and the rest of the traps.
 - **The `BOT_*` constants** in `Gang-Garrison-2/Source/gg2/Constants.xml` are a
   tuned set with real playtesting behind them. Port the values even if the
   algorithms get rewritten.

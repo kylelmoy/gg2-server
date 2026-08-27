@@ -28,7 +28,34 @@ public static class ReferenceTree
     /// <summary>Where the built-in map PNGs live.</summary>
     public static string IncludedFiles => Path.Combine(Root, "Source", "gg2", "Included Files");
 
+    /// <summary>
+    /// Where <c>gg2-nav-gen</c> writes the bot nav caches.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <c>Source/build/</c> is gitignored in the reference and is the user's
+    /// own build directory, so this may be absent or empty on a fresh checkout —
+    /// unlike the maps, which ship. A test that needs it must say so
+    /// (<see cref="RequireNavCache"/>) rather than failing as if the tree were
+    /// missing.
+    /// </remarks>
+    public static string NavCacheDirectory =>
+        Path.Combine(Root, "Source", "build", Gg2.Bots.NavCache.DirectoryName);
+
     public static bool IsAvailable => Directory.Exists(IncludedFiles);
+
+    public static bool HasNavCache =>
+        Directory.Exists(NavCacheDirectory) && Directory.EnumerateFiles(NavCacheDirectory, "*.txt").Any();
+
+    public static void RequireNavCache() =>
+        Assert.True(
+            HasNavCache,
+            $"""
+             No bot nav caches at {NavCacheDirectory}.
+
+             These are written by gg2-nav-gen, not shipped with the reference, and
+             Source/build/ is gitignored — so a fresh checkout has none. Run the
+             generator over the built-in maps to produce them.
+             """);
 
     public static string MapPath(string map) => Path.Combine(IncludedFiles, map + ".png");
 

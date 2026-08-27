@@ -3,10 +3,12 @@
 A headless Gang Garrison 2 server in C#, wire-compatible with the stock Game
 Maker 8 client.
 
-**Status: phases 0–6 of [`docs/PLAN.md`](docs/PLAN.md) are done. All eight game
+**Status: phases 0–7 of [`docs/PLAN.md`](docs/PLAN.md) are done.** All eight game
 modes run end to end, the server plays match after match on its own, and every
-field of a state update carries a real value. Phase 7, bots, is next and is the
-reason the project exists.**
+field of a state update carries a real value. **And the bots play**: a server
+started with `--bots 12` fills itself with twelve that walk the map, take the
+objective and fight over it — at **half a percent of the per-tick budget**, which
+is the headroom this project exists to buy.
 
 A stock client connects, picks a team and class, spawns, fights, dies,
 respawns, captures the objective, and sees the round end and the map change.
@@ -108,16 +110,38 @@ client's trajectory bit for bit.
 $env:PATH = "$env:LOCALAPPDATA\Microsoft\dotnet;$env:PATH"   # .NET 9, user-local
 dotnet test Gg2.sln
 dotnet run --project src/Gg2.Host -- --map ctf_truefort
+
+# ...and with bots. --bots is a FILL target including humans, not a bot count.
+dotnet run --project src/Gg2.Host -- --map ctf_truefort --bots 12 `
+    --botnav D:\code\Gang-Garrison-2\Sourceuildotnav
 ```
+
+⚠️ **The nav caches are not shipped.** They are gitignored in the reference and
+are built by `gg2-nav-gen`, so a fresh checkout has none — without `--botnav` the
+bots fight whatever comes to them and do not walk anywhere, which is a quiet
+degradation rather than an error.
 
 ## Why
 
 1. **Performance headroom for much heavier bot logic.** The existing bot layer is
-   ~7,100 lines of GML interpreted by Game Maker 8, running for every bot every
+   7,202 lines of GML interpreted by Game Maker 8, running for every bot every
    tick. That ceiling is the binding constraint on how good the bots can get.
-   Compiled C# on the same work should leave one to two orders of magnitude of
-   budget. ⚠️ **That is a design intention and not yet a measurement** — no
-   benchmark has been run, and doing so is phase 7's exit criterion.
+
+   **Measured, 2026-08-27: twelve bots cost 0.151ms of a 33.3ms tick — 0.5% of
+   the budget**, over 600 steady-state ticks of a real server with the whole
+   simulation, the state serialiser and the broadcast in the loop. So the budget
+   is there.
+
+   ⚠️ **That figure is a Release measurement, and the build matters.** The same
+   test in the default Debug build reads **0.307ms, 0.9%** — twice the cost, and
+   a re-measure that forgets to say which build it ran will look like a
+   regression that is not one. Say which build, every time.
+
+   ⚠️ **What is measured is this port's cost, not the ratio.** Nobody has
+   benchmarked the GM8 bot layer here, so "one to two orders of magnitude better
+   than the reference" remains a design intention; "a bot can be made two orders
+   of magnitude heavier before the tick is at risk" is the part that follows from
+   the number.
 2. **A faster loop for writing and testing that logic.** A pure, I/O-free
    simulation can run thousands of ticks with no game, no rendering and no real
    time elapsing — so a bot change is evaluated in seconds across every map,

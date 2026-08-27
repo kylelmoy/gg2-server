@@ -62,6 +62,16 @@ public sealed class GameServer : IDisposable
     // Reused every tick; see AdvanceSimulation.
     private readonly PlayerInput[] _inputs = new PlayerInput[WorldState.MaxSlots];
 
+    // botPopulationUpdate's half that needs a roster and a socket. Created in
+    // Start, because it needs a `this` and the constructor does not have one to
+    // hand out safely.
+    private BotPopulationService? _population;
+
+    // One bot's commands for one tick, reused across bots and across ticks: an
+    // inline buffer, so this field is the whole storage and ServiceBots
+    // allocates nothing.
+    private PlayerCommandBuffer _commands;
+
     /// <summary>
     /// Ticks since start. <c>frame</c> in <c>GameServerBeginStep.gml</c>, and it
     /// is incremented <em>before</em> the cadence is tested — so the first tick
@@ -116,6 +126,86 @@ public sealed class GameServer : IDisposable
 
     public int PlayerCount => _roster.Count;
 
+    /// <summary>The configuration this server was started with.</summary>
+    public ServerOptions Options => _options;
+
+    /// <summary>The roster's size, bots and slot 0 included.</summary>
+    public int RosterCount => _roster.Count;
+
+    /// <summary>
+    /// The map that is loaded right now.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Not <see cref="ServerOptions.Map"/>.</b> Those are the same string
+    /// until the first rotation and different for ever after, and reading the
+    /// option instead is the bug <c>MapRotationTests</c> was written to catch: every
+    /// player joining after round one was told the wrong map and then simulated a
+    /// different world, silently.
+    /// </remarks>
+    public string CurrentMap => _currentMap;
+
+    /// <summary>
+    /// <c>getNumberOfOccupiedSlots</c>: humans only.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ Neither bots nor the server's own reserved slot 0 count. Including
+    /// either would make the fill target chase its own tail — every bot added
+    /// would reduce the deficit it was added for.
+    /// </remarks>
+    public int HumanCount => OccupiedSlots();
+
+    /// <summary>Every bot's roster slot, ascending.</summary>
+    /// <remarks>
+    /// Rebuilt per call rather than cached: a departure compacts the roster, so a
+    /// cached list is stale the moment anybody leaves and the failure is a bot
+    /// removed from somebody else's slot.
+    /// </remarks>
+    public IReadOnlyList<int> BotSlots
+    {
+        get
+        {
+            var slots = new List<int>();
+
+            for (var i = 1; i < _roster.Count; i++)
+            {
+                if (_roster[i].IsBot)
+                    slots.Add(i);
+            }
+
+            return slots;
+        }
+    }
+
+    public Team TeamOf(int slot) => _roster[slot].Team;
+
+    public PlayerClass ClassOf(int slot) => _roster[slot].Class;
+
+    public IInputSource SourceOf(int slot) => _roster[slot].Source;
+
+    public bool IsAlive(int slot) => _world.IsAlive(slot);
+
+    /// <summary>
+    /// How many players are on each team — <c>botPickTeam</c>'s count.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ Everybody, humans included: a bot filling a server is balancing the
+    /// game rather than balancing the bots. ⚠️ And slot 0 is skipped, because the
+    /// server's own reserved player is a spectator that never plays.
+    /// </remarks>
+    public void CountTeams(out int red, out int blue)
+    {
+        red = 0;
+        blue = 0;
+
+        for (var i = 1; i < _roster.Count; i++)
+        {
+            if (_roster[i].Team == Team.Red)
+                red++;
+            else if (_roster[i].Team == Team.Blue)
+                blue++;
+        }
+    }
+
     /// <summary>The port actually bound, which differs from the request when it was 0.</summary>
     public int BoundPort { get; private set; }
 
@@ -143,6 +233,14 @@ public sealed class GameServer : IDisposable
         // Slot 0, the server's own reserved player: a spectator that always
         // exists, now in the world as well as the roster.
         _world.AddPlayer(0);
+
+        // ⚠️ Before OpenMap, because OpenMap is what points it at a map — and
+        // after AddPlayer(0), because its first Retarget walks the roster.
+        //
+        // Seeded from the port, so two servers on one machine roll differently and
+        // one server rolls the same way every run. ⚠️ NOT WorldState.Random: that
+        // stream is observable simulation and a bot joining must not move it.
+        _population = new BotPopulationService(this, _log, (uint)_options.Port);
 
         var map = OpenMap(_options.Map, area: 1);
 
@@ -253,6 +351,14 @@ public sealed class GameServer : IDisposable
         Rounds.Start(ref _world);
 
         _currentMap = name;
+
+        // ⚠️ Every bot's follower, route and blacklist are indices into the graph
+        // that was loaded a moment ago, so a rotation has to hand them the new one
+        // — see ScriptedBot.SetMap. The reference re-teams every bot across a map
+        // change (botReteamAll) and frees the nav state on the way
+        // (botNavRelease); this is both, in the one place a map is opened.
+        _population?.MapChanged(map, area, _options.NavCacheDirectory);
+
         return map;
     }
 
@@ -415,6 +521,13 @@ public sealed class GameServer : IDisposable
 
         ServiceClients();
 
+        // ⚠️ Before ServiceBots, so a bot added this tick is polled this tick
+        // rather than pressing nothing for one frame. GameServerBeginStep.gml
+        // calls botPopulationUpdate ahead of the input pass for the same reason.
+        _population?.Service();
+
+        ServiceBots();
+
         // Order matters and is the reference's. GameServerBeginStep.gml
         // serialises the update *before* any Character's Step runs, so one
         // update carries this tick's input alongside last tick's position — the
@@ -451,8 +564,7 @@ public sealed class GameServer : IDisposable
 
         var count = Math.Min(_roster.Count, WorldState.MaxSlots);
 
-        for (var i = 0; i < count; i++)
-            _inputs[i] = _roster[i].Input;
+        GatherInputs(count);
 
         MatchSimulation.Tick(_collision, ref _world, _inputs.AsSpan(0, count), ref _events, _spawnPoints);
 
@@ -484,6 +596,71 @@ public sealed class GameServer : IDisposable
         // Last: the only in-tick BALANCE comes from a death's own
         // ServerBalanceTeams, which runs after doEventPlayerDeath.
         BroadcastTeamBalance();
+    }
+
+    /// <summary>
+    /// Asks every slot's <see cref="IInputSource"/> what it is pressing.
+    /// </summary>
+    /// <remarks>
+    /// One path for sockets and bots alike — docs/ARCHITECTURE.md's seam. The
+    /// world handed to a source is the state as the previous tick left it,
+    /// which is the same thing an <c>INPUTSTATE</c> that arrived before
+    /// <see cref="ServiceClients"/> was decided against.
+    /// <para>
+    /// <b>The batched form is used where a source offers it</b>
+    /// (docs/BOTAI.md item 5). Slots are grouped by source <em>identity</em>,
+    /// because that is what a batching source is: one policy driving several
+    /// bots, which wants one call with all of their slots rather than one call
+    /// each. The grouping is here rather than deferred precisely because item 5
+    /// says adding it afterwards is a wide change — a call site that assumed
+    /// per-slot polling has to be rewritten, and this is that call site.
+    /// </para>
+    /// <para>
+    /// Everything below is stack or long-lived buffers: this runs every tick.
+    /// </para>
+    /// </remarks>
+    private void GatherInputs(int count)
+    {
+        Span<bool> polled = stackalloc bool[WorldState.MaxSlots];
+        Span<int> group = stackalloc int[WorldState.MaxSlots];
+
+        // Hoisted, not per group: a stackalloc inside the loop would grow the
+        // frame once per batching source and never give it back.
+        Span<PlayerInput> outputs = stackalloc PlayerInput[WorldState.MaxSlots];
+
+        for (var i = 0; i < count; i++)
+        {
+            if (polled[i])
+                continue;
+
+            var source = _roster[i].Source;
+
+            if (source is not IBatchInputSource batch)
+            {
+                _inputs[i] = source.Poll(new WorldView(in _world, _collision), i, (int)_frame);
+                polled[i] = true;
+                continue;
+            }
+
+            // Every remaining slot driven by this same instance, in ascending
+            // order — the roster order every other per-slot loop in the project
+            // walks.
+            var size = 0;
+            for (var j = i; j < count; j++)
+            {
+                if (!polled[j] && ReferenceEquals(_roster[j].Source, source))
+                {
+                    group[size++] = j;
+                    polled[j] = true;
+                }
+            }
+
+            batch.PollMany(
+                new WorldView(in _world, _collision), group[..size], outputs[..size], (int)_frame);
+
+            for (var k = 0; k < size; k++)
+                _inputs[group[k]] = outputs[k];
+        }
     }
 
     /// <summary>
@@ -981,6 +1158,150 @@ public sealed class GameServer : IDisposable
         }
     }
 
+    /// <summary>
+    /// The bots' half of the roster service loop: the commands a key cannot
+    /// express, asked for once per bot per tick.
+    /// </summary>
+    /// <remarks>
+    /// <c>GameServerBeginStep.gml:79-85</c> puts <c>botInputUpdate(player)</c>
+    /// in the same loop and the same position as
+    /// <c>processClientCommands(player, i)</c> — a bot is serviced exactly where
+    /// a socket is. The <em>keys</em> half of that is
+    /// <see cref="GatherInputs"/>, which runs for every slot including this one;
+    /// what is left here is <see cref="ICommandSource"/>.
+    /// <para>
+    /// A separate ascending pass rather than one interleaved loop, because
+    /// <see cref="ServiceClients"/> walks its clients <em>backwards</em> so a
+    /// disconnect cannot skip the next one — and a departure compacts the
+    /// roster, so running after it is what keeps every slot index below stable.
+    /// The cost is that a bot's broadcasts follow the humans' within a tick
+    /// where the reference interleaves them by roster index. Nothing observes
+    /// it: commands from different players produce independent messages, and no
+    /// recording in this project contains a bot at all.
+    /// </para>
+    /// </remarks>
+    private void ServiceBots()
+    {
+        for (var slot = 0; slot < _roster.Count; slot++)
+        {
+            var entry = _roster[slot];
+
+            if (entry.Source is not ICommandSource source)
+                continue;
+
+            _commands.Clear();
+            source.PollCommands(new WorldView(in _world, _collision), slot, (int)_frame, ref _commands);
+
+            for (var i = 0; i < _commands.Count; i++)
+            {
+                Execute(entry, _commands[i]);
+
+                // ⚠️ A command can move the roster under this loop: a class or
+                // team change can kill, and a kill can autobalance somebody
+                // across. It cannot *remove* an entry — only a disconnect does
+                // that, and a bot has no socket — so the index stays this
+                // player's. Re-reading the entry is not enough on its own,
+                // which is why every Execute* below takes the entry and asks
+                // IdOf for the slot rather than trusting one captured here.
+            }
+        }
+    }
+
+    /// <summary>
+    /// Adds a bot to the roster and joins it to the game the way a client is
+    /// joined — <c>Scripts/Bots/botAdd.gml</c>.
+    /// </summary>
+    /// <remarks>
+    /// The reference's order exactly: roster insertion first, so the id is the
+    /// index it lands at; <c>PLAYER_JOIN</c> broadcast <em>before</em> the team
+    /// and class are known; <c>checkClasslimits</c>; then <c>CHANGETEAM</c> and
+    /// <c>CHANGECLASS</c> — ⚠️ <b>team first</b>, which is the opposite of the
+    /// order <see cref="CompleteJoin"/> replays an existing roster in, and is
+    /// what the reference does. Finally <c>alarm[5] = 1</c> for anything but a
+    /// spectator: a spawn in this same tick's alarm stage.
+    /// <para>
+    /// ⚠️ <b>There is no <c>FULL_UPDATE</c> burst and no
+    /// <see cref="ClientPlayer"/>.</b> Those exist to catch a joining socket up;
+    /// a bot has no socket, and the state it needs is the one it is already
+    /// standing in.
+    /// </para>
+    /// <para>
+    /// Bots do not count against <see cref="ServerOptions.PlayerLimit"/> —
+    /// <c>getNumberOfOccupiedSlots</c> subtracts them — but they do occupy
+    /// roster slots, and <see cref="WorldState.MaxSlots"/> is the hard ceiling
+    /// on those.
+    /// </para>
+    /// </remarks>
+    /// <param name="source">
+    /// What this bot presses. May also implement <see cref="ICommandSource"/>
+    /// and <see cref="IBatchInputSource"/>.
+    /// </param>
+    /// <returns>The roster slot the bot landed in.</returns>
+    public int AddBot(string name, Team team, PlayerClass playerClass, IInputSource source)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(source);
+
+        if (_roster.Count >= WorldState.MaxSlots)
+            throw new InvalidOperationException($"the roster is full at {WorldState.MaxSlots} slots");
+
+        var entry = new RosterEntry { Name = name, IsBot = true, Source = source };
+        var slot = _roster.Add(entry);
+        _world.AddPlayer(slot);
+
+        ServerMessages.PlayerJoin(_broadcast, entry.Name);
+
+        // botAdd.gml:26 — the class it counts with is the one checkClasslimits
+        // handed back, not the one asked for.
+        var allowed = Classlimits.Pick(ref _world, slot, team, playerClass);
+
+        entry.Team = team;
+        entry.Class = allowed;
+        _world.Players[slot].Team = team;
+        _world.Players[slot].Class = allowed;
+
+        ServerMessages.PlayerChangeTeam(_broadcast, (byte)slot, team);
+        ServerMessages.PlayerChangeClass(_broadcast, (byte)slot, allowed);
+
+        if (team != Team.Spectator)
+            _world.Players[slot].RespawnTimer = 1;
+
+        _log.Info($"bot {name} added as player {slot} ({team}, {allowed})");
+        return slot;
+    }
+
+    /// <summary>
+    /// Removes a bot, mirroring the disconnect path —
+    /// <c>Scripts/Bots/botRemove.gml</c>.
+    /// </summary>
+    /// <remarks>
+    /// The same <see cref="WorldState.RemoveSlot"/> a departure runs, and for
+    /// the same reason: a slot index <em>is</em> a roster index, so everything
+    /// above the hole shifts down on both sides of the wire at once. Everything
+    /// the bot owned goes with it — its character, its sentry and every
+    /// projectile of its still in the air (docs/SIMULATION.md, "what a
+    /// departure destroys").
+    /// </remarks>
+    public void RemoveBot(int slot)
+    {
+        if (slot <= 0 || slot >= _roster.Count || !_roster[slot].IsBot)
+            throw new ArgumentOutOfRangeException(nameof(slot), slot, "not a bot slot");
+
+        var name = _roster[slot].Name;
+
+        _roster.RemoveAt(slot);
+        _world.RemoveSlot(slot);
+
+        ServerMessages.PlayerLeave(_broadcast, (byte)slot);
+
+        // GameServerBeginStep.gml:70's ServerBalanceTeams() after a departure,
+        // which botRemove reaches through removePlayer for the same reason.
+        TeamBalance.Check(ref _world, ref _events);
+        BroadcastTeamBalance();
+
+        _log.Info($"bot {name} removed from player {slot}");
+    }
+
     private void ProcessCommands(ClientPlayer client)
     {
         // At most ten completed commands per player per tick; the rest stay
@@ -1009,56 +1330,16 @@ public sealed class GameServer : IDisposable
                 break;
 
             case MessageType.InputState:
-                entry.Input = PlayerInput.Read(ref reader);
+                // The one command that is not a PlayerCommand: it *is* the
+                // per-tick input, and it reaches the simulation through the
+                // seam like everything else. A client always has a
+                // NetworkInputSource behind it, so the cast never fails.
+                ((NetworkInputSource)entry.Source).Latest = PlayerInput.Read(ref reader);
                 break;
 
             case MessageType.PlayerChangeTeam:
-            {
-                var slot = IdOf(entry);
-
-                // The balance block: "any" resolves to the smaller team, a
-                // request for the bigger team — or the one they are already on
-                // — is refused with silence.
-                var resolved = PlayerCommands.ResolveRequestedTeam(
-                    ref _world, slot, (Team)reader.ReadUByte());
-
-                if (resolved is not Team team)
-                    break;
-
-                // `getCharacterObject(player.class) != -1 or TEAM_SPECTATOR`:
-                // every class the port accepts has a character object, so the
-                // clause is always true here.
-
-                // A change with a live character is a death, announced before
-                // the change itself — the reference's own stream order. The
-                // simulation half also arms the respawn and remembers the team;
-                // the sentry notices on its own next Begin Step, exactly one
-                // tick later like the reference's guard.
-                var death = PlayerCommands.ChangeTeamWithBalance(
-                    ref _world, slot, team, ref _events, out var reclassed);
-
-                if (death is PlayerDeathEvent died)
-                    ServerMessages.PlayerDeath(
-                        _broadcast, (byte)slot, died.Killer, died.Assistant, died.Source);
-
-                // ⚠️ checkClasslimits runs *before* the team message and is
-                // announced separately, and only when it actually moved the
-                // class — processClientCommands.gml:181-186.
-                if (reclassed is PlayerClass forced)
-                {
-                    entry.Class = forced;
-                    ServerMessages.PlayerChangeClass(_broadcast, (byte)slot, forced);
-                }
-
-                entry.Team = team;
-                ServerMessages.PlayerChangeTeam(_broadcast, (byte)slot, team);
-
-                // And ServerBalanceTeams(), which ChangeTeamWithBalance has
-                // already run into _events — the messages it produced go out
-                // after this one, which is the reference's order.
-                BroadcastTeamBalance();
+                ExecuteChangeTeam(entry, (Team)reader.ReadUByte());
                 break;
-            }
 
             case MessageType.PlayerChangeClass:
             {
@@ -1066,19 +1347,7 @@ public sealed class GameServer : IDisposable
                 if (!Enum.IsDefined(requested))
                     break; // getCharacterObject() == -1: the reference ignores it.
 
-                var slot = IdOf(entry);
-
-                // A live character dies for the swap — BID_FAREWELL by their
-                // own hand, or FINISHED_OFF for whoever had hurt them — and the
-                // death precedes the class message, the reference's order. A
-                // characterless player is queued to spawn in this same tick's
-                // alarm stage.
-                if (PlayerCommands.ChangeClass(ref _world, slot, requested, _collision) is PlayerDeathEvent death)
-                    ServerMessages.PlayerDeath(
-                        _broadcast, (byte)slot, death.Killer, death.Assistant, death.Source);
-
-                entry.Class = requested;
-                ServerMessages.PlayerChangeClass(_broadcast, (byte)slot, requested);
+                ExecuteChangeClass(entry, requested);
                 break;
             }
 
@@ -1102,76 +1371,24 @@ public sealed class GameServer : IDisposable
             }
 
             case MessageType.BuildSentry:
-            {
-                // serverBuildSentry.gml: check, broadcast, build. A failed
-                // precondition is silence, exactly as the reference's guard
-                var slot = IdOf(entry);
-                if (!Sentries.CanBuild(_world, slot, _collision))
-                    break;
-
-                ref readonly var builder = ref _world.Characters[slot];
-
-                ServerMessages.BuildSentry(
-                    _broadcast,
-                    slot,
-                    WireQuantise.ToUShort(Gml.Round(builder.X * 5)),
-                    WireQuantise.ToUShort(Gml.Round(builder.Y * 5)),
-                    (sbyte)builder.Facing);
-
-                // The build itself uses the *exact* position; only the
-                // broadcast is quantised, like a character's own block. The
-                // team comes off the world's own player state.
-                Sentries.Build(ref _world, slot, builder.X, builder.Y, builder.Facing);
+                ExecuteBuildSentry(IdOf(entry));
                 break;
-            }
 
             case MessageType.DestroySentry:
-            {
-                // processClientCommands.gml: a bare instance_destroy, and no
-                // broadcast at all — clients notice through the subobject bit
-                // of the next update. The Destroy event still runs, so the
-                // owner is shoved if airborne and stuck mines drop.
-                var slot = IdOf(entry);
-                if (slot < WorldState.MaxSlots && _world.HasSentry[slot])
-                    Sentries.Destroy(_collision, ref _world, slot);
+                ExecuteDestroySentry(IdOf(entry));
                 break;
-            }
 
             case MessageType.DropIntel:
-            {
-                // processClientCommands.gml:221 — the player asked to put it
-                // down. Unlike the death drop this one *is* broadcast, and the
-                // reference sends it before doing it (`sendEventDropIntel` then
-                // `doEventDropIntel`); the order is unobservable because the
-                // message carries nothing but the player.
-                //
-                // ⚠️ It is a command and not a keypress, so it never reaches
-                // MatchSimulation.Tick — the same shape as BUILD_SENTRY, and
-                // the reason Intel.Drop is public.
-                var slot = IdOf(entry);
-                if (Intel.Drop(ref _world, slot))
-                    ServerMessages.DropIntel(_broadcast, slot);
-
+                ExecuteDropIntel(IdOf(entry));
                 break;
-            }
 
             // Everything below is either simulation the port does not have yet
             // or a subsystem a headless server deliberately does not implement.
             // The reference's own answer to REWARD_REQUEST from a server with no
             // auth is silence, and silence is a valid answer to all of these.
             case MessageType.ToggleZoom:
-            {
-                // serverToggleZoom.gml: the preconditions, the broadcast, then
-                // the apply. ⚠️ Zoom is its own client command rather than a key
-                // in the input byte, which is the whole reason the reference
-                // extracted it into a script a bot can call.
-                var slot = IdOf(entry);
-
-                if (PlayerCommands.ToggleZoom(ref _world, slot))
-                    ServerMessages.ToggleZoom(_broadcast, (byte)slot);
-
+                ExecuteToggleZoom(IdOf(entry));
                 break;
-            }
 
             case MessageType.Omnomnomnom:
             case MessageType.RewardRequest:
@@ -1183,6 +1400,183 @@ public sealed class GameServer : IDisposable
                 // Unreachable: CommandStream only yields commands in the table.
                 break;
         }
+    }
+
+    // --- the commands that are not keys ---------------------------------------
+    //
+    // Every one of these is reached from two places: a socket packet, and a bot
+    // that asked for it through ICommandSource. ⚠️ They must stay ONE copy.
+    // Scripts/Bots/botServerActions.gml is explicit about why — "a bot performs
+    // them by calling the same server-side scripts the network path calls …
+    // each of which re-checks its own preconditions" — and the reference
+    // extracted serverBuildSentry.gml and serverToggleZoom.gml out of
+    // processClientCommands.gml for exactly that reason. A second copy here
+    // would let a bot build a sentry a client could not.
+
+    /// <summary>
+    /// Runs one <see cref="PlayerCommand"/> for a slot, whoever asked for it.
+    /// </summary>
+    /// <remarks>
+    /// A command whose preconditions fail is silence, never an error: that is
+    /// the reference's guard style throughout <c>processClientCommands.gml</c>,
+    /// and <c>botServerActions.gml</c> leans on it — "a wrong guess here is
+    /// ignored rather than harmful".
+    /// </remarks>
+    private void Execute(RosterEntry entry, in PlayerCommand command)
+    {
+        switch (command.Kind)
+        {
+            case PlayerCommandKind.BuildSentry:
+                ExecuteBuildSentry(IdOf(entry));
+                break;
+
+            case PlayerCommandKind.DestroySentry:
+                ExecuteDestroySentry(IdOf(entry));
+                break;
+
+            case PlayerCommandKind.ToggleZoom:
+                ExecuteToggleZoom(IdOf(entry));
+                break;
+
+            case PlayerCommandKind.DropIntel:
+                ExecuteDropIntel(IdOf(entry));
+                break;
+
+            case PlayerCommandKind.ChangeClass:
+                // The socket path's Enum.IsDefined guard, for the same reason:
+                // getCharacterObject() == -1 is ignored by the reference.
+                if (Enum.IsDefined(command.AsClass))
+                    ExecuteChangeClass(entry, command.AsClass);
+                break;
+
+            case PlayerCommandKind.ChangeTeam:
+                ExecuteChangeTeam(entry, command.AsTeam);
+                break;
+
+            case PlayerCommandKind.None:
+            default:
+                break;
+        }
+    }
+
+    private void ExecuteChangeTeam(RosterEntry entry, Team requested)
+    {
+        var slot = IdOf(entry);
+
+        // The balance block: "any" resolves to the smaller team, a
+        // request for the bigger team — or the one they are already on
+        // — is refused with silence.
+        var resolved = PlayerCommands.ResolveRequestedTeam(ref _world, slot, requested);
+
+        if (resolved is not Team team)
+            return;
+
+        // getCharacterObject(player.class) != -1 or TEAM_SPECTATOR:
+        // every class the port accepts has a character object, so the
+        // clause is always true here.
+
+        // A change with a live character is a death, announced before
+        // the change itself — the reference's own stream order. The
+        // simulation half also arms the respawn and remembers the team;
+        // the sentry notices on its own next Begin Step, exactly one
+        // tick later like the reference's guard.
+        var death = PlayerCommands.ChangeTeamWithBalance(
+            ref _world, slot, team, ref _events, out var reclassed);
+
+        if (death is PlayerDeathEvent died)
+            ServerMessages.PlayerDeath(
+                _broadcast, (byte)slot, died.Killer, died.Assistant, died.Source);
+
+        // ⚠️ checkClasslimits runs *before* the team message and is
+        // announced separately, and only when it actually moved the
+        // class — processClientCommands.gml:181-186.
+        if (reclassed is PlayerClass forced)
+        {
+            entry.Class = forced;
+            ServerMessages.PlayerChangeClass(_broadcast, (byte)slot, forced);
+        }
+
+        entry.Team = team;
+        ServerMessages.PlayerChangeTeam(_broadcast, (byte)slot, team);
+
+        // And ServerBalanceTeams(), which ChangeTeamWithBalance has
+        // already run into _events — the messages it produced go out
+        // after this one, which is the reference's order.
+        BroadcastTeamBalance();
+    }
+
+    private void ExecuteChangeClass(RosterEntry entry, PlayerClass requested)
+    {
+        var slot = IdOf(entry);
+
+        // A live character dies for the swap — BID_FAREWELL by their
+        // own hand, or FINISHED_OFF for whoever had hurt them — and the
+        // death precedes the class message, the reference's order. A
+        // characterless player is queued to spawn in this same tick's
+        // alarm stage.
+        if (PlayerCommands.ChangeClass(ref _world, slot, requested, _collision) is PlayerDeathEvent death)
+            ServerMessages.PlayerDeath(
+                _broadcast, (byte)slot, death.Killer, death.Assistant, death.Source);
+
+        entry.Class = requested;
+        ServerMessages.PlayerChangeClass(_broadcast, (byte)slot, requested);
+    }
+
+    private void ExecuteBuildSentry(int slot)
+    {
+        // serverBuildSentry.gml: check, broadcast, build. A failed
+        // precondition is silence, exactly as the reference's guard
+        if (!Sentries.CanBuild(_world, slot, _collision))
+            return;
+
+        ref readonly var builder = ref _world.Characters[slot];
+
+        ServerMessages.BuildSentry(
+            _broadcast,
+            (byte)slot,
+            WireQuantise.ToUShort(Gml.Round(builder.X * 5)),
+            WireQuantise.ToUShort(Gml.Round(builder.Y * 5)),
+            (sbyte)builder.Facing);
+
+        // The build itself uses the *exact* position; only the
+        // broadcast is quantised, like a character's own block. The
+        // team comes off the world's own player state.
+        Sentries.Build(ref _world, slot, builder.X, builder.Y, builder.Facing);
+    }
+
+    private void ExecuteDestroySentry(int slot)
+    {
+        // processClientCommands.gml: a bare instance_destroy, and no
+        // broadcast at all — clients notice through the subobject bit
+        // of the next update. The Destroy event still runs, so the
+        // owner is shoved if airborne and stuck mines drop.
+        if (slot < WorldState.MaxSlots && _world.HasSentry[slot])
+            Sentries.Destroy(_collision, ref _world, slot);
+    }
+
+    private void ExecuteDropIntel(int slot)
+    {
+        // processClientCommands.gml:221 — the player asked to put it
+        // down. Unlike the death drop this one *is* broadcast, and the
+        // reference sends it before doing it (sendEventDropIntel then
+        // doEventDropIntel); the order is unobservable because the
+        // message carries nothing but the player.
+        //
+        // ⚠️ It is a command and not a keypress, so it never reaches
+        // MatchSimulation.Tick — the same shape as BUILD_SENTRY, and
+        // the reason Intel.Drop is public.
+        if (Intel.Drop(ref _world, slot))
+            ServerMessages.DropIntel(_broadcast, (byte)slot);
+    }
+
+    private void ExecuteToggleZoom(int slot)
+    {
+        // serverToggleZoom.gml: the preconditions, the broadcast, then
+        // the apply. ⚠️ Zoom is its own client command rather than a key
+        // in the input byte, which is the whole reason the reference
+        // extracted it into a script a bot can call.
+        if (PlayerCommands.ToggleZoom(ref _world, slot))
+            ServerMessages.ToggleZoom(_broadcast, (byte)slot);
     }
 
     private byte IdOf(RosterEntry entry) => checked((byte)_roster.IndexOf(entry));

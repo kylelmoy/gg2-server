@@ -16,6 +16,7 @@
     <ProjectReference Include="..\..\src\Gg2.Server\Gg2.Server.csproj" />
     <ProjectReference Include="..\..\src\Gg2.Parity\Gg2.Parity.csproj" />
     <ProjectReference Include="..\..\src\Gg2.Simulation\Gg2.Simulation.csproj" />
+    <ProjectReference Include="..\..\src\Gg2.Bots\Gg2.Bots.csproj" />
   </ItemGroup>
 
   <ItemGroup>

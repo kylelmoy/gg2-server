@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The bot layer. Depends on Gg2.Simulation for the seam (IInputSource,
+       WorldView) and on Gg2.Maps for the geometry a nav graph is built over;
+       it does NOT depend on Gg2.Server, because docs/ARCHITECTURE.md's whole
+       claim about the seam is that bot logic is testable without a server, a
+       socket or a client.
+
+       ⚠️ It DOES have file I/O — the nav cache is read off disk — and that is
+       why the reader is a separate type from the graph. Gg2.Simulation's
+       no-I/O rule is not this project's, but a NavGraph handed to a rollout
+       must still be a pure in-memory object. See NavCache. -->
+  <PropertyGroup>
+    <RootNamespace>Gg2.Bots</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Gg2.Protocol\Gg2.Protocol.csproj" />
+    <ProjectReference Include="..\Gg2.Maps\Gg2.Maps.csproj" />
+    <ProjectReference Include="..\Gg2.Simulation\Gg2.Simulation.csproj" />
+  </ItemGroup>
+
+</Project>
