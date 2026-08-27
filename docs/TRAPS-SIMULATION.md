@@ -1901,17 +1901,17 @@ tick, and it stays there.
 - **When a bound collapses on a new map, ask what that map makes a character do
   that no other one did.**
 
-⚠️ **And what is left on `gg_debug` is a different thing: the DROPDOWN PLATFORM,
-which the port does not implement.** `CharacterPhysics` says so in two comments,
-and this recording is the first evidence it matters — the map places **two**, at
-`438,216` and `498,216`, and the residual is slots 1 and 3 at rest on `y = 192`
-in the reference while the port falls past. A soldier's origin sits 22.6 above
-its foot, so `192 + 22.6 = 214.6` is a character standing exactly on a platform
-whose top is 216. ⚠️ **The old note ruled dropdown platforms out because
-"`tdm_mantic` has four and is exact"** — a map placing a feature is not its bots
-touching one, the same mistake the move-box recording made.
-**An open finding for the lane that owns `src/Gg2.Simulation`**;
-`TeamDeathmatchFixtureTests` pins the 23-tick window and the two coordinates.
+✅ **And what was left on `gg_debug` was a different thing — the DROPDOWN
+PLATFORM, implemented 2026-08-27.** The map places **two**, at `438,216` and
+`498,216`, and the residual was slots 1 and 3 at rest on `y = 192` in the
+reference while the port fell past. A soldier's origin sits 22.6 above its foot,
+so `192 + 22.6 = 214.6` is a character standing exactly on a platform whose top
+is 216. ⚠️ **The old note ruled dropdown platforms out because "`tdm_mantic` has
+four and is exact"** — a map placing a feature is not its bots touching one, the
+same mistake the move-box recording made. All three reference branches landed
+and the window went **23 → 100 ticks**, with the trajectories inside it exact
+(`|dx| max 0, |dy| max 0`). What stops it now is damage, not position — see
+"`gg_debug` stops on a rocket blast four pixels short" below.
 
 ⚠️ **A recording can never gate respawn *timing* closed-loop.** `Replayer`
 **injects** every `PLAYER_SPAWN` and `PortedSimulation` keeps `RespawnTime = 0`,
@@ -1987,3 +1987,73 @@ change trajectories rather than last digits:
   real-to-real comparison in `Gg2.Simulation` goes through `Gml.Equal`,
   `Gml.Greater`, `Gml.Sign` and friends. A raw `!= 0` on a value that ordinary
   cancellation left at `-2.7e-14` moves a character six pixels.
+
+### `gg_debug` stops on a rocket blast four pixels short
+
+⚠️ **Open finding, narrowed 2026-08-27, and it needs one live probe to close.**
+`reference-gg_debug-closedtdm.trace` replays exactly for 100 ticks after its
+spawn anchor at t381 and then diverges — not on a position, but because **slot 4
+survives a death the reference recorded**. `GgDebugSplashOpenFindingTests` holds
+the whole of it, including the arithmetic below; read that file before
+re-deriving any of this.
+
+**What is not in dispute.** All six rockets in the window are fired by the same
+players on the same ticks in both, all six explode on the same ticks, and the
+reference's `PLAYER_DEATH` at t477 names killer 5 and assistant 3 — exactly the
+pair the port's own damage bookkeeping picked. The port simply deals a little
+less over t475..t480: slot 2 takes 97.4 against 99–100, slot 6 takes 53.9
+against 56–57, slot 4 takes 68.4 against at least 70.
+
+**Slot 6 is the measurement, because it never moves.** Its position is exact on
+every observation and it still ends three hp higher here, so nothing about the
+physics is in question. Its three hits are the t475 blast, a point-blank t476
+blast already at the falloff floor, and the t480 wall blast — which pins the
+shortfall to the t475 blast and, through `ceil(hp)` on the wire, pins that
+blast's `distance_to_object` to **30 or 31** where the port computes **36**. (29
+would leave slot 6 on 13 and 32 would leave it on 15.) Slot 4's death needs the
+same number independently: 25 + 30 at t476 leaves it needing 15 from t475, which
+is a distance of 32.5 or less.
+
+⚠️ **It is not a tuning error in the back-out, and that is provable without the
+engine.** The escape from a direct hit runs along `direction + 180`, almost due
+left here, so freeing the rocket means clearing slot 2's box on the left — and
+slot 4's box starts a fixed 36 pixels beyond slot 2's left edge. Making the
+rocket's own box longer or shorter moves the stopping place and the measured gap
+by the same amount. `NoBackOutThatFreesTheRocketFromSlotTwoCanKillSlotFour`
+enumerates every whole-pixel step `really_move_contact_solid` could stop on and
+shows the distance is **never** below 36. So a distance of 30 means the rocket
+stopped **four pixels back instead of ten** — it exploded *while still inside
+slot 2's bounding box*.
+
+**Two candidates are already dead, and were killed by measurement rather than by
+argument:**
+
+- ❌ **What `distance_to_object` returns.** `PrimitiveSampleTests.DistanceToObjectMatchesTheEngineExactly`
+  holds `Aabb.Distance` against the engine over 361 rocket offsets spanning
+  ±64 px, exactly. This gap is 36.
+- ❌ **The two-pixel `image_xscale = -1` inflation** (`Aabb.ForCharacter`).
+  Widening it to eight *does* produce the missing distance of exactly 30 — and
+  it breaks four live-engine oracles (`PrimitiveSampleTests.FacingChangesTheSplashDistanceButNotTheOverlap`,
+  two in `CollisionLineSampleTests`, `RocketTests.ALeftFacingVictimIsTwoPixelsWiderToTheBlast`).
+  Right arithmetic, wrong cause. ⚠️ **Worth keeping as a shape**: a candidate
+  that reproduces the number exactly can still be ruled out by an oracle it
+  never occurred to you to run.
+
+⬅️ **The prime suspect is the one thing no oracle here can see: whether
+`place_free` uses the bounding box or the PRECISE MASK for a *rotated*
+projectile.** Every rocket in `primitive-samples.json` is unrotated — 361 of 361
+with a box of 8x2 — so `place_meeting` has only ever been asked about an
+axis-aligned rocket, where the two answers agree. `rotated-box-samples.json`
+gates what `bbox_*` **reports** for a rotated sprite (1,008 boxes) and not what
+the overlap primitives **use**. This rocket is at 351°, its bbox is 8x3, and it
+overlaps slot 2 by exactly one pixel row along the box's *top* edge — where a
+rocket pointing down-right has no sprite pixels at all. A precise mask frees it
+several steps early, which is the shape of the missing four to six pixels.
+
+⚠️ **The probe owed to the next live session**, and it is one probe, not a
+re-derivation: create a `Rocket`, set `image_angle` off-axis, walk it across a
+pinned character and ask both `place_meeting` and `bbox_*` on every step. If
+they disagree, that is the answer. `tools/probes/` is where it goes; sweeping
+the angle in `tools/sample-primitives.js` is the durable version. Remember
+CLAUDE.md's warning that **`sprite_add`'s third argument is `removeback`, not
+`precise`** — a sprite's precision cannot be read off its creation call.

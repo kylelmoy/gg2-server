@@ -194,11 +194,17 @@ public sealed class TeamDeathmatchFixtureTests
     /// <para>
     /// ⚠️ <b>And the trajectories inside it are now EXACT</b> — the closed-loop
     /// replay reports <c>|dx| max 0, |dy| max 0</c> over 132 ticks and 86
-    /// comparisons. What stops it is a single <b>damage</b> mismatch, not a
-    /// position one: <c>tick 131 slot 2 hp: expected 160, got 140</c>. That is a
-    /// different subsystem and an open finding of its own — twenty hp, on a map
-    /// of six soldiers, so a rocket that hit in the reference and missed here or
-    /// landed for a different amount.
+    /// comparisons. What stops it is <b>damage</b>, not position: slot 4
+    /// survives a death the reference recorded at t476.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>That is an open finding of its own and it has been narrowed a long
+    /// way — see <see cref="GgDebugSplashOpenFindingTests"/> before touching
+    /// it.</b> Every rocket matches, on every tick, with the killer and the
+    /// assistant the reference names; the port's blasts simply land a few pixels
+    /// short. The remaining question is whether GM8's overlap primitives use the
+    /// bounding box or the precise mask for a <em>rotated</em> projectile, and
+    /// it needs one probe against the running game.
     /// </para>
     /// <para>
     /// ⚠️ <b>The platform's BOX is inferred rather than measured.</b>
