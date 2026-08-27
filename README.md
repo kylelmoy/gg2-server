@@ -7,8 +7,8 @@ Maker 8 client.
 modes run end to end, the server plays match after match on its own, and every
 field of a state update carries a real value. **And the bots play**: a server
 started with `--bots 12` fills itself with twelve that walk the map, take the
-objective and fight over it — at **0.6% of the per-tick budget**, which is the
-headroom this project exists to buy.
+objective and fight over it — at **half a percent of the per-tick budget**, which
+is the headroom this project exists to buy.
 
 A stock client connects, picks a team and class, spawns, fights, dies,
 respawns, captures the objective, and sees the round end and the map change.
@@ -127,10 +127,15 @@ degradation rather than an error.
    7,202 lines of GML interpreted by Game Maker 8, running for every bot every
    tick. That ceiling is the binding constraint on how good the bots can get.
 
-   **Measured, 2026-08-27: twelve bots cost 0.20ms of a 33.3ms tick — 0.6% of the
-   budget**, over 600 steady-state ticks of a real server with the whole
+   **Measured, 2026-08-27: twelve bots cost 0.151ms of a 33.3ms tick — 0.5% of
+   the budget**, over 600 steady-state ticks of a real server with the whole
    simulation, the state serialiser and the broadcast in the loop. So the budget
    is there.
+
+   ⚠️ **That figure is a Release measurement, and the build matters.** The same
+   test in the default Debug build reads **0.307ms, 0.9%** — twice the cost, and
+   a re-measure that forgets to say which build it ran will look like a
+   regression that is not one. Say which build, every time.
 
    ⚠️ **What is measured is this port's cost, not the ratio.** Nobody has
    benchmarked the GM8 bot layer here, so "one to two orders of magnitude better

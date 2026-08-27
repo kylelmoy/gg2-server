@@ -215,10 +215,17 @@ orders of magnitude of budget, which is what buys real pathfinding, prediction
 and coordination instead of the current per-tick approximations.
 
 ✅ **Measured 2026-08-27, and it is phase 7's exit criterion: twelve bots cost
-0.20ms of a 33.3ms tick — 0.6% of the budget.** 600 steady-state ticks of a real
+0.151ms of a 33.3ms tick — 0.5% of the budget.** 600 steady-state ticks of a real
 server on `ctf_truefort`, with the population manager, twelve policies each
 planning and fighting, the whole simulation, the state serialiser and the
 broadcast in the loop. `BotPopulationTests.TwelveBotsRunWellUnderTheTickBudget`.
+
+⚠️ **That is a Release measurement and the build matters: the same test in the
+default Debug build reads 0.307ms, 0.9%.** Twice the cost, so a re-measure that
+forgets to say which build it ran looks like a regression that is not one. The
+test's own bound is a quarter of the budget, which both builds clear comfortably,
+because the claim is an order of magnitude rather than a digit and a CI machine
+under load is not a benchmark.
 
 ⚠️ **That measures this port's cost, not the ratio to GM8.** Nobody has
 benchmarked the reference's bot layer here, so the "one to two orders of
