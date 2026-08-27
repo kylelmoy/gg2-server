@@ -339,6 +339,94 @@ public sealed class HeadlessMatchTests
             Assert.Equal(Team.Red, uncontested.State.Players[slot].Team);
     }
 
+    /// <summary>
+    /// ⚠️ <b>AN OPEN BUG, PINNED: an intel carrier can wedge permanently and
+    /// hold the flag for the rest of the round.</b> A failure here is good news.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>What happens.</b> On <c>ctf_truefort</c> with six red bots and no
+    /// opposition, seed 1: slot 5 grabs the blue intel at t4265, walks to
+    /// <c>(1913.50, 474.48)</c> — the right-hand boundary of nav node #169,
+    /// which spans world x 1884..1914 — and stands there <b>on the ground</b>
+    /// for the remaining ~22,700 ticks. It keeps a valid goal (its own base), a
+    /// route, and <c>PathAt</c> frozen at 2; it needs only to walk <em>left</em>
+    /// onto node #168 (1848..1878) along the same row at the same height.
+    /// </para>
+    /// <para>
+    /// <b>What it is not.</b> ⚠️ Not the unported jump branch —
+    /// <c>UnsupportedEdgeTicks</c> is <b>0</b>. Not a death — the bot is alive
+    /// and there are no enemies. Not occupancy — <c>HeadlessMatch</c> sets none.
+    /// What it has is exactly <b>one</b> blacklisted edge and a
+    /// <c>PlanFailUntil</c> pushed forward for ever: every re-plan fails, and
+    /// <c>docs/TRAPS-BOTS.md</c>'s "a failed search KEEPS the old route" then
+    /// keeps the route it cannot use. That trap is written up as the reference's
+    /// "bots momentarily stop moving"; here it is permanent, because the search
+    /// never succeeds.
+    /// </para>
+    /// <para>
+    /// <b>What it costs.</b> Uncontested conversion is <b>100%</b> for every
+    /// grab that does not wedge, at every team size — so this bug is the entire
+    /// shortfall. It takes 3% of grabs at one bot, 7% at two, 9% at four and
+    /// <b>14% at six</b>, and each one removes the flag for the rest of the
+    /// round. It is also why six uncontested bots produce <em>fewer</em> grabs
+    /// than one (43 against 64): an early wedge ends that match's objective play.
+    /// Under real contest it is minor — 6v2 conversion is 40%, and 42% with
+    /// wedges excluded — so interception dominates there.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ACarrierStillWedgesPermanentlyAndHoldsTheFlag()
+    {
+        ReferenceTree.RequireNavCache();
+
+        var (map, nav) = Navigable();
+
+        var match = HeadlessMatch.On(
+            HeadlessMatchOptions.Default with
+            {
+                RedBots = 6,
+                BlueBots = 0,
+                MaxTicks = 27000,
+                Seed = 1,
+
+                // Never end on captures, so the round is a fixed length and the
+                // wedge cannot be masked by an early finish.
+                CapLimit = 99,
+            },
+            map,
+            nav);
+
+        var wasOnField = match.State.BlueIntel.OnField;
+        var grabbedAt = -1;
+        var longestCarry = 0;
+
+        for (var tick = 0; tick < 27000 && match.Outcome == MatchOutcome.Running; tick++)
+        {
+            match.Step();
+
+            var onField = match.State.BlueIntel.OnField;
+
+            if (wasOnField && !onField)
+                grabbedAt = tick;
+            else if (!wasOnField && onField && grabbedAt >= 0)
+                grabbedAt = -1;
+
+            if (grabbedAt >= 0)
+                longestCarry = Math.Max(longestCarry, tick - grabbedAt);
+
+            wasOnField = onField;
+        }
+
+        // A healthy carry is about 1,760 ticks end to end. Anything past five
+        // thousand is a bot that has stopped.
+        Assert.True(
+            longestCarry > 5000,
+            $"the longest carry was {longestCarry} ticks, not a wedge — if the carrier "
+                + "no longer sticks, this bug is FIXED: delete this test, and re-measure "
+                + "the uncontested conversion rates in docs/PLAN.md, which this bug caps.");
+    }
+
     /// <summary>The summary reports draws and unfinished matches rather than folding them away.</summary>
     /// <remarks>
     /// ⚠️ A bot change that makes capturing worse shows up FIRST as more

@@ -306,6 +306,18 @@ public sealed class HeadlessMatch
         AddBots();
     }
 
+    /// <summary>
+    /// The input source driving a slot — the same name and shape as
+    /// <c>GameServer.SourceOf</c>.
+    /// </summary>
+    /// <remarks>
+    /// A batch that evaluates one bot against another needs to reach the bots it
+    /// placed: "which role did red's third bot take" is a question about the
+    /// match, not about the world.
+    /// </remarks>
+    public IInputSource? SourceOf(int slot) =>
+        slot >= 0 && slot < _sources.Length ? _sources[slot] : null;
+
     /// <summary>Advances one tick.</summary>
     /// <remarks>
     /// ⚠️ <b>A decided round ENDS the match here rather than rotating.</b> A
