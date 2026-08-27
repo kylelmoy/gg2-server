@@ -111,12 +111,12 @@ public static class BotClassKeys
                 // rocket fired with lead does not go down the line the target was
                 // cleared on.
                 //
-                // ⚠️ UNGATED for the soldier, and deliberately recorded as such:
-                // dropping `arcClear` from this branch alone leaves every test green,
-                // because the only fixtures that separate it from the straight line
-                // need a MOVING target for the aim solver to lead. The demoman's half
-                // is gated (BotArcTests), and the two share the one computation
-                // above, so a change that breaks this breaks that.
+                // ⚠️ Gated only by a fixture with a MOVING target, because that is
+                // the only thing that separates a flat rocket's arc from the straight
+                // line the target search already cleared — `BotArcTests`, node 0 →
+                // 214 on ctf_truefort, where a target running at 6px/tick pulls the
+                // aim nineteen degrees into a wall. This branch stood ungated until
+                // that fixture was swept for.
                 return hasSubject && arcClear
                     && distance >= BotTargeting.ClassMinBand(PlayerClass.Soldier)
                     ? PlayerKeys.Attack

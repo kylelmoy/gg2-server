@@ -53,6 +53,22 @@ public sealed class BotArcTests(ITestOutputHelper output)
     private const int EndpointShooter = 52;
     private const int EndpointTarget = 280;
 
+    /// <summary>
+    /// A pair where a rocket's LEAD alone decides it — see the soldier test.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ Swept for across every node pair on the map: the chest-to-chest line is
+    /// clear, the still-aim arc is clear, and the led arc is blocked. Twelve pairs
+    /// qualify and this is the one with the widest angular separation, so the
+    /// fixture is not a knife edge.
+    /// </remarks>
+    private const int LeadShooter = 0;
+
+    private const int LeadTarget = 214;
+
+    /// <summary>A target running left at a scout's sort of speed.</summary>
+    private const double LeadSpeed = -6;
+
     private static NavGraph Graph()
     {
         ReferenceTree.RequireNavCache();
@@ -279,12 +295,16 @@ public sealed class BotArcTests(ITestOutputHelper output)
     /// as well, and the hold-fire roll in particular makes it intermittent. The arc
     /// gate lives in the class policy, and this asks the class policy.
     /// </remarks>
-    private static PlayerKeys Keys(PlayerClass playerClass, int targetNode)
+    private static PlayerKeys Keys(PlayerClass playerClass, int targetNode) =>
+        Keys(playerClass, ShooterNode, targetNode, aimDegrees: null);
+
+    private static PlayerKeys Keys(
+        PlayerClass playerClass, int shooterNode, int targetNode, double? aimDegrees)
     {
         var graph = Graph();
         var world = Scenario();
 
-        var (sx, sy) = BotSuppress.Centre(graph, ShooterNode);
+        var (sx, sy) = BotSuppress.Centre(graph, shooterNode);
         var (tx, ty) = BotSuppress.Centre(graph, targetNode);
 
         var slot = world.Place(playerClass, Team.Red, sx, sy);
@@ -294,7 +314,7 @@ public sealed class BotArcTests(ITestOutputHelper output)
         // character's live aimDirection rather than from the target. A defaulted aim
         // points right and the arc then has nothing to do with the target at all.
         // It is stored as the wire's ushort; the degrees property is derived.
-        var solved = Aim(graph, in world.State.Characters[slot], tx, ty);
+        var solved = aimDegrees ?? Aim(graph, in world.State.Characters[slot], tx, ty);
         world.State.Characters[slot].NetAimDirection = (ushort)(solved * 65536.0 / 360.0);
 
         var state = new BotCombatState
@@ -305,6 +325,72 @@ public sealed class BotArcTests(ITestOutputHelper output)
         var distance = Gml.PointDistance(sx, sy, tx, ty);
 
         return BotClassKeys.For(state, new WorldView(in world.State, world.Collision), slot, distance, 0);
+    }
+
+    /// <summary>
+    /// A soldier withholds a rocket whose LEAD takes it into geometry.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>This is the branch that stood ungated, and the reason it did.</b> A
+    /// rocket flies flat, so a soldier's arc is very nearly the straight line the
+    /// target search already cleared — and every fixture that separated the two
+    /// needed something the file did not have: a <b>moving</b> target, so the aim
+    /// solver leads and the shot no longer goes down the line the target was
+    /// cleared on.
+    /// <para>
+    /// ⚠️ <b>Swept for.</b> The pair has to satisfy three things at once: the
+    /// chest-to-chest line clear (or the target search would never offer it), the
+    /// still-aim arc clear (or it is the demoman's case and gravity is doing the
+    /// work), and the led arc blocked. Node 0 → 214 on <c>ctf_truefort</c> at
+    /// 417px: the still aim is 319.7° and a target running at 6px/tick pulls it to
+    /// 300.8°, nineteen degrees into a wall.
+    /// </para>
+    /// <para>
+    /// ⚠️ The class policy reads the character's live <c>aimDirection</c> and does
+    /// not solve, so the solve happens here and the angle is what is handed over —
+    /// which is also what makes the control exact: the <em>same</em> soldier at
+    /// the <em>same</em> pair, aimed the way it would aim at a stationary target,
+    /// fires.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ASoldierWithholdsARocketWhoseLeadTakesItIntoGeometry()
+    {
+        var graph = Graph();
+        var world = World();
+        var soldier = At(graph, PlayerClass.Soldier, LeadShooter);
+        var (tx, ty) = BotSuppress.Centre(graph, LeadTarget);
+
+        var (speed, gravity, _) = BotAim.Ballistics(in soldier);
+        Assert.Equal(0, gravity);
+
+        var floor = BotAim.FloorUnder(graph, tx, ty);
+        var still = BotAim.Solve(in soldier, tx, ty, 0, 0, BotLeadMode.Full, floor);
+        var led = BotAim.Solve(in soldier, tx, ty, LeadSpeed, 0, BotLeadMode.Full, floor);
+
+        output.WriteLine($"still {still:0.0}°, led {led:0.0}°, {BotTargeting.AngleDelta(led, still):0.0}° apart");
+
+        // The three premises, in the order the sweep applied them.
+        Assert.False(
+            world.CollisionLineBlocksBullets(soldier.X, soldier.Y, tx, ty, CollisionFilter.ForBullet()),
+            "the straight line is blocked, so the target search would never offer this pair");
+
+        Assert.True(
+            BotArc.Clear(world, in soldier, still, speed, gravity, tx, ty),
+            "the still shot is blocked too, so gravity or the geometry is doing the work");
+
+        Assert.False(
+            BotArc.Clear(world, in soldier, led, speed, gravity, tx, ty),
+            "the led shot is clear, so there is nothing here to withhold");
+
+        // And the class policy acts on it.
+        Assert.Equal(
+            PlayerKeys.None,
+            Keys(PlayerClass.Soldier, LeadShooter, LeadTarget, led) & PlayerKeys.Attack);
+
+        Assert.True(
+            (Keys(PlayerClass.Soldier, LeadShooter, LeadTarget, still) & PlayerKeys.Attack) != 0,
+            "the soldier withheld a shot it had a clear path for");
     }
 
     /// <summary>
