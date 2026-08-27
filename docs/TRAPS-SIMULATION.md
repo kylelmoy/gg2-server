@@ -2276,3 +2276,38 @@ rocket's box its diagonal mask does not reach.
 
 **Every overlap in the port now tests the mask.** The box survives only as the
 broad phase in front of each one.
+
+### A harness gate belongs where there is no drift
+
+⚠️ **2026-08-27, and it is a debt this session created and then paid.**
+`SupportClassFixtureTests.ThePortEmitsNoUberMessageTheReferenceDidNot` was the
+project's only check that `Fields.Ubers` is compared against the right tick, and
+it worked by finding an `UBER_CHARGED` **1,155 ticks past where its recording
+still agreed with the port at all**. The rotated-mask fix moved that charge by
+one tick, a 30-tick drift tolerance had to go in, and a harness reading a tick
+late then looked exactly like the drift.
+
+`ReplayerAlignmentTests` asks the same question of a **ten-tick synthetic
+trace**: a stand-in simulation that announces one ubercharge, and the recorded
+message placed in the following tick's block, the tick's own block, and the one
+after. No fixture, no drift, no RNG.
+
+⚠️ **The check that matters is the mutation**, and it was run: pointing
+`ReconcileUbers` at the current tick instead of the next fails **two of the four
+new tests and nothing else in 2,021**. That is the hole measured directly —
+before them, this off-by-one was unguarded.
+
+**The general shape, which is the transferable part:**
+
+- ⚠️ **An assertion that needs a thousand ticks of agreement to reach its subject
+  is not testing its subject** — it is testing everything upstream, and the first
+  unrelated fix retires it. `Fields.Deaths`, `Intel` and `Sentries` are still
+  gated this way (shifting each by a tick fails 3, 2 and 2 fixture assertions),
+  so they are one lucky fix away from the same problem.
+- **A synthetic trace is cheap.** `TraceTick` is a plain record; ten of them and
+  a stub `ITraceSimulation` are a few dozen lines, and they answer the harness
+  question without any simulation being right about anything.
+- ⚠️ **Assert the PAIR of mismatches, not "some mismatch".** A misaligned
+  comparison produces two — the recorded message nobody claimed and the port's
+  event nobody recorded — where a comparison that has simply stopped running
+  produces none and one that has broken produces something else.

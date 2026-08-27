@@ -352,13 +352,14 @@ public sealed class SupportClassFixtureTests
     /// is 826 ticks past where this trace stopped agreeing at all.
     /// </para>
     /// <para>
-    /// ⚠️ <b>What it costs is the tick-alignment content</b> that
+    /// ⚠️ <b>What it cost was the tick-alignment content</b> that
     /// <see cref="ThePortEmitsNoUberMessageTheReferenceDidNot"/> was written for:
-    /// a harness reading uber messages a tick late now looks exactly like this
-    /// drift. That gate is owed a home that does not sit 1,155 ticks into a
-    /// fixture — a unit-level one, like the Medigun chain above. Until it has
-    /// one, a shift of more than this many ticks still fails, and a rate error
-    /// worth having would move it by hundreds.
+    /// a harness reading uber messages a tick late looks exactly like this drift.
+    /// ✅ <b>That gate has a home again</b> — <see cref="ReplayerAlignmentTests"/>
+    /// asks the question of a ten-tick synthetic trace with no drift in it, and
+    /// catches the misalignment this file no longer can. What is left here is
+    /// still worth having: a shift of more than this many ticks fails, and a rate
+    /// error worth the name would move it by hundreds.
     /// </para>
     /// </remarks>
     private const int UberDriftTolerance = 30;
