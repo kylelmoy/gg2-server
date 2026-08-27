@@ -254,6 +254,33 @@ public sealed class BotPathState
 
     public int BlacklistFires { get; set; }
 
+    /// <summary>How many rocket jumps this bot has taken off on.</summary>
+    public int RocketJumps { get; set; }
+
+    /// <summary>
+    /// This tick's rocket-jump hand-off: aim straight down and fire.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The follower cannot fire.</b> It owns LEFT / RIGHT / JUMP / DOWN and
+    /// the aim comes from the combat half alone, so a rocket jump is <em>requested</em>
+    /// rather than pressed — <c>botInputUpdate</c> applies it after
+    /// <c>botCombatUpdate</c> has run, which is the only place that can see both
+    /// halves. <c>ScriptedBot</c> is that place here.
+    /// <para>
+    /// ⚠️ <b>A bool rather than the reference's <c>botRocketAim</c> direction</b>,
+    /// because 270 is the only value it ever holds and that is a decision rather
+    /// than a default: <c>vectorfactor</c> in the rocket's blast is
+    /// sqrt(sin⁴ + cos⁴), which is 1 only when the impulse is axis-aligned and
+    /// falls to 0.707 at 45°, so an angled rocket jump throws away up to 30% of its
+    /// impulse. <c>PathFollower.RocketAimDegrees</c> is the number.
+    /// </para>
+    /// <para>
+    /// ⚠️ Cleared at the top of every <c>Step</c>, so a tick that does not reach
+    /// the takeoff gate cannot leave last tick's request standing.
+    /// </para>
+    /// </remarks>
+    public bool RocketFire { get; set; }
+
     /// <summary>How many second impulses this bot has spent on double-jump arcs.</summary>
     public int DoubleJumps { get; set; }
 

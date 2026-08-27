@@ -45,6 +45,27 @@ namespace Gg2.Bots;
 /// </remarks>
 public sealed class PathFollower
 {
+    /// <summary>
+    /// Where a rocket jump aims: straight down.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Not a simplification of a richer choice — it is the only direction
+    /// worth firing.</b> <c>vectorfactor</c> in the rocket's blast is
+    /// sqrt(sin⁴ + cos⁴), which is 1 only when the impulse is axis-aligned and
+    /// falls to 0.707 at 45°, so an angled rocket jump throws away up to 30% of its
+    /// impulse. Down is also the one direction with guaranteed geometry to detonate
+    /// against: there is a floor under the takeoff column by construction, and
+    /// there may be nothing at all down-and-left of it.
+    /// <para>
+    /// ⚠️ <b>The aim SNAPS rather than slewing.</b> The turn rate is 8 degrees a
+    /// tick at tier 3 and level-to-down is 90 degrees, so honouring the slew would
+    /// mean eleven ticks of a bot standing still staring at the floor before every
+    /// rocket jump — both a long time to be helpless and nothing like what a player
+    /// looks like doing this. A player flicks down and fires.
+    /// </para>
+    /// </remarks>
+    public const double RocketAimDegrees = 270;
+
     private readonly NavGraph _graph;
     private readonly NavSearch _search;
     private readonly List<int> _scratch = [];
@@ -75,9 +96,30 @@ public sealed class PathFollower
     /// <param name="query">Who is asking, for the search.</param>
     /// <param name="occupancy">The team's edge crowding, or null.</param>
     /// <returns>LEFT / RIGHT / JUMP / DOWN. Never an attack or a special.</returns>
+    /// <remarks>
+    /// The weaponless overload. ⚠️ It means <b>"this bot has no rocket"</b>, not
+    /// "do not care": a rocket-jump edge is then never taken off from, which is the
+    /// conservative answer and the one every caller that does not model a weapon
+    /// wants. A zeroed <see cref="WeaponState"/> answers the same way — it is not
+    /// loaded and it is not ready — but saying so in an overload is better than
+    /// relying on a defaulted value type, which in this codebase is routinely not a
+    /// valid one.
+    /// </remarks>
     public PlayerKeys Step(
         BotPathState state,
         in CharacterState character,
+        int tick,
+        in NavQuery query,
+        IReadOnlyDictionary<long, int>? occupancy = null)
+    {
+        var none = default(WeaponState);
+        return Step(state, in character, in none, tick, in query, occupancy);
+    }
+
+    public PlayerKeys Step(
+        BotPathState state,
+        in CharacterState character,
+        in WeaponState weapon,
         int tick,
         in NavQuery query,
         IReadOnlyDictionary<long, int>? occupancy = null)
@@ -92,6 +134,11 @@ public sealed class PathFollower
         // Cleared up front and set only by the in-flight branch, so every early
         // return leaves it false.
         state.FlyingEdge = false;
+
+        // ⚠️ Cleared up front like FlyingEdge, so a tick that does not reach the
+        // takeoff gate cannot leave last tick's rocket request standing. The
+        // reference clears both at the top of botPathKeys for the same reason.
+        state.RocketFire = false;
 
         if (!state.HasGoal)
             return PlayerKeys.None;
@@ -200,7 +247,7 @@ public sealed class PathFollower
         if (state.PathAt >= size - 1)
             return WalkToGoal(state, x, hSpeed, onGround, moved, tick, query, occupancy);
 
-        return FollowEdge(state, in character, moved, tick, query, occupancy);
+        return FollowEdge(state, in character, in weapon, moved, tick, query, occupancy);
     }
 
     /// <summary>
@@ -350,11 +397,44 @@ public sealed class PathFollower
 
         /// <summary>Where the validated trajectory says the bot should be by now.</summary>
         public double TrackX;
+
+        /// <summary>
+        /// Press nothing at all this tick.
+        /// </summary>
+        /// <remarks>
+        /// ⚠️ The reference's mid-air bail is `return 0` from the whole of
+        /// botPathKeys — no keys, not "no steering". Returning to the default
+        /// steering instead leaves the bot walking toward the takeoff column while
+        /// it falls, which is a press on an arc this branch exists to stop steering.
+        /// </remarks>
+        public bool Abandon;
+
+        /// <summary>Apply the rocket arc's speed gate to the tracker's presses.</summary>
+        public bool TrackGate;
+
+        /// <summary>The arc's own horizontal velocity, for that gate.</summary>
+        public double TrackNeedVx;
+
+        /// <summary>The bot's speed along the jump, for that gate.</summary>
+        public double TrackAlong;
+
+        /// <summary>Which way the arc travels, for that gate.</summary>
+        public int TrackDir;
+
+        /// <summary>Ask the combat half to aim here and fire, for a rocket jump.</summary>
+        /// <remarks>
+        /// ⚠️ <b>The follower cannot fire.</b> It owns LEFT / RIGHT / JUMP / DOWN
+        /// and the aim comes from combat alone, so a rocket jump has to be handed
+        /// over rather than pressed — <c>botInputUpdate</c> applies both AFTER
+        /// <c>botCombatUpdate</c> has run, which is the only place that can see
+        /// both halves.
+        /// </remarks>
+        public bool RocketFire;
     }
 
     /// <summary>Steers along the edge between the current node and the next.</summary>
     private PlayerKeys FollowEdge(
-        BotPathState state, in CharacterState character, bool moved, int tick,
+        BotPathState state, in CharacterState character, in WeaponState weapon, bool moved, int tick,
         in NavQuery query, IReadOnlyDictionary<long, int>? occupancy)
     {
         var x = character.X;
@@ -432,8 +512,9 @@ public sealed class PathFollower
 
             case NavEdgeType.Jump:
             case NavEdgeType.DoubleJump:
+            case NavEdgeType.RocketJump:
                 SteerJump(
-                    state, in character, in edge, in from, in to,
+                    state, in character, in weapon, in edge, in from, in to,
                     current, next, column, dirToNext, tick, in query, occupancy, ref steer);
                 break;
 
@@ -444,17 +525,9 @@ public sealed class PathFollower
                 break;
 
             default:
-                // ⚠️ RocketJump — not implemented. It is flown exactly as a jump
-                // and everything above would serve, but its takeoff gate needs a
-                // rocket (a live Rocketlauncher, loaded, and hp above
-                // NAV_RJ_DAMAGE) and its trajectory needs the combat half to fire
-                // one straight down on the takeoff tick. Neither exists yet, and
-                // ⚠️ jumping without the rocket is the worst available outcome:
-                // the arc rises 276px where an ordinary jump rises 57, so the bot
-                // leaves the ground, tracks a trajectory it cannot be on, and
-                // lands somewhere the route does not mention. Counted rather than
-                // approximated; NavQuery.CanRocketJump defaults false, so the
-                // search does not offer one either.
+                // Every edge kind the generator emits is handled above. This is
+                // here so a graph from a newer generator degrades into a counted
+                // number rather than into silently flying an arc nobody modelled.
                 state.UnsupportedEdgeTicks++;
                 break;
         }
@@ -511,13 +584,47 @@ public sealed class PathFollower
             // a pixel because that is roughly what one tick of a slow arc covers,
             // and chattering the key either side of the line is exactly what
             // holds the average where it belongs.
+            //
+            // ⚠️ On a ROCKET arc each press is gated on speed as well as position
+            // — see Steering.TrackGate. The world-space test is not "behind the
+            // schedule" on its own: an arc travelling left is behind when the bot
+            // is to the RIGHT of the plan, so which branch is catching up depends
+            // on the direction, and `TrackAlong` already carries that sign. The
+            // non-rocket path keeps its unconditional presses exactly as they were.
             if (x < steer.TrackX - 1)
-                keys |= PlayerKeys.Right;
+            {
+                if (!steer.TrackGate
+                    || (steer.TrackDir > 0 && steer.TrackAlong < steer.TrackNeedVx)
+                    || (steer.TrackDir < 0 && steer.TrackAlong > steer.TrackNeedVx))
+                {
+                    keys |= PlayerKeys.Right;
+                }
+            }
             else if (x > steer.TrackX + 1)
-                keys |= PlayerKeys.Left;
+            {
+                if (!steer.TrackGate
+                    || (steer.TrackDir > 0 && steer.TrackAlong > steer.TrackNeedVx)
+                    || (steer.TrackDir < 0 && steer.TrackAlong < steer.TrackNeedVx))
+                {
+                    keys |= PlayerKeys.Left;
+                }
+            }
+        }
+
+        // ⚠️ Before the jump press and before the stuck counter, because
+        // this is the reference's `return 0` and it returns no keys at all.
+        if (steer.Abandon)
+        {
+            state.RocketFire = false;
+            state.StuckTicks = 0;
+            return PlayerKeys.None;
         }
 
         keys |= Press(state, steer.WantJump);
+
+        // Out of the per-edge steering and onto the state, which is what the caller
+        // reads — see BotPathState.RocketFire.
+        state.RocketFire = steer.RocketFire;
 
         // ⚠️ Gated on actually pressing something, unlike the arrival branch's:
         // a bot standing on its target waiting for a jump window would otherwise
@@ -637,7 +744,7 @@ public sealed class PathFollower
     /// at before, 100% after.</b>
     /// </remarks>
     private void SteerJump(
-        BotPathState state, in CharacterState character, in NavEdge edge,
+        BotPathState state, in CharacterState character, in WeaponState weapon, in NavEdge edge,
         in NavNode from, in NavNode to, int current, int next,
         int column, int dirToNext, int tick,
         in NavQuery query, IReadOnlyDictionary<long, int>? occupancy, ref Steering steer)
@@ -677,10 +784,35 @@ public sealed class PathFollower
         // ctf_truefort 4470,840: "the bot has momentum going left, and can't gain
         // enough speed going right to make the jump to the right stairs."
         var along = character.HSpeed * jumpDir;
+        var isRocket = edge.Type == NavEdgeType.RocketJump;
 
         if (!character.OnGround)
         {
             state.AirTicks++;
+
+            // ⚠️ The rocket did not go off, so this is not the arc that was
+            // planned. `moveStatus` 1 is "rocketing/mining myself" and is set by
+            // the blast itself, so a rocket-jump edge in the air without it is an
+            // ORDINARY jump — 57px of rise against the arc's 276 — and steering it
+            // toward a trajectory it cannot be on only carries the bot further
+            // from where an ordinary jump was always going to put it.
+            //
+            // The landing is then adjudicated by machinery that already exists and
+            // already has the right policy: it comes down on a surface the route
+            // does not mention, the off-route branch fires, and that branch gives
+            // the edge ONE retry before blacklisting it — which is exactly right
+            // here, because the common causes are transient (an enemy walked into
+            // the rocket, an evasive hop got there first) and the uncommon one is
+            // not.
+            //
+            // ⚠️ `AirTicks > 1` rather than `>= 1`: the blast lands in the same
+            // tick's simulation as the takeoff press, so tick one is always
+            // moveStatus 0.
+            if (isRocket && state.AirTicks > 1 && character.MoveStatus != 1)
+            {
+                steer.Abandon = true;
+                return;
+            }
 
             // ⚠️ The second impulse, on a double-jump arc. Rejump is the tick the
             // generator proved the arc at, counted from takeoff the same way
@@ -714,6 +846,22 @@ public sealed class PathFollower
                 + (jumpDir * Math.Min(jumpDistance, needVx * state.AirTicks));
 
             steer.Tracking = true;
+
+            // ⚠️ The rocket arc's tracker is SPEED-GATED where every other arc's
+            // is not, and it is the same gate RocketModel.Reach models. With no
+            // friction under it, a press that has already reached the arc's own vx
+            // gains nothing — an unfrictioned character just holds it — and
+            // pressing on from there is what made the real tracker limit-cycle.
+            //
+            // ⚠️ The test is on speed ALONG THE JUMP, so which of the tracker's two
+            // branches is catching up and which is braking depends on jumpDir: an
+            // arc travelling left is behind when the bot is to the RIGHT of the
+            // plan. `along` already carries that sign.
+            steer.TrackGate = isRocket;
+            steer.TrackNeedVx = needVx;
+            steer.TrackAlong = along;
+            steer.TrackDir = jumpDir;
+
             state.FlyingEdge = true;
             return;
         }
@@ -725,7 +873,7 @@ public sealed class PathFollower
         }
 
         Gate(
-            state, in character, in edge, from: current, to: next, in from,
+            state, in character, in weapon, in edge, from: current, to: next, in from,
             takeoff, needVx, flightTicks, jumpDir, along, tick, in query, occupancy, ref steer);
     }
 
@@ -808,7 +956,8 @@ public sealed class PathFollower
     /// </para>
     /// </remarks>
     private void Gate(
-        BotPathState state, in CharacterState character, in NavEdge edge, int from, int to,
+        BotPathState state, in CharacterState character, in WeaponState weapon, in NavEdge edge,
+        int from, int to,
         in NavNode fromNode, int takeoff, double needVx, double flightTicks, int jumpDir,
         double along, int tick, in NavQuery query,
         IReadOnlyDictionary<long, int>? occupancy, ref Steering steer)
@@ -861,13 +1010,84 @@ public sealed class PathFollower
         lead = Math.Clamp(lead, 0, NavConstants.CellSize);
         need = Math.Max(0, need - lead);
 
-        var reach = JumpModel.Reach(in character, needVx, flightTicks, along);
+        var isRocket = edge.Type == NavEdgeType.RocketJump;
 
-        if (along >= 0
+        // ⚠️ WHICH reach model, and it is not a detail. A rocket-jumping character
+        // is under moveStatus 1, where Begin Step's switch gives controlFactor 0.65
+        // and frictionFactor 1 — and a friction of 1 means horizontal speed does not
+        // bleed at all for the whole flight. JumpModel models the ordinary
+        // 0.85/1.15 and would be wrong in BOTH directions here: it under-rates how
+        // well a slow takeoff catches up (nothing takes the speed back off) and
+        // over-rates how easily a hot one sheds. RocketModel's own remarks have the
+        // numbers.
+        var reach = isRocket
+            ? RocketModel.Reach(in character, needVx, flightTicks, along)
+            : JumpModel.Reach(in character, needVx, flightTicks, along);
+
+        // ⚠️ Jumping without the rocket is the WORST available outcome. The arc
+        // rises 276px where an ordinary jump rises 57, so the bot would leave the
+        // ground, track a trajectory it cannot be on, and land somewhere the route
+        // does not mention — which costs an off-route fire and, on the second one,
+        // a blacklist on a perfectly good edge. So the gate refuses to leave rather
+        // than leaving badly.
+        var rocketReady = !isRocket || RocketModel.Ready(in character, in weapon);
+
+        if (rocketReady
+            && along >= 0
             && along <= needVx + BotConstants.JumpVtol
             && reach + BotConstants.JumpReachTol >= need)
         {
             Launch(state, ref steer);
+
+            // The hand-off: ScriptedBot applies this after the combat half has run,
+            // which is the only place that can see both. ⚠️ Straight down is not a
+            // simplification of a richer choice — `vectorfactor` in the rocket's
+            // blast is sqrt(sin⁴ + cos⁴), which is 1 only when the impulse is
+            // axis-aligned and falls to 0.707 at 45°, so an angled rocket jump
+            // throws away up to 30% of its impulse. Down is also the one direction
+            // with guaranteed geometry to detonate against: there is a floor under
+            // the takeoff column by construction, and there may be nothing at all
+            // down-and-left of it.
+            if (isRocket)
+            {
+                steer.RocketFire = true;
+                state.RocketJumps++;
+            }
+        }
+        // ⚠️ Waiting for the launcher, and NOT falling through to the run-up below.
+        // Refire is 30 ticks against BOT_TAKEOFF_PATIENCE's 60, so the overwhelmingly
+        // common reason to be here is a rocket that is a second away — and the answer
+        // is to stand on the takeoff column and wait for it. Letting this case reach
+        // the run-up would walk the bot away from a jump it is about to be able to
+        // make and back again, which is the shuffle the patience budget exists to end
+        // rather than a thing to spend it on.
+        //
+        // Standing still is safe here where it is not elsewhere: TakeoffTicks is
+        // counting, so this cannot become a bot waiting for ever, and the stuck
+        // detector is not fooled — it fires only when keys are pressed and nothing
+        // moves, and braking to a stop presses nothing once the bot is already still.
+        else if (isRocket && !rocketReady)
+        {
+            // ⚠️ BRAKING, where the reference writes `targetCol = takeoffCol`, and
+            // the two are the same behaviour in two codebases whose default
+            // steering differs. The reference's default is a pure column
+            // comparison, so aiming at the column the bot is already on presses
+            // nothing — which is what its own comment relies on ("braking to a stop
+            // presses nothing once the bot is already still", and "the stuck
+            // detector is not fooled"). This port's default is a DIRECTION HINT
+            // rather than a place to stop: it presses on along the route even when
+            // the bot is exactly on its target column, on purpose, because a cell is
+            // six world pixels and standing still on top of one is how a bot never
+            // quite reaches the node. Measured: aiming at the column here pressed
+            // RIGHT for twelve consecutive ticks and the stuck detector banned a
+            // perfectly good edge at tick 12, forty-eight ticks before the patience
+            // budget it was supposed to be spending.
+            //
+            // Braking is the behaviour the reference describes: press against your
+            // own motion, and press nothing once still. A bot that has drifted off
+            // the column stops here and is walked back by Approach on the next tick,
+            // once it is more than BOT_JUMP_LEAD cells away.
+            steer.Braking = true;
         }
         else if (along > needVx + BotConstants.JumpVtol)
         {
@@ -910,6 +1130,21 @@ public sealed class PathFollower
         // machinery already knows what to do with an edge that keeps doing that.
         if (state.TakeoffTicks >= BotConstants.TakeoffPatience)
         {
+            // ⚠️ Two seconds at the gate with no rocket is not a bot to shove off
+            // the edge — it would fly an ordinary jump on a 276px arc. The edge is
+            // taken away instead, which is the honest description of it:
+            // untraversable right now, by a bot that has been trying for two
+            // seconds. The search re-plans without it, the ban expires in
+            // BOT_BLACKLIST_TICKS, and by then the launcher has reloaded several
+            // times over.
+            if (isRocket && !rocketReady)
+            {
+                state.BlacklistEdge(from, to, tick);
+                state.BlacklistFires++;
+                Plan(state, character.X, character.Y, tick, query, occupancy);
+                return;
+            }
+
             steer.Braking = false;
             Launch(state, ref steer);
         }

@@ -226,6 +226,84 @@ public sealed class ScriptedBotTests
             $"the dummy is still on {world.State.Characters[dummy].Hp} of {startHp}");
     }
 
+    /// <summary>
+    /// A rocket jump snaps the aim down and pulls the trigger, overriding combat.
+    /// </summary>
+    /// <remarks>
+    /// <b>The hand-off, and the only place that can make it.</b> The follower owns
+    /// LEFT / RIGHT / JUMP / DOWN and cannot fire; combat owns ATTACK and the aim
+    /// and knows nothing about the route. A rocket jump needs one key from each, so
+    /// it is applied here after both halves have run.
+    /// <para>
+    /// ⚠️ It OVERRIDES the combat aim rather than being ORed with it. Whatever
+    /// the bot was shooting at, the arc it is about to fly is worth more than the
+    /// shot, and half an aim is a rocket into a wall beside its own feet.
+    /// Character's Begin Step reads <c>aimDirection</c> when it fires the weapon and
+    /// reads the ATTACK bit in the same event on the same tick, so the aim must be
+    /// down BEFORE the trigger is seen.
+    /// </para>
+    /// <para>
+    /// ⚠️ 270 is straight down and is not a simplification of a richer choice.
+    /// <c>vectorfactor</c> in the rocket's blast is sqrt(sin⁴ + cos⁴), which is 1
+    /// only when the impulse is axis-aligned and falls to 0.707 at 45°, so an angled
+    /// rocket jump throws away up to 30% of its impulse. It also SNAPS rather than
+    /// slewing: the turn rate is 8 degrees a tick and level-to-down is 90, so
+    /// honouring the slew would mean eleven ticks of a bot staring at the floor
+    /// before every rocket jump.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ARocketJumpSnapsTheAimDownAndFires()
+    {
+        var world = Load();
+
+        // ⚠️ NO graph, and that is what isolates the hand-off. The follower CLEARS
+        // Path.RocketFire at the top of every Step and sets it only when its own
+        // takeoff gate fires — which is right, and which means a test that plants
+        // the request and then polls a routed bot has it wiped before Poll ever
+        // reads it. Measured: the aim came back at 359.76, the enemy's bearing.
+        // With no graph the follower does not run, the request survives, and what
+        // is left under test is exactly the thing this file owns.
+        // PathFollowerTests gates the follower's half.
+        var bot = Bot(graph: null, stagger: 1);
+
+        var here = Stand(world.Nav!, -OnFloor);
+        var slot = world.Place(PlayerClass.Soldier, Team.Red, here.X, here.Y);
+
+        world.Drive(slot, bot);
+        bot.AliveLast = true;
+
+        // An enemy well to the RIGHT, so combat's own aim is nowhere near straight
+        // down and the override is visible.
+        world.Place(PlayerClass.Heavy, Team.Blue, here.X + 300, here.Y);
+
+        world.Step(60);
+
+        var beforeAim = bot.Combat.AimDir;
+        Assert.True(
+            Math.Abs(BotTargeting.AngleDelta(beforeAim, PathFollower.RocketAimDegrees)) > 45,
+            $"combat was already aiming near straight down at {beforeAim:0.#}, so the override is invisible");
+
+        // Ask for the rocket the way the follower does, and poll one tick.
+        bot.Path.RocketFire = true;
+
+        var input = bot.Poll(new WorldView(in world.State, world.Collision), slot, 61);
+
+        Assert.Equal(PathFollower.RocketAimDegrees, input.AimDirectionDegrees, 3);
+        Assert.True((input.Keys & PlayerKeys.Attack) != 0, "the trigger was not pulled");
+
+        // ⚠️ The control — without the request the same tick aims at the enemy
+        // and not at the floor. Without it this passes on a bot that always aims
+        // down.
+        bot.Path.RocketFire = false;
+
+        var plain = bot.Poll(new WorldView(in world.State, world.Collision), slot, 62);
+
+        Assert.True(
+            Math.Abs(BotTargeting.AngleDelta(plain.AimDirectionDegrees, PathFollower.RocketAimDegrees)) > 45,
+            $"the bot aimed at {plain.AimDirectionDegrees:0.#} with no rocket asked for");
+    }
+
     /// <summary>Presses nothing, for ever.</summary>
     private sealed class Idle : IInputSource
     {

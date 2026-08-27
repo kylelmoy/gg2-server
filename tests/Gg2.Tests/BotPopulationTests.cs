@@ -354,10 +354,21 @@ public sealed class BotPopulationTests(ITestOutputHelper output)
     [Fact]
     public void ARotationHandsEveryBotTheNewGraph()
     {
+        // ⚠️ It starts on a TEAM DEATHMATCH map, and that is not incidental. TDM is
+        // the only mode with NO OVERTIME — every other one can hang past its clock,
+        // and CTF hangs precisely when a flag is off its base at 0:00. This test used
+        // to start on ctf_truefort and was flaky for exactly that reason: once the
+        // rocket jump landed, two bots reached the enemy flag often enough that some
+        // runs went into an unbounded overtime and the wait below gave up after
+        // 5,400 ticks with no "round over" in the log at all.
+        //
+        // gg_debug is a TDM map (basicRoomSetup's chain ends there for a map with no
+        // objective) and both it and ctf_truefort have a nav cache, which the
+        // assertions need on both sides of the rotation.
         using var harness = new ServerHarness(o =>
         {
-            o.Map = Map;
-            o.MapRotation = [Map, "koth_valley"];
+            o.Map = "gg_debug";
+            o.MapRotation = ["gg_debug", Map];
             o.NavCacheDirectory = ReferenceTree.NavCacheDirectory;
             o.TimeLimitMinutes = 1;
             o.Bots = new BotPopulationOptions(Enabled: true, FillToPlayers: 2, MaxBots: 2, MinHumans: 0);
@@ -382,6 +393,24 @@ public sealed class BotPopulationTests(ITestOutputHelper output)
         // ⚠️ There has to BE nav state to invalidate, or the assertions below pass
         // on a rotation that does nothing: a bot re-spawned on the new map has no
         // route yet either way. So wait for a real route and plant a real ban.
+        //
+        // ⚠️ The goal is given BY HAND, because Team Deathmatch has no landmark and
+        // the objective layer correctly declines to invent one — so on gg_debug a
+        // bot plans nothing at all. That is the objective layer's own claim
+        // (BotObjectiveTests.TeamDeathmatchGivesNoGoal) and not this test's; what is
+        // under test here is that a rotation invalidates whatever nav state exists.
+        var far = harness.Server.BotSlots
+            .Select(slot => ((ScriptedBot)harness.Server.SourceOf(slot), slot))
+            .ToArray();
+
+        foreach (var (bot, _) in far)
+        {
+            var graph = NavCache.Load(ReferenceTree.NavCacheDirectory, "gg_debug", 1);
+            var node = graph.NodeCount - 1;
+
+            Assert.True(bot.SetGoal(NavGraph.ColumnWorldX(graph.Nodes[node].X0), graph.StandY(node)));
+        }
+
         harness.TickUntil(
             () => bots.All(b => b.Path.HasPath),
             "both bots to plan a route on the first map",
@@ -398,7 +427,7 @@ public sealed class BotPopulationTests(ITestOutputHelper output)
         // map is still running and every assertion below then reads the state this
         // test exists to say has changed.
         harness.TickUntil(
-            () => harness.Server.CurrentMap == "koth_valley",
+            () => harness.Server.CurrentMap == Map,
             "the map to rotate",
             maxTicks: 60 * 30 * 3);
 

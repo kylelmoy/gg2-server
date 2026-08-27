@@ -71,6 +71,15 @@ public sealed class PathFollowerTests
     /// that skipped the factory would stand still and the takeoff gate would ask
     /// <see cref="JumpModel.Reach"/> about a class that cannot accelerate.
     /// </remarks>
+    /// <summary>A Rocketlauncher with rounds in it and off cooldown.</summary>
+    /// <remarks>
+    /// ⚠️ The rest of <see cref="WeaponState"/> is defaulted deliberately —
+    /// the rocket gate reads only these two — but a zeroed one is NOT loaded and NOT
+    /// ready, which is the conservative answer and what every other test here wants.
+    /// </remarks>
+    private static WeaponState Loaded(double ammo = 4) =>
+        new() { ReadyToShoot = ammo > 0, AmmoCount = ammo };
+
     private static CharacterState At(
         double x, double y, double hSpeed = 0, bool onGround = true,
         PlayerClass playerClass = PlayerClass.Soldier)
@@ -651,60 +660,362 @@ public sealed class PathFollowerTests
     }
 
     /// <summary>
-    /// An unimplemented ROCKET-jump edge is counted and abandoned rather than
-    /// faked.
+    /// The rocket law is not the ordinary law, in both directions at once.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The contract until the rocket half lands.</b> A rocket jump is flown
-    /// exactly as a jump and everything in <see cref="PathFollower"/> would
-    /// serve — but its takeoff gate needs a live, loaded Rocketlauncher and hp
-    /// above <c>NAV_RJ_DAMAGE</c>, and its trajectory needs the combat half to
-    /// fire one straight down on the takeoff tick. Neither exists yet.
+    /// ⚠️ <b>They differ in BOTH terms of the motion law, not one.</b>
+    /// Character's Begin Step sets the control and friction factors from
+    /// <c>moveStatus</c>, and 1 — "rocketing/mining myself" — gives 0.65 and
+    /// <b>1</b> where the default gives 0.85 and 1.15. A friction of 1 means
+    /// horizontal speed does not bleed at all for the whole flight.
     /// <para>
-    /// ⚠️ <b>Jumping without the rocket is the worst available outcome</b>: the
-    /// arc rises 276px where an ordinary jump rises 57, so the bot would leave
-    /// the ground, track a trajectory it cannot be on, and land somewhere the
-    /// route does not mention — costing an off-route fire and, on the second, a
-    /// blacklist on a perfectly good edge. So the follower does nothing and the
-    /// stuck detector takes the edge away.
+    /// So using <see cref="JumpModel.Reach"/> for a rocket arc is wrong in both
+    /// directions at once, which is worse than wrong in one — and the two fixtures
+    /// below are one of each, measured rather than assumed:
     /// </para>
     /// <para>
-    /// This test is <b>expected to be deleted</b> when the rocket half lands.
+    /// <b>A cold start on a fast arc</b> (needVx 6, v0 0, 30 ticks): the rocket law
+    /// reaches <b>136.9px</b> against the ordinary law's <b>119.5</b>. Nothing takes
+    /// the speed back off between presses, so it climbs linearly instead of
+    /// approaching a ceiling geometrically. Using the ordinary model here REFUSES
+    /// arcs the bot flies easily — which is the whole reason the takeoff gate stopped
+    /// demanding the arc's full speed in the first place.
+    /// </para>
+    /// <para>
+    /// <b>A hot start on a slow arc</b> (needVx 2, v0 8): the rocket law overshoots
+    /// its own 60px schedule to <b>85.6px</b> where the ordinary law lands at
+    /// <b>59</b>. A rocket jump carries its takeoff momentum the entire flight; the
+    /// only way down is to press against the motion. Using the ordinary model here
+    /// ACCEPTS arcs the bot sails straight past.
+    /// </para>
+    /// <para>
+    /// ⚠️ This is the control that makes the two models' existence
+    /// load-bearing. Point the rocket branch of the takeoff gate at
+    /// <see cref="JumpModel"/> and every other follower test still passes — the arcs
+    /// in them are flyable under either law.
     /// </para>
     /// </remarks>
     [Fact]
-    public void AnUnimplementedRocketJumpEdgeIsCountedAndAbandoned()
+    public void TheRocketLawIsNotTheOrdinaryLaw()
+    {
+        var soldier = At(0, 0);
+
+        // Accelerating: a cold start on an arc asking for most of the ceiling.
+        var rocketCold = RocketModel.Reach(in soldier, 6, 30, 0);
+        var jumpCold = JumpModel.Reach(in soldier, 6, 30, 0);
+
+        Assert.True(
+            rocketCold > jumpCold + 10,
+            $"a cold rocket takeoff did not out-travel a cold ordinary one: "
+            + $"{rocketCold:0.#} against {jumpCold:0.#}");
+
+        // Coasting hot: a rocket jump cannot shed what it left with.
+        var rocketHot = RocketModel.Reach(in soldier, 2, 30, 8);
+        var jumpHot = JumpModel.Reach(in soldier, 2, 30, 8);
+
+        Assert.True(
+            rocketHot > jumpHot + 20,
+            $"a hot rocket takeoff shed speed like an ordinary one: "
+            + $"{rocketHot:0.#} against {jumpHot:0.#}");
+
+        // ⚠️ and it really does sail past its own schedule, which is the
+        // half a caller has to care about — 2 px/tick over 30 ticks is 60.
+        Assert.True(rocketHot > 2 * 30, $"the hot arc landed on schedule at {rocketHot:0.#}");
+        Assert.True(jumpHot <= 2 * 30, $"the ordinary law also overshot, at {jumpHot:0.#}");
+    }
+
+    /// <summary>
+    /// The takeoff gate asks the ROCKET model about a rocket arc.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <c>TheRocketLawIsNotTheOrdinaryLaw</c> gates that the two models
+    /// differ; this gates that the takeoff gate picks the right one, which is a
+    /// separate claim and was briefly ungated. Point the gate at
+    /// <see cref="JumpModel"/> and every other follower test still passes, because
+    /// their arcs are flyable under either law.
+    /// <para>
+    /// The fixture is an arc flyable under one law and not the other, taken from the
+    /// measured table: needVx 6 over 30 ticks from a standstill reaches
+    /// <b>136.9px</b> under the rocket law and <b>119.5px</b> under the ordinary
+    /// one. The gap is <b>132px</b>, so with the tolerance the rocket law clears it
+    /// and the ordinary law does not — and the observable difference is whether the
+    /// bot launches from where it stands or starts a run-up.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void TheTakeoffGateAsksTheRocketModelAboutARocketArc()
+    {
+        // Landing 22 anchor columns past the takeoff: a 132px gap.
+        var graph = Build(
+            [Node(30, 0, 9), Node(10, 30, 39)],
+            [Edge(0, 1, 200, NavEdgeType.RocketJump, takeoff: 8, bucket: 6, ticks: 30)]);
+
+        var follower = new PathFollower(graph);
+        var state = new BotPathState();
+
+        follower.SetGoal(state, NavGraph.ColumnWorldX(35), graph.StandY(1));
+
+        var at = Stand(graph, 0, 8);
+        var able = new NavQuery(Team.Red, CanRocketJump: true);
+        var loaded = Loaded();
+
+        // One tick, standing still on the takeoff column. Under the rocket law this
+        // is a launch; under the ordinary one it is a refusal and a run-up.
+        var keys = follower.Step(state, At(at.X, at.Y), in loaded, 0, able);
+
+        Assert.True(
+            state.RocketFire,
+            "the gate refused an arc the rocket law clears — it is asking the ordinary model");
+
+        Assert.True((keys & PlayerKeys.Jump) != 0);
+        Assert.Equal(-1, state.RunupAt);
+
+        // ⚠️ The control — the SAME arc as an ordinary jump edge is refused
+        // and does start a run-up. Without it this passes on a gate that accepts
+        // everything.
+        var ordinary = Build(
+            [Node(30, 0, 9), Node(10, 30, 39)],
+            [Edge(0, 1, 200, NavEdgeType.Jump, takeoff: 8, bucket: 6, ticks: 30)]);
+
+        var second = new PathFollower(ordinary);
+        var plain = new BotPathState();
+
+        second.SetGoal(plain, NavGraph.ColumnWorldX(35), ordinary.StandY(1));
+
+        var plainKeys = second.Step(plain, At(at.X, at.Y), 0, new NavQuery(Team.Red));
+
+        Assert.False(plain.RocketFire);
+        Assert.Equal(PlayerKeys.None, plainKeys & PlayerKeys.Jump);
+        Assert.True(plain.RunupAt >= 0, "the ordinary law accepted the same arc from a standstill");
+    }
+
+    /// <summary>
+    /// A rocket jump needs hp above the damage it does, strictly.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Strictly greater, because the damage lands before the bot
+    /// does</b> — a soldier on exactly <c>NAV_RJ_DAMAGE</c> arrives dead. And the
+    /// health test is re-asked at the gate because the search only ever answered it
+    /// at plan time: a route planned at 160hp is still installed at 35.
+    /// </remarks>
+    [Fact]
+    public void ARocketJumpNeedsHealthAboveItsOwnDamageStrictly()
+    {
+        var loaded = Loaded();
+
+        var healthy = At(0, 0);
+        healthy.Hp = NavConstants.RjDamage + 1;
+        Assert.True(RocketModel.Ready(in healthy, in loaded));
+
+        var exactly = At(0, 0);
+        exactly.Hp = NavConstants.RjDamage;
+        Assert.False(RocketModel.Ready(in exactly, in loaded), "a soldier on exactly 30hp would arrive dead");
+
+        // The other three clauses, each on its own.
+        Assert.False(RocketModel.Ready(in healthy, Loaded(ammo: 0)), "an empty launcher was ready");
+
+        var cooling = healthy;
+        Assert.False(
+            RocketModel.Ready(in cooling, new WeaponState { ReadyToShoot = false, AmmoCount = 4 }),
+            "a launcher on cooldown was ready");
+
+        // ⚠️ the class, not the weapon slot — every class has a WeaponState,
+        // and only the soldier's is a Rocketlauncher.
+        var scout = At(0, 0, playerClass: PlayerClass.Scout);
+        scout.Hp = 200;
+        Assert.False(RocketModel.Ready(in scout, in loaded), "a scout rocket-jumped");
+    }
+
+    /// <summary>
+    /// A loaded soldier takes off on a rocket-jump edge and asks for the rocket.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The follower cannot fire.</b> It owns LEFT / RIGHT / JUMP / DOWN;
+    /// the aim and the trigger come from the combat half. So a rocket jump is a JUMP
+    /// press plus a <em>request</em> — <see cref="BotPathState.RocketFire"/> — that
+    /// <c>ScriptedBot</c> turns into an aim of 270 and an ATTACK bit after combat
+    /// has run, which is the only place that can see both halves.
+    /// </remarks>
+    [Fact]
+    public void ALoadedSoldierTakesOffOnARocketJumpAndAsksForTheRocket()
     {
         var graph = Build(
             [Node(30, 0, 9), Node(10, 20, 29)],
-            [Edge(0, 1, 200, NavEdgeType.RocketJump, takeoff: 8, bucket: 3, ticks: 20)]);
+            [Edge(0, 1, 200, NavEdgeType.RocketJump, takeoff: 8, bucket: 5, ticks: 20)]);
 
         var follower = new PathFollower(graph);
         var state = new BotPathState();
 
         follower.SetGoal(state, NavGraph.ColumnWorldX(25), graph.StandY(1));
 
-        var at = Stand(graph, 0, 4);
-
-        // ⚠️ The query says the bot COULD rocket jump — it has the launcher and
-        // the health — so the search offers the edge. That is the case worth
-        // testing: with CanRocketJump left false the search refuses it, the bot
-        // has no route at all, and the follower is never asked. A test that let
-        // the default stand would pass with the whole branch deleted.
+        var at = Stand(graph, 0, 8);
         var able = new NavQuery(Team.Red, CanRocketJump: true);
+        var loaded = Loaded();
 
-        for (var tick = 0; tick < BotConstants.StuckTicks + 1; tick++)
-            follower.Step(state, At(at.X, at.Y), tick, able);
+        var keys = PlayerKeys.None;
 
-        Assert.True(state.UnsupportedEdgeTicks > 0, "the rocket-jump edge was steered by something");
-        Assert.Equal(1, state.StuckFires);
+        for (var tick = 0; tick < 40 && !state.RocketFire; tick++)
+            keys = follower.Step(state, At(at.X, at.Y), in loaded, tick, able);
+
+        Assert.True(state.RocketFire, "a loaded soldier never asked for the rocket");
+        Assert.True((keys & PlayerKeys.Jump) != 0, "it asked for the rocket without jumping");
+        Assert.Equal(1, state.RocketJumps);
+        Assert.Equal(0, state.UnsupportedEdgeTicks);
+
+        // ⚠️ Cleared at the top of the next Step, so a tick that does not
+        // reach the takeoff gate cannot leave the request standing. Without that a
+        // bot fires a rocket at its own feet every tick of the flight.
+        follower.Step(state, At(at.X, at.Y - 40, 3, onGround: false), in loaded, 41, able);
+        Assert.False(state.RocketFire, "the rocket request survived the takeoff tick");
+    }
+
+    /// <summary>
+    /// With no rocket the bot waits on the takeoff column, then gives the edge up.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Jumping without the rocket is the worst available outcome</b>:
+    /// the arc rises 276px where an ordinary jump rises 57, so the bot would leave
+    /// the ground, track a trajectory it cannot be on, and land somewhere the route
+    /// does not mention — costing an off-route fire and, on the second, a blacklist
+    /// on a perfectly good edge.
+    /// <para>
+    /// ⚠️ <b>And it WAITS rather than running up.</b> The launcher's refire is
+    /// 30 ticks against <c>BOT_TAKEOFF_PATIENCE</c>'s 60, so the overwhelmingly
+    /// common reason to be here is a rocket a second away — and walking away from a
+    /// jump the bot is about to be able to make and back again is the shuffle that
+    /// budget exists to end, not a thing to spend it on.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>The escape hatch takes the EDGE away rather than shoving the bot
+    /// off it</b>, which is what it does for every other arc. Two seconds at the
+    /// gate with no rocket is an honest "untraversable right now"; the search
+    /// re-plans without it and the ban expires long after the launcher has reloaded.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void WithNoRocketTheBotWaitsAndThenGivesTheEdgeUp()
+    {
+        var graph = Build(
+            [Node(30, 0, 9), Node(10, 20, 29)],
+            [Edge(0, 1, 200, NavEdgeType.RocketJump, takeoff: 8, bucket: 5, ticks: 20)]);
+
+        var follower = new PathFollower(graph);
+
+        // ⚠️ The stagger is not decoration. A re-plan clears the edge in progress
+        // and the takeoff budget with it, so a bot's re-plan interval is a hard
+        // ceiling on that budget — at the default stagger of 0 the interval is
+        // BOT_REPLAN_TICKS (45), BOT_TAKEOFF_PATIENCE is 60, and the escape hatch is
+        // unreachable. Item 4b-ii found that by a test failing; it bites here too.
+        //
+        // ⚠️ Which means a bot with an EMPTY launcher waits at the gate rather than
+        // giving the edge up, at every stagger below 15 — and that is very nearly
+        // always the right answer, because the launcher's refire is 30 ticks and its
+        // ammo comes back. The hatch is for the case where it does not.
+        var state = new BotPathState { ReplanStagger = BotConstants.ReplanTicks - 1 };
+
+        follower.SetGoal(state, NavGraph.ColumnWorldX(25), graph.StandY(1));
+
+        var at = Stand(graph, 0, 8);
+        var able = new NavQuery(Team.Red, CanRocketJump: true);
+        var empty = Loaded(ammo: 0);
+
+        // Well inside the patience budget: it waits, and it does not jump.
+        for (var tick = 0; tick < BotConstants.TakeoffPatience - 2; tick++)
+        {
+            var keys = follower.Step(state, At(at.X, at.Y), in empty, tick, able);
+
+            Assert.Equal(PlayerKeys.None, keys & PlayerKeys.Jump);
+            Assert.False(state.RocketFire);
+        }
+
+        Assert.Empty(state.Blacklist);
+
+        // Past it: the edge is given up.
+        for (var tick = BotConstants.TakeoffPatience - 2; tick < BotConstants.TakeoffPatience + 4; tick++)
+            follower.Step(state, At(at.X, at.Y), in empty, tick, able);
+
         Assert.Contains(NavGraph.EdgeKey(0, 1), state.Blacklist);
 
-        // ⚠️ And it never presses JUMP: a 57px hop along a 276px plan is worse
-        // than no press at all.
-        Assert.Equal(
-            PlayerKeys.None,
-            follower.Step(state, At(at.X, at.Y), 99, able) & PlayerKeys.Jump);
+        // ⚠️ The control — the same bot with a loaded launcher jumps instead
+        // of waiting. Without it this passes on a follower that refuses every rocket
+        // edge, which is where the port was before this landed.
+        var loadedState = new BotPathState();
+        follower.SetGoal(loadedState, NavGraph.ColumnWorldX(25), graph.StandY(1));
+
+        var loaded = Loaded();
+        var jumped = false;
+
+        for (var tick = 0; tick < 40 && !jumped; tick++)
+            jumped = (follower.Step(loadedState, At(at.X, at.Y), in loaded, tick, able) & PlayerKeys.Jump) != 0;
+
+        Assert.True(jumped);
+        Assert.Empty(loadedState.Blacklist);
+    }
+
+    /// <summary>
+    /// A rocket that did not go off is not the arc that was planned.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <c>moveStatus</c> 1 is "rocketing/mining myself" and is set by the
+    /// blast itself, so a rocket-jump edge in the air <em>without</em> it is an
+    /// ORDINARY jump — 57px of rise against the arc's 276 — and steering it toward a
+    /// trajectory it cannot be on only carries the bot further from where an
+    /// ordinary jump was always going to put it. The follower stops steering and
+    /// lets the off-route machinery adjudicate the landing, which already gives the
+    /// edge one retry before banning it — right, because the common causes are
+    /// transient (an enemy walked into the rocket) and the uncommon one is not.
+    /// <para>
+    /// ⚠️ <c>AirTicks &gt; 1</c> rather than <c>&gt;= 1</c>: the blast lands
+    /// in the same tick's simulation as the takeoff press, so tick one is always
+    /// <c>moveStatus</c> 0 and a stricter test would abandon every rocket jump on
+    /// its first airborne tick.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ARocketThatDidNotGoOffStopsBeingSteered()
+    {
+        var graph = Build(
+            [Node(30, 0, 9), Node(10, 20, 29)],
+            [Edge(0, 1, 200, NavEdgeType.RocketJump, takeoff: 8, bucket: 5, ticks: 20)]);
+
+        var follower = new PathFollower(graph);
+        var state = new BotPathState();
+
+        follower.SetGoal(state, NavGraph.ColumnWorldX(25), graph.StandY(1));
+
+        var at = Stand(graph, 0, 8);
+        var able = new NavQuery(Team.Red, CanRocketJump: true);
+        var loaded = Loaded();
+
+        for (var tick = 0; tick < 40 && !state.RocketFire; tick++)
+            follower.Step(state, At(at.X, at.Y), in loaded, tick, able);
+
+        Assert.True(state.RocketFire);
+
+        // Airborne and NOT rocketing: two ticks, so AirTicks passes 1.
+        var drifting = At(at.X, at.Y - 30, hSpeed: 0, onGround: false);
+
+        follower.Step(state, in drifting, in loaded, 50, able);
+        var keys = follower.Step(state, in drifting, in loaded, 51, able);
+
+        Assert.False(state.FlyingEdge, "the follower kept flying an arc the rocket never made");
+        Assert.Equal(PlayerKeys.None, keys & (PlayerKeys.Left | PlayerKeys.Right));
+
+        // ⚠️ The control — the same two ticks WITH moveStatus 1 are steered,
+        // so the bail is the moveStatus test and not simply "airborne".
+        var rocketing = drifting;
+        rocketing.MoveStatus = 1;
+
+        var flying = new BotPathState();
+        follower.SetGoal(flying, NavGraph.ColumnWorldX(25), graph.StandY(1));
+
+        for (var tick = 0; tick < 40 && !flying.RocketFire; tick++)
+            follower.Step(flying, At(at.X, at.Y), in loaded, tick, able);
+
+        follower.Step(flying, in rocketing, in loaded, 50, able);
+        follower.Step(flying, in rocketing, in loaded, 51, able);
+
+        Assert.True(flying.FlyingEdge, "a real rocket jump was not steered");
     }
 
     /// <summary>

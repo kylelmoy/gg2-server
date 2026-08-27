@@ -24,6 +24,13 @@ namespace Gg2.Tests;
 /// matches closely — <c>valley-shaft-floor-to-point</c> on 161 ticks against the
 /// reference's quoted 161, <c>truefort-blue-spawn-exit-west</c> on 53 against 58
 /// — which is corroboration rather than a requirement.
+/// <para>
+/// ⚠️ <b>The rocket jump moved five of these and every one got faster</b>:
+/// <c>avanti-ramp-pocket-to-intel</c> 311 → 175 (the reference quotes 352-438),
+/// <c>valley-floor-to-point</c> 251 → 178, <c>valley-spawn-to-point</c> 551 → 523,
+/// <c>truefort-spawn-to-intel</c> 1,750 → 1,716. That is the number to compare
+/// against when the takeoff machinery is next touched.
+/// </para>
 /// </para>
 /// </remarks>
 public sealed class ScenarioSuiteTests(ITestOutputHelper output)
@@ -82,6 +89,7 @@ public sealed class ScenarioSuiteTests(ITestOutputHelper output)
         ReferenceTree.RequireNavCache();
 
         var failed = new SortedSet<string>(StringComparer.Ordinal);
+        var rocketJumps = 0;
 
         foreach (var s in Scenarios.All)
         {
@@ -97,11 +105,25 @@ public sealed class ScenarioSuiteTests(ITestOutputHelper output)
                 + $"t={result.Ticks,-5} short={result.GoalDistance,7:0.#} dmg={result.Damage,-5:0} "
                 + $"acq={(result.Acquired ? "y" : "n")} moved={result.Moved,7:0.#} "
                 + $"replan={bot.Path.Replans,-4} off={bot.Path.OffRouteFires,-4} "
-                + $"stuck={bot.Path.StuckFires,-3} blacklist={bot.Path.BlacklistFires,-3} {why}");
+                + $"stuck={bot.Path.StuckFires,-3} blacklist={bot.Path.BlacklistFires,-3} "
+                + $"rj={bot.Path.RocketJumps,-3} {why}");
+
+            rocketJumps += bot.Path.RocketJumps;
 
             if (!ok)
                 failed.Add(s.Name);
         }
+
+        // ⚠️ <b>Somebody rocket-jumped.</b> Nothing else here notices whether the
+        // search is offered those arcs at all: with them switched off every leg
+        // still arrives, just more slowly, and an arrival test cannot see the
+        // difference. Measured — the rocket jump took avanti-ramp-pocket-to-intel
+        // from 311 ticks to 175 and valley-floor-to-point from 251 to 178 — so a
+        // regression that quietly stops offering them costs a third of the walking
+        // time on this suite and nothing goes red without this line.
+        Assert.True(
+            rocketJumps > 0,
+            "no leg used a rocket jump; the search is not being offered them at all");
 
         var expected = new SortedSet<string>(Unmet.Keys, StringComparer.Ordinal);
 

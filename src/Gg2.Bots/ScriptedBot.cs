@@ -272,12 +272,41 @@ public sealed class ScriptedBot : IInputSource, IScenarioSubject
 
         UpdateObjective(in world, slot, tick);
 
+        // ⚠️ The query is rebuilt from LIVE state every tick, not held. Both class
+        // arcs are conditional on things that change under a bot: a scout can be
+        // re-classed mid-life, and CanRocketJump is the WEAPON plus an hp test, so a
+        // soldier's routes shed their rocket jumps on their own as it takes damage
+        // — `hp > NAV_RJ_DAMAGE`, strictly greater, because the damage lands before
+        // the bot does.
+        Query = Query with
+        {
+            CanDoubleJump = BotClassProfile.AirJump(self.Class),
+            CanRocketJump = RocketModel.Ready(in self, in world.Weapon(slot)),
+        };
+
         var navKeys = _graph is null
             ? PlayerKeys.None
-            : _follower.Step(Path, in self, tick, Query);
+            : _follower.Step(Path, in self, in world.Weapon(slot), tick, Query);
 
         var fireKeys = BotCombat.Step(
             Combat, in world, slot, tick, Skill, ref Random, _graph, out var aim, out var aimDistance);
+
+        // ⚠️ The rocket-jump hand-off, and it goes AFTER the combat half because
+        // this is the only place that can see both. The follower owns LEFT / RIGHT /
+        // JUMP / DOWN and cannot fire; combat owns ATTACK and the aim and knows
+        // nothing about the route. A rocket jump needs one key from each.
+        //
+        // ⚠️ It OVERRIDES the combat aim rather than being ORed with it. Whatever
+        // the bot was shooting at, the arc it is about to fly is worth more than the
+        // shot, and half an aim is a rocket into a wall beside its own feet.
+        // Character's Begin Step reads aimDirection when it fires the weapon and
+        // reads the ATTACK bit in the same event on the same tick, so the aim must
+        // be down BEFORE the trigger is seen — writing both here is exactly that.
+        if (Path.RocketFire)
+        {
+            aim = PathFollower.RocketAimDegrees;
+            fireKeys |= PlayerKeys.Attack;
+        }
 
         navKeys = ApplyHolds(world, slot, tick, navKeys);
 
