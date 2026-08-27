@@ -433,7 +433,7 @@ public sealed class RoundTests
 
         Assert.False(events.Spawned[1]);
         Assert.False(state.Alive[1]);
-        Assert.Equal(Timers.Inactive, state.Players[1].RespawnTimer);
+        Assert.Equal(Timers.JustFired, state.Players[1].RespawnTimer);
     }
 
     // --- the reset ------------------------------------------------------------

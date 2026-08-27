@@ -291,7 +291,7 @@ public sealed class FlamethrowerTests
         state.Weapons[1].IsRefilling = false;
         Timers.Advance(ref state);
         Assert.True(state.Weapons[1].IsRefilling);
-        Assert.Equal(WeaponState.Inactive, state.Weapons[1].ReloadTimer);
+        Assert.Equal(Timers.JustFired, state.Weapons[1].ReloadTimer);
     }
 
     /// <summary>A tank that just ran dry waits fourteen ticks, not one.</summary>
@@ -616,9 +616,22 @@ public sealed class FlamethrowerTests
     /// The heat only starts fading ninety ticks after the last flame lands.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The gate is <c>alarm[0] == -1</c> <b>exactly</b>, not <c>&lt;= 0</c>.
-    /// That is what forced <see cref="Timers.Advance"/> to leave a fired counter
-    /// at -1 rather than 0 — at 0 the decay would start a tick late, every time.
+    /// <para>
+    /// ⚠️ The gate is <c>alarm[0] == -1</c> <b>exactly</b>, not <c>&lt;= 0</c>,
+    /// and <c>Character.events/Begin Step.xml:67</c> runs <em>before</em> the
+    /// alarm stage. So the fade does not start on the tick after the alarm
+    /// fires: that tick's Begin Step still reads the 0 the alarm was left at,
+    /// and only the tick after <em>that</em> sees -1.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>This test used to assert the opposite, and its remark used to give
+    /// the reason.</b> It read "that is what forced <c>Timers.Advance</c> to
+    /// leave a fired counter at -1 rather than 0 — at 0 the decay would start a
+    /// tick late, every time." A tick late is exactly what the running game
+    /// does: measured 2026-08-27, a fired GM8 alarm reads 0 for the rest of its
+    /// own frame. The port was starting every burn's decay a tick early, and
+    /// this is the one test that could see it.
+    /// </para>
     /// </remarks>
     [Fact]
     public void TheHeatOnlyFadesNinetyTicksAfterTheLastFlame()
@@ -641,10 +654,17 @@ public sealed class FlamethrowerTests
             Assert.Equal(9, state.Characters[1].BurnIntensity);
         }
 
-        Assert.Equal(WeaponState.Inactive, state.Characters[1].AfterburnDecayTimer);
+        Assert.Equal(Timers.JustFired, state.Characters[1].AfterburnDecayTimer);
         Assert.Equal(9.0 / CharacterState.BurnDecayDuration, state.Characters[1].IntensityDecay, 12);
 
-        // The very next tick's Begin Step sees -1 and starts the fade.
+        // ⚠️ The next tick's Begin Step reads the 0 the alarm was left at, so it
+        // does NOT fade — and that tick's own alarm stage is what takes the
+        // counter to -1.
+        MatchSimulation.Tick(World, ref state, idle);
+        Assert.Equal(9, state.Characters[1].BurnIntensity);
+        Assert.Equal(Timers.Inactive, state.Characters[1].AfterburnDecayTimer);
+
+        // The tick after that sees -1 and starts the fade.
         MatchSimulation.Tick(World, ref state, idle);
         Assert.Equal(9 - (9.0 / 90), state.Characters[1].BurnIntensity, 12);
     }

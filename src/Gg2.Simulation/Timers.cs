@@ -33,24 +33,36 @@ public static class Timers
     /// is a way of saying "off", not "fire immediately".
     /// </item>
     /// <item>
-    /// After firing the counter is <b>-1</b>, and it is set there
-    /// <em>before</em> the event body runs — which is what makes a handler that
-    /// re-arms its own alarm work. <c>Medic.events/Alarm 11.xml</c> ends with
-    /// <c>alarm[11] = 30</c> and <c>Scattergun.events/Alarm 5.xml</c> with
-    /// <c>alarm[5] = reloadTime</c>; if the engine wrote -1 after the body, both
-    /// would be wiped and neither weapon would ever reload again. So the write
-    /// comes first, and every caller here re-arms afterwards if it wants to.
+    /// A fired counter <b>rests at 0 for the remainder of the frame its event
+    /// ran on</b>, and reaches -1 only on the <em>next</em> frame's alarm stage.
+    /// It is never wiped before the body runs, which is what makes a handler
+    /// that re-arms its own alarm work: <c>Medic.events/Alarm 11.xml</c> ends
+    /// with <c>alarm[11] = 30</c> and <c>Scattergun.events/Alarm 5.xml</c> with
+    /// <c>alarm[5] = reloadTime</c>, and every caller here re-arms after
+    /// <see cref="Advance(ref int)"/> returns, overwriting the 0.
     /// </item>
     /// </list>
     /// <para>
-    /// ⚠️ <b>This file used to leave a fired counter at 0 for one tick, and that
-    /// became observable with the pyro.</b> Firing is unaffected either way — a 0
-    /// decrements to -1 without firing — but
+    /// ⚠️ <b>MEASURED 2026-08-27 against the running game, after this file spent
+    /// a stage asserting the opposite.</b> The code wrote <c>Inactive</c> the
+    /// instant a counter expired, on the reasoning that GM8 sets -1 before the
+    /// event body. It does not: a fired alarm reads <b>0</b> for the rest of
+    /// that frame. <c>docs/SIMULATION.md</c>'s own pseudocode had it right and
+    /// the code was changed away from it.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>One site makes it observable, and it is a whole tick of behaviour.</b>
     /// <c>Character.events/Begin Step.xml:67</c> gates the afterburn intensity
-    /// decay on <c>alarm[0] == -1</c> <em>exactly</em>, so a counter resting at 0
-    /// delayed every burn's fade by a tick. Still an inference from the
-    /// reference rather than a measurement against the running engine: see the
-    /// handoff.
+    /// decay on <c>alarm[0] == -1</c> <em>exactly</em>, and Begin Step runs
+    /// <em>before</em> the alarm stage. So with the eager write the frame after
+    /// a burn's alarm fired already read -1 and faded; with the engine's timing
+    /// it reads 0, and the fade starts a frame later. <b>The port was starting
+    /// every burn's decay a tick early.</b>
+    /// </para>
+    /// <para>
+    /// Firing itself is unaffected either way — a counter resting at 0
+    /// decrements to -1 and returns false, because the fire test is
+    /// <em>exactly</em> zero and -1 is not it.
     /// </para>
     /// </remarks>
     public static bool Advance(ref int timer)
@@ -60,15 +72,29 @@ public static class Timers
 
         timer--;
 
-        if (timer != 0)
-            return false;
-
-        timer = Inactive;
-        return true;
+        // ⚠️ The counter is deliberately LEFT AT ZERO here. GM8 does not write
+        // -1 until the next frame's alarm stage, and the difference is one tick
+        // of afterburn decay — see the remarks above. A `timer = Inactive;` on
+        // this line reads like tidiness and is a measured behaviour change.
+        return timer == 0;
     }
 
     /// <summary>GM8's resting alarm value. The same -1 as <see cref="WeaponState.Inactive"/>.</summary>
     public const int Inactive = -1;
+
+    /// <summary>
+    /// What a counter reads for the remainder of the frame its event ran on,
+    /// before the next frame's alarm stage takes it to <see cref="Inactive"/>.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>A spent counter is not immediately an inactive one</b>, and the
+    /// difference is a whole tick of afterburn decay — see
+    /// <see cref="Advance(ref int)"/>. It exists as a name because seven test
+    /// sites assert "this alarm has been spent" on the tick it fired, and a
+    /// literal <c>0</c> there reads like a magic number rather than like the
+    /// measured rule it is.
+    /// </remarks>
+    public const int JustFired = 0;
 
     /// <summary>
     /// The whole number of ticks GM8 stores when an alarm is assigned a real.

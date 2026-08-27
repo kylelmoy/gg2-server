@@ -190,7 +190,7 @@ public sealed class ArenaTests
         Assert.Equal(spawns, state.Alive[1]);
 
         // Spent either way.
-        Assert.Equal(Timers.Inactive, state.Players[1].RespawnTimer);
+        Assert.Equal(Timers.JustFired, state.Players[1].RespawnTimer);
     }
 
     // --- winning a round ------------------------------------------------------

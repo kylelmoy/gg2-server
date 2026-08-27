@@ -1092,10 +1092,14 @@ public sealed class MedigunTests
 
         Assert.Equal(40, state.Weapons[1].AmmoCount);
 
-        // Spent, and — unlike the Scattergun's — not re-armed. GM8 writes -1
-        // before running an alarm's body, which is what lets a handler re-arm
-        // its own alarm; this one does not, so it rests there.
-        Assert.Equal(WeaponState.Inactive, state.Weapons[1].ReloadTimer);
+        // Spent, and — unlike the Scattergun's — not re-armed. ⚠️ Zero rather
+        // than -1, and the old comment here had the mechanism backwards: GM8
+        // does NOT write -1 before running an alarm's body. A fired alarm reads
+        // 0 for the rest of that frame and reaches -1 on the next frame's alarm
+        // stage. What lets a handler re-arm its own alarm is simply that
+        // nothing wipes the value afterwards. Measured 2026-08-27; see
+        // Timers.Advance.
+        Assert.Equal(Timers.JustFired, state.Weapons[1].ReloadTimer);
     }
 
     /// <summary>

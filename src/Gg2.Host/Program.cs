@@ -167,6 +167,26 @@ internal static class Program
                     options.Bots = options.Bots with { Difficulty = RequireInt(name, value) };
                     i++;
                     break;
+
+                // ⚠️ Pacing only. Nothing about the simulation is rate-dependent
+                // — every duration in the game is counted in ticks — so this
+                // changes throughput and nothing else. It must stay at 1 on any
+                // server a client is connected to: clients pace themselves at
+                // 30 Hz and re-simulate between updates, so an unpaced server
+                // desynchronises every one of them at once.
+                case "--speed":
+                {
+                    var text = Require(name, value);
+
+                    options.SpeedMultiplier = text.Equals("max", StringComparison.OrdinalIgnoreCase)
+                        ? double.PositiveInfinity
+                        : double.TryParse(text, CultureInfo.InvariantCulture, out var speed)
+                            ? speed
+                            : throw new ArgumentException($"{name} needs a number or 'max', not '{text}'");
+
+                    i++;
+                    break;
+                }
                 default:
                     throw new ArgumentException($"unknown option '{name}'");
             }
@@ -204,9 +224,18 @@ internal static class Program
           --bot-difficulty <1-5>
                             how good they are (default 3)
           --botnav <path>   where the bot nav caches live
+          --speed <n|max>   run at n times real time, or 'max' for unpaced
+                            (default 1)
 
         The maps ship inside the reference Game Maker project, so --maps (or
         GG2_REFERENCE) has to point at a Gang-Garrison-2 checkout.
+
+        --speed is pacing and nothing else: every duration in the game is
+        counted in ticks, so the simulation is identical at any speed. Leave it
+        at 1 whenever a client is connected — clients pace themselves at 30 Hz
+        and re-simulate between updates, so an unpaced server desynchronises
+        every one of them at once. It is for a headless server nobody is
+        watching, which is what phase 8 is about.
 
         --time-limit and --cap-limit are floored at 1, exactly as the
         reference's own ini is (game_init.gml:96, 101), so a zero is a

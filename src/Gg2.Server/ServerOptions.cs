@@ -94,6 +94,39 @@ public sealed class ServerOptions
     /// </remarks>
     public string NavCacheDirectory { get; set; } = string.Empty;
 
+    /// <summary>
+    /// How fast <see cref="GameServer.Run"/> paces the tick loop, relative to
+    /// real time. 1.0 is the reference's 30 Hz; 4.0 runs four minutes of match
+    /// per minute; <see cref="double.PositiveInfinity"/> is <b>unpaced</b> — the
+    /// loop never sleeps and runs as fast as the machine allows.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Phase 8's cheapest item and, per <c>docs/PLAN.md</c>, its biggest
+    /// iteration win: nothing about the simulation is rate-dependent, because
+    /// <c>MatchSimulation.Tick</c> takes no clock and every duration in the game
+    /// is counted in ticks rather than seconds. So pacing is presentation, and
+    /// removing it changes throughput and nothing else.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Infinity rather than 0 for "as fast as possible", deliberately.</b>
+    /// This codebase already has three fields where 0 means "no limit"
+    /// (<c>RespawnTime</c>, <c>TimeLimitMinutes</c>, <c>CapLimit</c>) and every
+    /// one of them is a documented trap. Here the arithmetic says it instead:
+    /// the interval is <c>tickLength / SpeedMultiplier</c>, and that is exactly
+    /// zero at infinity. A 0 would read as "stopped", which is a mode this
+    /// does not have — freezing is the control port's, not the pacer's.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>This does not make the server faster; it makes it not wait.</b> A
+    /// live server with clients on it must stay at 1.0 — clients pace
+    /// themselves at 30 Hz and re-simulate between updates, so an unpaced server
+    /// desynchronises every one of them immediately. It is for a headless
+    /// server nobody is connected to.
+    /// </para>
+    /// </remarks>
+    public double SpeedMultiplier { get; set; } = 1.0;
+
     /// <summary>The <c>[Bots]</c> section. Off by default, as in the reference.</summary>
     /// <remarks>
     /// ⚠️ <see cref="BotPopulationOptions.Default"/>, never <c>new()</c> — see the
@@ -114,5 +147,17 @@ public sealed class ServerOptions
 
         if (MapDirectory.Length == 0)
             throw new InvalidOperationException($"{nameof(MapDirectory)} must point at the built-in map PNGs");
+
+        // Positive infinity is the one non-finite value that means something
+        // here (unpaced). NaN and anything <= 0 are refused rather than
+        // silently producing a negative or NaN wait, which WaitOne throws on
+        // deep inside the loop rather than at startup.
+        if (double.IsNaN(SpeedMultiplier) || SpeedMultiplier <= 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(SpeedMultiplier),
+                SpeedMultiplier,
+                "speed must be greater than zero, or infinity for unpaced");
+        }
     }
 }

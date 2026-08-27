@@ -480,12 +480,45 @@ public sealed class GameServer : IDisposable
     }
 
     /// <summary>
-    /// Runs until <paramref name="cancellation"/> is signalled, pacing to 30 Hz.
+    /// The wall-clock length of one tick at the configured speed, or
+    /// <see cref="TimeSpan.Zero"/> when the server is unpaced.
+    /// </summary>
+    /// <remarks>
+    /// Exposed so a caller can tell a paced server from an unpaced one without
+    /// re-deriving the arithmetic — and so the zero case has one definition
+    /// rather than two.
+    /// </remarks>
+    public TimeSpan TickInterval =>
+        double.IsPositiveInfinity(_options.SpeedMultiplier)
+            ? TimeSpan.Zero
+            : TimeSpan.FromSeconds(1.0 / (GameConstants.TickRate * _options.SpeedMultiplier));
+
+    /// <summary>
+    /// Runs until <paramref name="cancellation"/> is signalled, pacing to 30 Hz
+    /// times <see cref="ServerOptions.SpeedMultiplier"/> — or as fast as the
+    /// machine allows when that is infinite.
     /// </summary>
     public void Run(CancellationToken cancellation)
     {
+        var tickLength = TickInterval;
+
+        // ⚠️ Unpaced is a separate loop rather than the same one with a zero
+        // interval, and that is not tidiness. The backlog branch below tests
+        // `wait < -tickLength * 10`, which at a zero tickLength is `wait < 0`
+        // — true on every tick after the first — so a shared loop would log
+        // "dropped 0ms of tick backlog" forever. There is no debt to shed when
+        // there is no clock to be behind.
+        if (tickLength <= TimeSpan.Zero)
+        {
+            while (!cancellation.IsCancellationRequested)
+            {
+                Tick();
+            }
+
+            return;
+        }
+
         var clock = Stopwatch.StartNew();
-        var tickLength = TimeSpan.FromSeconds(1.0 / GameConstants.TickRate);
         var nextTick = TimeSpan.Zero;
 
         while (!cancellation.IsCancellationRequested)

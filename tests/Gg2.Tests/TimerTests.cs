@@ -49,6 +49,58 @@ public sealed class TimerTests
         Assert.False(Timers.Advance(ref timer));
     }
 
+    /// <summary>
+    /// ⚠️ A fired counter settles in <b>two</b> stages, not one: 0 for the rest
+    /// of the frame its event ran on, then -1 from the next frame's alarm stage.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Measured 2026-08-27 against the running game</b>, after this port
+    /// spent a stage writing -1 the instant a counter expired.
+    /// <c>docs/SIMULATION.md</c>'s own pseudocode had it right and the code was
+    /// changed away from it.
+    /// </para>
+    /// <para>
+    /// It is worth a test of its own because it is worth <em>a whole tick of
+    /// behaviour</em> at exactly one site:
+    /// <c>Character.events/Begin Step.xml:67</c> gates the afterburn intensity
+    /// decay on <c>alarm[0] == -1</c> exactly, and Begin Step runs before the
+    /// alarm stage — so the eager write started every burn's decay a tick
+    /// early. <see cref="AFiredCounterDoesNotFireAgainOnItsWayToInactive"/> is
+    /// the other half: resting at 0 must not mean firing twice.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void AFiredCounterRestsAtZeroForOneStageAndThenGoesInactive()
+    {
+        var timer = 1;
+
+        Assert.True(Timers.Advance(ref timer));
+        Assert.Equal(Timers.JustFired, timer);
+
+        Assert.False(Timers.Advance(ref timer));
+        Assert.Equal(Timers.Inactive, timer);
+    }
+
+    /// <summary>
+    /// The safety property the two-stage settle needs: a counter resting at 0
+    /// decrements to -1 <em>without</em> firing.
+    /// </summary>
+    /// <remarks>
+    /// The fire test is <em>exactly</em> zero and -1 is not it, which is the
+    /// same rule that makes an alarm set to 0 never fire at all. Without this,
+    /// leaving a fired counter at 0 would double every respawn, every reload
+    /// and every uber.
+    /// </remarks>
+    [Fact]
+    public void AFiredCounterDoesNotFireAgainOnItsWayToInactive()
+    {
+        var timer = Timers.JustFired;
+
+        Assert.False(Timers.Advance(ref timer));
+        Assert.Equal(Timers.Inactive, timer);
+    }
+
     [Fact]
     public void AnInactiveCounterStaysWhereItIs()
     {
