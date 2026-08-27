@@ -1,8 +1,13 @@
 # What the port must preserve for search-based and learned bots
 
-A set of constraints on the C# server, written while it is still specification.
-Each one is cheap now and expensive-to-impossible to retrofit once `WorldState`
+A set of constraints on the C# server, written while it was still specification.
+Each one is cheap early and expensive-to-impossible to retrofit once `WorldState`
 and the bot seam have shipped.
+
+⚠️ **Audited against the shipped code on 2026-08-27, and one of them was false.**
+`BotAiConstraintsTests` now asserts the five that are structural facts rather than
+design intent; each verdict is recorded against its item below. Items 3, 8, 9 and
+10 remain unbuilt and say so.
 
 None of this asks for a neural network to be built. It asks that the port not
 foreclose one.
@@ -66,6 +71,29 @@ event sink that owns memory. Map data and other read-only inputs are passed *to*
 **Retrofit cost.** Total. This is the one item on the list that cannot be added
 later without rewriting the simulation.
 
+✅ **Held, and asserted.** `WorldState` contains no reference anywhere in it —
+recursively, so a reference inside a struct inside an `[InlineArray]` slot buffer
+fails it too, which is exactly where one would be added without anybody noticing.
+⚠️ **The failure mode is not a broken test elsewhere**: putting a `List<>` or a
+logger in there breaks nothing that runs. The server still serves, every parity
+window holds, the whole suite stays green — and rollout search is dead months
+later for a reason nobody can find.
+`BotAiConstraintsTests.WorldStateHoldsNoReferenceAnywhereInIt`.
+
+❌ **The zero-allocation half was FALSE until the audit.** A steady-state tick
+allocated **32 bytes per live character, every tick** — about 384 B/tick on a
+twelve-bot server. The cause was `foreach` over an `IReadOnlyList<T>`: enumerating
+an *interface* allocates a boxed enumerator where enumerating the concrete array
+does not. `Cabinets.CollisionStep` walked its list once per live character;
+`KillBoxes`, `MoveBoxes` and `ControlPoints`' capture zones had the same pattern
+and were invisible only because no fixture map places any of those, and an
+**empty** array's enumerator is a cached singleton that measures zero. All four
+are indexed loops now.
+⚠️ **The rule worth carrying: inside `Gg2.Simulation`, a collection the tick walks
+must arrive as an array or a span, or be indexed — and a `foreach` that measures
+zero today may only be walking an empty list.**
+`BotAiConstraintsTests.ASteadyStateTickAllocatesNothing`.
+
 ## 2. Snapshot and restore, not just replay-from-start
 
 **Requirement.** `WorldState` can be serialised to bytes and restored to a
@@ -78,6 +106,19 @@ replay one second before the drift instead of ten minutes before it.
 
 If item 1 is done properly this is nearly free: a copyable flat state is a
 serialisable one.
+
+✅ **Free, and demonstrated rather than assumed.** A whole match is **144,840
+bytes** and round-trips through raw bytes bit-identically with no production code
+at all — the bytes *are* the state.
+⚠️ **Restoring is not the claim; continuing is.** The gate steps the restored copy
+fifty ticks against a control that was never serialised and compares at the
+**end**, because the failure worth catching is a state that compares equal and
+then diverges: a cursor, a counter, an RNG stream left outside the struct.
+⚠️ And the snapshot is taken on a **condition**, not a tick count — a rocket's
+whole life is shorter than its refire, so most instants after firing have an empty
+pool, and a snapshot with nothing in the air never exercises the handles or the
+creation order.
+`BotAiConstraintsTests.AStateRoundTripsThroughBytesAndGoesOnTickingIdentically`.
 
 ## 3. The parity trace format is the training data format
 
@@ -100,6 +141,10 @@ give it a bounded on-disk format.
 **Deadline.** This is the only item here with one. Data not collected during the
 port's first public games does not exist afterwards.
 
+❌ **Not built.** The parity recorder records a *server's own broadcast stream*;
+nothing records human input to disk on a live server, and no switch exists to turn
+it on. Still the item with the deadline.
+
 ## 4. Keep the action space exactly the wire action
 
 **Requirement.** A bot's output is the same `PlayerInput` a socket produces:
@@ -113,6 +158,11 @@ quantisation the game runs on. It is also the honesty property: a bot cannot aim
 more precisely than a player can.
 
 The reference already works this way. Do not "improve" it.
+
+✅ **Asserted structurally**: every field of `PlayerInput` is a byte, a ushort or
+an enum, so there is nowhere for a privileged float aim to live, and `FromAim`
+quantises the way *in* onto the same 65,536 steps — about 182 per degree.
+`BotAiConstraintsTests.TheActionSpaceIsExactlyTheWireAction`.
 
 **Satisfied.** `IInputSource.Poll` returns a `PlayerInput` and nothing else, and
 the actions a key cannot express go through a separate `PlayerCommand` channel
@@ -183,6 +233,10 @@ order the rest of the project already makes observable — a pool slot is recycl
 and says nothing about when anything was fired. The feature vector itself is
 still undesigned, which is what this item permits.
 
+✅ **Asserted**: `typeof(WorldView).IsByRefLike`, so the read-only guarantee is
+the compiler's rather than a convention
+(`BotAiConstraintsTests.WorldViewIsARefStruct`).
+
 ⚠️ **`WorldView` is a `ref struct`**, carrying a `ref readonly WorldState`
 rather than a copy. Constructing one is free, and the language refuses to let a
 source stash it in a field or keep it past the call — the read-only guarantee
@@ -215,6 +269,9 @@ all, and it is worth more day-to-day than any learned policy.
 `ARCHITECTURE.md`'s control surface is the interactive version of this; this is
 the batch version, and the two should share their hosting code.
 
+❌ **Not built.** It is phase 8's, in `docs/PLAN.md`, and the tooling lane's per
+`docs/PARALLEL.md`.
+
 ## 9. `SIM_UUID`, and refusing a policy that does not match it
 
 **Requirement.** The simulation carries a version stamp. Every policy file
@@ -237,6 +294,11 @@ invalidates every checkpoint. That is correct.
 to stamp before the physics exists. Do not defer it past that: a stamp added
 after the first checkpoints are trained cannot tell you which ones were valid.
 
+❌ **Not built, and it is now past the point the item warned about** — phases 4
+through 7 are all done and there is no stamp. Nothing has been trained yet, so
+nothing is invalid; the cost so far is only that the stamp has to be derived from
+a larger surface than it would have been.
+
 ## 10. A `Gg2.Env` project
 
 **Requirement.** A batch-stepping surface: N worlds advanced by one decision
@@ -253,6 +315,9 @@ project living in this repo.
 
 Start with a local socket and length-prefixed binary frames. Shared memory is an
 optimisation to make once there is a measurement that justifies it.
+
+❌ **Not built.** Items 1, 2 and 6 — its three hard preconditions — all hold, so
+it is unblocked whenever it is wanted.
 
 ## 11. Scenario construction without a gamemode
 

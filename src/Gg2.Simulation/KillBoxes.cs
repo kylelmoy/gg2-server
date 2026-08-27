@@ -174,8 +174,16 @@ public static class KillBoxes
             ref var character = ref state.Characters[slot];
             var box = Aabb.ForCharacter(character.Box, character.X, character.Y);
 
-            foreach (var killBox in boxes)
+                // ⚠️ Indexed rather than `foreach`: this list arrives as an
+                // INTERFACE, and enumerating one allocates a boxed enumerator —
+                // measured at 32 bytes per live character per tick, every tick,
+                // which is exactly what docs/BOTAI.md item 1 forbids. Indexing an
+                // IReadOnlyList costs an interface call per element and allocates
+                // nothing, and these lists are a handful of rectangles.
+                for (var i = 0; i < boxes.Count; i++)
             {
+                var killBox = boxes[i];
+
                 if (!box.Overlaps(new Aabb(killBox.Left, killBox.Top, killBox.Right, killBox.Bottom)))
                     continue;
 
@@ -201,8 +209,10 @@ public static class KillBoxes
             ref var sentry = ref state.Sentries[slot];
             var body = Sentries.BodyBox(sentry);
 
-            foreach (var killBox in boxes)
+            for (var i = 0; i < boxes.Count; i++)
             {
+                var killBox = boxes[i];
+
                 // ⚠️ A pit fall has no Sentry event at all.
                 if (killBox.Kind == KillBoxKind.Pit)
                     continue;
