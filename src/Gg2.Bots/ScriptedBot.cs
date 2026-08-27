@@ -193,12 +193,12 @@ public sealed class ScriptedBot : IInputSource, IScenarioSubject
     /// for a while rather than leave the bot standing at spawn wanting something it
     /// cannot walk to.
     /// <para>
-    /// ⚠️ <b>UNGATED, and deliberately recorded as such.</b> Deleting the ban leaves
-    /// every test green, checked by mutation. What it needs is a spot that resolves
-    /// and cannot be reached, which needs a nav graph with two components — and every
-    /// shipped graph is connected for the team that owns the ground, so the state is
-    /// not reachable from a real map. Building a synthetic two-component graph would
-    /// gate it; nothing else will, and a green suite is not evidence this works.
+    /// ⚠️ <b>The state is not reachable from any shipped map</b> — all 24 cached
+    /// graphs are connected for the team that owns the ground — so this stood
+    /// ungated for four items. <c>SpotBanTests</c> gates it now, on a real graph
+    /// with one node's edges stripped: a genuine two-component graph over real
+    /// geometry, so the spot search sees exactly the candidates it always saw and
+    /// the route to them is the only thing that changed.
     /// </para>
     /// </remarks>
     public int SpotBanUntil { get; set; }
