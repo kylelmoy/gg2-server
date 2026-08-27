@@ -95,6 +95,34 @@ public static class BotCombat
         KeepOrDropTarget(state, in world, slot, tick, range, in skill);
         LookForOne(state, in world, slot, tick, range, ref random);
 
+        // --- the medic exception: a hurt team-mate outranks an enemy ---------
+        //
+        // ⚠️ The ally REPLACES the subject rather than adding to it, and
+        // everything downstream then treats it as the thing being aimed at. That is
+        // what makes a medic stop shooting and start healing: BotClassKeys' medic
+        // case reads the flag and presses ATTACK (the beam) instead of SPECIAL (the
+        // needles).
+        var subjectIsAlly = false;
+
+        if (BotClassProfile.Heals(self.Class))
+        {
+            if ((tick + state.Stagger) % BotConstants.TargetPeriod == 0)
+            {
+                // false: a medic beaming another medic is correct play. Only the
+                // follow GOAL in BotObjective has to exclude them, and it says why.
+                state.Ally = BotAlly.Find(in world, slot, BotConstants.HealRange, skipFollowers: false);
+            }
+
+            if (BotAlly.StillValid(in world, slot, state.Ally))
+                subjectIsAlly = true;
+            else
+                state.Ally = BotAlly.None;
+        }
+
+        // ⚠️ The medic exception is decided ABOVE this, because an ally is a
+        // subject in its own right: a medic with a patient and no enemy anywhere
+        // still beams, and deciding it after the no-target return would make a medic
+        // heal only while something was shooting at it.
         if (!state.Target.Exists)
         {
             // ⚠️ With nothing to shoot at the aim follows the walk, so a bot
@@ -102,19 +130,22 @@ public static class BotCombat
             // BOT_REST_SPEED — the same "is it really moving" floor GG2's own
             // ice-skating snap uses — so a bot standing still keeps whatever it
             // was last pointing at rather than snapping to the right.
-            if (self.HSpeed > BotConstants.RestSpeed)
-                state.AimWant = 0;
-            else if (self.HSpeed < -BotConstants.RestSpeed)
-                state.AimWant = 180;
+            if (!subjectIsAlly)
+            {
+                if (self.HSpeed > BotConstants.RestSpeed)
+                    state.AimWant = 0;
+                else if (self.HSpeed < -BotConstants.RestSpeed)
+                    state.AimWant = 180;
 
-            Slew(state, in skill);
-            aim = state.AimDir;
+                Slew(state, in skill);
+                aim = state.AimDir;
 
-            state.AttackKeys = PlayerKeys.None;
-            return PlayerKeys.None;
+                state.AttackKeys = PlayerKeys.None;
+                return PlayerKeys.None;
+            }
         }
 
-        var target = state.Target;
+        var target = subjectIsAlly ? AllyAsSubject(in world, state.Ally) : state.Target;
         var distance = Gml.PointDistance(self.X, self.Y, target.X, target.Y);
         var sinceSeen = tick - state.TargetAt;
 
@@ -122,15 +153,33 @@ public static class BotCombat
         // begin to move. That is the difference between a slow bot and a blind
         // one, and folding it in after the slew would make every tier turn at the
         // same speed and only differ in when it shot.
-        if (sinceSeen < skill.AcquireTicks)
+        // ⚠️ An ally is NOT acquired. Every difficulty gate on this path —
+        // the acquire hold, the fire delay, the aim settle, the hold-fire roll — is
+        // about shooting a person who is trying not to be shot. A medic that made its
+        // own team-mate wait a second and a half before pointing the beam at them
+        // would read as broken rather than as bad, and the reference bypasses all
+        // four for exactly that reason.
+        if (!subjectIsAlly && sinceSeen < skill.AcquireTicks)
         {
             aim = state.AimDir;
             state.AttackKeys = PlayerKeys.None;
             return PlayerKeys.None;
         }
 
-        Perceive(state, in world, tick, in skill);
-        SolveAim(state, in world, slot, tick, sinceSeen, distance, in skill, ref random, graph);
+        if (subjectIsAlly)
+        {
+            // ⚠️ Straight at them, with NO lead solve. The beam has no travel
+            // time — botAimSolve exists to put a projectile where a target will be —
+            // and leading a team-mate points the beam at empty air beside them.
+            state.AimX = target.X;
+            state.AimY = target.Y;
+            state.AimWant = Gml.PointDirection(self.X, self.Y, target.X, target.Y);
+        }
+        else
+        {
+            Perceive(state, in world, tick, in skill);
+            SolveAim(state, in world, slot, tick, sinceSeen, distance, in skill, ref random, graph);
+        }
         Slew(state, in skill);
 
         aim = state.AimDir;
@@ -139,11 +188,15 @@ public static class BotCombat
         var settled = Math.Abs(BotTargeting.AngleDelta(state.AimWant, state.AimDir))
             <= BotConstants.AimSettleDeg * BotClassProfile.AimSettle(self.Class);
 
-        var keys = BotClassKeys.For(state, in world, slot, distance, tick);
+        var keys = BotClassKeys.For(state, in world, slot, distance, tick, subjectIsAlly);
 
         var canFire = sinceSeen >= skill.AcquireTicks + skill.FireDelayTicks;
 
-        if (!canFire || !settled || state.HoldFire)
+        // ⚠️ `!subjectIsAlly &&` on the whole suppression, not on each clause.
+        // A beam is not a shot: it costs nothing to be wrong about, it cannot miss,
+        // and holding it back on a settle tolerance is a medic that stops healing
+        // every time its patient walks round a corner.
+        if (!subjectIsAlly && (!canFire || !settled || state.HoldFire))
         {
             keys &= ~PlayerKeys.Attack;
 
@@ -155,6 +208,20 @@ public static class BotCombat
 
         state.AttackKeys = keys;
         return keys;
+    }
+
+    /// <summary>An ally, in the shape the aim and the keys already understand.</summary>
+    /// <remarks>
+    /// ⚠️ <see cref="BotTarget.Visible"/> is true by construction — the ally
+    /// search would not have returned a slot with no line to it. Leaving it false
+    /// would make the blind-fallback machinery downstream treat a team-mate standing
+    /// in the open as somebody remembered through a wall.
+    /// </remarks>
+    private static BotTarget AllyAsSubject(in WorldView world, int ally)
+    {
+        ref readonly var mate = ref world.Character(ally);
+
+        return new BotTarget(BotTargetKind.Character, ally, mate.X, mate.Y, Visible: true);
     }
 
     /// <summary>

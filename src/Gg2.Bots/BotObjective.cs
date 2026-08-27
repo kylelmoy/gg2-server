@@ -70,14 +70,16 @@ public readonly record struct BotGoal(bool Found, double X, double Y, bool IsSpo
 /// inside the radius that chose it.
 /// </para>
 /// <para>
-/// ⚠️ <b>The medic's follow-goal is NOT ported.</b> In the reference a medic's goal
-/// is a moving <em>instance</em> — the ally it is following — decided ahead of the
-/// whole mode cascade and returning early. That needs <c>botFindAlly</c>, which is
-/// also what makes a medic heal rather than shoot, so it belongs with the combat
-/// half rather than half-wired here. Absent, a medic falls through to the cascade
-/// and walks the objective like everyone else, healing whoever it meets on the way
-/// — which is exactly what the reference does with a medic that finds nobody to
-/// follow, so the absence is conservative rather than wrong.
+/// ⚠️ <b>The medic's follow-goal goes FIRST and returns early</b>, ahead of the
+/// whole mode cascade, because a medic following a team-mate is doing its job in
+/// every mode and the objective is that team-mate's problem. With nobody to follow
+/// it falls through and behaves like everyone else, which is the right thing to do
+/// with a medic that has spawned alone.
+/// <para>
+/// ⚠️ <b>Its goal is a moving INSTANCE rather than a world point at all</b>, which
+/// is why it does not feed the spread and spot machinery below — neither means
+/// anything against a target that walks. It is the same shape as the flag-carrier
+/// chase further down, and for the same reason.
 /// </para>
 /// </remarks>
 public sealed class BotObjective
@@ -109,8 +111,14 @@ public sealed class BotObjective
     /// caller owns that ban because only it can see a goal that never produced a
     /// path.
     /// </param>
+    /// <param name="target">
+    /// What the bot's combat half is looking at, if anything — the medic's follow
+    /// position is measured relative to it. Null is "nothing", and the follow
+    /// position is then simply the ally's own.
+    /// </param>
     public BotGoal Decide(
-        in WorldView world, int slot, BotRole role, double spreadX, bool allowSpot)
+        in WorldView world, int slot, BotRole role, double spreadX, bool allowSpot,
+        int? target = null)
     {
         if (!world.IsAlive(slot))
             return BotGoal.None;
@@ -121,6 +129,51 @@ public sealed class BotObjective
         var team = world.Player(slot).Team;
         var playerClass = world.Player(slot).Class;
         var defending = role == BotRole.Defend;
+
+        // --- the medic's follow-goal -----------------------------------------
+        //
+        // Before tier 3 this had zero references to the class, so a medic pathed to
+        // the enemy intel exactly like a soldier and healed whoever happened to be
+        // standing near the route it walked alone. A medic is the one class for
+        // which NEVER ENGAGING is correct play, and the thing it should be following
+        // is not a fixed world point at all.
+        //
+        // ⚠️ An intel carrier does not follow. There is exactly one thing to
+        // do with an enemy flag and it is not "escort somebody else while holding
+        // it" — the carry branch below owns that case.
+        if (BotClassProfile.Follows(playerClass) && !self.CarryingIntel)
+        {
+            // ⚠️ skipFollowers TRUE here and false in the combat half. Two
+            // medics who pick each other deadlock: each one's goal is where the
+            // other is standing, both are already there, and neither ever leaves
+            // spawn. The BEAM has no such problem, which is why it is an argument
+            // rather than a rule — see BotAlly.
+            var ally = BotAlly.Find(in world, slot, BotConstants.MedicFollowRange, skipFollowers: true);
+
+            if (ally != BotAlly.None)
+            {
+                ref readonly var mate = ref world.Character(ally);
+
+                // Keep the ally between me and the enemy: step to the far side of
+                // them from whatever this bot is currently looking at.
+                //
+                // ⚠️ Horizontal only. The goal is a place to STAND, and
+                // standing is a one-dimensional choice on a given surface.
+                var wantX = mate.X;
+
+                if (target is { } foe && world.IsAlive(foe))
+                    wantX += world.Character(foe).X > mate.X ? -BotConstants.MedicOffset : BotConstants.MedicOffset;
+
+                // ⚠️ BOT_GOAL_RETARGET_DIST throttles the re-issue for free. A
+                // moving ally naturally trips the 48px test — which is exactly the
+                // case that check was written for — while one standing still does
+                // not, and the goal is left alone.
+                return new BotGoal(true, wantX, mate.Y, IsSpot: false, MustTouch: true);
+            }
+
+            // Nobody to follow: fall through to the mode cascade and walk the
+            // objective like everyone else, healing whoever it meets on the way.
+        }
 
         var found = false;
         var useSpot = false;

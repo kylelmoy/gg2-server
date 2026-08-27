@@ -353,7 +353,15 @@ public sealed class ScriptedBot : IInputSource, IScenarioSubject
         if ((tick + Combat.Stagger) % BotConstants.ObjectivePeriod != 0)
             return;
 
-        var goal = Objective.Decide(in world, slot, Role, SpreadX, allowSpot: tick >= SpotBanUntil);
+        // ⚠️ The combat half's target is handed over, and only the medic reads it:
+        // its follow position is on the far side of its patient FROM the enemy. It
+        // is passed rather than looked up because BotCombat has already re-validated
+        // it this tick, and a second lookup could disagree with the one the bot is
+        // actually aiming at.
+        var foe = Combat.Target.Kind == BotTargetKind.Character ? Combat.Target.Slot : (int?)null;
+
+        var goal = Objective.Decide(
+            in world, slot, Role, SpreadX, allowSpot: tick >= SpotBanUntil, target: foe);
 
         if (!goal.Found || !Objective.TryResolve(in goal, goal.MustTouch ? 0 : SpreadX, out var x, out var y))
             return;

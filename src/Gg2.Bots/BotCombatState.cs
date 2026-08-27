@@ -121,6 +121,16 @@ public sealed class BotCombatState
     /// </remarks>
     public int Stagger { get; set; }
 
+    /// <summary>
+    /// The team-mate this medic is beaming, or <see cref="BotAlly.None"/>.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ Refreshed on the target cadence like everything else, but
+    /// RE-VALIDATED every tick — an ally can die, change team or leave between
+    /// refreshes, and a stale slot index names whoever the roster compacted into it.
+    /// </remarks>
+    public int Ally { get; set; } = BotAlly.None;
+
     /// <summary>Forgets the target and everything derived from it.</summary>
     public void DropTarget()
     {

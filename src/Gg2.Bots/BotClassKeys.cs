@@ -38,10 +38,20 @@ namespace Gg2.Bots;
 public static class BotClassKeys
 {
     /// <summary>What this class wants to press, before the fire gates.</summary>
+    /// <param name="subjectIsAlly">
+    /// Whether the thing being aimed at is a team-mate to heal rather than an
+    /// enemy to shoot. ⚠️ Only the medic reads it, but it has to be a parameter
+    /// rather than something derived here: the ally lives on the combat state and
+    /// the decision to use it belongs to the caller, which is the only place that
+    /// has already re-validated it this tick.
+    /// </param>
     public static PlayerKeys For(
-        BotCombatState state, in WorldView world, int slot, double distance, int tick)
+        BotCombatState state, in WorldView world, int slot, double distance, int tick,
+        bool subjectIsAlly = false)
     {
-        if (!state.Target.Exists)
+        // ⚠️ An ally is a subject even with no target, which is the whole point: a
+        // medic with a patient and no enemy in sight still beams.
+        if (!state.Target.Exists && !subjectIsAlly)
             return PlayerKeys.None;
 
         ref readonly var self = ref world.Character(slot);
@@ -73,14 +83,25 @@ public static class BotClassKeys
                 return distance <= BotConstants.FlameReach ? PlayerKeys.Attack : PlayerKeys.None;
 
             case PlayerClass.Medic:
-                // ⚠️ The needle gun is on the RIGHT click — the Medigun's left is
-                // the heal beam — so a medic with nobody to heal presses SPECIAL
-                // to shoot. That is also why the medic is the one class whose
-                // SPECIAL is gated by the fire delay.
-                //
-                // The heal branch waits on botFindAlly, which is not ported, so a
-                // medic currently always shoots.
-                return PlayerKeys.Special;
+                // ⚠️ The needle gun is on the RIGHT click — the Medigun's left
+                // is the heal beam — so a medic with nobody to heal presses SPECIAL
+                // to shoot. That is also why the medic is the one class whose SPECIAL
+                // is gated by the fire delay.
+                if (!subjectIsAlly)
+                    return PlayerKeys.Special;
+
+                // The heal beam is the primary. ⚠️ the uber is SPECIAL *while*
+                // the primary is held — it is not a separate press — and it is worth
+                // its whole charge only with an enemy close enough to matter.
+                var beam = PlayerKeys.Attack;
+
+                if (world.Weapon(slot).UberReady
+                    && BotTargeting.EnemyWithin(in world, slot, BotConstants.UberRange))
+                {
+                    beam |= PlayerKeys.Special;
+                }
+
+                return beam;
 
             case PlayerClass.Spy:
                 return SpyKeys(state, in self, tick);
