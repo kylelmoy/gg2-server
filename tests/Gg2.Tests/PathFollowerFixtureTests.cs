@@ -29,8 +29,15 @@ public sealed class PathFollowerFixtureTests
     private const string Map = "ctf_truefort";
 
     /// <summary>Edge kinds the follower can steer today.</summary>
+    /// <remarks>
+    /// ⚠️ <see cref="NavEdgeType.RocketJump"/> is the only one missing, and it is
+    /// refused by the search too (<see cref="NavQuery.CanRocketJump"/> defaults
+    /// false), so it never reaches a route here. When the rocket half lands this
+    /// list is complete and the distinction can go.
+    /// </remarks>
     private static bool Steerable(NavEdgeType type) =>
-        type is NavEdgeType.Walk or NavEdgeType.Fall or NavEdgeType.DropThrough or NavEdgeType.MoveBox;
+        type is NavEdgeType.Walk or NavEdgeType.Fall or NavEdgeType.DropThrough
+            or NavEdgeType.MoveBox or NavEdgeType.Jump or NavEdgeType.DoubleJump;
 
     private static ScenarioWorld Load()
     {
@@ -178,9 +185,17 @@ public sealed class PathFollowerFixtureTests
 
         world.Drive(slot, new Followed(follower, state, new NavQuery(Team.Red)));
 
-        // Generous: the leg is chosen by hop count, not by length, and a bot
-        // brakes onto its goal rather than coasting.
-        const int Budget = 1200;
+        // ⚠️ Six thousand is the reference's own budget for a leg across this map
+        // (`truefort-spawn-to-intel`), and it is not slack: the leg chosen here
+        // is the LONGEST steerable one on ctf_truefort, not spawn-to-intel.
+        //
+        // Measured 2026-08-27: a 137-node route, arrived at tick 2,655, with 76
+        // re-plans, 0 stuck fires, 34 off-route events and 9 blacklists. The
+        // reference quotes 2,200-2,500 ticks "with no blacklists now" for its own
+        // shorter leg — so this port is in the same band on a longer route and
+        // misses more marginal arcs. That gap is real and is the thing to watch
+        // when the takeoff machinery is next touched.
+        const int Budget = 6000;
 
         for (var tick = 0; tick < Budget && !state.Arrived; tick++)
             world.Step();
@@ -193,7 +208,21 @@ public sealed class PathFollowerFixtureTests
 
         // ⚠️ Arrived means stopped on it, not merely near it.
         Assert.True(Math.Abs(world.State.Characters[slot].X - goalX) <= BotConstants.ArriveTol);
+
+        // Nothing on the route was an edge kind the follower cannot steer, so
+        // this is a real crossing rather than a lucky one.
         Assert.Equal(0, state.UnsupportedEdgeTicks);
+
+        // ⚠️ Zero stuck fires is a claim, not a formality: a bot wedged against
+        // geometry it cannot leave is the failure this whole layer is built to
+        // avoid, and it is invisible in an arrival that eventually happens.
+        Assert.Equal(0, state.StuckFires);
+
+        // Half again on the measurement, so a regression that doubles the leg
+        // fails here rather than quietly inside the budget.
+        Assert.True(
+            state.ArrivedAt < 4000,
+            $"arrived at tick {state.ArrivedAt}; it measured 2,655 when this was written");
 
         // The control: the same bot with no goal presses nothing and goes
         // nowhere, so the walk above is the follower's doing.
@@ -277,14 +306,7 @@ public sealed class PathFollowerFixtureTests
 
             ref readonly var character = ref world.Character(slot);
 
-            var keys = follower.Step(
-                state,
-                character.X,
-                character.Y,
-                character.Motion.HSpeed,
-                character.OnGround,
-                clock?.Invoke() ?? tick,
-                query);
+            var keys = follower.Step(state, in character, clock?.Invoke() ?? tick, query);
 
             return new PlayerInput(keys, 0, 0);
         }

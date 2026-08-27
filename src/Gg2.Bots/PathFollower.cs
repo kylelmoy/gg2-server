@@ -61,14 +61,15 @@ public sealed class PathFollower
     /// Advances one bot's route by a tick and returns the movement keys.
     /// </summary>
     /// <param name="state">The bot's navigation state, updated in place.</param>
-    /// <param name="x">The character's origin.</param>
-    /// <param name="y">The character's origin.</param>
-    /// <param name="hSpeed">The character's horizontal speed, for the brake band.</param>
-    /// <param name="onGround">
-    /// ⚠️ Load-bearing far beyond the obvious. It gates the route advance, the
-    /// off-route branch and arrival, all for the same reason: an airborne bot is
-    /// flying a trajectory with its own end, and the tick it lands is the tick
-    /// either branch has anything true to say.
+    /// <param name="character">
+    /// The whole character, because the takeoff gate needs more of it than a
+    /// position: <see cref="JumpModel.Reach"/> replays the motion law off its
+    /// class, its run power and its <c>moveStatus</c>.
+    /// ⚠️ <see cref="CharacterState.OnGround"/> in particular is load-bearing far
+    /// beyond the obvious — it gates the route advance, the off-route branch and
+    /// arrival, all for the same reason: an airborne bot is flying a trajectory
+    /// with its own end, and the tick it lands is the tick either branch has
+    /// anything true to say.
     /// </param>
     /// <param name="tick">The server frame, for every timer here.</param>
     /// <param name="query">Who is asking, for the search.</param>
@@ -76,15 +77,17 @@ public sealed class PathFollower
     /// <returns>LEFT / RIGHT / JUMP / DOWN. Never an attack or a special.</returns>
     public PlayerKeys Step(
         BotPathState state,
-        double x,
-        double y,
-        double hSpeed,
-        bool onGround,
+        in CharacterState character,
         int tick,
         in NavQuery query,
         IReadOnlyDictionary<long, int>? occupancy = null)
     {
         ArgumentNullException.ThrowIfNull(state);
+
+        var x = character.X;
+        var y = character.Y;
+        var hSpeed = character.HSpeed;
+        var onGround = character.OnGround;
 
         // Cleared up front and set only by the in-flight branch, so every early
         // return leaves it false.
@@ -140,9 +143,30 @@ public sealed class PathFollower
                 break;
             }
 
-            // The run-up suppression the reference has here is part of the jump
-            // branch — a run-up deliberately walks BACKWARDS along the route and
-            // the forward-only search cannot see it. It lands with the jumps.
+            // ⚠️ A run-up deliberately walks BACKWARDS along the route, and the
+            // forward-only search above cannot see that. Without this a bot that
+            // backs up to build speed lands on a node the route does not mention
+            // *ahead* of it, which the block below reads as a finished move that
+            // went somewhere else — so it fires an off-route event and, on the
+            // second consecutive miss, blacklists the very edge it was preparing
+            // for. That is the single reason the obvious "just let it back up"
+            // fix is not a two-line change.
+            //
+            // ⚠️ PathAt is deliberately NOT moved. The edge being prepared for has
+            // to stay the current one for the whole run-up, or the follower is
+            // handed a different edge half way through and steers to the wrong
+            // takeoff column.
+            //
+            // The suppression is unconditional rather than "found somewhere
+            // earlier on the route", because the run-up follows walk edges
+            // through the GRAPH and not along the route: the floor a bot needs to
+            // build speed on is often a surface the route never mentions, and
+            // that case is exactly the one worth allowing. What bounds it is not
+            // this test but the takeoff budget — a run-up is only ever entered
+            // from the gate, and BOT_TAKEOFF_PATIENCE ends it whether or not it
+            // worked.
+            if (!found && state.RunupAt >= 0)
+                found = true;
         }
 
         // ⚠️ Standing on a surface the route does not mention is not a delay to
@@ -176,7 +200,7 @@ public sealed class PathFollower
         if (state.PathAt >= size - 1)
             return WalkToGoal(state, x, hSpeed, onGround, moved, tick, query, occupancy);
 
-        return FollowEdge(state, x, hSpeed, onGround, moved, tick, query, occupancy);
+        return FollowEdge(state, in character, moved, tick, query, occupancy);
     }
 
     /// <summary>
@@ -304,13 +328,51 @@ public sealed class PathFollower
         return keys;
     }
 
+    /// <summary>What the per-edge steering decided this tick.</summary>
+    /// <remarks>
+    /// One struct rather than six locals threaded through arguments, because the
+    /// takeoff gate writes four of them and the reference's own version is a
+    /// block of <c>var</c>s shared by every branch.
+    /// </remarks>
+    private struct Steering
+    {
+        /// <summary>The anchor column to walk toward.</summary>
+        public int TargetColumn;
+
+        /// <summary>Press against your own motion instead of steering.</summary>
+        public bool Braking;
+
+        /// <summary>Ask for a jump this tick. Edge-triggered — see <see cref="Press"/>.</summary>
+        public bool WantJump;
+
+        /// <summary>Fly the plan instead of steering: <see cref="TrackX"/> replaces the keys.</summary>
+        public bool Tracking;
+
+        /// <summary>Where the validated trajectory says the bot should be by now.</summary>
+        public double TrackX;
+    }
+
     /// <summary>Steers along the edge between the current node and the next.</summary>
     private PlayerKeys FollowEdge(
-        BotPathState state, double x, double hSpeed, bool onGround, bool moved, int tick,
+        BotPathState state, in CharacterState character, bool moved, int tick,
         in NavQuery query, IReadOnlyDictionary<long, int>? occupancy)
     {
+        var x = character.X;
+        var hSpeed = character.HSpeed;
+        var onGround = character.OnGround;
+
         var current = state.Path[state.PathAt];
         var next = state.Path[state.PathAt + 1];
+
+        // ⚠️ A new edge gets a fresh takeoff budget: BOT_TAKEOFF_PATIENCE is about
+        // one jump refusing to happen, not about how long the bot has been
+        // walking. A run-up belongs to the edge it was started for and goes with
+        // it.
+        if (current != state.EdgeFrom || next != state.EdgeTo)
+        {
+            state.TakeoffTicks = 0;
+            state.RunupAt = -1;
+        }
 
         state.EdgeFrom = current;
         state.EdgeTo = next;
@@ -332,17 +394,18 @@ public sealed class PathFollower
             : (to.X0 + to.X1) < (from.X0 + from.X1) ? -1
             : 0;
 
+        var steer = default(Steering);
+
         // Default: head for the near end of the next surface, a couple of cells
         // in, so the bot commits to standing on it rather than stopping on the
         // boundary.
-        int targetColumn;
         if (column < to.X0)
         {
-            targetColumn = Math.Min(to.X1, to.X0 + BotConstants.EntryLead);
+            steer.TargetColumn = Math.Min(to.X1, to.X0 + BotConstants.EntryLead);
         }
         else if (column > to.X1)
         {
-            targetColumn = Math.Max(to.X0, to.X1 - BotConstants.EntryLead);
+            steer.TargetColumn = Math.Max(to.X0, to.X1 - BotConstants.EntryLead);
         }
         else
         {
@@ -351,12 +414,8 @@ public sealed class PathFollower
             // anchor columns and the body box is NAV_BOX_W wide — so the answer
             // is to keep going its way until NodeFromWorld agrees, not to stand
             // still.
-            targetColumn = Math.Clamp(column + (dirToNext * BotConstants.EntryLead), to.X0, to.X1);
+            steer.TargetColumn = Math.Clamp(column + (dirToNext * BotConstants.EntryLead), to.X0, to.X1);
         }
-
-        var keys = PlayerKeys.None;
-        var tracking = false;
-        var trackX = 0.0;
 
         switch (edge.Type)
         {
@@ -364,63 +423,19 @@ public sealed class PathFollower
                 // The generator takes the drop from the middle of the run, and
                 // DOWN disables the platform entirely — both the standing test
                 // and the push-out.
-                targetColumn = (int)Math.Floor((from.X0 + from.X1) / 2.0);
-
-                if (Math.Abs(column - targetColumn) <= BotConstants.EntryLead)
-                    keys |= PlayerKeys.Down;
-
+                steer.TargetColumn = (int)Math.Floor((from.X0 + from.X1) / 2.0);
                 break;
 
             case NavEdgeType.Fall:
-            {
-                // ⚠️ The generator drops straight down from the cell just past
-                // ONE end of the run and carries that column on the edge. Which
-                // end cannot be re-derived here: "the column just past the run is
-                // inside the landing node" is true of BOTH ends wherever the
-                // landing surface reaches under the whole run, and guessing
-                // picked the right-hand end whenever it was ambiguous. In the
-                // reference that walked a bot on ctf_avanti into the solid block
-                // against its right end and wedged it there — stuck, edge
-                // blacklisted, ~1,100 ticks for a leg the graph priced at 545 —
-                // when the fall it wanted was off the left.
-                var takeoff = edge.Takeoff;
-
-                if (takeoff < 0)
-                {
-                    // A graph cached before falls carried a takeoff. The same
-                    // guess as before, which is right whenever only one end
-                    // works.
-                    takeoff = from.X1 + 1 >= to.X0 && from.X1 + 1 <= to.X1
-                        ? from.X1 + 1
-                        : from.X0 - 1;
-                }
-
-                targetColumn = takeoff > from.X1
-                    ? from.X1 + BotConstants.EntryLead
-                    : from.X0 - BotConstants.EntryLead;
-
-                // ⚠️ Off the edge the modelled trajectory is a STRAIGHT VERTICAL
-                // DROP from the takeoff column — the generator swept straight
-                // down from it and credited whatever surface it met — so the
-                // bot's job in the air is to hold that column, exactly the way a
-                // jump holds its arc. Without this a fall is the one edge kind
-                // flown with no plan at all: the bot walks off at whatever speed
-                // it had, keeps it, and sails past any landing narrower than the
-                // drift.
-                //
-                // ⚠️ The column is the one the EDGE carries, not the walk-off
-                // hint above: that is deliberately past the end of the run, and
-                // holding it would aim the drop a cell wide of the sweep that
-                // proved it.
-                if (!onGround)
-                {
-                    trackX = NavGraph.ColumnWorldX(takeoff);
-                    tracking = true;
-                    state.FlyingEdge = true;
-                }
-
+                SteerFall(state, onGround, in edge, in from, in to, ref steer);
                 break;
-            }
+
+            case NavEdgeType.Jump:
+            case NavEdgeType.DoubleJump:
+                SteerJump(
+                    state, in character, in edge, in from, in to,
+                    current, next, column, dirToNext, tick, in query, occupancy, ref steer);
+                break;
 
             case NavEdgeType.Walk:
             case NavEdgeType.MoveBox:
@@ -429,19 +444,36 @@ public sealed class PathFollower
                 break;
 
             default:
-                // ⚠️ Jump, DoubleJump, RocketJump — not implemented. Counted
-                // rather than approximated, and left to the stuck detector below.
-                // See this type's remarks.
+                // ⚠️ RocketJump — not implemented. It is flown exactly as a jump
+                // and everything above would serve, but its takeoff gate needs a
+                // rocket (a live Rocketlauncher, loaded, and hp above
+                // NAV_RJ_DAMAGE) and its trajectory needs the combat half to fire
+                // one straight down on the takeoff tick. Neither exists yet, and
+                // ⚠️ jumping without the rocket is the worst available outcome:
+                // the arc rises 276px where an ordinary jump rises 57, so the bot
+                // leaves the ground, tracks a trajectory it cannot be on, and
+                // lands somewhere the route does not mention. Counted rather than
+                // approximated; NavQuery.CanRocketJump defaults false, so the
+                // search does not offer one either.
                 state.UnsupportedEdgeTicks++;
                 break;
         }
 
-        // ⚠️ The steering target is a column to walk to, and once the bot is on
-        // it the nudge continues the way the next node lies rather than stopping:
-        // a node's span is in anchor columns and two runs a row apart overlap, so
-        // standing exactly on the target could otherwise mean standing still for
-        // ever.
-        var targetX = NavGraph.ColumnWorldX(targetColumn);
+        var keys = edge.Type == NavEdgeType.DropThrough
+                   && Math.Abs(column - steer.TargetColumn) <= BotConstants.EntryLead
+            ? PlayerKeys.Down
+            : PlayerKeys.None;
+
+        // ⚠️ The steering target is a direction hint, not a place to stop.
+        // Standing still on top of it is the one thing that must not happen: a
+        // cell is six world pixels, so a bot can sit within any sane tolerance of
+        // the column it is steering for and still not be on the node that column
+        // belongs to — which is exactly what the reference did the first time
+        // this ran, parking 4px short of a one-cell step and re-planning the
+        // identical route every 45 ticks for ever. So once it is on the target,
+        // keep nudging the way the next node lies and let NodeFromWorld be the
+        // thing that decides it has arrived.
+        var targetX = NavGraph.ColumnWorldX(steer.TargetColumn);
 
         if (x < targetX - BotConstants.SteerTol)
             keys |= PlayerKeys.Right;
@@ -452,22 +484,40 @@ public sealed class PathFollower
         else if (dirToNext < 0)
             keys |= PlayerKeys.Left;
 
-        // In the air on a validated trajectory the plan REPLACES the steering
-        // entirely — steering aims at a column to walk to and there is no walking
-        // to be done. Behind the plan is a press forward, ahead of it a press
-        // back, which is a brake and is how a player stops drifting too. The
-        // tolerance is a pixel because that is roughly what one tick of a slow
-        // arc covers, and chattering the key either side of the line is exactly
-        // what holds the average where it belongs.
-        if (tracking)
+        // Braking on the ground before the arc starts, and the in-flight tracker
+        // once it has: both REPLACE the steering keys rather than adding to them,
+        // so the bot cannot brake and steer in one tick.
+        //
+        // ⚠️ Neither caps the approach. Braking on the way to the takeoff column
+        // — so the bot arrives already travelling at the arc's speed rather than
+        // accelerating into it from a stop — sounds better, and measured no
+        // better on koth_valley (three trials at <90, 273 and 277 frames against
+        // 220 and 239 without it). It stays out.
+        if (steer.Braking)
         {
             keys &= ~(PlayerKeys.Left | PlayerKeys.Right);
 
-            if (x < trackX - 1)
+            if (hSpeed > 0)
+                keys |= PlayerKeys.Left;
+            else if (hSpeed < 0)
                 keys |= PlayerKeys.Right;
-            else if (x > trackX + 1)
+        }
+        else if (steer.Tracking)
+        {
+            keys &= ~(PlayerKeys.Left | PlayerKeys.Right);
+
+            // Behind the plan is a press forward, ahead of it a press back, which
+            // is a brake and is how a player stops drifting too. The tolerance is
+            // a pixel because that is roughly what one tick of a slow arc covers,
+            // and chattering the key either side of the line is exactly what
+            // holds the average where it belongs.
+            if (x < steer.TrackX - 1)
+                keys |= PlayerKeys.Right;
+            else if (x > steer.TrackX + 1)
                 keys |= PlayerKeys.Left;
         }
+
+        keys |= Press(state, steer.WantJump);
 
         // ⚠️ Gated on actually pressing something, unlike the arrival branch's:
         // a bot standing on its target waiting for a jump window would otherwise
@@ -486,6 +536,393 @@ public sealed class PathFollower
         }
 
         return keys;
+    }
+
+    /// <summary>
+    /// ⚠️ Jump is edge-triggered, not held.
+    /// </summary>
+    /// <remarks>
+    /// <c>Character.events/Begin Step.xml</c> jumps on <c>pressedKeys &amp; $80</c>
+    /// — a rising edge — so a bot holding JUMP down jumps exactly once and then
+    /// never again. Alternating gives a bot that still wants to jump a fresh
+    /// press every other tick until it leaves the ground.
+    /// </remarks>
+    private static PlayerKeys Press(BotPathState state, bool wantJump)
+    {
+        if (!wantJump)
+        {
+            state.JumpHeld = false;
+            return PlayerKeys.None;
+        }
+
+        if (state.JumpHeld)
+        {
+            state.JumpHeld = false;
+            return PlayerKeys.None;
+        }
+
+        state.JumpHeld = true;
+        return PlayerKeys.Jump;
+    }
+
+    /// <summary>Walks off the end the edge names, then holds that column.</summary>
+    /// <remarks>
+    /// ⚠️ <b>Which end cannot be re-derived here</b>, which is why the edge
+    /// carries it: "the column just past the run is inside the landing node" is
+    /// true of BOTH ends wherever the landing surface reaches under the whole
+    /// run — what a platform standing on a wider ledge looks like — and the old
+    /// guess picked the right-hand end whenever it was ambiguous. On ctf_avanti
+    /// that walked a bot into the solid block against its right end and wedged it
+    /// there (stuck, edge blacklisted, ~1,100 ticks for a leg priced at 545) when
+    /// the fall it wanted was off the left.
+    /// <para>
+    /// ⚠️ Off the edge the modelled trajectory is a STRAIGHT VERTICAL DROP from
+    /// the takeoff column — the generator swept straight down from it and
+    /// credited whatever surface it met — so the bot's job in the air is to hold
+    /// that column, exactly the way a jump holds its arc. Without this a fall is
+    /// the one edge kind flown with no plan at all: the bot walks off at whatever
+    /// speed it had, keeps it, and sails past any landing narrower than the
+    /// drift.
+    /// </para>
+    /// <para>
+    /// ⚠️ The column held is the one the EDGE carries, not the walk-off hint:
+    /// that is deliberately past the end of the run, and holding it would aim the
+    /// drop a cell wide of the sweep that proved it.
+    /// </para>
+    /// </remarks>
+    private static void SteerFall(
+        BotPathState state, bool onGround, in NavEdge edge,
+        in NavNode from, in NavNode to, ref Steering steer)
+    {
+        var takeoff = edge.Takeoff;
+
+        if (takeoff < 0)
+        {
+            // A graph cached before falls carried a takeoff. The same guess as
+            // before, which is right whenever only one end works: the column just
+            // past the run, if that column is inside the landing.
+            takeoff = from.X1 + 1 >= to.X0 && from.X1 + 1 <= to.X1
+                ? from.X1 + 1
+                : from.X0 - 1;
+        }
+
+        steer.TargetColumn = takeoff > from.X1
+            ? from.X1 + BotConstants.EntryLead
+            : from.X0 - BotConstants.EntryLead;
+
+        if (onGround)
+            return;
+
+        steer.TrackX = NavGraph.ColumnWorldX(takeoff);
+        steer.Tracking = true;
+        state.FlyingEdge = true;
+    }
+
+    /// <summary>
+    /// A jump or double-jump arc: the takeoff gate on the ground, the
+    /// position tracker in the air.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>An arc is flown as a TRAJECTORY, not as a speed.</b> The generator
+    /// validated one specific arc — leave the takeoff column, cover
+    /// <see cref="NavEdge.Bucket"/> pixels of ground a tick, be over the landing
+    /// when it comes back down — and every clearance cell it checked and every
+    /// surface it ruled out is about that arc and no other. Holding a speed
+    /// instead is what the reference used to do and is not the same thing: the
+    /// bot starts from a standstill, takes four or five ticks to reach a slow
+    /// arc's speed, and any nudge in the air is permanent. Tracking a
+    /// <em>position</em> corrects both, because being behind is a reason to press
+    /// and being ahead is a reason to brake. <b>Measured over every class, rise,
+    /// ledge width and run-up: 12-19% of jumps landed on the node they were aimed
+    /// at before, 100% after.</b>
+    /// </remarks>
+    private void SteerJump(
+        BotPathState state, in CharacterState character, in NavEdge edge,
+        in NavNode from, in NavNode to, int current, int next,
+        int column, int dirToNext, int tick,
+        in NavQuery query, IReadOnlyDictionary<long, int>? occupancy, ref Steering steer)
+    {
+        // ⚠️ The takeoff column is carried ON THE EDGE because the generator
+        // SEARCHED for it rather than assuming it. It is usually the end of the
+        // run facing the landing — but where the landing surface is also what
+        // ends the run (climbing onto a crate) the body is flush against it there
+        // and the only flyable arcs start a few cells back. Re-deriving it from
+        // the node's own columns would jump from a column the build already
+        // rejected and quietly turn those edges back into fictions.
+        var takeoff = edge.Takeoff >= 0 ? edge.Takeoff : (dirToNext >= 0 ? from.X1 : from.X0);
+
+        // ⚠️ Ticks are counted rather than read off vspeed, which would otherwise
+        // give the phase of the arc for free: vspeed pins at 10 once the fall
+        // reaches terminal velocity, and every phase after that reads as the same
+        // tick.
+        var needVx = edge.Bucket;
+        var flightTicks = edge.Ticks;
+        var jumpDistance = needVx * flightTicks;
+
+        // ⚠️ The generator's own direction, not the one inferred from node
+        // midpoints: it is the side of the takeoff column the landing is on, and
+        // a wide surface can straddle the midpoint test.
+        var jumpDir = dirToNext;
+
+        if (to.X0 > takeoff)
+            jumpDir = 1;
+        else if (to.X1 < takeoff)
+            jumpDir = -1;
+
+        // ⚠️ Speed ALONG THE JUMP, not speed. This is the whole of the run-up
+        // problem: the old gate was `abs(hspeed) <= needVx + 1`, which is
+        // satisfied by a bot drifting the wrong way at 2px/tick — so it left the
+        // ground with backwards momentum and the tracker spent the arc undoing
+        // it, and GG2 gives almost no authority in the air. Reported from play at
+        // ctf_truefort 4470,840: "the bot has momentum going left, and can't gain
+        // enough speed going right to make the jump to the right stairs."
+        var along = character.HSpeed * jumpDir;
+
+        if (!character.OnGround)
+        {
+            state.AirTicks++;
+
+            // ⚠️ The second impulse, on a double-jump arc. Rejump is the tick the
+            // generator proved the arc at, counted from takeoff the same way
+            // AirTicks is, and -1 on every other edge kind — so this is inert for
+            // the others without testing the type.
+            //
+            // ⚠️ It is a PRESS, not a hold. Begin Step takes the second jump on
+            // the rising edge and refuses it while `vspeed <= -jumpStrength`, so
+            // holding JUMP through the arc would consume the edge on the takeoff
+            // tick and leave nothing to press. The bit was released the moment
+            // WantJump went false at takeoff, which is what makes setting it again
+            // here an edge.
+            //
+            // ⚠️ CanDoubleJump is checked even though the search will not hand
+            // these edges to anything else: a route outlives the plan that made
+            // it, and a bot can change class mid-life while a path is still
+            // installed. Pressing JUMP on a class with no second jump is a wasted
+            // bit rather than a bug, but the arc it is flying is then a fiction
+            // and the sooner it fails the off-route test the better.
+            if (edge.Rejump >= 0 && !state.Rejumped && query.CanDoubleJump
+                && state.AirTicks >= edge.Rejump)
+            {
+                steer.WantJump = true;
+                state.Rejumped = true;
+                state.DoubleJumps++;
+            }
+
+            // Where the plan says to be now, clamped at the landing so a bot that
+            // is late keeps pressing toward it rather than aiming past it.
+            steer.TrackX = NavGraph.ColumnWorldX(takeoff)
+                + (jumpDir * Math.Min(jumpDistance, needVx * state.AirTicks));
+
+            steer.Tracking = true;
+            state.FlyingEdge = true;
+            return;
+        }
+
+        if (Math.Abs(column - takeoff) > BotConstants.JumpLead)
+        {
+            Approach(state, character, takeoff, needVx, along, column, in query, ref steer);
+            return;
+        }
+
+        Gate(
+            state, in character, in edge, from: current, to: next, in from,
+            takeoff, needVx, flightTicks, jumpDir, along, tick, in query, occupancy, ref steer);
+    }
+
+    /// <summary>Walking toward the takeoff column, or backing up to a run-up mark.</summary>
+    private void Approach(
+        BotPathState state, in CharacterState character, int takeoff, double needVx, double along,
+        int column, in NavQuery query, ref Steering steer)
+    {
+        if (state.RunupAt >= 0)
+        {
+            // Backing up. Two halves, and the switch between them is what makes
+            // it a run-up rather than a retreat: walk to the mark, then turn round
+            // and accelerate at the takeoff column over the whole distance just
+            // walked.
+            //
+            // Arrival is BOT_ENTRY_LEAD rather than exact, for the same reason
+            // every other target column is: a cell is six world pixels and a bot
+            // can sit inside any sane tolerance of a column without being on it.
+            if (Math.Abs(column - state.RunupAt) <= BotConstants.EntryLead)
+            {
+                state.RunupAt = -1;
+                steer.TargetColumn = takeoff;
+            }
+            else
+            {
+                steer.TargetColumn = state.RunupAt;
+            }
+
+            return;
+        }
+
+        // Approaching. Arrive at about the arc's speed rather than sprinting at
+        // the gate and braking on top of it: a bot that arrives at 9 and only then
+        // starts shedding speed drifts past the one-cell window while it does,
+        // backs up, and comes at it again.
+        //
+        // ⚠️ Only over the last stretch, and that distance is load-bearing.
+        // Bleeding speed for the whole leg makes every walk between two jumps
+        // happen at 2-4 px/tick instead of 7-9 — measured, it cost 30-50% on all
+        // three valley scenarios while changing nothing about whether they
+        // arrived. BOT_RUNUP_CELLS does double duty: the distance a bot needs to
+        // build the arc's speed is also the distance it needs to shed it.
+        if (along > needVx + BotConstants.JumpVtol
+            && Math.Abs(column - takeoff) <= BotConstants.RunupCells)
+        {
+            steer.Braking = true;
+        }
+        else
+        {
+            steer.TargetColumn = takeoff;
+        }
+    }
+
+    /// <summary>
+    /// At the takeoff column. Three ways this can go, and only one is a jump.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The rule is "not moving away from the jump", not "moving at exactly
+    /// the arc's speed", and the difference is measured.</b> GG2 applies the same
+    /// control factor in the air as on the ground, so a bot that leaves slow can
+    /// be pressed back up to the arc's speed within two or three ticks by the
+    /// tracker — which is why slow takeoffs were already landing. A bot that
+    /// leaves with speed <em>against</em> the jump cannot: it spends those ticks
+    /// undoing the drift and covers a good ten pixels the wrong way first, on an
+    /// arc whose height is already fixed. Demanding the full speed at the gate was
+    /// tried and costs a lot for nothing — 647 → 868 and 674 → 997 ticks on the
+    /// valley scenarios, with no more arrivals.
+    /// <para>
+    /// ⚠️ <c>along &gt;= 0</c> accepts a STANDSTILL, which is right for nine arcs
+    /// in ten and catastrophic for the rest — an arc asking for most of the
+    /// class's ceiling has no surplus for the tracker to make the acceleration
+    /// ramp back out of. Measured over the cached graphs, <b>3,310 of 62,069 jump
+    /// edges are unflyable by a heavy that way, and on koth_corinth 96% of a
+    /// heavy's routes to the point cross one</b>. So the speed test is
+    /// <see cref="JumpModel.Reach"/>, which replays the tracker against the speed
+    /// the bot has right now — and <c>along &gt;= 0</c> is kept on top of it,
+    /// because the reach model is honest about distance but knows nothing about
+    /// the clearance cells the generator sampled along the arc, and a bot that
+    /// leaves backwards and catches up flies through none of them.
+    /// </para>
+    /// </remarks>
+    private void Gate(
+        BotPathState state, in CharacterState character, in NavEdge edge, int from, int to,
+        in NavNode fromNode, int takeoff, double needVx, double flightTicks, int jumpDir,
+        double along, int tick, in NavQuery query,
+        IReadOnlyDictionary<long, int>? occupancy, ref Steering steer)
+    {
+        // ⚠️ Counted here and nowhere else. The budget is ticks spent AT the gate
+        // refusing to leave; counting the approach as well would spend it on a
+        // long walk and fire a jump from the middle of the run, which is what
+        // broke valley-spawn-to-point the first time the reference wrote this.
+        state.TakeoffTicks++;
+
+        // ⚠️ How much ground this jump has to cover, measured from the takeoff
+        // COLUMN and not from the bot's x — the difference is not cosmetic. The
+        // tracker's target is clamped at needVx * flightTicks from the anchor, so
+        // that is a hard ceiling on how far the bot can be steered. Plenty of arcs
+        // are costed with no margin at all (koth_gallery n86 → n58 is 0.70 px/tick
+        // over 17.2 ticks against a 12px gap: exactly 12 for exactly 12), so
+        // asking from x — up to BOT_JUMP_LEAD cells further out at the gate —
+        // asks for 22px of an arc that can never deliver more than 12. That
+        // refuses the jump on every approach, runs up, comes back and refuses
+        // again, silently: nothing blacklisted and nothing off route, because the
+        // bot is doing exactly what it was told.
+        var landingColumn = jumpDir > 0 ? _graph.Nodes[to].X0 : _graph.Nodes[to].X1;
+        var need = Math.Abs(NavGraph.ColumnWorldX(landingColumn) - NavGraph.ColumnWorldX(takeoff));
+
+        // ...minus whatever ground the bot has already covered INSIDE the takeoff
+        // column.
+        //
+        // ⚠️ A column is not a point. Every x across one whole cell — six world
+        // pixels — resolves to the same anchor column, and ColumnWorldX hands back
+        // the NEAR end of that run rather than its middle, so the line above
+        // assumes the bot is at the near end of a 6px band. Crediting the
+        // difference is sound because the tracker aims at an ABSOLUTE world x, not
+        // at a displacement from wherever the bot left the ground: leaving from
+        // further along does not move the landing point, it means there is less
+        // ground between the bot and it.
+        //
+        // Worth having rather than a rounding tidy-up: a one-column perch that
+        // overhangs the way it is jumping gives no run-up at all, so every arc off
+        // one is gated at a standstill, and six pixels of floor is the difference
+        // between 0 and about 2.3 px/tick for a heavy. Modelled over the
+        // twenty-four cached graphs, 209 of the 293 arcs otherwise refused become
+        // flyable once the gate stops asking for six pixels the bot has already
+        // walked.
+        //
+        // ⚠️ Only ever a credit, never a debit, and clamped to one cell. Behind
+        // the anchor the honest number is bigger, and asking for it is the mistake
+        // above: an arc costed with no margin can never deliver more, and a gate
+        // that asks for it refuses on every approach for ever.
+        var lead = jumpDir * (character.X - NavGraph.ColumnWorldX(takeoff));
+        lead = Math.Clamp(lead, 0, NavConstants.CellSize);
+        need = Math.Max(0, need - lead);
+
+        var reach = JumpModel.Reach(in character, needVx, flightTicks, along);
+
+        if (along >= 0
+            && along <= needVx + BotConstants.JumpVtol
+            && reach + BotConstants.JumpReachTol >= need)
+        {
+            Launch(state, ref steer);
+        }
+        else if (along > needVx + BotConstants.JumpVtol)
+        {
+            // Faster than the arc allows. Worth bleeding off even though the
+            // tracker can correct it: with no key held GG2 sheds horizontal speed
+            // by only about 13% a tick, so a bot arriving at 9 is still over 3
+            // some eight ticks later.
+            steer.Braking = true;
+        }
+        else
+        {
+            // Moving away from the jump, or too slow for this arc. ⚠️ Backing up
+            // is the only answer that works: pressing forward from here would walk
+            // the bot off the end of the run it is standing on, which is usually a
+            // ledge, and jumping anyway is what produced the short arcs in the
+            // first place — the bot arcs out with its old momentum still on it and
+            // lands back where it started.
+            //
+            // ⚠️ This used to clamp the run-up into the node's OWN columns, and
+            // that clamp was the bug the whole change is about: a node one anchor
+            // column wide, which is what the top step of a staircase is, resolves
+            // the clamp back to the column the bot is already standing on, so the
+            // run-up was a no-op and the jump happened from a standstill anyway.
+            // JumpModel.RunupColumn follows WALK edges instead.
+            state.RunupAt = state.RunupAt >= 0
+                ? state.RunupAt
+                : JumpModel.RunupColumn(
+                    _graph, from, takeoff, jumpDir, BotConstants.RunupCells, in query);
+
+            steer.TargetColumn = state.RunupAt;
+        }
+
+        // ⚠️ The escape hatch, because a gate that can refuse is a gate that can
+        // refuse FOR EVER — a bot on a run too short to build the speed, or wedged
+        // against a wall it cannot back away from, would otherwise work the gate
+        // for the rest of the round with every other detector reading it as
+        // healthy: it is not stuck (it is moving) and it is not off route (it is
+        // standing exactly where the route says). Jump on whatever it has instead.
+        // That either works, or it lands back where it started and the off-route
+        // machinery already knows what to do with an edge that keeps doing that.
+        if (state.TakeoffTicks >= BotConstants.TakeoffPatience)
+        {
+            steer.Braking = false;
+            Launch(state, ref steer);
+        }
+    }
+
+    /// <summary>Commits to the arc: ask for the press and reset the per-arc state.</summary>
+    private static void Launch(BotPathState state, ref Steering steer)
+    {
+        steer.WantJump = true;
+        state.AirTicks = 0;
+        state.TakeoffTicks = 0;
+        state.RunupAt = -1;
+        state.Rejumped = false;
     }
 
     /// <summary>The edge between two nodes, if the graph still has one.</summary>
@@ -541,10 +978,21 @@ public sealed class PathFollower
     {
         ArgumentNullException.ThrowIfNull(state);
 
-        // The timer is re-armed whatever happens below, staggered nowhere: the
-        // reference staggers by player id so a full server does not search on one
-        // frame, and a caller here can do the same by offsetting `tick`.
-        state.ReplanAt = tick + BotConstants.ReplanTicks;
+        // ⚠️ The timer is re-armed whatever happens below, and the stagger is
+        // ADDED rather than used as a phase — `botPathPlan.gml:53`. So a bot's
+        // re-plan interval is BOT_REPLAN_TICKS plus its own offset, somewhere in
+        // [45, 89].
+        //
+        // ⚠️ <b>That interval is a hard ceiling on the takeoff budget</b>, which
+        // nothing in the reference remarks on: a successful re-plan calls
+        // FreePath, which sets EdgeFrom to -1, and FollowEdge's change-of-edge
+        // test then zeroes TakeoffTicks on the very next tick. At a stagger of 0
+        // the interval is 45 and BOT_TAKEOFF_PATIENCE (60) can never be reached —
+        // the escape hatch is dead for that bot, exactly as it was dead for every
+        // bot before the reference started incrementing the counter at all. A bot
+        // that needs the hatch needs a stagger of at least 15.
+        state.ReplanAt = tick + BotConstants.ReplanTicks
+            + (state.ReplanStagger % BotConstants.ReplanTicks);
 
         if (!state.HasGoal)
             return false;

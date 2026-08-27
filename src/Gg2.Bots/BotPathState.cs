@@ -76,6 +76,29 @@ public sealed class BotPathState
     public int ReplanAt { get; set; }
 
     /// <summary>
+    /// This bot's own offset into the re-plan cadence.
+    /// </summary>
+    /// <remarks>
+    /// <c>botPathPlan.gml:53</c>: <c>botReplanAt = frame + BOT_REPLAN_TICKS +
+    /// (player mod BOT_REPLAN_TICKS)</c>, where <c>player</c> is the instance id
+    /// — so a server full of bots does not do all of its searching on one frame.
+    /// <para>
+    /// ⚠️ <b>It is ADDED, so it changes the interval and not just the phase</b>,
+    /// and that has a consequence nothing in the reference remarks on: a
+    /// successful re-plan clears the edge in progress, which zeroes
+    /// <see cref="TakeoffTicks"/> on the next tick — so a bot's re-plan interval
+    /// is a hard ceiling on its takeoff budget. At a stagger of 0 the interval is
+    /// 45 and <c>BOT_TAKEOFF_PATIENCE</c> (60) is <b>unreachable</b>. See
+    /// <see cref="PathFollower.Plan"/>.
+    /// </para>
+    /// <para>
+    /// Any per-bot number will do; the roster slot is the obvious one. It is
+    /// taken modulo <c>BOT_REPLAN_TICKS</c> at use.
+    /// </para>
+    /// </remarks>
+    public int ReplanStagger { get; set; }
+
+    /// <summary>
     /// A failed search parks the next one until this tick.
     /// </summary>
     /// <remarks>
@@ -157,6 +180,48 @@ public sealed class BotPathState
     /// </remarks>
     public bool JumpHeld { get; set; }
 
+    /// <summary>Ticks airborne on the current arc, counted from takeoff.</summary>
+    /// <remarks>
+    /// ⚠️ <b>Counted rather than read off <c>vspeed</c></b>, which would otherwise
+    /// give the phase of the arc for free: <c>vspeed</c> pins at 10 once the fall
+    /// reaches terminal velocity, and every phase after that reads as the same
+    /// tick.
+    /// </remarks>
+    public int AirTicks { get; set; }
+
+    /// <summary>
+    /// Ticks spent standing at the takeoff column refusing to leave.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ Counted <em>only</em> at the gate, and cleared by nothing but a takeoff
+    /// or a change of edge. The failure it exists for is a bot that shuffles
+    /// between the gate and its run-up for ever; counting the approach as well
+    /// would spend the budget on a long walk and then fire a jump from the middle
+    /// of the run.
+    /// <para>
+    /// ⚠️ In the reference this was set in four places and incremented in none,
+    /// so <c>BOT_TAKEOFF_PATIENCE</c> could never be reached and the escape hatch
+    /// was dead code for its whole life.
+    /// </para>
+    /// </remarks>
+    public int TakeoffTicks { get; set; }
+
+    /// <summary>The column being backed up to for a run-up, or -1.</summary>
+    /// <remarks>
+    /// Resolved once per edge and remembered, because working it out walks the
+    /// graph. Cleared on takeoff, on a change of edge, and by the escape hatch.
+    /// </remarks>
+    public int RunupAt { get; set; } = -1;
+
+    /// <summary>Whether this arc's second impulse has already been spent.</summary>
+    /// <remarks>
+    /// ⚠️ A once-only flag rather than a bare equality on the tick: <c>&gt;=</c>
+    /// with a flag survives a tick that does not reach the branch, where
+    /// <c>==</c> would silently fly a double-jump arc as a single jump and land
+    /// the bot somewhere the graph never said.
+    /// </remarks>
+    public bool Rejumped { get; set; }
+
     /// <summary>The edges this bot is refusing to be routed over.</summary>
     /// <remarks>
     /// Per bot, which is why it is here rather than on the graph — and a set,
@@ -188,6 +253,9 @@ public sealed class BotPathState
     public int OffRouteFires { get; set; }
 
     public int BlacklistFires { get; set; }
+
+    /// <summary>How many second impulses this bot has spent on double-jump arcs.</summary>
+    public int DoubleJumps { get; set; }
 
     /// <summary>
     /// How many ticks the follower asked for an edge kind it cannot fly.
@@ -221,6 +289,14 @@ public sealed class BotPathState
         StuckTicks = 0;
         OffPathTicks = 0;
         PathStale = false;
+
+        // ⚠️ The run-up belongs to the edge that was being prepared for, and
+        // that edge is gone with the route. The takeoff budget is NOT reset here
+        // — botPathFree.gml does not touch it — and the distinction is not
+        // academic: it is zeroed a moment later anyway, by FollowEdge's
+        // change-of-edge test, because this just set EdgeFrom to -1. See
+        // PathFollower.Plan for why that matters.
+        RunupAt = -1;
     }
 
     /// <summary>

@@ -1,5 +1,6 @@
 using Gg2.Bots;
 using Gg2.Protocol;
+using Gg2.Simulation;
 
 namespace Gg2.Tests;
 
@@ -24,8 +25,16 @@ public sealed class PathFollowerTests
     private static double[] Node(int row, int x0, int x1) => [row, x0, x1, 0, 0, 0];
 
     /// <summary>from, to, type, bucket, ticks, cost, gate, takeoff, rejump.</summary>
-    private static double[] Edge(int from, int to, double cost, NavEdgeType type = NavEdgeType.Walk, int takeoff = -1) =>
-        [from, to, (double)type, 0, cost, cost, 0, takeoff, 0];
+    /// <remarks>
+    /// bucket is the arc's horizontal speed and ticks its duration, and on a jump
+    /// edge they are the whole trajectory: the follower flies bucket * ticks
+    /// pixels of ground from the takeoff column. On a walk edge they are ignored,
+    /// which is why they default to the cost.
+    /// </remarks>
+    private static double[] Edge(
+        int from, int to, double cost, NavEdgeType type = NavEdgeType.Walk,
+        int takeoff = -1, double bucket = 0, double ticks = 0, int rejump = -1) =>
+        [from, to, (double)type, bucket, ticks == 0 ? cost : ticks, cost, 0, takeoff, rejump];
 
     private static NavGraph Build(double[][] nodes, double[][] edges)
     {
@@ -53,6 +62,28 @@ public sealed class PathFollowerTests
         (NavGraph.ColumnWorldX(column), graph.StandY(node));
 
     /// <summary>
+    /// A character standing (or flying) at a chosen place.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <see cref="CharacterState.Fresh"/>, never <c>new CharacterState()</c>:
+    /// six of its fields name a roster slot and a zeroed one claims slot 0 last
+    /// hurt it — and <c>RunPower</c> starts at zero, so a hand-built character
+    /// that skipped the factory would stand still and the takeoff gate would ask
+    /// <see cref="JumpModel.Reach"/> about a class that cannot accelerate.
+    /// </remarks>
+    private static CharacterState At(
+        double x, double y, double hSpeed = 0, bool onGround = true,
+        PlayerClass playerClass = PlayerClass.Soldier)
+    {
+        var character = CharacterState.Fresh(playerClass, Team.Red);
+        character.X = x;
+        character.Y = y;
+        character.HSpeed = hSpeed;
+        character.OnGround = onGround;
+        return character;
+    }
+
+    /// <summary>
     /// A bot with a goal plans a route and walks toward it.
     /// </summary>
     /// <remarks>
@@ -72,7 +103,7 @@ public sealed class PathFollowerTests
 
         Assert.True(follower.SetGoal(state, goal.X, goal.Y));
 
-        var keys = follower.Step(state, start.X, start.Y, 0, onGround: true, 0, new NavQuery(Team.Red));
+        var keys = follower.Step(state, At(start.X, start.Y, 0, true), 0, new NavQuery(Team.Red));
 
         Assert.Equal([0, 1, 2], state.Path);
         Assert.Equal(1, state.Replans);
@@ -85,7 +116,7 @@ public sealed class PathFollowerTests
         var far = Stand(graph, 2, 45);
         Assert.Equal(
             PlayerKeys.Left,
-            follower.Step(back, far.X, far.Y, 0, onGround: true, 0, new NavQuery(Team.Red)));
+            follower.Step(back, At(far.X, far.Y, 0, true), 0, new NavQuery(Team.Red)));
     }
 
     /// <summary>
@@ -104,7 +135,7 @@ public sealed class PathFollowerTests
         var state = new BotPathState();
 
         var at = Stand(graph, 0, 4);
-        Assert.Equal(PlayerKeys.None, follower.Step(state, at.X, at.Y, 0, true, 0, new NavQuery(Team.Red)));
+        Assert.Equal(PlayerKeys.None, follower.Step(state, At(at.X, at.Y, 0, true), 0, new NavQuery(Team.Red)));
         Assert.Equal(0, state.Replans);
         Assert.False(state.HasPath);
     }
@@ -136,16 +167,16 @@ public sealed class PathFollowerTests
         var start = Stand(graph, 0, 4);
         var goal = Stand(graph, 2, 45);
         follower.SetGoal(state, goal.X, goal.Y);
-        follower.Step(state, start.X, start.Y, 0, onGround: true, 0, new NavQuery(Team.Red));
+        follower.Step(state, At(start.X, start.Y, 0, true), 0, new NavQuery(Team.Red));
 
         Assert.Equal(0, state.PathAt);
 
         var overNodeOne = Stand(graph, 1, 24);
 
-        follower.Step(state, overNodeOne.X, overNodeOne.Y, 0, onGround: false, 1, new NavQuery(Team.Red));
+        follower.Step(state, At(overNodeOne.X, overNodeOne.Y, 0, false), 1, new NavQuery(Team.Red));
         Assert.Equal(0, state.PathAt);
 
-        follower.Step(state, overNodeOne.X, overNodeOne.Y, 0, onGround: true, 2, new NavQuery(Team.Red));
+        follower.Step(state, At(overNodeOne.X, overNodeOne.Y, 0, true), 2, new NavQuery(Team.Red));
         Assert.Equal(1, state.PathAt);
     }
 
@@ -177,7 +208,7 @@ public sealed class PathFollowerTests
 
         // Inside the band and still running to the right: brake left, do not
         // arrive.
-        var braking = follower.Step(state, goal.X, goal.Y, 5, onGround: true, 0, new NavQuery(Team.Red));
+        var braking = follower.Step(state, At(goal.X, goal.Y, 5, true), 0, new NavQuery(Team.Red));
 
         Assert.Equal(PlayerKeys.Left, braking);
         Assert.False(state.Arrived);
@@ -186,11 +217,11 @@ public sealed class PathFollowerTests
         // Running left: brake right.
         Assert.Equal(
             PlayerKeys.Right,
-            follower.Step(state, goal.X, goal.Y, -5, onGround: true, 1, new NavQuery(Team.Red)));
+            follower.Step(state, At(goal.X, goal.Y, -5, true), 1, new NavQuery(Team.Red)));
 
         // Stopped on the ground inside the band: arrived, and the goal is
         // cleared so nothing keeps steering to it.
-        var arrived = follower.Step(state, goal.X, goal.Y, 0, onGround: true, 2, new NavQuery(Team.Red));
+        var arrived = follower.Step(state, At(goal.X, goal.Y, 0, true), 2, new NavQuery(Team.Red));
 
         Assert.Equal(PlayerKeys.None, arrived);
         Assert.True(state.Arrived);
@@ -216,7 +247,7 @@ public sealed class PathFollowerTests
 
         var goal = Stand(graph, 0, 4);
         follower.SetGoal(state, goal.X, goal.Y);
-        follower.Step(state, goal.X, goal.Y, 0, onGround: false, 0, new NavQuery(Team.Red));
+        follower.Step(state, At(goal.X, goal.Y, 0, false), 0, new NavQuery(Team.Red));
 
         Assert.False(state.Arrived);
         Assert.True(state.HasGoal);
@@ -241,7 +272,7 @@ public sealed class PathFollowerTests
 
         var goal = Stand(graph, 0, 4);
         follower.SetGoal(state, goal.X, goal.Y);
-        follower.Step(state, goal.X, goal.Y, 0, onGround: true, 0, new NavQuery(Team.Red));
+        follower.Step(state, At(goal.X, goal.Y, 0, true), 0, new NavQuery(Team.Red));
         Assert.True(state.Arrived);
 
         // Now the same position and route, but marked stale.
@@ -249,7 +280,7 @@ public sealed class PathFollowerTests
         stale.Path.Add(0);
         stale.ReplanAt = int.MaxValue; // do not let the timer re-plan it away
 
-        var keys = follower.Step(stale, goal.X, goal.Y, 0, onGround: true, 0, new NavQuery(Team.Red));
+        var keys = follower.Step(stale, At(goal.X, goal.Y, 0, true), 0, new NavQuery(Team.Red));
 
         Assert.False(stale.Arrived);
         Assert.True(stale.HasGoal);
@@ -295,7 +326,7 @@ public sealed class PathFollowerTests
         var state = new BotPathState();
 
         follower.SetGoal(state, NavGraph.ColumnWorldX(45), graph.StandY(2));
-        follower.Step(state, NavGraph.ColumnWorldX(4), graph.StandY(0), 0, true, 0, new NavQuery(Team.Red));
+        follower.Step(state, At(NavGraph.ColumnWorldX(4), graph.StandY(0)), 0, new NavQuery(Team.Red));
 
         Assert.Equal([0, 1, 2], state.Path);
         state.EdgeFrom = 0;
@@ -304,7 +335,7 @@ public sealed class PathFollowerTests
         // Land on node 3, which the route does not mention.
         var off = (X: NavGraph.ColumnWorldX(4), Y: graph.StandY(3));
 
-        follower.Step(state, off.X, off.Y, 0, onGround: true, 1, new NavQuery(Team.Red));
+        follower.Step(state, At(off.X, off.Y, 0, true), 1, new NavQuery(Team.Red));
 
         Assert.Equal(1, state.OffRouteFires);
         Assert.Equal(0, state.BlacklistFires);
@@ -317,7 +348,7 @@ public sealed class PathFollowerTests
         // Set the same edge up again and miss it a second time.
         state.EdgeFrom = 0;
         state.EdgeTo = 1;
-        follower.Step(state, off.X, off.Y, 0, onGround: true, 2, new NavQuery(Team.Red));
+        follower.Step(state, At(off.X, off.Y, 0, true), 2, new NavQuery(Team.Red));
 
         Assert.Equal(2, state.OffRouteFires);
         Assert.Equal(1, state.BlacklistFires);
@@ -345,7 +376,7 @@ public sealed class PathFollowerTests
         follower.SetGoal(state, Stand(graph, 2, 45).X, Stand(graph, 2, 45).Y);
 
         for (var tick = 0; tick < BotConstants.StuckTicks + 1; tick++)
-            follower.Step(state, at.X, at.Y, 0, onGround: true, tick, new NavQuery(Team.Red));
+            follower.Step(state, At(at.X, at.Y, 0, true), tick, new NavQuery(Team.Red));
 
         Assert.Equal(1, state.StuckFires);
         Assert.Equal(1, state.BlacklistFires);
@@ -359,7 +390,7 @@ public sealed class PathFollowerTests
         for (var tick = 0; tick < BotConstants.StuckTicks + 1; tick++)
         {
             var jitter = (tick % 2) * 0.25;
-            follower.Step(wobbling, at.X + jitter, at.Y, 0, true, tick, new NavQuery(Team.Red));
+            follower.Step(wobbling, At(at.X + jitter, at.Y, 0, true), tick, new NavQuery(Team.Red));
         }
 
         Assert.Equal(1, wobbling.StuckFires);
@@ -557,12 +588,12 @@ public sealed class PathFollowerTests
 
         // At the middle: DOWN.
         var middle = NavGraph.ColumnWorldX(10);
-        var here = follower.Step(state, middle, graph.StandY(0), 0, true, 0, new NavQuery(Team.Red));
+        var here = follower.Step(state, At(middle, graph.StandY(0), 0, true), 0, new NavQuery(Team.Red));
         Assert.True(here.HasFlag(PlayerKeys.Down), $"at the middle the bot pressed {here}");
 
         // At the end: walk to the middle first, no DOWN.
         var end = NavGraph.ColumnWorldX(0);
-        var away = follower.Step(state, end, graph.StandY(0), 0, true, 1, new NavQuery(Team.Red));
+        var away = follower.Step(state, At(end, graph.StandY(0), 0, true), 1, new NavQuery(Team.Red));
         Assert.False(away.HasFlag(PlayerKeys.Down), $"at the end the bot pressed {away}");
         Assert.True(away.HasFlag(PlayerKeys.Right), "it did not walk toward the middle");
     }
@@ -603,12 +634,12 @@ public sealed class PathFollowerTests
         var middle = NavGraph.ColumnWorldX(15);
         Assert.Equal(
             PlayerKeys.Left,
-            follower.Step(state, middle, graph.StandY(0), 0, true, 0, new NavQuery(Team.Red)));
+            follower.Step(state, At(middle, graph.StandY(0), 0, true), 0, new NavQuery(Team.Red)));
 
         // In the air and drifting right of the takeoff column: press back left to
         // hold it, and report the bot as flying a validated edge.
         var takeoffX = NavGraph.ColumnWorldX(9);
-        var drifted = follower.Step(state, takeoffX + 10, graph.StandY(0) + 20, 4, false, 1, new NavQuery(Team.Red));
+        var drifted = follower.Step(state, At(takeoffX + 10, graph.StandY(0) + 20, 4, false), 1, new NavQuery(Team.Red));
 
         Assert.Equal(PlayerKeys.Left, drifted);
         Assert.True(state.FlyingEdge, "a bot part-way through a validated fall must say so");
@@ -616,31 +647,37 @@ public sealed class PathFollowerTests
         // Drifting left of it: press right.
         Assert.Equal(
             PlayerKeys.Right,
-            follower.Step(state, takeoffX - 10, graph.StandY(0) + 20, -4, false, 2, new NavQuery(Team.Red)));
+            follower.Step(state, At(takeoffX - 10, graph.StandY(0) + 20, -4, false), 2, new NavQuery(Team.Red)));
     }
 
     /// <summary>
-    /// An unimplemented jump edge is counted and abandoned rather than faked.
+    /// An unimplemented ROCKET-jump edge is counted and abandoned rather than
+    /// faked.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The contract until phase 7 item 4b-ii lands.</b> Steering a jump with
-    /// an approximation would fly an arc the generator never validated, which is
-    /// exactly what the whole takeoff apparatus exists to prevent — so the
-    /// follower does nothing, the stuck detector takes the edge away, and the
-    /// search routes round it. <see cref="BotPathState.UnsupportedEdgeTicks"/> is
-    /// what stops that being silent.
+    /// ⚠️ <b>The contract until the rocket half lands.</b> A rocket jump is flown
+    /// exactly as a jump and everything in <see cref="PathFollower"/> would
+    /// serve — but its takeoff gate needs a live, loaded Rocketlauncher and hp
+    /// above <c>NAV_RJ_DAMAGE</c>, and its trajectory needs the combat half to
+    /// fire one straight down on the takeoff tick. Neither exists yet.
     /// <para>
-    /// This test is <b>expected to be deleted</b> when the jump branch lands. It
-    /// is here so that "the bot cannot jump yet" is a stated, checked property
-    /// rather than something a reader has to infer from a missing case.
+    /// ⚠️ <b>Jumping without the rocket is the worst available outcome</b>: the
+    /// arc rises 276px where an ordinary jump rises 57, so the bot would leave
+    /// the ground, track a trajectory it cannot be on, and land somewhere the
+    /// route does not mention — costing an off-route fire and, on the second, a
+    /// blacklist on a perfectly good edge. So the follower does nothing and the
+    /// stuck detector takes the edge away.
+    /// </para>
+    /// <para>
+    /// This test is <b>expected to be deleted</b> when the rocket half lands.
     /// </para>
     /// </remarks>
     [Fact]
-    public void AnUnimplementedJumpEdgeIsCountedAndAbandoned()
+    public void AnUnimplementedRocketJumpEdgeIsCountedAndAbandoned()
     {
         var graph = Build(
             [Node(30, 0, 9), Node(10, 20, 29)],
-            [Edge(0, 1, 200, NavEdgeType.Jump, takeoff: 8)]);
+            [Edge(0, 1, 200, NavEdgeType.RocketJump, takeoff: 8, bucket: 3, ticks: 20)]);
 
         var follower = new PathFollower(graph);
         var state = new BotPathState();
@@ -649,17 +686,512 @@ public sealed class PathFollowerTests
 
         var at = Stand(graph, 0, 4);
 
-        for (var tick = 0; tick < BotConstants.StuckTicks + 1; tick++)
-            follower.Step(state, at.X, at.Y, 0, onGround: true, tick, new NavQuery(Team.Red));
+        // ⚠️ The query says the bot COULD rocket jump — it has the launcher and
+        // the health — so the search offers the edge. That is the case worth
+        // testing: with CanRocketJump left false the search refuses it, the bot
+        // has no route at all, and the follower is never asked. A test that let
+        // the default stand would pass with the whole branch deleted.
+        var able = new NavQuery(Team.Red, CanRocketJump: true);
 
-        Assert.True(state.UnsupportedEdgeTicks > 0, "the jump edge was steered by something");
+        for (var tick = 0; tick < BotConstants.StuckTicks + 1; tick++)
+            follower.Step(state, At(at.X, at.Y), tick, able);
+
+        Assert.True(state.UnsupportedEdgeTicks > 0, "the rocket-jump edge was steered by something");
         Assert.Equal(1, state.StuckFires);
         Assert.Contains(NavGraph.EdgeKey(0, 1), state.Blacklist);
 
-        // ⚠️ And it never presses JUMP: a press the generator did not plan is
-        // worse than no press, because it launches an arc nothing validated.
+        // ⚠️ And it never presses JUMP: a 57px hop along a 276px plan is worse
+        // than no press at all.
         Assert.Equal(
             PlayerKeys.None,
-            follower.Step(state, at.X, at.Y, 0, true, 99, new NavQuery(Team.Red)) & PlayerKeys.Jump);
+            follower.Step(state, At(at.X, at.Y), 99, able) & PlayerKeys.Jump);
+    }
+
+    /// <summary>
+    /// A jump edge leaves from the column the EDGE names, not from the end of
+    /// the run.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ The generator SEARCHED for the takeoff column rather than assuming it.
+    /// It is usually the end of the run facing the landing — but where the
+    /// landing surface is also what ends the run (climbing onto a crate) the body
+    /// is flush against it there and the only flyable arcs start a few cells
+    /// back. Re-deriving it from the node's own columns would jump from a column
+    /// the build already rejected and quietly turn those edges back into
+    /// fictions.
+    /// </remarks>
+    [Fact]
+    public void AJumpLeavesFromTheColumnTheEdgeNames()
+    {
+        // The run ends at column 9, but the arc was proved from column 4.
+        var graph = Build(
+            [Node(30, 0, 9), Node(10, 20, 29)],
+            [Edge(0, 1, 60, NavEdgeType.Jump, takeoff: 4, bucket: 3, ticks: 30)]);
+
+        var follower = new PathFollower(graph);
+        var state = new BotPathState();
+
+        follower.SetGoal(state, NavGraph.ColumnWorldX(25), graph.StandY(1));
+
+        // Standing at the end of the run, right of the takeoff: walk back left to
+        // it rather than jumping from here.
+        var atEnd = Stand(graph, 0, 9);
+        Assert.Equal(PlayerKeys.Left, follower.Step(state, At(atEnd.X, atEnd.Y), 0, new NavQuery(Team.Red)));
+    }
+
+    /// <summary>
+    /// A jump is a press on alternate ticks, never a hold.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <c>Character.events/Begin Step.xml</c> jumps on <c>pressedKeys and $80</c>
+    /// — a rising edge — so a bot holding JUMP down jumps exactly once and then
+    /// never again. Alternating is what gives a bot that still wants to jump a
+    /// fresh press every other tick until it leaves the ground.
+    /// </remarks>
+    [Fact]
+    public void AJumpIsAPressOnAlternateTicksAndNeverAHold()
+    {
+        // ⚠️ The arc has to cover its own gap, or this is not a fixture a
+        // generator could ever have written: takeoff column 9 to landing column
+        // 12 is 18 world pixels, and 1.2 px/tick over 20 ticks is 24. A first
+        // draft asked 0.5 over 20 — a 10px arc across an 18px gap — and the gate
+        // correctly refused it, which looks exactly like the press being broken.
+        var graph = Build(
+            [Node(30, 0, 9), Node(10, 12, 20)],
+            [Edge(0, 1, 30, NavEdgeType.Jump, takeoff: 9, bucket: 1.2, ticks: 20)]);
+
+        var follower = new PathFollower(graph);
+        var state = new BotPathState();
+
+        follower.SetGoal(state, NavGraph.ColumnWorldX(16), graph.StandY(1));
+
+        var at = Stand(graph, 0, 9);
+        var pressed = new List<bool>();
+
+        for (var tick = 0; tick < 6; tick++)
+        {
+            pressed.Add(
+                follower.Step(state, At(at.X, at.Y), tick, new NavQuery(Team.Red)).HasFlag(PlayerKeys.Jump));
+        }
+
+        Assert.Equal([true, false, true, false, true, false], pressed);
+    }
+
+    /// <summary>
+    /// The gate accepts a standstill when the arc reaches, and starts a run-up
+    /// when it does not.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The measurement that decided the gate's whole shape.</b>
+    /// "Not moving away" accepts a standstill, which is right for nine arcs in
+    /// ten — <b>91.9% of jump edges need no takeoff speed at all</b> — and
+    /// catastrophic for the rest: an arc asking for most of the class's ceiling
+    /// has no surplus for the tracker to make the acceleration ramp back out of,
+    /// and <b>3,310 of 62,069 jump edges are unflyable by a heavy that way</b>.
+    /// So the speed test is <see cref="JumpModel.Reach"/>.
+    /// <para>
+    /// Demanding the arc's <em>full</em> speed instead was tried and lost — 647
+    /// to 868 and 674 to 997 ticks on the valley scenarios with no more arrivals
+    /// — because it forces a run-up on every jump in the game. The first
+    /// assertion here is what that regression would break.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void TheGateAcceptsAStandstillOnlyWhenTheArcReaches()
+    {
+        // A gentle arc over a short gap: 18px of ground and twenty ticks to
+        // cover it in, so a soldier flies it from a standstill.
+        var easy = Build(
+            [Node(30, 0, 9), Node(10, 12, 20)],
+            [Edge(0, 1, 30, NavEdgeType.Jump, takeoff: 9, bucket: 1.2, ticks: 20)]);
+
+        var easyFollower = new PathFollower(easy);
+        var easyState = new BotPathState();
+        easyFollower.SetGoal(easyState, NavGraph.ColumnWorldX(16), easy.StandY(1));
+
+        var easyAt = Stand(easy, 0, 9);
+        Assert.True(
+            easyFollower.Step(easyState, At(easyAt.X, easyAt.Y), 0, new NavQuery(Team.Red))
+                .HasFlag(PlayerKeys.Jump),
+            "a gentle arc was refused from a standstill; 91.9% of arcs are this one");
+
+        // ⚠️ The same shape, but SHORT and FAST: 54px of ground in twelve ticks
+        // wants 4.5 px/tick from tick zero, which is essentially a heavy's
+        // ceiling — so there is no surplus for the tracker to make the
+        // acceleration ramp back out of and the bot would land short. This is
+        // the 3,310-of-62,069 case in miniature.
+        var hard = Build(
+            [Node(30, 0, 9), Node(10, 18, 26)],
+            [Edge(0, 1, 60, NavEdgeType.Jump, takeoff: 9, bucket: 4.5, ticks: 12)]);
+
+        var hardFollower = new PathFollower(hard);
+        var hardState = new BotPathState();
+        hardFollower.SetGoal(hardState, NavGraph.ColumnWorldX(22), hard.StandY(1));
+
+        var hardAt = Stand(hard, 0, 9);
+        var keys = hardFollower.Step(
+            hardState, At(hardAt.X, hardAt.Y, playerClass: PlayerClass.Heavy), 0, new NavQuery(Team.Red));
+
+        Assert.False(keys.HasFlag(PlayerKeys.Jump), "an arc the bot cannot reach was taken from a standstill");
+        Assert.True(hardState.RunupAt >= 0, "the gate refused without starting a run-up");
+        Assert.True(hardState.RunupAt < 9, $"the run-up mark {hardState.RunupAt} is not behind the takeoff");
+    }
+
+    /// <summary>
+    /// A bot faster than the arc allows brakes rather than leaving hot.
+    /// </summary>
+    /// <remarks>
+    /// Worth bleeding off even though the tracker can correct it: with no key
+    /// held GG2 sheds horizontal speed by only about 13% a tick, so a bot
+    /// arriving at 9 is still over 3 some eight ticks later.
+    /// </remarks>
+    [Fact]
+    public void ABotFasterThanTheArcBrakes()
+    {
+        var graph = Build(
+            [Node(30, 0, 9), Node(10, 12, 20)],
+            [Edge(0, 1, 30, NavEdgeType.Jump, takeoff: 9, bucket: 1.2, ticks: 20)]);
+
+        var follower = new PathFollower(graph);
+        var state = new BotPathState();
+        follower.SetGoal(state, NavGraph.ColumnWorldX(16), graph.StandY(1));
+
+        var at = Stand(graph, 0, 9);
+
+        // Running right at 9 px/tick into an arc that wants 1.2: brake left.
+        var keys = follower.Step(state, At(at.X, at.Y, hSpeed: 9), 0, new NavQuery(Team.Red));
+
+        Assert.False(keys.HasFlag(PlayerKeys.Jump));
+        Assert.Equal(PlayerKeys.Left, keys);
+    }
+
+    /// <summary>
+    /// The escape hatch jumps anyway once the gate has refused for two seconds.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>A gate that can refuse is a gate that can refuse for ever.</b> A bot
+    /// on a run too short to build the speed, or wedged against a wall it cannot
+    /// back away from, would otherwise work the gate for the rest of the round
+    /// with every other detector reading it as healthy: it is not stuck (it is
+    /// moving) and it is not off route (it is standing exactly where the route
+    /// says). Jump on whatever it has instead — that either works, or it lands
+    /// back where it started and the off-route machinery already knows what to do.
+    /// <para>
+    /// ⚠️ In the reference the budget was set in four places and incremented in
+    /// none, so this was dead code for its whole life.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void TheEscapeHatchJumpsAnywayAfterTakeoffPatience()
+    {
+        // The short fast arc again — no standstill reaches it — on a node with no
+        // floor behind it, so the run-up mark is the takeoff column itself and
+        // the gate refuses for ever.
+        var graph = Build(
+            [Node(30, 0, 9), Node(10, 18, 26)],
+            [Edge(0, 1, 60, NavEdgeType.Jump, takeoff: 9, bucket: 4.5, ticks: 12)]);
+
+        var follower = new PathFollower(graph);
+
+        // ⚠️ The stagger is not decoration here. A re-plan clears the edge in
+        // progress and the budget with it, so a bot's re-plan interval is a hard
+        // ceiling on its takeoff budget — at the default stagger of 0 the
+        // interval is BOT_REPLAN_TICKS (45), BOT_TAKEOFF_PATIENCE is 60, and the
+        // hatch is unreachable. Nothing in the reference remarks on that; it was
+        // found by this test failing.
+        var state = new BotPathState { ReplanStagger = BotConstants.ReplanTicks - 1 };
+
+        follower.SetGoal(state, NavGraph.ColumnWorldX(22), graph.StandY(1));
+
+        var at = Stand(graph, 0, 9);
+        var jumpedAt = -1;
+
+        // ⚠️ The bot is jittered so the stuck detector never fires: what is under
+        // test is the takeoff budget, and a stuck bot would be taken away by the
+        // other mechanism first.
+        for (var tick = 0; tick < BotConstants.TakeoffPatience + 5 && jumpedAt < 0; tick++)
+        {
+            var jitter = (tick % 2) * 2.0;
+
+            if (follower.Step(state, At(at.X + jitter, at.Y, playerClass: PlayerClass.Heavy), tick,
+                    new NavQuery(Team.Red))
+                .HasFlag(PlayerKeys.Jump))
+            {
+                jumpedAt = tick;
+            }
+        }
+
+        Assert.True(jumpedAt >= 0, "the gate refused for ever");
+        Assert.Equal(BotConstants.TakeoffPatience - 1, jumpedAt);
+    }
+
+    /// <summary>
+    /// In the air the plan replaces the steering, and the target moves with the
+    /// clock.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>An arc is flown as a trajectory, not as a speed.</b> The target is
+    /// <c>takeoffX + dir * min(distance, needVx * airTicks)</c> — an absolute
+    /// world x — so being behind is a reason to press forward and being ahead is
+    /// a reason to brake. Holding a speed instead loses most of a cell of ground
+    /// over the acceleration ramp with nothing to make it back, and any nudge in
+    /// the air is permanent. <b>Measured: 12-19% of jumps landed on the node they
+    /// were aimed at before, 100% after.</b>
+    /// </remarks>
+    [Fact]
+    public void InTheAirThePlanReplacesTheSteering()
+    {
+        var graph = Build(
+            [Node(30, 0, 9), Node(10, 20, 29)],
+            [Edge(0, 1, 60, NavEdgeType.Jump, takeoff: 9, bucket: 3, ticks: 20)]);
+
+        var follower = new PathFollower(graph);
+        var state = new BotPathState();
+        follower.SetGoal(state, NavGraph.ColumnWorldX(25), graph.StandY(1));
+
+        var takeoffX = NavGraph.ColumnWorldX(9);
+
+        // One airborne tick: the plan wants takeoffX + 3.
+        var behind = follower.Step(
+            state, At(takeoffX, graph.StandY(0) - 20, onGround: false), 1, new NavQuery(Team.Red));
+
+        Assert.Equal(1, state.AirTicks);
+        Assert.True(state.FlyingEdge, "a bot on a validated arc must say so");
+        Assert.Equal(PlayerKeys.Right, behind);
+
+        // Ahead of the plan on the same tick count: brake back.
+        var ahead = follower.Step(
+            state, At(takeoffX + 40, graph.StandY(0) - 20, onGround: false), 2, new NavQuery(Team.Red));
+
+        Assert.Equal(PlayerKeys.Left, ahead);
+
+        // ⚠️ And the target is CLAMPED at the arc's own distance, so a late bot
+        // keeps pressing toward the landing rather than aiming past it. 3 * 20 is
+        // 60 pixels: a hundred ticks in, the plan is still 60 pixels out and not
+        // three hundred.
+        state.AirTicks = 100;
+
+        Assert.Equal(
+            PlayerKeys.Right,
+            follower.Step(
+                state, At(takeoffX + 50, graph.StandY(0) - 20, onGround: false), 3, new NavQuery(Team.Red)));
+
+        state.AirTicks = 100;
+
+        Assert.Equal(
+            PlayerKeys.Left,
+            follower.Step(
+                state, At(takeoffX + 70, graph.StandY(0) - 20, onGround: false), 4, new NavQuery(Team.Red)));
+    }
+
+    /// <summary>
+    /// A double-jump arc spends its second impulse once, on the tick the
+    /// generator proved it at, and only for a class that has one.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <c>Rejump</c> is -1 on every other edge kind, so the branch is inert
+    /// for them without testing the type. It is a <b>press</b>, not a hold: Begin
+    /// Step takes the second jump on the rising edge and refuses it while
+    /// <c>vspeed</c> is still above the jump strength, so holding JUMP through the
+    /// arc would consume the edge on the takeoff tick and leave nothing to press.
+    /// <para>
+    /// ⚠️ <c>CanDoubleJump</c> is checked even though the search will not hand
+    /// these edges to anything else: a route outlives the plan that made it, and
+    /// a bot can change class mid-life while a path is still installed.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ADoubleJumpFiresOnceAtTheTickTheGeneratorProved()
+    {
+        var graph = Build(
+            [Node(30, 0, 9), Node(10, 20, 29)],
+            [Edge(0, 1, 60, NavEdgeType.DoubleJump, takeoff: 9, bucket: 3, ticks: 20, rejump: 5)]);
+
+        var follower = new PathFollower(graph);
+        var scout = new NavQuery(Team.Red, CanDoubleJump: true);
+        var state = new BotPathState();
+
+        follower.SetGoal(state, NavGraph.ColumnWorldX(25), graph.StandY(1));
+
+        var takeoffX = NavGraph.ColumnWorldX(9);
+        var presses = new List<int>();
+
+        for (var air = 1; air <= 8; air++)
+        {
+            var keys = follower.Step(
+                state, At(takeoffX, graph.StandY(0) - 20, onGround: false), air, scout);
+
+            if (keys.HasFlag(PlayerKeys.Jump))
+                presses.Add(air);
+        }
+
+        Assert.Equal([5], presses);
+        Assert.Equal(1, state.DoubleJumps);
+
+        // ⚠️ A class with no second jump never presses it, whatever the edge says
+        // — and the situation is the reference's own: <b>a route outlives the
+        // plan that made it</b>, so the route is planned as a scout and then
+        // flown by something that cannot double jump.
+        //
+        // ⚠️ The plan has to be the SCOUT's. A first draft planned and flew with
+        // the same no-double-jump query, and the search simply refused the edge:
+        // the bot had no route, the branch was never reached, and the control
+        // passed with the CanDoubleJump test deleted.
+        var reclassed = new BotPathState();
+        follower.SetGoal(reclassed, NavGraph.ColumnWorldX(25), graph.StandY(1));
+        follower.Plan(reclassed, takeoffX, graph.StandY(0), 0, scout);
+
+        Assert.Equal([0, 1], reclassed.Path);
+
+        var heavy = new NavQuery(Team.Red);
+
+        for (var air = 1; air <= 8; air++)
+        {
+            // ⚠️ And the timer must not re-plan the route away mid-flight, or the
+            // bot loses the edge for a reason that has nothing to do with the
+            // test.
+            reclassed.ReplanAt = int.MaxValue;
+
+            Assert.False(
+                follower.Step(reclassed, At(takeoffX, graph.StandY(0) - 20, onGround: false), air, heavy)
+                    .HasFlag(PlayerKeys.Jump),
+                $"a class with no second jump pressed one on air tick {air}");
+        }
+
+        Assert.Equal(0, reclassed.DoubleJumps);
+    }
+
+    /// <summary>
+    /// A run-up follows walk edges through the graph, not the node's own columns.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The clamp into the node's own columns was the bug the whole change
+    /// is about.</b> A node one anchor column wide — which is what the top step of
+    /// a staircase is — resolves that clamp back to the column the bot is already
+    /// standing on, so the run-up was a no-op and the jump happened from a
+    /// standstill anyway. Walk edges are one continuous floor by construction.
+    /// <b>Modelled offline: 3,310 unflyable jump edges to 253, and koth_gallery's
+    /// 105 to 0.</b>
+    /// </remarks>
+    [Fact]
+    public void ARunUpFollowsWalkEdgesThroughTheGraph()
+    {
+        // Node 1 is ONE column wide — the top of a staircase — with a wide floor
+        // behind it at node 0.
+        var graph = Build(
+            [Node(30, 0, 19), Node(30, 20, 20), Node(10, 29, 37)],
+            [
+                Edge(1, 0, 66), Edge(0, 1, 66),
+                Edge(1, 2, 60, NavEdgeType.Jump, takeoff: 20, bucket: 4.5, ticks: 12),
+            ]);
+
+        // Backing up six cells from column 20, heading right.
+        var mark = JumpModel.RunupColumn(
+            graph, node: 1, takeoffColumn: 20, jumpDirection: 1,
+            maxCells: BotConstants.RunupCells, new NavQuery(Team.Red));
+
+        Assert.Equal(20 - BotConstants.RunupCells, mark);
+
+        // ⚠️ The control: clamped into node 1's own span the answer is 20 — the
+        // column the bot is already on — and the run-up is a no-op.
+        Assert.NotEqual(20, mark);
+
+        // With nowhere to back up to, it gives up rather than walking off the
+        // node: the run-up is the map's to give.
+        var perch = Build(
+            [Node(30, 0, 19), Node(30, 20, 20), Node(10, 29, 37)],
+            [Edge(1, 2, 60, NavEdgeType.Jump, takeoff: 20, bucket: 4.5, ticks: 12)]);
+
+        Assert.Equal(
+            20,
+            JumpModel.RunupColumn(perch, 1, 20, 1, BotConstants.RunupCells, new NavQuery(Team.Red)));
+    }
+
+    /// <summary>
+    /// A bot part-way through a run-up is not treated as off route.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>A run-up deliberately walks BACKWARDS along the route</b>, and the
+    /// forward-only route advance cannot see that. Without the suppression a bot
+    /// backing up to build speed lands on a node the route does not mention
+    /// <em>ahead</em> of it, which reads as a finished move that went somewhere
+    /// else — so it fires an off-route event and, on the second consecutive miss,
+    /// blacklists the very edge it was preparing for. That is the single reason
+    /// the obvious "just let it back up" fix is not a two-line change.
+    /// <para>
+    /// ⚠️ And <see cref="BotPathState.PathAt"/> must not move: the edge being
+    /// prepared for has to stay the current one for the whole run-up, or the
+    /// follower is handed a different edge half way through and steers to the
+    /// wrong takeoff column.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ABotBackingUpForARunUpIsNotOffRoute()
+    {
+        var graph = Build(
+            [Node(30, 0, 19), Node(30, 20, 20), Node(10, 29, 37)],
+            [
+                Edge(1, 0, 66), Edge(0, 1, 66),
+                Edge(1, 2, 60, NavEdgeType.Jump, takeoff: 20, bucket: 4.5, ticks: 12),
+            ]);
+
+        var follower = new PathFollower(graph);
+        var state = new BotPathState();
+
+        follower.SetGoal(state, NavGraph.ColumnWorldX(33), graph.StandY(2));
+
+        // Standing on the one-column perch as a heavy: the arc is at its ceiling,
+        // so the gate refuses and starts a run-up.
+        var perch = Stand(graph, 1, 20);
+        follower.Step(state, At(perch.X, perch.Y, playerClass: PlayerClass.Heavy), 0, new NavQuery(Team.Red));
+
+        Assert.Equal([1, 2], state.Path);
+        Assert.True(state.RunupAt >= 0);
+        Assert.Equal(0, state.PathAt);
+
+        // Now back on node 0, which the route does not mention at all.
+        var behind = Stand(graph, 0, 14);
+        follower.Step(state, At(behind.X, behind.Y, playerClass: PlayerClass.Heavy), 1, new NavQuery(Team.Red));
+
+        Assert.Equal(0, state.OffRouteFires);
+        Assert.Equal(0, state.BlacklistFires);
+        Assert.Equal(0, state.PathAt);
+    }
+
+    /// <summary>
+    /// The reach model flies the arc it was given, and a standstill is not the
+    /// same as the arc's own speed.
+    /// </summary>
+    /// <remarks>
+    /// The tracker replayed inside <see cref="JumpModel.Reach"/> is
+    /// <see cref="PathFollower"/>'s own, so a bot leaving at exactly the arc's
+    /// speed covers the arc's own distance. ⚠️ Leaving from a standstill does
+    /// not: the acceleration ramp is a deficit the tracker only repays out of the
+    /// surplus between the arc's speed and the class's ceiling — and
+    /// <c>NAV_JUMP_VX</c> (4.53) is literally a heavy's ceiling, which is why the
+    /// fast arcs bite.
+    /// </remarks>
+    [Fact]
+    public void TheReachModelFliesTheArcItWasGiven()
+    {
+        var soldier = CharacterState.Fresh(PlayerClass.Soldier, Team.Red);
+
+        // Leaving at the arc's own speed: the tracker has nothing to correct.
+        var onPlan = JumpModel.Reach(soldier, needVx: 3, flightTicks: 20, v0: 3);
+        Assert.InRange(onPlan, 3 * 20 * 0.9, 3 * 20 * 1.1);
+
+        // From a standstill on the same arc: short, but the tracker claws most of
+        // it back.
+        var fromRest = JumpModel.Reach(soldier, needVx: 3, flightTicks: 20, v0: 0);
+        Assert.True(fromRest < onPlan, $"a standstill reached {fromRest} against {onPlan} on plan");
+
+        // ⚠️ A heavy on an arc at its own ceiling has no surplus at all, so the
+        // deficit is never repaid — this is the 3,310-of-62,069 case.
+        var heavy = CharacterState.Fresh(PlayerClass.Heavy, Team.Red);
+        var ceiling = JumpModel.Reach(heavy, needVx: 4.53, flightTicks: 40, v0: 0);
+
+        Assert.True(
+            ceiling < 4.53 * 40 * 0.9,
+            $"a heavy reached {ceiling} of {4.53 * 40} from a standstill at its own ceiling");
     }
 }
