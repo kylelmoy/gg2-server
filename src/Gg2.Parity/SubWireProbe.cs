@@ -186,6 +186,8 @@ public sealed class SubWireProbe(PortedSimulation inner, IReadOnlyList<TraceTick
 
     public void SetControlPointUnlock(int ticks) => inner.SetControlPointUnlock(ticks);
 
+    public void SetTdmInvulnerability(int ticks) => inner.SetTdmInvulnerability(ticks);
+
     public void Tick(ReadOnlySpan<PlayerInput> inputs)
     {
         inner.Tick(inputs);

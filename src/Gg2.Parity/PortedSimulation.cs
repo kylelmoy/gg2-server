@@ -953,6 +953,15 @@ public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSim
     /// given at its call site.
     /// </para>
     /// </remarks>
+    /// <inheritdoc />
+    /// <remarks>
+    /// Straight onto the state, and it takes effect on the next character
+    /// created: <c>WorldState.Spawn</c> reads
+    /// <c>TdmInvulnerabilityTicks</c> when it builds one. Nothing already alive
+    /// is retrofitted, which is right — the reference does not either.
+    /// </remarks>
+    public void SetTdmInvulnerability(int ticks) => _state.TdmInvulnerabilityTicks = ticks;
+
     public void SetControlPointUnlock(int ticks)
     {
         _state.ControlPointUnlock = ticks;

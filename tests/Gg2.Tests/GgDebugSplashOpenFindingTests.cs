@@ -7,99 +7,54 @@ using Gg2.Simulation;
 namespace Gg2.Tests;
 
 /// <summary>
-/// ⚠️ <b>The open finding that stops <c>reference-gg_debug-closedtdm.trace</c>
-/// at a hundred ticks: the port's rocket blasts land a few pixels short, and
-/// slot 4 lives through a death the reference recorded.</b>
+/// ✅ <b>The divergence that found the rotated-mask bug — fixed 2026-08-27.</b>
+/// <c>reference-gg_debug-closedtdm.trace</c> replayed for 100 ticks after its
+/// spawn anchor and then let slot 4 live through a death the reference
+/// recorded. It now runs to 135, on every field.
 /// </summary>
 /// <remarks>
-/// <b>Cause found 2026-08-27; the fix is not written.</b> Implementing dropdown platforms
-/// took this recording's window from 23 ticks to 100 with the trajectories
-/// inside it exact (<c>|dx| max 0, |dy| max 0</c>), and what stopped it next was
-/// damage rather than position — see
-/// <see cref="TeamDeathmatchFixtureTests.GgDebugReplaysPastItsDropdownPlatformsAndStopsOnDamage"/>.
+/// <b>What it was.</b> GM8's two collision primitives disagree about the same
+/// pair of instances: <c>distance_to_object</c> is computed from the bounding
+/// boxes and <c>place_free</c> from the precise masks. Unrotated the two
+/// coincide, so six phases never noticed; rotated, the box is a large
+/// over-estimate. The rocket that struck slot 2 on tick 475 overlapped it on its
+/// top row alone, and at that heading the top row is <b>one pixel</b> inside an
+/// eight-wide box — so <c>really_move_contact_solid</c> freed it six pixels
+/// earlier than the port did, and the blast landed six pixels nearer.
+/// <see cref="ProjectileMask"/> holds the model and
+/// <see cref="RotatedMaskSampleTests"/> the measurement.
+/// </remarks>
+/// <remarks>
+/// <b>How it was found, which is the part worth keeping.</b> Slot 6 never moves
+/// in the window and its position is exact on every observation, so its 3-hp
+/// shortfall was arithmetic rather than physics: through <c>ceil(hp)</c> on the
+/// wire it pinned the t475 blast's <c>distance_to_object</c> to <b>30 or 31</b>
+/// where the port computed <b>36</b>, and slot 4's death demanded the same
+/// number independently. <see cref="TheBoxCanNeverKillSlotFourAndTheMaskDoes"/>
+/// is that arithmetic, and it also shows the answer was unreachable by tuning:
+/// the escape is horizontal, so on the box the rocket always lands at 36
+/// whatever shape it is.
 /// <para>
-/// <b>What is established.</b> All six rockets in the window are fired by the
-/// same players on the same ticks in both, all six explode on the same ticks,
-/// and the reference's <c>PLAYER_DEATH</c> names the killer and the assistant
-/// the port's own bookkeeping picked. Nothing about <em>which</em> rocket hit
-/// <em>whom</em> is in dispute. The port simply deals a little less: over ticks
-/// 475 to 480 it deals slot 2 97.4 where the reference dealt 99 to 100, slot 6
-/// 53.9 where the reference dealt 56 to 57, and slot 4 68.4 where the reference
-/// dealt at least 70 — a kill.
+/// ⚠️ <b>Two candidates were killed by running oracles rather than by argument,
+/// and the second is the one to remember.</b> Widening the two-pixel
+/// <c>image_xscale = -1</c> inflation to eight reproduces the missing distance
+/// of <em>exactly</em> 30 — the number the arithmetic demanded, to the pixel —
+/// and breaks four live-engine tests. <b>Fitting the number is not
+/// evidence.</b>
 /// </para>
 /// <para>
-/// <b>Slot 6 is the clean measurement</b>, and it is the reason this is a damage
-/// finding rather than a physics one: it never moves in the window, its position
-/// is exact on every observation, and it still ends three hp higher here. Its
-/// three hits are the t475 blast, a point-blank t476 blast already at the
-/// falloff floor, and the t480 wall blast — so the shortfall has to be in the
-/// t475 blast, and pinning slot 6's arithmetic to <c>[56, 57)</c> puts that
-/// blast's <c>distance_to_object</c> at <b>30 or 31</b> where the port computes
-/// <b>36</b> — and nothing else, because 29 would leave slot 6 on 13 and 32
-/// would leave it on 15. Slot 4's death needs the same thing independently:
-/// 25 + 30 at t476 leaves it needing 15 from t475, which is a distance of 32.5
-/// or less.
+/// ⚠️ <b>And a second bug was hiding behind the first.</b> With the mask in, the
+/// divergence moved to t481: slot 4 respawned at t478 and the port took eleven
+/// hp off it where the reference took none. Team Deathmatch's spawn
+/// invulnerability rides on the <c>FULL_UPDATE</c> — this recording says 30
+/// ticks — and the parity harness had never read it, so every replayed
+/// respawn was mortal from its first frame. <see cref="ITraceSimulation.SetTdmInvulnerability"/>.
 /// </para>
 /// <para>
-/// ⚠️ <b>And that is why this is not a tuning error in the back-out.</b>
-/// <see cref="NoBackOutThatFreesTheRocketFromSlotTwoCanKillSlotFour"/> walks
-/// every whole-pixel step <c>really_move_contact_solid</c> could stop on and
-/// shows the distance is <b>never</b> below 36 — because the escape is
-/// horizontal, so the rocket lands with its right edge just left of slot 2's
-/// box, and slot 4's box starts 36 pixels beyond that <em>whatever shape the
-/// rocket is</em>. Making the rocket longer or shorter moves the stopping place
-/// and the measured gap by the same amount.
-/// </para>
-/// <para>
-/// ✅ <b>CAUSE FOUND, 2026-08-27, and it was the third candidate: GM8's overlap
-/// primitives use the PRECISE MASK for a rotated projectile, where this port
-/// uses the bounding box.</b> A distance of 30 is the rocket stopping four
-/// pixels back instead of ten — it exploded <em>while still inside slot 2's
-/// bounding box</em>, because its <em>mask</em> was already clear of it.
-/// </para>
-/// <para>
-/// <b>Measured, not inferred.</b>
-/// <c>RotatedMaskSampleTests.TheRocketsTopRowIsOnePixelAtTheDivergenceAngle</c>:
-/// at this rocket's exact heading its 8x3 box carries 16 opaque pixels, and the
-/// top row — the only row that overlaps slot 2 — is <b>one pixel, at offset
-/// zero</b>, where the port reads the whole eight-wide row as solid. Six pixels,
-/// which takes the back-out from step 10 to step 4 and the distance from 36 to
-/// 30. Both independent constraints then land exactly: slot 4 takes 71.15 and
-/// dies, and slot 6 finishes on 13.30, which <c>ceil</c>s to the 14 the
-/// recording holds.
-/// </para>
-/// <para>
-/// The other two candidates were ruled out by running oracles rather than by
-/// argument, and both are worth keeping:
-/// </para>
-/// <list type="number">
-/// <item>❌ <b>What <c>distance_to_object</c> returns.</b>
-/// <c>PrimitiveSampleTests.DistanceToObjectMatchesTheEngineExactly</c> holds
-/// <see cref="Aabb.Distance"/> against the engine over 361 rocket offsets
-/// spanning ±64 px, exactly. Re-checked live afterwards at this very angle:
-/// <c>distance_to_object</c> is computed from the <em>boxes</em> even when the
-/// sprite is rotated, so splash falloff was right all along. ⚠️ <b>The two
-/// primitives disagree about the same pair of instances</b> — box for distance,
-/// mask for overlap — which is a sharper version of the asymmetry
-/// <see cref="Aabb.ForCharacter"/> already documents.</item>
-/// <item>❌ <b>The two-pixel <c>image_xscale = -1</c> inflation</b>
-/// (<see cref="Aabb.ForCharacter"/>). Widening it to eight <em>does</em> produce
-/// the missing distance of exactly 30, and it breaks four live-engine oracles
-/// (<c>PrimitiveSampleTests.FacingChangesTheSplashDistanceButNotTheOverlap</c>,
-/// two in <c>CollisionLineSampleTests</c>, <c>RocketTests</c>). ⚠️ <b>Right
-/// arithmetic, wrong cause — fitting the number is not evidence.</b></item>
-/// </list>
-/// <para>
-/// ⚠️ <b>Still not fixed, and the fix is its own piece of work.</b> It changes
-/// which character every projectile in the game hits, so it carries the
-/// exactness bar rather than a good-enough bar, and the obvious model does not
-/// clear it: inverse-rotating each world pixel into sprite space and flooring
-/// reproduces 309,763 of 310,194 sampled cells (99.86%). ⚠️ The residue is not
-/// spread evenly — it is worst at <b>90, 180 and 270 degrees</b>, where the
-/// rotation is exact and a rounding rule cannot be what is wrong, so what is
-/// missing is an edge convention rather than a tie-break.
-/// <c>rotated-mask-samples.json</c> holds 162 masks so the next attempt can be
-/// checked without the game.
+/// <b>What stops it now, at t516:</b> slot 6 is 25 hp high, which is exactly a
+/// rocket's direct hit — one the reference landed and the port does not. Both
+/// deaths in that window (t507 and t509) are reproduced, so this is a miss
+/// rather than a mis-attribution, and it is the next thing to chase.
 /// </para>
 /// </remarks>
 public sealed class GgDebugSplashOpenFindingTests
@@ -188,24 +143,23 @@ public sealed class GgDebugSplashOpenFindingTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The first thing the port gets wrong after the spawn wave is that
-    /// death, and nothing before it.</b>
+    /// ✅ <b>The port reproduces that death, and everything else, for 135 ticks
+    /// after the spawn wave.</b>
     /// </summary>
     /// <remarks>
-    /// Held on <see cref="Fields.All"/> rather than on <c>Trajectory</c>, which
-    /// is the point: ninety-five ticks of positions, velocities, hp, ammo, flags,
-    /// deaths, ubers, the objective, sentries and control points all agree, and
-    /// then one character survives.
+    /// Held on <see cref="Fields.All"/>: positions, velocities, hp, ammo, flags,
+    /// deaths, ubers, the objective, sentries and control points, none of them
+    /// disagreeing until t516. It was 95 before the rotated mask and 100 with
+    /// the mask but without the spawn invulnerability.
     /// <para>
-    /// <b>This fails when the finding is fixed</b>, like
-    /// <c>SentryKillFixtureTests.ThePortStillMissesBothOfTheReferencesSentrySelfDestructs</c>.
-    /// That is the intent: the next session should not have to rediscover which
-    /// tick to look at, and a fix that moves the divergence somewhere else is
-    /// news either way.
+    /// ⚠️ <b>The tick is pinned exactly rather than bounded below</b>, because
+    /// both directions are news here. Shrinking means one of the two fixes has
+    /// regressed; growing means the t516 direct hit has been found, and this
+    /// recording's 52 deaths and 262 seeded fires start becoming assertions.
     /// </para>
     /// </remarks>
     [Fact]
-    public void ThePortStillMissesThatDeathAndGetsEverythingBeforeItRight()
+    public void ThePortReproducesThatDeathAndRunsToTick516()
     {
         var ticks = Ticks();
         var anchor = FixtureAnchors.LastExactAnchor(ticks);
@@ -220,35 +174,75 @@ public sealed class GgDebugSplashOpenFindingTests
         var first = after.MinBy(m => m.Tick);
 
         Assert.Equal(381, anchor);
-        Assert.Equal(476, first.Tick);
-        Assert.Equal(4, first.Slot);
-        Assert.Equal("death", first.Field);
-        Assert.Equal(1, first.Expected);
-        Assert.Equal(0, first.Actual);
+        Assert.Equal(516, first.Tick);
+
+        // Nothing about slot 4's death at t476 is wrong any more, and asserting
+        // that separately is the point: the tick above could move for reasons
+        // that have nothing to do with the finding this file is named after.
+        //
+        // ⚠️ Bounded by the divergence, not by the recording. Past t516 the two
+        // simulations have parted and every later death disagrees; asserting
+        // over the whole trace would be asserting about drift.
+        Assert.DoesNotContain(after, m => m.Field == "death" && m.Tick <= first.Tick);
     }
 
     /// <summary>
-    /// ⚠️ <b>And it cannot be fixed by moving the back-out</b>: every stopping
-    /// place that frees the rocket from slot 2 leaves it at least 36 pixels from
-    /// slot 4, where the kill needs 32.5 or less.
+    /// ⚠️ <b>Team Deathmatch's spawn invulnerability is on the wire, and this
+    /// recording says thirty ticks.</b>
     /// </summary>
     /// <remarks>
-    /// The escape runs along <c>direction + 180</c>, which is almost due left
-    /// here, so freeing the rocket means clearing slot 2's box on the left — and
-    /// slot 4's box begins a fixed 36 pixels beyond slot 2's left edge. Making
-    /// the rocket's own box longer or shorter moves both the stopping place and
-    /// the measured gap by the same amount, so the gap does not change. That is
-    /// why the remarks above look past the back-out to the two box conventions
-    /// and to whether a one-row overlap frees at all.
+    /// The control for the second half of the fix. Without it
+    /// <see cref="ThePortReproducesThatDeathAndRunsToTick516"/> would still pass
+    /// at a shorter window and nothing would say why — the harness read no
+    /// invulnerability at all for six phases, so every replayed respawn could be
+    /// damaged on its first frame.
     /// <para>
-    /// ⚠️ <b>The enumeration is not vacuous and the last assertion is what says
-    /// so.</b> A test that walked twelve steps and found none of them free would
-    /// pass this happily while proving nothing — so the step the port actually
-    /// stops on is asserted to be one of them.
+    /// ⚠️ <b>It rides on a <c>FULL_UPDATE</c> and a recording holds exactly
+    /// one</b>, at the join, so this is non-null on a single tick of nearly
+    /// three thousand. A reader that looked for it anywhere else would find
+    /// nothing and conclude the feature was off.
     /// </para>
     /// </remarks>
     [Fact]
-    public void NoBackOutThatFreesTheRocketFromSlotTwoCanKillSlotFour()
+    public void TheRecordingCarriesThirtyTicksOfSpawnInvulnerability()
+    {
+        var carried = Ticks()
+            .Where(t => t.TdmInvulnerability is not null)
+            .Select(t => (t.Index, t.TdmInvulnerability))
+            .ToArray();
+
+        Assert.Equal([(0, 30)], carried);
+    }
+
+    /// <summary>
+    /// ⚠️ <b>The whole finding in one test: on the bounding box no stopping
+    /// place can kill slot 4, and on the mask the rocket stops four pixels back
+    /// and does.</b>
+    /// </summary>
+    /// <remarks>
+    /// <b>The box half is a proof, not a sample.</b> The escape from a direct hit
+    /// runs along <c>direction + 180</c>, almost due left here, so freeing the
+    /// rocket means clearing slot 2's box on the left — and slot 4's box starts a
+    /// fixed 36 pixels beyond slot 2's left edge. Making the rocket's own box
+    /// longer or shorter moves the stopping place and the measured gap by the
+    /// same amount, so 36 is not a number that could be tuned to 30. That is what
+    /// sent the search past the back-out and into the primitives.
+    /// <para>
+    /// <b>The mask half is the fix.</b> At this heading the rocket's top row is
+    /// one pixel wide, so <c>place_free</c> frees it at step 4 rather than step
+    /// 10, six pixels nearer, and <c>distance_to_object</c> — which is still the
+    /// box, and still right — reads 30. That is exactly the 30 slot 6's
+    /// <c>ceil(hp)</c> demanded and exactly what kills slot 4.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>This replicates the back-out loop rather than calling it</b>, because
+    /// <c>Projectiles.BackOutOfCharacter</c> is private and the shape of the
+    /// argument is what is being asserted. The production path is gated by the
+    /// fixture instead — see <see cref="ThePortReproducesThatDeathAndRunsToTick516"/>.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void TheBoxCanNeverKillSlotFourAndTheMaskDoes()
     {
         var soldier = CharacterBox.For(PlayerClass.Soldier);
 
@@ -260,8 +254,8 @@ public sealed class GgDebugSplashOpenFindingTests
         var blastRadius = Explosions.BlastRadiusFor(ProjectileKind.Rocket);
         var explosionDamage = Explosions.ExplosionDamageFor(ProjectileKind.Rocket);
 
-        // What the t475 blast would have to deal for the t476 rocket to finish
-        // slot 4 off: 15, which is a distance of exactly half the blast radius.
+        // What the t475 blast has to deal for the t476 rocket to finish slot 4
+        // off: 15, which is a distance of exactly half the blast radius.
         var needed = SlotFourHpBeforeTheBlast - SlotFourDamageAtT476;
 
         var radians = Gml.DegToRad(RocketDirection + 180);
@@ -269,7 +263,8 @@ public sealed class GgDebugSplashOpenFindingTests
         var stepY = -Math.Sin(radians);
         var steps = CollisionWorld.RoundPosition(RocketSpeed);
 
-        var freed = new List<int>();
+        int? boxStop = null;
+        int? maskStop = null;
 
         for (var step = 0; step <= steps; step++)
         {
@@ -281,23 +276,35 @@ public sealed class GgDebugSplashOpenFindingTests
                 ImageAngle = RocketDirection,
             };
 
-            if (rocket.Box.Overlaps(victim))
-                continue;
+            if (boxStop is null && !rocket.Box.Overlaps(victim))
+            {
+                boxStop = step;
 
-            freed.Add(step);
+                // The proof: whatever the box frees on, it is never close enough.
+                var distance = rocket.Box.Distance(bystander);
+                Assert.Equal(36, distance);
+                Assert.True(
+                    explosionDamage * (1 - (distance / blastRadius)) < needed,
+                    $"the box freed the rocket at {distance}, which would kill slot 4");
+            }
 
-            var distance = rocket.Box.Distance(bystander);
-            var damage = explosionDamage * (1 - (distance / blastRadius));
+            if (maskStop is null && !ProjectileMask.Overlaps(in rocket, in victim))
+            {
+                maskStop = step;
 
-            Assert.True(
-                damage < needed,
-                $"step {step} frees the rocket at distance {distance} and deals {damage} to slot 4, "
-                    + "which is enough to kill it — the gg_debug damage finding may be fixed. "
-                    + "Re-measure the window and rewrite this file's remarks.");
+                // The fix: the mask frees six pixels earlier, at the distance
+                // slot 6's hp and slot 4's death both point at.
+                var distance = rocket.Box.Distance(bystander);
+                Assert.Equal(30, distance);
+                Assert.True(
+                    explosionDamage * (1 - (distance / blastRadius)) >= needed,
+                    $"the mask freed the rocket at {distance}, which would not kill slot 4");
+            }
         }
 
-        // The control: the port really does stop somewhere in that list, so the
-        // loop above tested something.
-        Assert.Contains(10, freed);
+        // Both really did stop somewhere inside the allowance, so neither branch
+        // above passed by never running — the shape docs/PARITY.md warns about.
+        Assert.Equal(10, boxStop);
+        Assert.Equal(4, maskStop);
     }
 }

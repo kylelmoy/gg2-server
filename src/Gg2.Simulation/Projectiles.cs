@@ -970,8 +970,11 @@ public static class Projectiles
                 // Aabb).
                 var victimBox = Aabb.ForCharacter(victim.Box, victim.X, victim.Y);
 
-                if (!projectileBox.Overlaps(victimBox))
+                if (!ProjectileMask.Overlaps(
+                        in state.Projectiles[handle.Index], in projectileBox, in victimBox))
+                {
                     continue;
+                }
 
                 if (HitCharacter(world, ref state, handle, slot))
                     return true;
@@ -994,8 +997,13 @@ public static class Projectiles
                 continue;
 
             // place_meeting again: the sentry's mask box, no facing inflation.
-            if (!projectileBox.Overlaps(Sentries.BodyBox(state.Sentries[slot])))
+            var sentryBody = Sentries.BodyBox(state.Sentries[slot]);
+
+            if (!ProjectileMask.Overlaps(
+                    in state.Projectiles[handle.Index], in projectileBox, in sentryBody))
+            {
                 continue;
+            }
 
             if (HitSentry(world, ref state, handle, slot))
                 return true;
@@ -1063,7 +1071,7 @@ public static class Projectiles
 
         // place_meeting's box. A generator's image_xscale is never assigned, so
         // its reported and overlap boxes are the same one.
-        if (!projectile.Box.Overlaps(Generators.BodyBox(generator)))
+        if (!ProjectileMask.Overlaps(in projectile, Generators.BodyBox(generator)))
             return false;
 
         // Every one of the four events opens with the same team test, spelled
@@ -1487,7 +1495,14 @@ public static class Projectiles
         // Aabb.ForCharacter.
         var victimBox = Aabb.ForCharacter(victim.Box, victim.X, victim.Y);
 
-        if (!projectile.Box.Overlaps(victimBox))
+        // ⚠️ The MASK, not the box, and this is the line the gg_debug damage
+        // divergence was about. `place_free` frees a rotated projectile as soon
+        // as its opaque pixels are clear, which happens several whole pixels
+        // before its bounding box is — six of them for the rocket at 351°,
+        // whose top row is one pixel wide inside an eight-wide box. Backing out
+        // on the box carries the explosion six pixels too far and costs a kill.
+        // See ProjectileMask and GgDebugSplashOpenFindingTests.
+        if (!ProjectileMask.Overlaps(in projectile, in victimBox))
             return;
 
         var radians = Gml.DegToRad(directionDegrees);
@@ -1503,7 +1518,7 @@ public static class Projectiles
             projectile.X = startX + (stepX * step);
             projectile.Y = startY + (stepY * step);
 
-            if (!projectile.Box.Overlaps(victimBox))
+            if (!ProjectileMask.Overlaps(in projectile, in victimBox))
                 return;
         }
 

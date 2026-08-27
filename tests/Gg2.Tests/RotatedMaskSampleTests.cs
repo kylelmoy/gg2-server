@@ -359,4 +359,106 @@ public sealed class RotatedMaskSampleTests
 
         Assert.Equal([-1, 0, 1, 2, 3, 4, 5, 6], nextRow);
     }
+
+    /// <summary>
+    /// ⚠️ <b><see cref="ProjectileMask"/> against every sampled pixel: 99.861%,
+    /// and the shortfall is pinned rather than tolerated.</b>
+    /// </summary>
+    /// <remarks>
+    /// <b>The number that justifies the model is the one it replaced.</b>
+    /// Treating the reported bounding box as solid — what this port did until
+    /// 2026-08-27, and what <see cref="BoundingBoxAloneIsWrongOnOneSampledPixelInTwelve"/>
+    /// measures — is right on 91.5% of these pixels. The mask model is right on
+    /// 99.861%, which is 431 wrong where the box was 26,342.
+    /// <para>
+    /// ⚠️ <b>It is not exact, and that is stated rather than smoothed over.</b>
+    /// 260 of the 431 are floor ties — a transformed coordinate within
+    /// <c>1e-9</c> of an integer, the same x87 class already documented on
+    /// <see cref="Aabb.ForRotatedSprite"/> and not fixable in <c>double</c>.
+    /// The other 171 are structural. A fine search over the whole unit square
+    /// of sampling offsets puts the optimum at exactly zero offset, so the
+    /// plain <c>floor</c> the model uses is the best this family can do.
+    /// </para>
+    /// <para>
+    /// The bound is an inequality so that a genuine improvement is not a
+    /// failure, but tight enough that losing the model entirely cannot pass —
+    /// the box alone is nowhere near it.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void TheMaskModelMatchesTheEngineOnAlmostEverySampledPixel()
+    {
+        var (wrong, total) = ScoreEveryPixel(mask: true);
+
+        Assert.Equal(310194, total);
+        Assert.True(
+            wrong <= 460,
+            $"the mask model is wrong on {wrong} of {total} sampled pixels; that was 431 when measured");
+    }
+
+    /// <summary>
+    /// The control that says the model earns its keep: the bounding box on its
+    /// own is wrong on one sampled pixel in twelve.
+    /// </summary>
+    /// <remarks>
+    /// Without this the accuracy above is a number with nothing to beat. With
+    /// it, deleting <see cref="ProjectileMask"/> and going back to
+    /// <c>Aabb.Overlaps</c> moves 26,342 pixels, which is what the two
+    /// assertions between them refuse to let happen quietly.
+    /// </remarks>
+    [Fact]
+    public void BoundingBoxAloneIsWrongOnOneSampledPixelInTwelve()
+    {
+        var (wrong, total) = ScoreEveryPixel(mask: false);
+
+        Assert.Equal(310194, total);
+        Assert.True(
+            wrong is > 20000 and < 30000,
+            $"the box alone is wrong on {wrong} of {total}; that was 26,342 when measured");
+    }
+
+    /// <summary>
+    /// Every sampled pixel of every mask, against either the model or the box.
+    /// </summary>
+    private static (int Wrong, int Total) ScoreEveryPixel(bool mask)
+    {
+        var document = Load();
+        var wrong = 0;
+        var total = 0;
+
+        foreach (var (name, samples) in document.Sprites)
+        {
+            foreach (var sample in samples)
+            {
+                // The probe sat on an exact integer position, which is what
+                // makes these answers integers rather than a rounding.
+                var projectile = new ProjectileState
+                {
+                    Kind = KindOf(name),
+                    X = 3000,
+                    Y = 600,
+                    ImageAngle = sample.Angle,
+                };
+
+                for (var dy = -sample.Reach; dy <= sample.Reach; dy++)
+                {
+                    for (var dx = -sample.Reach; dx <= sample.Reach; dx++)
+                    {
+                        var expected = sample.Covers(dx, dy);
+
+                        var actual = mask
+                            ? ProjectileMask.Covers(projectile, 3000 + dx, 600 + dy)
+                            : dx >= sample.Box.Left && dx <= sample.Box.Right
+                                && dy >= sample.Box.Top && dy <= sample.Box.Bottom;
+
+                        total++;
+                        if (actual != expected)
+                            wrong++;
+                    }
+                }
+            }
+        }
+
+        return (wrong, total);
+    }
 }

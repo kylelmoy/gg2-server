@@ -417,6 +417,27 @@ public interface ITraceSimulation
     /// </para>
     /// </remarks>
     void SetControlPointUnlock(int ticks);
+
+    /// <summary>
+    /// Team Deathmatch's spawn invulnerability, as the recording's server
+    /// configured it.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Injected rather than derived, for the same reason a
+    /// <c>PLAYER_SPAWN</c>'s position is</b>: it is server configuration
+    /// (<c>ServerOptions.TdmInvulnerabilitySeconds</c>) that the port has no way
+    /// to know and the server broadcasts on its <c>FULL_UPDATE</c>. See
+    /// <see cref="TraceTick.TdmInvulnerability"/>.
+    /// <para>
+    /// ⚠️ <b>Leaving it at zero is not neutral — it is a port that damages
+    /// people the reference could not.</b> Measured on
+    /// <c>reference-gg_debug-closedtdm.trace</c>: slot 4 respawns at t478, the
+    /// reference's blast at t480 does nothing to it, and the port took eleven hp
+    /// off a character that should have been untouchable. That was the whole of
+    /// this recording's next divergence after the rotated-mask fix.
+    /// </para>
+    /// </remarks>
+    void SetTdmInvulnerability(int ticks);
 }
 
 /// <summary>
@@ -506,4 +527,6 @@ public sealed class EmptySimulation : ITraceSimulation
     }
 
     public void SetControlPointUnlock(int ticks) { }
+
+    public void SetTdmInvulnerability(int ticks) { }
 }

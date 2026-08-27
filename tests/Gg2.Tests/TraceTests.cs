@@ -342,6 +342,8 @@ public sealed class TraceTests
 
         public void SetControlPointUnlock(int ticks) { }
 
+        public void SetTdmInvulnerability(int ticks) { }
+
         public void Tick(ReadOnlySpan<PlayerInput> inputs)
         {
             // The replayer compares before it advances, because one update

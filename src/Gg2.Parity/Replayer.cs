@@ -210,6 +210,19 @@ public sealed class Replayer(ITraceSimulation simulation)
                     Anchor(tick);
             }
 
+            // ⚠️ BEFORE the tick runs and before any spawn it queues, because
+            // WorldState.Spawn reads it when it builds a character. A recording
+            // carries exactly one FULL_UPDATE, at the join, so in practice this
+            // fires once and long before the spawn wave — but ordering it here
+            // is what makes that true rather than lucky.
+            //
+            // ⚠️ And `is { }` rather than `is > 0`, unlike the unlock beside it:
+            // zero is a legitimate setting (a server with invulnerability turned
+            // off) where a zero unlock is merely "already unlocked" and
+            // ambiguous. The null check is doing the work the > 0 does there.
+            if (tick.TdmInvulnerability is { } invulnerability)
+                simulation.SetTdmInvulnerability(invulnerability);
+
             if (tick.ControlPointUnlock is > 0 and var unlock)
                 simulation.SetControlPointUnlock(unlock);
 

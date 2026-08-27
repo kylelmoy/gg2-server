@@ -200,6 +200,8 @@ public sealed class DropIntelFixtureTests
 
         public void SetControlPointUnlock(int ticks) => inner.SetControlPointUnlock(ticks);
 
+        public void SetTdmInvulnerability(int ticks) => inner.SetTdmInvulnerability(ticks);
+
         public bool TryGetCharacter(int slot, out CharacterBlock character) =>
             inner.TryGetCharacter(slot, out character);
 

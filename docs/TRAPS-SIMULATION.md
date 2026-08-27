@@ -1990,10 +1990,11 @@ change trajectories rather than last digits:
 
 ### `gg_debug` stops on a rocket blast four pixels short
 
-✅ **Cause found 2026-08-27; the fix is not written.**
-`reference-gg_debug-closedtdm.trace` replays exactly for 100 ticks after its
-spawn anchor at t381 and then diverges — not on a position, but because **slot 4
-survives a death the reference recorded**. `GgDebugSplashOpenFindingTests` holds
+✅ **Found and FIXED 2026-08-27 — two bugs, one behind the other.**
+`reference-gg_debug-closedtdm.trace` replayed exactly for 100 ticks after its
+spawn anchor at t381 and then diverged — not on a position, but because **slot 4
+survived a death the reference recorded**. It now runs to **135 on every
+field**, and what stops it is a missing rocket direct hit at t516. `GgDebugSplashOpenFindingTests` holds
 the whole of it, including the arithmetic below; read that file before
 re-deriving any of this.
 
@@ -2072,14 +2073,75 @@ for a rotated sprite (1,008 boxes) and not what the overlap primitives **use**.
 **Ask what a fixture cannot reach**, the same rule as "when adding a fixture,
 ask what state it cannot reach".
 
-⬅️ **The fix is not written, and it is its own piece of work.** It changes which
-character every projectile in the game hits, so it carries the exactness bar.
-The obvious model does not clear it: inverse-rotating each world pixel into
-sprite space and flooring, then testing the sprite's bbox rectangle, reproduces
-**309,763 of 310,194** sampled cells (99.86%). ⚠️ **The residue is worst at 90,
-180 and 270 degrees** — where the rotation is exact and a rounding rule cannot
-be what is wrong — so what is missing is an **edge convention**, not a
-tie-break. The fixture is checked in so the next attempt needs no game.
+✅ **FIXED 2026-08-27** — `Gg2.Simulation.ProjectileMask`, wired into
+`Projectiles.CollideOne` (characters, sentries, generators) and
+`BackOutOfCharacter`. The model inverse-rotates each candidate world pixel into
+sprite space, floors, and tests the sprite's own bbox rectangle, with the
+bounding box kept as the broad phase in front of it.
+
+⚠️ **It is 99.861%, not exact, and that is a deliberate call.** Measured against
+the fixture: the box alone is right on **91.5%** of 310,194 sampled pixels and
+the mask model on **99.861%** — 431 wrong where the box was 26,342. Closing the
+last 431 needs GM8's own rasteriser. What settled it was not the percentage but
+**the windows**:
+
+| fixture | before | after |
+|---|---|---|
+| `reference-gg_debug-closedtdm.trace` | traj 100, all 95 | **traj 135, all 135** |
+| `reference-ctf_truefort-closedsupport.trace` | traj 489 | **traj 531** |
+| `reference-ctf_truefort-closedsentrykill.trace` | traj 581 | **traj 595** |
+
+⚠️ **Three better, twenty-four unchanged, none worse.** That is the measurement
+that justifies shipping a model which is not exact, and it is the one to re-run
+before touching this again — a 99.86% model can be wrong in a different place
+from the 91.5% one, so "more accurate on pixels" is not by itself an argument.
+
+⚠️ **What the residual is, so the next attempt does not repeat the search.** 260
+of the 431 are **floor ties** — a transformed coordinate within `1e-9` of an
+integer, the x87 class already documented on `Aabb.ForRotatedSprite`, not
+fixable in `double`. The other 171 are structural. Ruled out, all against the
+162-mask fixture:
+
+- a **continuous** rectangle test rather than floor-and-lookup: 2,832 wrong.
+- **round** instead of floor: 3,013.
+- **pixel-square coverage** (SAT, unit square against the rotated rect): 5,962.
+- a fine search over **the whole unit square of sampling offsets**: the optimum
+  is exactly zero offset, i.e. the plain floor already in use.
+- a **non-rectangular source mask**: solved for by majority vote across angles
+  and it comes back as the full bbox rectangle for every sprite, with the
+  minority votes sitting on the last row and column.
+
+⚠️ **The residue is worst at 90, 180 and 270 degrees** — where the rotation is
+exact and a rounding rule cannot be what is wrong — so what is missing is an
+**edge convention**, not a tie-break. That is where to start.
+
+⚠️ **Every sample was taken at an INTEGER position**, so which coordinate the
+pixel grid hangs off is unmeasured. `ProjectileMask` anchors it on
+`CollisionWorld.RoundPosition` because that is what `Aabb.ForRotatedSprite`
+does. A probe at fractional positions would settle it and is cheap.
+
+### Team Deathmatch's spawn invulnerability was never read off the wire
+
+⚠️ **Found hiding behind the rotated mask, 2026-08-27**, and it had been wrong
+for six phases. `WorldState.Spawn` applies `TdmInvulnerabilityTicks` correctly;
+`GameServer` sets it from `ServerOptions`; **the parity harness set it to
+nothing**, so every replayed respawn was mortal from its first frame.
+
+It rides on a `FULL_UPDATE` and on nothing else, and a recording holds exactly
+one — at the join. `reference-gg_debug-closedtdm.trace` says **30 ticks**.
+`TraceTick.TdmInvulnerability`, `ITraceSimulation.SetTdmInvulnerability`, and
+the injection in `Replayer` sits **before** the tick runs because
+`WorldState.Spawn` reads the value when it builds a character.
+
+⚠️ **Read with `is { }` rather than `is > 0`, unlike the King of the Hill unlock
+beside it.** Zero is a legitimate setting — a server with invulnerability turned
+off — where a zero unlock only ever means "already unlocked" and is ambiguous.
+
+⚠️ **The cost of not having it was invisible until something else was fixed.**
+With the mask in, `gg_debug` diverged at t481 because the port took eleven hp
+off a character that had respawned three ticks earlier and could not be hurt.
+Before the mask it diverged at t476 and nothing ever reached the respawn.
+**A bug behind a bug is only findable in order.**
 
 ### A rotated-box rounding tie is not only where `sin` is a half
 

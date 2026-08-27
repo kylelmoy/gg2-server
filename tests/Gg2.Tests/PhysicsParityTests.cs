@@ -1110,6 +1110,8 @@ public sealed class PhysicsParityTests
 
         public void SetControlPointUnlock(int ticks) => inner.SetControlPointUnlock(ticks);
 
+        public void SetTdmInvulnerability(int ticks) => inner.SetTdmInvulnerability(ticks);
+
         public bool TryGetCharacter(int slot, out CharacterBlock character) =>
             inner.TryGetCharacter(slot, out character);
     }
@@ -1154,6 +1156,8 @@ public sealed class PhysicsParityTests
         }
 
         public void SetControlPointUnlock(int ticks) { }
+
+        public void SetTdmInvulnerability(int ticks) { }
 
         public bool TryGetCharacter(int slot, out CharacterBlock character) =>
             inner.TryGetCharacter(slot, out character);
@@ -1258,6 +1262,8 @@ public sealed class PhysicsParityTests
         }
 
         public void SetControlPointUnlock(int ticks) => inner.SetControlPointUnlock(ticks);
+
+        public void SetTdmInvulnerability(int ticks) => inner.SetTdmInvulnerability(ticks);
 
         public bool TryGetCharacter(int slot, out CharacterBlock character) =>
             inner.TryGetCharacter(slot, out character);

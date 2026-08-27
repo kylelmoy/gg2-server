@@ -25,8 +25,10 @@ namespace Gg2.Tests;
 /// <para>
 /// ⚠️ <b>They disagree wildly about everything else, and that is the finding.</b>
 /// <c>tdm_mantic</c> replays exactly for <b>3,043</b> ticks — the longest
-/// closed-loop window in the project — and <c>gg_debug</c> for <b>23</b> (it was
-/// 2 until the alarm-stage spawn seam landed on 2026-08-27). See
+/// closed-loop window in the project — and <c>gg_debug</c> for <b>135</b>. That
+/// second number has been 2, 23, 100 and now 135 in a single day, and each step
+/// was a different bug: the alarm-stage spawn seam, dropdown platforms, the
+/// rotated projectile mask, and Team Deathmatch's spawn invulnerability. See
 /// <see cref="GgDebugReplaysPastItsDropdownPlatformsAndStopsOnDamage"/>.
 /// </para>
 /// </remarks>
@@ -94,9 +96,11 @@ public sealed class TeamDeathmatchFixtureTests
     /// small map. Every one of those deaths is a Team Deathmatch kill, so this
     /// is also the first recorded evidence that the mode scores at all.
     /// <para>
-    /// ⚠️ None of it is assertable against the port yet: the window is two
-    /// ticks. It is worth keeping precisely because it becomes the sharpest
-    /// combat fixture in the project the moment the landing agrees.
+    /// ⚠️ <b>Most of it is still not assertable</b>: the window reaches t516 of
+    /// 2,998, which is four of the fifty-two deaths. It is worth keeping
+    /// precisely because it becomes the sharpest combat fixture in the project
+    /// as that window grows, and it has grown from 2 ticks to 135 by being
+    /// chased four times.
     /// </para>
     /// </remarks>
     [Fact]
@@ -194,17 +198,23 @@ public sealed class TeamDeathmatchFixtureTests
     /// <para>
     /// ⚠️ <b>And the trajectories inside it are now EXACT</b> — the closed-loop
     /// replay reports <c>|dx| max 0, |dy| max 0</c> over 132 ticks and 86
-    /// comparisons. What stops it is <b>damage</b>, not position: slot 4
-    /// survives a death the reference recorded at t476.
+    /// comparisons. What stopped it next was <b>damage</b>, not position: slot 4
+    /// survived a death the reference recorded at t476.
     /// </para>
     /// <para>
-    /// ⚠️ <b>That is an open finding of its own and it has been narrowed a long
-    /// way — see <see cref="GgDebugSplashOpenFindingTests"/> before touching
-    /// it.</b> Every rocket matches, on every tick, with the killer and the
-    /// assistant the reference names; the port's blasts simply land a few pixels
-    /// short. The remaining question is whether GM8's overlap primitives use the
-    /// bounding box or the precise mask for a <em>rotated</em> projectile, and
-    /// it needs one probe against the running game.
+    /// ✅ <b>And that is fixed (2026-08-27), which took the window from 100 to
+    /// 135 — on <em>every</em> field, not just the trajectory.</b> It was two
+    /// bugs stacked: GM8's overlap primitives use the precise mask for a rotated
+    /// projectile where this port used the bounding box
+    /// (<see cref="ProjectileMask"/>), and behind it the parity harness had never
+    /// read Team Deathmatch's spawn invulnerability off the wire, so every
+    /// replayed respawn was mortal from its first frame. The whole story, and
+    /// the arithmetic that found it, is in
+    /// <see cref="GgDebugSplashOpenFindingTests"/>.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>What stops it now is a missing direct hit at t516</b> — slot 6 is 25
+    /// hp high, which is exactly a rocket's contact damage.
     /// </para>
     /// <para>
     /// ⚠️ <b>The platform's BOX is inferred rather than measured.</b>
@@ -224,11 +234,12 @@ public sealed class TeamDeathmatchFixtureTests
         var (exact, anchor) = ExactWindow(Debug, Fields.Trajectory);
 
         Assert.True(
-            exact is >= 90 and <= 140,
-            $"{Debug}: the window is now {exact} ticks after t{anchor}, not the pinned 100 — "
-                + "if it has shrunk to about 23 the dropdown platforms have regressed; if it "
-                + "has grown a long way, the t131 damage divergence is fixed and this "
-                + "recording's 52 deaths can become real assertions");
+            exact is >= 120 and <= 200,
+            $"{Debug}: the window is now {exact} ticks after t{anchor}, not the pinned 135 — "
+                + "if it has shrunk to about 23 the dropdown platforms have regressed, and to "
+                + "about 100 the rotated projectile mask has; if it has grown a long way, the "
+                + "t516 direct hit is fixed and this recording's 52 deaths can become real "
+                + "assertions");
     }
 
     /// <summary>

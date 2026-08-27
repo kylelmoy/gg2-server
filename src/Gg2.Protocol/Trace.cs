@@ -229,6 +229,26 @@ public sealed class TraceTick
     public int? ControlPointUnlock { get; init; }
 
     /// <summary>
+    /// Team Deathmatch's spawn invulnerability, in ticks, as the server
+    /// configured it — or null on a tick whose update did not carry it.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>It rides on a <c>FULL_UPDATE</c> and on nothing else</b>, and a
+    /// recording holds exactly one of those, at the moment the recorder joined.
+    /// So this is non-null on one tick of a whole trace.
+    /// <para>
+    /// ⚠️ <b>A replay cannot derive it.</b> It is server configuration
+    /// (<c>ServerOptions.TdmInvulnerabilitySeconds</c>, five by default), so a
+    /// port replaying a recording made against a differently-configured server
+    /// has no way to know except by being told — and the server tells everyone,
+    /// which is what makes anchoring it from the wire legitimate rather than a
+    /// fudge. The same argument as a <c>PLAYER_SPAWN</c>'s position and the
+    /// King of the Hill unlock.
+    /// </para>
+    /// </remarks>
+    public int? TdmInvulnerability { get; init; }
+
+    /// <summary>
     /// Everything else the server sent before this tick's update — roster
     /// changes, spawns, deaths, weapon fire.
     /// </summary>

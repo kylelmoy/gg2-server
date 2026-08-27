@@ -160,6 +160,7 @@ public static class TraceParser
                 // with it said, and empty on the great majority of ticks.
                 ControlPoints = PointsIn(pending),
                 ControlPointUnlock = UnlockIn(pending, shape),
+                TdmInvulnerability = TdmInvulnerabilityIn(pending),
                 Events = [.. pending],
             });
 
@@ -205,6 +206,36 @@ public static class TraceParser
         }
 
         return unlock;
+    }
+
+    /// <summary>
+    /// Team Deathmatch's spawn invulnerability, off whichever update in this
+    /// tick carried one.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Not gated on the gamemode, unlike <see cref="UnlockIn"/>.</b> The
+    /// field is on every <c>FULL_UPDATE</c> whatever the map is playing, and a
+    /// recording that rotates onto a Team Deathmatch map mid-stream would carry
+    /// the value in an update the shape at parse time still calls something
+    /// else. Reading it always costs nothing and cannot mislead: a non-TDM
+    /// simulation never spends it.
+    /// </remarks>
+    private static int? TdmInvulnerabilityIn(List<ServerMessage> pending)
+    {
+        int? ticks = null;
+
+        foreach (var message in pending)
+        {
+            // ⚠️ FULL_UPDATE only, and asked by tier rather than by "is the
+            // value non-zero": StateUpdateReader leaves it at zero on every
+            // other tier, and zero is also a legitimate setting, so a reader
+            // that took any non-zero value would silently keep a stale one for
+            // a server that had turned invulnerability off.
+            if (message.State is { Tier: MessageType.FullUpdate } state)
+                ticks = state.TdmInvulnerabilityTicks;
+        }
+
+        return ticks;
     }
 
     private static ControlPointBlock[] PointsIn(List<ServerMessage> pending)
