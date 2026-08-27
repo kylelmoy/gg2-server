@@ -31,11 +31,12 @@ namespace Gg2.Bots;
 /// that needs a key almost every tick to stay on.
 /// </para>
 /// <para>
-/// <b>Not ported, each conservative when absent:</b> the rocket dodge
-/// (<c>botRocketDodge</c>) so a bot never hops away from an incoming rocket; the
-/// close-in step (<c>botStepSafe</c>) so a pyro holds where the engage caught it
-/// rather than walking at its target; and the objective layer
-/// (<c>botObjectiveUpdate</c>) so a goal has to be given from outside.
+/// <b>Everything this type's three behaviours needed is ported now.</b> The
+/// rocket dodge (<c>botRocketDodge</c>) landed with the projectile reflexes, the
+/// objective layer (<c>botObjectiveUpdate</c>) with the goal cascade, and the
+/// close-in step (<c>botStepSafe</c>) last — so a pyro walks at its target
+/// instead of holding where the engage caught it, and refuses the step when the
+/// ground runs out.
 /// </para>
 /// </remarks>
 public sealed class ScriptedBot : IInputSource, IScenarioSubject
@@ -470,8 +471,25 @@ public sealed class ScriptedBot : IInputSource, IScenarioSubject
             navKeys &= ~(PlayerKeys.Left | PlayerKeys.Right);
             Path.StuckTicks = 0;
 
-            // The close-in step waits on botStepSafe, which is not ported, so a
-            // pyro holds where the engage caught it.
+            // ⚠️ A class that has to be NEARER than its attention band before it
+            // can shoot walks at the target rather than stopping where the hold
+            // caught it. Only the pyro today — its flame reaches a fraction of the
+            // distance it can see, so holding at acquisition range is holding out
+            // of range for ever.
+            //
+            // ⚠️ And it is the one press in this file that no route validated,
+            // which is why it goes through BotStep: everything else that moves a
+            // bot sideways is either an edge the nav generator proved or a single
+            // step of back-off, and ctf_truefort has a pit beside the route.
+            var closeIn = BotClassProfile.CloseIn(self.Class);
+
+            if (closeIn > 0 && distance > closeIn)
+            {
+                var stepDir = target.X < self.X ? -1 : 1;
+
+                if (BotStep.Safe(world.Collision, in self, stepDir))
+                    navKeys |= stepDir > 0 ? PlayerKeys.Right : PlayerKeys.Left;
+            }
         }
 
         // ⚠️ Back away from anything inside this class's minimum band. Two bots

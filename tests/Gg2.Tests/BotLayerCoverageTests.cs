@@ -25,7 +25,7 @@ namespace Gg2.Tests;
 public sealed class BotLayerCoverageTests
 {
     /// <summary>
-    /// The two scripts phase 7 left unported, each conservative when absent.
+    /// The one script phase 7 left unported, conservative when absent.
     /// </summary>
     /// <remarks>
     /// ⚠️ <b>Kept in the same order and the same words as <c>docs/PLAN.md</c>'s
@@ -34,7 +34,6 @@ public sealed class BotLayerCoverageTests
     /// </remarks>
     private static readonly string[] Unported =
     [
-        "botStepSafe",            // a pyro holds where the engage caught it rather than closing
         "botStabWindow",          // a spy never stabs
     ];
 
@@ -94,12 +93,12 @@ public sealed class BotLayerCoverageTests
         foreach (var script in Unported)
             Assert.Contains(script, bots);
 
-        // ⚠️ And the list is exactly two — ten before the rocket jump, nine before
+        // ⚠️ And the list is exactly one — ten before the rocket jump, nine before
         // botFindAlly, eight before the projectile reflexes took three at once, five
         // before botSuppressSpot, four before botArcClear, three before
-        // botMinesArmed. A list that grows without the plan growing with it is the
-        // same decay from the other direction.
-        Assert.Equal(2, Unported.Length);
-        Assert.Equal(2, Unported.Distinct(StringComparer.Ordinal).Count());
+        // botMinesArmed, two before botStepSafe. A list that grows without the plan
+        // growing with it is the same decay from the other direction.
+        Assert.Single(Unported);
+        Assert.Single(Unported.Distinct(StringComparer.Ordinal));
     }
 }
