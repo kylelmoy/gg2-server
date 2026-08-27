@@ -177,6 +177,15 @@ public sealed class SubWireProbe(PortedSimulation inner, IReadOnlyList<TraceTick
 
     public IReadOnlyList<IntelRecord> IntelLastTick => inner.IntelLastTick;
 
+    public IReadOnlyList<SentryRecord> SentriesLastTick => inner.SentriesLastTick;
+
+    public bool TryGetControlPoint(int index, out ControlPointBlock point)
+    {
+        return inner.TryGetControlPoint(index, out point);
+    }
+
+    public void SetControlPointUnlock(int ticks) => inner.SetControlPointUnlock(ticks);
+
     public void Tick(ReadOnlySpan<PlayerInput> inputs)
     {
         inner.Tick(inputs);

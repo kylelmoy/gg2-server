@@ -48,11 +48,36 @@ public static class TraceParser
     /// asserts something about a fixture's <em>contents</em>.
     /// </para>
     /// </remarks>
+    /// <param name="shapeForMap">
+    /// Resolves a map name to its wire shape, so the reader can follow a
+    /// <c>CHANGE_MAP</c> onto a map of a different gamemode.
+    /// </param>
+    /// <remarks>
+    /// ⚠️ <b>Without <paramref name="shapeForMap"/> a trace is framed by one
+    /// shape from end to end, and a rotation to another gamemode desynchronises
+    /// it.</b> Measured on
+    /// <c>reference-gen_destroy-rotationcaps.trace</c>: framing stops at byte
+    /// 79,467 of 124,340 when the reader keeps the Generator shape across a
+    /// change to <c>ctf_2dfort</c>.
+    /// <para>
+    /// It went unnoticed for a long time because <b>only <c>FULL_UPDATE</c> and
+    /// <c>CAPS_UPDATE</c> carry the HUD block</b> — <c>StateUpdateReader</c>
+    /// returns before the tail on every other tier — so a wrong shape is
+    /// harmless until one of those arrives after the change.
+    /// <c>reference-gen_destroy-rotation.trace</c> rotates gamemode and frames
+    /// perfectly, purely because none does.
+    /// </para>
+    /// <para>
+    /// Null keeps the old single-shape behaviour, which is correct for every
+    /// recording that never changes map.
+    /// </para>
+    /// </remarks>
     public static IReadOnlyList<TraceTick> Parse(
         Trace trace,
         in WorldShape shape,
         out StateUpdate? start,
-        out string? stopped)
+        out string? stopped,
+        Func<string, WorldShape>? shapeForMap = null)
     {
         stopped = null;
         var stream = new ServerStream();
@@ -85,6 +110,20 @@ public static class TraceParser
                 break;
             }
 
+            // ⚠️ Re-shape before anything else reads a body. The server is on
+            // the new map from this message onwards, and if its gamemode differs
+            // the HUD block changes length underneath the reader.
+            if (message.Type == MessageType.ChangeMap && shapeForMap is not null
+                && message.Payload.Length >= 1)
+            {
+                var length = message.Payload[0];
+                if (message.Payload.Length >= 1 + length)
+                {
+                    var name = System.Text.Encoding.ASCII.GetString(message.Payload, 1, length);
+                    stream.SetShape(shapeForMap(name));
+                }
+            }
+
             if (message.State is not { } state)
             {
                 pending.Add(message);
@@ -112,6 +151,15 @@ public static class TraceParser
                 Index = ticks.Count,
                 Tier = state.Tier,
                 Slots = SlotsOf(state),
+
+                // ⚠️ NOT from `state`. The control-point block is read only on
+                // a FULL_UPDATE or a CAPS_UPDATE — StateUpdateReader returns
+                // before the HUD tail on anything else — and neither of those
+                // delimits a tick, so both are sitting in `pending`. A tick's
+                // points are therefore whatever the CAPS_UPDATE that arrived
+                // with it said, and empty on the great majority of ticks.
+                ControlPoints = PointsIn(pending),
+                ControlPointUnlock = UnlockIn(pending, shape),
                 Events = [.. pending],
             });
 
@@ -119,6 +167,57 @@ public static class TraceParser
         }
 
         return ticks;
+    }
+
+    /// <summary>
+    /// The control points named by a <c>CAPS_UPDATE</c> or <c>FULL_UPDATE</c>
+    /// arriving with this tick, or empty.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>A recording observes a control point only when the server chose to
+    /// send one of those</b>, which on a King of the Hill recording is a few
+    /// dozen times in several thousand ticks — not every tick, and not on the
+    /// positional cadence either. The last one wins: two in a tick would mean
+    /// the later described the state the tick ended in.
+    /// </remarks>
+    /// <summary>
+    /// <c>cpUnlock</c> out of a King of the Hill HUD block arriving with this
+    /// tick, or null.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Index 0 of the HUD scalars, and only for the two hill modes.</b>
+    /// <c>StateUpdateReader.ReadHud</c> writes <c>cpUnlock, redTimer,
+    /// blueTimer</c> for <c>KingOfTheHill</c> and <c>DualKingOfTheHill</c>; every
+    /// other mode has a different layout, so this deliberately refuses to guess
+    /// for them rather than reading whatever happens to sit at index 0.
+    /// </remarks>
+    private static int? UnlockIn(List<ServerMessage> pending, WorldShape shape)
+    {
+        if (shape.GameMode is not (GameMode.KingOfTheHill or GameMode.DualKingOfTheHill))
+            return null;
+
+        int? unlock = null;
+
+        foreach (var message in pending)
+        {
+            if (message.State is { HudScalars.Length: > 0 } state)
+                unlock = (int)state.HudScalars[0];
+        }
+
+        return unlock;
+    }
+
+    private static ControlPointBlock[] PointsIn(List<ServerMessage> pending)
+    {
+        var points = Array.Empty<ControlPointBlock>();
+
+        foreach (var message in pending)
+        {
+            if (message.State is { ControlPoints.Length: > 0 } state)
+                points = state.ControlPoints;
+        }
+
+        return points;
     }
 
     private static TraceSlot[] SlotsOf(StateUpdate state)

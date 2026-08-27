@@ -206,7 +206,7 @@ public sealed class SupportClassFixtureTests
     /// <para>
     /// The numbers are written down so an improvement is visible, and one has
     /// happened: it replays with <c>|dx|</c> max <b>10</b> / p99 <b>9</b> and
-    /// <c>|dy|</c> max 166 / p99 <b>17</b> wire units over 1,158 comparisons.
+    /// <c>|dy|</c> max 166 / p99 <b>17</b> wire units over ~1,157 comparisons.
     /// When those numbers were first written they were max 25 / p99 13 and max
     /// 166 / p99 30, and the difference is measured rather than guessed:
     /// <b>disabling the engineer's Shotgun reproduces the old numbers
@@ -247,6 +247,20 @@ public sealed class SupportClassFixtureTests
         // ceiling below. At the old bound of 60 the same regression passed.
         Assert.True(report.PercentileXError(99) < 15, $"p99 |dx| {report.PercentileXError(99)} wire units");
         Assert.True(report.PercentileYError(99) < 25, $"p99 |dy| {report.PercentileYError(99)} wire units");
+
+        // ⚠️ And the horizontal MAXIMUM, which is here for a specific bug rather
+        // than as a general bound: this fixture's pyros fire an unseeded weapon
+        // every few ticks, and an unseeded weapon draws from the same stream the
+        // alarm stage's spawn-point pick uses. A replay that forced the stream
+        // before the tick — rather than narrowing what the draw can land on, as
+        // PortedSimulation.SeedIndependentSpawnPoints does — put slot 2's
+        // respawn at t1285 one marker along, and ctf_truefort's spawn markers
+        // are 24 world pixels apart.
+        //
+        // 10 today; 120 with that regression, on one comparison out of 1,157,
+        // with both percentiles above untouched. Nothing else in this file
+        // notices, which is exactly why the maximum is asserted.
+        Assert.True(report.MaxXError < 30, $"max |dx| {report.MaxXError} wire units: a respawn is landing on the wrong spawn marker");
     }
 
     /// <summary>
@@ -359,6 +373,103 @@ public sealed class SupportClassFixtureTests
     }
 
     /// <summary>
+    /// ✅ <b>The port emits no uber message the reference did not, on any tick</b>
+    /// — the first test in the project to use <see cref="Fields.Ubers"/> at all.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b><c>Fields.Ubers</c> existed and nothing exercised it.</b> Found by
+    /// auditing the replayer's tick alignment after the control-point comparison
+    /// turned out to be reading a tick late (docs/PARITY.md, "the capture meter
+    /// was compared one tick late"): shifting each comparison family by one tick
+    /// and counting failures gave deaths 3, intel 2, sentries 2 — and
+    /// <b>ubers 0</b>. A whole comparison could have been reading the wrong
+    /// tick's messages and no test would have said so, which is exactly the
+    /// condition that let the control-point bug survive.
+    /// <para>
+    /// <c>ThePortNeverChargesAnUberEarlierThanTheReference</c> above does not
+    /// close it: it replays with <c>Fields.None</c> and watches the simulation
+    /// through a decorator, so the comparison itself never runs.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>The direction is deliberate, and it is the same trade that test
+    /// makes.</b> Whether this fixture's medic lives long enough to charge is
+    /// decided by which of a pyro's unseeded flames connect, so a <em>missing</em>
+    /// uber is not evidence of anything. An uber the port emits that the
+    /// reference did not — or the same one on a different tick — is: it means the
+    /// rate, the target or the harness's alignment is wrong. Measured today:
+    /// <c>UBER_CHARGED</c> at t1929 and <c>UBER</c> at t1960, both reproduced
+    /// exactly, zero mismatches in either direction.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Both are far outside the trajectory and hp windows</b> (t774 + 489
+    /// and + 328), so a disagreement here would be uninformative — but
+    /// <em>agreement</em> across 1,155 ticks of drift is not, and tick alignment
+    /// is what this is for.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ThePortEmitsNoUberMessageTheReferenceDidNot()
+    {
+        var (trace, ticks) = Load(ClosedSupportTrace);
+        var anchor = FixtureAnchors.LastExactAnchor(ticks)!.Value;
+
+        var report = new Replayer(new PortedSimulation(MapLoader)) { Compare = Fields.Ubers }
+            .Replay(ClosedSupportTrace, trace.Header.Map, ticks, ReplayMode.ClosedLoop, stopAtFirstBadTick: false);
+
+        // ⚠️ BOTH directions, and the weaker version was tried first and
+        // rejected: asserting only "no uber the reference did not send" passes
+        // just as well when the comparison is deleted outright, which is how
+        // Fields.Ubers came to be unused in the first place. Measured — routing
+        // its mismatches to a discarded list fails nothing under the weak
+        // assertion and fails this one.
+        var mismatches = report.Mismatches.Where(m => m.Tick > anchor).ToArray();
+
+        Assert.True(
+            mismatches.Length == 0,
+            "the port's uber messages differ from the reference's: "
+                + string.Join(
+                    "; ",
+                    mismatches.Take(4).Select(m => $"t{m.Tick} slot {m.Slot} {m.Field} exp {m.Expected} got {m.Actual}"))
+                + ". ⚠️ If these are all `exp 1 got 0`, the port's medic died before charging — which is "
+                + "decided by unseeded pyro flames and is NOT a bug (see "
+                + "ThePortNeverChargesAnUberEarlierThanTheReference). Weaken this to `m.Expected == 0` "
+                + "and say so here. Anything with `exp 0` is a real divergence.");
+
+        // And the recording really does hold both halves, so this is not passing
+        // on a fixture with nothing in it.
+        Assert.Single(ticks, t => t.Events.Any(m => m.Type == MessageType.UberCharged));
+        Assert.Single(ticks, t => t.Events.Any(m => m.Type == MessageType.Uber));
+
+        // ⚠️ The control, and it is the one that was missing. "No mismatches" is
+        // satisfied just as well by a comparison that never runs — which is
+        // precisely how Fields.Ubers sat unused. Replay the same trace with the
+        // uber messages taken OUT: the port still emits its own, so the
+        // comparison must now report them as unexpected. If it reports nothing,
+        // the comparison is dead rather than agreeing.
+        var stripped = ticks
+            .Select(t => new TraceTick
+            {
+                Index = t.Index,
+                Tier = t.Tier,
+                Slots = t.Slots,
+                ControlPoints = t.ControlPoints,
+                ControlPointUnlock = t.ControlPointUnlock,
+                Events = t.Events
+                    .Where(m => m.Type is not (MessageType.UberCharged or MessageType.Uber))
+                    .ToArray(),
+            })
+            .ToList();
+
+        var control = new Replayer(new PortedSimulation(MapLoader)) { Compare = Fields.Ubers }
+            .Replay(ClosedSupportTrace, trace.Header.Map, stripped, ReplayMode.ClosedLoop, stopAtFirstBadTick: false);
+
+        Assert.True(
+            control.Mismatches.Any(m => m.Tick > anchor && m.Expected == 0),
+            "the uber comparison reported nothing against a trace with the uber messages removed — "
+                + "it is not running, so the assertion above proves nothing");
+    }
+
+    /// <summary>
     /// The injected sentries fall under simulated gravity and land on the tick
     /// — and at the fifth-of-a-pixel position — the reference's own
     /// <c>SENTRY_POSITION</c> broadcasts named.
@@ -457,6 +568,15 @@ public sealed class SupportClassFixtureTests
 
         public IReadOnlyList<IntelRecord> IntelLastTick => inner.IntelLastTick;
 
+        public IReadOnlyList<SentryRecord> SentriesLastTick => inner.SentriesLastTick;
+
+        public bool TryGetControlPoint(int index, out ControlPointBlock point)
+        {
+            return inner.TryGetControlPoint(index, out point);
+        }
+
+        public void SetControlPointUnlock(int ticks) => inner.SetControlPointUnlock(ticks);
+
         public void Tick(ReadOnlySpan<PlayerInput> inputs)
         {
             inner.Tick(inputs);
@@ -515,6 +635,15 @@ public sealed class SupportClassFixtureTests
         public IReadOnlyList<UberRecord> UbersLastTick => inner.UbersLastTick;
 
         public IReadOnlyList<IntelRecord> IntelLastTick => inner.IntelLastTick;
+
+        public IReadOnlyList<SentryRecord> SentriesLastTick => inner.SentriesLastTick;
+
+        public bool TryGetControlPoint(int index, out ControlPointBlock point)
+        {
+            return inner.TryGetControlPoint(index, out point);
+        }
+
+        public void SetControlPointUnlock(int ticks) => inner.SetControlPointUnlock(ticks);
 
         public void Tick(ReadOnlySpan<PlayerInput> inputs)
         {

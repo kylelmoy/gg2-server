@@ -83,10 +83,46 @@ public enum Fields
     /// </remarks>
     Intel = 1 << 7,
 
+    /// <summary>
+    /// Every recorded <c>DESTROY_SENTRY</c>, against the ones the port produced.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="Hp"/> for the same reason <see cref="Deaths"/>
+    /// is, and the argument is stronger still: ⚠️ <b>a sentry contributes
+    /// nothing at all to an <c>INPUTSTATE</c>-tier update, not even its hp</b>
+    /// (docs/PROTOCOL.md, "Per sentry"), so on most ticks a recording says
+    /// nothing whatever about one. A destroyed sentry is merely absent from a
+    /// later update's subobject bit, and nothing in that update names a killer.
+    /// See <see cref="SentryRecord"/>.
+    /// </remarks>
+    Sentries = 1 << 8,
+
+    /// <summary>
+    /// Every control point, as each position-bearing update described it.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The block rides on a <c>CAPS_UPDATE</c> or the join
+    /// <c>FULL_UPDATE</c> and on nothing else</b> — <c>StateUpdateReader</c>
+    /// returns before the HUD tail on any other tier — so a recording observes
+    /// a control point only when the server chose to send one, a few dozen
+    /// times in several thousand ticks, and on no fixed cadence.
+    /// <para>
+    /// ⚠️ <b>Nothing else in a recording says anything about a hill.</b>
+    /// <c>StateUpdateReader</c> parsed the block and <c>TraceParser</c> threw it
+    /// away until 2026-08-27, so a port that never captured the point, captured
+    /// it for the wrong team, or moved the meter at the wrong rate replayed a
+    /// King of the Hill recording exactly as well as a correct one.
+    /// <c>ControlPointTests</c> and <c>DualKothTests</c> were the whole gate for
+    /// two gamemodes.
+    /// </para>
+    /// </remarks>
+    ControlPoints = 1 << 9,
+
     /// <summary>What the character physics is responsible for.</summary>
     Trajectory = Position | Velocity,
 
-    All = Position | Velocity | Hp | Ammo | Flags | Deaths | Ubers | Intel,
+    All = Position | Velocity | Hp | Ammo | Flags | Deaths | Ubers | Intel | Sentries
+        | ControlPoints,
 }
 
 public sealed class Replayer(ITraceSimulation simulation)
@@ -136,6 +172,7 @@ public sealed class Replayer(ITraceSimulation simulation)
         simulation.LoadMap(map);
 
         var mismatches = new List<Mismatch>();
+
         var xErrors = new List<long>();
         var yErrors = new List<long>();
         var comparisons = 0;
@@ -151,7 +188,15 @@ public sealed class Replayer(ITraceSimulation simulation)
             // The seeds for the tick about to run are recorded in the *next*
             // tick's events; see SupplyFireSeeds.
             if (index + 1 < ticks.Count)
+            {
                 SupplyFireSeeds(ticks[index + 1]);
+
+                // ⚠️ And so is a spawn, for exactly the same reason: the alarm
+                // stage runs after the state has already been serialised, so a
+                // character created on this tick is first announced on the next
+                // one. See QueueSpawns.
+                QueueSpawns(ticks[index + 1]);
+            }
 
             var bad = mismatches.Count;
 
@@ -163,6 +208,37 @@ public sealed class Replayer(ITraceSimulation simulation)
 
                 if (mode == ReplayMode.OpenLoop)
                     Anchor(tick);
+            }
+
+            if (tick.ControlPointUnlock is > 0 and var unlock)
+                simulation.SetControlPointUnlock(unlock);
+
+            // ⚠️ BEFORE Advance, and that is not cosmetic. The control-point
+            // block rides in this tick's state update, which — like the
+            // positions beside it — was serialised in the server's Begin Step
+            // and therefore describes the END OF THE PREVIOUS TICK. Comparing it
+            // after Advance holds the port's end-of-this-tick meter against the
+            // reference's end-of-last-tick one, and the port reads high by
+            // exactly one tick of capture.
+            //
+            // Measured: that made the port look like it started every capture
+            // two ticks early — +2 on a soldier recording and +4 on a scout one,
+            // which was read as a simulation bug and pinned as an open finding
+            // before this line was moved. Both fixtures are exact with it here.
+            // docs/PARITY.md, "the capture meter was a harness bug".
+            //
+            // ⚠️ The unlock injection above must stay AHEAD of it, because it
+            // re-locks and zeroes the meter: comparing first would hold the port
+            // against a value the injection is about to wipe. Measured too — it
+            // costs reference-koth_valley-uncontested.trace its exactness.
+            //
+            // ⚠️ NOT gated on HasPositions. The block arrives on a CAPS_UPDATE,
+            // whose arrival is independent of the tick's own tier — so gating
+            // this on the positional cadence silently skipped every observation
+            // that landed on an INPUTSTATE tick, which was most of them.
+            if (tick.ControlPoints.Length > 0)
+            {
+                ReconcileControlPoints(tick, mismatches);
             }
 
             Advance(tick);
@@ -180,8 +256,50 @@ public sealed class Replayer(ITraceSimulation simulation)
                 ReconcileDeaths(tick.Index, ticks[index + 1], mismatches);
                 ReconcileUbers(tick.Index, ticks[index + 1], mismatches);
                 ReconcileIntel(tick.Index, ticks[index + 1], mismatches);
+
+                // ⚠️ Read out of the FOLLOWING tick like a death, and for the
+                // same reason: the turret fires from End Step, which runs after
+                // the server has already serialised this tick.
+                ReconcileSentries(tick.Index, ticks[index + 1], mismatches);
             }
 
+            // ⚠️ Injected on EVERY observation, like a PLAYER_SPAWN and for the
+            // same reason: a replay cannot derive it. The King of the Hill
+            // pregame timer starts when the server restarts the room, and a
+            // recording's only landmark is the CHANGE_MAP that announced the
+            // change several hundred ticks earlier. Measured on two recordings:
+            // both carry one CHANGE_MAP at t0 and unlock at t1236 and t1160,
+            // neither of which is the 901 the timer actually counts.
+            // KothUnlockTimingTests gates that arithmetic directly instead.
+            //
+            // ⚠️ Anchoring only ONCE does not work, and the reason is worth
+            // keeping: the FIRST observation is the join FULL_UPDATE, which
+            // describes the round the recorder joined *before* the reload — on
+            // reference-koth_valley-uncontested.trace it reads 0, an already
+            // unlocked point, so a one-shot anchor unlocks the replay's hill
+            // immediately. The new round's countdown first appears at t1086
+            // reading 149.
+            //
+            // ⚠️ Only a POSITIVE reading, and that is the whole trick. A zero
+            // is ambiguous: it means "already unlocked", which is true both of
+            // the round the recorder joined and of the one after the reload —
+            // and the server keeps serialising the OLD round's HUD for a few
+            // hundred ticks after announcing the change, so the first readings
+            // are stale. On reference-koth_valley-uncontested.trace the wire
+            // says 0 at t0 and t62 and does not show the new round's countdown
+            // until t1086, reading 149.
+            //
+            // A positive value is unambiguous — the server only fires the unlock
+            // when the counter reads 0 — so it says both "this many ticks left"
+            // and "still locked", which is why the simulation re-locks on it.
+            //
+            // ⚠️ The delay is NOT a constant to subtract: the two KotH
+            // recordings restart their rounds 335 and 254 ticks after their
+            // CHANGE_MAP.
+            //
+            // What this concedes is the countdown, which is `-1` a tick and
+            // unit-tested. What it still gates is everything downstream: who is
+            // standing on the point, the capture rate, and ownership.
             if (!UpdatesPrecedeTheirTick && tick.HasPositions)
             {
                 Reconcile(tick, mismatches, xErrors, yErrors, ref comparisons, ref resyncs);
@@ -220,6 +338,45 @@ public sealed class Replayer(ITraceSimulation simulation)
     /// client does too (<c>doEventSpawn.gml</c>). Only the choice of point is
     /// RNG this port does not reproduce, and the choice is on the wire.
     /// </remarks>
+    /// <summary>Slots whose spawn the previous tick's alarm stage has taken on.</summary>
+    private readonly HashSet<int> _queued = [];
+
+    /// <summary>
+    /// Asks the simulation to spawn, in the tick about to run, whoever the
+    /// <em>next</em> tick's messages report as having spawned.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>A <c>PLAYER_SPAWN</c> in tick T's block describes tick T-1</b>, the
+    /// same off-by-one a fire seed and a death have
+    /// (<see cref="SupplyFireSeeds"/>): <c>GameServerBeginStep.gml</c> serialises
+    /// the state inside Begin Step, and the alarm stage that runs
+    /// <c>PlayerSpawn</c> comes after it — so a character created on a tick
+    /// cannot appear in that tick's own update and is announced on the next.
+    /// <para>
+    /// That one tick is the whole point. A character created in the alarm stage
+    /// gets a Step and an End Step but <b>no Begin Step</b>, so its first End
+    /// Step still sees <c>vspeed == 0</c> and takes the stair descent's
+    /// six-pixel snap. Queueing on the tick the message *arrives* is a tick late
+    /// and breaks every spawn-anchored fixture; queueing a tick early — here —
+    /// is what the reference does. Measured both ways.
+    /// </para>
+    /// </remarks>
+    private void QueueSpawns(TraceTick next)
+    {
+        foreach (var message in next.Events)
+        {
+            if (message.Type != MessageType.PlayerSpawn
+                || message.PlayerId is not { } slot
+                || message.Payload.Length < 3)
+            {
+                continue;
+            }
+
+            if (simulation.QueueSpawn(slot, message.Payload[1], message.Payload[2]))
+                _queued.Add(slot);
+        }
+    }
+
     private void ApplyEvents(TraceTick tick)
     {
         foreach (var message in tick.Events)
@@ -239,8 +396,25 @@ public sealed class Replayer(ITraceSimulation simulation)
                     // later, already fallen and rounded to a fifth of a pixel.
                     // A simulation that cannot resolve it returns false and
                     // Reconcile anchors from the wire as before.
-                    if (message.Payload.Length >= 3)
+                    //
+                    // ⚠️ And ask for it through the ALARM STAGE first. A
+                    // character created there gets no Begin Step on its first
+                    // tick, so its first End Step still sees vspeed == 0 and
+                    // takes the stair descent's six-pixel snap. Placing it here
+                    // instead hands it this tick's gravity and misses the snap —
+                    // invisible on ctf_truefort, whose markers are eighteen
+                    // pixels up, and worth 0.4 px for ever on a map whose
+                    // markers are exactly six.
+                    //
+                    // ⚠️ Unless the previous tick already queued it — see
+                    // QueueSpawns, which is where a spawn is normally handled
+                    // now. This arm is the fallback for a spawn the simulation
+                    // could not put through its alarm stage, and for the first
+                    // tick of a replay, which has no previous tick to have
+                    // queued it.
+                    if (message.Payload.Length >= 3 && !_queued.Remove(spawned))
                         simulation.SpawnCharacter(spawned, message.Payload[1], message.Payload[2]);
+
                     break;
 
                 case MessageType.PlayerLeave when message.PlayerId is { } slot:
@@ -274,6 +448,20 @@ public sealed class Replayer(ITraceSimulation simulation)
                     if (message.Payload.Length >= 2)
                         simulation.SetPlayerClass(changedClass, (PlayerClass)message.Payload[1]);
                     simulation.ClearCharacter(changedClass);
+                    break;
+
+                // ⚠️ The slot comes from the PAYLOAD, not from PlayerId.
+                // ServerStream frames this through Fixed(), which skips the body
+                // without decoding it, so PlayerId is null for every message in
+                // that family — a `when message.PlayerId is { }` guard here
+                // silently never matched, and the injection did nothing.
+                case MessageType.DropIntel when message.Payload.Length >= 1:
+                    // ⚠️ Applied BEFORE this tick runs, like a BUILD_SENTRY and
+                    // for the same reason: processClientCommands runs inside the
+                    // server's Begin Step, ahead of serializeState, so the
+                    // message lands in its OWN tick's block rather than the
+                    // next one's.
+                    simulation.DropIntel(message.Payload[0]);
                     break;
 
                 case MessageType.BuildSentry when message.Payload.Length >= 6:
@@ -524,6 +712,140 @@ public sealed class Replayer(ITraceSimulation simulation)
         }
     }
 
+    /// <summary>
+    /// Every control point the update described, against the port's own.
+    /// </summary>
+    /// <remarks>
+    /// <b>Three fields, and each one catches a different wrong port.</b>
+    /// <c>Team</c> is who owns it, so a port that never completes a capture
+    /// fails there; <c>CappingTeam</c> is who is working on it, which catches a
+    /// port that ignores presence or contests wrongly; and <c>Capping</c> is the
+    /// meter itself, which catches a capture rate that is merely the wrong
+    /// speed.
+    /// <para>
+    /// ⚠️ <b>Compared by index, which is load order.</b> The block carries no
+    /// identifier — <c>ControlPoints.Place</c> fixes the order once at load and
+    /// the wire relies on both ends agreeing about it, which is the same
+    /// property that makes the count-prefix-free framing work at all.
+    /// </para>
+    /// </remarks>
+    private void ReconcileControlPoints(TraceTick tick, List<Mismatch> mismatches)
+    {
+        if ((Compare & Fields.ControlPoints) == 0)
+            return;
+
+        for (var i = 0; i < tick.ControlPoints.Length; i++)
+        {
+            var expected = tick.ControlPoints[i];
+
+            if (!simulation.TryGetControlPoint(i, out var actual))
+            {
+                mismatches.Add(new Mismatch
+                {
+                    Tick = tick.Index,
+                    Slot = i,
+                    Field = "cp",
+                    Expected = 1,
+                    Actual = 0,
+                });
+
+                continue;
+            }
+
+            Compare(nameof(expected.Team), expected.Team, actual.Team);
+            Compare("cappingTeam", expected.CappingTeam, actual.CappingTeam);
+            Compare("capping", expected.Capping, actual.Capping);
+
+            void Compare(string field, long want, long got)
+            {
+                if (want == got)
+                    return;
+
+                mismatches.Add(new Mismatch
+                {
+                    Tick = tick.Index,
+                    Slot = i,
+                    Field = $"cp{field}",
+                    Expected = want,
+                    Actual = got,
+                });
+            }
+        }
+    }
+
+    /// <summary>
+    /// Every <c>DESTROY_SENTRY</c> the recording holds, against every one the
+    /// port produced.
+    /// </summary>
+    /// <remarks>
+    /// <b>The missing direction is the one worth having.</b> A port that never
+    /// destroyed a sentry at all passes every state comparison in this file: a
+    /// sentry writes no bytes whatever on an <c>INPUTSTATE</c>, so on six ticks
+    /// in seven the recording is silent about it, and on the seventh a destroyed
+    /// one is simply an unset subobject bit that names nobody. Only the absent
+    /// message says so.
+    /// <para>
+    /// Matched as a multiset like <see cref="ReconcileIntel"/>, so two sentries
+    /// dying on one tick do not have to be produced in the reference's order.
+    /// </para>
+    /// </remarks>
+    private void ReconcileSentries(int tickIndex, TraceTick next, List<Mismatch> mismatches)
+    {
+        if ((Compare & Fields.Sentries) == 0)
+            return;
+
+        var unmatched = new List<SentryRecord>(simulation.SentriesLastTick);
+
+        foreach (var message in next.Events)
+        {
+            if (!TryReadSentry(message, out var expected))
+                continue;
+
+            if (unmatched.Remove(expected))
+                continue;
+
+            mismatches.Add(new Mismatch
+            {
+                Tick = tickIndex,
+                Slot = expected.Slot,
+                Field = "destroysentry",
+                Expected = 1,
+                Actual = 0,
+            });
+        }
+
+        foreach (var got in unmatched)
+        {
+            mismatches.Add(new Mismatch
+            {
+                Tick = tickIndex,
+                Slot = got.Slot,
+                Field = "destroysentry",
+                Expected = 0,
+                Actual = 1,
+            });
+        }
+    }
+
+    /// <summary>
+    /// One <c>DESTROY_SENTRY</c> body: <c>ubyte playerId</c>,
+    /// <c>ubyte killer</c>, <c>ubyte assistant</c>, <c>ubyte cause</c> —
+    /// <c>sendEventDestroySentry.gml</c>, the same shape as a
+    /// <c>PLAYER_DEATH</c>.
+    /// </summary>
+    private static bool TryReadSentry(ServerMessage message, out SentryRecord sentry)
+    {
+        if (message.Type == MessageType.DestroySentry && message.Payload.Length >= 4)
+        {
+            sentry = new SentryRecord(
+                message.Payload[0], message.Payload[1], message.Payload[2], message.Payload[3]);
+            return true;
+        }
+
+        sentry = default;
+        return false;
+    }
+
     private static string NameOf(IntelEvent which) => which switch
     {
         IntelEvent.Grabbed => "grabintel",
@@ -640,6 +962,20 @@ public sealed class Replayer(ITraceSimulation simulation)
     {
         for (var slot = 0; slot < tick.Slots.Length; slot++)
         {
+            // ⚠️ A slot whose spawn is queued for this tick's alarm stage is
+            // left alone here as well as in Reconcile: the trace cannot show the
+            // character yet — the state was serialised before the alarm stage ran
+            // — so the `else` arm below would clear a slot that is deliberately
+            // about to be filled by the tick itself.
+            //
+            // ⚠️ Measured to change no bound: it is here because it is right,
+            // not because it fixed anything. The open-loop artefact it looked
+            // like the cause of turned out to be the spawn-point draw being
+            // moved by an unseeded weapon — see docs/PARITY.md, "an unseeded
+            // weapon moves the spawn-point draw".
+            if (simulation.HasPendingSpawn(slot))
+                continue;
+
             var recorded = tick.Slots[slot];
 
             if (recorded.Observed is { } observed)
@@ -682,6 +1018,17 @@ public sealed class Replayer(ITraceSimulation simulation)
     {
         for (var slot = 0; slot < tick.Slots.Length; slot++)
         {
+            // ⚠️ A slot whose spawn is queued for this tick's alarm stage is
+            // deliberately not there yet, and must be left alone in both
+            // directions. The trace cannot show it either — the state was
+            // serialised before the alarm stage ran — so the arm below would
+            // clear the slot, and if the trace does show it, anchoring from the
+            // wire would throw away the exact spawn-point placement QueueSpawn
+            // exists to keep and count a resync against a replay doing the right
+            // thing.
+            if (simulation.HasPendingSpawn(slot))
+                continue;
+
             if (tick.Slots[slot].Observed is not { } expected)
             {
                 simulation.ClearCharacter(slot);

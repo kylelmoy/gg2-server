@@ -346,17 +346,13 @@ Be honest about these in the parity harness rather than assuming:
 
 1. **Instance ordering under heavy churn** (projectiles created and destroyed in
    the same tick).
-2. **How an alarm assigned a fractional number of ticks rounds.** GM8 stores
-   alarms as integers — it has to, or an alarm set to 30.45 would step past zero
-   and never fire — and `Gg2.Simulation.Timers.SetAlarm` rounds half to even
-   because that is this codebase's default for every GML-side rounding. It has
-   not been measured. It is reachable: the scattergun sets a pellet's lifetime
-   to `35` times a factor in `[0.5, 1]`, so every shot from a moving scout
-   assigns a fraction. The cost of being wrong is one tick of a pellet's maximum
-   range, which no fixture reaches.
 
-Both are answerable with `gg2-agent`'s live bridge. Do that before building on a
-guess.
+~~2. How an alarm assigned a fractional number of ticks rounds.~~ **Measured
+2026-08-27: half to even**, which is what `Timers.SetAlarm` already did. See
+"Settled: the alarm stage" for the table.
+
+The one that is left is answerable with `gg2-agent`'s live bridge. Do that
+before building on a guess.
 
 ### Settled: the collision boundary rule
 
@@ -1016,8 +1012,50 @@ if alarm >= 0 { alarm -= 1; if alarm == 0 { run the event } }
 - An alarm set to **0 never fires at all** — it goes straight to -1.
   `Character.events/Create.xml` writes `alarm[1] = 0`, and that is how GM8
   spells "off", not "fire immediately".
-- After firing it rests at 0, not -1, and is consumed on the following tick.
+- After firing it rests at **0**, not -1, and is consumed on the following tick.
   That is what makes it fire once.
+
+✅ **Measured 2026-08-27** against the running game, and the pseudocode above is
+exactly right. `tools/probes/probe-alarm-image.js`; the witness is a `StabAnim`,
+whose Create sets `alarm[0] = 10` and whose `Alarm 0` sets `image_speed = 1`, so
+the frame the alarm fires is visible without any injected code. Watching
+`alarm[0]` and `image_speed` from `AgentBridge`'s Step event — that is, during
+the Step stage, after that frame's alarm stage — the counter reads
+`9, 8, 7, 6, 5, 4, 3, 2, 1, 0, -1` on successive frames and `image_speed`
+becomes 1 on the frame the counter reads **0**.
+
+⚠️ **`Gg2.Simulation.Timers.Advance` writes -1 at the moment of firing, and the
+engine does not.** That is a real one-tick divergence, and it has exactly one
+observable site — the one the change was made for.
+`Character.events/Begin Step.xml:67` gates the afterburn intensity fade on
+`alarm[0] == -1` *exactly*, and Begin Step runs **before** the alarm stage:
+
+| | fires at tick T | Begin Step T+1 sees | Begin Step T+2 sees |
+|---|---|---|---|
+| reference | alarm stage of T, value left at 0 | `0` | `-1` |
+| port today | alarm stage of T, value forced to -1 | `-1` | `-1` |
+
+So the port starts every burn's intensity decay **one tick early**. The fix is
+to delete the `timer = Inactive;` line from `Advance` and let the following
+tick's decrement carry the counter from 0 to -1 — which is what the pseudocode
+above already says. It is owed to whichever lane owns `src/Gg2.Simulation`; the
+measurement lane found it and does not apply it.
+
+⚠️ **GM8 does not count down an alarm index the object has no event for.**
+Measured the same day: an `AgentSpare0` given `alarm[1] = 4` still read 4 sixty
+frames later. This is why `Character.events/Alarm 0.xml` exists at all — its
+entire body is the comment `Afterburn intensity stuff`, and that empty event is
+**load-bearing**, because without it `alarm[0]` would never reach -1 and the
+afterburn intensity would never fade. Do not "tidy" an empty alarm event away
+when reading the reference, and do not expect a bare probe instance to count.
+
+✅ **How a fractional alarm rounds is measured too**, and it is **half to even** —
+GML's own `round()`, which is what `Timers.SetAlarm` already used. Assigning and
+reading back in the same frame: `0.5 → 0`, `1.5 → 2`, `2.5 → 2`, `3.5 → 4`,
+`30.5 → 30`, `31.5 → 32`, `17.5 → 18`, `26.25 → 26`, `26.75 → 27`, `30.4 → 30`.
+The rounding happens at assignment, on an object with or without the matching
+alarm event. `TimerTests.AFractionalAlarmBecomesAWholeNumberOfTicks` carries the
+table. This was item 2 of "What is genuinely uncertain" and is no longer.
 
 **The order is alarm-index major.** `run_alarms` loops `for alarm_id in 0..=11`
 on the outside and over instances on the inside, so *every* instance's alarm 0
@@ -1035,6 +1073,39 @@ stage 3.
 
 An alarm assigned a *real* is stored as a whole number; see "What is genuinely
 uncertain" for the part of that which is not measured.
+
+### Settled: GM8 advances `image_index` after the whole Step stage
+
+Measured 2026-08-27, `tools/probes/probe-alarm-image.js`, in the same trace as
+the alarm rule above.
+
+**A Step event that reads `image_index` sees the value the end of the *previous*
+frame left.** The witness: a `StabAnim` is created with `image_speed = 0` and
+`alarm[0] = 10`; on the frame the alarm fires it sets `image_speed = 1`, and on
+that same frame `image_index` still reads **0** during the Step stage. The first
+`1` appears on the next frame.
+
+This is the last unmeasured tick of the spy's freeze, and it settles it in
+favour of the number already in the port:
+
+- `StabAnim.events/Step.xml` latches `done` on `image_index >= 32`. With the
+  advance after the Step stage, `image_index` on the animation's *k*-th Step
+  after the alarm is `k`, so the threshold lands on its **42nd** tick, not its
+  41st.
+- Its `alpha` then falls 0.1 a tick from 1 and the instance destroys itself on
+  the **tenth** subtraction, because 1 - 10x0.1 is 1.4e-16 and GML's `>` is fuzzy
+  to 1e-13 — the rocket's fade again.
+- 42 + 10 = **52**, which is `Weapons.StabFreezeTicks`. ✅ Confirmed end to end
+  in the same run: the owner's `stabbing` went back to 0 when the `StabAnim`
+  destroyed itself.
+
+⚠️ **The read point is what makes any of this measurable.** `gg2_eval` and
+`gg2_watch` are both serviced from `AgentBridge`'s **Step** event
+(`payload/Scripts/AgentBridge/agentBridgeStep.gml` calls `agentBridgeWatchTick`
+at the top), so a watch samples during the Step stage — after that frame's alarm
+stage and before whatever the engine does at the end of the frame. A probe that
+does not know where in the frame it is reading cannot answer a question of this
+shape at all; three designs were discarded before that was noticed.
 
 ### Settled: where a shot comes from, and where its box points
 
@@ -1838,6 +1909,46 @@ A projectile's own Create event is the default, not the answer.
 — `choose(0, 0, 1)` from the Shot's Create, then the speed jitter, then the
 direction jitter — and the count is contract, not bookkeeping.
 
+### Settled: the four boxes that were derived, and are not any more
+
+Measured 2026-08-27, `tools/probes/probe-sprite-boxes.js`, gated by
+`SpriteBoxSampleTests` against
+`tests/Gg2.Tests/Fixtures/sprite-box-samples.json`. Phases 5 and 6 landed four
+collision boxes without a live session, each with a comment saying so. **All
+four were right**, and none of them can drift silently again.
+
+| Sprite | `sprite_get_bbox_*` | origin | about the origin | was |
+|---|---|---|---|---|
+| `BubbleS` | 0, 0, 11, 11 | 6, 6 | -6, -6, +5, +5 | derived from `mode="FULL"` |
+| `StabMaskS` | 24, 13, 57, 55 | 26, 37 | -2, -24, +31, +18 | read off the PNG's alpha |
+| `IntelligenceRedS` / `BlueS` | 0, 0, 19, 19 | 9, 12 | -9, -12, +10, +7 | read off the PNGs |
+| `GeneratorRedS` / `BlueS` | 2, 14, 43, 41 | 23, 21 | -21, -7, +20, +20 | read off the PNG |
+
+Every one of the six objects reports `object_get_mask == -1`, so none of them
+wears the `Sentry`'s `mask_index` override and the sprite's own bound is the
+answer. The generator's 48 sub-images share one bounding box, which is why it
+needs no override where the sentry does.
+
+- **The briefcase is the one that mattered.** It was the only collision box in
+  the project that had never been measured, and `docs/PARITY.md` records that
+  three of its four edges can each move **sixteen** pixels with every fixture
+  still green. Note `bbox_bottom` is 19 on a 22-tall image: the AUTO bound stops
+  two rows short of the art, which is exactly what reading a PNG's nominal size
+  gets wrong. It happened not to be wrong here.
+- **`mode="FULL"` really does mean the whole image**, confirmed directly rather
+  than through `MineS` as a control.
+- **The generator's box is what its 400-pixel blast measures every distance
+  from**, so measuring the box measured the reach.
+
+⚠️ **The flipped readings show the mirror that `Aabb.ForCharacter` skips.** At
+`image_xscale = -1` the engine reports `[-right - 2, -left]` about the origin —
+the box mirrored, *then* `bbox_left` pushed two pixels out. `ForCharacter`
+applies only the two pixels, and that is correct **only because every character
+mask is symmetric about its origin**. None of the four boxes above is: the
+briefcase runs -9..+10 and mirrors to -10..+9. Nothing ever draws a briefcase or
+a generator flipped, so nothing reads it — but hand `ForCharacter` an asymmetric
+box some day and it will be quietly wrong.
+
 ### Settled: the sentry's collision box does not animate, and the turret's does
 
 Measured 2026-08-26 against the running game (`tools/probes/probe-sentry-mask.js`).
@@ -2079,9 +2190,29 @@ that bites.
 `Objects/Weapons/Flamethrower.events/User Event 2.xml`, dispatched by the same
 right-click as the mine detonation (`Character.events/Begin Step.xml:120-126`).
 `Gg2.Simulation.Weapons.AirBlast`, gated by `AirBlastTests` and the oracle rows
-in `AirBlastBoxTests`; the Flamethrower is unseeded, so no recording can gate
-it and the unit tests are the gate. Each rule below was verified to bite by
-mutation or was measured directly.
+in `AirBlastBoxTests`. Each rule below was verified to bite by mutation or was
+measured directly.
+
+✅ **And a recording gates it too, since 2026-08-27** —
+`reference-ctf_truefort-closedairblast.trace`, three pyros against three
+soldiers. **1,266 exact trajectory ticks with the airblast implemented and 286
+with `Weapons.AirBlast` stubbed to a no-op.** `AirblastFixtureTests`.
+
+⚠️ **This file used to say "the Flamethrower is unseeded, so no recording can
+gate it", and that was a claim about the fixtures rather than about the
+airblast.** Two things were wrong with it:
+
+- **The reflectable set is `Rocket`, `Flare` and `Mine`.** A pyro with none of
+  those in front of it never presses the key. `closedsupport` is the only
+  earlier fixture with pyros in it and it is medic/pyro/engineer — **no rockets
+  and no mines at all** — so its pyros could not airblast however long it ran.
+  That is the whole reason implementing the airblast moved no bound.
+- ⚠️ **An unseeded weapon caps an *hp* window, not necessarily a *trajectory*
+  one.** `Projectiles.BurningHitCharacter` deals damage and calls no
+  `motion_add`, so where the port's flames land cannot move anybody — where a
+  Minigun's pellets shove, which is why a heavy recording's trajectory window
+  really is capped. **When a weapon looks ungateable, ask whether it moves
+  people or only hurts them.**
 
 - ⚠️ **`blastAngle = 75` is dead, and so is the per-victim `angle`.** Both are
   computed and never read: the blast's reach is *only* the rotated `AirBlastO`
@@ -3541,10 +3672,45 @@ and the bubble's pops for one anyway. Applying only the event of whichever
 instance the port happened to walk first would make the outcome depend on which
 was created first, and for the commonest case (a screen older than the pellet
 flying into it) would leave every pellet alive and make `perseverant`
-meaningless. **This reading is inferred from the reference's design and has not
-been measured live**; what it rests on is GM8 deferring an instance's removal to
-the end of the step rather than the end of the event. Worth an hour at the next
-live session. `Projectiles.ResolveBubblePair`.
+meaningless. `Projectiles.ResolveBubblePair`.
+
+✅ **Measured 2026-08-27, and the port was right.**
+`tools/probes/probe-bubble-pair.js`: a real `Bubble` and a real `Shot` are
+created on the same point in open space — `place_meeting` between them checked,
+so the overlap is not assumed — and which of them still exists is read back one
+frame later. All four cells:
+
+| bubble vs pellet | `perseverant` | bubble | pellet |
+|---|---|---|---|
+| enemy | 0 | **dies** | **dies** |
+| enemy | 1 | **dies** | lives |
+| same | 1 | **dies** | lives |
+| same | 0 | lives | lives |
+
+Exactly `bubblePops = enemy or perseverant` and `pelletDies = enemy and not
+perseverant` — each instance's own condition, both applied. The **enemy/ordinary
+row is the decisive one**: no single event can destroy both instances, so both
+must have run. It also refutes each single-sided alternative on its own — bubble
+only would leave the pellet alive in that row, pellet only would leave the bubble
+alive in the other three.
+
+⚠️ **So a projectile that destroys itself in its own collision event is still
+there for the other instance's**, which is the GM8 property the whole reading
+rested on. Whichever side the engine reaches first, the other still fires in the
+same frame. The measurement cannot say which side goes first, and nothing
+observable depends on it.
+
+⚠️ **The same-team row needs a short window to be honest.** A `Bubble`'s Step
+pushes it away from a stationary owner at about 3.3 px a tick and its Begin Step
+destroys it past `distance_to_object(owner) > 160`, so a "both survive" read
+taken a second later reports the bubble dead for a reason that has nothing to do
+with the pellet. Read the outcome within three frames. That confound cost this
+measurement one wrong answer before it was noticed.
+
+`BladeTests.ThePelletAndBubbleTableHoldsWhicheverWasFiredFirst` carries the
+table for both creation orders — the port reaches the pair through `HitBubble`
+when the pellet is older and `BubbleHitProjectiles` when the bubble is, and only
+the second had coverage before.
 
 ⚠️ **And the collision stage now walks a snapshot of handles rather than a cursor
 over the live array.** A cursor can only express "the projectile I am looking at

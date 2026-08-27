@@ -54,6 +54,25 @@ internal static class Program
         var seconds = double.Parse(Flag(args, "--seconds") ?? "5", CultureInfo.InvariantCulture);
         var name = Flag(args, "--name") ?? "recorder";
         var output = Flag(args, "--out") ?? "trace.bin";
+        var source = Flag(args, "--source");
+
+        // ⚠️ Checked HERE rather than at the end, because the end is after the
+        // recording. A trace header writes its strings with a one-byte length
+        // prefix (Trace.Encode), so an over-long --source throws from
+        // WriteString1 once RecordFor has already returned — and the capture,
+        // however many minutes it took, is gone with it. Measured on 2026-08-27
+        // by losing a 175-second recording to a 284-character description.
+        //
+        // The limit is not raised: the prefix is the checked-in trace format and
+        // 27 fixtures are written in it.
+        if (source is { Length: > Gg2.Protocol.TraceHeader.MaxStringLength })
+        {
+            Console.Error.WriteLine(
+                $"--source is {source.Length} characters; a trace header allows "
+                + $"{Gg2.Protocol.TraceHeader.MaxStringLength}. Shorten it before recording.");
+
+            return 2;
+        }
 
         using var recorder = new Recorder(host, port);
         recorder.Join(name, TimeSpan.FromSeconds(10));
@@ -77,7 +96,7 @@ internal static class Program
                     ReferenceVersion = Gg2.Protocol.GameConstants.Version,
                     Map = recorder.Map,
                     MapMd5 = recorder.MapMd5,
-                    Source = Flag(args, "--source") ?? recorder.ServerName,
+                    Source = source ?? recorder.ServerName,
                     RecordedUtc = DateTime.UtcNow,
                 },
                 Stream = bytes,
@@ -119,8 +138,23 @@ internal static class Program
         if (map is null)
             return 1;
 
-        var shape = Gg2.Maps.GameModes.ShapeOf(map);
-        var ticks = Gg2.Protocol.TraceParser.Parse(trace, shape, out var start);
+        // ⚠️ NARROWED, and the stream cannot be read without it. A tall map is
+        // several rounds stacked vertically and only one area's entities exist:
+        // cp_dirtbowl writes six control points and plays two. The HUD block
+        // carries no count prefix, so a reader framing by the wrong number
+        // desynchronises on the first update — measured, on
+        // reference-cp_dirtbowl-closedcp.trace, which stops at byte 458 of
+        // 138,406 un-narrowed and frames to the last byte narrowed.
+        //
+        // Area 1 because a recording is of a fresh round; a recording whose
+        // area advances mid-stream would change the count underneath the reader
+        // and is not handled. See docs/PARITY.md.
+        var shape = Gg2.Maps.GameModes.ShapeOf(map.ForArea(1));
+
+        // Re-shaped on CHANGE_MAP: a recording can rotate onto a map of another
+        // gamemode, which changes the HUD block's length underneath the reader.
+        var ticks = Gg2.Protocol.TraceParser.Parse(
+            trace, shape, out var start, out _, ShapeForMap(Flag(args, "--maps")));
 
         Console.WriteLine(
             $"{ticks.Count} ticks, {shape.GameMode}" +
@@ -162,6 +196,25 @@ internal static class Program
         return failed ? 1 : 0;
     }
 
+    /// <summary>
+    /// Resolves a map name to its wire shape, for following a
+    /// <c>CHANGE_MAP</c> onto a map of another gamemode.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ Narrowed to area 1, like every other shape here — a tall map plays one
+    /// area's entities and the control-point block has no count prefix. A map
+    /// that cannot be loaded falls back to an empty shape rather than throwing,
+    /// because a framing report is more useful than a stack trace.
+    /// </remarks>
+    private static Func<string, Gg2.Protocol.WorldShape> ShapeForMap(string? mapDirectory) =>
+        name =>
+        {
+            var level = LoadMap(name, mapDirectory);
+            return level is null
+                ? default
+                : Gg2.Maps.GameModes.ShapeOf(level.ForArea(1));
+        };
+
     private static Gg2.Maps.LevelMap? LoadMap(string map, string? mapDirectory)
     {
         var directory = mapDirectory ?? DefaultMapDirectory();
@@ -198,7 +251,8 @@ internal static class Program
             return;
         }
 
-        var shape = Gg2.Maps.GameModes.ShapeOf(Gg2.Maps.LevelMap.FromPng(map, File.ReadAllBytes(png)));
+        var shape = Gg2.Maps.GameModes.ShapeOf(
+            Gg2.Maps.LevelMap.FromPng(map, File.ReadAllBytes(png)).ForArea(1));
         var stream = new Gg2.Protocol.ServerStream();
         stream.SetShape(shape);
 
@@ -276,7 +330,18 @@ internal static class Program
         if (map is null)
             return 1;
 
-        var shape = Gg2.Maps.GameModes.ShapeOf(map);
+        // ⚠️ NARROWED, and the stream cannot be read without it. A tall map is
+        // several rounds stacked vertically and only one area's entities exist:
+        // cp_dirtbowl writes six control points and plays two. The HUD block
+        // carries no count prefix, so a reader framing by the wrong number
+        // desynchronises on the first update — measured, on
+        // reference-cp_dirtbowl-closedcp.trace, which stops at byte 458 of
+        // 138,406 un-narrowed and frames to the last byte narrowed.
+        //
+        // Area 1 because a recording is of a fresh round; a recording whose
+        // area advances mid-stream would change the count underneath the reader
+        // and is not handled. See docs/PARITY.md.
+        var shape = Gg2.Maps.GameModes.ShapeOf(map.ForArea(1));
         var parser = new Gg2.Protocol.ServerStream();
         parser.SetShape(shape);
 
@@ -310,6 +375,20 @@ internal static class Program
 
             messages++;
             counts[message.Type.ToString()] = counts.GetValueOrDefault(message.Type.ToString()) + 1;
+
+            // ⚠️ Follow a rotation onto another gamemode's map, or the HUD block
+            // changes length underneath this loop. Only FULL_UPDATE and
+            // CAPS_UPDATE read that block, so the damage is invisible until one
+            // of them arrives on the new map. See docs/PARITY.md.
+            if (message.Type == Gg2.Protocol.MessageType.ChangeMap && message.Payload.Length >= 1)
+            {
+                var length = message.Payload[0];
+                if (message.Payload.Length >= 1 + length)
+                {
+                    var next = System.Text.Encoding.ASCII.GetString(message.Payload, 1, length);
+                    parser.SetShape(ShapeForMap(Flag(args, "--maps"))(next));
+                }
+            }
 
             if (message.Type == Gg2.Protocol.MessageType.FullUpdate)
                 firstFull ??= message;

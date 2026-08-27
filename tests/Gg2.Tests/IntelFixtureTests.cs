@@ -274,6 +274,15 @@ public sealed class IntelFixtureTests
 
         public IReadOnlyList<IntelRecord> IntelLastTick => inner.IntelLastTick;
 
+        public IReadOnlyList<SentryRecord> SentriesLastTick => inner.SentriesLastTick;
+
+        public bool TryGetControlPoint(int index, out ControlPointBlock point)
+        {
+            return inner.TryGetControlPoint(index, out point);
+        }
+
+        public void SetControlPointUnlock(int ticks) => inner.SetControlPointUnlock(ticks);
+
         public bool TryGetCharacter(int slot, out CharacterBlock character) =>
             inner.TryGetCharacter(slot, out character);
     }

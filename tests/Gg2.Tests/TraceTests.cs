@@ -332,6 +332,16 @@ public sealed class TraceTests
 
         public IReadOnlyList<IntelRecord> IntelLastTick => [];
 
+        public IReadOnlyList<SentryRecord> SentriesLastTick => [];
+
+        public bool TryGetControlPoint(int index, out ControlPointBlock point)
+        {
+            point = default;
+            return false;
+        }
+
+        public void SetControlPointUnlock(int ticks) { }
+
         public void Tick(ReadOnlySpan<PlayerInput> inputs)
         {
             // The replayer compares before it advances, because one update

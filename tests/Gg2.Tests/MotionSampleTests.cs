@@ -30,7 +30,7 @@ namespace Gg2.Tests;
 /// <para>
 /// Every sample is a list of writes replayed in order, so a row states its own
 /// inputs and cannot be invalidated by anything the running game did between
-/// calls — CLAUDE.md, "Every fixture row should carry its own inputs".
+/// calls — docs/TRAPS-SIMULATION.md, "Every fixture row should carry its own inputs".
 /// Regenerate with <c>node tools/sample-motion.js</c>.
 /// </para>
 /// </remarks>

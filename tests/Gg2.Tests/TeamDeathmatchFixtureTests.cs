@@ -1,0 +1,245 @@
+using System.Linq;
+using Gg2.Maps;
+using Gg2.Parity;
+using Gg2.Protocol;
+using Gg2.Simulation;
+
+namespace Gg2.Tests;
+
+/// <summary>
+/// The first Team Deathmatch recordings in the project, on the two maps that
+/// play it.
+/// </summary>
+/// <remarks>
+/// <b>Recorded 2026-08-27</b>, six soldiers, both spawn-anchored by the
+/// map-reload recipe. Until then every fixture here was Capture the Flag, so
+/// <c>GameModes.ShapeOf</c> had never produced a Team Deathmatch shape for a
+/// real reader and the mode's wire had no evidence behind it at all.
+/// <para>
+/// ✅ <b>Both frame cleanly to the last byte</b>, and <c>gg2-parity census</c>
+/// reports <c>TeamDeathmatch</c> for each. That negative is the first thing
+/// these recordings buy — the Arena <c>ARENA_ENDROUND</c> bug and the
+/// engineer's <c>INPUTSTATE</c> bug were both of this shape and both survived
+/// because no recording reached the state.
+/// </para>
+/// <para>
+/// ⚠️ <b>They disagree wildly about everything else, and that is the finding.</b>
+/// <c>tdm_mantic</c> replays exactly for <b>3,043</b> ticks — the longest
+/// closed-loop window in the project — and <c>gg_debug</c> for <b>23</b> (it was
+/// 2 until the alarm-stage spawn seam landed on 2026-08-27). See
+/// <see cref="GgDebugStopsOnTheUnimplementedDropdownPlatform"/>.
+/// </para>
+/// </remarks>
+public sealed class TeamDeathmatchFixtureTests
+{
+    private const string Mantic = "reference-tdm_mantic-closedtdm.trace";
+    private const string Debug = "reference-gg_debug-closedtdm.trace";
+
+    private static LevelMap MapLoader(string name) =>
+        LevelMap.FromPng(name, ReferenceTree.ReadMap(name));
+
+    private static (Trace Trace, IReadOnlyList<TraceTick> Ticks) Load(string fixture)
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, "Fixtures", fixture);
+        Assert.True(File.Exists(path), $"missing {path}");
+
+        var trace = Trace.Decode(File.ReadAllBytes(path));
+        var map = MapLoader(trace.Header.Map);
+        var ticks = TraceParser.Parse(trace, GameModes.ShapeOf(map), out _, out var stopped);
+
+        Assert.True(stopped is null, $"{fixture}: {stopped}");
+        return (trace, ticks);
+    }
+
+    private static int CountMessages(IReadOnlyList<TraceTick> ticks, MessageType type) =>
+        ticks.Sum(t => t.Events.Count(m => m.Type == type));
+
+    private static (int Exact, int Anchor) ExactWindow(string fixture, Fields compare)
+    {
+        var (trace, ticks) = Load(fixture);
+
+        var anchor = FixtureAnchors.LastExactAnchor(ticks);
+        Assert.True(anchor is not null, $"{fixture}: some slot holds a character it never spawned into");
+
+        var report = new Replayer(new PortedSimulation(MapLoader)) { Compare = compare }
+            .Replay(fixture, trace.Header.Map, ticks, ReplayMode.ClosedLoop, stopAtFirstBadTick: false);
+
+        var after = report.Mismatches.Where(m => m.Tick > anchor!.Value).ToArray();
+        var firstBad = after.Length == 0 ? ticks[^1].Index : after.Min(m => m.Tick);
+
+        return (firstBad - anchor.Value, anchor.Value);
+    }
+
+    /// <summary>
+    /// Both are Team Deathmatch, on the two maps that play it, and both frame.
+    /// </summary>
+    [Theory]
+    [InlineData(Mantic, "tdm_mantic")]
+    [InlineData(Debug, "gg_debug")]
+    public void BothAreTeamDeathmatchAndFrameCleanly(string fixture, string map)
+    {
+        var (trace, ticks) = Load(fixture);
+
+        Assert.Equal(map, trace.Header.Map);
+        Assert.Equal(GameMode.TeamDeathmatch, GameModes.ShapeOf(MapLoader(map)).GameMode);
+        Assert.True(ticks.Count > 2400, $"{fixture}: only {ticks.Count} ticks");
+    }
+
+    /// <summary>
+    /// <c>gg_debug</c> is the busiest recording in the project.
+    /// </summary>
+    /// <remarks>
+    /// Fifty-two deaths and 262 seeded weapon fires in a hundred seconds, which
+    /// is more combat than any other fixture holds — six soldiers on a very
+    /// small map. Every one of those deaths is a Team Deathmatch kill, so this
+    /// is also the first recorded evidence that the mode scores at all.
+    /// <para>
+    /// ⚠️ None of it is assertable against the port yet: the window is two
+    /// ticks. It is worth keeping precisely because it becomes the sharpest
+    /// combat fixture in the project the moment the landing agrees.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void TheDebugRecordingIsFullOfCombat()
+    {
+        var (_, ticks) = Load(Debug);
+
+        Assert.True(CountMessages(ticks, MessageType.PlayerDeath) >= 45, "not enough deaths");
+        Assert.True(CountMessages(ticks, MessageType.PlayerSpawn) >= 50, "not enough spawns");
+        Assert.True(CountMessages(ticks, MessageType.WeaponFire) >= 200, "not enough fire");
+    }
+
+    /// <summary>
+    /// <c>tdm_mantic</c> replays exactly for three thousand ticks — and is quiet.
+    /// </summary>
+    /// <remarks>
+    /// <b>The longest closed-loop window in the project</b>, and by this file's
+    /// own standard worth less than a short one on a loud recording: the bots
+    /// never met, so there is no weapon fire and no death in it at all. What it
+    /// does gate is a hundred seconds of six characters traversing a map no
+    /// fixture had ever touched, on <c>Trajectory | Hp | Deaths</c> with zero
+    /// mismatches.
+    /// <para>
+    /// ⚠️ <b>It does NOT gate the move boxes</b>, which is the reason it was
+    /// recorded on this map — <c>tdm_mantic</c> is the only shipped map placing
+    /// any (nine up, six down, confirmed live as fifteen). Checked by mutation:
+    /// commenting out <c>MoveBoxes.CollisionStep</c> leaves the window at 3,043
+    /// ticks, so no bot ever rode one. The same is true of the six pit falls —
+    /// there are no deaths to have caused.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void TheManticRecordingReplaysExactlyForThreeThousandTicks()
+    {
+        var (_, ticks) = Load(Mantic);
+
+        // Quiet, and asserted so that a re-recording which is *not* quiet cannot
+        // silently inherit this window's reputation.
+        Assert.Equal(0, CountMessages(ticks, MessageType.WeaponFire));
+        Assert.Equal(0, CountMessages(ticks, MessageType.PlayerDeath));
+
+        var (exact, anchor) = ExactWindow(Mantic, Fields.Trajectory | Fields.Hp | Fields.Deaths);
+
+        // 3,043 today, t554 to the end of the recording.
+        Assert.True(
+            exact >= 3000,
+            $"{Mantic}: exact for only {exact} ticks after the last spawn anchor (t{anchor})");
+    }
+
+    /// <summary>
+    /// ⚠️ <b><c>gg_debug</c> shows the same landing divergence as
+    /// <c>ctf_2dfort</c>, and that narrows the open finding a long way.</b>
+    /// </summary>
+    /// <remarks>
+    /// Two ticks after the anchor, <b>all six slots at once</b>: the reference
+    /// has them at rest at <c>y = 168</c> with <c>vspeed 0</c>, and the port has
+    /// them at <c>163.2</c> still falling at about 1.18 px a tick — exactly
+    /// where a character dropped from the spawn marker at <c>y = 162</c> would
+    /// be after two ticks of gravity.
+    /// <para>
+    /// <b>What the two TDM recordings settle about
+    /// <see cref="SecondMapFixtureTests"/>'s finding:</b>
+    /// </para>
+    /// <list type="bullet">
+    /// <item><b>It is not "any map that is not <c>ctf_truefort</c>".</b>
+    /// <c>tdm_mantic</c> is a third map and replays exactly for 3,043 ticks.</item>
+    /// <item><b>It is not the collision mask</b>, which
+    /// <c>SecondMapFixtureTests</c> established for <c>ctf_2dfort</c> by asking
+    /// the engine and the port the same column.</item>
+    /// <item><b>It is not dropdown platforms</b>, which the port does not
+    /// implement: <c>tdm_mantic</c> has four and is exact, <c>ctf_2dfort</c> has
+    /// none and diverges.</item>
+    /// <item><b>The signature is the same on both failing maps</b> — the
+    /// reference at rest on an integer <c>y</c> while the port is still falling
+    /// from the spawn marker, six pixels above (894→900, 162→168). On
+    /// <c>ctf_truefort</c>, where the port is exact, the reference instead comes
+    /// to rest on a <em>fractional</em> y (474.47) after an eighteen-pixel drop,
+    /// which is what a fall that really happened looks like.</item>
+    /// </list>
+    /// <para>
+    /// ✅ <b>The landing half of that is FIXED (2026-08-27)</b> — it was the
+    /// replayer pre-placing a spawning character instead of building it in the
+    /// alarm stage, and <see cref="ITraceSimulation.QueueSpawn"/> closes it.
+    /// <c>ctf_2dfort</c> went from 5 ticks to 362.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>What is left on <c>gg_debug</c> is a different thing entirely: the
+    /// DROPDOWN PLATFORM, which the port does not implement.</b>
+    /// <c>CharacterPhysics</c> says so in two places
+    /// (<c>"Dropdown platforms are the other way to be on the ground. Not …"</c>
+    /// and <c>"Dropdown platform push-out goes here. Not implemented"</c>), and
+    /// this recording is the first evidence that it matters. The map places
+    /// <b>two</b>, at <c>438,216</c> and <c>498,216</c>, and the divergence is
+    /// slots 1 and 3 sitting at rest on <c>y = 192</c> in the reference while the
+    /// port falls past — a soldier's box is 34 tall about an origin 22.6 above
+    /// its foot, so <c>192 + 22.6 = 214.6</c> is a character standing exactly on
+    /// a platform whose top is 216.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>And it is why the old reasoning about this pair was wrong.</b> The
+    /// note here used to rule dropdown platforms out because "<c>tdm_mantic</c>
+    /// has four and is exact" — but a map placing a feature is not the same as
+    /// its bots touching one, the same mistake the move-box recording made.
+    /// </para>
+    /// <para>
+    /// <b>An open finding for the lane that owns <c>src/Gg2.Simulation</c>.</b>
+    /// ⚠️ If this test fails, that is good news.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void GgDebugStopsOnTheUnimplementedDropdownPlatform()
+    {
+        var (exact, anchor) = ExactWindow(Debug, Fields.Trajectory);
+
+        Assert.True(
+            exact is >= 20 and <= 40,
+            $"{Debug}: the window is now {exact} ticks after t{anchor}, not the pinned 23 — "
+                + "if it has grown, the dropdown platform is implemented and this recording's "
+                + "52 deaths can become real assertions; if it has shrunk, the alarm-stage "
+                + "spawn seam has regressed");
+    }
+
+    /// <summary>
+    /// The control that puts the blame on the platform rather than on the map:
+    /// <c>gg_debug</c> really does place two, and at the height the divergence
+    /// points at.
+    /// </summary>
+    /// <remarks>
+    /// Without this, the claim above is an unverified reading of a residual.
+    /// With it, implementing dropdown platforms has a coordinate to test against
+    /// and this file fails loudly if a shipped map ever moves them.
+    /// </remarks>
+    [Fact]
+    public void GgDebugPlacesTheTwoPlatformsTheDivergencePointsAt()
+    {
+        var map = MapLoader("gg_debug");
+
+        var platforms = map.Entities
+            .Where(e => e.Type == EntityTypes.DropdownPlatform)
+            .Select(e => (e.X, e.Y))
+            .OrderBy(p => p.X)
+            .ToArray();
+
+        Assert.Equal([(438.0, 216.0), (498.0, 216.0)], platforms);
+    }
+}

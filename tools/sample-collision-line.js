@@ -72,7 +72,7 @@ const ev = (code) => mcp.callTool('gg2_eval', { code });
 //
 // Every coordinate is a base integer plus a ratio of two integers, and it is
 // emitted as *that expression* rather than as a decimal literal, because GM8's
-// parser reads some decimals one ULP above the IEEE nearest (CLAUDE.md, "GM8
+// parser reads some decimals one ULP above the IEEE nearest (docs/TRAPS-SIMULATION.md, "GM8
 // arithmetic"). An integer over an integer is safe: the division happens in
 // double on both sides and gives the same bits, so the number this tool writes
 // into the fixture is the number the game was asked about.

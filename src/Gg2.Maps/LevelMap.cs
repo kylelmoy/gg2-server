@@ -185,6 +185,37 @@ public sealed class LevelMap
     }
 
     /// <summary>
+    /// The same map with a different entity list, and everything else — the
+    /// name, the walkmask, the metadata, the size — untouched.
+    /// </summary>
+    /// <remarks>
+    /// A seam for the parity harness, which needs to hand
+    /// <c>MatchSimulation.Tick</c> a <see cref="SpawnPoints"/> narrowed to the
+    /// spawn point a recording actually named. It cannot reach into the middle of
+    /// a tick to override the draw <c>PlayerSpawn.gml</c> makes, so it changes
+    /// what the draw can land on instead — see
+    /// <c>PortedSimulation.SeedIndependentSpawnPoints</c>.
+    /// <para>
+    /// ⚠️ <b>Nothing in the server or the simulation should use this.</b> A map
+    /// whose entities do not come from its own level data is not the map the
+    /// client loaded, and the whole point of the port is that both sides build
+    /// the world from the same bytes.
+    /// </para>
+    /// </remarks>
+    public LevelMap WithEntities(IReadOnlyList<LevelEntity> entities)
+    {
+        ArgumentNullException.ThrowIfNull(entities);
+
+        return new LevelMap(
+            Name,
+            Walkmask,
+            entities,
+            Metadata,
+            Width / Gg2.Protocol.GameConstants.CellSize,
+            Height / Gg2.Protocol.GameConstants.CellSize);
+    }
+
+    /// <summary>
     /// Parses an <c>{ENTITIES}</c> block body, in either of the two formats the
     /// reference accepts.
     /// </summary>

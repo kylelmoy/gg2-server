@@ -29,6 +29,18 @@ public sealed class RespawnTimingTests
     /// </summary>
     private const int RecordedGap = 150;
 
+    /// <summary>
+    /// The other rule, and it is one tick.
+    /// </summary>
+    /// <remarks>
+    /// ✅ <b>Measured 2026-08-27</b>, and it is the first fixture evidence in
+    /// the project for <c>Character.events/Destroy.xml:37</c>. That arm writes
+    /// <c>player.alarm[5] = 1</c> rather than the respawn time, and an alarm set
+    /// to <c>n</c> fires <c>n</c> ticks later — so the death and the
+    /// <c>PLAYER_SPAWN</c> answering it land on <b>consecutive</b> ticks.
+    /// </remarks>
+    private const int RecordedSpawnRoomGap = 1;
+
     /// <summary>Every fixture that contains at least one death and a respawn.</summary>
     private static readonly string[] Fixtures =
     [
@@ -37,6 +49,16 @@ public sealed class RespawnTimingTests
         "reference-ctf_truefort-closedsupport.trace",
         "reference-ctf_truefort-hotsupport.trace",
         "reference-ctf_truefort-bots.trace",
+
+        // Recorded 2026-08-27. Added here rather than left to the older five, so
+        // that a rule this file states about "every recorded death" keeps
+        // meaning every one of them: the pair count goes from 28 to 60.
+        "reference-ctf_truefort-closedheavy.trace",
+        "reference-ctf_truefort-closedsniper.trace",
+        "reference-ctf_truefort-closedairblast.trace",
+        "reference-ctf_truefort-closedsentrykill.trace",
+        "reference-ctf_2dfort-closedrespawn.trace",
+        "reference-ctf_truefort-spawnroomdeath.trace",
     ];
 
     private static LevelMap MapLoader(string name) =>
@@ -137,11 +159,18 @@ public sealed class RespawnTimingTests
     [Fact]
     public void EveryRecordedDeathIsAnsweredAfterExactlyOneHundredAndFiftyTicks()
     {
-        var pairs = Pairs();
+        // ⚠️ Outside a spawn room. Since 2026-08-27 one recording contains a
+        // death inside one, and that death is answered in a single tick by a
+        // different rule — see
+        // <see cref="ADeathInsideASpawnRoomIsAnsweredOnTheVeryNextTick"/>.
+        // Filtered rather than tolerated, so a spawn-room death cannot hide a
+        // genuinely wrong gap.
+        var pairs = Pairs().Where(p => !p.InRoom).ToList();
 
         // The fixtures contain the deaths this is about. A re-recording that
         // came out quiet would otherwise pass by having nothing to measure.
-        Assert.True(pairs.Count >= 25, $"only {pairs.Count} death-to-respawn pairs");
+        // 59 outside a spawn room today, of 60 pairs across eleven recordings.
+        Assert.True(pairs.Count >= 50, $"only {pairs.Count} death-to-respawn pairs");
 
         // And they span more than one recording, so this is not one server's
         // configuration being asserted five times.
@@ -159,26 +188,72 @@ public sealed class RespawnTimingTests
     }
 
     /// <summary>
-    /// ⚠️ <b>And not one of those deaths happened inside a spawn room</b>, which
-    /// is why the fast-respawn arm has unit tests and no fixture evidence.
+    /// ✅ <b>A death inside a spawn room is answered on the very next tick</b>,
+    /// and a recording finally says so.
     /// </summary>
     /// <remarks>
-    /// <b>Written as an assertion rather than a comment so that it stops being
-    /// true loudly.</b> The moment a recording does contain a death in a spawn
-    /// room, this fails — and that recording is then the first thing in the
-    /// project able to gate <c>Character.events/Destroy.xml:37</c>'s first arm
-    /// against the engine. See docs/PARITY.md.
+    /// <b>This replaces <c>NoRecordedDeathHappensInASpawnRoom</c></b>, which
+    /// asserted that no fixture contained such a death and was written to fail
+    /// the day one did. It did, on 2026-08-27:
+    /// <c>reference-ctf_truefort-spawnroomdeath.trace</c> was recorded for
+    /// exactly this, and the fast-respawn arm of
+    /// <c>Character.events/Destroy.xml:37</c> now has fixture evidence instead
+    /// of unit tests asserting the port against itself.
+    /// <para>
+    /// ⚠️ <b>The death had to be forced, and the first attempt failed for a
+    /// reason worth keeping.</b> Setting a character's <c>hp</c> to 0 over the
+    /// bridge produced no death at all: a character standing in a spawn room is
+    /// on a <b>healing cabinet</b>, which tops it back above zero before End
+    /// Step ever tests <c>hp &lt;= 0</c>. Killing one in there needs a value the
+    /// cabinet cannot undo in a single tick.
+    /// </para>
+    /// <para>
+    /// <b>The recording carries its own control</b> — see
+    /// <see cref="OneRecordingHoldsBothRules"/>.
+    /// </para>
+    /// <para>
+    /// It also confirms the alarm rule end to end through the wire: that arm
+    /// writes <c>player.alarm[5] = 1</c>, an alarm set to <c>n</c> fires
+    /// <c>n</c> ticks later, and the two messages land on consecutive ticks.
+    /// </para>
     /// </remarks>
     [Fact]
-    public void NoRecordedDeathHappensInASpawnRoom()
+    public void ADeathInsideASpawnRoomIsAnsweredOnTheVeryNextTick()
     {
         var inRoom = Pairs().Where(p => p.InRoom).ToArray();
 
         Assert.True(
-            inRoom.Length == 0,
-            "a fixture now contains a death in a spawn room — that is good news, not a "
-            + "regression: it can gate the fast respawn, which nothing else can. "
-            + string.Join(", ", inRoom.Select(p => $"{p.Fixture} slot {p.Slot} t{p.Death} gap {p.Gap}")));
+            inRoom.Length >= 1,
+            "no fixture contains a death inside a spawn room any more — the fast respawn has "
+            + "lost its only recorded evidence, so re-record one rather than deleting this test");
+
+        foreach (var pair in inRoom)
+        {
+            Assert.True(
+                pair.Gap == RecordedSpawnRoomGap,
+                $"{pair.Fixture} slot {pair.Slot}: died in a spawn room at t{pair.Death}, "
+                + $"respawned t{pair.Spawn} — {pair.Gap} ticks, not {RecordedSpawnRoomGap}");
+        }
+    }
+
+    /// <summary>
+    /// And the two rules really are different, inside one recording.
+    /// </summary>
+    /// <remarks>
+    /// The control that stops the test above being satisfied by a server whose
+    /// respawn time simply <em>is</em> one tick: the same ninety seconds that
+    /// hold the spawn-room death also hold two ordinary deaths answered after
+    /// the full 150.
+    /// </remarks>
+    [Fact]
+    public void OneRecordingHoldsBothRules()
+    {
+        const string Fixture = "reference-ctf_truefort-spawnroomdeath.trace";
+
+        var pairs = Pairs().Where(p => p.Fixture == Fixture).ToArray();
+
+        Assert.Contains(pairs, p => p.InRoom && p.Gap == RecordedSpawnRoomGap);
+        Assert.Contains(pairs, p => !p.InRoom && p.Gap == RecordedGap);
     }
 
     /// <summary>
