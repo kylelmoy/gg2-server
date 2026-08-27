@@ -45,14 +45,30 @@ public static class BotClassKeys
     /// the decision to use it belongs to the caller, which is the only place that
     /// has already re-validated it this tick.
     /// </param>
+    /// <summary>
+    /// What one airblast costs, and so what the tank must hold to attempt one.
+    /// </summary>
+    /// <remarks>
+    /// <c>Flamethrower/User Event 2</c>'s own <c>ammoCount &gt;= 40</c>.
+    /// </remarks>
+    private const double AirblastAmmo = 40;
+
     public static PlayerKeys For(
         BotCombatState state, in WorldView world, int slot, double distance, int tick,
         bool subjectIsAlly = false)
     {
-        // ⚠️ An ally is a subject even with no target, which is the whole point: a
-        // medic with a patient and no enemy in sight still beams.
-        if (!state.Target.Exists && !subjectIsAlly)
-            return PlayerKeys.None;
+        // ⚠️ NOT a blanket "no subject, no keys". `botCombatUpdate`'s own
+        // no-subject branch still calls this — "nothing to aim at is a state a class
+        // can still have an opinion about: a spy re-cloaks, an engineer builds, a
+        // heavy eats" — and the pyro's AIRBLAST is the case that made it matter here.
+        // A pyro with nothing to shoot at must still be able to reflect a rocket,
+        // and a top guard sent it home before the branch that decides that.
+        //
+        // So every branch below that would otherwise fire at nothing carries its own
+        // `subject` test, exactly as the reference's do. ⚠️ the pyro's flame
+        // needs one because `distance` is 0 with no target and 0 is inside the flame's
+        // reach — without it a pyro with no target holds the trigger for ever.
+        var hasSubject = state.Target.Exists || subjectIsAlly;
 
         ref readonly var self = ref world.Character(slot);
         ref readonly var weapon = ref world.Weapon(slot);
@@ -64,31 +80,61 @@ public static class BotClassKeys
                 // kills the shooter. The band is the class's own minimum, so
                 // this and the targeting penalty are the same number by
                 // construction.
-                return distance >= BotTargeting.ClassMinBand(PlayerClass.Soldier)
+                return hasSubject && distance >= BotTargeting.ClassMinBand(PlayerClass.Soldier)
                     ? PlayerKeys.Attack
                     : PlayerKeys.None;
 
             case PlayerClass.Demoman:
                 // The detonation (SPECIAL) waits on botMinesArmed, which is not
                 // ported — see this type's remarks.
-                return distance >= BotTargeting.ClassMinBand(PlayerClass.Demoman)
+                return hasSubject && distance >= BotTargeting.ClassMinBand(PlayerClass.Demoman)
                     ? PlayerKeys.Attack
                     : PlayerKeys.None;
 
             case PlayerClass.Pyro:
+            {
                 // ⚠️ Distance rather than the class's attention radius: a flame
                 // reaches BOT_FLAME_REACH and a pyro that pulls the trigger
-                // further out is burning air and emptying its tank. The airblast
-                // waits on botIncomingProjectile.
-                return distance <= BotConstants.FlameReach ? PlayerKeys.Attack : PlayerKeys.None;
+                // further out is burning air and emptying its tank.
+                var flame = hasSubject && distance <= BotConstants.FlameReach
+                    ? PlayerKeys.Attack
+                    : PlayerKeys.None;
+
+                // ⚠️ The airblast is a REACTION and is not gated by the fire delay
+                // — a reflect a second and a half late is not a reflect. It is on
+                // SPECIAL, which for a pyro is not part of firing, so the
+                // suppression in BotCombat leaves it alone.
+                //
+                // ⚠️ And it is asked of a BEAM rather than a radius. The trigger
+                // volume is 28-126px along the aim and 18px either side of it, and
+                // a press costs 40 ticks of cooldown whether or not anything was
+                // there — see BotReflex.
+                // ⚠️ readyToBlast and the ammo are checked FIRST and are not
+                // decoration. The blast is on a 40-tick cooldown and the reflect test
+                // inside User Event 2 runs only on the frame of the press, so the cost
+                // of a press aimed at nothing is not the ammo — it is that the next
+                // rocket, the one that was going to land, arrives while the weapon is
+                // still reloading. They are also much the cheapest of the three tests
+                // and gate the beam scan regardless of geometry.
+                if (weapon.ReadyToBlast
+                    && weapon.AmmoCount >= AirblastAmmo
+                    && BotReflex.IncomingProjectile(in world, slot, BotConstants.AirblastMinTravel))
+                {
+                    flame |= PlayerKeys.Special;
+                }
+
+                return flame;
+            }
 
             case PlayerClass.Medic:
                 // ⚠️ The needle gun is on the RIGHT click — the Medigun's left
                 // is the heal beam — so a medic with nobody to heal presses SPECIAL
                 // to shoot. That is also why the medic is the one class whose SPECIAL
                 // is gated by the fire delay.
+                // ⚠️ ...but only at something. A medic with neither a patient
+                // nor an enemy would otherwise hold the right click on empty air.
                 if (!subjectIsAlly)
-                    return PlayerKeys.Special;
+                    return hasSubject ? PlayerKeys.Special : PlayerKeys.None;
 
                 // The heal beam is the primary. ⚠️ the uber is SPECIAL *while*
                 // the primary is held — it is not a separate press — and it is worth
@@ -112,6 +158,9 @@ public static class BotClassKeys
                 // a scoped sniper firing early simply cannot reach — and one that
                 // waited for a full charge at every distance would never shoot at
                 // anything close.
+                if (!hasSubject)
+                    return PlayerKeys.None;
+
                 if (!self.Zoomed)
                     return PlayerKeys.Attack;
 
@@ -123,7 +172,9 @@ public static class BotClassKeys
 
             default:
                 // The scout, the heavy, the engineer and Quote: point and shoot.
-                return PlayerKeys.Attack;
+                // ⚠️ At something. With no subject these hold the trigger on empty
+                // air, which is the one thing the no-subject branch must not do.
+                return hasSubject ? PlayerKeys.Attack : PlayerKeys.None;
         }
     }
 

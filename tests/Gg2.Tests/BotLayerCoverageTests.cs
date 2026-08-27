@@ -25,7 +25,7 @@ namespace Gg2.Tests;
 public sealed class BotLayerCoverageTests
 {
     /// <summary>
-    /// The eight scripts phase 7 left unported, each conservative when absent.
+    /// The five scripts phase 7 left unported, each conservative when absent.
     /// </summary>
     /// <remarks>
     /// ⚠️ <b>Kept in the same order and the same words as <c>docs/PLAN.md</c>'s
@@ -34,14 +34,11 @@ public sealed class BotLayerCoverageTests
     /// </remarks>
     private static readonly string[] Unported =
     [
-        "botRocketDodge",         // never hops away from an incoming rocket
         "botArcClear",            // a soldier fires at a target behind cover
         "botSuppressSpot",        // a heavy aims at the last known position, not a doorway
         "botStepSafe",            // a pyro holds where the engage caught it rather than closing
-        "botIncomingProjectile",  // a pyro never airblasts
         "botStabWindow",          // a spy never stabs
         "botMinesArmed",          // a demoman never detonates
-        "botInBlastBeam",         // reached only from the two above
     ];
 
     private static string[] Scripts(string folder)
@@ -100,10 +97,11 @@ public sealed class BotLayerCoverageTests
         foreach (var script in Unported)
             Assert.Contains(script, bots);
 
-        // ⚠️ And the list is exactly eight — it was ten before the rocket jump and
-        // nine before botFindAlly. A list that grows without the plan growing with
-        // it is the same decay from the other direction.
-        Assert.Equal(8, Unported.Length);
-        Assert.Equal(8, Unported.Distinct(StringComparer.Ordinal).Count());
+        // ⚠️ And the list is exactly five — ten before the rocket jump, nine before
+        // botFindAlly, eight before the projectile reflexes took three at once. A
+        // list that grows without the plan growing with it is the same decay from
+        // the other direction.
+        Assert.Equal(5, Unported.Length);
+        Assert.Equal(5, Unported.Distinct(StringComparer.Ordinal).Count());
     }
 }

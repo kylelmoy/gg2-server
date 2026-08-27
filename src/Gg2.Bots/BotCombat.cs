@@ -140,8 +140,22 @@ public static class BotCombat
                 Slew(state, in skill);
                 aim = state.AimDir;
 
-                state.AttackKeys = PlayerKeys.None;
-                return PlayerKeys.None;
+                // ⚠️ The class policy STILL RUNS with nothing to aim at —
+                // botCombatUpdate's own no-subject branch does the same, because
+                // "nothing to aim at is a state a class can still have an opinion
+                // about: a spy re-cloaks, an engineer builds, a heavy eats". Only
+                // the aiming is skipped.
+                //
+                // ⚠️ The case that made it matter here is the pyro's AIRBLAST: a
+                // reflect is a reaction to something already in the air and has
+                // nothing to do with having a target. Returning None here left a
+                // pyro with an empty screen unable to deflect a rocket at all.
+                // Every branch that would otherwise fire at nothing carries its own
+                // subject test — see BotClassKeys.
+                var idle = BotClassKeys.For(state, in world, slot, 0, tick);
+
+                state.AttackKeys = idle;
+                return idle;
             }
         }
 

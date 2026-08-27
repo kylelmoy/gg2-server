@@ -310,6 +310,27 @@ public sealed class ScriptedBot : IInputSource, IScenarioSubject
 
         navKeys = ApplyHolds(world, slot, tick, navKeys);
 
+        // ⚠️ Dodge an incoming rocket. GROUNDED ONLY, which keeps it out of every
+        // planned jump arc without needing to know anything about that arc — and
+        // never throttled, because it is a reflex to a thing already in the air.
+        //
+        // ⚠️ ORing is safe because JUMP is EDGE-TRIGGERED in Begin Step: a press
+        // cannot double a jump the follower already wants.
+        //
+        // ⚠️ And it is BotReflex.RocketDodge, not a proximity test. A radius cannot
+        // tell a rocket coming in at the knees (jump) from one passing over the head
+        // (jumping is what puts the bot in front of it), and getting that backwards
+        // made a bot a guaranteed hit for anyone who aimed high.
+        //
+        // This is the ONLY thing that presses JUMP outside the path follower. The
+        // voluntary combat hops that used to sit here in the reference — a
+        // blocked-shot peek, an ambient fidget, the scout's mid-air second jump —
+        // were removed: between them they fired often enough, precisely where the
+        // follower has arrived and is returning no movement keys at all, that bots
+        // in a firefight read as stuck in place jumping.
+        if (self.OnGround && BotReflex.RocketDodge(in world, slot))
+            navKeys |= PlayerKeys.Jump;
+
         return PlayerInput.FromAim(navKeys | fireKeys, aim, aimDistance);
     }
 
