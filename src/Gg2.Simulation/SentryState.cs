@@ -31,6 +31,23 @@ namespace Gg2.Simulation;
 /// </remarks>
 public struct SentryState
 {
+    /// <summary>
+    /// GM8's instance id, near enough: which sentry was built first.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Slot order is not build order</b>, and a projectile explodes on the
+    /// first sentry its collision event fires against. Issued from
+    /// <see cref="WorldState.NextInstanceOrder"/>, the same counter characters
+    /// draw from, because GM8 has one id sequence for every object.
+    /// <para>
+    /// On the sentry rather than in a parallel <c>SlotBuffer</c> so it moves with
+    /// the sentry through <c>WorldState.RemoveSlot</c>'s compaction and cannot be
+    /// forgotten there — the same reasoning as
+    /// <see cref="CharacterState.CreationOrder"/>.
+    /// </para>
+    /// </remarks>
+    public uint CreationOrder;
+
     /// <summary>Maximum hp once built. A sentry starts at a quarter of it.</summary>
     public const int MaxHp = 100;
 

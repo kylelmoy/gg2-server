@@ -208,6 +208,11 @@ public static class Sentries
         if (!state.HasSentry[slot])
         {
             state.Sentries[slot] = SentryState.Build(team, x, y, startDirection);
+
+            // GM8 issues an instance id here, and the order it induces decides
+            // which of two overlapping sentries a projectile explodes on. See
+            // SentryState.CreationOrder.
+            state.Sentries[slot].CreationOrder = ++state.NextInstanceOrder;
             state.HasSentry[slot] = true;
         }
         else
@@ -484,8 +489,16 @@ public static class Sentries
         {
             ref var projectile = ref state.Projectiles[state.LiveProjectileSlot(i)];
 
-            if (projectile.Kind == ProjectileKind.Mine && projectile.Box.Overlaps(sentryBody))
+            // ⚠️ The MASK, not the box. A mine in flight carries image_angle
+            // from createShot, and a rotated box is a strict over-estimate — so
+            // the box unsticks mines that are not touching the sentry at all.
+            // Order does not matter here (the `with` visits every mine, and
+            // none of them is destroyed), but membership does.
+            if (projectile.Kind == ProjectileKind.Mine
+                && ProjectileMask.Overlaps(in projectile, in sentryBody))
+            {
                 projectile.Stickied = false;
+            }
         }
 
         // with(ownerPlayer.object): the self-knockback — and only while the

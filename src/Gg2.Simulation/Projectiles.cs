@@ -1005,8 +1005,21 @@ public static class Projectiles
         // events by target object id, which this repo has not measured — the
         // difference is observable only when one projectile touches a character
         // and a sentry on the same tick.
-        for (var slot = 0; slot < WorldState.MaxSlots; slot++)
+        //
+        // ⚠️ Build order, not slot order, for the reason the character loop
+        // above uses creation order: a projectile explodes on the first sentry
+        // it meets. No fixture holds two sentries overlapping one projectile, so
+        // this follows the rule rather than a measurement — see
+        // WorldState.LiveSentriesInCreationOrder.
+        Span<byte> sentries = stackalloc byte[WorldState.MaxSlots];
+        var sentryCount = state.LiveSentriesInCreationOrder(sentries);
+
+        for (var i = 0; i < sentryCount; i++)
         {
+            var slot = sentries[i];
+
+            // Re-checked: an earlier iteration's explosion can destroy a sentry
+            // the snapshot listed.
             if (!state.HasSentry[slot])
                 continue;
 
@@ -2005,15 +2018,29 @@ public static class Projectiles
         var bubbleBox = state.Projectiles[handle.Index].Box;
 
         // 2: Character.
-        for (var slot = 0; slot < WorldState.MaxSlots; slot++)
+        //
+        // ⚠️ Creation order and the MASK, for the same two reasons the rocket's
+        // loop uses them: a bubble that pops on somebody is destroyed there, so
+        // which character it meets first is the outcome; and a rotated
+        // projectile's box is a strict over-estimate of its mask.
+        Span<byte> characters = stackalloc byte[WorldState.MaxSlots];
+        var liveCount = state.LiveCharactersInCreationOrder(characters);
+
+        for (var i = 0; i < liveCount; i++)
         {
+            var slot = characters[i];
+
             if (!state.Alive[slot])
                 continue;
 
             ref var victim = ref state.Characters[slot];
+            var victimBox = Aabb.ForCharacter(victim.Box, victim.X, victim.Y);
 
-            if (!bubbleBox.Overlaps(Aabb.ForCharacter(victim.Box, victim.X, victim.Y)))
+            if (!ProjectileMask.Overlaps(
+                    in state.Projectiles[handle.Index], in bubbleBox, in victimBox))
+            {
                 continue;
+            }
 
             if (BubbleHitCharacter(ref state, handle, slot))
                 return true;

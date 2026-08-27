@@ -389,7 +389,7 @@ public sealed class WorldStateTests
         for (var slot = 0; slot < 4; slot++)
         {
             state.Characters[slot] = CharacterState.Fresh(PlayerClass.Soldier, Team.Red);
-            state.Characters[slot].CreationOrder = ++state.NextCharacterOrder;
+            state.Characters[slot].CreationOrder = ++state.NextInstanceOrder;
             state.Alive[slot] = true;
         }
 
@@ -401,7 +401,7 @@ public sealed class WorldStateTests
         // Slot 1 dies and comes back, so its character is now the youngest.
         state.Clear(1);
         state.Characters[1] = CharacterState.Fresh(PlayerClass.Soldier, Team.Red);
-        state.Characters[1].CreationOrder = ++state.NextCharacterOrder;
+        state.Characters[1].CreationOrder = ++state.NextInstanceOrder;
         state.Alive[1] = true;
 
         var count = state.LiveCharactersInCreationOrder(order);
@@ -446,5 +446,55 @@ public sealed class WorldStateTests
         Span<byte> order = stackalloc byte[WorldState.MaxSlots];
         Assert.Equal(3, state.LiveCharactersInCreationOrder(order));
         Assert.Equal<byte[]>([3, 1, 2], order[..3].ToArray());
+    }
+
+    /// <summary>
+    /// ⚠️ <b>The same rule for sentries: the engineer in slot 5 can build before
+    /// the one in slot 2, and the ordering follows the build.</b>
+    /// </summary>
+    /// <remarks>
+    /// A projectile explodes on the first sentry its collision event fires
+    /// against, so this decides an outcome exactly as
+    /// <see cref="ARespawnMovesACharacterToTheBackOfTheCreationOrder"/> does.
+    /// <para>
+    /// ⚠️ <b>Unlike the character case, no recording contradicts the old
+    /// behaviour</b> — seeing it needs two sentries overlapping one projectile's
+    /// box, which no fixture holds. This exists because the rule was proven next
+    /// door and applying it costs nothing, and saying so is the point: a future
+    /// session re-arguing it should know it rests on the character measurement
+    /// rather than on one of its own.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Both lists draw from one counter</b>, because GM8 has one id
+    /// sequence for every object — so the sentry built between two spawns sorts
+    /// between them, and this asserts that interleaving rather than assuming the
+    /// two sequences are independent.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void SentriesAreOrderedByWhenTheyWereBuiltNotByTheirSlot()
+    {
+        var state = default(WorldState);
+
+        // Built high slot first, so slot order and build order disagree.
+        foreach (var slot in new[] { 5, 2, 7 })
+        {
+            state.Sentries[slot] = SentryState.Build(Team.Red, 100, 100, 0);
+            state.Sentries[slot].CreationOrder = ++state.NextInstanceOrder;
+            state.HasSentry[slot] = true;
+        }
+
+        Span<byte> order = stackalloc byte[WorldState.MaxSlots];
+
+        Assert.Equal(3, state.LiveSentriesInCreationOrder(order));
+        Assert.Equal<byte[]>([5, 2, 7], order[..3].ToArray());
+
+        // A character created now shares the counter, so it sorts after all
+        // three sentries — the interleaving GM8's single id sequence produces.
+        state.Characters[0] = CharacterState.Fresh(PlayerClass.Engineer, Team.Red);
+        state.Characters[0].CreationOrder = ++state.NextInstanceOrder;
+        state.Alive[0] = true;
+
+        Assert.True(state.Characters[0].CreationOrder > state.Sentries[7].CreationOrder);
     }
 }

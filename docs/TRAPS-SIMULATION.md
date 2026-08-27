@@ -2185,7 +2185,36 @@ fine** — its own comment already says why, and it is now half-true rather than
 wrong: nothing in the blast loop reads another character, so the order is not
 observable *there*. Move it the moment that stops being true.
 
-⚠️ **Where else the first hit ends a search**, and therefore where this rule may
-still be owed: `BubbleCollide`'s character loop, and the sentry and generator
-loops in `CollideOne`. None is currently contradicted by a fixture; none has
-been checked either.
+✅ **The rest of the first-hit-wins sites were audited on 2026-08-27 and all four
+now follow the rule.** None is contradicted by a fixture — re-measuring all 27
+after the change moved nothing — so they follow the rule the character case
+proved rather than a measurement of their own. **That distinction is recorded
+deliberately**, so a future session re-arguing one of them knows which evidence
+it rests on.
+
+| site | first hit ends it? | fixed |
+|---|---|---|
+| `CollideOne` characters | yes — the projectile explodes there | ✅ creation order, **measured** |
+| `CollideOne` sentries | yes | ✅ build order (`SentryState.CreationOrder`), by rule |
+| `BubbleCollide` characters | yes — the bubble pops | ✅ creation order, by rule |
+| `CollideOne` generators | two, and their order is the map's | ⬅️ left alone: `HitGenerator(Red) \|\| HitGenerator(Blue)` is an assumption about map entity order, and a map places one of each |
+| `Sentries` mine sweep | **no** — the `with` visits every mine | order irrelevant ✅ |
+| `Explosions.SplashCharacters` | no — every character in the blast | order irrelevant ✅ |
+
+⚠️ **Two of those sites were also using the BOX where the mask now applies**, and
+that is a membership error rather than an ordering one: `BubbleCollide`'s
+character test and the mine sweep in `Sentries`. A rotated mine's box is a strict
+over-estimate, so the sweep was unsticking mines that were not touching the
+sentry at all.
+
+⚠️ **`SentryState.CreationOrder` and `CharacterState.CreationOrder` draw from one
+counter** — `WorldState.NextInstanceOrder` — because GM8 issues instance ids from
+a single sequence whatever object is being created. Nothing in the port compares
+a character against a sentry today, so the sharing buys nothing yet; it costs
+nothing either, and it keeps the concept from drifting into "two independent
+sequences", which would be wrong the first time something did compare them.
+
+⚠️ **Both orderings are separate loops rather than one shared sort.** The key
+lives in a different `SlotBuffer` for each, and an abstraction that hides which
+buffer is being read is exactly the one that can silently sort by an unrelated
+number. Eight lines of duplication is the cheaper mistake.

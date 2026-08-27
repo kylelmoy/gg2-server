@@ -123,17 +123,26 @@ public struct WorldState
     public SlotBuffer<CharacterState> Characters;
 
     /// <summary>
-    /// The next value for <see cref="CharacterState.CreationOrder"/>. Stands in
-    /// for GM8's instance counter.
+    /// GM8's instance counter: the next value for
+    /// <see cref="CharacterState.CreationOrder"/> and
+    /// <see cref="SentryState.CreationOrder"/>.
     /// </summary>
     /// <remarks>
+    /// <b>One counter for both, because GM8 has one.</b> An instance id comes
+    /// from a single sequence whatever object is being created, so a sentry
+    /// built between two spawns sits between them. Nothing in the port compares
+    /// a character against a sentry today — a collision event runs over one
+    /// object at a time — but sharing the counter costs nothing and keeps the
+    /// concept honest.
+    /// <para>
     /// In the state rather than static for the same reason the RNG is: a forked
     /// rollout has to fork it, and a default <see cref="WorldState"/> has to be
     /// reproducible. It is never broadcast — only the <em>order</em> it induces
     /// is observable, and that reaches the wire as which character a rocket
     /// exploded on.
+    /// </para>
     /// </remarks>
-    public uint NextCharacterOrder;
+    public uint NextInstanceOrder;
 
     /// <summary>Whether a slot has a character at all — spectators and the dead do not.</summary>
     public SlotBuffer<bool> Alive;
@@ -1062,7 +1071,7 @@ public struct WorldState
         // GM8 issues an instance id here, and the order it induces is
         // observable — see CharacterState.CreationOrder. Pre-incremented so no
         // spawned character can share zero with a directly-placed one.
-        character.CreationOrder = ++NextCharacterOrder;
+        character.CreationOrder = ++NextInstanceOrder;
 
         // Character.events/Create.xml:192-205, "Temporary invuln on spawn for
         // deathmatch players". Here rather than in CharacterState.Fresh because
@@ -1119,6 +1128,55 @@ public struct WorldState
             var at = count;
 
             while (at > 0 && Characters[order[at - 1]].CreationOrder > key)
+            {
+                order[at] = order[at - 1];
+                at--;
+            }
+
+            order[at] = (byte)slot;
+            count++;
+        }
+
+        return count;
+    }
+
+    /// <summary>
+    /// The live sentries in <see cref="SentryState.CreationOrder"/>, which is
+    /// the order GM8 runs a collision event over them.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Slot order is not build order.</b> The engineer in slot 5 can build
+    /// before the one in slot 2, and a projectile explodes on the first sentry
+    /// its collision event fires against — the same rule
+    /// <see cref="CharacterState.CreationOrder"/> was measured for.
+    /// <para>
+    /// ⚠️ <b>Unlike the character case, no recording contradicts the old
+    /// behaviour.</b> Seeing it needs two sentries overlapping one projectile's
+    /// box, which no fixture holds. This is written because the rule was proven
+    /// next door and applying it costs nothing — <b>not</b> because a divergence
+    /// forced it, and the distinction is worth keeping if it ever has to be
+    /// re-argued.
+    /// </para>
+    /// <para>
+    /// Deliberately a second loop rather than a shared sort: the key lives in a
+    /// different buffer for each list, and the abstraction that hides which
+    /// buffer is being read is exactly the one that can silently sort by the
+    /// wrong number.
+    /// </para>
+    /// </remarks>
+    public readonly int LiveSentriesInCreationOrder(Span<byte> order)
+    {
+        var count = 0;
+
+        for (var slot = 0; slot < MaxSlots; slot++)
+        {
+            if (!HasSentry[slot])
+                continue;
+
+            var key = Sentries[slot].CreationOrder;
+            var at = count;
+
+            while (at > 0 && Sentries[order[at - 1]].CreationOrder > key)
             {
                 order[at] = order[at - 1];
                 at--;
