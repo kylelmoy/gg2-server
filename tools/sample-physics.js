@@ -36,6 +36,12 @@
 const fs = require('fs');
 const path = require('path');
 
+// The exact-double encoder lives in tools/exact-double.js, which is one
+// copy of what used to be four - and three of those four were wrong. Run
+// `node tools/exact-double.js` to self-test it; it needs no game.
+const exact = require(path.join(__dirname, 'exact-double.js'));
+
+
 const AGENT = process.env.GG2_AGENT || 'D:/code/gg2-agent';
 const mcp = require(path.join(AGENT, 'tools', 'gg2-mcp-server.js'));
 const walkmask = require(path.join(AGENT, 'tools', 'walkmask.js'));
@@ -81,31 +87,7 @@ const ev = (code) => mcp.callTool('gg2_eval', { code });
 // Every row in this tool's checked-in fixture was audited and none of them took
 // the fuzzy branch, so the oracle is sound as it stands. Port the fixed encoder
 // across before regenerating anything that can produce a value near zero.
-const ENCODE = (dst, src) => `
-{
-    var v, s, a, e, m, f, c1, c2, c3;
-    v = ${src};
-    if (v == 0) { ${dst} = "0 0 0 0 0"; }
-    else {
-        s = 1; a = v;
-        if (a < 0) { s = -1; a = -a; }
-        e = floor(log2(a));
-        m = a / power(2, e);
-        while (m >= 2) { m = m / 2; e = e + 1; }
-        while (m < 1)  { m = m * 2; e = e - 1; }
-        f = m * 262144;  c1 = floor(f);
-        f = (f - c1) * 262144;  c2 = floor(f);
-        f = (f - c2) * 65536;   c3 = floor(f + 0.5);
-        ${dst} = string(s) + " " + string(e) + " " + string(c1) + " " + string(c2) + " " + string(c3);
-    }
-}`;
 
-function decodeDouble(text) {
-  const [sign, exponent, c1, c2, c3] = text.trim().split(/\s+/).map(Number);
-  if (sign === 0) return 0;
-  const mantissa = (c1 + (c2 + c3 / 65536) / 262144) / 262144;
-  return sign * mantissa * Math.pow(2, exponent);
-}
 
 //---------------------------------------------------------------------------
 // The classes, and where to put them
@@ -236,7 +218,7 @@ with (global.probe) {
   for (let from = 0; from < TICKS; from += CHUNK) {
     const to = Math.min(TICKS, from + CHUNK);
     const body = fields
-      .map((f) => ENCODE('global.piece', `global.${f}[qt]`) + '\nglobal.out += global.piece + "|";')
+      .map((f) => exact.encodeInto('global.piece', `global.${f}[qt]`) + '\nglobal.out += global.piece + "|";')
       .join('\n');
 
     await ev(`global.out = "";\nfor (qt = ${from}; qt < ${to}; qt += 1) {\n${body}\n}`);
@@ -245,7 +227,7 @@ with (global.probe) {
       throw new Error(`scenario readback: ${parts.length} values, wanted ${(to - from) * fields.length}`);
 
     for (let q = 0; q < to - from; q++) {
-      const [x, y, h, v] = parts.slice(q * fields.length, (q + 1) * fields.length).map(decodeDouble);
+      const [x, y, h, v] = parts.slice(q * fields.length, (q + 1) * fields.length).map(exact.decode);
       ticks.push({ x, y, hspeed: h, vspeed: v });
     }
   }

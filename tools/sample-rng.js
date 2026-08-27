@@ -32,6 +32,12 @@
 const fs = require('fs');
 const path = require('path');
 
+// The exact-double encoder lives in tools/exact-double.js, which is one
+// copy of what used to be four - and three of those four were wrong. Run
+// `node tools/exact-double.js` to self-test it; it needs no game.
+const exact = require(path.join(__dirname, 'exact-double.js'));
+
+
 const AGENT = process.env.GG2_AGENT || 'D:/code/gg2-agent';
 const mcp = require(path.join(AGENT, 'tools', 'gg2-mcp-server.js'));
 
@@ -57,47 +63,7 @@ async function batch(body) {
   return (await evalx('global.rngOut')).trim();
 }
 
-// The exact-double encoder from sample-physics.js. string_format() is good to
-// about sixteen significant digits and the seventeenth is noise, which is
-// useless when the question is a single ULP. Every step here is a power-of-two
-// scale or a floor, and every chunk stays under 2^19 because GM8's floor()
-// truncates through a 32-bit integer and wraps silently above 2^31.
-// ⚠️ The `if (v == 0)` below and the two `while` loops after it use GML's
-// COMPARISON operators, which are fuzzy to 1e-13 (docs/SIMULATION.md). So this
-// encoder reports a hard zero for any value under 1e-13 - cos(degtorad(90)),
-// for one - and its normalisation loops can exit with the mantissa outside
-// [1, 2) and lose the last bit. tools/sample-motion.js has the corrected
-// version: it scales by 2^400 before testing the sign or the zero, and it has
-// no normalisation loops at all.
-//
-// Every row in this tool's checked-in fixture was audited and none of them took
-// the fuzzy branch, so the oracle is sound as it stands. Port the fixed encoder
-// across before regenerating anything that can produce a value near zero.
-const ENCODE = (dst, src) => `
-{
-    var v, s, a, e, m, f, c1, c2, c3;
-    v = ${src};
-    if (v == 0) { ${dst} = "0 0 0 0 0"; }
-    else {
-        s = 1; a = v;
-        if (a < 0) { s = -1; a = -a; }
-        e = floor(log2(a));
-        m = a / power(2, e);
-        while (m >= 2) { m = m / 2; e = e + 1; }
-        while (m < 1)  { m = m * 2; e = e - 1; }
-        f = m * 262144;  c1 = floor(f);
-        f = (f - c1) * 262144;  c2 = floor(f);
-        f = (f - c2) * 65536;   c3 = floor(f + 0.5);
-        ${dst} = string(s) + " " + string(e) + " " + string(c1) + " " + string(c2) + " " + string(c3);
-    }
-}`;
 
-function decodeDouble(text) {
-  const [sign, exponent, c1, c2, c3] = text.trim().split(/\s+/).map(Number);
-  if (sign === 0) return 0;
-  const mantissa = (c1 + (c2 + c3 / 65536) / 262144) / 262144;
-  return sign * mantissa * Math.pow(2, exponent);
-}
 
 // GM8 hands a 32-bit seed back through GML's one numeric type, signed.
 const toUnsigned = (n) => (n < 0 ? n + 4294967296 : n);
@@ -160,13 +126,13 @@ async function randomValues() {
         random_set_seed(${seed});
         var v;
         v = random(${x});
-        ${ENCODE('global.rngOut', 'v')}
+        ${exact.encodeInto('global.rngOut', 'v')}
         global.rngOut += " | " + string(random_get_seed());`);
       const [bits, advanced] = text.split('|');
       out.push({
         seed,
         arg: x,
-        value: decodeDouble(bits),
+        value: exact.decode(bits),
         bits: bits.trim(),
         advanced: toUnsigned(Number(advanced.trim())),
       });

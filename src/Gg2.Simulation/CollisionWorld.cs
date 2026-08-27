@@ -32,6 +32,18 @@ public sealed class CollisionWorld
         Map = map;
         _mask = map.Walkmask;
         _rects = [.. ColliderSprites.Build(map)];
+
+        // Neither of these is solid to anything, so they are not in _rects: a
+        // spawn room and a cabinet are regions to be asked about, not walls.
+        // Unlike the capture zones they need nothing but the map, so they are
+        // built here rather than handed in afterwards.
+        // Fully qualified: the properties below shadow the two static classes
+        // inside this type, and the properties are the better name at every
+        // call site (world.Cabinets, world.SpawnRooms).
+        _spawnRooms = Gg2.Simulation.SpawnRooms.Build(map);
+        _cabinets = Gg2.Simulation.Cabinets.Build(map);
+        _killBoxes = Gg2.Simulation.KillBoxes.Build(map);
+        _moveBoxes = Gg2.Simulation.MoveBoxes.Build(map);
     }
 
     public LevelMap Map { get; }
@@ -44,6 +56,116 @@ public sealed class CollisionWorld
     /// <see cref="SolidRect.IsSolidTo"/>.
     /// </remarks>
     public IReadOnlyList<SolidRect> Rects => _rects;
+
+    /// <summary>
+    /// The map's <c>CaptureZone</c> rectangles, each tagged with the control
+    /// point it belongs to.
+    /// </summary>
+    /// <remarks>
+    /// Here rather than in <see cref="WorldState"/> because a zone is map
+    /// geometry: it never moves, never opens and never changes hands, and the
+    /// state has to stay a <c>memcpy</c>. Empty until
+    /// <see cref="SetCaptureZones"/> is called — the zones need the control
+    /// points to have been placed first, since each one is tagged with the
+    /// nearest, and that ordering lives with the caller that loads the map.
+    /// </remarks>
+    public IReadOnlyList<CaptureZone> CaptureZones => _captureZones;
+
+    private CaptureZone[] _captureZones = [];
+
+    private readonly SpawnRoomRect[] _spawnRooms;
+
+    private readonly HealingCabinet[] _cabinets;
+
+    /// <summary>The map's <c>SpawnRoom</c> rectangles.</summary>
+    public IReadOnlyList<SpawnRoomRect> SpawnRooms => _spawnRooms;
+
+    /// <summary>The map's <c>HealingCabinet</c> rectangles and their switches.</summary>
+    public IReadOnlyList<HealingCabinet> Cabinets => _cabinets;
+
+    private readonly KillBoxRect[] _killBoxes;
+
+    /// <summary>The map's <c>KillBox</c>, <c>PitFall</c> and <c>FragBox</c> rectangles.</summary>
+    /// <remarks>
+    /// Scanned across all 22 shipped maps: only <c>tdm_mantic</c> places any,
+    /// and its six are all pit falls. See <see cref="KillBoxes"/>.
+    /// </remarks>
+    public IReadOnlyList<KillBoxRect> KillBoxes => _killBoxes;
+
+    private readonly MoveBoxRect[] _moveBoxes;
+
+    /// <summary>The map's <c>MoveBox</c> rectangles and which way each pushes.</summary>
+    /// <remarks>
+    /// Scanned across all 22 shipped maps: <c>tdm_mantic</c> alone, nine up and
+    /// six down. See <see cref="MoveBoxes"/>.
+    /// </remarks>
+    public IReadOnlyList<MoveBoxRect> MoveBoxes => _moveBoxes;
+
+    /// <summary>
+    /// <c>collision_point(x, y, SpawnRoom, 0, 0) &gt;= 0</c>: is this
+    /// character's <em>origin</em> inside a spawn room?
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The point, not the box</b>, and the reference asks both ways about
+    /// the same object — see <see cref="MeetsSpawnRoom"/>. This is the form a
+    /// class change and a sentry build use, and it is the same
+    /// <c>collision_point</c> a capture zone uses: the origin is at the
+    /// character's feet, so a character whose head is in the room and whose feet
+    /// are not is <em>outside</em> it.
+    /// </remarks>
+    public bool PointInSpawnRoom(double x, double y)
+    {
+        var px = RoundPosition(x);
+        var py = RoundPosition(y);
+
+        foreach (var room in _spawnRooms)
+            if (px >= room.Left && px <= room.Right && py >= room.Top && py <= room.Bottom)
+                return true;
+
+        return false;
+    }
+
+    /// <summary>
+    /// <c>place_meeting(x, y, SpawnRoom)</c>: does this character's <em>box</em>
+    /// overlap a spawn room?
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ The other half of the disagreement above. This is the form
+    /// <c>Character.events/Destroy.xml:37</c> uses for the fast respawn, so the
+    /// respawn is more generous than the class-change swap by exactly the height
+    /// of a character.
+    /// </remarks>
+    public bool MeetsSpawnRoom(in CharacterBox box, double x, double y)
+    {
+        var character = Aabb.ForCharacter(box, x, y);
+
+        foreach (var room in _spawnRooms)
+            if (character.Overlaps(new Aabb(room.Left, room.Top, room.Right, room.Bottom)))
+                return true;
+
+        return false;
+    }
+
+    /// <summary>
+    /// <c>place_meeting(x, y, HealingCabinet)</c>, which is
+    /// <c>Character.events/End Step.xml:104</c>'s <c>onCabinet</c>.
+    /// </summary>
+    public bool MeetsCabinet(in CharacterBox box, double x, double y)
+    {
+        var character = Aabb.ForCharacter(box, x, y);
+
+        foreach (var cabinet in _cabinets)
+            if (character.Overlaps(new Aabb(cabinet.Left, cabinet.Top, cabinet.Right, cabinet.Bottom)))
+                return true;
+
+        return false;
+    }
+
+    /// <summary>
+    /// Supplies the capture zones once the control points they name have been
+    /// placed. See <see cref="ControlPoints.Place"/>.
+    /// </summary>
+    public void SetCaptureZones(CaptureZone[] zones) => _captureZones = zones ?? [];
 
     /// <summary>
     /// <c>map_width()</c> — the art's width, which is what the physics clamps
@@ -186,6 +308,46 @@ public sealed class CollisionWorld
     }
 
     /// <summary>
+    /// <c>place_meeting(x, y, &lt;object&gt;)</c> for one family of map solid.
+    /// </summary>
+    /// <remarks>
+    /// <b>Not <c>place_free</c>, and the difference is the whole point of the
+    /// one caller.</b> <c>place_free</c> asks whether anything <em>solid to
+    /// me</em> is in the way; this asks whether a named object's mask overlaps,
+    /// solidity and team irrelevant. <c>Character.events/Collision with
+    /// IntelligenceRed.xml</c> is the case that needs it —
+    /// <c>!place_meeting(x, y, TeamGate)</c> refuses the grab to a player
+    /// standing inside <em>any</em> team gate, including their own, which is
+    /// non-solid to them and which <c>place_free</c> would therefore say nothing
+    /// about.
+    /// <para>
+    /// The map's walkmask is not consulted: a <c>place_meeting</c> against an
+    /// object is only ever about that object's instances. And
+    /// <see cref="SolidKind"/> is the port's stand-in for the object family, so
+    /// <see cref="SolidKind.TeamGate"/> here means exactly
+    /// <c>RedTeamGate</c>, <c>BlueTeamGate</c> and their two horizontal
+    /// variants — <c>IntelGate</c> is a <em>sibling</em> under <c>Gate</c> and
+    /// is not one of them.
+    /// </para>
+    /// </remarks>
+    public bool PlaceMeetingKind(in CharacterBox box, double x, double y, SolidKind kind)
+    {
+        var originX = RoundPosition(x);
+        var originY = RoundPosition(y);
+
+        var left = originX + box.Left;
+        var right = originX + box.Right;
+        var top = originY + box.Top;
+        var bottom = originY + box.Bottom;
+
+        foreach (var rect in _rects)
+            if (rect.Kind == kind && rect.Overlaps(left, right, top, bottom))
+                return true;
+
+        return false;
+    }
+
+    /// <summary>
     /// <c>place_free</c> for an instance whose bounding box is already known.
     /// </summary>
     /// <remarks>
@@ -219,6 +381,40 @@ public sealed class CollisionWorld
                 return false;
 
         return true;
+    }
+
+    /// <summary>
+    /// Whether any solid that is <em>not</em> an <see cref="SolidKind.Obstacle"/>
+    /// blocks this box.
+    /// </summary>
+    /// <remarks>
+    /// <b><c>gunSetSolids</c> minus the walls</b>, which is exactly the set of
+    /// map objects a <c>Bubble</c> has a destroying collision event for:
+    /// <c>TeamGate</c>, <c>BulletWall</c>, <c>IntelGate</c> and
+    /// <c>ControlPointSetupGate</c>. Its <c>Collision with Obstacle</c> is a
+    /// slide rather than a death, so the two halves have to be asked
+    /// separately — see <see cref="Projectiles"/>.
+    /// <para>
+    /// The map's own mask is not consulted for the same reason: it is a
+    /// <c>CustomMapO</c>, and <c>CustomMapO</c> descends from <c>Obstacle</c>.
+    /// Solidity still comes from <see cref="SolidRect.IsSolidTo"/> rather than
+    /// from the object family, because the reference's four events ask exactly
+    /// the questions that predicate already answers for a bullet — including
+    /// that an intel gate stays shut while the map is changing.
+    /// </para>
+    /// </remarks>
+    public bool MeetsNonObstacleSolid(in Aabb box, in CollisionFilter filter)
+    {
+        foreach (var rect in _rects)
+        {
+            if (rect.Kind == SolidKind.Obstacle)
+                continue;
+
+            if (rect.Overlaps(box.Left, box.Right, box.Top, box.Bottom) && rect.IsSolidTo(filter))
+                return true;
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -274,6 +470,81 @@ public sealed class CollisionWorld
     /// </remarks>
     public bool CollisionLineHitsMask(double x1, double y1, double x2, double y2) =>
         CollisionLine.Hits(MapCollider, new WalkmaskLookup(_mask), x1, y1, x2, y2);
+
+    /// <summary>
+    /// <c>place_meeting(x, y, Obstacle)</c> for a box: the map, and nothing
+    /// else.
+    /// </summary>
+    /// <remarks>
+    /// The <see cref="Aabb"/> counterpart of
+    /// <see cref="PlaceFreeInMask(in CharacterBox, double, double)"/>, and it
+    /// exists for one caller: a mine landing on a wall.
+    /// <c>move_all_bullets.gml</c> brackets that with
+    /// <c>gunUnsetSolids(); wallSetSolid();</c> — and
+    /// <c>Scripts/Physics/wallSetSolid.gml</c> is one line,
+    /// <c>with(Obstacle) solid = true</c>. So a mine backs out of the map and of
+    /// nothing else: it does not stick to a gate or to a bullet wall, it dies
+    /// against them.
+    /// </remarks>
+    public bool PlaceFreeInMask(in Aabb box)
+    {
+        var firstColumn = CellOf(box.Left);
+        var lastColumn = CellOf(box.Right);
+        var firstRow = CellOf(box.Top);
+        var lastRow = CellOf(box.Bottom);
+
+        for (var row = firstRow; row <= lastRow; row++)
+        for (var column = firstColumn; column <= lastColumn; column++)
+            if (_mask.IsSolid(column, row))
+                return false;
+
+        return true;
+    }
+
+    /// <summary>
+    /// <c>Scripts/Physics/collision_line_bulletblocking.gml</c>: is there
+    /// anything between these two points that a bullet cannot pass?
+    /// </summary>
+    /// <remarks>
+    /// The reference asks five questions and returns on the first yes —
+    /// <c>Obstacle</c>, <c>BulletWall</c>, <c>IntelGate</c>, <c>TeamGate</c>
+    /// (unless the map is changing) and <c>ControlPointSetupGate</c> (while the
+    /// setup gates are shut). The order is not observable, because the result is
+    /// a boolean, so this asks the map and then every solid rectangle the
+    /// <em>bullet's</em> filter says is solid — which is exactly those four
+    /// objects and, correctly, not <c>PlayerWall</c>.
+    /// <para>
+    /// <b>The rectangles were the part that had to be measured before it could
+    /// be written.</b> A rectangle is an instance rather than map geometry, so
+    /// it needs its own <see cref="LineCollider"/>, and building one means
+    /// claiming its sprite mask fills its bounding box. Measured 2026-08-25
+    /// against the running game: every point inside the reported box of all
+    /// eight solid level-entity types is solid to a precise
+    /// <c>collision_point</c> — twenty instances at scales from 0.3 to 13,
+    /// 100% filled in every case. See <see cref="LineCollider.ForSolidRect"/>.
+    /// </para>
+    /// <para>
+    /// <c>global.mapchanging</c> is not modelled. It is true only between a
+    /// <c>CHANGE_MAP</c> and the new map finishing its load, during which no
+    /// weapon can fire because no character exists.
+    /// </para>
+    /// </remarks>
+    public bool CollisionLineBlocksBullets(double x1, double y1, double x2, double y2, in CollisionFilter filter)
+    {
+        if (CollisionLineHitsMask(x1, y1, x2, y2))
+            return true;
+
+        foreach (var rect in _rects)
+        {
+            if (!rect.IsSolidTo(filter))
+                continue;
+
+            if (CollisionLine.Hits(LineCollider.ForSolidRect(rect), default(CollisionLine.FilledMask), x1, y1, x2, y2))
+                return true;
+        }
+
+        return false;
+    }
 
     /// <summary>
     /// The integer position GM8 collides at, for a real one.

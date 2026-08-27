@@ -130,6 +130,15 @@ public sealed class LoopbackClient : IDisposable
                 IsClosed = true;
                 return;
             }
+            catch (ObjectDisposedException)
+            {
+                // The test disposed this client to simulate a disconnect. The
+                // harness still polls every client it handed out, so a disposed
+                // one has to answer "closed" rather than throwing — otherwise a
+                // departure cannot be tested at all.
+                IsClosed = true;
+                return;
+            }
 
             if (read == 0)
             {
@@ -175,5 +184,13 @@ public sealed class LoopbackClient : IDisposable
 
     public string TakeString2() => Gg2Text.Decode(Take(TakeUShort()));
 
-    public void Dispose() => _socket.Dispose();
+    /// <summary>
+    /// Closes the connection. Also how a test simulates a client leaving — the
+    /// harness keeps polling it, and <see cref="Poll"/> answers "closed".
+    /// </summary>
+    public void Dispose()
+    {
+        IsClosed = true;
+        _socket.Dispose();
+    }
 }

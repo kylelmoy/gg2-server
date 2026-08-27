@@ -27,7 +27,12 @@ public sealed class FullUpdateLayoutTests
     [MemberData(nameof(Maps))]
     public void FullUpdateTailMatchesTheMapsGameMode(MapFixture fixture)
     {
-        var map = LevelMap.FromPng(fixture.Name, ReferenceTree.ReadMap(fixture.Name));
+        // ⚠️ ForArea(1), like the server. A tall map is several rounds stacked
+        // vertically and only one area's entities exist at a time — so the
+        // *unnarrowed* cp_dirtbowl has six control points and the round being
+        // played has two. Framing an update by the wrong count desynchronises
+        // the stream; see LevelMap.ForArea and GameModes.ShapeOf.
+        var map = LevelMap.FromPng(fixture.Name, ReferenceTree.ReadMap(fixture.Name)).ForArea(1);
         var mode = GameModes.Of(map);
 
         using var harness = new ServerHarness(o => o.Map = fixture.Name);

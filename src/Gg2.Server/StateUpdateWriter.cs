@@ -14,6 +14,147 @@ namespace Gg2.Server;
 public delegate bool CharacterLookup(int slot, out CharacterBlock character, out WeaponBlock weapon);
 
 /// <summary>
+/// Answers what a roster slot's sentry looks like on the wire, if it has one.
+/// A delegate for the same reason <see cref="CharacterLookup"/> is.
+/// </summary>
+public delegate bool SentryLookup(int slot, out SentryBlock sentry);
+
+/// <summary>
+/// What the objective contributes to a <c>FULL_UPDATE</c> or a
+/// <c>CAPS_UPDATE</c>: the two briefcases and the two cap counters.
+/// </summary>
+/// <remarks>
+/// A lookup for the same reason <see cref="CharacterLookup"/> is one — the
+/// objective now lives in <c>Gg2.Simulation.WorldState</c>, which is a large
+/// value type the writer must not copy. Null means a server with no objective
+/// simulated at all, which writes two empty instance lists and two zeroes; that
+/// is what the layout tests want and is a legal state (a map with no intel).
+/// </remarks>
+public delegate ObjectiveBlock ObjectiveLookup();
+
+/// <summary>
+/// One roster entry's scoreboard, as the <c>FULL_UPDATE</c> wants it.
+/// </summary>
+/// <remarks>
+/// A lookup for the same reason the others are: the counters live in
+/// <c>Gg2.Simulation.WorldState</c>, which the writer must not copy. Null means
+/// a server with no scoreboard simulated, which writes zeroes — what the layout
+/// tests want, and what this port did until the stats landed.
+/// </remarks>
+public delegate PlayerStatsBlock StatsLookup(int slot);
+
+/// <summary>
+/// How many times one roster entry has killed another without dying to them
+/// since — one cell of the domination matrix.
+/// </summary>
+/// <remarks>
+/// A second lookup rather than a field on <see cref="PlayerStatsBlock"/>,
+/// because the block a player writes is a <em>row</em> whose length is the
+/// roster size and the writer must not allocate one per player per update. Null
+/// writes zeroes, which is what this port did until the matrix landed.
+/// </remarks>
+public delegate byte DominationLookup(int killer, int victim);
+
+/// <summary>
+/// The eleven counters a <c>FULL_UPDATE</c> carries, in
+/// <c>Player.events/User Event 12.xml</c>'s order.
+/// </summary>
+/// <remarks>
+/// Reals, because the reference's are: an assist is worth half a point and
+/// healing accumulates fractional hit points. The quantisation happens at the
+/// writer, once.
+/// </remarks>
+public readonly record struct PlayerStatsBlock(
+    double Kills,
+    double Deaths,
+    double Caps,
+    double Assists,
+    double Destruction,
+    double Stabs,
+    double Healing,
+    double Defenses,
+    double Invulns,
+    double Bonus,
+    double Points);
+
+/// <summary>
+/// The objective, in wire terms. <c>null</c> for a briefcase that is being
+/// carried or that the map does not place — <c>serialize(IntelligenceRed)</c>
+/// then writes a count of zero.
+/// </summary>
+/// <param name="RedIntel">Where the red briefcase is lying, and its return alarm.</param>
+/// <param name="BlueIntel">The same for blue's.</param>
+/// <param name="RedCaps">Captures by the red team, clamped on the way out.</param>
+/// <param name="BlueCaps">Captures by the blue team.</param>
+/// <param name="TimeLimitMinutes">
+/// <c>global.timeLimitMins</c>. Six of the eight gamemodes' HUD blocks open
+/// with it.
+/// </param>
+/// <param name="RoundTimer">
+/// Ticks left in the round, as a <c>uint</c> on the wire. The client runs its
+/// own copy down between updates, so a server that never advanced it — which
+/// this port did until the round landed — shows every client a frozen clock.
+/// </param>
+/// <param name="ControlPoints">
+/// The map's control points, in the order the HUD block wants them —
+/// <c>Gg2.Simulation.ControlPoints.Place</c> decides that once, at load.
+/// </param>
+/// <param name="ControlPointUnlock">
+/// <c>cpUnlock</c>: ticks of pregame left. In the KotH, DKotH, Arena and CP
+/// blocks.
+/// </param>
+/// <param name="RedTimer">KotH's per-team countdown, in ticks.</param>
+/// <param name="BlueTimer">The other one.</param>
+/// <param name="ArenaState">Which phase of an Arena map the match is in.</param>
+/// <param name="ArenaRedWins">Rounds red has won on this map.</param>
+/// <param name="ArenaBlueWins">Rounds blue has won.</param>
+/// <param name="ArenaWinner">Who won the last <em>round</em>, not the map.</param>
+/// <param name="ArenaEndCount">Ticks of scoreboard left after a round.</param>
+/// <param name="ArenaRoundStart">
+/// Ticks of setup left. ⚠️ Sent as <c>floor(roundStart/2)</c> in one byte.
+/// </param>
+/// <param name="SetupTimer">
+/// <c>global.setupTimer</c>: ticks before the setup gates open. In the Invasion
+/// and control-point blocks, and zero in every other mode.
+/// </param>
+/// <param name="RedGenerator">
+/// The red team's generator, or null once it has been destroyed — in which case
+/// the HUD block simply does not carry it.
+/// </param>
+/// <param name="BlueGenerator">The other one.</param>
+/// <param name="KillLimit">
+/// <c>global.killLimit</c>: kills that end a Team Deathmatch round. In that
+/// mode's HUD block and nowhere else.
+/// </param>
+/// <param name="TdmInvulnerabilityTicks">
+/// <c>global.tdmInvulnerabilityTicks</c>, on every <c>FULL_UPDATE</c> whatever
+/// the mode — it leads the message, ahead of the player count. Zero outside
+/// Team Deathmatch.
+/// </param>
+public readonly record struct ObjectiveBlock(
+    IntelBlock? RedIntel,
+    IntelBlock? BlueIntel,
+    int RedCaps,
+    int BlueCaps,
+    int TimeLimitMinutes = 0,
+    int RoundTimer = 0,
+    ControlPointBlock[]? ControlPoints = null,
+    int ControlPointUnlock = 0,
+    int RedTimer = 0,
+    int BlueTimer = 0,
+    int SetupTimer = 0,
+    byte ArenaState = 0,
+    int ArenaRedWins = 0,
+    int ArenaBlueWins = 0,
+    sbyte ArenaWinner = 2,
+    int ArenaEndCount = 0,
+    int ArenaRoundStart = 0,
+    GeneratorBlock? RedGenerator = null,
+    GeneratorBlock? BlueGenerator = null,
+    int KillLimit = 0,
+    int TdmInvulnerabilityTicks = 0);
+
+/// <summary>
 /// Writes the four state-update tiers, transcribed from
 /// <c>Scripts/Serialization/serializeState.gml</c> and the <c>User Event 12</c>
 /// of everything it visits.
@@ -31,7 +172,13 @@ public delegate bool CharacterLookup(int slot, out CharacterBlock character, out
 /// glitch.
 /// </para>
 /// </remarks>
-public sealed class StateUpdateWriter(MatchState match, CharacterLookup characters)
+public sealed class StateUpdateWriter(
+    MatchState match,
+    CharacterLookup characters,
+    SentryLookup? sentries = null,
+    ObjectiveLookup? objective = null,
+    StatsLookup? statistics = null,
+    DominationLookup? dominations = null)
 {
     /// <summary>
     /// Writes one update of the given tier.
@@ -44,8 +191,14 @@ public sealed class StateUpdateWriter(MatchState match, CharacterLookup characte
     {
         writer.WriteMessageType(tier);
 
+        // One call per update, and it has to be first: the FULL_UPDATE's leading
+        // field comes out of it too, ahead of the player count. The lookup
+        // reaches into a WorldState the writer must not copy, and WriteHud
+        // below needs the same answer.
+        _objective = objective?.Invoke() ?? default;
+
         if (tier == MessageType.FullUpdate)
-            writer.WriteUShortFromReal(match.TdmInvulnerabilityTicks);
+            writer.WriteUShortFromReal(_objective.TdmInvulnerabilityTicks);
 
         // The client aborts with "Wrong number of players while deserializing
         // state" if this disagrees with its own roster size, so every
@@ -64,14 +217,16 @@ public sealed class StateUpdateWriter(MatchState match, CharacterLookup characte
                 WriteMovingPlatform(writer, tier, platform);
         }
 
+        var scores = _objective;
+
         if (tier == MessageType.FullUpdate)
         {
-            WriteIntel(writer, match.RedIntel);
-            WriteIntel(writer, match.BlueIntel);
+            WriteIntel(writer, scores.RedIntel);
+            WriteIntel(writer, scores.BlueIntel);
 
             writer.WriteUByte(match.CapLimit);
-            writer.WriteUByte(match.RedCaps);
-            writer.WriteUByte(match.BlueCaps);
+            writer.WriteUByteFromReal(scores.RedCaps);
+            writer.WriteUByteFromReal(scores.BlueCaps);
             writer.WriteUByte(match.RespawnTimeSeconds);
             WriteHud(writer, tier);
 
@@ -81,12 +236,15 @@ public sealed class StateUpdateWriter(MatchState match, CharacterLookup characte
 
         if (tier == MessageType.CapsUpdate)
         {
-            writer.WriteUByte(match.RedCaps);
-            writer.WriteUByte(match.BlueCaps);
+            writer.WriteUByteFromReal(scores.RedCaps);
+            writer.WriteUByteFromReal(scores.BlueCaps);
             writer.WriteUByte(match.RespawnTimeSeconds);
             WriteHud(writer, tier);
         }
     }
+
+    /// <summary>The objective as of the update being written. See <see cref="Write"/>.</summary>
+    private ObjectiveBlock _objective;
 
     /// <summary>
     /// <c>Objects/InGameElements/Player.events/User Event 12.xml</c>.
@@ -99,34 +257,84 @@ public sealed class StateUpdateWriter(MatchState match, CharacterLookup characte
         {
             // Stats, in serialisation order — which is not StatIndex order:
             // REVENGE and DOMINATIONS are not sent, and POINTS follows BONUS.
-            writer.WriteUByte(0); // kills
-            writer.WriteUByte(0); // deaths
-            writer.WriteUByte(0); // caps
-            writer.WriteUByte(0); // assists
-            writer.WriteUByte(0); // destruction
-            writer.WriteUByte(0); // stabs
-            writer.WriteUShort(0); // healing
-            writer.WriteUByte(0); // defenses
-            writer.WriteUByte(0); // invulns
-            writer.WriteUByte(0); // bonus
-            writer.WriteUByte(0); // points
+            //
+            // ⚠️ Every one is a **real** in the reference and every one but
+            // healing is written as a ubyte, so the wire rounds them half away
+            // from zero. An assist is worth half a point, which means a client's
+            // scoreboard can read one point above the host's own — the host
+            // draws floor(stats[POINTS]) and the client draws what it was sent.
+            // That is the reference's, not a quantisation this port chose.
+            var stats = statistics?.Invoke(index) ?? default;
+
+            writer.WriteUByteFromReal(stats.Kills);
+            writer.WriteUByteFromReal(stats.Deaths);
+            writer.WriteUByteFromReal(stats.Caps);
+            writer.WriteUByteFromReal(stats.Assists);
+            writer.WriteUByteFromReal(stats.Destruction);
+            writer.WriteUByteFromReal(stats.Stabs);
+            writer.WriteUShortFromReal(stats.Healing);
+            writer.WriteUByteFromReal(stats.Defenses);
+            writer.WriteUByteFromReal(stats.Invulns);
+            writer.WriteUByteFromReal(stats.Bonus);
+            writer.WriteUByteFromReal(stats.Points);
             writer.WriteUByte(player.QueueJump ? (byte)1 : (byte)0);
 
             // Rewards come from an auth server this port never talks to.
             writer.WriteString2(string.Empty);
 
-            // One domination count per *other* player, in roster order.
+            // One domination count per *other* player, in roster order — no
+            // count prefix, because the length is the roster size the message
+            // already declared. ⚠️ Self is skipped rather than written as a
+            // zero, so the row is one byte shorter than the roster and a reader
+            // that took `count` bytes would be one ahead per player.
             for (var i = 0; i < match.Roster.Count; i++)
+            {
                 if (i != index)
-                    writer.WriteUByte(0);
+                    writer.WriteUByte(dominations?.Invoke(index, i) ?? 0);
+            }
         }
 
-        // 0x01 = has a Character, 0x02 = has a Sentry. No sentries yet.
+        // 0x01 = has a Character, 0x02 = has a Sentry.
         var hasCharacter = characters(index, out var character, out var weapon);
-        writer.WriteUByte(hasCharacter ? (byte)0x01 : (byte)0x00);
+        var sentry = default(SentryBlock);
+        var hasSentry = sentries?.Invoke(index, out sentry) ?? false;
+
+        writer.WriteUByte((byte)((hasCharacter ? 0x01 : 0x00) | (hasSentry ? 0x02 : 0x00)));
 
         if (hasCharacter)
             WriteCharacter(writer, tier, character, weapon);
+
+        if (hasSentry)
+            WriteSentry(writer, tier, sentry);
+    }
+
+    /// <summary>
+    /// <c>Objects/InGameElements/Sentry.events/User Event 12.xml</c>.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>On an <c>INPUTSTATE</c> a sentry contributes NOTHING — not even
+    /// its hp.</b> Both groups below are guarded on the tier and between them
+    /// they cover only <c>QUICK_UPDATE</c> and <c>FULL_UPDATE</c>, so on an
+    /// <c>INPUTSTATE</c> the player's block ends at its subobjects byte with
+    /// bit 1 still set. Writing the hp byte unconditionally is the framing bug
+    /// docs/PROTOCOL.md's "Per sentry" section is about.
+    /// </remarks>
+    private static void WriteSentry(NetWriter writer, MessageType tier, in SentryBlock sentry)
+    {
+        if (tier == MessageType.FullUpdate)
+        {
+            writer.WriteByte(sentry.StartDirection);
+            writer.WriteUShort(sentry.X);
+            writer.WriteUShort(sentry.Y);
+        }
+
+        if (tier is MessageType.QuickUpdate or MessageType.FullUpdate)
+            writer.WriteUByte(sentry.BuiltAndHp);
+
+        // Self-describing through bit 7 of the byte just written: a falling
+        // sentry's vspeed follows on a FULL_UPDATE only.
+        if (!sentry.Built && tier == MessageType.FullUpdate)
+            writer.WriteUByte(sentry.VSpeed ?? 0);
     }
 
     /// <summary>
@@ -207,19 +415,26 @@ public sealed class StateUpdateWriter(MatchState match, CharacterLookup characte
         if (weapon.Class != PlayerClass.Demoman)
             return;
 
-        // A mine count is a promise of that many seven-byte blocks
-        // (Minegun.events/User Event 12.xml walks every Mine belonging to this
-        // player). Nothing lobs a mine yet, so the count can only be zero — and
-        // if it ever is not, the Minegun landed without its serialisation and
-        // every client after this byte is reading the wrong thing.
-        if (weapon.MinesLobbed != 0)
+        // Minegun.events/User Event 12.xml: the count, then one seven-byte
+        // record per mine in instance order. The count is a promise, and a
+        // client reads the records positionally — so the two must be built from
+        // the same walk, which is why CharacterWire fills them together.
+        if (weapon.MinesLobbed != weapon.Mines.Length)
         {
             throw new InvalidOperationException(
-                $"{weapon.MinesLobbed} mine(s) lobbed but no mine blocks to write: " +
-                "Minegun.events/User Event 12.xml needs its Mine loop porting alongside the weapon");
+                $"{weapon.MinesLobbed} mine(s) lobbed but {weapon.Mines.Length} block(s) to write");
         }
 
-        writer.WriteUByte(0);
+        writer.WriteUByte(weapon.MinesLobbed);
+
+        foreach (var mine in weapon.Mines)
+        {
+            writer.WriteUShort(mine.X);
+            writer.WriteUShort(mine.Y);
+            writer.WriteByte(mine.HSpeed);
+            writer.WriteByte(mine.VSpeed);
+            writer.WriteUByte(mine.Stickied);
+        }
     }
 
     /// <summary>
@@ -244,23 +459,24 @@ public sealed class StateUpdateWriter(MatchState match, CharacterLookup characte
     /// one <c>User Event 10</c> block each. The client destroys every instance
     /// it has and recreates exactly that many, so the count is authoritative.
     /// </summary>
-    private static void WriteIntel(NetWriter writer, IntelState? intel)
+    /// <remarks>
+    /// A carried briefcase has no instance, so its count is zero — see
+    /// <c>Gg2.Simulation.IntelState</c>. The quantisation is already done, by
+    /// the same code the parity harness compares against; see
+    /// <see cref="ObjectiveBlock"/>.
+    /// </remarks>
+    private static void WriteIntel(NetWriter writer, IntelBlock? intel)
     {
-        if (intel is null)
+        if (intel is not { } block)
         {
             writer.WriteUShort(0);
             return;
         }
 
         writer.WriteUShort(1);
-
-        // round(x*5), unlike Character's plain x*5: GML's round is half-to-even
-        // and runs first, after which the extension's own half-away-from-zero
-        // round has nothing left to do. Two objects, two quantisations, one
-        // wire — see WireQuantise.
-        writer.WriteUShortFromReal(Gml.Round(intel.X * 5));
-        writer.WriteUShortFromReal(Gml.Round(intel.Y * 5));
-        writer.WriteShort(intel.RecoverTimer);
+        writer.WriteUShort(block.X);
+        writer.WriteUShort(block.Y);
+        writer.WriteShort(block.RecoverTimer);
     }
 
     /// <summary>
@@ -277,62 +493,69 @@ public sealed class StateUpdateWriter(MatchState match, CharacterLookup characte
         switch (match.GameMode)
         {
             case GameMode.CaptureTheFlag:
-                writer.WriteUByte(match.TimeLimitMinutes);
-                writer.WriteUInt(match.Timer);
+                writer.WriteUByteFromReal(_objective.TimeLimitMinutes);
+                writer.WriteUInt((uint)Math.Max(0, _objective.RoundTimer));
                 break;
 
             case GameMode.Invasion:
-                writer.WriteUByte(match.TimeLimitMinutes);
-                writer.WriteUInt(match.Timer);
-                writer.WriteUShort(match.SetupTimer);
+                writer.WriteUByteFromReal(_objective.TimeLimitMinutes);
+                writer.WriteUInt((uint)Math.Max(0, _objective.RoundTimer));
+                writer.WriteUShortFromReal(_objective.SetupTimer);
                 break;
 
             case GameMode.Generator:
-                writer.WriteUByte(match.TimeLimitMinutes);
-                writer.WriteUInt(match.Timer);
-                WriteGenerator(writer, match.BlueGenerator);
-                WriteGenerator(writer, match.RedGenerator);
+                writer.WriteUByteFromReal(_objective.TimeLimitMinutes);
+                writer.WriteUInt((uint)Math.Max(0, _objective.RoundTimer));
+
+                // ⚠️ Blue first, then red — `with GeneratorBlue event_user(12);
+                // with GeneratorRed event_user(12);`, in that order, which is
+                // the reverse of every other paired field on the wire.
+                WriteGenerator(writer, _objective.BlueGenerator);
+                WriteGenerator(writer, _objective.RedGenerator);
                 break;
 
             case GameMode.Arena:
+                // ⚠️ Five extra fields on a FULL_UPDATE only, ahead of the
+                // scalars every other mode shares. A reader that took them on a
+                // CAPS_UPDATE too would be six bytes out.
                 if (tier == MessageType.FullUpdate)
                 {
-                    writer.WriteUByte(match.RedWins);
-                    writer.WriteUByte(match.BlueWins);
-                    writer.WriteUByte(match.ArenaState);
-                    writer.WriteByte(match.ArenaWinners);
-                    writer.WriteUShort(match.ArenaEndCount);
+                    writer.WriteUByteFromReal(_objective.ArenaRedWins);
+                    writer.WriteUByteFromReal(_objective.ArenaBlueWins);
+                    writer.WriteUByte(_objective.ArenaState);
+                    writer.WriteByte(_objective.ArenaWinner);
+                    writer.WriteUShortFromReal(_objective.ArenaEndCount);
                 }
 
-                writer.WriteUByte(match.TimeLimitMinutes);
-                writer.WriteUInt(match.Timer);
-                writer.WriteUShort(match.ControlPointUnlock);
-                writer.WriteUByteFromReal(Gml.Floor(match.ArenaRoundStart / 2.0));
-                foreach (var point in match.ControlPoints)
-                    WriteControlPoint(writer, point);
+                writer.WriteUByteFromReal(_objective.TimeLimitMinutes);
+                writer.WriteUInt((uint)Math.Max(0, _objective.RoundTimer));
+                writer.WriteUShortFromReal(_objective.ControlPointUnlock);
+
+                // floor(roundStart/2): 300 ticks in one byte, so the client sees
+                // the setup countdown to the nearest two ticks.
+                writer.WriteUByteFromReal(Gml.Floor(_objective.ArenaRoundStart / 2.0));
+                WriteControlPoints(writer);
                 break;
 
             case GameMode.KingOfTheHill:
             case GameMode.DualKingOfTheHill:
-                writer.WriteUShort(match.ControlPointUnlock);
-                writer.WriteUShort(match.RedTimer);
-                writer.WriteUShort(match.BlueTimer);
-                foreach (var point in match.ControlPoints)
-                    WriteControlPoint(writer, point);
+                writer.WriteUShortFromReal(_objective.ControlPointUnlock);
+                writer.WriteUShortFromReal(_objective.RedTimer);
+                writer.WriteUShortFromReal(_objective.BlueTimer);
+                WriteControlPoints(writer);
                 break;
 
             case GameMode.ControlPoints:
-                writer.WriteUByte(match.TimeLimitMinutes);
-                writer.WriteUInt(match.Timer);
-                writer.WriteUShort(match.SetupTimer);
-                foreach (var point in match.ControlPoints)
-                    WriteControlPoint(writer, point);
+                writer.WriteUByteFromReal(_objective.TimeLimitMinutes);
+                writer.WriteUInt((uint)Math.Max(0, _objective.RoundTimer));
+                writer.WriteUShortFromReal(_objective.SetupTimer);
+                WriteControlPoints(writer);
                 break;
 
             case GameMode.TeamDeathmatch:
-                writer.WriteUByte(match.TimeLimitMinutes);
-                writer.WriteUInt(match.Timer);
-                writer.WriteUShort(match.KillLimit);
+                writer.WriteUByteFromReal(_objective.TimeLimitMinutes);
+                writer.WriteUInt((uint)Math.Max(0, _objective.RoundTimer));
+                writer.WriteUShortFromReal(_objective.KillLimit);
                 break;
 
             default:
@@ -343,24 +566,45 @@ public sealed class StateUpdateWriter(MatchState match, CharacterLookup characte
     /// <summary>
     /// <c>Objects/Map elements/Gamemode-specific/CP/ControlPoint.events/User Event 12.xml</c>.
     /// </summary>
-    private static void WriteControlPoint(NetWriter writer, ControlPointState point)
+    /// <summary>
+    /// One block per control point, in order, with no count prefix.
+    /// </summary>
+    /// <remarks>
+    /// The client has the same map loaded and creates the same points from it,
+    /// so it knows how many to read — the same self-describing-by-the-map
+    /// arrangement the moving platforms use. Already quantised, by
+    /// <c>Gg2.Simulation.ControlPoints.ToBlock</c>: <c>team</c> and
+    /// <c>cappingTeam</c> are signed bytes whose -1 means neutral, and
+    /// <c>capping</c> is <c>round(capping)</c>, GML's half to even.
+    /// </remarks>
+    private void WriteControlPoints(NetWriter writer)
     {
-        // team and cappingTeam are signed: -1 means neutral / nobody capping.
-        writer.WriteByte(point.Team);
-        writer.WriteByte(point.CappingTeam);
-
-        // round(capping) in the reference: GML's half-to-even.
-        writer.WriteUShortFromReal(Gml.Round(point.Capping));
+        foreach (var point in _objective.ControlPoints ?? [])
+        {
+            writer.WriteByte(point.Team);
+            writer.WriteByte(point.CappingTeam);
+            writer.WriteUShort(point.Capping);
+        }
     }
 
     /// <summary>
     /// <c>Objects/Map elements/Gamemode-specific/Generator/Generator.events/User Event 12.xml</c>.
     /// </summary>
-    private static void WriteGenerator(NetWriter writer, GeneratorState generator)
+    /// <remarks>
+    /// ⚠️ <b>A destroyed generator writes nothing at all</b> — not a zeroed
+    /// block. The HUD reaches each one through a <c>with</c>, which visits no
+    /// instances once it has been destroyed, so the block shortens by four
+    /// bytes and a reader has to know. Already quantised, by
+    /// <c>Gg2.Simulation.Generators.ToBlock</c>: <c>ceil(hp)</c>, because a
+    /// generator on 0.1 hp is still standing and the client must not draw it
+    /// dead.
+    /// </remarks>
+    private static void WriteGenerator(NetWriter writer, GeneratorBlock? generator)
     {
-        // ceil(hp) in the reference: a generator on 0.1 hp is still standing,
-        // and the client must not draw it dead.
-        writer.WriteUShortFromReal(Gml.Ceil(generator.Hp));
-        writer.WriteUShortFromReal(Gml.Ceil(generator.ShieldHp));
+        if (generator is not { } block)
+            return;
+
+        writer.WriteUShort(block.Hp);
+        writer.WriteUShort(block.ShieldHp);
     }
 }

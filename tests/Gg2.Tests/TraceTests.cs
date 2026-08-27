@@ -299,12 +299,38 @@ public sealed class TraceTests
 
         public void ClearCharacter(int slot) => _characters.Remove(slot);
 
+        /// <summary>
+        /// Compacts, because a departure renumbers the roster. The oracle would
+        /// otherwise disagree with the port for the rest of any trace containing
+        /// a PLAYER_LEAVE.
+        /// </summary>
+        public void RemoveSlot(int slot)
+        {
+            _characters.Remove(slot);
+
+            foreach (var above in _characters.Keys.Where(k => k > slot).Order().ToArray())
+            {
+                _characters[above - 1] = _characters[above];
+                _characters.Remove(above);
+            }
+        }
+
         public void SetPlayerClass(int slot, PlayerClass playerClass) { }
 
         public void SetPlayerTeam(int slot, Team team) { }
 
+        public void BuildSentry(int slot, double x, double y, int direction) { }
+
         /// <remarks>The oracle replays recorded positions; it has nothing to seed.</remarks>
         public void SetFireSeed(int slot, ushort seed) { }
+
+        private readonly List<DeathRecord> _deaths = [];
+
+        public IReadOnlyList<DeathRecord> DeathsLastTick => _deaths;
+
+        public IReadOnlyList<UberRecord> UbersLastTick => [];
+
+        public IReadOnlyList<IntelRecord> IntelLastTick => [];
 
         public void Tick(ReadOnlySpan<PlayerInput> inputs)
         {
@@ -313,6 +339,24 @@ public sealed class TraceTests
             // this call leaves behind is the state the *next* tick will be
             // compared against.
             _tick++;
+
+            // Cheating at deaths too, and off the same one-tick offset the
+            // replayer reads them at: a PLAYER_DEATH produced during tick i is
+            // written after tick i's update and lands in tick i+1's message
+            // block. _tick has just been advanced past the tick being run, so it
+            // already names that block.
+            _deaths.Clear();
+            if (_tick < ticks.Count)
+            {
+                foreach (var message in ticks[_tick].Events)
+                {
+                    if (message.Type == MessageType.PlayerDeath && message.Payload.Length >= 4)
+                    {
+                        _deaths.Add(new DeathRecord(
+                            message.Payload[0], message.Payload[1], message.Payload[2], message.Payload[3]));
+                    }
+                }
+            }
 
             var next = _tick + 1;
             if (next >= ticks.Count)

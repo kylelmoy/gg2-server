@@ -79,6 +79,21 @@ public readonly record struct CollisionFilter
     public bool SetupGatesClosed { get; init; }
 
     /// <summary>
+    /// <c>global.mapchanging</c>: the round is over and the win is on screen.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Every gate opens, and the two lists disagree about which.</b>
+    /// <c>charSetSolids.gml:4</c> wraps <em>both</em> its <c>IntelGate</c> and
+    /// <c>TeamGate</c> blocks in <c>if(!global.mapchanging)</c>, so to a
+    /// character neither kind is solid; <c>gunSetSolids.gml:5</c> wraps only its
+    /// <c>TeamGate</c> block and leaves <c>with(IntelGate) solid = true</c>
+    /// outside it, so to a <b>bullet an intel gate stays solid</b> through the
+    /// whole victory screen. Obstacles, player walls and setup gates are
+    /// untouched by either — the world does not open, only its doors.
+    /// </remarks>
+    public bool MapChanging { get; init; }
+
+    /// <summary>
     /// The asker is a bullet, not a character:
     /// <c>Scripts/Physics/gunSetSolids.gml</c> rather than
     /// <c>charSetSolids.gml</c>.
@@ -93,6 +108,19 @@ public readonly record struct CollisionFilter
     /// </remarks>
     public bool Bullet { get; init; }
 
+    /// <summary>
+    /// The asker sees only <see cref="SolidKind.Obstacle"/> —
+    /// <c>Scripts/Physics/wallSetSolid.gml</c>, which is <c>with(Obstacle)
+    /// solid = true</c> and nothing else.
+    /// </summary>
+    /// <remarks>
+    /// The sentry's list. A falling sentry passes through player walls, bullet
+    /// walls and every gate, and lands only on the map and its obstacles —
+    /// neither <c>charSetSolids</c> nor <c>gunSetSolids</c> describes it, which
+    /// is why this is a third flag rather than a combination of the others.
+    /// </remarks>
+    public bool WallsOnly { get; init; }
+
     /// <summary>A filter that collides with everything that can ever be solid.</summary>
     public static CollisionFilter Everything => new()
     {
@@ -102,17 +130,36 @@ public readonly record struct CollisionFilter
     };
 
     /// <summary>
+    /// What a sentry collides with while placed or falling —
+    /// <c>wallSetSolid</c>'s list, which is <c>Obstacle</c> alone.
+    /// </summary>
+    public static CollisionFilter ForSentry() => new()
+    {
+        // Only the Obstacle rule ever fires under WallsOnly, and it reads
+        // neither the team nor the intel flag.
+        Team = Team.Spectator,
+        CarryingIntel = false,
+        WallsOnly = true,
+    };
+
+    /// <summary>
     /// What a projectile or a hitscan collides with —
     /// <c>gunSetSolids</c>'s list.
     /// </summary>
     /// <param name="setupGatesClosed">Whether the setup timer is still running.</param>
-    public static CollisionFilter ForBullet(bool setupGatesClosed = false) => new()
+    /// <param name="mapChanging">
+    /// Whether the round is over and the win is on screen, which opens a team
+    /// gate to bullets and — unlike a character's list — leaves an intel gate
+    /// shut. See <see cref="MapChanging"/>.
+    /// </param>
+    public static CollisionFilter ForBullet(bool setupGatesClosed = false, bool mapChanging = false) => new()
     {
         // The team and the intel flag are read only by the gate rules, and a
         // bullet's gates ignore both — so any value here is the same answer.
         Team = Team.Spectator,
         CarryingIntel = false,
         SetupGatesClosed = setupGatesClosed,
+        MapChanging = mapChanging,
         Bullet = true,
     };
 }
@@ -148,8 +195,58 @@ public readonly record struct SolidRect
     /// <summary>The gate's own team, where the kind has one.</summary>
     public Team Team { get; init; }
 
+    // --- what a hitscan needs, and a place_free does not ---------------------
+    //
+    // place_free only ever asks about the box, which the four bounds above
+    // already are. collision_line walks pixels and looks each one up in the
+    // *mask*, mapping world to sprite through the instance's position and
+    // scale — so it needs the instance rather than its bound. See
+    // LineCollider.ForSolidRect.
+    //
+    // Free, unlike everything on ProjectileState: a SolidRect lives in
+    // CollisionWorld, which is a read-only input passed *to* the tick and never
+    // held by WorldState, so none of this is cloned by a rollout.
+
+    /// <summary>The instance's unrounded <c>x</c>. GM8 rounds it itself.</summary>
+    public required double X { get; init; }
+
+    /// <summary>The instance's unrounded <c>y</c>.</summary>
+    public required double Y { get; init; }
+
+    /// <summary>
+    /// <c>image_xscale</c>. Fractional on real maps — 0.3, 0.8, 1.7, 13.
+    /// </summary>
+    /// <remarks>
+    /// <b>Required, not defaulted, because a zero would divide.</b>
+    /// <see cref="CollisionLine"/> maps a world pixel to a mask pixel by
+    /// dividing by this, so a construction site that forgot it would not fail
+    /// loudly — it would report an infinite mask index and quietly answer "no
+    /// wall" for every hitscan.
+    /// </remarks>
+    public required double XScale { get; init; }
+
+    /// <inheritdoc cref="XScale"/>
+    public required double YScale { get; init; }
+
+    /// <summary>The mask sprite's width in sprite pixels, before scaling.</summary>
+    /// <remarks>
+    /// Every solid a map places wears one of two sprites the game builds at
+    /// runtime: a 6x60 vertical bar and a 60x6 horizontal one. Both have their
+    /// origin at (0, 0) and a mask that fills the sprite exactly — measured
+    /// 2026-08-25 across eight object types and twenty instances, at scales from
+    /// 0.3 to 13, with every point inside the reported bounding box solid to a
+    /// precise <c>collision_point</c>. That is what lets this be two integers
+    /// instead of sprite metadata.
+    /// </remarks>
+    public required int SpriteWidth { get; init; }
+
+    /// <inheritdoc cref="SpriteWidth"/>
+    public required int SpriteHeight { get; init; }
+
     /// <summary>Whether this rectangle is solid to the character described by the filter.</summary>
-    public bool IsSolidTo(in CollisionFilter filter) => Kind switch
+    public bool IsSolidTo(in CollisionFilter filter) => filter.WallsOnly
+        ? Kind == SolidKind.Obstacle
+        : Kind switch
     {
         SolidKind.Obstacle => true,
 
@@ -157,12 +254,21 @@ public readonly record struct SolidRect
         SolidKind.PlayerWall => !filter.Bullet,
 
         // gunSetSolids: `with(TeamGate) solid = true` — unconditionally, where
-        // charSetSolids asks (team != other.team or other.intel).
-        SolidKind.TeamGate => filter.Bullet || Team != filter.Team || filter.CarryingIntel,
+        // charSetSolids asks (team != other.team or other.intel). Both lists put
+        // this one inside `if(!global.mapchanging)`, so it opens to everybody
+        // while the win is on screen.
+        SolidKind.TeamGate => !filter.MapChanging
+                              && (filter.Bullet || Team != filter.Team || filter.CarryingIntel),
 
         // Likewise: solid = (team != other.team and other.intel) for a
         // character, and simply solid for a bullet.
-        SolidKind.IntelGate => filter.Bullet || (Team != filter.Team && filter.CarryingIntel),
+        //
+        // ⚠️ But only charSetSolids' half is inside the mapchanging guard.
+        // gunSetSolids opens its TeamGate block and leaves `with(IntelGate)
+        // solid = true` outside it, so a bullet is still stopped by an intel
+        // gate during the victory screen and a character walks through it.
+        SolidKind.IntelGate => filter.Bullet
+                               || (!filter.MapChanging && Team != filter.Team && filter.CarryingIntel),
 
         // The one both lists agree on: closed while the setup timer runs, open
         // afterwards, for characters and bullets alike.
@@ -209,6 +315,12 @@ public readonly record struct SolidRect
             Bottom = CollisionWorld.RoundPosition(y + spriteHeight * yScale) - 1,
             Kind = kind,
             Team = team,
+            X = x,
+            Y = y,
+            XScale = xScale,
+            YScale = yScale,
+            SpriteWidth = spriteWidth,
+            SpriteHeight = spriteHeight,
         };
     }
 }

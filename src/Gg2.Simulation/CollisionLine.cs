@@ -249,6 +249,44 @@ public readonly record struct LineCollider(
     /// change with what it is doing. Checked live across four classes.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// The collider a map's own solid rectangle presents to a hitscan: a gate,
+    /// a player wall, a bullet wall.
+    /// </summary>
+    /// <remarks>
+    /// Simpler than <see cref="ForCharacter"/> in the one way that matters —
+    /// the sprite's origin is <c>(0, 0)</c> and its mask fills it, so the mask
+    /// bounds are just the sprite's extent and the acceptance interval is
+    /// always the ordinary <c>[left, right + 1)</c>. A map entity's scale is
+    /// never negative, so the flipped interval a left-facing character gets
+    /// cannot arise here.
+    /// <para>
+    /// The scale is <em>not</em> folded into the bounds. It has to stay as a
+    /// divisor: at a fractional scale — 0.3 and 0.8 are both on shipped maps —
+    /// several world pixels map to one mask pixel, and collapsing that into a
+    /// box comparison rounds where GM8 floors.
+    /// </para>
+    /// <para>
+    /// Gated by the same measured rows as the algorithm itself. The rectangle
+    /// probes in <c>collision-line-samples.json</c> are literal
+    /// <c>BulletWall</c>s wearing the 6x60 runtime sprite every map entity
+    /// wears, so
+    /// <c>CollisionLineSampleTests.SolidRectanglesPresentTheColliderTheEngineMeasured</c>
+    /// rebuilds each probe through <see cref="SolidRect.FromEntity"/> and runs
+    /// the engine's own answers back through this.
+    /// </para>
+    /// </remarks>
+    public static LineCollider ForSolidRect(in SolidRect rect) =>
+        new(
+            rect.X,
+            rect.Y,
+            rect.XScale,
+            rect.YScale,
+            new Aabb(rect.Left, rect.Top, rect.Right, rect.Bottom),
+            0,
+            0,
+            new Aabb(0, 0, rect.SpriteWidth - 1, rect.SpriteHeight - 1));
+
     public static LineCollider ForCharacter(in CharacterBox box, double x, double y, int facing = 1) =>
         new(
             x,

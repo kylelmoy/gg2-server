@@ -3,8 +3,16 @@
 A headless Gang Garrison 2 server in C#, wire-compatible with the stock Game
 Maker 8 client.
 
-**Status: phases 0–4 of [`docs/PLAN.md`](docs/PLAN.md) are done and checked against
-a stock GM8 client. Phase 5, combat, is next.**
+**Status: phases 0–6 of [`docs/PLAN.md`](docs/PLAN.md) are done. All eight game
+modes run end to end, the server plays match after match on its own, and every
+field of a state update carries a real value. Phase 7, bots, is next and is the
+reason the project exists.**
+
+A stock client connects, picks a team and class, spawns, fights, dies,
+respawns, captures the objective, and sees the round end and the map change.
+All ten classes are armed — rockets, mines, healing beams, ubercharge,
+afterburn, the airblast, the sentry gun, the sniper's scope, Quote's bubble
+screen and the spy's cloak and backstab.
 
 | Project | What |
 |---|---|
@@ -22,8 +30,9 @@ the running game.
 **Phase 1** — a stock GM8 client joins this server and reaches the team-select
 screen, indistinguishably from one joining the reference. Recording both
 servers' broadcast streams with `gg2-parity` and diffing them gives 569 bytes
-each, **byte-identical apart from four bytes of CTF round timer** — a value this
-port has no simulation to produce, not a layout difference.
+each, **byte-identical**. (For a long time they differed by four bytes of CTF
+round timer — a value the port had no simulation to produce. Phase 6's round
+closed that.)
 
 **Phase 2** — the parity harness. Recorder, stream framer, trace format,
 replayer and drift report all exist. A 30-second recording of the reference
@@ -42,9 +51,36 @@ are transcribed.
 Against the running engine, 48 trajectories driven inside the game itself and
 read back to the last bit are reproduced **bit for bit**. Against a recording,
 the 898-tick two-bot `ctf_truefort` trace replays **closed-loop — anchored once
-at tick 0 and never corrected — with zero error on both axes** for every
-comparison up to tick 393, which is the first tick on which any character takes
-damage. Combat is phase 5; there are no nudges or tolerances in that statement.
+at tick 0 and never corrected — with zero error on both axes**, now for all 898
+ticks including its two deaths. There are no nudges or tolerances in that
+statement.
+
+**Phase 5** — combat. Every class's weapon, projectiles, blast damage, fire,
+the airblast, death and its attribution, and the Engineer's sentry gun. The
+sharpest recording — six bots fighting on `ctf_truefort` — replays closed-loop
+with **exact damage for 1,204 ticks** (forty seconds) and exact positions for
+357. Both of the points where the exact window ends have been traced to a cause
+and neither is a bug: one is a position landing 0.0003px from a rounding
+boundary, the other a wall stopping a character 0.0087px early.
+`docs/PARITY.md` has both.
+
+**Phase 6** — game modes. All eight: Capture the Flag (carrying, dropping,
+returning, capturing, the score), King of the Hill, Dual King of the Hill, both
+control-point arrangements, Invasion, Arena, Generator and Team Deathmatch —
+plus the round itself (clock, win conditions, the victory screen, the map
+rotation), respawn, class and team changes, the scoreboard, the domination
+table, autobalance and the class limits.
+
+Implementing the modes that reach them turned up **four latent wire bugs**, each
+a message whose length depends on its own content and each invisible to every
+recording: the sentry's `INPUTSTATE` block, `ARENA_ENDROUND`, the generator HUD
+block and `BALANCE`. Any one of them would have desynchronised a real client the
+first time the game reached that state.
+
+⚠️ No recording covers any of the game-mode work — every fixture in the
+project is one CTF map — so it is gated by the reference and by purpose-built
+tests, and a recording on a control-point map is the next thing worth
+capturing.
 
 Getting there turned up three things GM8 does that no amount of careful
 transcription would have predicted: it parses some decimal literals one ULP
@@ -80,7 +116,8 @@ dotnet run --project src/Gg2.Host -- --map ctf_truefort
    ~7,100 lines of GML interpreted by Game Maker 8, running for every bot every
    tick. That ceiling is the binding constraint on how good the bots can get.
    Compiled C# on the same work should leave one to two orders of magnitude of
-   budget.
+   budget. ⚠️ **That is a design intention and not yet a measurement** — no
+   benchmark has been run, and doing so is phase 7's exit criterion.
 2. **A faster loop for writing and testing that logic.** A pure, I/O-free
    simulation can run thousands of ticks with no game, no rendering and no real
    time elapsing — so a bot change is evaluated in seconds across every map,

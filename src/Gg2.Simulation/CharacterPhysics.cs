@@ -46,7 +46,33 @@ public static class CharacterPhysics
     /// <summary>
     /// Input, jumping, acceleration and friction, and the gravity accumulation.
     /// </summary>
+    /// <remarks>
+    /// Kept as one call for the callers that have nothing to do between the two
+    /// halves. <see cref="MatchSimulation"/> uses the split pair instead,
+    /// because a demoman's right-click goes between them — see
+    /// <see cref="BeginStepAccelerate"/>.
+    /// </remarks>
     public static void BeginStep(CollisionWorld world, ref CharacterState character)
+    {
+        BeginStepInput(world, ref character);
+        BeginStepAccelerate(world, ref character);
+    }
+
+    /// <summary>
+    /// The first half of Begin Step: what is under the character, and the jump.
+    /// </summary>
+    /// <remarks>
+    /// Split from the second half at the line the reference splits at.
+    /// <c>Character.events/Begin Step.xml</c> runs the attack (line 83), then
+    /// the jump (93-116), then the <b>right-click</b> (120-126), and only then
+    /// the <c>switch(moveStatus)</c> that picks this tick's control and friction
+    /// factors (143). A demoman's right-click detonates their mines, and a mine
+    /// that goes off under its own owner sets <c>moveStatus = 1</c> — which that
+    /// switch reads <em>on the same tick</em>. That is what a mine jump is, and
+    /// running the detonation after the whole of Begin Step would give it last
+    /// tick's friction.
+    /// </remarks>
+    public static void BeginStepInput(CollisionWorld world, ref CharacterState character)
     {
         var stats = character.Stats;
         var box = character.Box;
@@ -89,24 +115,65 @@ public static class CharacterPhysics
         //
         // The vspeed guard stops a jump re-launching a character already rising
         // faster than a jump would.
+        // The character's own jumpStrength, not the class constant: a scoped
+        // sniper's is two units lower. It is the same value for everybody else.
         if ((character.PressedKeys & PlayerKeys.Jump) != 0
-            && Gml.Greater(character.VSpeed, -ClassStats.BaseJumpStrength))
+            && Gml.Greater(character.VSpeed, -character.JumpStrength))
         {
             if (character.OnGround && !stuckInWall)
             {
-                character.WantToJump = false;
-                character.VSpeed = -ClassStats.BaseJumpStrength;
-                character.OnGround = false;
+                // ⚠️ Outside the `if(not stabbing)` below it in the reference,
+                // so a spy who cannot actually jump still loses the slow decay.
+                // Character.events/Begin Step.xml:98.
+                character.DeathmatchInvulnDecay = CharacterState.MovingInvulnDecay;
+
+                // ⚠️ Character.events/Begin Step.xml:99, `if(not stabbing)`.
+                // A spy in the middle of a knife animation has jumpStrength 0
+                // anyway, so this looks redundant — it is not, because the
+                // guard above compares against that same zeroed jumpStrength
+                // and passes. Without it a stabbing spy would have its vspeed
+                // *set to* -0, which cancels a fall.
+                if (!character.Stabbing)
+                {
+                    character.WantToJump = false;
+                    character.VSpeed = -character.JumpStrength;
+                    character.OnGround = false;
+                }
             }
             else if (stats.CanDoubleJump && !character.DoubleJumpUsed)
             {
+                character.DeathmatchInvulnDecay = CharacterState.MovingInvulnDecay;
                 character.WantToJump = false;
-                character.VSpeed = -ClassStats.BaseJumpStrength;
+                character.VSpeed = -character.JumpStrength;
                 character.OnGround = false;
                 character.DoubleJumpUsed = true;
                 character.MoveStatus = 0;
             }
         }
+
+    }
+
+    /// <summary>
+    /// The second half of Begin Step: the friction switch, the acceleration
+    /// loop and the gravity accumulation.
+    /// </summary>
+    /// <remarks>
+    /// Reads <c>moveStatus</c>, so anything that can set it — a blast — has to
+    /// have happened already. See <see cref="BeginStepInput"/>.
+    /// <para>
+    /// <c>stuckInWall</c> and the key union are recomputed here rather than
+    /// carried across the split. Both are pure functions of the character, and
+    /// nothing that runs in between moves it: a blast changes velocity through
+    /// <c>motion_add</c> and sets <c>moveStatus</c>, and touches neither the
+    /// position nor the keys. So this is the same answer at the cost of one
+    /// extra <c>place_free</c> per character per tick.
+    /// </para>
+    /// </remarks>
+    public static void BeginStepAccelerate(CollisionWorld world, ref CharacterState character)
+    {
+        var stats = character.Stats;
+        var downOrPressed = character.KeyState | character.PressedKeys;
+        var stuckInWall = !world.PlaceFree(character.Box, character.X, character.Y, character.Filter);
 
         var (controlFactor, frictionFactor) = ControlAndFriction(character);
         var rocketJumping = character.MoveStatus is 1 or 2 or 4;
@@ -119,15 +186,20 @@ public static class CharacterPhysics
         // (Documentation/RateController.md). Do not "simplify" it away.
         for (var skip = 0; skip < 2; skip++)
         {
+            // ⚠️ The character's runPower against the *class's* basemaxspeed.
+            // The reference never recomputes basemaxspeed when runPower changes
+            // (Create.xml:159 derives it from baseRunPower once), so a scoped
+            // sniper accelerates slowly and is still capped at the unscoped
+            // maximum. See CharacterState.RunPower.
             if ((downOrPressed & PlayerKeys.Left) != 0 && Gml.GreaterOrEqual(character.HSpeed, -stats.BaseMaxSpeed))
             {
-                character.HSpeed -= stats.RunPower * controlFactor * 0.5;
+                character.HSpeed -= character.RunPower * controlFactor * 0.5;
                 character.Controlling = true;
             }
 
             if ((downOrPressed & PlayerKeys.Right) != 0 && Gml.LessOrEqual(character.HSpeed, stats.BaseMaxSpeed))
             {
-                character.HSpeed += stats.RunPower * controlFactor * 0.5;
+                character.HSpeed += character.RunPower * controlFactor * 0.5;
                 character.Controlling = true;
             }
 
@@ -146,6 +218,13 @@ public static class CharacterPhysics
             character.HSpeed /= ClassStats.DeltaMultSkip(
                 overspeed || pushingUnderCap ? ClassStats.BaseFriction : frictionFactor);
         }
+
+        // Character.events/Begin Step.xml:269, immediately below the friction
+        // block and above the key reset: walking spends spawn protection five
+        // times as fast as standing still does. Note it reads `controlling` as
+        // the *loop* left it, which is the second frameskip pass's answer.
+        if (character.Controlling)
+            character.DeathmatchInvulnDecay = CharacterState.MovingInvulnDecay;
 
         character.PressedKeys = PlayerKeys.None;
         character.ReleasedKeys = PlayerKeys.None;
@@ -172,6 +251,17 @@ public static class CharacterPhysics
         // so a speed inside it is zeroed here rather than kept.
         character.HSpeed = Math.Min(Math.Abs(character.HSpeed), ClassStats.MaxSpeed) * Gml.Sign(character.HSpeed);
         character.VSpeed = Math.Min(Math.Abs(character.VSpeed), ClassStats.MaxSpeed) * Gml.Sign(character.VSpeed);
+
+        // Character.events/Step.xml:25, and the reference's own comment on it:
+        // "Pretty sure this is for the healing ramp (crit heals). Done here
+        // instead of begin step to avoid code execution order mistakes."
+        //
+        // Nothing read it until the Medigun landed — damage resets it and only
+        // Healing.HealingFactor and the medic's own regeneration consume it — so
+        // this counter sat at zero for four phases and cost the beam its ramp.
+        // A plain min, not a fuzzy one, as written.
+        character.TimeUnscathed = Math.Min(
+            character.TimeUnscathed + 1, CharacterState.MaxTimeUnscathed);
 
         UpdateSpinjump(world, ref character);
 
@@ -239,6 +329,75 @@ public static class CharacterPhysics
     }
 
     /// <summary>
+    /// The tail of Begin Step: the nuts-and-bolts regeneration
+    /// (<c>Character.events/Begin Step.xml:387</c>) and what being ubered does
+    /// to you besides making you invulnerable (<c>:389-394</c>).
+    /// </summary>
+    /// <remarks>
+    /// <b>Still not the whole tail.</b> The animation counter beside these
+    /// belongs to a phase that has not landed. The intel drop moved out to
+    /// <see cref="Intel.BeginStep"/> with the objective, and the arena arm of
+    /// the ammo refill waits on <c>ArenaHUD</c>.
+    /// <para>
+    /// The regeneration is unconditional and classless:
+    /// <c>nutsNBolts = min(nutsNBolts + 0.1, maxNutsNBolts)</c> runs for a
+    /// scout too, invisibly — only the engineer's wire block and the build
+    /// command ever read the value. Ten ticks per unit, so a fresh build's
+    /// hundred takes 1,000 ticks (33 seconds) to come back.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b><c>event_perform(ev_alarm, 5)</c> is inert here and is deliberately
+    /// not reproduced.</b> The reference runs the weapon's reload alarm and then
+    /// cancels it, but the line above has already filled the magazine — so every
+    /// reload body in the game (<c>if ammoCount &lt; maxAmmo</c>) does nothing,
+    /// and all that survives is the cancellation.
+    /// </para>
+    /// </remarks>
+    public static void BeginStepUberEffects(ref CharacterState character, ref WeaponState weapon)
+    {
+        character.NutsNBolts = Math.Min(character.NutsNBolts + 0.1, CharacterState.MaxNutsNBolts);
+
+        if (character.Ubered)
+        {
+            // An uber puts a fire out, and forgets who lit it — so afterburn that
+            // would otherwise have finished the victim credits nobody afterwards.
+            if (Gml.Greater(character.BurnIntensity, 0) || Gml.Greater(character.BurnDuration, 0))
+            {
+                character.BurnIntensity = 0;
+                character.BurnDuration = 0;
+                character.BurnedBy = CharacterState.Nobody;
+            }
+
+            RefillMagazine(character.Class, ref weapon);
+        }
+
+        // Character.events/Begin Step.xml:404, a separate block a few lines
+        // below with the same body and a different reason: everybody has full
+        // ammo while the win is on screen, so the ten seconds are a free-for-all
+        // rather than a scramble for a reload.
+        //
+        // ⚠️ `(arenaRoundEnd or global.mapchanging) and !player.humiliated` —
+        // the arena half waits on ArenaHUD, and `humiliated` is set on the
+        // losing team by ScoreTableController, a drawing object nothing in the
+        // simulation reads. So the port refills for the losers too.
+        if (character.MapChanging || character.ArenaRoundEnded)
+            RefillMagazine(character.Class, ref weapon);
+    }
+
+    /// <summary>
+    /// The body both refills share: a full magazine and no reload pending.
+    /// </summary>
+    /// <remarks>
+    /// `if(variable_local_exists("maxAmmo"))` — true for every weapon in the
+    /// game; the guard is there for a weapon that has not defined one yet.
+    /// </remarks>
+    private static void RefillMagazine(PlayerClass playerClass, ref WeaponState weapon)
+    {
+        weapon.AmmoCount = WeaponStats.For(playerClass).MaxAmmo;
+        weapon.ReloadTimer = WeaponState.Inactive;
+    }
+
+    /// <summary>
     /// Stair descent, the facing, and the clamp into the map.
     /// </summary>
     /// <remarks>
@@ -246,17 +405,27 @@ public static class CharacterPhysics
     /// move. A real character always has one — <c>Character.events/Create.xml</c>
     /// makes it — so the live path is the three-argument form.
     /// </remarks>
-    public static void EndStep(CollisionWorld world, ref CharacterState character)
+    public static bool EndStep(CollisionWorld world, ref CharacterState character)
     {
         var discarded = default(WeaponState);
-        EndStep(world, ref character, ref discarded);
+        return EndStep(world, ref character, ref discarded);
     }
 
     /// <summary>
-    /// Stair descent, the facing, the weapon that trails the character, and the
-    /// clamp into the map.
+    /// Stair descent, the death check, the facing, the weapon that trails the
+    /// character, and the clamp into the map.
     /// </summary>
-    public static void EndStep(CollisionWorld world, ref CharacterState character, ref WeaponState weapon)
+    /// <returns>
+    /// Whether this character just died, in which case the rest of End Step did
+    /// not run and the caller owes it a <see cref="Deaths.Kill"/>.
+    /// </returns>
+    /// <remarks>
+    /// <b>The death check is reported rather than acted on.</b> It needs the
+    /// killer's character to resolve the medic assist and it has to remove a
+    /// slot from the world, and this function is handed one character and a
+    /// collision world — see <see cref="Deaths"/>.
+    /// </remarks>
+    public static bool EndStep(CollisionWorld world, ref CharacterState character, ref WeaponState weapon)
     {
         var box = character.Box;
         var filter = character.Filter;
@@ -281,6 +450,14 @@ public static class CharacterPhysics
                 }
             }
         }
+
+        // End Step.xml:34-47. Note where it sits: after the stair descent and
+        // *before* the hp clamp below, and it `exit`s — so a character that dies
+        // this tick never updates its facing, never drags its weapon along and
+        // is never clamped into the map. The last thing it did was walk down a
+        // step.
+        if (Deaths.IsDead(character))
+            return true;
 
         if (Gml.Greater(character.Hp, character.Stats.MaxHp))
             character.Hp = character.Stats.MaxHp;
@@ -307,7 +484,156 @@ public static class CharacterPhysics
             character.Y = 0;
         if (Gml.Greater(character.Y, world.Height))
             character.Y = world.Height;
+
+        // End Step.xml:69-72, immediately below the clamps: the cloak fading in
+        // or out, twenty ticks each way.
+        //
+        // ⚠️ An `else if`, so a cloaked character whose flicker is up does
+        // *neither* — the alpha is pinned where dealFlicker left it until
+        // alarm[7] clears the flicker. And note the fade is not what decides
+        // whether the cloak works: `cloak` alone gates the intel grab and the
+        // knife, and `cloakAlpha == 1` gates only the capture point and the
+        // start of a new cloak.
+        if (character.Cloak && Gml.Greater(character.CloakAlpha, 0) && !character.CloakFlicker)
+            character.CloakAlpha = Math.Max(character.CloakAlpha - CharacterState.CloakFadeRate, 0);
+        else if (!character.Cloak && Gml.Less(character.CloakAlpha, 1))
+            character.CloakAlpha = Math.Min(character.CloakAlpha + CharacterState.CloakFadeRate, 1);
+
+        // End Step.xml:104, between the taunt block and the death-cam
+        // position: "for things polling whether the character is on a
+        // medcabinet". The cabinet's own effects are a *collision* event and
+        // have already happened this tick; this is only the flag a sentry build
+        // reads next tick. See CharacterState.OnCabinet.
+        character.OnCabinet = world.MeetsCabinet(box, character.X, character.Y);
+
+        // End Step.xml:128, after the clamps: the flame count an airblast
+        // extinguish will read next Begin Step. Below the death exit, so a dead
+        // character's last value freezes — like everything else here.
+        character.RealNumFlames =
+            CharacterState.NumFlames * character.BurnDuration / CharacterState.MaxBurnDuration;
+
+        // Character.events/End Step.xml:131-135, the line below realnumflames.
+        //
+        // ⚠️ Two separate `if`s, not an else — so the tick a countdown crosses
+        // zero it is both decremented and clamped, and the clamp is the only
+        // thing that ever writes an exact 0.
+        //
+        // ⚠️ **And both comparisons are fuzzy, which is load-bearing here.** A
+        // default five seconds is 30 spent at 0.2 a tick, and 150 subtractions
+        // of 0.2 from 30 leave **7.3e-14** rather than zero — inside GML's 1e-13
+        // comparison fuzz, so the reference clamps and a raw `<= 0` does not.
+        // Written raw, the countdown rests on a positive residue for ever and
+        // the character is permanently invulnerable. Measured by writing it raw:
+        // TeamDeathmatchTests.ProtectionLastsFiveTimesItsTickCountWhileStandingStill.
+        //
+        // Same family as the ubercharge's 241st tick, and the opposite outcome:
+        // there the residue was 7.02e-12, seventy times the fuzz, so the
+        // reference did *not* treat it as zero.
+        if (Gml.Greater(character.DeathmatchInvulnerable, 0))
+            character.DeathmatchInvulnerable -= character.DeathmatchInvulnDecay;
+
+        if (Gml.LessOrEqual(character.DeathmatchInvulnerable, 0))
+            character.DeathmatchInvulnerable = 0;
+
+        return false;
     }
+
+    /// <summary>
+    /// <c>Character.events/Begin Step.xml:129-142</c>: the spy's cloak going on
+    /// or off.
+    /// </summary>
+    /// <remarks>
+    /// It sits between the right-click block and the <c>moveStatus</c> switch,
+    /// which is why it is called between <see cref="Weapons.SpecialStep"/> and
+    /// <see cref="BeginStepAccelerate"/> — and it is on the <b>same key</b> as
+    /// the right click, so both run on one press.
+    /// <list type="bullet">
+    /// <item>⚠️ <b>The cloak is on <c>pressedKeys</c>, not the down-or-pressed
+    /// union</b> — an edge, so holding the key does not flicker in and out.</item>
+    /// <item>⚠️ <b><c>(cloakAlpha == 1 and !cloak) or cloak</c></b>: you can
+    /// only <em>start</em> a cloak from fully visible, and you can always drop
+    /// one. A spy who uncloaks and immediately presses again has to wait the
+    /// twenty ticks of fade back in.</item>
+    /// <item>⚠️ <b><c>readyToStab</c> gates the toggle</b>, so the fifty ticks
+    /// after a stab are fifty ticks a spy cannot vanish <em>or</em> reappear.
+    /// That flag belongs to the Revolver, which is why the weapon is passed in.
+    /// </item>
+    /// <item>⚠️ <b>Uncloaking costs the intel grab</b>: <c>canGrabIntel =
+    /// false</c> and <c>alarm[1] = max(alarm[1], 25)</c> — <em>max</em>, so a
+    /// longer cooldown already running is not shortened. The reference's own
+    /// comment: "stop spies immediately picking up intel after uncloaking".</item>
+    /// <item>An intel carrier cannot cloak at all, and neither can somebody
+    /// taunting — taunting is not modelled, so that clause is always true.</item>
+    /// </list>
+    /// </remarks>
+    public static void CloakStep(ref CharacterState character, ref WeaponState weapon)
+    {
+        if ((character.PressedKeys & PlayerKeys.Special) == 0)
+            return;
+
+        if (!character.Stats.CanCloak
+            || character.CarryingIntel
+            || !(character.Cloak || Gml.Equal(character.CloakAlpha, 1)))
+        {
+            return;
+        }
+
+        // Above the readyToStab test, so the key gives up spawn protection even
+        // when the toggle itself is refused — the same shape the attack and the
+        // right click have.
+        character.DeathmatchInvulnerable = 0;
+
+        if (!weapon.ReadyToStab)
+            return;
+
+        if (character.Cloak)
+        {
+            character.CanGrabIntel = false;
+            character.IntelGrabTimer = Math.Max(character.IntelGrabTimer, UncloakGrabDelay);
+        }
+
+        character.Cloak = !character.Cloak;
+    }
+
+    /// <summary>
+    /// <c>Objects/Characters/Heavy.events/Step.xml</c>: a heavy holding the
+    /// trigger walks at 0.3 instead of 0.8.
+    /// </summary>
+    /// <remarks>
+    /// <b>The only class-specific Step event in the game</b>, and the only thing
+    /// besides the sniper's scope and the spy's stab that moves
+    /// <see cref="CharacterState.RunPower"/>. (The spy's End Step is the only
+    /// other per-class event of any kind.)
+    /// <para>
+    /// ⚠️ <b>It reads <c>keyState</c> alone, not the down-or-pressed
+    /// union</b>, so a click that arrives and releases inside one tick does not
+    /// slow the heavy — unlike the shot it fires, which that same click does
+    /// produce.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>It runs after the inherited Step</b>, so the rate it sets is the
+    /// one <em>next</em> tick's Begin Step accelerates with. The event's
+    /// <c>action_inherited</c> comes first and the code action second.
+    /// </para>
+    /// </remarks>
+    public static void HeavyStep(ref CharacterState character)
+    {
+        if (character.Class != PlayerClass.Heavy)
+            return;
+
+        character.RunPower = (character.KeyState & PlayerKeys.Attack) != 0
+            ? HeavyFiringRunPower
+            : ClassStats.For(PlayerClass.Heavy).RunPower;
+    }
+
+    /// <summary>What a heavy's acceleration drops to while the trigger is down.</summary>
+    private const double HeavyFiringRunPower = 0.3;
+
+    /// <summary>
+    /// The intel-grab cooldown an uncloak imposes: <c>alarm[1] = max(alarm[1],
+    /// 25)</c>.
+    /// </summary>
+    private const int UncloakGrabDelay = 25;
 
     /// <summary>
     /// Which control and friction factors this character's <c>moveStatus</c>

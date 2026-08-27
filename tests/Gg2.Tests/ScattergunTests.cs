@@ -40,6 +40,20 @@ public sealed class ScattergunTests
         new(LevelMap.FromPng(Map, ReferenceTree.ReadMap(Map)));
 
     /// <summary>
+    /// One world for the tests that only need <c>FireStep</c> to have something
+    /// to hand the Rocketlauncher.
+    /// </summary>
+    /// <remarks>
+    /// A scattergun blast reads no geometry at all, so these tests pass the map
+    /// only because the signature now requires it — the rocket's
+    /// <c>explodeImmediately</c> test is what put it there. Shared and lazy so
+    /// twelve tests do not decode the same PNG twelve times.
+    /// </remarks>
+    private static CollisionWorld SharedWorld => _sharedWorld ??= World();
+
+    private static CollisionWorld? _sharedWorld;
+
+    /// <summary>
     /// A scout standing at (<paramref name="x"/>, <paramref name="y"/>) with a
     /// loaded, ready scattergun and the attack key held.
     /// </summary>
@@ -61,6 +75,8 @@ public sealed class ScattergunTests
             Hp = ClassStats.For(PlayerClass.Scout).MaxHp,
             Facing = 1,
             LastFacing = 1,
+            RunPower = ClassStats.For(PlayerClass.Scout).RunPower,
+            JumpStrength = ClassStats.BaseJumpStrength,
             CloakAlpha = 1,
             CanGrabIntel = true,
             LastDamageDealer = CharacterState.Nobody,
@@ -107,7 +123,7 @@ public sealed class ScattergunTests
         var events = default(TickEvents);
         PutScout(ref state, 1, Team.Red, OpenX, OpenY);
 
-        Weapons.FireStep(ref state, 1, ref events);
+        Weapons.FireStep(SharedWorld, ref state, 1, ref events);
 
         Assert.Equal(6, state.LiveProjectileCount);
         Assert.Equal(5, state.Weapons[1].AmmoCount);
@@ -133,7 +149,7 @@ public sealed class ScattergunTests
         state.Weapons[1].ReadyToShoot = ready;
         state.Weapons[1].AmmoCount = ammo;
 
-        Weapons.FireStep(ref state, 1, ref events);
+        Weapons.FireStep(SharedWorld, ref state, 1, ref events);
 
         Assert.Equal(0, state.LiveProjectileCount);
         Assert.False(events.Fired[1]);
@@ -157,7 +173,7 @@ public sealed class ScattergunTests
 
         state.Characters[1].PressedKeys = PlayerKeys.Attack;
 
-        Weapons.FireStep(ref state, 1, ref events);
+        Weapons.FireStep(SharedWorld, ref state, 1, ref events);
 
         Assert.Equal(6, state.LiveProjectileCount);
     }
@@ -188,7 +204,7 @@ public sealed class ScattergunTests
         state.Weapons[1].X = OpenX;
         state.Weapons[1].Y = OpenY;
 
-        Weapons.FireStep(ref state, 1, ref events);
+        Weapons.FireStep(SharedWorld, ref state, 1, ref events);
 
         // A pellet is placed at the muzzle and then nudged fifteen pixels along
         // its own heading, so what is asserted is the distance from the weapon
@@ -239,7 +255,7 @@ public sealed class ScattergunTests
         var events = default(TickEvents);
         PutScout(ref state, 1, Team.Red, OpenX, OpenY, aimDegrees: Aim);
 
-        Weapons.FireStep(ref state, 1, ref events);
+        Weapons.FireStep(SharedWorld, ref state, 1, ref events);
 
         var pellets = LivePellets(state);
         var aim = state.Characters[1].AimDirection;
@@ -274,7 +290,7 @@ public sealed class ScattergunTests
         var events = default(TickEvents);
         PutScout(ref state, 1, Team.Red, OpenX, OpenY, aimDegrees: 90);
 
-        Weapons.FireStep(ref state, 1, ref events);
+        Weapons.FireStep(SharedWorld, ref state, 1, ref events);
 
         foreach (var pellet in LivePellets(state))
         {
@@ -319,7 +335,7 @@ public sealed class ScattergunTests
         PutScout(ref state, 1, Team.Red, OpenX, OpenY, aimDegrees: Aim);
         events.ForceFireSeed(1, Seed);
 
-        Weapons.FireStep(ref state, 1, ref events);
+        Weapons.FireStep(SharedWorld, ref state, 1, ref events);
 
         var random = new GmlRandom(Seed);
         var pellets = LivePellets(state);
@@ -357,7 +373,7 @@ public sealed class ScattergunTests
         PutScout(ref state, 1, Team.Red, OpenX, OpenY);
         events.ForceFireSeed(1, 1234);
 
-        Weapons.FireStep(ref state, 1, ref events);
+        Weapons.FireStep(SharedWorld, ref state, 1, ref events);
 
         Assert.False(events.HasForcedFireSeed[1]);
     }
@@ -376,7 +392,7 @@ public sealed class ScattergunTests
             PutScout(ref state, 1, Team.Red, OpenX, OpenY);
             events.ForceFireSeed(1, seed);
 
-            Weapons.FireStep(ref state, 1, ref events);
+            Weapons.FireStep(SharedWorld, ref state, 1, ref events);
             return [.. LivePellets(state).Select(p => p.Motion.Direction)];
         }
 
@@ -437,7 +453,7 @@ public sealed class ScattergunTests
         var events = default(TickEvents);
         PutScout(ref state, 1, Team.Red, OpenX, OpenY);
 
-        Weapons.FireStep(ref state, 1, ref events);
+        Weapons.FireStep(SharedWorld, ref state, 1, ref events);
         Assert.Equal(6, state.LiveProjectileCount);
 
         var lifetime = LivePellets(state)[0].Lifetime;
@@ -464,7 +480,7 @@ public sealed class ScattergunTests
         var events = default(TickEvents);
         PutScout(ref state, 1, Team.Red, OpenX, OpenY);
 
-        Weapons.FireStep(ref state, 1, ref events);
+        Weapons.FireStep(SharedWorld, ref state, 1, ref events);
         Assert.Equal(5, state.Weapons[1].AmmoCount);
 
         for (var i = 0; i < 35; i++)
@@ -491,7 +507,7 @@ public sealed class ScattergunTests
         var events = default(TickEvents);
         PutScout(ref state, 1, Team.Red, OpenX, OpenY);
 
-        Weapons.FireStep(ref state, 1, ref events);
+        Weapons.FireStep(SharedWorld, ref state, 1, ref events);
         Assert.False(state.Weapons[1].ReadyToShoot);
 
         for (var i = 0; i < 19; i++)

@@ -188,6 +188,46 @@ public static class Gml
     /// <summary>GML <c>radtodeg()</c>.</summary>
     public static double RadToDeg(double radians) => radians * (180.0 / Math.PI);
 
+    /// <summary>
+    /// GML <c>point_direction(x1, y1, x2, y2)</c>: the bearing from the first
+    /// point to the second, in degrees in <c>[0, 360)</c>.
+    /// </summary>
+    /// <remarks>
+    /// <b>It does not snap</b>, unlike <see cref="LengthDirX"/> and unlike the
+    /// <c>direction</c> a motion write recomputes — settled in
+    /// docs/SIMULATION.md, "Settled: the four motion variables", and the reason
+    /// the two cannot share a helper. An explosion's knockback bearing is one of
+    /// these, so an angle a hair off a right angle stays a hair off it.
+    /// <para>
+    /// The <c>y</c> negation is Game Maker's axis: y grows downwards and angles
+    /// grow anticlockwise.
+    /// </para>
+    /// </remarks>
+    public static double PointDirection(double x1, double y1, double x2, double y2)
+    {
+        var degrees = RadToDeg(Math.Atan2(-(y2 - y1), x2 - x1));
+        var wrapped = degrees % 360;
+
+        return wrapped < 0 ? wrapped + 360 : wrapped;
+    }
+
+    /// <summary>
+    /// GML <c>point_distance(x1, y1, x2, y2)</c>.
+    /// </summary>
+    /// <remarks>
+    /// <c>sqrt(dx*dx + dy*dy)</c> spelled out, never <c>double.Hypot</c>: Hypot
+    /// rescales its arguments and loses the last bit on 86 of 722 measured
+    /// samples. See <c>Gg2.Simulation.Aabb.Distance</c>, which says the same
+    /// thing about the same measurement.
+    /// </remarks>
+    public static double PointDistance(double x1, double y1, double x2, double y2)
+    {
+        var dx = x2 - x1;
+        var dy = y2 - y1;
+
+        return Math.Sqrt((dx * dx) + (dy * dy));
+    }
+
     // -- Decimal literals -----------------------------------------------------
     //
     // Game Maker 8 does not parse every decimal literal to the IEEE-754 double

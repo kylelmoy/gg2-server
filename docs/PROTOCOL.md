@@ -239,7 +239,9 @@ the client understands. The ones with non-obvious framing:
 | `PLAYER_SPAWN` (5) | `ubyte playerId`, `ubyte`, `ubyte` |
 | `PLAYER_CHANGENAME` (31) | `ubyte playerId`, `string1 name` |
 | `CHAT_BUBBLE` (15) | `ubyte playerId`, `ubyte image` |
-| `BUILD_SENTRY` (16) | `ubyte playerId`, `ushort x*5`, `ushort y*5`, `byte dir` |
+| `BUILD_SENTRY` (16) | `ubyte playerId`, `ushort round(x*5)`, `ushort round(y*5)`, `byte dir` |
+| `SENTRY_POSITION` (46) | `ubyte playerId`, `ushort round(x*5)`, `ushort round(y*5)` — the landing spot, from the sentry's Begin Step the tick `vspeed` reaches zero |
+| `DESTROY_SENTRY` (17) | `ubyte playerId`, `ubyte killer`, `ubyte assistant`, `ubyte cause` — same 255-for-nobody rule as `PLAYER_DEATH`; the assistant is the **killer's healer** (a sentry has no second dealer), and the Begin Step self-destruct sends `cause` 0. ⚠️ An owner detonating their own sentry broadcasts **nothing** — `processClientCommands.gml`'s case is a bare `instance_destroy`, and clients notice through the subobject bit of the next update |
 | `MAP_END` (14) | `string1 nextMap`, `ubyte winners`, `ubyte currentMapArea` |
 | `CHANGE_MAP` (7) | `string1 map`, `string1 md5` |
 | `INPUTSTATE` / `QUICK_UPDATE` / `FULL_UPDATE` / `CAPS_UPDATE` | see next section |
@@ -304,7 +306,7 @@ FULL_UPDATE only:
 all tiers:
   ubyte   subobjects     // 0x01 = has a Character, 0x02 = has a Sentry
   <Character block>      if 0x01
-  <Sentry block>         if 0x02
+  <Sentry block>         if 0x02   // ...but see below: EMPTY on an INPUTSTATE
 ```
 
 Per character (`Objects/InGameElements/Character.events/User Event 12.xml`) —
@@ -335,6 +337,72 @@ FULL_UPDATE only:
   <weapon block>            // the weapon's own User Event 12
 ```
 
+The weapon block is **FULL_UPDATE only** — it is written inside the character's
+own `if(global.updateType == FULL_UPDATE)`, so unlike the sentry there is no
+tier trap in it. Its shape depends on the class: two bytes for eight of them
+(`readyToShoot`, `alarm[0]`), **one** for a medic (`healTarget`, or 255), and for
+a demoman a count followed by one seven-byte record per mine
+(`Objects/Weapons/Minegun.events/User Event 12.xml`):
+
+```
+Demoman weapon block:
+  ubyte   lobbed            // how many mine records follow
+  per mine, in INSTANCE order (creation order):
+    ushort  round(x * 5)    // GML round(), half to even
+    ushort  round(y * 5)
+    byte    round(hspeed * 5)   // ⚠️ 5, not the character's 8.5
+    byte    round(vspeed * 5)
+    ubyte   stickied
+```
+
+⚠️ **The count is a promise and the client reads the records positionally**, so
+the two must be produced by one walk. This repo shipped a version where they were
+not: `WeaponState` carried both a `Lobbed` the simulation maintained and a
+`MinesLobbed` the serialiser read, and nothing ever wrote the second. A demoman
+with eight mines out put a **0** and no records — self-consistent, so no client
+ever desynchronised and no framing error ever fired; every client simply drew no
+mines. It could not be caught by a recording either, because `gg2-parity record`
+joins immediately and no fixture holds a demoman with mines out in a full update.
+`tests/Gg2.Tests/MineUpdateLayoutTests.cs` round-trips the real writer through
+the real reader instead, which is the only way to see bytes that were never
+written.
+
+Per sentry (`Objects/InGameElements/Sentry.events/User Event 12.xml`):
+
+```
+FULL_UPDATE only:
+  byte    startDirection
+  ushort  round(x * 5)      // GML round(), half to EVEN, like Intelligence
+  ushort  round(y * 5)      // and unlike Character, which writes plain x*5
+
+QUICK_UPDATE and FULL_UPDATE:
+  ubyte   built*0x80 + min(127, hp)
+
+FULL_UPDATE and only while !built:
+  ubyte   vspeed
+```
+
+⚠️ **On an `INPUTSTATE` a sentry contributes NOTHING — not even its hp.** The
+event guards each group on the tier and between them they cover only
+`FULL_UPDATE` and `QUICK_UPDATE`, so on an `INPUTSTATE` every branch is skipped
+and the player's block ends at its `subobjects` byte with bit 1 still set. A
+reader that consumes the hp byte unconditionally slips one byte per sentry on
+every tick that is not a quick update (`GameServerBeginStep.gml:99`), which is
+most of them.
+
+**This shipped in the port and nothing could see it**, because no recording had
+ever contained an engineer — every fixture was scout, soldier, demoman and
+medic. It surfaced as "no framing for server message 0" several hundred bytes
+downstream, nowhere near the cause. `tests/Gg2.Tests/SentryUpdateLayoutTests.cs`
+is the gate on the arithmetic, `FixtureFramingTests` on the recordings, and
+`docs/PARITY.md`'s "when adding a fixture, ask what state it cannot reach" is
+the moral.
+
+⚠️ Note also that the trailing `vspeed` is **self-describing through bit 7 of
+the byte before it**: a built sentry has no `vspeed`, a falling one does. A
+reader has to look at the value it just read to know the width of the block it
+is in.
+
 Note the quantisation: position to **1/5 world pixel** in an unsigned 16-bit
 field (so the coordinate space tops out at 65535/5 = 13107), and velocity to
 **1/8.5 px/tick in a signed byte**, saturating at ±15 — conveniently the same
@@ -344,6 +412,260 @@ clamp the physics applies (`Character.events/Step.xml`).
 gamemode HUD block and the ten class limits; `CAPS_UPDATE` carries only the cap
 counters, respawn time and HUD block. Read `serializeState.gml` directly for
 those — they are short and unambiguous.
+
+### Per intel entity
+
+`serialize(IntelligenceRed)` then `serialize(IntelligenceBlue)`, each a
+`ushort` instance count followed by that many `User Event 10` blocks:
+
+```
+ushort  instance count       // 0 or 1
+  ushort  round(x * 5)       // GML round(), half to EVEN
+  ushort  round(y * 5)
+  short   alarm[0]           // ticks until it returns itself; -1 at rest
+```
+
+⚠️ **A briefcase somebody is carrying writes a count of zero.**
+`doEventGrabIntel` destroys the instance, so "carried" is a *shorter* message
+rather than a flagged one, and the client's `deserialize` destroys every
+instance it has and recreates exactly `count` of them. Writing a block anyway
+slips six bytes and surfaces hundreds of bytes later as a framing error — the
+same failure mode as the sentry's `INPUTSTATE` bytes above.
+`IntelUpdateLayoutTests` round-trips the real writer through the real reader.
+
+### The KotH HUD block, and the control points
+
+```
+ushort  cpUnlock                 // ticks of pregame left
+ushort  redTimer                 // ticks red must still hold the hill
+ushort  blueTimer
+  ... then one block per control point, in order, with no count:
+  byte    team                   // -1 neutral
+  byte    cappingTeam            // -1 nobody
+  ushort  round(capping)         // GML round(), half to EVEN
+```
+
+⚠️ **No count prefix on the points.** The client has the same map loaded and
+creates the same `ControlPoint` instances from it, so it knows how many to read
+— the same self-describing-by-the-map arrangement the moving platforms use. Get
+the number or the order wrong and the stream desynchronises rather than showing
+a wrong number; `Gg2.Simulation.ControlPoints.Place` fixes the order once at
+load (numbered points by number, DKotH red then blue).
+
+⚠️ **`team` and `cappingTeam` are signed**, and the tick a point changes hands
+puts a real team in *both* — `pointCapture` does not clear `cappingTeam`.
+
+DKotH uses the same three scalars and then **two** point blocks, red's hill
+first (`DKothHUD.events/User Event 12.xml` is `with KothRedControlPoint` then
+`with KothBlueControlPoint`). ⚠️ With no index in the block, getting that order
+wrong swaps two hills on every client and nothing anywhere errors.
+
+The control-point block is the time limit, the round clock, the **setup
+timer**, and then one block per point:
+
+```
+ubyte   global.timeLimitMins
+uint    timer
+ushort  global.setupTimer        // 0 unless the map has setup gates
+  ... then one block per control point, in order, with no count
+```
+
+Invasion writes the same three scalars and no points.
+
+### Arena
+
+⚠️ **The only HUD block whose shape differs between tiers.** Five extra fields
+lead it on a `FULL_UPDATE` and are absent from a `CAPS_UPDATE`:
+
+```
+  (FULL_UPDATE only)
+  ubyte   redWins, ubyte blueWins
+  ubyte   state              // 0 waiting, 1 setup, 2 round, 3 scoreboard
+  byte    winners            // the ROUND's winner, not the map's
+  ushort  endCount
+  (always)
+  ubyte   global.timeLimitMins
+  uint    timer
+  ushort  cpUnlock
+  ubyte   floor(roundStart/2)    // 300 ticks in one byte
+  ... then the one control point's block
+```
+
+⚠️ **`ARENA_ENDROUND` is not a bodyless message**, and this port framed it as
+one until phase 6's arena work — which would have lost the stream the first time
+a round ended on an arena map. It carries five bytes and then five more per MVP:
+
+```
+ubyte   win
+ubyte   mvpsRed, ubyte mvpsBlue
+ubyte   redWins, ubyte blueWins
+  mvpsRed + mvpsBlue × {
+    ubyte playerId, ubyte kills, ushort healing, ubyte points
+  }
+```
+
+The counts have to be read to know how long the message is. It survived because
+no recording has ever been made on an arena map — the same reason the sentry
+`INPUTSTATE` bug survived six phases. The other three Arena messages
+(`ARENA_RESTART`, `ARENA_STARTROUND`, `ARENA_WAITFORPLAYERS`) really are
+bodyless.
+
+⚠️ **Both counts are written before either list**, so a sender cannot stream
+the records and count as it goes — both lists have to be chosen first. The
+records are the top three of each team by `roundStats[POINTS]`, best first; see
+docs/SIMULATION.md, "Settled: the scoreboard".
+
+⚠️ **The point count comes from the map, and from the *area* of it being
+played.** `cp_dirtbowl` is three rounds stacked vertically with two points each,
+and a reader that framed by the whole file's six would desynchronise. See
+docs/SIMULATION.md, "Settled: map areas".
+
+⚠️ **DKotH never sends `UNLOCKCP` and KotH always does** — see
+docs/SIMULATION.md, "Settled: Dual King of the Hill". It falls out of instance
+order rather than out of the protocol, and a client reaches the same state
+either way.
+
+### BALANCE, which has two shapes
+
+```
+BALANCE (18)  ubyte 255                       the "teams are uneven" notice
+BALANCE (18)  ubyte playerId, ubyte class     somebody was moved
+```
+
+⚠️ **Not a fixed-width message, and this port framed it as one** — two body
+bytes — until phase 6's team balance. The client reads one byte and only then
+decides whether to read a second (`ClientBeginStep.gml:244-253`), so a reader
+that always takes two is one byte ahead from the first notice onwards and never
+recovers.
+
+It never fired because autobalance needs one team two players larger than the
+other and every fixture is a balanced bot roster. **The fourth message in this
+project with a content-dependent length and no recording that reaches it**,
+after the sentry `INPUTSTATE` block, `ARENA_ENDROUND` and the generator HUD
+block — when adding a message, ask what makes its length change and whether any
+recording can get there.
+
+⚠️ **The switch does not say which team.** The client flips the player's own
+`team` field, so both sides must already agree on where they were. The class
+byte is there because `checkClasslimits` may have changed it on the way across.
+Both sides also destroy the player's character, and **no `PLAYER_DEATH` goes
+out** — see docs/SIMULATION.md, "Settled: autobalance".
+
+### The player stat block
+
+`FULL_UPDATE` only, one per roster entry, ahead of the `subobjects` byte:
+
+```
+ubyte   kills, deaths, caps, assists, destruction, stabs
+ushort  healing
+ubyte   defenses, invulns, bonus, points
+ubyte   queueJump
+string2 unparsed rewards
+  one per OTHER roster entry, in roster order {
+    ubyte dominationKills
+  }
+```
+
+⚠️ **The order is not `StatIndex` order.** `DOMINATIONS` and `REVENGE` are
+skipped and `POINTS` follows `BONUS` — `Player.events/User Event 12.xml` is the
+authority, not the enum.
+
+⚠️ **Every counter is a real in the reference and all but healing are
+`ubyte`s.** An assist is worth **half** a point, so `write_ubyte` rounds it half
+away from zero while the host's own scoreboard draws `floor(stats[POINTS])` — a
+client can therefore read one point above the host. That is the reference's, not
+a quantisation this port chose. Healing needs its two bytes: a medic passes 255
+hit points in the first seconds of a match.
+
+The domination table is **one byte per other player**, so its length comes from
+the roster and a reader needs no count. ⚠️ **Self is skipped rather than
+written as a zero**, so the row is one byte shorter than the roster — a reader
+that took `playerCount` bytes would be one ahead for every player in the update.
+Each cell is that player's kills of that other player *since last dying to
+them*. See docs/SIMULATION.md, "Settled: the domination kill table".
+
+⚠️ **No recording can see any of this.** The block is `FULL_UPDATE`-only and
+`gg2-parity record` joins immediately, so the one full update in a trace is the
+join's — sent before anybody has scored. A port that wrote eleven zeroes for
+ever replays every fixture identically, which is exactly what this one did until
+phase 6's scoreboard. `PlayerStatsLayoutTests` round-trips the real writer
+through the real reader instead.
+
+### The Team Deathmatch HUD block
+
+```
+ubyte   global.timeLimitMins
+uint    timer
+ushort  killLimit
+```
+
+The kills themselves are the ordinary `redCaps`/`blueCaps` bytes in the shared
+tail — Team Deathmatch has no score field of its own, so its HUD draws the
+capture counters. See docs/SIMULATION.md, "Settled: Team Deathmatch".
+
+⚠️ **`global.tdmInvulnerabilityTicks` is not in this block.** It leads *every*
+`FULL_UPDATE` whatever the mode, ahead of the player count
+(`serializeState.gml:18`), and is zero outside Team Deathmatch. It is
+`seconds * 30 * 0.2` — a fifth of the ticks it buys, because the client spends
+it at 0.2 a tick to draw the shrinking bubble.
+
+### The generator HUD block
+
+```
+ubyte   global.timeLimitMins
+uint    timer
+  one per SURVIVING generator, blue first {
+    ushort ceil(hp)           // out of 2100
+    ushort ceil(shieldHp)     // out of 300
+  }
+```
+
+⚠️ **There is one record per *surviving* generator, not one per team.** The HUD
+reaches each through a `with` (`GeneratorHUD.events/User Event 12.xml`), which
+visits no instances once a generator has been destroyed — so a
+`GENERATOR_DESTROY` shortens every later HUD block by four bytes. A reader that
+always takes two loses the stream, and surfaces hundreds of bytes later as "no
+framing for server message N". This is the third message in the project with
+that shape, after the sentry's `INPUTSTATE` block and `ARENA_ENDROUND`, and like
+both of those it is invisible to every recording: `gen_destroy` is the only
+shipped generator map and nothing has ever been recorded on it.
+
+A client stays in step because it destroys its own instance on the message.
+`Gg2.Protocol.WorldShape.GeneratorCount` is how anything else does — it is the
+one field in a `WorldShape` a map cannot settle for good, and a consumer has to
+decrement it on each `GENERATOR_DESTROY`.
+
+⚠️ **Blue's record is written first**, which is the reverse of every other
+paired field on the wire: `with GeneratorBlue event_user(12); with GeneratorRed
+event_user(12);`.
+
+`ceil(hp)`, not `round`: a generator on 0.1 hp is still standing and the client
+must not draw it dead.
+
+`GENERATOR_DESTROY` itself is one byte of body, and ⚠️ **it names the team that
+*lost* a generator** — see docs/SIMULATION.md, "Settled: the generator".
+
+### The CTF HUD block
+
+```
+ubyte   global.timeLimitMins     // 1..255, never 0
+uint    timer                    // ticks left in the round
+```
+
+Six of the eight gamemodes open their HUD block with exactly these two, and the
+client rebuilds `timeLimit = timeLimitMins*30*60` from the first and then runs
+its own copy of the second down between updates. ⚠️ **So a server that never
+advances the timer does not merely show a wrong number — it makes every client's
+clock jump backwards on each update it receives.** That is the one field
+docs/PARITY.md's phase-1 byte diff always disagreed on, and it is fixed since
+the round landed.
+
+⚠️ **`CAPS_UPDATE` is sent *in addition* to that tick's ordinary update**, not
+instead of it — `GameServerBeginStep.gml:88`, above the tier selection. A
+capture sets `GameServer.syncTimer = 1` and the extra message goes out on the
+next tick; there is also a `frame mod 3600` heartbeat. So a client can see two
+state messages on one tick, and `TraceParser` treats a `CAPS_UPDATE` as an
+event rather than a tick boundary for exactly that reason.
 
 ## What a headless server can skip
 

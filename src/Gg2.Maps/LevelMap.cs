@@ -110,6 +110,81 @@ public sealed class LevelMap
     }
 
     /// <summary>
+    /// The same map narrowed to one of its areas: the entities outside that
+    /// area are gone, exactly as the reference destroys them.
+    /// </summary>
+    /// <remarks>
+    /// <b>A tall map can be several rounds stacked vertically.</b>
+    /// <c>Scripts/Maps/basicRoomSetup.gml:7-26</c> counts the <c>NextAreaO</c>
+    /// markers, takes each one's <c>y</c> as a boundary, and then does
+    /// <c>with all ... instance_destroy()</c> on everything outside the slice
+    /// being played. So on <c>cp_dirtbowl</c> — the only shipped map with more
+    /// than one area, and the only attack/defend map — six control points are
+    /// written in the file and exactly two exist at a time.
+    /// <para>
+    /// ⚠️ <b>The terrain is <em>not</em> narrowed, only the entities.</b> The
+    /// collision mask is one instance covering the whole image and survives the
+    /// destroy, so every area's ground stays solid; what changes is which
+    /// spawns, gates, points and objectives exist. <see cref="Walkmask"/> is
+    /// therefore shared with the unnarrowed map rather than trimmed.
+    /// </para>
+    /// <para>
+    /// Applied once, where a map is loaded, so that everything downstream —
+    /// collision rectangles, spawn points, the objective — sees the same world
+    /// the reference does without each having to know about areas.
+    /// </para>
+    /// </remarks>
+    /// <param name="area">1-based, and clamped: an out-of-range area is area 1.</param>
+    public LevelMap ForArea(int area)
+    {
+        // instance_find(NextAreaO, i-2) walks instances in creation order, which
+        // for map entities is the order the level data lists them — so the
+        // boundaries are taken in file order and NOT sorted. A map whose
+        // markers are listed out of order would slice oddly in the reference
+        // too, and no shipped map does.
+        var boundaries = new List<double>();
+
+        foreach (var entity in Entities)
+        {
+            if (string.Equals(entity.Type, EntityTypes.NextArea, StringComparison.Ordinal))
+                boundaries.Add(entity.Y);
+        }
+
+        if (boundaries.Count == 0)
+            return this;
+
+        var total = boundaries.Count + 1;
+        var current = area >= 1 && area <= total ? area : 1;
+
+        // global.area[1] = 0, and area[i] = the (i-2)th marker's y. The slice
+        // played is [top, bottom); the reference's three branches reduce to
+        // exactly this once the `y > 0` guard — which only protects objects at
+        // the origin, and no map entity is there — is set aside.
+        var top = current == 1 ? double.NegativeInfinity : boundaries[current - 2];
+        var bottom = current == total ? double.PositiveInfinity : boundaries[current - 1];
+
+        var kept = new List<LevelEntity>();
+
+        foreach (var entity in Entities)
+        {
+            // Destroyed when `y > bottom` or `y < top`, so a marker's own y
+            // survives in the areas on both sides of it. Unreachable on the
+            // shipped maps and kept because the reference's comparisons are the
+            // specification.
+            if (entity.Y <= bottom && entity.Y >= top)
+                kept.Add(entity);
+        }
+
+        return new LevelMap(
+            Name,
+            Walkmask,
+            kept,
+            Metadata,
+            Width / Gg2.Protocol.GameConstants.CellSize,
+            Height / Gg2.Protocol.GameConstants.CellSize);
+    }
+
+    /// <summary>
     /// Parses an <c>{ENTITIES}</c> block body, in either of the two formats the
     /// reference accepts.
     /// </summary>

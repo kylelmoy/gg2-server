@@ -23,8 +23,38 @@ public static class TraceParser
     /// <paramref name="start"/>: it is the only message carrying complete
     /// initial state, and a replay has nowhere to begin without it.
     /// </remarks>
-    public static IReadOnlyList<TraceTick> Parse(Trace trace, in WorldShape shape, out StateUpdate? start)
+    public static IReadOnlyList<TraceTick> Parse(Trace trace, in WorldShape shape, out StateUpdate? start) =>
+        Parse(trace, shape, out start, out _);
+
+    /// <summary>
+    /// Parses a trace, and says whether it framed all the way to the last byte.
+    /// </summary>
+    /// <param name="stopped">
+    /// Null when the whole stream framed. Otherwise why the framer gave up and
+    /// where, and everything after that offset was silently dropped.
+    /// </param>
+    /// <remarks>
+    /// <b>The overload that exists because the other one hides a fixture-killing
+    /// bug.</b> A recording can legitimately stop mid-message — the socket
+    /// closed between one read and the next — so the loop treats a
+    /// <see cref="ProtocolException"/> as the end of the trace and returns what
+    /// it has. That is right for a truncated capture and catastrophic for a
+    /// desynchronised reader: a trace whose framing slipped at byte 500 of
+    /// 60,000 comes back as a handful of ticks, every test that loads it passes,
+    /// and nothing anywhere says the other 59,500 bytes were thrown away.
+    /// <para>
+    /// That is exactly what an engineer's sentry did on 2026-08-26
+    /// (<c>StateUpdateReader.ReadSentry</c>). Use this overload in any test that
+    /// asserts something about a fixture's <em>contents</em>.
+    /// </para>
+    /// </remarks>
+    public static IReadOnlyList<TraceTick> Parse(
+        Trace trace,
+        in WorldShape shape,
+        out StateUpdate? start,
+        out string? stopped)
     {
+        stopped = null;
         var stream = new ServerStream();
         stream.SetShape(shape);
 
@@ -41,10 +71,17 @@ public static class TraceParser
             {
                 message = stream.Read(ref reader);
             }
-            catch (ProtocolException)
+            catch (ProtocolException e)
             {
                 // A recording can stop mid-message: the socket closed between
                 // one read and the next. Everything before it is still a trace.
+                //
+                // But it is only harmless when the leftover is a fragment. Say
+                // how much was dropped so a caller can tell a truncated capture
+                // from a reader that lost the stream — see the remarks above.
+                stopped =
+                    $"framing stopped at byte {reader.Position} of {trace.Stream.Length}, " +
+                    $"{reader.Remaining} byte(s) unread: {e.Message}";
                 break;
             }
 

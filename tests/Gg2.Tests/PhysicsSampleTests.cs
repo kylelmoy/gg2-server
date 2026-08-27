@@ -222,6 +222,14 @@ public sealed class PhysicsSampleTests
         NetAimDirection = (ushort)scenario.Aims[0],
         Facing = Facing(scenario.Aims[0]),
         LastFacing = Facing(scenario.Aims[0]),
+
+        // ⚠️ Both are per-character in the reference and both start at their
+        // base — Create.xml:15 and :158. They joined CharacterState's
+        // "zeroed is not a valid character" list when the sniper's scope
+        // landed, and a hand-built anchor that left them at 0 stands still and
+        // never jumps.
+        RunPower = ClassStats.For(Enum.Parse<PlayerClass>(scenario.Class)).RunPower,
+        JumpStrength = ClassStats.BaseJumpStrength,
     };
 
     private static int Facing(int netAim) => (netAim * 360.0 / 65536.0 + 270) % 360 > 180 ? 1 : -1;

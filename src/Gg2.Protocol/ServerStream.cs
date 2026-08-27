@@ -48,6 +48,16 @@ public sealed class ServerStream
     private readonly List<PlayerClass> _classes = [];
     private readonly List<string> _names = [];
 
+    /// <summary>
+    /// The <c>BALANCE</c> id that means "no player": the message is the notice
+    /// rather than a switch, and carries nothing after it.
+    /// </summary>
+    /// <remarks>
+    /// 255 and not 0, like every other "nobody" on this wire — roster slot 0 is
+    /// the server's own player and always exists.
+    /// </remarks>
+    public const byte BalanceNotice = 255;
+
     private WorldShape _shape;
     private bool _haveShape;
 
@@ -221,8 +231,30 @@ public sealed class ServerStream
                 return Fixed(type, ref reader, start, 4);
 
             case MessageType.Balance:
-                // Two separate one-byte reads, not one two-byte read.
-                return Fixed(type, ref reader, start, 2);
+            {
+                // ⚠️ NOT a fixed-width message, and this port framed it as one
+                // — two body bytes — until phase 6's team balance. There are two
+                // shapes:
+                //
+                //   BALANCE, 255                     the "teams are uneven" notice
+                //   BALANCE, playerId, class         somebody was actually moved
+                //
+                // The client reads one byte and only then decides whether to
+                // read a second (`ClientBeginStep.gml:244-253`), so a reader
+                // that always takes two is one byte ahead from the first notice
+                // onwards. It never fired because autobalance needs a team two
+                // players larger than the other and every fixture is a balanced
+                // bot roster — the fourth message in this project with a
+                // content-dependent length and no recording that reaches it,
+                // after the sentry INPUTSTATE block, ARENA_ENDROUND and the
+                // generator HUD block.
+                var who = reader.ReadUByte();
+
+                if (who != BalanceNotice)
+                    reader.Skip(1);
+
+                return Done(type, ref reader, start, playerId: who);
+            }
 
             case MessageType.BuildSentry:
                 return Fixed(type, ref reader, start, 6);
@@ -265,7 +297,6 @@ public sealed class ServerStream
             case MessageType.ReserveSlot:
             case MessageType.ArenaWaitForPlayers:
             case MessageType.ArenaStartRound:
-            case MessageType.ArenaEndRound:
             case MessageType.ArenaRestart:
             case MessageType.UnlockCp:
             case MessageType.RedTeamCap:
@@ -273,6 +304,34 @@ public sealed class ServerStream
                 return Fixed(type, ref reader, start, 0);
 
             // --- variable ------------------------------------------------------
+            case MessageType.ArenaEndRound:
+            {
+                // ⚠️ NOT a bodyless message, and it was framed as one here until
+                // phase 6's arena work. `serverArenaEndRound.gml` writes five
+                // bytes — the winning team, the two MVP counts, and both round
+                // scores — and then five more per MVP, up to three a side:
+                //
+                //   ubyte  win
+                //   ubyte  mvpsRed, ubyte mvpsBlue
+                //   ubyte  redWins, ubyte blueWins
+                //   then mvpsRed + mvpsBlue × {
+                //       ubyte playerId, ubyte kills, ushort healing, ubyte points
+                //   }
+                //
+                // The client reads it in exactly that order
+                // (`clientArenaEndRound.gml`), so a reader that skipped the body
+                // would lose the stream from here on. It never fired because no
+                // recording has ever been made on an arena map — the same reason
+                // the sentry INPUTSTATE bug survived six phases.
+                var win = reader.ReadUByte();
+                var mvpsRed = reader.ReadUByte();
+                var mvpsBlue = reader.ReadUByte();
+                reader.Skip(2); // redWins, blueWins
+                reader.Skip(5 * (mvpsRed + mvpsBlue));
+
+                return Done(type, ref reader, start, playerId: win);
+            }
+
             case MessageType.MessageString:
                 return Done(type, ref reader, start, text: reader.ReadString1());
 

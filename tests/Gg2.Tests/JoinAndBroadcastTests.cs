@@ -376,6 +376,15 @@ public sealed class JoinAndBroadcastTests
                 continue;
             }
 
+            // A team change with a live character is a death since phase 6 —
+            // BID_FAREWELL, announced ahead of the change, as the reference
+            // does.
+            if ((MessageType)client.Received[0] == MessageType.PlayerDeath)
+            {
+                client.Take(5);
+                continue;
+            }
+
             ReadStateUpdate(client, playerCount);
         }
 

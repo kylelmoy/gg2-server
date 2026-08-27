@@ -48,6 +48,45 @@ public static class ProjectileSprites
 
     public static Sprite Blade => new(new Aabb(7, 7, 23, 23), 14, 13);
 
+    /// <summary>
+    /// <c>BubbleS</c>: a twelve-pixel square with the origin in the middle.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The one entry in this table that was not sampled from the running
+    /// game</b>, because Quote's weapon landed without a live session. It is
+    /// derived rather than guessed: <c>Sprites/Projectiles/BubbleS.xml</c>
+    /// declares <c>mode="FULL"</c>, which means the bounding box is the whole
+    /// image rather than the alpha's extent, and the image is 12x12.
+    /// <para>
+    /// The control is <see cref="Mine"/>: <c>MineS.xml</c> is also
+    /// <c>mode="FULL"</c>, its image is 6x6, and the engine reported
+    /// <c>0, 0, 5, 5</c> — the whole image — when
+    /// <c>tools/sample-rotated-box.js</c> asked it. So the rule this entry
+    /// leans on is measured even though this entry is not. Sample it anyway at
+    /// the next live session; CLAUDE.md's warning about a MANUAL bound being
+    /// clamped to the image is a reminder that the XML is not the engine.
+    /// </para>
+    /// </remarks>
+    public static Sprite Bubble => new(new Aabb(0, 0, 11, 11), 6, 6);
+
+    /// <summary>
+    /// <c>StabMaskS</c>: the spy's knife, which is much bigger than the knife.
+    /// </summary>
+    /// <remarks>
+    /// An AUTO bound on a 64x64 image about origin (26, 37), so about the
+    /// origin it runs <b>2 pixels back, 31 forward, 24 up and 18 down</b> — a
+    /// 34x43 box, the largest melee reach in the game. ⚠️ <b>And
+    /// <c>image_xscale</c> is ±1</b>, from the stab's direction
+    /// (<c>StabMask.events/Step.xml</c>), so a left-facing stab mirrors all of
+    /// it — which is also what decides whether a hit is a backstab.
+    /// <para>
+    /// Read off the PNG's alpha extent rather than sampled, like
+    /// <see cref="Bubble"/>. Unlike the bubble's there is no measured control
+    /// for AUTO in this table; sample it at the next live session.
+    /// </para>
+    /// </remarks>
+    public static Sprite Stab => new(new Aabb(24, 13, 57, 55), 26, 37);
+
     /// <summary>The sprite a pooled projectile of this kind wears.</summary>
     public static Sprite For(ProjectileKind kind) => kind switch
     {
@@ -58,9 +97,9 @@ public static class ProjectileSprites
         ProjectileKind.Mine => Mine,
         ProjectileKind.Flame => Flame,
         ProjectileKind.Blade => Blade,
+        ProjectileKind.Bubble => Bubble,
+        ProjectileKind.Stab => Stab,
 
-        // Bubble is a Quote projectile with no rotation and no sample yet; it
-        // arrives with the Blade in a later stage rather than being guessed at.
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "no sprite measured for this projectile"),
     };
 }

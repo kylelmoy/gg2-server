@@ -58,8 +58,29 @@ public static class GameModes
     public static int TotalAreas(LevelMap map) => 1 + Count(map, EntityTypes.NextArea);
 
     /// <summary>
+    /// Whether the map places a <c>ControlPointSetupGate</c>.
+    /// </summary>
+    /// <remarks>
+    /// The one thing that separates the two control-point arrangements —
+    /// <c>ControlPointHUD.events/Create.xml</c> is <c>if
+    /// instance_exists(ControlPointSetupGate)</c> — and it is also what gives
+    /// a CTF map Invasion's rules instead. Both read the same entity, which is
+    /// why this is one question rather than two.
+    /// </remarks>
+    public static bool HasSetupGate(LevelMap map) => Has(map, EntityTypes.SetupGate);
+
+    /// <summary>
     /// Everything a state update's shape depends on, beyond the roster.
     /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Give it the map the server is actually serving</b> — that is, one
+    /// already narrowed with <see cref="LevelMap.ForArea"/>. On a multi-area
+    /// map the unnarrowed entity list holds every area's control points at
+    /// once, and a shape built from it makes a reader expect more blocks than
+    /// an update carries. The framing then fails hundreds of bytes later with
+    /// no hint of where. <c>cp_dirtbowl</c> is the only shipped map where the
+    /// two differ: six points in the file, two in any given round.
+    /// </remarks>
     public static WorldShape ShapeOf(LevelMap map)
     {
         var mode = Of(map);
@@ -69,7 +90,31 @@ public static class GameModes
             GameMode = mode,
             ControlPointCount = ControlPointsFor(map, mode),
             MovingPlatformCount = Count(map, EntityTypes.MovingPlatform),
+            GeneratorCount = GeneratorsFor(map, mode),
         };
+    }
+
+    /// <summary>
+    /// How many generator blocks the HUD writes at the <em>start</em> of a
+    /// round.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ Unlike every other count in a <see cref="WorldShape"/>, this one
+    /// falls during a match: a destroyed generator stops being serialised. See
+    /// <see cref="WorldShape.GeneratorCount"/>.
+    /// </remarks>
+    public static int GeneratorsFor(LevelMap map, GameMode mode)
+    {
+        if (mode != GameMode.Generator)
+            return 0;
+
+        // One per team at most, which is what Gg2.Simulation.Generators.Place
+        // represents — a map with two red generators would give the reference
+        // two instances that every `GeneratorRed.hp` in the game reads as one.
+        // Counting the entities instead would promise blocks the writer never
+        // writes.
+        return (Has(map, EntityTypes.GeneratorRed) ? 1 : 0)
+               + (Has(map, EntityTypes.GeneratorBlue) ? 1 : 0);
     }
 
     /// <summary>

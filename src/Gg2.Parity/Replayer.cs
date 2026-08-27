@@ -42,10 +42,51 @@ public enum Fields
     Ammo = 1 << 3,
     Flags = 1 << 4,
 
+    /// <summary>
+    /// Every recorded <c>PLAYER_DEATH</c>, against the ones the port produced.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="Hp"/> because it is a much stronger claim than
+    /// the hp comparison makes. A slot's hp is only observed every seventh tick
+    /// and a dead character is simply absent from the update, so hp alone cannot
+    /// say <em>which</em> tick somebody died on, and says nothing at all about
+    /// who got the kill.
+    /// </remarks>
+    Deaths = 1 << 5,
+
+    /// <summary>
+    /// Every recorded <c>UBER_CHARGED</c> and <c>UBER</c>, against the ones the
+    /// port produced.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="Hp"/> for the same reason <see cref="Deaths"/>
+    /// is, and the argument is even stronger here: a medic's charge reaches the
+    /// wire only as one saturating byte in a class-specific field, so a port
+    /// that charged twice as fast would look identical from the moment it
+    /// topped out. The message names the tick. See
+    /// <see cref="Gg2.Parity.UberRecord"/>.
+    /// </remarks>
+    Ubers = 1 << 6,
+
+    /// <summary>
+    /// Every recorded <c>GRAB_INTEL</c>, <c>DROP_INTEL</c>, <c>SCORE_INTEL</c>
+    /// and <c>RETURN_INTEL</c>, against the ones the port produced.
+    /// </summary>
+    /// <remarks>
+    /// Separate from everything else because nothing else can see the
+    /// objective at all: the briefcase's position rides only in a
+    /// <c>FULL_UPDATE</c>, of which a recording holds exactly one, and a
+    /// carrier's <c>intel</c> byte is in the same block. These four messages
+    /// are the whole of what a recording says about the flag — and a grab in
+    /// particular is a strong claim, because it lands on the tick a character's
+    /// box first overlaps the briefcase's. See <see cref="IntelRecord"/>.
+    /// </remarks>
+    Intel = 1 << 7,
+
     /// <summary>What the character physics is responsible for.</summary>
     Trajectory = Position | Velocity,
 
-    All = Position | Velocity | Hp | Ammo | Flags,
+    All = Position | Velocity | Hp | Ammo | Flags | Deaths | Ubers | Intel,
 }
 
 public sealed class Replayer(ITraceSimulation simulation)
@@ -127,6 +168,20 @@ public sealed class Replayer(ITraceSimulation simulation)
             Advance(tick);
             replayed++;
 
+            // A death is reported in the *next* tick's message block, for the
+            // same reason a fire seed is — see SupplyFireSeeds. A tick whose
+            // successor was truncated off the end of the recording is not
+            // checked, because the recording does not say who died on it.
+            //
+            // The same is true of an uber message: it comes out of a Begin Step
+            // that runs after the server has already serialised this tick.
+            if (index + 1 < ticks.Count)
+            {
+                ReconcileDeaths(tick.Index, ticks[index + 1], mismatches);
+                ReconcileUbers(tick.Index, ticks[index + 1], mismatches);
+                ReconcileIntel(tick.Index, ticks[index + 1], mismatches);
+            }
+
             if (!UpdatesPrecedeTheirTick && tick.HasPositions)
             {
                 Reconcile(tick, mismatches, xErrors, yErrors, ref comparisons, ref resyncs);
@@ -189,7 +244,20 @@ public sealed class Replayer(ITraceSimulation simulation)
                     break;
 
                 case MessageType.PlayerLeave when message.PlayerId is { } slot:
-                    simulation.ClearCharacter(slot);
+                    // ⚠️ RemoveSlot, not ClearCharacter. A roster index is
+                    // positional: the server compacts on a departure and its
+                    // state updates are already compacted by the time they are
+                    // recorded, so clearing the slot in place would leave this
+                    // simulation comparing its slot 3 against the recording's
+                    // slot 3 while they name different players.
+                    //
+                    // This read ClearCharacter until 2026-08-25, and
+                    // reference-ctf_truefort-combat.trace is what caught it —
+                    // its medic leaves on tick 13, and from the next update
+                    // onwards every remaining bot was compared against its
+                    // neighbour. The bots trace has no departure in it and never
+                    // noticed.
+                    simulation.RemoveSlot(slot);
                     break;
 
                 case MessageType.PlayerChangeTeam when message.PlayerId is { } changedTeam:
@@ -206,6 +274,22 @@ public sealed class Replayer(ITraceSimulation simulation)
                     if (message.Payload.Length >= 2)
                         simulation.SetPlayerClass(changedClass, (PlayerClass)message.Payload[1]);
                     simulation.ClearCharacter(changedClass);
+                    break;
+
+                case MessageType.BuildSentry when message.Payload.Length >= 6:
+                    // [player, x*5 (ushort), y*5 (ushort), image_xscale
+                    // (signed byte)] — serverBuildSentry.gml's broadcast. An
+                    // injection like PLAYER_SPAWN: the message is the
+                    // reference's own acceptance of the build, so the
+                    // preconditions are not re-run. Everything after the
+                    // placement is simulated; SENTRY_POSITION and
+                    // DESTROY_SENTRY in the recording are not injected (the
+                    // fall and the death are the simulation's to reproduce).
+                    simulation.BuildSentry(
+                        message.Payload[0],
+                        (message.Payload[1] | (message.Payload[2] << 8)) / 5.0,
+                        (message.Payload[3] | (message.Payload[4] << 8)) / 5.0,
+                        (sbyte)message.Payload[5]);
                     break;
             }
         }
@@ -256,6 +340,299 @@ public sealed class Replayer(ITraceSimulation simulation)
 
             simulation.SetFireSeed(slot, reader.ReadUShort());
         }
+    }
+
+    /// <summary>
+    /// Compares the deaths the tick just run produced against the ones the
+    /// reference recorded for it.
+    /// </summary>
+    /// <remarks>
+    /// <b>Both directions, and the missing one is the one worth having.</b> A
+    /// death the recording has and the simulation does not is invisible to
+    /// every other comparison: the victim is simply absent from the next state
+    /// update, and the replayer's own <see cref="Reconcile"/> would quietly
+    /// clear the slot to match and report nothing. Before this check existed,
+    /// a port that never killed anybody replayed
+    /// <c>reference-ctf_truefort-bots.trace</c> with zero mismatches.
+    /// <para>
+    /// Keyed on the victim, because that is the one field a death is unique by:
+    /// a character that dies is destroyed, so no slot can appear twice in a
+    /// tick. That also makes the comparison independent of the order the two
+    /// sides list them in — GM8 runs End Step in <em>instance</em> order, which
+    /// is creation order and not roster order, so matching them off pairwise
+    /// would report a false mismatch whenever two people die on the same tick
+    /// and the older character has the higher slot.
+    /// </para>
+    /// </remarks>
+    private void ReconcileDeaths(int tickIndex, TraceTick next, List<Mismatch> mismatches)
+    {
+        if ((Compare & Fields.Deaths) == 0)
+            return;
+
+        var actual = simulation.DeathsLastTick;
+
+        foreach (var message in next.Events)
+        {
+            if (!TryReadDeath(message, out var expected))
+                continue;
+
+            if (!TryFindDeath(actual, expected.Slot, out var got))
+            {
+                mismatches.Add(new Mismatch
+                {
+                    Tick = tickIndex,
+                    Slot = expected.Slot,
+                    Field = "death",
+                    Expected = 1,
+                    Actual = 0,
+                });
+                continue;
+            }
+
+            Check(Fields.Deaths, mismatches, tickIndex, expected.Slot, "killer", expected.Killer, got.Killer);
+            Check(Fields.Deaths, mismatches, tickIndex, expected.Slot, "assistant", expected.Assistant, got.Assistant);
+            Check(Fields.Deaths, mismatches, tickIndex, expected.Slot, "deathcause", expected.Source, got.Source);
+        }
+
+        foreach (var got in actual)
+        {
+            if (RecordsDeathOf(next, got.Slot))
+                continue;
+
+            mismatches.Add(new Mismatch
+            {
+                Tick = tickIndex,
+                Slot = got.Slot,
+                Field = "death",
+                Expected = 0,
+                Actual = 1,
+            });
+        }
+    }
+
+    /// <summary>
+    /// Holds the simulation to every uber message the reference recorded, and
+    /// to no others.
+    /// </summary>
+    /// <remarks>
+    /// <b>Both directions, and the missing one is again the one worth
+    /// having.</b> A port that never charged an uber would sail through every
+    /// other comparison in this file: the charge byte would simply stay low,
+    /// and low is a legal value. Only the absent message says so.
+    /// <para>
+    /// Matched as a multiset rather than keyed, because unlike a death an uber
+    /// is not unique by slot — a medic can in principle fill and pop on the same
+    /// tick, and the two messages then differ only in their type. Each recorded
+    /// message consumes one produced message, so a duplicate on either side is
+    /// reported.
+    /// </para>
+    /// </remarks>
+    private void ReconcileUbers(int tickIndex, TraceTick next, List<Mismatch> mismatches)
+    {
+        if ((Compare & Fields.Ubers) == 0)
+            return;
+
+        // Copied because entries are struck off as they are matched, and the
+        // simulation owns the list it handed us.
+        var unmatched = new List<UberRecord>(simulation.UbersLastTick);
+
+        foreach (var message in next.Events)
+        {
+            if (!TryReadUber(message, out var expected))
+                continue;
+
+            if (unmatched.Remove(expected))
+                continue;
+
+            mismatches.Add(new Mismatch
+            {
+                Tick = tickIndex,
+                Slot = expected.Slot,
+                Field = expected.Event == UberEvent.Charged ? "ubercharged" : "uber",
+                Expected = 1,
+                Actual = 0,
+            });
+        }
+
+        foreach (var got in unmatched)
+        {
+            mismatches.Add(new Mismatch
+            {
+                Tick = tickIndex,
+                Slot = got.Slot,
+                Field = got.Event == UberEvent.Charged ? "ubercharged" : "uber",
+                Expected = 0,
+                Actual = 1,
+            });
+        }
+    }
+
+    /// <summary>
+    /// Holds the simulation to every intel message the reference recorded, and
+    /// to no others.
+    /// </summary>
+    /// <remarks>
+    /// A multiset like <see cref="ReconcileUbers"/> rather than a keyed lookup
+    /// like <see cref="ReconcileDeaths"/>: a slot is not unique here — an
+    /// ubered carrier can drop and re-grab the same flag on one tick — and a
+    /// <c>RETURN_INTEL</c> names a team rather than a player, so there is no
+    /// roster index to key on at all.
+    /// <para>
+    /// <b>The missing direction is again the one worth having.</b> A port that
+    /// never picked the flag up would pass every other comparison in this file
+    /// without a murmur: the carrier's <c>intel</c> byte is <c>FULL_UPDATE</c>
+    /// only, the briefcase is not in an <c>INPUTSTATE</c> or a
+    /// <c>QUICK_UPDATE</c> either, and carrying one changes no trajectory except
+    /// through the intel gates. Only the absent message says so.
+    /// </para>
+    /// </remarks>
+    private void ReconcileIntel(int tickIndex, TraceTick next, List<Mismatch> mismatches)
+    {
+        if ((Compare & Fields.Intel) == 0)
+            return;
+
+        var unmatched = new List<IntelRecord>(simulation.IntelLastTick);
+
+        foreach (var message in next.Events)
+        {
+            if (!TryReadIntel(message, out var expected))
+                continue;
+
+            if (unmatched.Remove(expected))
+                continue;
+
+            mismatches.Add(new Mismatch
+            {
+                Tick = tickIndex,
+                Slot = expected.Id,
+                Field = NameOf(expected.Event),
+                Expected = 1,
+                Actual = 0,
+            });
+        }
+
+        foreach (var got in unmatched)
+        {
+            mismatches.Add(new Mismatch
+            {
+                Tick = tickIndex,
+                Slot = got.Id,
+                Field = NameOf(got.Event),
+                Expected = 0,
+                Actual = 1,
+            });
+        }
+    }
+
+    private static string NameOf(IntelEvent which) => which switch
+    {
+        IntelEvent.Grabbed => "grabintel",
+        IntelEvent.Dropped => "dropintel",
+        IntelEvent.Scored => "scoreintel",
+        _ => "returnintel",
+    };
+
+    /// <summary>
+    /// One intel message body: a single byte, which is a roster index for three
+    /// of the four and a team for <c>RETURN_INTEL</c>.
+    /// </summary>
+    private static bool TryReadIntel(ServerMessage message, out IntelRecord intel)
+    {
+        if (message.Payload.Length >= 1)
+        {
+            switch (message.Type)
+            {
+                case MessageType.GrabIntel:
+                    intel = new IntelRecord(message.Payload[0], IntelEvent.Grabbed);
+                    return true;
+
+                case MessageType.DropIntel:
+                    intel = new IntelRecord(message.Payload[0], IntelEvent.Dropped);
+                    return true;
+
+                case MessageType.ScoreIntel:
+                    intel = new IntelRecord(message.Payload[0], IntelEvent.Scored);
+                    return true;
+
+                case MessageType.ReturnIntel:
+                    intel = new IntelRecord(message.Payload[0], IntelEvent.Returned);
+                    return true;
+            }
+        }
+
+        intel = default;
+        return false;
+    }
+
+    /// <summary>
+    /// One <c>UBER_CHARGED</c> or <c>UBER</c> body: a single player byte,
+    /// <c>sendEventUberReady.gml</c> and <c>sendEventUber.gml</c>.
+    /// </summary>
+    private static bool TryReadUber(ServerMessage message, out UberRecord uber)
+    {
+        if (message.Payload.Length >= 1)
+        {
+            switch (message.Type)
+            {
+                case MessageType.UberCharged:
+                    uber = new UberRecord(message.Payload[0], UberEvent.Charged);
+                    return true;
+
+                case MessageType.Uber:
+                    uber = new UberRecord(message.Payload[0], UberEvent.Started);
+                    return true;
+            }
+        }
+
+        uber = default;
+        return false;
+    }
+
+    /// <summary>
+    /// One <c>PLAYER_DEATH</c> body: <c>[victim, killer, assistant, cause]</c>,
+    /// <c>sendEventPlayerDeath.gml</c>.
+    /// </summary>
+    private static bool TryReadDeath(ServerMessage message, out DeathRecord death)
+    {
+        if (message.Type != MessageType.PlayerDeath || message.Payload.Length < 4)
+        {
+            death = default;
+            return false;
+        }
+
+        death = new DeathRecord(
+            message.Payload[0],
+            message.Payload[1],
+            message.Payload[2],
+            message.Payload[3]);
+
+        return true;
+    }
+
+    private static bool TryFindDeath(IReadOnlyList<DeathRecord> deaths, byte slot, out DeathRecord found)
+    {
+        for (var i = 0; i < deaths.Count; i++)
+        {
+            if (deaths[i].Slot != slot)
+                continue;
+
+            found = deaths[i];
+            return true;
+        }
+
+        found = default;
+        return false;
+    }
+
+    private static bool RecordsDeathOf(TraceTick tick, byte slot)
+    {
+        foreach (var message in tick.Events)
+        {
+            if (TryReadDeath(message, out var death) && death.Slot == slot)
+                return true;
+        }
+
+        return false;
     }
 
     /// <summary>Forces every slot's character to what the trace observed.</summary>

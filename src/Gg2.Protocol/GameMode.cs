@@ -49,9 +49,10 @@ public enum GameMode
 /// What a state update's shape depends on, beyond the roster.
 /// </summary>
 /// <remarks>
-/// All of it comes from the map, and none of it changes while a map is loaded —
-/// which is why a reader can be told once and then frame every update until the
-/// next <c>CHANGE_MAP</c>.
+/// All of it comes from the map, and all but one of them stays put while a map
+/// is loaded — which is why a reader can mostly be told once and then frame
+/// every update until the next <c>CHANGE_MAP</c>. The exception is
+/// <see cref="GeneratorCount"/>; see it.
 /// </remarks>
 public readonly record struct WorldShape
 {
@@ -69,4 +70,24 @@ public readonly record struct WorldShape
     /// reader has to be told.
     /// </summary>
     public required int MovingPlatformCount { get; init; }
+
+    /// <summary>
+    /// <c>Generator</c> instances still standing. Two on a generator map until
+    /// one is destroyed, and zero in every other mode.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The one field here that a map cannot settle for good.</b> The HUD
+    /// block reaches each generator through a <c>with</c>
+    /// (<c>GeneratorHUD.events/User Event 12.xml</c>), so a destroyed generator
+    /// shortens every later update by four bytes — a reader that keeps taking
+    /// two blocks loses the stream, exactly as one that framed
+    /// <c>ARENA_ENDROUND</c> as bodyless did.
+    /// <para>
+    /// A consumer therefore has to decrement it on every
+    /// <c>GENERATOR_DESTROY</c> it sees, which the client does implicitly by
+    /// destroying its own instance. It is not <c>required</c> so that the seven
+    /// modes without generators need not mention it.
+    /// </para>
+    /// </remarks>
+    public int GeneratorCount { get; init; }
 }

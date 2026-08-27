@@ -73,6 +73,21 @@ public readonly record struct SentryBlock
     /// <summary>Present only on a <c>FULL_UPDATE</c>.</summary>
     public bool HasPlacement { get; init; }
 
+    /// <summary>
+    /// Whether <see cref="BuiltAndHp"/> was on the wire at all.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>An <c>INPUTSTATE</c>-tier update carries no sentry bytes
+    /// whatsoever</b> — not the placement, and not even the hp.
+    /// <c>Sentry.events/User Event 12.xml</c> guards each group of writes on
+    /// the update tier and between them they cover only <c>FULL_UPDATE</c> and
+    /// <c>QUICK_UPDATE</c>, so on an <c>INPUTSTATE</c> the player's block ends
+    /// at its <c>subobjects</c> byte with bit 1 still set. False here means
+    /// <see cref="BuiltAndHp"/>, <see cref="Built"/> and <see cref="Hp"/> are
+    /// defaults rather than observations.
+    /// </remarks>
+    public bool HasHp { get; init; }
+
     public sbyte StartDirection { get; init; }
 
     /// <summary><c>round(x * 5)</c>.</summary>
@@ -83,7 +98,7 @@ public readonly record struct SentryBlock
     /// <summary>
     /// Bit 7 is "built"; the low seven bits are <c>min(127, hp)</c>. The two
     /// share a byte, which is also how a reader knows whether the trailing
-    /// <c>vspeed</c> byte is there.
+    /// <c>vspeed</c> byte is there. Meaningful only when <see cref="HasHp"/>.
     /// </summary>
     public required byte BuiltAndHp { get; init; }
 
@@ -190,6 +205,28 @@ public readonly record struct IntelBlock(ushort X, ushort Y, short RecoverTimer)
 public readonly record struct ControlPointBlock(sbyte Team, sbyte CappingTeam, ushort Capping);
 
 /// <summary>
+/// One line of an <c>ARENA_ENDROUND</c>'s MVP list.
+/// </summary>
+/// <remarks>
+/// <c>serverArenaEndRound.gml:43-46</c>: the roster index, then three of that
+/// player's <b>round</b> statistics. Up to three a side, best first.
+/// </remarks>
+public readonly record struct ArenaMvp(byte PlayerId, byte Kills, ushort Healing, byte Points);
+
+/// <summary>
+/// A generator. <c>Generator.events/User Event 12.xml</c>: <c>ceil(hp)</c> then
+/// <c>ceil(shieldHp)</c>.
+/// </summary>
+/// <remarks>
+/// ⚠️ <b>There is one of these per <em>surviving</em> generator, not one per
+/// team.</b> The HUD block writes them with
+/// <c>with GeneratorBlue event_user(12)</c>, which visits however many
+/// instances exist — so a destroyed generator makes the message four bytes
+/// shorter, and a reader that always takes two loses the stream.
+/// </remarks>
+public readonly record struct GeneratorBlock(ushort Hp, ushort ShieldHp);
+
+/// <summary>
 /// A decoded state update.
 /// </summary>
 /// <remarks>
@@ -261,6 +298,14 @@ public sealed class StateUpdate
 /// </remarks>
 public readonly record struct WeaponBlock
 {
+    /// <summary>
+    /// Needed only because <see cref="Mines"/> has an initializer: C# requires
+    /// a struct with one to declare a constructor explicitly.
+    /// </summary>
+    public WeaponBlock()
+    {
+    }
+
     /// <summary>Which of the three shapes this is.</summary>
     public required PlayerClass Class { get; init; }
 
@@ -275,4 +320,14 @@ public readonly record struct WeaponBlock
 
     /// <summary>A demoman's <c>lobbed</c>, and so how many mine blocks follow.</summary>
     public byte MinesLobbed { get; init; }
+
+    /// <summary>
+    /// The mines themselves, in instance order.
+    /// </summary>
+    /// <remarks>
+    /// Its length must equal <see cref="MinesLobbed"/> — the count is a promise
+    /// of exactly that many seven-byte records and a client reads them
+    /// positionally. Empty for every class but a demoman.
+    /// </remarks>
+    public MineBlock[] Mines { get; init; } = [];
 }

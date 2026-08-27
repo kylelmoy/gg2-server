@@ -222,22 +222,39 @@ public sealed class WorldStateTests
 
     /// <summary>
     /// A reference to the player who actually left becomes nobody. Following the
-    /// compaction instead would hand their rocket — and the kill it is about to
+    /// compaction instead would hand their claim — and the kill it is about to
     /// get — to whoever slid into their index.
     /// </summary>
+    /// <remarks>
+    /// ⚠️ The <em>owner</em> of a projectile used to be this test's second half,
+    /// and it was asserting the port's bug: a departing player's shot cannot be
+    /// left ownerless because it no longer exists — <c>Player.events/Destroy.xml</c>
+    /// destroys it. See <see cref="RemoveSlotTests"/>. The rule itself is still
+    /// live, on every other stored index a projectile carries; a mine reflected
+    /// by the departing pyro and owned by somebody else is the reachable case,
+    /// because a reflector outlives the projectile's owner and the reference has
+    /// no sweep for it.
+    /// </remarks>
     [Fact]
     public void AReferenceToTheDepartingSlotBecomesNobody()
     {
         var state = default(WorldState);
         state.Alive[0] = true;
         state.Characters[0].LastDamageDealer = 2;
-        var handle = state.SpawnProjectile(Shot(2));
+
+        var mine = Shot(4);
+        mine.Kind = ProjectileKind.Mine;
+        mine.Reflector = 2;
+        var handle = state.SpawnProjectile(mine);
 
         state.RemoveSlot(2);
 
         Assert.Equal(CharacterState.Nobody, state.Characters[0].LastDamageDealer);
         Assert.True(state.TryGetProjectile(handle, out var projectile));
-        Assert.Equal(ProjectileState.NoOwner, projectile.OwnerSlot);
+        Assert.Equal(CharacterState.Nobody, projectile.Reflector);
+
+        // And the owner still followed the compaction, since 4 was above 2.
+        Assert.Equal(3, projectile.OwnerSlot);
     }
 
     [Fact]
@@ -294,11 +311,43 @@ public sealed class WorldStateTests
         var size = System.Runtime.CompilerServices.Unsafe.SizeOf<WorldState>();
 
         // 53,896 bytes at the end of phase 5 stage 2; 67,208 after stage 3 grew
-        // a projectile by the fields a Shot needs. The ceiling is a budget
-        // rather than a measurement, so it does not move with each addition —
-        // but a change that doubled the state would trip it, which is the
-        // point.
-        Assert.True(size < 96 * 1024, $"WorldState is {size} bytes");
+        // a projectile by the fields a Shot needs; 99,976 after stage 5 gave one
+        // a rocket's leash, knockback, fade and pass-through set; 132,016 after
+        // phase 6's scoreboard; 143,304 after Quote's Blade, which cost a
+        // projectile its `ammoDrained` and its `bubbled` flag and a weapon four
+        // small fields. ⚠️ That last 11 KB is what overflowed the stack in
+        // ScoringTests — a struct this size is not free to pass by value, and
+        // the budget below is not the only thing its growth can break.
+        // The ceiling is a budget rather than a
+        // measurement, so it does not move with each addition — but a change
+        // that doubled the state would trip it, which is the point.
+        //
+        // It moved from 96 KB to 128 KB deliberately, and the rocket's fields
+        // were audited first rather than after: blastRadius and explosionDamage
+        // came back out as per-kind lookups (Explosions), and image_alpha became
+        // a four-byte tick count, because nothing writes any of the three to a
+        // per-instance value. What is left — knockback, the leash anchor, the
+        // travel budget, three alarms and the passed-through set — the reference
+        // genuinely mutates per rocket.
+        //
+        // It moved again, 128 KB to 160 KB, for the scoreboard, and that one was
+        // audited the same way. Two StatBuffers per player is 13,312 bytes — a
+        // tenth of the state — and every part of it is load-bearing:
+        //
+        //  * Both arrays are real. Every award in the reference writes stats[]
+        //    and roundStats[] together, and ARENA_ENDROUND reads the second.
+        //  * Doubles, not integers: an assist is worth half a point and healing
+        //    accumulates fractional hit points.
+        //  * Thirteen entries and not eleven. DOMINATIONS and REVENGE are
+        //    vestigial in the reference too, and the 2,048 bytes they cost buys
+        //    away an index mapping between StatIndex and the buffer — which is
+        //    the same class of silent off-by-one as a roster index, and this
+        //    file exists to keep those out.
+        //
+        // Four fifths of the state is still the 512-slot projectile pool, so the
+        // next real lever is that number, and shrinking it is a behaviour
+        // change: see WorldState.MaxProjectiles.
+        Assert.True(size < 160 * 1024, $"WorldState is {size} bytes");
     }
 
     private static byte[] Owners(in WorldState state)

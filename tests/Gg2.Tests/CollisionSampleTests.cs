@@ -256,14 +256,12 @@ public sealed class CollisionSampleTests
     /// Scales in the shipped maps include 0.3, 0.8, 1.7, 2, 3, 7.3 and 13, so
     /// the rounding is genuinely exercised.
     /// <para>
-    /// <b>Bullet walls are held out, because the fixture does not contain
-    /// them.</b> <c>tools/sample-collision.js</c> enumerates the objects
-    /// <c>charSetSolids</c> names, and <c>BulletWall</c> is in
-    /// <c>gunSetSolids</c> instead — so the oracle has nothing to say about it.
-    /// The sampler now lists it and a regeneration will pick it up; until then
-    /// this compares the character-solid rectangles it does cover, and holding
-    /// them out is what keeps the count assertion meaningful rather than
-    /// loosened.
+    /// <b>Bullet walls are in it now.</b> They used to be held out: the sampler
+    /// enumerated only the objects <c>charSetSolids</c> names, and
+    /// <c>BulletWall</c> is in <c>gunSetSolids</c> instead, so the oracle had
+    /// nothing to say about it. Regenerated 2026-08-25 against the running game
+    /// with <c>BulletWall</c> listed and <c>arena_lumberyard</c> added, so the
+    /// comparison is now over every rectangle the port builds.
     /// </para>
     /// </remarks>
     [Theory]
@@ -273,17 +271,24 @@ public sealed class CollisionSampleTests
         var sample = SampleFor(name);
         var world = new CollisionWorld(LevelMap.FromPng(name, ReferenceTree.ReadMap(name)));
 
-        var characterSolids = world.Rects.Where(r => r.Kind != SolidKind.BulletWall).ToArray();
+        var rects = world.Rects.ToArray();
 
         Assert.NotEmpty(sample.Rects);
-        Assert.Equal(sample.Rects.Length, characterSolids.Length);
+        Assert.Equal(sample.Rects.Length, rects.Length);
+
+        // The oracle really does cover bullet walls now, so assert that rather
+        // than trusting it: gg_debug and arena_lumberyard both place them, and a
+        // regeneration that quietly dropped the enumeration again would
+        // otherwise leave this test passing over a smaller world.
+        if (name is "gg_debug" or "arena_lumberyard")
+            Assert.Contains(sample.Rects, r => r.Object.StartsWith("BulletWall", StringComparison.Ordinal));
 
         // Both sides are in level-data / instance-creation order, so they pair
         // up positionally — but match on position anyway, so a reordering shows
         // up as a missing rectangle rather than a silent mismatch.
         foreach (var expected in sample.Rects)
         {
-            var matches = characterSolids
+            var matches = rects
                 .Where(r => r.Left == expected.Left && r.Top == expected.Top)
                 .ToArray();
 
@@ -302,12 +307,12 @@ public sealed class CollisionSampleTests
     [Fact]
     public void TeamGateSolidityFollowsTheAskingCharacter()
     {
-        var gate = new SolidRect
-        {
-            Left = 0, Right = 5, Top = 0, Bottom = 59,
-            Kind = SolidKind.TeamGate,
-            Team = Gg2.Protocol.Team.Red,
-        };
+        // Built through FromEntity rather than by hand: a SolidRect now carries
+        // the instance a hitscan needs (position, scale, sprite extent) as well
+        // as the box a place_free needs, and those are `required` precisely so
+        // that a construction site cannot leave a zero scale for
+        // LineCollider.ForSolidRect to divide by.
+        var gate = SolidRect.FromEntity(0, 0, 1, 1, 6, 60, SolidKind.TeamGate, Gg2.Protocol.Team.Red);
 
         // solid = (team != other.team or other.intel)
         Assert.False(gate.IsSolidTo(Filter(Gg2.Protocol.Team.Red, intel: false)));
@@ -334,10 +339,8 @@ public sealed class CollisionSampleTests
         var bullet = CollisionFilter.ForBullet();
         var red = Filter(Gg2.Protocol.Team.Red, intel: false);
 
-        SolidRect Rect(SolidKind kind, Gg2.Protocol.Team team = Gg2.Protocol.Team.Spectator) => new()
-        {
-            Left = 0, Right = 5, Top = 0, Bottom = 59, Kind = kind, Team = team,
-        };
+        SolidRect Rect(SolidKind kind, Gg2.Protocol.Team team = Gg2.Protocol.Team.Spectator) =>
+            SolidRect.FromEntity(0, 0, 1, 1, 6, 60, kind, team);
 
         // charSetSolids sets PlayerWall; gunSetSolids never mentions it.
         Assert.True(Rect(SolidKind.PlayerWall).IsSolidTo(red));
@@ -373,12 +376,7 @@ public sealed class CollisionSampleTests
     [Fact]
     public void IntelGateSolidityFollowsTheAskingCharacter()
     {
-        var red = new SolidRect
-        {
-            Left = 0, Right = 5, Top = 0, Bottom = 59,
-            Kind = SolidKind.IntelGate,
-            Team = Gg2.Protocol.Team.Red,
-        };
+        var red = SolidRect.FromEntity(0, 0, 1, 1, 6, 60, SolidKind.IntelGate, Gg2.Protocol.Team.Red);
 
         // solid = (team != other.team and other.intel)
         Assert.False(red.IsSolidTo(Filter(Gg2.Protocol.Team.Red, intel: false)));

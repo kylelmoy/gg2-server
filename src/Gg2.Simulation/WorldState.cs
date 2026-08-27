@@ -22,6 +22,20 @@ public struct SlotBuffer<T>
 }
 
 /// <summary>
+/// A fixed-capacity inline buffer, one entry per control point.
+/// </summary>
+/// <remarks>
+/// Inline for the same reason <see cref="SlotBuffer{T}"/> is. Five is the most
+/// any shipped map places (<c>controlPoint1</c> to <c>controlPoint5</c>); eight
+/// leaves room without making a clone measurably bigger.
+/// </remarks>
+[InlineArray(WorldState.MaxControlPoints)]
+public struct ControlPointBuffer<T>
+{
+    private T _element0;
+}
+
+/// <summary>
 /// A fixed-capacity inline buffer, one entry per projectile pool slot.
 /// </summary>
 /// <remarks>
@@ -112,6 +126,59 @@ public struct WorldState
     public SlotBuffer<bool> Alive;
 
     /// <summary>
+    /// The player behind each slot — the state that survives its character.
+    /// Only meaningful where <see cref="HasPlayer"/> is set.
+    /// </summary>
+    /// <remarks>
+    /// Phase 6: team, class and the respawn timer live here rather than at the
+    /// server seam, so the simulation can respawn a character and guard a
+    /// sentry on its owner's class without asking the roster.
+    /// </remarks>
+    public SlotBuffer<PlayerState> Players;
+
+    /// <summary>Whether a slot holds a connected player. Slot 0 always does on a live server.</summary>
+    public SlotBuffer<bool> HasPlayer;
+
+    /// <summary>
+    /// <c>player.dominationKills</c> for every player at once:
+    /// <c>[killer][victim]</c> is how many times that killer has killed that
+    /// victim without dying to them since.
+    /// </summary>
+    /// <remarks>
+    /// A square matrix rather than a map per player, because the state has to
+    /// stay a value type — the reference's <c>ds_map</c> is a handle and an
+    /// absent key reads as zero, which a zeroed row gives for free.
+    /// <para>
+    /// ⚠️ <b>Both axes are roster indices, so <see cref="RemoveSlot"/> has to
+    /// renumber both.</b> It is the only two-dimensional thing in the state and
+    /// therefore the only one where the usual one-dimensional renumbering is not
+    /// enough.
+    /// </para>
+    /// <para>
+    /// 4 KB of the clone. See <see cref="Dominations"/> for why it is simulation
+    /// rather than a scoreboard detail.
+    /// </para>
+    /// </remarks>
+    public SlotBuffer<SlotBuffer<byte>> DominationKills;
+
+    /// <summary>
+    /// <c>global.Server_Respawntime</c>, in ticks — what a death arms
+    /// <see cref="PlayerState.RespawnTimer"/> to.
+    /// </summary>
+    /// <remarks>
+    /// Match configuration rather than tick state, but it lives in the state
+    /// for the same reason the RNG does: <c>Tick</c> stays a pure function of
+    /// its arguments. <b>0 disables death-armed respawn entirely</b> — the
+    /// default, and what the parity replayer needs: a recording carries the
+    /// reference's own <c>PLAYER_SPAWN</c>s (with the reference's random spawn
+    /// point picks inside them), so a replay injects those and must not race
+    /// them with picks of its own. <c>game_init.gml</c> floors the reference's
+    /// value at one tick, so 0 is unreachable there and free to mean "off"
+    /// here.
+    /// </remarks>
+    public int RespawnTime;
+
+    /// <summary>
     /// Each slot's weapon. Only meaningful where <see cref="Alive"/> is set.
     /// </summary>
     /// <remarks>
@@ -172,6 +239,377 @@ public struct WorldState
     /// <summary>How many projectiles are in the air.</summary>
     public int LiveProjectileCount;
 
+    // --- the objective -------------------------------------------------------
+
+    /// <summary>
+    /// The red team's briefcase, and its base. Inert on a map with no intel.
+    /// </summary>
+    /// <remarks>
+    /// Placed by <see cref="Intel.Place"/> when the map loads. Two of these
+    /// rather than a two-entry buffer because <see cref="Team"/> has four
+    /// members and only two of them can own one; <see cref="IntelOf"/> is the
+    /// indexed view where a caller has a team in hand.
+    /// </remarks>
+    public IntelState RedIntel;
+
+    /// <inheritdoc cref="RedIntel"/>
+    public IntelState BlueIntel;
+
+    /// <summary>
+    /// <c>global.redCaps</c>: how many times blue's briefcase has reached red's
+    /// base.
+    /// </summary>
+    /// <remarks>
+    /// An <c>int</c> rather than the wire's <c>ubyte</c> because the reference
+    /// counts in a real and <c>write_ubyte</c> clamps on the way out; the round
+    /// ends at <c>global.capLimit</c> long before 255 anyway, once the round
+    /// ending is simulated at all.
+    /// </remarks>
+    public int RedCaps;
+
+    /// <inheritdoc cref="RedCaps"/>
+    public int BlueCaps;
+
+    /// <summary>
+    /// The red team's generator. Inert on a map with none.
+    /// </summary>
+    /// <remarks>
+    /// Placed by <see cref="Generators.Place"/> when the map loads, and two
+    /// fields rather than a buffer for the reason the briefcases are: only two
+    /// of <see cref="Team"/>'s four members can own one.
+    /// <see cref="Generators.Of"/> is the indexed view.
+    /// </remarks>
+    public GeneratorState RedGenerator;
+
+    /// <inheritdoc cref="RedGenerator"/>
+    public GeneratorState BlueGenerator;
+
+    /// <summary>Control points this state has room for. Five is the most a map places.</summary>
+    public const int MaxControlPoints = 8;
+
+    // --- the round -----------------------------------------------------------
+
+    /// <summary>
+    /// Which gamemode's rules the round runs under, from the map.
+    /// </summary>
+    /// <remarks>
+    /// Decided by <c>Gg2.Maps.GameModes.Of</c> at load and constant while a map
+    /// is loaded. A zeroed state says <see cref="GameMode.CaptureTheFlag"/>,
+    /// which is harmless only because <see cref="CapLimit"/> and
+    /// <see cref="TimeLimitMinutes"/> both default to "off"; see them.
+    /// </remarks>
+    public GameMode GameMode;
+
+    /// <summary>
+    /// <c>global.timeLimitMins</c>. On the wire in six of the eight modes'
+    /// HUD blocks, and what <see cref="RoundTimer"/> was started from.
+    /// </summary>
+    /// <remarks>
+    /// <b>0 means there is no time limit</b>, the same escape
+    /// <see cref="RespawnTime"/> uses and for the same reason:
+    /// <c>game_init.gml:96</c> is
+    /// <c>max(1, min(255, ini_read_real(...)))</c>, so 0 is unreachable in the
+    /// reference and free to mean "off" here. It is the default because a
+    /// zeroed <see cref="RoundTimer"/> would otherwise read as a round that
+    /// ended before it started — which is what a parity replay, a unit test and
+    /// a bot rollout would all get.
+    /// </remarks>
+    public int TimeLimitMinutes;
+
+    /// <summary>
+    /// <c>CTFHUD.timer</c>: ticks left in the round. Counts down to 0 and stops.
+    /// </summary>
+    public int RoundTimer;
+
+    /// <summary>
+    /// <c>global.caplimit</c>: captures that end the round.
+    /// </summary>
+    /// <remarks>
+    /// <b>0 means there is no cap limit</b> — see <see cref="TimeLimitMinutes"/>,
+    /// which is floored the same way (<c>game_init.gml:101</c>).
+    /// </remarks>
+    public int CapLimit;
+
+    /// <summary>
+    /// Whether the round has been decided. False until it is.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>A flag rather than a sentinel in <see cref="Winner"/>, on
+    /// purpose.</b> The reference spells "nobody has won" as
+    /// <c>global.winners = -1</c>, and <see cref="Team"/> has no -1 —
+    /// <c>Team.Red</c> is <b>0</b>, so a zeroed state with a plain
+    /// <c>Winner</c> field would say red had already won the match. The
+    /// slot-0 trap in its fourth costume. <c>GameServer</c> reconstitutes the
+    /// -1 on the way to the wire.
+    /// </remarks>
+    public bool RoundDecided;
+
+    /// <summary>
+    /// <c>global.killLimit</c>: kills that end a Team Deathmatch round.
+    /// </summary>
+    /// <remarks>
+    /// <b>0 means there is no kill limit</b> — the same escape
+    /// <see cref="CapLimit"/> and <see cref="TimeLimitMinutes"/> use, and for
+    /// the same reason: <c>game_init.gml:103</c> is
+    /// <c>max(1, min(65535, ...))</c>, so 0 is unreachable in the reference.
+    /// <para>
+    /// ⚠️ <b>The kills themselves are counted in <see cref="RedCaps"/> and
+    /// <see cref="BlueCaps"/></b>, not in a field of their own. Team Deathmatch
+    /// reuses the capture counters — <c>doEventPlayerDeath.gml:313</c> — which
+    /// is why it needs no per-player statistics to decide a round, and why its
+    /// HUD draws them where CTF draws captures.
+    /// </para>
+    /// </remarks>
+    public int KillLimit;
+
+    /// <summary>
+    /// <c>global.tdmInvulnerabilityTicks</c>: what a Team Deathmatch spawn seeds
+    /// <see cref="CharacterState.DeathmatchInvulnerable"/> to.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>A fifth of the ticks it buys</b> —
+    /// <c>seconds * 30 * 0.2</c>, spent at 0.2 a tick. See
+    /// <see cref="CharacterState.DeathmatchInvulnerable"/>.
+    /// <para>
+    /// In the state rather than at the server seam because the spawn reads it,
+    /// and a spawn is <see cref="MatchSimulation.Tick"/>'s business. It also
+    /// reaches the wire, on a <c>FULL_UPDATE</c> only, so that a client can draw
+    /// the shrinking bubble.
+    /// </para>
+    /// </remarks>
+    public int TdmInvulnerabilityTicks;
+
+    /// <summary>
+    /// <c>global.autobalance</c>: whether the server moves players across when
+    /// the teams are two apart.
+    /// </summary>
+    /// <remarks>
+    /// <b>Off by default here and on in the reference</b>, which is the same
+    /// choice <see cref="RespawnTime"/> makes and for the same reason: a unit
+    /// test, a parity replay and a bot rollout must not have players moved
+    /// between teams behind their backs. <c>GameServer</c> turns it on from the
+    /// ini, where <c>game_init.gml:105</c> defaults it to 1.
+    /// </remarks>
+    public bool Autobalance;
+
+    /// <summary>
+    /// <c>GameServer.serverbalance</c>: a balance notice is outstanding and the
+    /// fuse is burning.
+    /// </summary>
+    /// <remarks>
+    /// A bool rather than the reference's 0/1 real, which never holds any other
+    /// value. See <see cref="TeamBalance"/>.
+    /// </remarks>
+    public bool BalanceNoticeGiven;
+
+    /// <summary>
+    /// <c>GameServer.balancecounter</c>: ticks since the notice went out.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ Counted every tick while <see cref="BalanceNoticeGiven"/>, but only
+    /// <em>read</em> when something calls <see cref="TeamBalance.Check"/> — a
+    /// death, a departure or a team change.
+    /// </remarks>
+    public int BalanceCounter;
+
+    /// <summary>
+    /// <c>global.classlimits</c>: how many of each class one team may field.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>A zeroed state means every class is full</b>, which would send
+    /// every team change through <c>checkClasslimits</c>' random pick. The
+    /// reference's default is 255 and <c>GameServer</c> sets it; a test that
+    /// builds a world by hand and cares about classes has to as well. See
+    /// <see cref="Classlimits.Pick"/>, which is a no-op at 255.
+    /// </remarks>
+    public ClassLimitBuffer ClassLimits;
+
+    /// <summary>
+    /// Who won, where <see cref="RoundDecided"/>. <see cref="Team.Spectator"/>
+    /// is the reference's spelling of a draw and goes out as a 2.
+    /// </summary>
+    public Team Winner;
+
+    /// <summary>
+    /// <c>CTFHUD.overtime</c>: the clock is out and the round is still open,
+    /// because a briefcase is away from its base in a drawn match.
+    /// </summary>
+    /// <remarks>
+    /// Display-only in the reference — <c>CTFHUD.events/Draw.xml</c> is the one
+    /// reader and it is not serialised. Carried because it is a fact about the
+    /// round the simulation already knows, and a bot has as much right to it as
+    /// a player looking at the screen.
+    /// </remarks>
+    public bool Overtime;
+
+    /// <summary>
+    /// <c>global.mapchanging</c>: the round is over and the win is on screen.
+    /// </summary>
+    /// <remarks>
+    /// Ten seconds during which every gate opens, nobody may hold a briefcase,
+    /// everybody has full ammo and nobody respawns. See
+    /// <see cref="Rounds.BeginMapChange"/> for the whole list and where each
+    /// clause lives.
+    /// </remarks>
+    public bool MapChanging;
+
+    // --- control points ------------------------------------------------------
+
+    /// <summary>
+    /// The map's control points, in the order the HUD block serialises them.
+    /// Only the first <see cref="ControlPointCount"/> are real.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ A zeroed entry is owned by red and being captured by red — see
+    /// <see cref="ControlPoints.Neutral"/>, which is the factory.
+    /// </remarks>
+    public ControlPointBuffer<ControlPointState> ControlPoints;
+
+    /// <summary>How many of <see cref="ControlPoints"/> the map placed.</summary>
+    public int ControlPointCount;
+
+    /// <summary>
+    /// Whether this is the attack/defend arrangement of the control-point mode
+    /// rather than the symmetrical one.
+    /// </summary>
+    /// <remarks>
+    /// <c>ControlPointHUD.events/Create.xml</c> decides it from the map:
+    /// <c>if instance_exists(ControlPointSetupGate)</c>. One mode enum covers
+    /// both because the wire block is the same shape; almost everything else
+    /// about them differs — who starts owning what, how long each point takes,
+    /// and who wins.
+    /// </remarks>
+    public bool AttackDefend;
+
+    /// <summary>
+    /// <c>global.setupTimer</c>: ticks of setup left before the gates open.
+    /// </summary>
+    /// <remarks>
+    /// 1,800 in Invasion and 900 in attack/defend, zero everywhere else. While
+    /// it is above zero <c>areSetupGatesClosed()</c> is true and every
+    /// <c>ControlPointSetupGate</c> on the map is solid — to characters and
+    /// bullets alike, the one solidity rule both lists agree on.
+    /// <para>
+    /// ⚠️ At <b>30</b>, not 0, the round clock is reset to the full time limit:
+    /// the match proper starts a second before the gates actually open.
+    /// </para>
+    /// </remarks>
+    public int SetupTimer;
+
+    // --- arena ---------------------------------------------------------------
+
+    /// <summary>Which phase of an Arena map the match is in.</summary>
+    /// <remarks>
+    /// A zeroed state says <see cref="ArenaState.Waiting"/>, which is the
+    /// reference's own starting value — the one enum in this file whose default
+    /// happens to be right.
+    /// </remarks>
+    public ArenaState ArenaState;
+
+    /// <summary>Rounds each team has won on this map.</summary>
+    public int ArenaRedWins;
+
+    /// <inheritdoc cref="ArenaRedWins"/>
+    public int ArenaBlueWins;
+
+    /// <summary>
+    /// <c>endCount</c>: ticks of scoreboard left after a round.
+    /// </summary>
+    public int ArenaEndCount;
+
+    /// <summary>
+    /// <c>roundStart</c>: ticks of setup left before a round begins.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ On the wire it is <c>floor(roundStart/2)</c> in a single byte, so the
+    /// client sees it to the nearest two ticks. 300 fits in a byte; the halving
+    /// is the reference's and is not a rounding this port gets to choose.
+    /// </remarks>
+    public int ArenaRoundStart;
+
+    /// <summary>
+    /// <c>ArenaHUD.winners</c>: who won the <em>round</em>, not the map.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ Not <see cref="Winner"/>, which is <c>global.winners</c> and ends the
+    /// map. This one is <see cref="Team.Spectator"/> between rounds and is sent
+    /// as a signed byte — where the reference's -1 never appears, because it is
+    /// initialised to <c>TEAM_SPECTATOR</c> rather than to -1.
+    /// </remarks>
+    public Team ArenaWinner;
+
+    /// <summary>
+    /// The filter every projectile and hitscan collides with —
+    /// <c>gunSetSolids</c>'s list, with the two world flags that change it.
+    /// </summary>
+    /// <remarks>
+    /// One construction site rather than sixteen. Both flags are easy to forget
+    /// at a call site and each is silent when missed: a bullet would pass a
+    /// closed setup gate, or stop at a team gate the victory screen has opened.
+    /// </remarks>
+    public readonly CollisionFilter BulletFilter =>
+        CollisionFilter.ForBullet(SetupTimer > 0, MapChanging);
+
+    /// <summary>
+    /// <c>KothHUD.cpUnlock</c>: ticks of pregame before the point can be taken.
+    /// </summary>
+    /// <remarks>
+    /// 900 — thirty seconds — from <c>KothHUD.events/Create.xml</c>, counted
+    /// down every tick and, at zero, unlocking every point at once
+    /// (<c>doEventUnlockCP</c>). On the wire in the KotH and DKotH HUD blocks.
+    /// </remarks>
+    public int ControlPointUnlock;
+
+    /// <summary>
+    /// <c>KothHUD.redTimer</c>: ticks red must hold the hill for. Starts at
+    /// 5,400 — three minutes.
+    /// </summary>
+    public int RedTimer;
+
+    /// <inheritdoc cref="RedTimer"/>
+    public int BlueTimer;
+
+    /// <summary>
+    /// <c>GameServer.syncTimer = 1</c>: something the scoreboard shows has moved
+    /// far enough that clients are owed an extra <c>CAPS_UPDATE</c>.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Bandwidth, not correctness — and it is still on the wire.</b> The
+    /// reference asks for one when a point is captured, when a capture meter
+    /// crosses three quarters, a quarter or a tenth of the way
+    /// (<c>ControlPoint.events/Step.xml:217</c>), and five seconds before the
+    /// pregame lock comes off. A client that missed them all would still be
+    /// right, only laggier — but the extra messages are bytes a byte-diff sees,
+    /// so they are transcribed.
+    /// <para>
+    /// Cleared by the server when it sends the message. The intel's capture
+    /// reaches the same flag through <c>TickEvents.ScoredIntel</c>, because that
+    /// one is already an event.
+    /// </para>
+    /// </remarks>
+    public bool ScoreboardSyncRequested;
+
+    /// <summary>
+    /// Whether the pregame lock came off during the tick just run —
+    /// <c>UNLOCKCP</c>.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>In the state rather than in <see cref="TickEvents"/>, and that is
+    /// deliberate.</b> Every other broadcast the simulation produces is an
+    /// event; this one is a fact about the world that happens to be worth one
+    /// message, and a client that misses it recovers from the <c>cpUnlock</c> in
+    /// the next <c>CAPS_UPDATE</c> (<c>KothHUD.events/User Event 13.xml</c>
+    /// unlocks the point itself when it reads a zero). Cleared by the server
+    /// when it sends the message, and by a map change.
+    /// </remarks>
+    public bool UnlockedControlPointsThisTick;
+
+    // One team's briefcase, by team, is Intel.Of(ref state, team) — a static on
+    // Intel rather than a method here, because C# will not let a struct return
+    // one of its own fields by reference (CS8170) and copying an IntelState out
+    // and back at every call site is exactly the kind of silent aliasing bug
+    // this file exists to avoid.
+
     /// <summary>
     /// The match's own random stream — GM8's global one, as the host uses it.
     /// </summary>
@@ -202,6 +640,23 @@ public struct WorldState
     /// <summary>Whether the given slot currently has a character.</summary>
     public readonly bool IsAlive(int slot) => (uint)slot < MaxSlots && Alive[slot];
 
+    /// <summary>
+    /// A player joined: a fresh spectator scout with the respawn alarm at rest.
+    /// </summary>
+    /// <remarks>
+    /// Through <see cref="PlayerState.Fresh"/>, never a zeroed struct — a
+    /// defaulted player is a red scout ready to respawn, which is the slot-0
+    /// trap wearing yet another hat.
+    /// </remarks>
+    public void AddPlayer(int slot)
+    {
+        if ((uint)slot >= MaxSlots)
+            return;
+
+        Players[slot] = PlayerState.Fresh;
+        HasPlayer[slot] = true;
+    }
+
     /// <summary>Removes a slot's character: it died, left, or went spectator.</summary>
     /// <remarks>
     /// The character is cleared as well as flagged, so a stale body cannot leak
@@ -222,6 +677,72 @@ public struct WorldState
     {
         if ((uint)slot >= MaxSlots)
             return;
+
+        // Minegun.events/Destroy.xml: `with(Mine) if ownerPlayer ==
+        // other.ownerPlayer instance_destroy();`
+        //
+        // ⚠️ The one exception to "a projectile outlives its owner". A weapon is
+        // destroyed with its character, and the Minegun takes its mines with it
+        // — silently, without exploding them. A rocket already in the air does
+        // not care that its shooter died; a mine does. Before the fields are
+        // cleared, so the decrement above still finds the weapon.
+        for (var i = LiveProjectileCount - 1; i >= 0; i--)
+        {
+            var handle = LiveProjectileHandle(i);
+            ref var projectile = ref Projectiles[handle.Index];
+
+            // Blade.events/Destroy.xml does the same for both of Quote's, in
+            // two `with` blocks: `with (BladeB) if (ownerPlayer ==
+            // other.ownerPlayer) instance_destroy();` and the same for Bubble.
+            // So a Quote who dies, changes class or disconnects takes their
+            // whole screen of bubbles and the blade in flight with them —
+            // the Minegun's rule, applied to two more projectiles.
+            if (projectile.OwnerSlot != slot)
+                continue;
+
+            // Revolver.events/Destroy.xml is the same again for the knife:
+            // `with (StabMask) if (ownerPlayer == other.ownerPlayer)
+            // instance_destroy();`. Its StabAnim block needs nothing here —
+            // the freeze is a field on the character and is zeroed below.
+            if (projectile.Kind is ProjectileKind.Mine or ProjectileKind.Blade
+                or ProjectileKind.Bubble or ProjectileKind.Stab)
+            {
+                FreeProjectile(handle);
+            }
+        }
+
+        // Character.events/Destroy.xml: `if (intel) doEventDropIntel(player);`
+        //
+        // ⚠️ Every way a character stops existing drops the flag, and none of
+        // them broadcasts a DROP_INTEL. sendEventDropIntel's own comment says
+        // why: the drop would be a nested event inside the death, and the
+        // client would process the death first and then error out dropping a
+        // flag for a player it has already destroyed. Clients infer it from the
+        // PLAYER_DEATH — which is exactly why this belongs here, in the shared
+        // Destroy path, rather than in Deaths.Kill: a class or team change
+        // destroys a character too (PlayerCommands.BidFarewell), and so does a
+        // recorded PLAYER_CHANGETEAM in the parity harness.
+        //
+        // Before the fields are cleared, so the carrier's position and its
+        // charged intelRecharge are still readable.
+        //
+        // ⚠️ The `lastDamageSource in (KILL_BOX, FRAG_BOX, PITFALL)` arm
+        // below it — which sends the flag home instead of leaving it in the pit
+        // — is **not here**, and that is deliberate: it is *broadcast* where this
+        // drop is not, so it lives in Deaths.Kill, which has the events. Only a
+        // death can carry one of those three sources, because a box zeroes hit
+        // points the moment it is touched. See KillBoxes.
+        Intel.Drop(ref this, slot);
+
+        // Medigun.events/Destroy.xml: `if(instance_exists(healTarget)) if
+        // (healTarget.object != -1) healTarget.object.healer = -1;`
+        //
+        // The beam does not outlive the medic. Left set, the patient would keep
+        // naming a slot with no medic in it, and Deaths.Resolve would hand out
+        // an assist the reference does not — the same class of bug as a stale
+        // roster index, and just as quiet. Before the fields are cleared, so the
+        // heal target is still readable.
+        Healing.ReleasePatient(ref this, slot);
 
         Characters[slot] = default;
         Weapons[slot] = default;
@@ -258,6 +779,94 @@ public struct WorldState
         if ((uint)slot >= MaxSlots)
             return;
 
+        // Player.events/Destroy.xml, first line: `if(object != -1) with(object)
+        // instance_destroy();`
+        //
+        // ⚠️ **A departure destroys the character, and that is the *whole* of
+        // Character.events/Destroy.xml** — the weapon, the mines that die with
+        // the Minegun, Quote's blade and bubbles, the knife hitbox, the medic's
+        // beam and the intel drop. This path used to do the flag alone, on the
+        // reading that a departure is not a death; it is not a death, but it
+        // *is* a destruction, and the reference spells it with the same event.
+        //
+        // ⚠️ That line is invisible to every code-extracting grep of the
+        // reference. GM8 writes an event's code inside
+        // `<argument kind="STRING">`, and this one sits on the *same line* as
+        // the opening tag — so anything that filters out lines beginning with a
+        // tag eats it and hands back a Destroy event that starts at
+        // `ds_map_destroy(rewards)`. The same shape as the two drag-and-drop
+        // actions this project has already been caught by; read the raw XML.
+        //
+        // The `object != -1` guard is this port's Alive[]: a player who is dead
+        // or has never picked a team has no character to destroy, and no flag to
+        // drop either, since a carried briefcase lives on the character.
+        if (Alive[slot])
+            Clear(slot);
+
+        // Player.events/Destroy.xml:11-15, the player's own sweep:
+        //
+        //     with(Rocket)            if(ownerPlayer == other.id) instance_destroy();
+        //     with(BurningProjectile) if(ownerPlayer == other.id) instance_destroy();
+        //     with(Shot)              if(ownerPlayer == other.id) instance_destroy();
+        //     with(Needle)            if(ownerPlayer == other.id) instance_destroy();
+        //
+        // ⚠️ **A departure takes everything in the air with it, where a death
+        // takes almost nothing.** That is the sharpest difference between the
+        // two paths and it runs the opposite way from the intuition: a rocket
+        // outlives its shooter's death precisely so it can still credit the
+        // kill (`ownerPlayer` is a *player*, not a character) — and the moment
+        // that player is gone there is nothing left to credit, so it is
+        // destroyed rather than left ownerless. Without this a soldier could
+        // disconnect and still kill somebody a second later.
+        //
+        // Flame and Flare declare `<parent>BurningProjectile</parent>`, and a
+        // GM8 `with` walks an object's descendants, so one line covers both.
+        // Nothing else in the pool does: Needle has no parent and needs its own
+        // line, which is why the reference has four and not three.
+        //
+        // Mine, Blade, Bubble and Stab are deliberately absent here and absent
+        // from the reference's list for the same reason — they belong to the
+        // *weapon*, so the character's destruction above has already taken
+        // them. ⚠️ Adding them here is a **proved equivalent mutant**: the two
+        // sets are unreachably disjoint by the time this runs, because the only
+        // way to own one of those four is to have a weapon, and the only way to
+        // still have one after Clear is to have had no character — in which
+        // case the character that owned them was cleared earlier and took them
+        // then. Measured, not argued: the mutation that sweeps all nine kinds
+        // survives the whole suite. It is written the reference's way so that
+        // the two rules stay distinguishable.
+        for (var i = LiveProjectileCount - 1; i >= 0; i--)
+        {
+            var handle = LiveProjectileHandle(i);
+            ref readonly var projectile = ref Projectiles[handle.Index];
+
+            if (projectile.OwnerSlot != slot)
+                continue;
+
+            if (projectile.Kind is ProjectileKind.Rocket or ProjectileKind.Flame
+                or ProjectileKind.Flare or ProjectileKind.Shot or ProjectileKind.Needle)
+            {
+                FreeProjectile(handle);
+            }
+        }
+
+        // `with(Sentry) if(ownerPlayer == other.id) instance_destroy();` is the
+        // fifth line of that sweep and needs nothing of its own: a sentry is
+        // held in the departing player's own slot, and the compaction below
+        // overwrites it. Asserted rather than assumed — see RemoveSlotTests.
+        //
+        // `with(DeathCam)` and `with(ghost)` are the client's, and the rewards
+        // map and badge list are presentation.
+
+        // Player.events/Destroy.xml:8 is `clearPlayerDominations(id)`, and it
+        // is deliberately *not* transcribed here. ⚠️ It is load-bearing in the
+        // reference and redundant in the port, for the same reason: the
+        // reference's tables are keyed by player *instance* and survive the
+        // roster list compacting, so a departing player has to be deleted out of
+        // them by hand — whereas this matrix is keyed by slot on both axes, and
+        // the shift below overwrites every cell the clear would have zeroed.
+        // Proved by mutation: deleting the call changes nothing.
+
         for (var i = slot; i < MaxSlots - 1; i++)
         {
             Characters[i] = Characters[i + 1];
@@ -265,6 +874,13 @@ public struct WorldState
             Alive[i] = Alive[i + 1];
             Sentries[i] = Sentries[i + 1];
             HasSentry[i] = HasSentry[i + 1];
+            Players[i] = Players[i + 1];
+            HasPlayer[i] = HasPlayer[i + 1];
+
+            // The domination matrix's rows. Its columns are shifted below,
+            // because they have to be done for every row and not only the ones
+            // that moved.
+            DominationKills[i] = DominationKills[i + 1];
         }
 
         Characters[MaxSlots - 1] = default;
@@ -272,6 +888,23 @@ public struct WorldState
         Alive[MaxSlots - 1] = false;
         Sentries[MaxSlots - 1] = default;
         HasSentry[MaxSlots - 1] = false;
+
+        // A PlayerState holds no roster index, so shifting it is the whole of
+        // its renumbering.
+        Players[MaxSlots - 1] = default;
+        HasPlayer[MaxSlots - 1] = false;
+        DominationKills[MaxSlots - 1] = default;
+
+        // ⚠️ The domination table is indexed by roster slot on *both* axes, so
+        // it is the one thing in the state that needs shifting twice. The rows
+        // moved with the loop above; this moves the columns inside each of them.
+        for (var i = 0; i < MaxSlots; i++)
+        {
+            for (var j = slot; j < MaxSlots - 1; j++)
+                DominationKills[i][j] = DominationKills[i][j + 1];
+
+            DominationKills[i][MaxSlots - 1] = 0;
+        }
 
         RenumberReferences(slot);
     }
@@ -304,7 +937,40 @@ public struct WorldState
         {
             ref var projectile = ref Projectiles[ProjectileOrder[i]];
             projectile.OwnerSlot = Renumber(projectile.OwnerSlot, removed);
+            projectile.Reflector = Renumber(projectile.Reflector, removed);
+
+            // A rocket's set of already-passed team-mates names slots too, so it
+            // shifts with them. Leaving it alone would give a rocket a free pass
+            // through a stranger, or charge it 100 of its travel budget twice,
+            // seconds after an unrelated disconnect.
+            projectile.PlayersPassed = RenumberMask(projectile.PlayersPassed, removed);
+
+            // And a burning projectile's set of people it has already burnt, for
+            // the same reason: leaving it alone would let a flame burn a
+            // stranger twice, or refuse to burn them at all, seconds after an
+            // unrelated disconnect.
+            projectile.EnemiesHit = RenumberMask(projectile.EnemiesHit, removed);
         }
+    }
+
+    /// <summary>
+    /// A set of roster slots, held one bit each, after the slot below it left.
+    /// </summary>
+    /// <remarks>
+    /// The bit for the departing slot is dropped rather than following the
+    /// compaction, which is <see cref="Renumber"/>'s rule for a single index
+    /// said in bits.
+    /// </remarks>
+    private static ulong RenumberMask(ulong mask, int removed)
+    {
+        var below = mask & ((1UL << removed) - 1);
+
+        // C# masks a shift count to 63, so `mask >> 64` would be `mask >> 0` and
+        // would resurrect every bit rather than clearing them. The last slot has
+        // nothing above it by definition.
+        var above = removed >= MaxSlots - 1 ? 0UL : mask >> (removed + 1);
+
+        return below | (above << removed);
     }
 
     /// <summary>
@@ -359,34 +1025,43 @@ public struct WorldState
         if (!spawnPoints.TryGet(team, group, spawnpointId, out var x, out var y))
             return false;
 
-        Characters[slot] = new CharacterState
+        // Write-through to the player: a spawn is always *of* this slot's
+        // player, so the class and team passed in become the player's. Keeps
+        // every pre-phase-6 caller — which held these beside the state —
+        // consistent with the one copy the simulation now reads.
+        var timer = HasPlayer[slot] ? Players[slot].RespawnTimer : Timers.Inactive;
+
+        // Read before the player is rebuilt, and deliberately not carried into
+        // the new one: the bypass is spent by the spawn it feeds, and the next
+        // protected death sets it again.
+        var bypass = HasPlayer[slot] ? Players[slot].DeathmatchRespawnBypass : 0;
+
+        Players[slot] = new PlayerState { Team = team, Class = playerClass, RespawnTimer = timer };
+        HasPlayer[slot] = true;
+
+        // Every sentinel this needs is in CharacterState.Fresh, which the parity
+        // harness's anchor shares — see the warning on it about what a zeroed
+        // character claims.
+        var character = CharacterState.Fresh(playerClass, team);
+        character.X = x;
+        character.Y = y;
+
+        // Character.events/Create.xml:192-205, "Temporary invuln on spawn for
+        // deathmatch players". Here rather than in CharacterState.Fresh because
+        // it is the only part of the Create event that reads the *world*: the
+        // gamemode, the configured amount, and what the last life had left.
+        //
+        // ⚠️ The bypass is spent, not merely read — a player only carries their
+        // protection across one death, and the arm that set it
+        // (Character.events/Destroy.xml:40) writes it again if the next death is
+        // protected too.
+        if (GameMode == GameMode.TeamDeathmatch)
         {
-            Class = playerClass,
-            Team = team,
-            X = x,
-            Y = y,
-            Hp = ClassStats.For(playerClass).MaxHp,
-            Facing = 1,
-            LastFacing = 1,
+            character.DeathmatchInvulnerable = bypass != 0 ? bypass : TdmInvulnerabilityTicks;
+            character.DeathmatchInvulnDecay = CharacterState.SpawnInvulnDecay;
+        }
 
-            // The sentinels, which are not zero. Create.xml sets
-            // lastDamageDealer, secondToLastDamageDealer, burnedBy,
-            // afterburnSource and healer to noone or -1; a zeroed struct would
-            // have every one of them naming roster slot 0.
-            LastDamageDealer = CharacterState.Nobody,
-            SecondToLastDamageDealer = CharacterState.Nobody,
-            BurnedBy = CharacterState.Nobody,
-            AfterburnSource = DamageSource.None,
-            LastDamageSource = DamageSource.None,
-            Healer = CharacterState.Nobody,
-
-            // Likewise the three that start at something other than zero:
-            // cloakAlpha = 1 (fully visible), canGrabIntel = true, and an
-            // engineer spawns with a full 100 nuts and bolts.
-            CloakAlpha = 1,
-            CanGrabIntel = true,
-            NutsNBolts = 100,
-        };
+        Characters[slot] = character;
 
         // The weapon starts where instance_create put it: on the character's
         // own unrounded coordinates. End Step moves it to round(x) from this
@@ -440,6 +1115,39 @@ public struct WorldState
     {
         if (!IsLive(handle))
             return false;
+
+        // Mine.events/Destroy.xml: `owner.currentWeapon.lobbed -= 1`. On *any*
+        // destruction — exploded, flown into a gate, or killed off with its
+        // owner — because a Destroy event does not care why. `lobbed` gates
+        // firing and goes on the wire, so losing a decrement permanently costs
+        // the demoman a mine.
+        ref var dying = ref Projectiles[handle.Index];
+        if (dying.Kind == ProjectileKind.Mine && dying.OwnerSlot != ProjectileState.NoOwner)
+            Weapons[dying.OwnerSlot].Lobbed = Math.Max(0, Weapons[dying.OwnerSlot].Lobbed - 1);
+
+        // Bubble.events/Destroy.xml: `if(instance_exists(owner)) gun.bubbleCount
+        // -= 1;` — guarded on the *character* and then dereferencing the
+        // *weapon*, which is safe because one is destroyed with the other.
+        if (dying.Kind == ProjectileKind.Bubble && dying.OwnerSlot != ProjectileState.NoOwner)
+        {
+            Weapons[dying.OwnerSlot].BubbleCount =
+                Math.Max(0, Weapons[dying.OwnerSlot].BubbleCount - 1);
+        }
+
+        // BladeB.events/Destroy.xml, both lines: give the slot back, and charge
+        // the owner for whatever of the refire cost the flight did not already
+        // drain. ⚠️ The refund is *unguarded* — a blade whose owner has gone
+        // still runs it in the reference, on a weapon instance that is being
+        // destroyed in the same breath.
+        if (dying.Kind == ProjectileKind.Blade && dying.OwnerSlot != ProjectileState.NoOwner)
+        {
+            ref var weapon = ref Weapons[dying.OwnerSlot];
+            weapon.BladesOut = Math.Max(0, weapon.BladesOut - 1);
+
+            var refireTime = WeaponStats.For(WeaponKind.Blade).RefireTime;
+            if (Gml.Less(dying.AmmoDrained, refireTime))
+                weapon.AmmoCount -= refireTime - dying.AmmoDrained;
+        }
 
         Projectiles[handle.Index] = default;
 

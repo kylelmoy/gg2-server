@@ -38,8 +38,21 @@ public sealed class ServerOptions
     /// </summary>
     public int MultiClientLimit { get; set; } = 3;
 
-    /// <summary>Which built-in map to serve.</summary>
+    /// <summary>Which built-in map to serve first.</summary>
     public string Map { get; set; } = "ctf_truefort";
+
+    /// <summary>
+    /// The map rotation, in order. Empty means "just <see cref="Map"/>", which
+    /// is a rotation of one and replays the same map for ever.
+    /// </summary>
+    /// <remarks>
+    /// <c>global.map_rotation</c>, walked by <c>nextMapInRotation.gml</c>: the
+    /// next *loadable* entry after the current index, wrapping. The reference
+    /// errors out when no entry is loadable; here the current map is the
+    /// fallback, because a headless server refusing to start a new round is
+    /// worse than one that repeats a map.
+    /// </remarks>
+    public IReadOnlyList<string> MapRotation { get; set; } = [];
 
     public byte CapLimit { get; set; } = 5;
 
@@ -53,6 +66,12 @@ public sealed class ServerOptions
 
     /// <summary>Per-class limit applied to all ten classes. 255 means no limit.</summary>
     public byte ClassLimit { get; set; } = 255;
+
+    /// <summary>
+    /// <c>global.autobalance</c>: move a player across when one team is two
+    /// larger. On by default, as the reference's ini is.
+    /// </summary>
+    public bool Autobalance { get; set; } = true;
 
     /// <summary>
     /// Where the built-in map PNGs live — the reference checkout's

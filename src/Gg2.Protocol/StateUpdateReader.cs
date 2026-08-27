@@ -326,6 +326,23 @@ public static class StateUpdateReader
     {
         var full = tier == MessageType.FullUpdate;
 
+        // ⚠️ An INPUTSTATE-tier update writes NOTHING AT ALL for a sentry, not
+        // even its hp. Sentry.events/User Event 12.xml guards each group on the
+        // tier and the guards between them cover only FULL_UPDATE and
+        // QUICK_UPDATE, so on an INPUTSTATE every branch is skipped and the
+        // player's block ends at its subobjects byte.
+        //
+        // Reading the hp byte unconditionally desynchronises the whole stream
+        // from the first INPUTSTATE tick on which anybody owns a sentry — one
+        // byte per sentry, every tick that is not a quick update
+        // (GameServerBeginStep.gml:99). It looks like an unknown message type
+        // several hundred bytes later, which is nowhere near the cause.
+        //
+        // No fixture could see this before 2026-08-26: no recording had ever
+        // contained an engineer. docs/PARITY.md, "when adding a fixture, ask
+        // what state it cannot reach".
+        var hasHp = tier is MessageType.QuickUpdate or MessageType.FullUpdate;
+
         sbyte startDirection = 0;
         ushort x = 0, y = 0;
 
@@ -336,7 +353,9 @@ public static class StateUpdateReader
             y = reader.ReadUShort();
         }
 
-        var builtAndHp = reader.ReadUByte();
+        byte builtAndHp = 0;
+        if (hasHp)
+            builtAndHp = reader.ReadUByte();
 
         // The trailing vspeed byte exists only while the sentry is falling, and
         // "falling" is bit 7 of the byte just read. Self-describing, but only
@@ -346,6 +365,7 @@ public static class StateUpdateReader
         return new SentryBlock
         {
             HasPlacement = full,
+            HasHp = hasHp,
             StartDirection = startDirection,
             X = x,
             Y = y,
@@ -405,11 +425,17 @@ public static class StateUpdateReader
             case GameMode.Generator:
                 scalars.Add(reader.ReadUByte());
                 scalars.Add(reader.ReadUInt());
-                // Blue then red, in that order.
-                scalars.Add(reader.ReadUShort());
-                scalars.Add(reader.ReadUShort());
-                scalars.Add(reader.ReadUShort());
-                scalars.Add(reader.ReadUShort());
+
+                // ⚠️ Two fields per *surviving* generator, blue first — not two
+                // per team. A destroyed one contributes nothing, so the count
+                // has to come from the shape and a consumer has to decrement it
+                // on GENERATOR_DESTROY. See WorldShape.GeneratorCount.
+                for (var i = 0; i < shape.GeneratorCount; i++)
+                {
+                    scalars.Add(reader.ReadUShort());
+                    scalars.Add(reader.ReadUShort());
+                }
+
                 break;
 
             case GameMode.Arena:

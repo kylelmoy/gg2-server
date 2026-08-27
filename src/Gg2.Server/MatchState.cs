@@ -3,21 +3,6 @@ using Gg2.Protocol;
 
 namespace Gg2.Server;
 
-/// <summary>Intel position and its return countdown.</summary>
-public sealed class IntelState
-{
-    public double X { get; set; }
-
-    public double Y { get; set; }
-
-    /// <summary>
-    /// <c>alarm[0]</c>: ticks until dropped intel returns itself. At a fixed
-    /// 30 Hz this is a plain tick counter, and -1 means "not running", which is
-    /// GM8's value for an unset alarm.
-    /// </summary>
-    public short RecoverTimer { get; set; } = -1;
-}
-
 /// <summary>One control point, whatever kind of point the gamemode uses.</summary>
 public sealed class ControlPointState
 {
@@ -31,17 +16,6 @@ public sealed class ControlPointState
     /// Capture progress. A real in the reference, rounded on the way out.
     /// </summary>
     public double Capping { get; set; }
-}
-
-/// <summary>
-/// A generator's health. Reals, because damage is fractional and the reference
-/// sends <c>ceil(hp)</c> — a generator on 0.1 hp is still standing.
-/// </summary>
-public sealed class GeneratorState
-{
-    public double Hp { get; set; }
-
-    public double ShieldHp { get; set; }
 }
 
 public sealed class MovingPlatformState
@@ -76,13 +50,8 @@ public sealed class MatchState
         CurrentMapArea = 1;
 
         CapLimit = options.CapLimit;
-        TimeLimitMinutes = options.TimeLimitMinutes;
         RespawnTimeSeconds = options.RespawnTimeSeconds;
-        KillLimit = options.KillLimit;
         Array.Fill(ClassLimits, options.ClassLimit);
-
-        // global.tdmInvulnerabilityTicks = seconds * 30 * 0.2 — GameServerCreate.gml.
-        TdmInvulnerabilityTicks = (ushort)(options.TdmInvulnerabilitySeconds * 30 * 0.2);
 
         BuildEntities();
     }
@@ -98,10 +67,13 @@ public sealed class MatchState
     public byte CurrentMapArea { get; set; }
 
     // --- objective entities --------------------------------------------------
-
-    public IntelState? RedIntel { get; private set; }
-
-    public IntelState? BlueIntel { get; private set; }
+    //
+    // The intel moved into Gg2.Simulation.WorldState with phase 6's objective;
+    // the round timer and time limit followed it with the round, and the control
+    // points and the KotH/DKotH timers with those, the arena's round state with
+    // Arena and the generators with theirs. All of it is simulated now and
+    // StateUpdateWriter reads it through an ObjectiveLookup rather than out of
+    // this bag.
 
     /// <summary>
     /// The points the HUD block serialises, already in the order it wants them.
@@ -116,36 +88,13 @@ public sealed class MatchState
 
     public List<MovingPlatformState> MovingPlatforms { get; } = [];
 
-    public GeneratorState RedGenerator { get; } = new();
-
-    public GeneratorState BlueGenerator { get; } = new();
-
     // --- scoreboard and HUD --------------------------------------------------
 
     public byte CapLimit { get; set; }
 
-    public byte RedCaps { get; set; }
-
-    public byte BlueCaps { get; set; }
-
     public byte RespawnTimeSeconds { get; set; }
 
-    public byte TimeLimitMinutes { get; set; }
-
-    public ushort KillLimit { get; set; }
-
-    public ushort TdmInvulnerabilityTicks { get; }
-
-    /// <summary>Round timer, in ticks. A <c>uint</c> on the wire.</summary>
-    public uint Timer { get; set; }
-
     public ushort SetupTimer { get; set; }
-
-    public ushort ControlPointUnlock { get; set; }
-
-    public ushort RedTimer { get; set; }
-
-    public ushort BlueTimer { get; set; }
 
     public byte RedWins { get; set; }
 
@@ -169,14 +118,6 @@ public sealed class MatchState
         {
             switch (entity.Type)
             {
-                // The intel sits at its base until someone moves it.
-                case EntityTypes.RedIntel:
-                    RedIntel ??= new IntelState { X = entity.X, Y = entity.Y };
-                    break;
-                case EntityTypes.BlueIntel:
-                    BlueIntel ??= new IntelState { X = entity.X, Y = entity.Y };
-                    break;
-
                 case EntityTypes.MovingPlatform:
                     MovingPlatforms.Add(new MovingPlatformState { X = entity.X, Y = entity.Y });
                     break;

@@ -135,6 +135,72 @@ public readonly record struct Aabb(int Left, int Top, int Right, int Bottom)
     }
 
     /// <summary>
+    /// The box GM8 <em>reports</em> for a rotated sprite — <c>bbox_*</c> with
+    /// the flipped-sprite inflation included.
+    /// </summary>
+    /// <remarks>
+    /// Measured 2026-08-26 (<c>tools/probes/probe-airblast.js</c>, 19 boxes on
+    /// <c>AirBlastMaskS</c> plus three flipped angles on <c>SentryTurretS</c>):
+    /// at <c>image_xscale = -1</c> GM8's box is the mirrored sprite box with the
+    /// mirrored-left edge extended by <b>two sprite pixels before the
+    /// rotation</b> — the same two pixels a left-facing character gains on
+    /// <c>bbox_left</c>, but applied to the sprite-space edge and then rotated,
+    /// so at 45 degrees it moves <em>two</em> world edges by one pixel each.
+    /// Applying it to the rotated box instead (what <c>TurretReportedBox</c>
+    /// used to assume) reproduces none of the three measured flipped rotations.
+    /// <para>
+    /// This is what <c>distance_to_object</c> and <c>collision_circle</c>
+    /// consume; <c>place_meeting</c> and <c>collision_line</c> test the mask and
+    /// never see the two pixels, which is why <see cref="ForRotatedSprite"/>
+    /// stays the plain mirror.
+    /// </para>
+    /// </remarks>
+    public static Aabb ForRotatedSpriteReported(
+        in Aabb sprite,
+        double xOrigin,
+        double yOrigin,
+        double x,
+        double y,
+        double angle,
+        double xScale = 1,
+        double yScale = 1)
+    {
+        // Extending sprite.Right by 2 before the negative scale is exactly
+        // "mirrored left edge minus two": (right + 2 - ox) * -1 = -(right - ox) - 2.
+        var box = xScale < 0 ? sprite with { Right = sprite.Right + 2 } : sprite;
+        return ForRotatedSprite(box, xOrigin, yOrigin, x, y, angle, xScale, yScale);
+    }
+
+    /// <summary>
+    /// GM8 <c>collision_circle(cx, cy, r, ...)</c> against one reported box.
+    /// </summary>
+    /// <remarks>
+    /// Measured twice (docs/SIMULATION.md, "collision_circle is a plain
+    /// Euclidean test"): hit iff the Euclidean distance from the centre to the
+    /// <em>inclusive</em> box is <c>&lt;= r</c> — and the centre is
+    /// <b>floored per axis first</b> (probe-airblast.js: every fractional
+    /// centre up to +0.99 past the last integer hit still hits, including a
+    /// diagonal whose true distance is 10.076 against r = 10; rounding would
+    /// have missed at +0.5). Floor and truncate-toward-zero are
+    /// indistinguishable at positive coordinates, which is all the probe — and
+    /// the game's maps — reach.
+    /// <para>
+    /// The box is the <em>reported</em> one: a rotated instance answers with
+    /// the axis-aligned bound of its rotated sprite (the probe's corner walk
+    /// hits an AABB corner ~8px from any sprite pixel), and a flipped instance
+    /// answers with the two-pixel inflation included.
+    /// </para>
+    /// </remarks>
+    public static bool CircleHits(double cx, double cy, double r, in Aabb box)
+    {
+        var fx = Math.Floor(cx);
+        var fy = Math.Floor(cy);
+        var dx = Math.Max(0, Math.Max(box.Left - fx, fx - box.Right));
+        var dy = Math.Max(0, Math.Max(box.Top - fy, fy - box.Bottom));
+        return (dx * dx) + (dy * dy) <= r * r;
+    }
+
+    /// <summary>
     /// GM8 <c>place_meeting</c> between two rectangles: do they share a pixel?
     /// </summary>
     /// <remarks>

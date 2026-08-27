@@ -97,6 +97,114 @@ public static class CharacterWire
         ReadyToShoot = weapon.ReadyToShoot ? (byte)1 : (byte)0,
         RefireAlarm = WireQuantise.ToUByte(weapon.RefireTimer),
         HealTarget = weapon.HealTarget,
-        MinesLobbed = WireQuantise.ToUByte(weapon.MinesLobbed),
+        MinesLobbed = WireQuantise.ToUByte(weapon.Lobbed),
     };
+
+    /// <summary>
+    /// Quantises a sentry into the block
+    /// <c>Sentry.events/User Event 12.xml</c> writes.
+    /// </summary>
+    /// <remarks>
+    /// The position is <c>round(x*5)</c> — GML's half-to-even <em>then</em> the
+    /// extension's write, like <c>Intelligence</c> and a demoman's mines, and
+    /// unlike the character's plain <c>x*5</c>. The hp byte packs
+    /// <c>built*$80 + min(127, hp)</c>, and the trailing <c>vspeed</c> byte is
+    /// self-describing through that top bit: a built sentry has none.
+    /// docs/PROTOCOL.md, "Per sentry".
+    /// </remarks>
+    public static SentryBlock ToSentryBlock(in SentryState sentry) => new()
+    {
+        HasPlacement = true,
+        HasHp = true,
+        StartDirection = (sbyte)sentry.StartDirection,
+        X = WireQuantise.ToUShort(Gml.Round(sentry.X * 5)),
+        Y = WireQuantise.ToUShort(Gml.Round(sentry.Y * 5)),
+
+        // write_ubyte clamps and rounds half away from zero, once, on the whole
+        // expression — the min happens in GML on the real hp.
+        BuiltAndHp = WireQuantise.ToUByte(
+            ((sentry.Built ? 1 : 0) * 128) + Math.Min(127.0, sentry.Hp)),
+
+        VSpeed = sentry.Built ? null : WireQuantise.ToUByte(sentry.Motion.VSpeed),
+    };
+
+    /// <summary>
+    /// The same block, with a demoman's mines filled in from the projectile
+    /// pool.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The count and the blocks have to come from the same place, and
+    /// for four phases they did not.</b> <see cref="WeaponState.Lobbed"/> was
+    /// the field the simulation maintained and a second field named
+    /// <c>MinesLobbed</c> was the one this method serialised — and nothing ever
+    /// wrote it. So a demoman with mines out put a **0** on the wire and no mine
+    /// blocks, which is self-consistent and therefore silent: every client
+    /// simply drew no mines. Now there is one field.
+    /// <para>
+    /// <c>Minegun.events/User Event 12.xml</c> writes <c>lobbed</c> and then
+    /// walks <c>with(Mine) if(ownerPlayer == other.ownerPlayer)</c>, so the
+    /// blocks are in <b>instance order</b> — creation order, which is what
+    /// <see cref="WorldState.LiveProjectileSlot"/> walks. The count is a promise
+    /// of that many seven-byte records and a client reads them positionally, so
+    /// a disagreement desynchronises everything after it.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>A mine's speeds are quantised by <c>5</c>, not the character's
+    /// 8.5</b>, and every one of its five fields goes through GML's
+    /// <c>round()</c> — where a character's position is a plain <c>x*5</c>. Two
+    /// of this codebase's six rounding rules meet in one block.
+    /// </para>
+    /// </remarks>
+    public static WeaponBlock ToWeaponBlock(in WorldState state, int slot)
+    {
+        var playerClass = state.Characters[slot].Class;
+        var block = ToWeaponBlock(state.Weapons[slot], playerClass);
+
+        if (playerClass != PlayerClass.Demoman || state.Weapons[slot].Lobbed == 0)
+            return block;
+
+        var mines = new MineBlock[state.Weapons[slot].Lobbed];
+        var found = 0;
+
+        // ⚠️ The loop is NOT bounded by mines.Length. Stopping at the count
+        // would make the check below blind in one direction: a pool holding
+        // *more* mines than `lobbed` claims would fill the array, agree with
+        // itself and write a short block list. Count them all, then compare.
+        for (var i = 0; i < state.LiveProjectileCount; i++)
+        {
+            ref readonly var projectile = ref state.Projectiles[state.LiveProjectileSlot(i)];
+
+            if (projectile.Kind != ProjectileKind.Mine || projectile.OwnerSlot != slot)
+                continue;
+
+            if (found >= mines.Length)
+            {
+                found++;
+                continue;
+            }
+
+            mines[found++] = new MineBlock
+            {
+                X = WireQuantise.ToUShort(Gml.Round(projectile.X * 5)),
+                Y = WireQuantise.ToUShort(Gml.Round(projectile.Y * 5)),
+                HSpeed = WireQuantise.ToByte(Gml.Round(projectile.Motion.HSpeed * 5)),
+                VSpeed = WireQuantise.ToByte(Gml.Round(projectile.Motion.VSpeed * 5)),
+                Stickied = projectile.Stickied ? (byte)1 : (byte)0,
+            };
+        }
+
+        // `lobbed` is the reference's own counter, incremented by the launcher
+        // and decremented by Mine.events/Destroy.xml, so it should always equal
+        // the mines in the pool. If it does not, the byte already written
+        // promises records that do not exist and every client reads the rest of
+        // the update at the wrong offset — the same class of failure as the
+        // sentry hp byte (docs/PROTOCOL.md).
+        if (found != mines.Length)
+        {
+            throw new InvalidOperationException(
+                $"slot {slot} says {mines.Length} mine(s) lobbed but the pool holds {found}");
+        }
+
+        return block with { Mines = mines };
+    }
 }

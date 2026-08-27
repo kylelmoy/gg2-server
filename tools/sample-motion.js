@@ -63,6 +63,12 @@
 const fs = require('fs');
 const path = require('path');
 
+// The exact-double encoder lives in tools/exact-double.js, which is one
+// copy of what used to be four - and three of those four were wrong. Run
+// `node tools/exact-double.js` to self-test it; it needs no game.
+const exact = require(path.join(__dirname, 'exact-double.js'));
+
+
 const AGENT = process.env.GG2_AGENT || 'D:/code/gg2-agent';
 const DRY = process.argv.includes('--dry');
 const mcp = DRY ? null : require(path.join(AGENT, 'tools', 'gg2-mcp-server.js'));
@@ -110,34 +116,10 @@ async function evalx(expr) {
 // Chunks stay under 2^19 throughout, because GM8's floor() truncates through a
 // 32-bit integer and wraps silently above 2^31.
 //---------------------------------------------------------------------------
-const enc = (src) => `
-{
-    global.mV = ${src};
-    global.mZ = global.mV * power(2, 400);
-    if (global.mZ == 0) { global.mOut += "0 0 0 0 0 | "; }
-    else {
-        global.mS = 1; global.mA = global.mV;
-        if (global.mZ < 0) { global.mS = -1; global.mA = -global.mA; }
-        global.mE = floor(log2(global.mA));
-        global.mN = global.mA * power(2, 52 - global.mE);
-        global.mC1 = floor(global.mN / 68719476736);
-        global.mN = global.mN - global.mC1 * 68719476736;
-        global.mC2 = floor(global.mN / 262144);
-        global.mC3 = global.mN - global.mC2 * 262144;
-        global.mOut += string(global.mS) + " " + string(global.mE) + " "
-            + string(global.mC1) + " " + string(global.mC2) + " " + string(global.mC3) + " | ";
-    }
-}`;
 
 // The three chunks are an exact integer of up to 54 bits, so they are put back
 // together with BigInt: the sum overflows a double's exact integer range even
 // though the value it encodes does not.
-function decodeDouble(text) {
-  const [sign, exponent, c1, c2, c3] = text.trim().split(/\s+/).map(Number);
-  if (sign === 0) return 0;
-  const n = (BigInt(c1) << 36n) + (BigInt(c2) << 18n) + BigInt(c3);
-  return sign * Number(n) * Math.pow(2, exponent - 52);
-}
 
 //---------------------------------------------------------------------------
 // Operations
@@ -397,7 +379,7 @@ function sampleGml(sample) {
         global.mR[2] = direction; global.mR[3] = speed;
     }
     for (global.mI = 0; global.mI < 4; global.mI += 1)
-    ${enc('global.mR[global.mI]')}`;
+    ${exact.appendToOut('global.mR[global.mI]')}`;
 }
 
 async function runBatch(batch) {
@@ -415,10 +397,10 @@ async function runBatch(batch) {
       family: sample.family,
       label: sample.label,
       ops: sample.ops,
-      hspeed: { bits: h, value: decodeDouble(h) },
-      vspeed: { bits: v, value: decodeDouble(v) },
-      direction: { bits: d, value: decodeDouble(d) },
-      speed: { bits: s, value: decodeDouble(s) },
+      hspeed: { bits: h, value: exact.decode(h) },
+      vspeed: { bits: v, value: exact.decode(v) },
+      direction: { bits: d, value: exact.decode(d) },
+      speed: { bits: s, value: exact.decode(s) },
     };
   });
 }
@@ -444,7 +426,7 @@ async function trig() {
         global.mR[3] = sin(degtorad(global.mD));
         global.mR[4] = degtorad(global.mD);
         for (global.mI = 0; global.mI < 5; global.mI += 1)
-        ${enc('global.mR[global.mI]')}`)
+        ${exact.appendToOut('global.mR[global.mI]')}`)
       .join('\n')}`;
     await ev(code);
     const raw = (await evalx('global.mOut')).trim();
@@ -456,11 +438,11 @@ async function trig() {
       const [lx, ly, c, s, rad] = fields.slice(j * 5, j * 5 + 5);
       out.push({
         direction: d,
-        lengthdirX: { bits: lx, value: decodeDouble(lx) },
-        lengthdirY: { bits: ly, value: decodeDouble(ly) },
-        cos: { bits: c, value: decodeDouble(c) },
-        sin: { bits: s, value: decodeDouble(s) },
-        degtorad: { bits: rad, value: decodeDouble(rad) },
+        lengthdirX: { bits: lx, value: exact.decode(lx) },
+        lengthdirY: { bits: ly, value: exact.decode(ly) },
+        cos: { bits: c, value: exact.decode(c) },
+        sin: { bits: s, value: exact.decode(s) },
+        degtorad: { bits: rad, value: exact.decode(rad) },
       });
     });
     process.stdout.write('.');

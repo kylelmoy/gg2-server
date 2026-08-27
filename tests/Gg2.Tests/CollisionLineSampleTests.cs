@@ -37,6 +37,15 @@ public sealed class CollisionLineSampleTests
 {
     private sealed record Sprite
     {
+        /// <summary>
+        /// The sprite's full extent. Equal to the mask's for every sprite in
+        /// the fixture — these are the runtime bars the game builds for map
+        /// entities, and their masks fill them.
+        /// </summary>
+        [JsonPropertyName("width")] public required int Width { get; init; }
+
+        [JsonPropertyName("height")] public required int Height { get; init; }
+
         [JsonPropertyName("originX")] public required int OriginX { get; init; }
 
         [JsonPropertyName("originY")] public required int OriginY { get; init; }
@@ -159,6 +168,86 @@ public sealed class CollisionLineSampleTests
         }
 
         Assert.True(checkedSamples > 7000, $"only {checkedSamples} samples");
+    }
+
+    /// <summary>
+    /// A map's own solid rectangle presents the engine's collider, and answers
+    /// the engine's own segments through it.
+    /// </summary>
+    /// <remarks>
+    /// The test above pins the <em>algorithm</em> using colliders assembled from
+    /// the fixture. This pins the <em>port's</em> path to one: every probe in
+    /// that fixture is a literal <c>BulletWall</c> the sampler created and
+    /// scaled, wearing the 6x60 runtime sprite that <b>every</b> solid a map
+    /// places wears — gates, player walls and bullet walls alike. So each probe
+    /// can be rebuilt through <see cref="SolidRect.FromEntity"/> and run through
+    /// <see cref="LineCollider.ForSolidRect"/>, and the engine's recorded
+    /// answers apply unchanged.
+    /// <para>
+    /// It is a real gate on two separate things. Rebuilding the probe checks
+    /// that <c>FromEntity</c> reproduces the bounding box GM8 reported for the
+    /// same instance — at scales of 1/6, 1, and 1.5 by 0.6, which is the range
+    /// the shipped maps use. Running the rows checks that the collider handed to
+    /// the walk maps world pixels to mask pixels the way the engine does, which
+    /// is where the scale has to survive as a divisor rather than being folded
+    /// into the bounds.
+    /// </para>
+    /// <para>
+    /// The <c>dup</c>-sprite probe is excluded, and that exclusion is the point
+    /// rather than a convenience: its sprite origin is (3, 30), and no level
+    /// entity has a non-zero origin — measured 2026-08-25 across all eight solid
+    /// level-entity object types. <see cref="LineCollider.ForSolidRect"/>
+    /// hard-codes an origin of zero on the strength of that, so a probe that
+    /// does not share the assumption has nothing to say about it.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void SolidRectanglesPresentTheColliderTheEngineMeasured()
+    {
+        var document = Load();
+        var checkedSamples = 0;
+        var checkedProbes = 0;
+
+        foreach (var probe in document.Probes)
+        {
+            var sprite = document.Sprites[probe.Sprite];
+
+            if (sprite.OriginX != 0 || sprite.OriginY != 0)
+                continue;
+
+            var rect = SolidRect.FromEntity(
+                probe.X,
+                probe.Y,
+                probe.XScale,
+                probe.YScale,
+                sprite.Width,
+                sprite.Height,
+                SolidKind.BulletWall);
+
+            var collider = LineCollider.ForSolidRect(rect);
+
+            Assert.True(
+                collider.Bbox == ToAabb(probe.Box),
+                $"{probe.Label}: engine box {ToAabb(probe.Box)}, port {collider.Bbox}");
+
+            foreach (var row in probe.Rows)
+            {
+                var actual = CollisionLine.Hits(
+                    collider, default(CollisionLine.FilledMask), row[0], row[1], row[2], row[3]);
+
+                Assert.True(
+                    actual == (row[4] != 0),
+                    $"{probe.Label} ({row[0]}, {row[1]}) -> ({row[2]}, {row[3]}): " +
+                    $"engine {row[4] != 0}, port {actual}");
+
+                checkedSamples++;
+            }
+
+            checkedProbes++;
+        }
+
+        Assert.True(checkedProbes >= 5, $"only {checkedProbes} zero-origin probes");
+        Assert.True(checkedSamples > 5000, $"only {checkedSamples} samples");
     }
 
     /// <summary>
