@@ -1990,7 +1990,7 @@ change trajectories rather than last digits:
 
 ### `gg_debug` stops on a rocket blast four pixels short
 
-⚠️ **Open finding, narrowed 2026-08-27, and it needs one live probe to close.**
+✅ **Cause found 2026-08-27; the fix is not written.**
 `reference-gg_debug-closedtdm.trace` replays exactly for 100 ticks after its
 spawn anchor at t381 and then diverges — not on a position, but because **slot 4
 survives a death the reference recorded**. `GgDebugSplashOpenFindingTests` holds
@@ -2025,35 +2025,73 @@ shows the distance is **never** below 36. So a distance of 30 means the rocket
 stopped **four pixels back instead of ten** — it exploded *while still inside
 slot 2's bounding box*.
 
-**Two candidates are already dead, and were killed by measurement rather than by
-argument:**
+✅ **CAUSE FOUND, and it was the third candidate: GM8's overlap primitives use
+the PRECISE MASK for a rotated projectile, where this port uses the bounding
+box.** Measured with `collision_point(..., precise)` — nine sprites by eighteen
+angles, `tests/Gg2.Tests/Fixtures/rotated-mask-samples.json`, regenerate with
+`node tools/sample-rotated-mask.js`.
+
+⚠️ **The split runs through the middle of one GML line, and it is sharper than
+the facing asymmetry already recorded on `Aabb.ForCharacter`:**
+
+| primitive | uses | port |
+|---|---|---|
+| `distance_to_object` | the **bounding boxes**, rotated or not, with the character's `image_xscale` inflation | ✅ right — re-checked live at the divergence angle |
+| `place_free`, `place_meeting` | the **precise masks** | ❌ uses the box |
+
+**Unrotated the two coincide** — every one of the nine sprites' masks fills its
+own bbox exactly, which is what `RotatedMaskSampleTests.EveryUnrotatedMaskExactlyFillsItsBoundingBox`
+gates — so six phases never noticed. Rotated, the box is not a small
+over-estimate: a `Shot` at 45° has **25 opaque pixels inside a 169-pixel box**,
+and the Scattergun spreads every pellet by `random(15) - 7.5`, so diagonal
+pellets are the normal case.
+
+At the divergence angle the rocket's 8x3 box carries 16 opaque pixels and its
+**top row is one pixel, at offset zero** — the row that overlapped slot 2. Six
+pixels of back-out, step 10 → step 4, distance 36 → 30. Both constraints then
+land exactly: slot 4 takes 71.15 and dies, slot 6 finishes on 13.30 which
+`ceil`s to the recorded 14.
+
+**Two candidates were killed by running oracles rather than by argument, and
+both are worth keeping:**
 
 - ❌ **What `distance_to_object` returns.** `PrimitiveSampleTests.DistanceToObjectMatchesTheEngineExactly`
   holds `Aabb.Distance` against the engine over 361 rocket offsets spanning
-  ±64 px, exactly. This gap is 36.
+  ±64 px, exactly.
 - ❌ **The two-pixel `image_xscale = -1` inflation** (`Aabb.ForCharacter`).
   Widening it to eight *does* produce the missing distance of exactly 30 — and
-  it breaks four live-engine oracles (`PrimitiveSampleTests.FacingChangesTheSplashDistanceButNotTheOverlap`,
-  two in `CollisionLineSampleTests`, `RocketTests.ALeftFacingVictimIsTwoPixelsWiderToTheBlast`).
-  Right arithmetic, wrong cause. ⚠️ **Worth keeping as a shape**: a candidate
-  that reproduces the number exactly can still be ruled out by an oracle it
-  never occurred to you to run.
+  it breaks four live-engine oracles. ⚠️ **Right arithmetic, wrong cause: a
+  candidate that reproduces the number exactly can still be ruled out by an
+  oracle it never occurred to you to run.**
 
-⬅️ **The prime suspect is the one thing no oracle here can see: whether
-`place_free` uses the bounding box or the PRECISE MASK for a *rotated*
-projectile.** Every rocket in `primitive-samples.json` is unrotated — 361 of 361
-with a box of 8x2 — so `place_meeting` has only ever been asked about an
-axis-aligned rocket, where the two answers agree. `rotated-box-samples.json`
-gates what `bbox_*` **reports** for a rotated sprite (1,008 boxes) and not what
-the overlap primitives **use**. This rocket is at 351°, its bbox is 8x3, and it
-overlaps slot 2 by exactly one pixel row along the box's *top* edge — where a
-rocket pointing down-right has no sprite pixels at all. A precise mask frees it
-several steps early, which is the shape of the missing four to six pixels.
+⚠️ **Why no existing oracle could see it.** All 361 rockets in
+`primitive-samples.json` are **unrotated** — `sample-primitives.js` never sets
+`image_angle` — so `place_meeting` was only ever asked the question where the
+two answers agree. `rotated-box-samples.json` gates what `bbox_*` **reports**
+for a rotated sprite (1,008 boxes) and not what the overlap primitives **use**.
+**Ask what a fixture cannot reach**, the same rule as "when adding a fixture,
+ask what state it cannot reach".
 
-⚠️ **The probe owed to the next live session**, and it is one probe, not a
-re-derivation: create a `Rocket`, set `image_angle` off-axis, walk it across a
-pinned character and ask both `place_meeting` and `bbox_*` on every step. If
-they disagree, that is the answer. `tools/probes/` is where it goes; sweeping
-the angle in `tools/sample-primitives.js` is the durable version. Remember
-CLAUDE.md's warning that **`sprite_add`'s third argument is `removeback`, not
-`precise`** — a sprite's precision cannot be read off its creation call.
+⬅️ **The fix is not written, and it is its own piece of work.** It changes which
+character every projectile in the game hits, so it carries the exactness bar.
+The obvious model does not clear it: inverse-rotating each world pixel into
+sprite space and flooring, then testing the sprite's bbox rectangle, reproduces
+**309,763 of 310,194** sampled cells (99.86%). ⚠️ **The residue is worst at 90,
+180 and 270 degrees** — where the rotation is exact and a rounding rule cannot
+be what is wrong — so what is missing is an **edge convention**, not a
+tie-break. The fixture is checked in so the next attempt needs no game.
+
+### A rotated-box rounding tie is not only where `sin` is a half
+
+⚠️ **A correction to `Aabb.ForRotatedSprite`'s own note**, which said the ties
+are "210 and 330 degrees, where `sin` is analytically -0.5". That was
+`sample-rotated-box.js`'s angle grid, not the rule.
+`rotated-mask-samples.json` puts three of its six ties at **300**, where it is
+`cos` that is analytically 0.5 — the same mechanism on the other axis.
+
+`RotatedBoxSampleTests.IsRoundingTie` always covered both, because it asks
+whether a **rotated corner** sits within `1e-9` of a half rather than which
+angle it is. That is exactly why the exemption is written as a predicate and not
+as a list of angles, and it is the reason this correction cost nothing: only the
+prose was narrow. **Do not fudge the rounding** — a fudge would be wrong at
+every angle instead of at a few, and a tie is unreachable in play.

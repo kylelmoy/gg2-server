@@ -70,12 +70,21 @@ public readonly record struct Aabb(int Left, int Top, int Right, int Bottom)
     /// <para>
     /// ⚠️ <b>Exact except on a rounding tie.</b> Six of those 1,008 boxes differ
     /// by one pixel, and every one of them is an angle where a rotated corner
-    /// lands on a precise half — 210 and 330 degrees, where <c>sin</c> is
-    /// analytically -0.5. There the x87 gap in docs/SIMULATION.md's "four motion
-    /// variables" decides the tie the other way. It is unreachable in play: the
-    /// scattergun adds <c>random(15)-7.5</c> to every pellet's direction, so an
-    /// exact 210.000 has probability zero. Do not add a fudge for it — a fudge
-    /// would be wrong at every angle instead of at two.
+    /// lands on a precise half. There the x87 gap in docs/SIMULATION.md's "four
+    /// motion variables" decides the tie the other way. It is unreachable in
+    /// play: the scattergun adds <c>random(15)-7.5</c> to every pellet's
+    /// direction, so an exact 210.000 has probability zero. Do not add a fudge
+    /// for it — a fudge would be wrong at every angle instead of at a few.
+    /// <para>
+    /// ⚠️ <b>The tie is not only where <c>sin</c> is a half.</b> This used to say
+    /// "210 and 330 degrees, where <c>sin</c> is analytically -0.5", which is
+    /// what <c>sample-rotated-box.js</c>'s angle grid happened to expose.
+    /// <c>rotated-mask-samples.json</c> (2026-08-27) puts three of its six ties
+    /// at <b>300</b>, where it is <c>cos</c> that is analytically 0.5 — the same
+    /// mechanism on the other axis. <c>RotatedBoxSampleTests.IsRoundingTie</c>
+    /// always covered both, because it tests the rotated corner rather than the
+    /// angle; only this prose was narrow.
+    /// </para>
     /// </para>
     /// </remarks>
     /// <param name="sprite">The sprite's own bbox, in sprite pixels.</param>

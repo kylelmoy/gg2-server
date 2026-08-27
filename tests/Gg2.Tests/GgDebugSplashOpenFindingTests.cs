@@ -12,7 +12,7 @@ namespace Gg2.Tests;
 /// slot 4 lives through a death the reference recorded.</b>
 /// </summary>
 /// <remarks>
-/// <b>Narrowed on 2026-08-27; not settled.</b> Implementing dropdown platforms
+/// <b>Cause found 2026-08-27; the fix is not written.</b> Implementing dropdown platforms
 /// took this recording's window from 23 ticks to 100 with the trajectories
 /// inside it exact (<c>|dx| max 0, |dy| max 0</c>), and what stopped it next was
 /// damage rather than position — see
@@ -51,43 +51,55 @@ namespace Gg2.Tests;
 /// and the measured gap by the same amount.
 /// </para>
 /// <para>
-/// <b>Where that leaves it.</b> A distance of 30 or 31 is the rocket stopping
-/// <b>four or five pixels back</b> instead of the port's ten — which is to say
-/// it exploded <em>while still inside slot 2's bounding box</em>. So the
-/// back-out is not stopping too late by a tuning margin; it is being asked the
-/// wrong question. Three candidates, and two of them are already dead:
+/// ✅ <b>CAUSE FOUND, 2026-08-27, and it was the third candidate: GM8's overlap
+/// primitives use the PRECISE MASK for a rotated projectile, where this port
+/// uses the bounding box.</b> A distance of 30 is the rocket stopping four
+/// pixels back instead of ten — it exploded <em>while still inside slot 2's
+/// bounding box</em>, because its <em>mask</em> was already clear of it.
+/// </para>
+/// <para>
+/// <b>Measured, not inferred.</b>
+/// <c>RotatedMaskSampleTests.TheRocketsTopRowIsOnePixelAtTheDivergenceAngle</c>:
+/// at this rocket's exact heading its 8x3 box carries 16 opaque pixels, and the
+/// top row — the only row that overlaps slot 2 — is <b>one pixel, at offset
+/// zero</b>, where the port reads the whole eight-wide row as solid. Six pixels,
+/// which takes the back-out from step 10 to step 4 and the distance from 36 to
+/// 30. Both independent constraints then land exactly: slot 4 takes 71.15 and
+/// dies, and slot 6 finishes on 13.30, which <c>ceil</c>s to the 14 the
+/// recording holds.
+/// </para>
+/// <para>
+/// The other two candidates were ruled out by running oracles rather than by
+/// argument, and both are worth keeping:
 /// </para>
 /// <list type="number">
-/// <item>❌ <b>What <c>distance_to_object</c> returns</b> — ruled out.
+/// <item>❌ <b>What <c>distance_to_object</c> returns.</b>
 /// <c>PrimitiveSampleTests.DistanceToObjectMatchesTheEngineExactly</c> holds
 /// <see cref="Aabb.Distance"/> against the engine over 361 rocket offsets
-/// spanning ±64 px, exactly, and this gap is 36.</item>
+/// spanning ±64 px, exactly. Re-checked live afterwards at this very angle:
+/// <c>distance_to_object</c> is computed from the <em>boxes</em> even when the
+/// sprite is rotated, so splash falloff was right all along. ⚠️ <b>The two
+/// primitives disagree about the same pair of instances</b> — box for distance,
+/// mask for overlap — which is a sharper version of the asymmetry
+/// <see cref="Aabb.ForCharacter"/> already documents.</item>
 /// <item>❌ <b>The two-pixel <c>image_xscale = -1</c> inflation</b>
-/// (<see cref="Aabb.ForCharacter"/>) — ruled out, and checked rather than
-/// assumed: widening it to eight <em>does</em> produce this blast's missing
-/// distance of exactly 30, and it breaks four live-engine oracles
+/// (<see cref="Aabb.ForCharacter"/>). Widening it to eight <em>does</em> produce
+/// the missing distance of exactly 30, and it breaks four live-engine oracles
 /// (<c>PrimitiveSampleTests.FacingChangesTheSplashDistanceButNotTheOverlap</c>,
-/// two in <c>CollisionLineSampleTests</c>, and <c>RocketTests</c>). The
-/// arithmetic is right and the cause is not.</item>
-/// <item>⬅️ <b>Whether <c>place_free</c> uses the bounding box or the precise
-/// mask for a <em>rotated</em> projectile.</b> The prime suspect, and the one
-/// thing here no oracle can see: every rocket in <c>primitive-samples.json</c>
-/// is unrotated — 361 of 361 with a box of 8x2 — so <c>place_meeting</c> has
-/// only ever been asked about an axis-aligned rocket, where the two answers
-/// agree. <c>rotated-box-samples.json</c> gates what <c>bbox_*</c> <em>reports</em>
-/// for a rotated sprite (1,008 boxes) and not what the overlap primitives
-/// <em>use</em>. This rocket is at 351°, its bbox is 8x3, and it overlaps slot 2
-/// by exactly one pixel row along the box's top edge — where a rocket pointing
-/// down-right has no sprite pixels at all. A precise mask would free it several
-/// steps early, which is the shape of the missing four-to-six pixels.</item>
+/// two in <c>CollisionLineSampleTests</c>, <c>RocketTests</c>). ⚠️ <b>Right
+/// arithmetic, wrong cause — fitting the number is not evidence.</b></item>
 /// </list>
 /// <para>
-/// ⚠️ <b>Owed to the next live session</b>, and it is one cheap probe rather
-/// than a re-derivation: create a <c>Rocket</c>, set <c>image_angle</c> to
-/// something off-axis, and walk it across a pinned character asking both
-/// <c>place_meeting</c> and <c>bbox_*</c>. If the two disagree, the answer is
-/// here. <c>tools/probes/</c> is where it goes, and extending
-/// <c>tools/sample-primitives.js</c> to sweep the angle is the durable version.
+/// ⚠️ <b>Still not fixed, and the fix is its own piece of work.</b> It changes
+/// which character every projectile in the game hits, so it carries the
+/// exactness bar rather than a good-enough bar, and the obvious model does not
+/// clear it: inverse-rotating each world pixel into sprite space and flooring
+/// reproduces 309,763 of 310,194 sampled cells (99.86%). ⚠️ The residue is not
+/// spread evenly — it is worst at <b>90, 180 and 270 degrees</b>, where the
+/// rotation is exact and a rounding rule cannot be what is wrong, so what is
+/// missing is an edge convention rather than a tie-break.
+/// <c>rotated-mask-samples.json</c> holds 162 masks so the next attempt can be
+/// checked without the game.
 /// </para>
 /// </remarks>
 public sealed class GgDebugSplashOpenFindingTests
