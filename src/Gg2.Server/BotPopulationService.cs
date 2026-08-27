@@ -181,7 +181,7 @@ public sealed class BotPopulationService
         // load-bearing twice over: it phases the objective and combat cadences so a
         // full server does not pay every bot's scan on one frame, and it is added
         // to the follower's re-plan period, where zero makes BOT_TAKEOFF_PATIENCE
-        // unreachable. See CLAUDE.md, "Phase 7 item 4b-ii".
+        // unreachable. See docs/TRAPS-BOTS.md, "Phase 7 item 4b-ii".
         var stagger = _server.RosterCount;
 
         var bot = new ScriptedBot(Nav, new NavQuery(team), BotSkill.ForTier(options.Difficulty), stagger)

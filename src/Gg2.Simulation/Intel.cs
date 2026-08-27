@@ -119,23 +119,27 @@ public static class Intel
     /// being fully transparent. So one box serves the flags and the bases alike,
     /// and every map places them at <c>xscale = yscale = 1</c>.
     /// <para>
-    /// ⚠️ <b>Derived from the PNGs and the sprite XML, not measured against the
-    /// running game</b> — unlike every other box in this project. CLAUDE.md's
-    /// warning about <c>SentryRed.xml</c> is that a <em>manual</em> mask bound is
-    /// clamped to the image; these are <c>AUTO</c>, which is the case the XML
-    /// really does describe, but it is still an inference.
+    /// ✅ <b>Measured 2026-08-27 against the running game</b>, by
+    /// <c>tools/sample-sprite-box.js</c> and gated by
+    /// <c>SpriteBoxSampleTests</c>. The engine reports all three of
+    /// <c>IntelligenceRedS</c>, <c>IntelligenceBlueS</c> and
+    /// <c>IntelligenceBaseS</c> as <c>0, 0, 19, 19</c> about origin (9, 12) on a
+    /// 20x22 image, and none of the four objects that wear them declares a
+    /// <c>&lt;mask&gt;</c> — so one box really does serve the flags and the
+    /// bases alike. The inference below was right in every edge.
     /// </para>
     /// <para>
-    /// ⚠️ <b>And the fixtures corroborate almost none of it.</b> Measured by
-    /// mutation against <c>closedsupport</c>'s recorded grab, the one message a
-    /// replay reproduces on its exact tick: widening <see cref="BoxLeft"/> to
-    /// -11 moves the tick, -10 does not, and <see cref="BoxRight"/>,
-    /// <see cref="BoxTop"/> and <see cref="BoxBottom"/> can each be moved by
-    /// <b>sixteen pixels</b> without any fixture noticing. A bot walks in from
-    /// one side and grabs; the other three edges are never the ones it crosses.
-    /// So the only gate on three quarters of this box is
+    /// ⚠️ <b>It was worth measuring because the fixtures corroborate almost none
+    /// of it.</b> Measured by mutation against <c>closedsupport</c>'s recorded
+    /// grab, the one message a replay reproduces on its exact tick: widening
+    /// <see cref="BoxLeft"/> to -11 moves the tick, -10 does not, and
+    /// <see cref="BoxRight"/>, <see cref="BoxTop"/> and <see cref="BoxBottom"/>
+    /// can each be moved by <b>sixteen pixels</b> without any fixture noticing.
+    /// A bot walks in from one side and grabs; the other three edges are never
+    /// the ones it crosses. Until the live measurement landed, the only gate on
+    /// three quarters of this box was
     /// <c>IntelTests.TheGrabHappensExactlyWhereTheBoxesTouch</c>, which asserts
-    /// the same inference. Measuring it live is on the handoff.
+    /// the same inference it was derived from.
     /// </para>
     /// </remarks>
     public const int BoxLeft = -9;
@@ -180,7 +184,7 @@ public static class Intel
     /// ⚠️ <b><c>round(x*5)</c>, not the character's plain <c>x*5</c>.</b> GML's
     /// own <c>round</c> is half to <em>even</em> and runs first, after which the
     /// extension's half-away-from-zero rule has nothing left to decide — two
-    /// objects, two quantisations, one wire. CLAUDE.md's rounding table has all
+    /// objects, two quantisations, one wire. docs/TRAPS-SIMULATION.md's rounding table has all
     /// six cases.
     /// <para>
     /// Here rather than in <c>Gg2.Server</c> for the reason

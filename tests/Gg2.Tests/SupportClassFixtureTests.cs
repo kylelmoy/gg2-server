@@ -25,7 +25,7 @@ namespace Gg2.Tests;
 /// </para>
 /// <para>
 /// <b>They found a protocol bug on their first outing</b>, which is the whole
-/// argument for CLAUDE.md's "when adding a fixture, ask what state it cannot
+/// argument for docs/TRAPS-SIMULATION.md's "when adding a fixture, ask what state it cannot
 /// reach": an <c>INPUTSTATE</c>-tier update carries no sentry bytes, the reader
 /// consumed one anyway, and every stream containing an engineer desynchronised.
 /// <see cref="SentryUpdateLayoutTests"/> is the gate on the arithmetic and

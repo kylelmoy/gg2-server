@@ -91,7 +91,7 @@ public static class Timers
     /// <see cref="Timers"/> still taken from the OpenGMK transcription rather
     /// than from the running game, along with the phase itself. Half to even is
     /// this codebase's default for every GML-side rounding except the wire's
-    /// (CLAUDE.md's table), so it is what the transcription assumes. A pellet
+    /// (docs/TRAPS-SIMULATION.md's alarm table), so it is what the transcription assumes. A pellet
     /// hits within a handful of ticks and a whole tick of lifetime is only
     /// visible on a shot that reaches its maximum range, so the cost of being
     /// wrong is small — but it <em>is</em> observable, and it is on

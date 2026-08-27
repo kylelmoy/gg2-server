@@ -93,7 +93,7 @@ public sealed class BotArcTests(ITestOutputHelper output)
     /// aim comes back pointing BELOW its feet, into the ground. Every arc solved that
     /// way is then blocked, which reads as this whole feature refusing everything —
     /// the first draft of this file did exactly that, and so did the sweep that chose
-    /// its fixtures. CLAUDE.md, "Phase 7 item 4d".
+    /// its fixtures. docs/TRAPS-BOTS.md, "Phase 7 item 4d".
     /// </remarks>
     private static double Aim(NavGraph graph, in CharacterState self, double x, double y) =>
         BotAim.Solve(in self, x, y, 0, 0, BotLeadMode.Full, BotAim.FloorUnder(graph, x, y));

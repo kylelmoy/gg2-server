@@ -53,7 +53,7 @@ public static class BotArc
 
         // ⚠️ Gml.LengthDir rather than cos/sin: GM8's y axis points down and these
         // already account for it, and the engine snaps their results where a bare
-        // trig call does not (CLAUDE.md, "lengthdir_x and lengthdir_y snap too").
+        // trig call does not (docs/TRAPS-SIMULATION.md, "lengthdir_x and lengthdir_y snap too").
         var vx = Gml.LengthDirX(speed, aimDegrees);
         var vy = Gml.LengthDirY(speed, aimDegrees);
 

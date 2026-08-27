@@ -706,7 +706,7 @@ public sealed class IntelTests
     /// <c>Intelligence.events/User Event 10.xml</c> writes
     /// <c>round(x*5)</c> where <c>Character</c>'s writes <c>x*5</c>. At
     /// <c>x = 100.1</c> the product is 500.5 and half-to-even gives 500, where
-    /// the wire extension's own half-away-from-zero would give 501. CLAUDE.md's
+    /// the wire extension's own half-away-from-zero would give 501. docs/TRAPS-SIMULATION.md's
     /// rounding table, rows one and two.
     /// </remarks>
     [Fact]

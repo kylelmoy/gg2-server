@@ -23,7 +23,7 @@ public static class CharacterWire
     /// Position is a plain <c>x*5</c> with no GML <c>round()</c> in front of it,
     /// so the extension's own half-away-from-zero rule is the entire
     /// quantisation — unlike <c>Intelligence</c>, which writes
-    /// <c>round(x*5)</c>. CLAUDE.md's rounding table has the five cases and why
+    /// <c>round(x*5)</c>. docs/TRAPS-SIMULATION.md's rounding table has the five cases and why
     /// they differ; this is the one that matters most often.
     /// </remarks>
     /// <param name="state">The character.</param>

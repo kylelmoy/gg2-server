@@ -245,7 +245,7 @@ Two things to carry over rather than reinvent:
   ⚠️ `gg2-agent/tools/navgraph.js` documents the format and is right about it —
   including the non-obvious `ds_grid_write` column-major layout with
   sixteen-byte cells — but it **floors the feet row where the game rounds it**,
-  which is a whole row on stepped terrain. CLAUDE.md, "the nav cache reader",
+  which is a whole row on stepped terrain. docs/TRAPS-BOTS.md, "the nav cache reader",
   has that and the rest of the traps.
 - **The `BOT_*` constants** in `Gang-Garrison-2/Source/gg2/Constants.xml` are a
   tuned set with real playtesting behind them. Port the values even if the

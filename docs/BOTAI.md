@@ -354,7 +354,7 @@ with an `IInputSource`, `Step`. A library type rather than a test fixture,
 because a self-play evaluator wants exactly this. ⚠️ **What makes it
 gamemode-less is the zeroed limits and placing no objective, not the `GameMode`
 field** — measured, by setting the mode three ways and watching nothing change.
-CLAUDE.md, "the scenario harness", has the list of lines that do the work and
+docs/TRAPS-BOTS.md, "the scenario harness", has the list of lines that do the work and
 the two (`TdmInvulnerabilityTicks`, `RespawnTime`) that are only observable at
 one instant each.
 

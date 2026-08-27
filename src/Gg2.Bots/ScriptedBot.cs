@@ -64,7 +64,7 @@ public sealed class ScriptedBot : IInputSource, IScenarioSubject
     /// <see cref="BotCombatState.Stagger"/> is a phase; the path one is
     /// <em>added</em> to the re-plan period, and at zero the interval is 45 ticks
     /// against a 60-tick takeoff budget — so the jump escape hatch can never
-    /// fire. See CLAUDE.md, "Phase 7 item 4b-ii".
+    /// fire. See docs/TRAPS-BOTS.md, "Phase 7 item 4b-ii".
     /// </param>
     public ScriptedBot(NavGraph? graph, NavQuery query, BotSkill skill, int stagger = 0)
     {
@@ -124,7 +124,7 @@ public sealed class ScriptedBot : IInputSource, IScenarioSubject
     /// ⚠️ <b>Its own, and NOT <see cref="WorldState.Random"/>, and that is a rule
     /// rather than a convenience.</b> The match's stream is <em>observable
     /// simulation</em>: every seeded weapon puts its draw on the wire and every
-    /// client re-derives the spread from it (CLAUDE.md, "GM8's RNG is Delphi's").
+    /// client re-derives the spread from it (docs/TRAPS-SIMULATION.md, "GM8's RNG is Delphi's").
     /// A bot drawing from it would make the stream's position depend on how many
     /// bots were thinking, which is a divergence no client could follow and which
     /// the parity harness would report as a wrong shot.

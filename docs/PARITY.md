@@ -431,7 +431,7 @@ Three things about how it stayed hidden are worth more than the bug:
 
 1. **No recording had ever contained an engineer.** Every fixture was scout,
    soldier, demoman and medic, so bit 1 of `subobjects` had never been set on a
-   tier that omits the block. CLAUDE.md's "when adding a fixture, ask what state
+   tier that omits the block. docs/TRAPS-SIMULATION.md's "when adding a fixture, ask what state
    it cannot reach" is the whole lesson, and the answer this time was a class.
 2. ⚠️ **`TraceParser.Parse` swallowed it.** A capture can legitimately stop
    mid-message when the socket closes, so the loop treats a `ProtocolException`

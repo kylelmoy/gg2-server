@@ -2299,26 +2299,34 @@ reference's own `PLAYER_SPAWN`s.
   one does not. Resolved once at map load (`IntelState.Grabbable`), because the
   gamemode cannot change while a map is loaded.
 - **`round(x*5)` on the way out**, GML's half-to-even — not the character's
-  plain `x*5`. CLAUDE.md's rounding table, rows one and two.
+  plain `x*5`. docs/TRAPS-SIMULATION.md's rounding table, rows one and two.
 - **A capture sets `GameServer.syncTimer = 1`**, which sends an extra
   `CAPS_UPDATE` on the *next* tick, in addition to that tick's ordinary update
   (`GameServerBeginStep.gml:88`). The port sends the `frame mod 3600`
   heartbeat too; the third trigger, `global.setupTimer == 180`, waits on the
   setup timer being simulated.
 
-⚠️ **The briefcase's box is the one collision box in this project that has not
-been measured against the running game.** `IntelligenceRedS`,
+✅ **Settled 2026-08-27: the briefcase's box is `-9, -12, +10, +7` about the
+origin**, measured against the running game. `IntelligenceRedS`,
 `IntelligenceBlueS` and `IntelligenceBaseS` are all 20x22 with their origin at
-(9, 12), a `RECTANGLE` mask on `AUTO` bounds, and an opaque extent of columns
-0..19 and rows 0..19 — so the box is `-9, -12, +10, +7` about the origin, at
-`image_xscale = 1` on every map. That is read off the PNGs and the sprite XML.
-It is `AUTO`, which is the case the XML genuinely describes (unlike the
-*manual* bound `SentryRed.xml` gets clamped on), but it is still an inference,
-and **the fixtures corroborate almost none of it**: measured by mutation
-against `closedsupport`'s recorded grab, `BoxLeft` has to move two pixels
-before the tick changes and `BoxRight`, `BoxTop` and `BoxBottom` can each move
-**sixteen** unnoticed. A bot approaches from one side and never crosses the
-other three edges.
+(9, 12) and a `RECTANGLE` mask on `AUTO` bounds; the engine reports every one of
+them as `sprite_get_bbox_* = 0, 0, 19, 19` — the bottom two rows of all three
+images are fully transparent — and none of the four objects that wear them
+declares a `<mask>` of its own, so one box serves the flags and the bases alike.
+A **live briefcase on `ctf_truefort` answers `bbox_* - x/y = -9, -12, 10, 7`
+directly**, at `image_xscale = image_yscale = 1` and `image_angle = 0`.
+`tools/sample-sprite-box.js` regenerates
+`tests/Gg2.Tests/Fixtures/sprite-box-samples.json`; `SpriteBoxSampleTests` is
+the gate.
+
+⚠️ **It was worth measuring precisely because no fixture could, and that is the
+lesson rather than the number.** The box had been derived from the PNGs and the
+sprite XML and it was right in every edge — but **the fixtures corroborate almost
+none of it**: measured by mutation against `closedsupport`'s recorded grab,
+`BoxLeft` has to move two pixels before the tick changes, and `BoxRight`,
+`BoxTop` and `BoxBottom` can each move **sixteen** unnoticed. A bot approaches
+from one side and never crosses the other three edges. **A green fixture is not
+confirmation of a box.**
 
 **Not modelled**, each documented at its site: the `LooseSheet` particles a
 carrier sheds (they draw one or two `random(1)` per tick from the global
@@ -3380,12 +3388,14 @@ the right click.
   other projectile's `image_angle = direction` lives. A 12x12 square turned 45
   degrees reports a box about 17 wide, so this decides who a bubble blocks.
 
-**`BubbleS` is the one projectile sprite this port did not sample.** The XML
-says `mode="FULL"`, which means the whole image rather than the alpha's extent,
-and the image is 12x12 about origin (6, 6). The control is `MineS`, also
-`mode="FULL"`, whose 6x6 image the engine reported as `0, 0, 5, 5` when
-`tools/sample-rotated-box.js` asked it. Sample the bubble anyway at the next
-live session.
+✅ **Settled 2026-08-27: `BubbleS` is `0, 0, 11, 11` about origin (6, 6)** — the
+whole 12x12 image, which is what `mode="FULL"` in the XML had always been read
+to mean. ⚠️ **It is not sampled the way the other projectile sprites are.**
+`tools/sample-rotated-box.js` measures a projectile by creating one and reading
+its instance `bbox_*`, and a bubble is not something `createShot` can be handed;
+`tools/sample-sprite-box.js` asks `sprite_get_bbox_*` of the sprite resource
+instead, which needs no instance at all, and also records that `Bubble` declares
+no `<mask>` — without which the sprite's bbox would not be its collision box.
 
 **A bubble moves in its own Step event, and that is a phase of its own.**
 
@@ -3722,9 +3732,13 @@ another StabAnim for the same player" guard amounts to.
 
 **The `StabMask`** is a real projectile, and an odd one:
 
-- **`StabMaskS` is 34×43 about the origin** — 2 pixels back, **31 forward**, 24
-  up and 18 down — the largest melee reach in the game. Read off the PNG's AUTO
-  alpha extent rather than sampled; **sample it at the next live session**.
+- ✅ **`StabMaskS` is 34×43 about the origin** — 2 pixels back, **31 forward**,
+  24 up and 18 down — the largest melee reach in the game. Measured 2026-08-27:
+  `sprite_get_bbox_* = 24, 13, 57, 55` about origin (26, 37) on a 64x64 image,
+  `object_get_mask(StabMask) = -1`. ⚠️ **This is the one late-sampled box where
+  the image and the collision box genuinely differ** — 64 wide against 34 — so
+  taking the reach from the sprite's dimensions would have been thirty pixels
+  wrong.
 - ⚠️ **`image_xscale` is ±1 from the stab's `direction`**
   (`< 90 or > 270` → +1), which mirrors the whole box — and **is also what
   decides a backstab**: `sign(other.image_xscale) == sign(image_xscale)`, the

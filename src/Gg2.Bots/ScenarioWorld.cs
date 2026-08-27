@@ -23,7 +23,7 @@ namespace Gg2.Bots;
 /// <para>
 /// <b>What "no gamemode" means concretely.</b> The mode is
 /// <see cref="GameMode.TeamDeathmatch"/> with every limit at zero, which is not
-/// a fudge: CLAUDE.md, "Team Deathmatch is what a map with no objective
+/// a fudge: docs/TRAPS-SIMULATION.md, "Team Deathmatch is what a map with no objective
 /// <em>is</em>" — <c>basicRoomSetup</c>'s chain ends there — and every limit in
 /// the port carries a "0 means off" escape the reference reaches by flooring at
 /// one. So the round clock never starts, no limit is ever reached, nobody
@@ -183,7 +183,7 @@ public sealed class ScenarioWorld
     /// unrounded coordinates and only reaches <c>round(x)</c> in End Step — so a
     /// character teleported without its weapon fires its first shot from
     /// wherever it spawned, which on a big map is across the room.
-    /// <c>Character.events/End Step.xml:64-65</c>, and CLAUDE.md's "a shot
+    /// <c>Character.events/End Step.xml:64-65</c>, and docs/TRAPS-SIMULATION.md's "a shot
     /// leaves from the <em>weapon</em>".
     /// </para>
     /// </remarks>

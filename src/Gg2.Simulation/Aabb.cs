@@ -64,7 +64,7 @@ public readonly record struct Aabb(int Left, int Top, int Right, int Bottom)
     /// <c>node tools/sample-rotated-box.js</c>): take the sprite's own bbox
     /// corners relative to the origin, scale them, rotate each about the origin,
     /// take the extremes, and round each half to <b>even</b> — the same rounding
-    /// as <see cref="SolidRect.FromEntity"/>, and the fourth row of CLAUDE.md's
+    /// as <see cref="SolidRect.FromEntity"/>, and the fourth row of docs/TRAPS-SIMULATION.md's
     /// rounding table.
     /// </para>
     /// <para>

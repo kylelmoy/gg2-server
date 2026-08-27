@@ -169,7 +169,7 @@ public sealed class TimerTests
     /// and it is on the live path for every shot a moving scout takes.
     /// <para>
     /// ⚠️ Half to even is the codebase's default for GML-side rounding
-    /// (CLAUDE.md's table) and is <em>not</em> measured for this particular
+    /// (docs/TRAPS-SIMULATION.md's alarm table) and is <em>not</em> measured for this particular
     /// conversion; see <see cref="Timers.SetAlarm"/>.
     /// </para>
     /// </remarks>

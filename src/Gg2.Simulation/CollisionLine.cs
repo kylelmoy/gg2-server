@@ -132,7 +132,7 @@ public static class CollisionLine
     {
         // Round everything, as GM8 does. Half to even — the same rule as GML's
         // round() and as place_free's position rounding, and *not* the wire's
-        // half-away-from-zero (CLAUDE.md, "Five roundings").
+        // half-away-from-zero (docs/TRAPS-SIMULATION.md, "Six roundings").
         var instX = CollisionWorld.RoundPosition(collider.X);
         var instY = CollisionWorld.RoundPosition(collider.Y);
 

@@ -112,7 +112,7 @@ public sealed class ScenarioSuiteTests(ITestOutputHelper output)
     /// <remarks>
     /// ⚠️ Pinned rather than <c>&gt; 0</c>: the search offering <em>one</em> arc
     /// where it used to offer six is a regression that a presence test cannot see,
-    /// and the count is quoted as fact in `CLAUDE.md`.
+    /// and the count is quoted as fact in `docs/TRAPS-BOTS.md`.
     /// </remarks>
     private const int BaselineRocketJumps = 6;
 

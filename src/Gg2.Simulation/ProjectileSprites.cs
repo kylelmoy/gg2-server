@@ -52,19 +52,21 @@ public static class ProjectileSprites
     /// <c>BubbleS</c>: a twelve-pixel square with the origin in the middle.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The one entry in this table that was not sampled from the running
-    /// game</b>, because Quote's weapon landed without a live session. It is
-    /// derived rather than guessed: <c>Sprites/Projectiles/BubbleS.xml</c>
-    /// declares <c>mode="FULL"</c>, which means the bounding box is the whole
-    /// image rather than the alpha's extent, and the image is 12x12.
+    /// ✅ <b>Measured 2026-08-27</b>, and the inference it replaces was right.
+    /// It shipped derived rather than sampled because Quote's weapon landed
+    /// without a live session: <c>Sprites/Projectiles/BubbleS.xml</c> declares
+    /// <c>mode="FULL"</c>, which means the bounding box is the whole image
+    /// rather than the alpha's extent, and the image is 12x12.
     /// <para>
-    /// The control is <see cref="Mine"/>: <c>MineS.xml</c> is also
-    /// <c>mode="FULL"</c>, its image is 6x6, and the engine reported
-    /// <c>0, 0, 5, 5</c> — the whole image — when
-    /// <c>tools/sample-rotated-box.js</c> asked it. So the rule this entry
-    /// leans on is measured even though this entry is not. Sample it anyway at
-    /// the next live session; CLAUDE.md's warning about a MANUAL bound being
-    /// clamped to the image is a reminder that the XML is not the engine.
+    /// ⚠️ <b>A <c>Bubble</c> cannot be sampled the way the rest of this table
+    /// was.</b> <c>tools/sample-rotated-box.js</c> works by creating the
+    /// projectile and reading its instance <c>bbox_*</c>, and a bubble is not
+    /// something <c>createShot</c> can be handed. It is measured instead by
+    /// <c>tools/sample-sprite-box.js</c>, which asks
+    /// <c>sprite_get_bbox_*</c> — no instance needed — and by
+    /// <c>SpriteBoxSampleTests</c>, which also records that <c>Bubble</c>
+    /// declares no <c>&lt;mask&gt;</c> of its own, so this really is the box
+    /// every collision is decided against.
     /// </para>
     /// </remarks>
     public static Sprite Bubble => new(new Aabb(0, 0, 11, 11), 6, 6);
@@ -80,9 +82,13 @@ public static class ProjectileSprites
     /// (<c>StabMask.events/Step.xml</c>), so a left-facing stab mirrors all of
     /// it — which is also what decides whether a hit is a backstab.
     /// <para>
-    /// Read off the PNG's alpha extent rather than sampled, like
-    /// <see cref="Bubble"/>. Unlike the bubble's there is no measured control
-    /// for AUTO in this table; sample it at the next live session.
+    /// ✅ <b>Measured 2026-08-27</b> by <c>tools/sample-sprite-box.js</c> and
+    /// gated by <c>SpriteBoxSampleTests</c>, which also records that
+    /// <c>StabMask</c> declares no <c>&lt;mask&gt;</c> of its own. The AUTO
+    /// bound read off the PNG was right. ⚠️ <b>This is the one of the three
+    /// late-sampled boxes where the sprite and the collision box genuinely
+    /// differ</b> — 64 wide as an image, 34 as a box — so taking the reach from
+    /// the image dimensions would have been wrong by thirty pixels.
     /// </para>
     /// </remarks>
     public static Sprite Stab => new(new Aabb(24, 13, 57, 55), 26, 37);

@@ -125,7 +125,7 @@ public static class BotMines
 
             // ⚠️ The REPORTED box, which is the one distance_to_object answers with
             // — a sentry's mask does not animate and its bbox_left carries the
-            // two-pixel facing inflation (CLAUDE.md, "the sentry's box").
+            // two-pixel facing inflation (docs/TRAPS-SIMULATION.md, "the sentry's box").
             if (Gml.Less(Sentries.ReportedBox(sentry).Distance(mineBox), BotConstants.MineTrigger))
                 return true;
         }
