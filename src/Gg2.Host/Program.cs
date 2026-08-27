@@ -206,6 +206,16 @@ internal static class Program
                     i++;
                     break;
 
+                // ⚠️ Loopback only, and off unless this is passed — it executes
+                // commands against a live game, which is the same reason the GM8
+                // bridge is off by default. A port of 0 asks the OS for a free
+                // one and the server logs which it got.
+                case "--control-port":
+                    options.ControlPort = RequireInt(name, value);
+                    options.ControlPortEnabled = true;
+                    i++;
+                    break;
+
                 // ⚠️ Pacing only. Nothing about the simulation is rate-dependent
                 // — every duration in the game is counted in ticks — so this
                 // changes throughput and nothing else. It must stay at 1 on any
@@ -266,6 +276,9 @@ internal static class Program
                             (default 1)
           --record <path>   write replayable .trace recordings of this server's
                             broadcast stream to a directory (default: off)
+          --control-port <n>
+                            open the loopback control port (default: off;
+                            0 asks the OS for a free port)
 
         The maps ship inside the reference Game Maker project, so --maps (or
         GG2_REFERENCE) has to point at a Gang-Garrison-2 checkout.
@@ -296,6 +309,11 @@ internal static class Program
         `gg2-server eval` plays bot matches across maps instead of serving one,
         faster than real time and with nobody watching - phase 8's exit
         criterion. See `gg2-server eval --help`.
+
+        --control-port opens a line-of-JSON control surface on 127.0.0.1 only:
+        read state, freeze, step N ticks, set the speed or the bot count, change
+        the map, teleport, and run any command a client could. It is off unless
+        asked for, because it executes commands against a live game.
 
         The world is simulated: characters, weapons, all eight gamemodes and the
         map rotation. See docs/PLAN.md.

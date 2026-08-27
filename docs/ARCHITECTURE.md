@@ -265,7 +265,7 @@ Native AOT is attractive for startup and memory but not required; revisit once
 the thing runs. Do not enable any fast-math-equivalent switch — there isn't one
 in .NET, which is part of why C# is a reasonable choice here.
 
-## A control surface, eventually
+## The control surface — built, 2026-08-27
 
 `gg2-agent` drives the GM8 game through an injected bridge because there was no
 other way in. A C# server does not need injection: expose the same capabilities
@@ -280,3 +280,32 @@ win over the current setup.
 
 Keep it **loopback-only and off by default**, for the same reason the GM8 bridge
 is: it executes commands against a live game.
+
+✅ **Built: `ControlPort`, behind `gg2-server --control-port <n>`.** One JSON
+object per line, answered by one per line — enough for `nc`, a test or a script,
+with no schema to negotiate. `ping`, `state`, `freeze`, `resume`, `step`,
+`speed`, `bots`, `map`, `teleport` and `command`.
+
+⚠️ **It binds `IPAddress.Loopback`, not `Any`.** There is no configuration in
+which it is reachable from the network, and that is a property of the bind
+rather than of a check somebody can forget.
+
+⚠️ **It is serviced from inside `GameServer.Tick`, on the tick thread.** No
+locks, no concurrent access to `WorldState`, and a command's effect always lands
+between two ticks rather than inside one. A control port on its own thread would
+need the simulation to be thread-safe, which is a far larger claim than this
+project makes anywhere — and the failures would be the irreproducible kind.
+
+⚠️ **Freezing skips exactly one call — `AdvanceSimulation()` — and everything
+around it keeps running.** A freeze that skipped the whole tick would stop
+servicing sockets, so a frozen server would drop the clients it was frozen to
+inspect and stop answering the port that froze it: the freeze would be permanent
+and would read as a hang. Gated by joining a client *while frozen*, which needs
+the accept, the joining state machine and the flush all still running — the
+weaker version of that test passed the mutation it claimed to catch.
+
+⚠️ **Anything a client can also do goes through `Execute(RosterEntry,
+PlayerCommand)`** — the `command` verb — rather than being reimplemented.
+CLAUDE.md's "three places" rule, honoured by not adding a fourth. What is
+control-port-only is the operator actions no client can ask for: freeze, step,
+teleport, map change, bot count, speed.

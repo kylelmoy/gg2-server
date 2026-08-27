@@ -150,6 +150,24 @@ public sealed class ServerOptions
     /// </remarks>
     public string RecordingDirectory { get; set; } = string.Empty;
 
+    /// <summary>
+    /// The loopback control port, when <see cref="ControlPortEnabled"/> is set.
+    /// Zero asks the OS for a free port, which is what tests want.
+    /// </summary>
+    public int ControlPort { get; set; }
+
+    /// <summary>
+    /// Whether to open the control port at all. <b>Off by default.</b>
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>A separate flag rather than "a non-zero port means on", because
+    /// zero is a port people want</b> — it is how every test asks for an
+    /// ephemeral one (<c>ServerHarness.cs</c> does exactly that for the game
+    /// port). Overloading zero as "off" would make the one configuration a test
+    /// needs the one it cannot express.
+    /// </remarks>
+    public bool ControlPortEnabled { get; set; }
+
     /// <summary>The <c>[Bots]</c> section. Off by default, as in the reference.</summary>
     /// <remarks>
     /// ⚠️ <see cref="BotPopulationOptions.Default"/>, never <c>new()</c> — see the

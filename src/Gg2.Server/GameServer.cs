@@ -37,6 +37,18 @@ public sealed class GameServer : IDisposable
 
     /// <summary>Null unless the server was configured to record — docs/BOTAI.md item 3.</summary>
     private MatchRecorder? _recorder;
+
+    /// <summary>Null unless a control port was configured — off by default.</summary>
+    private ControlPort? _control;
+
+    /// <summary>
+    /// While true, <see cref="Tick"/> services the network and broadcasts but
+    /// does not advance the simulation.
+    /// </summary>
+    private bool _frozen;
+
+    /// <summary>Simulation steps still owed to a <c>step</c> while frozen.</summary>
+    private int _stepsOwed;
     private readonly NetWriter _broadcast = new(8192);
 
     private TcpListener? _listener;
@@ -258,6 +270,14 @@ public sealed class GameServer : IDisposable
         _log.Info(
             $"listening on {BoundPort}, map {map.Name} ({_match.GameMode}, " +
             $"{map.Walkmask.Width}x{map.Walkmask.Height} cells), {_options.PlayerLimit} slots");
+
+        // ⚠️ Loopback only and off unless configured — it executes commands
+        // against a live game, which is the same reason the GM8 bridge is.
+        if (_options.ControlPort >= 0 && _options.ControlPortEnabled)
+        {
+            _control = new ControlPort(this, _log);
+            _control.Start(_options.ControlPort);
+        }
 
         // ⚠️ Last, and after OpenMap: the first segment's preamble is a
         // FULL_UPDATE of the world, so there has to be a world.
@@ -527,30 +547,42 @@ public sealed class GameServer : IDisposable
     /// </summary>
     public void Run(CancellationToken cancellation)
     {
-        var tickLength = TickInterval;
-
-        // ⚠️ Unpaced is a separate loop rather than the same one with a zero
-        // interval, and that is not tidiness. The backlog branch below tests
-        // `wait < -tickLength * 10`, which at a zero tickLength is `wait < 0`
-        // — true on every tick after the first — so a shared loop would log
-        // "dropped 0ms of tick backlog" forever. There is no debt to shed when
-        // there is no clock to be behind.
-        if (tickLength <= TimeSpan.Zero)
-        {
-            while (!cancellation.IsCancellationRequested)
-            {
-                Tick();
-            }
-
-            return;
-        }
-
         var clock = Stopwatch.StartNew();
         var nextTick = TimeSpan.Zero;
+        var pacing = TickInterval;
 
         while (!cancellation.IsCancellationRequested)
         {
             Tick();
+
+            // ⚠️ Re-read every tick rather than captured before the loop: the
+            // control port can change the speed on a running server, and a
+            // captured interval would make --speed a startup-only setting with
+            // no sign that a later change did nothing.
+            var tickLength = TickInterval;
+
+            // ⚠️ Unpaced returns to the top BEFORE the pacing arithmetic, and
+            // that is not tidiness. The backlog branch below tests
+            // `wait < -tickLength * 10`, which at a zero tickLength reads
+            // `wait < 0` — true on every tick after the first — so falling
+            // through would log "dropped 0ms of tick backlog" forever, at
+            // unpaced speed. There is no debt to shed when there is no clock to
+            // be behind. Rebasing on the way past keeps a later switch back to a
+            // paced speed from thinking it is hours late.
+            if (tickLength <= TimeSpan.Zero)
+            {
+                nextTick = clock.Elapsed;
+                continue;
+            }
+
+            // A speed change rebases too: debt accumulated in the old interval
+            // means nothing in the new one, and carrying it would make a server
+            // slowed from max sprint until it had "caught up".
+            if (tickLength != pacing)
+            {
+                pacing = tickLength;
+                nextTick = clock.Elapsed;
+            }
 
             nextTick += tickLength;
             var wait = nextTick - clock.Elapsed;
@@ -597,13 +629,223 @@ public sealed class GameServer : IDisposable
         WriteStateUpdate();
         FlushBroadcast();
 
-        AdvanceSimulation();
+        // ⚠️ Freezing skips EXACTLY this call, and everything around it keeps
+        // running. A freeze that skipped the whole tick would stop servicing
+        // sockets, so a frozen server would silently drop every client it was
+        // being frozen to inspect — and it would stop answering the control port
+        // that froze it. Clients keep receiving updates of an unchanging world,
+        // which is what "frozen" looks like from a client that re-simulates
+        // between updates.
+        if (AdvancesThisTick())
+            AdvanceSimulation();
+
+        _control?.Service();
 
         AcceptConnections(now);
         ServiceJoiningConnections(now);
 
         foreach (var client in _clients)
             client.Connection.Flush();
+    }
+
+    /// <summary>
+    /// Whether this tick advances the simulation: always, unless frozen — and
+    /// then only for as many steps as a <c>step</c> asked for.
+    /// </summary>
+    private bool AdvancesThisTick()
+    {
+        if (!_frozen)
+            return true;
+
+        if (_stepsOwed <= 0)
+            return false;
+
+        _stepsOwed--;
+        return true;
+    }
+
+    // --- the control surface -------------------------------------------------
+    //
+    // docs/ARCHITECTURE.md's "A control surface, eventually", and phase 8's last
+    // item. Everything here is an OPERATOR action — freezing the world, moving a
+    // character, changing the map — and none of it is something a client can ask
+    // for. ⚠️ Anything a client CAN ask for does not belong here: it goes
+    // through Execute(RosterEntry, PlayerCommand), the one dispatch the socket
+    // path and the bots already share, or the control port becomes a third way
+    // to do what CLAUDE.md says must have exactly one.
+
+    /// <summary>
+    /// A live character's <em>exact</em> position and health.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ The unquantised doubles, deliberately — <c>TryGetCharacter</c> hands
+    /// back the wire blocks, which are rounded to what a client can observe. A
+    /// control port exists to answer "where is it really", and a debugging tool
+    /// that silently reported the wire's rounding would make every sub-pixel
+    /// question unanswerable.
+    /// </remarks>
+    public bool TryGetExactPosition(int slot, out double x, out double y, out double hp)
+    {
+        x = 0;
+        y = 0;
+        hp = 0;
+
+        if (slot < 0 || slot >= WorldState.MaxSlots || !_world.IsAlive(slot))
+            return false;
+
+        ref readonly var character = ref _world.Characters[slot];
+
+        x = character.X;
+        y = character.Y;
+        hp = character.Hp;
+
+        return true;
+    }
+
+    /// <summary>Ticks left on the round clock — the value the HUD blocks carry.</summary>
+    public int RoundTimer => _world.RoundTimer;
+
+    /// <summary>Whether the round has been decided and by whom.</summary>
+    public bool RoundDecided => _world.RoundDecided;
+
+    /// <inheritdoc cref="RoundDecided"/>
+    public Team RoundWinner => _world.Winner;
+
+    /// <summary>
+    /// The control port actually bound, or 0 when there is none.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ Read back rather than assumed, the same as <see cref="BoundPort"/> —
+    /// a test asks for port 0 and needs to learn which one it got. Hard-coding
+    /// one makes the suite un-parallelisable and the failure intermittent.
+    /// </remarks>
+    public int ControlBoundPort => _control?.BoundPort ?? 0;
+
+    /// <summary>Whether the simulation is frozen.</summary>
+    public bool IsFrozen => _frozen;
+
+    /// <summary>Stops advancing the simulation. The network keeps running.</summary>
+    public void Freeze()
+    {
+        _frozen = true;
+        _stepsOwed = 0;
+    }
+
+    /// <summary>Resumes normal ticking.</summary>
+    public void Resume()
+    {
+        _frozen = false;
+        _stepsOwed = 0;
+    }
+
+    /// <summary>
+    /// Advances the simulation <paramref name="ticks"/> times and stays frozen.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ It <b>freezes first</b> rather than refusing on a running server. A
+    /// step against a server that is still ticking would advance an unknowable
+    /// number of times, which is the opposite of what stepping is for.
+    /// </remarks>
+    public void StepSimulation(int ticks)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(ticks);
+
+        _frozen = true;
+        _stepsOwed = ticks;
+    }
+
+    /// <summary>
+    /// Ends the round now and changes to <paramref name="map"/>.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Down the same path a finished round takes</b> —
+    /// <c>Rounds.BeginMapChange</c>, the ten-second countdown and a
+    /// <c>MAP_END</c> — rather than swapping the map underneath everybody. A
+    /// control port that changed maps by a route no round takes would produce a
+    /// sequence no client has ever been sent, and the bug would look like a
+    /// client bug.
+    /// </remarks>
+    public bool RequestMapChange(string map, int area = 1)
+    {
+        if (!MapExists(map) || _world.MapChanging)
+            return false;
+
+        _nextMap = map;
+        _nextArea = Math.Max(1, area);
+
+        Rounds.BeginMapChange(ref _world);
+        _mapChangeCountdown = Rounds.MapChangeDelay;
+
+        ServerMessages.MapEnd(_broadcast, _nextMap, _world.Winner, (byte)_nextArea);
+        _log.Info($"control: {_nextMap} area {_nextArea} in ten seconds");
+
+        return true;
+    }
+
+    /// <summary>Changes the bot fill target; the population manager converges on it.</summary>
+    /// <remarks>
+    /// ⚠️ A fill TARGET including humans, not a bot count — the reference's
+    /// <c>FillToPlayers</c>. Setting it to 8 on a server with three people gives
+    /// five bots.
+    /// </remarks>
+    public void SetBotFill(int fill)
+    {
+        _options.Bots = _options.Bots with
+        {
+            Enabled = fill > 0,
+            FillToPlayers = fill,
+            MaxBots = Math.Max(fill, _options.Bots.MaxBots),
+        };
+    }
+
+    /// <summary>Sets the tick pacing. Infinity is unpaced.</summary>
+    public void SetSpeed(double multiplier)
+    {
+        if (double.IsNaN(multiplier) || multiplier <= 0)
+            throw new ArgumentOutOfRangeException(nameof(multiplier), multiplier, "speed must be > 0");
+
+        _options.SpeedMultiplier = multiplier;
+    }
+
+    /// <summary>Moves a live character, leaving its velocity alone.</summary>
+    /// <remarks>
+    /// ⚠️ <b>Not something a client can do</b>, which is why it is here and not
+    /// a <see cref="PlayerCommand"/>. It writes the position the same way a
+    /// spawn does and does not check that the destination is free: putting a
+    /// character inside a wall is a legitimate thing to want from a debugging
+    /// tool, and the movement solver's stuck case is one of the things worth
+    /// being able to reproduce on purpose.
+    /// </remarks>
+    public bool Teleport(int slot, double x, double y)
+    {
+        if (slot < 0 || slot >= _roster.Count || !_world.IsAlive(slot))
+            return false;
+
+        _world.Characters[slot].X = x;
+        _world.Characters[slot].Y = y;
+        _world.Weapons[slot].X = x;
+        _world.Weapons[slot].Y = y;
+
+        return true;
+    }
+
+    /// <summary>
+    /// Runs a <see cref="PlayerCommand"/> for a slot on the operator's behalf.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>This is the seam that keeps the control port honest.</b> It hands
+    /// the command to the same <c>Execute</c> the socket switch and the bots
+    /// reach, so the port cannot do anything a client could not, and a command
+    /// added later is reachable from all three without being written three
+    /// times. Preconditions that fail are silence, as everywhere else.
+    /// </remarks>
+    public bool ExecuteFor(int slot, in PlayerCommand command)
+    {
+        if (slot < 0 || slot >= _roster.Count)
+            return false;
+
+        Execute(_roster[slot], command);
+        return true;
     }
 
     // --- the simulation ------------------------------------------------------
@@ -1933,6 +2175,9 @@ public sealed class GameServer : IDisposable
         // a recording lost here is a recording that never existed.
         _recorder?.Dispose();
         _recorder = null;
+
+        _control?.Dispose();
+        _control = null;
 
         foreach (var client in _clients)
             client.Connection.Dispose();
