@@ -980,20 +980,36 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
             $"grabbed at tick {grabbedAt}: replans {bot.Path.Replans}, stuck {bot.Path.StuckFires}, "
             + $"off-route {bot.Path.OffRouteFires}, blacklisted {bot.Path.BlacklistFires}");
 
-        // Measured 2026-08-27, after the rocket jump landed: 1,747 ticks, 49
-        // re-plans, 0 stuck, 19 off-route, 1 blacklist. ⚠️ It read 1,780 / 41 / 0 /
-        // 10 / 2 before — the leg got FASTER and the re-plan and off-route counts
-        // went UP, which is what flying arcs that sometimes miss costs. The
-        // scenario suite is the better signal on that trade and it improved across
-        // the board (avanti 311 → 175, valley-floor 251 → 178).
+        // ⚠️ PINNED, exactly, and a failure here is the RE-RECORD rather than a
+        // broken test: check the change is one you meant, then that it went the way
+        // you meant, then update these and say so in the commit. The same
+        // discipline `ScenarioSuiteTests.Baseline` and the pinned `SIM_UUID` ask
+        // for, and it is exact for the same reason — every draw is seeded, the
+        // graph comes off disk and the physics is IEEE doubles, so a number that
+        // moves at all is a behaviour change and not noise. Four separate process
+        // runs across nine commits agree on every one of these.
         //
-        // The re-plan count is bounded because it is what moves when the goal
-        // cadence goes wrong — but loosely, because it is no longer only about the
-        // cadence. AnUnchangedObjectiveDoesNotForceAReplan gates the throttle
-        // directly and with a class that has no special arcs.
-        Assert.True(grabbedAt < 3000, $"took {grabbedAt} ticks; it measured 1,747 when this was written");
+        // ⚠️ <b>The bound this replaces was `< 3000` against a leg that takes
+        // 1,748 — 71% of slack.</b> Nothing in the project could see this run get
+        // half as good again, which is the same hole `ScenarioSuiteTests` had: a
+        // budget set before the arcs were flown is not a gate on the cost.
+        //
+        // ⚠️ <b>And the number it recorded was wrong on the day it was written.</b>
+        // The note said 1,747; the test has printed 1,748 since the commit that
+        // wrote it — bisected across nine commits, so it is a transcription error
+        // rather than a drift. A measurement quoted in three documents and gated by
+        // nothing does not get corrected by being read again.
+        //
+        // Against the rocket jump landing this read 1,780 / 41 / 0 / 10 / 2: the
+        // leg got FASTER and the re-plan and off-route counts went UP, which is
+        // what flying arcs that sometimes miss costs. The scenario suite is the
+        // better signal on that trade and it improved across the board
+        // (avanti 311 → 175, valley-floor 251 → 219).
+        Assert.Equal(1748, grabbedAt);
+        Assert.Equal(49, bot.Path.Replans);
         Assert.Equal(0, bot.Path.StuckFires);
-        Assert.True(bot.Path.Replans < 80, $"{bot.Path.Replans} re-plans; it measured 49");
+        Assert.Equal(19, bot.Path.OffRouteFires);
+        Assert.Equal(1, bot.Path.BlacklistFires);
 
         // ⚠️ And it turns round. The goal has to be re-decided on the objective
         // cadence, so step past one before asking.
