@@ -110,12 +110,19 @@ public sealed class SentryKillFixtureTests
     {
         var (exact, anchor) = ExactWindow(Fields.Trajectory);
 
-        // 581 today, t427 to t1008. Shorter than the airblast fixture's 1,266
+        // 595 today, t427 to t1022. Shorter than the airblast fixture's 1,266
         // because there is far more of everything happening here — 125 rocket
         // fires against 38, eleven deaths against five — not because engineers
         // are modelled worse than pyros.
+        //
+        // ⚠️ Raised 550 -> 585 on 2026-08-27, when modelling a rotated
+        // projectile's precise mask (ProjectileMask) took this window from 581
+        // to 595. The floor moves with the measurement on purpose: a gain left
+        // unprotected by its bound is a gain that can be lost silently, which is
+        // this project's "a bound nobody re-measures decays into a formality"
+        // running the other way.
         Assert.True(
-            exact >= 550,
+            exact >= 585,
             $"{SentryKill}: exact for only {exact} ticks after the last spawn anchor (t{anchor})");
     }
 

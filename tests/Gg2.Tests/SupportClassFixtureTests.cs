@@ -170,17 +170,20 @@ public sealed class SupportClassFixtureTests
         var firstBad = after.Length == 0 ? ticks[^1].Index : after.Min(m => m.Tick);
         var exact = firstBad - anchor.Value;
 
-        // 489 today, t774 to t1263. It was 412 until the engineer's Shotgun
+        // 531 today, t774 to t1305. It was 412 until the engineer's Shotgun
         // landed — seventy-seven ticks bought purely by pellets shoving people
         // the port previously did not shove, which is the clearest evidence in
         // the project that a weapon's *knockback* is part of the trajectory and
-        // not just its damage.
+        // not just its damage — and 489 until a rotated projectile's precise
+        // mask landed (ProjectileMask), which bought forty-two more the same
+        // way: flames and pellets that stopped touching people they were never
+        // touching.
         //
         // ⚠️ Meant to be raised, and it will move for a reason the other
         // fixtures' bounds do not have: implementing any of these three weapons
         // changes what the port does to everybody's trajectory here.
         Assert.True(
-            exact >= 470,
+            exact >= 520,
             $"exact for only {exact} ticks after the last spawn anchor (t{anchor} to t{firstBad})");
 
         // And all three classes are actually in the window.
