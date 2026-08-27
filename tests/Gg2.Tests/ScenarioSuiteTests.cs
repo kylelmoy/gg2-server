@@ -57,6 +57,65 @@ public sealed class ScenarioSuiteTests(ITestOutputHelper output)
     /// </remarks>
     private static readonly Dictionary<string, string> Unmet = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// What each leg costs, and how many rocket jumps the suite flies.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>A leg's BUDGET is not a gate on its cost.</b> Every budget was set
+    /// before the arcs were flown, so they are loose by design — a bot that lost
+    /// its rocket jumps on <c>avanti-ramp-pocket-to-intel</c> would go back to the
+    /// 311 ticks it took before item 4i, stay comfortably inside a budget that
+    /// admits 311, and go entirely unnoticed. That is a 78% slowdown nothing goes
+    /// red for. These numbers close that.
+    /// <para>
+    /// ⚠️ <b>Exact, because <see cref="ARunIsReproducible"/> says it can be.</b>
+    /// Every draw is seeded, the graph comes off disk, and the physics is IEEE
+    /// doubles — so a tick count that moves at all is a behaviour change and not
+    /// noise. <b>A failure here is therefore not a broken test: it is the
+    /// re-record.</b> Check first that the change is one you meant, then that it
+    /// went the direction you meant, then update the row and say so in the
+    /// commit — the same discipline the pinned <c>SIM_UUID</c> asks for.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Both directions.</b> A leg that got FASTER fails too, because a
+    /// baseline nobody re-records is a baseline that stops describing the thing it
+    /// names — the same reason <see cref="Unmet"/> is checked both ways.
+    /// </para>
+    /// <para>
+    /// Re-measured 2026-08-27 after the medic's ally, the projectile reflexes,
+    /// suppression, the arc gate, the mine trigger, the close-in step, the stab
+    /// window, occupancy and the per-tick allocation fix: <b>every leg unchanged
+    /// and the rocket-jump count unchanged.</b>
+    /// </para>
+    /// </remarks>
+    private static readonly Dictionary<string, int> Baseline = new(StringComparer.Ordinal)
+    {
+        ["valley-floor-to-point"] = 219,
+        ["valley-spawn-to-point"] = 523,
+        ["valley-point-to-spawn"] = 456,
+        ["valley-shaft-crate-to-point"] = 95,
+        ["valley-shaft-floor-to-point"] = 161,
+        ["truefort-spawn-to-intel"] = 1717,
+        ["truefort-blue-spawn-exit-west"] = 53,
+        ["avanti-ramp-pocket-to-intel"] = 175,
+        ["gallery-pit-climb"] = 216,
+        ["soldier-shells-generator"] = 600,
+        ["soldier-holds-and-fires"] = 400,
+        ["sniper-fires-at-close-range"] = 400,
+        ["atalia-ground-to-point"] = 62,
+        ["oldfort-perch-reroutes"] = 1190,
+    };
+
+    /// <summary>
+    /// How many rocket jumps the fourteen legs fly between them.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ Pinned rather than <c>&gt; 0</c>: the search offering <em>one</em> arc
+    /// where it used to offer six is a regression that a presence test cannot see,
+    /// and the count is quoted as fact in `CLAUDE.md`.
+    /// </remarks>
+    private const int BaselineRocketJumps = 6;
+
     private static ScenarioWorld Load(Scenario s) =>
         ScenarioWorld.Load(s.Map, s.Area, ReferenceTree.IncludedFiles, ReferenceTree.NavCacheDirectory);
 
@@ -89,6 +148,7 @@ public sealed class ScenarioSuiteTests(ITestOutputHelper output)
         ReferenceTree.RequireNavCache();
 
         var failed = new SortedSet<string>(StringComparer.Ordinal);
+        var costs = new Dictionary<string, int>(StringComparer.Ordinal);
         var rocketJumps = 0;
 
         foreach (var s in Scenarios.All)
@@ -109,21 +169,37 @@ public sealed class ScenarioSuiteTests(ITestOutputHelper output)
                 + $"rj={bot.Path.RocketJumps,-3} {why}");
 
             rocketJumps += bot.Path.RocketJumps;
+            costs[s.Name] = result.Ticks;
 
             if (!ok)
                 failed.Add(s.Name);
         }
 
-        // ⚠️ <b>Somebody rocket-jumped.</b> Nothing else here notices whether the
-        // search is offered those arcs at all: with them switched off every leg
-        // still arrives, just more slowly, and an arrival test cannot see the
-        // difference. Measured — the rocket jump took avanti-ramp-pocket-to-intel
-        // from 311 ticks to 175 and valley-floor-to-point from 251 to 178 — so a
-        // regression that quietly stops offering them costs a third of the walking
-        // time on this suite and nothing goes red without this line.
+        // ⚠️ <b>Somebody rocket-jumped, and exactly as often as before.</b>
+        // Nothing else here notices whether the search is offered those arcs at
+        // all: with them switched off every leg still arrives, just more slowly,
+        // and an arrival test cannot see the difference. Measured — the rocket
+        // jump took avanti-ramp-pocket-to-intel from 311 ticks to 175 and
+        // valley-floor-to-point from 251 to 178 — so a regression that quietly
+        // stops offering them costs a third of the walking time on this suite and
+        // nothing goes red without this line.
+        Assert.Equal(BaselineRocketJumps, rocketJumps);
+
+        // ⚠️ And what each leg COST, which the budgets do not gate — see Baseline.
+        var drifted = costs
+            .Where(c => Baseline[c.Key] != c.Value)
+            .Select(c => $"{c.Key} {Baseline[c.Key]} -> {c.Value}")
+            .ToArray();
+
         Assert.True(
-            rocketJumps > 0,
-            "no leg used a rocket jump; the search is not being offered them at all");
+            drifted.Length == 0,
+            $"the suite's cost moved: {string.Join("; ", drifted)}. This is the re-record, not a "
+            + "broken test — check the change is one you meant and went the way you meant, then "
+            + "update Baseline and say so in the commit.");
+
+        Assert.Equal(
+            new SortedSet<string>(Baseline.Keys, StringComparer.Ordinal),
+            new SortedSet<string>(costs.Keys, StringComparer.Ordinal));
 
         var expected = new SortedSet<string>(Unmet.Keys, StringComparer.Ordinal);
 
