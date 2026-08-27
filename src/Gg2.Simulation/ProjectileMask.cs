@@ -158,6 +158,102 @@ public static class ProjectileMask
         new Transform(projectile).Covers(px, py);
 
     /// <summary>
+    /// <c>place_free</c> against the MAP: whether the projectile's mask clears
+    /// every solid, rather than whether its bounding box does.
+    /// </summary>
+    /// <remarks>
+    /// <b>The map is a precise mask and the projectile is a rectangle</b>, so
+    /// GM8 tests where the two actually overlap — the same asymmetry
+    /// <see cref="Overlaps(in ProjectileState, in Aabb)"/> handles for a
+    /// character. Using the box instead explodes a diagonal rocket a few pixels
+    /// before it reaches the wall.
+    /// <para>
+    /// <b>The box is a sound broad phase in the cheap direction</b>, and this
+    /// leans on it: the mask never reaches outside the box
+    /// (<c>RotatedMaskSampleTests.ARotatedBoxOverStatesItsMask</c>), so a free
+    /// box means a free mask and the scan never runs. It only runs when the box
+    /// says "blocked", which is the rare tick.
+    /// </para>
+    /// <para>
+    /// The narrow phase asks the world about one pixel at a time rather than
+    /// reaching into the walkmask, because a single-pixel box is exactly the
+    /// question being asked and <see cref="CollisionWorld"/> already answers it
+    /// for both the pixel mask and the rectangle list. A projectile's box is a
+    /// few dozen pixels at most.
+    /// </para>
+    /// </remarks>
+    public static bool PlaceFree(
+        CollisionWorld world,
+        in ProjectileState projectile,
+        in CollisionFilter filter)
+    {
+        ArgumentNullException.ThrowIfNull(world);
+
+        var box = projectile.Box;
+
+        if (world.PlaceFree(in box, in filter))
+            return true;
+
+        // Unrotated the mask fills the box, so the box's answer is the mask's.
+        if (Gml.Equal(projectile.ImageAngle % 360, 0))
+            return false;
+
+        var transform = new Transform(projectile);
+
+        for (var y = box.Top; y <= box.Bottom; y++)
+        {
+            for (var x = box.Left; x <= box.Right; x++)
+            {
+                if (!transform.Covers(x, y))
+                    continue;
+
+                var pixel = new Aabb(x, y, x, y);
+
+                if (!world.PlaceFree(in pixel, in filter))
+                    return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <inheritdoc cref="PlaceFree"/>
+    /// <summary>
+    /// <c>place_free</c> against the map's <em>obstacles only</em> — what
+    /// <c>wallSetSolid</c> leaves standing.
+    /// </summary>
+    public static bool PlaceFreeInMask(CollisionWorld world, in ProjectileState projectile)
+    {
+        ArgumentNullException.ThrowIfNull(world);
+
+        var box = projectile.Box;
+
+        if (world.PlaceFreeInMask(in box))
+            return true;
+
+        if (Gml.Equal(projectile.ImageAngle % 360, 0))
+            return false;
+
+        var transform = new Transform(projectile);
+
+        for (var y = box.Top; y <= box.Bottom; y++)
+        {
+            for (var x = box.Left; x <= box.Right; x++)
+            {
+                if (!transform.Covers(x, y))
+                    continue;
+
+                var pixel = new Aabb(x, y, x, y);
+
+                if (!world.PlaceFreeInMask(in pixel))
+                    return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
     /// <c>place_meeting</c> against an axis-aligned box — a character's or a
     /// sentry's, both of which are rectangles.
     /// </summary>

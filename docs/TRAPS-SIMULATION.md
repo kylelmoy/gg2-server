@@ -2218,3 +2218,47 @@ sequences", which would be wrong the first time something did compare them.
 lives in a different `SlotBuffer` for each, and an abstraction that hides which
 buffer is being read is exactly the one that can silently sort by an unrelated
 number. Eight lines of duplication is the cheaper mistake.
+
+### The map test was the last place a projectile was still a box
+
+✅ **Closed 2026-08-27**, and it was worth more than the character path that
+found the rule. `MoveRocket` and its siblings asked
+`world.PlaceFree(projectile.Box, ...)` — the axis-aligned bound — while the same
+projectile had already become a rotated rectangle to characters and sentries.
+The map is a precise pixel mask, so GM8 tests where the two actually overlap.
+
+`ProjectileMask.PlaceFree` and `PlaceFreeInMask` now do that at all fifteen
+sites (Shot, Blade, Flame, Rocket, Mine, the shared mover and the obstacle
+back-out).
+
+**What it bought, and it is the largest single jump any fixture here has had:**
+
+| fixture | before | after |
+|---|---|---|
+| `reference-koth_valley-closedkoth.trace` | 330 | **568** |
+| `reference-gen_destroy-rotation.trace` | 445 | **466** |
+
+**Two better, twenty-five unchanged, none worse.** ⚠️ **A hill map felt it where
+every combat fixture did not**, and the reason is worth keeping: `koth_valley` is
+full of walls, and a bullet that stops a few pixels early stops *in the wrong
+place* — where a bullet that hits a person a few pixels early still hits the
+person. **A geometry error shows up against the map long before it shows up
+against a target**, so when a collision rule changes, the fixture to watch is the
+one with the most terrain, not the one with the most combat.
+
+⚠️ **The box stays as the broad phase and that is load-bearing, not an
+optimisation.** The mask never reaches outside the box, so a free box is a free
+mask and the pixel scan never runs; it only runs on the tick something is
+actually blocked. Without that, every projectile would scan its own area every
+tick.
+
+**The narrow phase asks the world about one pixel at a time** rather than
+reaching into the walkmask, because a 1x1 box is exactly the question and
+`CollisionWorld` already answers it for both the pixel mask and the rectangle
+list. Attribution checked by mutation: forcing the narrow phase to block
+reproduces **exactly 330** on `koth_valley`, the pre-change number, so the whole
+gain is this and nothing else.
+
+⬅️ **Still on the box: projectile vs projectile** — the two Bubble sites. Those
+need *both* masks, so they want a two-projectile overload rather than either
+existing one.

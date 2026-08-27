@@ -384,7 +384,7 @@ public static class Projectiles
         // first pass: afterwards the previous pass has already established that
         // the position is free, because a pellet that reached a solid one was
         // destroyed there.
-        var colliding = !shot.HasMoved && !world.PlaceFree(shot.Box, state.BulletFilter);
+        var colliding = !shot.HasMoved && !ProjectileMask.PlaceFree(world, in shot, state.BulletFilter);
 
         shot.X += shot.Motion.HSpeed;
         shot.Y += shot.Motion.VSpeed;
@@ -394,7 +394,7 @@ public static class Projectiles
         // the muzzle was. Both are the *bullet's* solids — a pellet passes
         // through a PlayerWall and is stopped by a BulletWall and by every gate,
         // whichever team's. state.BulletFilter.
-        colliding |= !world.PlaceFree(shot.Box, state.BulletFilter);
+        colliding |= !ProjectileMask.PlaceFree(world, in shot, state.BulletFilter);
 
         if (!colliding)
             return false;
@@ -427,13 +427,13 @@ public static class Projectiles
     {
         ref var blade = ref state.Projectiles[handle.Index];
 
-        var colliding = !blade.HasMoved && !world.PlaceFree(blade.Box, state.BulletFilter);
+        var colliding = !blade.HasMoved && !ProjectileMask.PlaceFree(world, in blade, state.BulletFilter);
 
         blade.X += blade.Motion.HSpeed;
         blade.Y += blade.Motion.VSpeed;
         blade.HasMoved = true;
 
-        colliding |= !world.PlaceFree(blade.Box, state.BulletFilter);
+        colliding |= !ProjectileMask.PlaceFree(world, in blade, state.BulletFilter);
 
         if (!colliding)
             return false;
@@ -611,7 +611,7 @@ public static class Projectiles
         if (flame.Kind == ProjectileKind.Flame)
             flame.Motion.VSpeed += FlameGravity;
 
-        var colliding = !flame.HasMoved && !world.PlaceFree(flame.Box, state.BulletFilter);
+        var colliding = !flame.HasMoved && !ProjectileMask.PlaceFree(world, in flame, state.BulletFilter);
 
         SubstepWalk(world, ref flame, BurningSubstep, state.BulletFilter, ref colliding);
         flame.HasMoved = true;
@@ -682,7 +682,7 @@ public static class Projectiles
         var colliding = rocket.ExplodeImmediately;
 
         if (!rocket.HasMoved)
-            colliding |= !world.PlaceFree(rocket.Box, state.BulletFilter);
+            colliding |= !ProjectileMask.PlaceFree(world, in rocket, state.BulletFilter);
 
         // ⚠️ `if(!colliding)`, where the Shot moves unconditionally. The
         // reference's own comment: "Only move forward if we don't collide, to
@@ -693,7 +693,7 @@ public static class Projectiles
         {
             rocket.X += rocket.Motion.HSpeed;
             rocket.Y += rocket.Motion.VSpeed;
-            colliding |= !world.PlaceFree(rocket.Box, state.BulletFilter);
+            colliding |= !ProjectileMask.PlaceFree(world, in rocket, state.BulletFilter);
         }
 
         rocket.HasMoved = true;
@@ -757,7 +757,7 @@ public static class Projectiles
 
         // ⚠️ `colliding = !place_free`, not `|=`: unlike the Shot's block this
         // one *assigns*, so the muzzle test is the whole of the initial value.
-        var colliding = !mine.HasMoved && !world.PlaceFree(mine.Box, state.BulletFilter);
+        var colliding = !mine.HasMoved && !ProjectileMask.PlaceFree(world, in mine, state.BulletFilter);
 
         SubstepWalk(world, ref mine, MineSubstep, state.BulletFilter, ref colliding);
         mine.HasMoved = true;
@@ -768,7 +768,7 @@ public static class Projectiles
         // place_meeting(x, y, Obstacle) — the map alone, because the reference
         // swaps gunSetSolids for wallSetSolid around this and wallSetSolid is
         // `with(Obstacle) solid = true` and nothing more.
-        if (!world.PlaceFreeInMask(mine.Box))
+        if (!ProjectileMask.PlaceFreeInMask(world, in mine))
         {
             BackOutOfWalls(world, ref mine, mine.Motion.Direction + 180, mine.Motion.Speed);
 
@@ -782,7 +782,7 @@ public static class Projectiles
         // Re-tested after the stick: a mine that backed out successfully is now
         // free and lives. One that hit a gate never entered the branch at all,
         // and one that could not escape the wall dies in it.
-        if (world.PlaceFree(mine.Box, state.BulletFilter))
+        if (ProjectileMask.PlaceFree(world, in mine, state.BulletFilter))
             return false;
 
         state.FreeProjectile(handle);
@@ -847,7 +847,7 @@ public static class Projectiles
             dx -= stepX;
             dy -= stepY;
 
-            colliding |= !world.PlaceFree(projectile.Box, filter);
+            colliding |= !ProjectileMask.PlaceFree(world, in projectile, filter);
         }
     }
 
@@ -867,7 +867,7 @@ public static class Projectiles
         double directionDegrees,
         double maxDistance)
     {
-        if (world.PlaceFreeInMask(projectile.Box))
+        if (ProjectileMask.PlaceFreeInMask(world, in projectile))
             return;
 
         var radians = Gml.DegToRad(directionDegrees);
@@ -883,7 +883,7 @@ public static class Projectiles
             projectile.X = startX + (stepX * step);
             projectile.Y = startY + (stepY * step);
 
-            if (world.PlaceFreeInMask(projectile.Box))
+            if (ProjectileMask.PlaceFreeInMask(world, in projectile))
                 return;
         }
 
@@ -1182,7 +1182,7 @@ public static class Projectiles
             case ProjectileKind.Needle:
                 // gunSetSolids(); if (!place_free(x, y)) { instance_destroy(); }
                 // — the same muzzle-through-a-wall test as the Character event.
-                if (!world.PlaceFree(projectile.Box, state.BulletFilter))
+                if (!ProjectileMask.PlaceFree(world, in projectile, state.BulletFilter))
                 {
                     state.FreeProjectile(handle);
                     return true;
@@ -1290,7 +1290,7 @@ public static class Projectiles
         // through a wall is inside that wall, and dies there without dealing
         // damage. This is the only wall test a Shot ever gets, which is why it
         // is here rather than in Move.
-        if (!world.PlaceFree(projectile.Box, state.BulletFilter))
+        if (!ProjectileMask.PlaceFree(world, in projectile, state.BulletFilter))
         {
             state.FreeProjectile(handle);
             return true;

@@ -131,9 +131,17 @@ public sealed class KothFixtureTests
         var firstBad = after.Length == 0 ? ticks[^1].Index : after.Min(m => m.Tick);
         var exact = firstBad - anchor.Value;
 
-        // 330 today, t409 to t739.
+        // 568 today, t409 to t977.
+        //
+        // ⚠️ Raised 300 -> 550 on 2026-08-27, when the projectile-vs-MAP test
+        // moved from the bounding box to the rotated mask: 330 -> 568, the
+        // largest single jump any fixture in this project has had from one
+        // change. A hill map is full of walls and a bullet that stops a few
+        // pixels early stops in the wrong place, so this recording felt it where
+        // the combat fixtures did not. The floor moves with the measurement, so
+        // the gain cannot be lost silently.
         Assert.True(
-            exact >= 300,
+            exact >= 550,
             $"{Fixture}: exact for only {exact} ticks after the last spawn anchor (t{anchor})");
     }
 
