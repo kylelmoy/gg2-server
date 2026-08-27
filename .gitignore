@@ -16,6 +16,18 @@ traces/
 # run in CI; this is what makes that true.
 !tests/Gg2.Tests/Fixtures/*.trace
 
-# Session handoffs are disposable messages to the next session, not documentation.
-# See CLAUDE.md, "Where documentation goes".
+# Claude Code session automation: the hooks, settings.json and commands that
+# carry a handoff from one session to the next.
+#
+# ⚠️ The negation is load-bearing. ~/.gitignore_global excludes .claude/
+# wholesale, and git will not descend into an excluded DIRECTORY to find a
+# negated file inside it - so the directory has to be re-included first or
+# .claude/hooks/ is silently untracked and a fresh clone gets none of it.
+!.claude/
+
+# ...but handoffs stay out. They are disposable messages to the next session,
+# not documentation. See CLAUDE.md, "Where documentation goes".
 .claude/notes/
+
+# Machine-specific overrides, never team config.
+.claude/settings.local.json
