@@ -28,7 +28,9 @@ namespace Gg2.Bots;
 /// the port carries a "0 means off" escape the reference reaches by flooring at
 /// one. So the round clock never starts, no limit is ever reached, nobody
 /// respawns and nothing is placed to capture. The terrain and the gates are
-/// real, because a route that ignores a team gate is not a route.
+/// real, because a route that ignores a team gate is not a route — and so are
+/// the generators, which are a thing to shoot rather than a mode to play; see
+/// the comment on <c>Generators.Place</c> in the constructor.
 /// </para>
 /// </remarks>
 public sealed class ScenarioWorld
@@ -92,6 +94,20 @@ public sealed class ScenarioWorld
         // the day something does, the failure is a class silently swapped.
         for (var i = 0; i < TeamBalance.ClassCount; i++)
             _state.ClassLimits[i] = 255;
+
+        // ⚠️ The one objective a scenario world DOES place, and the exception is
+        // not an inconsistency. A generator is not something a bot stands on or
+        // carries — it is a 2,100 hp thing that gets SHOT, so it is a combat
+        // target rather than a gamemode, and `soldier-shells-generator` exists
+        // precisely because it was invisible to every bot in the game and the
+        // symptom was silent: the round simply never ended.
+        //
+        // It is inert here for the ordinary reason. Rounds.StepGenerator is
+        // reached only under GameMode.Generator, and this world is
+        // TeamDeathmatch — so the generators take damage, regenerate their
+        // shields exactly as they would in a real match, and decide nothing.
+        // A map with no generators gets none and nothing changes.
+        Generators.Place(ref _state, Map);
 
         // Slot 0 is the server's own reserved player and always exists, which is
         // what makes CharacterState.Nobody 255 rather than 0. A scenario has no

@@ -8,9 +8,8 @@ namespace Gg2.Tests;
 /// graphs they name.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>The scenarios themselves cannot pass yet and these tests do not pretend
-/// otherwise.</b> Every one runs a bot and there is no bot behaviour in this
-/// port (phase 7 item 4). What <em>is</em> checkable now is the data: that every
+/// <b>What these gate is the DATA, not the behaviour.</b> Running the scenarios
+/// is <c>ScenarioSuiteTests</c>'s job; what is checked here is that every
 /// coordinate resolves to a real nav node on its real map, which is precisely
 /// the failure the reference's runner reports as VOID — "a raw objective
 /// coordinate usually does NOT resolve to a node on its own", and a scenario

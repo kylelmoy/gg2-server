@@ -38,7 +38,7 @@ namespace Gg2.Bots;
 /// (<c>botObjectiveUpdate</c>) so a goal has to be given from outside.
 /// </para>
 /// </remarks>
-public sealed class ScriptedBot : IInputSource
+public sealed class ScriptedBot : IInputSource, IScenarioSubject
 {
     private readonly PathFollower _follower;
     private readonly NavGraph? _graph;
@@ -140,6 +140,12 @@ public sealed class ScriptedBot : IInputSource
     /// <summary>Sends the bot somewhere. Null graph means it cannot go.</summary>
     public bool SetGoal(double worldX, double worldY) =>
         _graph is not null && _follower.SetGoal(Path, worldX, worldY);
+
+    /// <summary>
+    /// Is a target held right now — <see cref="IScenarioSubject"/>'s half of a
+    /// combat scenario.
+    /// </summary>
+    public bool HasTarget => Combat.Target.Exists;
 
     /// <summary>
     /// One tick: plan, steer, aim, fire, and hand back the four input bytes.

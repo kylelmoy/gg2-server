@@ -12,14 +12,16 @@ namespace Gg2.Bots;
 /// because every new GML script costs a full Game Maker build, and a harness
 /// that wanted GML per scenario would cost a minute per test written.
 /// <para>
-/// ⚠️ <b>These are not yet executable assertions in this port, and saying so is
-/// the point.</b> Every one of them runs a bot, and there is no bot behaviour
-/// here yet — that is phase 7 item 4. What is ported now is the <em>data</em>
-/// and the harness that will run it (<see cref="ScenarioWorld"/>,
-/// <see cref="ScenarioRunner"/>), so that item 4 is measurable from its first
-/// commit rather than felt. <c>ScenarioDefinitionTests</c> gates what can be
-/// gated without behaviour: that every coordinate resolves to a real nav node
-/// on its real map, which is the check the reference's runner reports as VOID.
+/// <b>These run for real now</b> — <c>ScenarioSuiteTests</c> drives every one of
+/// them with a <see cref="ScriptedBot"/> and asserts the outcome, and
+/// <c>ScenarioDefinitionTests</c> still gates the part that needs no behaviour:
+/// that every coordinate resolves to a real nav node on its real map, which is
+/// the check the reference's runner reports as VOID.
+/// <para>
+/// ⚠️ <b>Six of the fourteen do not pass, and the list is asserted exactly.</b>
+/// Five look like one defect in the takeoff run-up and one may not be; the
+/// diagnosis lives on <c>ScenarioSuiteTests.Unmet</c>, beside the names, because
+/// it is only useful to somebody reading the failure.
 /// </para>
 /// <para>
 /// The measurements quoted in each <c>about</c> are the reference
