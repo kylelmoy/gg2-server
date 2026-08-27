@@ -44,8 +44,8 @@ public sealed class ScriptedBot : IInputSource, IScenarioSubject
     /// <remarks>The reference's own literal 300, ten seconds.</remarks>
     private const int SpotBanTicks = 300;
 
-    private readonly PathFollower _follower;
-    private readonly NavGraph? _graph;
+    private PathFollower _follower;
+    private NavGraph? _graph;
 
     private bool _goalIsSpot;
 
@@ -201,6 +201,37 @@ public sealed class ScriptedBot : IInputSource, IScenarioSubject
     /// </para>
     /// </remarks>
     public int SpotBanUntil { get; set; }
+
+    /// <summary>
+    /// Moves this bot to a new map.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>A follower, a route and a blacklist are all indices into ONE graph</b>,
+    /// so a bot that survives a map rotation carrying them is holding node numbers
+    /// that now mean somewhere else entirely — a route through a map that is no
+    /// longer loaded, and a blacklist banning edges that were never flown. The
+    /// reference frees exactly this on a departure (<c>botNavRelease</c>) and
+    /// re-teams every bot on a map change (<c>botReteamAll</c>); a rotation is the
+    /// case where both matter at once.
+    /// <para>
+    /// The objective goes too, because a <see cref="BotObjective"/> holds the graph
+    /// and the map's spawn points. The caller supplies a fresh one.
+    /// </para>
+    /// </remarks>
+    public void SetMap(NavGraph? graph)
+    {
+        _graph = graph;
+        _follower = graph is null ? null! : new PathFollower(graph);
+
+        Path.FreePath();
+        Path.HasGoal = false;
+        Path.Blacklist.Clear();
+        Path.BlacklistOrder.Clear();
+
+        Objective = null;
+        _goalIsSpot = false;
+        SpotBanUntil = 0;
+    }
 
     /// <summary>Sends the bot somewhere. Null graph means it cannot go.</summary>
     public bool SetGoal(double worldX, double worldY) =>

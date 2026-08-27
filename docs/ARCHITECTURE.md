@@ -47,6 +47,14 @@ Gg2.Host          console entry point.
 references and keep it that way — the moment the physics can read a socket, the
 parity harness stops being able to run it.
 
+⚠️ **`Gg2.Server` references `Gg2.Bots`, and not the other way round.** The bot
+*population manager* is server-side in the reference (`botPopulationUpdate` is
+called from `GameServer`'s Begin Step) because only the server has a roster, a
+config file and a socket to broadcast a join on — so `Gg2.Server.BotPopulationService`
+drives `Gg2.Bots.BotPopulation`'s decisions. `Gg2.Bots` stays pure and gains
+nothing from the edge, and the rule above is untouched. The `IInputSource` seam
+still means the *simulation* never special-cases a bot.
+
 ## Threading
 
 - **One thread owns the tick**, at a fixed 30 Hz. It never blocks on I/O.

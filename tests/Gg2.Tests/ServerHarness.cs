@@ -78,6 +78,9 @@ public sealed class ServerHarness : IDisposable
     }
 
     /// <summary>Completes the whole handshake for a new client and returns it.</summary>
+    /// <summary>Roster entries that are neither a bot nor the server's own slot 0.</summary>
+    private int HumanRosterCount => Server.RosterCount - Server.BotSlots.Count - 1;
+
     public LoopbackClient JoinClient(string name)
     {
         var client = Connect();
@@ -96,9 +99,16 @@ public sealed class ServerHarness : IDisposable
         TickUntil(() => client.Received.Count > 0, "the slot reservation");
         Assert.Equal(Gg2.Protocol.MessageType.ReserveSlot, client.TakeMessageType());
 
-        var before = Server.PlayerCount;
+        // ⚠️ Humans ON THE ROSTER, which is neither of the two obvious counts.
+        // PlayerCount includes bots, so on a server with the population manager
+        // running it moves for reasons that have nothing to do with this join — a
+        // bot displaced by the joining human puts it straight back where it
+        // started. And HumanCount is getNumberOfOccupiedSlots, which counts a
+        // joiner that has merely RESERVED a slot: it went up on the reservation a
+        // few lines above and does not move again here.
+        var before = HumanRosterCount;
         client.SendPlayerJoin();
-        TickUntil(() => Server.PlayerCount > before, "the join to complete");
+        TickUntil(() => HumanRosterCount > before, "the join to complete");
 
         return client;
     }

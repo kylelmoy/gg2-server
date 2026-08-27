@@ -12,6 +12,18 @@
     <ProjectReference Include="..\Gg2.Protocol\Gg2.Protocol.csproj" />
     <ProjectReference Include="..\Gg2.Maps\Gg2.Maps.csproj" />
     <ProjectReference Include="..\Gg2.Simulation\Gg2.Simulation.csproj" />
+
+    <!--
+      ⚠️ Gg2.Server depends on Gg2.Bots, and NOT the other way round. The
+      population manager is server-side in the reference (botPopulationUpdate is
+      called from GameServer's Begin Step) because only the server has a roster,
+      a config file and a socket to broadcast a join on. Gg2.Bots stays pure and
+      gains nothing from this edge.
+
+      docs/ARCHITECTURE.md's one hard rule is that Gg2.Simulation must not
+      reference Gg2.Server, and that is untouched.
+    -->
+    <ProjectReference Include="..\Gg2.Bots\Gg2.Bots.csproj" />
   </ItemGroup>
 
 </Project>

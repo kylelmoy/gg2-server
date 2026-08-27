@@ -62,6 +62,11 @@ public sealed class GameServer : IDisposable
     // Reused every tick; see AdvanceSimulation.
     private readonly PlayerInput[] _inputs = new PlayerInput[WorldState.MaxSlots];
 
+    // botPopulationUpdate's half that needs a roster and a socket. Created in
+    // Start, because it needs a `this` and the constructor does not have one to
+    // hand out safely.
+    private BotPopulationService? _population;
+
     // One bot's commands for one tick, reused across bots and across ticks: an
     // inline buffer, so this field is the whole storage and ServiceBots
     // allocates nothing.
@@ -121,6 +126,86 @@ public sealed class GameServer : IDisposable
 
     public int PlayerCount => _roster.Count;
 
+    /// <summary>The configuration this server was started with.</summary>
+    public ServerOptions Options => _options;
+
+    /// <summary>The roster's size, bots and slot 0 included.</summary>
+    public int RosterCount => _roster.Count;
+
+    /// <summary>
+    /// The map that is loaded right now.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Not <see cref="ServerOptions.Map"/>.</b> Those are the same string
+    /// until the first rotation and different for ever after, and reading the
+    /// option instead is the bug <c>MapRotationTests</c> was written to catch: every
+    /// player joining after round one was told the wrong map and then simulated a
+    /// different world, silently.
+    /// </remarks>
+    public string CurrentMap => _currentMap;
+
+    /// <summary>
+    /// <c>getNumberOfOccupiedSlots</c>: humans only.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ Neither bots nor the server's own reserved slot 0 count. Including
+    /// either would make the fill target chase its own tail — every bot added
+    /// would reduce the deficit it was added for.
+    /// </remarks>
+    public int HumanCount => OccupiedSlots();
+
+    /// <summary>Every bot's roster slot, ascending.</summary>
+    /// <remarks>
+    /// Rebuilt per call rather than cached: a departure compacts the roster, so a
+    /// cached list is stale the moment anybody leaves and the failure is a bot
+    /// removed from somebody else's slot.
+    /// </remarks>
+    public IReadOnlyList<int> BotSlots
+    {
+        get
+        {
+            var slots = new List<int>();
+
+            for (var i = 1; i < _roster.Count; i++)
+            {
+                if (_roster[i].IsBot)
+                    slots.Add(i);
+            }
+
+            return slots;
+        }
+    }
+
+    public Team TeamOf(int slot) => _roster[slot].Team;
+
+    public PlayerClass ClassOf(int slot) => _roster[slot].Class;
+
+    public IInputSource SourceOf(int slot) => _roster[slot].Source;
+
+    public bool IsAlive(int slot) => _world.IsAlive(slot);
+
+    /// <summary>
+    /// How many players are on each team — <c>botPickTeam</c>'s count.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ Everybody, humans included: a bot filling a server is balancing the
+    /// game rather than balancing the bots. ⚠️ And slot 0 is skipped, because the
+    /// server's own reserved player is a spectator that never plays.
+    /// </remarks>
+    public void CountTeams(out int red, out int blue)
+    {
+        red = 0;
+        blue = 0;
+
+        for (var i = 1; i < _roster.Count; i++)
+        {
+            if (_roster[i].Team == Team.Red)
+                red++;
+            else if (_roster[i].Team == Team.Blue)
+                blue++;
+        }
+    }
+
     /// <summary>The port actually bound, which differs from the request when it was 0.</summary>
     public int BoundPort { get; private set; }
 
@@ -148,6 +233,14 @@ public sealed class GameServer : IDisposable
         // Slot 0, the server's own reserved player: a spectator that always
         // exists, now in the world as well as the roster.
         _world.AddPlayer(0);
+
+        // ⚠️ Before OpenMap, because OpenMap is what points it at a map — and
+        // after AddPlayer(0), because its first Retarget walks the roster.
+        //
+        // Seeded from the port, so two servers on one machine roll differently and
+        // one server rolls the same way every run. ⚠️ NOT WorldState.Random: that
+        // stream is observable simulation and a bot joining must not move it.
+        _population = new BotPopulationService(this, _log, (uint)_options.Port);
 
         var map = OpenMap(_options.Map, area: 1);
 
@@ -258,6 +351,14 @@ public sealed class GameServer : IDisposable
         Rounds.Start(ref _world);
 
         _currentMap = name;
+
+        // ⚠️ Every bot's follower, route and blacklist are indices into the graph
+        // that was loaded a moment ago, so a rotation has to hand them the new one
+        // — see ScriptedBot.SetMap. The reference re-teams every bot across a map
+        // change (botReteamAll) and frees the nav state on the way
+        // (botNavRelease); this is both, in the one place a map is opened.
+        _population?.MapChanged(map, area, _options.NavCacheDirectory);
+
         return map;
     }
 
@@ -419,6 +520,12 @@ public sealed class GameServer : IDisposable
         _frame++;
 
         ServiceClients();
+
+        // ⚠️ Before ServiceBots, so a bot added this tick is polled this tick
+        // rather than pressing nothing for one frame. GameServerBeginStep.gml
+        // calls botPopulationUpdate ahead of the input pass for the same reason.
+        _population?.Service();
+
         ServiceBots();
 
         // Order matters and is the reference's. GameServerBeginStep.gml

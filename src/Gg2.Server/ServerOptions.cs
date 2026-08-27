@@ -1,3 +1,4 @@
+using Gg2.Bots;
 using Gg2.Protocol;
 
 namespace Gg2.Server;
@@ -78,6 +79,23 @@ public sealed class ServerOptions
     /// <c>Source/gg2/Included Files</c>.
     /// </summary>
     public string MapDirectory { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Where the bot nav caches live — the reference's
+    /// <c>Source/build/botnav</c>.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ Empty, and a missing cache, are both fine and mean different things:
+    /// empty is "this server does not navigate", a miss is "this map has no cache
+    /// generated". Neither is an error, because a server with an ungenerated map
+    /// in its rotation should keep serving it — <c>navCacheLoad.gml</c>'s own
+    /// contract. The directory is gitignored in the reference and is not shipped,
+    /// so a fresh checkout has none.
+    /// </remarks>
+    public string NavCacheDirectory { get; set; } = string.Empty;
+
+    /// <summary>The <c>[Bots]</c> section. Off by default, as in the reference.</summary>
+    public BotPopulationOptions Bots { get; set; } = new();
 
     public void Validate()
     {
