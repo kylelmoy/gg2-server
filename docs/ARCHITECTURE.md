@@ -209,12 +209,18 @@ figure has never been measured**, and measuring it is phase 7's exit criterion.
 
 Two things to carry over rather than reinvent:
 
-- **The nav graph generator already lives outside the game.** `gg2-nav-gen`
-  builds `Source/build/botnav/<map>_a<area>.txt` offline. The port can read the
-  same cache — `gg2-agent/tools/navgraph.js` documents the format, including the
-  non-obvious `ds_grid_write` column-major layout with sixteen-byte cells.
-  Longer term, moving generation into `Gg2.Bots` is a natural consolidation, but
-  reading the existing cache is the cheap first step.
+- **The nav graph generator already lives outside the game**, and the port
+  **reads its cache** (phase 7 item 2): `gg2-nav-gen` builds
+  `Source/build/botnav/<map>_a<area>.txt` offline; `Gg2.Bots.NavCache` loads it
+  and `Gg2.Bots.NavGraph` is the model, with the coordinate conversions, the
+  node lookup, the gate rules and the two indices `navCacheLoad.gml` derives
+  rather than stores. Moving *generation* into `Gg2.Bots` is a natural
+  consolidation later; it is not done and is not needed.
+  ⚠️ `gg2-agent/tools/navgraph.js` documents the format and is right about it —
+  including the non-obvious `ds_grid_write` column-major layout with
+  sixteen-byte cells — but it **floors the feet row where the game rounds it**,
+  which is a whole row on stepped terrain. CLAUDE.md, "the nav cache reader",
+  has that and the rest of the traps.
 - **The `BOT_*` constants** in `Gang-Garrison-2/Source/gg2/Constants.xml` are a
   tuned set with real playtesting behind them. Port the values even if the
   algorithms get rewritten.
