@@ -141,9 +141,17 @@ give it a bounded on-disk format.
 **Deadline.** This is the only item here with one. Data not collected during the
 port's first public games does not exist afterwards.
 
-❌ **Not built.** The parity recorder records a *server's own broadcast stream*;
-nothing records human input to disk on a live server, and no switch exists to turn
-it on. Still the item with the deadline.
+✅ **Built 2026-08-27**: `gg2-server --record <dir>`, off by default. ⚠️ **There
+was nothing to capture** — the broadcast stream already carries every player's
+keys and aim every tick, so the recorder tees `GameServer.FlushBroadcast` and
+this item's "do not design a second logging path" holds by construction. Verified
+end to end: `gg2-parity census` reads a six-bot game as 27,989 messages, framed
+cleanly to the last byte.
+
+⚠️ **The DEADLINE is not discharged by having built it** — it is discharged by
+switching it on before the first public game. And **one human is not the data
+this item wants**: it asks for `p(action | state)` over real *opponents*, and a
+solo session is repeatable whenever; a game with strangers is not.
 
 ## 4. Keep the action space exactly the wire action
 
@@ -269,8 +277,12 @@ all, and it is worth more day-to-day than any learned policy.
 `ARCHITECTURE.md`'s control surface is the interactive version of this; this is
 the batch version, and the two should share their hosting code.
 
-❌ **Not built.** It is phase 8's, in `docs/PLAN.md`, and the tooling lane's per
-`docs/PARALLEL.md`.
+✅ **Built 2026-08-27**: `HeadlessMatch` (`Reset`/`Step`/`State`) with
+`MatchRunner` as a loop over it, and `gg2-server eval` on top. ⚠️ **Its results do
+not depend on the thread count**, and that is gated by comparing whole result
+arrays — digest included — rather than win rates, because every match owns its own
+`CollisionWorld`, `ScriptedBot`s and therefore its own `NavSearch`. 44 matches
+across all 22 maps in 3.3s, 3,548x real time.
 
 ## 9. `SIM_UUID`, and refusing a policy that does not match it
 

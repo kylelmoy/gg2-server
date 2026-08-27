@@ -372,9 +372,15 @@ public static class Generators
     /// the sentry survives the round.
     /// </para>
     /// <para>
-    /// <b>Not modelled</b>: the <c>DeadGuy</c>, <c>Gib</c> and <c>Bubble</c>
-    /// loops. The first two are client-side debris and the third is the
-    /// unimplemented Quote's projectile.
+    /// <b>Not modelled as loops</b>: the <c>DeadGuy</c>, <c>Gib</c> and
+    /// <c>Bubble</c> <c>with()</c> blocks. The first two are client-side debris.
+    /// ⚠️ The third is a transcription note and <em>not</em> a gap — this remark
+    /// used to call the Bubble "Quote's unimplemented projectile", which stopped
+    /// being true when Quote landed. The bubble is
+    /// <c>ProjectileKind.Bubble</c>, and the explosion really does pop the ones
+    /// in its blast: <see cref="Explosions.PopBubblesByBox"/>, called below.
+    /// What is not transcribed is the GML loop, which is CLAUDE.md's rule rather
+    /// than an omission.
     /// </para>
     /// </remarks>
     public static void Destroy(CollisionWorld world, ref WorldState state, Team team)

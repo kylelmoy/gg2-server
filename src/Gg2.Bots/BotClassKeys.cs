@@ -18,14 +18,12 @@ namespace Gg2.Bots;
 /// them to the reactive specials too.
 /// </para>
 /// <para>
-/// <b>One refinement is not ported, and it is conservative when absent</b> —
-/// deliberately, so that a missing helper makes a bot shoot <em>less</em> rather
-/// than shoot wrongly:
+/// ✅ <b>Every refinement is ported, including <c>botStabWindow</c></b> — whether
+/// a cloaked spy's knife would land, in <see cref="BotStab"/>. This remark used
+/// to say it was missing and that a spy therefore shot instead; that stopped
+/// being true and the comment did not, which is the sort of thing an audit of
+/// "what is unfinished" has to read past.
 /// </para>
-/// <list type="bullet">
-/// <item><c>botStabWindow</c> — whether a cloaked spy's knife would land. Absent,
-/// a spy never stabs and shoots instead.</item>
-/// </list>
 /// </remarks>
 public static class BotClassKeys
 {
