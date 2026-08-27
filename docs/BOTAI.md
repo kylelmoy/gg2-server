@@ -6,8 +6,8 @@ and the bot seam have shipped.
 
 ⚠️ **Audited against the shipped code on 2026-08-27, and one of them was false.**
 `BotAiConstraintsTests` now asserts the five that are structural facts rather than
-design intent; each verdict is recorded against its item below. Items 3, 8, 9 and
-10 remain unbuilt and say so.
+design intent; each verdict is recorded against its item below. Items 3, 8 and 10 remain
+unbuilt and say so; item 9 was built on the audit's own finding.
 
 None of this asks for a neural network to be built. It asks that the port not
 foreclose one.
@@ -294,10 +294,30 @@ invalidates every checkpoint. That is correct.
 to stamp before the physics exists. Do not defer it past that: a stamp added
 after the first checkpoints are trained cannot tell you which ones were valid.
 
-❌ **Not built, and it is now past the point the item warned about** — phases 4
-through 7 are all done and there is no stamp. Nothing has been trained yet, so
-nothing is invalid; the cost so far is only that the stamp has to be derived from
-a larger surface than it would have been.
+✅ **Built** (2026-08-27): `Gg2.Simulation.SimulationStamp`, and
+`SimulationStampTests` is the gate. `Uuid` is `99b7ab3141e31fb4` over 213 entries
+and `Require` **throws** on a mismatch, naming both stamps so an operator can tell
+which side is stale.
+
+⚠️ **The surface is chosen, not swept.** In: the physics constants (which live on
+`ClassStats`, not only `Gml`), the `BOT_*` and `NAV_*` blocks, the per-class table
+and the blast tables, and the two hand-bumped version numbers. **Out:
+`GameConstants` — configuration and protocol.** A port number moving must not
+invalidate every checkpoint, because **a stamp that churns gets ignored**.
+
+⚠️ **Round-trip formatting, so a one-ULP change moves it** — `Gml.PointSix` and
+its four siblings *are* gravity and the friction factors, and fifteen digits
+cannot tell them from the plain literals. And **FNV-1a rather than
+`string.GetHashCode()`**, which is randomised per process and would refuse every
+policy after a restart.
+
+⚠️ **The digest is pinned in the test, and a change there is the bump rather than
+a broken test.** The question to answer before editing that line is which
+checkpoints it just invalidated.
+
+It arrives at the end of phase 7 rather than with phase 4 as this item asks.
+Nothing has been trained, so nothing is invalid; the cost paid is only that the
+stamp had to be derived from a larger surface than it would have been.
 
 ## 10. A `Gg2.Env` project
 
