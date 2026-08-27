@@ -18,21 +18,13 @@ namespace Gg2.Bots;
 /// them to the reactive specials too.
 /// </para>
 /// <para>
-/// <b>Four refinements are not ported, and each is conservative when absent</b> —
+/// <b>One refinement is not ported, and it is conservative when absent</b> —
 /// deliberately, so that a missing helper makes a bot shoot <em>less</em> rather
 /// than shoot wrongly:
 /// </para>
 /// <list type="bullet">
-/// <item><c>botArcClear</c> — a splash class checking that its own arc reaches
-/// the target without hitting a wall first. Absent, <c>arcClear</c> is true,
-/// which is also the reference's value when the weapon has no ballistics. A
-/// soldier therefore fires at a target behind cover it would have declined.</item>
-/// <item><c>botIncomingProjectile</c> — the pyro's airblast trigger. Absent, a
-/// pyro never airblasts.</item>
 /// <item><c>botStabWindow</c> — whether a cloaked spy's knife would land. Absent,
 /// a spy never stabs and shoots instead.</item>
-/// <item><c>botMinesArmed</c> — whether a demoman has mines worth detonating.
-/// Absent, it never detonates them.</item>
 /// </list>
 /// </remarks>
 public static class BotClassKeys
@@ -131,16 +123,28 @@ public static class BotClassKeys
                     : PlayerKeys.None;
 
             case PlayerClass.Demoman:
-                // The detonation (SPECIAL) waits on botMinesArmed, which is not
-                // ported — see this type's remarks.
+            {
                 // ⚠️ Withholding rather than re-solving for a flatter shot is
                 // deliberate: a flatter solution generally means closing the
                 // distance, and where this bot stands is the objective layer's
                 // decision rather than this one's.
-                return hasSubject && arcClear
+                var lob = hasSubject && arcClear
                     && distance >= BotTargeting.ClassMinBand(PlayerClass.Demoman)
                     ? PlayerKeys.Attack
                     : PlayerKeys.None;
+
+                // ⚠️ SPECIAL detonates EVERY mine this bot has out at once, so it
+                // is worth pressing the moment any one of them has something inside
+                // its blast — which is what a chokepoint full of mines is for. It
+                // carries no `hasSubject` test on purpose: a mined doorway is worth
+                // springing on whoever walks into it, and that is very often not the
+                // thing this demoman is aiming at.
+                var detonate = BotMines.Armed(in world, slot)
+                    ? PlayerKeys.Special
+                    : PlayerKeys.None;
+
+                return lob | detonate;
+            }
 
             case PlayerClass.Pyro:
             {
