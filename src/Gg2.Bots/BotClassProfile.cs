@@ -127,4 +127,51 @@ public static class BotClassProfile
         PlayerClass.Spy => BotSpotMode.Flank,
         _ => BotSpotMode.None,
     };
+
+    /// <summary>
+    /// One bot in every N of this class's lean group defends.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The class term is a PERIOD, not a veto, and that distinction is the
+    /// whole design.</b> The obvious rule — "Engineers and Heavies defend, Scouts
+    /// and Spies attack" — breaks at both ends: a team of nine Engineers would
+    /// have nobody attacking and a team of nine Scouts nobody defending, and
+    /// <c>botPopulationUpdate</c> picks a class with <c>irandom(8)</c>, so it can
+    /// produce either. Making the class choose <em>how often</em> keeps a split at
+    /// every composition — an all-Engineer team runs half defenders, an all-Scout
+    /// team one in six — and with every class on the default it reduces exactly to
+    /// the old behaviour.
+    /// <para>
+    /// Keen because a sentry is a fixed emplacement and 200 hp at run 0.8 is
+    /// ground-holding rather than objective-running; averse because
+    /// <c>capStrength</c> 2 makes the scout the fastest capper in the game, and a
+    /// spy standing next to its own flag is a spy doing a job any class could do.
+    /// </para>
+    /// </remarks>
+    public static int DefendEvery(PlayerClass playerClass) => playerClass switch
+    {
+        PlayerClass.Engineer or PlayerClass.Heavy => BotConstants.DefendKeen,
+        PlayerClass.Scout or PlayerClass.Spy => BotConstants.DefendAverse,
+        _ => BotConstants.DefendEvery,
+    };
+
+    /// <summary>
+    /// How much this class values height when choosing where to stand, in
+    /// <c>BotGoalSpot</c>'s <c>highBonus</c> units.
+    /// </summary>
+    /// <remarks>
+    /// A sniper values height more than anything else does: elevation is what
+    /// turns a long sightline into one nobody can walk out of. A heavy wants it
+    /// for the same reason at a shorter range, an engineer only mildly — a
+    /// sentry's value is the corridor it covers, not the storey it stands on —
+    /// and a spy not at all, since a flank is about being unseen rather than
+    /// about being above.
+    /// </remarks>
+    public static double SpotHigh(PlayerClass playerClass) => playerClass switch
+    {
+        PlayerClass.Sniper => BotConstants.SpotHighSniper,
+        PlayerClass.Heavy => BotConstants.SpotHighBonus,
+        PlayerClass.Engineer => BotConstants.SpotHighBonus / 2,
+        _ => 0,
+    };
 }

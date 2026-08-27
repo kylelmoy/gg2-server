@@ -40,8 +40,14 @@ namespace Gg2.Bots;
 /// </remarks>
 public sealed class ScriptedBot : IInputSource, IScenarioSubject
 {
+    /// <summary>How long a spot that never planned is banned for.</summary>
+    /// <remarks>The reference's own literal 300, ten seconds.</remarks>
+    private const int SpotBanTicks = 300;
+
     private readonly PathFollower _follower;
     private readonly NavGraph? _graph;
+
+    private bool _goalIsSpot;
 
     /// <summary>
     /// Builds a bot for one map.
@@ -137,6 +143,65 @@ public sealed class ScriptedBot : IInputSource, IScenarioSubject
     /// </remarks>
     public GmlRandom Random;
 
+    /// <summary>
+    /// What decides where this bot goes, or null for a bot that is told from
+    /// outside.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Null is not a degraded mode.</b> A scenario, a test and a rollout
+    /// evaluator all want a bot they can point at something, and the reference has
+    /// the same escape (<c>botGoalLocked</c>). What null costs is exactly the
+    /// objective layer and nothing else.
+    /// </remarks>
+    public BotObjective? Objective { get; set; }
+
+    /// <summary>
+    /// Which half of the team this bot is on. ⚠️ <b>Assigned once at join, never
+    /// per tick</b> — see <see cref="BotRoles"/>.
+    /// </summary>
+    public BotRole Role { get; set; }
+
+    /// <summary>
+    /// This bot's constant lateral goal offset — <see cref="BotRoles.SpreadX"/>.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ It has to be constant for the bot's whole life: a spread that changes
+    /// re-issues the goal every time it is read, and re-issuing forces an immediate
+    /// re-plan.
+    /// </remarks>
+    public double SpreadX { get; set; }
+
+    /// <summary>
+    /// Suspends the objective layer, so a goal set from outside stays set.
+    /// </summary>
+    /// <remarks>
+    /// <c>botGoalLocked</c>. Nothing in the game sets it; it is here for the same
+    /// reason it is there — a harness that has already decided where the bot should
+    /// go.
+    /// </remarks>
+    public bool GoalLocked { get; set; }
+
+    /// <summary>
+    /// A tick before which a <see cref="BotGoal.IsSpot"/> goal will not be tried.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>A spot is chosen without checking reachability</b>
+    /// (<see cref="BotGoalSpot"/>), so one in another component of the map presents
+    /// as a goal that never plans. This is the only place that can notice — a goal
+    /// still held with no route behind it — and the answer is to stop trying spots
+    /// for a while rather than leave the bot standing at spawn wanting something it
+    /// cannot walk to.
+    /// <para>
+    /// ⚠️ <b>UNGATED, and deliberately recorded as such.</b> Deleting the ban leaves
+    /// every test green, checked by mutation. What it needs is a spot that resolves
+    /// and cannot be reached, which needs a nav graph with two components — and every
+    /// shipped graph is connected for the team that owns the ground, so the state is
+    /// not reachable from a real map. Building a synthetic two-component graph would
+    /// gate it; nothing else will, and a green suite is not evidence this works.
+    /// </para>
+    /// </remarks>
+    public int SpotBanUntil { get; set; }
+
     /// <summary>Sends the bot somewhere. Null graph means it cannot go.</summary>
     public bool SetGoal(double worldX, double worldY) =>
         _graph is not null && _follower.SetGoal(Path, worldX, worldY);
@@ -174,6 +239,8 @@ public sealed class ScriptedBot : IInputSource, IScenarioSubject
 
         AliveLast = true;
 
+        UpdateObjective(in world, slot, tick);
+
         var navKeys = _graph is null
             ? PlayerKeys.None
             : _follower.Step(Path, in self, tick, Query);
@@ -195,6 +262,53 @@ public sealed class ScriptedBot : IInputSource, IScenarioSubject
     /// distance, and there the retreat is right: a pyro closing on somebody
     /// already in its face should back off first and close second, not alternate.
     /// </remarks>
+    /// <summary>
+    /// The objective cadence: decide where to go, and reissue the goal only if it
+    /// actually moved.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Reissuing is deliberately cheap to skip.</b> Setting a goal forces an
+    /// immediate re-plan, so calling it every tick with an unchanged destination
+    /// would fight the very re-plan timer the follower was built around — hence the
+    /// <c>BOT_GOAL_RETARGET_DIST</c> test rather than an unconditional set. A
+    /// stationary objective is set once and then left alone, and a moving one (a
+    /// flag carrier) naturally trips the 48px test, which is the case it was written
+    /// for.
+    /// </remarks>
+    private void UpdateObjective(in WorldView world, int slot, int tick)
+    {
+        if (Objective is null || GoalLocked)
+            return;
+
+        // ⚠️ Notice a spot that never planned BEFORE deciding again, or the ban is
+        // always one objective tick behind the goal that earned it. HasGoal is what
+        // separates "planning failed" from "arrived": arrival clears the goal and
+        // frees the path together, so a bot that got there has neither.
+        if (_goalIsSpot && Path.HasGoal && !Path.HasPath)
+            SpotBanUntil = tick + SpotBanTicks;
+
+        // The reference's `(tick + player) mod BOT_OBJECTIVE_PERIOD == 0`: staggered
+        // per bot so a server full of them does not pay every objective scan on one
+        // frame.
+        if ((tick + Combat.Stagger) % BotConstants.ObjectivePeriod != 0)
+            return;
+
+        var goal = Objective.Decide(in world, slot, Role, SpreadX, allowSpot: tick >= SpotBanUntil);
+
+        if (!goal.Found || !Objective.TryResolve(in goal, goal.MustTouch ? 0 : SpreadX, out var x, out var y))
+            return;
+
+        // ⚠️ The throttle is on the RESOLVED node position, not on the raw
+        // objective. Two objectives a pixel apart resolve to the same node's same
+        // column, and it is the column the follower will actually walk to — so
+        // comparing anything else re-issues a goal that has not moved.
+        if (Path.HasGoal && Gml.PointDistance(x, y, Path.GoalX, Path.GoalY) <= BotConstants.GoalRetargetDist)
+            return;
+
+        _goalIsSpot = goal.IsSpot;
+        SetGoal(x, y);
+    }
+
     private PlayerKeys ApplyHolds(in WorldView world, int slot, int tick, PlayerKeys navKeys)
     {
         ref readonly var self = ref world.Character(slot);
