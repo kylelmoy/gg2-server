@@ -131,6 +131,25 @@ public sealed class BotCombatState
     /// </remarks>
     public int Ally { get; set; } = BotAlly.None;
 
+    /// <summary>
+    /// The node this bot is denying while it cannot see its target, or
+    /// <see cref="BotSuppress.NoSpot"/>.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ Re-used between refreshes, which is also honest about what it is: <b>a
+    /// place, not a moving target</b>.
+    /// </remarks>
+    public int SuppressNode { get; set; } = BotSuppress.NoSpot;
+
+    /// <summary>The tick the suppression spot may next be recomputed.</summary>
+    /// <remarks>
+    /// ⚠️ On its own clock, NOT on the aim interval. The walk is a graph search
+    /// and the aim interval is 2 ticks at the top tier, so asking it there would be a
+    /// search per bot per two frames on a server already near its budget with twelve
+    /// bots.
+    /// </remarks>
+    public int SuppressAt { get; set; }
+
     /// <summary>Forgets the target and everything derived from it.</summary>
     public void DropTarget()
     {

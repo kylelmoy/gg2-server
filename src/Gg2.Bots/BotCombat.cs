@@ -192,7 +192,7 @@ public static class BotCombat
         else
         {
             Perceive(state, in world, tick, in skill);
-            SolveAim(state, in world, slot, tick, sinceSeen, distance, in skill, ref random, graph);
+            SolveAim(state, in world, slot, tick, sinceSeen, distance, in skill, ref random, graph, subjectIsAlly);
         }
         Slew(state, in skill);
 
@@ -449,7 +449,8 @@ public static class BotCombat
     /// <summary>Recomputes the desired direction on the aim cadence.</summary>
     private static void SolveAim(
         BotCombatState state, in WorldView world, int slot, int tick,
-        int sinceSeen, double distance, in BotSkill skill, ref GmlRandom random, NavGraph? graph)
+        int sinceSeen, double distance, in BotSkill skill, ref GmlRandom random, NavGraph? graph,
+        bool subjectIsAlly = false)
     {
         if (tick < state.AimAt)
             return;
@@ -460,6 +461,53 @@ public static class BotCombat
 
         var aimX = state.SeeX;
         var aimY = state.SeeY;
+
+        // --- suppression -------------------------------------------------------
+        //
+        // Holding a target that cannot be seen, the snapshot above is deliberately
+        // frozen at the last position actually SEEN — which is, by construction,
+        // behind the cover they went into. For a class whose weapon can deny a
+        // doorway the better answer is the first point on the route they would have
+        // to walk back along that this bot can actually see.
+        //
+        // ⚠️ On its own clock, not on the aim interval. BotSuppress.Spot is a
+        // graph walk and the aim interval is 2 ticks at the top tier.
+        // ⚠️ state.Visible, NOT state.Target.Visible. The first is the LIVE flag —
+        // maintained on the perceive cadence and false exactly while the sightline
+        // is broken — and the second is only what the search reported at
+        // acquisition, which never changes again. Reading the target's made the
+        // whole branch fire on the acquisition tick and never afterwards, and it is
+        // `!player.botVisible` in the reference.
+        if (!subjectIsAlly
+            && !state.Visible
+            && state.Target.Kind == BotTargetKind.Character
+            && BotClassProfile.Suppresses(self.Class)
+            && graph is not null)
+        {
+            if (tick >= state.SuppressAt)
+            {
+                state.SuppressAt = tick + BotConstants.TargetPeriod;
+                state.SuppressNode = BotSuppress.Spot(
+                    graph, world.Collision, in self, state.SeeX, state.SeeY,
+                    world.Player(slot).Team == Team.Red ? Team.Blue : Team.Red);
+            }
+
+            if (state.SuppressNode >= 0)
+            {
+                (aimX, aimY) = BotSuppress.Centre(graph, state.SuppressNode);
+
+                // ⚠️ The velocity that came with the snapshot belongs to a body
+                // that was moving when it was last seen; A DOORWAY IS NOT MOVING.
+                // Leading a fixed point by a dead man's velocity is how a suppression
+                // shot ends up in the far wall.
+                state.SeeVx = 0;
+                state.SeeVy = 0;
+            }
+        }
+        else
+        {
+            state.SuppressNode = BotSuppress.NoSpot;
+        }
 
         // ⚠️ The splash classes aim at a grounded target's FEET, and only at a
         // skill high enough to know to. BOT_FEET_OFFSET below the chest is where
