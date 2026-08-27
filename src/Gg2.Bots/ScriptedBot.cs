@@ -39,7 +39,7 @@ namespace Gg2.Bots;
 /// ground runs out.
 /// </para>
 /// </remarks>
-public sealed class ScriptedBot : IInputSource, IScenarioSubject
+public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
 {
     /// <summary>How long a spot that never planned is banned for.</summary>
     /// <remarks>The reference's own literal 300, ten seconds.</remarks>
@@ -288,6 +288,8 @@ public sealed class ScriptedBot : IInputSource, IScenarioSubject
         }
 
         ref readonly var self = ref world.Character(slot);
+
+        TrackCarrierProgress(in self, tick);
 
         // A fresh life starts a fresh regroup hold, randomised so a whole team
         // does not leave on one frame.
@@ -567,5 +569,100 @@ public sealed class ScriptedBot : IInputSource, IScenarioSubject
         }
 
         return mates;
+    }
+
+    // --- the stuck-carrier failsafe ------------------------------------------
+
+    /// <summary>
+    /// How long a carrier may make no headway before it puts the briefcase down.
+    /// </summary>
+    /// <remarks>
+    /// Ten seconds. Long enough that a firefight, a regroup hold or a jump
+    /// window never trips it — a healthy carry on <c>ctf_truefort</c> is about
+    /// 1,760 ticks of continuous movement — and short enough that a round is not
+    /// spent waiting.
+    /// </remarks>
+    public const int CarrierStuckTicks = 300;
+
+    /// <summary>How far it must get in that time to count as headway.</summary>
+    private const double CarrierProgressDistance = 24.0;
+
+    private double _carrierMarkX;
+    private double _carrierMarkY;
+    private int _carrierStuckSince = -1;
+    private bool _dropIntel;
+
+    /// <summary>Ticks the bot has been carrying without headway.</summary>
+    public int CarrierStuckTicksNow { get; private set; }
+
+    /// <summary>
+    /// Watches a carrier for a total stall.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ⚠️ <b>A failsafe, not a fix.</b> The bug it exists for — three re-plan
+    /// recovery paths passing the goal's <c>y</c> as the bot's own, so the start
+    /// node resolved to nothing and every re-plan failed for ever — is fixed in
+    /// <c>PathFollower</c>. This catches the next one. A briefcase held by a
+    /// motionless bot is the worst failure the objective has: it does not end the
+    /// round, it does not show up as a loss, and it removes the objective from
+    /// play until the map changes.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>It lives in the BOT and not in the simulation, and that is not a
+    /// preference.</b> A bot pressing "drop intel" is a thing a player can do —
+    /// <c>PLAYER_DROP_INTEL</c>, through the same command dispatch a socket
+    /// reaches. A rule in <c>MatchSimulation</c> that took a briefcase off a
+    /// motionless carrier would be behaviour the reference does not have, which
+    /// is a wire-visible divergence from the stock game: CLAUDE.md's line is
+    /// compatible in observable simulation, free everywhere else, and this is
+    /// squarely on the observable side.
+    /// </para>
+    /// </remarks>
+    private void TrackCarrierProgress(in CharacterState self, int tick)
+    {
+        if (!self.CarryingIntel)
+        {
+            _carrierStuckSince = -1;
+            CarrierStuckTicksNow = 0;
+            return;
+        }
+
+        if (_carrierStuckSince < 0
+            || Gml.PointDistance(self.X, self.Y, _carrierMarkX, _carrierMarkY) > CarrierProgressDistance)
+        {
+            _carrierMarkX = self.X;
+            _carrierMarkY = self.Y;
+            _carrierStuckSince = tick;
+            CarrierStuckTicksNow = 0;
+            return;
+        }
+
+        CarrierStuckTicksNow = tick - _carrierStuckSince;
+
+        if (CarrierStuckTicksNow < CarrierStuckTicks)
+            return;
+
+        // Ask once, then re-arm from wherever the drop leaves it.
+        _dropIntel = true;
+        _carrierStuckSince = -1;
+        CarrierStuckTicksNow = 0;
+    }
+
+    /// <summary>
+    /// The commands this bot wants run — currently only the carrier failsafe.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ Through <see cref="ICommandSource"/> and therefore through the one
+    /// dispatch a socket and the control port also reach, so the bot cannot do
+    /// anything a client could not. Anything added here has to hold that.
+    /// </remarks>
+    public void PollCommands(in WorldView world, int slot, int tick, ref PlayerCommandBuffer commands)
+    {
+        if (!_dropIntel)
+            return;
+
+        _dropIntel = false;
+        commands.Push(PlayerCommand.DropIntel());
     }
 }

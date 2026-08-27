@@ -340,43 +340,41 @@ public sealed class HeadlessMatchTests
     }
 
     /// <summary>
-    /// ⚠️ <b>AN OPEN BUG, PINNED: an intel carrier can wedge permanently and
-    /// hold the flag for the rest of the round.</b> A failure here is good news.
+    /// ⚠️ <b>A carrier no longer wedges — the regression test for a bug that
+    /// held the flag hostage for a whole round.</b>
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>What happens.</b> On <c>ctf_truefort</c> with six red bots and no
-    /// opposition, seed 1: slot 5 grabs the blue intel at t4265, walks to
-    /// <c>(1913.50, 474.48)</c> — the right-hand boundary of nav node #169,
-    /// which spans world x 1884..1914 — and stands there <b>on the ground</b>
-    /// for the remaining ~22,700 ticks. It keeps a valid goal (its own base), a
-    /// route, and <c>PathAt</c> frozen at 2; it needs only to walk <em>left</em>
-    /// onto node #168 (1848..1878) along the same row at the same height.
+    /// <b>What it was.</b> Three of <c>PathFollower</c>'s re-plan RECOVERY paths
+    /// called <c>Plan(state, x, state.GoalY, ...)</c> — the bot's own <c>x</c>
+    /// with the <em>goal's</em> <c>y</c>. <c>Plan</c> resolves its start node
+    /// from those two, so every recovery re-plan started from a phantom
+    /// position. On <c>ctf_truefort</c>, seed 1, a carrier standing at
+    /// <c>(1913.50, 474.48)</c> was planned from <c>(1913.50, 859.00)</c>, which
+    /// is not a node: <c>NodeFromWorld</c> returned -1, the plan failed before it
+    /// ever searched, and <c>docs/TRAPS-BOTS.md</c>'s "a failed search KEEPS the
+    /// old route" kept the route it could not walk. The bot then stood still for
+    /// 22,700 ticks holding the enemy intel, while the anti-thrash rule re-banned
+    /// the edge it needed every time the ban expired.
     /// </para>
     /// <para>
-    /// <b>What it is not.</b> ⚠️ Not the unported jump branch —
-    /// <c>UnsupportedEdgeTicks</c> is <b>0</b>. Not a death — the bot is alive
-    /// and there are no enemies. Not occupancy — <c>HeadlessMatch</c> sets none.
-    /// What it has is exactly <b>one</b> blacklisted edge and a
-    /// <c>PlanFailUntil</c> pushed forward for ever: every re-plan fails, and
-    /// <c>docs/TRAPS-BOTS.md</c>'s "a failed search KEEPS the old route" then
-    /// keeps the route it cannot use. That trap is written up as the reference's
-    /// "bots momentarily stop moving"; here it is permanent, because the search
-    /// never succeeds.
+    /// ⚠️ <b>The reference does not have this shape at all</b>:
+    /// <c>botPathPlan.gml:100</c> takes its start from
+    /// <c>navNodeFromWorld(char.x, char.y)</c> and reads the goal separately at
+    /// line 107. The port introduced it by parameterising what the reference
+    /// reads for itself, and the three recovery sites were the ones with no
+    /// <c>y</c> in scope.
     /// </para>
     /// <para>
-    /// <b>What it costs.</b> Uncontested conversion is <b>100%</b> for every
-    /// grab that does not wedge, at every team size — so this bug is the entire
-    /// shortfall. It takes 3% of grabs at one bot, 7% at two, 9% at four and
-    /// <b>14% at six</b>, and each one removes the flag for the rest of the
-    /// round. It is also why six uncontested bots produce <em>fewer</em> grabs
-    /// than one (43 against 64): an early wedge ends that match's objective play.
-    /// Under real contest it is minor — 6v2 conversion is 40%, and 42% with
-    /// wedges excluded — so interception dominates there.
+    /// ⚠️ <b>It was not a nav-graph fault, and that was checked rather than
+    /// assumed.</b> A character placed at the wedge position and told to press
+    /// Left walks 350px toward home in 90 ticks; both the real start and the real
+    /// goal resolve to nodes (#169 and #643). The geometry and the graph were
+    /// always fine.
     /// </para>
     /// </remarks>
     [Fact]
-    public void ACarrierStillWedgesPermanentlyAndHoldsTheFlag()
+    public void ACarrierDoesNotWedge()
     {
         ReferenceTree.RequireNavCache();
 
@@ -390,7 +388,7 @@ public sealed class HeadlessMatchTests
                 MaxTicks = 27000,
                 Seed = 1,
 
-                // Never end on captures, so the round is a fixed length and the
+                // Never end on captures, so the round is a fixed length and a
                 // wedge cannot be masked by an early finish.
                 CapLimit = 99,
             },
@@ -418,13 +416,14 @@ public sealed class HeadlessMatchTests
             wasOnField = onField;
         }
 
-        // A healthy carry is about 1,760 ticks end to end. Anything past five
-        // thousand is a bot that has stopped.
+        // A healthy carry on this map is about 1,760 ticks; before the fix this
+        // seed produced one of 22,700. ⚠️ The bound is generous on purpose: the
+        // claim is "the carrier does not stop for ever", not a pinned duration.
         Assert.True(
-            longestCarry > 5000,
-            $"the longest carry was {longestCarry} ticks, not a wedge — if the carrier "
-                + "no longer sticks, this bug is FIXED: delete this test, and re-measure "
-                + "the uncontested conversion rates in docs/PLAN.md, which this bug caps.");
+            longestCarry < 5000,
+            $"a carrier held the intel for {longestCarry} ticks without delivering it");
+
+        Assert.True(match.State.RedCaps > 0, "six uncontested bots captured nothing at all");
     }
 
     /// <summary>The summary reports draws and unfinished matches rather than folding them away.</summary>

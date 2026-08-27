@@ -154,6 +154,7 @@ public sealed class HeadlessMatch
     private readonly IInputSource?[] _sources = new IInputSource?[WorldState.MaxSlots];
     private readonly PlayerInput[] _inputs = new PlayerInput[WorldState.MaxSlots];
     private readonly List<PlayerClass> _earlier = [];
+    private PlayerCommandBuffer _commands;
 
     private WorldState _state;
     private TickEvents _events;
@@ -339,6 +340,8 @@ public sealed class HeadlessMatch
                 : PlayerInput.None;
         }
 
+        RunCommands(count);
+
         _events = default;
         MatchSimulation.Tick(Collision, ref _state, _inputs.AsSpan(0, count), ref _events, Spawns);
 
@@ -348,6 +351,56 @@ public sealed class HeadlessMatch
             Outcome = MatchOutcome.Decided;
         else if (Tick >= Options.MaxTicks)
             Outcome = MatchOutcome.Exhausted;
+    }
+
+    /// <summary>
+    /// Runs whatever the sources asked for that is not a keypress.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ⚠️ <b>A match must drain commands or it is not the same game the server
+    /// plays.</b> <c>GameServer</c> polls <see cref="ICommandSource"/> every
+    /// tick; a match that did not would silently ignore the one thing a bot can
+    /// do that is not a key, and every evaluation would measure a bot with a
+    /// piece missing.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>The bodies are the simulation's own, not copies.</b>
+    /// <c>GameServer.ExecuteDropIntel</c> is <c>Intel.Drop</c> plus a broadcast;
+    /// there are no clients here, so this is the same call without the
+    /// broadcast. CLAUDE.md's rule is one shared body reached from every path,
+    /// and re-implementing a command here is exactly what it forbids —
+    /// <b>a kind with no shared method does not belong in this switch</b>, it
+    /// belongs in the simulation first.
+    /// </para>
+    /// </remarks>
+    private void RunCommands(int count)
+    {
+        for (var slot = 0; slot < count; slot++)
+        {
+            if (_sources[slot] is not ICommandSource source)
+                continue;
+
+            _commands.Clear();
+            source.PollCommands(new WorldView(in _state, Collision), slot, Tick, ref _commands);
+
+            for (var i = 0; i < _commands.Count; i++)
+            {
+                switch (_commands[i].Kind)
+                {
+                    case PlayerCommandKind.DropIntel:
+                        Intel.Drop(ref _state, slot);
+                        break;
+
+                    // ⚠️ Everything else is UNREACHED rather than unsupported:
+                    // no bot emits it yet. When one does, add it here against
+                    // the simulation method the server already calls — never a
+                    // second copy of the body.
+                    default:
+                        break;
+                }
+            }
+        }
     }
 
     /// <summary>Advances until the match ends, and reports what happened.</summary>

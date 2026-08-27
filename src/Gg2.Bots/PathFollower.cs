@@ -245,7 +245,7 @@ public sealed class PathFollower
         }
 
         if (state.PathAt >= size - 1)
-            return WalkToGoal(state, x, hSpeed, onGround, moved, tick, query, occupancy);
+            return WalkToGoal(state, x, y, hSpeed, onGround, moved, tick, query, occupancy);
 
         return FollowEdge(state, in character, in weapon, moved, tick, query, occupancy);
     }
@@ -314,7 +314,7 @@ public sealed class PathFollower
     /// </para>
     /// </remarks>
     private PlayerKeys WalkToGoal(
-        BotPathState state, double x, double hSpeed, bool onGround, bool moved, int tick,
+        BotPathState state, double x, double y, double hSpeed, bool onGround, bool moved, int tick,
         in NavQuery query, BotOccupancy? occupancy)
     {
         state.EdgeFrom = -1;
@@ -375,7 +375,9 @@ public sealed class PathFollower
         if (state.StuckTicks >= BotConstants.StuckTicks)
         {
             state.StuckFires++;
-            Plan(state, x, state.GoalY, tick, query, occupancy);
+
+            // ⚠️ y, not state.GoalY. See the remark on Plan.
+            Plan(state, x, y, tick, query, occupancy);
             return PlayerKeys.None;
         }
 
@@ -469,7 +471,8 @@ public sealed class PathFollower
         // exist.
         if (!TryFindEdge(current, next, out var edge))
         {
-            Plan(state, x, state.GoalY, tick, query, occupancy);
+            // ⚠️ character.Y, not state.GoalY. See the remark on Plan.
+            Plan(state, x, character.Y, tick, query, occupancy);
             return PlayerKeys.None;
         }
 
@@ -645,7 +648,9 @@ public sealed class PathFollower
         {
             state.StuckFires++;
             state.BlacklistEdge(current, next, tick);
-            Plan(state, x, state.GoalY, tick, query, occupancy);
+
+            // ⚠️ character.Y, not state.GoalY. See the remark on Plan.
+            Plan(state, x, character.Y, tick, query, occupancy);
             return PlayerKeys.None;
         }
 

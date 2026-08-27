@@ -1,0 +1,124 @@
+using Gg2.Bots;
+using Gg2.Protocol;
+using Gg2.Simulation;
+
+namespace Gg2.Tests;
+
+/// <summary>
+/// The stuck-carrier failsafe: a bot that stops making headway while holding a
+/// briefcase puts it down.
+/// </summary>
+/// <remarks>
+/// <para>
+/// ⚠️ <b>A failsafe, not the fix.</b> The bug it was written for — three of
+/// <c>PathFollower</c>'s re-plan recovery paths passing the goal's <c>y</c> as
+/// the bot's own — is fixed, and <c>HeadlessMatchTests.ACarrierDoesNotWedge</c>
+/// is its regression test. This exists because a briefcase held by a motionless
+/// bot is the worst failure the objective has: it does not end the round, it
+/// does not read as a loss, and it removes the objective from play until the map
+/// changes. Measured against the bug deliberately re-introduced: the longest
+/// carry fell from <b>22,700 ticks to 1,726</b>, and the flag came back into
+/// play 37 times instead of never.
+/// </para>
+/// <para>
+/// ⚠️ <b>It is in the bot, not the simulation, and that is a hard line.</b> A
+/// bot pressing "drop intel" is something a player can do, through the same
+/// command dispatch a socket reaches. A rule in <c>MatchSimulation</c> that took
+/// a briefcase off a motionless carrier would be behaviour the stock game does
+/// not have — wire-visible divergence, which CLAUDE.md's "compatible in
+/// observable simulation" forbids.
+/// </para>
+/// </remarks>
+public sealed class BotCarrierFailsafeTests
+{
+    private static (ScriptedBot Bot, WorldState State) Carrier()
+    {
+        ReferenceTree.RequireAvailable();
+
+        var state = default(WorldState);
+        state.GameMode = GameMode.CaptureTheFlag;
+        state.AddPlayer(0);
+        state.AddPlayer(1);
+        state.Players[1].Team = Team.Red;
+        state.Players[1].Class = PlayerClass.Scout;
+        // ⚠️ CharacterState.Fresh, never new(): six of its fields name a roster
+        // slot and a zeroed one claims slot 0 hurt it, assisted and is healing
+        // it — none of which throws, because slot 0 always exists.
+        state.Characters[1] = CharacterState.Fresh(PlayerClass.Scout, Team.Red);
+        state.Characters[1].X = 100;
+        state.Characters[1].Y = 100;
+        state.Alive[1] = true;
+        state.Characters[1].CarryingIntel = true;
+
+        // ⚠️ No nav graph, so the bot cannot go anywhere — which is exactly the
+        // condition being tested, and needs no broken follower to produce.
+        var bot = new ScriptedBot(null, new NavQuery(Team.Red), BotSkill.ForTier(3), stagger: 1);
+
+        return (bot, state);
+    }
+
+    private static PlayerCommandBuffer Run(ScriptedBot bot, ref WorldState state, CollisionWorld world, int ticks)
+    {
+        var commands = default(PlayerCommandBuffer);
+
+        for (var tick = 0; tick < ticks; tick++)
+        {
+            bot.Poll(new WorldView(in state, world), 1, tick);
+
+            commands.Clear();
+            bot.PollCommands(new WorldView(in state, world), 1, tick, ref commands);
+
+            if (commands.Count > 0)
+                return commands;
+        }
+
+        return commands;
+    }
+
+    /// <summary>A carrier that has not moved for ten seconds asks to drop it.</summary>
+    [Fact]
+    public void AStalledCarrierAsksToDropTheIntel()
+    {
+        var (bot, state) = Carrier();
+        var world = ScenarioWorld.Load("ctf_truefort", 1, ReferenceTree.IncludedFiles, null).Collision;
+
+        var commands = Run(bot, ref state, world, ScriptedBot.CarrierStuckTicks + 60);
+
+        Assert.Equal(1, commands.Count);
+        Assert.Equal(PlayerCommandKind.DropIntel, commands[0].Kind);
+    }
+
+    /// <summary>
+    /// ⚠️ And it does NOT ask before the timeout — the control that stops this
+    /// becoming "bots drop the intel constantly".
+    /// </summary>
+    /// <remarks>
+    /// Ten seconds is long enough that a firefight, a regroup hold or a jump
+    /// window never trips it; a healthy carry on <c>ctf_truefort</c> is about
+    /// 1,760 ticks of continuous movement.
+    /// </remarks>
+    [Fact]
+    public void ACarrierDoesNotDropBeforeTheTimeout()
+    {
+        var (bot, state) = Carrier();
+        var world = ScenarioWorld.Load("ctf_truefort", 1, ReferenceTree.IncludedFiles, null).Collision;
+
+        var commands = Run(bot, ref state, world, ScriptedBot.CarrierStuckTicks - 30);
+
+        Assert.Equal(0, commands.Count);
+    }
+
+    /// <summary>A bot carrying nothing never asks, however still it is.</summary>
+    [Fact]
+    public void ABotCarryingNothingNeverAsks()
+    {
+        var (bot, state) = Carrier();
+        state.Characters[1].CarryingIntel = false;
+
+        var world = ScenarioWorld.Load("ctf_truefort", 1, ReferenceTree.IncludedFiles, null).Collision;
+
+        var commands = Run(bot, ref state, world, ScriptedBot.CarrierStuckTicks * 2);
+
+        Assert.Equal(0, commands.Count);
+    }
+}
