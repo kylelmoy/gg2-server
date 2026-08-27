@@ -265,6 +265,37 @@ public sealed class PathFollower
     /// <see cref="BotPathState.FailCount"/>.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// Landed somewhere the route does not go: take the edge away if it has now
+    /// failed twice, and re-plan from where the bot actually is.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ⚠️ <b>A DELIBERATE DEPARTURE FROM THE REFERENCE, and the first one in the
+    /// bot layer.</b> <c>botPathKeys.gml:178-192</c> counts a miss whether or not
+    /// an edge is running. The reference's own comment says what the blacklist is
+    /// for — "two surfaces still cannot become a loop" — and then that is exactly
+    /// what happens, because the <c>(-1,-1)</c> "no edge running" sentinel resets
+    /// the count for the real edge and the ban is spent on a pair
+    /// <c>BlacklistEdge</c> discards. Ignoring the sentinel makes the rule do what
+    /// the reference says it is for.
+    /// </para>
+    /// <para>
+    /// <b>Measured</b>, ten seeds a row, full rounds on <c>ctf_truefort</c>, on
+    /// top of the carrier ceiling: uncontested captures a match 7.3 → 7.4 with
+    /// the carrier loop gone from every seed that still had one, and — the part
+    /// worth having — <b>contested play improves too</b>, because the loop was
+    /// costing attacks there as well. 6v6 went from 0.4 captures a match to
+    /// <b>1.0</b> and 5% conversion to 8%, on 84 grabs → 118; 6v2 5.8 → 6.0;
+    /// 6v4 3.4 → 3.6.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>The bot layer is not held to the reference — see CLAUDE.md.</b> The
+    /// wire and observable simulation are; a bot's decisions are this project's
+    /// own, the reference's bot layer is treated as incomplete, and much of it is
+    /// expected to be replaced by a learned policy later.
+    /// </para>
+    /// </remarks>
     private PlayerKeys OffRoute(
         BotPathState state, double x, double y, int tick,
         in NavQuery query, BotOccupancy? occupancy)
@@ -272,20 +303,41 @@ public sealed class PathFollower
         state.OffRouteFires++;
         state.OffPathTicks = 0;
 
-        if (state.EdgeFrom == state.FailFrom && state.EdgeTo == state.FailTo)
+        // ⚠️ ONLY a real edge counts, and this is a DELIBERATE DEPARTURE from the
+        // reference — see the remark on this method.
+        //
+        // EdgeFrom/EdgeTo are -1 whenever no edge is running: WalkToGoal zeroes
+        // them, and so does FreePath. The reference counts those sentinel misses
+        // like any other, which resets FailCount for the real edge that is
+        // actually failing — and then spends the ban on (-1,-1), which
+        // BlacklistEdge discards because the nodes are negative. So the escape
+        // never reaches the edge it is for.
+        //
+        // Measured on ctf_truefort: a carrier looped a pair of surfaces for
+        // 26,000 ticks, firing off-route in an exact 35-tick cycle of one real
+        // edge (449->395) followed by two sentinels, with the ban count stuck at
+        // zero the whole time.
+        if (state.EdgeFrom >= 0 && state.EdgeTo >= 0)
         {
-            state.FailCount++;
-        }
-        else
-        {
-            state.FailFrom = state.EdgeFrom;
-            state.FailTo = state.EdgeTo;
-            state.FailCount = 1;
+            if (state.EdgeFrom == state.FailFrom && state.EdgeTo == state.FailTo)
+            {
+                state.FailCount++;
+            }
+            else
+            {
+                state.FailFrom = state.EdgeFrom;
+                state.FailTo = state.EdgeTo;
+                state.FailCount = 1;
+            }
         }
 
-        if (state.FailCount >= 2)
+        // ⚠️ Banned by the REMEMBERED pair, not the current one. The two are the
+        // same in the reference because it only gets here with a live edge; here
+        // the count can survive a sentinel miss, so the current pair may be
+        // (-1,-1) at the moment the second real miss lands.
+        if (state.FailCount >= 2 && state.FailFrom >= 0 && state.FailTo >= 0)
         {
-            state.BlacklistEdge(state.EdgeFrom, state.EdgeTo, tick);
+            state.BlacklistEdge(state.FailFrom, state.FailTo, tick);
             state.FailCount = 0;
         }
 

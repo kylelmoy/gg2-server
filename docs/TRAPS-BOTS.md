@@ -1,5 +1,55 @@
 # The bot-layer traps
 
+## ⚠️ The bot layer is not held to the reference (2026-08-27)
+
+**The user's call, and it reverses CLAUDE.md's standing "the reference is the
+specification" rule for `src/Gg2.Bots/` only:**
+
+> "The reference bot implementation should be considered incomplete. We began
+> this C# port project precisely because testing and troubleshooting the GML
+> implementation was too slow. Ignore the GML implementation — make the bot
+> implementation here better if straightforward. However, also don't spend too
+> much effort chasing perfection — just document known issues if not a
+> straightforward fix. Parts of the bot implementation here will be replaced via
+> an RL model in a future phase."
+
+What it licenses, and what it does not:
+
+- ✅ **A bot's decisions are free.** A bot is an `IInputSource` like a socket, so
+  what it *presses* is this project's own. Improve it where the fix is
+  straightforward, and **measure the change** — `gg2-server eval`, or
+  `MatchRunner` over ten-plus seeds. ⚠️ A single match is not evidence; seed
+  variance on `ctf_truefort` is large enough that one match proves nothing.
+- ✅ **Document rather than chase.** A hard one goes in "Known issues" below.
+- ❌ **The wire and observable simulation are NOT covered.** A bot may press
+  "drop intel"; `MatchSimulation` may not decide to drop one. Anything a client
+  can see is still the reference's.
+- ⚠️ **A departure must say so where it lives**, naming the reference line it
+  leaves and what it was measured against. `PathFollower.OffRoute` is the worked
+  example. Without that a later session reads the divergence as a porting mistake
+  and "restores fidelity", silently undoing it.
+
+### Departures taken so far
+
+| Where | What | Measured |
+|---|---|---|
+| `PathFollower.OffRoute` | The off-route fail counter ignores the `(-1,-1)` "no edge running" sentinel, so a real edge can accumulate the two consecutive misses the blacklist wants. `botPathKeys.gml:178-192` counts sentinel misses too, which resets the count and spends the ban on a pair `BlacklistEdge` discards — so the loop escape never reaches the edge it is for, and the reference's own comment describes the loop it then fails to break. | 10 seeds, full rounds, `ctf_truefort`: 6v6 **0.4 → 1.0** captures a match and 5% → 8% conversion; uncontested 7.3 → 7.4; the carrier loop gone from every seed that had it. |
+| `ScriptedBot` carrier failsafe | A bot drops the intel after 300 ticks without 24px of headway, **or** 4,000 ticks holding it at all. The reference has no such rule. | Uncontested captures a match 5.4 → 7.3; contested play unmoved (the longest contested carry is 3,180 ticks against a 4,000 ceiling). |
+
+### Known issues, not chased
+
+- ⚠️ **One uncontested seed in ten still carries for ~5,100 ticks** before the
+  4,000-tick ceiling resolves it — a drop and a re-grab rather than a lock, so
+  the flag does come back into play. Not chased.
+- ⚠️ **The jump branch of the follower is not ported** (item 4b-ii, 209 lines of
+  `botPathKeys.gml` plus four helpers). A jump, double jump or rocket jump on a
+  route is steered by nothing and left to the stuck detector. This one is a real
+  capability gap rather than a defect, and it is the largest single thing the bot
+  layer is missing.
+- ⚠️ **Conversion at 6v6 is 8%**, and nothing establishes whether that is
+  *right*. There is no human baseline in this project.
+
+
 Every ⚠️ in this file cost a session time. One section per item of phase 7, in
 the order they landed: what the item is, which reference scripts it came from,
 which tests gate it, and the traps that were paid for on the way.
