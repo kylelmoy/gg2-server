@@ -955,8 +955,22 @@ public static class Projectiles
         // sentry, which is why it does not skip the sentry loop below.
         if (state.Projectiles[handle.Index].Kind != ProjectileKind.Mine)
         {
-            for (var slot = 0; slot < WorldState.MaxSlots; slot++)
+            // ⚠️ CREATION order, not slot order, and the difference is a kill.
+            // A rocket explodes on the FIRST character its collision event fires
+            // against and GM8 fires those in ascending instance id — so a slot
+            // that respawned a tick ago is visited *after* one that has been
+            // alive since the wave, however low its number is. See
+            // CharacterState.CreationOrder for the recording that measured it.
+            Span<byte> characters = stackalloc byte[WorldState.MaxSlots];
+            var liveCount = state.LiveCharactersInCreationOrder(characters);
+
+            for (var i = 0; i < liveCount; i++)
             {
+                var slot = characters[i];
+
+                // Re-checked because an earlier iteration's collision can kill
+                // somebody the snapshot listed — the same reason Collide walks a
+                // snapshot of projectile handles rather than a live cursor.
                 if (!state.Alive[slot])
                     continue;
 

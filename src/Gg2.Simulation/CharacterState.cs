@@ -312,6 +312,32 @@ public struct CharacterState
     /// </remarks>
     public double JumpStrength;
 
+    /// <summary>
+    /// GM8's instance id, near enough: which character was created first.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Slot order is NOT creation order, and the difference is
+    /// observable.</b> A slot whose player has died and respawned holds a
+    /// character <em>younger</em> than the ones in higher slots that have not —
+    /// so a loop walking slots 0..7 visits them in an order GM8 would not.
+    /// <para>
+    /// It matters wherever the FIRST hit ends the search.
+    /// <c>Projectiles.CollideOne</c> is the case that found it: a rocket
+    /// explodes on the first character its collision event fires against, and
+    /// GM8 fires those in ascending instance id. Measured on
+    /// <c>reference-gg_debug-closedtdm.trace</c> at t509 — slot 6 respawned at
+    /// t508 and slot 2 at t509, so the reference's rocket struck slot 6 and the
+    /// port, walking slots, struck slot 2. Slot 6 finished the window 25 hp
+    /// high: exactly a rocket's contact damage.
+    /// </para>
+    /// <para>
+    /// Zero for a character the parity harness placed directly rather than
+    /// spawned, which sorts it before everything and leaves slot order to break
+    /// the tie — the behaviour those anchors had before this field existed.
+    /// </para>
+    /// </remarks>
+    public uint CreationOrder;
+
     public double DeathmatchInvulnerable;
 
     /// <summary>

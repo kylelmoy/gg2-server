@@ -122,6 +122,19 @@ public struct WorldState
     /// <summary>Each slot's character. Only meaningful where <see cref="Alive"/> is set.</summary>
     public SlotBuffer<CharacterState> Characters;
 
+    /// <summary>
+    /// The next value for <see cref="CharacterState.CreationOrder"/>. Stands in
+    /// for GM8's instance counter.
+    /// </summary>
+    /// <remarks>
+    /// In the state rather than static for the same reason the RNG is: a forked
+    /// rollout has to fork it, and a default <see cref="WorldState"/> has to be
+    /// reproducible. It is never broadcast — only the <em>order</em> it induces
+    /// is observable, and that reaches the wire as which character a rocket
+    /// exploded on.
+    /// </remarks>
+    public uint NextCharacterOrder;
+
     /// <summary>Whether a slot has a character at all — spectators and the dead do not.</summary>
     public SlotBuffer<bool> Alive;
 
@@ -1046,6 +1059,11 @@ public struct WorldState
         character.X = x;
         character.Y = y;
 
+        // GM8 issues an instance id here, and the order it induces is
+        // observable — see CharacterState.CreationOrder. Pre-incremented so no
+        // spawned character can share zero with a directly-placed one.
+        character.CreationOrder = ++NextCharacterOrder;
+
         // Character.events/Create.xml:192-205, "Temporary invuln on spawn for
         // deathmatch players". Here rather than in CharacterState.Fresh because
         // it is the only part of the Create event that reads the *world*: the
@@ -1069,6 +1087,48 @@ public struct WorldState
         Weapons[slot] = WeaponState.Spawn(playerClass, x, y);
         Alive[slot] = true;
         return true;
+    }
+
+    /// <summary>
+    /// The live characters in <see cref="CharacterState.CreationOrder"/>, which
+    /// is the order GM8 runs a collision event over them.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Not slot order.</b> See <see cref="CharacterState.CreationOrder"/>
+    /// for what that costs and the recording that measured it.
+    /// <para>
+    /// An insertion sort because <see cref="MaxSlots"/> is eight and the caller
+    /// hands in a stack buffer: no allocation, and a comparison sort's setup
+    /// would cost more than the whole loop. Stable, so two characters sharing a
+    /// creation order — only possible for harness-placed anchors, which are all
+    /// zero — keep slot order between them.
+    /// </para>
+    /// </remarks>
+    /// <param name="order">At least <see cref="MaxSlots"/> long.</param>
+    /// <returns>How many entries were written.</returns>
+    public readonly int LiveCharactersInCreationOrder(Span<byte> order)
+    {
+        var count = 0;
+
+        for (var slot = 0; slot < MaxSlots; slot++)
+        {
+            if (!Alive[slot])
+                continue;
+
+            var key = Characters[slot].CreationOrder;
+            var at = count;
+
+            while (at > 0 && Characters[order[at - 1]].CreationOrder > key)
+            {
+                order[at] = order[at - 1];
+                at--;
+            }
+
+            order[at] = (byte)slot;
+            count++;
+        }
+
+        return count;
     }
 
     // --- projectiles ---------------------------------------------------------

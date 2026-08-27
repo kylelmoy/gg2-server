@@ -1,3 +1,4 @@
+using Gg2.Maps;
 using Gg2.Protocol;
 using Gg2.Simulation;
 
@@ -357,5 +358,93 @@ public sealed class WorldStateTests
             owners[i] = state.Projectiles[state.LiveProjectileSlot(i)].OwnerSlot;
 
         return owners;
+    }
+
+    // --- creation order ------------------------------------------------------
+
+    /// <summary>
+    /// ⚠️ <b>A respawn makes slot order stop being creation order, and the
+    /// ordering helper follows the respawn rather than the slot.</b>
+    /// </summary>
+    /// <remarks>
+    /// <b>This is the whole of the rule, and it is observable.</b> A rocket
+    /// explodes on the <em>first</em> character its collision event fires
+    /// against, and GM8 fires those in ascending instance id — so a low slot
+    /// that died and came back is visited after a high slot that never did.
+    /// Measured on <c>reference-gg_debug-closedtdm.trace</c>: see
+    /// <see cref="CharacterState.CreationOrder"/>.
+    /// <para>
+    /// ⚠️ <b>The last assertion is the control.</b> Without it a helper that
+    /// simply returned the live slots in slot order would pass the first two —
+    /// slot order and creation order agree until something respawns, which is
+    /// exactly why this was wrong for six phases and no test noticed.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ARespawnMovesACharacterToTheBackOfTheCreationOrder()
+    {
+        var state = default(WorldState);
+
+        // Four characters created in slot order, so the two orders agree.
+        for (var slot = 0; slot < 4; slot++)
+        {
+            state.Characters[slot] = CharacterState.Fresh(PlayerClass.Soldier, Team.Red);
+            state.Characters[slot].CreationOrder = ++state.NextCharacterOrder;
+            state.Alive[slot] = true;
+        }
+
+        Span<byte> order = stackalloc byte[WorldState.MaxSlots];
+
+        Assert.Equal(4, state.LiveCharactersInCreationOrder(order));
+        Assert.Equal<byte[]>([0, 1, 2, 3], order[..4].ToArray());
+
+        // Slot 1 dies and comes back, so its character is now the youngest.
+        state.Clear(1);
+        state.Characters[1] = CharacterState.Fresh(PlayerClass.Soldier, Team.Red);
+        state.Characters[1].CreationOrder = ++state.NextCharacterOrder;
+        state.Alive[1] = true;
+
+        var count = state.LiveCharactersInCreationOrder(order);
+
+        Assert.Equal(4, count);
+        Assert.Equal<byte[]>([0, 2, 3, 1], order[..4].ToArray());
+    }
+
+    /// <summary>
+    /// <see cref="WorldState.Spawn"/> issues the creation order itself, and
+    /// every character gets a distinct one.
+    /// </summary>
+    /// <remarks>
+    /// The helper above is only right if something fills the field. Pre-
+    /// incremented, so no spawned character can share zero with one the parity
+    /// harness placed directly.
+    /// </remarks>
+    [Fact]
+    public void SpawningIssuesAFreshCreationOrder()
+    {
+        var level = LevelMap.FromPng("ctf_truefort", ReferenceTree.ReadMap("ctf_truefort"));
+        var spawns = new SpawnPoints(level);
+        var state = default(WorldState);
+
+        state.GameMode = GameModes.Of(level);
+        state.RespawnTime = 0;
+
+        for (var i = 0; i < TeamBalance.ClassCount; i++)
+            state.ClassLimits[i] = 255;
+
+        foreach (var slot in new[] { 3, 1, 2 })
+        {
+            state.AddPlayer(slot);
+            Assert.True(state.Spawn(spawns, slot, PlayerClass.Soldier, Team.Red, 0, 0));
+        }
+
+        // Issued in the order Spawn was called, not in slot order.
+        Assert.Equal(1u, state.Characters[3].CreationOrder);
+        Assert.Equal(2u, state.Characters[1].CreationOrder);
+        Assert.Equal(3u, state.Characters[2].CreationOrder);
+
+        Span<byte> order = stackalloc byte[WorldState.MaxSlots];
+        Assert.Equal(3, state.LiveCharactersInCreationOrder(order));
+        Assert.Equal<byte[]>([3, 1, 2], order[..3].ToArray());
     }
 }

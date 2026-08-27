@@ -10,7 +10,7 @@ namespace Gg2.Tests;
 /// ✅ <b>The divergence that found the rotated-mask bug — fixed 2026-08-27.</b>
 /// <c>reference-gg_debug-closedtdm.trace</c> replayed for 100 ticks after its
 /// spawn anchor and then let slot 4 live through a death the reference
-/// recorded. It now runs to 135, on every field.
+/// recorded. It now runs to 142, on every field.
 /// </summary>
 /// <remarks>
 /// <b>What it was.</b> GM8's two collision primitives disagree about the same
@@ -51,10 +51,20 @@ namespace Gg2.Tests;
 /// respawn was mortal from its first frame. <see cref="ITraceSimulation.SetTdmInvulnerability"/>.
 /// </para>
 /// <para>
-/// <b>What stops it now, at t516:</b> slot 6 is 25 hp high, which is exactly a
-/// rocket's direct hit — one the reference landed and the port does not. Both
-/// deaths in that window (t507 and t509) are reproduced, so this is a miss
-/// rather than a mis-attribution, and it is the next thing to chase.
+/// ✅ <b>And a THIRD bug was behind the second.</b> The next divergence was slot 6
+/// finishing 25 hp high — exactly a rocket's contact damage. The reference's
+/// t509 rocket struck slot 6 and the port's struck slot 2, because
+/// <c>CollideOne</c> walked characters in <b>slot</b> order where GM8 fires a
+/// collision event in ascending <b>instance id</b>. Those agree until somebody
+/// respawns: slot 6 came back at t508 and slot 2 at t509, so the port visited
+/// the younger character first and exploded on it. 25 + 30 splash = 55, and
+/// 140 − 55 = the 85 the recording holds.
+/// <see cref="CharacterState.CreationOrder"/>.
+/// </para>
+/// <para>
+/// <b>What stops it now, at t523,</b> is a different order of thing entirely:
+/// slot 4's x is one wire unit — a fifth of a pixel — from the reference's.
+/// Three missing kills became a rounding residue.
 /// </para>
 /// </remarks>
 public sealed class GgDebugSplashOpenFindingTests
@@ -143,23 +153,25 @@ public sealed class GgDebugSplashOpenFindingTests
     }
 
     /// <summary>
-    /// ✅ <b>The port reproduces that death, and everything else, for 135 ticks
+    /// ✅ <b>The port reproduces that death, and everything else, for 142 ticks
     /// after the spawn wave.</b>
     /// </summary>
     /// <remarks>
     /// Held on <see cref="Fields.All"/>: positions, velocities, hp, ammo, flags,
     /// deaths, ubers, the objective, sentries and control points, none of them
-    /// disagreeing until t516. It was 95 before the rotated mask and 100 with
-    /// the mask but without the spawn invulnerability.
+    /// disagreeing until t523. It was 95 before the rotated mask, 100 with the
+    /// mask but without the spawn invulnerability, and 135 before characters
+    /// were walked in creation order.
     /// <para>
     /// ⚠️ <b>The tick is pinned exactly rather than bounded below</b>, because
-    /// both directions are news here. Shrinking means one of the two fixes has
-    /// regressed; growing means the t516 direct hit has been found, and this
-    /// recording's 52 deaths and 262 seeded fires start becoming assertions.
+    /// both directions are news here. Shrinking means one of the three fixes has
+    /// regressed — 135, 100 and 95 each name a different one; growing means the
+    /// t523 sub-pixel residue has been closed, and this recording's 52 deaths
+    /// and 262 seeded fires start becoming assertions.
     /// </para>
     /// </remarks>
     [Fact]
-    public void ThePortReproducesThatDeathAndRunsToTick516()
+    public void ThePortReproducesThatDeathAndRunsToTick523()
     {
         var ticks = Ticks();
         var anchor = FixtureAnchors.LastExactAnchor(ticks);
@@ -174,7 +186,7 @@ public sealed class GgDebugSplashOpenFindingTests
         var first = after.MinBy(m => m.Tick);
 
         Assert.Equal(381, anchor);
-        Assert.Equal(516, first.Tick);
+        Assert.Equal(523, first.Tick);
 
         // Nothing about slot 4's death at t476 is wrong any more, and asserting
         // that separately is the point: the tick above could move for reasons
@@ -192,7 +204,7 @@ public sealed class GgDebugSplashOpenFindingTests
     /// </summary>
     /// <remarks>
     /// The control for the second half of the fix. Without it
-    /// <see cref="ThePortReproducesThatDeathAndRunsToTick516"/> would still pass
+    /// <see cref="ThePortReproducesThatDeathAndRunsToTick523"/> would still pass
     /// at a shorter window and nothing would say why — the harness read no
     /// invulnerability at all for six phases, so every replayed respawn could be
     /// damaged on its first frame.
@@ -238,7 +250,7 @@ public sealed class GgDebugSplashOpenFindingTests
     /// ⚠️ <b>This replicates the back-out loop rather than calling it</b>, because
     /// <c>Projectiles.BackOutOfCharacter</c> is private and the shape of the
     /// argument is what is being asserted. The production path is gated by the
-    /// fixture instead — see <see cref="ThePortReproducesThatDeathAndRunsToTick516"/>.
+    /// fixture instead — see <see cref="ThePortReproducesThatDeathAndRunsToTick523"/>.
     /// </para>
     /// </remarks>
     [Fact]

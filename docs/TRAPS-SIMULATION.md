@@ -1990,11 +1990,11 @@ change trajectories rather than last digits:
 
 ### `gg_debug` stops on a rocket blast four pixels short
 
-✅ **Found and FIXED 2026-08-27 — two bugs, one behind the other.**
+✅ **Found and FIXED 2026-08-27 — three bugs, each behind the last.**
 `reference-gg_debug-closedtdm.trace` replayed exactly for 100 ticks after its
 spawn anchor at t381 and then diverged — not on a position, but because **slot 4
 survived a death the reference recorded**. It now runs to **135 on every
-field**, and what stops it is a missing rocket direct hit at t516. `GgDebugSplashOpenFindingTests` holds
+field**, and what stops it is a fifth of a pixel on slot 4's x at t523. `GgDebugSplashOpenFindingTests` holds
 the whole of it, including the arithmetic below; read that file before
 re-deriving any of this.
 
@@ -2157,3 +2157,41 @@ angle it is. That is exactly why the exemption is written as a predicate and not
 as a list of angles, and it is the reason this correction cost nothing: only the
 prose was narrow. **Do not fudge the rounding** — a fudge would be wrong at
 every angle instead of at a few, and a tie is unreachable in play.
+
+### Slot order is not creation order, and a respawn is where they part
+
+⚠️ **The third bug behind the `gg_debug` blast, found 2026-08-27**, and it had
+been wrong since the collision stage was written. `Projectiles.CollideOne`
+walked characters in **slot** order, with a comment saying that is "the
+reference's instance order ... an id is issued at creation". It is — **until
+somebody respawns.** A slot whose player died and came back holds a character
+*younger* than the ones in higher slots that never did.
+
+**It matters wherever the FIRST hit ends the search.** A rocket explodes on the
+first character its collision event fires against and is destroyed there, so
+which one it visits first is not a tie-break — it is the whole outcome.
+
+**Measured, and the arithmetic closes exactly.** At t509 of
+`reference-gg_debug-closedtdm.trace`, slot 6 had respawned at t508 and slot 2 at
+t509. The reference's rocket struck **slot 6**; the port, walking slots, struck
+slot 2 — which was invulnerable and took nothing. Slot 6 therefore finished the
+window **25 hp high**, exactly a rocket's contact damage: 25 + 30 splash = 55,
+and 140 − 55 = the 85 the recording holds. Fixing it took the window from 135 to
+**142**, and moved no other fixture at all.
+
+`CharacterState.CreationOrder` is a `uint` on the character rather than a
+parallel `SlotBuffer`, **on purpose**: it then moves with the character through
+`RemoveSlot`'s compaction and cannot be forgotten there — which CLAUDE.md warns
+is exactly how a per-slot field goes wrong. `WorldState.NextCharacterOrder`
+issues it, and lives in the state for the reason the RNG does: a forked rollout
+has to fork it.
+
+⚠️ **`Explosions.SplashCharacters` still walks slot order and that is still
+fine** — its own comment already says why, and it is now half-true rather than
+wrong: nothing in the blast loop reads another character, so the order is not
+observable *there*. Move it the moment that stops being true.
+
+⚠️ **Where else the first hit ends a search**, and therefore where this rule may
+still be owed: `BubbleCollide`'s character loop, and the sentry and generator
+loops in `CollideOne`. None is currently contradicted by a fixture; none has
+been checked either.

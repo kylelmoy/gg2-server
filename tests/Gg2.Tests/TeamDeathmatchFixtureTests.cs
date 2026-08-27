@@ -25,10 +25,11 @@ namespace Gg2.Tests;
 /// <para>
 /// ⚠️ <b>They disagree wildly about everything else, and that is the finding.</b>
 /// <c>tdm_mantic</c> replays exactly for <b>3,043</b> ticks — the longest
-/// closed-loop window in the project — and <c>gg_debug</c> for <b>135</b>. That
-/// second number has been 2, 23, 100 and now 135 in a single day, and each step
-/// was a different bug: the alarm-stage spawn seam, dropdown platforms, the
-/// rotated projectile mask, and Team Deathmatch's spawn invulnerability. See
+/// closed-loop window in the project — and <c>gg_debug</c> for <b>142</b>. That
+/// second number has been 2, 23, 100, 135 and now 142 in a single day, and each
+/// step was a different bug: the alarm-stage spawn seam, dropdown platforms, the
+/// rotated projectile mask, Team Deathmatch's spawn invulnerability, and walking
+/// characters in creation order rather than slot order. See
 /// <see cref="GgDebugReplaysPastItsDropdownPlatformsAndStopsOnDamage"/>.
 /// </para>
 /// </remarks>
@@ -96,11 +97,11 @@ public sealed class TeamDeathmatchFixtureTests
     /// small map. Every one of those deaths is a Team Deathmatch kill, so this
     /// is also the first recorded evidence that the mode scores at all.
     /// <para>
-    /// ⚠️ <b>Most of it is still not assertable</b>: the window reaches t516 of
+    /// ⚠️ <b>Most of it is still not assertable</b>: the window reaches t523 of
     /// 2,998, which is four of the fifty-two deaths. It is worth keeping
     /// precisely because it becomes the sharpest combat fixture in the project
-    /// as that window grows, and it has grown from 2 ticks to 135 by being
-    /// chased four times.
+    /// as that window grows, and it has grown from 2 ticks to 142 by being
+    /// chased five times.
     /// </para>
     /// </remarks>
     [Fact]
@@ -213,8 +214,8 @@ public sealed class TeamDeathmatchFixtureTests
     /// <see cref="GgDebugSplashOpenFindingTests"/>.
     /// </para>
     /// <para>
-    /// ⚠️ <b>What stops it now is a missing direct hit at t516</b> — slot 6 is 25
-    /// hp high, which is exactly a rocket's contact damage.
+    /// ⚠️ <b>What stops it now, at t523, is a fifth of a pixel</b> on slot 4's x.
+    /// Three missing kills became a rounding residue.
     /// </para>
     /// <para>
     /// ⚠️ <b>The platform's BOX is inferred rather than measured.</b>
@@ -234,12 +235,12 @@ public sealed class TeamDeathmatchFixtureTests
         var (exact, anchor) = ExactWindow(Debug, Fields.Trajectory);
 
         Assert.True(
-            exact is >= 120 and <= 200,
-            $"{Debug}: the window is now {exact} ticks after t{anchor}, not the pinned 135 — "
-                + "if it has shrunk to about 23 the dropdown platforms have regressed, and to "
-                + "about 100 the rotated projectile mask has; if it has grown a long way, the "
-                + "t516 direct hit is fixed and this recording's 52 deaths can become real "
-                + "assertions");
+            exact is >= 130 and <= 200,
+            $"{Debug}: the window is now {exact} ticks after t{anchor}, not the pinned 142 — "
+                + "if it has shrunk to about 23 the dropdown platforms have regressed, to about "
+                + "100 the rotated projectile mask has, and to 135 the creation-order collision "
+                + "walk has; if it has grown a long way, the t523 sub-pixel residue is closed and "
+                + "this recording's 52 deaths can become real assertions");
     }
 
     /// <summary>
