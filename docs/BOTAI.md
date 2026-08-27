@@ -263,6 +263,16 @@ given map, with no gamemode running, and step them.
 asks for a socket-free runner of *full matches*; this is the smaller case, and
 it is the one the sample budget actually spends its time in.
 
+**Satisfied.** `Gg2.Bots.ScenarioWorld` — load a map for an area, `Place` any
+number of characters of given classes and teams at exact positions, `Drive` each
+with an `IInputSource`, `Step`. A library type rather than a test fixture,
+because a self-play evaluator wants exactly this. ⚠️ **What makes it
+gamemode-less is the zeroed limits and placing no objective, not the `GameMode`
+field** — measured, by setting the mode three ways and watching nothing change.
+CLAUDE.md, "the scenario harness", has the list of lines that do the work and
+the two (`TdmInvulnerabilityTicks`, `RespawnTime`) that are only observable at
+one instant each.
+
 ## Not asking for
 
 To keep the scope honest:
