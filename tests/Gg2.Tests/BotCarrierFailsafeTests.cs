@@ -108,6 +108,70 @@ public sealed class BotCarrierFailsafeTests
         Assert.Equal(0, commands.Count);
     }
 
+    /// <summary>
+    /// ⚠️ A carrier that keeps MOVING is still made to drop it eventually — the
+    /// headway check alone is not enough.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The case that proves it: a carrier can circle a pair of surfaces
+    /// indefinitely, genuinely covering ground, so the 24px test never fires.
+    /// Measured on <c>ctf_truefort</c> — three of ten uncontested seeds, the
+    /// carrier ranging up to 1,666px around the <em>enemy</em> base for ~26,000
+    /// ticks, capturing nothing.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>That loop is faithful to the reference, not a port bug.</b>
+    /// <c>botPathKeys.gml:160-195</c> has the identical off-route rule, and its
+    /// own comment describes this failure — "the pair of surfaces becomes a loop
+    /// the bot never leaves… the anti-thrash distance check never fires, because
+    /// the bot is genuinely covering ground" — with the blacklist as its remedy.
+    /// The remedy is defeated because the blacklist wants two
+    /// <em>consecutive</em> misses of one edge, and the misses alternate with the
+    /// <c>(-1,-1)</c> "no edge running" sentinel, which resets the count. So the
+    /// ceiling is a failsafe over reference behaviour rather than a fix for a
+    /// defect.
+    /// </para>
+    /// <para>
+    /// Measured effect: uncontested captures a match went from 5.4 to
+    /// <b>7.3</b>, and contested play did not move at all (6v2 5.8, 6v4 3.4,
+    /// 6v6 0.4 either way) — the ceiling cannot fire on a real attempt, because
+    /// the longest contested carry measured was 3,180 ticks.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void AMovingCarrierThatNeverDeliversStillDropsIt()
+    {
+        var (bot, state) = Carrier();
+        var world = ScenarioWorld.Load("ctf_truefort", 1, ReferenceTree.IncludedFiles, null).Collision;
+
+        var commands = default(PlayerCommandBuffer);
+        var dropped = -1;
+
+        for (var tick = 0; tick < ScriptedBot.CarrierHoldCeiling + 200; tick++)
+        {
+            // Moving far every tick, so the headway test can never fire.
+            state.Characters[1].X = 100 + (tick % 40) * 20;
+
+            bot.Poll(new WorldView(in state, world), 1, tick);
+
+            commands.Clear();
+            bot.PollCommands(new WorldView(in state, world), 1, tick, ref commands);
+
+            if (commands.Count > 0)
+            {
+                dropped = tick;
+                break;
+            }
+        }
+
+        Assert.True(dropped > 0, "a carrier that moved for ever never dropped the intel");
+        Assert.Equal(PlayerCommandKind.DropIntel, commands[0].Kind);
+
+        // At the ceiling, not before it — this must not fire on a healthy carry.
+        Assert.InRange(dropped, ScriptedBot.CarrierHoldCeiling, ScriptedBot.CarrierHoldCeiling + 60);
+    }
+
     /// <summary>A bot carrying nothing never asks, however still it is.</summary>
     [Fact]
     public void ABotCarryingNothingNeverAsks()

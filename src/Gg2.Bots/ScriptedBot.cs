@@ -587,9 +587,30 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
     /// <summary>How far it must get in that time to count as headway.</summary>
     private const double CarrierProgressDistance = 24.0;
 
+    /// <summary>
+    /// The hard ceiling on holding a briefcase, however much the bot is moving.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The headway check is not enough on its own, and this is the case
+    /// that proves it.</b> A carrier can circle a pair of surfaces indefinitely
+    /// — genuinely covering ground, so the 24px test never fires — and hold the
+    /// intel for a whole round. Measured on <c>ctf_truefort</c>: three of ten
+    /// uncontested seeds, the carrier ranging up to 1,666px around the *enemy*
+    /// base for ~26,000 ticks, capturing nothing.
+    /// <para>
+    /// Four thousand ticks is a bit over two minutes. A healthy carry is about
+    /// 1,760 ticks, and the longest carry measured in *contested* play — where a
+    /// carrier legitimately holds it through fights — was 3,180. So this cannot
+    /// fire on a bot that is making a real attempt; it fires on one that has
+    /// stopped making progress toward anything.
+    /// </para>
+    /// </remarks>
+    public const int CarrierHoldCeiling = 4000;
+
     private double _carrierMarkX;
     private double _carrierMarkY;
     private int _carrierStuckSince = -1;
+    private int _carryingSince = -1;
     private bool _dropIntel;
 
     /// <summary>Ticks the bot has been carrying without headway.</summary>
@@ -623,6 +644,21 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
     {
         if (!self.CarryingIntel)
         {
+            _carrierStuckSince = -1;
+            _carryingSince = -1;
+            CarrierStuckTicksNow = 0;
+            return;
+        }
+
+        if (_carryingSince < 0)
+            _carryingSince = tick;
+
+        // The hard ceiling, checked before the headway test: a bot circling a
+        // pair of surfaces is moving, so only this one catches it.
+        if (tick - _carryingSince >= CarrierHoldCeiling)
+        {
+            _dropIntel = true;
+            _carryingSince = tick;
             _carrierStuckSince = -1;
             CarrierStuckTicksNow = 0;
             return;
