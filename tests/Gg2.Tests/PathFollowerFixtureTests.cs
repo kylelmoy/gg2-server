@@ -24,7 +24,7 @@ namespace Gg2.Tests;
 /// stops being walk-only.
 /// </para>
 /// </remarks>
-public sealed class PathFollowerFixtureTests
+public sealed class PathFollowerFixtureTests(Xunit.Abstractions.ITestOutputHelper output)
 {
     private const string Map = "ctf_truefort";
 
@@ -214,6 +214,11 @@ public sealed class PathFollowerFixtureTests
             + $"short, replans {state.Replans}, stuck {state.StuckFires}, off-route {state.OffRouteFires}, "
             + $"blacklisted {state.BlacklistFires}");
 
+        output.WriteLine(
+            $"{route.Count} nodes, arrived t={state.ArrivedAt}, replans {state.Replans}, "
+            + $"stuck {state.StuckFires}, off-route {state.OffRouteFires}, "
+            + $"blacklisted {state.BlacklistFires}");
+
         // ⚠️ Arrived means stopped on it, not merely near it.
         Assert.True(Math.Abs(world.State.Characters[slot].X - goalX) <= BotConstants.ArriveTol);
 
@@ -221,16 +226,32 @@ public sealed class PathFollowerFixtureTests
         // this is a real crossing rather than a lucky one.
         Assert.Equal(0, state.UnsupportedEdgeTicks);
 
-        // ⚠️ Zero stuck fires is a claim, not a formality: a bot wedged against
-        // geometry it cannot leave is the failure this whole layer is built to
-        // avoid, and it is invisible in an arrival that eventually happens.
+        // ⚠️ PINNED, exactly, and a failure here is the RE-RECORD rather than a
+        // broken test — the discipline `ScenarioSuiteTests.Baseline`,
+        // `BotObjectiveTests`' intel run and the pinned `SIM_UUID` all ask for.
+        // Exact for the same reason: every draw is seeded, the graph comes off
+        // disk and the physics is IEEE doubles, so a number that moves at all is a
+        // behaviour change and not noise.
+        //
+        // ⚠️ <b>The bound this replaces was `ArrivedAt < 2400` and three of these
+        // five were asserted by nothing at all.</b> That was already the tightened
+        // version — "half again on the measurement" — and it still admitted a 53%
+        // regression silently, while the re-plan, off-route and blacklist counts
+        // this file's own comment quotes could go anywhere. Two loose bounds on
+        // consecutive items were found to be hiding drift before this one was
+        // swept; this one had not drifted, which is worth knowing only because it
+        // was checked.
+        //
+        // ⚠️ <b>Zero blacklists is the load-bearing one.</b> It read 9 before the
+        // `NAV_EDGE_BUCKET` truncation was found, and a bot that starts banning
+        // edges again still arrives — just slowly, inside any budget, with the
+        // route quality gone and nothing red.
+        Assert.Equal(137, route.Count);
+        Assert.Equal(1572, state.ArrivedAt);
+        Assert.Equal(33, state.Replans);
         Assert.Equal(0, state.StuckFires);
-
-        // Half again on the measurement, so a regression that doubles the leg
-        // fails here rather than quietly inside the budget.
-        Assert.True(
-            state.ArrivedAt < 2400,
-            $"arrived at tick {state.ArrivedAt}; it measured 1,572 when this was written");
+        Assert.Equal(4, state.OffRouteFires);
+        Assert.Equal(0, state.BlacklistFires);
 
         // The control: the same bot with no goal presses nothing and goes
         // nowhere, so the walk above is the follower's doing.
