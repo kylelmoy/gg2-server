@@ -2288,22 +2288,37 @@ one tick, a 30-tick drift tolerance had to go in, and a harness reading a tick
 late then looked exactly like the drift.
 
 `ReplayerAlignmentTests` asks the same question of a **ten-tick synthetic
-trace**: a stand-in simulation that announces one ubercharge, and the recorded
-message placed in the following tick's block, the tick's own block, and the one
-after. No fixture, no drift, no RNG.
+trace**: a stand-in simulation that announces one event, and the recorded message
+placed in the following tick's block, the tick's own block, and the one after. No
+fixture, no drift, no RNG.
 
-⚠️ **The check that matters is the mutation**, and it was run: pointing
-`ReconcileUbers` at the current tick instead of the next fails **two of the four
-new tests and nothing else in 2,021**. That is the hole measured directly —
-before them, this off-by-one was unguarded.
+✅ **All four event families are covered**, not just Ubers — deaths, the
+objective and sentries were in exactly the same condition.
+
+⚠️ **The check that matters is the mutation, and it was run for each family.**
+Pointing one `Reconcile*` at the current tick instead of the next:
+
+| family | caught by the new tests | caught by everything else |
+|---|---|---|
+| Deaths | 2 | 4 |
+| **Ubers** | 2 | **0** |
+| Intel | 2 | 2 |
+| Sentries | 2 | 2 |
+
+**Ubers was unguarded entirely** — the number that says the debt was real — and
+the other three rested on two to four fixture assertions that happen to reach
+them. That is the hole measured rather than asserted.
+
+⚠️ **Control points are deliberately not in this file.** They are not an event
+family: the block rides on a `CAPS_UPDATE` and is compared *before* the tick
+runs rather than out of the next tick's messages, so it needs a different shape
+of test. It is also the one that was already caught the hard way.
 
 **The general shape, which is the transferable part:**
 
 - ⚠️ **An assertion that needs a thousand ticks of agreement to reach its subject
   is not testing its subject** — it is testing everything upstream, and the first
-  unrelated fix retires it. `Fields.Deaths`, `Intel` and `Sentries` are still
-  gated this way (shifting each by a tick fails 3, 2 and 2 fixture assertions),
-  so they are one lucky fix away from the same problem.
+  unrelated fix retires it.
 - **A synthetic trace is cheap.** `TraceTick` is a plain record; ten of them and
   a stub `ITraceSimulation` are a few dozen lines, and they answer the harness
   question without any simulation being right about anything.
