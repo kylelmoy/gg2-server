@@ -34,6 +34,9 @@ public sealed class GameServer : IDisposable
 
     private readonly List<JoiningConnection> _joining = [];
     private readonly List<ClientPlayer> _clients = [];
+
+    /// <summary>Null unless the server was configured to record — docs/BOTAI.md item 3.</summary>
+    private MatchRecorder? _recorder;
     private readonly NetWriter _broadcast = new(8192);
 
     private TcpListener? _listener;
@@ -255,6 +258,25 @@ public sealed class GameServer : IDisposable
         _log.Info(
             $"listening on {BoundPort}, map {map.Name} ({_match.GameMode}, " +
             $"{map.Walkmask.Width}x{map.Walkmask.Height} cells), {_options.PlayerLimit} slots");
+
+        // ⚠️ Last, and after OpenMap: the first segment's preamble is a
+        // FULL_UPDATE of the world, so there has to be a world.
+        if (_options.RecordingDirectory.Length != 0)
+        {
+            _recorder = new MatchRecorder(
+                _options.RecordingDirectory, _options.ServerName, _log, JoinBurstBytes);
+
+            _recorder.StartSegment(_currentMap);
+            _log.Info($"recording to {_options.RecordingDirectory}");
+        }
+    }
+
+    /// <summary>The join burst as a fresh array, for <see cref="MatchRecorder"/>.</summary>
+    private byte[] JoinBurstBytes()
+    {
+        var writer = new NetWriter(2048);
+        WriteJoinBurst(writer);
+        return writer.WrittenSpan.ToArray();
     }
 
     /// <summary>
@@ -430,6 +452,11 @@ public sealed class GameServer : IDisposable
         // every map this server serves.
         ServerMessages.ChangeMap(_broadcast, map.Name, string.Empty);
         _log.Info($"now playing {map.Name} ({_match.GameMode}), area {_nextArea}");
+
+        // ⚠️ A segment is one map, so the header's map name cannot go stale —
+        // and the new segment's preamble is taken against the world OpenMap has
+        // just built, before anything broadcasts on it.
+        _recorder?.StartSegment(map.Name);
     }
 
     /// <summary>
@@ -1693,6 +1720,11 @@ public sealed class GameServer : IDisposable
         foreach (var client in _clients)
             client.Connection.Send(bytes);
 
+        // ⚠️ The recording tees HERE and nowhere else, which is what makes it
+        // exactly what the clients saw rather than a reconstruction of it.
+        // docs/BOTAI.md item 3: one recorder, not a second logging path.
+        _recorder?.Append(bytes);
+
         _broadcast.Reset();
     }
 
@@ -1799,15 +1831,23 @@ public sealed class GameServer : IDisposable
     /// Turns a finished handshake into a roster entry, in the order
     /// <c>serviceJoiningPlayer.gml:108-129</c> does it.
     /// </summary>
-    private void CompleteJoin(JoiningConnection joining)
+    /// <summary>
+    /// The join burst: everything a joiner is sent before it starts following
+    /// the broadcast, ending in the <c>FULL_UPDATE</c> that defines a complete
+    /// starting point.
+    /// </summary>
+    /// <remarks>
+    /// Factored out of <see cref="CompleteJoin"/> for <see cref="MatchRecorder"/>,
+    /// which opens every segment with it so the segment is replayable on its own.
+    /// ⚠️ There must be exactly one of these: a recording whose preamble drifted
+    /// from what a real client is sent would replay differently from the game it
+    /// recorded, and nothing would say so.
+    /// </remarks>
+    private void WriteJoinBurst(NetWriter writer)
     {
-        var connection = joining.Connection;
-        var writer = new NetWriter(2048);
-
-        // 1. The whole join burst, on this socket alone. The joiner's id is the
-        //    roster size *before* it is added, and everything here has to arrive
-        //    before the FULL_UPDATE that follows it — that update's player count
-        //    is checked against the client's own roster.
+        // The joiner's id is the roster size *before* it is added, and
+        // everything here has to arrive before the FULL_UPDATE that follows it —
+        // that update's player count is checked against the client's own roster.
         var playerId = checked((byte)_roster.Count);
         ServerMessages.JoinUpdate(writer, playerId, _match.CurrentMapArea);
 
@@ -1828,6 +1868,15 @@ public sealed class GameServer : IDisposable
         }
 
         _stateWriter.Write(writer, MessageType.FullUpdate);
+    }
+
+    private void CompleteJoin(JoiningConnection joining)
+    {
+        var connection = joining.Connection;
+        var writer = new NetWriter(2048);
+
+        // 1. The whole join burst, on this socket alone.
+        WriteJoinBurst(writer);
 
         connection.Send(writer.WrittenSpan);
 
@@ -1851,7 +1900,11 @@ public sealed class GameServer : IDisposable
         }
 
         connection.Flush();
-        _log.Info($"{entry.Name} joined as player {playerId}; {_roster.Count - 1} of {_options.PlayerLimit} slots used");
+        // The joiner's id is its roster index, which is the count before it was
+        // added — the same value WriteJoinBurst put in the JOIN_UPDATE.
+        _log.Info(
+            $"{entry.Name} joined as player {_roster.Count - 1}; "
+            + $"{_roster.Count - 1} of {_options.PlayerLimit} slots used");
     }
 
     // --- map loading ---------------------------------------------------------
@@ -1876,6 +1929,11 @@ public sealed class GameServer : IDisposable
 
     public void Dispose()
     {
+        // First: a segment only becomes a readable .trace when it is closed, so
+        // a recording lost here is a recording that never existed.
+        _recorder?.Dispose();
+        _recorder = null;
+
         foreach (var client in _clients)
             client.Connection.Dispose();
         _clients.Clear();

@@ -127,6 +127,29 @@ public sealed class ServerOptions
     /// </remarks>
     public double SpeedMultiplier { get; set; } = 1.0;
 
+    /// <summary>
+    /// Where to write replayable <c>.trace</c> recordings of this server's own
+    /// broadcast stream. Empty — the default — records nothing.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <c>docs/BOTAI.md</c> item 3, <b>the only item on this project with a
+    /// deadline</b>: "data not collected during the port's first public games
+    /// does not exist afterwards". The broadcast stream already carries every
+    /// player's keys and aim every tick, so a recording of a game with people in
+    /// it is a labelled dataset of human action arriving for free — and it is
+    /// the only source of human-<em>like</em> behaviour rather than
+    /// optimal-looking behaviour.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Off by default and it should stay that way.</b> Recording a game
+    /// people are playing is a thing to decide rather than a thing to inherit
+    /// from a default, and the data is only worth having if somebody meant to
+    /// collect it. See <see cref="MatchRecorder"/> for the on-disk bound.
+    /// </para>
+    /// </remarks>
+    public string RecordingDirectory { get; set; } = string.Empty;
+
     /// <summary>The <c>[Bots]</c> section. Off by default, as in the reference.</summary>
     /// <remarks>
     /// ⚠️ <see cref="BotPopulationOptions.Default"/>, never <c>new()</c> — see the
