@@ -189,12 +189,20 @@ public sealed class PathFollowerFixtureTests
         // (`truefort-spawn-to-intel`), and it is not slack: the leg chosen here
         // is the LONGEST steerable one on ctf_truefort, not spawn-to-intel.
         //
-        // Measured 2026-08-27: a 137-node route, arrived at tick 2,655, with 76
-        // re-plans, 0 stuck fires, 34 off-route events and 9 blacklists. The
+        // Measured 2026-08-27: a 137-node route, arrived at tick 1,572, with 33
+        // re-plans, 0 stuck fires, 4 off-route events and 0 blacklists. The
         // reference quotes 2,200-2,500 ticks "with no blacklists now" for its own
-        // shorter leg — so this port is in the same band on a longer route and
-        // misses more marginal arcs. That gap is real and is the thing to watch
-        // when the takeoff machinery is next touched.
+        // SHORTER leg, so this port is now comfortably ahead of it on a longer
+        // route.
+        //
+        // ⚠️ It read 2,655 / 76 / 34 / 9 when this was written, and that gap was
+        // recorded here as "this port misses more marginal arcs — the thing to
+        // watch when the takeoff machinery is next touched". It was not the
+        // takeoff machinery. It was a single (int) cast in NavCache truncating
+        // NAV_EDGE_BUCKET, the horizontal velocity every arc is flown at, which
+        // zeroed a third of the jump edges in the game. Worth remembering the
+        // shape of: a plausible-looking gap in a behaviour layer, explained
+        // entirely by a lossy read three layers below it.
         const int Budget = 6000;
 
         for (var tick = 0; tick < Budget && !state.Arrived; tick++)
@@ -221,8 +229,8 @@ public sealed class PathFollowerFixtureTests
         // Half again on the measurement, so a regression that doubles the leg
         // fails here rather than quietly inside the budget.
         Assert.True(
-            state.ArrivedAt < 4000,
-            $"arrived at tick {state.ArrivedAt}; it measured 2,655 when this was written");
+            state.ArrivedAt < 2400,
+            $"arrived at tick {state.ArrivedAt}; it measured 1,572 when this was written");
 
         // The control: the same bot with no goal presses nothing and goes
         // nowhere, so the walk above is the follower's doing.

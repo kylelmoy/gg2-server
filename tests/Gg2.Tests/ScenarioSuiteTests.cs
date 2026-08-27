@@ -20,75 +20,35 @@ namespace Gg2.Tests;
 /// ⚠️ <b>The numbers quoted in each <c>about</c> are the reference's, against the
 /// GM8 bots, and they are a target rather than a contract.</b> This port is
 /// expected to differ; where it misses one the question is whether the leg is
-/// possible at all, not whether the tick count matches.
+/// possible at all, not whether the tick count matches. As it happens it now
+/// matches closely — <c>valley-shaft-floor-to-point</c> on 161 ticks against the
+/// reference's quoted 161, <c>truefort-blue-spawn-exit-west</c> on 53 against 58
+/// — which is corroboration rather than a requirement.
 /// </para>
 /// </remarks>
 public sealed class ScenarioSuiteTests(ITestOutputHelper output)
 {
     /// <summary>
-    /// The legs this port does not complete, and what is known about each.
+    /// The legs this port does not complete. ⚠️ <b>It is empty, and keeping it
+    /// empty is the point.</b>
     /// </summary>
     /// <remarks>
+    /// All fourteen pass. This existed with six entries for exactly one commit —
+    /// long enough for the suite to be the thing that found why, which was a
+    /// single <c>(int)</c> cast on <c>NAV_EDGE_BUCKET</c> in <c>NavCache</c>
+    /// truncating every arc's horizontal velocity and zeroing a third of them
+    /// outright. The tick counts landed on the reference's own numbers when it
+    /// went (<c>valley-shaft-floor-to-point</c> on 161 against its quoted 161).
+    /// <para>
     /// ⚠️ <b>Asserted as an exact set, in both directions.</b> A leg that starts
-    /// failing is a regression; a leg that starts passing means somebody fixed
-    /// something and this list is now a lie, which is the state a "known
-    /// failures" list decays into if it is only ever checked one way.
-    /// <para>
-    /// ⚠️ <b>Five of the six look like one defect</b>, diagnosed on
-    /// <c>truefort-blue-spawn-exit-west</c> because it is the shortest — a 150px
-    /// leg the reference walks in 58 ticks. The route is <em>right</em> (the
-    /// direct 33.67 arc, node 178 to 177, takeoff column 588 at world x 3540);
-    /// the takeoff gate refuses it every time. The bot's run-up is a <b>round
-    /// trip</b>: it walks six cells right to the mark, arrives there at
-    /// +3.13 px/tick heading <em>away</em> from the jump, spends seven ticks
-    /// reversing, and is back at the takeoff column at <b>0.35 px/tick</b> — so
-    /// every attempt is made from a standstill and the cycle repeats identically
-    /// every <b>22 ticks</b> until the anti-thrash blacklist fires around t140 and
-    /// sends it down a hole it cannot climb out of.
-    /// </para>
-    /// <para>
-    /// ⚠️ <c>BOT_TAKEOFF_PATIENCE</c> cannot rescue it, and this is the first time
-    /// that has been observed mattering. <c>TakeoffTicks</c> peaked at <b>4</b>
-    /// over the whole run: every re-plan zeroes it and at this stagger the
-    /// re-plan interval is 46, which is the ceiling CLAUDE.md records under item
-    /// 4b-ii. It was found there by a test failing and reasoned about; here it is
-    /// costing a real leg.
+    /// failing is a regression; a leg that starts passing means an entry here is
+    /// a lie and has to go, taking its diagnosis with it. A "known failures" list
+    /// that is only ever checked one way decays into a list of things nobody
+    /// looks at — this one is checked both ways and is currently a claim that
+    /// there is nothing to look at.
     /// </para>
     /// </remarks>
-    private static readonly Dictionary<string, string> Unmet = new(StringComparer.Ordinal)
-    {
-        ["valley-shaft-floor-to-point"] =
-            "arrives, but at 478 ticks against a 400 cap and the reference's 161. The only "
-            + "one of the six that completes at all, which makes it the cheapest A/B signal "
-            + "here — a takeoff fix should move this number first.",
-
-        ["truefort-spawn-to-intel"] =
-            "737px short after the full 6,000. The reference does it in 2,200-2,500. It is "
-            + "the only leg covering two stacked jumps in a row, so it is the run-up defect "
-            + "compounded.",
-
-        ["truefort-blue-spawn-exit-west"] =
-            "834px short on a 150px leg the reference walks in 58 ticks. The diagnosed case "
-            + "— see the remarks above. ⚠️ Fix this one and the other four are worth "
-            + "re-running before anything else is attempted.",
-
-        ["avanti-ramp-pocket-to-intel"] =
-            "958px short. The reference does it in 352-438. Its start node stands one anchor "
-            + "column from the 54px block that is the way out, so the takeoff has no room at "
-            + "all — the same gate in its harshest form.",
-
-        ["gallery-pit-climb"] =
-            "497px short. ⚠️ Do NOT use this as an A/B signal even though it is deterministic "
-            + "here: Scenario.Known records that it measured 2/5 and then 1/6 in the "
-            + "reference on one unchanged build, and was believed once at the price of a "
-            + "wrong revert. It is only good for 'the takeoff machinery is broken outright'.",
-
-        ["oldfort-perch-reroutes"] =
-            "2,253px short with 479 off-route events, by far the most of any leg. ⚠️ This one "
-            + "may not be the same defect: the scenario exists to make a bot DECLINE a lying "
-            + "arc, and 479 misses is the signature of taking one. Worth its own look rather "
-            + "than assuming the run-up explains it.",
-    };
+    private static readonly Dictionary<string, string> Unmet = new(StringComparer.Ordinal);
 
     private static ScenarioWorld Load(Scenario s) =>
         ScenarioWorld.Load(s.Map, s.Area, ReferenceTree.IncludedFiles, ReferenceTree.NavCacheDirectory);

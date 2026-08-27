@@ -17,9 +17,22 @@ public readonly record struct NavNode(int Row, int X0, int X1, int Flags, NavDoo
 /// rocket jump costs hit points. <see cref="Takeoff"/> is the anchor column the
 /// arc was validated from, which a follower has to actually reach before
 /// pressing — an arc proved from one column does not reach from the next.
+/// <para>
+/// ⚠️ <b><see cref="Bucket"/> is a horizontal VELOCITY in px/tick and it is
+/// fractional — it is not a bucket index, whatever the cache column is called.</b>
+/// <c>NAV_EDGE_BUCKET</c> is what <c>navJumpTakeoff</c> proved the arc at:
+/// "leave the takeoff column, cover NAV_EDGE_BUCKET px of ground a tick, be over
+/// the landing when the arc comes back down" (<c>botPathKeys.gml:436</c>). This
+/// port declared it <c>int</c> and truncated it on load for three items.
+/// Measured over the 24 cached graphs: <b>all 67,013 jump edges carry a
+/// fractional value and 23,184 of them — 34.6% — truncate to ZERO</b>, which
+/// makes the in-flight tracker steer for the takeoff column itself and the
+/// takeoff gate demand the whole gap from a reach of nothing. The name is the
+/// trap; <c>NavGraphFixtureTests</c> is what stops it coming back.
+/// </para>
 /// </remarks>
 public readonly record struct NavEdge(
-    int From, int To, NavEdgeType Type, int Bucket, double Ticks, double Cost,
+    int From, int To, NavEdgeType Type, double Bucket, double Ticks, double Cost,
     NavGate Gate, int Takeoff, int Rejump);
 
 /// <summary>

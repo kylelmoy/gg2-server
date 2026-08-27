@@ -267,4 +267,94 @@ public sealed class NavGraphFixtureTests
             }
         }
     }
+
+    /// <summary>
+    /// A jump edge's velocity survives the load with its fraction intact.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The most expensive single character this port has written was the
+    /// <c>(int)</c> that used to sit in front of this field.</b>
+    /// <c>NAV_EDGE_BUCKET</c> is the horizontal velocity <c>navJumpTakeoff</c>
+    /// proved the arc at — "cover NAV_EDGE_BUCKET px of ground a tick"
+    /// (<c>botPathKeys.gml:436</c>) — and the name invites an integer it has
+    /// never held. It cost five of the fourteen behaviour scenarios: with the
+    /// value truncated, <c>truefort-blue-spawn-exit-west</c> ends 834px from a
+    /// goal 150px away and the reference walks in 58 ticks.
+    /// <para>
+    /// Two assertions, because they fail at different distances from the cause.
+    /// <b>No jump edge may read zero</b> — that is the 34.6% the truncation
+    /// zeroed outright, and a zero velocity makes the in-flight tracker steer for
+    /// the takeoff column itself, so the bot is told to hang still in the air.
+    /// And <b>the values must actually be fractional</b>, which is what notices a
+    /// rounding rather than a truncation, and what notices a regenerated cache
+    /// that quietly started storing indices.
+    /// </para>
+    /// <para>
+    /// ⚠️ The scenario suite catches this too, and catching it there is not
+    /// enough: it is a whole map load and 6,000 ticks away from the line that is
+    /// wrong, and it reads as a follower defect. Measured over the 24 shipped
+    /// caches — 67,013 jump edges, every one fractional.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void AJumpEdgesVelocityIsARealAndSurvivesTheLoad()
+    {
+        var total = 0;
+        var fractional = 0;
+
+        foreach (var (map, area) in Caches())
+        {
+            var graph = NavCache.Load(ReferenceTree.NavCacheDirectory, map, area);
+
+            foreach (var edge in graph.Edges)
+            {
+                if (edge.Type != NavEdgeType.Jump)
+                    continue;
+
+                total++;
+
+                Assert.True(
+                    edge.Bucket > 0,
+                    $"{map} a{area}: jump edge {edge.From}->{edge.To} has a horizontal velocity "
+                    + "of 0, which cannot fly anywhere — NAV_EDGE_BUCKET has been truncated");
+
+                if (edge.Bucket != Math.Floor(edge.Bucket))
+                    fractional++;
+            }
+        }
+
+        Assert.True(total > 60000, $"only {total} jump edges across every cache, expected ~67,000");
+
+        // ⚠️ Measured: 67,005 of 67,013. Eight really do land on a whole number,
+        // which is what a velocity does occasionally and what an index does
+        // always — so the claim is a proportion, and the sharp gate is the two
+        // named edges below.
+        Assert.True(
+            fractional > total * 0.999,
+            $"only {fractional} of {total} jump velocities are fractional; a field that is "
+            + "mostly integral is an index, and the follower's trajectory model is built on "
+            + "this being a speed");
+
+        // ⚠️ The gate that actually bites, and it bites on a rounding as well as a
+        // truncation. Both values are the cache's own bits; the second is the arc
+        // the reference's takeoff-gate comment quotes as "0.70 px/tick over 17.2
+        // ticks against a 12px gap: exactly 12 for exactly 12", which is
+        // corroboration that this port is reading the same field the reference is.
+        var truefort = NavCache.Load(ReferenceTree.NavCacheDirectory, "ctf_truefort", 1);
+        var gallery = NavCache.Load(ReferenceTree.NavCacheDirectory, "koth_gallery", 1);
+
+        Assert.Equal(1.9518072289156623, Edge(truefort, 178, 177).Bucket);
+        Assert.Equal(0.6975139064871476, Edge(gallery, 86, 58).Bucket);
+    }
+
+    private static NavEdge Edge(NavGraph graph, int from, int to)
+    {
+        foreach (var edge in graph.Edges)
+        {
+            if (edge.From == from && edge.To == to)
+                return edge;
+        }
+
+        throw new InvalidOperationException($"no edge {from}->{to} in {graph.Map}");
+    }
 }

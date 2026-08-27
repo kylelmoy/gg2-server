@@ -233,7 +233,12 @@ public static class NavCache
                 (int)edgeGrid.At(NavConstants.EdgeFrom, e),
                 (int)edgeGrid.At(NavConstants.EdgeTo, e),
                 (NavEdgeType)(int)edgeGrid.At(NavConstants.EdgeType, e),
-                (int)edgeGrid.At(NavConstants.EdgeBucket, e),
+
+                // ⚠️ NOT cast. NAV_EDGE_BUCKET is the arc's horizontal velocity
+                // in px/tick and every jump edge in every shipped cache carries a
+                // fractional one — see NavEdge. An (int) here truncated a third of
+                // them to zero and cost this port five of its fourteen scenarios.
+                edgeGrid.At(NavConstants.EdgeBucket, e),
                 edgeGrid.At(NavConstants.EdgeTicks, e),
                 edgeGrid.At(NavConstants.EdgeCost, e),
                 (NavGate)(int)edgeGrid.At(NavConstants.EdgeGate, e),
