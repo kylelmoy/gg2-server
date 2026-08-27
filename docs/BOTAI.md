@@ -37,7 +37,9 @@ nobody solves them twice:
 - `IInputSource` as the seam, with network clients and bots on the same
   interface - which is already true in the reference (`botInputUpdate.gml`
   writes `keyState`/`aimDirection` exactly as `processClientCommands.gml:267`
-  does for a socket).
+  does for a socket). **Built** (2026-08-27): `Gg2.Simulation.IInputSource`,
+  `Gg2.Server.NetworkInputSource`, `GameServer.GatherInputs`. See
+  docs/ARCHITECTURE.md, "Bots", for what it settled.
 - Determinism, independent `WorldState`s across cores, headless
   faster-than-real-time, per-slot think-rate.
 - `Gg2.Parity`'s trace recorder and replayer.
@@ -112,6 +114,14 @@ more precisely than a player can.
 
 The reference already works this way. Do not "improve" it.
 
+**Satisfied.** `IInputSource.Poll` returns a `PlayerInput` and nothing else, and
+the actions a key cannot express go through a separate `PlayerCommand` channel
+capped at the socket's own `ClientCommands.PerTickLimit` — so a bot's whole
+budget is a client's whole budget. ⚠️ The commands are *not* an escape hatch:
+each one lands in the same `GameServer.Execute*` handler the socket switch
+calls, and its preconditions are re-checked there
+(`InputSourceTests.ACommandWithFailedPreconditionsIsSilent`).
+
 ## 5. The bot seam must allow batched decisions
 
 **Requirement.** Alongside the per-slot poll, there is a shape that decides for
@@ -138,6 +148,13 @@ deciding on the same tick.
 Only the interface shape matters now; nothing has to implement the batched form.
 Adding it after every call site assumes per-slot polling is a wide change.
 
+**Satisfied, including the call site.** `IBatchInputSource : IInputSource`, and
+`GameServer.GatherInputs` groups slots by source *identity* and calls `PollMany`
+once with all of them — because the wide change this item warns about is the
+call site, not the declaration. Nothing implements it for real yet;
+`InputSourceTests.OnePolicyDrivingSeveralBotsIsAskedOnce` is the gate, with the
+per-slot fallback as its control.
+
 ## 6. `WorldView` must yield a feature vector cheaply
 
 **Requirement.** The read-only projection can produce a fixed-size numeric
@@ -153,6 +170,24 @@ more expensive than the simulation it observes.
 Not asking for the feature set to be designed now. Asking that `WorldView`
 support spatial queries - nearest-K by team, projectiles within a radius - rather
 than only whole-collection enumeration.
+
+**The shape is there.** `WorldView.NearestEnemies` / `NearestAllies` fill a
+caller-supplied `Span<int>` by insertion into its sorted prefix — a nearest-3
+query does three comparisons a candidate, not a sort of the roster — and
+`ProjectilesWithin` fills a `Span<ProjectileHandle>`. Neither allocates.
+⚠️ **Every tie is broken by roster index**, deliberately: without a defined
+tie-break the answer depends on whether the insertion used `<` or `<=`, which is
+exactly the kind of thing that makes a rollout search irreproducible for reasons
+nobody can find. `ProjectilesWithin` answers in *creation* order, which is the
+order the rest of the project already makes observable — a pool slot is recycled
+and says nothing about when anything was fired. The feature vector itself is
+still undesigned, which is what this item permits.
+
+⚠️ **`WorldView` is a `ref struct`**, carrying a `ref readonly WorldState`
+rather than a copy. Constructing one is free, and the language refuses to let a
+source stash it in a field or keep it past the call — the read-only guarantee
+made structural. A by-value projection would have been a kilobyte copy per bot
+per decision, which is item 1 in another costume.
 
 ## 7. Damage and score events must be emitted, not inferred
 
