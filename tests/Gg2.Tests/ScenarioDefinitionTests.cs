@@ -131,24 +131,20 @@ public sealed class ScenarioDefinitionTests
     }
 
     /// <summary>
-    /// A travel scenario's goal is somewhere else, and the two ends are
-    /// connected for the team that is walking.
+    /// A travel scenario's two ends are different nodes.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Reachability is a per-team, per-carrier query, not a property of the
-    /// graph</b> — your own team gate is open unless you are carrying intel out
-    /// of it, so a route that exists for red may not exist for blue. Every leg
-    /// here is an empty-handed walk, which is the case each scenario was written
-    /// for.
-    /// <para>
-    /// This is the check that would have caught <c>truefort-blue-spawn-exit-west</c>'s
-    /// pit — the one whose only exit is behind a blue team gate — as a
-    /// <em>graph</em> problem rather than as a bot standing still for 1,484
-    /// stuck fires.
-    /// </para>
+    /// The rest of this claim — that the two ends are actually <em>connected</em>
+    /// for the team walking — moved to
+    /// <c>NavSearchFixtureTests.EveryTravelScenarioHasARouteEvenForTheLeastCapableClass</c>
+    /// once there was a real search to ask. ⚠️ It is a better question than the
+    /// breadth-first walk that stood here: a BFS answers "is there any way at
+    /// all" and ignores cost, so it cannot see a leg whose only route runs over
+    /// an arc the asker cannot fly. Two copies of a reachability check, one of
+    /// them weaker, is worse than one.
     /// </remarks>
     [Fact]
-    public void EveryTravelScenariosGoalIsReachableByItsTeam()
+    public void ATravelScenarioGoesSomewhere()
     {
         var checkedAny = false;
 
@@ -161,56 +157,10 @@ public sealed class ScenarioDefinitionTests
             var from = graph.SnapObjective(scenario.From.X, scenario.From.Y).Node;
             var goal = graph.SnapObjective(to.X, to.Y).Node;
 
-            Assert.NotEqual(from, goal); // otherwise the leg is already over
-
-            Assert.True(
-                Reaches(graph, from, goal, scenario.Team),
-                $"{scenario.Name}: node {goal} is unreachable from {from} for {scenario.Team} on "
-                + $"{scenario.Map} — the scenario asks for a route the graph does not have");
-
+            Assert.NotEqual(from, goal);
             checkedAny = true;
         }
 
         Assert.True(checkedAny, "no travel scenario was checked");
-    }
-
-    /// <summary>
-    /// A breadth-first walk of the graph under one traveller's gate rules —
-    /// <c>navgraph.js</c>'s <c>reach</c>.
-    /// </summary>
-    private static bool Reaches(NavGraph graph, int start, int target, Team team)
-    {
-        if (start < 0 || target < 0)
-            return false;
-
-        var seen = new bool[graph.NodeCount];
-        var queue = new Queue<int>();
-
-        seen[start] = true;
-        queue.Enqueue(start);
-
-        while (queue.Count > 0)
-        {
-            var at = queue.Dequeue();
-            if (at == target)
-                return true;
-
-            foreach (var edge in graph.EdgesFrom(at))
-            {
-                if (seen[edge.To])
-                    continue;
-
-                // Empty-handed, and past setup: every ported leg is an ordinary
-                // walk. A carrier's return leg is a different query and no
-                // scenario asks it yet.
-                if (!graph.EdgePassable(edge, team, hasIntel: false, setupGatesClosed: false))
-                    continue;
-
-                seen[edge.To] = true;
-                queue.Enqueue(edge.To);
-            }
-        }
-
-        return false;
     }
 }

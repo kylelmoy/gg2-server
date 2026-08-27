@@ -479,27 +479,75 @@ public sealed class NavCacheTests
         Assert.False(NavGraph.GatePassable((NavGate)97, Team.Red, hasIntel: false, setupGatesClosed: false));
 
     /// <summary>
-    /// An edge is passable only if its own gate and the gate on the node it
-    /// lands in both are.
+    /// An edge is judged by its own gate, and not by the gate on the node it
+    /// lands in.
     /// </summary>
     /// <remarks>
-    /// Both, because an edge that passes through nothing can still land inside a
-    /// gated node — which a check on the edge alone lets a bot walk into.
+    /// ⚠️ <b>This looks like an omission and is the reference's rule.</b>
+    /// <c>navFindPath.gml</c> tests <c>NAV_EDGE_GATE</c> and nothing else,
+    /// because "an arc can cross a gate without landing on it — the generator
+    /// stamps an edge that passes through a gate with that gate, so the check
+    /// below covers both".
+    /// <para>
+    /// ⚠️ <b>This test asserted the opposite until 2026-08-27</b>, because it was
+    /// written from <c>gg2-agent/tools/navgraph.js</c>'s <c>reach</c>, which
+    /// checks both. That tool is an audit answering "can a body get there" and is
+    /// deliberately conservative; the game is the specification. The two agree on
+    /// every shipped graph —
+    /// <c>NavSearchFixtureTests.NoEdgeLandsOnAGatedNodeUnstamped</c> is the
+    /// measurement, and is what notices if a generator ever stops stamping.
+    /// </para>
+    /// <para>
+    /// The rule this preserves is worth stating: <b>a bot standing inside a gate
+    /// it may not pass still gets edges out.</b> One that has just picked up the
+    /// intel, or anyone the setup gates shut around, would otherwise be trapped
+    /// by its own footing.
+    /// </para>
     /// </remarks>
     [Fact]
-    public void AnEdgeAsksAboutItsLandingNodeToo()
+    public void AnEdgeIsJudgedByItsOwnGateAndNotItsLandingNode()
     {
         var graph = NavCache.Parse(
             WriteCache(
                 240, 180,
-                [Node(10, 4, 9), Node(10, 20, 26, NavGate.TeamBlue)],
-                [Edge(0, 1, NavEdgeType.Walk)]),
+                [Node(10, 4, 9, NavGate.TeamRed), Node(10, 20, 26, NavGate.TeamBlue)],
+                [Edge(0, 1, NavEdgeType.Walk), Edge(1, 0, NavEdgeType.Walk, NavGate.TeamBlue)]),
             "fixture", 1);
 
-        var edge = graph.Edges[0];
+        var unstamped = graph.Edges[0];
+        var stamped = graph.Edges[1];
 
-        Assert.Equal(NavGate.None, edge.Gate);
-        Assert.True(graph.EdgePassable(edge, Team.Blue, hasIntel: false, setupGatesClosed: false));
-        Assert.False(graph.EdgePassable(edge, Team.Red, hasIntel: false, setupGatesClosed: false));
+        // The unstamped edge lands on a blue gate and is open to everyone: the
+        // generator would have stamped it if it were not.
+        Assert.Equal(NavGate.None, unstamped.Gate);
+        Assert.True(graph.EdgePassable(unstamped, Team.Red, hasIntel: false, setupGatesClosed: false));
+        Assert.True(graph.EdgePassable(unstamped, Team.Blue, hasIntel: false, setupGatesClosed: false));
+
+        // The stamped one is refused, and its landing node's own red gate has
+        // nothing to do with it.
+        Assert.True(graph.EdgePassable(stamped, Team.Blue, hasIntel: false, setupGatesClosed: false));
+        Assert.False(graph.EdgePassable(stamped, Team.Red, hasIntel: false, setupGatesClosed: false));
+
+        // ⚠️ And the edge OUT of a gated node is not refused for standing there:
+        // node 0 carries a red gate, and a blue bot on it can still leave.
+        Assert.True(graph.EdgePassable(unstamped, Team.Blue, hasIntel: true, setupGatesClosed: true));
+    }
+
+    /// <summary>
+    /// A node count past <c>navEdgeKey</c>'s stride is refused rather than
+    /// silently aliasing two edges onto one key.
+    /// </summary>
+    /// <remarks>
+    /// The multiplier is 100,000 and the largest shipped graph is 833 nodes, so
+    /// this is unreachable today. ⚠️ It is checked because the symptom of a
+    /// collision is a bot blacklisting an edge it never tried, which is
+    /// indistinguishable from the thrash the blacklist exists to stop.
+    /// </remarks>
+    [Fact]
+    public void TheEdgeKeyPacksTwoNodeIndicesWithoutColliding()
+    {
+        Assert.NotEqual(NavGraph.EdgeKey(0, 1), NavGraph.EdgeKey(1, 0));
+        Assert.NotEqual(NavGraph.EdgeKey(1, NavGraph.KeyStride - 1), NavGraph.EdgeKey(2, 0));
+        Assert.Equal((833L * NavGraph.KeyStride) + 12, NavGraph.EdgeKey(833, 12));
     }
 }

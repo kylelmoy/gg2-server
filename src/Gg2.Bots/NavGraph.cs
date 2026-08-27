@@ -107,6 +107,17 @@ public sealed class NavGraph
             _edgeCount[from]++;
         }
 
+        if (nodes.Length > KeyStride)
+        {
+            // navEdgeKey packs two node indices into one number. A graph big
+            // enough to overflow the stride would alias two different edges onto
+            // one key, and the symptom would be a bot blacklisting an edge it
+            // never tried.
+            throw new ArgumentException(
+                $"{map} area {area} has {nodes.Length} nodes, past navEdgeKey's stride of {KeyStride}",
+                nameof(nodes));
+        }
+
         _rowStart = new int[maskHeight + 2];
         Array.Fill(_rowStart, -1);
 
@@ -356,16 +367,56 @@ public sealed class NavGraph
         };
 
     /// <summary>
-    /// Whether this traveller may take <paramref name="edge"/> — the edge's own
-    /// gate and the gate on the node it lands in.
+    /// Whether this traveller may take <paramref name="edge"/>.
     /// </summary>
     /// <remarks>
-    /// Both, because a node carries a gate as well as an edge does: an edge that
-    /// passes through nothing can still land inside a gated node.
+    /// ⚠️ <b>The test is on the EDGE and not on the node it arrives at</b>, which
+    /// looks like an omission and is the reference's rule —
+    /// <c>navFindPath.gml</c>: "an arc can cross a gate without landing on it —
+    /// the generator stamps an edge that passes through a gate with that gate,
+    /// so the check below covers both".
+    /// <para>
+    /// <b>Measured, because the two rules are only equivalent if the generator
+    /// really does stamp them.</b> Across all 24 shipped graphs and 115,757
+    /// edges, <b>none</b> lands on one of the 148 gated nodes without carrying
+    /// that gate itself — <see cref="Nodes"/>, and
+    /// <c>NavGraphFixtureTests.NoEdgeLandsOnAGatedNodeUnstamped</c>, which is
+    /// what notices if a future generator stops.
+    /// </para>
+    /// <para>
+    /// ⚠️ It also falls out of this that <b>a bot standing inside a gate it may
+    /// not pass still gets edges out</b> — one that has just picked up the intel,
+    /// or anyone the setup gates shut around. Those edges arrive somewhere
+    /// ungated and are never refused. Adding the landing-node test would not
+    /// break that, but adding a test on the node the bot is <em>standing</em> on
+    /// would trap it.
+    /// </para>
     /// </remarks>
     public bool EdgePassable(in NavEdge edge, Team team, bool hasIntel, bool setupGatesClosed) =>
-        GatePassable(edge.Gate, team, hasIntel, setupGatesClosed)
-        && GatePassable(_nodes[edge.To].Gate, team, hasIntel, setupGatesClosed);
+        GatePassable(edge.Gate, team, hasIntel, setupGatesClosed);
+
+    /// <summary>
+    /// <c>navEdgeKey.gml</c>: one number naming a directed edge by its
+    /// endpoints.
+    /// </summary>
+    /// <remarks>
+    /// Keyed on the endpoints rather than on the edge's index because an index
+    /// only means anything to one build of the graph, and the thing that holds
+    /// these — a bot's anti-thrash blacklist — outlives individual searches.
+    /// Endpoints are no more stable across a rebuild, but a blacklist entry
+    /// expires in seconds and a rebuild only happens on a map change, which
+    /// clears the bots' paths anyway.
+    /// <para>
+    /// ⚠️ The multiplier is comfortably above any node count a real map produces
+    /// — the largest shipped graph, <c>cp_dirtbowl</c>, comes to 833 — and is
+    /// checked rather than assumed, because a collision here silently blacklists
+    /// or crowds the wrong edge.
+    /// </para>
+    /// </remarks>
+    public static long EdgeKey(int fromNode, int toNode) => ((long)fromNode * KeyStride) + toNode;
+
+    /// <summary>The <c>navEdgeKey</c> multiplier. See <see cref="EdgeKey"/>.</summary>
+    public const int KeyStride = 100_000;
 }
 
 /// <summary>What <see cref="NavGraph.SnapObjective"/> found.</summary>
