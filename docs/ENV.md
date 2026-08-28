@@ -152,8 +152,27 @@ same `Step` call (seeded from its own stream) and returns the fresh episode's
 first observation alongside the terminal reward components. Round-trip economy;
 explicit `Reset` remains for forcing a new scenario.
 
-World `i`'s seed derives from the base seed and `i`, so batch size cannot move
-any world's stream.
+### The seeding guarantee, stated as a promise rather than a description
+
+⚠️ **This used to read "world `i`'s seed derives from the base seed and `i`", and
+that undersold a property a trainer needs to rely on.** A description that
+undersells is the same defect class as one that oversells — nobody can depend on
+the real behaviour, because the document never promised it. Raised by `gg2-rl`,
+whose phase 0 criterion 2 leans on this.
+
+**The promise, and it is gated in both halves:**
+
+1. **A world's seed is a pure function of the base seed and its index**, so batch
+   size cannot move any world's stream. World 7 of a batch of 64 is bit-identical
+   to world 7 of a batch of 8. `EnvBatchTests` compares a whole batch against a
+   batch of one seeded to be that world.
+2. ⚠️ **The index is MIXED IN, not added** — `seed + index * 2654435761`. So two
+   batches one seed apart share **no world at all**. Plain `seed + index` would
+   make `{seed 1, count 100}` and `{seed 2, count 100}` share 99 of their 100
+   worlds, and two runs a researcher believed were independent would be almost
+   the same experiment. `EnvBatchTests.TwoBatchesOneSeedApartShareNoWorld`.
+3. **An episode's seed also mixes its episode number**, so a world that
+   auto-resets does not replay its own first episode.
 
 ## Action encoding v0 (stamped)
 
@@ -253,6 +272,32 @@ reaction-delay model (phase 5 — only its observation field exists).
 | Decision steps/sec, batch 64 | **34,073** | Release | 2026-08-28 |
 | Decision steps/sec, batch 64, 2 threads | 36,173 | Release | 2026-08-28 |
 | Decision steps/sec, batch 64, 8 threads | 37,592 | Release | 2026-08-28 |
+| `ObservationWriter.Write`, one call | **~5.0 µs** | Release | 2026-08-28 |
+| Sixteen of them — `gg2-rl` phase 2's budget unit | **79 µs, 7.9% of 1 ms** | Release | 2026-08-28 |
+
+### Observation extraction, measured because somebody was about to design around it
+
+⚠️ **Asked for by `gg2-rl`**, which had measured the *other* half of phase 2's
+criterion — a 3-layer MLP, 209 inputs to 25 logits, at 13.6 µs for sixteen — and
+noticed that the half it could not measure was mine. Its criterion is **1 ms for
+16 bots including observation extraction**, and extraction runs per bot per
+decision.
+
+**The answer: extraction dominates inference by about seven to one**, and the
+budget is still comfortable. 79 µs of extraction plus ~14 µs of inference is
+about **9% of 1 ms**, so phase 2 has an order of magnitude in hand.
+
+⚠️ **It is flat in roster size**, which is the non-obvious part and the reason
+the number is safe to design around: 5.7, 5.1 and 5.0 µs at populations of 2, 8
+and 16 — decreasing, so the spread is measurement noise rather than scaling. The
+cost is the fixed 209-float write, **not** the neighbour scans, so a busier
+server does not make an observation dearer.
+
+⚠️ **Measured in Release**, like everything else in this table, and by calling
+`ObservationWriter.Write` in a loop over a settled `ScenarioWorld` — so it is the
+extraction alone, with no socket and no serialisation. The boundary cost is the
+row above it, and the two should not be added: a policy running **in process**
+pays this and not that.
 
 ✅ **34,073 clears the ~20k `gg2-rl` phase 0 stops the programme below**, so
 shared memory is not needed yet — which was the decision this number existed to
