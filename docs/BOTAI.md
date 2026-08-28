@@ -263,6 +263,13 @@ and it forces training code to duplicate game rules it should never know. The
 events are needed for the scoreboard regardless; the requirement is only that
 they carry the attributor and the amount rather than being presentation strings.
 
+⚠️ **Half built, found 2026-08-27 while scoping item 10.** `TickEvents` carries
+kills, deaths, spawns and captures with attribution — but **no per-tick damage
+amounts**. Kill credit exists; the dense reward does not. The accumulators
+(`DamageDealt`/`DamageTaken` per slot, credited at application time, self-damage
+as taken only, blocked damage as nothing) are `docs/ENV.md`'s first
+prerequisite.
+
 ## 8. A match runner with no sockets in it
 
 **Requirement.** An entry point that runs N independent matches in one process
@@ -348,8 +355,12 @@ project living in this repo.
 Start with a local socket and length-prefixed binary frames. Shared memory is an
 optimisation to make once there is a measurement that justifies it.
 
-❌ **Not built.** Items 1, 2 and 6 — its three hard preconditions — all hold, so
-it is unblocked whenever it is wanted.
+❌ **Not built, but scoped.** Items 1, 2 and 6 — its three hard preconditions —
+all hold. The scope call was made 2026-08-27 (duels only; v0 observation layout
+built to `gg2-rl/docs/DESIGN.md`'s sketch; action heads decoded server-side;
+rewards as components) and the design is **`docs/ENV.md`**. ⚠️ One gap found in
+the preconditions: item 7's damage half — `TickEvents` has no per-tick damage
+amounts, and `docs/ENV.md` makes the accumulators the first prerequisite.
 
 ## 11. Scenario construction without a gamemode
 
