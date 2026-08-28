@@ -89,7 +89,8 @@ public static class Explosions
         CollisionWorld world,
         ref WorldState state,
         ProjectileHandle handle,
-        byte directVictim)
+        byte directVictim,
+        ref TickEvents events)
     {
         ArgumentNullException.ThrowIfNull(world);
 
@@ -108,9 +109,9 @@ public static class Explosions
             return false;
 
         if (directVictim != CharacterState.Nobody)
-            DealDirectHit(ref state, in rocket, directVictim, ownerCharacter);
+            DealDirectHit(ref state, in rocket, directVictim, ownerCharacter, ref events);
 
-        SplashCharacters(world, ref state, in rocket, ownerCharacter);
+        SplashCharacters(world, ref state, in rocket, ownerCharacter, ref events);
         SplashSentries(ref state, in rocket);
         SplashGenerators(ref state, in rocket);
         PopBubblesByBox(ref state, rocket.Box, BlastRadiusFor(rocket.Kind) * RocketBubblePopFactor);
@@ -136,7 +137,8 @@ public static class Explosions
         CollisionWorld world,
         ref WorldState state,
         ProjectileHandle handle,
-        int sentrySlot)
+        int sentrySlot,
+        ref TickEvents events)
     {
         ArgumentNullException.ThrowIfNull(world);
 
@@ -151,7 +153,7 @@ public static class Explosions
 
         Sentries.Damage(ref state, sentrySlot, rocket.HitDamage, rocket.OwnerSlot, rocket.Source);
 
-        SplashCharacters(world, ref state, in rocket, ownerCharacter);
+        SplashCharacters(world, ref state, in rocket, ownerCharacter, ref events);
         SplashSentries(ref state, in rocket);
         SplashGenerators(ref state, in rocket);
         PopBubblesByBox(ref state, rocket.Box, BlastRadiusFor(rocket.Kind) * RocketBubblePopFactor);
@@ -309,7 +311,8 @@ public static class Explosions
         ref WorldState state,
         in ProjectileState rocket,
         byte victimSlot,
-        byte ownerCharacter)
+        byte ownerCharacter,
+        ref TickEvents events)
     {
         ref var victim = ref state.Characters[victimSlot];
 
@@ -324,7 +327,7 @@ public static class Explosions
             return;
 
         // damageAuto -> damageCharacter -> dealDamage.
-        DamageApi.Deal(ref victim, rocket.HitDamage);
+        DamageApi.Deal(ref events, victimSlot, rocket.OwnerSlot, ref victim, rocket.HitDamage);
         victim.TimeUnscathed = 0;
 
         // The same assist bookkeeping a pellet does, and the demoted dealer
@@ -353,7 +356,8 @@ public static class Explosions
         CollisionWorld world,
         ref WorldState state,
         in ProjectileState rocket,
-        byte ownerCharacter)
+        byte ownerCharacter,
+        ref TickEvents events)
     {
         var blastRadius = BlastRadiusFor(rocket.Kind);
         var rocketBox = rocket.Box;
@@ -387,7 +391,7 @@ public static class Explosions
             if (victim.Team == rocket.Team && slot != ownerCharacter && grounded)
                 continue;
 
-            SplashOne(ref state, in rocket, slot, ownerCharacter, blastRadius, distance);
+            SplashOne(ref state, in rocket, slot, ownerCharacter, blastRadius, distance, ref events);
         }
     }
 
@@ -398,7 +402,8 @@ public static class Explosions
         int slot,
         byte ownerCharacter,
         double blastRadius,
-        double distance)
+        double distance,
+        ref TickEvents events)
     {
         ref var victim = ref state.Characters[slot];
 
@@ -455,7 +460,7 @@ public static class Explosions
         }
 
         if (rocket.Team != victim.Team || slot == ownerCharacter)
-            DealSplashDamage(ref state, in rocket, slot, ownerCharacter, falloff);
+            DealSplashDamage(ref state, in rocket, slot, ownerCharacter, falloff, ref events);
 
         ApplyMoveStatus(ref state, in rocket, slot, ownerCharacter, falloff);
     }
@@ -466,11 +471,14 @@ public static class Explosions
         in ProjectileState rocket,
         int slot,
         byte ownerCharacter,
-        double falloff)
+        double falloff,
+        ref TickEvents events)
     {
         ref var victim = ref state.Characters[slot];
 
-        DamageApi.Deal(ref victim, ExplosionDamageFor(rocket.Kind) * (1 - falloff));
+        DamageApi.Deal(
+            ref events, slot, rocket.OwnerSlot, ref victim,
+            ExplosionDamageFor(rocket.Kind) * (1 - falloff));
         victim.TimeUnscathed = 0;
 
         if (slot == ownerCharacter
@@ -606,7 +614,8 @@ public static class Explosions
     /// instead would be simpler and would change which mines a chain reaches.
     /// </para>
     /// </remarks>
-    public static void DetonateMine(CollisionWorld world, ref WorldState state, ProjectileHandle handle)
+    public static void DetonateMine(
+        CollisionWorld world, ref WorldState state, ProjectileHandle handle, ref TickEvents events)
     {
         ArgumentNullException.ThrowIfNull(world);
 
@@ -624,7 +633,7 @@ public static class Explosions
 
             state.Projectiles[current.Index].Exploded = true;
 
-            SplashCharactersFromMine(world, ref state, in mine);
+            SplashCharactersFromMine(world, ref state, in mine, ref events);
             SplashSentriesFromMine(ref state, in mine);
 
             // ⚠️ The mine's generator arm keeps the quarter-radius `continue`
@@ -676,7 +685,8 @@ public static class Explosions
     }
 
     /// <summary><c>with (Character)</c> for a mine's blast.</summary>
-    private static void SplashCharactersFromMine(CollisionWorld world, ref WorldState state, in ProjectileState mine)
+    private static void SplashCharactersFromMine(
+        CollisionWorld world, ref WorldState state, in ProjectileState mine, ref TickEvents events)
     {
         var radius = BlastRadiusFor(mine.Kind);
         var damage = ExplosionDamageFor(mine.Kind);
@@ -739,7 +749,7 @@ public static class Explosions
                 if (slot == ownerCharacter)
                     dealt *= MineSelfDamage;
 
-                DamageApi.Deal(ref victim, dealt);
+                DamageApi.Deal(ref events, slot, mine.OwnerSlot, ref victim, dealt);
                 victim.TimeUnscathed = 0;
 
                 Attribute(ref victim, in mine, slot, ownerCharacter);

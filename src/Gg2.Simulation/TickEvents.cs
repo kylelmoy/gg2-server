@@ -336,6 +336,55 @@ public struct TickEvents
     public SlotBuffer<bool> Balanced;
 
     /// <summary>
+    /// Hit points this slot dealt to <em>other</em> characters this tick.
+    /// </summary>
+    /// <remarks>
+    /// <b>`docs/ENV.md`'s first prerequisite, and the half of `docs/BOTAI.md`
+    /// item 7 that was never built.</b> The rest of this struct carries kills,
+    /// deaths, spawns and captures with attribution — the sparse events. A
+    /// learned policy wants the <em>dense</em> signal, and item 7's design
+    /// forbids reconstructing it by diffing hp between ticks: healing, spawn
+    /// invulnerability and a respawn all move hp without anybody dealing
+    /// damage.
+    /// <para>
+    /// ⚠️ <b>Credited at application time, following <c>LastDamageDealer</c>
+    /// semantics</b> — so a rocket in the air still credits its shooter after
+    /// they have died, exactly as a kill does.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Self-damage is never dealt, only taken.</b> A rocket jump must not
+    /// score a positive reward, and a soldier who kills himself must not
+    /// out-earn one who kills somebody else.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Blocked damage accumulates nothing.</b> <c>DamageApi.Deal</c>
+    /// returning false is Team Deathmatch invulnerability: no amount landed, so
+    /// neither side's counter moves. Note this is deliberately *not* the same
+    /// rule the reference uses for <c>timeUnscathed</c>, which it resets even
+    /// on a blocked hit.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Sentries and generators are out.</b> Their damage does not route
+    /// through <c>DamageApi.Deal</c> at all, and `docs/ENV.md` puts them beyond
+    /// v0 because a duel has no objective. Damage a sentry's turret deals to a
+    /// <em>character</em> is in, because that goes through <c>Deal</c> like
+    /// everything else — it is credited to the sentry's owner.
+    /// </para>
+    /// </remarks>
+    public SlotBuffer<double> DamageDealt;
+
+    /// <summary>
+    /// Hit points this slot lost to damage this tick, including its own.
+    /// </summary>
+    /// <remarks>
+    /// See <see cref="DamageDealt"/>. ⚠️ <b>This is damage, not hp lost</b> —
+    /// falling in a pit, a spawn-room kill box and the generator explosion all
+    /// take hp without going through <c>DamageApi.Deal</c>, and none of them
+    /// appears here.
+    /// </remarks>
+    public SlotBuffer<double> DamageTaken;
+
+    /// <summary>
     /// What class they came out as, where <see cref="Balanced"/> — the message
     /// carries it because <c>checkClasslimits</c> may have changed it.
     /// </summary>
@@ -403,6 +452,8 @@ public struct TickEvents
             DroppedIntel[slot] = false;
             ScoredIntel[slot] = false;
             Balanced[slot] = false;
+            DamageDealt[slot] = 0;
+            DamageTaken[slot] = 0;
         }
 
         ReturnedRedIntel = false;

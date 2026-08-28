@@ -226,7 +226,7 @@ public sealed class MinegunTests
 
         for (var tick = 1; tick <= 3; tick++)
         {
-            Projectiles.Move(World, ref state);
+            Projectiles.Move(World, ref state, ref DiscardedEvents.Events);
             Assert.Equal(0.2 * tick, Live(state, 0).Motion.VSpeed, 9);
         }
     }
@@ -250,15 +250,15 @@ public sealed class MinegunTests
         state.SpawnProjectile(below);
 
         // 7.7 + 0.2 is under the cap and lands on it exactly.
-        Projectiles.Move(World, ref state);
+        Projectiles.Move(World, ref state, ref DiscardedEvents.Events);
         Assert.Equal(7.9, Live(state, 0).Motion.VSpeed, 9);
 
         // 7.9 + 0.2 would be 8.1. The cap takes it.
-        Projectiles.Move(World, ref state);
+        Projectiles.Move(World, ref state, ref DiscardedEvents.Events);
         Assert.Equal(8, Live(state, 0).Motion.VSpeed, 9);
 
         // And it stays there rather than creeping.
-        Projectiles.Move(World, ref state);
+        Projectiles.Move(World, ref state, ref DiscardedEvents.Events);
         Assert.Equal(8, Live(state, 0).Motion.VSpeed, 9);
     }
 
@@ -274,7 +274,7 @@ public sealed class MinegunTests
         state.SpawnProjectile(Mine(OpenX, floor - 40, ownerSlot: 1, Team.Red, direction: 270, speed: 12));
 
         for (var tick = 0; tick < 10 && state.LiveProjectileCount > 0 && !Live(state, 0).Stickied; tick++)
-            Projectiles.Move(World, ref state);
+            Projectiles.Move(World, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(1, state.LiveProjectileCount);
 
@@ -291,7 +291,7 @@ public sealed class MinegunTests
 
         // And it stays exactly where it landed, losing the cutoff as it does.
         var (x, y) = (mine.X, mine.Y);
-        Projectiles.Move(World, ref state);
+        Projectiles.Move(World, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(x, Live(state, 0).X);
         Assert.Equal(y, Live(state, 0).Y);
@@ -332,7 +332,7 @@ public sealed class MinegunTests
         // up, and moving so the substep loop cannot leave it.
         state.SpawnProjectile(Mine(gate.Left + 2, y, ownerSlot: 1, Team.Red, direction: 0, speed: 2));
 
-        Projectiles.Move(World, ref state);
+        Projectiles.Move(World, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(0, state.LiveProjectileCount);
     }
@@ -361,7 +361,7 @@ public sealed class MinegunTests
             state.Characters[2].Box, state.Characters[2].X, state.Characters[2].Y)));
 
         var before = state.Characters[2].Hp;
-        Projectiles.Collide(World, ref state);
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(1, state.LiveProjectileCount);
         Assert.Equal(before, state.Characters[2].Hp);
@@ -424,7 +424,7 @@ public sealed class MinegunTests
         state.SpawnProjectile(Mine(OpenX - 10, AirY, ownerSlot: 3, Team.Blue, stuck: true));
 
         Assert.Equal(3, state.LiveProjectileCount);
-        Explosions.DetonateMine(World, ref state, first);
+        Explosions.DetonateMine(World, ref state, first, ref DiscardedEvents.Events);
 
         Assert.Equal(0, state.LiveProjectileCount);
     }
@@ -450,7 +450,7 @@ public sealed class MinegunTests
         var first = state.SpawnProjectile(Mine(OpenX, AirY, ownerSlot: 1, Team.Red, stuck: true));
         state.SpawnProjectile(Mine(OpenX + 10, AirY, ownerSlot: 2, Team.Red, stuck: true));
 
-        Explosions.DetonateMine(World, ref state, first);
+        Explosions.DetonateMine(World, ref state, first, ref DiscardedEvents.Events);
 
         Assert.Equal(1, state.LiveProjectileCount);
         Assert.Equal(2, Live(state, 0).OwnerSlot);
@@ -472,8 +472,8 @@ public sealed class MinegunTests
 
         var start = ClassStats.For(PlayerClass.Soldier).MaxHp;
 
-        Explosions.DetonateMine(World, ref enemy, enemyHandle);
-        Explosions.DetonateMine(World, ref own, ownHandle);
+        Explosions.DetonateMine(World, ref enemy, enemyHandle, ref DiscardedEvents.Events);
+        Explosions.DetonateMine(World, ref own, ownHandle, ref DiscardedEvents.Events);
 
         var toEnemy = start - enemy.Characters[2].Hp;
         var toOwner = start - own.Characters[1].Hp;
@@ -513,8 +513,8 @@ public sealed class MinegunTests
         Assert.True(gap >= 30 && gap < BlastRadius, $"the setup put the mine {gap} away");
 
         var start = ClassStats.For(PlayerClass.Soldier).MaxHp;
-        Explosions.DetonateMine(World, ref flying, flyingHandle);
-        Explosions.DetonateMine(World, ref stuck, stuckHandle);
+        Explosions.DetonateMine(World, ref flying, flyingHandle, ref DiscardedEvents.Events);
+        Explosions.DetonateMine(World, ref stuck, stuckHandle, ref DiscardedEvents.Events);
 
         Assert.Equal(start, flying.Characters[2].Hp);
         Assert.True(stuck.Characters[2].Hp < start, "the stuck mine's cutoff still applied");

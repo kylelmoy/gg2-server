@@ -253,13 +253,13 @@ public static class Generators
         if (state.RedGenerator.Exists && Gml.LessOrEqual(state.RedGenerator.Hp, 0))
         {
             events.RedGeneratorDestroyed = true;
-            Destroy(world, ref state, Team.Red);
+            Destroy(world, ref state, Team.Red, ref events);
         }
 
         if (state.BlueGenerator.Exists && Gml.LessOrEqual(state.BlueGenerator.Hp, 0))
         {
             events.BlueGeneratorDestroyed = true;
-            Destroy(world, ref state, Team.Blue);
+            Destroy(world, ref state, Team.Blue, ref events);
         }
     }
 
@@ -383,7 +383,8 @@ public static class Generators
     /// than an omission.
     /// </para>
     /// </remarks>
-    public static void Destroy(CollisionWorld world, ref WorldState state, Team team)
+    public static void Destroy(
+        CollisionWorld world, ref WorldState state, Team team, ref TickEvents events)
     {
         ArgumentNullException.ThrowIfNull(world);
 
@@ -411,7 +412,7 @@ public static class Generators
 
         BlastCharacters(ref state, box, x, y);
         BlastSentries(ref state, box);
-        BlastProjectiles(world, ref state, box);
+        BlastProjectiles(world, ref state, box, ref events);
     }
 
     /// <summary><c>with (Character)</c>: 999 damage and a shove, to everybody.</summary>
@@ -485,7 +486,8 @@ public static class Generators
     /// before mines, which is the order the event writes them in and is
     /// observable: a rocket's blast can push a character into or out of a mine's.
     /// </remarks>
-    private static void BlastProjectiles(CollisionWorld world, ref WorldState state, in Aabb box)
+    private static void BlastProjectiles(
+        CollisionWorld world, ref WorldState state, in Aabb box, ref TickEvents events)
     {
         Span<ProjectileHandle> rockets = stackalloc ProjectileHandle[WorldState.MaxProjectiles];
         Span<ProjectileHandle> mines = stackalloc ProjectileHandle[WorldState.MaxProjectiles];
@@ -514,14 +516,14 @@ public static class Generators
             // `characterHit = -1; event_user(5);` — a wall-style explosion with
             // no direct victim.
             if (state.IsLive(rockets[i]))
-                Explosions.Explode(world, ref state, rockets[i], CharacterState.Nobody);
+                Explosions.Explode(world, ref state, rockets[i], CharacterState.Nobody, ref events);
         }
 
         for (var i = 0; i < mineCount; i++)
         {
             // `event_user(2)`, which chains into any mine this one reaches.
             if (state.IsLive(mines[i]))
-                Explosions.DetonateMine(world, ref state, mines[i]);
+                Explosions.DetonateMine(world, ref state, mines[i], ref events);
         }
 
         // `with(Bubble) if (distance_to_object(other) < other.blastRadius)` —

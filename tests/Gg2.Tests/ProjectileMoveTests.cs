@@ -130,7 +130,7 @@ public sealed class ProjectileMoveTests
         var state = default(WorldState);
         state.SpawnProjectile(Shot(OpenX, OpenY, direction: 0, speed: 13));
 
-        Projectiles.Move(world, ref state);
+        Projectiles.Move(world, ref state, ref DiscardedEvents.Events);
 
         var shot = Live(state, 0);
         Assert.Equal(0.15, shot.Motion.VSpeed);
@@ -149,7 +149,7 @@ public sealed class ProjectileMoveTests
         var y = OpenY;
         for (var tick = 1; tick <= 4; tick++)
         {
-            Projectiles.Move(world, ref state);
+            Projectiles.Move(world, ref state, ref DiscardedEvents.Events);
 
             var shot = Live(state, 0);
             Assert.Equal(0.15 * tick, shot.Motion.VSpeed);
@@ -179,7 +179,7 @@ public sealed class ProjectileMoveTests
         var state = default(WorldState);
         state.SpawnProjectile(Shot(OpenX, OpenY, direction: 0, speed: 13));
 
-        Projectiles.Move(world, ref state);
+        Projectiles.Move(world, ref state, ref DiscardedEvents.Events);
 
         var shot = Live(state, 0);
 
@@ -255,7 +255,7 @@ public sealed class ProjectileMoveTests
         state.SpawnProjectile(Shot(OpenX, floor - 5, direction: 270, speed: 13));
         Assert.True(world.PlaceFree(Live(state, 0).Box, CollisionFilter.ForBullet()));
 
-        Projectiles.Move(world, ref state);
+        Projectiles.Move(world, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(0, state.LiveProjectileCount);
     }
@@ -282,7 +282,7 @@ public sealed class ProjectileMoveTests
         Assert.True(world.PlaceFree(rising.Box, CollisionFilter.ForBullet()));
 
         state.SpawnProjectile(rising);
-        Projectiles.Move(world, ref state);
+        Projectiles.Move(world, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(1, state.LiveProjectileCount);
     }
@@ -317,7 +317,7 @@ public sealed class ProjectileMoveTests
         Assert.False(world.PlaceFree(buried.Box, CollisionFilter.ForBullet()));
 
         state.SpawnProjectile(buried);
-        Projectiles.Move(world, ref state);
+        Projectiles.Move(world, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(0, state.LiveProjectileCount);
     }
@@ -337,7 +337,7 @@ public sealed class ProjectileMoveTests
         buried.HasMoved = true;
         state.SpawnProjectile(buried);
 
-        Projectiles.Move(world, ref state);
+        Projectiles.Move(world, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(1, state.LiveProjectileCount);
 
@@ -361,7 +361,7 @@ public sealed class ProjectileMoveTests
 
         Assert.False(Live(state, 0).HasMoved);
 
-        Projectiles.Move(world, ref state);
+        Projectiles.Move(world, ref state, ref DiscardedEvents.Events);
 
         Assert.True(Live(state, 0).HasMoved);
     }

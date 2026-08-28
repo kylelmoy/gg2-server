@@ -428,7 +428,7 @@ public sealed class BladeTests
         Attack(ref state);
 
         var before = Live(state, 0);
-        Projectiles.Move(World, ref state);
+        Projectiles.Move(World, ref state, ref DiscardedEvents.Events);
         var after = Live(state, 0);
 
         Assert.Equal(before.X, after.X);
@@ -454,7 +454,7 @@ public sealed class BladeTests
 
         var before = state.Projectiles[first.Index].Motion.HSpeed;
 
-        Projectiles.Collide(World, ref state);
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(2, CountOf(state, ProjectileKind.Bubble));
         Assert.True(state.Projectiles[first.Index].Motion.HSpeed < before,
@@ -484,7 +484,7 @@ public sealed class BladeTests
             state.Projectiles[handle.Index].Y = ClearY;
         }
 
-        Projectiles.Collide(World, ref state);
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(0, CountOf(state, ProjectileKind.Bubble));
     }
@@ -505,7 +505,7 @@ public sealed class BladeTests
         var bubble = Live(state, 0);
         SpawnShot(ref state, bubble.X, bubble.Y, Team.Blue, perseverant: false);
 
-        Projectiles.Collide(World, ref state);
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(0, state.LiveProjectileCount);
     }
@@ -525,7 +525,7 @@ public sealed class BladeTests
         var bubble = Live(state, 0);
         SpawnShot(ref state, bubble.X, bubble.Y, Team.Blue, perseverant: true);
 
-        Projectiles.Collide(World, ref state);
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(0, CountOf(state, ProjectileKind.Bubble));
         Assert.Equal(1, CountOf(state, ProjectileKind.Shot));
@@ -547,7 +547,7 @@ public sealed class BladeTests
         var bubble = Live(state, 0);
         SpawnShot(ref state, bubble.X, bubble.Y, Team.Red, perseverant: true);
 
-        Projectiles.Collide(World, ref state);
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(0, CountOf(state, ProjectileKind.Bubble));
         Assert.Equal(1, CountOf(state, ProjectileKind.Shot));
@@ -564,7 +564,7 @@ public sealed class BladeTests
         var bubble = Live(state, 0);
         SpawnShot(ref state, bubble.X, bubble.Y, Team.Red, perseverant: false);
 
-        Projectiles.Collide(World, ref state);
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(1, CountOf(state, ProjectileKind.Bubble));
         Assert.Equal(1, CountOf(state, ProjectileKind.Shot));
@@ -652,7 +652,7 @@ public sealed class BladeTests
         Assert.Equal(1, CountOf(state, ProjectileKind.Bubble));
         Assert.Equal(1, CountOf(state, ProjectileKind.Shot));
 
-        Projectiles.Collide(World, ref state);
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(bubbles, CountOf(state, ProjectileKind.Bubble));
         Assert.Equal(shots, CountOf(state, ProjectileKind.Shot));
@@ -687,7 +687,7 @@ public sealed class BladeTests
 
         var life = state.Projectiles[bubbleHandle.Index].Lifetime;
 
-        Projectiles.Collide(World, ref state);
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
 
         Assert.True(state.IsLive(mineHandle), "the mine was destroyed rather than reflected");
         Assert.Equal(6, state.Projectiles[mineHandle.Index].Motion.HSpeed, 9);
@@ -723,7 +723,7 @@ public sealed class BladeTests
         mine.Motion.SetComponents(-6, 0);
         var mineHandle = state.SpawnProjectile(mine);
 
-        Projectiles.Collide(World, ref state);
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(-6, state.Projectiles[mineHandle.Index].Motion.HSpeed, 9);
     }
@@ -741,7 +741,7 @@ public sealed class BladeTests
         Attack(ref state, 1);
         var before = state.Characters[2].Hp;
 
-        Projectiles.Collide(World, ref state);
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(before - 0.75, state.Characters[2].Hp, 9);
         Assert.Equal(0, CountOf(state, ProjectileKind.Bubble));
@@ -761,7 +761,7 @@ public sealed class BladeTests
         state.Characters[2].TimeUnscathed = 200;
 
         Attack(ref state, 1);
-        Projectiles.Collide(World, ref state);
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(200, state.Characters[2].TimeUnscathed);
     }
@@ -782,7 +782,7 @@ public sealed class BladeTests
         Attack(ref state, 1);
         var before = state.Characters[2].Hp;
 
-        Projectiles.Collide(World, ref state);
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(before, state.Characters[2].Hp);
         Assert.Equal(1, CountOf(state, ProjectileKind.Bubble));
@@ -804,7 +804,7 @@ public sealed class BladeTests
         Attack(ref state, 1);
         var before = state.Characters[2].Hp;
 
-        Projectiles.Collide(World, ref state);
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(before - 0.75, state.Characters[2].Hp, 9);
         Assert.Equal(0, CountOf(state, ProjectileKind.Bubble));
@@ -861,7 +861,7 @@ public sealed class BladeTests
         Assert.Equal(0, Live(state, 0).ImageAngle);
 
         // And the movement pass does not put it back, unlike a pellet's.
-        Projectiles.Move(World, ref state);
+        Projectiles.Move(World, ref state, ref DiscardedEvents.Events);
         Assert.Equal(0, Live(state, 0).ImageAngle);
     }
 
@@ -879,7 +879,7 @@ public sealed class BladeTests
         Special(ref state);
 
         for (var i = 0; i < 5; i++)
-            Projectiles.Move(World, ref state);
+            Projectiles.Move(World, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(1, CountOf(state, ProjectileKind.Blade));
         Assert.Equal(0, Live(state, 0).Motion.VSpeed);
@@ -1026,7 +1026,7 @@ public sealed class BladeTests
         Special(ref state, 1);
         var before = state.Characters[2].Hp;
 
-        Projectiles.Collide(World, ref state);
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(before - 17, state.Characters[2].Hp, 9);
         Assert.Equal(0, CountOf(state, ProjectileKind.Blade));
@@ -1050,7 +1050,7 @@ public sealed class BladeTests
         Special(ref state, 1);
         var before = state.Characters[2].Hp;
 
-        Projectiles.Collide(World, ref state);
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(before, state.Characters[2].Hp);
         Assert.Equal(0, CountOf(state, ProjectileKind.Blade));
@@ -1068,7 +1068,7 @@ public sealed class BladeTests
         Special(ref state, 1);
         var before = state.Characters[2].Hp;
 
-        Projectiles.Collide(World, ref state);
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(before, state.Characters[2].Hp);
         Assert.Equal(1, CountOf(state, ProjectileKind.Blade));
@@ -1095,7 +1095,7 @@ public sealed class BladeTests
         state.Projectiles[bladeHandle.Index].X = bubble.X;
         state.Projectiles[bladeHandle.Index].Y = bubble.Y;
 
-        Projectiles.Collide(World, ref state);
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(0, CountOf(state, ProjectileKind.Bubble));
         Assert.Equal(1, CountOf(state, ProjectileKind.Blade));
@@ -1117,7 +1117,7 @@ public sealed class BladeTests
         state.Projectiles[bladeHandle.Index].X = bubble.X;
         state.Projectiles[bladeHandle.Index].Y = bubble.Y;
 
-        Projectiles.Collide(World, ref state);
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(1, CountOf(state, ProjectileKind.Bubble));
     }
@@ -1345,7 +1345,7 @@ public sealed class BladeTests
         // Asserted rather than assumed: this has to be the gate and not the map.
         Assert.True(World.PlaceFreeInMask(state.Projectiles[handle.Index].Box));
 
-        Projectiles.Collide(World, ref state);
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
 
         Assert.False(state.IsLive(handle));
     }
@@ -1371,7 +1371,7 @@ public sealed class BladeTests
         state.Projectiles[handle.Index].X = GateX;
         state.Projectiles[handle.Index].Y = GateY;
 
-        Projectiles.Collide(World, ref state);
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
 
         Assert.True(state.IsLive(handle));
     }
@@ -1401,7 +1401,7 @@ public sealed class BladeTests
 
         Assert.False(World.PlaceFreeInMask(state.Projectiles[handle.Index].Box));
 
-        Projectiles.Collide(World, ref state);
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
 
         Assert.True(state.IsLive(handle), "the bubble died on a wall");
         Assert.True(World.PlaceFreeInMask(state.Projectiles[handle.Index].Box),
@@ -1438,7 +1438,7 @@ public sealed class BladeTests
 
         Assert.False(World.PlaceFreeInMask(state.Projectiles[handle.Index].Box));
 
-        Projectiles.Collide(World, ref state);
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
 
         Assert.True(state.IsLive(handle));
         Assert.Equal(LedgeY + 6, state.Projectiles[handle.Index].Y);
@@ -1475,7 +1475,7 @@ public sealed class BladeTests
         state.Projectiles[handle.Index].Y = WallY;
         state.Projectiles[handle.Index].Motion.SetComponents(10, 6);
 
-        Projectiles.Collide(World, ref state);
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
 
         Assert.True(state.IsLive(handle));
         Assert.Equal(0, state.Projectiles[handle.Index].Motion.HSpeed);
@@ -1495,7 +1495,7 @@ public sealed class BladeTests
         var handle = state.LiveProjectileHandle(0);
 
         for (var i = 0; i < 6 && state.IsLive(handle); i++)
-            Projectiles.Move(World, ref state);
+            Projectiles.Move(World, ref state, ref DiscardedEvents.Events);
 
         Assert.False(state.IsLive(handle), "a blade flew through the wall");
     }
@@ -1522,7 +1522,7 @@ public sealed class BladeTests
         var bubble = state.Projectiles[handle.Index];
         var rocket = SpawnRocket(ref state, bubble.X, bubble.Y, Team.Blue);
 
-        Projectiles.Collide(World, ref state);
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(0, CountOf(state, ProjectileKind.Bubble));
         Assert.True(state.IsLive(rocket), "the rocket died on a bubble");
@@ -1566,7 +1566,7 @@ public sealed class BladeTests
 
         SpawnRocket(ref state, ClearX + 120, ClearY, Team.Red, owner: 1);
 
-        Projectiles.Collide(World, ref state);
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
 
         Assert.False(state.IsLive(near), "a bubble beside the blast survived");
         Assert.True(state.IsLive(far),
@@ -1602,7 +1602,7 @@ public sealed class BladeTests
         };
         var mineHandle = state.SpawnProjectile(mine);
 
-        Explosions.DetonateMine(World, ref state, mineHandle);
+        Explosions.DetonateMine(World, ref state, mineHandle, ref DiscardedEvents.Events);
 
         Assert.False(state.IsLive(handle),
             "the mine's sweep was not widened past its 40-pixel blast radius");
@@ -1636,7 +1636,7 @@ public sealed class BladeTests
         state.Projectiles[handle.Index].X = state.RedGenerator.X + 330;
         state.Projectiles[handle.Index].Y = state.RedGenerator.Y;
 
-        Generators.Destroy(world, ref state, Team.Red);
+        Generators.Destroy(world, ref state, Team.Red, ref DiscardedEvents.Events);
 
         Assert.False(state.IsLive(handle),
             "a generator's sweep did not reach 330 pixels");
@@ -1677,7 +1677,7 @@ public sealed class BladeTests
 
         var before = state.Characters[3].Hp;
 
-        Projectiles.Collide(World, ref state);
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
 
         Assert.False(state.IsLive(bubble), "the rocket's blast did not pop the bubble");
         Assert.Equal(before - 8, state.Characters[3].Hp, 9);

@@ -1025,7 +1025,7 @@ public sealed class MedigunTests
 
         state.SpawnProjectile(needle);
 
-        Projectiles.Move(World, ref state);
+        Projectiles.Move(World, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(0.2, Live(state, 0).Motion.VSpeed);
         Assert.Equal(OpenY - 200 + 0.2, Live(state, 0).Y);
@@ -1059,7 +1059,7 @@ public sealed class MedigunTests
 
         state.SpawnProjectile(needle);
 
-        Projectiles.Collide(World, ref state);
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(0, state.LiveProjectileCount);
         Assert.Equal(156, state.Characters[2].Hp);

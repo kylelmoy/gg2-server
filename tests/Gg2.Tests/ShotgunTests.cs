@@ -240,7 +240,7 @@ public sealed class ShotgunTests
 
         state.SpawnProjectile(pellet);
 
-        Projectiles.Collide(World, ref state);
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(0, state.LiveProjectileCount);
         Assert.Equal(153, state.Characters[2].Hp);

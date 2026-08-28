@@ -679,7 +679,7 @@ public static class Weapons
                 // The seed is drawn and broadcast and then read by nothing —
                 // the Rifle's User Event 3 uses no randomness at all, exactly
                 // like the Rocketlauncher's.
-                FireRifle(world, ref state, slot);
+                FireRifle(world, ref state, slot, ref events);
                 break;
 
             case WeaponKind.Revolver:
@@ -769,7 +769,8 @@ public static class Weapons
     /// and a rifle that is still charging reaches proportionally less far.
     /// </para>
     /// </remarks>
-    private static void FireRifle(CollisionWorld world, ref WorldState state, int slot)
+    private static void FireRifle(
+        CollisionWorld world, ref WorldState state, int slot, ref TickEvents events)
     {
         ref var character = ref state.Characters[slot];
         ref var weapon = ref state.Weapons[slot];
@@ -797,7 +798,7 @@ public static class Weapons
         switch (hit.Kind)
         {
             case HitscanTarget.Character:
-                DealRifleHit(ref state, slot, hit.Slot, damage, zoomed);
+                DealRifleHit(ref state, slot, hit.Slot, damage, zoomed, ref events);
                 break;
 
             case HitscanTarget.Sentry:
@@ -969,14 +970,19 @@ public static class Weapons
     /// takes nothing from it.
     /// </remarks>
     private static void DealRifleHit(
-        ref WorldState state, int shooter, int victimSlot, double damage, bool zoomed)
+        ref WorldState state,
+        int shooter,
+        int victimSlot,
+        double damage,
+        bool zoomed,
+        ref TickEvents events)
     {
         ref var victim = ref state.Characters[victimSlot];
 
         if (victim.Ubered || victim.Team == state.Characters[shooter].Team)
             return;
 
-        DamageApi.Deal(ref victim, damage);
+        DamageApi.Deal(ref events, victimSlot, shooter, ref victim, damage);
         victim.TimeUnscathed = 0;
 
         // The same demote-and-inherit the other weapons do.
@@ -1783,7 +1789,7 @@ public static class Weapons
             ref var projectile = ref state.Projectiles[handle.Index];
 
             if (projectile.Kind == ProjectileKind.Mine && projectile.OwnerSlot == slot)
-                Explosions.DetonateMine(world, ref state, handle);
+                Explosions.DetonateMine(world, ref state, handle, ref events);
         }
 
         state.Weapons[slot].Lobbed = 0;

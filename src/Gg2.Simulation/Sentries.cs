@@ -529,7 +529,8 @@ public static class Sentries
     /// distance.
     /// </para>
     /// </remarks>
-    public static void TurretEndStep(CollisionWorld world, ref WorldState state, int slot)
+    public static void TurretEndStep(
+        CollisionWorld world, ref WorldState state, int slot, ref TickEvents events)
     {
         ArgumentNullException.ThrowIfNull(world);
 
@@ -727,7 +728,7 @@ public static class Sentries
             sentry.NoticedTarget = false;
 
             if (sentry.ReadyToShoot && !sentry.Rotating)
-                Fire(ref state, ref sentry, slot, isSentry, targetSlot, targetX, targetY);
+                Fire(ref state, ref sentry, slot, isSentry, targetSlot, targetX, targetY, ref events);
         }
 
         // The flip animation: 0.3 of a frame per tick across four frames, so a
@@ -755,7 +756,8 @@ public static class Sentries
         bool targetIsSentry,
         int targetSlot,
         double targetX,
-        double targetY)
+        double targetY,
+        ref TickEvents events)
     {
         sentry.TurretDirection = Gml.PointDirection(sentry.X, sentry.Y, targetX, targetY);
 
@@ -793,7 +795,11 @@ public static class Sentries
                 ref var victim = ref state.Characters[targetSlot];
 
                 // damageAuto -> damageCharacter -> dealDamage.
-                DamageApi.Deal(ref victim, SentryState.TurretHitDamage);
+                // ⚠️ Credited to the sentry's OWNER, not to the sentry. A
+                // sentry belongs to a player and outlives their character, so
+                // the slot here is the one a DESTROY_SENTRY would name.
+                DamageApi.Deal(
+                    ref events, targetSlot, slot, ref victim, SentryState.TurretHitDamage);
                 victim.TimeUnscathed = 0;
 
                 // The same assist bookkeeping every weapon performs, spelled

@@ -484,7 +484,7 @@ public sealed class AirBlastTests
         var handle = state.SpawnProjectile(mine);
 
         // The stickied branch of the movement pass arms alarm[0] = 30.
-        Projectiles.Move(World, ref state);
+        Projectiles.Move(World, ref state, ref DiscardedEvents.Events);
         Assert.Equal(30, state.Projectiles[handle.Index].Lifetime);
 
         for (var tick = 0; tick < 30; tick++)
@@ -511,7 +511,7 @@ public sealed class AirBlastTests
         mine.Reflector = 1;
         var handle = state.SpawnProjectile(mine);
 
-        Explosions.DetonateMine(World, ref state, handle);
+        Explosions.DetonateMine(World, ref state, handle, ref DiscardedEvents.Events);
 
         ref readonly var owner = ref state.Characters[2];
         Assert.True(owner.Hp < ClassStats.For(PlayerClass.Demoman).MaxHp);
@@ -587,8 +587,8 @@ public sealed class AirBlastTests
         state.Weapons[1].ReadyToFlare = true;
         Blast(ref state, 1);
 
-        Projectiles.Move(World, ref state);
-        Projectiles.Move(World, ref state);
+        Projectiles.Move(World, ref state, ref DiscardedEvents.Events);
+        Projectiles.Move(World, ref state, ref DiscardedEvents.Events);
 
         var flare = Live(state, 0);
         Assert.Equal(0.0, flare.Motion.VSpeed);
@@ -625,7 +625,7 @@ public sealed class AirBlastTests
         flare.Motion.Speed = 15;
         state.SpawnProjectile(flare);
 
-        Projectiles.Collide(World, ref state);
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
 
         ref readonly var victim = ref state.Characters[2];
         Assert.Equal(ClassStats.For(PlayerClass.Heavy).MaxHp - 30, victim.Hp);

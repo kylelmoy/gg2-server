@@ -689,7 +689,7 @@ public sealed class SpyTests
         var before = state.Characters[2].Hp;
         Weapons.CreateStabMask(ref state, 1);
         Projectiles.StabStep(ref state);
-        Projectiles.Collide(World, ref state);
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(before - 200, state.Characters[2].Hp);
         Assert.Equal(0, state.Characters[2].Hp);
@@ -710,7 +710,7 @@ public sealed class SpyTests
 
         Weapons.CreateStabMask(ref state, 1);
         Projectiles.StabStep(ref state);
-        Projectiles.Collide(World, ref state);
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(2, Hurt(state, 2) + Hurt(state, 3) + Hurt(state, 4));
         Assert.Equal(0, CountOf(state, ProjectileKind.Stab));
@@ -738,7 +738,7 @@ public sealed class SpyTests
             state.Weapons[1].StabDirection = 0;
             Weapons.CreateStabMask(ref state, 1);
             Projectiles.StabStep(ref state);
-            Projectiles.Collide(World, ref state);
+            Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
 
             return state.Characters[2].LastDamageSource;
         }
@@ -764,7 +764,7 @@ public sealed class SpyTests
             state.Weapons[1].StabDirection = stabDegrees;
             Weapons.CreateStabMask(ref state, 1);
             Projectiles.StabStep(ref state);
-            Projectiles.Collide(World, ref state);
+            Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
 
             return state.Characters[2].Hp < 200;
         }
@@ -794,7 +794,7 @@ public sealed class SpyTests
 
         Weapons.CreateStabMask(ref state, 1);
         Projectiles.StabStep(ref state);
-        Projectiles.Collide(World, ref state);
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(200, state.Characters[2].Hp);
         Assert.Equal(0, CountOf(state, ProjectileKind.Stab));
@@ -815,7 +815,7 @@ public sealed class SpyTests
 
         Weapons.CreateStabMask(ref state, 1);
         Projectiles.StabStep(ref state);
-        Projectiles.Collide(World, ref state);
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(0, state.Characters[2].Hp);
     }
@@ -830,7 +830,7 @@ public sealed class SpyTests
 
         Weapons.CreateStabMask(ref state, 1);
         Projectiles.StabStep(ref state);
-        Projectiles.Collide(World, ref state);
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(200, state.Characters[2].Hp);
         Assert.Equal(1, CountOf(state, ProjectileKind.Stab));
@@ -874,7 +874,7 @@ public sealed class SpyTests
         var shieldBefore = state.BlueGenerator.ShieldHp;
         Weapons.CreateStabMask(ref state, 1);
         Projectiles.StabStep(ref state);
-        Projectiles.Collide(world, ref state);
+        Projectiles.Collide(world, ref state, ref DiscardedEvents.Events);
 
         // ⚠️ The *shield* takes the full 72 and the hit points take half of
         // it — the generator's own discount, which is why this asserts the
@@ -912,7 +912,7 @@ public sealed class SpyTests
 
         Weapons.CreateStabMask(ref state, 1);
         Projectiles.StabStep(ref state);
-        Projectiles.Collide(World, ref state);
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(DamageSource.Backstab, state.Characters[2].LastDamageSource);
 

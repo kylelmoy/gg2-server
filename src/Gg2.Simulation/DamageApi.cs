@@ -34,7 +34,43 @@ public static class DamageApi
     /// (<c>damageCharacter.gml:7</c>), so an invulnerable target loses its
     /// healing ramp to a shot that did nothing to it.
     /// </returns>
-    public static bool Deal(ref CharacterState victim, double amount)
+    /// <summary>
+    /// <c>dealDamage</c>, plus the per-tick accumulation `docs/ENV.md` needs.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The parameters are required rather than optional deliberately.</b>
+    /// This is the one chokepoint every character's damage passes through, and
+    /// an overload without them would let a new call site accumulate nothing and
+    /// nobody notice — the reward signal would simply be quietly incomplete,
+    /// which is the hardest kind of bug to see in a trained policy. Making the
+    /// compiler ask "who dealt this" at all eleven sites is the point.
+    /// <para>
+    /// ⚠️ <b><paramref name="dealerSlot"/> may be <see cref="CharacterState.Nobody"/></b>
+    /// — afterburn whose lighter has since left, for one — and then the damage
+    /// is taken by somebody and dealt by no one. It must never default to 0:
+    /// slot 0 is the server's own player and always exists.
+    /// </para>
+    /// </remarks>
+    public static bool Deal(
+        ref TickEvents events,
+        int victimSlot,
+        int dealerSlot,
+        ref CharacterState victim,
+        double amount)
+    {
+        if (!Deal(ref victim, amount))
+            return false;
+
+        events.DamageTaken[victimSlot] += amount;
+
+        // ⚠️ Self-damage is taken and not dealt. A rocket jump must not pay.
+        if (dealerSlot != victimSlot && dealerSlot != CharacterState.Nobody)
+            events.DamageDealt[dealerSlot] += amount;
+
+        return true;
+    }
+
+    private static bool Deal(ref CharacterState victim, double amount)
     {
         // `if(argument1.deathmatch_invulnerable != 0) return 0;`
         //

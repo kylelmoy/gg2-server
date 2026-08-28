@@ -140,7 +140,7 @@ public static class MatchSimulation
             // and a medic beaming it sees the duration this already spent. It
             // sits just below the ground checks, which are inside
             // BeginStepInput below and touch nothing it reads or writes.
-            Afterburn.BeginStep(ref state, slot);
+            Afterburn.BeginStep(ref state, slot, ref events);
 
             Weapons.FireStep(world, ref state, slot, ref events);
             CharacterPhysics.BeginStepInput(world, ref state.Characters[slot]);
@@ -231,7 +231,7 @@ public static class MatchSimulation
         // characters the blast landed four pixels outside its owner's box and
         // dealt 28.15385 instead of 30, and the replay diverged there. Moving it
         // here makes the damage exactly 30 and pushes the exact window on.
-        Projectiles.Move(world, ref state);
+        Projectiles.Move(world, ref state, ref events);
 
         // The gamemode HUD's Step, which is where the round is decided.
         // Between move_all_bullets and the characters because CTFHUD is younger
@@ -310,7 +310,7 @@ public static class MatchSimulation
         // unlike the blast above they see *both* sides at their new positions —
         // a hit is decided on where things ended up. Before End Step, so a
         // knockback lands in the state End Step then reads.
-        Projectiles.Collide(world, ref state);
+        Projectiles.Collide(world, ref state, ref events);
 
         // Character.events/Collision with HealingCabinet.xml, in the same
         // stage and — by GM8's collision-event ordering, which keys on the
@@ -390,7 +390,7 @@ public static class MatchSimulation
         for (var slot = 0; slot < WorldState.MaxSlots; slot++)
         {
             if (state.HasSentry[slot] && state.Sentries[slot].HasTurret)
-                Sentries.TurretEndStep(world, ref state, slot);
+                Sentries.TurretEndStep(world, ref state, slot, ref events);
         }
     }
 }

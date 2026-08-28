@@ -321,7 +321,7 @@ public sealed class FlamethrowerTests
         Put(ref state, 1, PlayerClass.Pyro, Team.Red, OpenX, OpenY - 200);
         state.SpawnProjectile(Flame(OpenX, OpenY - 200, 1, Team.Red, speed: 0));
 
-        Projectiles.Move(World, ref state);
+        Projectiles.Move(World, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(0.15, Live(state, 0).Motion.VSpeed);
     }
@@ -347,7 +347,7 @@ public sealed class FlamethrowerTests
         // there and a single jump would sail past.
         state.SpawnProjectile(Flame(OpenX, floor - 12, 1, Team.Red, direction: 270, speed: 30));
 
-        Projectiles.Move(World, ref state);
+        Projectiles.Move(World, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(0, state.LiveProjectileCount);
     }
@@ -362,7 +362,7 @@ public sealed class FlamethrowerTests
         Put(ref state, 1, PlayerClass.Pyro, Team.Red, OpenX, OpenY);
         state.SpawnProjectile(Flame(OpenX, floor + 4, 1, Team.Red, speed: 0));
 
-        Projectiles.Move(World, ref state);
+        Projectiles.Move(World, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(0, state.LiveProjectileCount);
     }
@@ -382,7 +382,7 @@ public sealed class FlamethrowerTests
         // Lifetime 15 is a flame that has not moved yet: the freshest there is.
         state.SpawnProjectile(Flame(OpenX + 40, OpenY, 1, Team.Red));
 
-        Projectiles.Collide(World, ref state);
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
 
         ref var victim = ref state.Characters[2];
         Assert.Equal(160 - FlameDamage, victim.Hp);
@@ -425,7 +425,7 @@ public sealed class FlamethrowerTests
             Put(ref state, 2, PlayerClass.Soldier, Team.Blue, OpenX + 40, OpenY);
             state.SpawnProjectile(Flame(OpenX + 40, OpenY, 1, Team.Red, lifetime: lifetime));
 
-            Projectiles.Collide(World, ref state);
+            Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
             return state.Characters[2].BurnIntensity;
         }
     }
@@ -441,7 +441,7 @@ public sealed class FlamethrowerTests
 
         state.SpawnProjectile(Flame(OpenX + 40, OpenY, 1, Team.Red, lifetime: 0));
 
-        Projectiles.Collide(World, ref state);
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(7.5 + (1.35 / 2), state.Characters[2].BurnIntensity, 12);
     }
@@ -458,7 +458,7 @@ public sealed class FlamethrowerTests
 
         state.SpawnProjectile(Flame(OpenX + 40, OpenY, 1, Team.Red, lifetime: 0));
 
-        Projectiles.Collide(World, ref state);
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(CharacterState.MaxBurnIntensity, state.Characters[2].BurnIntensity);
         Assert.Equal(CharacterState.MaxBurnDuration, state.Characters[2].BurnDuration);
@@ -481,7 +481,7 @@ public sealed class FlamethrowerTests
 
         state.SpawnProjectile(Flame(OpenX + 40, OpenY, 1, Team.Red));
 
-        Projectiles.Collide(World, ref state);
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
 
         // Both were reached in the same pass: slot 2 burned and survived the
         // flame, slot 3 burned and killed it.
@@ -501,7 +501,7 @@ public sealed class FlamethrowerTests
 
         state.SpawnProjectile(Flame(OpenX + 40, OpenY, 1, Team.Red, perseverant: true));
 
-        Projectiles.Collide(World, ref state);
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(160 - FlameDamage, state.Characters[2].Hp);
         Assert.Equal(160 - FlameDamage, state.Characters[3].Hp);
@@ -518,10 +518,10 @@ public sealed class FlamethrowerTests
 
         state.SpawnProjectile(Flame(OpenX + 40, OpenY, 1, Team.Red, perseverant: true, speed: 0));
 
-        Projectiles.Collide(World, ref state);
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
         var afterFirst = state.Characters[2].Hp;
 
-        Projectiles.Collide(World, ref state);
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(afterFirst, state.Characters[2].Hp);
         Assert.Equal(1, state.LiveProjectileCount);
@@ -546,7 +546,7 @@ public sealed class FlamethrowerTests
         var before = state.Characters[2].Hp;
         state.SpawnProjectile(Flame(OpenX + 40, OpenY, 1, Team.Red));
 
-        Projectiles.Collide(World, ref state);
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(before, state.Characters[2].Hp);
         Assert.Equal(0, state.Characters[2].BurnDuration);
@@ -569,7 +569,7 @@ public sealed class FlamethrowerTests
         state.Characters[1].AfterburnSource = DamageSource.Flamethrower;
         state.Characters[1].AfterburnDecayTimer = 90;
 
-        Afterburn.BeginStep(ref state, 1);
+        Afterburn.BeginStep(ref state, 1, ref DiscardedEvents.Events);
 
         Assert.Equal(160 - (6.0 / 30), state.Characters[1].Hp, 12);
         Assert.Equal(59, state.Characters[1].BurnDuration);
@@ -602,7 +602,7 @@ public sealed class FlamethrowerTests
         state.Characters[1].LastDamageDealer = 3;
         state.Characters[1].LastDamageSource = DamageSource.Minegun;
 
-        Afterburn.BeginStep(ref state, 1);
+        Afterburn.BeginStep(ref state, 1, ref DiscardedEvents.Events);
 
         Assert.Equal(0, state.Characters[1].Hp);
         Assert.Equal(3, state.Characters[1].LastDamageDealer);
@@ -681,7 +681,7 @@ public sealed class FlamethrowerTests
         state.Characters[2].AfterburnDecayTimer = 3;
 
         state.SpawnProjectile(Flame(OpenX + 40, OpenY, 1, Team.Red));
-        Projectiles.Collide(World, ref state);
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(CharacterState.BurnDecayDelay, state.Characters[2].AfterburnDecayTimer);
     }
@@ -707,7 +707,7 @@ public sealed class FlamethrowerTests
         state.Characters[1].IntensityDecay = 1;
         state.Characters[1].AfterburnDecayTimer = WeaponState.Inactive;
 
-        Afterburn.BeginStep(ref state, 1);
+        Afterburn.BeginStep(ref state, 1, ref DiscardedEvents.Events);
 
         Assert.Equal(0, state.Characters[1].BurnDuration);
         Assert.Equal(0, state.Characters[1].BurnIntensity);

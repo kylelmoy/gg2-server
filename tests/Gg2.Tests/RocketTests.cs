@@ -343,7 +343,7 @@ public sealed class RocketTests
         var state = default(WorldState);
         state.SpawnProjectile(Rocket(OpenX, OpenY, direction: 0, ownerSlot: 1, Team.Red));
 
-        Projectiles.Move(World, ref state);
+        Projectiles.Move(World, ref state, ref DiscardedEvents.Events);
 
         var rocket = Live(state, 0);
         Assert.Equal((13 + 1) * 0.92, rocket.Motion.Speed, 12);
@@ -379,7 +379,7 @@ public sealed class RocketTests
         Assert.True(gap + ((13 + 1) * 0.92) > 48.75, "one tick of travel does not clear the cutoff");
 
         var before = state.Characters[2].Hp;
-        Projectiles.Move(World, ref state);
+        Projectiles.Move(World, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(0, state.LiveProjectileCount);
         Assert.True(state.Characters[2].Hp < before, "the rocket stepped before it exploded");
@@ -407,7 +407,7 @@ public sealed class RocketTests
         state.SpawnProjectile(rocket);
         var before = state.Characters[2].Hp;
 
-        Projectiles.Move(World, ref state);
+        Projectiles.Move(World, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(0, state.LiveProjectileCount);
         Assert.Equal(before, state.Characters[2].Hp);
@@ -444,11 +444,11 @@ public sealed class RocketTests
 
         for (var pass = 1; pass < 10; pass++)
         {
-            Projectiles.Move(World, ref state);
+            Projectiles.Move(World, ref state, ref DiscardedEvents.Events);
             Assert.Equal(1, state.LiveProjectileCount);
         }
 
-        Projectiles.Move(World, ref state);
+        Projectiles.Move(World, ref state, ref DiscardedEvents.Events);
         Assert.Equal(0, state.LiveProjectileCount);
     }
 
@@ -470,7 +470,7 @@ public sealed class RocketTests
         Assert.True(gap > 0 && gap < BlastRadius, $"the setup put the rocket {gap} away");
 
         var before = state.Characters[2].Hp;
-        Assert.True(Explosions.Explode(World, ref state, handle, CharacterState.Nobody));
+        Assert.True(Explosions.Explode(World, ref state, handle, CharacterState.Nobody, ref DiscardedEvents.Events));
 
         Assert.Equal(before - (ExplosionDamage * (1 - (gap / BlastRadius))), state.Characters[2].Hp, 9);
         Assert.Equal(1, state.Characters[2].LastDamageDealer);
@@ -502,7 +502,7 @@ public sealed class RocketTests
         Assert.True(gap >= 48.75 && gap < BlastRadius, $"the setup put the rocket {gap} away");
 
         var before = state.Characters[2].Hp;
-        Explosions.Explode(World, ref state, handle, CharacterState.Nobody);
+        Explosions.Explode(World, ref state, handle, CharacterState.Nobody, ref DiscardedEvents.Events);
 
         Assert.Equal(before, state.Characters[2].Hp);
         Assert.Equal(0, state.Characters[2].Motion.Speed);
@@ -526,7 +526,7 @@ public sealed class RocketTests
         Assert.True(gap < 48.75, $"the setup put the rocket {gap} away");
 
         var before = state.Characters[2].Hp;
-        Explosions.Explode(World, ref state, handle, CharacterState.Nobody);
+        Explosions.Explode(World, ref state, handle, CharacterState.Nobody, ref DiscardedEvents.Events);
 
         Assert.True(state.Characters[2].Hp < before);
         Assert.True(state.Characters[2].Motion.Speed > 0);
@@ -565,8 +565,8 @@ public sealed class RocketTests
         Assert.Equal(rightGap - 2, leftGap);
 
         var before = facingRight.Characters[2].Hp;
-        Explosions.Explode(World, ref facingRight, rightHandle, CharacterState.Nobody);
-        Explosions.Explode(World, ref facingLeft, leftHandle, CharacterState.Nobody);
+        Explosions.Explode(World, ref facingRight, rightHandle, CharacterState.Nobody, ref DiscardedEvents.Events);
+        Explosions.Explode(World, ref facingLeft, leftHandle, CharacterState.Nobody, ref DiscardedEvents.Events);
 
         Assert.Equal(before, facingRight.Characters[2].Hp);
         Assert.True(facingLeft.Characters[2].Hp < before, "the left-facing victim took nothing either");
@@ -598,7 +598,7 @@ public sealed class RocketTests
             Rocket(OpenX - 30, standing, direction: 0, ownerSlot: 1, Team.Red));
 
         var before = state.Characters[2].Hp;
-        Explosions.Explode(World, ref state, handle, CharacterState.Nobody);
+        Explosions.Explode(World, ref state, handle, CharacterState.Nobody, ref DiscardedEvents.Events);
 
         Assert.Equal(before, state.Characters[2].Hp);
         Assert.Equal(0, state.Characters[2].Motion.Speed);
@@ -627,7 +627,7 @@ public sealed class RocketTests
             Rocket(OpenX - 30, AirY, direction: 0, ownerSlot: 1, Team.Red));
 
         var before = state.Characters[2].Hp;
-        Explosions.Explode(World, ref state, handle, CharacterState.Nobody);
+        Explosions.Explode(World, ref state, handle, CharacterState.Nobody, ref DiscardedEvents.Events);
 
         Assert.Equal(before, state.Characters[2].Hp);
         Assert.True(state.Characters[2].Motion.Speed > 0);
@@ -654,7 +654,7 @@ public sealed class RocketTests
             Rocket(OpenX, OpenY + 40, direction: 270, ownerSlot: 1, Team.Red));
 
         var before = state.Characters[1].Hp;
-        Explosions.Explode(World, ref state, handle, CharacterState.Nobody);
+        Explosions.Explode(World, ref state, handle, CharacterState.Nobody, ref DiscardedEvents.Events);
 
         Assert.True(state.Characters[1].Hp < before, "the shooter took no self-damage");
         Assert.Equal(1, state.Characters[1].MoveStatus);
@@ -707,8 +707,8 @@ public sealed class RocketTests
         // the report.
         for (var tick = 0; tick < 10 && state.LiveProjectileCount > 0; tick++)
         {
-            Projectiles.Move(World, ref state);
-            Projectiles.Collide(World, ref state);
+            Projectiles.Move(World, ref state, ref DiscardedEvents.Events);
+            Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
         }
 
         Assert.Equal(0, state.LiveProjectileCount);
@@ -733,7 +733,7 @@ public sealed class RocketTests
         Assert.Equal(0, gap);
 
         var before = state.Characters[2].Hp;
-        Assert.True(Explosions.Explode(World, ref state, handle, 2));
+        Assert.True(Explosions.Explode(World, ref state, handle, 2, ref DiscardedEvents.Events));
 
         // 25 for the hit, and the full 30 for a blast at zero distance.
         Assert.Equal(before - 25 - ExplosionDamage, state.Characters[2].Hp, 9);
@@ -757,7 +757,7 @@ public sealed class RocketTests
         var handle = state.SpawnProjectile(Rocket(OpenX, OpenY, direction: 0, ownerSlot: 1, Team.Red));
 
         var before = state.Characters[2].Hp;
-        Explosions.Explode(World, ref state, handle, 2);
+        Explosions.Explode(World, ref state, handle, 2, ref DiscardedEvents.Events);
 
         Assert.Equal(before, state.Characters[2].Hp);
         Assert.True(state.Characters[2].Motion.Speed > 0);
@@ -777,11 +777,11 @@ public sealed class RocketTests
         Put(ref state, 2, PlayerClass.Soldier, Team.Red, OpenX, OpenY);
         state.SpawnProjectile(Rocket(OpenX, OpenY, direction: 0, ownerSlot: 1, Team.Red));
 
-        Projectiles.Collide(World, ref state);
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
         Assert.Equal(700, Live(state, 0).DistanceToTravel);
 
         // Still overlapping on the next tick, and it must not be charged again.
-        Projectiles.Collide(World, ref state);
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
         Assert.Equal(700, Live(state, 0).DistanceToTravel);
     }
 
@@ -793,7 +793,7 @@ public sealed class RocketTests
         Put(ref state, 1, PlayerClass.Soldier, Team.Red, OpenX, OpenY);
         state.SpawnProjectile(Rocket(OpenX, OpenY, direction: 0, ownerSlot: 1, Team.Red));
 
-        Projectiles.Collide(World, ref state);
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(800, Live(state, 0).DistanceToTravel);
     }
@@ -815,7 +815,7 @@ public sealed class RocketTests
         Put(ref state, 3, PlayerClass.Soldier, Team.Red, OpenX, OpenY);
         state.SpawnProjectile(Rocket(OpenX, OpenY, direction: 0, ownerSlot: 1, Team.Red));
 
-        Projectiles.Collide(World, ref state);
+        Projectiles.Collide(World, ref state, ref DiscardedEvents.Events);
         Assert.Equal(1UL << 3, Live(state, 0).PlayersPassed);
 
         state.RemoveSlot(2);

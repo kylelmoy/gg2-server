@@ -39,7 +39,7 @@ public static class Afterburn
     /// frameskip guard for a <em>client</em> catching up, and this port has no
     /// frameskip.
     /// </remarks>
-    public static void BeginStep(ref WorldState state, int slot)
+    public static void BeginStep(ref WorldState state, int slot, ref TickEvents events)
     {
         ref var character = ref state.Characters[slot];
 
@@ -70,7 +70,12 @@ public static class Afterburn
                 // dealDamage, not damageCharacter — so this does not reset
                 // timeUnscathed itself. The line four below does it instead,
                 // and it runs whether or not the victim was still alive.
-                DamageApi.Deal(ref character, character.BurnIntensity / 30);
+                // ⚠️ Credited to `BurnedBy`, the line above — the pyro who lit
+                // the fire, not whoever last hit them. That slot can be
+                // CharacterState.Nobody once the lighter has left, and then the
+                // burn is taken by somebody and dealt by no one.
+                DamageApi.Deal(
+                    ref events, slot, character.BurnedBy, ref character, character.BurnIntensity / 30);
             }
 
             character.BurnDuration -= CharacterState.BurnDurationDecay;

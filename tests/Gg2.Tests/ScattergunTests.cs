@@ -553,7 +553,7 @@ public sealed class ScattergunTests
         pellet.Motion.SetPolar(13, 0);
         state.SpawnProjectile(pellet);
 
-        Projectiles.Collide(world, ref state);
+        Projectiles.Collide(world, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(92, state.Characters[1].Hp);
         Assert.Equal(0, state.LiveProjectileCount);
@@ -607,7 +607,7 @@ public sealed class ScattergunTests
         pellet.Motion.SetPolar(13, 0);
         state.SpawnProjectile(pellet);
 
-        Projectiles.Collide(world, ref state);
+        Projectiles.Collide(world, ref state, ref DiscardedEvents.Events);
 
         // Not destroyed: the collision event falls off its end rather than
         // calling instance_destroy, so the pellet carries on to whoever is
@@ -659,7 +659,7 @@ public sealed class ScattergunTests
         Assert.False(world.PlaceFree(pellet.Box, CollisionFilter.ForBullet()),
             "the pellet is not inside the map, so this test is not testing anything");
 
-        Projectiles.Collide(world, ref state);
+        Projectiles.Collide(world, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(0, state.LiveProjectileCount);
         Assert.Equal(100, state.Characters[1].Hp);

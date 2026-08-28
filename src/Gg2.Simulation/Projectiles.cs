@@ -295,7 +295,7 @@ public static class Projectiles
     /// <c>PhysicsParityTests.ClosedLoopIsExactAcrossTheWholeTrace</c>.
     /// </para>
     /// </remarks>
-    public static void Move(CollisionWorld world, ref WorldState state)
+    public static void Move(CollisionWorld world, ref WorldState state, ref TickEvents events)
     {
         ArgumentNullException.ThrowIfNull(world);
 
@@ -304,7 +304,7 @@ public static class Projectiles
         // array under the cursor.
         for (var i = 0; i < state.LiveProjectileCount;)
         {
-            if (MoveOne(world, ref state, state.LiveProjectileHandle(i)))
+            if (MoveOne(world, ref state, state.LiveProjectileHandle(i), ref events))
                 continue;
 
             i++;
@@ -312,7 +312,8 @@ public static class Projectiles
     }
 
     /// <summary>Dispatch for one projectile. True if it was destroyed.</summary>
-    private static bool MoveOne(CollisionWorld world, ref WorldState state, ProjectileHandle handle)
+    private static bool MoveOne(
+        CollisionWorld world, ref WorldState state, ProjectileHandle handle, ref TickEvents events)
     {
         return state.Projectiles[handle.Index].Kind switch
         {
@@ -324,7 +325,7 @@ public static class Projectiles
             // the two disagree about.
             ProjectileKind.Needle => MoveShot(world, ref state, handle, NeedleGravity),
 
-            ProjectileKind.Rocket => MoveRocket(world, ref state, handle),
+            ProjectileKind.Rocket => MoveRocket(world, ref state, handle, ref events),
             ProjectileKind.Mine => MoveMine(world, ref state, handle),
 
             // Both children of BurningProjectile share its with() block; the
@@ -635,7 +636,8 @@ public static class Projectiles
     /// <b>it does not move at all on a tick it is already colliding</b>, so that
     /// the blast is centred on what it hit rather than a step past it.
     /// </remarks>
-    private static bool MoveRocket(CollisionWorld world, ref WorldState state, ProjectileHandle handle)
+    private static bool MoveRocket(
+        CollisionWorld world, ref WorldState state, ProjectileHandle handle, ref TickEvents events)
     {
         ref var rocket = ref state.Projectiles[handle.Index];
 
@@ -711,7 +713,7 @@ public static class Projectiles
             return true;
         }
 
-        return Explosions.Explode(world, ref state, handle, CharacterState.Nobody);
+        return Explosions.Explode(world, ref state, handle, CharacterState.Nobody, ref events);
     }
 
     /// <summary>
@@ -901,7 +903,7 @@ public static class Projectiles
     /// collision event over the instances of one object and then the instances
     /// of the other, both by id, and an id is issued at creation.
     /// </remarks>
-    public static void Collide(CollisionWorld world, ref WorldState state)
+    public static void Collide(CollisionWorld world, ref WorldState state, ref TickEvents events)
     {
         ArgumentNullException.ThrowIfNull(world);
 
@@ -929,20 +931,21 @@ public static class Projectiles
         for (var i = 0; i < count; i++)
         {
             if (state.IsLive(order[i]))
-                CollideOne(world, ref state, order[i]);
+                CollideOne(world, ref state, order[i], ref events);
         }
     }
 
     /// <summary>
     /// One projectile against every character. True if it was destroyed.
     /// </summary>
-    private static bool CollideOne(CollisionWorld world, ref WorldState state, ProjectileHandle handle)
+    private static bool CollideOne(
+        CollisionWorld world, ref WorldState state, ProjectileHandle handle, ref TickEvents events)
     {
         // A Bubble's sixteen collision events have almost nothing in common
         // with the other six projectiles' three, so they are a body of their
         // own rather than a pile of branches inside this one.
         if (state.Projectiles[handle.Index].Kind == ProjectileKind.Bubble)
-            return BubbleCollide(world, ref state, handle);
+            return BubbleCollide(world, ref state, handle, ref events);
 
         // Hoisted out of the character loop: the box depends only on the
         // projectile, and nothing inside the loop moves it.
@@ -990,7 +993,7 @@ public static class Projectiles
                     continue;
                 }
 
-                if (HitCharacter(world, ref state, handle, slot))
+                if (HitCharacter(world, ref state, handle, slot, ref events))
                     return true;
 
                 // The box was hoisted before the loop, and a rocket's collision
@@ -1032,7 +1035,7 @@ public static class Projectiles
                 continue;
             }
 
-            if (HitSentry(world, ref state, handle, slot))
+            if (HitSentry(world, ref state, handle, slot, ref events))
                 return true;
 
             projectileBox = state.Projectiles[handle.Index].Box;
@@ -1057,8 +1060,8 @@ public static class Projectiles
         // projectile touches two of the three on the same tick, which on a
         // generator map is a scattergun pellet catching a defender standing
         // against the generator.
-        if (HitGenerator(world, ref state, handle, Team.Red)
-            || HitGenerator(world, ref state, handle, Team.Blue))
+        if (HitGenerator(world, ref state, handle, Team.Red, ref events)
+            || HitGenerator(world, ref state, handle, Team.Blue, ref events))
         {
             return true;
         }
@@ -1088,7 +1091,8 @@ public static class Projectiles
         CollisionWorld world,
         ref WorldState state,
         ProjectileHandle handle,
-        Team team)
+        Team team,
+        ref TickEvents events)
     {
         ref var generator = ref Generators.Of(ref state, team);
         if (!generator.Exists)
@@ -1127,7 +1131,7 @@ public static class Projectiles
                 // unlike a sentry hit the generator is *not* the blast's direct
                 // victim, and it takes the splash on top at distance zero.
                 Generators.Damage(ref state, team, projectile.HitDamage);
-                return Explosions.Explode(world, ref state, handle, CharacterState.Nobody);
+                return Explosions.Explode(world, ref state, handle, CharacterState.Nobody, ref events);
 
             case ProjectileKind.Stab:
                 // ⚠️ 0.36 of the knife's damage, and ⚠️ no line-of-sight
@@ -1171,7 +1175,8 @@ public static class Projectiles
         CollisionWorld world,
         ref WorldState state,
         ProjectileHandle handle,
-        int slot)
+        int slot,
+        ref TickEvents events)
     {
         ref var projectile = ref state.Projectiles[handle.Index];
         ref var sentry = ref state.Sentries[slot];
@@ -1202,7 +1207,7 @@ public static class Projectiles
 
                 // characterHit = other.id; event_user(5): the sentry is the
                 // direct victim, and the blast happens where the rocket is.
-                return Explosions.ExplodeOnSentry(world, ref state, handle, slot);
+                return Explosions.ExplodeOnSentry(world, ref state, handle, slot, ref events);
 
             case ProjectileKind.Flame:
             case ProjectileKind.Flare:
@@ -1249,23 +1254,24 @@ public static class Projectiles
         CollisionWorld world,
         ref WorldState state,
         ProjectileHandle handle,
-        int slot)
+        int slot,
+        ref TickEvents events)
     {
         return state.Projectiles[handle.Index].Kind switch
         {
-            ProjectileKind.Shot => ShotHitCharacter(world, ref state, handle, slot),
+            ProjectileKind.Shot => ShotHitCharacter(world, ref state, handle, slot, ref events),
 
             // Needle.events/Collision with Character.xml is the Shot's event
             // with `perseverant` and the Bubble clause absent — neither of which
             // this body reaches — so the two really are the same code. The
             // damage difference rides on the instance, not on the event.
-            ProjectileKind.Needle => ShotHitCharacter(world, ref state, handle, slot),
+            ProjectileKind.Needle => ShotHitCharacter(world, ref state, handle, slot, ref events),
 
-            ProjectileKind.Rocket => RocketHitCharacter(world, ref state, handle, slot),
-            ProjectileKind.Flame => BurningHitCharacter(ref state, handle, slot),
-            ProjectileKind.Flare => BurningHitCharacter(ref state, handle, slot),
-            ProjectileKind.Blade => BladeHitCharacter(ref state, handle, slot),
-            ProjectileKind.Stab => StabHitCharacter(world, ref state, handle, slot),
+            ProjectileKind.Rocket => RocketHitCharacter(world, ref state, handle, slot, ref events),
+            ProjectileKind.Flame => BurningHitCharacter(ref state, handle, slot, ref events),
+            ProjectileKind.Flare => BurningHitCharacter(ref state, handle, slot, ref events),
+            ProjectileKind.Blade => BladeHitCharacter(ref state, handle, slot, ref events),
+            ProjectileKind.Stab => StabHitCharacter(world, ref state, handle, slot, ref events),
             var kind => throw new ArgumentOutOfRangeException(
                 nameof(handle), kind, "no collision event for this projectile"),
         };
@@ -1279,7 +1285,8 @@ public static class Projectiles
         CollisionWorld world,
         ref WorldState state,
         ProjectileHandle handle,
-        int slot)
+        int slot,
+        ref TickEvents events)
     {
         ref var projectile = ref state.Projectiles[handle.Index];
 
@@ -1319,7 +1326,7 @@ public static class Projectiles
         // and nothing else, so the timeUnscathed reset below and the assist
         // bookkeeping under it both still run — which is exactly what
         // damageCharacter.gml:3-7 does.
-        DamageApi.Deal(ref victim, projectile.HitDamage);
+        DamageApi.Deal(ref events, slot, projectile.OwnerSlot, ref victim, projectile.HitDamage);
         victim.TimeUnscathed = 0;
 
         // Assist bookkeeping. The demoted dealer inherits what is *left* of the
@@ -1370,7 +1377,8 @@ public static class Projectiles
     /// person and dies on the next.
     /// </para>
     /// </remarks>
-    private static bool BurningHitCharacter(ref WorldState state, ProjectileHandle handle, int slot)
+    private static bool BurningHitCharacter(
+        ref WorldState state, ProjectileHandle handle, int slot, ref TickEvents events)
     {
         ref var flame = ref state.Projectiles[handle.Index];
         ref var victim = ref state.Characters[slot];
@@ -1391,7 +1399,7 @@ public static class Projectiles
         if ((flame.EnemiesHit & bit) != 0)
             return false;
 
-        DamageApi.Deal(ref victim, flame.HitDamage);
+        DamageApi.Deal(ref events, slot, flame.OwnerSlot, ref victim, flame.HitDamage);
         victim.TimeUnscathed = 0;
 
         if (victim.LastDamageDealer != flame.OwnerSlot && victim.LastDamageDealer != slot)
@@ -1436,7 +1444,8 @@ public static class Projectiles
         CollisionWorld world,
         ref WorldState state,
         ProjectileHandle handle,
-        int slot)
+        int slot,
+        ref TickEvents events)
     {
         ref var rocket = ref state.Projectiles[handle.Index];
         ref var victim = ref state.Characters[slot];
@@ -1476,7 +1485,7 @@ public static class Projectiles
         // rocket's heading, not along its own.
         victim.Motion.MotionAdd(rocket.Motion.Direction, 2);
 
-        return Explosions.Explode(world, ref state, handle, (byte)slot);
+        return Explosions.Explode(world, ref state, handle, (byte)slot, ref events);
     }
 
     /// <summary>
@@ -1662,7 +1671,8 @@ public static class Projectiles
         CollisionWorld world,
         ref WorldState state,
         ProjectileHandle handle,
-        int slot)
+        int slot,
+        ref TickEvents events)
     {
         ref var mask = ref state.Projectiles[handle.Index];
         ref var victim = ref state.Characters[slot];
@@ -1684,7 +1694,7 @@ public static class Projectiles
             return true;
         }
 
-        DamageApi.Deal(ref victim, mask.HitDamage);
+        DamageApi.Deal(ref events, slot, mask.OwnerSlot, ref victim, mask.HitDamage);
 
         if (victim.LastDamageDealer != mask.OwnerSlot && victim.LastDamageDealer != slot)
         {
@@ -1769,7 +1779,8 @@ public static class Projectiles
     /// pellet's 0.03, which at speed 12 is nearly five units of velocity.</item>
     /// </list>
     /// </remarks>
-    private static bool BladeHitCharacter(ref WorldState state, ProjectileHandle handle, int slot)
+    private static bool BladeHitCharacter(
+        ref WorldState state, ProjectileHandle handle, int slot, ref TickEvents events)
     {
         ref var blade = ref state.Projectiles[handle.Index];
         ref var victim = ref state.Characters[slot];
@@ -1780,7 +1791,7 @@ public static class Projectiles
 
         if (!victim.Ubered)
         {
-            DamageApi.Deal(ref victim, blade.HitDamage);
+            DamageApi.Deal(ref events, slot, blade.OwnerSlot, ref victim, blade.HitDamage);
             victim.TimeUnscathed = 0;
 
             if (victim.LastDamageDealer != blade.OwnerSlot && victim.LastDamageDealer != slot)
@@ -2016,7 +2027,8 @@ public static class Projectiles
     /// has no player wall in it either.
     /// </para>
     /// </remarks>
-    private static bool BubbleCollide(CollisionWorld world, ref WorldState state, ProjectileHandle handle)
+    private static bool BubbleCollide(
+        CollisionWorld world, ref WorldState state, ProjectileHandle handle, ref TickEvents events)
     {
         // 0: Obstacle. It moves the bubble and never destroys it, so it has to
         // run before anything that reads the box.
@@ -2049,7 +2061,7 @@ public static class Projectiles
                 continue;
             }
 
-            if (BubbleHitCharacter(ref state, handle, slot))
+            if (BubbleHitCharacter(ref state, handle, slot, ref events))
                 return true;
         }
 
@@ -2070,8 +2082,8 @@ public static class Projectiles
         }
 
         // 560: Generator, whose event is the pellet's.
-        return HitGenerator(world, ref state, handle, Team.Red)
-               || HitGenerator(world, ref state, handle, Team.Blue);
+        return HitGenerator(world, ref state, handle, Team.Red, ref events)
+               || HitGenerator(world, ref state, handle, Team.Blue, ref events);
     }
 
     /// <summary>
@@ -2101,7 +2113,8 @@ public static class Projectiles
     /// moves nobody.
     /// </para>
     /// </remarks>
-    private static bool BubbleHitCharacter(ref WorldState state, ProjectileHandle handle, int slot)
+    private static bool BubbleHitCharacter(
+        ref WorldState state, ProjectileHandle handle, int slot, ref TickEvents events)
     {
         ref var bubble = ref state.Projectiles[handle.Index];
         ref var victim = ref state.Characters[slot];
@@ -2112,7 +2125,7 @@ public static class Projectiles
         if (victim.Team == bubble.Team || victim.Ubered || !Gml.Greater(victim.Hp, 0))
             return false;
 
-        DamageApi.Deal(ref victim, bubble.HitDamage);
+        DamageApi.Deal(ref events, slot, bubble.OwnerSlot, ref victim, bubble.HitDamage);
 
         if (victim.LastDamageDealer != bubble.OwnerSlot && victim.LastDamageDealer != slot)
         {

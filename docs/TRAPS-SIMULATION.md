@@ -2925,3 +2925,54 @@ recordings alone.
 ⚠️ **And the earlier confusion is worth keeping**: the recorded x moves 2940 →
 3050 in seven ticks, which reads as impossible for a walking soldier until you
 remember the wire's ×5. That is 22 px, not 110. **Divide before disbelieving.**
+
+### ✅ The damage accumulators, and why the parameters are required
+
+**2026-08-28**, `docs/ENV.md`'s first prerequisite — the half of
+`docs/BOTAI.md` item 7 that was never built. `TickEvents` carried kills, deaths,
+spawns and captures with attribution and **no per-tick damage amounts**.
+
+⚠️ **They cannot be reconstructed by diffing hp**, which is why item 7 says so:
+healing, a medic's beam, a cabinet, spawn invulnerability and a respawn all move
+hp without anybody dealing damage, and afterburn moves it without anybody acting
+that tick.
+
+**`TickEvents.DamageDealt` / `DamageTaken`**, per slot, cleared by
+`ClearOutputs`. Accumulated inside `DamageApi.Deal`, the one chokepoint every
+character's damage passes through.
+
+⚠️ **`Deal`'s new parameters are REQUIRED, and the convenience overload was
+deliberately not kept.** An overload without them would let a new damage site
+accumulate nothing and nobody notice — **a reward signal that is quietly
+incomplete is far harder to see than one that is obviously broken**, because a
+policy simply learns a slightly wrong game. Making the compiler ask "who dealt
+this?" is the design, and it is what found all eleven sites in one build.
+
+The rules, each gated by `DamageAccumulatorTests`:
+
+- **Credited at application time, following `LastDamageDealer` semantics** — so a
+  rocket in the air still credits a shooter who has since died, exactly as a kill
+  does.
+- ⚠️ **Self-damage is taken and never dealt.** A rocket jump must not pay. The
+  sharp case is one explosion that does both: 60 px from an enemy, the blast
+  deals to them *and* self-damages the shooter, and only the first half reaches
+  `DamageDealt`.
+- ⚠️ **Blocked damage accumulates nothing.** `Deal` returning false is Team
+  Deathmatch invulnerability. Note this is deliberately **not** the rule beside
+  it: the reference resets `timeUnscathed` even on a hit that did nothing.
+- ⚠️ **The dealer may be `Nobody` (255, never 0)** — afterburn whose lighter has
+  left. Then the damage is taken by somebody and dealt by no one. A defaulted
+  zero would credit the server's own reserved player.
+- **Sentries and generators are out of v0** and do not route through `Deal`
+  anyway. Damage a sentry's *turret* deals to a character is in, credited to the
+  sentry's **owner**.
+
+✅ **Re-measured across every fixture: nothing moved.** This is additive
+bookkeeping with no behaviour change, and the sweep says so rather than the
+argument.
+
+⚠️ **The unit tests pay for it with an argument they do not want.**
+`DiscardedEvents` is a `[ThreadStatic]` buffer for the 132 test call sites that
+drive a simulation entry point and do not care what it announced. A convenience
+overload in the simulation would have been tidier and would have put the hole
+straight back, because production code could reach it too.

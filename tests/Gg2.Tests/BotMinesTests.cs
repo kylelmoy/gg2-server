@@ -80,7 +80,7 @@ public sealed class BotMinesTests(ITestOutputHelper output)
     private static double DamageDealt(ScenarioWorld world, ProjectileHandle mine, int victim)
     {
         var before = world.State.Characters[victim].Hp;
-        Explosions.DetonateMine(world.Collision, ref world.State, mine);
+        Explosions.DetonateMine(world.Collision, ref world.State, mine, ref DiscardedEvents.Events);
         return before - world.State.Characters[victim].Hp;
     }
 

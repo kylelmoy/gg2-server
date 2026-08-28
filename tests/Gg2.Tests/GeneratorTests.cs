@@ -297,7 +297,7 @@ public sealed class GeneratorTests
 
         var farHp = state.Characters[3].Hp;
 
-        Generators.Destroy(world, ref state, Team.Red);
+        Generators.Destroy(world, ref state, Team.Red, ref DiscardedEvents.Events);
 
         Assert.True(state.Characters[1].Hp < 0);
         Assert.True(state.Characters[2].Hp < 0);
@@ -317,7 +317,7 @@ public sealed class GeneratorTests
         Put(ref state, 1, Team.Blue, generator.X + 60, generator.Y);
         Put(ref state, 2, Team.Blue, generator.X + 300, generator.Y);
 
-        Generators.Destroy(world, ref state, Team.Red);
+        Generators.Destroy(world, ref state, Team.Red, ref DiscardedEvents.Events);
 
         // Both pushed to the right, which is away from the generator.
         Assert.True(state.Characters[1].Motion.HSpeed > 0);
@@ -339,7 +339,7 @@ public sealed class GeneratorTests
 
         Put(ref state, 1, Team.Blue, generator.X + 60, generator.Y);
 
-        Generators.Destroy(world, ref state, Team.Red);
+        Generators.Destroy(world, ref state, Team.Red, ref DiscardedEvents.Events);
 
         Assert.Equal(CharacterState.Nobody, state.Characters[1].LastDamageDealer);
         Assert.Equal(DamageSource.GeneratorExplosion, state.Characters[1].LastDamageSource);
@@ -361,7 +361,7 @@ public sealed class GeneratorTests
         state.Characters[1].LastDamageDealer = 2;
         state.Characters[1].LastDamageSource = DamageSource.Rocketlauncher;
 
-        Generators.Destroy(world, ref state, Team.Red);
+        Generators.Destroy(world, ref state, Team.Red, ref DiscardedEvents.Events);
 
         Assert.Equal(2, state.Characters[1].LastDamageDealer);
         Assert.Equal(DamageSource.FinishedOffGib, state.Characters[1].LastDamageSource);
@@ -381,7 +381,7 @@ public sealed class GeneratorTests
         state.Characters[1].LastDamageDealer = 1;
         state.Characters[1].LastDamageSource = DamageSource.Rocketlauncher;
 
-        Generators.Destroy(world, ref state, Team.Red);
+        Generators.Destroy(world, ref state, Team.Red, ref DiscardedEvents.Events);
 
         Assert.Equal(CharacterState.Nobody, state.Characters[1].LastDamageDealer);
         Assert.Equal(DamageSource.GeneratorExplosion, state.Characters[1].LastDamageSource);
@@ -409,7 +409,7 @@ public sealed class GeneratorTests
 
         var rateBefore = state.Sentries[1].BuildRate;
 
-        Generators.Destroy(world, ref state, Team.Red);
+        Generators.Destroy(world, ref state, Team.Red, ref DiscardedEvents.Events);
 
         Assert.True(state.Sentries[1].Hp < 0);
         Assert.Equal(rateBefore, state.Sentries[1].BuildRate);
@@ -455,7 +455,7 @@ public sealed class GeneratorTests
 
         Assert.Equal(2, state.LiveProjectileCount);
 
-        Generators.Destroy(world, ref state, Team.Red);
+        Generators.Destroy(world, ref state, Team.Red, ref DiscardedEvents.Events);
 
         Assert.Equal(0, state.LiveProjectileCount);
     }
@@ -470,7 +470,7 @@ public sealed class GeneratorTests
         var generator = state.RedGenerator;
 
         Fire(ref state, ProjectileKind.Shot, Team.Blue, generator.X, generator.Y, hitDamage: 8);
-        Projectiles.Collide(world, ref state);
+        Projectiles.Collide(world, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(0, state.LiveProjectileCount);
         Assert.Equal(Generators.MaxHp - 4, state.RedGenerator.Hp);
@@ -485,7 +485,7 @@ public sealed class GeneratorTests
         var generator = state.RedGenerator;
 
         Fire(ref state, ProjectileKind.Shot, Team.Red, generator.X, generator.Y, hitDamage: 8);
-        Projectiles.Collide(world, ref state);
+        Projectiles.Collide(world, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(1, state.LiveProjectileCount);
         Assert.Equal(Generators.MaxHp, state.RedGenerator.Hp);
@@ -541,7 +541,7 @@ public sealed class GeneratorTests
         // nothing, which is the whole point of the case.
         Assert.False(world.PlaceFree(state.Projectiles[state.LiveProjectileSlot(0)].Box, state.BulletFilter));
 
-        Projectiles.Collide(world, ref state);
+        Projectiles.Collide(world, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(0, state.LiveProjectileCount);
         Assert.Equal(Generators.MaxHp - 4, state.RedGenerator.Hp);
@@ -563,7 +563,7 @@ public sealed class GeneratorTests
         state.Projectiles[handle.Index].Motion.SetComponents(4, -2);
         state.Weapons[1].Lobbed++;
 
-        Projectiles.Collide(world, ref state);
+        Projectiles.Collide(world, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(1, state.LiveProjectileCount);
         Assert.True(state.Projectiles[handle.Index].Stickied);
@@ -582,7 +582,7 @@ public sealed class GeneratorTests
         var generator = state.RedGenerator;
 
         Fire(ref state, ProjectileKind.Rocket, Team.Blue, generator.X, generator.Y, hitDamage: 25);
-        Projectiles.Collide(world, ref state);
+        Projectiles.Collide(world, ref state, ref DiscardedEvents.Events);
 
         Assert.Equal(0, state.LiveProjectileCount);
 
@@ -608,7 +608,7 @@ public sealed class GeneratorTests
         var box = Generators.BodyBox(generator);
         var handle = Fire(ref state, ProjectileKind.Rocket, Team.Blue, box.Right + 64, generator.Y, hitDamage: 25);
 
-        Explosions.Explode(world, ref state, handle, CharacterState.Nobody);
+        Explosions.Explode(world, ref state, handle, CharacterState.Nobody, ref DiscardedEvents.Events);
 
         Assert.True(state.RedGenerator.Hp < Generators.MaxHp);
         Assert.True(state.RedGenerator.Hp > Generators.MaxHp - 1);
@@ -646,7 +646,7 @@ public sealed class GeneratorTests
         state.Projectiles[handle.Index].Stickied = !flying;
         state.Weapons[1].Lobbed++;
 
-        Explosions.DetonateMine(world, ref state, handle);
+        Explosions.DetonateMine(world, ref state, handle, ref DiscardedEvents.Events);
 
         Assert.Equal(expectDamage, state.RedGenerator.Hp < Generators.MaxHp);
     }

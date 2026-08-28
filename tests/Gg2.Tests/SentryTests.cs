@@ -397,7 +397,7 @@ public sealed class SentryTests
         // missing shot means the wall test and not the alert pause.
         state.Sentries[1].NoticedTarget = false;
 
-        Sentries.TurretEndStep(world, ref state, 1);
+        Sentries.TurretEndStep(world, ref state, 1, ref DiscardedEvents.Events);
         Assert.Equal(100.0, state.Characters[2].Hp);
 
         // Clear: the same target up on the floor is hit at once.
@@ -406,7 +406,7 @@ public sealed class SentryTests
         Put(ref control, 2, PlayerClass.Scout, Team.Blue, OpenX + 300, OpenY);
         control.Sentries[1].NoticedTarget = false;
 
-        Sentries.TurretEndStep(world, ref control, 1);
+        Sentries.TurretEndStep(world, ref control, 1, ref DiscardedEvents.Events);
         Assert.Equal(92.0, control.Characters[2].Hp);
     }
 
@@ -426,7 +426,7 @@ public sealed class SentryTests
         Put(ref state, 3, PlayerClass.Scout, Team.Blue, OpenX + 100, OpenY);
         state.Sentries[1].NoticedTarget = false;
 
-        Sentries.TurretEndStep(world, ref state, 1);
+        Sentries.TurretEndStep(world, ref state, 1, ref DiscardedEvents.Events);
         Assert.Equal(100.0, state.Characters[3].Hp);
 
         // Without the blocker the same shot lands.
@@ -435,7 +435,7 @@ public sealed class SentryTests
         Put(ref control, 3, PlayerClass.Scout, Team.Blue, OpenX + 100, OpenY);
         control.Sentries[1].NoticedTarget = false;
 
-        Sentries.TurretEndStep(world, ref control, 1);
+        Sentries.TurretEndStep(world, ref control, 1, ref DiscardedEvents.Events);
         Assert.Equal(92.0, control.Characters[3].Hp);
     }
 
@@ -492,7 +492,7 @@ public sealed class SentryTests
         state.Sentries[1].NoticedTarget = false;
         state.Sentries[2].ReadyToShoot = false;
 
-        Sentries.TurretEndStep(world, ref state, 1);
+        Sentries.TurretEndStep(world, ref state, 1, ref DiscardedEvents.Events);
 
         Assert.Equal(92.0, state.Sentries[2].Hp);
         Assert.Equal(SentryState.DamagedBuildRate, state.Sentries[2].BuildRate);
@@ -619,7 +619,7 @@ public sealed class SentryTests
         Assert.Equal(0, stuck.Motion.Speed);
         Assert.Equal(100.0, state.Sentries[1].Hp);
 
-        Explosions.DetonateMine(world, ref state, handle);
+        Explosions.DetonateMine(world, ref state, handle, ref DiscardedEvents.Events);
 
         // Zero distance, zero falloff: 45 * 3/2.
         Assert.Equal(100.0 - 67.5, state.Sentries[1].Hp);

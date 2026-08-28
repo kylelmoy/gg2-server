@@ -316,9 +316,17 @@ public sealed class TeamDeathmatchTests
         victim.TimeUnscathed = 200;
         var hp = victim.Hp;
 
-        Assert.False(DamageApi.Deal(ref victim, 50));
+        var events = default(TickEvents);
+        Assert.False(DamageApi.Deal(ref events, 1, 2, ref victim, 50));
 
         Assert.Equal(hp, victim.Hp);
+
+        // ⚠️ Blocked damage accumulates NOTHING on either side — `docs/ENV.md`'s
+        // rule, and deliberately not the same rule as the line below it. The
+        // reference resets `timeUnscathed` on a hit that did nothing; a reward
+        // signal must not count an amount that never landed.
+        Assert.Equal(0, events.DamageTaken[1]);
+        Assert.Equal(0, events.DamageDealt[2]);
 
         // The caller's own line, which runs whatever Deal answered.
         victim.TimeUnscathed = 0;
