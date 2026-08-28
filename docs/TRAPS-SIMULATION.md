@@ -2472,3 +2472,83 @@ gates the platform **holding a character up** (723 → 116 when disabled), which
 is the opposite direction. Pinned by
 `Phase2FixtureTests.ThePortPutsAPlayerBackOnAPlatformTheyDroppedThrough`, which
 **fails when fixed**.
+
+### The first two-human playtest: what it proved, and three reports from it
+
+✅ **2026-08-27, `koth_corinth`, two humans, ~12 minutes.** The first exercise of
+`--record` on a real multi-client game. Two segments, **both framed cleanly to
+the last byte** (13,811 and 9,522 messages), and rich where every scripted
+recording is thin: 22 deaths, 20 class changes, 185 weapon fires, a sentry built
+*and* destroyed, a sniper zooming, the hill contested, chat.
+
+⚠️ **The deadline is still NOT discharged.** `docs/BOTAI.md` item 3 wants the
+*first public games* — strangers, unrepeatable. Two arranged players is a
+rehearsal, and rehearsal is what it was for.
+
+#### ⚠️ A kill loses the round in progress
+
+`MatchRecorder` writes to `<name>.trace.part` and only prepends a header on
+`Close()`, because a trace is a header in front of one stream and the header
+needs the length. A clean stop finalises it — the host cancels on **Ctrl+C**,
+`Run` returns, `Dispose` → `Close`. A `taskkill /F`, a crash or a power cut does
+not, and the bytes are then unreadable.
+
+⚠️ **On a public server the segment in progress is the round in progress**, and
+the events most likely to end a server uncleanly are the events most worth
+having recorded. `gg2-parity recover <file.trace.part>` now puts the header on
+afterwards; proven on the real 4,096-byte orphan this playtest produced, which
+came back as 1,017 whole messages. **Stop a recording server with Ctrl+C.**
+
+⚠️ **A recovered `.part` ends mid-message** — the reader stops with a precise
+byte offset and the last whole message before it is all there is. That is the
+ceiling on recovery, not a bug.
+
+#### The three things the players reported
+
+⬅️ **1. Rubberbanding / hitching.** ⚠️ **The most serious of the three**, because
+it is the failure mode CLAUDE.md says has no test: "the client re-simulates the
+physics itself between position updates … there is no test that fails when
+trajectories drift — the client just snaps."
+
+**Measured, and the pacing is a real suspect.** `GameServer.Run` paces with
+`cancellation.WaitHandle.WaitOne(wait)`. Timing 200 ticks of exactly that loop
+against a 33.333 ms target gives a **bimodal** distribution — nothing between
+the modes:
+
+| bucket | ticks |
+|---|---|
+| 30–34 ms | 166 |
+| 45–49 ms | **29** |
+
+So about **15% of ticks land ~13 ms late**, which is 40% of a tick, and the mean
+(33.29 ms) hides it completely. That is the Windows timer quantum (~15.6 ms)
+showing through, and it is the right *shape* for perceived hitching.
+
+⚠️ **Not proven to be the cause, and two honest caveats.** The measurement ran
+inside a test host, and a running GM8 client raises the system-wide timer
+resolution for every process — so the server may pace better when a client is on
+the same machine than this measurement suggests. And **the obvious alternative
+is no better**: a `Thread.Sleep(1)` plus spin loop measured 31 ticks over 40 ms,
+the same bimodality, because `Sleep(1)` has the same quantum. A real fix means
+timer resolution (`timeBeginPeriod`) or a busy spin, and neither should be
+written without measuring the server itself under a connected client.
+
+⬅️ **2. The heavy's sandvich does nothing — because it is not implemented.**
+Confirmed in the source, which says so in four places: `PlayerCommand.cs`
+("`serverEatSandvich` is absent because the port has no sandvich"),
+`CharacterPhysics.cs`, `SpawnRooms.cs` (twice) and `Weapons.cs`.
+
+⚠️ **This contradicts two claims in this repo** and both were wrong before the
+playtest: CLAUDE.md's "✅ Every class is implemented", and the handoff's
+"nothing else in the port is known-missing". A class being playable is not a
+class being complete. **A gap noted only in a code comment is a gap nobody is
+tracking.**
+
+⬅️ **3. A rocket killed a scout and carried on to explode on the stairs beyond
+it.** Not yet diagnosed. ⚠️ **It is in the code this session changed most** —
+`RocketHitCharacter`, `BackOutOfCharacter` and `ProjectileMask` — so check
+against a build from before `0a4e9c3` before assuming it is long-standing.
+⚠️ **And it may be a client-side artefact**: the same session reported
+rubberbanding, and a mispredicted rocket is drawn flying on by a client that has
+not yet been corrected. The recording is on disk, so this is answerable from the
+trace rather than from memory.
