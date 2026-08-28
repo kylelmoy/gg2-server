@@ -2598,11 +2598,40 @@ identical x — 3077.50 and 515.50 — so the terrain traversed was the same.**
 
 | leg | mean unexplained Δx on correction frames | max Δx | |
 |---|---|---|---|
-| hop right, reference | 0.0734 px | **0.33 px** | |
-| hop right, this port | **0.501 px** | **23.10 px** | 6.8× / 70× |
-| walk left, reference | 0.0501 px | **0.27 px** | |
+| hop right, reference | 0.1134 px | 4.24 px | |
+| hop right, this port | **0.2068 px** | **19.30 px** | 1.8× / 4.6× |
+| walk left, reference | 0.0501 px | 0.27 px | |
 | walk left, this port | **0.1737 px** | **4.03 px** | 3.5× / 15× |
-| either, non-update floor | 0.0003–0.024 px | 0.10–5.32 px | the control |
+| either, non-update floor | 0.0186–0.0202 px | ~5 px | the control |
+
+⚠️⚠️ **The first version of this table was WRONG in two ways, and both are worth
+more than the table.** It read 0.501 px / 23.10 px for the port's hop leg against
+0.0734 / 0.33 for the reference — 6.8× and **70×**. Neither number survived.
+
+- ⚠️ **The port's leg had a human on the keyboard.** The user was firing a
+  rocket launcher on the very client being driven, and said so; the trace proves
+  it — **first ATTACK at tick 3381**, inside the measurement window, and the
+  driver's injected mask never contains bit 0x10. Rocket jumps in the middle of
+  a "constant input" leg inflated the mean by **2.4×**.
+- ⚠️ **And the reference's own maximum is not stable run to run**: the same
+  reference hop, same driver, same everything, gave **0.33 px** once and
+  **4.24 px** the next time. A ratio built on one run's maximum was never sound
+  in the first place.
+
+✅ **How to not repeat it.** The trace records every player's keys every tick, so
+**a live measurement can be audited afterwards from its own recording** — count
+ATTACK ticks and distinct key masks inside the window; a driven leg is one
+constant mask and zero attacks. That check is cheap, it is what caught this, and
+it should run before any live measurement is quoted. The port's own walk-left
+leg passes it: mask 64 held for 316 s, **zero** attack ticks.
+
+⚠️ **The conclusion survives; the magnitude and the pointer do not.** The port
+does drift more than the reference on both legs, with the non-update floor
+identical (0.0186 vs 0.0202) as a control. But it is **1.8–3.5× on the mean**,
+not 6.8×, and **the claim that the error is worst airborne is withdrawn** — on
+clean data the *walking* leg has the larger ratio (3.5× / 15×) than the hopping
+one (1.8× / 4.6×). Anyone told to "look at the vertical branches first" was being
+sent there by contaminated data.
 
 ⚠️ **Quantisation is ruled out by the reference's own column.** Position goes on
 the wire as `round(x*5)`, so a correction of up to 0.1 px is inherent — and the
@@ -2623,10 +2652,10 @@ watches. The harness and this measurement are not redundant — a fixture's exac
 window ending is the same divergence seen from the other side.
 
 ⚠️ **Do not read this as "the physics is wrong everywhere".** The non-update
-floor says the client and the port agree to a thousandth of a pixel while nobody
-is being corrected. What diverges is small, and the 70× on the jumping leg
-against 15× on the walking one says **the vertical branches are where to look
-first** — the horizontal error is largest when the character is airborne.
+floor says the client and the port agree to a fiftieth of a pixel while nobody is
+being corrected. What diverges is small. **There is no reliable pointer to which
+branch yet** — see the withdrawal above — and the honest next step is more
+measurement, on more than one leg each, rather than a hunt aimed by one run.
 
 **How to repeat it**, in full, is `.claude/notes/` at the time and the recipe
 above; the whole run is four `gg2_eval` calls and two waits per server.
