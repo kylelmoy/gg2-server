@@ -210,6 +210,13 @@ internal static class Program
                 // commands against a live game, which is the same reason the GM8
                 // bridge is off by default. A port of 0 asks the OS for a free
                 // one and the server logs which it got.
+                // Pacing telemetry. Safe with clients connected — unlike the
+                // two switches around it, it changes nothing the simulation can
+                // see.
+                case "--tick-stats":
+                    options.TickStats = true;
+                    break;
+
                 case "--control-port":
                     options.ControlPort = RequireInt(name, value);
                     options.ControlPortEnabled = true;
@@ -279,6 +286,8 @@ internal static class Program
           --control-port <n>
                             open the loopback control port (default: off;
                             0 asks the OS for a free port)
+          --tick-stats      log a histogram of tick intervals every 30s and at
+                            shutdown; safe with clients connected
 
         The maps ship inside the reference Game Maker project, so --maps (or
         GG2_REFERENCE) has to point at a Gang-Garrison-2 checkout.

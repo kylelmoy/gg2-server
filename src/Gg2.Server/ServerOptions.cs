@@ -168,6 +168,17 @@ public sealed class ServerOptions
     /// </remarks>
     public bool ControlPortEnabled { get; set; }
 
+    /// <summary>
+    /// Logs a histogram of tick intervals every 30 seconds and at shutdown.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Pacing only — it cannot touch the simulation</b>, so unlike the
+    /// other switches this one is safe on a server with people on it, which is
+    /// the only place the interesting measurement exists. Off by default
+    /// because a healthy server's report is a line of noise every 30 seconds.
+    /// </remarks>
+    public bool TickStats { get; set; }
+
     /// <summary>The <c>[Bots]</c> section. Off by default, as in the reference.</summary>
     /// <remarks>
     /// ⚠️ <see cref="BotPopulationOptions.Default"/>, never <c>new()</c> — see the

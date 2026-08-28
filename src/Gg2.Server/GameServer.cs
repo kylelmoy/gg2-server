@@ -560,8 +560,31 @@ public sealed class GameServer : IDisposable
         var nextTick = TimeSpan.Zero;
         var pacing = TickInterval;
 
+        // ⚠️ Measured with clients on it, not idle. The 15% figure above came
+        // from an empty server, which is the clean measurement but not the one
+        // a player experienced; --tick-stats is here so the same distribution
+        // can be read back out of a real game.
+        var stats = _options.TickStats ? new TickPacing(TickInterval.TotalMilliseconds) : null;
+        var lastStart = clock.Elapsed;
+
         while (!cancellation.IsCancellationRequested)
         {
+            if (stats is not null)
+            {
+                var start = clock.Elapsed;
+
+                // The first interval is measured from the loop's start rather
+                // than skipped, so the count matches the tick count.
+                stats.Record((start - lastStart).TotalMilliseconds);
+                lastStart = start;
+
+                // Every 30 seconds of play, so a hitch can be placed in time
+                // against what the players were doing rather than only summed
+                // at the end — and so a crash still leaves the evidence.
+                if (stats.Count % (GameConstants.TickRate * 30) == 0)
+                    _log.Info(stats.Report());
+            }
+
             Tick();
 
             // ⚠️ Re-read every tick rather than captured before the loop: the
@@ -608,6 +631,9 @@ public sealed class GameServer : IDisposable
                 nextTick = clock.Elapsed;
             }
         }
+
+        if (stats is not null)
+            _log.Info(stats.Report());
     }
 
     /// <summary>

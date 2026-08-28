@@ -2560,3 +2560,73 @@ against a build from before `0a4e9c3` before assuming it is long-standing.
 rubberbanding, and a mispredicted rocket is drawn flying on by a client that has
 not yet been corrected. The recording is on disk, so this is answerable from the
 trace rather than from memory.
+
+### ✅ ANSWERED: the rubberbanding is physics drift, and it is ours
+
+**Measured 2026-08-28, against the reference server, with the same client.** The
+pacing fix above removed one cause and explicitly did not close report 1. This
+closes it, and the answer is the serious one.
+
+**The instrument.** `Character.events/User Event 13.xml` **hard-assigns** `x`,
+`y`, `hspeed` and `vspeed` from the wire on every `QUICK_UPDATE` — no smoothing,
+no reconciliation — and then sets `xprevious = x`, erasing the evidence. So a
+desync *is* that assignment jumping, and it is visible from inside a stock client
+with no modification to the reference tree: a `gg2_watch` expression samples the
+character once a frame and compares each frame's position against the previous
+frame's `x + hspeed`.
+
+⚠️ **The residual has to be split into two populations, not thresholded.** A
+crude prediction model has a bias — gravity alone leaves ~0.7 px a frame in `y` —
+and the bias lands on update and non-update frames alike, so **the non-update
+population is the noise floor and the comparison is the measurement**. Absolute
+thresholds ("corrections over 4 px") count model error as desync; the first run
+here did that and read 102 snaps that were mostly jump impulses.
+
+✅ **Three checks say the instrument works before any number is believed:**
+
+- **The update frames are 1 in 7.** Measured `updRatio` 0.1426 and 0.1422
+  against the protocol's exact 0.1429, which is what proves `global.updateType`
+  is being sampled *after* the network read rather than a frame stale.
+- **A motionless character reads exactly 0.00 on both populations**, so the
+  `QUICK_UPDATE` assignment introduces no error of its own.
+- **The non-update floor is 0.0003–0.024 px**, so the model accounts for the
+  client's own physics to a fraction of a pixel and anything above it is signal.
+
+**The comparison.** Same map (`koth_corinth`), same class, same constant input
+mask, same client build; only the server differs. **Both runs ended at
+identical x — 3077.50 and 515.50 — so the terrain traversed was the same.**
+
+| leg | mean unexplained Δx on correction frames | max Δx | |
+|---|---|---|---|
+| hop right, reference | 0.0734 px | **0.33 px** | |
+| hop right, this port | **0.501 px** | **23.10 px** | 6.8× / 70× |
+| walk left, reference | 0.0501 px | **0.27 px** | |
+| walk left, this port | **0.1737 px** | **4.03 px** | 3.5× / 15× |
+| either, non-update floor | 0.0003–0.024 px | 0.10–5.32 px | the control |
+
+⚠️ **Quantisation is ruled out by the reference's own column.** Position goes on
+the wire as `round(x*5)`, so a correction of up to 0.1 px is inherent — and the
+reference never exceeds **0.33 px**, which is that bound plus accumulation. This
+port reaches **23 px**. The two servers quantise identically; only one drifts.
+
+⚠️ **Input timing is ruled out by the client's own code.** The client reads
+`keyState` off the wire *every tick*, on the `INPUTSTATE` tier too — so between
+position updates it is simulating with **the server's inputs, not its own**. With
+input identical by construction, seven ticks of divergence can only be physics.
+The constant-mask leg rules it out a second way: a held key is the same value
+every frame, so no arrival offset can survive to explain 0.1737 px.
+
+⚠️ **This is the failure mode CLAUDE.md says has no test, and it had none.** The
+parity harness proves the port matches the reference *server* on recorded traces;
+it says nothing about the *client's* prediction, and the client is what a player
+watches. The harness and this measurement are not redundant — a fixture's exact
+window ending is the same divergence seen from the other side.
+
+⚠️ **Do not read this as "the physics is wrong everywhere".** The non-update
+floor says the client and the port agree to a thousandth of a pixel while nobody
+is being corrected. What diverges is small, and the 70× on the jumping leg
+against 15× on the walking one says **the vertical branches are where to look
+first** — the horizontal error is largest when the character is airborne.
+
+**How to repeat it**, in full, is `.claude/notes/` at the time and the recipe
+above; the whole run is four `gg2_eval` calls and two waits per server.
