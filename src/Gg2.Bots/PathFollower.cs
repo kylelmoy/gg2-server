@@ -1253,7 +1253,15 @@ public sealed class PathFollower
         // counting, so this cannot become a bot waiting for ever, and the stuck
         // detector is not fooled — it fires only when keys are pressed and nothing
         // moves, and braking to a stop presses nothing once the bot is already still.
-        else if (isRocket && !rocketReady)
+        // ⚠️ AND a sticky jump whose launcher is cold, which this branch was
+        // rocket-only for and should never have been. A demoman arriving at a
+        // takeoff just after firing — or freshly spawned, where the refire starts
+        // cold — has exactly the rocket's problem: the manoeuvre is a second away
+        // and the right answer is to stand on the takeoff column and wait for it.
+        // Falling through to the run-up instead walks the bot off the column and
+        // back, burning the takeoff patience budget until the edge is blacklisted,
+        // which is a refusal with no bad arc anywhere in it.
+        else if ((isRocket && !rocketReady) || (isSticky && !stickyReady))
         {
             // ⚠️ BRAKING, where the reference writes `targetCol = takeoffCol`, and
             // the two are the same behaviour in two codebases whose default

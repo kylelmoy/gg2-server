@@ -993,6 +993,54 @@ public sealed class PathFollowerTests
     }
 
     /// <summary>
+    /// ⚠️ <b>A cold launcher makes a sticky jump WAIT on the takeoff column</b>,
+    /// exactly as it does a rocket jump.
+    /// </summary>
+    /// <remarks>
+    /// The waiting branch was <c>isRocket</c>-only, which is a policy the sticky
+    /// jump needs just as badly: a demoman arriving at a takeoff just after
+    /// firing — or freshly spawned, where the refire starts cold — falls through
+    /// to the run-up instead, walks off the column and back, and burns the
+    /// takeoff patience budget until the edge is blacklisted. That is a refusal
+    /// with no bad arc anywhere in it.
+    /// <para>
+    /// ⚠️ <b>Fixing it did not change any real flight</b>, which is recorded
+    /// rather than hidden: it is a correct policy and it was not the thing
+    /// refusing `gg2-nav-gen`'s edges. See docs/TRAPS-BOTS.md.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void AColdLauncherMakesAStickyJumpWaitRatherThanRunUp()
+    {
+        var graph = Build(
+            [Node(30, 0, 9), Node(10, 20, 29)],
+            [Edge(0, 1, 200, NavEdgeType.StickyJump, takeoff: 8, bucket: 5, ticks: 20)]);
+
+        var follower = new PathFollower(graph);
+        var state = new BotPathState();
+
+        follower.SetGoal(state, NavGraph.ColumnWorldX(25), graph.StandY(1));
+
+        var at = Stand(graph, 0, 8);
+        var able = new NavQuery(Team.Red, CanStickyJump: true);
+        var cold = new WeaponState { ReadyToShoot = false, AmmoCount = 3 };
+
+        for (var tick = 0; tick < 10; tick++)
+        {
+            var keys = follower.Step(
+                state, At(at.X, at.Y, playerClass: PlayerClass.Demoman), in cold, tick, able);
+
+            Assert.False(state.MineFire, "a cold launcher placed a mine");
+            Assert.True((keys & PlayerKeys.Jump) == 0, "it jumped with a cold launcher");
+
+            // The point of the branch: it stands still rather than running up.
+            Assert.True(
+                (keys & (PlayerKeys.Left | PlayerKeys.Right)) == 0,
+                $"tick {tick} ran up instead of waiting for the launcher");
+        }
+    }
+
+    /// <summary>
     /// ⚠️ <b>A sticky-jump edge is refused to anybody who cannot fly one</b>, and
     /// the follower counts the ticks rather than steering it.
     /// </summary>

@@ -2255,17 +2255,36 @@ sixteen failing edges, and **all three match exactly**:
 places** — the deliberate agreement described above is real and measured, not
 merely intended.
 
-⬅️ **What is left**: the gate would open, so something *earlier* in `SteerJump`
-prevents it being reached, or the route the follower plans does not contain the
-edge the harness thinks it does. ⚠️ The prime suspect is the harness rather than
-the arm: the goal is set to the **midpoint of the landing run**, and `SetGoal`
-snaps a goal to a node — if it snaps to a neighbour, the follower is correctly
-flying a different route and the "refusal" is an artefact of the test. **Check
-that before touching the follower.**
+**The goal-snap suspect is also dead.** `SnapObjective` on the landing run's
+midpoint returns the intended node on all six. So the harness's start position,
+its goal, the route A* offers, the need, the reach and the gate arithmetic have
+each been checked and each is correct.
+
+⬅️ **WHERE IT ACTUALLY STANDS.** Six hypotheses eliminated by measurement, two
+real bugs found and fixed on the way (the launcher cooldown, and the
+rocket-only wait branch), and **the edges are still refused with zero sticky
+jumps taken**. `UnsupportedEdgeTicks` is zero, so the dispatch switch sees the
+type; the blacklist grows, so the follower is abandoning the edge through the
+off-route machinery rather than through the sticky arm's own abandon.
+
+⚠️ **The next question is the one nobody has asked yet: is `SteerJump` called at
+all for these edges?** Everything checked so far assumes it is, and the evidence
+is only that the `default` arm is not hit — which is also true if the route's
+first hop is a Walk and the sticky edge is never the current edge. **Instrument
+which edge the follower believes it is on, tick by tick, before checking anything
+else.** That distinguishes "the arm refuses" from "the arm is never asked", and
+every measurement above is consistent with the second.
 
 ⚠️ **Do not let `gg2-nav-gen` re-veto on this.** It already made one honest change
 off the back of these flights (below); a second one aimed at a term that has been
-measured correct would be fixing the wrong side. `gg2-nav-gen` emits them only behind `--sticky`, into a cache the game
+measured correct would be fixing the wrong side. Its cache is standing at 4,132
+edges with all sixteen refusals still present, so the isolation work transfers
+whenever this is picked up.
+
+⚠️ **And the second fix changed no flight.** The rocket-only wait branch was a
+real bug — a demoman with a cold launcher ran up and back instead of waiting —
+but fixing it moved nothing here. Recorded because a fix that changes no symptom
+is exactly the kind that gets quietly credited with one later. `gg2-nav-gen` emits them only behind `--sticky`, into a cache the game
 never reads, because `navFindPath` has no `canSticky` and would route every class
 over them.
 
