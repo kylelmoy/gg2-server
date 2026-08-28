@@ -2237,11 +2237,58 @@ irrelevant once the mine is on the ground.
 `TheCountdownSurvivesTheLauncherGoingColdAfterThePlacement` hands the follower a
 weapon that goes cold the moment the mine is placed, and goes red without it.
 
-⚠️ **Still open after the fix**: the arm now fires on real edges but most arcs are
-refused at the takeoff gate — `along >= 0 && along <= needVx + tol && reach + tol
->= need` — with `UnsupportedEdgeTicks` at zero, so the dispatch is right and the
-*reach* is the suspect. **Which term fails has not been isolated**, and that is
-exactly what distinguishes the generator's run-up assumption from the arc itself.
-Failing edges are recorded with map, from, to and takeoff. `gg2-nav-gen` emits them only behind `--sticky`, into a cache the game
+#### ⚠️ Still open — but it is NOT the reach and NOT the need
+
+The arm fires on real edges after the fix, and most arcs are still refused.
+Three things have been checked against `gg2-nav-gen`'s own numbers on six of the
+sixteen failing edges, and **all three match exactly**:
+
+| checked | result |
+|---|---|
+| `StickyModel.Reach` vs its `flyDistanceRocket` at v0 = 0 | **identical** — 191.10 vs 191.1, 31.2, 11.7, 12.4, 37.7 |
+| `need` (near edge of the landing run) vs its recomputation | **identical** on all six — 192, 18, 12, 12, 12, 36 |
+| the takeoff-gate arithmetic `reach + JumpReachTol >= need` | **passes on all six** |
+| the flight harness's start position | resolves to the from-node every time; the takeoff column is inside the from-run |
+
+⚠️ **So the two obvious suspects are both eliminated, and the delegation to
+`RocketModel.Reach` is confirmed to give the generator's number to two decimal
+places** — the deliberate agreement described above is real and measured, not
+merely intended.
+
+⬅️ **What is left**: the gate would open, so something *earlier* in `SteerJump`
+prevents it being reached, or the route the follower plans does not contain the
+edge the harness thinks it does. ⚠️ The prime suspect is the harness rather than
+the arm: the goal is set to the **midpoint of the landing run**, and `SetGoal`
+snaps a goal to a node — if it snaps to a neighbour, the follower is correctly
+flying a different route and the "refusal" is an artefact of the test. **Check
+that before touching the follower.**
+
+⚠️ **Do not let `gg2-nav-gen` re-veto on this.** It already made one honest change
+off the back of these flights (below); a second one aimed at a term that has been
+measured correct would be fixing the wrong side. `gg2-nav-gen` emits them only behind `--sticky`, into a cache the game
 never reads, because `navFindPath` has no `canSticky` and would route every class
 over them.
+
+#### ✅ What the flights did buy: 333 arcs that leaned on a run-up that cannot exist
+
+Independently of the open question above, the flights found a real bug in the
+generator, and the route to it is the interesting part: **`gg2-nav-gen` went
+looking for reasons my refusals might be legitimate, and found one that applied
+to different edges.**
+
+The arm **stands still on the mine for the whole setup**, so a walked-in run-up
+is speed the follower can never have at takeoff — but the fan's veto credited one,
+copied from the rocket fan where no stand-still exists. Auditing all 4,285 edges:
+**333 (7.8%) leaned on that credit** and fail a standing-start reach test. None of
+the sixteen refusals is among them, so it explains nothing about them — but every
+one of the 333 was a guaranteed blacklist for this port.
+
+The veto is now `v0 = 0`, the cache is 4,132 edges, and **access is unchanged at
+1,121 node-openings** — the removed arcs were shortcuts, not access, measured
+rather than assumed.
+
+⚠️ **The mirror of this repo's fixture lesson.** Here a fixture that could not go
+cold was a test that could not fail; there a run-up credit copied between fans was
+an assumption **every offline checker shared**, so no check could catch it. Both
+are the same shape: the thing that would have failed was not representable in the
+apparatus.
