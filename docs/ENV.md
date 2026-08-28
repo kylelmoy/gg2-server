@@ -193,3 +193,48 @@ reaction-delay model (phase 5 — only its observation field exists).
 |---|---|---|---|
 | Decision steps/sec, batch 1 | — | — | at exit |
 | Decision steps/sec, batch 64 | — | — | at exit |
+
+## Build log
+
+### ✅ Step 2 — `DuelEnv` and `ActionDecoder` (2026-08-28)
+
+`src/Gg2.Env`, referencing `Gg2.Bots` for `ScenarioWorld` and **not**
+`Gg2.Server`: an env is not a game server, and the seam's whole claim is that a
+policy can be stepped without a socket.
+
+**What landed**, gated by `ActionDecoderTests` (8) and `DuelEnvTests` (12):
+
+- `EnvAction` — the five heads as indices, so "left and right at once" is not
+  expressible. The reference cancels that case to "not controlling" anyway
+  (`Begin Step.xml:249`), and letting a policy spend probability mass on it
+  teaches it nothing.
+- `ActionDecoder` — jump on the first tick of a decision only; the mask built
+  fresh every tick; the turn applied once per **decision**; the angle through
+  `PlayerInput.FromAim` so it lands on the wire's 65,536 steps.
+- `DuelEnv` — reset, step with action repeat, termination on death or the
+  decision cap, and a raw-bytes snapshot that carries the decoder's aim.
+
+⚠️ **The cap counts DECISIONS, the repeat counts TICKS.** A cap in ticks would
+silently change episode length when the repeat changed, so a trainer comparing
+two repeat settings would be comparing two different episode budgets.
+
+⚠️ **The turn is applied once per decision, not once per tick.** Repeating it
+across a repeat of k makes the effective turn-rate cap k times larger and
+quietly undoes the honesty property the cap exists for — the policy could spin
+four times faster purely because the trainer chose a longer repeat.
+
+⚠️ **Damage is summed across the repeat's ticks.** `TickEvents` is cleared every
+tick, so reading it after the loop reports the last tick's damage and drops the
+rest — at a repeat of 4 that is three quarters of the signal, lost in a way that
+*still trains*.
+
+⚠️ **Red is slot 1 and blue is slot 2, not 0 and 1.** Slot 0 is the server's own
+reserved player and always exists; `ScenarioWorld` starts its counter at 1 for
+the same reason a headless server does. The first draft of the test asserted 0
+and was asserting the one thing CLAUDE.md says never to assume.
+
+⚠️ **The seed is `uint`, not `ulong`.** GML's generator has a 32-bit seed;
+accepting 64 would throw away half of whatever a trainer sent without saying so.
+
+**Not done in this step**, and each is its own step: the observation writer, the
+stamp bump, `EnvBatch`, and the socket host.
