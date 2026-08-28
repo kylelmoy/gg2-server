@@ -333,4 +333,194 @@ public sealed class SpriteBoxSampleTests
         Assert.Equal(-61, engine.Flipped.Left);
         Assert.Equal(0, engine.Flipped.Right);
     }
+
+    /// <summary>
+    /// ✅ <b>The four dropdown platforms the game actually places, against the
+    /// boxes the engine reports for them — and every one is SCALED.</b>
+    /// </summary>
+    /// <remarks>
+    /// <see cref="TheDropdownPlatformsBoxIsTheOneTheEngineReports"/> measured the
+    /// sprite and then checked the port at <b>scale 1</b>, which is the one case
+    /// that never occurs: all four dropdown platforms on all 22 shipped maps are
+    /// on <c>tdm_mantic</c>, and their x scales are <b>1.6, 0.5, 0.6 and
+    /// 1.2</b>. So the assertion that mattered — that
+    /// <c>Right = round(x + 60*xscale) - 1</c> is what the engine does at a
+    /// <em>fractional</em> scale — was never made.
+    /// <para>
+    /// ⚠️ <b>All four scales agree under rounding and truncation, so this test
+    /// does NOT gate <c>FromEntity</c>'s rounding.</b> A first draft of this
+    /// remark claimed 0.6 would be a pixel short if the port truncated; that is
+    /// wrong — <c>60 * 0.6</c> lands on exactly 36.0 in <c>double</c>, and 1.6,
+    /// 0.5 and 1.2 land on integers too. Measured live 2026-08-28 against real
+    /// <c>DropdownPlatform</c> instances, which is also how the claim was caught.
+    /// <b>The rounding is observable on the setup gates instead</b> — see
+    /// <see cref="TheSevenSetupGatesThatDistinguishRoundingFromTruncationMatchTheEngine"/>.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>And the mask fills the scaled box</b>, which is a separate question
+    /// from the box and the one the whole rotated-mask episode was about:
+    /// <c>collision_point</c> at every column reports <b>36 of 36</b> hits at
+    /// scale 0.6 and <b>96 of 96</b> at scale 1.6, contiguous, with nothing
+    /// outside. <c>sprite44.xml</c> declares <c>&lt;shape&gt;RECTANGLE&lt;/shape&gt;</c>
+    /// with <c>mode="FULL"</c>, and it means it.
+    /// </para>
+    /// <para>
+    /// This goes through <see cref="LevelMap"/> rather than a synthetic entity,
+    /// so it gates the real path: map bytes, entity, rectangle.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void TheFourDropdownPlatformsTheGameActuallyPlacesMatchTheEngine()
+    {
+        var map = LevelMap.FromPng("tdm_mantic", ReferenceTree.ReadMap("tdm_mantic"));
+
+        var platforms = new List<SolidRect>();
+
+        foreach (var entity in map.Entities)
+            if (entity.Type == EntityTypes.DropdownPlatform && ColliderSprites.Of(entity) is { } rect)
+                platforms.Add(rect);
+
+        // Every dropdown platform in the game is on this map. If that stops
+        // being true the rows below are no longer the whole population, and the
+        // scaled cases may have moved somewhere ungated.
+        Assert.Equal(4, platforms.Count);
+
+        // x, xscale, and the engine's bbox_left..bbox_right, measured live
+        // 2026-08-28 by creating each instance and reading its bounding box.
+        var expected = new (int X, double XScale, int Left, int Right)[]
+        {
+            (1164, 1.6, 1164, 1259),
+            (1074, 0.5, 1074, 1103),
+            (1590, 0.6, 1590, 1625),
+            (2622, 1.2, 2622, 2693),
+        };
+
+        foreach (var (x, xScale, left, right) in expected)
+        {
+            var rect = platforms.Single(p => p.Left == left);
+
+            Assert.Equal(SolidKind.DropdownPlatform, rect.Kind);
+            Assert.Equal(x, rect.Left);
+            Assert.Equal(right, rect.Right);
+            Assert.Equal(xScale, rect.XScale, 9);
+
+            // yscale is 1 on all four, so the height is the unscaled six.
+            Assert.Equal(rect.Top + 5, rect.Bottom);
+        }
+    }
+
+    /// <summary>
+    /// ✅ <b>The seven collider rectangles in the whole game whose edge depends on
+    /// <c>FromEntity</c> ROUNDING rather than truncating — and the engine rounds.</b>
+    /// </summary>
+    /// <remarks>
+    /// <c>SolidRect.FromEntity</c> computes
+    /// <c>Right = RoundPosition(x + width * xScale) - 1</c>. ⚠️ <b>Replacing that
+    /// round with a truncation passed all 2,185 tests</b> when it was tried on
+    /// 2026-08-28 — including the dropdown-platform test above, whose four real
+    /// scales all land on exact integers. The rounding was ungated.
+    /// <para>
+    /// Scanned across all 22 shipped maps: <b>7 of 128 collider rectangles differ
+    /// between rounding and truncating</b>, and every one of them is a
+    /// <c>ControlPointSetupGate</c> on <c>cp_dirtbowl</c> or <c>ctf_avanti</c>.
+    /// Those are the solids that hold players in spawn during setup, so a
+    /// one-pixel edge here is wire-visible geometry, not decoration.
+    /// </para>
+    /// <para>
+    /// Each row's <c>Right</c>/<c>Bottom</c> was measured live 2026-08-28 by
+    /// creating a <c>ControlPointSetupGate</c> at that position and scale and
+    /// reading <c>bbox_right</c>/<c>bbox_bottom</c>. ⚠️ <b>The scales were sent as
+    /// integer ratios</b> (<c>56/100</c>, not <c>0.56</c>): GM8's parser is a ULP
+    /// off on some decimal literals, which would have measured a neighbouring
+    /// rectangle and blamed the port.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Why the collision oracle missed them</b> is worth keeping: it
+    /// enumerates what is <em>solid</em>, and a setup gate is only solid during
+    /// setup. Same shape of hole as the dropdown platform, which is never solid
+    /// at all.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void TheSevenSetupGatesThatDistinguishRoundingFromTruncationMatchTheEngine()
+    {
+        // map, x, xscale, y, yscale, engine bbox_right, engine bbox_bottom
+        var measured = new (string Map, int X, double XScale, int Y, double YScale, int Right, int Bottom)[]
+        {
+            ("cp_dirtbowl", 660, 0.56, 756, 6.56, 677, 965),
+            ("cp_dirtbowl", 738, 0.56, 2274, 2.06, 755, 2339),
+            ("cp_dirtbowl", 1776, 0.38, 3756, 1.31, 1787, 3797),
+            ("cp_dirtbowl", 840, 0.75, 3636, 1.31, 863, 3677),
+            ("ctf_avanti", 1074, 1.13, 402, 0.56, 1109, 419),
+            ("ctf_avanti", 1074, 0.56, 444, 0.38, 1091, 455),
+            ("ctf_avanti", 1074, 0.19, 468, 0.56, 1079, 485),
+        };
+
+        foreach (var row in measured)
+        {
+            var rect = ColliderSprites.Of(new LevelEntity
+            {
+                Type = EntityTypes.SetupGate,
+                X = row.X,
+                Y = row.Y,
+                XScale = row.XScale,
+                YScale = row.YScale,
+                Properties = new Dictionary<string, GgonValue>(),
+            });
+
+            Assert.NotNull(rect);
+            Assert.Equal(row.X, rect!.Value.Left);
+            Assert.Equal(row.Y, rect.Value.Top);
+            Assert.Equal(row.Right, rect.Value.Right);
+            Assert.Equal(row.Bottom, rect.Value.Bottom);
+
+            // The control: this row exists precisely because truncating differs.
+            // If both edges ever agree, the row has stopped doing its job and the
+            // scan that chose it needs re-running.
+            var truncRight = (int)(row.X + 32 * row.XScale) - 1;
+            var truncBottom = (int)(row.Y + 32 * row.YScale) - 1;
+
+            Assert.True(
+                row.Right != truncRight || row.Bottom != truncBottom,
+                $"{row.Map} ({row.X},{row.Y}) no longer distinguishes rounding from "
+                    + "truncation; re-run the round-vs-truncate scan to pick rows that do");
+        }
+    }
+
+    /// <summary>
+    /// The seven rows above really are the whole population.
+    /// </summary>
+    /// <remarks>
+    /// Without this, a map change could add an eighth rounding-sensitive collider
+    /// and the table above would still pass while no longer covering the game.
+    /// </remarks>
+    [Fact]
+    public void NoOtherColliderInTheGameDependsOnThatRounding()
+    {
+        var sensitive = new List<string>();
+
+        foreach (var path in Directory.GetFiles(ReferenceTree.IncludedFiles, "*.png"))
+        {
+            var name = Path.GetFileNameWithoutExtension(path);
+
+            LevelMap map;
+            try { map = LevelMap.FromPng(name, ReferenceTree.ReadMap(name)); }
+            catch (Exception) { continue; }
+
+            foreach (var entity in map.Entities)
+            {
+                if (ColliderSprites.Of(entity) is not { } rect)
+                    continue;
+
+                var truncRight = (int)(rect.X + rect.SpriteWidth * rect.XScale) - 1;
+                var truncBottom = (int)(rect.Y + rect.SpriteHeight * rect.YScale) - 1;
+
+                if (rect.Right != truncRight || rect.Bottom != truncBottom)
+                    sensitive.Add($"{name} {entity.Type} ({rect.X},{rect.Y})");
+            }
+        }
+
+        Assert.Equal(7, sensitive.Count);
+        Assert.All(sensitive, s => Assert.Contains("etupGate", s));
+    }
 }

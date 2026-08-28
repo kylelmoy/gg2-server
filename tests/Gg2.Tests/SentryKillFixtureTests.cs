@@ -195,6 +195,40 @@ public sealed class SentryKillFixtureTests
     /// is already ruled out.
     /// </para>
     /// <para>
+    /// ✅ <b>POSITION IS ELIMINATED (live, 2026-08-28).</b> The two self-destructs
+    /// are at the same spot and the successful builds are elsewhere, which made
+    /// the coordinates look causal. They are not. Built live at the trace's exact
+    /// build position on <c>ctf_truefort</c> — x = 9454/5, y = 2372/5, a red
+    /// engineer — the sentry died, and so did <b>the control at a position the
+    /// trace says works</b>. Both deaths were the server resetting the lone test
+    /// player's roster entry to <c>TEAM_SPECTATOR</c>, firing the guard's second
+    /// clause. <b>The apparent reproduction was an artefact and the control is
+    /// what caught it.</b>
+    /// </para>
+    /// <para>
+    /// What the live session did establish, and what the next one should not
+    /// re-derive:
+    /// <list type="bullet">
+    /// <item>the destruction signature <c>killer 255, assistant 255, cause 0</c>
+    /// is this guard's and no other path produces it;</item>
+    /// <item><c>Sentry</c> has <b>no descendant objects</b> — checked in the
+    /// engine with <c>object_is_ancestor</c> over every object index — so the
+    /// third clause needs a genuine second <c>Sentry</c>, and
+    /// <c>collision_circle</c>'s descendant behaviour is not a way out;</item>
+    /// <item>at the trace's build position all three clauses read <b>false</b> at
+    /// build time <em>and</em> after the sentry settles (y 474.4 to 485.41,
+    /// vspeed 0), so <c>Sentries.BeginStep</c> is a faithful transcription and
+    /// the divergence is in the <em>state</em>, not the guard;</item>
+    /// <item><c>CLASS_ENGINEER</c> is <b>5</b>, so the trace's slot 1 really is an
+    /// engineer and the first clause is genuinely false.</item>
+    /// </list>
+    /// ⬅️ <b>So look at slot 1's team, not at geometry.</b> The clause that fires
+    /// in a running game is <c>team != ownerPlayer.team</c>, and a sentry's own
+    /// team is copied once at build and never updated. The recording carries no
+    /// team change at t496 or t2296 — which is exactly the shape of "something in
+    /// the reference's state that is not in the recording".
+    /// </para>
+    /// <para>
     /// ⚠️ <b>If this test fails, that is good news.</b> It means the self-destruct
     /// now agrees; delete the pin and fold the ticks into the test above.
     /// </para>

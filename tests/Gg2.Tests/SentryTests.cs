@@ -789,4 +789,59 @@ public sealed class SentryTests
         Assert.Equal(CharacterState.Nobody, destruction.Assistant);
         Assert.Equal(DamageSource.None, destruction.Source);
     }
+
+    /// <summary>
+    /// ✅ <b>A sentry whose owner is dropped to SPECTATOR scraps itself</b> —
+    /// the second clause, reached by a roster reset rather than a side switch.
+    /// </summary>
+    /// <remarks>
+    /// <c>Sentry.events/Begin Step.xml:16</c>, <c>team != ownerPlayer.team</c>.
+    /// <c>PlayerLifecycleTests.AnEngineerChangingTeamLosesTheSentryATickLater</c>
+    /// already covers red-to-blue; this is the other way into the same clause,
+    /// and it is the one that happens without anybody choosing it.
+    /// <para>
+    /// ⚠️ <b>Reproduced live 2026-08-28, by accident.</b> A sentry built by a lone
+    /// player on a dedicated server died one tick after the server reset that
+    /// player's roster entry to <c>TEAM_SPECTATOR</c> — the same reset
+    /// <c>CLAUDE.md</c> records the server doing on a map change. A sentry's own
+    /// team is copied once at build (<c>buildSentry.gml</c>) and never updated,
+    /// so <b>the clause is an inequality, not a red-versus-blue test</b>:
+    /// spectator orphans a sentry exactly as switching sides does.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>This is also why a live "reproduction" of the recorded self-destructs
+    /// was wrong.</b> Building at the trace's exact coordinates killed the sentry
+    /// and looked like the answer; the control at a position the trace says works
+    /// killed it identically, because both deaths were this roster reset.
+    /// <b>Position is eliminated</b> — see <c>SentryKillFixtureTests</c>' open
+    /// finding.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ASentryWhoseOwnerIsDroppedToSpectatorScrapsItself()
+    {
+        var world = World;
+        var state = default(WorldState);
+        var events = default(TickEvents);
+
+        Put(ref state, 1, PlayerClass.Engineer, Team.Red, OpenX, OpenY);
+        PutBuiltSentry(ref state, 1, Team.Red, OpenX, FloorY);
+
+        // The control: an engineer of the sentry's own team keeps it.
+        Tick(world, ref state, ref events);
+        Assert.True(state.HasSentry[1]);
+        Assert.False(events.SentryDestroyed[1]);
+
+        state.Players[1].Team = Team.Spectator;
+        Tick(world, ref state, ref events);
+
+        Assert.False(state.HasSentry[1]);
+        Assert.True(events.SentryDestroyed[1]);
+
+        // The signature the wire carries: DESTROY_SENTRY [slot, 255, 255, 0].
+        var death = events.SentryDestructions[1];
+        Assert.Equal(CharacterState.Nobody, death.Killer);
+        Assert.Equal(CharacterState.Nobody, death.Assistant);
+        Assert.Equal(DamageSource.None, death.Source);
+    }
 }

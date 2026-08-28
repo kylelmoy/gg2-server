@@ -1660,6 +1660,49 @@ victory screen, map change — runs against a real client.
 ⚠️ **A live class change is on the same path and works**: `ClientPlayerChangeclass`
 mid-match was answered with a death and a respawn on the marker.
 
+### Seven rectangles in the whole game depend on `FromEntity` rounding, and all seven are setup gates
+
+Measured live 2026-08-28, on a dedicated `ctf_truefort` server, while closing the
+dropdown platform.
+
+`SolidRect.FromEntity` computes `Right = RoundPosition(x + width * xScale) - 1`.
+⚠️ **Replacing that round with a truncation passed all 2,185 tests.** The rounding
+was completely ungated.
+
+A scan across all 22 shipped maps: **7 of 128 collider rectangles differ between
+rounding and truncating**, and every one is a `ControlPointSetupGate` on
+`cp_dirtbowl` or `ctf_avanti`. Those are the solids that hold players in spawn
+during setup, so a one-pixel edge is wire-visible geometry.
+
+✅ **The engine rounds.** Each of the seven was created live at its map position
+and scale and its `bbox_right`/`bbox_bottom` read back; all seven match the port
+and none matches truncation. Gated by
+`SpriteBoxSampleTests.TheSevenSetupGatesThatDistinguishRoundingFromTruncationMatchTheEngine`,
+with a companion that asserts those seven are still the whole population so a map
+change cannot add an eighth unnoticed.
+
+⚠️ **Send a scale as an integer ratio, never a decimal literal** — `56/100`, not
+`0.56`. GM8's parser is a ULP off on some decimals, which would measure a
+neighbouring rectangle and blame the port. Same rule as the physics constants.
+
+⚠️ **Why every existing oracle missed it.** `collision-samples.json` enumerates
+what is **solid**, and a setup gate is only solid during setup — the same shape of
+hole as the dropdown platform, which is never solid at all. **Two colliders have
+now escaped that oracle for the same reason; when adding a collider, ask whether
+it is ever solid at the moment the oracle samples.**
+
+⚠️ **And the dropdown platform is not where this is visible**, though it looks like
+it should be: all four shipped platforms are scaled (**1.6, 0.5, 0.6, 1.2** — none
+at 1, which is the only case the pre-existing test covered), but `60 * s` lands on
+an exact integer for all four, so rounding and truncation agree. A first draft of
+that test claimed 0.6 would be a pixel short; **it is not — `60 * 0.6` is exactly
+36.0 in `double`**, and the mutation that was supposed to prove the point passed.
+
+✅ **The dropdown platform's mask is a filled rectangle and fills its scaled box**:
+`collision_point` reports 360 of 360 cells unscaled, 36 of 36 at scale 0.6 and 96
+of 96 at scale 1.6, contiguous, nothing outside. `sprite44.xml` declares
+`<shape>RECTANGLE</shape>` with `mode="FULL"` and means it.
+
 ### `tdm_mantic`'s move boxes: six of nine do nothing, and three hang in the air
 
 ⚠️ **Three attempts, and the third one measured why the first two failed.** The
