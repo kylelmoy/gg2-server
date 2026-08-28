@@ -1974,3 +1974,96 @@ nothing red.
 run and the longest leg — are all pinned exactly now**, in both directions, each
 saying in its own message that a failure is the re-record. Two of the three were
 hiding something; the sweep is what established that the third was not.
+
+### Item 12: the rollout-search bot, and the assumption it is built on
+
+`Gg2.Bots.RolloutSearch`, landed 2026-08-28 for `gg2-rl` phase 1, which was
+blocked on it. `docs/BOTAI.md` item 12 is the requirement; this is what it cost
+and what to know before touching it.
+
+**What it is.** On each decision it copies the `WorldState`, plays every
+candidate action to a 20-tick horizon, scores each from `TickEvents.DamageDealt`
+minus `DamageTaken`, and plays the first 4 ticks of the winner — then replans.
+Nothing new was needed from the simulation: item 2's copyable state is the fork,
+item 7's accumulators are the score, item 11's `ScenarioWorld` is the fight.
+
+**Measured, Release, one searcher on `gg_debug` with the defaults:**
+
+| | |
+|---|---|
+| candidates | 60 (5 aim bins x 2 fire x 3 horizontal x 2 jump) |
+| simulated ticks per decision | 1,200 |
+| cost per decision | **2.94 ms** — about 0.74 ms of a 33.3 ms tick, at one decision every four |
+| against `ScriptedBot` tier 5, 12 duels | **11 wins, 0 losses, 1 draw** |
+
+⚠️ **Name the build.** Debug is roughly twice that, and `CLAUDE.md` records what
+a stale unattributed figure cost this project.
+
+#### ⚠️ The opponent model is a decision, and it is written down
+
+`docs/BOTAI.md` item 12 calls this "the one open design question" and says to
+decide it explicitly, *"because leaving it implicit is how a search ends up with
+a hidden opponent model nobody chose"*. The `RolloutOpponent` enum is that
+decision made visible:
+
+- **`HoldLastInput` (the default)** — every other character holds the input it is
+  already holding, read straight off `CharacterState.KeyState` and
+  `NetAimDirection`. No history, no allocation, no model: it is the wire's last
+  word about them replayed forward. Right about momentum over 20 ticks, wrong
+  about reactions, and wrong in the direction that assumes the opponent keeps
+  doing what they were doing rather than stopping.
+- **`Idle`** — presses nothing. Optimistic, and kept as the floor for a
+  comparison.
+- **Self-play is deliberately not in v0.** It is what item 12 points at as the
+  answer needing no data, and it costs a nested search per candidate per tick.
+  The seam is a third enum member and a branch in `OpponentInput`.
+
+⚠️ **Test it on the SCORE, not on the chosen action.** Two opponent models pick
+the same action all the time; a first draft of `RolloutSearchTests` compared
+actions in a position where nothing landed inside the horizon, so both models
+returned the first candidate and the test passed for no reason.
+
+#### ⚠️ A horizon shorter than a refire timer makes the search blind
+
+The trap that cost this the most time, and it is a property rather than a bug.
+When nothing can fire inside the horizon **every candidate scores exactly zero**,
+the tie goes to the first candidate, and the bot stands still looking broken.
+
+**A freshly spawned soldier's `refireTimer` starts at 29** and a scout is
+nineteen ticks from its first shot — measured — so the first second of every life
+is exactly that state. Two tests here were written inside that window and
+asserted against a weapon that could not fire.
+
+The honest fix is a shaping term (distance, facing, ammo), **not** a longer
+horizon: 20 ticks is already 1,200 simulated ticks a decision, and doubling it
+doubles the cost of every decision to cover a case that lasts a second.
+
+#### Three properties that make it a baseline rather than merely a bot
+
+Each has its own test, because each would fail silently:
+
+1. ⚠️ **It draws nothing from the match's RNG.** That is automatic and it is why
+   the fork is safe: `WorldState.Random` travels inside the copy, so a
+   candidate's shots advance a stream that is thrown away. A search that rolled
+   out in place would make every unseeded weapon's spread depend on how many bots
+   were thinking — the one thing `docs/BOTAI.md` forbids the bot layer outright,
+   and it would not crash.
+2. ⚠️ **It leaves no aim behind.** `ActionDecoder` carries an *absolute* bearing
+   and 60 candidates turn it 60 times, so `Search` saves and restores it. Without
+   that the character comes out pointing wherever the last candidate looked —
+   which is a bearing nobody chose, and the bot still moves and still fires.
+3. **It is deterministic.** Candidate order is fixed and nothing is drawn to
+   break ties. A baseline that answered differently twice would make every win
+   rate measured against it meaningless.
+
+⚠️ **`new RolloutOptions()` is not the primary constructor.** A record struct's
+parameterless form is `default` — every field zero, none of the declared defaults
+applied — so `default` and `new()` gave a zero horizon where
+`new RolloutOptions(ConsiderSpecial: true)` gave 20. `WithDefaults()` is what
+makes the two agree, and the first run of the tests died on it.
+
+**It is also a parity fuzzer**, and that is worth more than it sounds: a search
+tries what no human would, so it finds physics-port bugs by exploiting them.
+⚠️ **An exploit is a finding for `docs/PARITY.md`, not something to penalise in
+the score** — scoring around a bug hides it. `gg2-rl/docs/PLAN.md` phase 1 says
+the same thing from the other side.
