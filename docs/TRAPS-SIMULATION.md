@@ -2337,3 +2337,60 @@ misalignment does to it anyway, and the assertion is that
   comparison produces two — the recorded message nobody claimed and the port's
   event nobody recorded — where a comparison that has simply stopped running
   produces none and one that has broken produces something else.
+
+### Phase 2's scripted fixtures, and what they turned out to gate
+
+✅ **Recorded 2026-08-27**, the deliverable `docs/PLAN.md` has listed as open
+since phase 2: recordings of a **scripted** character rather than a bot's own
+judgement. `reference-gg_debug-scriptedwalk.trace` and
+`reference-gg_debug-scriptedjumps.trace`, one scout driven from the agent bridge
+against the reference server. **Both replay closed-loop to the last tick of
+their recording on `Fields.All`** — 723 and 625 ticks, zero mismatches. Nobody
+fires and nobody dies, so nothing caps the window but the recording's length.
+
+⚠️ **Two of the four manoeuvres are covered, and which two was MEASURED rather
+than intended.** Deleting each branch and watching both windows:
+
+| branch disabled | walk | jumps |
+|---|---|---|
+| *baseline* | 723 | 625 |
+| double jump | 723 | **162** ✅ |
+| dropdown platform | **116** ✅ | 625 |
+| wall step-up (`Y -= StepHeight`) | 723 | 625 ❌ |
+| sloping ceiling (`Y += StepHeight`) | 723 | 625 ❌ |
+
+**The dropdown platform gains a much sharper gate than it had** — previously only
+`gg_debug-closedtdm`, which moves 135 → about 23; this moves 723 → 116.
+
+⚠️ **The step arms are still ungated, and the reason is a planning mistake worth
+keeping.** The route was chosen from an offline walkmask profile that used
+`CollisionFilter.ForBullet`, so it **could not see the player walls** that shape
+where a character can actually walk — `gg_debug` has one at `372,156`. The scout
+went somewhere else than planned, and the 24 px of descent it did make turns out
+to be ordinary falling: disabling both step arms changes nothing.
+**Profile with the filter the thing you are planning for actually uses.**
+
+### Driving a client: a second `gg2_input press` did not take
+
+⚠️ **Observed twice on 2026-08-27, mechanism NOT established** — recorded as a
+symptom because it cost a whole recording and the workaround is cheap.
+
+In both recordings the **first** input action took effect and every later
+`gg2_input press` did not: the character kept the first held direction until the
+end. `clear` on its own *did* work — `AgentBridge.heldMask` read 0 afterwards
+both times — so it is the second `press` that is in question, not the bridge
+being wedged.
+
+⚠️ **Do not conclude it was the watch.** The first recording had no `gg2_watch`
+running when its second press failed, so the `gg2_watch`-writes-`heldMask`
+explanation is ruled out by that alone.
+
+**The workaround, and it is what CLAUDE.md already recommends for frame
+accuracy:** drive everything from **one** `gg2_watch` expression that computes
+the mask, and change the expression when the phase changes, rather than
+alternating `gg2_input` calls. A watch expression is evaluated every frame and
+demonstrably keeps writing.
+
+⚠️ **And verify each phase from the SERVER's state, not from the tool's "ok".**
+Every one of these calls returned `ok`. What would have caught it in seconds is
+one `gg2_state` between phases: the character sat at the same x for 400 ticks.
