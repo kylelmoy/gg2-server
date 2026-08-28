@@ -343,6 +343,38 @@ public interface ITraceSimulation
     void EatSandvich(int slot) { }
 
     /// <summary>
+    /// A <c>BALANCE</c> switch: autobalance moved this slot to the other team
+    /// and left it as this class.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Not a client command, and injected for a different reason:</b> the
+    /// server decided this on its own out of
+    /// <c>Scripts/GameServer/ServerBalanceTeams.gml</c>, and the only trace of
+    /// the decision on the wire is this message. The team it moved the player to
+    /// is <b>not</b> in the payload — the message carries the slot and the class
+    /// — so the flip is red-to-blue or blue-to-red from whatever the replay
+    /// already believes.
+    /// <para>
+    /// ⚠️ <b>The character dies silently.</b> <c>ServerBalanceTeams</c> calls
+    /// <c>instance_destroy()</c> on it and broadcasts no <c>PLAYER_DEATH</c> at
+    /// all — the same shape as the intel drop a death performs. A replay that
+    /// keeps the character alive keeps it on the wrong team, and anything
+    /// guarding on the pair diverges: a <b>sentry self-destructs one tick later
+    /// because its owner's team no longer matches its own</b>, which is what this
+    /// injection was found by.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>The notice is not a switch.</b> Stage 1 broadcasts
+    /// <c>BALANCE 255</c> to announce the countdown and moves nobody; only the
+    /// two-byte stage-2 message is this.
+    /// </para>
+    /// <para>
+    /// The default is a no-op, so a stand-in simply never rebalances.
+    /// </para>
+    /// </remarks>
+    void BalanceSwitch(int slot, PlayerClass playerClass) { }
+
+    /// <summary>
     /// Supplies the random seed the reference used for a slot's shot on the
     /// tick that is about to run.
     /// </summary>

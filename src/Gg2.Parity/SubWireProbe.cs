@@ -173,6 +173,8 @@ public sealed class SubWireProbe(PortedSimulation inner, IReadOnlyList<TraceTick
 
     public void EatSandvich(int slot) => inner.EatSandvich(slot);
 
+    public void BalanceSwitch(int slot, PlayerClass playerClass) => inner.BalanceSwitch(slot, playerClass);
+
     public void SetFireSeed(int slot, ushort seed) => inner.SetFireSeed(slot, seed);
 
     public IReadOnlyList<DeathRecord> DeathsLastTick => inner.DeathsLastTick;

@@ -494,6 +494,31 @@ public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSim
     public int EatsRefused { get; private set; }
 
     /// <inheritdoc />
+    public void BalanceSwitch(int slot, PlayerClass playerClass)
+    {
+        if ((uint)slot >= WorldState.MaxSlots)
+            return;
+
+        EnsurePlayer(slot);
+
+        // ServerBalanceTeams.gml: the flip is unconditional between the two
+        // teams, and a spectator is never picked (the loop only considers
+        // players on the oversized team), so there is no third case to handle.
+        var team = _state.Players[slot].Team;
+        _state.Players[slot].Team = team == Team.Red ? Team.Blue : Team.Red;
+        _state.Players[slot].Class = playerClass;
+
+        // `with(balanceplayer.object) instance_destroy()` — no PLAYER_DEATH is
+        // broadcast, so nothing else in the replay would clear it.
+        _state.Clear(slot);
+
+        BalanceSwitches++;
+    }
+
+    /// <summary>How many recorded <c>BALANCE</c> switches have been applied.</summary>
+    public int BalanceSwitches { get; private set; }
+
+    /// <inheritdoc />
     /// <remarks>
     /// Counted as well as stored, so a test can assert that the shots the
     /// recording contains were actually taken: a seed that is supplied and never
@@ -854,8 +879,14 @@ public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSim
     /// here has exercised the code the server actually runs, not a replica of
     /// it that can drift away in maintenance.
     /// </remarks>
+    public System.Collections.Generic.List<string> HpTrace { get; } = new();
+    public int TickCount { get; private set; }
+
     public void Tick(ReadOnlySpan<PlayerInput> inputs)
     {
+        TickCount++;
+        if (_state.IsAlive(1)) HpTrace.Add($"{TickCount}:{_state.Characters[1].Hp}:{_state.Characters[1].Omnomnomnom}");
+
         if (_world is null)
             throw new InvalidOperationException("LoadMap must run before Tick");
 

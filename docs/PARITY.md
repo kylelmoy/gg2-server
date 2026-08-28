@@ -1704,12 +1704,87 @@ limit as "a recording of players who were already alive is open-loop only".
 which would be a real disagreement about the sandvich's 45-second cooldown —
 fails.
 
+✅ **A fourth message joined them the same day: `BALANCE`.** Not a client
+command — `ServerBalanceTeams.gml` decides it — but the same failure exactly: it
+moves a player to the other team and destroys their character with
+`instance_destroy()`, broadcasting **no `PLAYER_DEATH` at all**, so the two-byte
+message is the entire record. Applying it took `ctf_2dfort-autobalance`'s
+open-loop p99 from **10/3 to 2/2** and made the port reproduce an autobalance's
+sentry self-destruct. Found by the new `closedsentryteam` fixture, below.
+
 ⚠️ **The general lesson, and it is the third time this project has paid for it:**
 `MessageCoverageTests` asks *"what state can no recording reach?"*. This was the
 inverse — **a recording reached it and the harness discarded it** — and nothing in
 the suite asked that question. `ClientCommandInjectionTests` now counts the
 injections in both directions: the fixtures still contain 31 zooms and 4 eats, and
 every one is accepted.
+
+### Settled: two recordings made for events the corpus could not gate
+
+✅ **2026-08-28.** Both were recorded because the census question had a second
+half nobody had asked: not "which message types does the corpus reach" but
+**"which of the things it reaches happen where a comparison can see them"**.
+
+#### `closedsandvich` — the heavy's eat, inside an exact window at last
+
+Six heavies, three a side, `ctf_truefort`, map reloaded under a connected
+recorder. **22 eats, forced over the bridge** with `serverEatSandvich` — the
+script a bot calls — rather than waited for.
+
+⚠️ **Take one of this recording is the lesson.** Left to their own AI, heavies
+eat when they are hurt and out of the fight, which is late: take one put its eats
+at t824 and t1531 against an exact window of [t367, t705] and gated **none** of
+them. `closedheavy` has the same shape — eats at t0, t184, t1263 against
+[t499, t895]. **An event outside the exact window is a message the harness frames
+and the simulation is never held to.** Take two fires the first batch 118 ticks
+after the anchor, and twelve eats land inside a **687-tick** window — the longest
+combat window on that map.
+
+⚠️ **At full health a heavy can eat again immediately**: the 45-second cooldown
+is armed only while `hp < maxHp`, so 22 eats fitted into 70 seconds.
+
+⬅️ **It found an open divergence on its first run.** A heavy who eats at full
+health sits at 201.6 for the whole eat and drops back to 200 the tick after it
+ends — and the port's return lands **one comparison tick later** than the
+reference's, on both forced batches. Three explanations are eliminated in
+`SandvichFixtureTests`: the eat's length (confirmed frame by frame against the
+live game), `delta_factor` (measured at 1 throughout), and the injection landing
+late (deferring it collapses the window from 687 to 120, because the acceleration
+freeze then starts a tick early and x is wrong by 8 wire units immediately).
+
+#### `closedsentryteam` — a self-destruct with its cause on the wire
+
+Six engineers, three a side, with an engineer's **team** and another's **class**
+switched over the bridge while their sentries stood. **Twelve sentries built,
+eight destroyed, all eight `killer 255, assistant 255, cause 0`.**
+
+✅ **Three of the four causes are reproduced by the port**, each on the tick: the
+team change (t1243), the class change (t2007) and the autobalance switch (t2366,
+once `BALANCE` was injected). Until this recording, all three arms of
+`Sentry.events/Begin Step`'s guard were gated by unit tests alone.
+
+⬅️ **The remaining five are the sharpest form of the long-standing finding**, and
+they share one shape: **built at T, self-destructed at T+1**. What the recording
+settles, none of which was known before:
+
+- ✅ **It is the Begin Step guard, not damage.** The only other site that
+  broadcasts a destruction is `End Step`'s `hp <= 0`, which passes
+  `lastDamageSource` — initialised to **-1** in `Sentry.events/Create.xml`, never
+  0. **Cause 0 can only be the guard.**
+- ✅ **Not a leftover from before the map reload.** Measured live: `serverGotoMap`
+  destroys every `Sentry` and leaves `player.sentry` at -4.
+- ⚠️ **The first one cannot be the 25 px circle.** At t281 it is the only sentry
+  alive in the recording, and `collision_circle(x, y+10, 25, Sentry, false, true)`
+  excludes the calling instance. So either an arm reads differently from how the
+  port reads it, or the reference had a sentry the wire never announced.
+- ⚠️ **The sixth mismatch is a cascade.** At t1102 the port destroys slot 2's
+  sentry and the reference destroys slot 6's — because the port still holds the
+  slot 2 sentry it failed to destroy at t867, and slot 6 then builds 10 px from
+  it. **A missed destruction becomes a wrong destruction later**, which is how one
+  bug reads as two.
+
+`SandvichFixtureTests`, `SentryCauseFixtureTests`. Both are pinned in both
+directions, so the misses fail loudly when they are fixed.
 
 ### Settled: `ARENA_WAIT_FOR_PLAYERS`, and every gameplay message is now recorded
 

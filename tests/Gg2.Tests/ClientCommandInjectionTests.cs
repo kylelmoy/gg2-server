@@ -8,8 +8,9 @@ using Gg2.Protocol;
 namespace Gg2.Tests;
 
 /// <summary>
-/// The three client commands — zoom, build and eat — reach the replayed
-/// simulation, because nothing in an <c>INPUTSTATE</c> ever will.
+/// The messages a replay can only learn from a broadcast — the three client
+/// commands (zoom, build, eat) and autobalance — reach the simulation, because
+/// nothing in an <c>INPUTSTATE</c> ever will.
 /// </summary>
 /// <remarks>
 /// ⚠️ <b>The reference has exactly three commands that are not key bits</b>, and
@@ -110,6 +111,35 @@ public sealed class ClientCommandInjectionTests
     }
 
     /// <summary>
+    /// ⚠️ <b>The fourth message the replayer was throwing away, and the one that
+    /// is not a client command at all: <c>BALANCE</c>.</b>
+    /// </summary>
+    /// <remarks>
+    /// <c>ServerBalanceTeams.gml</c> moves a player to the other team and
+    /// destroys their character with <c>instance_destroy()</c> — <b>no
+    /// PLAYER_DEATH is broadcast</b> — so this two-byte message is the entire
+    /// record of the decision. A replay that ignored it kept the player on the
+    /// old team with a live character, and nothing else would ever correct it.
+    /// <para>
+    /// ✅ <b>Found by <c>closedsentryteam</c></b>, where an autobalance switch at
+    /// t2365 self-destructs the moved engineer's sentry a tick later and the port
+    /// missed it. Applying the switch fixed that, and took
+    /// <c>ctf_2dfort-autobalance</c>'s open-loop p99 from <b>10/3 to 2/2</b> —
+    /// the worst row in <c>ClientPredictionGateTests</c> apart from the two the
+    /// zoom and the eat already explained.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Stage 1's notice is not a switch.</b> <c>BALANCE 255</c> announces
+    /// the countdown and moves nobody; only the two-byte form is applied.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData("reference-ctf_2dfort-autobalance", 2)]
+    [InlineData("reference-ctf_truefort-closedsentryteam", 1)]
+    public void EveryRecordedBalanceSwitchIsApplied(string fixture, int switches) =>
+        Assert.Equal(switches, Replay(fixture).BalanceSwitches);
+
+    /// <summary>
     /// The corpus still contains the commands this file is about.
     /// </summary>
     /// <remarks>
@@ -143,6 +173,6 @@ public sealed class ClientCommandInjectionTests
         }
 
         Assert.Equal(31, zooms);
-        Assert.Equal(4, eats);
+        Assert.Equal(26, eats);
     }
 }

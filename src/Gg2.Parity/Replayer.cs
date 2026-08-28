@@ -512,6 +512,16 @@ public sealed class Replayer(ITraceSimulation simulation)
                 case MessageType.Omnomnomnom when message.Payload.Length >= 1:
                     simulation.EatSandvich(message.Payload[0]);
                     break;
+
+                // ⚠️ Stage 2 of autobalance, and the third message the replayer
+                // was throwing away. The server moves a player between teams and
+                // destroys their character with no PLAYER_DEATH — this two-byte
+                // message is the whole record of it. `255` is stage 1's notice,
+                // which moves nobody.
+                case MessageType.Balance
+                    when message.Payload.Length >= 2 && message.Payload[0] != ServerStream.BalanceNotice:
+                    simulation.BalanceSwitch(message.Payload[0], (PlayerClass)message.Payload[1]);
+                    break;
             }
         }
     }
