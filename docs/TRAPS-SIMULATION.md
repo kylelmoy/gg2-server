@@ -2419,3 +2419,56 @@ demonstrably keeps writing.
 ⚠️ **And verify each phase from the SERVER's state, not from the tool's "ok".**
 Every one of these calls returned `ok`. What would have caught it in seconds is
 one `gg2_state` between phases: the character sat at the same x for 400 ticks.
+
+### A human found in 100 seconds what three scripted routes could not
+
+✅ **2026-08-27.** After three scripted recordings reached
+`characterHitObstacle`'s step arms **zero** times, a human played `tdm_mantic`
+for a hundred seconds. `reference-tdm_mantic-humanmoves.trace`, 2,999 ticks,
+**1,161 exact** from its spawn anchor.
+
+| branch | three scripted takes | one human take |
+|---|---|---|
+| wall step-up (`Y -= StepHeight`) | **0** | **50** |
+| sloping ceiling (`Y += StepHeight`) | **0** | **3** |
+
+⚠️ **Why, and it matters before anyone writes another driver.** A script walks
+in straight lines between points worked out in advance, so it only ever meets
+geometry somebody predicted — and two of the three routes were planned against a
+walkmask profile taken with the **wrong collision filter**. A person wanders,
+changes direction mid-stride, and taps a key for five ticks and lets go.
+**A person is a better fuzzer than a plan.**
+
+⚠️ **Two mistakes of mine cost a whole take**, and both are avoidable:
+
+- **Do not teleport a character during a recording.** A `gg2_eval` teleport moves
+  it server-side with no wire event, so the replay simulates the character
+  walking while the reference jumped, and diverges there. It also killed the
+  player twice by dropping them where nothing was standable.
+- **Check reachability, not just geometry.** The first route sent the player to
+  `gg_debug`'s step-up staircase, which is **enclosed** — the human said so in
+  seconds where the map analysis had not. The fix was a scan that walks from
+  every spawn on every map and reports where a step-up is actually met; it found
+  ten maps, the nearest **24 px** from a `tdm_mantic` spawn.
+
+### ⚠️ OPEN: the port puts a player back on a platform they dropped through
+
+**Found by that human take**, and it is the fourth manoeuvre `docs/PLAN.md`
+asked for. At t1621–1625 the player holds `KEY_DOWN` on the dropdown platform at
+`2622,1014` and releases it. The reference drops them through and they keep
+falling — y 990.4 → 1001.2 → 1041.2 → 1086.4. **The port falls with them and
+then lifts them back onto the platform**, holding 990.4 for the rest of the
+recording. It is why that fixture's window stops at 1,161.
+
+⚠️ **Not a missing feature.** All three dropdown paths check `KEY_DOWN` — the
+Begin Step ground test, the Step push-out, and
+`CharacterPhysics.StandingOnDropdown`. The suspect is the Step push-out's
+"already inside it before this tick's move" guard, which exists precisely to
+stop a character being caught on a platform it is falling through and is
+evidently not catching this once the key comes back up.
+
+⚠️ **This is not the dropdown coverage the walk fixture already had.** That one
+gates the platform **holding a character up** (723 → 116 when disabled), which
+is the opposite direction. Pinned by
+`Phase2FixtureTests.ThePortPutsAPlayerBackOnAPlatformTheyDroppedThrough`, which
+**fails when fixed**.

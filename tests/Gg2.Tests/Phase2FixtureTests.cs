@@ -11,35 +11,37 @@ namespace Gg2.Tests;
 /// character rather than a bot's own judgement.</b>
 /// </summary>
 /// <remarks>
-/// <b>Recorded 2026-08-27</b> on <c>gg_debug</c>, one scout driven from the
-/// agent bridge against the reference server. <c>docs/PLAN.md</c> has asked for
-/// these since phase 2 and listed them as the one deliverable still open:
+/// <b>Recorded 2026-08-27.</b> Three scripted takes on <c>gg_debug</c>, a scout
+/// driven from the agent bridge, and <b>one take of a human playing
+/// <c>tdm_mantic</c></b>. <c>docs/PLAN.md</c> has asked for these since phase 2
+/// and listed them as the one deliverable still open:
 /// "a double-jump, a wall step-up, a corner fall and a drop-through platform
 /// need scripted input rather than a bot's own judgement". Every other fixture
 /// in this project is bots playing, which covers walking and jumping only
 /// incidentally.
 /// <para>
-/// ✅ <b>All three replay closed-loop to the last tick of their recording</b>, on
-/// <see cref="Fields.All"/> — 723, 625 and 474 ticks with zero mismatches. A
-/// scripted trace has no unseeded weapon in it and nobody dies, so unlike the
-/// combat fixtures there is nothing to cap the window but the recording's own
-/// length.
+/// ✅ <b>All four replay closed-loop with zero mismatches</b> on
+/// <see cref="Fields.All"/> — 723, 625, 474 and <b>1,161</b> ticks. Nobody fires
+/// and nobody dies in any of them, so unlike the combat fixtures there is
+/// nothing to cap a window but the recording's own length, or a real divergence.
 /// </para>
 /// <para>
-/// ⚠️ <b>Two of the four manoeuvres are covered, not four</b>, and which two was
-/// measured rather than intended — see
-/// <see cref="TheMutationTableThatSaysWhatTheseFixturesGate"/>. The double jump
-/// and the drop-through platform are gated; a <b>wall step-up</b> and a
-/// <b>corner fall</b> are not, and the third recording was made specifically to
-/// reach them and did not.
+/// ⚠️ <b>THE HUMAN TAKE IS THE ONE THAT WORKED, and that is the finding.</b>
+/// Three scripted recordings reached <see cref="CharacterHitObstacle"/>'s step
+/// arms <b>zero</b> times between them, despite 505 wall collisions — every one
+/// taking the arm that stops the character dead. A hundred seconds of a person
+/// playing reached them <b>50 times</b>, plus 3 sloping ceilings, and turned up
+/// a drop-through bug on the way
+/// (<see cref="ThePortPutsAPlayerBackOnAPlatformTheyDroppedThrough"/>).
 /// </para>
 /// <para>
-/// ⚠️ <b>The reason is worth more than the fixtures.</b> The step arms of
-/// <see cref="CharacterHitObstacle"/> execute <b>zero</b> times across all
-/// three, while the two walking recordings enter that solver's wall branch 505
-/// times between them — every one taking the arm that stops the character dead.
-/// <c>gg_debug</c>'s six-pixel staircase is climbed by some other path
-/// entirely, so it is not the geometry those arms want.
+/// <b>Why, and it is worth knowing before writing another driver:</b> a script
+/// walks in straight lines between points worked out in advance, so it only ever
+/// meets the geometry somebody predicted. A person wanders, changes direction
+/// mid-stride, and taps keys for five ticks and releases them. Two of the three
+/// scripted routes were also planned against a walkmask profile taken with the
+/// <em>wrong collision filter</em>, which is its own lesson — but the deeper one
+/// is that <b>a person is a better fuzzer than a plan</b>.
 /// </para>
 /// </remarks>
 public sealed class Phase2FixtureTests
@@ -62,6 +64,25 @@ public sealed class Phase2FixtureTests
     /// that the staircase is not what those arms are for.
     /// </remarks>
     private const string Stairs = "reference-gg_debug-scriptedstairs.trace";
+
+    /// <summary>
+    /// ✅ <b>A HUMAN playing <c>tdm_mantic</c> for a hundred seconds</b>, and the
+    /// only recording in the project that is neither a bot nor a script.
+    /// </summary>
+    /// <remarks>
+    /// <b>It reaches both branches three scripted attempts could not</b> — 50
+    /// step-ups and 3 sloping ceilings against zero — and it found a bug on the
+    /// way. See <see cref="TheMutationTableThatSaysWhatTheseFixturesGate"/> and
+    /// <see cref="ThePortPutsAPlayerBackOnAPlatformTheyDroppedThrough"/>.
+    /// <para>
+    /// ⚠️ <b>The lesson is about the recording method, not the map.</b> A script
+    /// walks in straight lines between the points somebody worked out in
+    /// advance; a person wanders, changes their mind, taps a key and releases
+    /// it. Every branch this fixture reaches that the others do not is of that
+    /// second kind.
+    /// </para>
+    /// </remarks>
+    private const string Human = "reference-tdm_mantic-humanmoves.trace";
 
     private static LevelMap MapLoader(string name) =>
         LevelMap.FromPng(name, ReferenceTree.ReadMap(name));
@@ -104,14 +125,15 @@ public sealed class Phase2FixtureTests
     /// beautifully while gating nothing.
     /// </remarks>
     [Theory]
-    [InlineData(Walk)]
-    [InlineData(Jumps)]
-    [InlineData(Stairs)]
-    public void BothAreScriptedSinglePlayerRecordingsOnGgDebug(string fixture)
+    [InlineData(Walk, "gg_debug")]
+    [InlineData(Jumps, "gg_debug")]
+    [InlineData(Stairs, "gg_debug")]
+    [InlineData(Human, "tdm_mantic")]
+    public void EachIsASinglePlayerRecordingWithNoCombatInIt(string fixture, string map)
     {
         var (trace, ticks) = Load(fixture);
 
-        Assert.Equal("gg_debug", trace.Header.Map);
+        Assert.Equal(map, trace.Header.Map);
         Assert.True(ticks.Count > 700, $"{fixture}: only {ticks.Count} ticks");
 
         // Exactly one spawn, and it is what the window anchors on.
@@ -136,6 +158,7 @@ public sealed class Phase2FixtureTests
     [InlineData(Walk, 700)]
     [InlineData(Jumps, 600)]
     [InlineData(Stairs, 450)]
+    [InlineData(Human, 1100)]
     public void BothReplayToTheEndOfTheirRecording(string fixture, int floor)
     {
         var (exact, anchor) = ExactWindow(fixture);
@@ -161,9 +184,9 @@ public sealed class Phase2FixtureTests
     /// <item><term>stair descent (<c>CharacterPhysics</c> End Step)</term>
     /// <description>walk <b>4</b>, jumps <b>1</b> — gated hard, but see below</description></item>
     /// <item><term>wall step-up (<c>CharacterHitObstacle</c>, <c>Y -= StepHeight</c>)</term>
-    /// <description>all three unchanged — <b>none</b> ❌</description></item>
+    /// <description>scripted: unchanged ❌ — <b>human: 50 executions</b> ✅</description></item>
     /// <item><term>sloping ceiling (<c>CharacterHitObstacle</c>, <c>Y += StepHeight</c>)</term>
-    /// <description>all three unchanged — <b>none</b> ❌</description></item>
+    /// <description>scripted: unchanged ❌ — <b>human: 3 executions</b> ✅</description></item>
     /// </list>
     /// <para>
     /// ✅ <b>So phase 2 gains a double-jump gate and a second, much sharper
@@ -186,13 +209,20 @@ public sealed class Phase2FixtureTests
     /// one that stops the character dead. Neither step is ever free.
     /// </para>
     /// <para>
-    /// <b>So <c>gg_debug</c>'s six-pixel staircase is not a step-up, and that is
-    /// the useful finding.</b> The scout demonstrably climbs it — 192 back up to
-    /// 168, verified from the server mid-recording — by some path that is not
-    /// these arms. Reaching them needs geometry where
-    /// <c>PlaceFree(x + sign, y - 6)</c> is true while <c>PlaceFree(x + sign, y)</c>
-    /// is false: a wall at most six pixels tall with headroom above it. A
-    /// staircase approached at a scout's five pixels a tick is not that.
+    /// <b>So <c>gg_debug</c>'s six-pixel staircase is not a step-up.</b> The
+    /// scout demonstrably climbs it — 192 back up to 168, verified from the
+    /// server mid-recording — by some path that is not these arms. Reaching them
+    /// needs geometry where <c>PlaceFree(x + sign, y - 6)</c> is true while
+    /// <c>PlaceFree(x + sign, y)</c> is false: a wall at most six pixels tall
+    /// with headroom above it.
+    /// </para>
+    /// <para>
+    /// ✅ <b>And a human found that geometry in a hundred seconds without being
+    /// told where it was.</b> 50 step-ups and 3 sloping ceilings on
+    /// <c>tdm_mantic</c>, closing both branches that three planned routes missed.
+    /// ⚠️ Note the counters are of <em>executions</em>, not window movement:
+    /// disabling an arm that fires 50 times still may not move a window, which
+    /// is why the count is the measurement here and the mutation is not.
     /// </para>
     /// <para>
     /// This test asserts only the positives, because a test cannot delete a
@@ -206,6 +236,7 @@ public sealed class Phase2FixtureTests
         Assert.Equal(723, ExactWindow(Walk).Exact);
         Assert.Equal(625, ExactWindow(Jumps).Exact);
         Assert.Equal(474, ExactWindow(Stairs).Exact);
+        Assert.Equal(1161, ExactWindow(Human).Exact);
     }
 
     /// <summary>
@@ -250,5 +281,72 @@ public sealed class Phase2FixtureTests
         Assert.True(JumpPresses(Load(Jumps).Ticks) > 20, "the jumps recording should be full of jumps");
         Assert.Equal(0, JumpPresses(Load(Walk).Ticks));
         Assert.Equal(0, JumpPresses(Load(Stairs).Ticks));
+    }
+
+    /// <summary>
+    /// ⚠️ <b>OPEN FINDING: the port puts a player back on a dropdown platform
+    /// they had already dropped through.</b>
+    /// </summary>
+    /// <remarks>
+    /// <b>Found by a human tapping a key, 2026-08-27.</b> At t1621–1625 of
+    /// <see cref="Human"/> the player holds <c>KEY_DOWN</c> on the platform at
+    /// <c>2622,1014</c>, and lets go. The reference drops them through and they
+    /// keep falling — y 990.4 → 1001.2 → 1041.2 → 1086.4. The port starts
+    /// falling with them and then, once <c>Down</c> is released, <b>lifts them
+    /// back onto the platform</b> and holds them at 990.4 for the rest of the
+    /// recording.
+    /// <para>
+    /// ⚠️ <b>All three dropdown paths DO honour <c>KEY_DOWN</c></b> — the Begin
+    /// Step ground test, the Step push-out and
+    /// <c>CharacterPhysics.StandingOnDropdown</c> each check it, so this is not
+    /// a missing feature. The suspect is the Step push-out's "already inside it
+    /// before this tick's move" guard, which exists precisely to stop a
+    /// character being caught on a platform it is falling through, and which is
+    /// evidently not catching this case once the key comes back up.
+    /// </para>
+    /// <para>
+    /// <b>This is the fourth manoeuvre <c>docs/PLAN.md</c> asked for</b> — the
+    /// drop-through platform — and it is wire-visible, so the reference is the
+    /// specification. Note the earlier dropdown coverage is NOT this: the walk
+    /// fixture gates the platform <em>holding a character up</em>, which is the
+    /// opposite direction.
+    /// </para>
+    /// <para>
+    /// <b>This test fails when the finding is fixed</b>, like
+    /// <c>SentryKillFixtureTests</c>'s. That is the intent: the window is pinned
+    /// exactly above, and this says <em>why</em> it stops where it does so the
+    /// next session does not have to rediscover the tick.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ThePortPutsAPlayerBackOnAPlatformTheyDroppedThrough()
+    {
+        var ticks = Load(Human).Ticks;
+
+        // The tap that starts it, on the wire, on every tick.
+        var down = ticks
+            .Where(t => t.Index is >= 1618 and <= 1628)
+            .Where(t => (t.Slots[1].Input.Keys & PlayerKeys.Down) != 0)
+            .Select(t => t.Index)
+            .ToArray();
+
+        Assert.Equal([1621, 1622, 1623, 1624, 1625], down);
+
+        var (trace, all) = Load(Human);
+        var anchor = FixtureAnchors.LastExactAnchor(all)!.Value;
+
+        var report = new Replayer(new PortedSimulation(MapLoader)) { Compare = Fields.All }
+            .Replay(Human, trace.Header.Map, all, ReplayMode.ClosedLoop, stopAtFirstBadTick: false);
+
+        var first = report.Mismatches.Where(m => m.Tick > anchor).MinBy(m => m.Tick);
+
+        // Six ticks after the key came up, and it is a POSITION disagreement:
+        // the reference is 254 wire units — nearly 51 px — below the port.
+        Assert.Equal(1634, first.Tick);
+        Assert.Equal("y", first.Field);
+        Assert.True(
+            first.Expected > first.Actual,
+            $"the reference should be BELOW the port here, but expected {first.Expected} and got {first.Actual} — "
+                + "if the port is now the lower one, the push-out has been changed in the other direction");
     }
 }
