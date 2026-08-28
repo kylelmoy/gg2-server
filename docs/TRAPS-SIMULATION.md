@@ -2659,3 +2659,52 @@ measurement, on more than one leg each, rather than a hunt aimed by one run.
 
 **How to repeat it**, in full, is `.claude/notes/` at the time and the recipe
 above; the whole run is four `gg2_eval` calls and two waits per server.
+
+### The client-prediction gate, and what pinning it turned up
+
+**Built 2026-08-28** for the failure mode CLAUDE.md calls invisible — "there is
+no test that fails when trajectories drift; the client just snaps".
+
+⚠️ **The claim that it had no test was wrong, and the correction is the useful
+part.** `ReplayMode.OpenLoop` has existed since phase 2, and
+`PhysicsParityTests.OpenLoopPredictionErrorIsSubPixelOnATypicalTick` already
+gated it — at p99 ≤ 5 wire units on **one** fixture. What was missing was not
+the instrument but the **pin**, and the breadth: a bound of 1 px passes
+comfortably at every error this port actually makes, so it could never have
+noticed a regression short of a catastrophe.
+
+✅ **Open-loop is the client's view exactly, and that is checkable rather than
+hopeful.** `Replayer.Anchor` resets each slot from the trace's *observed* block
+— the quantised wire values — then simulates to the next position-bearing tick.
+That is what `Character.events/User Event 13.xml` does to a client: hard-assign
+`x`, `y`, `hspeed`, `vspeed`, then dead-reckon seven ticks.
+
+`ClientPredictionGateTests` pins 34 fixtures. **Four single-player recordings
+hold the client to two wire units — 0.4 px.** The fifth, the human take, sits at
+**270 / 44 in y**, which is the known drop-through-platform bug: 54 px of
+correction, and the row will move when that is fixed.
+
+⚠️ **p99, not max, and it is forced.** A death teleports a character to a spawn
+point, so any window containing a respawn shows an "error" of most of the map.
+That is why the combat fixtures have maxima in the hundreds beside a p99 of 2.
+
+⚠️ **Two fixtures did not frame, and the assertion found both in one run.** The
+first draft pinned `cp_dirtbowl` from **458 bytes of its 138,406** — 0.3% — and
+it passed. A multi-area map writes every area's control points into its file and
+plays one area's worth, so the un-narrowed shape expects a wider HUD block than
+the wire carries; `.ForArea(1)` fixes it. `gen_destroy-rotationcaps` cannot be
+framed by any single shape and is excluded: it exists to *be* that case.
+**A distribution is only worth pinning if the whole recording was read**, and
+`TraceParser.Parse`'s three-argument overload throws that away silently.
+
+⚠️ **A steady walk is blind to input phase — measured, and it changes which
+fixture to reach for.** The off-by-one update pairing that
+`PairingInputsWithTheWrongTickIsMeasurablyWorse` detects on the bot trace moves
+`scriptedwalk` **not at all**: both score p99 1, because a constant input is the
+same input a tick early. **The single-player fixtures are the sharpest
+instrument for trajectory error and the bluntest for input timing.** Asserted, so
+it is not rediscovered.
+
+**Rows worth a look some day**, recorded because nothing else would notice them:
+the heavy at 49 in x, the sniper at 25/20, `gg_debug-closedtdm` at 77 in y, and
+`gen_destroy-closedgen` at 18/30.
