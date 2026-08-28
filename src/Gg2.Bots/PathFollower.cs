@@ -1154,7 +1154,19 @@ public sealed class PathFollower
         // arc needs a mine that has already been placed and settled, so leaving
         // the ground without one is not merely a short jump, it is a short jump
         // that also wasted the setup.
-        var stickyReady = !isSticky || StickyModel.Ready(in character, in weapon);
+        //
+        // ⚠️⚠️ BUT ONLY TO *START* ONE. Once StickySetup is running the mine is
+        // already on the ground, and the launcher's readiness has nothing to do
+        // with the arc — which matters because PLACING the mine puts the weapon
+        // straight onto its refire cooldown. Requiring readiness throughout made
+        // the gate close on the tick after the placement, every single time, and
+        // the abandon branch below then threw the setup away. Zero sticky jumps
+        // across 48 real edges on four maps, and the synthetic unit test could
+        // not see it because its fixture weapon is
+        // permanently ready.
+        var stickyReady = !isSticky
+            || state.StickySetup >= 0
+            || StickyModel.Ready(in character, in weapon);
 
         if (rocketReady
             && stickyReady

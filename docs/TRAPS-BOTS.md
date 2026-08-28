@@ -2215,9 +2215,33 @@ mine jump flies under `moveStatus` 1 exactly as a rocket jump does — control
 generator and the follower agree about which arcs exist; that agreement is worth
 keeping deliberately rather than by coincidence.
 
-⚠️ **No shipped cache contains a type-7 edge**, so the arm is gated on synthetic
-edges in `PathFollowerTests` and cannot yet be exercised end to end. That is the
-honest state: the arm is correct against the manoeuvre and unproven against a
-real graph. `gg2-nav-gen` emits them only behind `--sticky`, into a cache the game
+#### ⚠️ Flying real edges found a bug every synthetic test was blind to
+
+`gg2-nav-gen` built a sticky cache (`build/botnav-sticky`, 4,285 type-7 edges) and
+48 real edges were flown across four maps. **Zero sticky jumps were taken.**
+
+**The cause: placing the mine puts the launcher on its refire cooldown.**
+`StickyModel.Ready` requires `ReadyToShoot`, the gate re-evaluates every tick, so
+it closed on the tick *after* the placement — and the abandon branch then threw
+the setup away. Every attempt, on every map.
+
+⚠️ **The synthetic tests could not see it because their fixture weapon is
+permanently ready.** `Loaded()` sets `ReadyToShoot` once and nothing ever spends
+it, so the one state that breaks the manoeuvre never occurs in them.
+**A fixture that cannot enter the failing state is a test that cannot fail**, and
+this is the third time today the same shape has cost something — a claim that was
+self-consistent and untested against the thing it described.
+
+The fix is one clause: readiness is required to **start** the manoeuvre and is
+irrelevant once the mine is on the ground.
+`TheCountdownSurvivesTheLauncherGoingColdAfterThePlacement` hands the follower a
+weapon that goes cold the moment the mine is placed, and goes red without it.
+
+⚠️ **Still open after the fix**: the arm now fires on real edges but most arcs are
+refused at the takeoff gate — `along >= 0 && along <= needVx + tol && reach + tol
+>= need` — with `UnsupportedEdgeTicks` at zero, so the dispatch is right and the
+*reach* is the suspect. **Which term fails has not been isolated**, and that is
+exactly what distinguishes the generator's run-up assumption from the arc itself.
+Failing edges are recorded with map, from, to and takeoff. `gg2-nav-gen` emits them only behind `--sticky`, into a cache the game
 never reads, because `navFindPath` has no `canSticky` and would route every class
 over them.

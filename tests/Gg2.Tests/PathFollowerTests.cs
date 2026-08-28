@@ -936,6 +936,63 @@ public sealed class PathFollowerTests
     }
 
     /// <summary>
+    /// ⚠️ <b>Placing the mine puts the launcher on cooldown, and the countdown
+    /// must survive that.</b>
+    /// </summary>
+    /// <remarks>
+    /// <b>The bug this pins was invisible to every synthetic test and cost every
+    /// real flight.</b> <see cref="StickyModel.Ready"/> requires
+    /// <c>ReadyToShoot</c>, and firing the mine clears it for the refire — so a
+    /// gate that demands readiness on every tick closes on the tick after the
+    /// placement, the abandon branch throws the setup away, and the bot never
+    /// jumps. Measured across 48 real edges on four maps from
+    /// <c>gg2-nav-gen</c>'s sticky cache: <b>zero sticky jumps taken</b>.
+    /// <para>
+    /// ⚠️ <b>The synthetic tests could not see it because their fixture weapon is
+    /// permanently ready</b> — <c>Loaded()</c> sets <c>ReadyToShoot</c> once and
+    /// nothing ever spends it. This test hands the follower a weapon that goes
+    /// cold the moment the mine is placed, which is what the simulation does.
+    /// </para>
+    /// <para>
+    /// Readiness is required to <em>start</em> the manoeuvre and irrelevant once
+    /// the mine is on the ground, which is the fix.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void TheCountdownSurvivesTheLauncherGoingColdAfterThePlacement()
+    {
+        var graph = Build(
+            [Node(30, 0, 9), Node(10, 20, 29)],
+            [Edge(0, 1, 200, NavEdgeType.StickyJump, takeoff: 8, bucket: 5, ticks: 20)]);
+
+        var follower = new PathFollower(graph);
+        var state = new BotPathState();
+
+        follower.SetGoal(state, NavGraph.ColumnWorldX(25), graph.StandY(1));
+
+        var at = Stand(graph, 0, 8);
+        var able = new NavQuery(Team.Red, CanStickyJump: true);
+
+        // Ready until the mine goes down, cold for ever after — the shape a
+        // refire has, and the shape Loaded() does not.
+        var weapon = Loaded();
+        var keys = PlayerKeys.None;
+
+        for (var tick = 0; tick < 20 && !state.MineDetonate; tick++)
+        {
+            keys = follower.Step(
+                state, At(at.X, at.Y, playerClass: PlayerClass.Demoman), in weapon, tick, able);
+
+            if (state.MineFire)
+                weapon = new WeaponState { ReadyToShoot = false, AmmoCount = 3 };
+        }
+
+        Assert.True(state.MineDetonate, "the countdown died with the launcher's cooldown");
+        Assert.True((keys & PlayerKeys.Jump) != 0, "it detonated without jumping");
+        Assert.Equal(1, state.StickyJumps);
+    }
+
+    /// <summary>
     /// ⚠️ <b>A sticky-jump edge is refused to anybody who cannot fly one</b>, and
     /// the follower counts the ticks rather than steering it.
     /// </summary>
