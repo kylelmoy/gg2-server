@@ -3141,3 +3141,52 @@ of this; the other form is **two CLI tools at once**, and it looks exactly like
 a hung game. `Get-CimInstance Win32_Process` filtered on the command line is
 what identified it in seconds — `Get-Process` alone shows only `node.exe` and
 cannot tell two node tools apart.
+
+### The sentry self-destruct: narrowed to a contradiction, not yet explained
+
+**2026-08-28.** Still open, but three of the four obvious explanations are dead
+and the shape of the evidence has changed.
+
+**What the trace actually holds** (`reference-ctf_truefort-closedsentrykill`):
+
+```
+t 495  BUILD_SENTRY    player 1  at (1890.8, 474.4)
+t 496  DESTROY_SENTRY  player 1  killer 255, assistant 255, cause 0
+...
+t1125  BUILD_SENTRY    player 1  -> t1691 DESTROY, killer 4, cause 9  (a real kill)
+t2295  BUILD_SENTRY    player 1  -> t2296 DESTROY, self
+```
+
+⚠️ **Player 1 builds and the sentry dies on the VERY NEXT TICK, twice, at the
+same spot** — and the one build in between, at a different place, lives for 566
+ticks and dies to a rocket. That is a much sharper picture than "two
+self-destructs are missed".
+
+**What is now ruled out:**
+
+- ❌ **Not a failed build.** Replaying to t495 shows the port *does* build it:
+  slot 1 at (1890.7, 475.1), hp 25, falling normally and gaining hp for the next
+  fifteen ticks. The port has a sentry to destroy and does not destroy it.
+- ❌ **Not another sentry inside the 25 px circle.** The next builds are at t506
+  and t508; at t496 the port's world holds exactly one sentry, and the reference
+  cannot hold more — nothing before t495 builds one.
+- ❌ **Not a `Sentry` descendant being found by `collision_circle`.**
+  `SentryTurret` declares no `<parent>`, and nothing else in the object tree
+  parents `Sentry` — so the "instance_find includes descendants" trap, which
+  this project has been caught by before, is not this.
+- ❌ **Not class or team.** `PlayerChangeClass player 1 → 5` (Engineer) and
+  `PlayerChangeTeam player 1 → 0` both happen at t0 and never change again, and
+  `buildSentry.gml` sets `sentry.team = player.team` on the same tick it creates
+  it.
+
+⬅️ **So the guard's three clauses all read false, and the reference fired it
+anyway.** That is a contradiction rather than a mystery: something in the
+reference's state at t496 is not visible in the recording. **The next step is the
+live game** — build a sentry at (1890.8, 474.4) on `ctf_truefort` with a bot
+engineer and watch whether it self-destructs. If it does, the cause is
+reproducible and local; if it does not, the cause is history the trace does not
+carry.
+
+⚠️ **Do not spend more time on static reading.** Two sessions have now inferred
+their way around this guard and both ran out at the same place; the cheap
+experiment has not been tried.
