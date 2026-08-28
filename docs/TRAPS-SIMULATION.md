@@ -2293,7 +2293,8 @@ placed in the following tick's block, the tick's own block, and the one after. N
 fixture, no drift, no RNG.
 
 ✅ **All four event families are covered**, not just Ubers — deaths, the
-objective and sentries were in exactly the same condition.
+objective and sentries were in exactly the same condition — **and control points
+alongside them**, in a different shape.
 
 ⚠️ **The check that matters is the mutation, and it was run for each family.**
 Pointing one `Reconcile*` at the current tick instead of the next:
@@ -2304,15 +2305,25 @@ Pointing one `Reconcile*` at the current tick instead of the next:
 | **Ubers** | 2 | **0** |
 | Intel | 2 | 2 |
 | Sentries | 2 | 2 |
+| Control points | 3 | 3 |
 
 **Ubers was unguarded entirely** — the number that says the debt was real — and
-the other three rested on two to four fixture assertions that happen to reach
-them. That is the hole measured rather than asserted.
+deaths, intel and sentries rested on two to four fixture assertions that happen
+to reach them. That is the hole measured rather than asserted.
 
-⚠️ **Control points are deliberately not in this file.** They are not an event
-family: the block rides on a `CAPS_UPDATE` and is compared *before* the tick
-runs rather than out of the next tick's messages, so it needs a different shape
-of test. It is also the one that was already caught the hard way.
+⚠️ **Control points were the exception, and the honest reading is that they were
+already fine**: three fixture tests catch the mutation, because this is the one
+that was found the hard way and gated properly afterwards. What the new tests
+add there is not first coverage but **independence from drift** — the same thing
+Ubers lost when a simulation fix moved its charge by a tick.
+
+**Control points take a different shape** for a real reason: they are not an
+event family. The block rides on a `CAPS_UPDATE` and is compared *before* the
+tick runs rather than out of the next tick's messages, so the sensitivity
+control cannot be "move the message to another block" — there is one observation
+per tick. The offset goes into the **value** instead, which is what a one-tick
+misalignment does to it anyway, and the assertion is that
+`Expected - Actual` is uniformly ±1 rather than merely non-zero.
 
 **The general shape, which is the transferable part:**
 

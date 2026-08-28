@@ -41,10 +41,12 @@ namespace Gg2.Tests;
 /// off-by-one a fire seed and a spawn have. See <see cref="Replayer"/>.
 /// </para>
 /// <para>
-/// ⚠️ <b>Control points are deliberately absent.</b> They are not an event
-/// family: the block rides on a <c>CAPS_UPDATE</c> and is compared <em>before</em>
-/// the tick runs rather than out of the next tick's messages, so it needs a
-/// different shape of test. It is also the one that was already caught once.
+/// ⚠️ <b>Control points are here too, and they take a different shape.</b> They
+/// are not an event family: the block rides on a <c>CAPS_UPDATE</c> and is
+/// compared <em>before</em> the tick runs rather than out of the next tick's
+/// messages. ⚠️ <b>They are also the one this project already got wrong</b> —
+/// the comparison read a tick late for several phases. See
+/// <see cref="TheCaptureMeterIsComparedAgainstTheEndOfThePreviousTick"/>.
 /// </para>
 /// </remarks>
 public sealed class ReplayerAlignmentTests
@@ -54,6 +56,12 @@ public sealed class ReplayerAlignmentTests
 
     /// <summary>The roster slot every announcement names.</summary>
     private const byte Slot = 2;
+
+    /// <summary>
+    /// What the capture meter starts at, so an observation one tick behind tick
+    /// zero is still a representable number.
+    /// </summary>
+    private const int MeterBase = 100;
 
     public enum Family
     {
@@ -268,5 +276,174 @@ public sealed class ReplayerAlignmentTests
     public void NothingObjectsWhenThatFamilyIsNotBeingCompared(Family family)
     {
         Assert.Empty(Replay(family, EventTick, Fields.All & ~CompareFor(family)));
+    }
+
+    // --- control points, which are not an event family -----------------------
+
+    /// <summary>
+    /// A simulation whose capture meter is simply the number of ticks it has
+    /// run, so the harness's idea of "when" is the only thing under test.
+    /// </summary>
+    private sealed class CountsCaptureTicks : ITraceSimulation
+    {
+        private ushort _ticksRun;
+
+        public void Tick(ReadOnlySpan<PlayerInput> inputs) => _ticksRun++;
+
+        public bool TryGetControlPoint(int index, out ControlPointBlock point)
+        {
+            // ⚠️ Offset so the meter never has to represent a negative. It is a
+            // ushort on the wire, so an observation a tick BEHIND tick zero
+            // would wrap to 65535 and the comparison would report a difference
+            // of 65535 rather than of one — true, and useless as a signature.
+            point = new ControlPointBlock(
+                Team: 0,
+                CappingTeam: 1,
+                Capping: (ushort)(MeterBase + _ticksRun));
+
+            return index == 0;
+        }
+
+        public void LoadMap(string map) { }
+
+        public void SetCharacter(int slot, in CharacterBlock observed) { }
+
+        public bool SpawnCharacter(int slot, int spawnpointId, int group) => false;
+
+        public void ClearCharacter(int slot) { }
+
+        public void RemoveSlot(int slot) { }
+
+        public void SetPlayerClass(int slot, PlayerClass playerClass) { }
+
+        public void SetPlayerTeam(int slot, Team team) { }
+
+        public void BuildSentry(int slot, double x, double y, int direction) { }
+
+        public void SetFireSeed(int slot, ushort seed) { }
+
+        public void SetControlPointUnlock(int ticks) { }
+
+        public void SetTdmInvulnerability(int ticks) { }
+
+        public IReadOnlyList<DeathRecord> DeathsLastTick => [];
+
+        public IReadOnlyList<UberRecord> UbersLastTick => [];
+
+        public IReadOnlyList<IntelRecord> IntelLastTick => [];
+
+        public IReadOnlyList<SentryRecord> SentriesLastTick => [];
+
+        public bool TryGetCharacter(int slot, out CharacterBlock character)
+        {
+            character = default;
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Ten ticks, each observing a capture meter of <c>index + offset</c>.
+    /// </summary>
+    private static TraceTick[] CapTrace(int offset) =>
+        [.. Enumerable.Range(0, 10).Select(i => new TraceTick
+        {
+            Index = i,
+            Tier = MessageType.CapsUpdate,
+            Slots = new TraceSlot[8],
+            Events = [],
+            ControlPoints =
+            [
+                new ControlPointBlock(
+                    Team: 0,
+                    CappingTeam: 1,
+                    Capping: (ushort)(MeterBase + i + offset)),
+            ],
+        })];
+
+    private static Mismatch[] ReplayCaps(int offset) =>
+        [.. new Replayer(new CountsCaptureTicks()) { Compare = Fields.ControlPoints }
+            .Replay("synthetic", "ctf_truefort", CapTrace(offset), ReplayMode.ClosedLoop,
+                stopAtFirstBadTick: false)
+            .Mismatches];
+
+    /// <summary>
+    /// ✅ <b>The capture meter is compared against the END OF THE PREVIOUS TICK,
+    /// which is what the observation describes.</b>
+    /// </summary>
+    /// <remarks>
+    /// <c>GameServerBeginStep.gml</c> serialises the HUD in the server's own
+    /// Begin Step, so a <c>CAPS_UPDATE</c> arriving with tick T carries the
+    /// meter as it stood at the end of T-1 — exactly like the positions beside
+    /// it. The replayer therefore compares <b>before</b> <c>Advance</c>.
+    /// <para>
+    /// ⚠️ <b>Comparing after it instead is a real bug this project shipped</b>,
+    /// for several phases: it holds the port's end-of-this-tick meter against
+    /// the reference's end-of-last-tick one, so the port reads high by exactly
+    /// one tick of capture. That presented as the port starting every capture
+    /// two ticks early on a soldier recording and four on a scout one, was read
+    /// as a simulation bug, and was pinned as an open finding before anybody
+    /// looked at the harness. docs/PARITY.md, "the capture meter was compared
+    /// one tick late".
+    /// </para>
+    /// <para>
+    /// The stand-in's meter is just its tick count, so nothing here depends on
+    /// capture arithmetic being right — only on the two clocks agreeing.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void TheCaptureMeterIsComparedAgainstTheEndOfThePreviousTick()
+    {
+        Assert.Empty(ReplayCaps(0));
+    }
+
+    /// <summary>
+    /// ⚠️ <b>The control, and it carries the signature of the original bug:</b>
+    /// an observation one tick out makes every comparison read high — or low —
+    /// by exactly one.
+    /// </summary>
+    /// <remarks>
+    /// Unlike the event families above, the sensitivity cannot be shown by
+    /// moving a message between blocks: there is one observation per tick and it
+    /// is compared against the tick it arrived with. So the offset goes into the
+    /// <em>value</em>, which is the same thing a one-tick misalignment does to
+    /// it.
+    /// <para>
+    /// ⚠️ <b><c>Expected - Actual = -offset</c> on every tick is the assertion
+    /// that matters.</b> "Some mismatch" would also pass for a comparison that
+    /// had stopped reading the meter at all; a uniform one-tick lead is the
+    /// shape a misaligned clock actually produces.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData(1)]
+    [InlineData(-1)]
+    public void AnObservationOneTickOutMakesEveryComparisonReadByExactlyOne(int offset)
+    {
+        var mismatches = ReplayCaps(offset);
+
+        // Every one of the ten ticks, not merely some of them.
+        Assert.Equal(10, mismatches.Length);
+        Assert.All(mismatches, m => Assert.Equal("cpcapping", m.Field));
+        Assert.All(mismatches, m => Assert.Equal(offset, m.Expected - m.Actual));
+    }
+
+    /// <summary>
+    /// The meter is not compared unless <see cref="Fields.ControlPoints"/> asks.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Not a formality here.</b> <c>Fields.ControlPoints</c> spent two
+    /// gamemodes doing nothing: <c>StateUpdateReader</c> parsed the block and
+    /// <c>TraceParser</c> threw it away, so a port that never captured the point
+    /// replayed a King of the Hill recording exactly as well as a correct one.
+    /// </remarks>
+    [Fact]
+    public void NothingObjectsWhenControlPointsAreNotBeingCompared()
+    {
+        var report = new Replayer(new CountsCaptureTicks())
+            { Compare = Fields.All & ~Fields.ControlPoints }
+            .Replay("synthetic", "ctf_truefort", CapTrace(1), ReplayMode.ClosedLoop,
+                stopAtFirstBadTick: false);
+
+        Assert.Empty(report.Mismatches);
     }
 }
