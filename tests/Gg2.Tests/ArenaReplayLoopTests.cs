@@ -34,6 +34,14 @@ namespace Gg2.Tests;
 /// that question first.
 /// </para>
 /// <para>
+/// ⚠️ <b>This file's first version blamed the whole symptom on replay, and a
+/// LIVE bug was hiding behind it</b> — <c>spawningAllowed()</c> moved from the
+/// respawn alarm into <c>PlayerSpawn</c>, so every arena round began with
+/// nobody alive. That is fixed and gated by <see cref="ArenaRoundLoopTests"/>.
+/// <b>Fixing it moved nothing here</b>, which is the evidence that these are two
+/// causes with one symptom rather than one cause seen twice.
+/// </para>
+/// <para>
 /// The two <see cref="ClientPredictionGateTests"/> arena rows are the price:
 /// they read 19/21 and 28/9 rather than 2/2 and 9/2, and every one of those
 /// units is this.

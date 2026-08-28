@@ -2135,27 +2135,61 @@ humiliated sentry is healed to `maxHp` on every tick of the scoreboard**
 (`if (built == 1 and currentWeapon == -1) { ... hp = maxHp; ... }`). Both are the
 reference's.
 
-#### ⚠️ NEW, open: the Arena round loop cannot be replayed
+#### ⚠️ The Arena round loop: a replay artefact, and a LIVE BUG hiding behind it
+
+⚠️ **This section said "an artefact of replay rather than of live simulation"
+and that was wrong.** It was written after checking the replay and *reasoning*
+that live play must be fine because the state machine is a faithful
+transcription. It is — and the spawn underneath it was not. **Two causes, one
+symptom, and finding the first stopped the search.** The live half is fixed
+below; the replay half is real and remains.
 
 Landing humiliation gave Arena's round-end state its first observable effect,
-and it immediately exposed something nothing had been checking: **under replay
-the port's Arena loop is nowhere near the recording's.**
+and it immediately exposed something nothing had been checking: **the port's
+Arena loop is nowhere near the recording's.**
 
 | | rounds |
 |---|---|
 | `reference-arena_lumberyard-closedarena` | ends at t1342, t2533, t3601 — 561 and 591 ticks long, won by both teams |
 | the port, replaying it | ends **one tick after each start**, on a 601-tick cycle, **always Red** |
 
-The cause is structural. `doEventArenaRestart` ends in `respawnEveryone()`, and
-a replay may only spawn characters the recording announced — so the tick after
-the port restarts a round, one team has nobody alive, and an empty team is a
-win. The loop then runs on the two timers alone: 300 + 300 + 1.
+**Cause 1, live, FIXED 2026-08-28.** `Player.events/Alarm 5.xml` is
+`if (spawningAllowed()) PlayerSpawn();` — **the guard is on the alarm.** This
+port had moved it inside `PlayerSpawn`, which reads like the same thing and is
+not: Arena's `respawnEveryone()` calls `PlayerSpawn()` *directly*, precisely so
+that it can spawn a round's worth of characters at a moment `spawningAllowed()`
+refuses — `doEventArenaStartRound` sets the HUD to `ARENA_STATE_ROUND_PROPER`
+**before** it calls the sweep. With the guard inside, every arena round began
+with nobody alive.
+
+Measured, 8 bots on `arena_lumberyard`, before and after: rounds of **1 tick**
+became rounds of **447 to 753 ticks**, against the recording's 561 and 591.
+`ArenaRoundLoopTests` gates all three claims and all three go red on the old
+placement.
+
+⚠️ **`spawningAllowed()` is called from exactly ONE place in the reference** —
+`botPopulationUpdate.gml:30` — plus the alarm. It is not a general spawn rule,
+and treating it as one cost a gamemode.
+
+**Cause 2, replay, still open.** A replay may only spawn characters the
+recording announced, so `PortedSimulation` passes no spawn points on most ticks
+and the sweep's spawn is refused for a second, unrelated reason. The replayed
+loop is still 300 + 300 + 1, and the two `ClientPredictionGateTests` arena rows
+did not move when the live bug was fixed — which is the evidence that these
+really are two causes.
 
 **The price is two rows of `ClientPredictionGateTests`**, which went from 2/2 and
 9/2 to 19/21 and 28/9 — every one of those units is the port humiliating half a
 roster in a window the reference never had. ⚠️ Flipping the humiliated team
 gives 19 and 27, indistinguishable, which is the evidence that the **window** is
 wrong rather than the side.
+
+⚠️ **Nothing caught the live half, and the reason is worth more than the bug.**
+The arena fixtures gate the *recording's* framing and the port's trajectories,
+both of which were fine. `eval` ran arena matches to a decision and reported them
+as wins, because five instant rounds reach a cap limit exactly like five real
+ones. **A match that ends is not a match that happened**, and no test asked how
+long a round lasted.
 
 ⚠️ **Injecting the recording's four `ARENA_*` messages is the obvious fix and is
 not obviously right.** Everything else a replay cannot derive is injected

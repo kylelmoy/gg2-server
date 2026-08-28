@@ -359,19 +359,32 @@ public static class Timers
 
         // --- alarm 5: the players' respawns, then the weapons' reloads --------
         //
-        // Player.events/Alarm 5.xml: `if (spawningAllowed()) PlayerSpawn();`.
-        // spawningAllowed() is arena-round gating and is true in every mode the
-        // port runs. Player instances are created at join, before any character
-        // or weapon exists, so within the index every player's alarm fires
-        // before any weapon's — and a character spawned here has its own alarms
-        // visited by the *later* indices of this same stage, exactly as a GM8
-        // instance created mid-stage is.
+        // Player.events/Alarm 5.xml, in full: `if (spawningAllowed())
+        // PlayerSpawn();`. Player instances are created at join, before any
+        // character or weapon exists, so within the index every player's alarm
+        // fires before any weapon's — and a character spawned here has its own
+        // alarms visited by the *later* indices of this same stage, exactly as a
+        // GM8 instance created mid-stage is.
+        //
+        // ⚠️ THE GUARD IS ON THE ALARM, NOT INSIDE PlayerSpawn, and this port
+        // had it inside for two phases. That is not a stylistic difference: it
+        // is the whole of Arena. `respawnEveryone()` calls `PlayerSpawn()`
+        // DIRECTLY (Scripts/Maps/Arena/respawnEveryone.gml) and so bypasses
+        // this test — which is what lets a round start with everybody alive
+        // even though `doEventArenaStartRound` has already set the HUD to
+        // ARENA_STATE_ROUND_PROPER, a state spawningAllowed() refuses. With the
+        // guard moved inside, every arena round began with nobody alive, an
+        // empty team is a win, and every round in this port ended one tick after
+        // it started. See Arena.Sweep and ArenaRoundLoopTests.
+        //
+        // ⚠️ The alarm is still SPENT when the guard refuses — `Advance` runs
+        // first and short-circuit order matters here.
         for (var slot = 0; slot < WorldState.MaxSlots; slot++)
         {
             if (!state.HasPlayer[slot])
                 continue;
 
-            if (Advance(ref state.Players[slot].RespawnTimer))
+            if (Advance(ref state.Players[slot].RespawnTimer) && Arena.SpawningAllowed(state))
                 PlayerSpawn(spawnPoints, ref state, slot, ref events);
         }
 
@@ -544,6 +557,15 @@ public static class Timers
     /// every character in a new round one tick later than the reference does,
     /// and the round starts on the same tick. The guards are the script's own,
     /// so a spectator still spawns nothing.
+    /// <para>
+    /// ⚠️ <b>And it deliberately does NOT consult
+    /// <see cref="Arena.SpawningAllowed"/></b>, because
+    /// <c>respawnEveryone.gml</c> calls <c>PlayerSpawn()</c> directly while
+    /// <c>Player.events/Alarm 5.xml</c> is <c>if (spawningAllowed())
+    /// PlayerSpawn();</c>. The round is already <c>RoundProper</c> by the time
+    /// the sweep runs, so a guard here refuses every spawn and the round starts
+    /// empty.
+    /// </para>
     /// </remarks>
     public static void SpawnNow(
         Maps.SpawnPoints? spawnPoints,
@@ -561,13 +583,15 @@ public static class Timers
         ref readonly var player = ref state.Players[slot];
 
         // `if(global.isHost and !global.mapchanging and team != TEAM_SPECTATOR
-        // and object == -1)`. ⚠️ The alarm still fires while the map is
-        // changing — the guard is inside the script, not on the alarm — so the
-        // timer is spent and the player simply does not appear. That is what
-        // makes the reset's blanket `alarm[5] = 1` safe.
+        // and object == -1)` — the script's own guard, and all of it. ⚠️ The
+        // alarm still fires while the map is changing (that test IS inside the
+        // script) so the timer is spent and the player simply does not appear,
+        // which is what makes the reset's blanket `alarm[5] = 1` safe.
+        //
+        // ⚠️ `spawningAllowed()` is NOT one of these, and putting it here broke
+        // Arena outright — see the alarm-5 stage above.
         if (spawnPoints is null
             || state.MapChanging
-            || !Arena.SpawningAllowed(state)
             || state.Alive[slot]
             || player.Team is not (Team.Red or Team.Blue))
         {
