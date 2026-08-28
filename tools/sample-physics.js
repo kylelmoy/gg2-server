@@ -272,32 +272,62 @@ async function main() {
 
     const mask = walkmask.decode(map);
 
+    let site = 0;
+
     for (const [cx, cy] of groundSites(mask)) {
+      site++;
+
       for (const cls of CLASSES) {
         const floorY = (cy + 7) * CELL;
+
+        // ⚠️ HALF THE SITES START AT EXACT REST, added 2026-08-28. Every
+        // scenario used to start already moving - `hNum` is
+        // round((random() * 12 - 6) * den), so an hspeed of exactly 0 was
+        // essentially impossible - and a character ACCELERATING FROM REST was
+        // therefore never measured at all. That is the state gg_debug's t523
+        // residue is born in.
+        //
+        // Deterministic on the site index rather than drawn, so the split does
+        // not move when the seed does.
+        const rest = site % 2 === 0;
 
         // A denominator of 40 lands the start on eighths and fifths of a pixel:
         // the fifth is the bin the wire quantises to, and the eighth is the step
         // the landing crawl backs off by. Both are where a rounding rule shows.
         const den = 40;
+
+        // ⚠️ The draws happen either way, so that turning a site into a rest
+        // start does not shift the random stream for every scenario after it.
+        const drift = Math.floor(random() * 12);
+        const jitter = Math.floor(random() * den);
+        const hDraw = Math.round((random() * 12 - 6) * den);
+        const vDraw = Math.round((random() * 10 - 3) * den);
+
         const start = {
           den,
           xNum: Math.round((cx + 4) * CELL * den) + Math.floor(random() * den),
-          yNum: Math.round((floorY - cls.bottom - 1 - Math.floor(random() * 12)) * den) + Math.floor(random() * den),
-          hNum: Math.round((random() * 12 - 6) * den),
-          vNum: Math.round((random() * 10 - 3) * den),
+
+          // A rest start is placed exactly on the floor, with no drift and no
+          // sub-pixel jitter: "standing still on the ground" is the state, and
+          // a character hovering a fraction above it is a falling one.
+          yNum: rest
+            ? Math.round((floorY - cls.bottom - 1) * den)
+            : Math.round((floorY - cls.bottom - 1 - drift) * den) + jitter,
+          hNum: rest ? 0 : hDraw,
+          vNum: rest ? 0 : vDraw,
         };
 
         const keys = keySequence(random);
         const aims = keys.map(() => Math.floor(random() * 65536));
 
-        const scenario = { map, cls, team: 1, start, keys, aims };
+        const scenario = { map, cls, team: 1, start, keys, aims, rest };
         const ticks = await runScenario(scenario);
 
         out.scenarios.push({
           map,
           class: cls.name,
           team: scenario.team,
+          rest,
           start: {
             x: start.xNum / den,
             y: start.yNum / den,

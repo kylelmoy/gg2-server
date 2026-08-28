@@ -3101,3 +3101,43 @@ regeneration should force some rest starts.
 ⬅️ **So t523's lead is now "an unmeasured corner of the physics oracle" rather
 than "somewhere in walking".** That is a much smaller place to look, and it does
 not need the six-player recording reproduced.
+
+### ✅ The physics oracle regenerated: correct boxes, a Soldier, and rest starts
+
+**2026-08-28.** The follow-up the box measurement left owing, and the port
+**matches every tick of it**.
+
+`physics-samples.json` is now **64 scenarios × 48 ticks**, up from 48, and the
+three things it was missing are all in:
+
+| | before | after |
+|---|---|---|
+| character box | sampler's own table, **wrong** for Scout and Heavy | derived from the sprite, as `Create.xml` does |
+| classes | Scout, Heavy, Pyro | **+ Soldier** (16 scenarios) |
+| starts | always already moving | **32 of 64 start at exact rest**, and all 32 move |
+
+✅ **The port reproduces all of it.** So the per-tick physics is exact for a
+Soldier, for a character accelerating from rest, and for the real boxes — none
+of which had ever been measured.
+
+⬅️ **Which narrows `gg_debug`'s t523 residue again, by elimination.** The lead
+was "ordinary walking and friction arithmetic"; that arithmetic is now measured
+in the state the residue is born in — a Soldier accelerating from rest — and it
+is exact. **The residue is not in the per-tick walking formula.** What remains
+is the interaction: the stage order around it, the collision path, or the state
+the character carries into the walk.
+
+⚠️ **`rest` is decided on the site index, not drawn**, and the random draws
+happen either way, so making a site a rest start does not shift the stream for
+every scenario after it. A sampler whose variants perturb the seed cannot be
+compared run to run.
+
+#### ⚠️ The one-client trap, hit again and worth the reminder
+
+The first sampler run timed out with "the game did not reply within 10000ms".
+The cause was not the game: **an earlier backgrounded run of the same sampler
+was still alive and holding the bridge.** CLAUDE.md records the MCP-server form
+of this; the other form is **two CLI tools at once**, and it looks exactly like
+a hung game. `Get-CimInstance Win32_Process` filtered on the command line is
+what identified it in seconds — `Get-Process` alone shows only `node.exe` and
+cannot tell two node tools apart.
