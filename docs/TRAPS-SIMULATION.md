@@ -2063,6 +2063,80 @@ change trajectories rather than last digits:
   `Gml.Greater`, `Gml.Sign` and friends. A raw `!= 0` on a value that ordinary
   cancellation left at `-2.7e-14` moves a character six pixels.
 
+### t523's residue: the stop is a WALL, and the "+0.4865" was never a divergence
+
+**2026-08-28.** Three corrections and one new experiment. The residue itself is
+still open, but everything the last three sessions pointed at has moved.
+
+**The reproduction, with nothing in it.** Slot 4 at t383 is at (588, 168) on
+`gg_debug` holding RIGHT, and that is the whole of the interesting part. Placed
+in a bare `ScenarioWorld` — no trace, no replayer, nobody else on the map — the
+port does this:
+
+```
+t12  x = 626.5277729831873   hspeed = 4.3220528294914455
+t13  x = 629.2933979831873   hspeed = 0          <- the wall
+t14  x = 629.4650989026032   hspeed = 0
+t15  x = 629.4758302100668   hspeed = 0
+t16  x = 629.4865615175303   hspeed = 0
+t17  x = 629.4972928249938   <- rest, and it never moves again
+```
+
+⚠️ **The stop is a WALL, not friction.** The recording holds key 0x20 — RIGHT,
+held — on every tick from t388 through t406, and `hspeed` goes to zero at t404
+anyway. The handoff's *"suspect ordinary walking and friction arithmetic"* was
+wrong, and it is what sent two sessions to the acceleration formula, which
+`PhysicsSampleTests` already measures exact over 64 engine scenarios.
+
+⚠️ **The famous "+0.4865 residual, which grows while walking and then freezes"
+is not a measurement of anything.** It is `x*5 - 3147` for the port's own
+resting position: 629.4972928… × 5 = 3147.4865. It grows while the character
+walks because the character is walking, and freezes when it stops because it has
+stopped. **A recording cannot say where the reference rests to better than a
+fifth of a pixel**, so no quantity computed from the port's own x and a wire
+integer is a divergence. Reading it as one is what made the residue look as
+though it were born during the walk.
+
+⚠️ **`good_move_contact_solid`'s back-off ladder is NOT an uncovered arm.**
+Measured by counting it inside the physics oracle: the 64 engine scenarios enter
+the back-off branch **1,354 times** and come to rest on a rung **198 times**, and
+the port is exact on every one. The ladder was the natural next suspect and it is
+dead.
+
+#### What the reproduction did turn up: the rest is 0.0027 px from a tie
+
+The mask's free/blocked boundary at that spot is exactly **x = 629.5**, and
+`RoundPosition` is half-to-even, so 629.5 becomes 630 and is solid. The
+character rests at 629.4972928…, **0.0027 px short of a rounding tie** — reached
+by a four-tick *creep* with `hspeed` already zero, because the walk keys are
+still held, so it re-accelerates a fraction each tick, moves until `place_free`
+fails and backs off a rung. Each tick gains one rung less than the last: 0.1717,
+then 0.0107 three times, then the smallest rung no longer fits.
+
+**Both simulations report `round(x*5) = 3147` from anywhere in [629.3, 629.5).**
+That is the whole reason no fixture can see this, and it is why the item has
+stalled three times.
+
+#### ⬅️ The next step is one command, and it is decisive
+
+`tools/probes/probe-wall-stop.js` drives that scenario in the engine and prints
+the engine's resting x beside the port's. It needs a dedicated server on
+`gg_debug` with the bridge and one Character to borrow, and it answers the item
+either way:
+
+- **engine = 629.4972928249938** — the walk and the wall stop agree exactly, the
+  "born during the walk" reading is finished, and the search moves to what slot 4
+  does from t418: it starts rocket-jumping.
+- **anything else** — the residue is measured for the first time, and its size
+  names the mechanism. A whole rung (~0.0107) is a `place_free` disagreement near
+  the tie; ~1e-13 is the fuzzy-compare epsilon; in between is the creep loop
+  running a different number of times.
+
+`WallStopTests` pins the port's side of that comparison to the last bit,
+deliberately: the probe's entire output is `engine − 629.4972928249938`, so a
+port change that moves the number invalidates a comparison somebody may already
+have run.
+
 ### `gg_debug` stops on a rocket blast four pixels short
 
 ✅ **Found and FIXED 2026-08-27 — three bugs, each behind the last.**
