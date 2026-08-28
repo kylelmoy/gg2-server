@@ -2078,3 +2078,43 @@ tries what no human would, so it finds physics-port bugs by exploiting them.
 ⚠️ **An exploit is a finding for `docs/PARITY.md`, not something to penalise in
 the score** — scoring around a bug hides it. `gg2-rl/docs/PLAN.md` phase 1 says
 the same thing from the other side.
+
+### ⚠️ Team Deathmatch bots have no goal, and one map makes it visible
+
+**Found 2026-08-28**, by applying the Arena lesson ("a match that ends is not a
+match that happened") to the other twenty-one maps rather than only to the one
+that had just bitten.
+
+`BotObjective.Decide` chooses between the intel, a generator and the control
+points. **Team Deathmatch has none of the three**, so it returns `BotGoal.None`,
+the path follower has no route, and a bot stands where it spawned until an enemy
+walks into its combat range.
+
+| map | mode | what 8 bots do in 1,500 ticks |
+|---|---|---|
+| `gg_debug` | TeamDeathmatch | fight hard — 24 deaths, match decided at t949 |
+| `tdm_mantic` | TeamDeathmatch | **move exactly 0 px, all eight, and 0 deaths in 3,000 ticks** |
+
+⚠️ **The difference is the map, not the mode.** `gg_debug` is one room where
+everybody spawns on top of everybody, so combat steering does all the moving and
+the missing goal is invisible — which is why the TDM fixtures and
+`TeamDeathmatchTests` look healthy. `tdm_mantic` is large and vertical, the bots
+spawn scattered across levels, and nothing ever brings them together.
+
+⚠️ **`eval`'s `tdm_mantic` result has therefore never measured anything**, the
+same way its arena results did not, and for a related reason: the run completes,
+so it reports.
+
+**Pinned rather than fixed** (`MatchActuallyHappensTests`). Giving Team
+Deathmatch a goal is a bot-layer design question — hunt the nearest enemy?
+patrol? hold a chokepoint? — and `CLAUDE.md`'s rule for this layer is to improve
+where the fix is straightforward and write down where it is not. This is not
+straightforward: "walk at the nearest enemy" is the obvious answer and is also
+how you get eight bots in a conga line.
+
+**The gate that came with it** asserts the cheapest possible thing about a match
+— *the bots move* — on one map per gamemode. Movement rather than kills, because
+a kill needs two bots to find each other inside the budget and a stationary
+roster is unambiguous. ⚠️ **That gate is the durable part of the arena
+finding**, and it is worth more than either bug: this repo had 2,240 tests and
+not one of them asked whether a match had anything in it.
