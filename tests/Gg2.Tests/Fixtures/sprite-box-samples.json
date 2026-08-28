@@ -1,7 +1,7 @@
 {
-  "generated": "2026-08-27",
-  "source": "tools/probes/probe-sprite-boxes.js, against a dedicated ctf_truefort server",
-  "note": "Raw sprite_get_* and instance bbox_* readings for the boxes phase 5 and 6 had to derive from a PNG or an XML rather than ask the engine for. 'instance' and 'flipped' are bbox_* minus the instance position, at image_xscale +1 and -1.",
+  "generated": "2026-08-28",
+  "source": "tools/probes/probe-sprite-boxes.js, against any dedicated server (a sprite box does not depend on the map)",
+  "note": "Raw sprite_get_* and instance bbox_* readings for the boxes phases 5 and 6 had to derive from a PNG or an XML rather than ask the engine for. 'instance' and 'flipped' are bbox_* minus the instance position, at image_xscale +1 and -1.",
   "sprites": [
     {
       "sprite": "BubbleS",
@@ -16,8 +16,18 @@
       "bboxTop": 0,
       "bboxRight": 11,
       "bboxBottom": 11,
-      "instance": { "left": -6, "top": -6, "right": 5, "bottom": 5 },
-      "flipped": { "left": -7, "top": -6, "right": 6, "bottom": 5 }
+      "instance": {
+        "left": -6,
+        "top": -6,
+        "right": 5,
+        "bottom": 5
+      },
+      "flipped": {
+        "left": -7,
+        "top": -6,
+        "right": 6,
+        "bottom": 5
+      }
     },
     {
       "sprite": "StabMaskS",
@@ -32,8 +42,18 @@
       "bboxTop": 13,
       "bboxRight": 57,
       "bboxBottom": 55,
-      "instance": { "left": -2, "top": -24, "right": 31, "bottom": 18 },
-      "flipped": { "left": -33, "top": -24, "right": 2, "bottom": 18 }
+      "instance": {
+        "left": -2,
+        "top": -24,
+        "right": 31,
+        "bottom": 18
+      },
+      "flipped": {
+        "left": -33,
+        "top": -24,
+        "right": 2,
+        "bottom": 18
+      }
     },
     {
       "sprite": "IntelligenceRedS",
@@ -48,8 +68,18 @@
       "bboxTop": 0,
       "bboxRight": 19,
       "bboxBottom": 19,
-      "instance": { "left": -9, "top": -12, "right": 10, "bottom": 7 },
-      "flipped": { "left": -12, "top": -12, "right": 9, "bottom": 7 }
+      "instance": {
+        "left": -9,
+        "top": -12,
+        "right": 10,
+        "bottom": 7
+      },
+      "flipped": {
+        "left": -12,
+        "top": -12,
+        "right": 9,
+        "bottom": 7
+      }
     },
     {
       "sprite": "IntelligenceBlueS",
@@ -64,8 +94,18 @@
       "bboxTop": 0,
       "bboxRight": 19,
       "bboxBottom": 19,
-      "instance": { "left": -9, "top": -12, "right": 10, "bottom": 7 },
-      "flipped": { "left": -12, "top": -12, "right": 9, "bottom": 7 }
+      "instance": {
+        "left": -9,
+        "top": -12,
+        "right": 10,
+        "bottom": 7
+      },
+      "flipped": {
+        "left": -12,
+        "top": -12,
+        "right": 9,
+        "bottom": 7
+      }
     },
     {
       "sprite": "GeneratorRedS",
@@ -80,8 +120,18 @@
       "bboxTop": 14,
       "bboxRight": 43,
       "bboxBottom": 41,
-      "instance": { "left": -21, "top": -7, "right": 20, "bottom": 20 },
-      "flipped": { "left": -22, "top": -7, "right": 21, "bottom": 20 }
+      "instance": {
+        "left": -21,
+        "top": -7,
+        "right": 20,
+        "bottom": 20
+      },
+      "flipped": {
+        "left": -22,
+        "top": -7,
+        "right": 21,
+        "bottom": 20
+      }
     },
     {
       "sprite": "GeneratorBlueS",
@@ -96,8 +146,44 @@
       "bboxTop": 14,
       "bboxRight": 43,
       "bboxBottom": 41,
-      "instance": { "left": -21, "top": -7, "right": 20, "bottom": 20 },
-      "flipped": { "left": -22, "top": -7, "right": 21, "bottom": 20 }
+      "instance": {
+        "left": -21,
+        "top": -7,
+        "right": 20,
+        "bottom": 20
+      },
+      "flipped": {
+        "left": -22,
+        "top": -7,
+        "right": 21,
+        "bottom": 20
+      }
+    },
+    {
+      "sprite": "sprite44",
+      "object": "DropdownPlatform",
+      "objectMask": -1,
+      "frames": 9,
+      "width": 60,
+      "height": 6,
+      "xOrigin": 0,
+      "yOrigin": 0,
+      "bboxLeft": 0,
+      "bboxTop": 0,
+      "bboxRight": 59,
+      "bboxBottom": 5,
+      "instance": {
+        "left": 0,
+        "top": 0,
+        "right": 59,
+        "bottom": 5
+      },
+      "flipped": {
+        "left": -61,
+        "top": 0,
+        "right": 0,
+        "bottom": 5
+      }
     }
   ]
 }

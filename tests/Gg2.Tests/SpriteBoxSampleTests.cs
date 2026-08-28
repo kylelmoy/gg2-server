@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Gg2.Maps;
 using Gg2.Simulation;
 
 namespace Gg2.Tests;
@@ -228,5 +229,108 @@ public sealed class SpriteBoxSampleTests
             Assert.Equal(sample.Instance.Top, sample.Flipped.Top);
             Assert.Equal(sample.Instance.Bottom, sample.Flipped.Bottom);
         }
+    }
+
+    /// <summary>
+    /// ✅ <b>The dropdown platform's box, measured at last</b> — and the port's
+    /// inferred 60x6 bar is right.
+    /// </summary>
+    /// <remarks>
+    /// <b>It was the last collider in the project that had never been asked of
+    /// the engine.</b> The collision oracle samples every rectangle the port
+    /// builds, but only for things that are <em>solid</em>, and
+    /// <c>SolidKind.DropdownPlatform</c> is never solid to anything — so the
+    /// platform fell through the one net that would have caught it. Measured
+    /// 2026-08-28 with <c>probe-sprite-boxes.js</c>'s <c>mask_index</c> trick,
+    /// which does not care about solidity because a bounding box is a property
+    /// of the sprite.
+    /// <para>
+    /// ⚠️ <b>The sprite has NINE sub-images</b>, which is worth knowing only
+    /// because it makes "one frame" a bad assumption to carry into the next
+    /// collider: the box is the same for all of them, but nothing here checked
+    /// that before.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void TheDropdownPlatformsBoxIsTheOneTheEngineReports()
+    {
+        var engine = Sprite("sprite44");
+
+        Assert.Equal(60, engine.Width);
+        Assert.Equal(6, engine.Height);
+        Assert.Equal(0, engine.XOrigin);
+        Assert.Equal(0, engine.YOrigin);
+
+        // The port infers this one rather than reading it: ColliderSprites.Bar
+        // with BarLong x BarShort.
+        var rect = ColliderSprites.Of(new LevelEntity
+        {
+            Type = EntityTypes.DropdownPlatform,
+            X = 100,
+            Y = 200,
+            Properties = new Dictionary<string, GgonValue>(),
+        });
+
+        Assert.NotNull(rect);
+        Assert.Equal(SolidKind.DropdownPlatform, rect!.Value.Kind);
+
+        Assert.Equal(100 + engine.Instance.Left, rect.Value.Left);
+        Assert.Equal(100 + engine.Instance.Right, rect.Value.Right);
+        Assert.Equal(200 + engine.Instance.Top, rect.Value.Top);
+        Assert.Equal(200 + engine.Instance.Bottom, rect.Value.Bottom);
+    }
+
+    /// <summary>
+    /// ⚠️ <b>OPEN, latent: a collider placed with a negative scale gets an
+    /// inverted rectangle.</b>
+    /// </summary>
+    /// <remarks>
+    /// <c>SolidRect.FromEntity</c> computes
+    /// <c>Right = round(x + width * xScale) - 1</c>, so at <c>xScale = -1</c> it
+    /// returns <b>Left = x, Right = x - 61</b> — a rectangle whose right edge is
+    /// left of its left edge, which overlaps nothing. The engine's answer,
+    /// measured on all seven sprites above, is <c>[-(right + 2), -left]</c>:
+    /// for this sprite <b>Left = x - 61, Right = x</b>, two pixels wider than
+    /// the unflipped box rather than a mirror of it.
+    /// <para>
+    /// ✅ <b>Unreachable with the shipped maps.</b> Not one entity in
+    /// <c>maps.json</c> — every built-in map — has a negative scale, which is
+    /// why no fixture and no oracle has ever shown this. **A custom map can set
+    /// one**, and the server serves custom maps.
+    /// </para>
+    /// <para>
+    /// <b>This test pins the defect rather than the fix</b>, like
+    /// <c>SentryKillFixtureTests</c>: it fails when the rectangle is normalised,
+    /// and the flip inflation above is the number to normalise it to. Left
+    /// unfixed because no map exercises it and a fix without a case that needs
+    /// it is a change to collision geometry made on spec.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void AFlippedColliderStillBuildsAnInvertedRectangle()
+    {
+        var rect = ColliderSprites.Of(new LevelEntity
+        {
+            Type = EntityTypes.DropdownPlatform,
+            X = 100,
+            Y = 200,
+            XScale = -1,
+            Properties = new Dictionary<string, GgonValue>(),
+        });
+
+        Assert.NotNull(rect);
+
+        // What the port produces today: inverted, so it overlaps nothing.
+        Assert.Equal(100, rect!.Value.Left);
+        Assert.Equal(100 - 61, rect.Value.Right);
+        Assert.True(
+            rect.Value.Right < rect.Value.Left,
+            "the rectangle is no longer inverted — if this was fixed, re-pin it "
+                + "against the measured flip: Left = x - 61, Right = x");
+
+        // And what the engine says it should be.
+        var engine = Sprite("sprite44");
+        Assert.Equal(-61, engine.Flipped.Left);
+        Assert.Equal(0, engine.Flipped.Right);
     }
 }

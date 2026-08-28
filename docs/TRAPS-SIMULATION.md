@@ -2976,3 +2976,79 @@ argument.
 drive a simulation entry point and do not care what it announced. A convenience
 overload in the simulation would have been tidier and would have put the hole
 straight back, because production code could reach it too.
+
+### Live session 2026-08-28: the platform's box, and where a mask hangs
+
+Two of the open live-game questions, settled with a dedicated server on
+`gg_debug` and **no `gg2.ini` edit at all** — neither probe needs a character,
+so the bots setting was never touched and the reference tree never changed.
+
+#### ✅ The dropdown platform's box: 60 × 6, and the port was right
+
+`sprite44`, via `probe-sprite-boxes.js`'s `mask_index` trick — a `Shot` wearing
+the sprite, which works because **a bounding box is a property of the sprite and
+solidity is not**. That is the whole reason this one was still open: the
+collision oracle samples every rectangle the port builds, but only for things
+that are *solid*, and a dropdown platform is never solid to anything.
+
+Measured: **width 60, height 6, origin (0,0), sprite bbox 0,0..59,5**, instance
+box `[0..59] × [0..5]`, **nine sub-images**. `ColliderSprites`' inferred
+`BarLong × BarShort` bar is exact, and `SolidRect.FromEntity`'s
+`round(x + w) - 1` gives the same inclusive right edge the engine reports.
+
+⚠️ **The flip rule now holds on a seventh sprite**: `flipped = [-(right + 2),
+-left]`, two pixels wider than the unflipped box. `SpriteBoxSampleTests` already
+asserted it over every sample, so the platform joined that gate for free.
+
+#### ⚠️ OPEN, latent: a flipped collider builds an inverted rectangle
+
+`SolidRect.FromEntity` computes `Right = round(x + width * xScale) - 1`, so at
+`xScale = -1` it returns **Left = x, Right = x − 61** — a rectangle whose right
+edge is left of its left edge, which overlaps nothing. The engine's answer is
+**x − 61 .. x**.
+
+✅ **Unreachable with the shipped maps** — *no* entity in any built-in map has a
+negative scale, checked across `maps.json`, which is why no oracle ever showed
+it. **A custom map can set one**, and the server serves custom maps. Pinned by
+`SpriteBoxSampleTests.AFlippedColliderStillBuildsAnInvertedRectangle`, which
+**fails when it is fixed**; left unfixed because changing collision geometry
+with no case that needs it is a change made on spec.
+
+#### ✅ A precise mask hangs off the ROUNDED position
+
+The open half of the mask model: every sample in `rotated-mask-samples.json` is
+at an exact integer position, so the anchor was a choice rather than a
+measurement — and it matters because a projectile is essentially never at an
+integer position.
+
+`probe-fractional-mask.js`, rotated Rocket at 30°, rasterised at +0, +0.25,
++0.5, +0.75: **+0.25 is pixel-identical to +0, and +0.75 is +0 shifted exactly
+one pixel right.** That is rounding, and it rules out the mask following the
+real position, which would have moved a boundary between +0 and +0.25.
+✅ **`ProjectileMask`'s anchor on `CollisionWorld.RoundPosition` is correct**,
+and `RotatedMaskSampleTests.AFractionalPositionCollidesAsItsRoundedOne` now
+holds the port to the same property.
+
+#### ⚠️ NEW, open: at an exact half, the box is the union of both neighbours
+
+`probe-round-tie.js`, four bases:
+
+| x | bbox at ⌊x⌋ | **bbox at x.5** | bbox at ⌈x⌉ |
+|---|---|---|---|
+| 3000.5 | 2999..3005 | **2999..3006** | 3000..3006 |
+| 3001.5 | 3000..3006 | **3000..3007** | 3001..3007 |
+| 3002.5 | 3001..3007 | **3001..3008** | 3002..3008 |
+| 3003.5 | 3002..3008 | **3002..3009** | 3003..3009 |
+
+⚠️ **The tie is not rounded to one integer at all.** The left edge takes the
+lower neighbour and the right edge the upper, so the box is one pixel wider than
+either. Consistent at both parities, so this is **not** half-to-even and **not**
+half-away-from-zero — and `CollisionWorld.RoundPosition`, whose comment states
+half-to-even as fact, cannot express it at ties.
+
+⚠️ **Left unfixed, deliberately.** `RoundPosition` is on every collision path in
+the port; changing it to model a case that arises only at an exact half is a
+large risk for a measure-nearly-zero input. **What is now written down is that
+the model has a known edge**, which is the thing that was missing. The precise
+*mask* at a half matched neither neighbour at an even base and matched the upper
+one at an odd base — unexplained, recorded rather than theorised about.

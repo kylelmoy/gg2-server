@@ -1,6 +1,7 @@
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Gg2.Protocol;
 using Gg2.Simulation;
 
 namespace Gg2.Tests;
@@ -571,5 +572,66 @@ public sealed class RotatedMaskSampleTests
         Assert.False(
             ProjectileMask.Overlaps(in rocket, in rocketBox, in bubble, in bubbleBox),
             "the masks do not share a pixel, so the projectiles are not touching");
+    }
+
+    /// <summary>
+    /// ✅ <b>MEASURED 2026-08-28: a precise mask hangs off the ROUNDED position,
+    /// not the exact one</b> — so <c>ProjectileMask</c>'s anchor is right.
+    /// </summary>
+    /// <remarks>
+    /// <b>This was the open half of the mask model.</b> Every sample in the
+    /// fixture above is taken at an exact integer position, deliberately, "so
+    /// the bbox rounding is not part of what is measured" — which left the
+    /// anchor a choice rather than a measurement. It mattered because a
+    /// projectile is essentially never at an integer position: a rocket's x
+    /// moves by <c>hspeed</c> every tick.
+    /// <para>
+    /// <c>tools/probes/probe-fractional-mask.js</c>, rotated Rocket at 30°,
+    /// rasterised at x + 0, +0.25, +0.5, +0.75:
+    /// <b>+0.25 is pixel-identical to +0, and +0.75 is +0 shifted exactly one
+    /// pixel right.</b> That is rounding, and it rules out the mask following
+    /// the real position — which would have moved a boundary between +0 and
+    /// +0.25.
+    /// </para>
+    /// <para>
+    /// This test asserts the port has the same property rather than checking in
+    /// another grid: the fixture already pins <em>what</em> the mask is, and
+    /// what was unknown was only <em>where it hangs</em>.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData(0.25, 0.0)]
+    [InlineData(0.75, 1.0)]
+    [InlineData(-0.25, 0.0)]
+    public void AFractionalPositionCollidesAsItsRoundedOne(double offset, double equivalent)
+    {
+        var rocket = new ProjectileState
+        {
+            Kind = ProjectileKind.Rocket,
+            X = 3000 + offset,
+            Y = 3000,
+            OwnerSlot = CharacterState.Nobody,
+            Team = Team.Red,
+            Source = DamageSource.Rocketlauncher,
+            ImageAngle = 30,
+        };
+
+        var control = rocket with { X = 3000 + equivalent };
+
+        var covered = 0;
+
+        for (var py = 3000 - 9; py <= 3000 + 9; py++)
+        for (var px = 3000 - 9; px <= 3000 + 9; px++)
+        {
+            var a = ProjectileMask.Covers(in rocket, px, py);
+            Assert.Equal(a, ProjectileMask.Covers(in control, px, py));
+
+            if (a)
+                covered++;
+        }
+
+        // A mask that covered nothing would satisfy the equality above without
+        // saying anything, which is the failure this project keeps meeting.
+        Assert.True(covered > 0, "the mask covered no pixel at all");
     }
 }

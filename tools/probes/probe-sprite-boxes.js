@@ -53,6 +53,13 @@ const SPRITES = [
   ['IntelligenceBlueS', 'IntelligenceBlue'],
   ['GeneratorRedS', 'GeneratorRed'],
   ['GeneratorBlueS', 'GeneratorBlue'],
+
+  // ⚠️ The dropdown platform, added 2026-08-28. Its box was INFERRED, never
+  // measured, because the collision oracle only ever sampled solid things and a
+  // platform is never solid to anything (SolidKind.DropdownPlatform). The port
+  // builds it as a 60x6 bar; nothing has ever asked the engine. It is the one
+  // collider left in that standing, and the same mask_index trick reaches it.
+  ['sprite44', 'DropdownPlatform'],
 ];
 
 function gml() {
@@ -147,7 +154,7 @@ async function main() {
 
   const doc = {
     generated: new Date().toISOString().slice(0, 10),
-    source: 'tools/probes/probe-sprite-boxes.js, against a dedicated ctf_truefort server',
+    source: 'tools/probes/probe-sprite-boxes.js, against any dedicated server (a sprite box does not depend on the map)',
     note:
       'Raw sprite_get_* and instance bbox_* readings for the boxes phases 5 and 6 had to derive '
       + "from a PNG or an XML rather than ask the engine for. 'instance' and 'flipped' are bbox_* "
