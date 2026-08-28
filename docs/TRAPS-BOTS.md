@@ -2018,6 +2018,17 @@ decision made visible:
   answer needing no data, and it costs a nested search per candidate per tick.
   The seam is a third enum member and a branch in `OpponentInput`.
 
+⚠️ **`Idle` is NOT dead code, and it is the member most likely to be deleted by
+somebody tidying up.** `HoldLastInput` is the same *class* of assumption as
+`botAimLead.gml`'s constant velocity — better, because it is right about momentum
+over 20 ticks, and still an opponent who does not react. `gg2-rl` phase 1 will
+therefore report the win rate under **both** models rather than one headline
+number: if they barely differ the search is not really using its opponent model
+and the horizon or the scoring is the binding constraint; if they differ a lot,
+that gap is the quantified argument for paying for nested rollouts. `Idle` is the
+control that makes the comparison possible, and the number is wanted before
+phase 2 distils anything — a policy inherits whatever the search assumed.
+
 ⚠️ **Test it on the SCORE, not on the chosen action.** Two opponent models pick
 the same action all the time; a first draft of `RolloutSearchTests` compared
 actions in a position where nothing landed inside the horizon, so both models

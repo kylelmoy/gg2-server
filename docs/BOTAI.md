@@ -6,8 +6,21 @@ and the bot seam have shipped.
 
 ⚠️ **Audited against the shipped code on 2026-08-27, and one of them was false.**
 `BotAiConstraintsTests` now asserts the five that are structural facts rather than
-design intent; each verdict is recorded against its item below. Items 3, 8 and 10 remain
-unbuilt and say so; item 9 was built on the audit's own finding.
+design intent; each verdict is recorded against its item below. Item 9 was built on
+the audit's own finding, and items 3 and 8 were built the same day.
+
+✅ **Items 1-11 are all built as of 2026-08-28.** Item 10's `Gg2.Env` closed with
+its v0 exit criteria met, and item 7 closed with it: the accumulators
+`TickEvents.DamageDealt` / `DamageTaken` are credited in `DamageApi.Deal` and
+gated by `DamageAccumulatorTests`. ⚠️ **Item 7's own section said "half built"
+for a day after it was whole** — the third stale queue entry this week, and the
+reason the standing instruction is to `grep` for the missing thing before
+starting an item rather than trusting the prose.
+
+✅ **Item 12 — the rollout-search bot — landed 2026-08-28** (`13b5b75`),
+`Gg2.Bots.RolloutSearch`. It was `gg2-rl` phase 1's hard dependency and nothing
+else blocked on it. 2.94 ms a decision in Release and 11-0-1 against
+`ScriptedBot` over twelve duels; `docs/TRAPS-BOTS.md`, "Item 12", has the rest.
 
 None of this asks for a neural network to be built. It asks that the port not
 foreclose one.
@@ -141,6 +154,30 @@ give it a bounded on-disk format.
 **Deadline.** This is the only item here with one. Data not collected during the
 port's first public games does not exist afterwards.
 
+### ⬅️ TABLED by the user, 2026-08-28
+
+**"There are zero active players of this game world wide."** The deadline assumed
+a first public game with strangers in it. There is no evidence such a game is
+coming, and an item whose precondition may never arrive should not go on being
+the one item with a clock on it.
+
+**It is not critical, and this is the argument that it is not.** Item 3 serves
+exactly one thing — the opponent model in the aim problem this document opens
+with — and the fallback is already specified below: self-play, through items 8,
+10 and 11, all of which are built. What is lost is not the ability to train. It
+is that every behaviour the trainer ever sees will have been written by somebody
+in this repo, which is a *quality* cost rather than a blocker.
+
+**What stays true, so that reopening is cheap:** the recorder is built, tested
+and off by default, and switching it on is a flag; the format question is settled
+and needs no revisiting; and the note below about recording somebody else's
+server still holds and is the cheapest route back in. **Nothing needs doing to
+keep the option open.**
+
+⚠️ **Do not silently re-open this as a queue item.** A session that finds itself
+about to spend time on human data is looking at a decision to put back to the
+user, not a gap to fill.
+
 ✅ **Built 2026-08-27**: `gg2-server --record <dir>`, off by default. ⚠️ **There
 was nothing to capture** — the broadcast stream already carries every player's
 keys and aim every tick, so the recorder tees `GameServer.FlushBroadcast` and
@@ -148,10 +185,29 @@ this item's "do not design a second logging path" holds by construction. Verifie
 end to end: `gg2-parity census` reads a six-bot game as 27,989 messages, framed
 cleanly to the last byte.
 
-⚠️ **The DEADLINE is not discharged by having built it** — it is discharged by
-switching it on before the first public game. And **one human is not the data
-this item wants**: it asks for `p(action | state)` over real *opponents*, and a
-solo session is repeatable whenever; a game with strangers is not.
+⚠️ **The DEADLINE is not discharged by having built it** — it would have been
+discharged by switching it on before the first public game, and it is **tabled**
+instead. The reasoning is kept because it is what would make the item worth
+reopening: **one human is not the data it wants**. It asks for
+`p(action | state)` over real *opponents*, and a solo session is repeatable
+whenever; a game with strangers is not.
+
+⚠️ **The humans do not have to be on THIS server.** `Recorder` is a passive
+spectator client: it connects to any host and port, sends no `INPUTSTATE`, and
+writes down every byte (`src/Gg2.Parity/Recorder.cs:7-22`). So
+`gg2-parity record --host <public-server> --port <n>` captures human play on
+somebody else's GM8 server, and that is the cheapest route to the *opponent*
+distribution this item is actually after — available today rather than at this
+port's first public game.
+
+**And the bar is lower than "a playerbase".** What the item wants is a
+distribution over players nobody scripted, not a large corpus. At 30 Hz one
+8-player half-hour round is ~430,000 labelled player-ticks, and the thing being
+fitted is small: reaction-time and dodge-direction priors conditioned on a
+handful of local features, over an action space of one byte of keys and a
+quantised aim. A dozen recorded rounds clears it. **None are expected**, the item being tabled,
+so the fallback is self-play (items 8, 10 and 11) — which costs the opponent
+model its only source of behaviour nobody in this repo wrote.
 
 ## 4. Keep the action space exactly the wire action
 
@@ -263,12 +319,18 @@ and it forces training code to duplicate game rules it should never know. The
 events are needed for the scoreboard regardless; the requirement is only that
 they carry the attributor and the amount rather than being presentation strings.
 
-⚠️ **Half built, found 2026-08-27 while scoping item 10.** `TickEvents` carries
-kills, deaths, spawns and captures with attribution — but **no per-tick damage
-amounts**. Kill credit exists; the dense reward does not. The accumulators
-(`DamageDealt`/`DamageTaken` per slot, credited at application time, self-damage
-as taken only, blocked damage as nothing) are `docs/ENV.md`'s first
-prerequisite.
+✅ **Whole, 2026-08-28.** `TickEvents` carried kills, deaths, spawns and captures
+with attribution; the accumulators `docs/ENV.md` named as its first prerequisite
+landed with `Gg2.Env` step 1. `SlotBuffer<double> DamageDealt` / `DamageTaken`
+(`TickEvents.cs:374`), credited at application time in `DamageApi.Deal`
+(`DamageApi.cs:68`), cleared by `ClearOutputs`, gated by `DamageAccumulatorTests`.
+Self-damage counts as taken and never as dealt; blocked damage accumulates
+nothing.
+
+⚠️ **This section read "half built" for a day after it was whole**, and so did
+this document's header. Two places, one fact, both stale — which is the failure
+mode the standing instruction exists for: `grep` for the thing an item says is
+missing before starting it.
 
 ## 8. A match runner with no sockets in it
 
@@ -381,6 +443,65 @@ docs/TRAPS-BOTS.md, "the scenario harness", has the list of lines that do the wo
 the two (`TdmInvulnerabilityTicks`, `RespawnTime`) that are only observable at
 one instant each.
 
+## 12. The rollout-search bot
+
+**Requirement.** An `IInputSource` in `Gg2.Bots` that, on each decision, forks
+the world, plays candidate short action sequences forward 15-30 ticks, scores
+each from the emitted damage events, restores, and plays the first action of the
+best sequence - replanning next decision rather than committing to the plan. Its
+action space is the same `EnvAction` heads `Gg2.Env` decodes, so a decision it
+logs is valid data for a policy and vice versa.
+
+**Why it is here and not in `gg2-rl`.** ⚠️ **It is a bot in its own right.** It
+is a better bot than this repo currently ships, it is the permanent evaluation
+baseline every later policy is measured against, and it is useful with `gg2-rl`
+deleted. It also wants `WorldState` internals and has to be fast in the tick
+loop, which is this document's own test for which side of the seam a thing lives
+on. Putting it in the trainer would make the trainer non-deletable.
+
+**Why it is worth building even if no policy ever ships.** Two things fall out of
+it for free. It is a **parity fuzzer**: a search systematically tries what no
+human would, so it finds physics-port bugs by exploiting them, and each exploit
+is a finding for `docs/PARITY.md` rather than something to suppress. And it gives
+`gg2-rl` phase 1 an exit criterion that can be checked - beat the ported scripted
+bot over 500 duels per class matchup at p < 0.01 - which is the cheapest possible
+test of whether the whole learning programme is worth continuing.
+
+**What it needs that already exists.** Item 2's snapshot/restore (the fork), item
+5's `IBatchInputSource` (amortising forked worlds across every bot deciding on
+the same tick), item 6's `WorldView` queries, item 7's damage accumulators (the
+score), and item 11's `ScenarioWorld` (a fight, not a match). ⚠️ **Nothing new is
+required from the simulation.** This item is assembly, not capability.
+
+**The one open design question**, and it is the one that decides whether the
+search is worth imitating: **what the opponent is assumed to do during a
+rollout.** `botAimLead.gml` assumes constant velocity plus gravity, which is the
+assumption this whole programme exists because it is wrong. Self-play - rolling
+the opponent out with the same search - is the answer that needs no data.
+
+✅ **DECIDED 2026-08-28, and it is a named enum rather than a comment**:
+`RolloutOpponent.HoldLastInput` is the default — every other character holds the
+input it is already holding, read off `CharacterState`. `Idle` (presses nothing)
+is kept beside it as the comparison floor. Self-play is deliberately out of v0
+and its seam is a third member of that enum.
+
+⚠️ **`HoldLastInput` is the same CLASS of assumption as `botAimLead`'s** — better,
+because it is right about momentum over a 20-tick horizon, and still an opponent
+who does not *react*, which is the thing this programme exists because of. So
+`gg2-rl` phase 1 will report the win rate under both models rather than one
+headline number: if they barely differ the search is not really using its
+opponent model and the horizon or the scoring is the binding constraint, and if
+they differ a lot that gap is the quantified argument for paying for nested
+rollouts. **That number is wanted before phase 2 distils anything**, because a
+policy inherits whatever the search assumed.
+
+⚠️ **`RolloutOpponent.Idle` is therefore not dead code.** It looks like unused
+surface area and it is the control that makes the paragraph above measurable.
+`docs/TRAPS-BOTS.md`, "Item 12", and `gg2-rl/docs/PLAN.md` phase 1.
+
+**Not asked for:** a learned policy guiding the search. That is `gg2-rl` phase 2's
+expert iteration, and it arrives as weights behind a seam that already exists.
+
 ## Not asking for
 
 To keep the scope honest:
@@ -397,9 +518,13 @@ To keep the scope honest:
 - Nothing here changes the wire protocol or the simulation's observable
   behaviour. Every constraint above is on structure, not on what the game does.
 
-## Where items 9-11 came from
+## Where items 9-12 came from
 
-They are `gg2-rl/docs/CONTRACT.md`'s "What gg2-server does not yet promise".
+They are `gg2-rl/docs/CONTRACT.md`'s "What gg2-server does not yet promise" —
+9-11 as originally written, and **12 raised 2026-08-28** when that repo's phase 0
+started and phase 1's dependency turned out to be named nowhere: the search bot
+appeared in this document only as *motivation* for items 1, 2, 5 and 11, and in
+`docs/ENV.md` only as something v0 was not.
 That repo is the trainer; this one owns the simulation, the env surface, the
 observation layout and the version stamp. The split is deliberate and the
 asymmetry is the point: anything needing `WorldState` internals, or needing to
