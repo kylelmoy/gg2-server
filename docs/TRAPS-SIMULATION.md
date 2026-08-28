@@ -301,6 +301,38 @@ the full rules; these are the ones that will bite a change.
   as "unless the victim is the shooter" breaks every rocket jump's assist window.
 - ⚠️ **The quarter-radius cutoff is a `continue` inside a `with`**, so the outer
   quarter gets no knockback either.
+- ✅ **A rocket jump costs its shooter exactly what the same blast costs an
+  enemy — GG2 has no self-damage reduction at all.** Confirmed 2026-08-28 by
+  reading `Rocket.events/User Event 5.xml` down through `damageCharacter.gml`
+  and `dealDamage.gml`: the damage expression
+  `explosionDamage*(1-(fake_distance/blastRadius))` sits on a single line reached
+  by both arms of `(other.team != team) or (id==other.ownerPlayer.object)`, and
+  nothing below it tests the owner. ⚠️ **The most natural "fix" for a self-kill
+  report is a self-damage factor, and it would have been wrong.** Gated by
+  `RocketTests.ARocketJumpCostsItsShooterExactlyWhatItWouldCostAnEnemy`, which
+  runs the identical geometry twice — once as the shooter, once as an enemy — and
+  asserts the two losses are *equal*, so any factor fails rather than passing.
+- ✅ **A rocket jump therefore costs at most `explosionDamage`, never
+  `hitDamage + explosionDamage`**: the direct hit's 25 is unreachable because the
+  whole of `User Event 5` is inside `if(characterHit.id != ownerPlayer.object)`,
+  `instance_destroy()` included — a rocket that reports its own shooter as the
+  thing it struck neither explodes nor dies. **So the worst a rocket jump can
+  cost a soldier is 30 of 160, and it takes SIX from full health to kill.**
+  ⚠️ 160/30 is 5.33, not 5 — this session's first draft asserted five and the
+  gate caught it, which is why the count is pinned rather than left in prose.
+  ⚠️ **Removing that outer guard was invisible to all 2,181 tests** until
+  `RocketTests.ARocketThatStruckItsOwnShooterNeitherExplodesNorDies` landed:
+  every other test in the file passes `CharacterState.Nobody` as the direct
+  victim, so nothing exercised the arm at all.
+- ⚠️ **"No gate" was half right, and the half that was wrong is the useful
+  half.** The handoff recorded rocket self-damage magnitude as ungated. Measured
+  by mutation on 2026-08-28: halving self-damage fails **seven parity fixtures**
+  (`PhysicsParityTests` ×2, `KothFixtureTests`, `CpDirtbowlFixtureTests`,
+  `GeneratorFixtureTests`, `AirblastFixtureTests`, `BotAiConstraintsTests`) —
+  real players rocket-jump in those recordings — but **not** the one unit test
+  named after it, which asserted only `Hp < before`. ⚠️ **A recording gating a
+  fact diffusely is not the same as a test naming it**: the fixtures say a window
+  shrank, not what changed.
 - **A grounded team-mate who is not the shooter is exempt from the entire
   blast**; an airborne one is thrown and still takes no damage. `Obstacle` only,
   so a player wall does not count as ground.

@@ -662,6 +662,139 @@ public sealed class RocketTests
     }
 
     /// <summary>
+    /// ✅ <b>A rocket jump costs its shooter exactly what the same blast costs an
+    /// enemy — GG2 has no self-damage reduction at all.</b>
+    /// </summary>
+    /// <remarks>
+    /// <c>Rocket.events/User Event 5.xml</c> deals
+    /// <c>other.explosionDamage*(1-(fake_distance/other.blastRadius))</c> from a
+    /// single line reached by both arms of
+    /// <c>if (other.team != team) or (id==other.ownerPlayer.object)</c>, and
+    /// <c>damageCharacter</c> → <c>dealDamage</c> has no owner test anywhere
+    /// below it. So the shooter pays the full linear falloff.
+    /// <para>
+    /// ⚠️ <b>The gate is the EQUALITY, not the number.</b>
+    /// <c>ARocketJumpHurtsAndLaunchesItsOwnShooter</c> asserts only
+    /// <c>Hp &lt; before</c>, which is what a halved or floored self-damage rule
+    /// would still satisfy — and adding one is the single most natural "fix"
+    /// somebody reading a self-kill report would reach for. Running the identical
+    /// geometry twice, once as the shooter and once as an enemy, is what makes
+    /// any such factor fail rather than pass quietly.
+    /// </para>
+    /// <para>
+    /// A mid-radius gap rather than point-blank, so the falloff term is a real
+    /// fraction: a multiplicative fudge and an additive one both move it.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ARocketJumpCostsItsShooterExactlyWhatItWouldCostAnEnemy()
+    {
+        // The shooter, hit by their own rocket.
+        var self = default(WorldState);
+        Put(ref self, 1, PlayerClass.Soldier, Team.Red, OpenX, OpenY);
+
+        var selfRocket = RocketAtGap(in self, 1, 20, Team.Red);
+        var gap = BlastGap(in self, 1, in selfRocket);
+        Assert.True(gap > 0 && gap < BlastRadius, $"the setup put the rocket {gap} away");
+
+        var selfHandle = self.SpawnProjectile(selfRocket);
+        Assert.True(Explosions.Explode(World, ref self, selfHandle, CharacterState.Nobody, ref DiscardedEvents.Events));
+
+        var selfLoss = ClassStats.For(PlayerClass.Soldier).MaxHp - self.Characters[1].Hp;
+
+        // The same soldier at the same coordinates and the same facing, so the
+        // box the blast measures against is the same one — but on the other team,
+        // with the shooter parked well outside the radius.
+        var enemy = default(WorldState);
+        Put(ref enemy, 1, PlayerClass.Soldier, Team.Red, OpenX + 400, OpenY);
+        Put(ref enemy, 2, PlayerClass.Soldier, Team.Blue, OpenX, OpenY);
+
+        var enemyRocket = selfRocket;
+        Assert.Equal(gap, BlastGap(in enemy, 2, in enemyRocket), 9);
+
+        var enemyHandle = enemy.SpawnProjectile(enemyRocket);
+        Assert.True(Explosions.Explode(World, ref enemy, enemyHandle, CharacterState.Nobody, ref DiscardedEvents.Events));
+
+        var enemyLoss = ClassStats.For(PlayerClass.Soldier).MaxHp - enemy.Characters[2].Hp;
+
+        Assert.Equal(ExplosionDamage * (1 - (gap / BlastRadius)), selfLoss, 9);
+        Assert.Equal(selfLoss, enemyLoss, 9);
+
+        // The control that says the two runs really were different situations
+        // rather than the same one twice: the shooter is rocketing themselves and
+        // the enemy is merely being shoved.
+        Assert.Equal(1, self.Characters[1].MoveStatus);
+        Assert.Equal(2, enemy.Characters[2].MoveStatus);
+    }
+
+    /// <summary>
+    /// ✅ <b>A rocket that reports its own shooter as the thing it struck does not
+    /// go off at all</b> — which is why a rocket jump can never cost 25 + 30.
+    /// </summary>
+    /// <remarks>
+    /// The whole of <c>User Event 5</c> is inside
+    /// <c>if(characterHit.id != ownerPlayer.object)</c>, <c>instance_destroy()</c>
+    /// included. Deleting that guard is invisible to every other test in this
+    /// file — they all pass <c>CharacterState.Nobody</c> as the direct victim —
+    /// and it would turn the worst rocket jump in the game from 30 into 55.
+    /// </remarks>
+    [Fact]
+    public void ARocketThatStruckItsOwnShooterNeitherExplodesNorDies()
+    {
+        var state = default(WorldState);
+        Put(ref state, 1, PlayerClass.Soldier, Team.Red, OpenX, OpenY);
+
+        var handle = state.SpawnProjectile(Rocket(OpenX, OpenY, direction: 270, ownerSlot: 1, Team.Red));
+
+        Assert.False(Explosions.Explode(World, ref state, handle, directVictim: 1, ref DiscardedEvents.Events));
+
+        Assert.Equal(ClassStats.For(PlayerClass.Soldier).MaxHp, state.Characters[1].Hp);
+        Assert.Equal(0, state.Characters[1].MoveStatus);
+        Assert.Equal(1, state.LiveProjectileCount);
+    }
+
+    /// <summary>
+    /// ✅ <b>The worst a rocket jump can cost a soldier is 30 of 160</b>, so it
+    /// takes six of them from full health to kill you.
+    /// </summary>
+    /// <remarks>
+    /// The number this pins is the one a player report needs to be read against:
+    /// three self-kills in a session is a soldier who was already hurt, not a
+    /// self-damage bug. The direct hit's 25 is unreachable
+    /// (<see cref="ARocketThatStruckItsOwnShooterNeitherExplodesNorDies"/>), and
+    /// the blast's own falloff is capped by <c>fake_distance</c> being pulled to
+    /// zero at contact, so <c>explosionDamage</c> is the whole ceiling.
+    /// </remarks>
+    [Fact]
+    public void TheWorstARocketJumpCanCostIsTheBlastDamageAlone()
+    {
+        var state = default(WorldState);
+        Put(ref state, 1, PlayerClass.Soldier, Team.Red, OpenX, OpenY);
+
+        // Point-blank: the boxes overlap, so `fake_distance` is zero and the
+        // falloff term is 1.
+        var rocket = RocketAtGap(in state, 1, 0, Team.Red);
+        Assert.Equal(0, BlastGap(in state, 1, in rocket));
+
+        var handle = state.SpawnProjectile(rocket);
+        Assert.True(Explosions.Explode(World, ref state, handle, CharacterState.Nobody, ref DiscardedEvents.Events));
+
+        var maxHp = ClassStats.For(PlayerClass.Soldier).MaxHp;
+        Assert.Equal(maxHp - ExplosionDamage, state.Characters[1].Hp, 9);
+
+        // Five survivable, the sixth fatal — stated as arithmetic on the pinned
+        // ceiling rather than by rocket-jumping five more times, which would
+        // measure the falloff of five different geometries.
+        //
+        // ⚠️ 160/30 is 5.33, not 5: a soldier who has rocket-jumped five times
+        // from full is on 10hp and still standing. The first draft of this test
+        // asserted five and was wrong, which is the whole reason the count is
+        // pinned rather than left in a comment.
+        Assert.True(maxHp - (5 * ExplosionDamage) > 0);
+        Assert.True(maxHp - (6 * ExplosionDamage) <= 0);
+    }
+
+    /// <summary>
     /// ✅ <b>A rocket that hits an enemy is GONE, and does not fly on.</b>
     /// </summary>
     /// <remarks>
