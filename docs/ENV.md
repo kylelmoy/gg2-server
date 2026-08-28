@@ -138,6 +138,15 @@ about the distribution is this project's invention.
 `SampledSpawnTests` gates all of it, including the lethal explicit coordinate as
 a pinned control.
 
+⚠️ **The rest of the table above was then checked by hand**, on the argument that
+a table with one false row is the highest-prior place to look for a second. Every
+other row holds: all seven messages are dispatched in `EnvServer`, the auto-reset
+really does happen inside `Step` (`EnvBatch`), and the per-world seed derivation
+is not only real but stronger than the row claims — the index is *mixed in*
+rather than added, so two worlds cannot share a stream by arithmetic accident.
+**One false row, six sound ones**, recorded so the next reader does not re-check
+them.
+
 **Auto-reset on termination**: a world whose episode ends is reset within the
 same `Step` call (seeded from its own stream) and returns the fresh episode's
 first observation alongside the terminal reward components. Round-trip economy;
