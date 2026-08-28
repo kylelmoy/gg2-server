@@ -289,9 +289,21 @@ about **9% of 1 ms**, so phase 2 has an order of magnitude in hand.
 
 ⚠️ **It is flat in roster size**, which is the non-obvious part and the reason
 the number is safe to design around: 5.7, 5.1 and 5.0 µs at populations of 2, 8
-and 16 — decreasing, so the spread is measurement noise rather than scaling. The
-cost is the fixed 209-float write, **not** the neighbour scans, so a busier
-server does not make an observation dearer.
+and 16.
+
+⚠️ **And the flatness is STRUCTURAL, not luck** — worth stating precisely,
+because "no neighbour-scan cost was observed" and "there cannot be one" are
+different claims and only the second lets phase 4 be projected from phase 2.
+`WorldView.Nearest` loops `for (other = 0; other < WorldState.MaxSlots; other++)`
+and skips the empty slots inside the loop, so **the sweep is 64 iterations at a
+population of two and 64 at a population of sixteen**. A fuller roster adds only
+the insertion work for the extra live characters, which is dwarfed by that sweep
+and by the 209-float write. The observation is already paying its worst-case scan
+cost in a duel.
+
+⚠️ **Do not read anything into the downward direction.** 5.7 → 5.0 is noise; if
+anything the insertion work should make it rise slightly. What the data shows is
+the *absence of growth*, and the loop bound above is why there can be none.
 
 ⚠️ **Measured in Release**, like everything else in this table, and by calling
 `ObservationWriter.Write` in a loop over a settled `ScenarioWorld` — so it is the
