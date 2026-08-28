@@ -19,8 +19,8 @@ namespace Gg2.Tests;
 /// in this project is bots playing, which covers walking and jumping only
 /// incidentally.
 /// <para>
-/// ✅ <b>Both replay closed-loop to the last tick of their recording</b>, on
-/// <see cref="Fields.All"/> — 723 and 625 ticks with zero mismatches. A
+/// ✅ <b>All three replay closed-loop to the last tick of their recording</b>, on
+/// <see cref="Fields.All"/> — 723, 625 and 474 ticks with zero mismatches. A
 /// scripted trace has no unseeded weapon in it and nobody dies, so unlike the
 /// combat fixtures there is nothing to cap the window but the recording's own
 /// length.
@@ -28,9 +28,18 @@ namespace Gg2.Tests;
 /// <para>
 /// ⚠️ <b>Two of the four manoeuvres are covered, not four</b>, and which two was
 /// measured rather than intended — see
-/// <see cref="TheMutationTableThatSaysWhatTheseFixturesGate"/>. The route was
-/// driven blind: the offline map profile used a bullet filter, so it missed the
-/// player walls that shape where a character can actually walk.
+/// <see cref="TheMutationTableThatSaysWhatTheseFixturesGate"/>. The double jump
+/// and the drop-through platform are gated; a <b>wall step-up</b> and a
+/// <b>corner fall</b> are not, and the third recording was made specifically to
+/// reach them and did not.
+/// </para>
+/// <para>
+/// ⚠️ <b>The reason is worth more than the fixtures.</b> The step arms of
+/// <see cref="CharacterHitObstacle"/> execute <b>zero</b> times across all
+/// three, while the two walking recordings enter that solver's wall branch 505
+/// times between them — every one taking the arm that stops the character dead.
+/// <c>gg_debug</c>'s six-pixel staircase is climbed by some other path
+/// entirely, so it is not the geometry those arms want.
 /// </para>
 /// </remarks>
 public sealed class Phase2FixtureTests
@@ -40,6 +49,19 @@ public sealed class Phase2FixtureTests
 
     /// <summary>A scout jumping on the spot, about thirty times.</summary>
     private const string Jumps = "reference-gg_debug-scriptedjumps.trace";
+
+    /// <summary>
+    /// A scout walking down <c>gg_debug</c>'s six-pixel staircase and back up
+    /// it, twice.
+    /// </summary>
+    /// <remarks>
+    /// Recorded specifically to reach <see cref="CharacterHitObstacle"/>'s step
+    /// arms, and it does not — see
+    /// <see cref="TheMutationTableThatSaysWhatTheseFixturesGate"/>. Kept anyway:
+    /// it is 474 more ticks of exact terrain traversal, and it is the evidence
+    /// that the staircase is not what those arms are for.
+    /// </remarks>
+    private const string Stairs = "reference-gg_debug-scriptedstairs.trace";
 
     private static LevelMap MapLoader(string name) =>
         LevelMap.FromPng(name, ReferenceTree.ReadMap(name));
@@ -84,12 +106,13 @@ public sealed class Phase2FixtureTests
     [Theory]
     [InlineData(Walk)]
     [InlineData(Jumps)]
+    [InlineData(Stairs)]
     public void BothAreScriptedSinglePlayerRecordingsOnGgDebug(string fixture)
     {
         var (trace, ticks) = Load(fixture);
 
         Assert.Equal("gg_debug", trace.Header.Map);
-        Assert.True(ticks.Count > 800, $"{fixture}: only {ticks.Count} ticks");
+        Assert.True(ticks.Count > 700, $"{fixture}: only {ticks.Count} ticks");
 
         // Exactly one spawn, and it is what the window anchors on.
         var spawns = ticks.SelectMany(t => t.Events).Count(m => m.Type == MessageType.PlayerSpawn);
@@ -112,6 +135,7 @@ public sealed class Phase2FixtureTests
     [Theory]
     [InlineData(Walk, 700)]
     [InlineData(Jumps, 600)]
+    [InlineData(Stairs, 450)]
     public void BothReplayToTheEndOfTheirRecording(string fixture, int floor)
     {
         var (exact, anchor) = ExactWindow(fixture);
@@ -126,18 +150,20 @@ public sealed class Phase2FixtureTests
     /// and watching the window — not by what the route was meant to do.</b>
     /// </summary>
     /// <remarks>
-    /// <b>The table, run 2026-08-27.</b> Each row disables one branch and
-    /// reports the two windows:
+    /// <b>The table, run 2026-08-27.</b> Each row disables one branch and reports
+    /// the three windows:
     /// <list type="table">
-    /// <item><term>baseline</term><description>walk 723, jumps 625</description></item>
+    /// <item><term>baseline</term><description>walk 723, jumps 625, stairs 474</description></item>
     /// <item><term>double jump (<c>CharacterPhysics</c>, <c>CanDoubleJump</c>)</term>
-    /// <description>walk 723, jumps <b>162</b> ✅</description></item>
+    /// <description>jumps <b>162</b> ✅, others unchanged</description></item>
     /// <item><term>dropdown platform (<c>CharacterPhysics</c>, the Step push-out)</term>
-    /// <description>walk <b>116</b> ✅, jumps 625</description></item>
+    /// <description>walk <b>116</b> ✅, others unchanged</description></item>
+    /// <item><term>stair descent (<c>CharacterPhysics</c> End Step)</term>
+    /// <description>walk <b>4</b>, jumps <b>1</b> — gated hard, but see below</description></item>
     /// <item><term>wall step-up (<c>CharacterHitObstacle</c>, <c>Y -= StepHeight</c>)</term>
-    /// <description>walk 723, jumps 625 — <b>neither</b> ❌</description></item>
+    /// <description>all three unchanged — <b>none</b> ❌</description></item>
     /// <item><term>sloping ceiling (<c>CharacterHitObstacle</c>, <c>Y += StepHeight</c>)</term>
-    /// <description>walk 723, jumps 625 — <b>neither</b> ❌</description></item>
+    /// <description>all three unchanged — <b>none</b> ❌</description></item>
     /// </list>
     /// <para>
     /// ✅ <b>So phase 2 gains a double-jump gate and a second, much sharper
@@ -146,20 +172,32 @@ public sealed class Phase2FixtureTests
     /// it regresses; this one moves 723 → 116.
     /// </para>
     /// <para>
-    /// ⚠️ <b>The step arms of <c>characterHitObstacle</c> are still ungated, and
-    /// that is the honest result rather than the intended one.</b> The scout
-    /// descended 24 px of terrain in the walk recording, and disabling both step
-    /// arms changes nothing — so that descent is ordinary falling, not a step.
-    /// Provoking a step needs a wall between one and six pixels tall in the
-    /// character's path, and where those are on <c>gg_debug</c> is not yet known:
-    /// the offline profile that planned this route used
-    /// <c>CollisionFilter.ForBullet</c> and so could not see the player walls
-    /// that shape a character's world.
+    /// ⚠️ <b>The stair descent collapses both walking fixtures, but that is not
+    /// evidence these recordings are special</b> — it runs on every grounded
+    /// tick, so almost any fixture would show it. It is in the table for
+    /// completeness, not as a claim of new coverage.
     /// </para>
     /// <para>
-    /// This test asserts only the two positives, because a test cannot delete a
-    /// branch. It is here so the table has a home next to the fixtures it
-    /// describes, and so the two windows it quotes are checked.
+    /// ⚠️ <b>The step arms are executed ZERO times by all three recordings, and
+    /// that is measured rather than inferred.</b> A counter on each arm during
+    /// the replays: the walk and stairs fixtures enter
+    /// <c>characterHitObstacle</c>'s wall branch <b>340 and 165 times</b> — 505
+    /// real wall collisions — and <em>every one</em> takes the third arm, the
+    /// one that stops the character dead. Neither step is ever free.
+    /// </para>
+    /// <para>
+    /// <b>So <c>gg_debug</c>'s six-pixel staircase is not a step-up, and that is
+    /// the useful finding.</b> The scout demonstrably climbs it — 192 back up to
+    /// 168, verified from the server mid-recording — by some path that is not
+    /// these arms. Reaching them needs geometry where
+    /// <c>PlaceFree(x + sign, y - 6)</c> is true while <c>PlaceFree(x + sign, y)</c>
+    /// is false: a wall at most six pixels tall with headroom above it. A
+    /// staircase approached at a scout's five pixels a tick is not that.
+    /// </para>
+    /// <para>
+    /// This test asserts only the positives, because a test cannot delete a
+    /// branch. It is here so the table has a home beside the fixtures it
+    /// describes, and so the windows it quotes are checked.
     /// </para>
     /// </remarks>
     [Fact]
@@ -167,6 +205,7 @@ public sealed class Phase2FixtureTests
     {
         Assert.Equal(723, ExactWindow(Walk).Exact);
         Assert.Equal(625, ExactWindow(Jumps).Exact);
+        Assert.Equal(474, ExactWindow(Stairs).Exact);
     }
 
     /// <summary>
@@ -210,5 +249,6 @@ public sealed class Phase2FixtureTests
 
         Assert.True(JumpPresses(Load(Jumps).Ticks) > 20, "the jumps recording should be full of jumps");
         Assert.Equal(0, JumpPresses(Load(Walk).Ticks));
+        Assert.Equal(0, JumpPresses(Load(Stairs).Ticks));
     }
 }

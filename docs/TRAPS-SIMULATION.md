@@ -2362,13 +2362,38 @@ than intended.** Deleting each branch and watching both windows:
 **The dropdown platform gains a much sharper gate than it had** — previously only
 `gg_debug-closedtdm`, which moves 135 → about 23; this moves 723 → 116.
 
-⚠️ **The step arms are still ungated, and the reason is a planning mistake worth
-keeping.** The route was chosen from an offline walkmask profile that used
-`CollisionFilter.ForBullet`, so it **could not see the player walls** that shape
-where a character can actually walk — `gg_debug` has one at `372,156`. The scout
-went somewhere else than planned, and the 24 px of descent it did make turns out
-to be ordinary falling: disabling both step arms changes nothing.
-**Profile with the filter the thing you are planning for actually uses.**
+⚠️ **The step arms are still ungated, and chasing that produced the more useful
+result.** A third recording (`scriptedstairs`, 474 ticks) was made specifically
+to reach them: a scout walking down `gg_debug`'s six-pixel staircase and back up
+it, twice, with the ascent verified from the server mid-recording (192 → 168).
+It does not reach them either.
+
+**Counted during the replays**, which is what turns this from a failure into a
+finding:
+
+| fixture | `characterHitObstacle` calls | wall branch | **step-up** | sloping ceiling |
+|---|---|---|---|---|
+| `scriptedwalk` | 340 | 340 | **0** | 0 |
+| `scriptedstairs` | 165 | 165 | **0** | 0 |
+| `scriptedjumps` | 34 | 0 | 0 | 0 |
+
+**505 real wall collisions, and every one takes the third arm — the one that
+stops the character dead.** Neither step is ever free.
+
+⚠️ **So a six-pixel staircase is not a step-up**, and that is the thing to know
+before recording a fourth time. Reaching those arms needs geometry where
+`PlaceFree(x + sign, y - 6)` is true while `PlaceFree(x + sign, y)` is false: a
+wall at most six pixels tall **with headroom above it**. A staircase approached
+at a scout's five pixels a tick presents a wall with the next step's mass right
+above it, so the step-up probe finds no room and the character just stops. The
+scout climbs it by some other path, which is itself unexplained and worth one
+probe next time.
+
+⚠️ **And the first route was planned from a walkmask profile that used
+`CollisionFilter.ForBullet`**, so it could not see the player walls that shape a
+character's world — `gg_debug` has one at `372,156`, which is exactly where the
+first recording stopped. **Profile with the filter the thing you are planning
+for actually uses.**
 
 ### Driving a client: a second `gg2_input press` did not take
 
