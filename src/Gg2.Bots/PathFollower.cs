@@ -554,9 +554,12 @@ public sealed class PathFollower
 
         // ⚠️ The graph is rebuilt on every map change, and a route planned
         // against the old one names nodes that no longer connect — or no longer
-        // exist.
-        if (!TryFindEdge(current, next, out var edge))
+        // exist. ⚠️ AND the traveller's own arcs can go while the route stands:
+        // see the remark on TryFindEdge.
+        if (!TryFindEdge(_graph, state, current, next, out var edge))
         {
+            state.EdgeUnroutableFires++;
+
             // ⚠️ character.Y, not state.GoalY. See the remark on Plan.
             Plan(state, x, character.Y, tick, query, occupancy);
             return PlayerKeys.None;
@@ -1355,26 +1358,75 @@ public sealed class PathFollower
         state.Rejumped = false;
     }
 
-    /// <summary>The edge between two nodes, if the graph still has one.</summary>
+    /// <summary>
+    /// The edge between two nodes that <see cref="NavSearch"/> would have taken,
+    /// if the graph still has one this traveller may use.
+    /// </summary>
     /// <remarks>
-    /// <c>navEdgeFind</c>. The first match wins; a graph can carry more than one
-    /// edge between a pair — a walk and a parallel fall, for instance — and the
-    /// search costed whichever it took, so the follower steers the first the
-    /// index yields, exactly as the reference does.
+    /// <c>navEdgeFind</c>, and ⚠️ <b>NOT the first match.</b> A route is a list of
+    /// nodes, so the follower has to re-derive which of a pair's parallel edges
+    /// the search actually costed — and a graph carries plenty of them: across the
+    /// 24 shipped caches, <b>11,615 node pairs carry edges of more than one
+    /// type</b> (9,251 walk+fall, 1,529 fall+jump, <b>835 double-jump+rocket-jump</b>).
+    /// <para>
+    /// ⚠️ <b>Taking the first was a live bug, and not only a sticky-jump one.</b>
+    /// The search refuses per <em>edge</em> — a scout gets no rocket jump, a
+    /// soldier no double jump — while this took whichever the edge index happened
+    /// to yield. Measured on the shipped graphs: <b>833 pairs where a soldier's
+    /// route is costed as a rocket jump and was steered as a double jump</b>, so
+    /// the bot pressed for a second jump its class does not have, flew an ordinary
+    /// 57px hop where the arc wanted 276, landed off route and eventually
+    /// blacklisted a perfectly good edge. On a cache carrying type-7 edges the
+    /// same fault hid the sticky-jump arm completely: 3,584 pairs handed a demoman
+    /// a rocket-jump or double-jump edge, <see cref="StickyModel.Ready"/> was
+    /// never consulted, and the bot stood on the takeoff column waiting for a
+    /// rocket launcher it does not carry. <b>Zero sticky jumps across 48 real
+    /// edges on four maps, with the arm itself entirely correct.</b>
+    /// </para>
+    /// <para>
+    /// <b>Reproducing the search exactly is cheap</b>: A* relaxes with
+    /// <c>existing &gt;= 0 &amp;&amp; existing &lt;= tentative → continue</c>, so among
+    /// parallel edges it keeps the strictly cheapest and the first one wins a tie.
+    /// Lowest <see cref="NavEdge.Cost"/>, first-in-order on ties, is that rule.
+    /// ⚠️ The occupancy multiplier does not enter it: it is keyed on the node
+    /// pair, so it scales every parallel edge by the same factor and cannot
+    /// reorder them.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>No usable edge is a re-plan, not a fallback.</b> The query is rebuilt
+    /// from live state every tick, so a route outlives the traveller that planned
+    /// it — a soldier's rocket jumps go as its hp drops, and picking up the intel
+    /// shuts a team gate on the way home. Steering a hop the search would now
+    /// refuse is the failure this method exists to stop, so returning false and
+    /// re-planning is the answer rather than steering it anyway.
+    /// </para>
     /// </remarks>
-    private bool TryFindEdge(int from, int to, out NavEdge edge)
+    private static bool TryFindEdge(NavGraph graph, BotPathState state, int from, int to, out NavEdge edge)
     {
-        foreach (var candidate in _graph.EdgesFrom(from))
+        var found = false;
+        edge = default;
+
+        // A local because PlanQuery is a property and cannot be passed by `in`.
+        var planned = state.PlanQuery;
+
+        foreach (var candidate in graph.EdgesFrom(from))
         {
             if (candidate.To != to)
                 continue;
 
+            if (!NavGraph.EdgeRoutable(in candidate, in planned))
+                continue;
+
+            // Strictly cheaper, so an equal cost leaves the earlier one standing
+            // — the same tie-break A*'s `existing <= tentative` gives.
+            if (found && candidate.Cost >= edge.Cost)
+                continue;
+
             edge = candidate;
-            return true;
+            found = true;
         }
 
-        edge = default;
-        return false;
+        return found;
     }
 
     /// <summary>
@@ -1490,6 +1542,12 @@ public sealed class PathFollower
         // replaced.
         state.FreePath();
         state.Path.AddRange(_scratch);
+
+        // ⚠️ Recorded with the route, because the route is a list of NODES and
+        // the edge each hop costed can only be re-derived by asking the search's
+        // own question again. Asking the LIVE one instead loops — see
+        // BotPathState.PlanQuery.
+        state.PlanQuery = query;
         state.PathAt = 0;
         state.PathStale = false;
         state.PlanFailUntil = 0;

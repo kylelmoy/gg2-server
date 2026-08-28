@@ -978,7 +978,8 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
 
         output.WriteLine(
             $"grabbed at tick {grabbedAt}: replans {bot.Path.Replans}, stuck {bot.Path.StuckFires}, "
-            + $"off-route {bot.Path.OffRouteFires}, blacklisted {bot.Path.BlacklistFires}");
+            + $"off-route {bot.Path.OffRouteFires}, blacklisted {bot.Path.BlacklistFires}, "
+            + $"rocket jumps {bot.Path.RocketJumps}");
 
         // ⚠️ PINNED, exactly, and a failure here is the RE-RECORD rather than a
         // broken test: check the change is one you meant, then that it went the way
@@ -1005,11 +1006,25 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
         // what flying arcs that sometimes miss costs. The scenario suite is the
         // better signal on that trade and it improved across the board
         // (avanti 311 → 175, valley-floor 251 → 219).
-        Assert.Equal(1748, grabbedAt);
-        Assert.Equal(49, bot.Path.Replans);
+        //
+        // ⚠️ <b>RE-RECORDED 2026-08-28</b>, when `PathFollower.TryFindEdge` stopped
+        // taking the first edge of a parallel pair and started resolving the one
+        // `NavSearch` actually costed. <b>1,748 → 1,697, and all four counters
+        // moved the good way</b>: re-plans 49 → 48, off-route 19 → 18, and the
+        // blacklist 1 → 0.
+        //
+        // ⚠️ <b>That last one is the informative one.</b> ctf_truefort carries 833
+        // node pairs (across the shipped caches) where a soldier's route is costed
+        // as a rocket jump while the edge index yields a double jump first; the bot
+        // flew the ordinary hop, landed somewhere its route did not mention, and
+        // banned a perfectly good edge. Nothing here could see that: the ban was
+        // one of the counters, and `UnsupportedEdgeTicks` stayed at zero
+        // throughout, because the dispatch switch saw a type it handles.
+        Assert.Equal(1697, grabbedAt);
+        Assert.Equal(48, bot.Path.Replans);
         Assert.Equal(0, bot.Path.StuckFires);
-        Assert.Equal(19, bot.Path.OffRouteFires);
-        Assert.Equal(1, bot.Path.BlacklistFires);
+        Assert.Equal(18, bot.Path.OffRouteFires);
+        Assert.Equal(0, bot.Path.BlacklistFires);
 
         // ⚠️ And it turns round. The goal has to be re-decided on the objective
         // cadence, so step past one before asking.

@@ -409,6 +409,28 @@ public sealed class NavGraph
         GatePassable(edge.Gate, team, hasIntel, setupGatesClosed);
 
     /// <summary>
+    /// Whether this traveller may take <paramref name="edge"/> at all: the gate
+    /// and the class arcs together.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The one copy of the rule, and it has to stay the one copy.</b>
+    /// <see cref="NavSearch"/> applies it per <em>edge</em> while choosing a
+    /// route; <see cref="PathFollower"/> applies it again when it re-resolves the
+    /// hop it is steering. Those two answering differently is not a cosmetic
+    /// inconsistency — it is a bot flying an arc its own route never costed.
+    /// <para>
+    /// ⚠️ <b>Refusing is the DEFAULT for every class arc.</b> The failure mode of
+    /// the opposite is a heavy routed over something it physically cannot fly,
+    /// which is worse than a longer walk.
+    /// </para>
+    /// </remarks>
+    public static bool EdgeRoutable(in NavEdge edge, in NavQuery query) =>
+        GatePassable(edge.Gate, query.Team, query.HasIntel, query.SetupGatesClosed)
+        && (query.CanDoubleJump || edge.Type != NavEdgeType.DoubleJump)
+        && (query.CanStickyJump || edge.Type != NavEdgeType.StickyJump)
+        && (query.CanRocketJump || edge.Type != NavEdgeType.RocketJump);
+
+    /// <summary>
     /// <c>navEdgeKey.gml</c>: one number naming a directed edge by its
     /// endpoints.
     /// </summary>

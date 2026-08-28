@@ -368,6 +368,56 @@ public sealed class BotPathState
     /// </remarks>
     public int UnsupportedEdgeTicks { get; set; }
 
+    /// <summary>
+    /// How many times the route named a hop the graph does not connect for the
+    /// traveller it was planned for.
+    /// </summary>
+    /// <remarks>
+    /// The graph was rebuilt under the route — a map change — or the route was
+    /// installed by something other than <c>PathFollower.Plan</c>, which is a
+    /// thing only a test does. It forces an immediate re-plan.
+    /// <para>
+    /// ⚠️ <b>It is NOT the live capability going away, and saying so was wrong for
+    /// exactly as long as this counter has existed.</b> The hop is resolved
+    /// against <see cref="PlanQuery"/>, so a soldier whose launcher goes cold
+    /// mid-arc does not land here — deliberately, because doing so was a loop.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Counted because it is a re-plan that costs a tick of standing
+    /// still</b>, and a route that keeps naming a hop with no edge under it would
+    /// otherwise burn a full A* per bot per frame in silence.
+    /// </para>
+    /// </remarks>
+    public int EdgeUnroutableFires { get; set; }
+
+    /// <summary>
+    /// The traveller <see cref="Path"/> was planned for.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>A route is a list of NODES, so the edge it costed can only be
+    /// re-derived — and only against the query that costed it.</b>
+    /// <c>PathFollower.TryFindEdge</c> picks a pair's cheapest routable edge,
+    /// which reproduces A* exactly only if it is asked the same question A* was.
+    /// <para>
+    /// ⚠️ <b>Asking the LIVE query instead is a loop, and it was measured.</b>
+    /// <c>ScriptedBot</c> rebuilds <see cref="NavQuery.CanRocketJump"/> from the
+    /// weapon every tick, and firing the rocket that starts a rocket jump puts
+    /// the launcher on cooldown — so the capability goes false on the tick after
+    /// takeoff, while the bot is still in the air on the arc. Re-resolving
+    /// against that abandons an arc already paid for at 30 hp. On
+    /// <c>avanti-ramp-pocket-to-intel</c>: launch, re-plan mid-flight, land, walk
+    /// back, reload, launch again — <b>five times, 150 hp, and the leg went from
+    /// a 175-tick arrival to not arriving at all</b>.
+    /// </para>
+    /// <para>
+    /// The live query still decides everything it should: the next <em>plan</em>
+    /// uses it, and the takeoff gate re-checks <c>RocketModel.Ready</c> before
+    /// leaving the ground. What it must not do is change which edge is being
+    /// steered halfway along it.
+    /// </para>
+    /// </remarks>
+    public NavQuery PlanQuery { get; set; }
+
     /// <summary>Whether a route is installed.</summary>
     public bool HasPath => Path.Count > 0;
 

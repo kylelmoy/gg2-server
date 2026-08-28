@@ -14,26 +14,35 @@ namespace Gg2.Tests;
 /// through <see cref="ScenarioWorld"/>, so the character is moved by the same
 /// <c>MatchSimulation.Tick</c> the parity fixtures gate.
 /// <para>
-/// ⚠️ <b>The legs here are walk-only, and that is a statement about the follower
-/// rather than about the maps.</b> The jump branch is phase 7 item 4b-ii, so a
-/// route with a jump on it cannot be flown yet and a test that asked for one
-/// would be asserting the absence of a feature. The leg is chosen by asking the
-/// graph for one every edge of which this follower can steer — which also means
-/// these tests start covering more ground on their own the day jumps land, and
+/// ⚠️ <b>The leg here avoids the arcs that need a WEAPON, and that is now a
+/// statement about the harness rather than about the follower.</b> The jump and
+/// double-jump branches landed in item 4b-ii and the rocket branch in 4i, so
+/// <see cref="Steerable"/> excludes only the two kinds whose takeoff gate asks a
+/// weapon this harness does not model. The leg is chosen by asking the graph
+/// for one every edge of which this follower can steer, so these tests widen on
+/// their own as the arms land, and
 /// <see cref="ABotWalksALegItCanActuallySteer"/> says so if the leg it finds
-/// stops being walk-only.
+/// changes shape.
 /// </para>
 /// </remarks>
 public sealed class PathFollowerFixtureTests(Xunit.Abstractions.ITestOutputHelper output)
 {
     private const string Map = "ctf_truefort";
 
-    /// <summary>Edge kinds the follower can steer today.</summary>
+    /// <summary>Edge kinds this fixture asks a leg to be made of.</summary>
     /// <remarks>
-    /// ⚠️ <see cref="NavEdgeType.RocketJump"/> is the only one missing, and it is
-    /// refused by the search too (<see cref="NavQuery.CanRocketJump"/> defaults
-    /// false), so it never reaches a route here. When the rocket half lands this
-    /// list is complete and the distinction can go.
+    /// ⚠️ <b>Not "the kinds the follower can steer" any more — every kind the
+    /// generator emits is steered.</b> The two missing here are the two whose
+    /// takeoff gate asks about a weapon, and both are refused by the search on
+    /// this query anyway (<see cref="NavQuery.CanRocketJump"/> and
+    /// <see cref="NavQuery.CanStickyJump"/> default false), so neither can reach a
+    /// route here. Keeping them out makes the chosen leg deterministic rather than
+    /// making a claim about the follower.
+    /// <para>
+    /// ⚠️ This remark said "RocketJump is the only one missing … when the rocket
+    /// half lands this list is complete" for a phase after the rocket half landed,
+    /// and it never mentioned <see cref="NavEdgeType.StickyJump"/> at all.
+    /// </para>
     /// </remarks>
     private static bool Steerable(NavEdgeType type) =>
         type is NavEdgeType.Walk or NavEdgeType.Fall or NavEdgeType.DropThrough

@@ -255,25 +255,19 @@ public sealed class NavSearch
                 // may not pass — one that has just picked up the intel, or
                 // anyone the setup gates shut around — still gets edges *out*:
                 // those arrive somewhere ungated and are never refused.
-                if (!NavGraph.GatePassable(edge.Gate, query.Team, query.HasIntel, query.SetupGatesClosed))
-                    continue;
-
-                // The class half of the graph, same shape as the gates: those
-                // arcs are carried with full connectivity and refused per query.
-                // ⚠️ Refusing is the DEFAULT — the failure mode of the opposite
-                // is a heavy routed over an arc it physically cannot fly.
-                if (!query.CanDoubleJump && edge.Type == NavEdgeType.DoubleJump)
-                    continue;
-
-                // ⚠️ The refusal the reference's own A* cannot make — see
-                // NavQuery.CanAffordStickyJump. Without it a graph carrying
-                // type-7 edges would route every class over them and the
-                // follower would count UnsupportedEdgeTicks for a bot that was
-                // never going to fly one.
-                if (!query.CanStickyJump && edge.Type == NavEdgeType.StickyJump)
-                    continue;
-
-                if (!query.CanRocketJump && edge.Type == NavEdgeType.RocketJump)
+                //
+                // The class half of the graph has the same shape: those arcs are
+                // carried with full connectivity and refused per query — the
+                // sticky one being the refusal the reference's own A* cannot make
+                // at all, see NavQuery.CanAffordStickyJump.
+                //
+                // ⚠️ BOTH halves live in NavGraph.EdgeRoutable and are applied a
+                // SECOND time by PathFollower.TryFindEdge, which re-resolves the
+                // hop it is steering. Inlining either of them back here would let
+                // the two answers drift, and a follower steering an edge this
+                // search refused is a bot flying an arc its route never costed —
+                // measured at 833 node pairs on the shipped graphs.
+                if (!NavGraph.EdgeRoutable(in edge, in query))
                     continue;
 
                 var key = NavGraph.EdgeKey(current, next);

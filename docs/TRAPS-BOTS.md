@@ -297,15 +297,16 @@ physics taken out) and `PathFollowerFixtureTests` (a real leg walked on
 ✅ **The jump branch IS ported** — item 4b-ii, below in this file. This paragraph
 said the opposite until 2026-08-28, contradicting its own section.
 
-⚠️ **`NavEdgeType.StickyJump` is the one edge kind still unhandled.** It falls to
-`FollowEdge`'s `default` arm: steered by nothing, counted in
-`BotPathState.UnsupportedEdgeTicks`, and left to the stuck detector to take away.
-**Do not paper over it with an approximate jump**: an arc the generator did not
-validate is exactly what the whole takeoff apparatus exists to prevent.
-✅ **No shipped graph contains one** — measured across all 24 caches in
-`Source/build/botnav`. ⚠️ But **nothing filters one out of the search**, so a
-graph from a generator that started emitting them would be routed over and
-steered by nothing, which is why that arm counts rather than throws.
+✅ **`NavEdgeType.StickyJump` is handled**, landed 2026-08-28 — see "The
+sticky-jump follower arm" below. `FollowEdge`'s `default` arm now covers nothing
+the generator emits, and still counts rather than throws so a graph from a newer
+generator degrades into `BotPathState.UnsupportedEdgeTicks` instead of silently
+flying an arc nobody modelled. **Do not paper over a new kind with an approximate
+jump**: an arc the generator did not validate is exactly what the whole takeoff
+apparatus exists to prevent. ✅ **No shipped graph contains a type-7 edge** —
+measured across all 24 caches in `Source/build/botnav` — and `NavSearch` refuses
+one to anybody without `NavQuery.CanStickyJump`, which the reference's own A*
+cannot do.
 
 - ⚠️ **The route index advances only while the bot is ON THE GROUND**, and this
   is the single most expensive bug in the reference's follower. `NodeFromWorld`
@@ -2237,56 +2238,51 @@ irrelevant once the mine is on the ground.
 `TheCountdownSurvivesTheLauncherGoingColdAfterThePlacement` hands the follower a
 weapon that goes cold the moment the mine is placed, and goes red without it.
 
-#### ⚠️ Still open — but it is NOT the reach and NOT the need
+#### ✅ ANSWERED — the arm was never asked, and the fault was not the arm's
 
-The arm fires on real edges after the fix, and most arcs are still refused.
-Three things have been checked against `gg2-nav-gen`'s own numbers on six of the
-sixteen failing edges, and **all three match exactly**:
+**Closed 2026-08-28**, after six hypotheses had been eliminated by measurement
+and every one of them turned out to be correct. They were all asking whether the
+arm *refused*. It was never *called* for a sticky edge at all.
 
-| checked | result |
+| checked before the answer | result |
 |---|---|
 | `StickyModel.Reach` vs its `flyDistanceRocket` at v0 = 0 | **identical** — 191.10 vs 191.1, 31.2, 11.7, 12.4, 37.7 |
 | `need` (near edge of the landing run) vs its recomputation | **identical** on all six — 192, 18, 12, 12, 12, 36 |
 | the takeoff-gate arithmetic `reach + JumpReachTol >= need` | **passes on all six** |
-| the flight harness's start position | resolves to the from-node every time; the takeoff column is inside the from-run |
+| `SnapObjective` on the landing run's midpoint | returns the intended node on all six |
+| the flight harness's start position | resolves to the from-node every time |
+| the dispatch switch | `UnsupportedEdgeTicks` zero, so the type is seen |
 
-⚠️ **So the two obvious suspects are both eliminated, and the delegation to
-`RocketModel.Reach` is confirmed to give the generator's number to two decimal
-places** — the deliberate agreement described above is real and measured, not
-merely intended.
+⚠️ **The cause is `PathFollower.TryFindEdge`, and it is not a sticky-jump bug.**
+A route is a list of **nodes**, so the follower re-derives which edge each hop
+meant — and it took the **first** the edge index yielded. `NavSearch` refuses per
+**edge**. A sticky cache carries a rocket jump beside the sticky jump on **2,460
+node pairs** and a double jump beside one on **1,124 more**, and the rocket jump
+is what the index yields first. A demoman carries a Minegun, so
+`RocketModel.Ready` was false, the gate never opened, and the bot stood on the
+takeoff column waiting for a launcher it does not have. **`StickyModel.Ready` was
+never consulted once.**
 
-**The goal-snap suspect is also dead.** `SnapObjective` on the landing run's
-midpoint returns the intended node on all six. So the harness's start position,
-its goal, the route A* offers, the need, the reach and the gate arithmetic have
-each been checked and each is correct.
+**Instrumenting which edge the follower believed it was on** — the one question
+nobody had asked — showed hop `25->1 RocketJump` for a demoman on a sticky
+route, in the first minute of looking. ⚠️ **Every one of the six earlier
+measurements was consistent with that**, because each of them was computed from
+the sticky edge by hand rather than read out of the follower.
 
-⬅️ **WHERE IT ACTUALLY STANDS.** Six hypotheses eliminated by measurement, two
-real bugs found and fixed on the way (the launcher cooldown, and the
-rocket-only wait branch), and **the edges are still refused with zero sticky
-jumps taken**. `UnsupportedEdgeTicks` is zero, so the dispatch switch sees the
-type; the blacklist grows, so the follower is abandoning the edge through the
-off-route machinery rather than through the sticky arm's own abandon.
+✅ **After the fix, 4 of 4 real sticky edges on `ctf_2dfort` are flown and
+arrive** (was 1 of 4 — the one where no parallel edge existed). Reproduce with a
+demoman driven over `gg2-nav-gen`'s `build/botnav-sticky`; that cache is another
+lane's build output and is not gated here, which is why the checked-in gate is
+`PathFollowerTests.ADemomanOnAPairThatAlsoCarriesARocketJumpStillPlacesItsMine`
+— the same graph shape, synthetic, and it fails without the fix.
 
-⚠️ **The next question is the one nobody has asked yet: is `SteerJump` called at
-all for these edges?** Everything checked so far assumes it is, and the evidence
-is only that the `default` arm is not hit — which is also true if the route's
-first hop is a Walk and the sticky edge is never the current edge. **Instrument
-which edge the follower believes it is on, tick by tick, before checking anything
-else.** That distinguishes "the arm refuses" from "the arm is never asked", and
-every measurement above is consistent with the second.
-
-⚠️ **Do not let `gg2-nav-gen` re-veto on this.** It already made one honest change
-off the back of these flights (below); a second one aimed at a term that has been
-measured correct would be fixing the wrong side. Its cache is standing at 4,132
-edges with all sixteen refusals still present, so the isolation work transfers
-whenever this is picked up.
-
-⚠️ **And the second fix changed no flight.** The rocket-only wait branch was a
-real bug — a demoman with a cold launcher ran up and back instead of waiting —
-but fixing it moved nothing here. Recorded because a fix that changes no symptom
-is exactly the kind that gets quietly credited with one later. `gg2-nav-gen` emits them only behind `--sticky`, into a cache the game
-never reads, because `navFindPath` has no `canSticky` and would route every class
-over them.
+⚠️ **The other three maps in that flight still take no sticky jump, and that is
+the harness rather than the arm**: `koth_harvest` arrives 4 of 4 by walking
+because A* costs a jump the same as anything else, and on `ctf_truefort` and
+`cp_egypt` the takeoff column does not resolve to the from-node so the route
+starts somewhere else entirely. **A flight harness that does not check its own
+start against the edge it means to fly measures a different edge**, which is
+worth fixing before the next sticky measurement rather than during it.
 
 #### ✅ What the flights did buy: 333 arcs that leaned on a run-up that cannot exist
 
@@ -2311,3 +2307,117 @@ cold was a test that could not fail; there a run-up credit copied between fans w
 an assumption **every offline checker shared**, so no check could catch it. Both
 are the same shape: the thing that would have failed was not representable in the
 apparatus.
+
+### ⚠️ A route is a list of NODES, and re-deriving its edges was wrong for eight phases
+
+**2026-08-28.** `NavSearch` returns `List<int>` — nodes, not edges. So
+`PathFollower.FollowEdge` has to work out which edge each hop meant, and
+`TryFindEdge` did it by taking **the first edge from the pair's edge index**.
+Its own doc comment said that was safe: *"the search costed whichever it took, so
+the follower steers the first the index yields."*
+
+**That sentence was false, and nothing in the repo could contradict it** — the
+exact failure mode `CLAUDE.md` names. The search refuses **per edge**; the
+follower resolved **per node pair**.
+
+#### The graphs really do carry parallel edges, and plenty of them
+
+Measured across all 24 shipped caches, and now pinned by
+`NavGraphFixtureTests.ParallelEdgesAreCommonAndCarryMoreThanOneType`:
+
+| | shipped `botnav` | with `--sticky` |
+|---|---|---|
+| edges | 115,757 | 119,889 |
+| node pairs | 104,087 | 104,615 |
+| pairs with more than one edge | 11,670 | 14,470 |
+| pairs with more than one **type** | **11,615** | **14,415** |
+
+By type: `Walk+Fall` 9,251, `Fall+Jump` 1,529, **`DoubleJump+RocketJump` 835** —
+and, on a sticky cache, `RocketJump+StickyJump` 2,479 and `DoubleJump+StickyJump`
+321.
+
+#### Two different faults, and keeping them apart matters
+
+- **A cost mismatch** — 3,821 walk/fall pairs where both edges are flyable by
+  anybody and the cheaper is simply not the one the index yields first. The bot
+  arrived, along an arc its route had not costed.
+- **A capability mismatch**, which is the live bug — **833 pairs where a
+  soldier's route is costed as a rocket jump and the index yields the double jump
+  first**. A soldier cannot double-jump, so it pressed for a second jump it does
+  not have, flew an ordinary 57px hop where the arc wanted 276, landed somewhere
+  the route does not mention and eventually **blacklisted a perfectly good edge**.
+
+⚠️ **A scout was accidentally right the whole time**, because the double jump is
+first on every one of those 833 pairs. Half the population never showed the bug,
+which is a large part of why it survived eight phases.
+
+⚠️ **`UnsupportedEdgeTicks` stayed at zero throughout.** The dispatch switch saw
+a type it handles; the counter that exists to notice an unsteerable edge kind is
+blind to a *steerable* edge kind being steered on the wrong route.
+
+#### The fix is A*'s own rule, not a new one
+
+`NavSearch` relaxes with `existing >= 0 && existing <= tentative → continue`, so
+among parallel edges it keeps the **strictly cheapest** and an equal cost **never
+displaces what is already there**. `TryFindEdge` now does exactly that: lowest
+`NavEdge.Cost` among the routable, first-in-order on ties. ⚠️ The occupancy
+multiplier deliberately does not enter it — it is keyed on the node pair, so it
+scales every parallel edge identically and cannot reorder them.
+
+✅ **The refusal rule now has one copy**, `NavGraph.EdgeRoutable`, applied by both
+the search and the follower. The whole bug was two places answering the same
+question differently, so a second copy is the thing to guard against.
+
+#### ⚠️ It must be the query the route was PLANNED with, and the live one is a loop
+
+This cost the session more than the original bug. `ScriptedBot` rebuilds
+`NavQuery.CanRocketJump` from the **live** weapon and hp every tick, and firing
+the rocket that starts a rocket jump puts the launcher straight onto its refire
+cooldown. So the capability is false on the tick **after** takeoff, with the bot
+already in the air on the arc — and re-resolving the hop there abandons an arc
+already paid for at 30 hp.
+
+**Measured on `avanti-ramp-pocket-to-intel`**: launch, re-plan mid-flight, land,
+walk back, reload, launch again — **five times, 150 hp, and a leg that arrived in
+175 ticks did not arrive at all in 600**.
+
+`BotPathState.PlanQuery` records the traveller each route was planned for, and
+the hop is resolved against that. The live query still decides everything it
+should: the next *plan* uses it, and the takeoff gate re-checks
+`RocketModel.Ready` before leaving the ground. What it must not do is change
+which arc is being flown halfway along it.
+
+#### What it bought, and what it cost
+
+| pinned measurement | before | after |
+|---|---|---|
+| `BotObjectiveTests` intel run | 1,748 | **1,697** — re-plans 49→48, off-route 19→18, **blacklist 1→0** |
+| `truefort-spawn-to-intel` | 1,717 | **1,667** — re-plans 57→48, **blacklist 1→0** |
+| `avanti-ramp-pocket-to-intel` | 175 | **217** |
+| the suite's rocket-jump total | 6 | **6** |
+| `PathFollowerFixtureTests`' longest leg | 137/1,572/33/0/4/0 | unchanged |
+
+⚠️ **`avanti` got 42 ticks slower on purpose, and the trade is worth stating.**
+Its node pair 231→168 carries a double jump beside a rocket jump; the bot used to
+steer the double jump — for a soldier, an ordinary jump with no second press —
+and get away with it. It now waits for the launcher, walks a safe route while it
+reloads, and rocket-jumps once. **The old 175 was a bot flying an arc nothing had
+costed.** The same fault cost 462 ticks on the intel run and hid the sticky-jump
+arm completely.
+
+⚠️ **The rocket-jump total being unchanged at six is the load-bearing number**:
+the bot is not flying *more* arcs, it is flying the ones it was routed over.
+
+#### What to remember
+
+- ⚠️ **Anything that re-derives an edge from a node pair is suspect.** The
+  blacklist and the occupancy counts are both keyed on the pair
+  (`NavGraph.EdgeKey`) and that is fine — they mean to cover every parallel edge.
+  Steering is the one that has to pick one.
+- ⚠️ **A capability predicate evaluated at plan time and at steer time is two
+  different predicates** whenever it depends on live state. Ask which one a
+  decision belongs to before re-checking it.
+- ⚠️ **Six correct measurements in a row can all be answering the wrong
+  question.** Every sticky-jump number checked before this was right. The cheap
+  move — print what the follower thinks it is doing — was never made, because the
+  expensive checks kept looking like progress.

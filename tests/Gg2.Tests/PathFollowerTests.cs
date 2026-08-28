@@ -1715,4 +1715,285 @@ public sealed class PathFollowerTests
             ceiling < 4.53 * 40 * 0.9,
             $"a heavy reached {ceiling} of {4.53 * 40} from a standstill at its own ceiling");
     }
+
+    // --- which of a pair's parallel edges gets steered -------------------------
+
+    /// <summary>
+    /// A node pair carrying a double jump AND a rocket jump: the traveller that
+    /// can only fly one of them gets that one.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>This was a live bug on the SHIPPED graphs, and it hid an entire
+    /// feature.</b> A route is a list of nodes, so the follower re-derives which
+    /// edge each hop meant — and it used to take the first the edge index yielded.
+    /// <see cref="NavSearch"/> refuses per <em>edge</em>, so the two disagreed
+    /// wherever a pair carried more than one type, which is <b>11,615 of the
+    /// 104,087 node pairs across the 24 shipped caches</b>
+    /// (<c>NavGraphFixtureTests.ParallelEdgesAreCommonAndCarryMoreThanOneType</c>).
+    /// <para>
+    /// The double-jump/rocket-jump pair is the one that bites: <b>833 pairs where
+    /// a soldier's route is costed as a rocket jump</b> and the double jump is
+    /// what the index yields first. The bot then flew an ordinary 57px hop where
+    /// the arc wanted 276, landed somewhere the route does not mention, and
+    /// eventually blacklisted a perfectly good edge — all with
+    /// <see cref="BotPathState.UnsupportedEdgeTicks"/> at zero, because the
+    /// dispatch switch saw a type it handles.
+    /// </para>
+    /// <para>
+    /// The declared order here is the one the shipped graphs have: the double
+    /// jump first. Reverting <c>TryFindEdge</c> to "first match wins" makes this
+    /// fail on <see cref="BotPathState.RocketFire"/> — checked, not assumed.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ASoldierOnAPairThatAlsoCarriesADoubleJumpStillTakesTheRocketJump()
+    {
+        // ⚠️ The double jump is declared FIRST and is what the old resolution
+        // yielded. Its cost is deliberately the CHEAPER of the two, so this
+        // cannot pass by accident on a cost comparison that ignored the query.
+        var graph = Build(
+            [Node(30, 0, 9), Node(10, 20, 29)],
+            [
+                Edge(0, 1, 100, NavEdgeType.DoubleJump, takeoff: 8, bucket: 5, ticks: 20, rejump: 6),
+                Edge(0, 1, 200, NavEdgeType.RocketJump, takeoff: 8, bucket: 5, ticks: 20),
+            ]);
+
+        var follower = new PathFollower(graph);
+        var state = new BotPathState();
+
+        follower.SetGoal(state, NavGraph.ColumnWorldX(25), graph.StandY(1));
+
+        var at = Stand(graph, 0, 8);
+        var soldier = new NavQuery(Team.Red, CanRocketJump: true);
+        var loaded = Loaded();
+
+        var keys = follower.Step(state, At(at.X, at.Y), in loaded, 0, soldier);
+
+        Assert.True(
+            state.RocketFire,
+            "the soldier was routed over a rocket jump and steered the parallel double jump instead");
+        Assert.True((keys & PlayerKeys.Jump) != 0, "it asked for the rocket without jumping");
+        Assert.Equal(1, state.RocketJumps);
+        Assert.Equal(0, state.DoubleJumps);
+        Assert.Equal(0, state.UnsupportedEdgeTicks);
+    }
+
+    /// <summary>
+    /// The control: the same pair, and a scout gets the double jump.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Without this the test above is satisfied by "always prefer the rocket
+    /// jump".</b> The claim is that the follower resolves whatever the search
+    /// resolved, which means the answer has to change with the traveller — so the
+    /// discriminating fact is the pair of results, not either one.
+    /// <para>
+    /// A scout may not rocket-jump, so the search costs this hop as the double
+    /// jump; the follower must steer that one and must not ask for a rocket it has
+    /// no launcher for. <b>Firing one at its own feet is a real outcome</b> —
+    /// <c>ScriptedBot</c> ORs <see cref="BotPathState.RocketFire"/> straight into
+    /// ATTACK and overrides the combat aim to straight down.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void AScoutOnTheSamePairTakesTheDoubleJumpInstead()
+    {
+        var graph = Build(
+            [Node(30, 0, 9), Node(10, 20, 29)],
+            [
+                Edge(0, 1, 100, NavEdgeType.DoubleJump, takeoff: 8, bucket: 5, ticks: 20, rejump: 6),
+                Edge(0, 1, 200, NavEdgeType.RocketJump, takeoff: 8, bucket: 5, ticks: 20),
+            ]);
+
+        var follower = new PathFollower(graph);
+        var state = new BotPathState();
+
+        follower.SetGoal(state, NavGraph.ColumnWorldX(25), graph.StandY(1));
+
+        var at = Stand(graph, 0, 8);
+        var scout = new NavQuery(Team.Red, CanDoubleJump: true);
+        var none = default(WeaponState);
+
+        var keys = follower.Step(
+            state, At(at.X, at.Y, playerClass: PlayerClass.Scout), in none, 0, scout);
+
+        Assert.False(state.RocketFire, "a scout asked for a rocket it does not carry");
+        Assert.True((keys & PlayerKeys.Jump) != 0, "the scout never left the ground");
+        Assert.Equal(0, state.RocketJumps);
+        Assert.Equal(0, state.UnsupportedEdgeTicks);
+    }
+
+    /// <summary>
+    /// ⚠️ <b>The same fault hid the whole sticky-jump arm.</b>
+    /// </summary>
+    /// <remarks>
+    /// A cache carrying type-7 edges puts a rocket jump beside a sticky jump on
+    /// <b>2,460 node pairs</b> and a double jump beside one on 1,124 more, and the
+    /// rocket jump is what the index yields first. A demoman carries a Minegun, so
+    /// <see cref="RocketModel.Ready"/> was false, the takeoff gate never opened,
+    /// and the bot stood on the takeoff column waiting for a launcher it does not
+    /// have — <b>zero sticky jumps across 48 real edges on four maps, with the arm
+    /// itself entirely correct</b>. <see cref="StickyModel.Ready"/> was never
+    /// consulted once.
+    /// <para>
+    /// ⚠️ <b>Six hypotheses had been eliminated by measurement before this</b> —
+    /// the reach, the need, the gate arithmetic, the goal snap, the harness start
+    /// and the dispatch switch — and every one of them was correct. They were all
+    /// asking whether the arm refused, and the arm was never asked.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ADemomanOnAPairThatAlsoCarriesARocketJumpStillPlacesItsMine()
+    {
+        // The order a sticky cache really has: the rocket jump first.
+        var graph = Build(
+            [Node(30, 0, 9), Node(10, 20, 29)],
+            [
+                Edge(0, 1, 100, NavEdgeType.RocketJump, takeoff: 8, bucket: 5, ticks: 20),
+                Edge(0, 1, 200, NavEdgeType.StickyJump, takeoff: 8, bucket: 5, ticks: 20),
+            ]);
+
+        var follower = new PathFollower(graph);
+        var state = new BotPathState();
+
+        follower.SetGoal(state, NavGraph.ColumnWorldX(25), graph.StandY(1));
+
+        var at = Stand(graph, 0, 8);
+        var demo = new NavQuery(Team.Red, CanStickyJump: true);
+        var loaded = Loaded();
+
+        var keys = follower.Step(
+            state, At(at.X, at.Y, playerClass: PlayerClass.Demoman), in loaded, 0, demo);
+
+        Assert.True(state.MineFire, "the demoman was routed over a sticky jump and never placed a mine");
+        Assert.False(state.RocketFire, "a demoman asked for a rocket");
+        Assert.True((keys & PlayerKeys.Jump) == 0, "it jumped before the mine had settled");
+        Assert.Equal(NavConstants.SjSetupTicks, state.StickySetup);
+        Assert.Equal(0, state.UnsupportedEdgeTicks);
+    }
+
+    /// <summary>
+    /// Two edges a traveller can fly BOTH of: the cheaper wins, and an exact tie
+    /// leaves the earlier one standing.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>This is A*'s tie-break, not a choice.</b> <see cref="NavSearch"/>
+    /// relaxes with <c>existing &gt;= 0 &amp;&amp; existing &lt;= tentative →
+    /// continue</c>, so among parallel edges it keeps the strictly cheapest and an
+    /// equal cost never displaces what is already there. The follower has to
+    /// reproduce that exactly or it steers an arc the route did not cost, which is
+    /// the whole bug this group of tests exists for.
+    /// <para>
+    /// ⚠️ The occupancy multiplier deliberately does not enter it: it is keyed on
+    /// the node pair, so it scales every parallel edge by the same factor and
+    /// cannot reorder them.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void TheCheaperParallelEdgeWinsAndAnExactTieGoesToTheFirst()
+    {
+        // A traveller that can fly either arc, so the class filter cannot be what
+        // decides it.
+        var both = new NavQuery(Team.Red, CanDoubleJump: true, CanRocketJump: true);
+        var loaded = Loaded();
+
+        // Strictly cheaper rocket jump: it wins even though the double jump is
+        // declared first.
+        var cheaper = Build(
+            [Node(30, 0, 9), Node(10, 20, 29)],
+            [
+                Edge(0, 1, 200, NavEdgeType.DoubleJump, takeoff: 8, bucket: 5, ticks: 20, rejump: 6),
+                Edge(0, 1, 100, NavEdgeType.RocketJump, takeoff: 8, bucket: 5, ticks: 20),
+            ]);
+
+        var cheaperState = new BotPathState();
+        var cheaperFollower = new PathFollower(cheaper);
+        cheaperFollower.SetGoal(cheaperState, NavGraph.ColumnWorldX(25), cheaper.StandY(1));
+
+        var at = Stand(cheaper, 0, 8);
+        cheaperFollower.Step(cheaperState, At(at.X, at.Y), in loaded, 0, both);
+
+        Assert.True(cheaperState.RocketFire, "the strictly cheaper parallel edge did not win");
+
+        // The same pair at an identical cost: the first declared stands.
+        var tied = Build(
+            [Node(30, 0, 9), Node(10, 20, 29)],
+            [
+                Edge(0, 1, 150, NavEdgeType.DoubleJump, takeoff: 8, bucket: 5, ticks: 20, rejump: 6),
+                Edge(0, 1, 150, NavEdgeType.RocketJump, takeoff: 8, bucket: 5, ticks: 20),
+            ]);
+
+        var tiedState = new BotPathState();
+        var tiedFollower = new PathFollower(tied);
+        tiedFollower.SetGoal(tiedState, NavGraph.ColumnWorldX(25), tied.StandY(1));
+
+        tiedFollower.Step(tiedState, At(at.X, at.Y), in loaded, 0, both);
+
+        Assert.False(tiedState.RocketFire, "an exact tie displaced the edge declared first");
+    }
+
+    /// <summary>
+    /// ⚠️ <b>A route is steered against the query that PLANNED it, and losing the
+    /// capability mid-arc must not change which edge is being flown.</b>
+    /// </summary>
+    /// <remarks>
+    /// <b>Measured, and it is a loop.</b> <c>ScriptedBot</c> rebuilds
+    /// <see cref="NavQuery.CanRocketJump"/> from the live weapon every tick, and
+    /// firing the rocket that starts a rocket jump puts the launcher straight onto
+    /// its refire cooldown — so the capability is false on the tick <em>after</em>
+    /// takeoff, with the bot already in the air on the arc. Re-resolving the hop
+    /// against the live query there abandons an arc that has already been paid for
+    /// at 30 hp.
+    /// <para>
+    /// On <c>avanti-ramp-pocket-to-intel</c>, with the live query: launch, re-plan
+    /// mid-flight, land, walk back, reload, launch again — <b>five times, 150 hp,
+    /// and a leg that used to arrive in 175 ticks did not arrive at all in 600</b>.
+    /// With the plan-time query it arrives in 217 with one rocket jump, and
+    /// <see cref="ScenarioSuiteTests"/> pins that end to end.
+    /// </para>
+    /// <para>
+    /// The live query still decides everything it should: the next <em>plan</em>
+    /// uses it, and the takeoff gate re-checks <see cref="RocketModel.Ready"/>
+    /// before leaving the ground. What it must not do is change the arc halfway
+    /// along.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void LosingTheRocketMidArcDoesNotReplanOutOfTheArcItIsFlying()
+    {
+        var graph = Build(
+            [Node(30, 0, 9), Node(10, 20, 29)],
+            [
+                Edge(0, 1, 100, NavEdgeType.DoubleJump, takeoff: 8, bucket: 5, ticks: 20, rejump: 6),
+                Edge(0, 1, 200, NavEdgeType.RocketJump, takeoff: 8, bucket: 5, ticks: 20),
+            ]);
+
+        var follower = new PathFollower(graph);
+        var state = new BotPathState();
+
+        follower.SetGoal(state, NavGraph.ColumnWorldX(25), graph.StandY(1));
+
+        var at = Stand(graph, 0, 8);
+        var loaded = Loaded();
+
+        // Plan and take off with the launcher ready.
+        follower.Step(state, At(at.X, at.Y), in loaded, 0, new NavQuery(Team.Red, CanRocketJump: true));
+        Assert.True(state.RocketFire);
+
+        var replansAtTakeoff = state.Replans;
+
+        // ⚠️ The next ticks are the real test: the rocket has gone, so the launcher
+        // is cold and the live query no longer offers a rocket jump — while the bot
+        // is airborne under moveStatus 1, on the arc it just bought.
+        var flying = At(at.X, at.Y - 40, hSpeed: 3, onGround: false);
+        flying.MoveStatus = 1;
+
+        var cold = default(WeaponState);
+
+        for (var tick = 1; tick <= 8; tick++)
+            follower.Step(state, in flying, in cold, tick, new NavQuery(Team.Red));
+
+        Assert.Equal(0, state.EdgeUnroutableFires);
+        Assert.Equal(replansAtTakeoff, state.Replans);
+        Assert.True(state.FlyingEdge, "the follower stopped flying the arc it had taken off on");
+    }
 }

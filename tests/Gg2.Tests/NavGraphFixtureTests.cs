@@ -357,4 +357,163 @@ public sealed class NavGraphFixtureTests
 
         throw new InvalidOperationException($"no edge {from}->{to} in {graph.Map}");
     }
+    /// <summary>
+    /// Parallel edges are common, they carry different types, and the type the
+    /// edge index yields first is routinely NOT the one a search would choose.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>This is the measurement that made a whole class of bug visible, and
+    /// it is pinned so the synthetic tests for it cannot go quietly vacuous.</b>
+    /// A route is a list of nodes, so <c>PathFollower.TryFindEdge</c> re-derives
+    /// which edge each hop meant — and it used to take the first match. Nothing
+    /// in the repo said how often a pair carries more than one.
+    /// <para>
+    /// It carries more than one <b>11,615 times</b>, and the two that matter are
+    /// class-refusable: <b>833 node pairs where a soldier's route is costed as a
+    /// rocket jump while the index yields a double jump first</b>. That soldier
+    /// pressed for a second jump its class does not have, flew an ordinary 57px
+    /// hop where the arc wanted 276, and eventually blacklisted a good edge.
+    /// <see cref="PathFollowerTests.ASoldierOnAPairThatAlsoCarriesADoubleJumpStillTakesTheRocketJump"/>
+    /// is the gate; this is the evidence that the gate describes real graphs.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>A generator that stopped emitting parallel edges would make every one
+    /// of those tests pass while testing nothing</b>, and nothing else here would
+    /// notice — the caches are gitignored and rebuilt out of band. So the counts
+    /// are exact, and a move is the re-record: check the generator changed the way
+    /// you meant, update the numbers, and say so in the commit.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>The scout column is deliberately zero and is not padding.</b> The
+    /// double jump is what the index yields first on every one of those 833 pairs,
+    /// so a scout was accidentally right the whole time — which is exactly why the
+    /// bug survived: half the population never showed it.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ParallelEdgesAreCommonAndCarryMoreThanOneType()
+    {
+        var caches = Caches();
+
+        var pairs = 0;
+        var multi = 0;
+        var mixed = 0;
+        var soldierMisresolved = 0;
+        var soldierUnflyable = 0;
+        var scoutMisresolved = 0;
+        var scoutUnflyable = 0;
+
+        var soldier = new NavQuery(Team.Red, CanRocketJump: true);
+        var scout = new NavQuery(Team.Red, CanDoubleJump: true);
+
+        var byTo = new Dictionary<int, List<NavEdge>>();
+
+        foreach (var (map, area) in caches)
+        {
+            var graph = NavCache.Load(ReferenceTree.NavCacheDirectory, map, area);
+
+            for (var node = 0; node < graph.NodeCount; node++)
+            {
+                byTo.Clear();
+
+                foreach (var edge in graph.EdgesFrom(node))
+                {
+                    if (!byTo.TryGetValue(edge.To, out var list))
+                        byTo[edge.To] = list = [];
+
+                    list.Add(edge);
+                }
+
+                foreach (var (_, list) in byTo)
+                {
+                    pairs++;
+
+                    if (list.Count == 1)
+                        continue;
+
+                    multi++;
+
+                    var first = list[0].Type;
+                    foreach (var edge in list)
+                    {
+                        if (edge.Type == first)
+                            continue;
+
+                        mixed++;
+                        break;
+                    }
+
+                    if (Misresolved(list, in soldier, out var soldierRefused))
+                    {
+                        soldierMisresolved++;
+
+                        if (soldierRefused)
+                            soldierUnflyable++;
+                    }
+
+                    if (Misresolved(list, in scout, out var scoutRefused))
+                    {
+                        scoutMisresolved++;
+
+                        if (scoutRefused)
+                            scoutUnflyable++;
+                    }
+                }
+            }
+        }
+
+        Assert.Equal(104_087, pairs);
+        Assert.Equal(11_670, multi);
+        Assert.Equal(11_615, mixed);
+
+        // ⚠️ TWO different faults, and keeping them apart is the point.
+        //
+        // The larger number is a COST mismatch: 3,821 walk/fall pairs where both
+        // edges are flyable by anybody and the cheaper one is simply not the one
+        // the index yields first. The bot got somewhere; it got there along an arc
+        // its route had not costed.
+        //
+        // The smaller is a CAPABILITY mismatch and is the live bug: 833 pairs
+        // where the edge the index yields first is one this traveller may not use
+        // at all. A soldier crossing any of them pressed for a second jump its
+        // class does not have.
+        Assert.Equal(4_654, soldierMisresolved);
+        Assert.Equal(833, soldierUnflyable);
+
+        Assert.Equal(3_821, scoutMisresolved);
+        Assert.Equal(0, scoutUnflyable);
+    }
+
+    /// <summary>
+    /// Whether taking the first edge of a parallel group gives a different
+    /// <em>type</em> from the one <see cref="NavSearch"/> would have costed, and
+    /// whether that first edge is one this traveller may not use at all.
+    /// </summary>
+    /// <remarks>
+    /// The search's choice is the strictly cheapest routable edge, first-in-order
+    /// on ties — see <c>PathFollower.TryFindEdge</c>, which reproduces exactly
+    /// that. A group no traveller can use is not counted: there is no route over
+    /// it to mis-steer in the first place.
+    /// </remarks>
+    private static bool Misresolved(List<NavEdge> group, in NavQuery query, out bool firstIsRefused)
+    {
+        var chosen = -1;
+
+        for (var i = 0; i < group.Count; i++)
+        {
+            var edge = group[i];
+
+            if (!NavGraph.EdgeRoutable(in edge, in query))
+                continue;
+
+            if (chosen < 0 || edge.Cost < group[chosen].Cost)
+                chosen = i;
+        }
+
+        var first = group[0];
+
+        firstIsRefused = chosen >= 0 && !NavGraph.EdgeRoutable(in first, in query);
+
+        return chosen >= 0 && group[chosen].Type != first.Type;
+    }
 }

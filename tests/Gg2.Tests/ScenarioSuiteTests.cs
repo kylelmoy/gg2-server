@@ -86,6 +86,30 @@ public sealed class ScenarioSuiteTests(ITestOutputHelper output)
     /// suppression, the arc gate, the mine trigger, the close-in step, the stab
     /// window, occupancy and the per-tick allocation fix: <b>every leg unchanged
     /// and the rocket-jump count unchanged.</b>
+    /// <para>
+    /// ⚠️ <b>RE-RECORDED 2026-08-28</b>, when <c>PathFollower.TryFindEdge</c>
+    /// stopped taking the first edge of a parallel pair and started resolving the
+    /// one <see cref="NavSearch"/> actually costed. Two legs moved and twelve did
+    /// not; the rocket-jump total is unchanged at six, which is the useful part —
+    /// the bot is not flying <em>more</em> arcs, it is flying the ones it was
+    /// routed over.
+    /// </para>
+    /// <para>
+    /// <b><c>truefort-spawn-to-intel</c> 1,717 → 1,667</b>, with re-plans 57 → 48
+    /// and <b>its last blacklist gone (1 → 0)</b>. That leg was crossing pairs
+    /// carrying a double jump beside the rocket jump its route was costed for,
+    /// flying the ordinary hop, landing off route and banning a good edge.
+    /// </para>
+    /// <para>
+    /// <b><c>avanti-ramp-pocket-to-intel</c> 175 → 217</b>, and this one got
+    /// slower on purpose. Node pair 231→168 carries a double jump and a rocket
+    /// jump; the bot used to steer the double jump — which for a soldier is an
+    /// ordinary jump, no second press — and get lucky. It now waits for the
+    /// launcher, walks a safe route while it reloads, and rocket-jumps once. ⚠️ It
+    /// is 42 ticks and it is honest: the old 175 was a bot flying an arc nothing
+    /// had costed, and the same fault cost 462 ticks on the intel run and hid the
+    /// sticky-jump arm completely.
+    /// </para>
     /// </para>
     /// </remarks>
     private static readonly Dictionary<string, int> Baseline = new(StringComparer.Ordinal)
@@ -95,9 +119,9 @@ public sealed class ScenarioSuiteTests(ITestOutputHelper output)
         ["valley-point-to-spawn"] = 456,
         ["valley-shaft-crate-to-point"] = 95,
         ["valley-shaft-floor-to-point"] = 161,
-        ["truefort-spawn-to-intel"] = 1717,
+        ["truefort-spawn-to-intel"] = 1667,
         ["truefort-blue-spawn-exit-west"] = 53,
-        ["avanti-ramp-pocket-to-intel"] = 175,
+        ["avanti-ramp-pocket-to-intel"] = 217,
         ["gallery-pit-climb"] = 216,
         ["soldier-shells-generator"] = 600,
         ["soldier-holds-and-fires"] = 400,
