@@ -316,7 +316,6 @@ public sealed class BotAllyTests(ITestOutputHelper output)
 
         var medic = world.Place(PlayerClass.Medic, Team.Red, StandX, StandY);
         var ally = world.Place(PlayerClass.Heavy, Team.Red, StandX + 60, StandY);
-        var enemy = world.Place(PlayerClass.Soldier, Team.Blue, StandX + 400, StandY);
 
         // ⚠️ ScenarioWorld places no objective, so the mode cascade has nothing to
         // offer — which is what makes the follow goal's existence visible. Shown
@@ -325,9 +324,25 @@ public sealed class BotAllyTests(ITestOutputHelper output)
         // cascade. The first draft of this asserted exactly that and failed.
         var soldier = world.Place(PlayerClass.Soldier, Team.Red, StandX - 40, StandY);
 
+        // ⚠️ CHECKED BEFORE THE ENEMY EXISTS, and it did not have to be until
+        // 2026-08-28. A world with no gamemode is now a DEATHMATCH — the cascade's
+        // last branch hunts the nearest enemy — so "the cascade offers nothing"
+        // stopped being true of any world with somebody to shoot in it. The
+        // scaffolding's premise is restored rather than the assertion weakened:
+        // with no enemy on the map there is genuinely nothing for it to find.
         Assert.False(
             objective.Decide(View(world), soldier, BotRole.Attack, 0, allowSpot: true).Found,
             "the cascade found something, so the follow goal is not what is under test");
+
+        var enemy = world.Place(PlayerClass.Soldier, Team.Blue, StandX + 400, StandY);
+
+        // ⚠️ And the other half of the same point: now that there IS an enemy, the
+        // cascade has an answer for the soldier. So the medic's goal below is the
+        // follow branch's precisely because it returns BEFORE the cascade runs, not
+        // because the cascade is empty.
+        Assert.True(
+            objective.Decide(View(world), soldier, BotRole.Attack, 0, allowSpot: true).Found,
+            "a world with an enemy in it should now give a non-follower a deathmatch goal");
 
         var goal = objective.Decide(View(world), medic, BotRole.Attack, 0, allowSpot: true, target: enemy);
 

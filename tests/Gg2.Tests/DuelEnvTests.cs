@@ -553,20 +553,24 @@ public sealed class DuelEnvTests
     }
 
     /// <summary>
-    /// ⚠️ Chasing a target that cannot be reached must not search every decision.
+    /// ⚠️ Hunting a target that cannot be reached must not search every decision.
     /// </summary>
     /// <remarks>
-    /// <b>This nearly shipped.</b> The env re-points a scripted opponent at the
-    /// other agent every decision, because a duel has no objective layer to do it
-    /// — and <c>PathFollower.SetGoal</c> clears both <c>ReplanAt</c> and
-    /// <c>PlanFailUntil</c>, so calling it unconditionally defeats the
-    /// unreachable-goal throttle completely: a full A* per bot per decision, for
-    /// ever. <b>Measured at 55 searches in 60 decisions.</b>
+    /// <b>Kept from a version of this that nearly shipped.</b> The env used to
+    /// re-point a scripted opponent at the other agent itself, because a duel had
+    /// no objective layer to do it — and <c>PathFollower.SetGoal</c> clears both
+    /// <c>ReplanAt</c> and <c>PlanFailUntil</c>, so calling it unconditionally
+    /// defeated the unreachable-goal throttle completely: a full A* per bot per
+    /// decision, for ever. <b>Measured at 55 searches in 60 decisions.</b>
     /// <para>
-    /// ⚠️ <b><c>PathFollowerFixtureTests.AnUnreachableGoalIsSearchedForOnTheTimerAndNotEveryTick</c>
-    /// gates the throttle and could not see this</b>, because it does not know
-    /// about this caller. A throttle is only as good as every path that reaches
-    /// it.
+    /// That hand-rolled chase is gone — <c>BotObjective</c>'s deathmatch branch
+    /// does it now, throttled on the RESOLVED node by
+    /// <c>BOT_GOAL_RETARGET_DIST</c> — but the gate is worth more than the code
+    /// that prompted it. ⚠️ <b>
+    /// <c>PathFollowerFixtureTests.AnUnreachableGoalIsSearchedForOnTheTimerAndNotEveryTick</c>
+    /// gates the throttle and could not see it</b>, because it does not know about
+    /// this caller. <b>A throttle is only as good as every path that reaches
+    /// it</b>, and the objective layer is now one of those paths.
     /// </para>
     /// <para>
     /// <c>ctf_2dfort</c> because it is genuinely unreachable and not merely far:
@@ -575,7 +579,7 @@ public sealed class DuelEnvTests
     /// </para>
     /// </remarks>
     [Fact]
-    public void ChasingAnUnreachableOpponentDoesNotSearchEveryDecision()
+    public void HuntingAnUnreachableOpponentDoesNotSearchEveryDecision()
     {
         var env = NavEnv();
         env.Reset(Sampled("ctf_2dfort", EnvDriver.Scripted, EnvDriver.Idle, cap: 200), seed: 1);
@@ -587,7 +591,7 @@ public sealed class DuelEnvTests
 
         // The premise: it really is unreachable, so every search really did fail.
         Assert.False(bot.Path.HasPath, "the opponent turned out to be reachable; this map no longer tests the throttle");
-        Assert.True(bot.Path.HasGoal, "the chase never set a goal at all, so nothing here was tested");
+        Assert.True(bot.Path.HasGoal, "the deathmatch goal never set anything at all, so nothing here was tested");
 
         // ⚠️ The bound is the throttle's own, not a round number: BOT_REPLAN_TICKS
         // apart over the episode's ticks, plus slack for the stagger and the first
@@ -599,6 +603,63 @@ public sealed class DuelEnvTests
             bot.Path.Replans <= ceiling,
             $"an unreachable opponent was searched for {bot.Path.Replans} times in 200 decisions, "
             + $"against a throttled ceiling of {ceiling}");
+    }
+
+    /// <summary>
+    /// ✅ A scripted opponent hunts down and kills an agent that never moves.
+    /// </summary>
+    /// <remarks>
+    /// <b>The case the env's own hand-rolled chase could not do</b>, and the
+    /// reason it was replaced by <c>BotObjective</c>. Chasing the enemy's exact
+    /// position walked a soldier to point blank — inside its own splash-safe band,
+    /// where <c>BotClassKeys</c> correctly refuses to fire — and left it there:
+    /// <b>250 decisions of walking, arrival 59px away against a band of 110, zero
+    /// shots and zero damage</b>. The objective layer stands at a <em>spot</em>
+    /// anchored on the enemy at the class's own band instead, which is a real
+    /// walkable node it can shoot from.
+    /// <para>
+    /// <b>Measured over 8 seeds, sampled spawns, 250-decision cap:</b>
+    /// <c>arena_montane</c> went from 0 duels ending in a death to <b>8 of 8</b>,
+    /// and <c>tdm_mantic</c> from 0 to 5 of 8.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>An idle opponent, not a scripted one, and that is the point.</b> Two
+    /// scripted bots find each other because both are walking; a stationary target
+    /// is the case that separates "the opponent moves" from "the opponent hunts",
+    /// and it is also what an untrained policy looks like on its first episodes.
+    /// </para>
+    /// <para>
+    /// ⚠️ <c>arena_montane</c> rather than <c>gg_debug</c>: gg_debug's two spawn
+    /// points are <b>59px apart</b>, already inside a soldier's band, and a bot
+    /// that starts there does not leave — 41px in 250 decisions. That is an open
+    /// question recorded in <c>docs/TRAPS-BOTS.md</c>, and it is not what this
+    /// test is about.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void AScriptedOpponentHuntsDownAnAgentThatNeverMoves()
+    {
+        var deaths = 0;
+
+        for (uint seed = 1; seed <= 8; seed++)
+        {
+            var env = NavEnv();
+            env.Reset(Sampled("arena_montane", EnvDriver.Idle, EnvDriver.Scripted), seed);
+
+            while (env.Termination == Termination.Running)
+                env.Step(Idle, Idle);
+
+            if (env.Termination == Termination.Death)
+                deaths++;
+        }
+
+        // ⚠️ Not 8 of 8, though that is what it measures: an exact pin on eight
+        // stochastic-looking episodes is a re-record every time a spawn moves. The
+        // number that matters is that it is not ZERO, which is what it was.
+        Assert.True(
+            deaths >= 5,
+            $"a scripted opponent killed a stationary agent in only {deaths} of 8 duels; before the "
+            + "deathmatch goal this was 0 of 8");
     }
 
     /// <summary>A driver or tier outside the table is refused, not clamped.</summary>

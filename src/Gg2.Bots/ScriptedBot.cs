@@ -513,6 +513,16 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
         // hold began is what stops a bot renewing its own stalemate by looking
         // away and back), and a class with a close-in distance walks at its
         // target instead.
+        // ⚠️ There is no exception here for "the target is inside my own minimum
+        // band, where BotClassKeys will not let me fire". Adding one is the
+        // obvious mirror of the pyro's close-in press below — too far to shoot
+        // walks in, so too close to shoot should walk out — and it was TRIED on
+        // 2026-08-28 and REVERTED, because it changed nothing measurable: not the
+        // scenario suite's exact tick costs, not the intel run, and not the case
+        // it was written for. Something else pins a bot that starts inside the
+        // band, and until that is found this condition would be an ungated change
+        // to shipped behaviour with no demonstrated effect. docs/TRAPS-BOTS.md,
+        // "Team Deathmatch", has the measurement and the open question.
         if (!self.CarryingIntel
             && distance <= BotTargeting.ClassRange(self.Class)
             && tick - Combat.TargetAt <= BotConstants.EngageTicks

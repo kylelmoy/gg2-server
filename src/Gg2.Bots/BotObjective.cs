@@ -206,6 +206,20 @@ public sealed class BotObjective
             found = ControlPoint(
                 in world, in self, team, defending, ref wx, ref wy, ref held, ref contested);
         }
+        else
+        {
+            // ⚠️ Team Deathmatch, and the ONLY mode with nothing in the world to
+            // walk to. Until 2026-08-28 the cascade simply ended here and a TDM
+            // bot got BotGoal.None — no route, no movement, standing where it
+            // spawned until somebody wandered into its combat range. On
+            // tdm_mantic that was eight bots moving exactly ZERO pixels for 3,000
+            // ticks, with every test green, and it made `eval`'s tdm result
+            // measure nothing at all.
+            found = Deathmatch(
+                in world, slot, in self, playerClass, target,
+                ref wx, ref wy, ref anchorX, ref anchorY,
+                ref spotMin, ref spotMax, ref spotHigh, ref useSpot);
+        }
 
         // --- the flag is in somebody's hands ---------------------------------
         //
@@ -599,6 +613,113 @@ public sealed class BotObjective
             // team-mate was running the flag back.
             chase = team;
         }
+    }
+
+    /// <summary>
+    /// Team Deathmatch: the objective is the other team, so the goal is a place
+    /// to shoot one of them from.
+    /// </summary>
+    /// <remarks>
+    /// <b>The design question the pin in <c>MatchActuallyHappensTests</c> left
+    /// open</b> — hunt the nearest enemy, patrol, or hold a chokepoint. It is
+    /// answered as <b>hunt</b>, because the other two need a notion of territory
+    /// that no mode without an objective has, and because a deathmatch's whole
+    /// content is finding somebody.
+    /// <para>
+    /// ⚠️ <b>A SPOT anchored on the enemy, never the enemy's own position.</b>
+    /// That distinction is the entire difficulty and it was measured twice.
+    /// <c>BotClassKeys</c> refuses to fire inside
+    /// <see cref="BotTargeting.ClassMinBand"/> — "a rocket at that range kills the
+    /// shooter" — and it explicitly does <em>not</em> move the bot away, because
+    /// "where this bot stands is the objective layer's decision rather than this
+    /// one's". <b>So a goal of "walk onto the enemy" walks a soldier to point
+    /// blank and leaves it there, permanently, not firing</b>: measured in
+    /// <c>Gg2.Env</c>'s duels as 250 decisions of walking, arrival 59px away
+    /// against a band of 110, and zero shots.
+    /// </para>
+    /// <para>
+    /// The spot search is what fixes it, and it is the machinery that already
+    /// exists: the band's floor is the class's own minimum, so a standoff can
+    /// never put a bot inside its own splash radius, and it returns a real
+    /// walkable node rather than an offset that may be in mid-air. ⚠️ <b>Offsetting
+    /// the enemy's position by the band was tried first and is worse</b> — the
+    /// offset lands off whatever surface the target is standing on and A* refuses
+    /// it, so the bot stops dead with no route at all.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>The combat target first, the nearest enemy second.</b> Preferring
+    /// whatever the bot is already shooting at keeps the movement half and the
+    /// firing half pointed at one player; picking independently makes a bot walk
+    /// toward one enemy while shooting another, which is how it ends up in the
+    /// open between two of them. The nearest is the fallback for a bot that has
+    /// not acquired anything yet, and is what starts the hunt.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>No role split, and that is deliberate.</b> <see cref="BotRole"/>
+    /// divides a team into attack and defend, which means nothing when there is
+    /// nothing to defend — a "defending" TDM bot is a bot told to guard empty
+    /// ground. Both roles hunt.
+    /// </para>
+    /// </remarks>
+    private static bool Deathmatch(
+        in WorldView world, int slot, in CharacterState self, PlayerClass playerClass, int? target,
+        ref double wx, ref double wy, ref double anchorX, ref double anchorY,
+        ref double spotMin, ref double spotMax, ref double spotHigh, ref bool useSpot)
+    {
+        var foe = -1;
+
+        if (target is { } acquired && world.IsAlive(acquired))
+        {
+            foe = acquired;
+        }
+        else
+        {
+            // ⚠️ NearestEnemies is ordered, so the first live one is the nearest.
+            // It skips empty slots inside its own sweep, so this costs the same
+            // whatever the population — see docs/ENV.md's extraction measurement.
+            Span<int> nearest = stackalloc int[4];
+            var count = world.NearestEnemies(slot, nearest);
+
+            for (var i = 0; i < count; i++)
+            {
+                if (!world.IsAlive(nearest[i]))
+                    continue;
+
+                foe = nearest[i];
+                break;
+            }
+        }
+
+        // ⚠️ Nobody to hunt is BotGoal.None, exactly as before. A bot alone on the
+        // map should stand still rather than walk to where somebody used to be —
+        // and this is the state every round starts in for one tick.
+        if (foe < 0)
+            return false;
+
+        ref readonly var enemy = ref world.Character(foe);
+
+        wx = enemy.X;
+        wy = enemy.Y;
+
+        anchorX = wx;
+        anchorY = wy;
+
+        // The same band the generator's firing position uses, and for the same
+        // reason: comfortably inside the weapon's reach rather than on the edge of
+        // it, where a target taking one step is out of range. ⚠️ The floor is the
+        // class's own minimum band — the line that stops this being the point-blank
+        // standoff described above.
+        spotMin = Math.Max(BotTargeting.ClassMinBand(playerClass), 1);
+        spotMax = BotTargeting.ClassRange(playerClass) * BotConstants.SpotBand;
+
+        // ⚠️ Height is worth having here where it is not worth having against a
+        // generator: a generator cannot shoot back. This is the one goal in the
+        // cascade whose anchor is an opponent, so the class's own height
+        // preference is exactly the right question to ask.
+        spotHigh = BotClassProfile.SpotHigh(playerClass);
+        useSpot = true;
+
+        return true;
     }
 
     private bool Generator(

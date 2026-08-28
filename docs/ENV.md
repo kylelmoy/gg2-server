@@ -235,7 +235,7 @@ alone would resume with an opponent mid-way through a plan for a world that no
 longer exists, and it would do it silently. **Lifting this means serialising the
 bot layer**, which is real work and is not wanted yet.
 
-#### ⚠️ A duel has no objective layer, so the env supplies the goal
+#### ✅ A duel is a deathmatch, and the objective layer plays it
 
 `ScriptedBot` gets where to walk from `BotObjective`, and a duel runs on
 `ScenarioWorld` — `docs/BOTAI.md` item 11, a world with no gamemode in it. **With
@@ -244,24 +244,37 @@ issue as "Team Deathmatch bots have no goal" in `docs/TRAPS-BOTS.md`.
 
 Measured before it was handled, sampled spawns on `ctf_2dfort`, 300 decisions:
 neither bot walked a pixel, **nobody fired a shot**, and every episode ended on
-the tick cap. So the env re-points a scripted opponent at the other agent, using
-the reference's own `botGoalLocked` escape.
+the tick cap.
 
-⚠️ **Only when the target has moved 32px**, and that is not an optimisation.
-`PathFollower.SetGoal` clears both `ReplanAt` and `PlanFailUntil` — it is
-event-driven by design — so calling it every decision defeats the
-unreachable-goal throttle completely: **measured at 55 searches in 60 decisions**
-against a goal that could never route. `PathFollowerFixtureTests` gates that
-throttle and could not see this, because it does not know about this caller.
+✅ **Fixed in the bot layer rather than here.** `BotObjective` grew a deathmatch
+branch, so a duel now falls to the same code path `tdm_mantic` uses and
+`DuelEnv` simply gives its scripted bots a real `BotObjective`.
 
-⚠️ **KNOWN and deliberately not fixed: a splash class chasing a STATIONARY
-opponent closes to inside its own splash-safe band and then correctly holds
-fire.** Against an idle red on `gg_debug`: 250 decisions of walking, arrival 59px
-away against `ClassMinBand`'s 110, **zero shots**. It does not appear against
-anything that moves. Chasing to a stand-off point instead was tried and is worse
-— the offset lands off the surface the target stands on and A\* refuses it, so
-the bot stops with no route at all. **Picking an engagement position is bot-layer
-work** and belongs with that open item.
+⚠️ **`DuelEnv` had a hand-rolled `GoalLocked` chase first, and it is gone.** The
+objective layer is better at it in three separate ways:
+
+- it stands at a **spot** at the class's own band instead of walking onto the
+  target — the chase parked a soldier 59px from an idle opponent, inside a band of
+  110, where it correctly refuses to fire, and it never moved again: **250
+  decisions, zero shots, zero damage**;
+- the spot search returns a **real walkable node**, where offsetting the enemy's
+  position by the band lands off whatever surface the target is on and A\*
+  refuses it;
+- its re-issue is throttled on the **resolved node** by `BOT_GOAL_RETARGET_DIST`.
+  ⚠️ That last one nearly shipped as a bug: `PathFollower.SetGoal` clears both
+  `ReplanAt` and `PlanFailUntil`, so the env's own version defeated the
+  unreachable-goal throttle completely — **55 searches in 60 decisions** against a
+  goal that could never route.
+
+**Against a STATIONARY opponent**, 8 seeds, sampled spawns, 250-decision cap:
+`arena_montane` went **0 → 8 of 8** duels ending in a death and `tdm_mantic`
+**0 → 5 of 8**. That is the case an untrained policy looks like on its first
+episodes, and it did not work at all before.
+
+⬅️ **Still open: `gg_debug`'s two spawn points are 59px apart**, already inside a
+soldier's band, and a bot that starts there moves 41px in 250 decisions with a
+live route it never walks. `docs/TRAPS-BOTS.md`, "Team Deathmatch", has the
+repro and what has already been eliminated.
 
 #### ⚠️ Which maps two sampled duellists can actually reach each other on
 
@@ -272,11 +285,18 @@ Scripted against scripted, sampled spawns, 8 seeds × 250 decisions each:
 | `gg_debug` | 8 | **8** | yes |
 | `tdm_mantic` | 8 | **7** | yes |
 | `arena_montane` | 8 | **7** | yes |
-| `arena_lumberyard` | 8 | 4 | yes |
+| `arena_lumberyard` | 8 | 5 | yes |
 | `koth_harvest` | 8 | 0 | **no** |
 | `ctf_2dfort` | 8 | 0 | **no** |
 | `koth_valley` | 8 | 0 | **no** |
 | `dkoth_atalia` | 8 | 0 | **no** |
+
+⚠️ **Re-measured across all eight after the deathmatch goal landed: the four
+zeros are unchanged and `arena_lumberyard` moved 4 → 5.** The zeros are the point
+— they are gate geometry, not a bot failure, and no amount of better hunting will
+move them. Against a **stationary** opponent the same eight maps read differently —
+`arena_montane` 8 of 8 and `tdm_mantic` 5 of 8 — because that case depends on the
+opponent hunting rather than on both sides wandering into each other.
 
 ⚠️ **The four that never engage are not slow, they are unroutable.** Both sampled
 spawns sit behind their own team gates, so a blue bot asked to walk to a red one
@@ -382,7 +402,8 @@ to do it now rather than after `gg2-rl` phase 2.
 - **Per-slot drivers** (2026-08-28): a bot slot returns real reward components
   and the action it took; two scripted opponents fight **to a death**, not to a
   tick cap; a scripted driver without a nav graph is refused; `Snapshot` is
-  refused with a bot in play; the chase does not defeat the re-plan throttle; a
+  refused with a bot in play; hunting an unreachable opponent does not defeat the
+  re-plan throttle; a scripted opponent hunts down and kills a stationary agent; a
   bot-driven batch is identical at batch 1 and 32 and on 1, 2 and 4 threads.
   ⚠️ **Each of those has its premise asserted** — that a bot really is behind the
   slot — because a client slot fed `EnvAction.Idle` behaves identically and made
@@ -402,9 +423,7 @@ to do it now rather than after `gg2-rl` phase 2.
 ## Out of scope, so nobody re-opens it
 
 **Serialising the bot layer**, which is what `Snapshot` with a bot-driven slot
-would need — refused explicitly instead. **Choosing an engagement position for a
-chased opponent**, which is bot-layer work and belongs with "Team Deathmatch bots
-have no goal". No shared memory until the throughput number above justifies it. No ML runtime,
+would need — refused explicitly instead. No shared memory until the throughput number above justifies it. No ML runtime,
 no inference path, no weights format (that is `gg2-rl` phase 2's arrival). No
 rollout-search bot (`Gg2.Bots`, `gg2-rl` phase 1). No full-match episodes. No
 reaction-delay model (phase 5 — only its observation field exists).

@@ -52,6 +52,9 @@ What it licenses, and what it does not:
   and **all 24 shipped nav graphs contain zero of them** (measured 2026-08-28:
   Walk 18,785, Fall 11,558, Jump 67,013, DropThrough 5, DoubleJump 2,382,
   RocketJump 16,014, StickyJump 0, MoveBox 0).
+- ✅ **Team Deathmatch has a goal as of 2026-08-28** — `BotObjective.Deathmatch`,
+  a spot anchored on the nearest enemy. `tdm_mantic` went from eight bots moving
+  zero pixels to a real match, and team clumping went DOWN rather than up.
 - ⚠️ **Conversion at 6v6 is 8%**, and nothing establishes whether that is
   *right*. There is no human baseline in this project.
 
@@ -2080,7 +2083,7 @@ tries what no human would, so it finds physics-port bugs by exploiting them.
 the score** — scoring around a bug hides it. `gg2-rl/docs/PLAN.md` phase 1 says
 the same thing from the other side.
 
-### ⚠️ Team Deathmatch bots have no goal, and one map makes it visible
+### ✅ Team Deathmatch had no goal — FIXED 2026-08-28, and the conga line was the wrong fear
 
 **Found 2026-08-28**, by applying the Arena lesson ("a match that ends is not a
 match that happened") to the other twenty-one maps rather than only to the one
@@ -2091,17 +2094,83 @@ points. **Team Deathmatch has none of the three**, so it returns `BotGoal.None`,
 the path follower has no route, and a bot stands where it spawned until an enemy
 walks into its combat range.
 
-⚠️ **It bites `Gg2.Env`'s duels too, and harder**, because a duel runs on
-`ScenarioWorld` — a world with no gamemode at all, so there is not even a mode
-for `Decide` to look at. A scripted opponent stood still for 300 decisions and
-never fired. The env now supplies the goal itself (the other agent, via the
-reference's own `botGoalLocked`), which is the "walk at the nearest enemy" answer
-below with the conga-line objection removed by there being only two characters.
-⚠️ **That is a duel-shaped patch and not the fix for this item** — it is in
-`DuelEnv.Chase`, it does not touch the bot layer, and it inherits this item's own
-open question: chasing to the enemy's exact position walks a splash class inside
-its own splash-safe band, where it correctly refuses to fire. `docs/ENV.md`,
-"A duel has no objective layer", has the numbers.
+#### ✅ The fix: a fourth branch, and it is a SPOT rather than the enemy
+
+`BotObjective.Deathmatch` — hunt the nearest enemy, preferring whatever the
+combat half has already acquired, and stand at a **spot anchored on that enemy**
+at the class's own band.
+
+⚠️ **The spot is the whole difficulty, and "walk at the nearest enemy" on its own
+does not work.** `BotClassKeys` refuses to fire inside
+`BotTargeting.ClassMinBand` — "a rocket at that range kills the shooter" — and it
+deliberately does **not** move the bot away, because *"where this bot stands is
+the objective layer's decision rather than this one's"*. So a goal of the enemy's
+own position walks a soldier to point blank and leaves it there, not firing:
+measured in `Gg2.Env`'s duels as **250 decisions of walking, arrival 59px away
+against a band of 110, and zero shots**.
+
+The spot search fixes it and is machinery that already existed for the generator
+and control-point standoffs: its band floor is the class's own minimum, and it
+returns a **real walkable node**. ⚠️ **Offsetting the enemy's position by the band
+was tried first and is worse** — the offset lands off whatever surface the target
+is standing on and A* refuses it, so the bot stops dead with no route at all.
+
+**Measured, `tdm_mantic`, 8 bots, 600 ticks, three seeds:**
+
+| | before | after |
+|---|---|---|
+| bots that moved | 0 | **8** |
+| bots that moved past 100px | 0 | **8** |
+| furthest | 0 | **856 / 1,156 / 766 px** |
+| deaths | 0 | **4 / 7 / 4** (13 / 16 / 13 over 1,500 ticks) |
+
+#### ✅ The conga line was the wrong fear, and it is measured
+
+This section used to record "walk at the nearest enemy is the obvious answer and
+is how you get eight bots in a conga line" as the reason not to do it. **It is the
+other way round.** Each bot picks its *own* nearest enemy and then a spot that
+prefers to walk less and rewards height, so they distribute rather than stack.
+
+Fraction of live same-team pairs within 64px, sampled every 50 ticks, on
+`gg_debug` — the one-room map where piling up is easiest and where the original
+bug hid:
+
+| seed | before | after |
+|---|---|---|
+| 11 | 1.00 | **0.73** |
+| 12 | 0.76 | **0.54** |
+| 13 | 0.98 | **0.63** |
+
+Deaths across those three seeds went **42 → 50** at the same time. The bots spread
+out *and* killed each other more. `MatchActuallyHappensTests` gates both halves.
+
+#### ✅ And `Gg2.Env`'s duels use the same branch
+
+A duel runs on `ScenarioWorld`, a world with no gamemode at all, so it falls to
+this branch like any TDM map. ⚠️ **`DuelEnv` had a hand-rolled `GoalLocked` chase
+first and it is gone**: the objective layer is better at it in three ways — it
+stands at the class's band instead of walking onto the target, it picks a real
+walkable node, and its re-issue is throttled on the **resolved node** by
+`BOT_GOAL_RETARGET_DIST` rather than by a distance test invented in the env.
+Against a **stationary** opponent, 8 seeds: `arena_montane` **0 → 8 of 8** duels
+ending in a death, `tdm_mantic` **0 → 5 of 8**.
+
+#### ⬅️ Still open: a bot that STARTS inside its own minimum band does not leave
+
+`gg_debug`'s two spawn points are **59px apart**, against a soldier's band of 110.
+A bot spawned there acquires a target it cannot shoot and moves **41px in 250
+decisions**, with a live 15-node route to a proper standoff spot it never walks.
+
+⚠️ **The obvious cause is not the cause.** `ScriptedBot.ApplyHolds`'s engage hold
+— "stand and fight instead of walking past" — has exceptions for carrying intel,
+being near the goal, expiry and the pyro's close-in, and **none for "the target is
+inside my own minimum band"**. Adding one is the exact mirror of the pyro's rule
+and was **tried on 2026-08-28 and reverted**: it changed *nothing* measurable —
+not the scenario suite's exact tick costs, not the intel run, and not the case it
+was written for. **Something else pins the bot**, and until that is found the
+condition would be an ungated change to shipped behaviour with no demonstrated
+effect. Finding it is the next step, and `gg_debug` idle-vs-scripted is the
+repro.
 
 | map | mode | what 8 bots do in 1,500 ticks |
 |---|---|---|

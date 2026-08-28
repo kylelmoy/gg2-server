@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using Gg2.Bots;
+using Gg2.Maps;
 using Gg2.Protocol;
 using Gg2.Simulation;
 
@@ -313,18 +314,6 @@ public sealed class DuelEnv
     private int _decisions;
     private Termination _termination;
 
-    /// <summary>
-    /// How far a chased agent has to move before the opponent re-plans.
-    /// </summary>
-    /// <remarks>
-    /// ⚠️ <b>The unit is "far enough that the route would differ".</b> A body is
-    /// about this wide and <c>BotConstants.ArriveTol</c> is 8, so a target
-    /// shuffling on the spot cannot make the opponent search — and a target that
-    /// has genuinely gone somewhere always does. See <see cref="Chase"/> for what
-    /// asking every decision costs.
-    /// </remarks>
-    private const double ChaseRepointDistance = 32;
-
     // The bot behind a non-client slot, or null. ⚠️ Rebuilt on every Reset
     // rather than reused: ScriptedBot carries a route, a target and four clocks
     // that belong to one life, and a bot that started an episode mid-plan would
@@ -509,9 +498,21 @@ public sealed class DuelEnv
                 {
                     Random = new GmlRandom(seed),
 
-                    // ⚠️ The env supplies the goal, because a duel has no
-                    // objective layer to supply one — see Chase.
-                    GoalLocked = true,
+                    // ⚠️ The REAL objective layer, and a duel is a deathmatch.
+                    // `ScenarioWorld` places no intel, generator or control point,
+                    // so `BotObjective.Decide` falls to its deathmatch branch and
+                    // hunts the other agent — which is the same code path
+                    // tdm_mantic uses, rather than a duel-shaped special case.
+                    //
+                    // ⚠️ This replaced a `GoalLocked` chase written here first,
+                    // and the objective layer is better at it in three separate
+                    // ways: it stands at the class's own band instead of walking
+                    // onto the target (the chase parked a soldier at 59px against
+                    // a band of 110 and it never fired again), it picks a real
+                    // walkable node through the spot search, and its re-issue is
+                    // throttled on the RESOLVED node by BOT_GOAL_RETARGET_DIST
+                    // rather than by a distance test invented here.
+                    Objective = new BotObjective(world.Nav, new SpawnPoints(world.Map)),
                 };
 
             default:
@@ -576,13 +577,6 @@ public sealed class DuelEnv
         // instead would report jump 0 for every jump, because the bit is an edge.
         var redBotInput = PlayerInput.None;
         var blueBotInput = PlayerInput.None;
-
-        // ⚠️ Once per DECISION, not once per tick. Re-planning a route every tick
-        // is a full A* per bot per frame, which is the cost the follower's own
-        // re-plan timer exists to avoid — and the follower keeps walking the route
-        // it has in between, so nothing is gained by asking more often.
-        Chase(_redBot, world, BlueSlot);
-        Chase(_blueBot, world, RedSlot);
 
         for (var tick = 0; tick < _spec.ActionRepeat; tick++)
         {
@@ -676,98 +670,6 @@ public sealed class DuelEnv
                 Action = blueAction,
                 ActionExact = blueExact,
             });
-    }
-
-    /// <summary>
-    /// Points a scripted opponent at the other agent.
-    /// </summary>
-    /// <remarks>
-    /// ⚠️ <b>Without this the scripted driver stands still for the whole
-    /// episode</b>, and it is not a bug in this file. <c>ScriptedBot</c> gets
-    /// where to walk from <c>BotObjective</c>, and a duel runs on
-    /// <c>ScenarioWorld</c> — <c>docs/BOTAI.md</c> item 11, a world with no
-    /// gamemode in it — so there is no objective layer at all. It is the same
-    /// known issue as <b>"Team Deathmatch bots have no goal"</b>
-    /// (<c>docs/TRAPS-BOTS.md</c>): with nothing to capture, nothing tells a bot
-    /// where to be.
-    /// <para>
-    /// <b>Measured before this existed</b>, sampled spawns on <c>ctf_2dfort</c>,
-    /// 300 decisions: the two spawns are at opposite ends of the map, neither bot
-    /// walked a pixel, <b>nobody fired a shot and no episode ever terminated in
-    /// anything but the tick cap</b>. A scripted opponent that cannot reach the
-    /// agent is not an opponent, and a batch of them trains a policy against an
-    /// empty room while looking busy.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>"Walk at the enemy" is the answer the traps file already names, and
-    /// the objection to it does not apply here.</b> It is recorded there as "how
-    /// you get eight bots in a conga line" — which is about a TEAM. A duel has two
-    /// characters, so there is no line to form, and the opponent is the only thing
-    /// in the world worth walking to.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Re-issued every decision rather than once</b>, so the bot follows a
-    /// moving agent instead of walking to where it used to be.
-    /// <c>GoalLocked</c> — the reference's own <c>botGoalLocked</c>, for exactly
-    /// this, "a harness that has already decided where the bot should go" — is
-    /// what stops the objective layer taking it back, and is set once at
-    /// construction.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Only when the target has actually MOVED, and that is not an
-    /// optimisation.</b> <c>PathFollower.SetGoal</c> clears both
-    /// <c>ReplanAt</c> and <c>PlanFailUntil</c> — it is event-driven by design —
-    /// so re-issuing it every decision defeats the unreachable-goal throttle
-    /// completely and costs a full A* per bot per decision <em>for ever</em>.
-    /// That throttle has its own gate
-    /// (<c>PathFollowerFixtureTests.AnUnreachableGoalIsSearchedForOnTheTimerAndNotEveryTick</c>)
-    /// and this would have walked straight through it, because the gate does not
-    /// know about this caller. <b>Measured:</b> 55 searches in 60 decisions
-    /// against a goal that could never route.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>And an unreachable enemy is a real answer, not a failure.</b> On a
-    /// CTF map both sampled spawns sit behind their own team gates, so a blue bot
-    /// asked to walk into the red spawn is correctly told there is no route — see
-    /// <c>NavGraph.GatePassable</c>. It then stands, which is the right behaviour
-    /// and the wrong duel: <c>docs/ENV.md</c> records which maps two sampled
-    /// duellists can actually reach each other on.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>KNOWN, measured, and deliberately not fixed here: a splash class
-    /// chasing a STATIONARY opponent closes to inside its own splash-safe band
-    /// and then correctly holds fire.</b> Against an idle red on
-    /// <c>gg_debug</c>: 250 decisions of walking, arrival 59px away — well inside
-    /// <c>BotTargeting.ClassMinBand</c>'s 110 — <b>zero shots and zero
-    /// damage</b>. It reads like a broken combat layer and is the goal being
-    /// wrong.
-    /// </para>
-    /// <para>
-    /// <b>It does not appear against anything that moves</b>, which is the case
-    /// this driver exists for: scripted against scripted on <c>gg_debug</c> kills
-    /// somebody in 8 episodes of 8. Chasing to a stand-off point instead was tried
-    /// and is worse — the offset lands off the surface the target is standing on
-    /// and A* refuses it, so the bot stops dead with no route at all. <b>Picking
-    /// an engagement position is bot-layer work</b>, it belongs with the open
-    /// "Team Deathmatch bots have no goal" item in <c>docs/TRAPS-BOTS.md</c>, and
-    /// inventing one here would be the env having an opinion it has no business
-    /// having.
-    /// </para>
-    /// </remarks>
-    private static void Chase(IInputSource? bot, ScenarioWorld world, int enemySlot)
-    {
-        if (bot is not ScriptedBot scripted || !world.State.Alive[enemySlot])
-            return;
-
-        ref readonly var enemy = ref world.State.Characters[enemySlot];
-
-        if (scripted.Path.HasGoal
-            && Gml.PointDistance(scripted.Path.GoalX, scripted.Path.GoalY, enemy.X, enemy.Y) < ChaseRepointDistance)
-        {
-            return;
-        }
-
-        scripted.SetGoal(enemy.X, enemy.Y);
     }
 
     /// <summary>Points a character where the decoder says it is looking.</summary>
