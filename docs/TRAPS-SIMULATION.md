@@ -2867,3 +2867,61 @@ stock GG2 and no amount of server-side work removes it.
 - **Do not reach for the recording.** The trace is the server's broadcast, so it
   holds the shot, the death and the positions — and never the projectile. The
   question the report asks is not in there.
+
+### `gg_debug`'s t523 residue: narrowed, and the standing suspect was wrong
+
+**Measured 2026-08-28.** Still open, but it is no longer "one wire unit,
+undiagnosed", and the lead this project was carrying pointed the wrong way.
+
+**What diverges.** At t523, slot 4 only:
+
+```
+tick 523 slot 4 x:      expected 2374, got 2375  (+1)
+tick 523 slot 4 hspeed: expected  -46, got  -45  (+1)
+```
+
+**Both are rounding-boundary crossings, and the port's exact values say so.**
+Replaying to the tick before and reading `PortedSimulation.TryGetState`:
+
+```
+x      = 474.94116167832897   ->  x*5      = 2374.7058   (rounds to 2375)
+hspeed = -5.350951194573562   ->  hspeed*8.5 =  -45.4831 (rounds to -45)
+```
+
+⚠️ **The hspeed residual is 0.0169 of a wire unit from the boundary** — about
+**0.002 px/tick**. This is a ULP-scale disagreement being magnified by
+quantisation, not a wrong branch.
+
+**The residual per position-bearing tick, slot 4, from the anchor** (port's exact
+value minus the recorded quantised one, in wire units):
+
+| tick | hspeed residual | x residual | moveStatus |
+|---|---|---|---|
+| 383 | +0.0000 | +0.0000 | 0 |
+| 390 | −0.1105 | −0.1604 | 0 |
+| 397 | −0.4433 | +0.2213 | 0 |
+| 404 | +0.0000 | **+0.3792** | 0 |
+| 411–474 | +0.0000 | **+0.4865, frozen** | 0 |
+| 523 | **+0.5169** | +0.7058 | 0 |
+
+⚠️ **It does not accumulate monotonically — it oscillates and finally crosses.**
+Every earlier tick is inside half a unit, which is why the window is 142 ticks
+and not 20.
+
+⚠️ **`moveStatus` is 0 on every tick of the window where the residual is born,
+so no knockback is involved — and the standing suspicion that it was the
+knockback path is WITHDRAWN.** `MotionAdd` and the explosion positions are not
+implicated by this evidence. The residual grows across t383–t404 while the
+character walks 41 px and stops, and then **freezes for 70 ticks while it stands
+still**. The suspect is ordinary walking and friction arithmetic.
+
+⚠️ **Do not read the frozen +0.4865 as a measured 0.097 px offset.** The
+reference column is quantised, so what is known is that the port's resting x is
+629.4973 px and the reference's is somewhere in `[629.3, 629.5)`. The true
+difference is bounded, not measured — **a trace can never hand back an exact
+reference position**, which is the ceiling on how far this can be chased from
+recordings alone.
+
+⚠️ **And the earlier confusion is worth keeping**: the recorded x moves 2940 →
+3050 in seven ticks, which reads as impossible for a walking soldier until you
+remember the wire's ×5. That is 22 px, not 110. **Divide before disbelieving.**
