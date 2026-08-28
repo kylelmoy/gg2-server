@@ -334,4 +334,327 @@ public sealed class DuelEnvTests
         Assert.Throws<ArgumentOutOfRangeException>(() => env.Reset(Spec(repeat: 0), 1));
         Assert.Throws<ArgumentOutOfRangeException>(() => env.Reset(Spec(cap: 0), 1));
     }
+    // --- per-slot drivers -----------------------------------------------------
+
+    private static DuelEnv NavEnv()
+    {
+        ReferenceTree.RequireNavCache();
+        return new DuelEnv(ReferenceTree.IncludedFiles, ReferenceTree.NavCacheDirectory);
+    }
+
+    /// <summary>Both sides sampled onto the map's own spawn points.</summary>
+    private static DuelSpec Sampled(string map, EnvDriver red, EnvDriver blue, int cap = 250) => new()
+    {
+        Map = map,
+        RedClass = PlayerClass.Soldier,
+        BlueClass = PlayerClass.Soldier,
+        RedX = DuelSpec.Sampled,
+        RedY = DuelSpec.Sampled,
+        BlueX = DuelSpec.Sampled,
+        BlueY = DuelSpec.Sampled,
+        DecisionCap = cap,
+        ActionRepeat = 4,
+        RedDriver = red,
+        BlueDriver = blue,
+        RedTier = 5,
+        BlueTier = 5,
+    };
+
+    /// <summary>
+    /// A client side gets back exactly the action it sent.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Echoed rather than left to the trainer to remember.</b> A trainer
+    /// logging transitions would otherwise correlate the reply with its own send
+    /// buffer — which works right up until a side is bot-driven and the two stop
+    /// agreeing, which is exactly when the action matters most.
+    /// </remarks>
+    [Fact]
+    public void AClientSideGetsBackTheActionItSent()
+    {
+        var env = Env();
+        env.Reset(Spec(), seed: 1);
+
+        var sent = new EnvAction { Horizontal = 2, Jump = 1, Down = 0, Fire = 1, AimDelta = 11 };
+        var (red, blue) = env.Step(sent, Idle);
+
+        Assert.Equal(sent, red.Action);
+        Assert.True(red.ActionExact, "a client's own action is always reproducible");
+
+        Assert.Equal(Idle, blue.Action);
+        Assert.True(blue.ActionExact);
+    }
+
+    /// <summary>
+    /// An idle driver presses nothing, and the slot still earns its rewards.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The first of the two properties <c>gg2-rl</c> asked for</b>: a
+    /// bot-driven slot has to keep returning its own observation and reward
+    /// components, or an opponent cannot be scored and self-play cannot be
+    /// evaluated. The floor case is the one worth gating, because a driver that
+    /// short-circuited the whole slot would still look right on damage.
+    /// </remarks>
+    [Fact]
+    public void AnIdleDriverPressesNothingAndStillEarnsItsRewards()
+    {
+        var env = NavEnv();
+        env.Reset(Spec() with { BlueDriver = EnvDriver.Idle }, seed: 1);
+
+        // ⚠️ The premise, asserted rather than assumed: a driver really is behind
+        // that slot. Without this the whole test passes on an env that ignored the
+        // driver field entirely, because a CLIENT slot sent EnvAction.Idle behaves
+        // identically — checked by mutation, and it did.
+        Assert.NotNull(env.BotFor(env.BlueSlot));
+        Assert.Null(env.BotFor(env.RedSlot));
+
+        var damage = 0.0;
+
+        for (var i = 0; i < 60; i++)
+        {
+            // Red shoots at its neighbour; blue does nothing at all.
+            var (_, blue) = env.Step(new EnvAction { Fire = 1, AimDelta = ActionDecoder.AimCentreBin }, Idle);
+
+            Assert.Equal(EnvAction.Idle, blue.Action);
+            Assert.True(blue.ActionExact);
+
+            damage += blue.DamageTaken;
+        }
+
+        // ⚠️ NOT asserted: that it stayed where it was. It does not — measured at
+        // 20px — because rocket splash moves a character that pressed nothing, and
+        // that is the simulation being right. "Presses nothing" is the claim, and
+        // the per-step action assertion above is what states it.
+        //
+        // ⚠️ The load-bearing half: the idle side's reward components are real,
+        // not zeroed because nothing drove it from outside.
+        Assert.True(damage > 0, "an idle opponent was shot at for 60 decisions and recorded no damage taken");
+    }
+
+    /// <summary>
+    /// Two scripted opponents fight, and what they did comes back.
+    /// </summary>
+    /// <remarks>
+    /// <b>The whole point of the item.</b> Until per-slot drivers existed a duel
+    /// between two things that both live in this repo could not be asked for at
+    /// all, which is what blocked <c>gg2-rl</c>'s phase 1 exit criterion and its
+    /// phase 3 opponent pool.
+    /// <para>
+    /// ⚠️ <b>Deaths, not merely damage.</b> "N episodes completed" is satisfiable
+    /// by a broken feature — <c>MatchActuallyHappensTests</c> exists because five
+    /// instant Arena rounds looked exactly like five real ones — and a duel that
+    /// ends on its tick cap with two bots standing in their own spawns is the same
+    /// shape. Requiring somebody to die is what makes this a match rather than a
+    /// timer.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b><c>gg_debug</c> and sampled spawns on purpose.</b> On a CTF or KotH
+    /// map both spawns sit behind their own team gates, so neither bot can route
+    /// to the other and nobody ever fires — correct simulation, useless duel. The
+    /// maps that work are recorded in <c>docs/ENV.md</c>.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void TwoScriptedOpponentsFightAndTheirActionsComeBack()
+    {
+        var env = NavEnv();
+        env.Reset(Sampled("gg_debug", EnvDriver.Scripted, EnvDriver.Scripted), seed: 1);
+
+        var fired = 0;
+        var moved = 0;
+        var damage = 0.0;
+
+        while (env.Termination == Termination.Running)
+        {
+            var (red, blue) = env.Step(Idle, Idle);
+
+            damage += red.DamageDealt + blue.DamageDealt;
+
+            foreach (var r in new[] { red, blue })
+            {
+                if (r.Action.Fire != 0)
+                    fired++;
+
+                if (r.Action.Horizontal != 0 || r.Action.Jump != 0)
+                    moved++;
+            }
+        }
+
+        // ⚠️ Somebody DIED. Not "the episode ended".
+        Assert.Equal(Termination.Death, env.Termination);
+        Assert.True(damage > 0, "two scripted bots fought to a death and dealt no damage");
+
+        // ⚠️ The second property gg2-rl asked for: what the bot chose comes back.
+        // Zero here is the silent failure — a driver that ran the bot correctly
+        // and reported EnvAction.Idle for every step would pass every other
+        // assertion in this test.
+        Assert.True(fired > 0, "neither scripted bot's action ever carried a shot it demonstrably took");
+        Assert.True(moved > 0, "neither scripted bot's action ever carried a direction it demonstrably walked");
+    }
+
+    /// <summary>
+    /// ⚠️ A scripted driver is refused without a nav graph rather than downgraded.
+    /// </summary>
+    /// <remarks>
+    /// <c>ScriptedBot</c> takes a null graph happily and then has no follower at
+    /// all: it fights from where it spawned and never walks. An experiment
+    /// reporting "against the scripted bot" while playing a stationary one is
+    /// precisely the class of wrong <c>CLAUDE.md</c> names — a claim about
+    /// capability that nothing inside the repo can contradict.
+    /// </remarks>
+    [Fact]
+    public void AScriptedDriverWithoutANavGraphIsRefused()
+    {
+        // No nav directory: the env loads maps but no graphs.
+        var env = new DuelEnv(ReferenceTree.IncludedFiles);
+
+        var refused = Assert.Throws<InvalidOperationException>(
+            () => env.Reset(Spec() with { BlueDriver = EnvDriver.Scripted }, seed: 1));
+
+        Assert.Contains("nav graph", refused.Message, StringComparison.Ordinal);
+
+        // The control: the same env is perfectly happy with the drivers that need
+        // no graph, so this is about the graph and not about the env.
+        env.Reset(Spec() with { BlueDriver = EnvDriver.Idle }, seed: 1);
+        env.Reset(Spec() with { BlueDriver = EnvDriver.Rollout }, seed: 1);
+    }
+
+    /// <summary>
+    /// ⚠️ A snapshot is refused while a bot drives a slot.
+    /// </summary>
+    /// <remarks>
+    /// <b>The honest edge of "the bytes ARE the state".</b> That claim is true of
+    /// <see cref="Gg2.Simulation.WorldState"/>, which holds no reference to
+    /// anything — but a bot is state outside it: <c>ScriptedBot</c> carries a
+    /// route, a target, four clocks and its own RNG stream. Restoring the world
+    /// alone would resume with an opponent mid-way through a plan for a world that
+    /// no longer exists, and it would do it silently.
+    /// <para>
+    /// ⚠️ <b>The control matters more than the refusal.</b> Both slots
+    /// client-driven still snapshots, so this is a statement about bots rather
+    /// than a snapshot path that quietly stopped working.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ASnapshotIsRefusedWhileABotDrivesASlot()
+    {
+        var env = NavEnv();
+
+        env.Reset(Spec() with { BlueDriver = EnvDriver.Scripted }, seed: 1);
+        env.Step(Idle, Idle);
+
+        var refused = Assert.Throws<InvalidOperationException>(() => env.Snapshot());
+        Assert.Contains("bot-driven", refused.Message, StringComparison.Ordinal);
+
+        // The control.
+        env.Reset(Spec(), seed: 1);
+        env.Step(Idle, Idle);
+        Assert.NotEmpty(env.Snapshot());
+    }
+
+    /// <summary>
+    /// ⚠️ Chasing a target that cannot be reached must not search every decision.
+    /// </summary>
+    /// <remarks>
+    /// <b>This nearly shipped.</b> The env re-points a scripted opponent at the
+    /// other agent every decision, because a duel has no objective layer to do it
+    /// — and <c>PathFollower.SetGoal</c> clears both <c>ReplanAt</c> and
+    /// <c>PlanFailUntil</c>, so calling it unconditionally defeats the
+    /// unreachable-goal throttle completely: a full A* per bot per decision, for
+    /// ever. <b>Measured at 55 searches in 60 decisions.</b>
+    /// <para>
+    /// ⚠️ <b><c>PathFollowerFixtureTests.AnUnreachableGoalIsSearchedForOnTheTimerAndNotEveryTick</c>
+    /// gates the throttle and could not see this</b>, because it does not know
+    /// about this caller. A throttle is only as good as every path that reaches
+    /// it.
+    /// </para>
+    /// <para>
+    /// <c>ctf_2dfort</c> because it is genuinely unreachable and not merely far:
+    /// both sampled spawns sit behind their own team gates, so A* correctly
+    /// returns no route at all, for the whole episode.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ChasingAnUnreachableOpponentDoesNotSearchEveryDecision()
+    {
+        var env = NavEnv();
+        env.Reset(Sampled("ctf_2dfort", EnvDriver.Scripted, EnvDriver.Idle, cap: 200), seed: 1);
+
+        while (env.Termination == Termination.Running)
+            env.Step(Idle, Idle);
+
+        var bot = (ScriptedBot)env.BotFor(env.RedSlot)!;
+
+        // The premise: it really is unreachable, so every search really did fail.
+        Assert.False(bot.Path.HasPath, "the opponent turned out to be reachable; this map no longer tests the throttle");
+        Assert.True(bot.Path.HasGoal, "the chase never set a goal at all, so nothing here was tested");
+
+        // ⚠️ The bound is the throttle's own, not a round number: BOT_REPLAN_TICKS
+        // apart over the episode's ticks, plus slack for the stagger and the first
+        // plan. Unthrottled is one per decision — 200 — so this bites hard.
+        var ticks = 200 * 4;
+        var ceiling = (ticks / BotConstants.ReplanTicks) + 4;
+
+        Assert.True(
+            bot.Path.Replans <= ceiling,
+            $"an unreachable opponent was searched for {bot.Path.Replans} times in 200 decisions, "
+            + $"against a throttled ceiling of {ceiling}");
+    }
+
+    /// <summary>A driver or tier outside the table is refused, not clamped.</summary>
+    /// <remarks>
+    /// ⚠️ Silently giving an out-of-range tier the top one would make an
+    /// experiment report a matchup that never happened, which is worse than a
+    /// crash because it is publishable.
+    /// </remarks>
+    [Fact]
+    public void AnUnknownDriverOrAnImpossibleTierIsRefused()
+    {
+        var env = NavEnv();
+
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => env.Reset(Spec() with { BlueDriver = (EnvDriver)99 }, seed: 1));
+
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => env.Reset(Spec() with { BlueDriver = EnvDriver.Scripted, BlueTier = 6 }, seed: 1));
+
+        // ⚠️ The control: a tier is only checked for the driver that uses one, so
+        // a leftover tier on a client side is not an error.
+        env.Reset(Spec() with { RedTier = 6 }, seed: 1);
+    }
+
+    /// <summary>
+    /// A bot-driven duel is a pure function of its seed.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b><c>ScriptedBot.Random</c> is the bot's own stream and is NOT
+    /// <c>WorldState.Random</c></b> — deliberately, because the match's stream is
+    /// observable simulation and a bot drawing from it would make its position
+    /// depend on how many bots were thinking. So it has to be seeded from
+    /// somewhere, and "somewhere" has to be this world's own seed or every world
+    /// in a batch shares one opponent's rolls.
+    /// </remarks>
+    [Fact]
+    public void ABotDrivenDuelIsAPureFunctionOfItsSeed()
+    {
+        static string Play(uint seed)
+        {
+            var env = NavEnv();
+            env.Reset(Sampled("gg_debug", EnvDriver.Scripted, EnvDriver.Scripted, cap: 80), seed);
+
+            var log = new System.Text.StringBuilder();
+
+            while (env.Termination == Termination.Running)
+            {
+                var (red, blue) = env.Step(Idle, Idle);
+                log.Append($"{red.Action.Horizontal}{red.Action.Fire}{red.Action.AimDelta}|");
+                log.Append($"{blue.Action.Horizontal}{blue.Action.Fire}{blue.Action.AimDelta};");
+            }
+
+            return log.ToString();
+        }
+
+        Assert.Equal(Play(11), Play(11));
+        Assert.NotEqual(Play(11), Play(12));
+    }
 }

@@ -45,7 +45,31 @@ public static class EnvProtocol
     /// mismatch is refused at <see cref="EnvMessage.Hello"/> — the
     /// <c>PROTOCOL_UUID</c> idiom, not a warning.
     /// </summary>
-    public const int Version = 1;
+    /// <remarks>
+    /// <b>v2, 2026-08-28</b>: <c>MakeBatch</c> carries a driver and a skill tier
+    /// per side, and every reward block carries the action that side actually
+    /// took plus whether it is reproducible. ⚠️ <b>A v1 client is refused rather
+    /// than tolerated</b> — the reward block changed length, so a v1 reader would
+    /// slice a v2 reply into plausible nonsense rather than failing.
+    /// </remarks>
+    public const int Version = 2;
+
+    /// <summary>
+    /// Bytes of reward components per agent in every reply.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Fixed, and present as zeros on <c>MakeBatch</c> and <c>Reset</c>
+    /// too</b>, so the reply's layout never depends on which message produced it
+    /// — a variable shape here is a shape the trainer has to branch on.
+    /// <para>
+    /// ⚠️ <b>Eleven 4-byte fields rather than five plus six packed bytes.</b> The
+    /// action heads are 0-14 and would fit in a byte each, but <c>gg2-rl</c>'s
+    /// <c>CONTRACT.md</c> maps this block straight into a tensor, and a block that
+    /// is 4-byte typed throughout can be viewed as one dtype. Six bytes saved per
+    /// agent against a 209-float observation is not a trade worth making.
+    /// </para>
+    /// </remarks>
+    public const int ComponentBytes = 44;
 
     /// <summary>
     /// A frame larger than this is refused rather than allocated.

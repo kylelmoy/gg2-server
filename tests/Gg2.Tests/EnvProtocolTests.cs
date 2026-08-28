@@ -104,7 +104,15 @@ public sealed class EnvProtocolTests : IDisposable
         return all;
     }
 
-    private static byte[] MakeBatchBody(int count, int cap = 20, int repeat = 2, int threads = 1)
+    private static byte[] MakeBatchBody(
+        int count,
+        int cap = 20,
+        int repeat = 2,
+        int threads = 1,
+        EnvDriver red = EnvDriver.Client,
+        EnvDriver blue = EnvDriver.Client,
+        int redTier = 0,
+        int blueTier = 0)
     {
         var name = System.Text.Encoding.UTF8.GetBytes("gg_debug");
 
@@ -119,7 +127,15 @@ public sealed class EnvProtocolTests : IDisposable
             Int(cap),
             Int(repeat),
             Int(1234),
-            Int(threads));
+            Int(threads),
+
+            // ⚠️ v2's four driver fields. They are REQUIRED, not
+            // optional-if-absent: the reward block changed length in v2, so a
+            // client that omitted them would be reading a reply it cannot slice.
+            Int((int)red),
+            Int((int)blue),
+            Int(redTier),
+            Int(blueTier));
     }
 
     /// <summary>A handshake agrees on everything a checkpoint depends on.</summary>
@@ -200,7 +216,8 @@ public sealed class EnvProtocolTests : IDisposable
         Assert.Equal(count, BinaryPrimitives.ReadInt32LittleEndian(made.AsSpan(1)));
 
         // 1 kind + 4 count + observations + components.
-        var expected = 1 + 4 + (count * 2 * ObservationWriter.Length * 4) + (count * 2 * 20);
+        var expected = 1 + 4 + (count * 2 * ObservationWriter.Length * 4)
+            + (count * 2 * EnvProtocol.ComponentBytes);
         Assert.Equal(expected, made.Length);
 
         // Five head bytes per agent, red then blue, per world.
@@ -304,5 +321,121 @@ public sealed class EnvProtocolTests : IDisposable
         _stream.Flush();
 
         Assert.Equal((byte)EnvMessage.Hello, Receive()[0]);
+    }
+    /// <summary>
+    /// A bot-driven slot can be asked for over the socket, and what it did comes
+    /// back in the reply.
+    /// </summary>
+    /// <remarks>
+    /// <b>The item, end to end.</b> Until protocol v2 <c>MakeBatch</c> could only
+    /// drive both slots from the client, so a duel between <c>RolloutSearch</c>
+    /// and <c>ScriptedBot</c> — two things that both live in this repo — could not
+    /// be asked for at all. That blocked <c>gg2-rl</c>'s phase 1 exit criterion,
+    /// its phase 2 collection and its phase 3 opponent pool.
+    /// <para>
+    /// ⚠️ <b>The two properties it asked for are the two assertions here</b>: a
+    /// bot-driven slot still returns its own reward components, and the action the
+    /// bot chose comes back. Neither is visible from outside the process any other
+    /// way.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Idle rather than Scripted, on purpose.</b> A scripted opponent needs
+    /// a nav cache, which is generated out of band and gitignored — a protocol
+    /// test that skipped without one would be a protocol test nobody runs. Idle is
+    /// the driver whose behaviour is certain, so a reply that carries its action
+    /// and its damage proves the wire without depending on a bot.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ABotDrivenSlotIsAskedForOverTheSocketAndItsActionComesBack()
+    {
+        Send(EnvMessage.Hello, Int(EnvProtocol.Version));
+        Receive();
+
+        Send(EnvMessage.MakeBatch, MakeBatchBody(count: 2, cap: 40, repeat: 2, blue: EnvDriver.Idle));
+
+        var made = Receive();
+        Assert.Equal((byte)EnvMessage.MakeBatch, made[0]);
+
+        var componentsAt = 1 + 4 + (2 * 2 * ObservationWriter.Length * 4);
+        var sawDamage = false;
+
+        for (var step = 0; step < 40; step++)
+        {
+            // Red fires straight at its neighbour every step; blue is the idle
+            // driver and is sent an action that must be IGNORED.
+            var actions = new byte[2 * 2 * 5];
+
+            for (var w = 0; w < 2; w++)
+            {
+                // red: fire, no turn
+                actions[(w * 10) + 3] = 1;
+                actions[(w * 10) + 4] = ActionDecoder.AimCentreBin;
+
+                // ⚠️ blue is sent a hard left turn and a jump, which the env must
+                // throw away because a bot drives that slot. If the driver were
+                // ignored and the client's action used instead, this is what would
+                // come back.
+                actions[(w * 10) + 5 + 0] = 1;
+                actions[(w * 10) + 5 + 1] = 1;
+                actions[(w * 10) + 5 + 4] = 0;
+            }
+
+            Send(EnvMessage.Step, actions);
+
+            var reply = Receive();
+            Assert.Equal((byte)EnvMessage.Step, reply[0]);
+
+            for (var w = 0; w < 2; w++)
+            {
+                var blueAt = componentsAt + (((w * 2) + 1) * EnvProtocol.ComponentBytes);
+
+                var damageTaken = BinaryPrimitives.ReadSingleLittleEndian(reply.AsSpan(blueAt + 4));
+
+                var horizontal = BinaryPrimitives.ReadInt32LittleEndian(reply.AsSpan(blueAt + 20));
+                var jump = BinaryPrimitives.ReadInt32LittleEndian(reply.AsSpan(blueAt + 24));
+                var aim = BinaryPrimitives.ReadInt32LittleEndian(reply.AsSpan(blueAt + 36));
+                var exact = BinaryPrimitives.ReadInt32LittleEndian(reply.AsSpan(blueAt + 40));
+
+                // The bot's action, not the client's — an idle driver presses
+                // nothing and does not turn.
+                Assert.Equal(0, horizontal);
+                Assert.Equal(0, jump);
+                Assert.Equal(ActionDecoder.AimCentreBin, aim);
+                Assert.Equal(1, exact);
+
+                if (damageTaken > 0)
+                    sawDamage = true;
+            }
+        }
+
+        // ⚠️ The other half: a bot-driven slot still earns its reward components.
+        // Without this the test passes on a server that returned a zeroed block
+        // for every bot slot.
+        Assert.True(sawDamage, "a bot-driven slot was shot at for 40 steps and reported no damage taken");
+    }
+
+    /// <summary>An unknown driver is refused on the wire, with a reason.</summary>
+    /// <remarks>
+    /// ⚠️ <b>Refused at the protocol edge rather than thrown from inside the batch
+    /// construction</b>, so the client gets a sentence it can print instead of a
+    /// dropped connection.
+    /// </remarks>
+    [Fact]
+    public void AnUnknownDriverIsRefusedWithAReason()
+    {
+        Send(EnvMessage.Hello, Int(EnvProtocol.Version));
+        Receive();
+
+        Send(EnvMessage.MakeBatch, MakeBatchBody(count: 1, red: (EnvDriver)200));
+
+        var reply = Receive();
+
+        Assert.Equal((byte)EnvMessage.Error, reply[0]);
+
+        var length = BinaryPrimitives.ReadInt32LittleEndian(reply.AsSpan(1));
+        var reason = System.Text.Encoding.UTF8.GetString(reply, 5, length);
+
+        Assert.Contains("driver", reason, StringComparison.OrdinalIgnoreCase);
     }
 }

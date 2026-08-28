@@ -220,4 +220,182 @@ public sealed class EnvBatchTests
         Assert.Throws<ArgumentException>(() => batch.Step(two, four, resultsFour, resultsFour));
         Assert.Throws<ArgumentException>(() => batch.Step(four, four, resultsTwo, resultsFour));
     }
+    // --- the same two properties, with a bot driving a slot -------------------
+
+    /// <summary>
+    /// The spec above with a scripted opponent on blue.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Sampled spawns and a nav cache</b>, because a scripted driver is
+    /// refused without a graph and a duel it cannot walk in tests nothing.
+    /// </remarks>
+    private static DuelSpec BotSpec => Spec with
+    {
+        RedX = DuelSpec.Sampled,
+        RedY = DuelSpec.Sampled,
+        BlueX = DuelSpec.Sampled,
+        BlueY = DuelSpec.Sampled,
+        BlueDriver = EnvDriver.Scripted,
+        BlueTier = 5,
+        DecisionCap = 20,
+    };
+
+    private static StepResult[] BotTrajectories(int count, int steps, int threads)
+    {
+        ReferenceTree.RequireNavCache();
+
+        var batch = new EnvBatch(
+            count, BotSpec, seed: 4242,
+            ReferenceTree.IncludedFiles, ReferenceTree.NavCacheDirectory, threads);
+
+        var red = new EnvAction[count];
+        var blue = new EnvAction[count];
+        var redOut = new StepResult[count];
+        var blueOut = new StepResult[count];
+
+        // ⚠️ BOTH sides are logged here where the client-driven version logs only
+        // red. Blue is the bot, so its results are the half that could differ —
+        // logging red alone would compare the side whose actions the test already
+        // controls.
+        var log = new StepResult[count * steps * 2];
+
+        for (var step = 0; step < steps; step++)
+        {
+            for (var w = 0; w < count; w++)
+            {
+                red[w] = ActionFor(w, step);
+                blue[w] = ActionFor(w + 1, step);
+            }
+
+            batch.Step(red, blue, redOut, blueOut);
+
+            for (var w = 0; w < count; w++)
+            {
+                log[(((step * count) + w) * 2) + 0] = redOut[w];
+                log[(((step * count) + w) * 2) + 1] = blueOut[w];
+            }
+        }
+
+        return log;
+    }
+
+    /// <summary>
+    /// ⚠️ <b>A bot-driven world behaves identically at batch 1 and batch 32.</b>
+    /// </summary>
+    /// <remarks>
+    /// <b>The existing batch-size gate could not see this</b>, because with both
+    /// slots client-driven there is no per-world state outside
+    /// <c>WorldState</c> at all. A bot has plenty — <c>ScriptedBot</c> carries a
+    /// route, four clocks and <b>its own RNG stream</b>, which is deliberately not
+    /// <c>WorldState.Random</c> — so a driver seeded from anything but this
+    /// world's own seed makes every world in a batch share one opponent's rolls.
+    /// <para>
+    /// ⚠️ <b>That failure is invisible at a stagger of 0.</b> A scripted bot with
+    /// a fixed seed is deterministic, so a shared stream produces identical
+    /// behaviour and looks correct — right up until two worlds take different
+    /// numbers of decisions and the shared stream desynchronises them. Which is
+    /// why this compares whole trajectories across a real batch rather than
+    /// checking a seed field.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ABotDrivenWorldIsTheSameAtBatchOneAndBatchThirtyTwo()
+    {
+        ReferenceTree.RequireNavCache();
+
+        const int steps = 30;
+        const int count = 32;
+
+        var large = BotTrajectories(count, steps, threads: 1);
+
+        for (var world = 0; world < count; world += 11)
+        {
+            var single = new EnvBatch(
+                1, BotSpec, seed: unchecked(4242 + ((uint)world * 2654435761u)),
+                ReferenceTree.IncludedFiles, ReferenceTree.NavCacheDirectory, 1);
+
+            var red = new EnvAction[1];
+            var blue = new EnvAction[1];
+            var redOut = new StepResult[1];
+            var blueOut = new StepResult[1];
+
+            for (var step = 0; step < steps; step++)
+            {
+                red[0] = ActionFor(world, step);
+                blue[0] = ActionFor(world + 1, step);
+
+                single.Step(red, blue, redOut, blueOut);
+
+                Assert.Equal(large[(((step * count) + world) * 2) + 0], redOut[0]);
+                Assert.Equal(large[(((step * count) + world) * 2) + 1], blueOut[0]);
+            }
+        }
+    }
+
+    /// <summary>
+    /// ⚠️ <b>A bot-driven batch is the same however many threads.</b>
+    /// </summary>
+    /// <remarks>
+    /// The property a shared driver instance would break. <c>IdleInput</c> is
+    /// deliberately a shared singleton and is safe because it is stateless;
+    /// everything else is per world for exactly this reason, and a race on a
+    /// shared <c>ScriptedBot</c> would show up here as a thread-count-dependent
+    /// trajectory rather than as a crash.
+    /// </remarks>
+    [Theory]
+    [InlineData(2)]
+    [InlineData(4)]
+    public void ABotDrivenBatchIsTheSameHoweverManyThreads(int threads)
+    {
+        ReferenceTree.RequireNavCache();
+
+        var one = BotTrajectories(12, 25, threads: 1);
+        var many = BotTrajectories(12, 25, threads);
+
+        Assert.Equal(one, many);
+    }
+
+    /// <summary>
+    /// The premise of the two gates above: the bot really is doing something.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Without this they are satisfiable by a driver that does nothing at
+    /// all.</b> Two identical rows of "the opponent pressed nothing and dealt no
+    /// damage" compare equal at any batch size and on any number of threads —
+    /// which is the shape of every "N completed" criterion this project has been
+    /// caught by. <c>MatchActuallyHappensTests</c> exists for the same reason.
+    /// </remarks>
+    [Fact]
+    public void TheBotDrivenBatchesAboveActuallyHaveABotInThem()
+    {
+        ReferenceTree.RequireNavCache();
+
+        var batch = new EnvBatch(
+            4, BotSpec, seed: 4242, ReferenceTree.IncludedFiles, ReferenceTree.NavCacheDirectory, 1);
+
+        // ⚠️ The premise first: every world really has a bot behind blue and
+        // nothing behind red. Without it the rest passes on an env that ignored
+        // the driver field, because a client slot fed a deterministic script is
+        // also identical at every batch size — checked by mutation, and it was.
+        for (var w = 0; w < 4; w++)
+        {
+            Assert.NotNull(batch.World(w).BotFor(batch.World(w).BlueSlot));
+            Assert.Null(batch.World(w).BotFor(batch.World(w).RedSlot));
+        }
+
+        var log = BotTrajectories(12, 25, threads: 1);
+
+        var acted = 0;
+
+        // Blue is the bot: the odd entries.
+        for (var i = 1; i < log.Length; i += 2)
+        {
+            var action = log[i].Action;
+
+            if (action.Horizontal != 0 || action.Jump != 0 || action.Fire != 0)
+                acted++;
+        }
+
+        Assert.True(acted > 0, "the scripted opponent never pressed anything across 12 worlds and 25 steps");
+    }
 }

@@ -82,8 +82,8 @@ length, one message-kind byte, payload. Request/response.
 | Message | Carries | Returns |
 |---|---|---|
 | `Hello` | client's protocol version | protocol version, `SIM_UUID`, obs layout version, action encoding version, obs length, head shape. **Mismatch refuses** — the `PROTOCOL_UUID` idiom, not a warning |
-| `MakeBatch` | N, map, per-side classes, spawn placement (explicit positions, or **NaN** for sampled — see below), base seed, tick cap, action repeat k | ack + initial observations |
-| `Step` | N action tuples (one per world: 4 head indices + aim-delta bin) | N × (obs block, reward components, done, termination reason) |
+| `MakeBatch` | N, map, per-side classes, spawn placement (explicit positions, or **NaN** for sampled — see below), base seed, tick cap, action repeat k, **per-side driver and skill tier** | ack + initial observations |
+| `Step` | N action tuples (one per world: 4 head indices + aim-delta bin) | N × (obs block, reward components, done, termination reason, **the action that side actually took + whether it is reproducible**) |
 | `Reset` | world index, optional new seed | that world's fresh observation |
 | `Snapshot` | world index | the world's state bytes |
 | `Restore` | world index, state bytes | ack |
@@ -174,6 +174,139 @@ whose phase 0 criterion 2 leans on this.
 3. **An episode's seed also mixes its episode number**, so a world that
    auto-resets does not replay its own first episode.
 
+### Per-slot drivers, and protocol v2
+
+**Built 2026-08-28, requested by `gg2-rl`.** Until this existed `MakeBatch` could
+only drive both slots from the client, so a duel between two things that both
+live in this repo — `RolloutSearch` against `ScriptedBot` — could not be asked
+for over the socket at all. It blocked phase 1's exit criterion (500 duels per
+matchup), phase 2's collection against fixed opponents, and phase 3's opponent
+pool ("past checkpoints, the scripted bot, and a noise bot").
+
+| Driver | What it is |
+|---|---|
+| `Client` (0) | the action arrives over the socket. **The default, and what a past checkpoint is** — the trainer has the weights and drives that slot itself |
+| `Idle` (1) | presses nothing, and goes on looking where it was. The comparison floor |
+| `Scripted` (2) | `ScriptedBot` at a tier 0-5. ⚠️ **Refused without a nav graph**, not downgraded |
+| `Rollout` (3) | `RolloutSearch`. ⚠️ **~2.94 ms a decision** against a scripted bot's microseconds — an evaluation baseline, not a collection opponent |
+
+**Protocol v2**: `MakeBatch` gains four `i32` fields (red driver, blue driver,
+red tier, blue tier) and every reward block grows from 20 to **44** bytes,
+carrying the action that side actually took plus an exactness flag. ⚠️ **A v1
+client is refused at `Hello` rather than tolerated** — the reward block changed
+length, so a v1 reader would slice a v2 reply into plausible nonsense.
+
+⚠️ **The whole components block stays 4-byte typed** (eleven fields, the five
+action heads as `i32` each). The heads would fit in a byte, but `CONTRACT.md`
+maps this block straight into a tensor and six bytes an agent against a 209-float
+observation is not a trade worth making.
+
+#### ⚠️ The bot is polled AS IT IS, so the reported action can be lossy
+
+Each bot drives its slot through its own `IInputSource.Poll`, on its own
+cadence. The opponent is then really that bot rather than an imitation squeezed
+through the action space — which matters most for `ScriptedBot`, whose aim has
+**no turn-rate cap** and which would be a materially weaker shot if forced
+through one.
+
+The consequence is that the action reported back is the *nearest* action, not
+necessarily a reproducible one:
+
+- the four discrete heads are **exact** — they are recovered from the same key
+  mask bits the decoder writes;
+- the **aim head can saturate**. The bot's turn over a decision is quantised to
+  the nearest of 15 bins over ±30°, and a scripted bot snapping onto a fresh
+  target turns much further than that.
+
+**Measured**, scripted vs scripted on `gg_debug`, three seeds: **86-89% of
+actions are exact**. `ActionExact` reports it per step, so nothing has to assume.
+
+⚠️ **This matters for imitation and not for logging.** Cloning a scripted bot
+from these actions learns a throttled version of it; recording what an opponent
+did is exact enough.
+
+#### ⚠️ `Snapshot` is refused while a bot drives a slot
+
+The honest edge of "the bytes ARE the state". That claim is true of `WorldState`,
+which holds no reference to anything — but a bot is state *outside* it:
+`ScriptedBot` carries a route, a target, four clocks and its own RNG stream, and
+`RolloutSearch` carries a decision countdown and a decoder. Restoring the world
+alone would resume with an opponent mid-way through a plan for a world that no
+longer exists, and it would do it silently. **Lifting this means serialising the
+bot layer**, which is real work and is not wanted yet.
+
+#### ⚠️ A duel has no objective layer, so the env supplies the goal
+
+`ScriptedBot` gets where to walk from `BotObjective`, and a duel runs on
+`ScenarioWorld` — `docs/BOTAI.md` item 11, a world with no gamemode in it. **With
+no objective there is nothing to tell a bot where to be**, which is the same open
+issue as "Team Deathmatch bots have no goal" in `docs/TRAPS-BOTS.md`.
+
+Measured before it was handled, sampled spawns on `ctf_2dfort`, 300 decisions:
+neither bot walked a pixel, **nobody fired a shot**, and every episode ended on
+the tick cap. So the env re-points a scripted opponent at the other agent, using
+the reference's own `botGoalLocked` escape.
+
+⚠️ **Only when the target has moved 32px**, and that is not an optimisation.
+`PathFollower.SetGoal` clears both `ReplanAt` and `PlanFailUntil` — it is
+event-driven by design — so calling it every decision defeats the
+unreachable-goal throttle completely: **measured at 55 searches in 60 decisions**
+against a goal that could never route. `PathFollowerFixtureTests` gates that
+throttle and could not see this, because it does not know about this caller.
+
+⚠️ **KNOWN and deliberately not fixed: a splash class chasing a STATIONARY
+opponent closes to inside its own splash-safe band and then correctly holds
+fire.** Against an idle red on `gg_debug`: 250 decisions of walking, arrival 59px
+away against `ClassMinBand`'s 110, **zero shots**. It does not appear against
+anything that moves. Chasing to a stand-off point instead was tried and is worse
+— the offset lands off the surface the target stands on and A\* refuses it, so
+the bot stops with no route at all. **Picking an engagement position is bot-layer
+work** and belongs with that open item.
+
+#### ⚠️ Which maps two sampled duellists can actually reach each other on
+
+Scripted against scripted, sampled spawns, 8 seeds × 250 decisions each:
+
+| map | episodes | ended in a death | engaged |
+|---|---|---|---|
+| `gg_debug` | 8 | **8** | yes |
+| `tdm_mantic` | 8 | **7** | yes |
+| `arena_montane` | 8 | **7** | yes |
+| `arena_lumberyard` | 8 | 4 | yes |
+| `koth_harvest` | 8 | 0 | **no** |
+| `ctf_2dfort` | 8 | 0 | **no** |
+| `koth_valley` | 8 | 0 | **no** |
+| `dkoth_atalia` | 8 | 0 | **no** |
+
+⚠️ **The four that never engage are not slow, they are unroutable.** Both sampled
+spawns sit behind their own team gates, so a blue bot asked to walk to a red one
+standing in the red spawn is correctly told there is no route
+(`NavGraph.GatePassable`) — the follower's path length is **0** for the whole
+episode and neither character leaves its spawn x. Use explicit positions outside
+spawn on those maps, or an arena/tdm map.
+
+⚠️ **This is a different experiment from the sampled-placement table above** and
+the two do not contradict each other: that one measured random-head agents, this
+one measures scripted bots.
+
+#### ⚠️ The starting facing was in the decoder only, and is now on the character
+
+`Reset` arranges for both agents to start facing one another, because facing is
+observable — it is what the two-pixel box inflation splash is measured against.
+Until 2026-08-28 that facing was written into the `ActionDecoder` and **not onto
+the characters**, so:
+
+- **the first observation of every episode reported the spawn's facing** (due
+  east) rather than the arranged one, and aim sin/cos is in the layout;
+- a client-driven slot hid it, because `Decode` writes an aim every tick and the
+  character caught up on tick one;
+- a bot-driven slot did not, because a bot supplies its own aim.
+
+Found by a driver test whose idle opponent came back having apparently made a
+180° turn nobody asked for. ⚠️ **`PlayerInput.None` is not "no aim" — it is "aim
+at zero degrees"**, which is why `Idle` reads the character's own bearing back
+rather than using it.
+
 ## Action encoding v0 (stamped)
 
 Per `gg2-rl/docs/DESIGN.md`:
@@ -246,6 +379,15 @@ to do it now rather than after `gg2-rl` phase 2.
 - Damage accumulators: attribution, the self-damage rule, invulnerable-victim
   accumulates nothing.
 - Protocol round-trip against a real socket, including the `Hello` refuse.
+- **Per-slot drivers** (2026-08-28): a bot slot returns real reward components
+  and the action it took; two scripted opponents fight **to a death**, not to a
+  tick cap; a scripted driver without a nav graph is refused; `Snapshot` is
+  refused with a bot in play; the chase does not defeat the re-plan throttle; a
+  bot-driven batch is identical at batch 1 and 32 and on 1, 2 and 4 threads.
+  ⚠️ **Each of those has its premise asserted** — that a bot really is behind the
+  slot — because a client slot fed `EnvAction.Idle` behaves identically and made
+  four of them pass with the driver ignored entirely, which is what the mutation
+  check found.
 
 ## Exit (v0)
 
@@ -259,7 +401,10 @@ to do it now rather than after `gg2-rl` phase 2.
 
 ## Out of scope, so nobody re-opens it
 
-No shared memory until the throughput number above justifies it. No ML runtime,
+**Serialising the bot layer**, which is what `Snapshot` with a bot-driven slot
+would need — refused explicitly instead. **Choosing an engagement position for a
+chased opponent**, which is bot-layer work and belongs with "Team Deathmatch bots
+have no goal". No shared memory until the throughput number above justifies it. No ML runtime,
 no inference path, no weights format (that is `gg2-rl` phase 2's arrival). No
 rollout-search bot (`Gg2.Bots`, `gg2-rl` phase 1). No full-match episodes. No
 reaction-delay model (phase 5 — only its observation field exists).

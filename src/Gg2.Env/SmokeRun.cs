@@ -156,7 +156,7 @@ public static class SmokeRun
 
         for (var i = 0; i < worlds; i++)
         {
-            var red = componentsAt + (i * 2 * 20);
+            var red = componentsAt + (i * 2 * EnvProtocol.ComponentBytes);
             var termination = BinaryPrimitives.ReadInt32LittleEndian(reply.AsSpan(red + 16));
 
             if (termination != (int)Termination.Running)
@@ -182,7 +182,7 @@ public static class SmokeRun
     private static void MakeBatch(Stream stream, int worlds, uint seed, int threads)
     {
         var name = System.Text.Encoding.UTF8.GetBytes("gg_debug");
-        var body = new byte[(4 * 2) + name.Length + (4 * 2) + (8 * 4) + (4 * 4)];
+        var body = new byte[(4 * 2) + name.Length + (4 * 2) + (8 * 4) + (4 * 8)];
         var at = 0;
 
         void Int(int v)
@@ -212,6 +212,14 @@ public static class SmokeRun
         Int(2);
         Int((int)seed);
         Int(threads);
+
+        // ⚠️ v2's drivers. The smoke run is the RANDOM-HEAD agent's exit
+        // criterion, so both sides stay Client here on purpose — a bot-driven
+        // side would be measuring the bot rather than the socket.
+        Int((int)EnvDriver.Client);
+        Int((int)EnvDriver.Client);
+        Int(0);
+        Int(0);
 
         Send(stream, EnvMessage.MakeBatch, body);
 

@@ -43,7 +43,113 @@ public readonly record struct StepResult
 
     public Termination Termination { get; init; }
 
+    /// <summary>
+    /// The action this agent actually took.
+    /// </summary>
+    /// <remarks>
+    /// For a <see cref="EnvDriver.Client"/> side this is exactly what was passed
+    /// in, echoed so a trainer logging transitions does not have to correlate its
+    /// own send buffer with the reply.
+    /// <para>
+    /// ⚠️ <b>For a bot side it is the nearest action to what the bot did, and the
+    /// aim head is the one that can be lossy.</b> The four discrete heads are
+    /// recovered exactly from the key mask — they are the same bits — but the aim
+    /// is recovered as the bin nearest the turn the bot actually made, and
+    /// <c>ScriptedBot</c> aims straight at its target with no turn-rate cap at
+    /// all. When it snaps further than <c>ActionDecoder.MaxTurnDegreesPerDecision</c>
+    /// the bin saturates, so replaying that action would turn less than the bot
+    /// did.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>This matters for imitation and not for logging.</b> Cloning a
+    /// scripted bot from these actions learns a throttled version of it; using
+    /// them to record what an opponent did is exact enough. <b>Measured</b>, and
+    /// the number is in <c>docs/ENV.md</c> — do not assume it is rare.
+    /// <see cref="ActionExact"/> says so per step rather than leaving it to be
+    /// inferred.
+    /// </para>
+    /// </remarks>
+    public EnvAction Action { get; init; }
+
+    /// <summary>
+    /// Whether <see cref="Action"/> reproduces what this agent did.
+    /// </summary>
+    /// <remarks>
+    /// Always true for a client side and for any bot whose turn fitted inside the
+    /// cap. False means the aim head saturated — the discrete heads are still
+    /// exact. ⚠️ <b>A flag rather than a footnote</b>, because the alternative is
+    /// a trainer discovering the lossiness as an unexplained gap between its
+    /// cloned policy and the bot it cloned.
+    /// </remarks>
+    public bool ActionExact { get; init; }
+
     public bool Done => Termination != Termination.Running;
+}
+
+/// <summary>
+/// Who supplies one agent's actions.
+/// </summary>
+/// <remarks>
+/// ⚠️ <b>Requested by <c>gg2-rl</c> 2026-08-28, and it blocks three of its
+/// phases.</b> Until this existed <c>MakeBatch</c> could only drive both slots
+/// from the client, so a duel between two things that both live in this repo —
+/// <c>RolloutSearch</c> against <c>ScriptedBot</c> — could not be asked for over
+/// the socket at all. Phase 1's exit criterion is 500 duels per matchup, phase 2
+/// collects against fixed opponents, and phase 3's opponent pool is "past
+/// checkpoints, the scripted bot, and a noise bot".
+/// <para>
+/// ⚠️ <b>A past checkpoint is <see cref="Client"/>.</b> The trainer already has
+/// the weights and can drive that slot itself; what it cannot do from outside is
+/// run the bots, which need the <c>WorldView</c> and the nav graph. So this enum
+/// is deliberately short and is not a plug-in seam.
+/// </para>
+/// <para>
+/// ⚠️ <b>The bot is polled AS IT IS, not re-encoded.</b> Each bot drives its slot
+/// through its own <c>IInputSource.Poll</c>, on its own decision cadence, so the
+/// opponent really is that bot rather than an imitation of it squeezed through
+/// the action space. What comes back in <see cref="StepResult.Action"/> is the
+/// nearest action to what it did — exact for everything except the aim head on a
+/// bot that turns faster than the cap. See <see cref="StepResult.Action"/>.
+/// </para>
+/// </remarks>
+public enum EnvDriver : byte
+{
+    /// <summary>The action arrives over the socket. The default.</summary>
+    Client = 0,
+
+    /// <summary>
+    /// Presses nothing and never turns — the comparison floor.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Not dead weight and not a placeholder.</b> A win rate against an
+    /// idle opponent is what says whether a policy has learned to aim and fire at
+    /// all, and it is the only opponent whose behaviour is certain. The same
+    /// argument <c>RolloutOpponent.Idle</c> is kept for.
+    /// </remarks>
+    Idle = 1,
+
+    /// <summary>
+    /// <c>ScriptedBot</c> at a skill tier.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Needs a nav graph.</b> Without one its follower is null and it
+    /// fights from wherever it spawned, which is a different and much weaker
+    /// opponent — so a spec asking for it without a nav directory is refused
+    /// rather than quietly downgraded.
+    /// </remarks>
+    Scripted = 2,
+
+    /// <summary>
+    /// <c>RolloutSearch</c>, the forward-search bot.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>It costs about 2.94 ms a decision</b> (Release, one searcher on
+    /// <c>gg_debug</c>) against a scripted bot's microseconds, so a batch driven
+    /// by it is roughly three orders of magnitude slower per world. That is the
+    /// point of it — it is an evaluation baseline, not a data-collection
+    /// opponent — but it is worth knowing before making a batch of 64.
+    /// </remarks>
+    Rollout = 3,
 }
 
 /// <summary>How a duel is set up.</summary>
@@ -75,6 +181,30 @@ public readonly record struct DuelSpec
 
     /// <summary>Ticks each action is held for. 1 means every tick is a decision.</summary>
     public int ActionRepeat { get; init; }
+
+    /// <summary>Who drives red. <see cref="EnvDriver.Client"/> by default.</summary>
+    public EnvDriver RedDriver { get; init; }
+
+    /// <summary>Who drives blue. <see cref="EnvDriver.Client"/> by default.</summary>
+    public EnvDriver BlueDriver { get; init; }
+
+    /// <summary>
+    /// The skill tier for a <see cref="EnvDriver.Scripted"/> side, 0-5.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Zero is a real tier, not "unset".</b> <c>BotSkill.ForTier(0)</c> is
+    /// the most handicapped bot rather than the default one, so a caller that
+    /// leaves this alone gets the weakest scripted opponent — which is the safe
+    /// direction to be wrong in, and is stated because the opposite reading costs
+    /// an experiment.
+    /// </remarks>
+    public int RedTier { get; init; }
+
+    /// <summary>The skill tier for a <see cref="EnvDriver.Scripted"/> blue side.</summary>
+    public int BlueTier { get; init; }
+
+    /// <summary>Whether either side is driven from inside this process.</summary>
+    public bool HasBotDriver => RedDriver != EnvDriver.Client || BlueDriver != EnvDriver.Client;
 
     /// <summary>
     /// Put this in a coordinate to mean <b>"pick a spawn point off the map"</b>
@@ -132,6 +262,21 @@ public readonly record struct DuelSpec
 
         if (IsSampled(BlueX) != IsSampled(BlueY))
             throw new ArgumentException("blue's x and y must both be sampled or both be explicit", nameof(BlueX));
+
+        // ⚠️ Refused rather than clamped. A tier outside the table is a trainer
+        // bug, and silently giving it tier 5 would make an experiment report a
+        // matchup that never happened.
+        if (RedDriver == EnvDriver.Scripted && (uint)RedTier > 5)
+            throw new ArgumentOutOfRangeException(nameof(RedTier), RedTier, "a skill tier is 0 to 5");
+
+        if (BlueDriver == EnvDriver.Scripted && (uint)BlueTier > 5)
+            throw new ArgumentOutOfRangeException(nameof(BlueTier), BlueTier, "a skill tier is 0 to 5");
+
+        if (!Enum.IsDefined(RedDriver))
+            throw new ArgumentOutOfRangeException(nameof(RedDriver), RedDriver, "no such driver");
+
+        if (!Enum.IsDefined(BlueDriver))
+            throw new ArgumentOutOfRangeException(nameof(BlueDriver), BlueDriver, "no such driver");
     }
 }
 
@@ -168,6 +313,25 @@ public sealed class DuelEnv
     private int _decisions;
     private Termination _termination;
 
+    /// <summary>
+    /// How far a chased agent has to move before the opponent re-plans.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The unit is "far enough that the route would differ".</b> A body is
+    /// about this wide and <c>BotConstants.ArriveTol</c> is 8, so a target
+    /// shuffling on the spot cannot make the opponent search — and a target that
+    /// has genuinely gone somewhere always does. See <see cref="Chase"/> for what
+    /// asking every decision costs.
+    /// </remarks>
+    private const double ChaseRepointDistance = 32;
+
+    // The bot behind a non-client slot, or null. ⚠️ Rebuilt on every Reset
+    // rather than reused: ScriptedBot carries a route, a target and four clocks
+    // that belong to one life, and a bot that started an episode mid-plan would
+    // make the episode depend on the last one.
+    private IInputSource? _redBot;
+    private IInputSource? _blueBot;
+
     public DuelEnv(string mapDirectory, string? navDirectory = null)
     {
         ArgumentNullException.ThrowIfNull(mapDirectory);
@@ -192,6 +356,20 @@ public sealed class DuelEnv
     public int Tick => _world?.Tick ?? 0;
 
     public Termination Termination => _termination;
+
+    /// <summary>
+    /// The bot behind a slot, or null when the client drives it.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>For inspection, not for wiring.</b> A gate needs to be able to ask
+    /// whether a scripted opponent really was re-pointed at the agent, and that
+    /// is bot-internal state nothing on the wire carries — the same argument
+    /// <c>IScenarioSubject.HasTarget</c> exists for. Reaching in here to change a
+    /// bot mid-episode would make the episode depend on something outside the
+    /// spec and the seed.
+    /// </remarks>
+    public IInputSource? BotFor(int slot) =>
+        slot == RedSlot ? _redBot : slot == BlueSlot ? _blueBot : null;
 
     /// <summary>The live world, for an observation writer to read.</summary>
     public ScenarioWorld World =>
@@ -244,6 +422,15 @@ public sealed class DuelEnv
         RedSlot = Place(world, spec.RedClass, Team.Red, spec.RedX, spec.RedY);
         BlueSlot = Place(world, spec.BlueClass, Team.Blue, spec.BlueX, spec.BlueY);
 
+        // ⚠️ Seeded from THIS world's seed, so a scripted opponent's own stream
+        // is a pure function of (base seed, world, episode) exactly as the
+        // match's is. Without it every world in a batch would share the bot's
+        // stream and the batch-size independence gate would fail — or worse,
+        // pass, because a stagger of 0 is deterministic and the dependence would
+        // only appear once two worlds took different numbers of decisions.
+        _redBot = MakeBot(spec.RedDriver, spec.RedTier, Team.Red, spec.RedClass, world, seed);
+        _blueBot = MakeBot(spec.BlueDriver, spec.BlueTier, Team.Blue, spec.BlueClass, world, seed ^ 0x9E3779B9u);
+
         // Both agents start facing one another, which is the only neutral
         // choice: facing is observable (it moves the two-pixel box inflation
         // splash is measured against) so "whatever the spawn left" would be a
@@ -260,7 +447,76 @@ public sealed class DuelEnv
         Decoder.SetAim(RedSlot, redX <= blueX ? 0 : 180);
         Decoder.SetAim(BlueSlot, blueX < redX ? 0 : 180);
 
+        // ⚠️ And written onto the CHARACTERS, not only into the decoder. Until
+        // 2026-08-28 this facing existed in the decoder alone, so:
+        //
+        //   - the first observation of every episode reported the SPAWN's facing
+        //     (due east) rather than the one this method says it arranges, and
+        //     aim sin/cos is in the layout;
+        //   - a client-driven slot hid it, because Decode writes an aim every
+        //     tick and the character caught up on tick one;
+        //   - a bot-driven slot did not, because a bot supplies its own aim — an
+        //     idle opponent came back having apparently made a 180° turn it never
+        //     asked for.
+        //
+        // Facing is observable (it is what the two-pixel box inflation splash is
+        // measured against), so "whatever the spawn left" is exactly the hidden
+        // asymmetry the paragraph above refuses.
+        WriteAim(world, RedSlot, Decoder.Aim(RedSlot));
+        WriteAim(world, BlueSlot, Decoder.Aim(BlueSlot));
+
         _world = world;
+    }
+
+    /// <summary>
+    /// The bot behind one side, or null when the client drives it.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b><see cref="EnvDriver.Scripted"/> is refused without a nav graph
+    /// rather than downgraded.</b> <c>ScriptedBot</c> takes a null graph happily
+    /// and then has no follower at all — it fights from where it spawned and
+    /// never walks. That is a different opponent, and an experiment reporting
+    /// "against the scripted bot" while playing a stationary one is the kind of
+    /// wrong this project has already paid for twice.
+    /// </remarks>
+    private IInputSource? MakeBot(
+        EnvDriver driver, int tier, Team team, PlayerClass playerClass, ScenarioWorld world, uint seed)
+    {
+        switch (driver)
+        {
+            case EnvDriver.Client:
+                return null;
+
+            case EnvDriver.Idle:
+                return IdleInput.Instance;
+
+            case EnvDriver.Rollout:
+                return new RolloutSearch();
+
+            case EnvDriver.Scripted:
+                if (world.Nav is null)
+                {
+                    throw new InvalidOperationException(
+                        $"a Scripted driver needs a nav graph and {world.Map.Name} has none loaded; "
+                        + "give the env a nav directory, or ask for Idle or Rollout");
+                }
+
+                // ⚠️ The query's class arcs are rebuilt from live state by
+                // ScriptedBot itself every tick, so what is passed here is only
+                // the team — see its own remark. Passing CanDoubleJump here would
+                // be overwritten on the first tick and read as though it were not.
+                return new ScriptedBot(world.Nav, new NavQuery(team), BotSkill.ForTier(tier))
+                {
+                    Random = new GmlRandom(seed),
+
+                    // ⚠️ The env supplies the goal, because a duel has no
+                    // objective layer to supply one — see Chase.
+                    GoalLocked = true,
+                };
+
+            default:
+                throw new ArgumentOutOfRangeException(nameof(driver), driver, "no such driver");
+        }
     }
 
     /// <summary>
@@ -308,21 +564,61 @@ public sealed class DuelEnv
         double redDealt = 0, redTaken = 0, blueDealt = 0, blueTaken = 0;
         byte redKills = 0, redDeaths = 0, blueKills = 0, blueDeaths = 0;
 
+        // ⚠️ The aim a bot side started this decision at, kept so the action it
+        // took can be recovered. A bot does not go through this decoder, so the
+        // only way to say what it did in the action space is to measure the turn
+        // it made — see StepResult.Action.
+        var redAimBefore = Decoder.Aim(RedSlot);
+        var blueAimBefore = Decoder.Aim(BlueSlot);
+
+        // What the bots actually pressed on the FIRST tick of the decision, which
+        // is the tick the jump head is defined on. ⚠️ Reading the last tick's mask
+        // instead would report jump 0 for every jump, because the bit is an edge.
+        var redBotInput = PlayerInput.None;
+        var blueBotInput = PlayerInput.None;
+
+        // ⚠️ Once per DECISION, not once per tick. Re-planning a route every tick
+        // is a full A* per bot per frame, which is the cost the follower's own
+        // re-plan timer exists to avoid — and the follower keeps walking the route
+        // it has in between, so nothing is gained by asking more often.
+        Chase(_redBot, world, BlueSlot);
+        Chase(_blueBot, world, RedSlot);
+
         for (var tick = 0; tick < _spec.ActionRepeat; tick++)
         {
             var first = tick == 0;
 
             world.State.Characters[RedSlot].KeyState = default;
 
-            // Decoded fresh every tick — the jump edge and the absolute mask are
-            // both properties of doing it here rather than once per decision.
-            var redInput = Decoder.Decode(RedSlot, red, first);
-            var blueInput = Decoder.Decode(BlueSlot, blue, first);
+            // ⚠️ A bot slot is driven by the bot ITSELF, on its own cadence, and
+            // not by re-encoding its choice through this decoder. The opponent is
+            // then really that bot rather than one throttled to the action space
+            // — which matters most for ScriptedBot, whose aim has no turn-rate cap
+            // and would be a materially weaker shot if it were forced through one.
+            if (_redBot is null)
+            {
+                // Decoded fresh every tick — the jump edge and the absolute mask
+                // are both properties of doing it here rather than once per
+                // decision.
+                world.Drive(RedSlot, new FixedInput(Decoder.Decode(RedSlot, red, first)));
+            }
+            else
+            {
+                world.Drive(RedSlot, _redBot);
+            }
 
-            world.Drive(RedSlot, new FixedInput(redInput));
-            world.Drive(BlueSlot, new FixedInput(blueInput));
+            if (_blueBot is null)
+                world.Drive(BlueSlot, new FixedInput(Decoder.Decode(BlueSlot, blue, first)));
+            else
+                world.Drive(BlueSlot, _blueBot);
 
             world.Step();
+
+            if (first)
+            {
+                redBotInput = InputOf(world, RedSlot);
+                blueBotInput = InputOf(world, BlueSlot);
+            }
 
             redDealt += world.Events.DamageDealt[RedSlot];
             redTaken += world.Events.DamageTaken[RedSlot];
@@ -353,6 +649,12 @@ public sealed class DuelEnv
         if (_termination == Termination.Running && _decisions >= _spec.DecisionCap)
             _termination = Termination.TickCap;
 
+        // ⚠️ The decoder FOLLOWS a bot slot rather than driving it, and that is
+        // what keeps Snapshot's aim meaningful and lets the next decision's turn
+        // be measured against where the bot really is now.
+        var (redAction, redExact) = ActionTaken(_redBot, red, redBotInput, RedSlot, redAimBefore);
+        var (blueAction, blueExact) = ActionTaken(_blueBot, blue, blueBotInput, BlueSlot, blueAimBefore);
+
         return (
             new StepResult
             {
@@ -361,6 +663,8 @@ public sealed class DuelEnv
                 Kills = redKills,
                 Deaths = redDeaths,
                 Termination = _termination,
+                Action = redAction,
+                ActionExact = redExact,
             },
             new StepResult
             {
@@ -369,7 +673,197 @@ public sealed class DuelEnv
                 Kills = blueKills,
                 Deaths = blueDeaths,
                 Termination = _termination,
+                Action = blueAction,
+                ActionExact = blueExact,
             });
+    }
+
+    /// <summary>
+    /// Points a scripted opponent at the other agent.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Without this the scripted driver stands still for the whole
+    /// episode</b>, and it is not a bug in this file. <c>ScriptedBot</c> gets
+    /// where to walk from <c>BotObjective</c>, and a duel runs on
+    /// <c>ScenarioWorld</c> — <c>docs/BOTAI.md</c> item 11, a world with no
+    /// gamemode in it — so there is no objective layer at all. It is the same
+    /// known issue as <b>"Team Deathmatch bots have no goal"</b>
+    /// (<c>docs/TRAPS-BOTS.md</c>): with nothing to capture, nothing tells a bot
+    /// where to be.
+    /// <para>
+    /// <b>Measured before this existed</b>, sampled spawns on <c>ctf_2dfort</c>,
+    /// 300 decisions: the two spawns are at opposite ends of the map, neither bot
+    /// walked a pixel, <b>nobody fired a shot and no episode ever terminated in
+    /// anything but the tick cap</b>. A scripted opponent that cannot reach the
+    /// agent is not an opponent, and a batch of them trains a policy against an
+    /// empty room while looking busy.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>"Walk at the enemy" is the answer the traps file already names, and
+    /// the objection to it does not apply here.</b> It is recorded there as "how
+    /// you get eight bots in a conga line" — which is about a TEAM. A duel has two
+    /// characters, so there is no line to form, and the opponent is the only thing
+    /// in the world worth walking to.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Re-issued every decision rather than once</b>, so the bot follows a
+    /// moving agent instead of walking to where it used to be.
+    /// <c>GoalLocked</c> — the reference's own <c>botGoalLocked</c>, for exactly
+    /// this, "a harness that has already decided where the bot should go" — is
+    /// what stops the objective layer taking it back, and is set once at
+    /// construction.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Only when the target has actually MOVED, and that is not an
+    /// optimisation.</b> <c>PathFollower.SetGoal</c> clears both
+    /// <c>ReplanAt</c> and <c>PlanFailUntil</c> — it is event-driven by design —
+    /// so re-issuing it every decision defeats the unreachable-goal throttle
+    /// completely and costs a full A* per bot per decision <em>for ever</em>.
+    /// That throttle has its own gate
+    /// (<c>PathFollowerFixtureTests.AnUnreachableGoalIsSearchedForOnTheTimerAndNotEveryTick</c>)
+    /// and this would have walked straight through it, because the gate does not
+    /// know about this caller. <b>Measured:</b> 55 searches in 60 decisions
+    /// against a goal that could never route.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>And an unreachable enemy is a real answer, not a failure.</b> On a
+    /// CTF map both sampled spawns sit behind their own team gates, so a blue bot
+    /// asked to walk into the red spawn is correctly told there is no route — see
+    /// <c>NavGraph.GatePassable</c>. It then stands, which is the right behaviour
+    /// and the wrong duel: <c>docs/ENV.md</c> records which maps two sampled
+    /// duellists can actually reach each other on.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>KNOWN, measured, and deliberately not fixed here: a splash class
+    /// chasing a STATIONARY opponent closes to inside its own splash-safe band
+    /// and then correctly holds fire.</b> Against an idle red on
+    /// <c>gg_debug</c>: 250 decisions of walking, arrival 59px away — well inside
+    /// <c>BotTargeting.ClassMinBand</c>'s 110 — <b>zero shots and zero
+    /// damage</b>. It reads like a broken combat layer and is the goal being
+    /// wrong.
+    /// </para>
+    /// <para>
+    /// <b>It does not appear against anything that moves</b>, which is the case
+    /// this driver exists for: scripted against scripted on <c>gg_debug</c> kills
+    /// somebody in 8 episodes of 8. Chasing to a stand-off point instead was tried
+    /// and is worse — the offset lands off the surface the target is standing on
+    /// and A* refuses it, so the bot stops dead with no route at all. <b>Picking
+    /// an engagement position is bot-layer work</b>, it belongs with the open
+    /// "Team Deathmatch bots have no goal" item in <c>docs/TRAPS-BOTS.md</c>, and
+    /// inventing one here would be the env having an opinion it has no business
+    /// having.
+    /// </para>
+    /// </remarks>
+    private static void Chase(IInputSource? bot, ScenarioWorld world, int enemySlot)
+    {
+        if (bot is not ScriptedBot scripted || !world.State.Alive[enemySlot])
+            return;
+
+        ref readonly var enemy = ref world.State.Characters[enemySlot];
+
+        if (scripted.Path.HasGoal
+            && Gml.PointDistance(scripted.Path.GoalX, scripted.Path.GoalY, enemy.X, enemy.Y) < ChaseRepointDistance)
+        {
+            return;
+        }
+
+        scripted.SetGoal(enemy.X, enemy.Y);
+    }
+
+    /// <summary>Points a character where the decoder says it is looking.</summary>
+    /// <remarks>
+    /// ⚠️ Through <see cref="PlayerInput.FromAim"/> so the angle lands on the same
+    /// 65,536 steps a client's would — an agent whose starting bearing was on a
+    /// finer grid than the wire carries is aiming somewhere no human can, which is
+    /// <c>docs/BOTAI.md</c> item 4.
+    /// </remarks>
+    private static void WriteAim(ScenarioWorld world, int slot, double degrees)
+    {
+        var quantised = PlayerInput.FromAim(PlayerKeys.None, degrees, ActionDecoder.AimDistancePixels);
+
+        world.State.Characters[slot].NetAimDirection = quantised.NetAimDirection;
+        world.State.Characters[slot].AimDistance = quantised.AimDistance;
+    }
+
+    /// <summary>What a slot's input source put on the character this tick.</summary>
+    /// <remarks>
+    /// ⚠️ Read off <c>CharacterState.KeyState</c> and <c>NetAimDirection</c>
+    /// rather than by polling the bot a second time. Polling twice would advance
+    /// a stateful bot — <c>RolloutSearch</c> counts down a decision and
+    /// <c>ScriptedBot</c> runs four clocks — so the second answer would be to a
+    /// question the simulation never asked.
+    /// </remarks>
+    private static PlayerInput InputOf(ScenarioWorld world, int slot)
+    {
+        ref readonly var character = ref world.State.Characters[slot];
+        return new PlayerInput(character.KeyState, character.NetAimDirection, 0);
+    }
+
+    /// <summary>
+    /// The action an agent took, and whether it is reproducible.
+    /// </summary>
+    /// <remarks>
+    /// A client side echoes what it sent. A bot side is measured: the four
+    /// discrete heads come straight off the key mask, which is exact because they
+    /// are the same bits, and the aim head is the bin nearest the turn the bot
+    /// made over this decision.
+    /// <para>
+    /// ⚠️ <b>The aim is the one that can saturate.</b> <c>ScriptedBot</c> points
+    /// straight at its target with no turn-rate cap, so a target that moves
+    /// quickly — or a fresh acquisition — snaps further in one decision than
+    /// <c>ActionDecoder.MaxTurnDegreesPerDecision</c> allows. The bin then clamps
+    /// and <c>exact</c> is false, which is the whole reason that flag is reported
+    /// per step rather than assumed away.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>The decoder is then set to where the bot actually is.</b> Leaving it
+    /// where the clamp landed would make every following decision's measurement
+    /// drift, and would make a Snapshot restore the wrong bearing.
+    /// </para>
+    /// </remarks>
+    private (EnvAction Action, bool Exact) ActionTaken(
+        IInputSource? bot, EnvAction sent, PlayerInput taken, int slot, double aimBefore)
+    {
+        if (bot is null)
+            return (sent, true);
+
+        var keys = taken.Keys;
+
+        byte horizontal = (keys & PlayerKeys.Left) != 0 ? (byte)1
+            : (keys & PlayerKeys.Right) != 0 ? (byte)2
+            : (byte)0;
+
+        byte fire = (keys & PlayerKeys.Attack) != 0 ? (byte)1
+            : (keys & PlayerKeys.Special) != 0 ? (byte)2
+            : (byte)0;
+
+        var aimAfter = taken.AimDirectionDegrees;
+
+        // Signed shortest turn into (-180, 180].
+        var turn = ((aimAfter - aimBefore + 540.0) % 360.0) - 180.0;
+
+        var step = ActionDecoder.MaxTurnDegreesPerDecision / ActionDecoder.AimCentreBin;
+        var wanted = turn / step;
+        var bin = (int)Math.Round(wanted, MidpointRounding.AwayFromZero) + ActionDecoder.AimCentreBin;
+        var clamped = Math.Clamp(bin, 0, ActionDecoder.AimBins - 1);
+
+        Decoder.SetAim(slot, aimAfter);
+
+        var action = new EnvAction
+        {
+            Horizontal = horizontal,
+            Jump = (keys & PlayerKeys.Jump) != 0 ? (byte)1 : (byte)0,
+            Down = (keys & PlayerKeys.Down) != 0 ? (byte)1 : (byte)0,
+            Fire = fire,
+            AimDelta = (byte)clamped,
+        };
+
+        // ⚠️ Exact means the BIN reproduces the turn, not that the angle is
+        // identical: a turn always lands between two bins. Half a bin is the most
+        // a representable turn can be out by, so that is the test.
+        var exact = bin == clamped && Math.Abs(turn - (ActionDecoder.TurnFor((byte)clamped))) <= (step / 2) + 1e-9;
+
+        return (action, exact);
     }
 
     /// <summary>
@@ -389,6 +883,26 @@ public sealed class DuelEnv
     public byte[] Snapshot()
     {
         var world = World;
+
+        // ⚠️ REFUSED rather than half-taken, and this is the honest edge of the
+        // "the bytes ARE the state" claim. WorldState holds no reference to
+        // anything, which is what makes the raw round-trip total — but a bot
+        // driving a slot is state OUTSIDE it: ScriptedBot carries a route, a
+        // target, four clocks and its own RNG stream, and RolloutSearch carries a
+        // decision countdown and a decoder. Restoring the world alone would
+        // resume the episode with an opponent mid-way through a plan for a world
+        // that no longer exists, and it would do it silently.
+        //
+        // Lifting this means serialising the bot layer, which is a real piece of
+        // work and is not wanted yet — docs/ENV.md says so rather than leaving it
+        // to be discovered.
+        if (_spec.HasBotDriver)
+        {
+            throw new InvalidOperationException(
+                "a snapshot cannot capture a bot-driven slot: the bot's route, clocks and RNG live "
+                + "outside WorldState. Drive both slots from the client to snapshot this episode");
+        }
+
         var state = world.State;
 
         var stateBytes = MemoryMarshal.AsBytes(new ReadOnlySpan<WorldState>(in state));
@@ -438,5 +952,40 @@ public sealed class DuelEnv
     private sealed class FixedInput(PlayerInput input) : IInputSource
     {
         public PlayerInput Poll(in WorldView world, int slot, int tick) => input;
+    }
+
+    /// <summary>Presses nothing, ever, and goes on looking where it was.</summary>
+    /// <remarks>
+    /// ⚠️ <b><see cref="PlayerInput.None"/> is NOT "no aim" — it is "aim at
+    /// zero degrees", due east.</b> An idle driver built on it snaps the
+    /// character's facing on its first tick, and <b>facing is observable</b>: it
+    /// is what the two-pixel box inflation splash is measured against, and
+    /// <see cref="Reset"/> already goes out of its way to make the starting
+    /// facing symmetric for exactly that reason. An "opponent that does nothing"
+    /// that silently turns to face east is not the comparison floor anybody
+    /// means.
+    /// <para>
+    /// Caught by <c>DuelEnvTests.AnIdleDriverPressesNothingAndStillEarnsItsRewards</c>,
+    /// which saw the recovered action come back as a full left turn — the aim
+    /// head faithfully reporting a 180° snap nobody asked for.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Stateless, so one instance is shared across every world in a batch
+    /// and that is safe</b> — it reads the aim back out of the character rather
+    /// than remembering it. Every other driver is per-world precisely because it
+    /// is not: <c>ScriptedBot</c> carries a route and an RNG, and sharing one
+    /// across a parallel batch would be a race that shows up as a
+    /// batch-size-dependent trajectory rather than as a crash.
+    /// </para>
+    /// </remarks>
+    private sealed class IdleInput : IInputSource
+    {
+        public static readonly IdleInput Instance = new();
+
+        public PlayerInput Poll(in WorldView world, int slot, int tick)
+        {
+            ref readonly var character = ref world.Character(slot);
+            return new PlayerInput(PlayerKeys.None, character.NetAimDirection, character.AimDistance);
+        }
     }
 }

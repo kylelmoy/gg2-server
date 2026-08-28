@@ -182,7 +182,13 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
     private byte[] MakeBatch(ReadOnlySpan<byte> body)
     {
         // count, mapNameLength, mapName, redClass, blueClass, redX, redY,
-        // blueX, blueY, decisionCap, actionRepeat, seed, threads.
+        // blueX, blueY, decisionCap, actionRepeat, seed, threads,
+        // redDriver, blueDriver, redTier, blueTier.
+        //
+        // ⚠️ The four driver fields are REQUIRED rather than optional-if-absent.
+        // Tolerating a short frame would let a v1 client through the Hello check
+        // it already failed, and the reply it then read would be sliced wrong —
+        // the reward block is a different length in v2.
         //
         // ⚠️ Read with an explicit cursor rather than local helper functions: a
         // `ReadOnlySpan<byte>` is a ref-like type and cannot be captured by a
@@ -224,6 +230,15 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
         var seed = (uint)BinaryPrimitives.ReadInt32LittleEndian(body[at..]);
         at += 4;
         var threads = BinaryPrimitives.ReadInt32LittleEndian(body[at..]);
+        at += 4;
+
+        var redDriver = (EnvDriver)BinaryPrimitives.ReadInt32LittleEndian(body[at..]);
+        at += 4;
+        var blueDriver = (EnvDriver)BinaryPrimitives.ReadInt32LittleEndian(body[at..]);
+        at += 4;
+        var redTier = BinaryPrimitives.ReadInt32LittleEndian(body[at..]);
+        at += 4;
+        var blueTier = BinaryPrimitives.ReadInt32LittleEndian(body[at..]);
 
         var spec = new DuelSpec
         {
@@ -236,7 +251,16 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
             BlueY = blueY,
             DecisionCap = decisionCap,
             ActionRepeat = actionRepeat,
+            RedDriver = redDriver,
+            BlueDriver = blueDriver,
+            RedTier = redTier,
+            BlueTier = blueTier,
         };
+
+        // ⚠️ Validated HERE as well as in Reset, so a malformed driver is refused
+        // at the protocol edge with a reason on the wire rather than thrown from
+        // inside a batch construction the client cannot see into.
+        spec.Validate();
 
         _batch = new EnvBatch(count, spec, seed, mapDirectory, navDirectory, threads);
         _observations = new float[count * 2 * ObservationWriter.Length];
@@ -358,11 +382,7 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
             ObservationWriter.Write(in view, world.BlueSlot, _observations.AsSpan(((i * 2) + 1) * stride, stride));
         }
 
-        // ⚠️ Fixed 20 bytes of components per agent, present even on MakeBatch
-        // and Reset (as zeros), so the reply's layout does not depend on which
-        // message produced it. A variable shape here would be a shape the
-        // trainer has to branch on.
-        const int componentBytes = 20;
+        var componentBytes = EnvProtocol.ComponentBytes;
 
         var floats = _observations.Length;
         var reply = new byte[1 + 4 + (floats * 4) + (batch.Count * 2 * componentBytes)];
@@ -387,6 +407,17 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
         return reply;
     }
 
+    /// <summary>
+    /// One agent's reward components and the action it took.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The action is echoed for a client side too, and that is not
+    /// redundancy.</b> A trainer logging transitions would otherwise have to
+    /// correlate this reply with its own send buffer, and the two stop agreeing
+    /// the moment a side is bot-driven — which is precisely when the action is
+    /// the thing it most needs. One field that always means "what this agent did"
+    /// is cheaper than two paths that usually agree.
+    /// </remarks>
     private static void WriteComponents(byte[] into, ref int at, StepResult r)
     {
         BinaryPrimitives.WriteSingleLittleEndian(into.AsSpan(at), (float)r.DamageDealt);
@@ -398,6 +429,22 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
         BinaryPrimitives.WriteInt32LittleEndian(into.AsSpan(at), r.Deaths);
         at += 4;
         BinaryPrimitives.WriteInt32LittleEndian(into.AsSpan(at), (int)r.Termination);
+        at += 4;
+
+        BinaryPrimitives.WriteInt32LittleEndian(into.AsSpan(at), r.Action.Horizontal);
+        at += 4;
+        BinaryPrimitives.WriteInt32LittleEndian(into.AsSpan(at), r.Action.Jump);
+        at += 4;
+        BinaryPrimitives.WriteInt32LittleEndian(into.AsSpan(at), r.Action.Down);
+        at += 4;
+        BinaryPrimitives.WriteInt32LittleEndian(into.AsSpan(at), r.Action.Fire);
+        at += 4;
+        BinaryPrimitives.WriteInt32LittleEndian(into.AsSpan(at), r.Action.AimDelta);
+        at += 4;
+
+        // ⚠️ 1 or 0 rather than a bool byte, keeping the whole block 4-byte typed
+        // — see EnvProtocol.ComponentBytes.
+        BinaryPrimitives.WriteInt32LittleEndian(into.AsSpan(at), r.ActionExact ? 1 : 0);
         at += 4;
     }
 }

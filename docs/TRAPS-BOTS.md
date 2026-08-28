@@ -2091,6 +2091,18 @@ points. **Team Deathmatch has none of the three**, so it returns `BotGoal.None`,
 the path follower has no route, and a bot stands where it spawned until an enemy
 walks into its combat range.
 
+⚠️ **It bites `Gg2.Env`'s duels too, and harder**, because a duel runs on
+`ScenarioWorld` — a world with no gamemode at all, so there is not even a mode
+for `Decide` to look at. A scripted opponent stood still for 300 decisions and
+never fired. The env now supplies the goal itself (the other agent, via the
+reference's own `botGoalLocked`), which is the "walk at the nearest enemy" answer
+below with the conga-line objection removed by there being only two characters.
+⚠️ **That is a duel-shaped patch and not the fix for this item** — it is in
+`DuelEnv.Chase`, it does not touch the bot layer, and it inherits this item's own
+open question: chasing to the enemy's exact position walks a splash class inside
+its own splash-safe band, where it correctly refuses to fire. `docs/ENV.md`,
+"A duel has no objective layer", has the numbers.
+
 | map | mode | what 8 bots do in 1,500 ticks |
 |---|---|---|
 | `gg_debug` | TeamDeathmatch | fight hard — 24 deaths, match decided at t949 |
