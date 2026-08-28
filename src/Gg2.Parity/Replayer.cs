@@ -492,6 +492,26 @@ public sealed class Replayer(ITraceSimulation simulation)
                         (message.Payload[3] | (message.Payload[4] << 8)) / 5.0,
                         (sbyte)message.Payload[5]);
                     break;
+
+                // ⚠️ The other two client commands, and they were missing here
+                // for nine phases while their messages sat in the corpus:
+                // TOGGLE_ZOOM 31 times across four fixtures, OMNOMNOMNOM four
+                // times across two. Neither is a key bit, so nothing in an
+                // INPUTSTATE says a sniper scoped or a heavy ate — exactly the
+                // BUILD_SENTRY situation. Both change physics (runPower and
+                // jumpStrength; frozen acceleration, frozen facing and 1.6 hp a
+                // tick), so leaving them out was a trajectory divergence the
+                // fixtures could only report as a shorter exact window.
+                //
+                // Applied before the tick, like a build: processClientCommands
+                // runs inside GameServerBeginStep, ahead of serializeState.
+                case MessageType.ToggleZoom when message.Payload.Length >= 1:
+                    simulation.ToggleZoom(message.Payload[0]);
+                    break;
+
+                case MessageType.Omnomnomnom when message.Payload.Length >= 1:
+                    simulation.EatSandvich(message.Payload[0]);
+                    break;
             }
         }
     }

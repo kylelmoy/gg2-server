@@ -50,7 +50,7 @@ game. `good_move_contact_solid`, `move_outside_solid` and `characterHitObstacle`
 are transcribed.
 
 **Phase 4** — the character update, and it is exact on both kinds of evidence.
-Against the running engine, 48 trajectories driven inside the game itself and
+Against the running engine, 64 trajectories driven inside the game itself and
 read back to the last bit are reproduced **bit for bit**. Against a recording,
 the 898-tick two-bot `ctf_truefort` trace replays **closed-loop — anchored once
 at tick 0 and never corrected — with zero error on both axes**, now for all 898

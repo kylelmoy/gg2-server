@@ -299,6 +299,50 @@ public interface ITraceSimulation
     void DropIntel(int slot) { }
 
     /// <summary>
+    /// A <c>TOGGLE_ZOOM</c>: this slot's sniper raised or lowered the scope.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The reference has exactly three client commands — zoom, build and
+    /// eat</b> (<c>Scripts/Bots/botServerActions.gml</c>'s own wording), and all
+    /// three are invisible to an <c>INPUTSTATE</c>: none of them is a key bit, so
+    /// a replay can only learn about them from the broadcast the server makes
+    /// when it accepts one. This is the same injection as
+    /// <see cref="BuildSentry"/> and lands in the same place —
+    /// <c>processClientCommands.gml:236</c> runs inside
+    /// <c>GameServerBeginStep</c>, ahead of <c>serializeState</c>, so the
+    /// message is in its OWN tick's block.
+    /// <para>
+    /// ⚠️ <b>Zoom is physics, not a HUD flag.</b> <c>toggleZoom.gml</c> writes
+    /// <c>runPower</c> (0.6) and <c>jumpStrength</c> (6.3), so a scoped sniper
+    /// accelerates and jumps differently — an unapplied zoom is a trajectory
+    /// divergence, not a cosmetic one.
+    /// </para>
+    /// <para>
+    /// The default is a no-op, so a stand-in simply never scopes.
+    /// </para>
+    /// </remarks>
+    void ToggleZoom(int slot) { }
+
+    /// <summary>
+    /// An <c>OMNOMNOMNOM</c>: this slot's heavy started eating a sandvich.
+    /// </summary>
+    /// <remarks>
+    /// The third client command, and the same injection as
+    /// <see cref="ToggleZoom"/> — <c>serverEatSandvich.gml</c> broadcasts at the
+    /// moment it accepts, inside <c>processClientCommands.gml:232</c>.
+    /// <para>
+    /// ⚠️ <b>Also physics.</b> The eat freezes the character's acceleration and
+    /// its facing for 128 ticks and heals 1.6 hp a tick
+    /// (<c>Character.events/End Step.xml:83-96</c>), so an unapplied eat drifts
+    /// position, facing and hp at once.
+    /// </para>
+    /// <para>
+    /// The default is a no-op, so a stand-in simply never eats.
+    /// </para>
+    /// </remarks>
+    void EatSandvich(int slot) { }
+
+    /// <summary>
     /// Supplies the random seed the reference used for a slot's shot on the
     /// tick that is about to run.
     /// </summary>

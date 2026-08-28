@@ -155,7 +155,7 @@ public sealed class SecondMapFixtureTests
     /// that no earlier fixture ever dropped anybody.</b> On <c>ctf_truefort</c>
     /// the spawn wave produces no such offset — six fixtures there stay exact
     /// for hundreds of ticks past their anchors — so a spawn-drop is a path
-    /// phase 4's 48 trajectories evidently never took.
+    /// phase 4's original 48 trajectories evidently never took.
     /// </para>
     /// <para>
     /// ✅ <b>ROOT CAUSE, and it was the harness.</b> The reference creates a

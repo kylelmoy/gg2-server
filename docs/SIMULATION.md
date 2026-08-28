@@ -611,9 +611,12 @@ it fails silently.
 
 ### Settled: the character update matches the engine exactly
 
-`tests/Gg2.Tests/Fixtures/physics-samples.json` is 48 whole trajectories — three
-classes, two maps, 48 ticks each — driven inside the running game from start
-states chosen exactly, with position and velocity read back to the last bit. The
+`tests/Gg2.Tests/Fixtures/physics-samples.json` is 64 whole trajectories — four
+classes (Scout, Soldier, Pyro, Heavy), two maps, 48 ticks each, **32 of them
+started from rest** — driven inside the running game from start states chosen
+exactly, with position and velocity read back to the last bit. (It was 48 across
+three classes until 2026-08-28, when the Soldier and the rest starts were added
+to put item 1's residue-bearing state under the oracle.) The
 port reproduces every one of them **bit for bit**. Regenerate with
 `node tools/sample-physics.js` against a running dedicated server with bots.
 

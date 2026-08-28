@@ -156,12 +156,31 @@ public class ClientPredictionGateTests
     /// respawn cannot forge.
     /// </summary>
     /// <remarks>
-    /// <b>Measured 2026-08-28 across the whole fixture set.</b> Most sit at 2
-    /// wire units, under half a pixel, with two classes and both generator maps
-    /// noticeably worse. <b>The rows worth looking at some day</b>, recorded here
-    /// because nothing else in the suite would notice them: the heavy at 49 in x,
-    /// the sniper at 25/20, <c>gg_debug-closedtdm</c> at 77 in y, and
-    /// <c>gen_destroy-closedgen</c> at 18/30.
+    /// <b>Measured 2026-08-28 across the whole fixture set, and re-measured the
+    /// same day after the zoom and eat injections landed.</b> Most sit at 2 wire
+    /// units, under half a pixel, with both generator maps noticeably worse.
+    /// <para>
+    /// ✅ <b>Two of the four rows this remark used to nominate as "worth looking
+    /// at some day" were the missing client commands, and looking at them cost an
+    /// afternoon rather than a day.</b> The heavy at 49 in x was the sandvich the
+    /// replayer never applied (now 15) and the sniper at 20 in y was the scope
+    /// (now 3) — <c>jumpStrength</c> 6.3 against 6 is a y-axis quantity, which is
+    /// why it showed up there. See <c>ClientCommandInjectionTests</c>.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>One row moved the other way and it is not a regression:</b>
+    /// <c>cp_egypt-uncontestedcp</c> went 5/1 to 6/2 when its three recorded
+    /// zooms started being applied. <b>Its maxima did not move at all</b> (53 and
+    /// 111, both configurations), so no new outlier appeared — the distribution
+    /// shifted by one wire unit, 0.2 px, on a fixture whose sniper then stands
+    /// scoped for thousands of ticks. A control fixture with neither message
+    /// (<c>cp_egypt-closedsymmetric</c>, 6/2) is byte-identical either way, which
+    /// is what says the change reaches only what it should.
+    /// </para>
+    /// <b>The rows still worth looking at some day</b>, recorded here because
+    /// nothing else in the suite would notice them: the sniper still at 25 in x,
+    /// <c>gg_debug-closedtdm</c> at 77 in y, and <c>gen_destroy-closedgen</c> at
+    /// 18/30.
     /// <para>
     /// ⚠️ <b>A high row here is not automatically a bug.</b> These fixtures have
     /// several characters in them and open-loop compares every slot: a knockback,
@@ -193,7 +212,7 @@ public class ClientPredictionGateTests
     [InlineData("reference-arena_lumberyard-waitforplayers", 9, 2)]
     [InlineData("reference-cp_dirtbowl-closedcp", 2, 2)]
     [InlineData("reference-cp_egypt-closedsymmetric", 6, 2)]
-    [InlineData("reference-cp_egypt-uncontestedcp", 5, 1)]
+    [InlineData("reference-cp_egypt-uncontestedcp", 6, 2)]
     [InlineData("reference-ctf_2dfort-autobalance", 10, 3)]
     [InlineData("reference-ctf_2dfort-closedrespawn", 2, 2)]
     [InlineData("reference-ctf_2dfort-dropintel", 2, 2)]
@@ -202,10 +221,10 @@ public class ClientPredictionGateTests
     [InlineData("reference-ctf_truefort-bots", 2, 3)]
     [InlineData("reference-ctf_truefort-closedairblast", 9, 2)]
     [InlineData("reference-ctf_truefort-closedcombat", 2, 2)]
-    [InlineData("reference-ctf_truefort-closedheavy", 49, 3)]
+    [InlineData("reference-ctf_truefort-closedheavy", 15, 2)]
     [InlineData("reference-ctf_truefort-closedquote", 8, 2)]
     [InlineData("reference-ctf_truefort-closedsentrykill", 2, 2)]
-    [InlineData("reference-ctf_truefort-closedsniper", 25, 20)]
+    [InlineData("reference-ctf_truefort-closedsniper", 25, 3)]
     [InlineData("reference-ctf_truefort-closedspy", 2, 2)]
     [InlineData("reference-ctf_truefort-closedsupport", 9, 2)]
     [InlineData("reference-ctf_truefort-combat", 2, 2)]
@@ -214,7 +233,7 @@ public class ClientPredictionGateTests
     [InlineData("reference-ctf_truefort-spawnroomdeath", 2, 2)]
     [InlineData("reference-dkoth_atalia-closeddkoth", 2, 2)]
     [InlineData("reference-gen_destroy-closedgen", 18, 30)]
-    [InlineData("reference-gen_destroy-rotation", 7, 10)]
+    [InlineData("reference-gen_destroy-rotation", 6, 10)]
     [InlineData("reference-gg_debug-closedtdm", 2, 2)]
     [InlineData("reference-koth_valley-closedkoth", 5, 2)]
     [InlineData("reference-koth_valley-uncontested", 2, 2)]

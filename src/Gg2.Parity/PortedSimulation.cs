@@ -446,6 +446,55 @@ public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSim
 
     /// <inheritdoc />
     /// <remarks>
+    /// ⚠️ <b>The preconditions are re-run rather than assumed, and a refusal is
+    /// counted rather than swallowed.</b> That is the opposite of
+    /// <see cref="BuildSentry"/>, deliberately: a build's preconditions depend on
+    /// where the builder is standing, which a replay can only approximate, while
+    /// zoom's are just "alive, and a sniper" — state the replay holds exactly. So
+    /// a refusal here means the replay disagrees with the recording about who
+    /// this slot is, which is worth a failed assertion rather than a silent
+    /// no-op.
+    /// </remarks>
+    public void ToggleZoom(int slot)
+    {
+        if ((uint)slot >= WorldState.MaxSlots)
+            return;
+
+        if (!PlayerCommands.ToggleZoom(ref _state, slot))
+            ZoomsRefused++;
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Counted like <see cref="ToggleZoom"/>, and here the count is sharper: the
+    /// reference broadcast means <c>canEat</c> was true on its side, so a refusal
+    /// is the port's 45-second cooldown disagreeing with the reference's.
+    /// </remarks>
+    public void EatSandvich(int slot)
+    {
+        if ((uint)slot >= WorldState.MaxSlots)
+            return;
+
+        if (!PlayerCommands.EatSandvich(ref _state, slot))
+            EatsRefused++;
+    }
+
+    /// <summary>
+    /// Recorded <c>TOGGLE_ZOOM</c>s the port's own preconditions rejected.
+    /// </summary>
+    /// <remarks>
+    /// Non-zero means the replay's idea of a slot's class or liveness has drifted
+    /// from the recording's, whatever the position comparison says.
+    /// </remarks>
+    public int ZoomsRefused { get; private set; }
+
+    /// <summary>
+    /// Recorded <c>OMNOMNOMNOM</c>s the port's own preconditions rejected.
+    /// </summary>
+    public int EatsRefused { get; private set; }
+
+    /// <inheritdoc />
+    /// <remarks>
     /// Counted as well as stored, so a test can assert that the shots the
     /// recording contains were actually taken: a seed that is supplied and never
     /// used means the replay did not fire when the reference did, which is a

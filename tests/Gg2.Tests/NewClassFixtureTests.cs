@@ -194,20 +194,28 @@ public sealed class NewClassFixtureTests
     /// </para>
     /// </remarks>
     [Theory]
-    // Re-measured 2026-08-27 after the alarm-stage spawn seam landed. The
-    // heavy's and the sniper's are the short ones and that is the weapons, not
-    // the classes: an unseeded Minigun's spread cannot be reproduced, so the port
-    // lands its pellets somewhere else and shoves people somewhere else. Quote's
-    // and the spy's run nearly the whole recording because a bubble barely pushes
-    // and a cloaked spy is not fighting.
+    // Re-measured 2026-08-27 after the alarm-stage spawn seam landed, and
+    // 2026-08-28 after the TOGGLE_ZOOM and OMNOMNOMNOM injections.
     //
-    // ⚠️ The heavy's is the one number in this table that has moved: 270 before
-    // the seam and 396 after it, attributed by measurement rather than guessed
-    // (switching the queueing off reproduces 270 exactly). The other three are
-    // unchanged to the tick, which is the control — a seam that shifted every
-    // fixture by a tick would have moved all four.
+    // ✅ The sniper's window went 362 -> 1630 the moment the replayer started
+    // applying the scope. ⚠️ This comment used to explain 362 as the weapons —
+    // "an unseeded Minigun's spread cannot be reproduced" — which is true of the
+    // heavy and was never true of the sniper: the Rifle is hitscan, this
+    // comparison is trajectory-only, and what actually ended the window was
+    // t923's unapplied zoom, four ticks of runPower and jumpStrength the port
+    // never took. A plausible explanation covering two rows hid the one row it
+    // did not fit. See ClientCommandInjectionTests.
+    //
+    // The heavy's 396 is genuinely the Minigun, and it did not move: its three
+    // recorded eats are at t0, t184 and t1263, all outside [t499, t895].
+    //
+    // ⚠️ The heavy's is the one number here that moved for the seam: 270 before
+    // and 396 after, attributed by measurement rather than guessed (switching the
+    // queueing off reproduces 270 exactly). Quote's and the spy's run nearly the
+    // whole recording because a bubble barely pushes and a cloaked spy is not
+    // fighting, and neither has ever moved — the control.
     [InlineData(Heavy, 350)]    // 396 today, t499
-    [InlineData(Sniper, 340)]   // 362 today, t613
+    [InlineData(Sniper, 1600)]  // 1630 today, t613 — was 362 before the zoom injection
     [InlineData(Quote, 1700)]   // 1756 today, t486
     [InlineData(Spy, 1750)]     // 1829 today, t406
     public void TheNewClassesTrajectoriesAreExactFromTheirSpawnAnchors(string fixture, int floor)

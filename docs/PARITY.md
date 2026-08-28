@@ -710,8 +710,8 @@ on the same tick (five after the wave), and it stays there. Every mismatch reads
 ⚠️ **So it is the landing, and the reason no earlier fixture caught it is that
 no earlier fixture ever dropped anybody.** On `ctf_truefort` the spawn wave
 produces no such offset — six fixtures there stay exact for hundreds of ticks
-past their anchors — so a spawn-drop is a path phase 4's 48 trajectories
-evidently never took. **An open finding for the lane that owns
+past their anchors — so a spawn-drop is a path phase 4's original 48
+trajectories evidently never took. **An open finding for the lane that owns
 `src/Gg2.Simulation`.**
 
 `SecondMapFixtureTests.ThePortLandsFourTenthsOfAPixelLowOnThisMap` pins the
@@ -1641,6 +1641,75 @@ straight into the new instance's `alarm[0]`, and the grab guard's `alarm[0] <= 1
 arm lets anyone pick it straight back up (docs/SIMULATION.md, "Settled: the
 intel"). The recording corroborates it — that re-grab is the second of its two
 `GRAB_INTEL`s. **Assert on the named slot, not on the flag.**
+
+### Settled: the corpus had two client commands in it that the replayer threw away
+
+✅ **2026-08-28.** The reference has exactly **three** commands that are not key
+bits — `Scripts/Bots/botServerActions.gml` names them in one line, *"Zoom, build
+and eat are client commands"* — and `processClientCommands.gml` handles all three
+in adjacent cases (212 `BUILD_SENTRY`, 232 `OMNOMNOMNOM`, 236 `TOGGLE_ZOOM`),
+each broadcasting at the moment the server accepts it.
+
+⚠️ **The replayer injected one of the three, for nine phases.** `BUILD_SENTRY`
+was wired up when the sentry landed and `DROP_INTEL` beside it; `TOGGLE_ZOOM` and
+`OMNOMNOMNOM` never were — while their messages sat in the checked-in corpus the
+whole time: **31 zooms across four fixtures and four eats across two**
+(`gg2-parity census`).
+
+**Both are physics, not HUD flags:**
+
+| | what the reference does | where |
+|---|---|---|
+| `TOGGLE_ZOOM` | `runPower = 0.6`, `jumpStrength = 6 + 0.6/2` | `Scripts/Misc/toggleZoom.gml` |
+| `OMNOMNOMNOM` | freezes acceleration and facing for 128 ticks, heals 1.6 hp a tick | `Character.events/End Step.xml:83-96` |
+
+So a replay that dropped them walked a scoped sniper at the wrong acceleration,
+jumped it at the wrong strength, and let an eating heavy accelerate while the
+reference's stood still.
+
+✅ **What it was worth, measured both ways** — the fixtures were replayed with
+the injection on and off in the same session:
+
+| fixture | open-loop p99 x/y, off | on | closed-loop exact window |
+|---|---|---|---|
+| `ctf_truefort-closedsniper` | 25 / 20 | 25 / **3** | **362 → 1,630 ticks** |
+| `ctf_truefort-closedheavy` | 49 / 3 | **15** / 2 | 396, unchanged |
+| `gen_destroy-rotation` | 7 / 10 | **6** / 10 | n/a |
+| `cp_egypt-uncontestedcp` | 5 / 1 | **6 / 2** | 4,617, unchanged |
+| `cp_egypt-closedsymmetric` (control, neither message) | 6 / 2 | 6 / 2 | unchanged |
+
+⚠️ **The sniper's 362-tick window was being explained by the wrong thing, in a
+comment, for two sessions.** `NewClassFixtureTests` said the heavy's and the
+sniper's short windows were "the weapons, not the classes — an unseeded Minigun's
+spread cannot be reproduced". That is true of the heavy and was never true of the
+sniper: the Rifle is hitscan and the comparison is trajectory-only. What ended the
+window was **t923's unapplied zoom**. **A plausible explanation that covers two
+rows will happily hide the one row it does not fit.**
+
+⚠️ **One row moved the wrong way and it is not a regression.**
+`cp_egypt-uncontestedcp` went 5/1 → 6/2 when its three zooms started being
+applied — but **its maxima did not move at all** (53 and 111 either way), so no
+new outlier appeared; the distribution shifted by one wire unit, 0.2 px, on a
+fixture whose sniper then stands scoped for thousands of ticks. The control
+fixture is identical either way, which is what says the change reaches only what
+it should.
+
+⚠️ **One recorded eat is refused, and it is a bootstrap artefact.**
+`closedheavy`'s first `OMNOMNOMNOM` is in the **t0** block: slot 5's heavy was
+already alive and already eating when the recorder connected, so the replay has no
+character to feed. ✅ **Deferring the injection until after the anchor was tried
+and does not help** — the anchor resets characters, it does not create them. Same
+limit as "a recording of players who were already alive is open-loop only".
+`ClientCommandInjectionTests` pins the refusal at exactly one, so a *second* one —
+which would be a real disagreement about the sandvich's 45-second cooldown —
+fails.
+
+⚠️ **The general lesson, and it is the third time this project has paid for it:**
+`MessageCoverageTests` asks *"what state can no recording reach?"*. This was the
+inverse — **a recording reached it and the harness discarded it** — and nothing in
+the suite asked that question. `ClientCommandInjectionTests` now counts the
+injections in both directions: the fixtures still contain 31 zooms and 4 eats, and
+every one is accepted.
 
 ### Settled: `ARENA_WAIT_FOR_PLAYERS`, and every gameplay message is now recorded
 

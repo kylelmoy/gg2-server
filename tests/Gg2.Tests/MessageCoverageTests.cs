@@ -36,6 +36,16 @@ namespace Gg2.Tests;
 /// <c>ARENA_WAIT_FOR_PLAYERS</c>, <c>CHAT_BUBBLE</c>, <c>MESSAGE_STRING</c> and
 /// <c>PLAYER_CHANGENAME</c>. Only the first two are gameplay.
 /// </para>
+/// <para>
+/// ⚠️ <b>Reaching a type is not the same as the harness doing anything with
+/// it, and this census cannot tell the difference.</b> <c>TOGGLE_ZOOM</c> and
+/// <c>OMNOMNOMNOM</c> sat in the Reached list below while
+/// <c>Replayer.ApplyEvents</c> silently dropped both — 31 and 4 messages the
+/// corpus paid to record and the replay never applied, worth 1,268 ticks of
+/// exact window on the sniper fixture alone. <c>ClientCommandInjectionTests</c>
+/// asks the other question: of the messages a recording contains, which ones
+/// actually reach the simulation?
+/// </para>
 /// </remarks>
 public sealed class MessageCoverageTests
 {

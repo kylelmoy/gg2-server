@@ -33,7 +33,7 @@ session spends a day arriving where it started.
   transcribed. `PlaceMeeting` is not written; nothing needs it yet.
   `CollisionLine` **is** written, as phase 5's third oracle — see below.
 - `Gg2.Simulation.CharacterPhysics` — phase 4. The character update reproduces
-  the running engine **bit for bit** across 48 trajectories on two maps
+  the running engine **bit for bit** across 64 trajectories on two maps
   (`tests/Gg2.Tests/Fixtures/physics-samples.json`, regenerate with
   `node tools/sample-physics.js`), and replays the checked-in 898-tick bot trace
   closed-loop with **zero** error on both axes. That used to stop at tick 393,

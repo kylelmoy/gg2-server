@@ -169,6 +169,10 @@ public sealed class SubWireProbe(PortedSimulation inner, IReadOnlyList<TraceTick
     public void SetPlayerTeam(int slot, Team team) => inner.SetPlayerTeam(slot, team);
     public void BuildSentry(int slot, double x, double y, int direction) => inner.BuildSentry(slot, x, y, direction);
 
+    public void ToggleZoom(int slot) => inner.ToggleZoom(slot);
+
+    public void EatSandvich(int slot) => inner.EatSandvich(slot);
+
     public void SetFireSeed(int slot, ushort seed) => inner.SetFireSeed(slot, seed);
 
     public IReadOnlyList<DeathRecord> DeathsLastTick => inner.DeathsLastTick;
