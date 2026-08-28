@@ -2708,3 +2708,57 @@ it is not rediscovered.
 **Rows worth a look some day**, recorded because nothing else would notice them:
 the heavy at 49 in x, the sniper at 25/20, `gg_debug-closedtdm` at 77 in y, and
 `gen_destroy-closedgen` at 18/30.
+
+### ✅ FIXED: the dropdown push-out's guard had the wrong sign
+
+**2026-08-28.** The port put a player back on a platform they had dropped
+through. One character, one sign, and it was worth more than its size.
+
+`Character.events/Step.xml`, inside `with(DropdownPlatform)`:
+
+```
+if(place_meeting(x, y + (other.y - other.y_previous), other)) continue;
+```
+
+⚠️ **`x` and `y` there are the PLATFORM's and `other` is the character**, so the
+platform moves DOWN by the character's own dy. Relative to the character that
+asks *"was I already inside this platform at my previous y"* — which is the
+whole mechanism that lets somebody keep falling through a platform they have
+already entered. The port moved the **character** down by dy instead, which asks
+whether it will be inside the platform *next* tick: the opposite question. The
+comment sitting above the line already described the correct behaviour, so this
+was a transcription slip, not a misreading.
+
+⚠️ **Shift the platform, not the character — they are not equivalent.** GM8
+rounds the *calling instance's* position to build the box `place_meeting` tests,
+so the reference rounds `platformY + dy`; rounding the character's `y - dy`
+instead is a different number with an unrelated fractional part. A platform's own
+y is an integer, so `round(P + dy)` is `P + round(dy)` except where `dy` lands
+exactly on a half and the platform's parity decides it — a tie this project does
+not chase.
+
+**What one sign was worth, measured across every fixture, with nothing
+regressed:**
+
+| | before | after |
+|---|---|---|
+| `humanmoves` exact window | 1,161 | **2,525** — the whole recording past its anchor, zero mismatches |
+| `humanmoves` client prediction, y | max 270, p99 44 | **max 24, p99 2** |
+| `gg_debug-closedtdm` first divergence | tick 152 | **tick 166** |
+| `gg_debug-closedtdm` client prediction, y | p99 **77** | **2** |
+| every other fixture | — | unchanged |
+
+⚠️ **`gg_debug-closedtdm` gained a mismatch while improving** — 2 becomes 3 — but
+its *first* divergence moved 14 ticks later. The count is not the bound; the
+first bad tick is.
+
+✅ **Nothing but the new client-prediction gate was watching
+`gg_debug-closedtdm`'s 77.** Its closed-loop window is pinned and moved by 14
+ticks, which is small enough to be noise to a reader; the open-loop p99 fell by
+a factor of 38. That is the case for the gate existing.
+
+⚠️ **This is a plausible contributor to the rubberbanding two humans reported**,
+and it is not proven to be. A player who taps down through a platform gets
+corrected by up to 54 px, which is exactly what they described — but the reports
+were on `koth_corinth` and the measurement above is on other maps. Do not close
+the drift item on this.

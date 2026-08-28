@@ -236,7 +236,7 @@ public sealed class Phase2FixtureTests
         Assert.Equal(723, ExactWindow(Walk).Exact);
         Assert.Equal(625, ExactWindow(Jumps).Exact);
         Assert.Equal(474, ExactWindow(Stairs).Exact);
-        Assert.Equal(1161, ExactWindow(Human).Exact);
+        Assert.Equal(2525, ExactWindow(Human).Exact);
     }
 
     /// <summary>
@@ -298,30 +298,45 @@ public sealed class Phase2FixtureTests
     /// <para>
     /// ⚠️ <b>All three dropdown paths DO honour <c>KEY_DOWN</c></b> — the Begin
     /// Step ground test, the Step push-out and
-    /// <c>CharacterPhysics.StandingOnDropdown</c> each check it, so this is not
-    /// a missing feature. The suspect is the Step push-out's "already inside it
-    /// before this tick's move" guard, which exists precisely to stop a
-    /// character being caught on a platform it is falling through, and which is
-    /// evidently not catching this case once the key comes back up.
+    /// <c>CharacterPhysics.StandingOnDropdown</c> each check it, so this was
+    /// never a missing feature. ✅ <b>The suspect named here was the right one</b>
+    /// — the Step push-out's "already inside it before this tick's move" guard —
+    /// and the defect was its <b>sign</b>.
+    /// <para>
+    /// ✅ <b>FIXED 2026-08-28.</b> The reference is
+    /// <c>place_meeting(x, y + (other.y - other.y_previous), other)</c> inside
+    /// <c>with(DropdownPlatform)</c>, so <c>x</c>/<c>y</c> are the <b>platform's</b>
+    /// and it moves the platform DOWN by the character's dy — which relative to
+    /// the character asks "was I already inside it at my previous y". The port
+    /// moved the <em>character</em> down by dy instead, which asks whether it
+    /// will be inside the platform <em>next</em> tick. Opposite direction, and
+    /// the comment above it already described the correct behaviour.
     /// </para>
     /// <para>
-    /// <b>This is the fourth manoeuvre <c>docs/PLAN.md</c> asked for</b> — the
-    /// drop-through platform — and it is wire-visible, so the reference is the
-    /// specification. Note the earlier dropdown coverage is NOT this: the walk
-    /// fixture gates the platform <em>holding a character up</em>, which is the
-    /// opposite direction.
+    /// <b>What one sign was worth:</b> this fixture's exact window went
+    /// <b>1,161 → 2,525</b>, which is the whole recording past its anchor with
+    /// zero mismatches; the client-prediction gate's row for it went
+    /// <b>270 / 44 → 24 / 2</b> in y; and <c>gg_debug-closedtdm</c>'s p99 in y
+    /// went <b>77 → 2</b> — a fixture nothing else in the suite was watching for
+    /// this.
     /// </para>
     /// <para>
-    /// <b>This test fails when the finding is fixed</b>, like
-    /// <c>SentryKillFixtureTests</c>'s. That is the intent: the window is pinned
-    /// exactly above, and this says <em>why</em> it stops where it does so the
-    /// next session does not have to rediscover the tick.
+    /// ⚠️ <b>The shift is applied to the platform, not the character, and that
+    /// is not equivalent.</b> GM8 rounds the <em>calling instance's</em> position
+    /// to build the box it tests, so the reference rounds <c>platformY + dy</c>;
+    /// rounding the character's <c>y - dy</c> is a different number with an
+    /// unrelated fractional part. See the comment in <c>CharacterPhysics</c>.
+    /// </para>
+    /// <para>
+    /// Note the earlier dropdown coverage is NOT this: the walk fixture gates the
+    /// platform <em>holding a character up</em>, which is the opposite direction.
+    /// Both directions now have a gate.
     /// </para>
     /// </remarks>
     [Fact]
-    public void ThePortPutsAPlayerBackOnAPlatformTheyDroppedThrough()
+    public void APlayerWhoDropsThroughAPlatformKeepsFalling()
     {
-        var ticks = Load(Human).Ticks;
+        var (trace, ticks) = Load(Human);
 
         // The tap that starts it, on the wire, on every tick.
         var down = ticks
@@ -332,21 +347,15 @@ public sealed class Phase2FixtureTests
 
         Assert.Equal([1621, 1622, 1623, 1624, 1625], down);
 
-        var (trace, all) = Load(Human);
-        var anchor = FixtureAnchors.LastExactAnchor(all)!.Value;
+        var anchor = FixtureAnchors.LastExactAnchor(ticks)!.Value;
 
         var report = new Replayer(new PortedSimulation(MapLoader)) { Compare = Fields.All }
-            .Replay(Human, trace.Header.Map, all, ReplayMode.ClosedLoop, stopAtFirstBadTick: false);
+            .Replay(Human, trace.Header.Map, ticks, ReplayMode.ClosedLoop, stopAtFirstBadTick: false);
 
-        var first = report.Mismatches.Where(m => m.Tick > anchor).MinBy(m => m.Tick);
-
-        // Six ticks after the key came up, and it is a POSITION disagreement:
-        // the reference is 254 wire units — nearly 51 px — below the port.
-        Assert.Equal(1634, first.Tick);
-        Assert.Equal("y", first.Field);
-        Assert.True(
-            first.Expected > first.Actual,
-            $"the reference should be BELOW the port here, but expected {first.Expected} and got {first.Actual} — "
-                + "if the port is now the lower one, the push-out has been changed in the other direction");
+        // ⚠️ Was tick 1634, six ticks after the key came up, with the reference
+        // 254 wire units — nearly 51 px — BELOW the port, which is the port
+        // holding the player up on a platform they had left. Now there is
+        // nothing at all after the anchor.
+        Assert.DoesNotContain(report.Mismatches, m => m.Tick > anchor);
     }
 }

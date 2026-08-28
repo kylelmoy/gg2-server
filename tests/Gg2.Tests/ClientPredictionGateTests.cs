@@ -110,13 +110,14 @@ public class ClientPredictionGateTests
     /// second character to be wrong about. <b>Four of the five hold the client to
     /// two wire units, which is 0.4 px.</b>
     /// <para>
-    /// ⚠️ <b>The exception is the human take's 270 / 44 in y, and it is a known
-    /// bug rather than noise</b> — the drop-through platform of
-    /// <c>Phase2FixtureTests.ThePortPutsAPlayerBackOnAPlatformTheyDroppedThrough</c>.
-    /// 270 wire units is 54 px: the port holds the player up on a platform the
-    /// reference drops them through, so the client is corrected by most of a
-    /// screen height. <b>Fixing that item will move this row</b>, and it should
-    /// be re-pinned then, downwards.
+    /// ✅ <b>This gate paid for itself within the hour, and the human take's row
+    /// is the receipt.</b> It was pinned at <b>270 / 44</b> in y on the day it
+    /// was written — 54 px of correction — because the port held a player up on
+    /// a dropdown platform they had dropped through. One sign fixed in
+    /// <c>CharacterPhysics</c>'s Step push-out took the row to <b>24 / 2</b>,
+    /// and <c>gg_debug-closedtdm</c>'s p99 in y from <b>77 to 2</b> with it.
+    /// <b>Nothing else in the suite moved on that second fixture</b>, so this
+    /// was the only thing watching it.
     /// </para>
     /// <para>
     /// ⚠️ <b>Exact equality, not an upper bound, and deliberately so.</b> This
@@ -132,7 +133,7 @@ public class ClientPredictionGateTests
     [InlineData("reference-gg_debug-scriptedjumps", 0, 0, 2, 2)]
     [InlineData("reference-gg_debug-scriptedstairs", 2, 2, 0, 0)]
     [InlineData("reference-tdm_mantic-closedtdm", 0, 0, 0, 0)]
-    [InlineData("reference-tdm_mantic-humanmoves", 2, 2, 270, 44)]
+    [InlineData("reference-tdm_mantic-humanmoves", 2, 2, 24, 2)]
     public void ASinglePlayerRecordingPinsTheSnapExactly(
         string fixture,
         long maxX,
@@ -214,7 +215,7 @@ public class ClientPredictionGateTests
     [InlineData("reference-dkoth_atalia-closeddkoth", 2, 2)]
     [InlineData("reference-gen_destroy-closedgen", 18, 30)]
     [InlineData("reference-gen_destroy-rotation", 7, 10)]
-    [InlineData("reference-gg_debug-closedtdm", 2, 77)]
+    [InlineData("reference-gg_debug-closedtdm", 2, 2)]
     [InlineData("reference-koth_valley-closedkoth", 5, 2)]
     [InlineData("reference-koth_valley-uncontested", 2, 2)]
     public void EveryOtherFixturePinsItsNinetyNinthPercentile(string fixture, long p99X, long p99Y)

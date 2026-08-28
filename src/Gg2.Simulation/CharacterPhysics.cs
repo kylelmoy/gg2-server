@@ -364,10 +364,35 @@ public static class CharacterPhysics
                     continue;
 
                 // ⚠️ Already inside it before this tick's move: leave it alone.
-                // The reference asks this by shifting the PLATFORM by the
-                // character's own dy, which is the same as asking whether the
-                // character was overlapping at its previous y.
-                if (Overlaps(rect, box, character.X, character.Y + (character.Y - character.YPrevious)))
+                // This is what lets a character fall THROUGH a platform it was
+                // already inside, and getting its sign wrong re-seats them on
+                // top of one they had dropped through — measured, see below.
+                //
+                // The reference is `place_meeting(x, y + (other.y -
+                // other.y_previous), other)` inside `with(DropdownPlatform)`, so
+                // `x`/`y` are the PLATFORM's and `other` is the character: the
+                // platform moves DOWN by the character's dy. Relative to the
+                // character that is the same as testing it at its previous y.
+                //
+                // ⚠️ It is NOT the same as moving the character down by dy,
+                // which is what stood here and is the opposite direction — that
+                // asks whether it will be inside the platform NEXT tick.
+                //
+                // ⚠️ And the shift is applied to the platform, not the
+                // character, because GM8 rounds the *calling instance's*
+                // position to build the box it tests. `place_meeting` on the
+                // platform rounds `platformY + dy`; rounding the character's
+                // `y - dy` instead is a different number with an unrelated
+                // fractional part. A platform's own y is an integer, so
+                // `round(P + dy)` is `P + round(dy)` except where `dy` lands
+                // exactly on a half and the platform's parity decides it —
+                // a tie this project does not chase (docs/SIMULATION.md).
+                var shift = CollisionWorld.RoundPosition(character.Y - character.YPrevious);
+
+                if (Overlaps(rect with { Top = rect.Top + shift, Bottom = rect.Bottom + shift },
+                        box,
+                        character.X,
+                        character.Y))
                     continue;
 
                 // Lift out in tenths of a pixel, exactly as the reference does —
