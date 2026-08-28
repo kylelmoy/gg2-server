@@ -3121,12 +3121,44 @@ either. Consistent at both parities, so this is **not** half-to-even and **not**
 half-away-from-zero — and `CollisionWorld.RoundPosition`, whose comment states
 half-to-even as fact, cannot express it at ties.
 
-⚠️ **Left unfixed, deliberately.** `RoundPosition` is on every collision path in
-the port; changing it to model a case that arises only at an exact half is a
-large risk for a measure-nearly-zero input. **What is now written down is that
-the model has a known edge**, which is the thing that was missing. The precise
-*mask* at a half matched neither neighbour at an even base and matched the upper
-one at an odd base — unexplained, recorded rather than theorised about.
+✅ **NARROWED 2026-08-28, and the scary half of this entry was wrong.** The union
+is a property of the reported **bounding box** — the `distance_to_object` family —
+and **not** of `place_free`. The two are different GM8 primitives, which this
+project already knows in another context ("GM8's two collision primitives
+disagree about the same pair of instances": `distance_to_object` uses bboxes,
+`place_free`/`place_meeting` use masks).
+
+⚠️ **So "`RoundPosition` is on every collision path and cannot express this" is a
+misreading.** On the `place_free` path `RoundPosition` is **measured correct**:
+`CollisionSampleTests.HalvesRoundToEvenAndTheSamplesProveIt` sweeps four maps
+with three different box widths *specifically* to discriminate half-up from
+half-to-even at both parities, against the live game. `place_free` rounds half to
+even and the port matches it.
+
+**Tested, not argued.** Modelling the union on all three character box paths
+(`PlaceFreeInMask`, `PlaceFree`, `PlaceMeetingKind`) **fails ten engine-oracle
+tests** — the four `HalvesRoundToEven`, the four
+`PlaceFreeAgreesWithTheLiveGameAtFractionalPositions`, and two
+`PhysicsSampleTests`. The change is not merely unnecessary, it is wrong.
+
+⚠️ **The input is NOT measure-nearly-zero, which was the stated reason for
+leaving it.** Instrumenting a full `gg_debug` replay: **297 exact-half inputs to
+`RoundPosition` in 521,780 calls, 138 of them on the three character box paths.**
+Ties happen constantly. The real reason to leave the entry alone is better: on the
+path where ties are frequent, half-to-even is the *measured* answer.
+
+⬅️ **What genuinely remains open** is much narrower: at a tie the port builds one
+rounded **bbox** where the engine reports the union of both neighbours, so the
+edge is in `Aabb.ForCharacter`/`ForRotatedSprite` and reaches only
+`distance_to_object` consumers — the rocket blast falloff, `collision_circle`, the
+bubble pop radius. Not every collision path. The precise *mask* at a half matched
+neither neighbour at an even base and matched the upper one at an odd base —
+unexplained, recorded rather than theorised about.
+
+⚠️ **And it is not the `gg_debug` t523 residue.** That was the reason to try it —
+the residue is born during a walk, which is a collision path — and the union
+change **does not move the divergence tick at all**, with 138 ties exercised.
+Falsified; do not retry it.
 
 ### ✅ Every character box measured — and the physics oracle was measuring the wrong one
 
