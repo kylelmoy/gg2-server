@@ -1,4 +1,4 @@
-using Gg2.Maps;
+﻿using Gg2.Maps;
 using Gg2.Protocol;
 using Gg2.Simulation;
 
@@ -761,6 +761,71 @@ public sealed class SentryTests
 
         Sentries.Destroy(world, ref airborne, 1);
         Assert.True(Gml.Greater(airborne.Characters[1].Motion.Speed, 0));
+    }
+
+    /// <summary>
+    /// ✅ <b>A sentry built inside a team gate dies on the same tick</b> —
+    /// <c>Sentry.events/Collision with TeamGate.xml</c>, <c>hp -= 999</c>, and
+    /// the End Step below it does the rest.
+    /// </summary>
+    /// <remarks>
+    /// The gate used is <c>ctf_truefort</c>'s red one at
+    /// [1578,444]-[1595,497], which is where the recording's t280 build died.
+    /// Unlike the Begin Step guard this is a <em>same-tick</em> death: the
+    /// collision stage and the End Step are both after Begin Step, so a sentry
+    /// created during a tick never survives to the next one.
+    /// </remarks>
+    [Fact]
+    public void ASentryStandingInATeamGateIsDestroyedByItsCollisionEvent()
+    {
+        var world = World;
+        var events = default(TickEvents);
+        var state = default(WorldState);
+
+        PutBuiltSentry(ref state, 1, Team.Red, 1574.2, 474.4);
+
+        Tick(world, ref state, ref events);
+
+        Assert.False(state.HasSentry[1]);
+        Assert.True(events.SentryDestroyed[1]);
+
+        // ⚠️ Byte-identical to the Begin Step guard's destruction, and that is
+        // the whole reason the recorded ones were misattributed for five
+        // sessions: lastDamageSource stays at Create's -1, which write_ubyte
+        // puts on the wire as 0.
+        var destruction = events.SentryDestructions[1];
+        Assert.Equal(CharacterState.Nobody, destruction.Killer);
+        Assert.Equal(CharacterState.Nobody, destruction.Assistant);
+        Assert.Equal(DamageSource.None, destruction.Source);
+    }
+
+    /// <summary>
+    /// ⚠️ <b>Its own team's gate kills it too.</b> Neither collision event
+    /// looks at <c>team</c>.
+    /// </summary>
+    /// <remarks>
+    /// Three of the five in <c>reference-ctf_truefort-closedsentryteam.trace</c>
+    /// are an engineer's sentry in his own doorway, so this is the common case
+    /// rather than the corner one. The control is the same gate two hundred
+    /// pixels to the left, where the sentry lives.
+    /// </remarks>
+    [Fact]
+    public void AGateKillsASentryOfItsOwnTeamAndSpareOneStandingClear()
+    {
+        var world = World;
+
+        var inGate = default(WorldState);
+        var gateEvents = default(TickEvents);
+        PutBuiltSentry(ref inGate, 1, Team.Red, 1586, 470);
+        Tick(world, ref inGate, ref gateEvents);
+        Assert.False(inGate.HasSentry[1]);
+
+        var clear = default(WorldState);
+        var clearEvents = default(TickEvents);
+        PutBuiltSentry(ref clear, 1, Team.Red, 1386, 470);
+        Tick(world, ref clear, ref clearEvents);
+        Assert.True(clear.HasSentry[1]);
+        Assert.False(clearEvents.SentryDestroyed[1]);
     }
 
     /// <summary>

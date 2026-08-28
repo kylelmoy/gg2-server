@@ -1,4 +1,4 @@
-using Gg2.Protocol;
+﻿using Gg2.Protocol;
 
 namespace Gg2.Simulation;
 
@@ -334,6 +334,15 @@ public static class MatchSimulation
         // which is what makes Deaths' return arm reachable at all.
         //
         // ⚠️ Placed after Intel.CollisionStep for that reason and not for tidiness.
+        // Sentry.events/Collision with {TeamGate, IntelGate}.xml — the two
+        // collision events the port did not have until 2026-08-28, and the
+        // whole of the "built at T, self-destructed at T+1" finding: a sentry
+        // built in a doorway takes 999 and dies in its own End Step below.
+        // TeamGate is object 110 and so strictly runs before KillBox's 506;
+        // IntelGate's 516 falls after FragBox's 509. Unobservable either way —
+        // see Sentries.GateCollisionStep.
+        Sentries.GateCollisionStep(world, ref state);
+
         KillBoxes.CollisionStep(world, ref state);
 
         // Character.events/Collision with MoveBox{Up,Down,Left,Right}.xml. Their

@@ -1,4 +1,4 @@
-using Gg2.Protocol;
+﻿using Gg2.Protocol;
 
 namespace Gg2.Simulation;
 
@@ -66,6 +66,12 @@ public static class Sentries
 
     /// <summary>What building costs, and the exact stock it demands.</summary>
     private const double BuildCost = 100;
+
+    /// <summary>
+    /// What a sentry loses on touching a team gate or an intel gate —
+    /// <c>hp -= 999</c>, the same raw subtraction the kill boxes use.
+    /// </summary>
+    private const double GateDamage = 999;
 
     /// <summary>
     /// The sentry's box as <c>place_meeting</c> and <c>collision_line</c> see
@@ -411,6 +417,82 @@ public static class Sentries
         ref var sentry = ref state.Sentries[slot];
         sentry.X += sentry.Motion.HSpeed;
         sentry.Y += sentry.Motion.VSpeed;
+    }
+
+    /// <summary>
+    /// <c>Sentry.events/Collision with {TeamGate, IntelGate}.xml</c>: a sentry
+    /// standing in a gate loses 999 hp and dies in its own End Step.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>This is what an engineer who builds in a doorway gets, and it is
+    /// the whole of the "built at T, self-destructed at T+1" finding</b> —
+    /// five of them in
+    /// <c>reference-ctf_truefort-closedsentryteam.trace</c>, which the port
+    /// kept alive for as long as the port had no gate event. The build
+    /// preconditions in <see cref="CanBuild"/> say nothing about a gate, so the
+    /// reference accepts the build, broadcasts it, and then kills the gun on
+    /// the next tick. See docs/TRAPS-SIMULATION.md, "the sentry's gate
+    /// collision".
+    /// <para>
+    /// <b>Both events are two lines and identical</b>: <c>hp -= 999;
+    /// lastDamageDealer = noone;</c> — the same shape as
+    /// <see cref="KillBoxes"/>' pair, and like those they leave
+    /// <c>lastDamageSource</c> alone. It is <c>-1</c> from
+    /// <c>Sentry.events/Create.xml</c> and reaches the wire as <b>0</b>
+    /// (<see cref="DamageSource.None"/>), which is why one of these looks
+    /// exactly like the Begin Step guard's <c>sendEventDestruction(...,
+    /// noone, noone, 0)</c> in a recording.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Any gate, not just the enemy's.</b> Neither event looks at
+    /// <c>team</c>, so a red engineer's sentry dies in a red team gate — three
+    /// of the five in that recording are a sentry in its own team's doorway.
+    /// And <b>a setup gate is not a gate</b>: <c>ControlPointSetupGate</c>
+    /// (object 536) has no parent, so it is neither a <c>TeamGate</c> (110)
+    /// nor an <c>IntelGate</c> (516) and a sentry may stand in one.
+    /// </para>
+    /// <para>
+    /// The two events are keyed by the other object's id like every collision
+    /// event, so strictly <c>TeamGate</c> (110) runs before <c>KillBox</c>
+    /// (506) and <c>IntelGate</c> (516) after <c>FragBox</c> (509). Both write
+    /// the same two fields and neither reads anything, so the interleaving is
+    /// not observable and they are done together here.
+    /// </para>
+    /// </remarks>
+    public static void GateCollisionStep(CollisionWorld world, ref WorldState state)
+    {
+        ArgumentNullException.ThrowIfNull(world);
+
+        for (var slot = 0; slot < WorldState.MaxSlots; slot++)
+        {
+            if (!state.HasSentry[slot])
+                continue;
+
+            ref var sentry = ref state.Sentries[slot];
+
+            // The mask, not the reported box: a collision event is a mask
+            // overlap, and SentryMaskS does not inflate when the gun faces
+            // left. Same call shape as the kill boxes above it.
+            var body = BodyBox(sentry);
+            var rects = world.RectSpan;
+
+            for (var i = 0; i < rects.Length; i++)
+            {
+                ref readonly var rect = ref rects[i];
+
+                if (rect.Kind is not (SolidKind.TeamGate or SolidKind.IntelGate))
+                    continue;
+
+                if (!rect.Overlaps(body.Left, body.Right, body.Top, body.Bottom))
+                    continue;
+
+                // ⚠️ Once per overlapping gate, exactly as GM8 runs the event
+                // once per colliding instance. 999 already kills it, so the
+                // repeat is only visible in hp, which nothing reads again.
+                sentry.Hp -= GateDamage;
+                sentry.LastDamageDealer = CharacterState.Nobody;
+            }
+        }
     }
 
     /// <summary>

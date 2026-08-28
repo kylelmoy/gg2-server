@@ -1,4 +1,4 @@
-using System.Linq;
+﻿using System.Linq;
 using Gg2.Maps;
 using Gg2.Parity;
 using Gg2.Protocol;
@@ -169,89 +169,63 @@ public sealed class SentryKillFixtureTests
     }
 
     /// <summary>
-    /// ⚠️ <b>A known divergence, pinned so that fixing it fails loudly.</b>
+    /// ✅ <b>ANSWERED 2026-08-28: both self-destructs are the sentry's
+    /// <c>Collision with TeamGate</c> event, and the port reproduces them on
+    /// the tick.</b>
     /// </summary>
     /// <remarks>
-    /// The reference self-destructs slot 1's sentry one tick after it is built,
-    /// twice — <c>killer 255, cause 0</c>, which is
-    /// <c>Sentries.BeginStep</c>'s three-clause guard — and the port does
-    /// neither. <b>Found by this fixture on its first run</b>, which is the
-    /// argument for <see cref="Fields.Sentries"/> existing at all.
+    /// This was pinned as a known divergence for five sessions, on the reading
+    /// that <c>killer 255, assistant 255, cause 0</c> could only be
+    /// <c>Sentries.BeginStep</c>'s three-clause guard, whose only literal 0 it
+    /// is. <b>That reading was wrong in one step</b>: the four collision events
+    /// leave <c>lastDamageSource</c> at the <c>-1</c>
+    /// <c>Sentry.events/Create.xml</c> set, and <c>-1</c> reaches the wire
+    /// through <c>write_ubyte</c> as <b>0</b> as well. So an End Step
+    /// destruction with nobody to blame is byte-identical to the guard's.
     /// <para>
-    /// <b>Only the first one is evidence.</b> t496 is inside the trajectory
-    /// window (t427 + 581 = t1008), so the port and the reference still agree
-    /// about where everything is and the disagreement is real. t2296 is thirteen
-    /// hundred ticks past the window, where the port's sentries are somewhere
-    /// else entirely, and proves nothing on its own.
+    /// The evidence is positional and it is total. Across
+    /// <c>reference-ctf_truefort-closedsentryteam.trace</c>'s twelve builds,
+    /// <b>all five that die overlap a <c>TeamGate</c> rectangle and all seven
+    /// that live overlap nothing</b> — and the two here are a thirteenth and a
+    /// fourteenth of the same shape. <c>docs/TRAPS-SIMULATION.md</c>, "the
+    /// sentry's gate collision", has the table.
     /// </para>
     /// <para>
-    /// <b>Two candidate causes, both in <c>Sentries.BeginStep</c>, neither run
-    /// down</b> — this is the measurement lane and the fix belongs to whoever
-    /// owns <c>src/Gg2.Simulation</c>: either the port never built the sentry at
-    /// all (so it had none to destroy), or it built one and
-    /// <c>AnySentryInCircle</c>/the class-and-team clauses did not fire where
-    /// the reference's did. The port <em>does</em> build at t1125, since it
-    /// reproduces that sentry's death at t1691, so a blanket "Build never works"
-    /// is already ruled out.
-    /// </para>
-    /// <para>
-    /// ✅ <b>POSITION IS ELIMINATED (live, 2026-08-28).</b> The two self-destructs
-    /// are at the same spot and the successful builds are elsewhere, which made
-    /// the coordinates look causal. They are not. Built live at the trace's exact
-    /// build position on <c>ctf_truefort</c> — x = 9454/5, y = 2372/5, a red
-    /// engineer — the sentry died, and so did <b>the control at a position the
-    /// trace says works</b>. Both deaths were the server resetting the lone test
-    /// player's roster entry to <c>TEAM_SPECTATOR</c>, firing the guard's second
-    /// clause. <b>The apparent reproduction was an artefact and the control is
-    /// what caught it.</b>
-    /// </para>
-    /// <para>
-    /// What the live session did establish, and what the next one should not
-    /// re-derive:
-    /// <list type="bullet">
-    /// <item>the destruction signature <c>killer 255, assistant 255, cause 0</c>
-    /// is this guard's and no other path produces it;</item>
-    /// <item><c>Sentry</c> has <b>no descendant objects</b> — checked in the
-    /// engine with <c>object_is_ancestor</c> over every object index — so the
-    /// third clause needs a genuine second <c>Sentry</c>, and
-    /// <c>collision_circle</c>'s descendant behaviour is not a way out;</item>
-    /// <item>at the trace's build position all three clauses read <b>false</b> at
-    /// build time <em>and</em> after the sentry settles (y 474.4 to 485.41,
-    /// vspeed 0), so <c>Sentries.BeginStep</c> is a faithful transcription and
-    /// the divergence is in the <em>state</em>, not the guard;</item>
-    /// <item><c>CLASS_ENGINEER</c> is <b>5</b>, so the trace's slot 1 really is an
-    /// engineer and the first clause is genuinely false.</item>
-    /// </list>
-    /// ⬅️ <b>So look at slot 1's team, not at geometry.</b> The clause that fires
-    /// in a running game is <c>team != ownerPlayer.team</c>, and a sentry's own
-    /// team is copied once at build and never updated. The recording carries no
-    /// team change at t496 or t2296 — which is exactly the shape of "something in
-    /// the reference's state that is not in the recording".
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>If this test fails, that is good news.</b> It means the self-destruct
-    /// now agrees; delete the pin and fold the ticks into the test above.
+    /// ⚠️ <b>The live session that "eliminated position" was right about its
+    /// own experiment and wrong about the conclusion.</b> It rebuilt at the
+    /// trace's coordinates and watched the sentry die — but the control at a
+    /// known-good position died too, both of them to the server resetting a
+    /// lone test player to <c>TEAM_SPECTATOR</c>, so the experiment could not
+    /// see a gate even where there was one. A contaminated experiment does not
+    /// eliminate a hypothesis; it fails to test it.
     /// </para>
     /// </remarks>
     [Fact]
-    public void ThePortStillMissesBothOfTheReferencesSentrySelfDestructs()
+    public void TheTwoSentriesBuiltInATeamGateAreDestroyedOnTheSameTick()
     {
         var (trace, ticks) = Load();
 
         var report = new Replayer(new PortedSimulation(MapLoader)) { Compare = Fields.Sentries }
             .Replay(SentryKill, trace.Header.Map, ticks, ReplayMode.ClosedLoop, stopAtFirstBadTick: false);
 
-        var missed = report.Mismatches
-            .Where(m => m.Expected == 1 && m.Actual == 0)
-            .Select(m => m.Tick)
-            .OrderBy(t => t)
-            .ToArray();
+        // ⚠️ Reported against the preceding tick: the destruction is broadcast
+        // from End Step, after the server has serialised the tick. The
+        // recording's t496 and t2296 are reconciled at t495 and t2295.
+        Assert.DoesNotContain(report.Mismatches, m => m.Tick is 495 or 2295);
 
-        Assert.Equal([495, 2295], missed);
+        // Both directions, and this is the half that fails if the gate step is
+        // deleted: the recording really does hold two of them, so the line
+        // above cannot pass by there being nothing to reproduce.
+        var selfDestructs = ticks
+            .SelectMany(t => t.Events)
+            .Count(m => m.Type == MessageType.DestroySentry && m.Payload.Length >= 4
+                        && m.Payload[1] == 255 && m.Payload[3] == 0);
 
-        // The port invents none of its own, which is the other direction and is
-        // worth stating separately: a port that destroyed sentries at random
-        // would satisfy the line above.
-        Assert.DoesNotContain(report.Mismatches, m => m.Expected == 0 && m.Actual == 1);
+        Assert.Equal(2, selfDestructs);
+
+        // And the whole comparison is clean now, which is the stronger claim:
+        // no sentry the port keeps that the reference killed, and none it kills
+        // that the reference kept.
+        Assert.Empty(report.Mismatches);
     }
 }

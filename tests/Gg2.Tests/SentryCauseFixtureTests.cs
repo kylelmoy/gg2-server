@@ -1,7 +1,8 @@
-using System.Linq;
+﻿using System.Linq;
 using Gg2.Maps;
 using Gg2.Parity;
 using Gg2.Protocol;
+using Gg2.Simulation;
 
 namespace Gg2.Tests;
 
@@ -29,9 +30,20 @@ namespace Gg2.Tests;
 /// <item><b>t2366, after a BALANCE switch at t2365</b> — ✅ reproduced, but only
 /// once the replayer started injecting <c>BALANCE</c> at all; this fixture is
 /// what found that. See <see cref="ClientCommandInjectionTests"/>.</item>
-/// <item><b>Five of the shape "built at T, self-destructed at T+1"</b> —
-/// ❌ missed, and pinned below.</item>
+/// <item><b>Five of the shape "built at T, self-destructed at T+1"</b> — ✅
+/// reproduced since 2026-08-28, and this fixture is what explained them: every
+/// one was built inside a <c>TeamGate</c>, and the sentry's two gate collision
+/// events were missing from the port. See
+/// <see cref="Sentries.GateCollisionStep"/>.</item>
 /// </list>
+/// </para>
+/// <para>
+/// ⚠️ <b>What made it hard was a byte.</b> <c>cause 0</c> was read as proof of
+/// the Begin Step guard, the only site passing a literal 0 — but
+/// <c>lastDamageSource</c> is <c>-1</c> and <c>write_ubyte</c> puts that out as
+/// 0 too, so an End Step destruction with no dealer is indistinguishable on the
+/// wire. Five sessions of inference ran down the guard's three arms because of
+/// it.
 /// </para>
 /// </remarks>
 public sealed class SentryCauseFixtureTests
@@ -149,57 +161,111 @@ public sealed class SentryCauseFixtureTests
     }
 
     /// <summary>
-    /// ⚠️ <b>OPEN, and the sharpest form the sentry self-destruct finding has
-    /// ever had: five sentries the reference builds and destroys one tick
-    /// later, which the port keeps.</b>
+    /// ✅ <b>ANSWERED 2026-08-28. The five "built at T, destroyed at T+1"
+    /// sentries were built in a doorway</b> —
+    /// <c>Sentry.events/Collision with TeamGate.xml</c>, an event the port did
+    /// not have.
     /// </summary>
     /// <remarks>
-    /// The five are at t281, t327, t338, t867 and t1103, each exactly one tick
-    /// after that slot's own <c>BUILD_SENTRY</c>, each <c>killer 255, assistant
-    /// 255, cause 0</c>.
-    /// <para>
-    /// <b>What this recording established, none of which was known before:</b>
-    /// <list type="bullet">
-    /// <item>✅ <b>It is the Begin Step guard, not the damage path.</b> The other
-    /// site that broadcasts a destruction is <c>End Step</c>'s <c>hp &lt;= 0</c>,
-    /// which passes <c>lastDamageSource</c> — initialised to <b>-1</b> in
-    /// <c>Sentry.events/Create.xml</c>, never 0. Cause 0 can only be the guard.</item>
-    /// <item>✅ <b>Not a leftover from before the map reload.</b> Measured live on
-    /// 2026-08-28: <c>serverGotoMap</c> destroys every <c>Sentry</c>
-    /// (<c>instance_number(Sentry)</c> 0 afterwards) and leaves
-    /// <c>player.sentry</c> at -4.</item>
-    /// <item>⚠️ <b>The first one cannot be the 25 px circle.</b> At t281 it is the
-    /// only sentry alive in the recording — the first <c>BUILD_SENTRY</c> is the
-    /// one at t280 — and <c>collision_circle(x, y+10, 25, Sentry, false, true)</c>
-    /// excludes the calling instance. So either an arm reads differently from how
-    /// the port reads it, or the reference had a sentry the wire never
-    /// announced.</item>
-    /// <item>⚠️ <b>The sixth mismatch is a cascade, not a sixth cause.</b> At
-    /// t1102 the port destroys slot 2's sentry while the reference destroys slot
-    /// 6's — because the port still holds the slot 2 sentry it failed to destroy
-    /// at t867, and slot 6 then builds 10 px away from it.</item>
+    /// The recording discriminates perfectly, which is why this fixture settled
+    /// in one pass what five sessions of inference could not. Taking each
+    /// <c>BUILD_SENTRY</c>'s broadcast coordinates and the sentry's own mask
+    /// box: <b>all five that die overlap a <c>TeamGate</c> rectangle, and all
+    /// seven that live overlap nothing.</b>
+    /// <list type="table">
+    /// <item><term>t280 slot 3</term><description>(1574.2, 474.4) — red gate [1578,444]-[1595,497] — died</description></item>
+    /// <item><term>t326 slot 2</term><description>(3454.8, 474.4) — blue gate [3438,444]-[3455,497] — died</description></item>
+    /// <item><term>t337 slot 6</term><description>(3582.4, 570.4) — blue gate [3558,546]-[3575,593] — died</description></item>
+    /// <item><term>t866 slot 2</term><description>(3444.8, 474.4) — blue gate [3438,444]-[3455,497] — died</description></item>
+    /// <item><term>t1102 slot 6</term><description>(3454.8, 474.4) — blue gate [3438,444]-[3455,497] — died</description></item>
+    /// <item><term>t294, t338, t342, t790, t1482, t1612, t1646</term><description>no gate — all lived</description></item>
     /// </list>
+    /// <para>
+    /// ⚠️ <b>The step that made this look impossible was the cause byte.</b>
+    /// "Cause 0 can only be the guard, because <c>lastDamageSource</c> is
+    /// <c>-1</c> and never 0" — true of the field, false on the wire.
+    /// <c>write_ubyte</c> puts <c>-1</c> out as <b>0</b>, so an End Step
+    /// destruction with no dealer is byte-identical to
+    /// <c>sendEventDestruction(ownerPlayer, noone, noone, 0)</c>. Every other
+    /// elimination in the old note stands and none of them mattered.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Pinned so that fixing it fails loudly</b>, in both directions: the
-    /// five root misses and the one cascade. A fix that closes the five closes the
-    /// sixth with them.
+    /// ⚠️ <b>Three of the five are a sentry in its <em>own</em> team's
+    /// doorway.</b> Neither gate event looks at <c>team</c>. See
+    /// <see cref="Sentries.GateCollisionStep"/>.
+    /// </para>
+    /// <para>
+    /// The cascade at t1102 went with them, as predicted: the port only
+    /// destroyed the wrong sentry of that pair because it was still holding the
+    /// one it should have lost at t867.
     /// </para>
     /// </remarks>
     [Fact]
-    public void ThePortStillMissesTheFiveSelfDestructsThatFollowABuild()
+    public void TheFiveSentriesBuiltInATeamGateDieOnTheSameTickAsTheReferences()
     {
         var mismatches = Replay(Fields.Sentries).Mismatches;
 
-        int[] missed = [280, 326, 337, 866, 1102];
+        Assert.Empty(mismatches);
+    }
 
-        foreach (var tick in missed)
-            Assert.Contains(mismatches, m => m.Tick == tick);
+    /// <summary>
+    /// The other direction, so the test above cannot pass on an empty
+    /// recording: the five builds really are in a gate and the seven survivors
+    /// really are not.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>This is the mutation control.</b> Deleting
+    /// <see cref="Sentries.GateCollisionStep"/> leaves this green and the test
+    /// above red, which is the pair that says the fix is the reason the replay
+    /// agrees rather than an accident of the comparison.
+    /// </remarks>
+    [Fact]
+    public void EveryBuildThatDiesIsInAGateAndEveryBuildThatLivesIsNot()
+    {
+        var (_, ticks) = Load();
+        var map = MapLoader("ctf_truefort");
+        var world = new CollisionWorld(map);
 
-        // The cascade: the port destroys the wrong sentry of the pair at t1102.
-        Assert.Equal(6, mismatches.Count(m => m.Tick is 280 or 326 or 337 or 866 or 1102));
+        var destroyed = ticks
+            .SelectMany(t => t.Events.Select(m => (t.Index, m)))
+            .Where(e => e.m.Type == MessageType.DestroySentry && e.m.Payload.Length >= 4)
+            .Select(e => (Tick: e.Index, Slot: e.m.Payload[0]))
+            .ToArray();
 
-        // And nothing else disagrees, so the five are the whole of it.
-        Assert.Equal(6, mismatches.Count);
+        var builds = ticks
+            .SelectMany(t => t.Events.Select(m => (t.Index, m)))
+            .Where(e => e.m.Type == MessageType.BuildSentry && e.m.Payload.Length >= 6)
+            .Select(e => (
+                Tick: e.Index,
+                Slot: e.m.Payload[0],
+                X: (e.m.Payload[1] | (e.m.Payload[2] << 8)) / 5.0,
+                Y: (e.m.Payload[3] | (e.m.Payload[4] << 8)) / 5.0))
+            .ToArray();
+
+        Assert.Equal(12, builds.Length);
+
+        var inGate = 0;
+
+        foreach (var build in builds)
+        {
+            var box = Aabb.ForCharacter(Sentries.Box, build.X, build.Y);
+            var gated = false;
+
+            foreach (var rect in world.Rects)
+                if (rect.Kind is SolidKind.TeamGate or SolidKind.IntelGate
+                    && rect.Overlaps(box.Left, box.Right, box.Top, box.Bottom))
+                    gated = true;
+
+            // Destroyed on the very next tick — the shape the whole finding is
+            // about, as opposed to the four later deaths with a broadcast cause.
+            var diedNextTick = destroyed.Any(d => d.Slot == build.Slot && d.Tick == build.Tick + 1);
+
+            Assert.Equal(gated, diedNextTick);
+
+            if (gated)
+                inGate++;
+        }
+
+        Assert.Equal(5, inGate);
     }
 }

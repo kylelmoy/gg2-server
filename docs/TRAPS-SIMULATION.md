@@ -2560,6 +2560,12 @@ recording is thin: 22 deaths, 20 class changes, 185 weapon fires, a sentry built
 *first public games* — strangers, unrepeatable. Two arranged players is a
 rehearsal, and rehearsal is what it was for.
 
+⚠️ **`--record` is not the only route, and it is the slower one.** It needs
+strangers to come to this server. `Recorder` is a passive spectator client that
+takes a host, so `gg2-parity record --host <public-server> --port <n>` records
+strangers on somebody *else's* GM8 server, today. Same format, same deadline,
+no playerbase required — `docs/BOTAI.md` item 3.
+
 #### ⚠️ A kill loses the round in progress
 
 `MatchRecorder` writes to `<name>.trace.part` and only prepends a header on
@@ -3249,51 +3255,100 @@ a hung game. `Get-CimInstance Win32_Process` filtered on the command line is
 what identified it in seconds — `Get-Process` alone shows only `node.exe` and
 cannot tell two node tools apart.
 
-### The sentry self-destruct: narrowed to a contradiction, not yet explained
+### ✅ The sentry self-destruct: ANSWERED. It is the gate collision event
 
-**2026-08-28.** Still open, but three of the four obvious explanations are dead
-and the shape of the evidence has changed.
+**2026-08-28, and it was open for five sessions.** A sentry built inside a
+`TeamGate` or an `IntelGate` loses 999 hp to a collision event and dies in its
+own End Step, on the tick it was built. The port had no such event, so it kept
+every one of them.
 
-**What the trace actually holds** (`reference-ctf_truefort-closedsentrykill`):
+`Sentry.events/Collision with TeamGate.xml` and
+`Sentry.events/Collision with IntelGate.xml`, in full — both are two lines and
+identical to `Collision with KillBox.xml`:
 
 ```
-t 495  BUILD_SENTRY    player 1  at (1890.8, 474.4)
-t 496  DESTROY_SENTRY  player 1  killer 255, assistant 255, cause 0
-...
-t1125  BUILD_SENTRY    player 1  -> t1691 DESTROY, killer 4, cause 9  (a real kill)
-t2295  BUILD_SENTRY    player 1  -> t2296 DESTROY, self
+hp -= 999;
+lastDamageDealer = noone;
 ```
 
-⚠️ **Player 1 builds and the sentry dies on the VERY NEXT TICK, twice, at the
-same spot** — and the one build in between, at a different place, lives for 566
-ticks and dies to a rocket. That is a much sharper picture than "two
-self-destructs are missed".
+**The evidence is positional and it discriminates perfectly.** Across
+`reference-ctf_truefort-closedsentryteam.trace`'s twelve builds, taking each
+`BUILD_SENTRY`'s broadcast coordinates and the sentry's own mask box
+(`SentryMaskS`, -8/+7/-7/+12):
 
-**What is now ruled out:**
+| build | position | gate | outcome |
+|---|---|---|---|
+| t280 slot 3 | (1574.2, 474.4) | red [1578,444]-[1595,497] | died t281 |
+| t326 slot 2 | (3454.8, 474.4) | blue [3438,444]-[3455,497] | died t327 |
+| t337 slot 6 | (3582.4, 570.4) | blue [3558,546]-[3575,593] | died t338 |
+| t866 slot 2 | (3444.8, 474.4) | blue [3438,444]-[3455,497] | died t867 |
+| t1102 slot 6 | (3454.8, 474.4) | blue [3438,444]-[3455,497] | died t1103 |
+| t294, t338, t342, t790, t1482, t1612, t1646 | — | none | all lived |
 
-- ❌ **Not a failed build.** Replaying to t495 shows the port *does* build it:
-  slot 1 at (1890.7, 475.1), hp 25, falling normally and gaining hp for the next
-  fifteen ticks. The port has a sentry to destroy and does not destroy it.
-- ❌ **Not another sentry inside the 25 px circle.** The next builds are at t506
-  and t508; at t496 the port's world holds exactly one sentry, and the reference
-  cannot hold more — nothing before t495 builds one.
-- ❌ **Not a `Sentry` descendant being found by `collision_circle`.**
-  `SentryTurret` declares no `<parent>`, and nothing else in the object tree
-  parents `Sentry` — so the "instance_find includes descendants" trap, which
-  this project has been caught by before, is not this.
-- ❌ **Not class or team.** `PlayerChangeClass player 1 → 5` (Engineer) and
-  `PlayerChangeTeam player 1 → 0` both happen at t0 and never change again, and
-  `buildSentry.gml` sets `sentry.team = player.team` on the same tick it creates
-  it.
+**5 of 5 and 7 of 7.** The two in `closedsentrykill` are a thirteenth and a
+fourteenth of the same shape: (1890.8, 474.4) sits in the red gate at
+[1890,444]-[1907,497]. Both fixtures now replay with **zero** sentry mismatches.
 
-⬅️ **So the guard's three clauses all read false, and the reference fired it
-anyway.** That is a contradiction rather than a mystery: something in the
-reference's state at t496 is not visible in the recording. **The next step is the
-live game** — build a sentry at (1890.8, 474.4) on `ctf_truefort` with a bot
-engineer and watch whether it self-destructs. If it does, the cause is
-reproducible and local; if it does not, the cause is history the trace does not
-carry.
+#### ⚠️ The one step that made this look impossible: `cause 0` is not a literal
 
-⚠️ **Do not spend more time on static reading.** Two sessions have now inferred
-their way around this guard and both ran out at the same place; the cheap
-experiment has not been tried.
+Every session that ran at this read the destruction byte the same way — *"killer
+255, assistant 255, cause 0, and the only site that passes a literal 0 is
+`sendEventDestruction(ownerPlayer, noone, noone, 0)` in the Begin Step guard, so
+it must be the guard"*. Then it spent its time on the guard's three arms, all of
+which really do read false at those coordinates.
+
+**The premise is false.** `Sentry.events/Create.xml` sets `lastDamageSource =
+-1`; none of the four collision events touches it; `End Step` passes it to
+`sendEventDestruction`, which ends `write_ubyte(global.sendBuffer,
+damageSource)` — and **`write_ubyte(-1)` reaches the wire as 0**, not 255. So an
+End Step destruction with nobody to blame is *byte-identical* to the guard's.
+The recording cannot tell them apart, and the guard was never the only candidate.
+
+⚠️ **This confirms `DamageSource.None = 0` empirically** for the first time. The
+port already mapped the reference's `-1` onto 0 on the argument that 0 is the one
+value `createDamageSource`'s numbering leaves free — an inference. These
+fourteen destructions are a recording of the reference doing it.
+
+#### What follows, and what does not
+
+- ⚠️ **Any gate, including your own team's.** Neither event looks at `team`, and
+  three of the five above are an engineer's sentry in his own doorway. This is
+  not the "enemy gate is solid" rule showing through; a gate is lethal to a
+  sentry from both sides.
+- ⚠️ **A setup gate is not a gate.** `ControlPointSetupGate` is object **536**
+  with **no parent**, so it is neither a `TeamGate` (110) nor an `IntelGate`
+  (516) and a sentry may stand in one. The collision events are keyed on the
+  parents, and GM8 fires a collision event for an object's descendants:
+  `TeamGate` covers 108, 109, 476, 477 and `IntelGate` covers 499-504.
+- **`serverBuildSentry.gml` says nothing about a gate.** Its preconditions are
+  class, 100 nuts and bolts, no sentry within 50 px, not in a spawn room, no
+  sentry already owned, not on a cabinet. So the reference *accepts* the build,
+  broadcasts `BUILD_SENTRY`, takes the hundred nuts and bolts, and kills the gun
+  a moment later. An engineer who builds in a doorway simply loses the build,
+  which is why a recording of bot engineers contains five of them.
+- **The stage order is unobservable.** GM8 keys collision events by the other
+  object's id, so strictly `TeamGate` (110) runs before `KillBox` (506) and
+  `IntelGate` (516) after `FragBox` (509). All four write the same two fields
+  and none reads anything, so `Sentries.GateCollisionStep` does both together,
+  next to `KillBoxes.CollisionStep`.
+- ⚠️ **A pit fall still does not touch a sentry**, and that asymmetry is
+  unchanged: `Sentry.events/` has `KillBox` and `FragBox` and no `PitFall`.
+
+#### ⚠️ The live experiment that "eliminated position" tested nothing
+
+2026-08-28's live session built at the trace's exact coordinates, watched the
+sentry die, then built a control at a position the trace says works — and *that*
+died too, both of them to the server resetting a lone test player's roster entry
+to `TEAM_SPECTATOR` and firing the guard's second arm. It concluded **position is
+eliminated**, and wrote that into two files.
+
+The control did its job: it proved the experiment was contaminated. What it
+cannot do is eliminate the hypothesis the contaminated run was testing. **A
+failed experiment leaves a hypothesis exactly where it was**, and this one was
+recorded as a negative result for a day, which is the more expensive of the two
+mistakes available here.
+
+Gated by `SentryCauseFixtureTests` (the replay, plus a control that reads the
+gate geometry straight off the map and needs no simulation),
+`SentryKillFixtureTests` and two unit tests in `SentryTests`. All four go red
+when `Sentries.GateCollisionStep` is removed — measured, not assumed.
