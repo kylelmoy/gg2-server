@@ -98,9 +98,18 @@ const ev = (code) => mcp.callTool('gg2_eval', { code });
 // character's own left/right/top/bottom_bound_offset, which the movement solver
 // reads directly rather than taking from the sprite.
 const CLASSES = [
+  // ⚠️ `left`/`right`/`top`/`bottom` here are NO LONGER the collision box - the
+  // GML derives that from the sprite. `bottom` is still used, to place the probe
+  // relative to a floor, and it is the one value that was right anyway.
   { name: 'Scout', sprite: 'ScoutBlueS', left: -6, right: 6, top: -6, bottom: 23, runPower: 1.4, doubleJump: 1 },
   { name: 'Heavy', sprite: 'HeavyBlueS', left: -9, right: 9, top: -6, bottom: 23, runPower: 0.8, doubleJump: 0 },
   { name: 'Pyro', sprite: 'PyroBlueS', left: -7, right: 7, top: -6, bottom: 23, runPower: 1.1, doubleJump: 0 },
+
+  // ⚠️ Added 2026-08-28. The Soldier was absent for six phases, and its
+  // runPower of 0.9 is a value no other sampled class has (1.4, 0.8, 1.1) - so
+  // the friction equilibrium it settles at was never measured. It is also the
+  // class of gg_debug's t523 residue, which is still open.
+  { name: 'Soldier', sprite: 'SoldierBlueS', left: -6, right: 6, top: -8, bottom: 23, runPower: 0.9, doubleJump: 0 },
 ];
 
 // Deterministic, so re-running the tool produces the same fixture and its diff
@@ -180,8 +189,21 @@ async function runScenario(scenario) {
 global.probe = instance_find(Character, 0);
 with (global.probe) {
     sprite_index = ${cls.sprite}; mask_index = -1;
-    left_bound_offset = ${cls.left}; right_bound_offset = ${cls.right};
-    top_bound_offset = ${cls.top}; bottom_bound_offset = ${cls.bottom};
+
+    // ⚠️ DERIVED FROM THE SPRITE, exactly as Character.events/Create.xml:12-15
+    // does - NOT from a table here. This used to hardcode CLASSES' own numbers
+    // and two of them were wrong: it forced top_bound_offset = -6 for a Scout
+    // and a Heavy where the engine derives -10 and -12
+    // (tools/probes/probe-character-boxes.js, 2026-08-28).
+    //
+    // That made the oracle a measurement of a character the port does not
+    // simulate, and it went unnoticed for six phases because PhysicsSampleTests
+    // is green: no scenario in 48 x 48 ticks ever had an outcome that turned on
+    // the top edge. Luck, not coverage.
+    left_bound_offset = sprite_get_bbox_left(sprite_index) - sprite_get_xoffset(sprite_index);
+    right_bound_offset = sprite_get_bbox_right(sprite_index) - sprite_get_xoffset(sprite_index);
+    top_bound_offset = sprite_get_bbox_top(sprite_index) - sprite_get_yoffset(sprite_index);
+    bottom_bound_offset = sprite_get_bbox_bottom(sprite_index) - sprite_get_yoffset(sprite_index);
     runPower = ${cls.runPower}; basemaxspeed = abs(${cls.runPower}*baseControl/(baseFriction-1));
     canDoublejump = ${cls.doubleJump};
     hp = 1000; maxHp = 1000;

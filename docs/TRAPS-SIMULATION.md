@@ -3052,3 +3052,52 @@ large risk for a measure-nearly-zero input. **What is now written down is that
 the model has a known edge**, which is the thing that was missing. The precise
 *mask* at a half matched neither neighbour at an even base and matched the upper
 one at an odd base — unexplained, recorded rather than theorised about.
+
+### ✅ Every character box measured — and the physics oracle was measuring the wrong one
+
+**2026-08-28**, `tools/probes/probe-character-boxes.js`. Chasing the `gg_debug`
+t523 residue into the physics oracle turned up something bigger than the residue.
+
+✅ **`CharacterBox.For` is exactly right for all ten classes, on both teams.**
+The table had been *derived* and never asked, and nothing pinned it — a wrong
+edge would have surfaced as a mysterious trajectory divergence rather than as a
+wrong box. `CharacterBoxTests` holds it now.
+
+**A character's box is a pure property of its class sprite** — four subtractions
+in `Character.events/Create.xml:12-15` — so the probe needs no character, no bot
+and no map. That is why this was cheap once anybody thought to ask, and why
+nothing had forced it.
+
+⚠️ **`tools/sample-physics.js` overrode the engine with a table of its own, and
+two of its numbers were wrong.** It set `top_bound_offset = -6` for the Scout
+and the Heavy where the engine derives **-10** and **-12**. So
+`physics-samples.json` is a recording of a character the port does not simulate,
+and `PhysicsSampleTests` replays it through the port's real box.
+
+⚠️ **It has been green for six phases on luck, not coverage.** No scenario in
+48 × 48 ticks ever had an outcome that turned on the top edge — and the reason
+that is easy is in the table itself: **nine of the ten classes share a bottom of
+23**, so ground contact, which is most of what a scenario does, cannot tell the
+boxes apart at all. The next scenario that touched a ceiling would have been
+checked in with a wrong expectation and read as a port bug.
+
+✅ **The sampler now derives all four bounds the way Create.xml does.**
+⬅️ **The fixture itself still wants regenerating**, which needs a live game with
+a character — the bots recipe — and is the first thing to do in the next live
+session.
+
+#### Two gaps in that oracle, found the same way
+
+⚠️ **No Soldier.** Six phases of Scout, Heavy and Pyro only, and the Soldier's
+`runPower` of **0.9** is a value none of those three has (1.4, 0.8, 1.1), so the
+friction equilibrium it settles at was never measured. It is also the class of
+the t523 residue. Added to the sampler.
+
+⚠️ **Nothing ever starts from rest.** `hNum = round((random() * 12 - 6) * den)`,
+so a start with `hspeed == 0` is essentially impossible — and the t523 residual
+is born while a Soldier **accelerates from rest**. Not yet addressed; the
+regeneration should force some rest starts.
+
+⬅️ **So t523's lead is now "an unmeasured corner of the physics oracle" rather
+than "somewhere in walking".** That is a much smaller place to look, and it does
+not need the six-player recording reproduced.
