@@ -1,3 +1,4 @@
+using Gg2.Bots;
 using System.Buffers.Binary;
 using System.Net;
 using System.Net.Sockets;
@@ -33,17 +34,30 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
     /// <summary>
     /// Binds, accepts one client, and serves it until it closes.
     /// </summary>
+    /// <param name="bound">
+    /// Called with the port actually bound, after the listener starts and
+    /// before it blocks accepting.
+    /// </param>
     /// <remarks>
     /// ⚠️ <b><see cref="IPAddress.Loopback"/>, never <c>Any</c>.</b> This
     /// executes arbitrary batch commands against live simulation state; the
     /// control port made the same choice for the same reason.
+    /// <para>
+    /// ⚠️ <b><paramref name="bound"/> exists because <see cref="Port"/> is
+    /// unreadable in time.</b> It is assigned here and then this method blocks
+    /// in <c>AcceptTcpClient</c>, so a caller on the same thread cannot observe
+    /// it until after the client has already been and gone. `--port 0` printed
+    /// the literal 0 for exactly that reason, which made the OS-assigned port
+    /// the tool's own `--help` promises unobtainable by any launcher.
+    /// </para>
     /// </remarks>
-    public void Serve(int port, CancellationToken cancellation = default)
+    public void Serve(int port, CancellationToken cancellation = default, Action<int>? bound = null)
     {
         var listener = new TcpListener(IPAddress.Loopback, port);
 
         listener.Start();
         Port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        bound?.Invoke(Port);
 
         try
         {

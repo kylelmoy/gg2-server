@@ -1,6 +1,14 @@
 using Gg2.Protocol;
 
-namespace Gg2.Env;
+namespace Gg2.Bots;
+
+// ⚠️ This file lives in Gg2.Bots and not in Gg2.Env, and the reason is
+// docs/BOTAI.md item 4: the action space is the WIRE action, shared by every
+// bot and every policy, so it cannot belong to the project that happens to
+// serve one of them. It moved here on 2026-08-28 when item 12's rollout-search
+// bot needed the same heads — Gg2.Env references Gg2.Bots and not the other way
+// round, so leaving it in the env would have meant a second copy, which is a
+// second chance for a policy's action space and a bot's to drift apart.
 
 /// <summary>
 /// One agent's action, as the multi-discrete heads a policy emits.

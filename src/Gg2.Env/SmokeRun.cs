@@ -1,3 +1,4 @@
+using Gg2.Bots;
 using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Net;

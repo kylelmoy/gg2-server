@@ -1,3 +1,4 @@
+using Gg2.Bots;
 using System.Buffers.Binary;
 using Gg2.Simulation;
 

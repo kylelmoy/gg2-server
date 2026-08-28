@@ -98,9 +98,16 @@ if (args[0] == "smoke")
 
 var server = new EnvServer(maps);
 
-Console.WriteLine($"gg2-env serving on 127.0.0.1:{port} (0 means the OS picks)");
-
-server.Serve(port);
+// ⚠️ Printed from the BOUND callback, never from the requested `port`. Printing
+// the request means `--port 0` announces "127.0.0.1:0", which is not an address
+// anything can connect to — and this tool's own --help promises it prints the
+// one the OS granted. A launcher that scrapes this line got 0 and failed to
+// connect, which is how it was found.
+server.Serve(port, bound: actual =>
+{
+    Console.WriteLine($"gg2-env serving on 127.0.0.1:{actual}");
+    Console.Out.Flush();
+});
 
 Console.WriteLine("client closed");
 return 0;
