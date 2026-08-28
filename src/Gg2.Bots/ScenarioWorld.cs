@@ -209,6 +209,54 @@ public sealed class ScenarioWorld
         return slot;
     }
 
+    /// <summary>
+    /// How many spawn points this map offers a team, for a caller that wants to
+    /// pick one.
+    /// </summary>
+    public int SpawnPointCount(Team team, int group = 0) =>
+        new SpawnPoints(Map).Count(team, group);
+
+    /// <summary>
+    /// Places a character <b>at the map's own spawn point</b> rather than at
+    /// coordinates the caller had to know.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>This is <see cref="Place"/> without the override.</b> `Place` calls
+    /// <see cref="WorldState.Spawn"/>, which already puts the character on a
+    /// real spawn point, and then moves it to the caller's x and y — so the only
+    /// difference here is the two lines that do not run.
+    /// <para>
+    /// It exists because a caller that has no business knowing a map's geometry
+    /// should not have to invent coordinates. <c>docs/ENV.md</c> promised
+    /// "explicit positions <b>or sampled</b>" from the first draft and only the
+    /// first half was built, so a duel on any map meant the trainer holding a
+    /// coordinate table — a second source of truth about the maps, which is what
+    /// <c>SIM_UUID</c> exists to prevent, and one that would go on working right
+    /// up until a map changed.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>The caller draws the index, not this method.</b> Whose random
+    /// stream a placement comes out of is a decision with consequences — see
+    /// <see cref="DuelEnv"/>, which draws from the match's own so that a world's
+    /// placement is reproducible from its seed.
+    /// </para>
+    /// </remarks>
+    public int PlaceAtSpawn(PlayerClass playerClass, Team team, int spawnpointId, int group = 0)
+    {
+        if (_slots >= WorldState.MaxSlots)
+            throw new InvalidOperationException($"a scenario world holds {WorldState.MaxSlots} slots");
+
+        var slot = _slots++;
+
+        if (!_state.Spawn(new SpawnPoints(Map), slot, playerClass, team, spawnpointId, group))
+        {
+            throw new InvalidOperationException(
+                $"{Map.Name} has no spawn point {spawnpointId} in group {group} for {team}");
+        }
+
+        return slot;
+    }
+
     /// <summary>Gives a slot an input source. Null means it presses nothing.</summary>
     public void Drive(int slot, IInputSource? source) => _sources[slot] = source;
 

@@ -82,12 +82,61 @@ length, one message-kind byte, payload. Request/response.
 | Message | Carries | Returns |
 |---|---|---|
 | `Hello` | client's protocol version | protocol version, `SIM_UUID`, obs layout version, action encoding version, obs length, head shape. **Mismatch refuses** — the `PROTOCOL_UUID` idiom, not a warning |
-| `MakeBatch` | N, map, per-side classes, spawn placement (explicit positions or sampled), base seed, tick cap, action repeat k | ack + initial observations |
+| `MakeBatch` | N, map, per-side classes, spawn placement (explicit positions, or **NaN** for sampled — see below), base seed, tick cap, action repeat k | ack + initial observations |
 | `Step` | N action tuples (one per world: 4 head indices + aim-delta bin) | N × (obs block, reward components, done, termination reason) |
 | `Reset` | world index, optional new seed | that world's fresh observation |
 | `Snapshot` | world index | the world's state bytes |
 | `Restore` | world index, state bytes | ack |
 | `Close` | — | ack |
+
+### ⚠️ Sampled spawn placement, and the year this row was wrong
+
+**This row said "explicit positions or sampled" from the first draft and only
+the first half existed** until 2026-08-28. Nothing was wrong with the code; the
+document described a surface that did not exist, and a reader who trusted it
+built a trainer around it. **A documented capability that was never built is the
+same trap as a gap recorded only in a code comment** — `CLAUDE.md` names the
+second and this was the first.
+
+**What it cost**, measured by `gg2-rl` before it was built: a duel on any map
+required the caller to know that map's coordinates, which is exactly the game
+knowledge the trainer is not supposed to hold. Driving `gg_debug`'s (600,850) at
+four other maps, 8 worlds, 199 steps:
+
+| map | what happened |
+|---|---|
+| `gg_debug`, `arena_lumberyard`, `koth_harvest` | every episode to the cap, no deaths |
+| `ctf_2dfort` | 5 deaths, intermittent |
+| `tdm_mantic` | **32 deaths across 16 episodes — exactly 2.0 each** |
+
+Both characters, every episode, together. They are in **open air** at that
+coordinate: y goes 850 → 2,267 and they die at **t152**. Environmental, not
+combat — and since the reward is damage taken, a trainer sampling maps would have
+learned to avoid the map rather than to fight.
+
+**How it works now.** A coordinate of **`NaN`** (`DuelSpec.Sampled`) means "draw
+a spawn point off the map". The draw is `state.Random.Next(count)` — the same
+stream and the same call `Timers.PlayerSpawn` uses for a real respawn, so a
+sampled duel starts where an ordinary spawn would have put somebody and nothing
+about the distribution is this project's invention.
+
+- ⚠️ **A sentinel rather than a new field, deliberately**: it rides in the four
+  doubles `MakeBatch` already carries, so the frame layout is unchanged and
+  **`EnvProtocol.Version` does not move**. A client built against v1 goes on
+  working; one that wants sampling sends NaN. No map coordinate can ever be NaN,
+  so there is no legal value it collides with.
+- ⚠️ **Half a sampled pair is refused**, loudly. One NaN of a pair is meaningless
+  and is the shape a marshalling bug produces; letting it through would place a
+  character at NaN and make every comparison about it quietly false.
+- ⚠️ **The stream is now seeded BEFORE placement.** It was seeded after, which
+  was invisible while every placement was explicit and would have taken a
+  sampled draw from whatever the previous episode left behind.
+- ⚠️ **The facing is read off the placed positions, not off the spec.** A sampled
+  spec holds two NaNs and `NaN <= NaN` is false either way, so both agents would
+  have faced 180 and one would have started with its back turned.
+
+`SampledSpawnTests` gates all of it, including the lethal explicit coordinate as
+a pinned control.
 
 **Auto-reset on termination**: a world whose episode ends is reset within the
 same `Step` call (seeded from its own stream) and returns the fresh episode's

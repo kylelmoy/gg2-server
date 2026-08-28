@@ -75,6 +75,64 @@ public readonly record struct DuelSpec
 
     /// <summary>Ticks each action is held for. 1 means every tick is a decision.</summary>
     public int ActionRepeat { get; init; }
+
+    /// <summary>
+    /// Put this in a coordinate to mean <b>"pick a spawn point off the map"</b>
+    /// instead of naming one.
+    /// </summary>
+    /// <remarks>
+    /// <c>docs/ENV.md</c>'s <c>MakeBatch</c> row has said "explicit positions or
+    /// sampled" since the first draft and only the first half existed until
+    /// 2026-08-28. Without the second, a duel on any map required the caller to
+    /// know that map's coordinates — a second source of truth about the maps,
+    /// which is the thing <c>SIM_UUID</c> exists to prevent, and one that keeps
+    /// working right up until a map changes.
+    /// <para>
+    /// ⚠️ <b>A sentinel rather than a new field, deliberately.</b> It rides in
+    /// the four doubles <c>MakeBatch</c> already carries, so the frame layout is
+    /// unchanged and <see cref="EnvProtocol.Version"/> does <b>not</b> move — a
+    /// client built against v1 goes on working, and one that wants sampling
+    /// sends a NaN. NaN is the honest choice for it because no map coordinate
+    /// can ever be one: there is no legal value it collides with.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>And a NaN that is not understood must not flow onward</b>, which is
+    /// the standing risk with this sentinel — an unnoticed NaN coordinate would
+    /// place a character at NaN and every comparison about it would read false.
+    /// <see cref="Validate"/> is what stops that: half a sampled pair is
+    /// refused, loudly, rather than half-applied.
+    /// </para>
+    /// </remarks>
+    public static double Sampled => double.NaN;
+
+    /// <summary>Whether a coordinate is the <see cref="Sampled"/> sentinel.</summary>
+    public static bool IsSampled(double coordinate) => double.IsNaN(coordinate);
+
+    /// <summary>Whether red's position is to be drawn from the map.</summary>
+    public bool RedIsSampled => IsSampled(RedX) && IsSampled(RedY);
+
+    /// <summary>Whether blue's position is to be drawn from the map.</summary>
+    public bool BlueIsSampled => IsSampled(BlueX) && IsSampled(BlueY);
+
+    /// <summary>
+    /// Refuses a spec whose coordinates are half sampled.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The whole reason a NaN sentinel is safe.</b> One NaN of a pair is
+    /// meaningless — a caller either knows where it wants a character or does
+    /// not — and it is the shape a marshalling bug produces. Refusing it here
+    /// means the sentinel can never reach a placement half-understood, which is
+    /// the failure mode that would otherwise put a character at NaN and make
+    /// every comparison about it quietly false.
+    /// </remarks>
+    public void Validate()
+    {
+        if (IsSampled(RedX) != IsSampled(RedY))
+            throw new ArgumentException("red's x and y must both be sampled or both be explicit", nameof(RedX));
+
+        if (IsSampled(BlueX) != IsSampled(BlueY))
+            throw new ArgumentException("blue's x and y must both be sampled or both be explicit", nameof(BlueX));
+    }
 }
 
 /// <summary>
@@ -160,10 +218,9 @@ public sealed class DuelEnv
         _decisions = 0;
         _termination = Termination.Running;
 
-        var world = ScenarioWorld.Load(spec.Map, area: 1, _mapDirectory, _navDirectory);
+        spec.Validate();
 
-        RedSlot = world.Place(spec.RedClass, Team.Red, spec.RedX, spec.RedY);
-        BlueSlot = world.Place(spec.BlueClass, Team.Blue, spec.BlueX, spec.BlueY);
+        var world = ScenarioWorld.Load(spec.Map, area: 1, _mapDirectory, _navDirectory);
 
         // ⚠️ The match's own stream, seeded per world. Every seeded weapon draws
         // from it and puts the draw on the wire, so two worlds sharing a seed
@@ -174,16 +231,60 @@ public sealed class DuelEnv
         // ⚠️ `uint`, matching GmlRandom, and not widened here: GML's generator
         // has a 32-bit seed and pretending to accept 64 would throw away half
         // of whatever a trainer sent without saying so.
+        //
+        // ⚠️ SEEDED BEFORE PLACEMENT, and that is load-bearing now that a
+        // placement can be sampled: a sampled spawn draws from this stream, so
+        // seeding afterwards would make the draw come out of whatever the
+        // previous episode left and the world would not be reproducible from its
+        // seed. It moved above the two Place calls on 2026-08-28; the explicit
+        // path is unaffected, because `ScenarioWorld.Place` names its spawn
+        // point rather than drawing one.
         world.State.Random = new GmlRandom(seed);
+
+        RedSlot = Place(world, spec.RedClass, Team.Red, spec.RedX, spec.RedY);
+        BlueSlot = Place(world, spec.BlueClass, Team.Blue, spec.BlueX, spec.BlueY);
 
         // Both agents start facing one another, which is the only neutral
         // choice: facing is observable (it moves the two-pixel box inflation
         // splash is measured against) so "whatever the spawn left" would be a
         // hidden asymmetry.
-        Decoder.SetAim(RedSlot, spec.RedX <= spec.BlueX ? 0 : 180);
-        Decoder.SetAim(BlueSlot, spec.BlueX < spec.RedX ? 0 : 180);
+        //
+        // ⚠️ Read off the PLACED positions, not off the spec. A sampled spec has
+        // no coordinates in it, and taking the facing from `spec.RedX <=
+        // spec.BlueX` would compare two NaNs — which is false either way, so
+        // both agents would face 180 and one of them would start with its back
+        // turned.
+        var redX = world.State.Characters[RedSlot].X;
+        var blueX = world.State.Characters[BlueSlot].X;
+
+        Decoder.SetAim(RedSlot, redX <= blueX ? 0 : 180);
+        Decoder.SetAim(BlueSlot, blueX < redX ? 0 : 180);
 
         _world = world;
+    }
+
+    /// <summary>
+    /// One side's placement: the coordinates the caller named, or a spawn point
+    /// drawn from the map.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The draw is <c>state.Random.Next(count)</c>, which is exactly what
+    /// <c>Timers.PlayerSpawn</c> does for a real respawn</b> — same stream, same
+    /// call, so a sampled duel starts where an ordinary spawn would have put
+    /// somebody and nothing about the distribution is this project's invention.
+    /// </remarks>
+    private static int Place(ScenarioWorld world, PlayerClass playerClass, Team team, double x, double y)
+    {
+        if (!DuelSpec.IsSampled(x))
+            return world.Place(playerClass, team, x, y);
+
+        var available = world.SpawnPointCount(team);
+
+        if (available == 0)
+            throw new InvalidOperationException(
+                $"{world.Map.Name} has no {team} spawn point to sample");
+
+        return world.PlaceAtSpawn(playerClass, team, (int)world.State.Random.Next(available));
     }
 
     /// <summary>
