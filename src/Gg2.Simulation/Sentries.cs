@@ -1,4 +1,4 @@
-﻿using Gg2.Protocol;
+using Gg2.Protocol;
 
 namespace Gg2.Simulation;
 
