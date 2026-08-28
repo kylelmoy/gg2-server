@@ -41,7 +41,8 @@ public readonly record struct NavQuery(
     bool HasIntel = false,
     bool SetupGatesClosed = false,
     bool CanDoubleJump = false,
-    bool CanRocketJump = false)
+    bool CanRocketJump = false,
+    bool CanStickyJump = false)
 {
     /// <summary>
     /// Whether a character of this hp may be routed over a rocket jump.
@@ -53,6 +54,20 @@ public readonly record struct NavQuery(
     /// like a player" — but at exactly 30 the bot dies in the air.
     /// </remarks>
     public static bool CanAffordRocketJump(double hp) => hp > NavConstants.RjDamage;
+
+    /// <summary>
+    /// Whether a character of this hp may be routed over a sticky jump.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The game cannot make this refusal and this port can.</b>
+    /// <c>navFindPath</c> takes <c>canDouble</c> and <c>canRocket</c> and has no
+    /// <c>canSticky</c>, so a cache containing type-7 edges routes <em>every
+    /// class</em> over them in the stock game — a medic walking to a takeoff to
+    /// wait for a mine boost no medic can produce. That asymmetry is the whole
+    /// argument for `gg2-nav-gen` emitting them only behind a flag, into a cache
+    /// the game never reads. See its NOTES-STICKYJUMP.md.
+    /// </remarks>
+    public static bool CanAffordStickyJump(double hp) => hp > NavConstants.SjDamage;
 }
 
 /// <summary>
@@ -248,6 +263,14 @@ public sealed class NavSearch
                 // ⚠️ Refusing is the DEFAULT — the failure mode of the opposite
                 // is a heavy routed over an arc it physically cannot fly.
                 if (!query.CanDoubleJump && edge.Type == NavEdgeType.DoubleJump)
+                    continue;
+
+                // ⚠️ The refusal the reference's own A* cannot make — see
+                // NavQuery.CanAffordStickyJump. Without it a graph carrying
+                // type-7 edges would route every class over them and the
+                // follower would count UnsupportedEdgeTicks for a bot that was
+                // never going to fly one.
+                if (!query.CanStickyJump && edge.Type == NavEdgeType.StickyJump)
                     continue;
 
                 if (!query.CanRocketJump && edge.Type == NavEdgeType.RocketJump)

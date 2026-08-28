@@ -85,4 +85,27 @@ public static class NavConstants
     public const int RjMaxPerSide = 2;   // NAV_RJ_MAX_PER_SIDE
     public const int RjPenalty = 10;   // NAV_RJ_PENALTY
     public const int RjSkipHops = 1;   // NAV_RJ_SKIP_HOPS
+
+    // ⚠️ The sticky-jump family, added to the fork by `gg2-nav-gen` on
+    // 2026-08-28. These are the values the FORK DECLARES, carried faithfully
+    // because ConstantsTests compares them against Constants.xml — they are not
+    // this port's opinion of them.
+    //
+    // ⚠️ SjImpulse WAS 10 UNTIL THIS PORT MEASURED IT. The generator derived it,
+    // said so, and asked for the launch velocity to be measured before the edges
+    // were trusted to a bot; MineJumpTests flew the manoeuvre here and read
+    // -14.460 px/tick, an apex of 193.6 px where 10 implies 18.3 and ~310. The
+    // fork was corrected to 6.16 the same day — 14.46 minus the 8.3 jump — and
+    // SjMaxTicks came down 130 to 100 with it.
+    //
+    // ⚠️ So this value now AGREES with the measurement, and that agreement is
+    // young. `StickyModel.Launch` is what the follower actually flies on, and it
+    // is the measured post-tick velocity rather than anything derived from this.
+    public const double SjImpulse = 6.16;   // NAV_SJ_IMPULSE
+    public const int SjDamage = 25;   // NAV_SJ_DAMAGE
+    public const int SjMaxTicks = 100;   // NAV_SJ_MAX_TICKS
+    public const int SjMaxPerSide = 2;   // NAV_SJ_MAX_PER_SIDE
+    public const int SjPenalty = 40;   // NAV_SJ_PENALTY
+    public const int SjSkipHops = 3;   // NAV_SJ_SKIP_HOPS
+    public const int SjSetupTicks = 5;   // NAV_SJ_SETUP_TICKS
 }

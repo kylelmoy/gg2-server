@@ -870,6 +870,111 @@ public sealed class PathFollowerTests
     }
 
     /// <summary>
+    /// ✅ <b>A demoman on a sticky-jump edge places a mine, waits, and then jumps
+    /// and detonates on ONE tick.</b>
+    /// </summary>
+    /// <remarks>
+    /// <b>The only edge kind that does not leave on the tick its gate opens.</b>
+    /// A rocket jump is one press — <c>Character.events/Begin Step.xml</c> runs
+    /// the attack branch before the jump branch and the rocket goes off in the
+    /// same step. A mine has to be placed and has to settle, so the gate opening
+    /// starts a <see cref="NavConstants.SjSetupTicks"/> countdown and the launch
+    /// is five ticks later.
+    /// <para>
+    /// ⚠️ <b>The jump and the detonation are the same tick, and that ordering is
+    /// the manoeuvre.</b> Begin Step's jump branch (line 108) runs before its
+    /// right-click branch (line 137), so <c>vspeed = -jumpStrength</c> is already
+    /// in place when the blast's <c>motion_add</c> lands on top of it —
+    /// <c>MineJumpTests</c> measures the result at -14.460 px/tick. Detonating a
+    /// tick later throws the jump away.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ADemomanPlacesAMineWaitsAndThenJumpsAndDetonatesTogether()
+    {
+        var graph = Build(
+            [Node(30, 0, 9), Node(10, 20, 29)],
+            [Edge(0, 1, 200, NavEdgeType.StickyJump, takeoff: 8, bucket: 5, ticks: 20)]);
+
+        var follower = new PathFollower(graph);
+        var state = new BotPathState();
+
+        follower.SetGoal(state, NavGraph.ColumnWorldX(25), graph.StandY(1));
+
+        var at = Stand(graph, 0, 8);
+        var able = new NavQuery(Team.Red, CanStickyJump: true);
+        var loaded = Loaded();
+
+        // Phase one: the mine goes down and the bot does NOT jump.
+        var keys = follower.Step(
+            state, At(at.X, at.Y, playerClass: PlayerClass.Demoman), in loaded, 0, able);
+
+        Assert.True(state.MineFire, "the demoman never placed a mine");
+        Assert.False(state.MineDetonate, "it detonated on the placing tick");
+        Assert.True((keys & PlayerKeys.Jump) == 0, "it jumped before the mine had settled");
+        Assert.Equal(NavConstants.SjSetupTicks, state.StickySetup);
+
+        // The setup ticks: still no jump, and no second mine.
+        for (var tick = 1; tick <= NavConstants.SjSetupTicks; tick++)
+        {
+            keys = follower.Step(
+                state, At(at.X, at.Y, playerClass: PlayerClass.Demoman), in loaded, tick, able);
+
+            if (state.MineDetonate)
+                break;
+
+            Assert.False(state.MineFire, $"tick {tick} placed a second mine");
+            Assert.True((keys & PlayerKeys.Jump) == 0, $"tick {tick} jumped early");
+        }
+
+        // Phase two: jump and detonate together.
+        Assert.True(state.MineDetonate, "the demoman never detonated");
+        Assert.True((keys & PlayerKeys.Jump) != 0, "it detonated without jumping");
+        Assert.Equal(1, state.StickyJumps);
+        Assert.Equal(0, state.UnsupportedEdgeTicks);
+        Assert.Equal(-1, state.StickySetup);
+    }
+
+    /// <summary>
+    /// ⚠️ <b>A sticky-jump edge is refused to anybody who cannot fly one</b>, and
+    /// the follower counts the ticks rather than steering it.
+    /// </summary>
+    /// <remarks>
+    /// The reference's A* <em>cannot</em> make this refusal —
+    /// <c>navFindPath</c> takes <c>canDouble</c> and <c>canRocket</c> and has no
+    /// <c>canSticky</c> — so a cache carrying type-7 edges routes every class
+    /// over them in the stock game. This port filters them in
+    /// <see cref="NavSearch"/>, which is the whole argument for the generator
+    /// emitting them only into a cache the game never reads.
+    /// </remarks>
+    [Fact]
+    public void AScoutOnAStickyEdgeNeitherMinesNorJumps()
+    {
+        var graph = Build(
+            [Node(30, 0, 9), Node(10, 20, 29)],
+            [Edge(0, 1, 200, NavEdgeType.StickyJump, takeoff: 8, bucket: 5, ticks: 20)]);
+
+        var follower = new PathFollower(graph);
+        var state = new BotPathState();
+
+        follower.SetGoal(state, NavGraph.ColumnWorldX(25), graph.StandY(1));
+
+        var at = Stand(graph, 0, 8);
+        var able = new NavQuery(Team.Red, CanStickyJump: true);
+        var loaded = Loaded();
+
+        for (var tick = 0; tick < 20; tick++)
+        {
+            var keys = follower.Step(
+                state, At(at.X, at.Y, playerClass: PlayerClass.Scout), in loaded, tick, able);
+
+            Assert.False(state.MineFire, "a scout placed a mine");
+            Assert.False(state.MineDetonate, "a scout detonated something");
+            Assert.True((keys & PlayerKeys.Jump) == 0, "a scout took off on a sticky edge");
+        }
+    }
+
+    /// <summary>
     /// With no rocket the bot waits on the takeoff column, then gives the edge up.
     /// </summary>
     /// <remarks>

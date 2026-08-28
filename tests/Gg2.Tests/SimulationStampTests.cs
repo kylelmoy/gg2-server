@@ -36,8 +36,23 @@ public sealed class SimulationStampTests(ITestOutputHelper output)
     /// <c>docs/ENV.md</c> chose to do this before <c>gg2-rl</c> phase 2 rather
     /// than after. The bump is free exactly once.
     /// </para>
+    /// <para>
+    /// ✅ <b>Bumped again 2026-08-28</b>, from <c>08dc7b09303b3843</c>, by the
+    /// <c>NAV_SJ_*</c> family arriving in <see cref="NavConstants"/> — the fork
+    /// grew sticky-jump tuning and this port carries it. ⚠️ <b>This is the stamp
+    /// working, not a nuisance</b>: the surface deliberately includes the
+    /// <c>NAV_*</c> block, because a policy's behaviour depends on where the bots
+    /// it played against could go.
+    /// <para>
+    /// ⚠️ <b>It still invalidated no checkpoints — but the window is closing.</b>
+    /// <c>gg2-rl</c> is in phase 1 and its client asserts this digest at the
+    /// handshake, so a bump is now a refused connection until it updates, which
+    /// is the designed behaviour and the reason it was told rather than left to
+    /// find out.
+    /// </para>
+    /// </para>
     /// </remarks>
-    private const string Pinned = "08dc7b09303b3843";
+    private const string Pinned = "61edbca3899d1b07";
 
     /// <summary>
     /// The stamp is stable, and not a per-process hash.

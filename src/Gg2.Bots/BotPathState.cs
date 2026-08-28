@@ -310,6 +310,49 @@ public sealed class BotPathState
     /// </remarks>
     public bool RocketFire { get; set; }
 
+    /// <summary>
+    /// The follower wants a mine placed at its feet this tick — phase one of a
+    /// sticky jump.
+    /// </summary>
+    /// <remarks>
+    /// Handed over like <see cref="RocketFire"/> and for the same reason: the
+    /// follower owns LEFT / RIGHT / JUMP / DOWN and cannot fire, so the aim and
+    /// the trigger are applied by <c>ScriptedBot</c> after the combat half has
+    /// run. ⚠️ Straight down, for the same <c>vectorfactor</c> reason a rocket
+    /// jump aims down.
+    /// </remarks>
+    public bool MineFire { get; set; }
+
+    /// <summary>
+    /// The follower wants its mine detonated this tick — phase two, and it is
+    /// the <em>same</em> tick as the jump.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Right-click, not attack.</b> <c>Minegun</c>'s User Event 2 detonates
+    /// every mine the demoman owns, and Begin Step runs the jump branch before
+    /// the right-click branch — so pressing both on one tick stacks the blast on
+    /// <c>vspeed = -jumpStrength</c>. A tick later would waste the jump.
+    /// </remarks>
+    public bool MineDetonate { get; set; }
+
+    /// <summary>
+    /// Ticks left before the placed mine has settled and the jump can be taken.
+    /// </summary>
+    /// <remarks>
+    /// Counts down from <see cref="NavConstants.SjSetupTicks"/>, and <b>-1 means
+    /// no sticky jump is being set up</b> rather than "ready now" — a zeroed
+    /// state must not read as a mine that is waiting.
+    /// <para>
+    /// ⚠️ <b>Reset on every re-plan and on leaving the ground</b>, because a
+    /// countdown that survives either is a bot detonating under a route it is no
+    /// longer following.
+    /// </para>
+    /// </remarks>
+    public int StickySetup { get; set; } = -1;
+
+    /// <summary>How many sticky jumps this bot has taken.</summary>
+    public int StickyJumps { get; set; }
+
     /// <summary>How many second impulses this bot has spent on double-jump arcs.</summary>
     public int DoubleJumps { get; set; }
 

@@ -159,6 +159,13 @@ public sealed class PathFollower
         // reference clears both at the top of botPathKeys for the same reason.
         state.RocketFire = false;
 
+        // The sticky jump's two presses, cleared for the same reason. ⚠️ The
+        // COUNTDOWN is not cleared here — it has to survive the ticks between
+        // placing the mine and jumping on it, which is the whole difference
+        // between this manoeuvre and a rocket jump.
+        state.MineFire = false;
+        state.MineDetonate = false;
+
         if (!state.HasGoal)
             return PlayerKeys.None;
 
@@ -510,6 +517,14 @@ public sealed class PathFollower
         /// both halves.
         /// </remarks>
         public bool RocketFire;
+
+        /// <summary>Place a mine at the feet this tick — a sticky jump's phase one.</summary>
+        public bool MineFire;
+
+        /// <summary>
+        /// Detonate this tick — phase two, and the same tick as the jump.
+        /// </summary>
+        public bool MineDetonate;
     }
 
     /// <summary>Steers along the edge between the current node and the next.</summary>
@@ -594,6 +609,7 @@ public sealed class PathFollower
             case NavEdgeType.Jump:
             case NavEdgeType.DoubleJump:
             case NavEdgeType.RocketJump:
+            case NavEdgeType.StickyJump:
                 SteerJump(
                     state, in character, in weapon, in edge, in from, in to,
                     current, next, column, dirToNext, tick, in query, occupancy, ref steer);
@@ -697,6 +713,12 @@ public sealed class PathFollower
         if (steer.Abandon)
         {
             state.RocketFire = false;
+
+            // ⚠️ And the setup, or a bot that abandoned an edge mid-countdown
+            // detonates under a route it is no longer following.
+            state.MineFire = false;
+            state.MineDetonate = false;
+            state.StickySetup = -1;
             state.StuckTicks = 0;
             return PlayerKeys.None;
         }
@@ -706,6 +728,8 @@ public sealed class PathFollower
         // Out of the per-edge steering and onto the state, which is what the caller
         // reads — see BotPathState.RocketFire.
         state.RocketFire = steer.RocketFire;
+        state.MineFire = steer.MineFire;
+        state.MineDetonate = steer.MineDetonate;
 
         // ⚠️ Gated on actually pressing something, unlike the arrival branch's:
         // a bot standing on its target waiting for a jump window would otherwise
@@ -891,7 +915,9 @@ public sealed class PathFollower
             // ⚠️ `AirTicks > 1` rather than `>= 1`: the blast lands in the same
             // tick's simulation as the takeoff press, so tick one is always
             // moveStatus 0.
-            if (isRocket && state.AirTicks > 1 && character.MoveStatus != 1)
+            if ((isRocket || edge.Type == NavEdgeType.StickyJump)
+                && state.AirTicks > 1
+                && character.MoveStatus != 1)
             {
                 steer.Abandon = true;
                 return;
@@ -1103,9 +1129,18 @@ public sealed class PathFollower
         // well a slow takeoff catches up (nothing takes the speed back off) and
         // over-rates how easily a hot one sheds. RocketModel's own remarks have the
         // numbers.
+        var isSticky = edge.Type == NavEdgeType.StickyJump;
+
+        // ⚠️ A mine jump flies under moveStatus 1 exactly as a rocket jump does —
+        // controlFactor 0.65, friction 1 — so it takes the SAME reach model. The
+        // one thing a rocket has that a mine does not is NAV_RJ_SPEEDUP, which
+        // RocketModel.Reach does not use. StickyModel.Reach delegates rather
+        // than copying, so there is one integration to keep correct.
         var reach = isRocket
             ? RocketModel.Reach(in character, needVx, flightTicks, along)
-            : JumpModel.Reach(in character, needVx, flightTicks, along);
+            : isSticky
+                ? StickyModel.Reach(in character, needVx, flightTicks, along)
+                : JumpModel.Reach(in character, needVx, flightTicks, along);
 
         // ⚠️ Jumping without the rocket is the WORST available outcome. The arc
         // rises 276px where an ordinary jump rises 57, so the bot would leave the
@@ -1115,11 +1150,58 @@ public sealed class PathFollower
         // than leaving badly.
         var rocketReady = !isRocket || RocketModel.Ready(in character, in weapon);
 
+        // ⚠️ The same refusal for a sticky jump, and it matters MORE here: the
+        // arc needs a mine that has already been placed and settled, so leaving
+        // the ground without one is not merely a short jump, it is a short jump
+        // that also wasted the setup.
+        var stickyReady = !isSticky || StickyModel.Ready(in character, in weapon);
+
         if (rocketReady
+            && stickyReady
             && along >= 0
             && along <= needVx + BotConstants.JumpVtol
             && reach + BotConstants.JumpReachTol >= need)
         {
+            // ⚠️ A STICKY JUMP DOES NOT LEAVE ON THE TICK ITS GATE OPENS, and it
+            // is the only edge kind that does not. The mine has to be placed and
+            // has to settle first, so the gate opening starts a countdown and the
+            // launch happens NavConstants.SjSetupTicks later. Everything else
+            // here — the reach model, the run-up, the patience timer — is shared,
+            // which is why this is a branch inside the gate rather than a second
+            // gate beside it.
+            if (isSticky)
+            {
+                if (state.StickySetup < 0)
+                {
+                    // Phase one: put the mine down and stand still. ⚠️ -1 rather
+                    // than 0 is "not set up", so a zeroed state cannot read as a
+                    // mine that has already settled.
+                    steer.MineFire = true;
+                    state.StickySetup = NavConstants.SjSetupTicks;
+                }
+                else if (--state.StickySetup > 0)
+                {
+                    // ⚠️ Decrement THEN test, so the launch lands exactly
+                    // SjSetupTicks after the placing tick. Testing first and
+                    // decrementing after waits one tick longer than the cost the
+                    // generator charged for the mine's travel, and an arc costed
+                    // for five ticks flown after six is a different arc.
+                }
+                else
+                {
+                    // Phase two, and both presses are THIS tick: Begin Step runs
+                    // its jump branch before its right-click branch, so the
+                    // blast's motion_add lands on top of `vspeed = -jumpStrength`.
+                    // A tick later would throw the jump away.
+                    Launch(state, ref steer);
+                    steer.MineDetonate = true;
+                    state.StickySetup = -1;
+                    state.StickyJumps++;
+                }
+
+                return;
+            }
+
             Launch(state, ref steer);
 
             // The hand-off: ScriptedBot applies this after the combat half has run,
@@ -1136,6 +1218,16 @@ public sealed class PathFollower
                 steer.RocketFire = true;
                 state.RocketJumps++;
             }
+        }
+        else if (isSticky && state.StickySetup >= 0)
+        {
+            // ⚠️ The gate closed with a mine already down. Abandon rather than
+            // stand on a live mine waiting for a window that has moved: the
+            // countdown is only meaningful for the approach that started it, and
+            // the off-route machinery gives the edge one retry before blacklisting
+            // it, which is the right policy for a transient.
+            state.StickySetup = -1;
+            steer.Abandon = true;
         }
         // ⚠️ Waiting for the launcher, and NOT falling through to the run-up below.
         // Refire is 30 ticks against BOT_TAKEOFF_PATIENCE's 60, so the overwhelmingly

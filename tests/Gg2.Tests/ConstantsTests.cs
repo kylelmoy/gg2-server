@@ -140,30 +140,6 @@ public sealed class ConstantsTests
         ["BOOT_STANDARD"] = "GM8 boot mode",
         ["BOOT_DEBUG"] = "GM8 boot mode",
 
-        // ⚠️ THE FORK GREW THESE ON 2026-08-28, MID-SESSION, and this is the
-        // first time a reference change has reached this repo while it was
-        // being worked on. `gg2-nav-gen` is implementing sticky-jump nav edges
-        // (docs/TRAPS-BOTS.md, "Item 12"'s neighbour and
-        // gg2-nav-gen/NOTES-STICKYJUMP.md), and its first step was to declare
-        // the NAV_SJ_* tuning family beside NAV_DJ_* and NAV_RJ_*.
-        //
-        // They are EXCLUDED rather than carried, deliberately: nothing in the
-        // game's GML and nothing in this port reads a type-7 edge yet, so a
-        // member in NavConstants would be a number this port claims to use and
-        // does not. ⚠️ Carry them the moment PathFollower grows a StickyJump
-        // arm, and not before.
-        //
-        // ⚠️ If that work is abandoned and the constants go away,
-        // NothingIsExcludedThatTheReferenceNoLongerDefines fails and points
-        // here. That is the intended failure, not a bug.
-        ["NAV_SJ_IMPULSE"] = "sticky-jump nav edges, declared by the fork and unimplemented",
-        ["NAV_SJ_DAMAGE"] = "sticky-jump nav edges, declared by the fork and unimplemented",
-        ["NAV_SJ_MAX_TICKS"] = "sticky-jump nav edges, declared by the fork and unimplemented",
-        ["NAV_SJ_MAX_PER_SIDE"] = "sticky-jump nav edges, declared by the fork and unimplemented",
-        ["NAV_SJ_PENALTY"] = "sticky-jump nav edges, declared by the fork and unimplemented",
-        ["NAV_SJ_SKIP_HOPS"] = "sticky-jump nav edges, declared by the fork and unimplemented",
-        ["NAV_SJ_SETUP_TICKS"] = "sticky-jump nav edges, declared by the fork and unimplemented",
-
         // Notices are HUD text ids the server never originates.
         ["NOTICE_NUTSNBOLTS"] = "client HUD",
         ["NOTICE_TOOCLOSE"] = "client HUD",

@@ -2166,3 +2166,58 @@ where he sat at terminal velocity going nowhere. `PlaceAtSpawn` is what fixed it
 **The same lesson as `docs/ENV.md`'s sampled placement, on the same day, in a
 second place** — a coordinate that looks reasonable is not a coordinate that is
 free.
+
+### The sticky-jump follower arm, and the one thing it does differently
+
+**Landed 2026-08-28**, after the measurement above. `NavEdgeType.StickyJump` was
+the last unhandled edge kind; it now steers.
+
+**The pieces**: `NavQuery.CanStickyJump` and a refusal in `NavSearch` beside the
+double-jump and rocket-jump ones; `StickyModel` for the launch, the readiness
+test and the reach; a two-phase arm in `PathFollower.SteerJump`;
+`BotPathState.MineFire` / `MineDetonate` / `StickySetup`; and the hand-off in
+`ScriptedBot`, because the follower owns LEFT/RIGHT/JUMP/DOWN and cannot fire.
+
+#### ⚠️ It is the only edge kind that does not leave on the tick its gate opens
+
+Every other launch is one press. A rocket jump is *one tick* —
+`Character.events/Begin Step.xml` runs the attack branch before the jump branch
+and the rocket detonates in the same step. **A mine has to be placed, and has to
+settle.** So the gate opening starts a `NAV_SJ_SETUP_TICKS` countdown and the
+launch happens five ticks later:
+
+1. **Place** — `MineFire`, aimed straight down, and *no jump*.
+2. **Wait** — five ticks, standing on the takeoff column, placing nothing else.
+3. **Jump and detonate on ONE tick** — `MineDetonate` is `Special`, not `Attack`
+   (`Attack` would place a second mine), and it rides on the same tick as the
+   follower's `JUMP` press.
+
+⚠️ **Step 3's ordering is the manoeuvre, not an optimisation.** Begin Step's jump
+branch (line 108) runs before its right-click branch (line 137), so `vspeed =
+-jumpStrength` is already in place when the blast's `motion_add` lands on top of
+it. Detonating a tick later throws the jump away and the arc is an ordinary hop.
+
+⚠️ **Decrement then test, not test then decrement.** The obvious loop waits one
+tick longer than `NAV_SJ_SETUP_TICKS`, and an arc costed for five ticks and flown
+after six is a different arc. Caught by the test, one line in the arm.
+
+⚠️ **A gate that closes mid-countdown abandons** rather than standing on a live
+mine waiting for a window that has moved. The off-route machinery then gives the
+edge one retry before blacklisting it, which is the right policy for a transient.
+
+#### What is shared, deliberately
+
+`StickyModel.Reach` **delegates to `RocketModel.Reach`** rather than copying it. A
+mine jump flies under `moveStatus` 1 exactly as a rocket jump does — control
+0.65, friction 1 — and the one thing a rocket has that a mine does not
+(`NAV_RJ_SPEEDUP`) is not used by that integration. ⚠️ **`gg2-nav-gen`'s
+`canFly` veto uses the same law** (`flyDistanceRocket`, moveStatus 1), so the
+generator and the follower agree about which arcs exist; that agreement is worth
+keeping deliberately rather than by coincidence.
+
+⚠️ **No shipped cache contains a type-7 edge**, so the arm is gated on synthetic
+edges in `PathFollowerTests` and cannot yet be exercised end to end. That is the
+honest state: the arm is correct against the manoeuvre and unproven against a
+real graph. `gg2-nav-gen` emits them only behind `--sticky`, into a cache the game
+never reads, because `navFindPath` has no `canSticky` and would route every class
+over them.

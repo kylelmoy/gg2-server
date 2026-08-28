@@ -336,6 +336,29 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
             fireKeys |= PlayerKeys.Attack;
         }
 
+        // The sticky jump's two presses, handed over the same way and for the
+        // same reason. ⚠️ They are on DIFFERENT TICKS — the mine is placed,
+        // settles for NavConstants.SjSetupTicks, and only then is jumped on —
+        // which is why they are two flags rather than one.
+        if (Path.MineFire)
+        {
+            // Straight down, like the rocket: a mine that lands at the feet is
+            // the whole geometry the measured -14.46 launch assumes.
+            aim = PathFollower.RocketAimDegrees;
+            fireKeys |= PlayerKeys.Attack;
+        }
+
+        // ⚠️ SPECIAL, not ATTACK: Minegun's User Event 2 detonates, and its
+        // User Event 1 would place a second mine. And this rides on the SAME
+        // tick as the follower's JUMP press, because Begin Step runs its jump
+        // branch before its right-click branch — so the blast stacks on
+        // `vspeed = -jumpStrength` rather than replacing it.
+        if (Path.MineDetonate)
+        {
+            aim = PathFollower.RocketAimDegrees;
+            fireKeys |= PlayerKeys.Special;
+        }
+
         navKeys = ApplyHolds(world, slot, tick, navKeys);
 
         // ⚠️ Dodge an incoming rocket. GROUNDED ONLY, which keeps it out of every
