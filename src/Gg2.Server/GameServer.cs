@@ -547,6 +547,15 @@ public sealed class GameServer : IDisposable
     /// </summary>
     public void Run(CancellationToken cancellation)
     {
+        // ⚠️ Windows rounds a wait up to its timer quantum — about 15.6ms by
+        // default — and the pacing below waits. Measured on an idle server
+        // without this: 15% of ticks arrived about 14ms late, nearly half a
+        // tick, in a distribution with nothing between 34ms and 45ms. With it,
+        // none. The stock client re-simulates between position updates and
+        // corrects when one lands, so irregular ticks reach a player as
+        // rubberbanding. See TimerResolution for the numbers.
+        using var resolution = TimerResolution.Raise();
+
         var clock = Stopwatch.StartNew();
         var nextTick = TimeSpan.Zero;
         var pacing = TickInterval;

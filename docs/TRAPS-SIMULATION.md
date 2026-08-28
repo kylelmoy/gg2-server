@@ -2505,33 +2505,41 @@ ceiling on recovery, not a bug.
 
 #### The three things the players reported
 
-⬅️ **1. Rubberbanding / hitching.** ⚠️ **The most serious of the three**, because
-it is the failure mode CLAUDE.md says has no test: "the client re-simulates the
-physics itself between position updates … there is no test that fails when
+⬅️ **1. Rubberbanding / hitching. ✅ One measured cause found and fixed.**
+⚠️ It is the failure mode CLAUDE.md says has no test: "the client re-simulates
+the physics itself between position updates … there is no test that fails when
 trajectories drift — the client just snaps."
 
-**Measured, and the pacing is a real suspect.** `GameServer.Run` paces with
-`cancellation.WaitHandle.WaitOne(wait)`. Timing 200 ticks of exactly that loop
-against a 33.333 ms target gives a **bimodal** distribution — nothing between
-the modes:
+**The tick pacing was bimodal.** `GameServer.Run` paces with
+`cancellation.WaitHandle.WaitOne(wait)`, and Windows rounds a wait up to its
+timer quantum — about 15.6 ms. Measured **in the real server process, idle, no
+clients and no bots**, so this is pacing alone:
 
-| bucket | ticks |
-|---|---|
-| 30–34 ms | 166 |
-| 45–49 ms | **29** |
+| | before | after `timeBeginPeriod(1)` |
+|---|---|---|
+| p50 | 31.04 ms | **33.30 ms** (the target) |
+| p99 | 46.98 ms | **34.79 ms** |
+| max | 47.54 ms | **36.10 ms** |
+| ticks over 40 ms | **133 / 870 — 15.3%** | **0** |
+| shape | bimodal: 736 at 30–34, 133 at 45–49 | 868 of 870 in one bucket |
 
-So about **15% of ticks land ~13 ms late**, which is 40% of a tick, and the mean
-(33.29 ms) hides it completely. That is the Windows timer quantum (~15.6 ms)
-showing through, and it is the right *shape* for perceived hitching.
+⚠️ **The mean hid it completely.** Before the fix the *median* was 31.04 ms —
+below the 33.33 target — because the loop catches up on the ticks after each
+overshoot. Only the distribution shows the problem, which is why "average tick
+time looks fine" is not an answer to a report of hitching.
 
-⚠️ **Not proven to be the cause, and two honest caveats.** The measurement ran
-inside a test host, and a running GM8 client raises the system-wide timer
-resolution for every process — so the server may pace better when a client is on
-the same machine than this measurement suggests. And **the obvious alternative
-is no better**: a `Thread.Sleep(1)` plus spin loop measured 31 ticks over 40 ms,
-the same bimodality, because `Sleep(1)` has the same quantum. A real fix means
-timer resolution (`timeBeginPeriod`) or a busy spin, and neither should be
-written without measuring the server itself under a connected client.
+`Gg2.Server.TimerResolution` holds the window open for the life of the run.
+⚠️ **Pacing only, never simulation**: a tick computes the same thing whenever it
+runs, so docs/SIMULATION.md's contract is untouched.
+
+⚠️ **The obvious alternative does not work**, measured rather than assumed: a
+`Thread.Sleep(1)` plus spin loop is bimodal in the same way, because `Sleep` is
+rounded by the same quantum.
+
+⬅️ **This does NOT close the report.** It removes one measured cause; whether the
+players' rubberbanding was pacing or genuine physics drift is still unproven, and
+drift is the more serious possibility. The next playtest is the test — and if it
+still hitches, the cause is the one with no gate.
 
 ⬅️ **2. The heavy's sandvich does nothing — because it is not implemented.**
 Confirmed in the source, which says so in four places: `PlayerCommand.cs`
