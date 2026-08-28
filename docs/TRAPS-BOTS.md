@@ -2118,3 +2118,51 @@ a kill needs two bots to find each other inside the budget and a stationary
 roster is unambiguous. ⚠️ **That gate is the durable part of the arena
 finding**, and it is worth more than either bug: this repo had 2,240 tests and
 not one of them asked whether a match had anything in it.
+
+### ⚠️ The sticky jump's envelope is 194 px, not 310 — measured before the arm was built
+
+**2026-08-28.** `gg2-nav-gen` shipped a sticky-jump edge fan (6,497 edges across
+24 graphs, ~1,600 node-openings) and flagged one thing to do before trusting it:
+**`NAV_SJ_IMPULSE = 10` is derived, not measured.** Its own reason for the
+warning is the best argument for taking it seriously — the rocket jump's derived
+number promised 276 px, delivered 206, and *"every offline check stayed green
+while the follower blacklisted the edges."*
+
+✅ **It did not need the live game.** This port's mine and explosion physics are
+measured exact against the engine (phase 5, nine oracles), so the manoeuvre can
+be flown here and read straight off.
+
+**The manoeuvre**: place a mine straight down, wait for it to settle, then
+**jump and detonate on ONE tick** — `Character.events/Begin Step.xml` runs its
+jump branch (line 108) before its right-click branch (line 137), so
+`vspeed = -jumpStrength` is already in place when the blast's `motion_add` lands
+on top of it. Detonating a tick later wastes the jump.
+
+| | generator's derivation | measured here |
+|---|---|---|
+| launch | 18.3 px/tick (`NAV_JUMP_V0 + NAV_SJ_IMPULSE`) | **-14.460** |
+| unobstructed apex | ~310 px | **193.6 px** |
+| self-damage | 25 (`NAV_SJ_DAMAGE`) | **25** ✅ |
+
+⚠️ **The envelope is about 60% too generous**, so some fraction of those 6,497
+edges are arcs a demoman cannot fly. The damage constant is right, which is worth
+saying so that "the generator's numbers are wrong" is not read more broadly than
+it should be: one of the two is correct.
+
+⚠️ **The launch is identical on four maps to three decimals** — `ctf_truefort`,
+`koth_valley`, `ctf_2dfort`, `gg_debug`. A mine fired straight down settles at
+the demoman's feet, so the geometry that sets the impulse is the character's own
+and not the map's. That is what makes one number the answer rather than a sample.
+
+⚠️ **The apex is computed from the launch, not measured off a map**, and that is
+not a shortcut: every map tried has a ceiling or a slope inside 200 px of a
+spawn, and the measured rise there is 20.9 to 68.8 px — geometry, not the
+manoeuvre. `MineJumpTests` pins the launch exactly, because a generator is
+costing arcs against it: if it moves, every type-7 edge needs regenerating.
+
+⚠️ **And the probe's first draft measured nothing at all**, because it placed the
+demoman at a hand-picked (500, 850) on `gg_debug` and put him inside terrain,
+where he sat at terminal velocity going nowhere. `PlaceAtSpawn` is what fixed it.
+**The same lesson as `docs/ENV.md`'s sampled placement, on the same day, in a
+second place** — a coordinate that looks reasonable is not a coordinate that is
+free.
