@@ -367,10 +367,13 @@ public static class Weapons
     /// 1.4e-16 and GML's <c>&gt;</c> is fuzzy to 1e-13. The rocket's fade, in
     /// another costume. 42 + 10 = 52.
     /// <para>
-    /// ⚠️ <b>One tick of it is not certain</b> and cannot be settled by
-    /// reading: whether GM8 advances <c>image_index</c> before or after an
-    /// instance's Step event decides whether the threshold lands on tick 42 or
-    /// 41. Measure it at the next live session.
+    /// ✅ <b>The one tick that was uncertain is MEASURED</b> (2026-08-27), and 52
+    /// stands. <b>GM8 advances <c>image_index</c> after the whole Step stage</b>,
+    /// so a Step reading it sees what the previous frame left and the
+    /// <c>&gt;= 32</c> threshold lands on tick 42. See
+    /// <c>docs/SIMULATION.md</c>, "Settled: GM8 advances <c>image_index</c> after
+    /// the whole Step stage", and the spy section of
+    /// <c>docs/TRAPS-SIMULATION.md</c>.
     /// </para>
     /// </remarks>
     public const int StabFreezeTicks = 52;

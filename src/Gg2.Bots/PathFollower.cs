@@ -32,15 +32,34 @@ namespace Gg2.Bots;
 /// what keeps the follower honest about what it planned.
 /// </para>
 /// <para>
-/// ⚠️ <b>The jump edges are not implemented yet</b> — <see cref="NavEdgeType.Jump"/>,
+/// ⚠️ <b>This remark used to say the jump edges were not implemented, and it was
+/// stale from <c>c34549b</c> ("the jump branch") onwards</b> — corrected
+/// 2026-08-28, after a session picked the queue item it had spawned and found the
+/// work already done. <see cref="NavEdgeType.Jump"/>,
 /// <see cref="NavEdgeType.DoubleJump"/> and <see cref="NavEdgeType.RocketJump"/>
-/// are 209 of <c>botPathKeys.gml</c>'s 394 code lines and four helper scripts,
-/// and they are the next piece. Until then such an edge is steered by nothing and
-/// counted in <see cref="BotPathState.UnsupportedEdgeTicks"/>; the stuck detector
-/// takes it away and the search routes round it, which is the machinery that
-/// already exists for an edge that turns out to be untraversable. <b>Do not
-/// paper over it with an approximate jump</b> — an arc the generator did not
-/// validate is exactly what the whole takeoff apparatus exists to prevent.
+/// are steered by <see cref="SteerJump"/> and gated by twelve named tests in
+/// <c>PathFollowerTests</c>. <b>A stale "not done" costs a session exactly what a
+/// stale "done" does</b>, which is the same rule <c>CLAUDE.md</c> states for the
+/// sandvich in the other direction.
+/// </para>
+/// <para>
+/// ⚠️ <see cref="NavEdgeType.StickyJump"/> is the one edge kind genuinely
+/// unhandled, and it falls to the <c>default</c> arm: steered by nothing and
+/// counted in <see cref="BotPathState.UnsupportedEdgeTicks"/>, so the stuck
+/// detector takes it away and the search routes round it — the machinery that
+/// already exists for an edge that turns out to be untraversable. <b>Do not paper
+/// over it with an approximate jump</b>; an arc the generator did not validate is
+/// exactly what the whole takeoff apparatus exists to prevent.
+/// </para>
+/// <para>
+/// ✅ <b>Unreachable on every shipped map, measured 2026-08-28</b> by walking all
+/// 24 cached graphs in <c>Source/build/botnav</c> and counting edge kinds:
+/// Walk 18,785, Fall 11,558, Jump 67,013, DropThrough 5, DoubleJump 2,382,
+/// RocketJump 16,014 — and <b>StickyJump 0</b>. (<see cref="NavEdgeType.MoveBox"/>
+/// is 0 too; its arm is a deliberate no-op rather than a gap.) ⚠️ <b>Nothing
+/// filters a sticky-jump edge out of the search</b>, so a graph from a generator
+/// that starts emitting them would be routed over one and steered by nothing —
+/// which is why the <c>default</c> arm counts rather than throws.
 /// </para>
 /// </remarks>
 public sealed class PathFollower

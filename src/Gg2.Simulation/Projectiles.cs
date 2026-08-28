@@ -1894,14 +1894,14 @@ public static class Projectiles
     /// commonest case of a screen that is older than the pellet flying into it,
     /// would leave every pellet alive and make <c>perseverant</c> meaningless.
     /// <para>
-    /// ⚠️ <b>That reading is inferred from the reference's design and has not
-    /// been measured live.</b> What it rests on is that GM8 defers an
-    /// instance's removal to the end of the step rather than the end of the
-    /// event, so a destroyed instance is still there for the other side's
-    /// collision check. The alternative — the older instance wins and the
-    /// younger survives — makes three of the reference's own conditions
-    /// unreachable, which is why it is not the one transcribed. Worth an hour
-    /// at the next live session.
+    /// ✅ <b>MEASURED live 2026-08-27</b> (<c>tools/probes/probe-bubble-pair.js</c>),
+    /// across all four cells of the team x <c>perseverant</c> table, and this
+    /// transcription was right. The decisive row is an enemy ordinary pellet,
+    /// where <b>both</b> instances die — an outcome no single event can produce.
+    /// ⚠️ So <b>a projectile that destroys itself in its own collision event is
+    /// still there for the other instance's</b>: GM8 defers removal to the end of
+    /// the step, not the end of the event. See <c>docs/TRAPS-SIMULATION.md</c>,
+    /// the Quote section, and <c>docs/SIMULATION.md</c>, "Settled: Quote's Blade".
     /// </para>
     /// </remarks>
     private static bool ResolveBubblePair(

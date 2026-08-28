@@ -41,11 +41,17 @@ What it licenses, and what it does not:
 - ⚠️ **One uncontested seed in ten still carries for ~5,100 ticks** before the
   4,000-tick ceiling resolves it — a drop and a re-grab rather than a lock, so
   the flag does come back into play. Not chased.
-- ⚠️ **The jump branch of the follower is not ported** (item 4b-ii, 209 lines of
-  `botPathKeys.gml` plus four helpers). A jump, double jump or rocket jump on a
-  route is steered by nothing and left to the stuck detector. This one is a real
-  capability gap rather than a defect, and it is the largest single thing the bot
-  layer is missing.
+- ✅ **The jump branch of the follower IS ported** — item 4b-ii, landed in
+  `c34549b`, and the rocket jump in `55692be`. This bullet used to say it was not,
+  and so did the item's own section below it, **while that section documented the
+  implementation two hundred lines further down the same file**. Corrected
+  2026-08-28, after a session took the queue item it had spawned and found the
+  work done. ⚠️ **A stale "not done" costs a session exactly what a stale "done"
+  does**, which is the rule `CLAUDE.md` states for the sandvich in the other
+  direction. The only genuinely unhandled edge kind is `NavEdgeType.StickyJump`,
+  and **all 24 shipped nav graphs contain zero of them** (measured 2026-08-28:
+  Walk 18,785, Fall 11,558, Jump 67,013, DropThrough 5, DoubleJump 2,382,
+  RocketJump 16,014, StickyJump 0, MoveBox 0).
 - ⚠️ **Conversion at 6v6 is 8%**, and nothing establishes whether that is
   *right*. There is no human baseline in this project.
 
@@ -288,12 +294,18 @@ physics taken out) and `PathFollowerFixtureTests` (a real leg walked on
 `ctf_truefort` through `ScenarioWorld`). The reference is `botPathKeys.gml`
 (1,014 lines, 394 of code) and `botPathPlan.gml`.
 
-⚠️ **The jump branch is NOT ported** — 209 of those 394 code lines plus four
-helper scripts, and it is item 4b-ii. A jump, double jump or rocket jump on a
-route is steered by nothing, counted in `BotPathState.UnsupportedEdgeTicks`, and
-left to the stuck detector to take away. **Do not paper over it with an
-approximate jump**: an arc the generator did not validate is exactly what the
-whole takeoff apparatus exists to prevent.
+✅ **The jump branch IS ported** — item 4b-ii, below in this file. This paragraph
+said the opposite until 2026-08-28, contradicting its own section.
+
+⚠️ **`NavEdgeType.StickyJump` is the one edge kind still unhandled.** It falls to
+`FollowEdge`'s `default` arm: steered by nothing, counted in
+`BotPathState.UnsupportedEdgeTicks`, and left to the stuck detector to take away.
+**Do not paper over it with an approximate jump**: an arc the generator did not
+validate is exactly what the whole takeoff apparatus exists to prevent.
+✅ **No shipped graph contains one** — measured across all 24 caches in
+`Source/build/botnav`. ⚠️ But **nothing filters one out of the search**, so a
+graph from a generator that started emitting them would be routed over and
+steered by nothing, which is why that arm counts rather than throws.
 
 - ⚠️ **The route index advances only while the bot is ON THE GROUND**, and this
   is the single most expensive bug in the reference's follower. `NodeFromWorld`
