@@ -39,11 +39,27 @@ public static class SimulationStamp
     public const int ActionEncodingVersion = 1;
 
     /// <summary>
-    /// The observation layout. <b>0 means undesigned</b>: <c>docs/BOTAI.md</c>
-    /// item 6 deliberately does not fix the feature set yet, and a policy trained
-    /// against a layout that did not exist cannot be loaded anyway.
+    /// The observation layout.
     /// </summary>
-    public const int ObservationLayoutVersion = 0;
+    /// <remarks>
+    /// <b>Was 0, meaning "undesigned"</b>, while <c>docs/BOTAI.md</c> item 6
+    /// deliberately left the feature set open. ✅ **1 since 2026-08-28**: the v0
+    /// layout is <c>Gg2.Env.ObservationWriter</c>, whose field order is the
+    /// authority and whose own <c>LayoutVersion</c> this mirrors.
+    /// <para>
+    /// ⚠️ <b>This is mirrored rather than referenced.</b> <c>Gg2.Simulation</c>
+    /// does not and must not depend on <c>Gg2.Env</c> — the simulation is the
+    /// thing an env observes, not the other way round — so the two constants are
+    /// held equal by a test instead of by the compiler.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Bumping this changes <see cref="Uuid"/>, and that is the point.</b>
+    /// A checkpoint trained against one layout must not silently load against
+    /// another. When it moves, the pinned digest in <c>SimulationStampTests</c>
+    /// is <em>updated as the bump</em>, not fixed as a broken test.
+    /// </para>
+    /// </remarks>
+    public const int ObservationLayoutVersion = 1;
 
     /// <summary>The types whose public constants are part of the contract.</summary>
     /// <remarks>

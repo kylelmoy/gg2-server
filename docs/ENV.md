@@ -238,3 +238,41 @@ accepting 64 would throw away half of whatever a trainer sent without saying so.
 
 **Not done in this step**, and each is its own step: the observation writer, the
 stamp bump, `EnvBatch`, and the socket host.
+
+### ✅ Step 3 — `ObservationWriter` v0 and the stamp bump (2026-08-28)
+
+`Gg2.Env.ObservationWriter` is the authoritative field order; the table earlier
+in this document describes the shape. **`ObservationWriterTests` (9)** holds the
+three gates this document asked for — zero allocation, bounded values, advertised
+length — plus two that would otherwise be silent.
+
+✅ **The stamp is bumped**: `ObservationLayoutVersion` 0 → 1, and the pinned
+digest went `99b7ab3141e31fb4` → `08dc7b09303b3843`. **It invalidated no
+checkpoints, because none exist** — which is exactly why this was scheduled
+before `gg2-rl` phase 2. The bump is free precisely once.
+
+⚠️ **The version is MIRRORED, and the compiler cannot hold the two copies
+equal.** `Gg2.Simulation` must not depend on `Gg2.Env` — the simulation is the
+thing an env observes, not the reverse — so
+`ObservationWriterTests.TheStampMirrorsTheWritersLayoutVersion` is the only thing
+standing between a layout change and a stamp that did not move with it. That is
+the exact failure the stamp exists to prevent, so it is worth knowing it rests on
+one test.
+
+⚠️ **Nine class columns, not ten: the Quote has none, and is REFUSED.** Encoding
+it would set no column at all, which is indistinguishable from an empty slot —
+so a Quote throws rather than being observed as nothing.
+
+⚠️ **A scale is part of the layout.** `PositionScale`, `VelocityScale`,
+`RayRange`, `PatchCell` and the projectile radius all decide what the numbers
+mean; changing one is a layout bump exactly like changing a count.
+
+⚠️ **The rays are MARCHED, not asked of `CollisionLine`.** That primitive
+answers "is anything in the way", and a policy needs *how far* — a different
+question, and not one the simulation ever has to answer.
+
+**Two v0 shortcuts, both deliberate and both carrying their column now** so the
+layout does not churn when they arrive: `time-since-seen` is a fixed 0 (the
+reaction-delay ring buffer is `gg2-rl` phase 5), and the macro goal is a constant
+"engage" (the hybrid-boundary rule). A constant column costs one float; a bump
+costs a retrain.

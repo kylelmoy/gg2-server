@@ -28,8 +28,16 @@ public sealed class SimulationStampTests(ITestOutputHelper output)
     /// is correct." A change here is therefore not a broken test — it is the bump,
     /// and the question to answer before editing this line is which checkpoints it
     /// just invalidated.
+    /// <para>
+    /// ✅ <b>Bumped 2026-08-28</b>, from <c>99b7ab3141e31fb4</c>, by
+    /// <c>ObservationLayoutVersion</c> going 0 → 1: the v0 observation layout
+    /// exists now (<c>Gg2.Env.ObservationWriter</c>). <b>It invalidated no
+    /// checkpoints, because none exist yet</b> — which is precisely why
+    /// <c>docs/ENV.md</c> chose to do this before <c>gg2-rl</c> phase 2 rather
+    /// than after. The bump is free exactly once.
+    /// </para>
     /// </remarks>
-    private const string Pinned = "99b7ab3141e31fb4";
+    private const string Pinned = "08dc7b09303b3843";
 
     /// <summary>
     /// The stamp is stable, and not a per-process hash.
