@@ -208,8 +208,26 @@ public class ClientPredictionGateTests
     /// </para>
     /// </remarks>
     [Theory]
-    [InlineData("reference-arena_lumberyard-closedarena", 2, 2)]
-    [InlineData("reference-arena_lumberyard-waitforplayers", 9, 2)]
+    // ⚠️ THE TWO ARENA ROWS MEASURE A HARNESS ARTEFACT, NOT THE PORT. They were
+    // 2 and 9 until 2026-08-28, when the humiliation round landed and gave
+    // Arena's round-end state an observable effect for the first time — the
+    // losing team's control factor drops from 0.85 to 0.65.
+    //
+    // Under REPLAY the port's Arena loop is nowhere near the recording's: it
+    // ends a round one tick after starting it, on a 601-tick cycle, always for
+    // Red, where the recording plays rounds of 561 and 591 ticks. The cause is
+    // structural rather than arithmetic — a restart calls respawnEveryone(), a
+    // replay may only spawn characters the recording announces, so a tick later
+    // one team is empty and that is a win. So the port humiliates half the
+    // roster in windows that have nothing to do with the reference's, and these
+    // two numbers are the size of that.
+    //
+    // Flipping the humiliated team gives 19 and 27 — indistinguishable — which
+    // is the evidence that the WINDOW is wrong and not the side. See
+    // ArenaReplayLoopTests and docs/TRAPS-SIMULATION.md, "the Arena round loop
+    // cannot be replayed".
+    [InlineData("reference-arena_lumberyard-closedarena", 19, 21)]
+    [InlineData("reference-arena_lumberyard-waitforplayers", 28, 9)]
     [InlineData("reference-cp_dirtbowl-closedcp", 2, 2)]
     [InlineData("reference-cp_egypt-closedsymmetric", 6, 2)]
     [InlineData("reference-cp_egypt-uncontestedcp", 6, 2)]

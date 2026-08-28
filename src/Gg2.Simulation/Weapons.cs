@@ -532,8 +532,10 @@ public static class Weapons
         // Begin Step.xml:84: the whole attack/taunt/cloak block is wrapped in
         // `if(!taunting and !omnomnomnom)`. An eating heavy holding fire does
         // nothing at all — and note this returns BEFORE the spawn-protection
-        // line below, so eating does not spend it either.
-        if (character.Omnomnomnom)
+        // line below, so eating does not spend it either. The same is true of a
+        // taunt, and of the losing team of an Arena round
+        // (Begin Step.xml:97's `!player.humiliated`).
+        if (character.Taunting || character.Omnomnomnom || character.Humiliated)
             return;
 
         // Character.events/Begin Step.xml:85, beside the `event_user(1)` and not
@@ -542,16 +544,12 @@ public static class Weapons
         // up by pulling the trigger.
         character.DeathmatchInvulnerable = 0;
 
-        // ⚠️ Still not modelled, and each would suppress the shot: `taunting`
-        // and `player.humiliated` (the humiliation round). Neither can be
-        // entered by anything this port implements, so there is no state in
-        // which the guard would differ — they arrive with the features that set
-        // them, and this is one of the two places to add them.
-        //
-        // `omnomnomnom` WAS on that list and is now real, so it is a live guard
-        // rather than a note: Begin Step.xml:84 wraps the attack, the taunt and
-        // the cloak in `if(!taunting and !omnomnomnom)`, and :124 takes the
-        // right click too. An eating heavy cannot shoot.
+        // ⚠️ All three of `taunting`, `omnomnomnom` and `player.humiliated`
+        // suppress the shot, and all three are live guards above — the last two
+        // arrived with the sandvich and with Arena's humiliation round. Begin
+        // Step.xml:84 wraps the attack, the taunt and the cloak in
+        // `if(!taunting and !omnomnomnom)`, :97 adds `!player.humiliated`, and
+        // :124 takes the right click too.
 
         var kind = WeaponStats.KindFor(character.Class);
 
@@ -1731,10 +1729,7 @@ public static class Weapons
 
         // The union again, so a click that arrives and is released inside one
         // tick still counts. `taunting`, `omnomnomnom` and `player.humiliated`
-        // guard it in the reference and none can be entered yet — except that
-        // ⚠️ the taunt clause has an exemption for the demoman specifically
-        // (`!taunting or player.class == CLASS_DEMOMAN`), so a demoman can
-        // detonate mid-taunt. It arrives with taunting.
+        // all guard it, below.
         var downOrPressed = character.KeyState | character.PressedKeys;
 
         if ((downOrPressed & PlayerKeys.Special) == 0)
@@ -1743,8 +1738,16 @@ public static class Weapons
         // Begin Step.xml:124's `and !omnomnomnom`, which unlike the taunt clause
         // beside it has no demoman exemption: an eating demoman is impossible,
         // but an eating heavy right-clicking is not, and it does nothing.
-        if (character.Omnomnomnom)
+        //
+        // ⚠️ `(!taunting or player.class == CLASS_DEMOMAN)` — the exemption is
+        // real and it is the only one in the block: a demoman can detonate mines
+        // in the middle of a taunt, and nobody else can do anything.
+        if (character.Omnomnomnom
+            || character.Humiliated
+            || (character.Taunting && character.Class != PlayerClass.Demoman))
+        {
             return;
+        }
 
         // Character.events/Begin Step.xml:124, *above* the `event_user(2)` this
         // time rather than below it — the order is not observable, and the rule

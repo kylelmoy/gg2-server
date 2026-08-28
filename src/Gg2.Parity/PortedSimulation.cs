@@ -926,6 +926,24 @@ public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSim
             MatchSimulation.Tick(_world, ref _state, inputs, ref _events);
         }
 
+        // Arena's four round transitions, kept for the whole replay rather than
+        // for one tick: they are 300 ticks apart and what a test wants to know
+        // is whether the port reaches them where the recording did.
+        // ⚠️ Nothing in the wire comparison covers this — the replayer injects
+        // no arena message at all, so the port derives every round end itself
+        // and nothing was checking the arithmetic.
+        if (_events.ArenaRoundEnded)
+            _arenaTransitions.Add((TickCount, MessageType.ArenaEndRound, _events.ArenaRoundWinner));
+
+        if (_events.ArenaRestarted)
+            _arenaTransitions.Add((TickCount, MessageType.ArenaRestart, Team.Spectator));
+
+        if (_events.ArenaRoundStarted)
+            _arenaTransitions.Add((TickCount, MessageType.ArenaStartRound, Team.Spectator));
+
+        if (_events.ArenaWaitingForPlayers)
+            _arenaTransitions.Add((TickCount, MessageType.ArenaWaitForPlayers, Team.Spectator));
+
         _deaths.Clear();
         _ubers.Clear();
         _intel.Clear();
@@ -982,6 +1000,16 @@ public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSim
             _deaths.Add(new DeathRecord((byte)slot, death.Killer, death.Assistant, (byte)death.Source));
         }
     }
+
+    private readonly System.Collections.Generic.List<(int Tick, MessageType Kind, Team Winner)>
+        _arenaTransitions = [];
+
+    /// <summary>
+    /// Every Arena round transition the port decided on, with the tick it
+    /// decided it — for the fixture test that holds those ticks against the
+    /// recording's own <c>ARENA_*</c> messages.
+    /// </summary>
+    public IReadOnlyList<(int Tick, MessageType Kind, Team Winner)> ArenaTransitions => _arenaTransitions;
 
     /// <inheritdoc />
     public IReadOnlyList<DeathRecord> DeathsLastTick => _deaths;

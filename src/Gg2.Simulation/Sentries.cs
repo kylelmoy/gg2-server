@@ -324,6 +324,17 @@ public static class Sentries
             sentry.TurretImageAngle = 0;
         }
 
+        // Begin Step.xml:51, immediately below the build branch:
+        // `if (humiliated == 1 and built == 1 and currentWeapon != -1)
+        // event_user(1)`, and the user event destroys currentWeapon.
+        //
+        // ⚠️ So a humiliated sentry re-creates its turret above and scraps it
+        // here, every tick, for the whole of the scoreboard — which also means
+        // the branch above heals it to full every tick. Both are the
+        // reference's; neither is a shortcut.
+        if (sentry.Humiliated && sentry.Built && sentry.HasTurret)
+            sentry.HasTurret = false;
+
         // wallSetSolid() ... wallUnsetSolid(): only Obstacle is solid to a
         // sentry — not player walls, not bullet walls, not any gate.
         var filter = CollisionFilter.ForSentry();

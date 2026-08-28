@@ -306,6 +306,10 @@ public static class Arena
         state.ArenaState = ArenaState.RoundSetup;
         state.Overtime = false;
 
+        // `with Player humiliated = 0` — everybody, winners included, since the
+        // flag is only ever true for the losers of the round just ended.
+        ClearHumiliation(ref state);
+
         ResetPoint(ref state);
         Sweep(ref state, spawnPoints, ref events);
 
@@ -355,14 +359,16 @@ public static class Arena
     /// ten seconds the scoreboard is up — which is what the losing team's
     /// humiliation is drawn over. Only the next restart clears them.
     /// <para>
-    /// <c>with Sentry if team != win event_user(1)</c> destroys the losing
-    /// team's sentries, and the reference does it twice — once in
-    /// <c>serverArenaEndRound</c> and again in <c>doEventArenaEndRound</c>,
-    /// which the server calls. The second is a no-op.
+    /// <c>with Sentry if team != win event_user(1)</c> scraps the losing team's
+    /// <em>turrets</em> — <c>Sentry.events/User Event 1.xml</c> destroys
+    /// <c>currentWeapon</c>, not the sentry — and sets each one's
+    /// <c>humiliated</c>, which keeps them scrapped through the scoreboard.
     /// </para>
     /// <para>
-    /// <c>humiliated</c> is set on the losing team here and is not modelled; it
-    /// suppresses their ammo refill and drops a spy's cloak.
+    /// <c>humiliated</c> is set on the losing team here, and it is real since
+    /// 2026-08-28: it costs them 0.2 of control, suppresses the attack, the
+    /// taunt, the right click, the cloak and the sandvich, and withholds the
+    /// round-end ammo refill everybody else gets.
     /// </para>
     /// </remarks>
     private static void EndRound(ref WorldState state, Team winner, ref TickEvents events)
@@ -377,13 +383,30 @@ public static class Arena
         state.ArenaRoundStart = 0;
         state.ArenaState = ArenaState.RoundEnd;
 
-        // The losing team's sentries go with the round.
+        // doEventArenaEndRound.gml:26 — `with Player if team != win humiliated
+        // = 1`. ⚠️ Every player, not every living character: it survives the
+        // death that usually earns it, and a spectator is humiliated too,
+        // because Team.Spectator is not the winner either. Cleared by the next
+        // Restart or WaitForPlayers below.
+        for (var slot = 0; slot < WorldState.MaxSlots; slot++)
+        {
+            if (state.HasPlayer[slot] && state.Players[slot].Team != winner)
+                state.Players[slot].Humiliated = true;
+        }
+
+        // doEventArenaEndRound.gml:27 — `with Sentry if team != win
+        // event_user(1)`.
+        //
+        // ⚠️ That user event scraps the sentry's TURRET and sets the sentry's
+        // own `humiliated`. It does not destroy the sentry, and this loop did
+        // until 2026-08-28: the guns stay standing through the scoreboard, they
+        // simply cannot shoot. Only the next restart's sweep removes them.
         for (var slot = 0; slot < WorldState.MaxSlots; slot++)
         {
             if (state.HasSentry[slot] && state.Sentries[slot].Team != winner)
             {
-                state.Sentries[slot] = default;
-                state.HasSentry[slot] = false;
+                state.Sentries[slot].HasTurret = false;
+                state.Sentries[slot].Humiliated = true;
             }
         }
 
@@ -410,10 +433,25 @@ public static class Arena
         state.ControlPointUnlock = UnlockTicks;
         state.ArenaState = ArenaState.Waiting;
 
+        // `with Player humiliated = 0` — everybody, winners included, since the
+        // flag is only ever true for the losers of the round just ended.
+        ClearHumiliation(ref state);
+
         ResetPoint(ref state);
         Sweep(ref state, spawnPoints, ref events);
 
         events.ArenaWaitingForPlayers = true;
+    }
+
+    /// <summary>
+    /// <c>with Player humiliated = 0</c>, shared by
+    /// <c>doEventArenaRestart.gml:11</c> and
+    /// <c>doEventArenaWaitForPlayers.gml:12</c>.
+    /// </summary>
+    private static void ClearHumiliation(ref WorldState state)
+    {
+        for (var slot = 0; slot < WorldState.MaxSlots; slot++)
+            state.Players[slot].Humiliated = false;
     }
 
     private static void ResetPoint(ref WorldState state)

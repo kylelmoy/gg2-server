@@ -144,6 +144,30 @@ public struct SentryState
     /// </summary>
     public bool HasTurret;
 
+    /// <summary>
+    /// <c>humiliated</c>: this sentry belonged to the losing side of an Arena
+    /// round, so its turret is scrapped and stays scrapped.
+    /// </summary>
+    /// <remarks>
+    /// Set by <c>Sentry.events/User Event 1.xml</c>, which
+    /// <c>doEventArenaEndRound.gml:27</c> runs on every sentry whose team is not
+    /// the winner's.
+    /// <para>
+    /// ⚠️ <b>The sentry is NOT destroyed</b> — only <c>currentWeapon</c> is, and
+    /// this flag is what keeps it that way: <c>Begin Step.xml:51</c> re-runs the
+    /// user event every tick, so the gun that the build branch above it
+    /// re-creates each tick is scrapped again before it can fire. The port had
+    /// this as an outright destruction until 2026-08-28.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>And that loop heals it.</b> The re-creation branch is
+    /// <c>if (built == 1 and currentWeapon == -1) { ... hp = maxHp; ... }</c>,
+    /// so a humiliated sentry is restored to full health on every tick of the
+    /// scoreboard. That is the reference's behaviour, not a convenience.
+    /// </para>
+    /// </remarks>
+    public bool Humiliated;
+
     /// <summary>Whether the turret can fire this tick. <c>SentryTurret</c>'s, not a weapon's.</summary>
     public bool ReadyToShoot;
 

@@ -117,6 +117,10 @@ public static class MatchSimulation
             state.Characters[slot].MapChanging = state.MapChanging;
             state.Characters[slot].SetupGatesClosed = state.SetupTimer > 0;
             state.Characters[slot].ArenaRoundEnded = Arena.RoundEnded(state);
+
+            // The third mirrored flag, and the only one that comes off the
+            // PLAYER rather than off a global: Arena's humiliation round.
+            state.Characters[slot].Humiliated = state.Players[slot].Humiliated;
         }
 
         for (var slot = 0; slot < WorldState.MaxSlots; slot++)

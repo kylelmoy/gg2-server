@@ -11,8 +11,8 @@ namespace Gg2.Simulation;
 /// only three things on it feed the simulation: <c>team</c>, <c>class</c> and
 /// <c>alarm[5]</c>, the respawn timer. <c>object</c> (the character, or -1) is
 /// <see cref="WorldState.Alive"/>; <c>sentry</c> is
-/// <see cref="WorldState.HasSentry"/>; <c>humiliated</c> and the stats arrive
-/// with the features that read them.
+/// <see cref="WorldState.HasSentry"/>; the stats arrive with the features that
+/// read them.
 /// <para>
 /// ⚠️ <b>Make a player with <see cref="Fresh"/>, never <c>default</c>.</b>
 /// <c>Team.Red</c> is 0, so a zeroed player is a red scout ready to respawn —
@@ -28,6 +28,25 @@ public struct PlayerState
 
     /// <summary><c>player.class</c>: what the next spawn will be.</summary>
     public PlayerClass Class;
+
+    /// <summary>
+    /// <c>player.humiliated</c>: this player was on the losing side of the
+    /// Arena round now on the scoreboard.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Arena and nothing else, and it is a <em>player</em> flag rather
+    /// than a character one</b> — it survives the death it is usually earned by.
+    /// <c>doEventArenaEndRound.gml:26</c> is <c>with Player if team != win
+    /// humiliated = 1</c>, which takes spectators with it because their team is
+    /// not the winner either; <c>doEventArenaRestart.gml:11</c> and
+    /// <c>doEventArenaWaitForPlayers.gml:12</c> clear it on everybody, as does
+    /// <c>basicRoomSetup.gml:33</c> on a map load.
+    /// <para>
+    /// <see cref="CharacterState.Humiliated"/> is the per-tick copy the physics
+    /// reads, mirrored the same way <c>MapChanging</c> is.
+    /// </para>
+    /// </remarks>
+    public bool Humiliated;
 
     /// <summary>
     /// <c>player.alarm[5]</c>: ticks until <c>PlayerSpawn()</c>. Rests at

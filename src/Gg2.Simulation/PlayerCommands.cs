@@ -370,12 +370,10 @@ public static class PlayerCommands
     /// precondition fails, which is silence rather than an error.
     /// </summary>
     /// <remarks>
-    /// The reference's five clauses, minus the two this port has no state for:
-    /// <c>player.humiliated</c> (the humiliation round) and
-    /// <c>object.taunting</c>. ⚠️ <b>Neither is modelled anywhere</b>, so there
-    /// is no state in which the guard would differ — the same standing note
-    /// <c>Weapons</c> carries about the shot. They arrive with the features that
-    /// set them, and this is one of the places to add them.
+    /// All five of the reference's clauses since 2026-08-28, when
+    /// <c>player.humiliated</c> and <c>object.taunting</c> stopped being notes
+    /// and became state. A heavy cannot eat while taunting, and the losing side
+    /// of an Arena round cannot eat at all.
     /// <para>
     /// ⚠️ <b>The heal is not here.</b> <c>serverEatSandvich</c> only starts the
     /// animation; every point of health comes from
@@ -397,6 +395,13 @@ public static class PlayerCommands
         // ⚠️ Already eating is a refusal, not a restart. Without it a heavy
         // holding the key would hold `omnomnomnomindex` at zero and eat forever.
         if (character.Omnomnomnom || !character.CanEat)
+            return false;
+
+        // `!player.humiliated and !player.object.taunting`. ⚠️ The humiliation
+        // is read off the PLAYER rather than the mirrored copy on the character,
+        // because a client command is processed outside the tick and the mirror
+        // is written inside it.
+        if (state.Players[slot].Humiliated || character.Taunting)
             return false;
 
         character.Omnomnomnom = true;

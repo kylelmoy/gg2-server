@@ -573,6 +573,49 @@ public struct CharacterState
     public int RegenTimer;
 
     /// <summary>
+    /// <c>taunting</c>: the character is playing its taunt animation and can do
+    /// nothing else.
+    /// </summary>
+    /// <remarks>
+    /// Set by the taunt key on a fresh press
+    /// (<c>Character.events/Begin Step.xml:102-107</c>) and cleared by
+    /// <see cref="TauntIndex"/> reaching the end of the class's taunt sprite in
+    /// End Step. ⚠️ <b>It is observable simulation, not decoration</b>: it
+    /// suppresses acceleration, the attack, the right click and the cloak, and
+    /// the stock client re-derives all of that from the same key bit — so a
+    /// server that ignored the taunt key would keep walking a character the
+    /// client has already stopped.
+    /// <para>
+    /// ⚠️ <b>The jump is the exception, and only on the tick the taunt
+    /// starts.</b> GML evaluates <c>if(!taunting and !omnomnomnom)</c> once, at
+    /// the top of the block; the taunt is set inside it and the jump is tested
+    /// further down the same block, so a press of taunt-and-jump together jumps.
+    /// Everything below that block — the right click at :137, the cloak at :147,
+    /// the acceleration at :259 — re-reads the flag and is refused.
+    /// </para>
+    /// </remarks>
+    public bool Taunting;
+
+    /// <summary>
+    /// <c>tauntindex</c>: the animation clock that decides when a taunt ends.
+    /// </summary>
+    /// <remarks>
+    /// <c>End Step.xml:90-94</c> adds <c>tauntspeed*0.1</c> — 3 x 0.1, and
+    /// written that way rather than as 0.3 because the two are different
+    /// doubles and the sum is compared against a small integer — and the taunt
+    /// ends at <c>tauntindex &gt;= sprite_get_number(tauntsprite)</c>. So the
+    /// duration is the class's taunt sprite frame count, and nothing else:
+    /// <see cref="ClassStats.TauntFrames"/>.
+    /// <para>
+    /// ⚠️ <b>Reset by the key even when the taunt does not start.</b> The
+    /// reference sets <c>tauntindex = 0</c> outside the <c>!invisible and
+    /// cloakAlpha == 1</c> test, so a cloaked spy pressing taunt rewinds the
+    /// counter without taunting.
+    /// </para>
+    /// </remarks>
+    public double TauntIndex;
+
+    /// <summary>
     /// The heavy is eating: <c>omnomnomnom</c>, from <c>serverEatSandvich.gml</c>.
     /// </summary>
     /// <remarks>
@@ -644,6 +687,19 @@ public struct CharacterState
     public const double OmnomnomnomRate = 0.25;
 
     /// <summary>
+    /// <c>tauntspeed * 0.1</c> per tick — <c>tauntspeed</c> is 3 for every class
+    /// (<c>Character.events/Create.xml:113</c>).
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Written as the product, not as 0.3.</b> GM8 holds <c>3*0.1</c> and
+    /// the literal <c>0.3</c> as different doubles, and <see cref="TauntIndex"/>
+    /// accumulates this thirty to sixty times before being compared against an
+    /// integer frame count — so which side of the comparison the last tick falls
+    /// on can differ. Transcribe the expression.
+    /// </remarks>
+    public const double TauntRate = 3 * 0.1;
+
+    /// <summary>
     /// <c>omnomnomnomend = 32</c>, set by <c>serverEatSandvich.gml</c>.
     /// </summary>
     /// <remarks>
@@ -709,6 +765,26 @@ public struct CharacterState
     /// </para>
     /// </remarks>
     public bool MapChanging;
+
+    /// <summary>
+    /// <c>player.humiliated</c>: this character is on the team that just lost an
+    /// Arena round, mirrored beside <see cref="MapChanging"/> and written by the
+    /// same line.
+    /// </summary>
+    /// <remarks>
+    /// Arena and nothing else. <c>doEventArenaEndRound.gml:26</c> sets it on
+    /// every player not on the winning side and the next
+    /// <c>doEventArenaRestart</c> or <c>doEventArenaWaitForPlayers</c> clears
+    /// it, so it is true only during the ten seconds the scoreboard is up.
+    /// <para>
+    /// It costs 0.2 of control (<em>instead of</em> the intel's 0.1, not as
+    /// well as), suppresses the attack, the taunt, the right click, the cloak
+    /// and the sandvich, and withholds the round-end ammo refill. The state
+    /// lives on <see cref="PlayerState.Humiliated"/>; this is the per-tick copy
+    /// the physics reads.
+    /// </para>
+    /// </remarks>
+    public bool Humiliated;
 
     /// <summary>
     /// <c>areSetupGatesClosed()</c>, mirrored beside <see cref="MapChanging"/>

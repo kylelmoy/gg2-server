@@ -141,6 +141,30 @@ public static class CharacterPhysics
         if (character.OnGround)
             character.DoubleJumpUsed = false;
 
+        // ⚠️ Begin Step.xml:95's `if(!taunting and !omnomnomnom)` opens here and
+        // closes after the jump, and GML evaluates it ONCE. So a character
+        // already taunting cannot start another taunt and cannot jump — but one
+        // that starts a taunt on this tick still jumps, because the block was
+        // entered before the flag was set. That is why `taunting` is read into a
+        // local rather than re-read below.
+        var blocked = character.Taunting || character.Omnomnomnom;
+
+        // Begin Step.xml:102-107. The attack above this (Weapons.FireStep) is
+        // the other statement in the block.
+        if (!blocked && !character.Humiliated && (character.PressedKeys & PlayerKeys.Taunt) != 0)
+        {
+            // ⚠️ `if (!invisible && cloakAlpha == 1) taunting = true;` — a spy
+            // part-way through a cloak presses taunt and does not taunt.
+            // `invisible` is a *drawing* flag the reference sets from the same
+            // cloak state, so this port asks the cloak directly.
+            if (!character.Cloak && Gml.Equal(character.CloakAlpha, 1))
+                character.Taunting = true;
+
+            // ⚠️ Outside that test, so the counter is rewound whether or not the
+            // taunt starts. Transcribed rather than tidied.
+            character.TauntIndex = 0;
+        }
+
         // Jump fires on a fresh press, not on the key being held — so holding
         // jump does not bunny-hop. The reference also accepts a queued jump
         // (the client's queueJump setting), which is not modelled; a queue-jump
@@ -150,7 +174,8 @@ public static class CharacterPhysics
         // faster than a jump would.
         // The character's own jumpStrength, not the class constant: a scoped
         // sniper's is two units lower. It is the same value for everybody else.
-        if ((character.PressedKeys & PlayerKeys.Jump) != 0
+        if (!blocked
+            && (character.PressedKeys & PlayerKeys.Jump) != 0
             && Gml.Greater(character.VSpeed, -character.JumpStrength))
         {
             if (character.OnGround && !stuckInWall)
@@ -223,7 +248,11 @@ public static class CharacterPhysics
             // both-keys cancel — and NOT the friction below it. So an eating
             // heavy still decelerates to a stop rather than sliding on at the
             // speed they started with. Begin Step.xml:237-253.
-            if (!character.Omnomnomnom)
+            //
+            // ⚠️ Unlike the jump, this re-reads `taunting` — it is a different
+            // block, several lines further down the event — so the tick a taunt
+            // starts is already a tick with no acceleration in it.
+            if (!character.Taunting && !character.Omnomnomnom)
             {
                 // ⚠️ The character's runPower against the *class's*
                 // basemaxspeed. The reference never recomputes basemaxspeed when
@@ -483,11 +512,10 @@ public static class CharacterPhysics
         // ammo while the win is on screen, so the ten seconds are a free-for-all
         // rather than a scramble for a reload.
         //
-        // ⚠️ `(arenaRoundEnd or global.mapchanging) and !player.humiliated` —
-        // the arena half waits on ArenaHUD, and `humiliated` is set on the
-        // losing team by ScoreTableController, a drawing object nothing in the
-        // simulation reads. So the port refills for the losers too.
-        if (character.MapChanging || character.ArenaRoundEnded)
+        // ⚠️ `(arenaRoundEnd or global.mapchanging) and !player.humiliated`, so
+        // the losing team of an Arena round does NOT get the free reload — the
+        // ten seconds are a free-for-all for the winners only.
+        if ((character.MapChanging || character.ArenaRoundEnded) && !character.Humiliated)
             RefillMagazine(character.Class, ref weapon);
     }
 
@@ -649,6 +677,22 @@ public static class CharacterPhysics
                 character.Omnomnomnom = false;
         }
 
+        // End Step.xml:90-94, the taunt's own clock and the only thing that ever
+        // ends one.
+        //
+        // ⚠️ `tauntspeed*0.1`, not 0.3 — GM8 holds 3*0.1 and 0.3 as different
+        // doubles, and this is a repeated addition compared against a small
+        // integer, so the two do not always end on the same tick. The class's
+        // frame count is the whole duration: 9 frames for a scout is 30 ticks,
+        // 17 for Quote is 57.
+        if (character.Taunting)
+        {
+            character.TauntIndex += CharacterState.TauntRate;
+
+            if (Gml.GreaterOrEqual(character.TauntIndex, character.Stats.TauntFrames))
+                character.Taunting = false;
+        }
+
         // End Step.xml:104, between the taunt block and the death-cam
         // position: "for things polling whether the character is on a
         // medcabinet". The cabinet's own effects are a *collision* event and
@@ -713,7 +757,9 @@ public static class CharacterPhysics
     /// longer cooldown already running is not shortened. The reference's own
     /// comment: "stop spies immediately picking up intel after uncloaking".</item>
     /// <item>An intel carrier cannot cloak at all, and neither can somebody
-    /// taunting — taunting is not modelled, so that clause is always true.</item>
+    /// taunting or humiliated — both real since 2026-08-28. The taunt clause
+    /// bites on the tick the taunt starts, because this block is below the one
+    /// that sets the flag.</item>
     /// </list>
     /// </remarks>
     public static void CloakStep(ref CharacterState character, ref WeaponState weapon)
@@ -723,6 +769,8 @@ public static class CharacterPhysics
 
         if (!character.Stats.CanCloak
             || character.CarryingIntel
+            || character.Taunting
+            || character.Humiliated
             || !(character.Cloak || Gml.Equal(character.CloakAlpha, 1)))
         {
             return;
@@ -808,9 +856,12 @@ public static class CharacterPhysics
             3 => (Gml.PointThreeFive, 1.05), // airblast
             4 => (ClassStats.BaseControl, 1.0), // rocketed by a team-mate
 
-            // Humiliation costs 0.2 of control and is not modelled yet; intel
-            // costs 0.1 and is.
-            _ => (character.CarryingIntel ? ClassStats.BaseControl - 0.1 : ClassStats.BaseControl,
+            // ⚠️ Humiliation costs 0.2 and intel 0.1, and they do not add: the
+            // reference is an if/else-if chain, so a humiliated flag carrier
+            // loses 0.2 and not 0.3. Begin Step.xml:176-181.
+            _ => (character.Humiliated ? ClassStats.BaseControl - 0.2
+                    : character.CarryingIntel ? ClassStats.BaseControl - 0.1
+                    : ClassStats.BaseControl,
                   ClassStats.BaseFriction),
         };
 

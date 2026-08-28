@@ -2063,6 +2063,110 @@ change trajectories rather than last digits:
   `Gml.Greater`, `Gml.Sign` and friends. A raw `!= 0` on a value that ordinary
   cancellation left at `-2.7e-14` moves a character six pixels.
 
+### ✅ Taunting and the humiliation round, landed 2026-08-28
+
+The two features `CLAUDE.md` had been naming as absent since phase 5. Both are
+**observable simulation**, which is the reason they could not stay absent: the
+taunt key is a bit in `keyState`, so the stock client sets `taunting` from the
+same wire the server does, and a server that ignored it would keep walking a
+character the client has already stopped.
+
+**What a taunt does** (`Character.events/Begin Step.xml:95-152`, `End Step.xml:90-94`):
+
+| effect | where |
+|---|---|
+| no acceleration at all | `:259`, the block wrapped in `if(!taunting && !omnomnomnom)` |
+| no attack | `:97`, inside the same guarded block |
+| no right click — **except a demoman**, who may detonate | `:137`, `(!taunting or player.class == CLASS_DEMOMAN)` |
+| no cloak | `:147` |
+| no sandvich | `serverEatSandvich.gml:18` |
+| ends after the class's taunt sprite frames | `End Step.xml:90-94` |
+
+⚠️ **The jump on the tick the taunt starts still fires.** GML evaluates
+`if(!taunting and !omnomnomnom)` **once**, sets the flag inside the block, and
+tests the jump further down the *same* block — so taunt-and-jump together jumps.
+Everything outside that block re-reads the flag and refuses on the same tick.
+That asymmetry is the reference's and `TauntTests` pins both halves.
+
+⚠️ **A taunt's duration is the class's sprite frame count and nothing else.**
+`tauntindex += tauntspeed*0.1` with `tauntspeed = 3`, ending at `>=
+sprite_get_number(tauntsprite)`. Counted from the reference tree, red and blue
+identical for every class:
+
+| class | frames | ticks | | class | frames | ticks |
+|---|---|---|---|---|---|---|
+| Scout | 9 | 30 | | Engineer | 13 | 44 |
+| Soldier | 16 | 54 | | Heavy | 12 | 40 |
+| Sniper | 13 | 44 | | Spy | 11 | 37 |
+| Demoman | 11 | 37 | | Pyro | 10 | 34 |
+| Medic | 12 | 40 | | Quote (`Querly*`) | 17 | 57 |
+
+⚠️ **Write the rate as `3 * 0.1`, not `0.3`.** GM8 holds them as different
+doubles and this is a repeated addition compared against a small integer, so
+which tick the taunt ends on can differ. Same class of trap as the physics
+constants.
+
+**What humiliation does.** `doEventArenaEndRound.gml:26` is `with Player if team
+!= win humiliated = 1`, cleared by `doEventArenaRestart.gml:11` and
+`doEventArenaWaitForPlayers.gml:12`. It is **Arena and nothing else**, and true
+only for the ten seconds the scoreboard is up. It costs **0.2 of control**,
+suppresses the attack, the taunt, the right click, the cloak and the sandvich,
+and withholds the round-end ammo refill everybody else gets.
+
+⚠️ **The control penalties do not stack.** `Begin Step.xml:176-181` is an
+if/else-if chain, so a humiliated flag carrier is `baseControl - 0.2` and not
+`- 0.3`.
+
+⚠️ **It is a PLAYER flag, and it takes spectators with it.** `with Player`
+includes everybody whose team is not the winner's, and `Team.Spectator` is not
+the winner either. It also survives the death that usually earns it.
+
+#### ⚠️ The sentry is NOT destroyed, and the port destroyed it for two phases
+
+`doEventArenaEndRound.gml:27` is `with Sentry if team != win event_user(1)`, and
+that user event destroys **`currentWeapon`** — the turret — and sets the
+*sentry's* own `humiliated`. `Arena.EndRound` removed the whole sentry until
+2026-08-28.
+
+And the flag is load-bearing rather than cosmetic: `Sentry.events/Begin
+Step.xml:51` re-runs the user event every tick, because the build branch
+immediately above it re-creates the turret every tick — which also means **a
+humiliated sentry is healed to `maxHp` on every tick of the scoreboard**
+(`if (built == 1 and currentWeapon == -1) { ... hp = maxHp; ... }`). Both are the
+reference's.
+
+#### ⚠️ NEW, open: the Arena round loop cannot be replayed
+
+Landing humiliation gave Arena's round-end state its first observable effect,
+and it immediately exposed something nothing had been checking: **under replay
+the port's Arena loop is nowhere near the recording's.**
+
+| | rounds |
+|---|---|
+| `reference-arena_lumberyard-closedarena` | ends at t1342, t2533, t3601 — 561 and 591 ticks long, won by both teams |
+| the port, replaying it | ends **one tick after each start**, on a 601-tick cycle, **always Red** |
+
+The cause is structural. `doEventArenaRestart` ends in `respawnEveryone()`, and
+a replay may only spawn characters the recording announced — so the tick after
+the port restarts a round, one team has nobody alive, and an empty team is a
+win. The loop then runs on the two timers alone: 300 + 300 + 1.
+
+**The price is two rows of `ClientPredictionGateTests`**, which went from 2/2 and
+9/2 to 19/21 and 28/9 — every one of those units is the port humiliating half a
+roster in a window the reference never had. ⚠️ Flipping the humiliated team
+gives 19 and 27, indistinguishable, which is the evidence that the **window** is
+wrong rather than the side.
+
+⚠️ **Injecting the recording's four `ARENA_*` messages is the obvious fix and is
+not obviously right.** Everything else a replay cannot derive is injected
+because the reference already made the choice and put it on the wire, and these
+qualify — but the port would go on making its *own* decision beside the injected
+one, and there is no way to tell it not to: `MatchSimulation.Tick` takes no mode
+and `docs/SIMULATION.md`'s rule is that the simulation never special-cases its
+caller. Settle that question before writing anything. `ArenaReplayLoopTests`
+pins the artefact in both directions, and
+`PortedSimulation.ArenaTransitions` is the diagnostic it reads.
+
 ### t523's residue: the stop is a WALL, and the "+0.4865" was never a divergence
 
 **2026-08-28.** Three corrections and one new experiment. The residue itself is
