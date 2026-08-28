@@ -2823,3 +2823,47 @@ until somebody eats, and no recording contains one — which is also the honest
 statement of its coverage. `SandvichTests` (9) is unit coverage, not parity
 evidence; **no fixture holds a sandvich, so none of this is measured against the
 running game.**
+
+### ✅ DIAGNOSED: the rocket that "carried on past the scout it killed"
+
+**2026-08-28.** The third report from the first two-human game. **No server bug
+— and the mechanism is not the one the report points at.**
+
+⚠️ **A rocket is NEVER on the wire.** `WEAPON_FIRE` carries the shooter's
+position and velocity, quantised, plus the RNG seed — and nothing else. **The
+client creates the rocket from that and simulates its entire flight locally,
+with nothing ever correcting it.** Mines *are* serialised, every tick, which is
+what makes the omission easy to miss: `StateUpdateWriter` has a mine block and
+no rocket block.
+
+**So the rocket a player watches is their own client's, start to finish**, and
+the question "did the server's rocket carry on" cannot be answered by looking at
+the picture. On the server it does not: `RocketHitCharacter` explodes and frees
+it on the tick it hits, now gated end-to-end through the real collision path by
+`RocketTests.ARocketThatHitsAnEnemyIsDestroyedRatherThanFlyingOn`.
+
+✅ **The actual mechanism is the target's prediction, not the projectile's.**
+Both sides simulate the rocket from near-identical launch states — position to
+1/5 px, and the velocity is the launcher's own constant rather than anything
+inherited — so the two rockets stay close. What the client is *corrected* on
+every seventh tick is the **character**. A scout is the fastest thing in the
+game, so its seven-tick dead-reckoning error is the largest in the game: the
+rocket passes where the client has drawn the scout and hits where the server
+has it, and the client draws the miss.
+
+⬅️ **Which makes this the same finding as the rubberbanding, seen from another
+angle**, and it inherits that item's open question rather than closing it: the
+port's client-prediction error is **1.8–3.5×** the reference's, so this port
+makes the artefact more likely than stock GG2 does — but the artefact exists in
+stock GG2 and no amount of server-side work removes it.
+
+⚠️ **Two traps for whoever tests a projectile next:**
+
+- **A tick is `Move` and then `Collide`, two stages far apart**
+  (`MatchSimulation.cs:234` and `:313`, with every character's physics between
+  them). A test that calls only `Move` flies the rocket through everybody — and
+  looks exactly like a reproduction of this report. The first draft of that test
+  did precisely that.
+- **Do not reach for the recording.** The trace is the server's broadcast, so it
+  holds the shot, the death and the positions — and never the projectile. The
+  question the report asks is not in there.

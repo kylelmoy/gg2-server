@@ -662,6 +662,62 @@ public sealed class RocketTests
     }
 
     /// <summary>
+    /// ✅ <b>A rocket that hits an enemy is GONE, and does not fly on.</b>
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Reported by a player from the first two-human game</b> — "the
+    /// rocket appeared to continue moving past the scout it killed and exploded
+    /// against the stairs past the scout". This is the server half of that
+    /// report, and it holds: the rocket is destroyed on the tick it hits.
+    /// <para>
+    /// <b>Everything else in this file asserts the destruction indirectly</b>,
+    /// through <c>Explosions.Explode</c>'s return value. This drives the whole
+    /// collision path — <c>Projectiles.Move</c>, which is what a tick actually
+    /// calls — and then asks the pool, which is the question the report asks.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>The report's cause is not here, and this test cannot find it.</b>
+    /// A rocket is <em>never on the wire</em>: <c>WEAPON_FIRE</c> carries the
+    /// shooter's quantised position, velocity and an RNG seed, and the client
+    /// creates and simulates the whole flight itself with nothing ever
+    /// correcting it. What the client corrects every seventh tick is the
+    /// <em>target</em>. So a rocket drawn flying through somebody is the
+    /// character's prediction error, not the projectile's — see
+    /// <c>ClientPredictionGateTests</c>, and <c>docs/TRAPS-SIMULATION.md</c>.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ARocketThatHitsAnEnemyIsDestroyedRatherThanFlyingOn()
+    {
+        var state = default(WorldState);
+
+        // Far enough ahead that the rocket has to travel to reach them, so the
+        // collision happens inside Move rather than at the muzzle.
+        Put(ref state, 2, PlayerClass.Scout, Team.Blue, OpenX + 60, OpenY);
+        state.SpawnProjectile(Rocket(OpenX, OpenY, direction: 0, ownerSlot: 1, Team.Red));
+
+        Assert.Equal(1, state.LiveProjectileCount);
+
+        var before = state.Characters[2].Hp;
+
+        // ⚠️ Both stages. A tick is Move and then, well after the characters
+        // have moved, Collide — MatchSimulation.cs:234 and :313. Calling only
+        // Move flies the rocket straight through everybody, which is what the
+        // first draft of this test did and why it looked like it had reproduced
+        // the report.
+        for (var tick = 0; tick < 10 && state.LiveProjectileCount > 0; tick++)
+        {
+            Projectiles.Move(World, ref state);
+            Projectiles.Collide(World, ref state);
+        }
+
+        Assert.Equal(0, state.LiveProjectileCount);
+        Assert.True(
+            state.Characters[2].Hp < before,
+            "the rocket vanished without hurting anybody, so it hit something else");
+    }
+
+    /// <summary>
     /// A direct hit deals its own 25 on top of whatever the blast does.
     /// </summary>
     [Fact]
