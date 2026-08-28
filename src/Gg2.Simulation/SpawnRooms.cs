@@ -256,25 +256,36 @@ public static class Cabinets
 
         // `if ((hp < maxHp or nutsNBolts < 100 or !canEat) and other.heal)`.
         //
-        // `canEat` is the heavy's sandvich, which this port does not model and
-        // which is always true — so the clause reduces to the two below it, and
-        // the `alarm[6] = 0; canEat = true;` pair inside the branch is a no-op
-        // for the same reason. Both are transcribed as comments rather than as
-        // code, because writing a field that nothing reads is worse.
+        // ⚠️ The third clause is load-bearing now that the sandvich exists: a
+        // heavy at full health with full ammo and a spent sandvich still
+        // *enters* this branch, purely to have the cooldown cleared. Before the
+        // sandvich was modelled it was a no-op and was transcribed as a comment.
         if (cabinet.Heal
             && (Gml.Less(character.Hp, stats.MaxHp)
-                || Gml.Less(character.NutsNBolts, CharacterState.MaxNutsNBolts)))
+                || Gml.Less(character.NutsNBolts, CharacterState.MaxNutsNBolts)
+                || !character.CanEat))
         {
             if (state.GameMode == GameMode.TeamDeathmatch)
             {
                 // ⚠️ A trickle, not a fill — and nothing else. See
-                // DeathmatchHealPerTick.
+                // DeathmatchHealPerTick. ⚠️ Note it does NOT clear the sandvich
+                // cooldown either, so a Team Deathmatch heavy who steps on a
+                // cabinet to reset their sandvich gets a third of a hit point
+                // and keeps waiting.
                 character.Hp += DeathmatchHealPerTick;
             }
             else
             {
                 character.Hp = stats.MaxHp;
                 character.NutsNBolts = CharacterState.MaxNutsNBolts;
+
+                // `alarm[6] = 0; canEat = true;` — the reference's own FIXME
+                // asks whether the second is redundant with the first. It is
+                // not redundant, it is the other way round: an alarm set to 0
+                // decrements to -1 without ever firing, so clearing the timer
+                // alone would leave `canEat` false for ever.
+                character.EatTimer = 0;
+                character.CanEat = true;
             }
         }
 

@@ -26,7 +26,6 @@ namespace Gg2.Simulation;
 /// The set is exactly the commands this port executes that change the world.
 /// <c>CHAT_BUBBLE</c> and <c>PLAYER_CHANGENAME</c> are deliberately absent —
 /// they are presentation, and a bot's name is settled when it is added.
-/// <c>serverEatSandvich</c> is absent because the port has no sandvich.
 /// </para>
 /// </remarks>
 public enum PlayerCommandKind : byte
@@ -51,6 +50,9 @@ public enum PlayerCommandKind : byte
 
     /// <summary><c>DROP_INTEL</c>. Unlike the death drop, this one is broadcast.</summary>
     DropIntel,
+
+    /// <summary><c>OMNOMNOMNOM</c>. A live heavy, off cooldown, not already eating.</summary>
+    EatSandvich,
 }
 
 /// <summary>One command and its one byte of argument.</summary>
@@ -68,6 +70,8 @@ public readonly record struct PlayerCommand(PlayerCommandKind Kind, byte Argumen
     public static PlayerCommand ToggleZoom() => new(PlayerCommandKind.ToggleZoom, 0);
 
     public static PlayerCommand DropIntel() => new(PlayerCommandKind.DropIntel, 0);
+
+    public static PlayerCommand EatSandvich() => new(PlayerCommandKind.EatSandvich, 0);
 
     public static PlayerCommand ChangeClass(PlayerClass playerClass) =>
         new(PlayerCommandKind.ChangeClass, (byte)playerClass);

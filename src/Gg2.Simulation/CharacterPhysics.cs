@@ -219,28 +219,39 @@ public static class CharacterPhysics
         // (Documentation/RateController.md). Do not "simplify" it away.
         for (var skip = 0; skip < 2; skip++)
         {
-            // ⚠️ The character's runPower against the *class's* basemaxspeed.
-            // The reference never recomputes basemaxspeed when runPower changes
-            // (Create.xml:159 derives it from baseRunPower once), so a scoped
-            // sniper accelerates slowly and is still capped at the unscoped
-            // maximum. See CharacterState.RunPower.
-            if ((downOrPressed & PlayerKeys.Left) != 0 && Gml.GreaterOrEqual(character.HSpeed, -stats.BaseMaxSpeed))
+            // ⚠️ `if(!taunting && !omnomnomnom)` wraps the acceleration and the
+            // both-keys cancel — and NOT the friction below it. So an eating
+            // heavy still decelerates to a stop rather than sliding on at the
+            // speed they started with. Begin Step.xml:237-253.
+            if (!character.Omnomnomnom)
             {
-                character.HSpeed -= character.RunPower * controlFactor * 0.5;
-                character.Controlling = true;
+                // ⚠️ The character's runPower against the *class's*
+                // basemaxspeed. The reference never recomputes basemaxspeed when
+                // runPower changes (Create.xml:159 derives it from baseRunPower
+                // once), so a scoped sniper accelerates slowly and is still
+                // capped at the unscoped maximum. See CharacterState.RunPower.
+                if ((downOrPressed & PlayerKeys.Left) != 0 && Gml.GreaterOrEqual(character.HSpeed, -stats.BaseMaxSpeed))
+                {
+                    character.HSpeed -= character.RunPower * controlFactor * 0.5;
+                    character.Controlling = true;
+                }
+
+                if ((downOrPressed & PlayerKeys.Right) != 0 && Gml.LessOrEqual(character.HSpeed, stats.BaseMaxSpeed))
+                {
+                    character.HSpeed += character.RunPower * controlFactor * 0.5;
+                    character.Controlling = true;
+                }
+
+                // Both directions cancel: pressing left and right is not "in
+                // control", it is standing still.
+                if ((downOrPressed & (PlayerKeys.Left | PlayerKeys.Right)) == (PlayerKeys.Left | PlayerKeys.Right))
+                    character.Controlling = false;
             }
 
-            if ((downOrPressed & PlayerKeys.Right) != 0 && Gml.LessOrEqual(character.HSpeed, stats.BaseMaxSpeed))
-            {
-                character.HSpeed += character.RunPower * controlFactor * 0.5;
-                character.Controlling = true;
-            }
-
-            // Both directions cancel: pressing left and right is not "in
-            // control", it is standing still.
-            if ((downOrPressed & (PlayerKeys.Left | PlayerKeys.Right)) == (PlayerKeys.Left | PlayerKeys.Right))
-                character.Controlling = false;
-
+            // ⚠️ Outside the eating guard, deliberately — and note the branch
+            // below still reads the direction keys, so an eating heavy holding
+            // one takes the base-friction arm exactly as a walking one would.
+            //
             // Way too fast, or being pushed while under the cap: use the base
             // friction rather than the moveStatus's. This is what stops a rocket
             // jump's low friction from making a running player unstoppable.
@@ -604,6 +615,39 @@ public static class CharacterPhysics
             character.CloakAlpha = Math.Max(character.CloakAlpha - CharacterState.CloakFadeRate, 0);
         else if (!character.Cloak && Gml.Less(character.CloakAlpha, 1))
             character.CloakAlpha = Math.Min(character.CloakAlpha + CharacterState.CloakFadeRate, 1);
+
+        // End Step.xml:83-96, the sandvich, between the cloak fade and the
+        // cabinet flag. ⚠️ Its position is what makes the facing freeze work:
+        // the line above derived Facing from the aim, and this overwrites it.
+        if (character.Omnomnomnom)
+        {
+            character.OmnomnomnomIndex += CharacterState.OmnomnomnomRate;
+            character.Facing = character.EatFacing;
+
+            // ⚠️ Re-armed EVERY tick of the eat while hurt, not once at the
+            // start. The reference's own comment: "This should prevent the 'ate
+            // and got hit but didn't refresh cooldown' bug ... cooldown is now
+            // reset continually until fully healed or finished eating." So a
+            // heavy hit on the last tick pays the whole 45 seconds from there,
+            // and one who reaches full health early keeps a cooldown that
+            // stopped being re-armed.
+            if (Gml.Less(character.Hp, character.Stats.MaxHp))
+            {
+                character.CanEat = false;
+                character.EatTimer = Timers.SetAlarm(CharacterState.EatCooldown);
+            }
+
+            // ⚠️ `<=`, so the tick a heavy reaches exactly full health still
+            // gets 1.6 more and ends the tick 1.6 ABOVE maxHp. The clamp is
+            // earlier in this same event, so that overshoot survives until the
+            // next tick's End Step — and the wire carries it. Transcribed, not
+            // tidied: `Gml.LessOrEqual` then add is what the reference does.
+            if (Gml.LessOrEqual(character.Hp, character.Stats.MaxHp))
+                character.Hp += CharacterState.OmnomnomnomHeal;
+
+            if (Gml.GreaterOrEqual(character.OmnomnomnomIndex, CharacterState.OmnomnomnomEnd))
+                character.Omnomnomnom = false;
+        }
 
         // End Step.xml:104, between the taunt block and the death-cam
         // position: "for things polling whether the character is on a

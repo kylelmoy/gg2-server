@@ -1728,6 +1728,9 @@ public sealed class GameServer : IDisposable
                 break;
 
             case MessageType.Omnomnomnom:
+                ExecuteEatSandvich(IdOf(entry));
+                break;
+
             case MessageType.RewardRequest:
             case MessageType.RewardChallengeResponse:
             case MessageType.PluginPacket:
@@ -1777,6 +1780,10 @@ public sealed class GameServer : IDisposable
 
             case PlayerCommandKind.DropIntel:
                 ExecuteDropIntel(IdOf(entry));
+                break;
+
+            case PlayerCommandKind.EatSandvich:
+                ExecuteEatSandvich(IdOf(entry));
                 break;
 
             case PlayerCommandKind.ChangeClass:
@@ -1904,6 +1911,21 @@ public sealed class GameServer : IDisposable
         // the reason Intel.Drop is public.
         if (Intel.Drop(ref _world, slot))
             ServerMessages.DropIntel(_broadcast, (byte)slot);
+    }
+
+    private void ExecuteEatSandvich(int slot)
+    {
+        // serverEatSandvich.gml, and the same shape as the zoom beside it: the
+        // preconditions live in the simulation, and a refusal is silence.
+        //
+        // ⚠️ The broadcast carries no timer and no hp. The client re-derives
+        // the cooldown itself from the same OMNOMNOMNOM byte
+        // (ClientBeginStep.gml:386-400), and the healing arrives through the
+        // ordinary position updates a tick at a time — so a client that missed
+        // this message sees a heavy healing for no reason, not a desynchronised
+        // one.
+        if (PlayerCommands.EatSandvich(ref _world, slot))
+            ServerMessages.Omnomnomnom(_broadcast, (byte)slot);
     }
 
     private void ExecuteToggleZoom(int slot)

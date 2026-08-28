@@ -308,6 +308,24 @@ public static class ServerMessages
     }
 
     /// <summary>
+    /// <c>OMNOMNOMNOM</c>: this heavy has started eating.
+    /// </summary>
+    /// <remarks>
+    /// One byte of body, the player id, and ⚠️ <b>the client does more with it
+    /// than start an animation</b>: <c>ClientBeginStep.gml:386-400</c> also puts
+    /// the sandvich on cooldown itself, <c>if(hp &lt; 200)</c> — a hard 200
+    /// rather than the character's <c>maxHp</c>, which happens to be the heavy's
+    /// and is the only class that can receive this. The server re-arms the same
+    /// cooldown every tick of the eat, so the two agree without the server ever
+    /// sending the timer.
+    /// </remarks>
+    public static void Omnomnomnom(NetWriter writer, byte playerId)
+    {
+        writer.WriteMessageType(MessageType.Omnomnomnom);
+        writer.WriteUByte(playerId);
+    }
+
+    /// <summary>
     /// <c>BALANCE</c>: the teams are uneven and everybody should know.
     /// </summary>
     /// <remarks>

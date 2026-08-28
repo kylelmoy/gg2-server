@@ -526,17 +526,29 @@ public static class Weapons
         if ((downOrPressed & PlayerKeys.Attack) == 0)
             return;
 
+        // Begin Step.xml:84: the whole attack/taunt/cloak block is wrapped in
+        // `if(!taunting and !omnomnomnom)`. An eating heavy holding fire does
+        // nothing at all — and note this returns BEFORE the spawn-protection
+        // line below, so eating does not spend it either.
+        if (character.Omnomnomnom)
+            return;
+
         // Character.events/Begin Step.xml:85, beside the `event_user(1)` and not
         // inside the weapon. ⚠️ It is the *key* that ends spawn protection, not
         // the shot — a scout out of ammo with a hot refire timer still gives it
         // up by pulling the trigger.
         character.DeathmatchInvulnerable = 0;
 
-        // Not modelled, and each would suppress the shot: `taunting`,
-        // `omnomnomnom` (the heavy's sandvich) and `player.humiliated` (the
-        // humiliation round). None of the three can be entered by anything
-        // phase 5 implements, so there is no state in which the guard would
-        // differ — they arrive with the features that set them.
+        // ⚠️ Still not modelled, and each would suppress the shot: `taunting`
+        // and `player.humiliated` (the humiliation round). Neither can be
+        // entered by anything this port implements, so there is no state in
+        // which the guard would differ — they arrive with the features that set
+        // them, and this is one of the two places to add them.
+        //
+        // `omnomnomnom` WAS on that list and is now real, so it is a live guard
+        // rather than a note: Begin Step.xml:84 wraps the attack, the taunt and
+        // the cloak in `if(!taunting and !omnomnomnom)`, and :124 takes the
+        // right click too. An eating heavy cannot shoot.
 
         var kind = WeaponStats.KindFor(character.Class);
 
@@ -1717,6 +1729,12 @@ public static class Weapons
         var downOrPressed = character.KeyState | character.PressedKeys;
 
         if ((downOrPressed & PlayerKeys.Special) == 0)
+            return;
+
+        // Begin Step.xml:124's `and !omnomnomnom`, which unlike the taunt clause
+        // beside it has no demoman exemption: an eating demoman is impossible,
+        // but an eating heavy right-clicking is not, and it does nothing.
+        if (character.Omnomnomnom)
             return;
 
         // Character.events/Begin Step.xml:124, *above* the `event_user(2)` this

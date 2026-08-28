@@ -364,4 +364,48 @@ public static class PlayerCommands
         if (state.RespawnTime > 0)
             state.Players[slot].RespawnTimer = state.RespawnTime;
     }
+
+    /// <summary>
+    /// <c>serverEatSandvich.gml</c>: a heavy starts eating. False when any
+    /// precondition fails, which is silence rather than an error.
+    /// </summary>
+    /// <remarks>
+    /// The reference's five clauses, minus the two this port has no state for:
+    /// <c>player.humiliated</c> (the humiliation round) and
+    /// <c>object.taunting</c>. ⚠️ <b>Neither is modelled anywhere</b>, so there
+    /// is no state in which the guard would differ — the same standing note
+    /// <c>Weapons</c> carries about the shot. They arrive with the features that
+    /// set them, and this is one of the places to add them.
+    /// <para>
+    /// ⚠️ <b>The heal is not here.</b> <c>serverEatSandvich</c> only starts the
+    /// animation; every point of health comes from
+    /// <c>Character.events/End Step.xml:83-96</c>, a tick at a time, and stops
+    /// if the character dies mid-eat. Healing on the command instead would give
+    /// a heavy 200 hp the instant they pressed it.
+    /// </para>
+    /// </remarks>
+    public static bool EatSandvich(ref WorldState state, int slot)
+    {
+        if (!state.IsAlive(slot))
+            return false;
+
+        ref var character = ref state.Characters[slot];
+
+        if (character.Class != PlayerClass.Heavy)
+            return false;
+
+        // ⚠️ Already eating is a refusal, not a restart. Without it a heavy
+        // holding the key would hold `omnomnomnomindex` at zero and eat forever.
+        if (character.Omnomnomnom || !character.CanEat)
+            return false;
+
+        character.Omnomnomnom = true;
+        character.OmnomnomnomIndex = 0;
+
+        // `xscale = image_xscale`, and End Step writes it back every tick of the
+        // eat. See CharacterState.EatFacing for why the server needs it.
+        character.EatFacing = character.Facing;
+
+        return true;
+    }
 }

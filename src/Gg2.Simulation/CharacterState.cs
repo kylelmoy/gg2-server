@@ -572,6 +572,108 @@ public struct CharacterState
     /// </remarks>
     public int RegenTimer;
 
+    /// <summary>
+    /// The heavy is eating: <c>omnomnomnom</c>, from <c>serverEatSandvich.gml</c>.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>It suppresses movement, not just the attack.</b>
+    /// <c>Character.events/Begin Step.xml:237</c> wraps the entire movement
+    /// block in <c>if(!taunting &amp;&amp; !omnomnomnom)</c>, so an eating heavy
+    /// cannot accelerate left or right at all — and :86, :91 and :124 take the
+    /// attack, the taunt and the right click with it. A sandvich that only
+    /// healed would be a different item.
+    /// </remarks>
+    public bool Omnomnomnom;
+
+    /// <summary>
+    /// <c>omnomnomnomindex</c>: the animation clock that also decides when
+    /// eating stops.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>A real, and the eat's whole duration lives in it.</b>
+    /// <c>End Step.xml:85</c> adds <b>0.25</b> a tick and stops at
+    /// <c>omnomnomnomend</c>, which <c>serverEatSandvich</c> sets to <b>32</b> —
+    /// so eating lasts <b>128 ticks</b>, a little over four seconds, and it is
+    /// an animation counter rather than a timer that carries it. Not on the
+    /// wire: a client starts its own on the <c>OMNOMNOMNOM</c> broadcast.
+    /// </remarks>
+    public double OmnomnomnomIndex;
+
+    /// <summary>
+    /// <c>canEat</c>: the sandvich is off cooldown.
+    /// </summary>
+    public bool CanEat;
+
+    /// <summary>
+    /// <c>alarm[6]</c>: ticks until <see cref="CanEat"/> comes back.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>45 seconds, not the 10 the reference's own comment claims.</b>
+    /// <c>Create.xml:125</c> sets <c>eatCooldown = 1350</c> and the client's
+    /// <c>OMNOMNOMNOM</c> case is commented "10 second cooldown" beside the line
+    /// that uses the variable. The number is the specification; the comment is
+    /// wrong in the reference and copying it would import the bug.
+    /// <para>
+    /// ⚠️ <b>Re-armed every tick of the eat while hurt</b>, not once at the
+    /// start — <c>End Step.xml:87-91</c>, whose own comment explains why: "this
+    /// should prevent the 'ate and got hit but didn't refresh cooldown' bug". So
+    /// a heavy damaged on the last tick of eating pays the full 45 seconds from
+    /// there.
+    /// </para>
+    /// </remarks>
+    public int EatTimer;
+
+    /// <summary>
+    /// <c>xscale</c>: the facing captured when this heavy started eating.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Eating freezes which way you face, and that is not only cosmetic
+    /// here.</b> <c>End Step.xml:86</c> writes <c>image_xscale = xscale</c> on
+    /// every tick of the eat, <em>after</em> the line that derives the facing
+    /// from the aim — so an eating heavy keeps pointing where they were when
+    /// they started. The port has to carry it because <c>Aabb.ForCharacter</c>
+    /// inflates a character's box by two pixels on the side it faces, and that
+    /// box is what <c>distance_to_object</c> measures splash damage against.
+    /// So a frozen facing changes who a rocket hurts.
+    /// </remarks>
+    public int EatFacing;
+
+    /// <summary>
+    /// <c>omnomnomnomindex += 0.25</c> a tick, <c>End Step.xml:85</c>.
+    /// </summary>
+    public const double OmnomnomnomRate = 0.25;
+
+    /// <summary>
+    /// <c>omnomnomnomend = 32</c>, set by <c>serverEatSandvich.gml</c>.
+    /// </summary>
+    /// <remarks>
+    /// With <see cref="OmnomnomnomRate"/> that is <b>128 ticks</b> of eating.
+    /// The end is written by the command rather than the Create event, but no
+    /// caller ever writes anything else, so it is a constant here.
+    /// </remarks>
+    public const double OmnomnomnomEnd = 32;
+
+    /// <summary>
+    /// <c>hp += 1.6</c> a tick while eating, <c>End Step.xml:93</c>.
+    /// </summary>
+    /// <remarks>
+    /// Over the full 128 ticks that is <b>204.8</b>, comfortably more than a
+    /// heavy's 200 — so an uninterrupted sandvich is a full heal from any
+    /// survivable amount of damage, and the duration is what limits it rather
+    /// than the total.
+    /// </remarks>
+    public const double OmnomnomnomHeal = 1.6;
+
+    /// <summary>
+    /// <c>eatCooldown = 1350</c> — 45 seconds. <c>Create.xml:125</c>.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The reference's own comment beside the client's use of it says "10
+    /// second cooldown" and is wrong.</b> 1350 ticks at 30 Hz is 45 seconds. The
+    /// value is the specification.
+    /// </remarks>
+    public const double EatCooldown = 1350;
+
     public readonly ClassStats Stats => ClassStats.For(Class);
 
     public readonly CharacterBox Box => CharacterBox.For(Class);
@@ -693,6 +795,11 @@ public struct CharacterState
         Hp = ClassStats.For(playerClass).MaxHp,
         Facing = 1,
         LastFacing = 1,
+
+        // Create.xml:124. Every class carries it, because every class runs the
+        // same Create event — only a heavy can ever spend it.
+        CanEat = true,
+        EatTimer = Timers.Inactive,
 
         // Create.xml:15 and :158 — both start at their base and only
         // toggleZoom ever moves them. A zeroed character would stand still and

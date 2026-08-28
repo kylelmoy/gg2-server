@@ -2762,3 +2762,64 @@ and it is not proven to be. A player who taps down through a platform gets
 corrected by up to 54 px, which is exactly what they described — but the reports
 were on `koth_corinth` and the measurement above is on other maps. Do not close
 the drift item on this.
+
+### ✅ IMPLEMENTED: the heavy's sandvich
+
+**2026-08-28**, from a player's report in the first two-human game — "heavy
+sandwich doesn't work" — not from any test.
+
+⚠️ **It had been absent for the whole port and was recorded only in four code
+comments.** CLAUDE.md said "✅ Every class is implemented" and the handoff said
+"nothing else in the port is known-missing", and both were wrong.
+**A gap noted only in a code comment is a gap nobody is tracking.**
+
+**The shape.** `OMNOMNOMNOM` (24) is a client *command* with no payload, like the
+zoom and the sentry build, so it cannot be a key bit and a bot reaches it by the
+same method the socket does. `serverEatSandvich.gml` checks five preconditions
+and only starts the animation; **every hit point comes from
+`Character.events/End Step.xml:83-96`, a tick at a time.**
+
+| | |
+|---|---|
+| duration | `omnomnomnomindex` 0 → 32 at **0.25/tick** = **128 ticks**. No timer is involved |
+| heal | **1.6 hp/tick**, so 204.8 over a full eat — more than a heavy's 200 |
+| cooldown | **1350 ticks (45 s)**, `alarm[6]` |
+
+⚠️ **The reference's own comment says "10 second cooldown" and is wrong** —
+`eatCooldown = 1350`. Copying the comment would have imported the bug.
+
+⚠️ **The cooldown is re-armed on every tick of the eat while hurt**, not once at
+the start; the reference explains why in its own comment ("the 'ate and got hit
+but didn't refresh cooldown' bug"). A heavy hit on the last tick pays the full
+45 seconds from there.
+
+⚠️ **Eating suppresses MOVEMENT, not just the attack.** `Begin Step.xml:237`
+wraps the acceleration and the both-keys cancel in `if(!taunting and
+!omnomnomnom)` — but **not** the friction below them, so an eating heavy coasts
+to a stop rather than stopping dead or sliding on. The attack, the taunt, the
+cloak and the right click go with it.
+
+⚠️ **The facing freezes, and that is not cosmetic on the server.**
+`End Step.xml:86` writes `image_xscale = xscale` *after* the line deriving the
+facing from the aim. `Aabb.ForCharacter` inflates a character's box by two
+pixels on the side it faces, and that box is what `distance_to_object` measures
+splash damage against — so a frozen facing changes who a rocket hurts.
+
+⚠️ **A heavy who eats at full health sits at 201.6 hp for the whole eat.**
+`if (hp <= maxHp) hp += 1.6` fires at exactly maxHp, and the clamp is *earlier*
+in the same event, so each tick clamps to 200 and is immediately pushed back
+over. Every state update in that window carries the overshoot. Transcribed, not
+tidied — and the first draft of the test asserted 200 and was wrong.
+
+✅ **The cabinet's third clause became load-bearing.** `(hp < maxHp or
+nutsNBolts < 100 or !canEat)` — a heavy at full health and full ammo with a spent
+sandvich now enters that branch purely to have the cooldown cleared, where before
+it was a no-op transcribed as a comment. ⚠️ **Team Deathmatch's arm does not
+clear it**, so a TDM heavy standing on a cabinet to reset their sandvich gets a
+third of a hit point and keeps waiting.
+
+✅ **Re-measured across every fixture: nothing moved.** The feature is inert
+until somebody eats, and no recording contains one — which is also the honest
+statement of its coverage. `SandvichTests` (9) is unit coverage, not parity
+evidence; **no fixture holds a sandvich, so none of this is measured against the
+running game.**

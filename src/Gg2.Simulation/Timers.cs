@@ -491,6 +491,19 @@ public static class Timers
         // remarks) and eleven is the highest index in the game — so a medic
         // regenerates *after* every refire, every lifetime and every reload has
         // been resolved this tick.
+        // Character.events/Alarm 6.xml, the sandvich cooldown, whose whole body
+        // is `canEat = true`. Unguarded by class on purpose: only
+        // PlayerCommands.EatSandvich ever arms it and only a heavy reaches
+        // that, so the timer is inactive on every other class for ever.
+        for (var slot = 0; slot < WorldState.MaxSlots; slot++)
+        {
+            if (!state.Alive[slot])
+                continue;
+
+            if (Advance(ref state.Characters[slot].EatTimer))
+                state.Characters[slot].CanEat = true;
+        }
+
         for (var slot = 0; slot < WorldState.MaxSlots; slot++)
         {
             if (!state.Alive[slot])
