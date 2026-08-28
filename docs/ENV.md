@@ -276,3 +276,40 @@ layout does not churn when they arrive: `time-since-seen` is a fixed 0 (the
 reaction-delay ring buffer is `gg2-rl` phase 5), and the macro goal is a constant
 "engage" (the hybrid-boundary rule). A constant column costs one float; a bump
 costs a retrain.
+
+### ✅ Step 4 — `EnvBatch` (2026-08-28)
+
+N duels stepped together, each world owning its own `DuelEnv`, `CollisionWorld`,
+RNG stream and decoder — the same shape `MatchRunner` uses, and what makes the
+parallelism safe without a lock. **`EnvBatchTests` (7).**
+
+✅ **Both gates are compared WHOLE, as this document asked**: world *i* is
+identical at batch 1 and batch 64, and identical at 1, 2 and 4 threads — every
+world, every step, every reward component. A comparison of summary statistics
+would pass a batch that produced the right multiset in the wrong order.
+
+⚠️ **The seed is a pure function of (base, world, EPISODE), and the episode part
+was a real bug.** The first draft derived the next episode's seed from the
+finished episode's **decision count** — so two episodes lasting the same number
+of decisions, which with a fixed cap is nearly all of them, got the same seed and
+the world **replayed one trajectory for ever**. A batch training on a single
+repeated episode still produces a falling loss and a useless policy. Caught by
+`EachEpisodeInAWorldGetsItsOwnSeed`.
+
+⚠️ **The auto-reset happens AFTER the results are recorded**, so the terminal
+step still carries its components. Resetting first would hand back the fresh
+episode's zeros as though the death earned nothing, which is the one transition a
+policy most needs.
+
+⚠️ **A world's next episode is seeded from its OWN counter, never a shared one.**
+A shared counter would make the next episode depend on how many *other* worlds
+had finished — precisely the batch-size dependence the gates forbid, and it would
+have passed the batch-size gate because that gate compares aligned steps.
+
+⚠️ **`TheRunActuallyCrossesEpisodeBoundaries` is the control the file needs
+most.** Determinism gates are easy to pass when nothing happens; without it every
+assertion above would be a statement about one episode that never ended.
+
+⚠️ **Threads default to 1, not `Environment.ProcessorCount`.** A default that
+varied with the machine would make "the same however many threads" a claim nobody
+was testing on their own box.
