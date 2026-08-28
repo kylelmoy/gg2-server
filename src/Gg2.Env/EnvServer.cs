@@ -1,0 +1,389 @@
+using System.Buffers.Binary;
+using System.Net;
+using System.Net.Sockets;
+using Gg2.Protocol;
+using Gg2.Simulation;
+
+namespace Gg2.Env;
+
+/// <summary>
+/// The loopback socket host: one client, request and response.
+/// </summary>
+/// <remarks>
+/// <b><c>docs/ENV.md</c> step 5.</b> Loopback only and one client at a time,
+/// like the control port — it executes against live worlds, and a surface that
+/// accepted a second client would need a policy for what "the batch" then meant.
+/// <para>
+/// ⚠️ <b>The <see cref="EnvMessage.Hello"/> REFUSES a mismatch rather than
+/// warning.</b> The <c>PROTOCOL_UUID</c> idiom this project already uses: a
+/// trainer running against a different observation layout, action encoding or
+/// simulation stamp is not slightly wrong, it is collecting data that cannot be
+/// used, and it should find out in the first millisecond rather than after an
+/// hour of rollouts.
+/// </para>
+/// </remarks>
+public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
+{
+    private EnvBatch? _batch;
+    private float[] _observations = [];
+
+    /// <summary>The port actually bound, which a 0 request resolves to.</summary>
+    public int Port { get; private set; }
+
+    /// <summary>
+    /// Binds, accepts one client, and serves it until it closes.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b><see cref="IPAddress.Loopback"/>, never <c>Any</c>.</b> This
+    /// executes arbitrary batch commands against live simulation state; the
+    /// control port made the same choice for the same reason.
+    /// </remarks>
+    public void Serve(int port, CancellationToken cancellation = default)
+    {
+        var listener = new TcpListener(IPAddress.Loopback, port);
+
+        listener.Start();
+        Port = ((IPEndPoint)listener.LocalEndpoint).Port;
+
+        try
+        {
+            using var client = listener.AcceptTcpClient();
+            using var stream = client.GetStream();
+
+            ServeOne(stream, cancellation);
+        }
+        finally
+        {
+            listener.Stop();
+        }
+    }
+
+    /// <summary>
+    /// Serves one already-connected stream. Exposed so a test can drive the real
+    /// message loop without a socket in the way.
+    /// </summary>
+    public void ServeOne(Stream stream, CancellationToken cancellation = default)
+    {
+        while (!cancellation.IsCancellationRequested)
+        {
+            var frame = EnvProtocol.ReadFrame(stream);
+
+            if (frame is null || frame.Length == 0)
+                return;
+
+            var kind = (EnvMessage)frame[0];
+            var body = frame.AsSpan(1);
+
+            byte[] reply;
+
+            try
+            {
+                if (kind == EnvMessage.Close)
+                {
+                    EnvProtocol.WriteFrame(stream, [(byte)EnvMessage.Close]);
+                    return;
+                }
+
+                reply = Handle(kind, body);
+            }
+            catch (Exception e) when (e is ArgumentException or InvalidOperationException or InvalidDataException)
+            {
+                // ⚠️ A refusal is a message, never a dropped connection. A
+                // trainer that saw the socket close would report "the env died"
+                // and the reason would be in nobody's log.
+                reply = Error(e.Message);
+            }
+
+            EnvProtocol.WriteFrame(stream, reply);
+        }
+    }
+
+    private byte[] Handle(EnvMessage kind, ReadOnlySpan<byte> body) => kind switch
+    {
+        EnvMessage.Hello => Hello(body),
+        EnvMessage.MakeBatch => MakeBatch(body),
+        EnvMessage.Step => Step(body),
+        EnvMessage.Reset => Reset(body),
+        EnvMessage.Snapshot => Snapshot(body),
+        EnvMessage.Restore => Restore(body),
+        _ => Error($"unknown message {(byte)kind}"),
+    };
+
+    private static byte[] Error(string reason)
+    {
+        var text = System.Text.Encoding.UTF8.GetBytes(reason);
+        var reply = new byte[1 + 4 + text.Length];
+
+        reply[0] = (byte)EnvMessage.Error;
+        BinaryPrimitives.WriteInt32LittleEndian(reply.AsSpan(1), text.Length);
+        text.CopyTo(reply.AsSpan(5));
+
+        return reply;
+    }
+
+    private static byte[] Hello(ReadOnlySpan<byte> body)
+    {
+        if (body.Length < 4)
+            throw new InvalidDataException("Hello carries the client's protocol version");
+
+        var theirs = BinaryPrimitives.ReadInt32LittleEndian(body);
+
+        if (theirs != EnvProtocol.Version)
+        {
+            throw new InvalidDataException(
+                $"protocol version {theirs} does not match this build's {EnvProtocol.Version}");
+        }
+
+        var shake = EnvProtocol.Handshake.Current;
+        var uuid = System.Text.Encoding.UTF8.GetBytes(shake.SimulationUuid);
+
+        var reply = new byte[1 + (4 * 4) + 4 + uuid.Length + 4 + (shake.HeadShape.Length * 4)];
+        var at = 0;
+
+        reply[at++] = (byte)EnvMessage.Hello;
+
+        void Int(int value)
+        {
+            BinaryPrimitives.WriteInt32LittleEndian(reply.AsSpan(at), value);
+            at += 4;
+        }
+
+        Int(shake.ProtocolVersion);
+        Int(shake.ObservationLayoutVersion);
+        Int(shake.ActionEncodingVersion);
+        Int(shake.ObservationLength);
+        Int(uuid.Length);
+
+        uuid.CopyTo(reply.AsSpan(at));
+        at += uuid.Length;
+
+        Int(shake.HeadShape.Length);
+
+        foreach (var head in shake.HeadShape)
+            Int(head);
+
+        return reply;
+    }
+
+    private byte[] MakeBatch(ReadOnlySpan<byte> body)
+    {
+        // count, mapNameLength, mapName, redClass, blueClass, redX, redY,
+        // blueX, blueY, decisionCap, actionRepeat, seed, threads.
+        //
+        // ⚠️ Read with an explicit cursor rather than local helper functions: a
+        // `ReadOnlySpan<byte>` is a ref-like type and cannot be captured by a
+        // lambda or a local function at all. The compiler says so, which is the
+        // good outcome — the alternative design copies the frame to an array
+        // first and allocates on every message.
+        var at = 0;
+
+        var count = BinaryPrimitives.ReadInt32LittleEndian(body[at..]);
+        at += 4;
+
+        var nameLength = BinaryPrimitives.ReadInt32LittleEndian(body[at..]);
+        at += 4;
+
+        if (nameLength is < 1 or > 64 || body.Length < at + nameLength)
+            throw new InvalidDataException("MakeBatch's map name is missing or absurd");
+
+        var map = System.Text.Encoding.UTF8.GetString(body.Slice(at, nameLength));
+        at += nameLength;
+
+        var redClass = (PlayerClass)BinaryPrimitives.ReadInt32LittleEndian(body[at..]);
+        at += 4;
+        var blueClass = (PlayerClass)BinaryPrimitives.ReadInt32LittleEndian(body[at..]);
+        at += 4;
+
+        var redX = BinaryPrimitives.ReadDoubleLittleEndian(body[at..]);
+        at += 8;
+        var redY = BinaryPrimitives.ReadDoubleLittleEndian(body[at..]);
+        at += 8;
+        var blueX = BinaryPrimitives.ReadDoubleLittleEndian(body[at..]);
+        at += 8;
+        var blueY = BinaryPrimitives.ReadDoubleLittleEndian(body[at..]);
+        at += 8;
+
+        var decisionCap = BinaryPrimitives.ReadInt32LittleEndian(body[at..]);
+        at += 4;
+        var actionRepeat = BinaryPrimitives.ReadInt32LittleEndian(body[at..]);
+        at += 4;
+        var seed = (uint)BinaryPrimitives.ReadInt32LittleEndian(body[at..]);
+        at += 4;
+        var threads = BinaryPrimitives.ReadInt32LittleEndian(body[at..]);
+
+        var spec = new DuelSpec
+        {
+            Map = map,
+            RedClass = redClass,
+            BlueClass = blueClass,
+            RedX = redX,
+            RedY = redY,
+            BlueX = blueX,
+            BlueY = blueY,
+            DecisionCap = decisionCap,
+            ActionRepeat = actionRepeat,
+        };
+
+        _batch = new EnvBatch(count, spec, seed, mapDirectory, navDirectory, threads);
+        _observations = new float[count * 2 * ObservationWriter.Length];
+
+        return Observations(EnvMessage.MakeBatch);
+    }
+
+    private byte[] Step(ReadOnlySpan<byte> body)
+    {
+        var batch = _batch ?? throw new InvalidOperationException("no batch; send MakeBatch first");
+
+        // Five head bytes per agent, red then blue, per world.
+        var needed = batch.Count * 2 * 5;
+
+        if (body.Length < needed)
+            throw new InvalidDataException($"Step wants {needed} action bytes, got {body.Length}");
+
+        var red = new EnvAction[batch.Count];
+        var blue = new EnvAction[batch.Count];
+
+        for (var i = 0; i < batch.Count; i++)
+        {
+            red[i] = ReadAction(body.Slice(i * 10, 5));
+            blue[i] = ReadAction(body.Slice((i * 10) + 5, 5));
+        }
+
+        var redOut = new StepResult[batch.Count];
+        var blueOut = new StepResult[batch.Count];
+
+        batch.Step(red, blue, redOut, blueOut);
+
+        return Observations(EnvMessage.Step, redOut, blueOut);
+    }
+
+    private static EnvAction ReadAction(ReadOnlySpan<byte> b) => new()
+    {
+        Horizontal = b[0],
+        Jump = b[1],
+        Down = b[2],
+        Fire = b[3],
+        AimDelta = b[4],
+    };
+
+    private byte[] Reset(ReadOnlySpan<byte> body)
+    {
+        var batch = _batch ?? throw new InvalidOperationException("no batch; send MakeBatch first");
+
+        if (body.Length < 4)
+            throw new InvalidDataException("Reset carries a world index");
+
+        var index = BinaryPrimitives.ReadInt32LittleEndian(body);
+
+        if ((uint)index >= (uint)batch.Count)
+            throw new ArgumentOutOfRangeException(nameof(body), index, "no such world");
+
+        // ⚠️ Through the batch, which owns the spec. Calling
+        // `World(index).Reset(default, ...)` compiles and resets the world to an
+        // EMPTY spec — no map, no classes — which throws somewhere else entirely.
+        // The first draft of this did exactly that.
+        batch.ResetWorld(index);
+
+        return Observations(EnvMessage.Reset);
+    }
+
+    private byte[] Snapshot(ReadOnlySpan<byte> body)
+    {
+        var batch = _batch ?? throw new InvalidOperationException("no batch; send MakeBatch first");
+        var index = BinaryPrimitives.ReadInt32LittleEndian(body);
+
+        if ((uint)index >= (uint)batch.Count)
+            throw new ArgumentOutOfRangeException(nameof(body), index, "no such world");
+
+        var bytes = batch.World(index).Snapshot();
+        var reply = new byte[1 + 4 + bytes.Length];
+
+        reply[0] = (byte)EnvMessage.Snapshot;
+        BinaryPrimitives.WriteInt32LittleEndian(reply.AsSpan(1), bytes.Length);
+        bytes.CopyTo(reply.AsSpan(5));
+
+        return reply;
+    }
+
+    private byte[] Restore(ReadOnlySpan<byte> body)
+    {
+        var batch = _batch ?? throw new InvalidOperationException("no batch; send MakeBatch first");
+        var index = BinaryPrimitives.ReadInt32LittleEndian(body);
+
+        if ((uint)index >= (uint)batch.Count)
+            throw new ArgumentOutOfRangeException(nameof(body), index, "no such world");
+
+        var length = BinaryPrimitives.ReadInt32LittleEndian(body[4..]);
+
+        batch.World(index).Restore(body.Slice(8, length));
+
+        return [(byte)EnvMessage.Restore];
+    }
+
+    /// <summary>
+    /// The observation block for every world, red then blue, plus the reward
+    /// components when there are any.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>One contiguous block</b>, which is <c>gg2-rl</c>'s
+    /// <c>CONTRACT.md</c> requirement: a trainer maps it straight into a tensor
+    /// rather than walking a structure per world.
+    /// </remarks>
+    private byte[] Observations(
+        EnvMessage kind, StepResult[]? red = null, StepResult[]? blue = null)
+    {
+        var batch = _batch!;
+        var stride = ObservationWriter.Length;
+
+        for (var i = 0; i < batch.Count; i++)
+        {
+            var world = batch.World(i);
+            var view = new WorldView(in world.World.State, world.World.Collision);
+
+            ObservationWriter.Write(in view, world.RedSlot, _observations.AsSpan(((i * 2) + 0) * stride, stride));
+            ObservationWriter.Write(in view, world.BlueSlot, _observations.AsSpan(((i * 2) + 1) * stride, stride));
+        }
+
+        // ⚠️ Fixed 20 bytes of components per agent, present even on MakeBatch
+        // and Reset (as zeros), so the reply's layout does not depend on which
+        // message produced it. A variable shape here would be a shape the
+        // trainer has to branch on.
+        const int componentBytes = 20;
+
+        var floats = _observations.Length;
+        var reply = new byte[1 + 4 + (floats * 4) + (batch.Count * 2 * componentBytes)];
+        var at = 0;
+
+        reply[at++] = (byte)kind;
+        BinaryPrimitives.WriteInt32LittleEndian(reply.AsSpan(at), batch.Count);
+        at += 4;
+
+        foreach (var value in _observations)
+        {
+            BinaryPrimitives.WriteSingleLittleEndian(reply.AsSpan(at), value);
+            at += 4;
+        }
+
+        for (var i = 0; i < batch.Count; i++)
+        {
+            WriteComponents(reply, ref at, red is null ? default : red[i]);
+            WriteComponents(reply, ref at, blue is null ? default : blue[i]);
+        }
+
+        return reply;
+    }
+
+    private static void WriteComponents(byte[] into, ref int at, StepResult r)
+    {
+        BinaryPrimitives.WriteSingleLittleEndian(into.AsSpan(at), (float)r.DamageDealt);
+        at += 4;
+        BinaryPrimitives.WriteSingleLittleEndian(into.AsSpan(at), (float)r.DamageTaken);
+        at += 4;
+        BinaryPrimitives.WriteInt32LittleEndian(into.AsSpan(at), r.Kills);
+        at += 4;
+        BinaryPrimitives.WriteInt32LittleEndian(into.AsSpan(at), r.Deaths);
+        at += 4;
+        BinaryPrimitives.WriteInt32LittleEndian(into.AsSpan(at), (int)r.Termination);
+        at += 4;
+    }
+}

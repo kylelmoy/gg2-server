@@ -95,6 +95,23 @@ public sealed class EnvBatch
     public uint SeedForEpisode(int index, int episode) =>
         unchecked(SeedFor(index) + ((uint)episode * 40503u));
 
+    /// <summary>
+    /// Resets one world to a fresh first episode, on the spec this batch holds.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The spec lives here, so a caller must not reset a world directly.</b>
+    /// <c>DuelEnv.Reset</c> takes a spec, and passing a default one compiles and
+    /// produces a world with no map and no classes.
+    /// </remarks>
+    public void ResetWorld(int index)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(index);
+        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(index, _worlds.Length);
+
+        _episodes[index] = 0;
+        _worlds[index].Reset(_spec, SeedForEpisode(index, 0));
+    }
+
     /// <summary>Resets every world to its first episode.</summary>
     public void ResetAll()
     {

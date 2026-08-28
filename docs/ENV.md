@@ -191,8 +191,26 @@ reaction-delay model (phase 5 — only its observation field exists).
 
 | Measurement | Value | Build | When |
 |---|---|---|---|
-| Decision steps/sec, batch 1 | — | — | at exit |
-| Decision steps/sec, batch 64 | — | — | at exit |
+| Decision steps/sec, batch 1 | **8,753** | Release | 2026-08-28 |
+| Decision steps/sec, batch 64 | **34,073** | Release | 2026-08-28 |
+| Decision steps/sec, batch 64, 2 threads | 36,173 | Release | 2026-08-28 |
+| Decision steps/sec, batch 64, 8 threads | 37,592 | Release | 2026-08-28 |
+
+✅ **34,073 clears the ~20k `gg2-rl` phase 0 stops the programme below**, so
+shared memory is not needed yet — which was the decision this number existed to
+make.
+
+⚠️ **Threads barely help: 34k → 38k across 1 to 8.** That is the informative
+part. The simulation is not the bottleneck; the boundary is. Every step writes
+`worlds × 2 × 209` floats and serialises them one `BinaryPrimitives` call at a
+time in `EnvServer.Observations`, single-threaded, which is ~107 KB per step at
+batch 64. **If throughput ever needs to go up, that loop is the lever and more
+threads are not** — and shared memory would attack exactly this.
+
+⚠️ **Both figures name their build, and the CLI prints it with the number.**
+CLAUDE.md's standing rule: this project's headroom figure sat stale in four
+documents because a re-measure forgot to say which configuration it was, and
+Debug reads about half of Release.
 
 ## Build log
 
@@ -313,3 +331,42 @@ assertion above would be a statement about one episode that never ended.
 ⚠️ **Threads default to 1, not `Environment.ProcessorCount`.** A default that
 varied with the machine would make "the same however many threads" a claim nobody
 was testing on their own box.
+
+### ✅ Step 5 — the socket host, and v0's exit (2026-08-28)
+
+`gg2-env serve --port <n>` and `gg2-env smoke`. **`EnvProtocolTests` (7)** drives
+the real message loop over a **real socket**, and **`EnvSmokeTests` (2)** runs
+the random-head agent.
+
+✅ **All three v0 exit criteria are met**: a random-head agent completed
+**1,024 duels** over the socket with no crash and no hang; every gate above is
+green; and the throughput is measured, named by build, in the table above.
+
+⚠️ **A real socket, not a `MemoryStream`, and that is the point of the gate.**
+Framing bugs hide behind a stream that always returns everything asked for and
+reappear the first time a frame is split across two reads —
+`AFrameSplitAcrossTwoWritesIsStillOneMessage` sends a header and a body in two
+writes with a pause between them.
+
+⚠️ **A refusal is a message, never a dropped connection.** A trainer that saw
+the socket close would report "the env died" and the reason would be in nobody's
+log. The gate checks the connection is still usable afterwards, which is the
+half that makes it a refusal rather than a crash that happened to be caught.
+
+⚠️ **The frame length is capped before the buffer is allocated.** A length prefix
+read off a socket is attacker-controlled input even on loopback: a mis-framed
+client sends four bytes that mean nothing, and `new byte[thatLength]` turns a
+mis-frame into an out-of-memory instead of an error message.
+
+⚠️ **A `ReadOnlySpan<byte>` cannot be captured by a local function**, so the
+message readers use an explicit cursor. The compiler says so, which is the good
+outcome — the tidier design copies each frame to an array first and allocates on
+every message.
+
+**Two bugs the gates caught in this step**, both mine: `Reset` called
+`DuelEnv.Reset(default, …)`, which compiles and resets a world to an *empty*
+spec with no map and no classes; and the smoke run's step ceiling was
+unreachable by construction, so the guard against a hang could never have been
+observed to work. The ceiling is now a parameter for exactly that reason — **a
+safety net nobody has watched trip is indistinguishable from one that does not
+work**.
