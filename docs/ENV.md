@@ -480,6 +480,37 @@ that the opponent's fire does not reach — and a flat one-room map does not.
 ⚠️ **So an experiment that reports "the opponent model changes nothing" from
 `gg_debug` has measured the map.** Run that comparison on `ctf_2dfort`.
 
+### ⚠️ `SIM_UUID` does NOT cover the bot layer, and that bit a consumer
+
+**2026-08-29, found by `gg2-rl`.** The stamp covers the simulation and the `NAV_*`
+block — "a policy trained against different physics is not loadable". **It does
+not cover `RolloutSearch`**, which lives in `Gg2.Bots`.
+
+⚠️ So the aim tie-break (`2d810c3`) **changed what the labels in a distillation
+corpus ARE**, while leaving every field of that lane's dataset identity untouched:
+`SIM_UUID`, encoding version, layout version, head shape and cadence were all
+unmoved. **A corpus from the old expert and one from the new would have pooled
+silently and trained a policy on two different teachers.**
+
+⚠️ **It is not obviously right to fold the bot layer into `SIM_UUID`.** The stamp's
+job is "these weights cannot be loaded against this simulation", and a trained
+policy does not care what generated its labels once it exists — so folding the
+expert in would invalidate checkpoints that are perfectly valid. The scope is
+correct; what was missing was anyone saying so out loud.
+
+✅ **`gg2-rl`'s fix is to key its dataset identity on this repo's COMMIT**, which
+over-refuses — a docs commit invalidates a corpus — and cannot drift. ⚠️ **That is
+the better mechanism on this session's own evidence**: a hand-maintained version
+constant is exactly what shipped as `Version = 2` while the wire carried v3, and
+what advertised five action heads while sending six. **A number a human has to
+remember to bump is the weaker half of every pairing tried today.**
+
+⬅️ **Open, and deliberately not built**: the server could report its own build
+revision in the handshake, so a consumer keys on something it is *told* rather
+than something it tracks externally. That is real value and it is also more build
+plumbing (`SourceRevisionId`) than the problem currently justifies, given the
+consumer already has a working answer.
+
 ### ⬅️ DESIGNED, NOT BUILT: the shadow search slot
 
 **Asked for by `gg2-rl` 2026-08-29, deferred by the user pending a cheaper

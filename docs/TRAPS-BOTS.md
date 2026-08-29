@@ -2591,6 +2591,28 @@ shots inside the horizon. ⚠️ **That is the signature `RolloutOptions.CommitT
 was built to produce and failed to**: blind falling without win rate falling,
 reached by a different mechanism.
 
+✅ **CONFIRMED INDEPENDENTLY AND IT IS BIGGER THAN THE A/B SHOWED.** `gg2-rl`
+re-measured the whole expert against this build — 1,600 duels, sixteen pairings,
+both orientations:
+
+| | old (`ab78c9d`) | new (`2d810c3`) |
+|---|---|---|
+| expert win rate | 76.9% | **84.2%** [81.8%, 86.5%] |
+| matchups clearing p<0.01 | 15 of 16 | **16 of 16** |
+| worst matchup | sniper mirror, **a loss** | scout-v-sniper, 66.0% |
+
+**+7.3 points, and the sniper mirror stops being a defeat.** My own A/B saw the
+scout move and the soldier stay flat at 60 duels a cell; the full sixteen-pairing
+run says the effect is broad rather than one class. ⚠️ **A two-class A/B
+understated a change that touched every class**, which is the opposite of the
+sample-size error made earlier the same day and worth the same caution.
+
+✅ **The three predictions made when handing this over all held**: the
+`[0,0,0,0,0,0]` share fell 35.2% → **1.5%**, the aim-bin-0 share ~85% → **4.4%**,
+and the tie RATE held (85.2% → 89.6%) because the scoring function was untouched.
+⚠️ **The tied-set SIZE shrank, median 6 → 4**, which was explicitly *not*
+predicted either way.
+
 ✅ **It also kills `gg2-rl`'s `[0,0,0,0,0,0]` corpus signature.** A blind decision
 now points at the enemy rather than turning hard left, so a blind row is no longer
 identifiable by its action at all — only by `BestScore == 0`. **That makes
