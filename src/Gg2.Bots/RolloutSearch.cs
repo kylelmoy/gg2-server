@@ -217,6 +217,12 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
 
     private EnvAction[] _candidates;
 
+    // Per-candidate scores for the decision just taken. Grown to fit, never
+    // per-decision — see LastScores.
+    private double[] _scores = [];
+
+    private int _scoreCount;
+
     // Whether _candidates currently carries the zoom dimension. See CandidatesFor.
     private bool _candidatesAreSniper;
 
@@ -264,6 +270,56 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
 
     /// <summary>The score the winning candidate earned, for diagnostics.</summary>
     public double LastBestScore { get; private set; }
+
+    /// <summary>
+    /// Every candidate's score from the decision just taken, aligned with
+    /// <see cref="LastCandidates"/>.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>This is the whole reason a search is a better expert than a reward
+    /// signal, and until 2026-08-29 it did not survive the method that computed
+    /// it.</b> <c>gg2-rl/docs/DESIGN.md</c> — "its output is an ACTION
+    /// DISTRIBUTION rather than a scalar, so every logged decision carries far
+    /// more signal than a reward sample does" — and its collection step logs
+    /// <c>(observation, distribution over actions, outcome)</c>. <see cref="Search"/>
+    /// scored all 60 (or 120) candidates and kept only <c>bestScore</c>; every
+    /// other score was discarded inside the loop that produced it.
+    /// <para>
+    /// ⚠️ <b>Nothing was inconsistent, which is why it took a phase needing the
+    /// data to surface it.</b> This class did exactly what it documented and that
+    /// document said exactly what it wanted, and no test on either side compared
+    /// the two. Fourth instance of that shape in three days and the first that was
+    /// nobody's bug.
+    /// </para>
+    /// <para>
+    /// <b>Why it matters concretely:</b> a one-hot on the argmax throws away the
+    /// search's own uncertainty. That two candidates scored 70 and 69 is exactly
+    /// the information saying "either is fine", and cloning the argmax teaches a
+    /// policy to be confident there instead.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Written into a pre-allocated buffer</b>, resized only when the
+    /// candidate set changes — docs/BOTAI.md item 1 forbids allocating in the tick
+    /// loop, and this is written once per candidate per decision.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Valid only until the next decision</b>, and a span so it cannot be
+    /// stashed. A caller logging a dataset copies it.
+    /// </para>
+    /// </remarks>
+    public ReadOnlySpan<double> LastScores => _scores.AsSpan(0, _scoreCount);
+
+    /// <summary>
+    /// The candidate set the scores are aligned with.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Handed back with the scores rather than left to be re-derived.</b>
+    /// The set is per class — a sniper's carries the zoom dimension and is twice
+    /// the size — so a caller that rebuilt it from <see cref="RolloutOptions"/>
+    /// would silently mis-align every sniper's distribution against a
+    /// soldier-shaped index.
+    /// </remarks>
+    public ReadOnlySpan<EnvAction> LastCandidates => _candidates.AsSpan(0, _scoreCount);
 
     /// <summary>
     /// The action the current decision settled on — the thing a behaviour-cloning
@@ -415,6 +471,14 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
         // mid-life, exactly as ScriptedBot rebuilds its NavQuery every tick.
         var candidates = CandidatesFor(world.Character(slot).Class);
 
+        // ⚠️ Grown here and not per decision. CandidatesFor can change the length
+        // when the class does, so the check is against the current set rather
+        // than done once in the constructor.
+        if (_scores.Length < candidates.Length)
+            _scores = new double[candidates.Length];
+
+        _scoreCount = candidates.Length;
+
         var savedAim = _decoder.Aim(slot);
         var best = EnvAction.Idle;
         var bestScore = double.NegativeInfinity;
@@ -424,6 +488,11 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
             _decoder.SetAim(slot, savedAim);
 
             var score = Rollout(world.Collision, slot, candidates[i]);
+
+            // ⚠️ EVERY score is kept, not just the winner's. See LastScores: the
+            // distribution is the thing that makes a search a better expert than
+            // a reward sample, and it used to be discarded inside this loop.
+            _scores[i] = score;
 
             if (score > bestScore)
             {

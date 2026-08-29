@@ -403,6 +403,83 @@ public sealed class RolloutSearchTests
         Assert.False(world.State.IsAlive(blue), "the scripted bot survived the whole duel");
     }
 
+    /// <summary>
+    /// ✅ <b>Every candidate's score survives the decision</b>, aligned with the
+    /// candidate set — the action distribution, not just the argmax.
+    /// </summary>
+    /// <remarks>
+    /// <c>gg2-rl/docs/DESIGN.md</c>: "its output is an ACTION DISTRIBUTION rather
+    /// than a scalar, so every logged decision carries far more signal than a
+    /// reward sample does", and its collection step logs
+    /// <c>(observation, distribution over actions, outcome)</c>. Until 2026-08-29
+    /// <see cref="RolloutSearch.Search"/> scored all 60 candidates and kept only
+    /// the best; every other score was discarded inside the loop that computed it.
+    /// <para>
+    /// ⚠️ <b>Nothing was inconsistent, which is why it survived.</b> This class did
+    /// what it documented, that document said what it wanted, and no test compared
+    /// them. It took a phase actually needing the data to surface it.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>The alignment is the load-bearing claim, not the presence.</b> A
+    /// distribution mis-indexed against the candidate set trains a policy towards
+    /// the wrong actions and nothing about it looks wrong — so this asserts that
+    /// the argmax of the scores IS the action the search returned, which is the
+    /// one relation that cannot hold by accident.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>And it must re-align when the class changes.</b> A sniper's set
+    /// carries the zoom dimension and is twice the length; a stale count would
+    /// hand out a soldier-shaped span over a sniper's scores.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void EveryCandidateScoreSurvivesTheDecisionAndStaysAligned()
+    {
+        var world = Load();
+        var red = world.Place(PlayerClass.Soldier, Team.Red, RedX, StandY);
+        var blue = world.Place(PlayerClass.Soldier, Team.Blue, RedX + 160, StandY);
+        world.Step(SpawnCooldownTicks);
+
+        var bot = new RolloutSearch();
+        var view = new WorldView(in world.State, world.Collision);
+
+        bot.Poll(view, red, 0);
+
+        Assert.Equal(bot.CandidateCount, bot.LastScores.Length);
+        Assert.Equal(bot.CandidateCount, bot.LastCandidates.Length);
+
+        // The alignment, asserted through the one relation that cannot hold by
+        // accident: the argmax of the distribution is the action taken.
+        var bestAt = 0;
+        for (var i = 1; i < bot.LastScores.Length; i++)
+        {
+            if (bot.LastScores[i] > bot.LastScores[bestAt])
+                bestAt = i;
+        }
+
+        Assert.Equal(bot.LastCandidates[bestAt], bot.LastAction);
+        Assert.Equal(bot.LastBestScore, bot.LastScores[bestAt]);
+
+        // ⚠️ And the distribution is a distribution rather than a constant. A
+        // search whose candidates all score the same is the blind case its own
+        // remarks describe, and cloning it teaches nothing — so a test that did
+        // not check this would pass on exactly the state the data is useless in.
+        var distinct = new HashSet<double>();
+        foreach (var score in bot.LastScores)
+            distinct.Add(score);
+
+        Assert.True(distinct.Count > 1, "every candidate scored the same; there is no distribution here");
+
+        // Re-aligns when the class changes: a sniper's set is twice as long.
+        var sniper = world.Place(PlayerClass.Sniper, Team.Red, RedX - 200, StandY);
+        bot.Poll(new WorldView(in world.State, world.Collision), sniper, 1);
+
+        Assert.Equal(bot.CandidateCount, bot.LastScores.Length);
+        Assert.Equal(120, bot.LastScores.Length);
+
+        Assert.NotEqual(blue, red);
+    }
+
     /// <summary>Presses nothing, for ever — the control for the fight test.</summary>
     private sealed class Passive : IInputSource
     {
