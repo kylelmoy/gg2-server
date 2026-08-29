@@ -535,10 +535,43 @@ states the policy actually visits.
 decision, Release), because the search runs on a slot that is not using it. Opt-in
 only; never a default.
 
-#### ⬅️ Why it is deferred
+#### ⚠️ The deferral's premise was half wrong, and is now repaired
+
+The shadow slot was deferred pending `gg2-rl`'s soft-targets run — **and it could
+not run one.** `StepScored` sent scores aligned with a candidate list whose
+**actions the env never sent**, so turning an index into an action meant
+reconstructing `RolloutSearch`'s enumeration inside the trainer. What was
+buildable was **margin weighting** (best minus runner-up as a per-row weight),
+which attacks part of the problem and is strictly weaker than matching a
+distribution over actions.
+
+⚠️ **This repo made exactly that argument one commit earlier** — the shadow
+slot's argmax "sent explicitly rather than left to be derived from the
+distribution's index, because recovering it otherwise needs a model of
+`RolloutSearch`'s candidate enumeration inside the trainer" — **and did not notice
+it applied with equal force to the whole distribution.** `gg2-rl` did.
+
+✅ **`EnvMessage.Candidates` closes it**: red's set then blue's, each a count and
+six i32 an action. Asked **once per batch**, not per step — a duel's classes are
+fixed by its spec — so every existing reply stays byte-identical and no version
+moves. A non-rollout side reports an explicit zero.
+
+⚠️ **The gate asserts ALIGNMENT, not presence**: the action at the argmax of the
+distribution must equal the action the reward block says was taken. A table that
+came back in a different order would train a policy towards the wrong actions and
+nothing about it would look wrong. Mutation-checked by reversing it.
+
+**The case for it, from the first scoring decision `gg2-rl` inspected**: 60
+candidates, best **15.2 at index 6**, runner-up **15.2 at index 7**, margin
+**0.0**. Two candidates the search considered exactly equal, one recorded as the
+label, and a policy marked wrong for choosing the other. **A one-hot is a lie on
+every such row.**
+
+#### ⬅️ Why the shadow slot is still deferred
 
 `gg2-rl` is training on the `StepScored` distribution instead of a one-hot on the
-argmax — **entirely its own work, next on its list regardless**. That attacks the
+argmax — **entirely its own work, next on its list regardless**, and now actually
+buildable. That attacks the
 same 0.422 exact-match number from the other end: a near-miss stops being scored
 as a total miss. **Measuring that first says how much the shadow slot actually
 buys**, and it costs nothing but a run that was happening anyway.

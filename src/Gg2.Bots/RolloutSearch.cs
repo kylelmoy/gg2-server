@@ -441,6 +441,27 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
     /// the only reason it is here rather than in a post-mortem.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// The candidate set a search with these options would use for this class,
+    /// without needing one to exist.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Pure and static on purpose.</b> The instance path rebuilds
+    /// <c>_candidates</c> in place, and calling that out of band could shrink the
+    /// array under a <see cref="LastCandidates"/> span still describing the
+    /// previous class's length. Nothing here touches instance state.
+    /// <para>
+    /// ⚠️ <b>It exists because a distribution is useless without the actions it
+    /// is over.</b> <c>StepScored</c> sends scores aligned with this list and a
+    /// consumer that had to reconstruct the enumeration would be holding a second
+    /// source of truth about this search — the exact thing the input seam exists
+    /// to prevent, and the argument this repo already made about the shadow
+    /// slot's argmax before noticing it applied to the whole distribution.
+    /// </para>
+    /// </remarks>
+    public static ReadOnlySpan<EnvAction> CandidatesFor(RolloutOptions options, PlayerClass playerClass) =>
+        BuildCandidates(options.WithDefaults(), considerZoom: playerClass == PlayerClass.Sniper);
+
     private EnvAction[] CandidatesFor(PlayerClass playerClass)
     {
         var wantsZoom = playerClass == PlayerClass.Sniper;

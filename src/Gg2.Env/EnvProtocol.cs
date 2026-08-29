@@ -37,6 +37,33 @@ public enum EnvMessage : byte
     /// </para>
     /// </remarks>
     StepScored = 8,
+
+    /// <summary>
+    /// The candidate ACTIONS a <see cref="StepScored"/> distribution is over.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>A distribution is useless without the actions it ranges over</b>, and
+    /// <see cref="StepScored"/> sent only the scores. A consumer turning an index
+    /// into an action had to reconstruct <c>RolloutSearch</c>'s enumeration inside
+    /// its own repo — a second source of truth about this search, which is exactly
+    /// what the input seam exists to prevent. ⚠️ <b>This repo made that argument
+    /// about the shadow slot's argmax and did not notice it applied with equal
+    /// force to the whole distribution</b>; <c>gg2-rl</c> did.
+    /// <para>
+    /// ⚠️ <b>Asked once, not per step.</b> The set is fixed by the batch's spec —
+    /// a duel's classes do not change — so it rides its own message rather than
+    /// 360 bytes an agent on every reply. That also keeps every existing reply
+    /// byte-identical, which is why this needs no version bump: a client that
+    /// never sends it is unaffected.
+    /// </para>
+    /// <para>
+    /// Reply: red's count then that many actions, then blue's. Each action is six
+    /// i32 — horizontal, jump, down, fire, aim, zoom — in the order
+    /// <c>EnvServer.ReadAction</c> consumes them. A non-rollout side has a count
+    /// of zero.
+    /// </para>
+    /// </remarks>
+    Candidates = 9,
     Reset = 4,
     Snapshot = 5,
     Restore = 6,

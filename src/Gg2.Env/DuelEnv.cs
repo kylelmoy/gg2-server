@@ -585,6 +585,37 @@ public sealed class DuelEnv
     public ReadOnlySpan<double> ScoresFor(int slot) =>
         BotFor(slot) is RolloutSearch search ? search.LastScores : ReadOnlySpan<double>.Empty;
 
+    /// <summary>
+    /// The candidate actions a rollout slot's scores are aligned with, or empty.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Fixed for the whole batch</b>, because a duel's classes are fixed by
+    /// its spec — which is why this can be answered once rather than per step.
+    /// <para>
+    /// ⚠️ <b>Derived from the spec rather than read off the live search</b>, so it
+    /// is answerable before the first <see cref="Step"/> and cannot disturb
+    /// <c>RolloutSearch.LastCandidates</c>.
+    /// </para>
+    /// </remarks>
+    public ReadOnlySpan<EnvAction> CandidatesFor(int slot)
+    {
+        if (slot == RedSlot && _spec.RedDriver == EnvDriver.Rollout)
+        {
+            return RolloutSearch.CandidatesFor(
+                new RolloutOptions(HorizonTicks: _spec.RedHorizonTicks, Opponent: _spec.RedRolloutOpponent),
+                _spec.RedClass);
+        }
+
+        if (slot == BlueSlot && _spec.BlueDriver == EnvDriver.Rollout)
+        {
+            return RolloutSearch.CandidatesFor(
+                new RolloutOptions(HorizonTicks: _spec.BlueHorizonTicks, Opponent: _spec.BlueRolloutOpponent),
+                _spec.BlueClass);
+        }
+
+        return ReadOnlySpan<EnvAction>.Empty;
+    }
+
     /// <summary>The live world, for an observation writer to read.</summary>
     public ScenarioWorld World =>
         _world ?? throw new InvalidOperationException("Reset has not been called");

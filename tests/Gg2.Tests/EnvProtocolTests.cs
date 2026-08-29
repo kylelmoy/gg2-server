@@ -394,6 +394,125 @@ public sealed class EnvProtocolTests : IDisposable
         Assert.Equal(max, bestScore);
     }
 
+    /// <summary>
+    /// ✅ <b>The candidate ACTIONS come back, and the action at the distribution's
+    /// argmax is the action the search took.</b>
+    /// </summary>
+    /// <remarks>
+    /// <c>StepScored</c> sent scores aligned with a candidate list whose actions
+    /// the env never sent, so a consumer turning an index into an action had to
+    /// reconstruct <c>RolloutSearch</c>'s enumeration in its own repo — the second
+    /// source of truth the seam exists to prevent. ⚠️ <b>This repo made exactly
+    /// that argument about the shadow slot's argmax and did not notice it applied
+    /// to the whole distribution</b>; <c>gg2-rl</c> did, and without the actions it
+    /// could build only margin weighting rather than true soft targets.
+    /// <para>
+    /// ⚠️ <b>ALIGNMENT is the assertion, not presence.</b> A candidate list that
+    /// came back in a different order from the scores would train a policy towards
+    /// the wrong actions and nothing about it would look wrong. The one relation
+    /// that cannot hold by accident is that the action at the argmax of the
+    /// distribution equals the action the reward block says was taken — so that is
+    /// what is checked, across the socket, on a real search.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>No version bump</b>: a new kind leaves every existing reply
+    /// byte-identical, so a client that never sends it is unaffected. Asserted
+    /// here by checking the plain <c>Step</c> reply's length is untouched.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void TheCandidateActionsComeBackAlignedWithTheScores()
+    {
+        Send(EnvMessage.Hello, Int(EnvProtocol.Version));
+        Receive();
+
+        // ⚠️ A cap of 120 rather than the default 20: a soldier's refire starts at
+        // 29 ticks against a 20-tick horizon, so the first decisions are all the
+        // blind tie-break and a short episode never reaches one that scores.
+        Send(EnvMessage.MakeBatch, MakeBatchBody(
+            count: 1, cap: 120, red: EnvDriver.Rollout, blue: EnvDriver.Idle));
+        Assert.Equal((byte)EnvMessage.MakeBatch, Receive()[0]);
+
+        Send(EnvMessage.Candidates, []);
+        var table = Receive();
+        Assert.Equal((byte)EnvMessage.Candidates, table[0]);
+
+        var at = 1;
+        var redCount = BinaryPrimitives.ReadInt32LittleEndian(table.AsSpan(at));
+        at += 4;
+
+        Assert.Equal(60, redCount);
+
+        var candidates = new (int H, int J, int D, int F, int A, int Z)[redCount];
+        for (var i = 0; i < redCount; i++)
+        {
+            candidates[i] = (
+                BinaryPrimitives.ReadInt32LittleEndian(table.AsSpan(at)),
+                BinaryPrimitives.ReadInt32LittleEndian(table.AsSpan(at + 4)),
+                BinaryPrimitives.ReadInt32LittleEndian(table.AsSpan(at + 8)),
+                BinaryPrimitives.ReadInt32LittleEndian(table.AsSpan(at + 12)),
+                BinaryPrimitives.ReadInt32LittleEndian(table.AsSpan(at + 16)),
+                BinaryPrimitives.ReadInt32LittleEndian(table.AsSpan(at + 20)));
+            at += 24;
+        }
+
+        // ⚠️ Blue is Idle: an explicit zero, not an absent field.
+        Assert.Equal(0, BinaryPrimitives.ReadInt32LittleEndian(table.AsSpan(at)));
+        Assert.Equal(at + 4, table.Length);
+
+        var actions = new byte[2 * EnvProtocol.ActionBytes];
+        actions[4] = ActionDecoder.AimCentreBin;
+        actions[EnvProtocol.ActionBytes + 4] = ActionDecoder.AimCentreBin;
+
+        // Step until the search finds something, so the argmax is meaningful
+        // rather than the blind tie-break.
+        var componentsAt = 1 + 4 + (ObservationWriter.Length * 2 * 4);
+        byte[] scored;
+        float best;
+        var scores = Array.Empty<float>();
+
+        var guard = 0;
+        do
+        {
+            Send(EnvMessage.StepScored, actions);
+            scored = Receive();
+
+            best = BinaryPrimitives.ReadSingleLittleEndian(
+                scored.AsSpan(componentsAt + EnvProtocol.ComponentBytes - 4));
+
+            var sat = componentsAt + (2 * EnvProtocol.ComponentBytes);
+            var n = BinaryPrimitives.ReadInt32LittleEndian(scored.AsSpan(sat));
+            sat += 4;
+
+            scores = new float[n];
+            for (var i = 0; i < n; i++)
+                scores[i] = BinaryPrimitives.ReadSingleLittleEndian(scored.AsSpan(sat + (i * 4)));
+        }
+        while (best == 0 && ++guard < 100);
+
+        Assert.True(best != 0, "the search never scored anything; the argmax would be the blind tie-break");
+        Assert.Equal(redCount, scores.Length);
+
+        var bestAt = 0;
+        for (var i = 1; i < scores.Length; i++)
+        {
+            if (scores[i] > scores[bestAt])
+                bestAt = i;
+        }
+
+        // THE ALIGNMENT: the action at the distribution's argmax is the action the
+        // reward block says the search took.
+        var taken = (
+            BinaryPrimitives.ReadInt32LittleEndian(scored.AsSpan(componentsAt + 20)),
+            BinaryPrimitives.ReadInt32LittleEndian(scored.AsSpan(componentsAt + 24)),
+            BinaryPrimitives.ReadInt32LittleEndian(scored.AsSpan(componentsAt + 28)),
+            BinaryPrimitives.ReadInt32LittleEndian(scored.AsSpan(componentsAt + 32)),
+            BinaryPrimitives.ReadInt32LittleEndian(scored.AsSpan(componentsAt + 36)),
+            BinaryPrimitives.ReadInt32LittleEndian(scored.AsSpan(componentsAt + 40)));
+
+        Assert.Equal(candidates[bestAt], taken);
+    }
+
     /// <summary>A handshake agrees on everything a checkpoint depends on.</summary>
     [Fact]
     public void HelloAgreesOnTheVersionsAndTheShape()

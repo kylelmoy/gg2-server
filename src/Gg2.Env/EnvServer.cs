@@ -118,6 +118,7 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
         EnvMessage.MakeBatch => MakeBatch(body),
         EnvMessage.Step => Step(body),
         EnvMessage.StepScored => Step(body, scored: true),
+        EnvMessage.Candidates => Candidates(),
         EnvMessage.Reset => Reset(body),
         EnvMessage.Snapshot => Snapshot(body),
         EnvMessage.Restore => Restore(body),
@@ -377,6 +378,63 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
         batch.ResetWorld(index);
 
         return Observations(EnvMessage.Reset);
+    }
+
+    /// <summary>
+    /// The candidate actions a <see cref="EnvMessage.StepScored"/> distribution is
+    /// aligned with — red's set, then blue's.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ Answered from world 0's spec, which every world in the batch shares, so
+    /// this is a property of the batch rather than of a step. A non-rollout side
+    /// reports a count of zero — the same explicit zero <c>WriteScores</c> uses,
+    /// and for the same reason: "this side does not search" must not be spelled
+    /// like anything else.
+    /// </remarks>
+    private byte[] Candidates()
+    {
+        var batch = _batch ?? throw new InvalidOperationException("no batch; send MakeBatch first");
+        var world = batch.World(0);
+
+        var red = world.CandidatesFor(world.RedSlot);
+        var blue = world.CandidatesFor(world.BlueSlot);
+
+        var reply = new byte[1 + 4 + (red.Length * 6 * 4) + 4 + (blue.Length * 6 * 4)];
+        var at = 0;
+
+        reply[at++] = (byte)EnvMessage.Candidates;
+
+        WriteCandidates(reply, ref at, red);
+        WriteCandidates(reply, ref at, blue);
+
+        return reply;
+    }
+
+    /// <summary>One side's candidate set: a count, then six i32 per action.</summary>
+    /// <remarks>
+    /// ⚠️ Six i32 rather than six bytes, matching how the reward block already
+    /// reports an action, so a consumer parses the same shape in both places.
+    /// </remarks>
+    private static void WriteCandidates(byte[] into, ref int at, ReadOnlySpan<EnvAction> candidates)
+    {
+        BinaryPrimitives.WriteInt32LittleEndian(into.AsSpan(at), candidates.Length);
+        at += 4;
+
+        foreach (var action in candidates)
+        {
+            BinaryPrimitives.WriteInt32LittleEndian(into.AsSpan(at), action.Horizontal);
+            at += 4;
+            BinaryPrimitives.WriteInt32LittleEndian(into.AsSpan(at), action.Jump);
+            at += 4;
+            BinaryPrimitives.WriteInt32LittleEndian(into.AsSpan(at), action.Down);
+            at += 4;
+            BinaryPrimitives.WriteInt32LittleEndian(into.AsSpan(at), action.Fire);
+            at += 4;
+            BinaryPrimitives.WriteInt32LittleEndian(into.AsSpan(at), action.AimDelta);
+            at += 4;
+            BinaryPrimitives.WriteInt32LittleEndian(into.AsSpan(at), action.Zoom);
+            at += 4;
+        }
     }
 
     private byte[] Snapshot(ReadOnlySpan<byte> body)
