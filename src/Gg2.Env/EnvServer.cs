@@ -117,6 +117,7 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
         EnvMessage.Hello => Hello(body),
         EnvMessage.MakeBatch => MakeBatch(body),
         EnvMessage.Step => Step(body),
+        EnvMessage.StepScored => Step(body, scored: true),
         EnvMessage.Reset => Reset(body),
         EnvMessage.Snapshot => Snapshot(body),
         EnvMessage.Restore => Restore(body),
@@ -299,7 +300,7 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
         return Observations(EnvMessage.MakeBatch);
     }
 
-    private byte[] Step(ReadOnlySpan<byte> body)
+    private byte[] Step(ReadOnlySpan<byte> body, bool scored = false)
     {
         var batch = _batch ?? throw new InvalidOperationException("no batch; send MakeBatch first");
 
@@ -328,7 +329,11 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
 
         batch.Step(red, blue, redOut, blueOut);
 
-        return Observations(EnvMessage.Step, redOut, blueOut);
+        // ⚠️ The reply KIND echoes what was asked for, so a client can tell which
+        // shape it is holding without tracking its own request.
+        return scored
+            ? Observations(EnvMessage.StepScored, redOut, blueOut)
+            : Observations(EnvMessage.Step, redOut, blueOut);
     }
 
     private static EnvAction ReadAction(ReadOnlySpan<byte> b) => new()
@@ -425,8 +430,25 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
 
         var componentBytes = EnvProtocol.ComponentBytes;
 
+        // ⚠️ Sized from the real spans rather than from CandidateCount, because a
+        // sniper's set is twice a soldier's and a batch can hold both. Assuming
+        // one length would truncate half of every mixed batch.
+        var scoreFloats = 0;
+
+        if (kind == EnvMessage.StepScored)
+        {
+            for (var i = 0; i < batch.Count; i++)
+            {
+                var world = batch.World(i);
+                scoreFloats += world.ScoresFor(world.RedSlot).Length;
+                scoreFloats += world.ScoresFor(world.BlueSlot).Length;
+            }
+        }
+
         var floats = _observations.Length;
-        var reply = new byte[1 + 4 + (floats * 4) + (batch.Count * 2 * componentBytes)];
+        var reply = new byte[
+            1 + 4 + (floats * 4) + (batch.Count * 2 * componentBytes)
+            + (kind == EnvMessage.StepScored ? (batch.Count * 2 * 4) + (scoreFloats * 4) : 0)];
         var at = 0;
 
         reply[at++] = (byte)kind;
@@ -445,7 +467,53 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
             WriteComponents(reply, ref at, blue is null ? default : blue[i]);
         }
 
+        // ⚠️ The score block, and ONLY for StepScored. Every agent gets a length
+        // even when it is zero, so the block is walkable without knowing which
+        // slots searched — a client that had to infer that would be holding a
+        // model of this repo's internals, which is the thing the whole seam
+        // exists to avoid.
+        if (kind == EnvMessage.StepScored)
+        {
+            for (var i = 0; i < batch.Count; i++)
+            {
+                var world = batch.World(i);
+
+                WriteScores(reply, ref at, world.ScoresFor(world.RedSlot));
+                WriteScores(reply, ref at, world.ScoresFor(world.BlueSlot));
+            }
+        }
+
         return reply;
+    }
+
+    /// <summary>
+    /// One agent's candidate scores: a count, then that many float32.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Length-prefixed per agent rather than a batch-wide stride.</b> A
+    /// sniper searches 120 candidates and everything else 60, so a single stride
+    /// would either truncate the snipers or pad every other agent — and a batch
+    /// can hold both classes at once.
+    /// <para>
+    /// ⚠️ <b>Zero is a real length</b>, written for any slot that is not
+    /// search-driven. It is not the same as a block of zero scores: zero is a
+    /// meaningful score, the blind case, so the two must not be spelled the same
+    /// way. See <see cref="StepResult.BestScore"/>.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>float32</b>, matching the damage fields a score is a difference of.
+    /// </para>
+    /// </remarks>
+    private static void WriteScores(byte[] into, ref int at, ReadOnlySpan<double> scores)
+    {
+        BinaryPrimitives.WriteInt32LittleEndian(into.AsSpan(at), scores.Length);
+        at += 4;
+
+        foreach (var score in scores)
+        {
+            BinaryPrimitives.WriteSingleLittleEndian(into.AsSpan(at), (float)score);
+            at += 4;
+        }
     }
 
     /// <summary>

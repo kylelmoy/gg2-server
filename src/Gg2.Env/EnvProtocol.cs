@@ -15,6 +15,28 @@ public enum EnvMessage : byte
     Hello = 1,
     MakeBatch = 2,
     Step = 3,
+
+    /// <summary>
+    /// <see cref="Step"/>, plus every candidate's score for each searching agent.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Opt-in per call, and that is the whole design.</b> The distribution
+    /// is 60 doubles an agent — 120 for a sniper — against a 52-byte reward block,
+    /// so carrying it in every reply would tax the random-head smoke run and move
+    /// phase 0's throughput criterion, which is the one number <c>gg2-rl</c>
+    /// quotes for the socket boundary. A separate kind costs nothing when unused.
+    /// <para>
+    /// The request body is byte-identical to <see cref="Step"/>'s. The reply is
+    /// <see cref="Step"/>'s followed by the score block — see
+    /// <c>EnvServer.StepScored</c>.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>float32, not double.</b> A score is a sum of damage differences and
+    /// carries exactly the precision the damage fields already do; doubling the
+    /// payload to preserve digits the source does not have is not a trade.
+    /// </para>
+    /// </remarks>
+    StepScored = 8,
     Reset = 4,
     Snapshot = 5,
     Restore = 6,

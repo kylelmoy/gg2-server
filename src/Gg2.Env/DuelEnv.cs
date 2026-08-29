@@ -521,6 +521,22 @@ public sealed class DuelEnv
     public IInputSource? BotFor(int slot) =>
         slot == RedSlot ? _redBot : slot == BlueSlot ? _blueBot : null;
 
+    /// <summary>
+    /// Every candidate's score behind a slot, or empty when nothing searched.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Empty rather than zeros for a non-search slot.</b> Zero is a
+    /// meaningful score — it is precisely the blind case, see
+    /// <see cref="StepResult.BestScore"/> — so a block of them would read as a
+    /// search that found nothing rather than as a slot that never searched.
+    /// <para>
+    /// ⚠️ <b>A span over the search's own buffer, valid until its next
+    /// decision.</b> A caller serialising it copies; nothing here allocates.
+    /// </para>
+    /// </remarks>
+    public ReadOnlySpan<double> ScoresFor(int slot) =>
+        BotFor(slot) is RolloutSearch search ? search.LastScores : ReadOnlySpan<double>.Empty;
+
     /// <summary>The live world, for an observation writer to read.</summary>
     public ScenarioWorld World =>
         _world ?? throw new InvalidOperationException("Reset has not been called");

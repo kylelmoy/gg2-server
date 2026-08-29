@@ -287,6 +287,106 @@ public sealed class EnvProtocolTests : IDisposable
         Assert.Equal([3, 2, 2, 3, ActionDecoder.AimBins, 2], shape);
     }
 
+    /// <summary>
+    /// ✅ <b><see cref="EnvMessage.StepScored"/> carries the search's whole
+    /// candidate distribution, and plain <see cref="EnvMessage.Step"/> carries
+    /// none of it.</b>
+    /// </summary>
+    /// <remarks>
+    /// <c>gg2-rl/docs/DESIGN.md</c>'s reason a search is a better expert than a
+    /// reward signal is that its output is a distribution rather than a scalar. A
+    /// one-hot on the argmax throws away the search's own uncertainty — that two
+    /// candidates scored 70 and 69 is exactly the information saying "either is
+    /// fine".
+    /// <para>
+    /// ⚠️ <b>Opt-in per call, and the control is the point.</b> 60 floats an agent
+    /// (120 for a sniper) against a 52-byte reward block would tax the random-head
+    /// smoke run and move phase 0's throughput criterion — the one number quoted
+    /// for the socket boundary. So this asserts that a plain Step reply is exactly
+    /// the length it was before, byte for byte, and not merely that StepScored is
+    /// longer.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Length-prefixed per agent</b>, because a batch can hold a sniper
+    /// (120 candidates) beside a soldier (60) and a single stride would truncate
+    /// one or pad the other. A non-searching slot gets a length of <b>zero</b>,
+    /// which is deliberately not the same as a block of zero scores: zero is a
+    /// meaningful score — the blind case.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void OnlyStepScoredCarriesTheCandidateDistribution()
+    {
+        Send(EnvMessage.Hello, Int(EnvProtocol.Version));
+        Receive();
+
+        // Red searches, blue does not — so one agent has a distribution and the
+        // other has an explicit zero.
+        Send(EnvMessage.MakeBatch, MakeBatchBody(count: 1, red: EnvDriver.Rollout, blue: EnvDriver.Idle));
+        Assert.Equal((byte)EnvMessage.MakeBatch, Receive()[0]);
+
+        var actions = new byte[2 * EnvProtocol.ActionBytes];
+        actions[4] = ActionDecoder.AimCentreBin;
+        actions[EnvProtocol.ActionBytes + 4] = ActionDecoder.AimCentreBin;
+
+        Send(EnvMessage.Step, actions);
+        var plain = Receive();
+        Assert.Equal((byte)EnvMessage.Step, plain[0]);
+
+        Send(EnvMessage.StepScored, actions);
+        var scored = Receive();
+
+        // ⚠️ The reply KIND echoes the request, so a client never has to track
+        // which shape it is holding.
+        Assert.Equal((byte)EnvMessage.StepScored, scored[0]);
+
+        var expectedPlain = 1 + 4
+            + (ObservationWriter.Length * 2 * 4)
+            + (2 * EnvProtocol.ComponentBytes);
+
+        // The control: a plain Step is untouched by this feature existing.
+        Assert.Equal(expectedPlain, plain.Length);
+
+        // Two length prefixes plus red's candidates. Blue is Idle: zero of them.
+        var at = expectedPlain;
+
+        var redCount = BinaryPrimitives.ReadInt32LittleEndian(scored.AsSpan(at));
+        at += 4;
+
+        Assert.Equal(60, redCount);
+
+        var scores = new float[redCount];
+        for (var i = 0; i < redCount; i++)
+        {
+            scores[i] = BinaryPrimitives.ReadSingleLittleEndian(scored.AsSpan(at));
+            at += 4;
+        }
+
+        var blueCount = BinaryPrimitives.ReadInt32LittleEndian(scored.AsSpan(at));
+        at += 4;
+
+        // ⚠️ Zero, written explicitly. An Idle slot did not search; that is not
+        // the same as having searched and scored nothing.
+        Assert.Equal(0, blueCount);
+
+        Assert.Equal(at, scored.Length);
+
+        // And the distribution agrees with the scalar the same reply carries:
+        // BestScore is the last field of red's component block.
+        var redComponents = 1 + 4 + (ObservationWriter.Length * 2 * 4);
+        var bestScore = BinaryPrimitives.ReadSingleLittleEndian(
+            scored.AsSpan(redComponents + EnvProtocol.ComponentBytes - 4));
+
+        var max = scores[0];
+        foreach (var v in scores)
+        {
+            if (v > max)
+                max = v;
+        }
+
+        Assert.Equal(max, bestScore);
+    }
+
     /// <summary>A handshake agrees on everything a checkpoint depends on.</summary>
     [Fact]
     public void HelloAgreesOnTheVersionsAndTheShape()
