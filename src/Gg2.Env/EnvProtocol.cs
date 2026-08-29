@@ -235,7 +235,34 @@ public static class EnvProtocol
 
         public required int ObservationLength { get; init; }
 
-        /// <summary>The five head widths, in the order the actions are sent.</summary>
+        /// <summary>
+        /// The head widths, in the order the actions are sent.
+        /// </summary>
+        /// <remarks>
+        /// ⚠️ <b>This is the env's RUNTIME SELF-DESCRIPTION, and a trainer sizes
+        /// its policy's output layer from it.</b> v4 added the <c>Zoom</c> head to
+        /// the request, to the reader, to the reward block and to
+        /// <see cref="ActionBytes"/> — and left this at five. The code was
+        /// entirely self-consistent: the server read six bytes and wrote six heads
+        /// back while telling every client the action space had five.
+        /// <para>
+        /// ⚠️ <b>Nothing on this side could catch it, and the failure it causes is
+        /// silent.</b> No test here asks the handshake what the action space is;
+        /// every one of them builds frames from the constants directly. A trainer
+        /// that believed the advertisement would build a five-head policy against
+        /// a six-head space — not a crash, just <b>a sniper that can never
+        /// zoom</b>, which is the exact bug v4 existed to remove. Found by
+        /// <c>gg2-rl</c> on its first connection, because it asserts the
+        /// advertised shape rather than assuming it.
+        /// </para>
+        /// <para>
+        /// ⚠️ <b>Second time in two days that a self-description drifted from the
+        /// thing it describes</b>, after <see cref="Version"/> itself. The gate is
+        /// <c>EnvProtocolTests.TheAdvertisedHeadShapeMatchesTheWire</c>, which
+        /// derives the count from <see cref="ActionBytes"/> rather than restating
+        /// it — a literal here would drift the same way again.
+        /// </para>
+        /// </remarks>
         public required int[] HeadShape { get; init; }
 
         public static Handshake Current => new()
@@ -245,7 +272,9 @@ public static class EnvProtocol
             ObservationLayoutVersion = ObservationWriter.LayoutVersion,
             ActionEncodingVersion = SimulationStamp.ActionEncodingVersion,
             ObservationLength = ObservationWriter.Length,
-            HeadShape = [3, 2, 2, 3, ActionDecoder.AimBins],
+            // horizontal, jump, down, fire, aim, zoom — one entry per byte of
+            // ActionBytes, in the order EnvServer.ReadAction consumes them.
+            HeadShape = [3, 2, 2, 3, ActionDecoder.AimBins, 2],
         };
     }
 }

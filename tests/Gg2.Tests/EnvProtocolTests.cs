@@ -240,6 +240,52 @@ public sealed class EnvProtocolTests : IDisposable
         Assert.Contains($"protocol v{EnvProtocol.Version}", reason, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// ⚠️ <b>The advertised action space matches the one the wire actually
+    /// carries</b> — one head per action byte, and every width real.
+    /// </summary>
+    /// <remarks>
+    /// <b>The gate for a blocker that shipped.</b> v4 added the <c>Zoom</c> head
+    /// to the request, the reader, the reward block and
+    /// <see cref="EnvProtocol.ActionBytes"/>, and left
+    /// <c>Handshake.HeadShape</c> at five entries. The server read six bytes and
+    /// wrote six heads back while telling every client the space had five.
+    /// <para>
+    /// ⚠️ <b>Nothing here could have caught it and the failure is silent.</b>
+    /// Every test in this file builds its frames from the constants directly, so
+    /// none of them ever asks the handshake what the action space is. A trainer
+    /// that believed the advertisement would size a five-head policy against a
+    /// six-head space — not a crash, just a sniper that can never zoom, which is
+    /// the exact bug v4 removed. Found by <c>gg2-rl</c> on its first connection,
+    /// because it asserts the advertised shape rather than assuming it.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Derived from <see cref="EnvProtocol.ActionBytes"/>, never restated.</b>
+    /// A literal 6 here would drift exactly as the literal 5 did — the whole
+    /// lesson of this bug and of the version constant before it is that a
+    /// self-description checked against another copy of itself is not checked.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void TheAdvertisedHeadShapeMatchesTheWire()
+    {
+        var shape = EnvProtocol.Handshake.Current.HeadShape;
+
+        // One head per byte the Step request carries per agent.
+        Assert.Equal(EnvProtocol.ActionBytes, shape.Length);
+
+        // ⚠️ And the reward block echoes every head plus ActionExact, at four
+        // bytes each after the five reward fields — so the sizes are tied too.
+        // Getting this wrong is how ActionExact silently moved under a reader.
+        Assert.Equal(EnvProtocol.ComponentBytes, (5 + shape.Length + 1) * 4);
+
+        foreach (var width in shape)
+            Assert.True(width >= 2, $"a head of width {width} cannot encode a choice");
+
+        // The widths themselves, against the decoder that consumes them.
+        Assert.Equal([3, 2, 2, 3, ActionDecoder.AimBins, 2], shape);
+    }
+
     /// <summary>A handshake agrees on everything a checkpoint depends on.</summary>
     [Fact]
     public void HelloAgreesOnTheVersionsAndTheShape()
@@ -272,12 +318,17 @@ public sealed class EnvProtocolTests : IDisposable
         // covered only the framing would let that through.
         Assert.Equal(SimulationStamp.Uuid, uuid);
 
-        Assert.Equal(5, Next());
-        Assert.Equal(3, Next());
-        Assert.Equal(2, Next());
-        Assert.Equal(2, Next());
-        Assert.Equal(3, Next());
-        Assert.Equal(ActionDecoder.AimBins, Next());
+        // ⚠️ DERIVED from ActionBytes, not restated. This line read
+        // `Assert.Equal(5, Next())` while the wire carried six heads, and it
+        // passed — because it checked the advertisement against a literal copy of
+        // the advertisement rather than against the thing advertised. That is the
+        // whole failure: a self-description checked against another copy of
+        // itself is not checked. TheAdvertisedHeadShapeMatchesTheWire is the
+        // other half, tying the shape to the frame and the reward block.
+        Assert.Equal(EnvProtocol.ActionBytes, Next());
+
+        foreach (var width in EnvProtocol.Handshake.Current.HeadShape)
+            Assert.Equal(width, Next());
     }
 
     /// <summary>
