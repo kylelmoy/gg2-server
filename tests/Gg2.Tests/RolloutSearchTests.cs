@@ -1,3 +1,4 @@
+using Gg2.Maps;
 using Gg2.Bots;
 using Gg2.Protocol;
 using Gg2.Simulation;
@@ -349,6 +350,30 @@ public sealed class RolloutSearchTests
     /// of magnitude past the opponent model's, which on this map is zero (see
     /// <c>RolloutOpponentSelectionTests</c>).
     /// </para>
+    /// <para>
+    /// ✅ <b>So here is the figure that is a claim about the BOT rather than about
+    /// a spot.</b> <see cref="ScenarioWorld.PlaceInBand"/>, 150-350px, 24 duels
+    /// (soldier and scout mirrors, seeds 1-12), tier 5, 2,400 ticks — which is
+    /// <c>gg2-rl</c>'s own cap of 600 decisions at an action repeat of 4, so it is
+    /// comparable to its run:
+    /// </para>
+    /// <list type="bullet">
+    /// <item><c>ctf_2dfort</c>: <b>21-1-2</b> (HoldLastInput), <b>21-2-1</b>
+    /// (Idle). <c>gg2-rl</c>'s 1,600-duel run over sixteen pairings reads 76.5%
+    /// [73.5%, 79.2%], with the soldier and scout pairings in the 65-96% band —
+    /// so these agree.</item>
+    /// <item><c>gg_debug</c>: <b>4-1-19</b>. ⚠️ Banded, it is nineteen stalemates
+    /// out of twenty-four. One spawn point per team, zero opponent-model
+    /// divergence in 12 of 12, an order-of-magnitude position swing between two
+    /// spots in one room, and now this. <b>It is a determinism and throughput
+    /// fixture, not an evaluation map.</b></item>
+    /// </list>
+    /// <para>
+    /// ⚠️ <b>Those numbers were 4-0-20 and 2-0-22 before the opponent had an
+    /// <see cref="ScriptedBot.Objective"/></b>, which is the correction above and
+    /// the largest single effect measured on this bot all session — larger than
+    /// the position, the opponent model and the horizon put together.
+    /// </para>
     /// </remarks>
     [Fact]
     public void ItBeatsTheScriptedBotInADuel()
@@ -358,7 +383,18 @@ public sealed class RolloutSearchTests
         var blue = world.Place(PlayerClass.Soldier, Team.Blue, RedX + 160, StandY);
 
         world.Drive(red, new RolloutSearch());
-        world.Drive(blue, new ScriptedBot(world.Nav, new NavQuery(Team.Blue), BotSkill.ForTier(5), stagger: 1));
+        world.Drive(blue, new ScriptedBot(world.Nav, new NavQuery(Team.Blue), BotSkill.ForTier(5), stagger: 1)
+        {
+            // ⚠️ WITHOUT THIS the opponent is not the scripted bot, it is the
+            // scripted bot with its objective layer off — it never hunts and
+            // stands where it was placed. `DuelEnv.MakeBot` has always set it and
+            // this test never did, which was invisible here (the two start 160px
+            // apart, already inside every band) and decisive anywhere else:
+            // banded on ctf_2dfort the same matchup reads 4-0-20 without it and
+            // 21-1-2 with it. A test that names "the scripted bot" has to drive
+            // the one everything else drives.
+            Objective = new BotObjective(world.Nav!, new SpawnPoints(world.Map)),
+        });
 
         for (var i = 0; i < 600 && world.State.IsAlive(red) && world.State.IsAlive(blue); i++)
             world.Step();

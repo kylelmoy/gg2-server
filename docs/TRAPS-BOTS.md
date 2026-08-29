@@ -2487,6 +2487,113 @@ an assumption **every offline checker shared**, so no check could catch it. Both
 are the same shape: the thing that would have failed was not representable in the
 apparatus.
 
+### ⚠️ NO BOT CAN ZOOM, so every bot sniper plays at half its weapon
+
+**2026-08-29, found chasing `gg2-rl`'s sniper hole and NOT the cause of it.**
+
+`toggleZoom` is not a key. `PlayerCommands.ToggleZoom` says so in as many words —
+*"Zoom is not a key. It is its own client command"* — and a bot's entire output is
+`PlayerInput`, which is `PlayerKeys` plus an aim. So **no `IInputSource` in this
+port can zoom**: not `ScriptedBot`, not `RolloutSearch`, and not a learned policy,
+because `EnvAction`'s five heads have no zoom either.
+
+What that costs, from `Weapons.RifleBeginStep`:
+
+| | damage |
+|---|---|
+| unscoped (`RifleUnscopedDamage`) | **35** |
+| scoped, uncharged (`RifleBaseDamage`) | 45 |
+| scoped, full charge (`RifleMaxDamage`) | **75** |
+
+**Every bot sniper in this port fires at 35 for ever**, against a weapon that
+reaches 75. And `BotClassKeys`' sniper branch reads `self.Zoomed`, which is always
+false for a bot — so its charge-proportional-to-range arm, and the comment
+explaining it, are **unreachable code**.
+
+⚠️ **This is the mirror of CLAUDE.md's standing rule and the rule does not cover
+it.** That rule says a bot must not be able to do something a client cannot. Here
+a **client can do something a bot cannot**, which is just as much a gap in the
+seam — and it is invisible to every test, because nothing asserts a bot can
+express the whole action space.
+
+⚠️ **It is recorded here rather than fixed.** Fixing it means giving the input
+seam a channel for a client command, which reaches `IInputSource`, `EnvAction`,
+the action encoding and therefore `SIM_UUID` — and `gg2-rl` has checkpoints keyed
+on that. It is a scope call, not a patch. **What must not happen again is it
+staying a remark inside `ToggleZoom` that nobody reads**: CLAUDE.md, "a gap
+recorded only in a code comment is a gap nobody is tracking".
+
+### ⚠️ A horizon shorter than the refire: measured per class, and it is the SOLDIER
+
+`RolloutSearch`'s own remark has always said a horizon shorter than a refire timer
+makes every candidate score zero, so the tie goes to the first and the bot stands
+still. **The rifle's refire is 40 ticks against a 20-tick horizon — the longest in
+the game, and the only one at double it** (rocket launcher 30, minegun 26,
+revolver 18, the rest under 6). That made a tidy hypothesis for `gg2-rl`'s
+sniper-v-sniper hole.
+
+⚠️ **It is wrong, and the measurement says so.** `ctf_2dfort` banded 150-350px,
+12 mirror duels, 900 ticks, tier 5:
+
+| class | horizon 20 | horizon 45 |
+|---|---|---|
+| Sniper (refire 40) | 0-2-10 | **0-5-7** — worse |
+| Soldier (refire 30) | 0-0-12 | **3-1-8** — much better |
+| Scout (refire 8) | 4-0-8 | 5-2-5 |
+
+**Lengthening the horizon past the rifle's refire made the sniper worse.** So the
+blindness is real and it is the **soldier's** binding constraint, not the
+sniper's; the sniper hole survives the fix and is still unexplained. Recorded as a
+dead hypothesis so nobody re-runs it, and as a live finding about the soldier.
+
+### ⚠️⚠️ A `ScriptedBot` with no `Objective` is not the scripted bot
+
+**The largest single effect measured on `RolloutSearch` all session**, and it was
+in the test apparatus rather than in the bot.
+
+`ScriptedBot.Objective` is optional. Without it the bot has no objective layer at
+all: it never picks a goal, never hunts, and **stands where it was placed**.
+`DuelEnv.MakeBot` has always set it. `RolloutSearchTests.ItBeatsTheScriptedBotInADuel`
+never did, and neither did the first draft of every measurement in this section.
+
+The same 24 banded duels on `ctf_2dfort`, tier 5, 2,400 ticks:
+
+| opponent | result |
+|---|---|
+| `ScriptedBot` with no `Objective` | **4-0-20** — twenty stalemates |
+| `ScriptedBot` with one | **21-1-2** |
+
+⚠️ **It was invisible at a fixed position and decisive banded.** At `gg_debug`'s
+`x=600` the two start 160px apart, already inside every weapon's range, so an
+opponent that cannot close loses nothing by it. Banded placement puts the pair
+150-350px apart on purpose — and then "cannot close" is the whole duel.
+
+⚠️ **So the pinned smoke figure was against a weaker opponent than the one every
+other caller uses.** Fixed, and the corrected banded figure (21-1-2 against
+`gg2-rl`'s independently measured 76.5% over 1,600 duels) is in that test's
+remark. **A harness that constructs a bot by hand has to construct the same bot
+the product constructs** — the third time this session a measurement was invalid
+because the apparatus differed from the thing it claimed to measure, after the
+flight harness's start position and the `gg_debug` opponent-model scenario.
+
+### ⚠️ `gg_debug` is a determinism fixture, not an evaluation map
+
+Four independent measurements now say so, and they were taken for four different
+reasons:
+
+- **One spawn point per team**, so sampled placement draws the same duel every
+  time — `gg2-rl` computed a sixteen-duel confidence interval off a sample size
+  of one.
+- **Zero opponent-model divergence in 12 of 12 scenarios**, at every separation
+  tried, against both a scripted and a rollout opponent.
+- **An order-of-magnitude position swing inside one room**: 11-1-0 at `x=600`
+  against 4-2-6 at `x=1500`, same everything else.
+- **Banded, it is 4-1-19** — nineteen stalemates out of twenty-four, against
+  21-1-2 on `ctf_2dfort`.
+
+It is excellent at what phase 0 uses it for — determinism, throughput, exact tick
+counts. Evaluate on `ctf_2dfort`.
+
 ### ⚠️ A route is a list of NODES, and re-deriving its edges was wrong for eight phases
 
 **2026-08-28.** `NavSearch` returns `List<int>` — nodes, not edges. So

@@ -257,6 +257,148 @@ public sealed class ScenarioWorld
         return slot;
     }
 
+    /// <summary>
+    /// Places two opposing characters on walkable nodes drawn from this map,
+    /// a chosen distance apart.
+    /// </summary>
+    /// <param name="minSeparation">The closest the pair may be, in pixels.</param>
+    /// <param name="maxSeparation">The furthest the pair may be, in pixels.</param>
+    /// <remarks>
+    /// ⚠️ <b>This is what makes a batch of N worlds N SAMPLES.</b> Placing at
+    /// fixed coordinates gives two deterministic bots the identical duel in every
+    /// world — <c>gg2-rl</c> measured 8 worlds returning 74 decisions and 165
+    /// damage eight times over, seed-invariant, and a sixteen-duel win rate
+    /// computed off a sample size of one. Banded, the same matchup returns 15
+    /// distinct episode lengths out of 16.
+    /// <para>
+    /// ⚠️ <b>And a fixed position does not merely repeat, it MISLEADS.</b> Twelve
+    /// duels of <c>RolloutSearch</c> against a tier-5 <c>ScriptedBot</c> on
+    /// <c>gg_debug</c> read <b>11-1-0 at x=600 and 4-2-6 at x=1500</b> — same map,
+    /// same classes, same budget, budget-invariant out to 5,400 ticks. One spot
+    /// in one room is a rout and another is half stalemates, a swing an order of
+    /// magnitude past anything else measured about that bot. <b>A duel figure
+    /// names its position or it names nothing.</b>
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>A PAIR placement, not two draws.</b> A separation is a property of
+    /// the two together, so it cannot be expressed as one <see cref="Place"/>
+    /// followed by another.
+    /// </para>
+    /// <para>
+    /// The draw is red first, uniformly over the nodes red may stand on; then
+    /// blue uniformly over the nodes blue may stand on whose stand position is
+    /// inside the band. ⚠️ <b>Red first, and out of the world's own
+    /// <see cref="WorldState.Random"/></b>: a slot index is a roster index, and a
+    /// sampled placement must be a pure function of the world's seed. Seed the
+    /// world <em>before</em> calling this.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Gate-filtered per team.</b> A node whose gate that team cannot pass
+    /// is a node that team cannot legitimately stand on, and placing there is
+    /// what produced <c>gg2-rl</c>'s four maps at 0 of 8 engagements: the pair
+    /// started behind their own team gates and could not route to one another.
+    /// <c>hasIntel</c> is false because a duel has no briefcase and
+    /// <c>setupGatesClosed</c> is false because this world zeroes the setup timer.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>The node's MIDPOINT, not a column drawn inside it.</b> A node spans
+    /// several columns and drawing one would add a few pixels of variety on top
+    /// of a draw that already has hundreds of nodes in it — while making every
+    /// placement's own resolution back to its node a thing to check rather than a
+    /// certainty (see <see cref="EdgeFlights"/>, which pays for that property).
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Straight-line distance, deliberately not path length.</b> What "in
+    /// range" means here is what a weapon and a rollout horizon reach, which is a
+    /// line; a path metric would call two agents either side of a thin wall 0px
+    /// apart.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Retries the red draw rather than widening the band.</b> A band with
+    /// nothing in it for one red node usually has plenty for another, and
+    /// widening silently would answer a question the caller did not ask. After
+    /// <see cref="BandAttempts"/> reds it gives up loudly, naming the map and the
+    /// band, because a band no pair on the map satisfies is a caller error and
+    /// not a rare draw.
+    /// </para>
+    /// </remarks>
+    public (int Red, int Blue) PlaceInBand(
+        PlayerClass redClass, PlayerClass blueClass, double minSeparation, double maxSeparation)
+    {
+        var graph = Nav
+            ?? throw new InvalidOperationException(
+                $"a separation band needs a nav graph and {Map.Name} has none loaded; "
+                + "load this world with a nav directory, or place at explicit coordinates");
+
+        var red = Standable(graph, Team.Red);
+        var blue = Standable(graph, Team.Blue);
+
+        if (red.Count == 0 || blue.Count == 0)
+        {
+            throw new InvalidOperationException(
+                $"{Map.Name} has no nodes a {(red.Count == 0 ? Team.Red : Team.Blue)} character may stand on");
+        }
+
+        var candidates = new List<int>();
+
+        for (var attempt = 0; attempt < BandAttempts; attempt++)
+        {
+            var redNode = red[(int)_state.Random.Next(red.Count)];
+            var redX = NodeMidpoint(graph, redNode);
+            var redY = graph.StandY(redNode);
+
+            candidates.Clear();
+
+            foreach (var node in blue)
+            {
+                var d = Gml.PointDistance(redX, redY, NodeMidpoint(graph, node), graph.StandY(node));
+
+                if (d >= minSeparation && d <= maxSeparation)
+                    candidates.Add(node);
+            }
+
+            if (candidates.Count == 0)
+                continue;
+
+            var blueNode = candidates[(int)_state.Random.Next(candidates.Count)];
+
+            return (
+                Place(redClass, Team.Red, redX, redY),
+                Place(blueClass, Team.Blue, NodeMidpoint(graph, blueNode), graph.StandY(blueNode)));
+        }
+
+        throw new InvalidOperationException(
+            $"no pair of walkable nodes on {Map.Name} is {minSeparation}-{maxSeparation}px "
+            + $"apart after {BandAttempts} draws; widen the band or pick another map");
+    }
+
+    /// <summary>How many red nodes are tried before a band is called empty.</summary>
+    /// <remarks>
+    /// ⚠️ It is a caller error rather than a rare draw that this catches, so it is
+    /// small on purpose: a band a map really supports is satisfied by the first
+    /// draw almost always, and a band it does not is not going to be satisfied by
+    /// the thousandth.
+    /// </remarks>
+    private const int BandAttempts = 32;
+
+    /// <summary>The nodes a character of this team may legitimately stand on.</summary>
+    private static List<int> Standable(NavGraph graph, Team team)
+    {
+        var nodes = new List<int>(graph.NodeCount);
+
+        for (var i = 0; i < graph.NodeCount; i++)
+        {
+            if (NavGraph.GatePassable(graph.Nodes[i].Gate, team, hasIntel: false, setupGatesClosed: false))
+                nodes.Add(i);
+        }
+
+        return nodes;
+    }
+
+    /// <summary>Where a character standing in the middle of a node sits.</summary>
+    private static double NodeMidpoint(NavGraph graph, int node) =>
+        NavGraph.ColumnWorldX((graph.Nodes[node].X0 + graph.Nodes[node].X1) / 2);
+
     /// <summary>Gives a slot an input source. Null means it presses nothing.</summary>
     public void Drive(int slot, IInputSource? source) => _sources[slot] = source;
 

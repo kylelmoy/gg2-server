@@ -540,7 +540,15 @@ public sealed class DuelEnv
 
         if (spec.SeparationBanded)
         {
-            (RedSlot, BlueSlot) = PlaceInBand(world, spec);
+            // ⚠️ ScenarioWorld's, not this class's. A banded pair is map and nav
+            // knowledge, and it belongs beside PlaceAtSpawn for the same reason
+            // that one does: a caller with no business knowing a map's geometry
+            // should not have to invent it. It also has to be reachable from the
+            // bot layer's own tests, which must not depend on this assembly —
+            // see RolloutSearchTests, whose duel figure is banded because a
+            // fixed-position one says almost nothing about the bot.
+            (RedSlot, BlueSlot) = world.PlaceInBand(
+                spec.RedClass, spec.BlueClass, spec.MinSeparation, spec.MaxSeparation);
         }
         else
         {
@@ -666,129 +674,6 @@ public sealed class DuelEnv
                 throw new ArgumentOutOfRangeException(nameof(driver), driver, "no such driver");
         }
     }
-
-    /// <summary>
-    /// Places both agents on walkable nodes drawn from the map, inside the
-    /// spec's separation band.
-    /// </summary>
-    /// <remarks>
-    /// ⚠️ <b>A PAIR placement, not two draws.</b> A separation is a property of
-    /// the two together, so it cannot be expressed as red's <see cref="Place"/>
-    /// followed by blue's — which is why this is a second path rather than a
-    /// parameter on the first.
-    /// <para>
-    /// The draw is red first, uniformly over the nodes red may stand on; then
-    /// blue uniformly over the nodes blue may stand on whose stand position is
-    /// inside the band. ⚠️ <b>Red first, and out of the world's own
-    /// <c>GmlRandom</c></b>, both for the reasons <see cref="Reset"/> already
-    /// gives: a slot index is a roster index, and a sampled placement must be a
-    /// pure function of the world's seed.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Gate-filtered per team.</b> A node whose gate that team cannot pass
-    /// is a node that team cannot legitimately stand on, and placing there is
-    /// what produced <c>gg2-rl</c>'s four maps at 0 of 8 engagements: the pair
-    /// started behind their own team gates and could not route to one another.
-    /// <c>hasIntel</c> is false because a duel has no briefcase and
-    /// <c>setupGatesClosed</c> is false because <see cref="ScenarioWorld"/> zeroes
-    /// the setup timer.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>The node's MIDPOINT, not a column drawn inside it.</b> A node spans
-    /// several columns and drawing one would add a few pixels of variety on top
-    /// of a draw that already has hundreds of nodes in it — while making every
-    /// placement's own resolution back to its node a thing to check rather than a
-    /// certainty (see <c>EdgeFlights</c>, which pays for exactly that property).
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Retries the red draw rather than widening the band.</b> A band with
-    /// nothing in it for one red node usually has plenty for another, and
-    /// widening silently would answer a question the caller did not ask. After
-    /// <see cref="BandAttempts"/> reds it gives up loudly, naming the map and the
-    /// band, because a band no pair on the map satisfies is a spec error and not
-    /// a rare draw.
-    /// </para>
-    /// </remarks>
-    private static (int Red, int Blue) PlaceInBand(ScenarioWorld world, DuelSpec spec)
-    {
-        var graph = world.Nav
-            ?? throw new InvalidOperationException(
-                $"a separation band needs a nav graph and {world.Map.Name} has none loaded; "
-                + "give the env a nav directory, or drop MaxSeparation to sample spawn points");
-
-        var red = Standable(graph, Team.Red);
-        var blue = Standable(graph, Team.Blue);
-
-        if (red.Count == 0 || blue.Count == 0)
-        {
-            throw new InvalidOperationException(
-                $"{world.Map.Name} has no nodes a {(red.Count == 0 ? Team.Red : Team.Blue)} character may stand on");
-        }
-
-        var candidates = new List<int>();
-
-        for (var attempt = 0; attempt < BandAttempts; attempt++)
-        {
-            var redNode = red[(int)world.State.Random.Next(red.Count)];
-            var redX = Midpoint(graph, redNode);
-            var redY = graph.StandY(redNode);
-
-            candidates.Clear();
-
-            foreach (var node in blue)
-            {
-                // ⚠️ Straight-line distance, and it is deliberately not path
-                // length. What "in range" means here is what a weapon and a
-                // rollout horizon can reach, which is a line; a path metric would
-                // put two agents either side of a thin wall at "0 px apart" and
-                // two on one open floor at 900.
-                var d = Gml.PointDistance(redX, redY, Midpoint(graph, node), graph.StandY(node));
-
-                if (d >= spec.MinSeparation && d <= spec.MaxSeparation)
-                    candidates.Add(node);
-            }
-
-            if (candidates.Count == 0)
-                continue;
-
-            var blueNode = candidates[(int)world.State.Random.Next(candidates.Count)];
-
-            return (
-                world.Place(spec.RedClass, Team.Red, redX, redY),
-                world.Place(spec.BlueClass, Team.Blue, Midpoint(graph, blueNode), graph.StandY(blueNode)));
-        }
-
-        throw new InvalidOperationException(
-            $"no pair of walkable nodes on {world.Map.Name} is {spec.MinSeparation}-{spec.MaxSeparation}px "
-            + $"apart after {BandAttempts} draws; widen the band or pick another map");
-    }
-
-    /// <summary>How many red nodes are tried before a band is called empty.</summary>
-    /// <remarks>
-    /// ⚠️ It is a spec error rather than a rare draw that this catches, so it is
-    /// small on purpose: a band a map really supports is satisfied by the first
-    /// draw almost always, and a band it does not is not going to be satisfied by
-    /// the thousandth.
-    /// </remarks>
-    private const int BandAttempts = 32;
-
-    /// <summary>The nodes a character of this team may legitimately stand on.</summary>
-    private static List<int> Standable(NavGraph graph, Team team)
-    {
-        var nodes = new List<int>(graph.NodeCount);
-
-        for (var i = 0; i < graph.NodeCount; i++)
-        {
-            if (NavGraph.GatePassable(graph.Nodes[i].Gate, team, hasIntel: false, setupGatesClosed: false))
-                nodes.Add(i);
-        }
-
-        return nodes;
-    }
-
-    /// <summary>Where a character standing in the middle of a node sits.</summary>
-    private static double Midpoint(NavGraph graph, int node) =>
-        NavGraph.ColumnWorldX((graph.Nodes[node].X0 + graph.Nodes[node].X1) / 2);
 
     /// <summary>
     /// One side's placement: the coordinates the caller named, or a spawn point
