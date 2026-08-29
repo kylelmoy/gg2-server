@@ -480,6 +480,56 @@ public sealed class RolloutSearchTests
         Assert.NotEqual(blue, red);
     }
 
+    /// <summary>
+    /// ⚠️ <see cref="RolloutOptions.CommitTicks"/> really shortens the commitment,
+    /// so the knob cannot rot into a no-op.
+    /// </summary>
+    /// <remarks>
+    /// <b>The idea was measured and does NOT help</b> — see the parameter's own
+    /// remarks, where the numbers are. The knob is kept anyway, because the
+    /// negative is only worth having if it is reproducible in one line, and
+    /// because a continuation that keeps <em>acting</em> (a distilled policy) is a
+    /// different experiment somebody will want to run.
+    /// <para>
+    /// ⚠️ <b>So this gates that it DOES something, not that it does something
+    /// good.</b> An option kept for a future experiment is exactly the kind that
+    /// quietly becomes inert — this session has now hit that shape four times —
+    /// and a default of "commit for the whole horizon" makes an inert
+    /// implementation indistinguishable from a working one at the default.
+    /// </para>
+    /// <para>
+    /// Asserted on the SCORE rather than the chosen action: a short commitment
+    /// stops accruing damage partway through the horizon, so it cannot score
+    /// higher than committing throughout, and on a state where anything lands at
+    /// all it scores strictly less.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void AShorterCommitmentReallyShortensTheRollout()
+    {
+        static double ScoreWith(int commit)
+        {
+            var bot = new RolloutSearch(new RolloutOptions(HorizonTicks: 60, CommitTicks: commit));
+            var world = Load();
+            var red = world.Place(PlayerClass.Soldier, Team.Red, RedX, StandY);
+            world.Place(PlayerClass.Soldier, Team.Blue, RedX + 160, StandY);
+            world.Step(SpawnCooldownTicks);
+
+            bot.Poll(new WorldView(in world.State, world.Collision), red, 0);
+            return bot.LastBestScore;
+        }
+
+        var whole = ScoreWith(0);
+        var brief = ScoreWith(4);
+
+        Assert.True(whole > 0, "the horizon-60 search scored nothing; this state proves nothing");
+
+        Assert.True(
+            brief < whole,
+            $"committing for 4 ticks scored {brief} against {whole} for the whole horizon; "
+            + "CommitTicks is not reaching the rollout");
+    }
+
     /// <summary>Presses nothing, for ever — the control for the fight test.</summary>
     private sealed class Passive : IInputSource
     {

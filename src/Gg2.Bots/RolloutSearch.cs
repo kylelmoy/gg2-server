@@ -87,6 +87,46 @@ public enum RolloutOpponent
 /// fifteen would multiply the candidate count by three for turns a 20-tick
 /// horizon cannot tell apart.
 /// </param>
+/// <param name="CommitTicks">
+/// How many ticks a candidate's action is actually HELD before the rollout
+/// continues under a neutral continuation. <b>0 means the whole horizon</b>,
+/// which is what this search has always done.
+/// ⚠️ <b>Lookahead and commitment are the same number until this is set</b>, and
+/// <c>gg2-rl</c>'s horizon sweep is what showed that mattered: blind fraction and
+/// win rate oppose monotonically for every class, because at horizon 90 the
+/// search is choosing among plans of the shape "hold this key and this aim for
+/// three seconds". Seeing further and committing longer are separable, and this
+/// is the separation.
+/// <para>
+/// ❌ <b>MEASURED 2026-08-29, AND IT DOES NOT HELP.</b> The signature of a real
+/// fix was agreed in advance — the blind fraction falling <em>without</em> the
+/// win rate falling. It does the opposite. <c>ctf_2dfort</c> banded, tier 5, 24
+/// duels a cell:
+/// </para>
+/// <list type="bullet">
+/// <item>sniper, horizon 60: commit=horizon <b>0.523 blind / 0.375 win</b>;
+/// commit=4 <b>0.965 / 0.625</b>; commit=8 <b>0.962 / 0.667</b>.</item>
+/// <item>soldier, horizon 60: commit=horizon <b>0.562 / 0.750</b>; commit=8
+/// <b>0.851 / 0.792</b>.</item>
+/// </list>
+/// <para>
+/// ⚠️ <b>Shortening the commitment puts the blindness straight back</b> — to
+/// 0.965 for a sniper, worse than horizon 20's 0.933 — while recovering only part
+/// of the win rate. It slides back along the same trade rather than breaking it,
+/// and the reason is the same refire arithmetic: a candidate scores from damage
+/// landing inside the window where it is acting, and shortening the commitment
+/// shortens that window.
+/// </para>
+/// <para>
+/// ⚠️ <b>This is a negative result about THIS continuation, not about the
+/// idea.</b> The continuation here is neutral — keys released, bearing kept —
+/// because holding the candidate on is exactly what the split removes. A
+/// continuation that kept <em>acting</em>, such as a distilled policy, is a
+/// different experiment and is the one <c>gg2-rl</c> named for phase 3. The knob
+/// is kept so that experiment is a one-line change rather than a
+/// re-implementation, and so this negative is reproducible.
+/// </para>
+/// </param>
 /// <param name="ConsiderSpecial">
 /// Whether the right-click head is searched. Off by default: for most classes it
 /// is a reload or nothing, and it triples nothing useful.
@@ -96,7 +136,8 @@ public readonly record struct RolloutOptions(
     int DecisionTicks = 4,
     RolloutOpponent Opponent = RolloutOpponent.HoldLastInput,
     byte[]? AimBins = null,
-    bool ConsiderSpecial = false)
+    bool ConsiderSpecial = false,
+    int CommitTicks = 0)
 {
     /// <summary><c>docs/BOTAI.md</c> item 12 says 15-30 ticks; this is the middle.</summary>
     public const int DefaultHorizonTicks = 20;
@@ -134,6 +175,13 @@ public readonly record struct RolloutOptions(
     {
         HorizonTicks = HorizonTicks == 0 ? DefaultHorizonTicks : HorizonTicks,
         DecisionTicks = DecisionTicks == 0 ? DefaultDecisionTicks : DecisionTicks,
+
+        // ⚠️ 0 means "commit for the whole horizon", which is the behaviour this
+        // search has always had — see the parameter's own remarks. It is resolved
+        // here rather than at the use site so there is one place that decides.
+        CommitTicks = CommitTicks == 0
+            ? (HorizonTicks == 0 ? DefaultHorizonTicks : HorizonTicks)
+            : CommitTicks,
     };
 }
 
@@ -556,9 +604,21 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
 
             for (var other = 0; other < WorldState.MaxSlots; other++)
             {
-                inputs[other] = other == slot
+                if (other != slot)
+                {
+                    inputs[other] = OpponentInput(in _fork, other);
+                    continue;
+                }
+
+                // ⚠️ Past the commitment the candidate is NOT held. The searcher
+                // keeps the bearing the action turned it to and releases the
+                // keys, which models "I will decide again shortly and am not
+                // committed to this key" — the ordinary receding-horizon split.
+                // With CommitTicks defaulted to the horizon this is unreachable
+                // and the behaviour is exactly what it always was.
+                inputs[other] = tick < _options.CommitTicks
                     ? _decoder.Decode(slot, action, firstTickOfDecision: tick == 0)
-                    : OpponentInput(in _fork, other);
+                    : _decoder.Decode(slot, Continuation, firstTickOfDecision: false);
             }
 
             _events = default;
@@ -569,6 +629,23 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
 
         return score;
     }
+
+    /// <summary>
+    /// What the searcher itself is assumed to do after its commitment ends.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Keys released, bearing kept.</b> The aim is carried by the decoder
+    /// across ticks, so an action with no turn and no keys leaves the character
+    /// pointing where the candidate put it and pressing nothing. That is the
+    /// neutral continuation: it scores what the action buys inside its
+    /// commitment, plus whatever follows from merely being there.
+    /// <para>
+    /// ⚠️ <b>It is deliberately NOT hold-last-input.</b> Holding the candidate on
+    /// is precisely the behaviour the split exists to remove, so a continuation
+    /// that did it would make <c>CommitTicks</c> a no-op that looked implemented.
+    /// </para>
+    /// </remarks>
+    private static EnvAction Continuation => EnvAction.Idle;
 
     /// <summary>
     /// What a character other than the searcher is assumed to be doing.

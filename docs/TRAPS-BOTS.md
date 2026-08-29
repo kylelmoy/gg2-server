@@ -2627,9 +2627,10 @@ Measured, `gg_debug` at 220px:
 halves so neither can be mistaken for the other.
 
 ⚠️ **The default was deliberately NOT changed to fix it.** A horizon is a
-whole-bot knob: 20 → 45 measured much better for the soldier and *worse* for the
-sniper, it triples the per-decision cost, and `gg2-rl`'s phase 1 baseline is
-quoted against the current one. That is a separate measured decision, not a side
+whole-bot knob, and the sweep has since shown it is **not** one worth turning:
+blind fraction and win rate oppose monotonically for every class, because a
+candidate is one action held for the whole horizon. See "both curves oppose"
+above. That is a separate measured decision, not a side
 effect of adding a head.
 
 ⚠️ **Consequence for anyone measuring the sniper matchup now**: a scripted sniper
@@ -2657,9 +2658,66 @@ sniper-v-sniper hole.
 | Scout (refire 8) | 4-0-8 | 5-2-5 |
 
 **Lengthening the horizon past the rifle's refire made the sniper worse.** So the
-blindness is real and it is the **soldier's** binding constraint, not the
-sniper's; the sniper hole survives the fix and is still unexplained. Recorded as a
-dead hypothesis so nobody re-runs it, and as a live finding about the soldier.
+blindness is real and the sniper hole survives it.
+
+#### ❌ RETRACTED 2026-08-29: "much better for the soldier" does NOT reproduce
+
+⚠️ **Twelve duels a cell was not enough to read a direction from, and this section
+said so at the time and then read one anyway.** `gg2-rl` re-ran at **80 duels a
+cell**: the soldier goes **93.8% to 78.8% at horizon 45** — worse, not better. The
+sniper's direction survives; the soldier's inverts.
+
+⚠️ **The retraction matters more than the number.** That row was quoted into
+`RolloutSearch`'s remarks, `DuelSpec.RedHorizonTicks`' remarks and a peer's
+planning notes before anybody re-measured, and every one of them said "12 duels"
+honestly. **Labelling a sample size does not make a direction read off it safe to
+propagate.**
+
+#### ⚠️⚠️ BOTH CURVES OPPOSE, MONOTONICALLY, FOR EVERY CLASS
+
+`ctf_2dfort` banded, tier 5, repeat 4 — blind over 1,200 decisions a cell, win
+rate over 80 duels a cell:
+
+| | 20 | 30 | 45 | 60 | 90 |
+|---|---|---|---|---|---|
+| **blind** sniper | 89.8 | 82.2 | 53.0 | 47.0 | **43.5** |
+| **blind** soldier | 80.5 | 69.6 | 52.0 | 38.1 | **29.8** |
+| **win** sniper | **68.4** | 66.2 | 39.2 | 39.2 | 22.8 |
+| **win** soldier | **93.8** | 92.5 | 78.8 | 64.6 | 63.7 |
+
+**Every class, every step, opposite directions.** ✅ The refire mechanism is
+confirmed by the cliff LOCATIONS — the sniper's between 30 and 45 around its
+40-tick refire, the soldier's opening at 30 — but every class plateaus at 30-45%
+blind however long the horizon, and **that floor is geometry**: decisions with
+nothing to shoot. A fully-signal corpus was never available at any horizon.
+
+⚠️ **THE CAUSE IS THE CANDIDATE REPRESENTATION, not the horizon.**
+`RolloutSearch.Rollout` takes one `EnvAction` and calls `_decoder.Decode` with it
+**every tick to the horizon**, so at horizon 90 the search chooses among 120 plans
+of the shape *"hold this key and this aim for three seconds"*. It sees further —
+blindness falls exactly as the refire mechanism predicts — while the plans become
+increasingly implausible commitments. **Lookahead and commitment are the same
+number.**
+
+⚠️ So raising the default would not fix a distillation corpus: it trades rows
+carrying no decision for rows carrying a **badly chosen** one, and the second is
+strictly worse. A blind row is labelled `BestScore == 0` and can be dropped; a
+confidently-wrong row is indistinguishable from a good one.
+
+❌ **A second, attractive hypothesis died here.** `HoldLastInput` planning against
+an increasingly fictional opponent predicts the opponent-model gap should WIDEN
+with horizon. Measured, soldier mirror, 80 duels a cell: horizon 20 gap
+**-3.5pp** (Idle better), horizon 90 **+0.9pp** — it does not widen, and both
+models lose about thirty points together. The degradation is **not** opponent-model
+error, which is what leaves the candidate representation as an explanation rather
+than a guess.
+
+⬅️ **The open idea, from `gg2-rl` and explicitly not asked for**: decouple
+lookahead from commitment — score a candidate over its `DecisionTicks` and
+continue the rollout under a default continuation for the rest of the horizon.
+The ordinary receding-horizon split; today the two are one number. ⚠️ **The
+signature of a real fix is the blind fraction falling WITHOUT the win rate
+falling.**
 
 ### ⚠️⚠️ A `ScriptedBot` with no `Objective` is not the scripted bot
 

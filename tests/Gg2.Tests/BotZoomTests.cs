@@ -379,7 +379,9 @@ public sealed class BotZoomTests(Xunit.Abstractions.ITestOutputHelper output)
     /// <para>
     /// ⚠️ <b>The default was deliberately NOT changed to fix this.</b> A horizon
     /// is a whole-bot tuning knob: 20 → 45 was measured at 12 mirror duels a
-    /// class as much better for the soldier and <em>worse</em> for the sniper
+    /// class as better for the soldier -- RETRACTED, it does not reproduce at 80
+    /// duels a cell, where the soldier goes 93.8% to 78.8% -- and worse for the
+    /// sniper
     /// (docs/TRAPS-BOTS.md), and it triples the per-decision cost, which
     /// <c>gg2-rl</c>'s phase 1 baseline is quoted against. Changing it is a
     /// separate, measured decision and not a side effect of adding a head.
