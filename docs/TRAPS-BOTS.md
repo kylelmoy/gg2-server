@@ -2543,6 +2543,69 @@ one nobody would have guessed:
 policy needs no memory of its own scope. A toggle-shaped head would turn one
 dropped or duplicated action into a permanently inverted sniper.
 
+#### ⚠️⚠️ KNOWN ISSUE: the search's AIM is decided by its tie-break, not its scoring
+
+**2026-08-29, and it is the largest unexamined thing in `RolloutSearch`.**
+`gg2-rl`'s corpus analysis — possible only once `ab78c9d` put the candidate
+actions on the wire — measured, on rows that are **not** blind:
+
+| | |
+|---|---|
+| rows with the top two candidates tied | **85.2%** |
+| actions sharing the best score, median | **6** (mean 15.2, max 60) |
+| rows with a unique best action | **7.8%** |
+
+⚠️ **The search is usually INDIFFERENT**, and ties go to the first candidate.
+`BuildCandidates` loops **aim outermost** over `[0, 3, 7, 11, 14]`, where bin 0 is
+a hard left turn — so the first candidate at any aim-tied score is *turn hard
+left*. Measured here over ~thousands of decisions on `ctf_2dfort` banded, tier 5:
+
+| class | share of decisions taking aim bin 0 |
+|---|---|
+| soldier | **0.966** |
+| scout | **0.929** |
+
+**So the bot's aiming is essentially "turn hard left", with occasional scored
+corrections.** That is not a strategy, it is enumeration order showing through —
+and it is the same signature as the blind tie-break, reaching decisions that are
+*not* blind.
+
+##### ⚠️ It is NOT fixed, because the obvious fix does not clearly win
+
+Putting no-turn first (`[7, 3, 11, 0, 14]` — same candidate set, different order,
+so ties resolve to *not turning*) removes the bias completely: hard-left share
+0.966 → **0.004**. Win rate, 24 duels a cell:
+
+| class | shipped | centred |
+|---|---|---|
+| soldier | 18-2-4 | **12-2-10** |
+| scout | 18-3-3 | **22-1-1** |
+
+⚠️ **The scout improves and the soldier degrades**, the soldier's losses turning
+into draws rather than defeats — consistent with a splash class that was
+accidentally benefiting from sweeping its aim across the target every decision.
+
+⚠️⚠️ **DO NOT READ A DIRECTION OFF THAT TABLE.** It is 24 duels a cell, and this
+file already had to retract a direction read off twelve. **What is solid is the
+BIAS RATE** — a share over thousands of decisions — and what is not solid is
+whether removing it helps. Two different sample sizes in one experiment, and only
+one of them supports a conclusion.
+
+##### ⬅️ Why it matters beyond the bot
+
+**An expert whose actions are 93-97% arbitrary tie-breaks is a hard thing to
+clone**, and phase 2 is trying. `gg2-rl` measured a soft-target policy landing
+inside the tied-best set 57.8% of the time while its *exact* match fell to 0.143
+— agreement rising while exact-match fell, because exact-match was scoring a
+tied alternative as wrong. ⚠️ **Any metric that treats one of six equally-good
+actions as the right answer was measuring the wrong thing**, and phase 2 reported
+that metric for three days.
+
+⬅️ **The open question this raises is whether the EXPERT should be improved before
+more effort goes into distilling it** — a scoring function that discriminated
+among today's ties would change what there is to learn. That is a bigger question
+than a tie-break order and it is not answered here.
+
 #### ⚠️⚠️ KNOWN ISSUE: the scope makes the scripted sniper WORSE, by about 10%
 
 **2026-08-29. Reported by `gg2-rl`, reproduced here independently, and both of us
