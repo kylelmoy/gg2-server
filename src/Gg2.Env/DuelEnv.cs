@@ -266,6 +266,45 @@ public readonly record struct DuelSpec
     public RolloutOpponent BlueRolloutOpponent { get; init; }
 
     /// <summary>
+    /// Ticks a <see cref="EnvDriver.Rollout"/> red side plays each candidate
+    /// forward. <b>0 means the search's own default</b>.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The number this exists for is the BLIND FRACTION, not the win
+    /// rate.</b> <c>RolloutSearch</c> scores every candidate at exactly 0 when
+    /// nothing can fire inside the horizon, and the rifle's 40-tick refire is
+    /// double the 20-tick default. <c>gg2-rl</c> measured what that does to a
+    /// distillation corpus with <see cref="StepResult.BestScore"/>: <b>70.9% of
+    /// rows blind overall</b>, by class scout 32.7%, heavy 46.8%, soldier 80.5%,
+    /// <b>sniper 92.8%</b>. A sniper corpus at horizon 20 is not noisy, it is
+    /// noise — one row in fourteen carries a decision.
+    /// <para>
+    /// ⚠️ <b>Win rate cannot see this.</b> A search that is blind most of the time
+    /// still wins 74%, so the curve phase 2 needs is one no win-rate measurement
+    /// would ever have prompted. That is why the knob is here and not a tuning
+    /// change: it makes the sweep possible without deciding its outcome.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>The DEFAULT IS DELIBERATELY UNCHANGED.</b> A horizon is a whole-bot
+    /// knob — it triples the per-decision cost at 45 ticks, and phase 1's baseline
+    /// is quoted against 20 — so which value ships is a decision that should
+    /// follow the curves rather than precede them. <c>gg2-rl</c> asked for the
+    /// knob and asked explicitly that the default not move with it.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Only the horizon is exposed, not the rest of <c>RolloutOptions</c>.</b>
+    /// The aim ladder and the candidate set are the search's own tuning, and
+    /// putting them on the wire would make "the search baseline" a different thing
+    /// per batch — the same argument that limited
+    /// <see cref="RedRolloutOpponent"/> to the opponent model.
+    /// </para>
+    /// </remarks>
+    public int RedHorizonTicks { get; init; }
+
+    /// <summary>The horizon for a <see cref="EnvDriver.Rollout"/> blue side. 0 is the default.</summary>
+    public int BlueHorizonTicks { get; init; }
+
+    /// <summary>
     /// The closest two sampled placements may be, in pixels. 0 for no floor.
     /// </summary>
     /// <remarks>See <see cref="MaxSeparation"/>, which is the switch.</remarks>
@@ -406,6 +445,15 @@ public readonly record struct DuelSpec
         {
             throw new ArgumentOutOfRangeException(
                 nameof(BlueRolloutOpponent), BlueRolloutOpponent, "no such rollout opponent");
+        }
+
+        // ⚠️ Refused rather than clamped, like the skill tier: a negative or absurd
+        // horizon is a trainer bug, and silently substituting the default would
+        // make a sweep report a curve it never measured.
+        if (RedHorizonTicks < 0 || BlueHorizonTicks < 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(RedHorizonTicks), RedHorizonTicks, "a horizon is not negative; 0 means the default");
         }
 
         if (MinSeparation < 0 || MaxSeparation < 0)
@@ -610,10 +658,11 @@ public sealed class DuelEnv
         // pass, because a stagger of 0 is deterministic and the dependence would
         // only appear once two worlds took different numbers of decisions.
         _redBot = MakeBot(
-            spec.RedDriver, spec.RedTier, spec.RedRolloutOpponent, Team.Red, spec.RedClass, world, seed);
+            spec.RedDriver, spec.RedTier, spec.RedRolloutOpponent, spec.RedHorizonTicks,
+            Team.Red, spec.RedClass, world, seed);
         _blueBot = MakeBot(
-            spec.BlueDriver, spec.BlueTier, spec.BlueRolloutOpponent, Team.Blue, spec.BlueClass, world,
-            seed ^ 0x9E3779B9u);
+            spec.BlueDriver, spec.BlueTier, spec.BlueRolloutOpponent, spec.BlueHorizonTicks,
+            Team.Blue, spec.BlueClass, world, seed ^ 0x9E3779B9u);
 
         // Both agents start facing one another, which is the only neutral
         // choice: facing is observable (it moves the two-pixel box inflation
@@ -664,8 +713,8 @@ public sealed class DuelEnv
     /// wrong this project has already paid for twice.
     /// </remarks>
     private IInputSource? MakeBot(
-        EnvDriver driver, int tier, RolloutOpponent opponent, Team team, PlayerClass playerClass,
-        ScenarioWorld world, uint seed)
+        EnvDriver driver, int tier, RolloutOpponent opponent, int horizon, Team team,
+        PlayerClass playerClass, ScenarioWorld world, uint seed)
     {
         switch (driver)
         {
@@ -682,7 +731,11 @@ public sealed class DuelEnv
                 // "the search baseline" a different thing per batch; the
                 // opponent model is the one knob phase 1 has to report a
                 // difference across. See DuelSpec.RedRolloutOpponent.
-                return new RolloutSearch(new RolloutOptions(Opponent: opponent));
+                // ⚠️ A zero horizon reaches RolloutOptions.WithDefaults, which is
+                // where "0 means the declared default" is already implemented —
+                // rather than substituting DefaultHorizonTicks here and making a
+                // second place that decides what the default is.
+                return new RolloutSearch(new RolloutOptions(HorizonTicks: horizon, Opponent: opponent));
 
             case EnvDriver.Scripted:
                 if (world.Nav is null)

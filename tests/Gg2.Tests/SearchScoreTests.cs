@@ -13,10 +13,25 @@ namespace Gg2.Tests;
 /// remark has always said that when nothing can score inside the horizon every
 /// candidate ties at exactly 0, the tie goes to the first, and the first is
 /// <c>[0,0,0,0,0,0]</c> — "turn hard left, do nothing". <c>gg2-rl</c> measured
-/// what that does to training data: <b>35.2% of 1,960 rows</b> are that exact
-/// action, and the share tracks refire time against the 20-tick horizon —
-/// scout (8) 15.3%, heavy (12) 24.2%, soldier (30) 39.5%, <b>sniper (40)
-/// 46.2%</b>.
+/// what that does to training data. ⚠️ <b>Its first estimate, by matching the row
+/// value, was 35.2% — and the truth measured with THIS FIELD is 70.9%.</b> The
+/// heuristic ran at 93.5% precision and <b>46.4% recall</b>: right about what it
+/// flagged, missing more than half. Filtering on it would have dropped 35% of the
+/// corpus, left another 35% of exactly the same poison in place, and produced a
+/// dataset that then LOOKED clean.
+/// <para>
+/// It missed them because the tie-break has <b>two faces</b>: with the env asking
+/// for an action every 2 ticks and <c>RolloutSearch</c> re-planning every 4, half
+/// the blind rows are candidate 0 and half are "no turn" — the in-between
+/// decisions, where the measured action is whatever the character was already
+/// holding. Matching the cadence collapses 1,960 rows to 989 with the blind
+/// fraction unchanged, which is how the duplicates were identified at all.
+/// </para>
+/// <para>
+/// By class, with the real signal: scout (refire 8) <b>32.7%</b>, heavy (12)
+/// 46.8%, soldier (30) 80.5%, <b>sniper (40) 92.8%</b>. A sniper corpus at
+/// horizon 20 is not noisy, it is noise — one row in fourteen carries a decision.
+/// </para>
 /// <para>
 /// Every one of those rows is <b>valid</b>: correct action, correctly recorded,
 /// 99.8% exact. Cloning them teaches a policy to turn hard left and freeze
@@ -133,6 +148,75 @@ public sealed class SearchScoreTests(Xunit.Abstractions.ITestOutputHelper output
         Assert.True(
             double.IsNaN(red.BestScore),
             $"a {driver} slot reported {red.BestScore}; only a search has a score");
+    }
+
+    /// <summary>
+    /// ⚠️ <b>The horizon reaches the search, and it is the blind fraction that
+    /// moves</b> — which is the number the knob exists for.
+    /// </summary>
+    /// <remarks>
+    /// <c>gg2-rl</c> needs to sweep blind-fraction against horizon and could not:
+    /// <c>DuelEnv</c> answered <see cref="EnvDriver.Rollout"/> with
+    /// <c>new RolloutSearch()</c> and its defaults. With
+    /// <see cref="DuelSpec.RedHorizonTicks"/> the curve is measurable.
+    /// <para>
+    /// ⚠️ <b>Asserted through the BLIND FRACTION rather than through a getter.</b>
+    /// A test that read the horizon back would gate the assignment, which is the
+    /// shape that passed while <c>--nav</c> was being dropped a layer up. A
+    /// soldier's refire is 30 ticks: at a horizon of 20 nothing can fire inside it
+    /// and almost every decision scores zero; at 60 most can.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>The default is UNCHANGED and this test does not argue for changing
+    /// it.</b> Which value ships is a decision that should follow
+    /// <c>gg2-rl</c>'s curves — blind fraction and win rate — rather than precede
+    /// them.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void TheHorizonReachesTheSearchAndMovesTheBlindFraction()
+    {
+        ReferenceTree.RequireAvailable();
+        ReferenceTree.RequireNavCache();
+
+        var shortHorizon = BlindFraction(20);
+        var longHorizon = BlindFraction(60);
+
+        output.WriteLine($"horizon 20: {shortHorizon:0.00} blind, horizon 60: {longHorizon:0.00}");
+
+        Assert.True(
+            shortHorizon > 0.5,
+            $"a 20-tick horizon left only {shortHorizon:0.00} of a soldier's decisions blind; "
+            + "the scenario does not demonstrate the trap");
+
+        Assert.True(
+            longHorizon < shortHorizon / 2,
+            $"the horizon did not move the blind fraction ({shortHorizon:0.00} -> {longHorizon:0.00}); "
+            + "it is not reaching RolloutSearch");
+    }
+
+    /// <summary>What share of a rollout side's decisions scored exactly zero.</summary>
+    private static double BlindFraction(int horizon)
+    {
+        var env = Env();
+        env.Reset(Spec(EnvDriver.Rollout) with { RedHorizonTicks = horizon }, seed: 11);
+
+        var blind = 0;
+        var total = 0;
+
+        for (var i = 0; i < 40; i++)
+        {
+            var (red, _) = env.Step(EnvAction.Idle, EnvAction.Idle);
+
+            total++;
+            if (red.BestScore == 0)
+                blind++;
+
+            if (red.Done)
+                break;
+        }
+
+        return blind / (double)total;
     }
 
     /// <summary>

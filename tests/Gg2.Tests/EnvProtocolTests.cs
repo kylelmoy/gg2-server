@@ -117,6 +117,8 @@ public sealed class EnvProtocolTests : IDisposable
         RolloutOpponent blueRollout = RolloutOpponent.HoldLastInput,
         double minSeparation = 0,
         double maxSeparation = 0,
+        int redHorizon = 0,
+        int blueHorizon = 0,
         double redX = 600,
         double blueX = 700,
         string map = "gg_debug")
@@ -151,7 +153,12 @@ public sealed class EnvProtocolTests : IDisposable
             Int((int)redRollout),
             Int((int)blueRollout),
             Real(minSeparation),
-            Real(maxSeparation));
+            Real(maxSeparation),
+
+            // v6's horizons. 0 is "the search's own default" rather than a horizon
+            // of zero, which RolloutOptions.WithDefaults resolves.
+            Int(redHorizon),
+            Int(blueHorizon));
     }
 
     /// <summary>
@@ -193,8 +200,8 @@ public sealed class EnvProtocolTests : IDisposable
         // ⚠️ Change BOTH or neither. If you are here because you added a field to
         // MakeBatch, the version below is the other half of that change — and
         // gg2-rl has to be told, because its suite pins these from outside.
-        Assert.Equal(5, EnvProtocol.Version);
-        Assert.Equal(96, EnvProtocol.MakeBatchFixedBytes);
+        Assert.Equal(6, EnvProtocol.Version);
+        Assert.Equal(104, EnvProtocol.MakeBatchFixedBytes);
 
         // ⚠️ v4's sixth action head, on both sides of the wire. A client a version
         // behind sends five bytes an agent and every action from the second world

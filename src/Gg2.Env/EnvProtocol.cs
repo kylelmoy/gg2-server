@@ -68,6 +68,14 @@ public static class EnvProtocol
     /// <c>PROTOCOL_UUID</c> idiom, not a warning.
     /// </summary>
     /// <remarks>
+    /// <b>v6, 2026-08-29</b>: <c>MakeBatch</c> gains a rollout <b>horizon</b> per
+    /// side, two i32 appended, so <see cref="MakeBatchFixedBytes"/> goes 96 to
+    /// 104. 0 means the search's own default, which is <b>unchanged</b>: the knob
+    /// exists so <c>gg2-rl</c> can sweep blind-fraction against horizon, and which
+    /// value ships is a decision that should follow those curves rather than
+    /// precede them. Reply shapes and the action encoding are untouched, so
+    /// <c>SIM_UUID</c> and <see cref="ComponentBytes"/> do not move.
+    /// <para>
     /// <b>v5, 2026-08-29</b>: the reward block gains <c>BestScore</c> —
     /// <b>appended</b>, so <see cref="ComponentBytes"/> goes 48 → 52 and nothing
     /// already in the block moves. It is the winning candidate's score for a
@@ -115,7 +123,7 @@ public static class EnvProtocol
     /// sampling and nav-node sampling read off uninitialised bytes.
     /// </para>
     /// </remarks>
-    public const int Version = 5;
+    public const int Version = 6;
 
     /// <summary>
     /// Bytes of <c>MakeBatch</c> body after the map name — the fixed tail.
@@ -123,7 +131,8 @@ public static class EnvProtocol
     /// <remarks>
     /// Two classes, two drivers, two tiers and two rollout opponents at four
     /// bytes (32); the decision cap, the action repeat, the seed and the thread
-    /// count at four (16); four coordinates and two separations at eight (48).
+    /// count at four (16); four coordinates and two separations at eight (48);
+    /// two rollout horizons at four (8).
     /// <para>
     /// ⚠️ <b>It lives beside <see cref="Version"/> so that the two cannot move
     /// apart, and that is not tidiness — it is the gate for a bug this file
@@ -144,7 +153,7 @@ public static class EnvProtocol
     /// failing test rather than a silent lie.
     /// </para>
     /// </remarks>
-    public const int MakeBatchFixedBytes = 32 + 16 + 48;
+    public const int MakeBatchFixedBytes = 32 + 16 + 48 + 8;
 
     /// <summary>
     /// Bytes of reward components per agent in every reply.

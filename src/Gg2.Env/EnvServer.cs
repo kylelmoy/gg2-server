@@ -185,7 +185,8 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
         // count, mapNameLength, mapName, redClass, blueClass, redX, redY,
         // blueX, blueY, decisionCap, actionRepeat, seed, threads,
         // redDriver, blueDriver, redTier, blueTier,
-        // redRolloutOpponent, blueRolloutOpponent, minSeparation, maxSeparation.
+        // redRolloutOpponent, blueRolloutOpponent, minSeparation, maxSeparation,
+        // redHorizonTicks, blueHorizonTicks.
         //
         // ⚠️ Every field is REQUIRED rather than optional-if-absent. Tolerating a
         // short frame would let an older client through the Hello check it
@@ -267,6 +268,11 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
         var minSeparation = BinaryPrimitives.ReadDoubleLittleEndian(body[at..]);
         at += 8;
         var maxSeparation = BinaryPrimitives.ReadDoubleLittleEndian(body[at..]);
+        at += 8;
+
+        var redHorizon = BinaryPrimitives.ReadInt32LittleEndian(body[at..]);
+        at += 4;
+        var blueHorizon = BinaryPrimitives.ReadInt32LittleEndian(body[at..]);
 
         var spec = new DuelSpec
         {
@@ -287,6 +293,8 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
             BlueRolloutOpponent = blueRollout,
             MinSeparation = minSeparation,
             MaxSeparation = maxSeparation,
+            RedHorizonTicks = redHorizon,
+            BlueHorizonTicks = blueHorizon,
         };
 
         // ⚠️ Validated HERE as well as in Reset, so a malformed driver is refused

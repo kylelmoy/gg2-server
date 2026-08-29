@@ -148,6 +148,10 @@ public sealed class EnvOptionsTests
             .. Int((int)RolloutOpponent.HoldLastInput),
             .. Real(0),
             .. Real(0),
+
+            // v6's rollout horizons, both 0 = the search's own default.
+            .. Int(0),
+            .. Int(0),
         ];
     }
 

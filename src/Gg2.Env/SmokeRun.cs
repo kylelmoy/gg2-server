@@ -190,7 +190,7 @@ public static class SmokeRun
     private static void MakeBatch(Stream stream, int worlds, uint seed, int threads)
     {
         var name = System.Text.Encoding.UTF8.GetBytes("gg_debug");
-        var body = new byte[(4 * 2) + name.Length + (4 * 2) + (8 * 4) + (4 * 8) + (4 * 2) + (8 * 2)];
+        var body = new byte[(4 * 2) + name.Length + (4 * 2) + (8 * 4) + (4 * 8) + (4 * 2) + (8 * 2) + (4 * 2)];
         var at = 0;
 
         void Int(int v)
@@ -238,6 +238,12 @@ public static class SmokeRun
         Int((int)RolloutOpponent.HoldLastInput);
         Real(0);
         Real(0);
+
+        // v6's horizons, both 0 = the search's own default. The smoke run has no
+        // Rollout side, so they are unread; written because the frame length is
+        // checked as a whole.
+        Int(0);
+        Int(0);
 
         Send(stream, EnvMessage.MakeBatch, body);
 
