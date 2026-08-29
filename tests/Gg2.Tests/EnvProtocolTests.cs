@@ -193,7 +193,7 @@ public sealed class EnvProtocolTests : IDisposable
         // ⚠️ Change BOTH or neither. If you are here because you added a field to
         // MakeBatch, the version below is the other half of that change — and
         // gg2-rl has to be told, because its suite pins these from outside.
-        Assert.Equal(4, EnvProtocol.Version);
+        Assert.Equal(5, EnvProtocol.Version);
         Assert.Equal(96, EnvProtocol.MakeBatchFixedBytes);
 
         // ⚠️ v4's sixth action head, on both sides of the wire. A client a version
@@ -205,7 +205,7 @@ public sealed class EnvProtocolTests : IDisposable
         // The reward block is the other half of the wire the trainer slices, and
         // v3 deliberately did NOT move it — stated here so a change to it is a
         // conscious edit to this same test rather than a surprise downstream.
-        Assert.Equal(48, EnvProtocol.ComponentBytes);
+        Assert.Equal(52, EnvProtocol.ComponentBytes);
 
         // And the handshake reports the same number this file pins, rather than
         // one computed somewhere else.
@@ -277,7 +277,8 @@ public sealed class EnvProtocolTests : IDisposable
         // ⚠️ And the reward block echoes every head plus ActionExact, at four
         // bytes each after the five reward fields — so the sizes are tied too.
         // Getting this wrong is how ActionExact silently moved under a reader.
-        Assert.Equal(EnvProtocol.ComponentBytes, (5 + shape.Length + 1) * 4);
+        // five reward fields, one per action head, ActionExact, BestScore.
+        Assert.Equal(EnvProtocol.ComponentBytes, (5 + shape.Length + 2) * 4);
 
         foreach (var width in shape)
             Assert.True(width >= 2, $"a head of width {width} cannot encode a choice");

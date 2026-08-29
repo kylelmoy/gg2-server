@@ -84,6 +84,37 @@ public readonly record struct StepResult
     /// </remarks>
     public bool ActionExact { get; init; }
 
+    /// <summary>
+    /// The winning candidate's score, for a <see cref="EnvDriver.Rollout"/> slot.
+    /// <b>NaN</b> for every other driver.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>ZERO LABELS A BLIND DECISION, and that is what this field is for.</b>
+    /// <c>RolloutSearch</c>'s own remark has always said that when nothing can
+    /// score inside the horizon every candidate scores exactly 0, the tie goes to
+    /// the first, and the first is <c>[0,0,0,0,0,0]</c> — "turn hard left, do
+    /// nothing". <c>gg2-rl</c> measured what that does to a training corpus:
+    /// <b>35.2% of 1,960 collected rows are that exact action</b>, and the share
+    /// tracks refire time against the 20-tick horizon — scout (refire 8) 15.3%,
+    /// heavy (12) 24.2%, soldier (30) 39.5%, <b>sniper (40) 46.2%</b>.
+    /// <para>
+    /// ⚠️ <b>Every one of those rows is VALID</b> — correct action, correctly
+    /// recorded, 99.8% exact — so nothing about the dataset looks wrong. Cloning
+    /// it teaches a policy to turn hard left and freeze whenever it is unsure, and
+    /// it would have surfaced as an inexplicable leftward bias <em>after</em> a
+    /// training run. A consumer cannot filter it by value: a genuinely chosen
+    /// "hold still" is a sensible action for a sniper at range and is
+    /// indistinguishable from the fallback.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>NaN, not 0, when there is no search behind the slot</b> — the two
+    /// mean opposite things here, and 0 is the meaningful value. The same
+    /// reasoning as <see cref="DuelSpec.Sampled"/>: NaN is safe as a sentinel
+    /// precisely because no real score can collide with it.
+    /// </para>
+    /// </remarks>
+    public double BestScore { get; init; }
+
     public bool Done => Termination != Termination.Running;
 }
 
@@ -816,6 +847,7 @@ public sealed class DuelEnv
                 Termination = _termination,
                 Action = redAction,
                 ActionExact = redExact,
+                BestScore = ScoreOf(_redBot),
             },
             new StepResult
             {
@@ -826,8 +858,21 @@ public sealed class DuelEnv
                 Termination = _termination,
                 Action = blueAction,
                 ActionExact = blueExact,
+                BestScore = ScoreOf(_blueBot),
             });
     }
+
+    /// <summary>
+    /// The search's winning score behind a slot, or NaN when nothing searched.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ Only <c>RolloutSearch</c> has one. A scripted bot does not score
+    /// candidates at all and a client slot is not a search, so reporting 0 for
+    /// them would collide with the one value that carries meaning — see
+    /// <see cref="StepResult.BestScore"/>.
+    /// </remarks>
+    private static double ScoreOf(IInputSource? bot) =>
+        bot is RolloutSearch search ? search.LastBestScore : double.NaN;
 
     /// <summary>Points a character where the decoder says it is looking.</summary>
     /// <remarks>

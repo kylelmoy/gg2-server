@@ -46,6 +46,20 @@ public static class EnvProtocol
     /// <c>PROTOCOL_UUID</c> idiom, not a warning.
     /// </summary>
     /// <remarks>
+    /// <b>v5, 2026-08-29</b>: the reward block gains <c>BestScore</c> —
+    /// <b>appended</b>, so <see cref="ComponentBytes"/> goes 48 → 52 and nothing
+    /// already in the block moves. It is the winning candidate's score for a
+    /// <c>Rollout</c> slot and NaN otherwise, and <b>zero labels a blind
+    /// decision</b>: when nothing can score inside the search's horizon every
+    /// candidate ties at 0 and the tie goes to candidate 0, which encodes "turn
+    /// hard left, do nothing". <c>gg2-rl</c> measured <b>35.2% of a 1,960-row
+    /// distillation corpus</b> as exactly that action, rising to <b>46.2% for a
+    /// sniper</b>, with every row valid and nothing about the dataset looking
+    /// wrong. A consumer cannot separate those from genuine holds by value; this
+    /// field is what makes them labellable.
+    /// ⚠️ <b>The action encoding does NOT move</b>, so <c>SIM_UUID</c> is
+    /// unchanged — this is a reply-shape change only.
+    /// <para>
     /// <b>v4, 2026-08-29</b>: the action gains a sixth head, <c>Zoom</c>. That
     /// changes the wire in BOTH directions — <c>Step</c> carries <b>six</b> bytes
     /// per agent instead of five, and <see cref="ComponentBytes"/> goes 44 → 48
@@ -79,7 +93,7 @@ public static class EnvProtocol
     /// sampling and nav-node sampling read off uninitialised bytes.
     /// </para>
     /// </remarks>
-    public const int Version = 4;
+    public const int Version = 5;
 
     /// <summary>
     /// Bytes of <c>MakeBatch</c> body after the map name — the fixed tail.
@@ -119,8 +133,11 @@ public static class EnvProtocol
     /// — a variable shape here is a shape the trainer has to branch on.
     /// <para>
     /// ⚠️ <b>v4 made it twelve fields from eleven</b>, the extra one being the
-    /// <c>Zoom</c> head the action gained. The reply's shape moving is why v4 is a
-    /// version bump in both directions rather than a longer request.
+    /// <c>Zoom</c> head the action gained; <b>v5 makes it thirteen</b> with
+    /// <c>BestScore</c>. ⚠️ v4's head was <b>inserted</b> and moved
+    /// <c>ActionExact</c> under every reader; v5's is <b>appended</b>, so a stale
+    /// reader runs off the end and fails loudly instead of misreading a field.
+    /// The action heads had to stay contiguous; a score does not.
     /// <para>
     /// ⚠️ <b>Twelve 4-byte fields rather than six plus six packed bytes.</b> The
     /// action heads are 0-14 and would fit in a byte each, but <c>gg2-rl</c>'s
@@ -130,7 +147,7 @@ public static class EnvProtocol
     /// </para>
     /// </para>
     /// </remarks>
-    public const int ComponentBytes = 48;
+    public const int ComponentBytes = 52;
 
     /// <summary>
     /// Bytes of action heads per agent in a <c>Step</c> request.

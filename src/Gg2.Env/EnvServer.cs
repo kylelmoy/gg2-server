@@ -489,5 +489,16 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
         // — see EnvProtocol.ComponentBytes.
         BinaryPrimitives.WriteInt32LittleEndian(into.AsSpan(at), r.ActionExact ? 1 : 0);
         at += 4;
+
+        // ⚠️ APPENDED, deliberately, where v4's Zoom was INSERTED. Inserting moved
+        // ActionExact under every reader and my own test caught it by asserting
+        // the zoom level was 1; appending means a stale reader runs off the end
+        // instead, which fails loudly. The action heads had to stay contiguous;
+        // this does not.
+        //
+        // ⚠️ float32 like the damage fields. A score is a damage difference, so it
+        // carries exactly the precision damage does.
+        BinaryPrimitives.WriteSingleLittleEndian(into.AsSpan(at), (float)r.BestScore);
+        at += 4;
     }
 }
