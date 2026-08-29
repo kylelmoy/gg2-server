@@ -204,6 +204,92 @@ public readonly record struct DuelSpec
     /// <summary>The skill tier for a <see cref="EnvDriver.Scripted"/> blue side.</summary>
     public int BlueTier { get; init; }
 
+    /// <summary>
+    /// Which opponent model a <see cref="EnvDriver.Rollout"/> red side searches
+    /// against. <see cref="RolloutOpponent.HoldLastInput"/> by default.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The number this exists for is a difference, not a level.</b>
+    /// <c>gg2-rl</c>'s phase 1 wants the search baseline reported under
+    /// <see cref="RolloutOpponent.HoldLastInput"/> <em>and</em> under
+    /// <see cref="RolloutOpponent.Idle"/>: if the win rate barely moves between
+    /// them the search is not really using its opponent model and the horizon or
+    /// the scoring is the binding constraint; if it moves a lot, that is the
+    /// argument for paying for self-play rollouts. It is wanted before a policy
+    /// is distilled from the search, because the policy inherits whatever the
+    /// search assumed.
+    /// <para>
+    /// ⚠️ <b>A separate field rather than an overload of <see cref="RedTier"/>.</b>
+    /// The two are never both meaningful — a side is Scripted or it is Rollout —
+    /// so sharing one integer is tempting. It is refused because both are small
+    /// non-negative values with no sentinel between them, so a marshalling slip
+    /// would silently ask for tier 1 instead of HoldLastInput and the experiment
+    /// would report a matchup that never happened. <see cref="Sampled"/> is
+    /// overloaded onto a coordinate precisely because NaN <em>has</em> no legal
+    /// collision; this has one.
+    /// </para>
+    /// </remarks>
+    public RolloutOpponent RedRolloutOpponent { get; init; }
+
+    /// <summary>The opponent model a <see cref="EnvDriver.Rollout"/> blue side searches against.</summary>
+    public RolloutOpponent BlueRolloutOpponent { get; init; }
+
+    /// <summary>
+    /// The closest two sampled placements may be, in pixels. 0 for no floor.
+    /// </summary>
+    /// <remarks>See <see cref="MaxSeparation"/>, which is the switch.</remarks>
+    public double MinSeparation { get; init; }
+
+    /// <summary>
+    /// The furthest two sampled placements may be, in pixels — and the switch
+    /// that moves sampling off the spawn points and onto the nav graph.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Zero means off, and off means spawn points.</b> Sampling from spawn
+    /// points is what a real respawn does and is the right default; it is also
+    /// unusable for a duel, and that was measured rather than argued.
+    /// <c>gg2-rl</c>, <c>RolloutSearch</c> against a stationary <c>Idle</c>, 90
+    /// decisions:
+    /// <list type="bullet">
+    /// <item><c>gg_debug</c>, explicit spawns: 4 distinct actions, 16-0-0.</item>
+    /// <item><c>arena_lumberyard</c> and <c>ctf_2dfort</c>, sampled: <b>2</b>
+    /// distinct actions, 0 damage, tick cap.</item>
+    /// </list>
+    /// No candidate can produce damage inside a 20-tick horizon at that range,
+    /// so every candidate scores zero, the tie goes to the first, and the bot
+    /// stands still. <c>RolloutSearch</c> has no objective layer and no follower
+    /// — nothing in it walks toward anybody — so it is not a search bug, it is
+    /// out of range.
+    /// <para>
+    /// And the other half: <c>gg_debug</c> has ONE spawn point per team, so
+    /// sampling there draws the same duel every time. Sixteen duels reported
+    /// 100.0% [70.7%, 100.0%] p=3.1e-05 off a sample size of one — they genuinely
+    /// happened, and they were one duel counted sixteen times. **A map that gives
+    /// engagement gave no variety and a map that gave variety gave no
+    /// engagement**, so no map satisfied phase 1's exit criterion.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>With it set, placements are drawn from the NAV GRAPH's walkable
+    /// nodes rather than from spawn points</b>, filtered per team by
+    /// <see cref="NavGraph.GatePassable"/> and paired inside the band. Gate
+    /// filtering is not decoration: <c>koth_harvest</c>, <c>ctf_2dfort</c>,
+    /// <c>koth_valley</c> and <c>dkoth_atalia</c> engaged 0 of 8 sampled duels
+    /// because the pair started behind their own team gates and could not route
+    /// to each other. A node the team may not pass is a node they may not be
+    /// placed on.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>It needs a nav graph and is refused without one</b>, the same way
+    /// <see cref="EnvDriver.Scripted"/> is, and for the same reason: quietly
+    /// falling back to spawn points would answer the request with the exact
+    /// behaviour it was asked to replace.
+    /// </para>
+    /// </remarks>
+    public double MaxSeparation { get; init; }
+
+    /// <summary>Whether placements are drawn from the nav graph inside a band.</summary>
+    public bool SeparationBanded => MaxSeparation > 0;
+
     /// <summary>Whether either side is driven from inside this process.</summary>
     public bool HasBotDriver => RedDriver != EnvDriver.Client || BlueDriver != EnvDriver.Client;
 
@@ -278,6 +364,50 @@ public readonly record struct DuelSpec
 
         if (!Enum.IsDefined(BlueDriver))
             throw new ArgumentOutOfRangeException(nameof(BlueDriver), BlueDriver, "no such driver");
+
+        if (!Enum.IsDefined(RedRolloutOpponent))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(RedRolloutOpponent), RedRolloutOpponent, "no such rollout opponent");
+        }
+
+        if (!Enum.IsDefined(BlueRolloutOpponent))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(BlueRolloutOpponent), BlueRolloutOpponent, "no such rollout opponent");
+        }
+
+        if (MinSeparation < 0 || MaxSeparation < 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(MinSeparation), MinSeparation, "a separation band is not negative");
+        }
+
+        if (SeparationBanded && MinSeparation > MaxSeparation)
+        {
+            throw new ArgumentException(
+                $"the separation band is empty: min {MinSeparation} is past max {MaxSeparation}",
+                nameof(MinSeparation));
+        }
+
+        // ⚠️ Refused rather than ignored, and the argument is the half-NaN one
+        // above. A band between one sampled placement and one the caller named is
+        // half-specified — there is nothing to draw for the named side — and
+        // ignoring it silently would give back exactly the spawn-point sampling
+        // the band exists to replace, which is the failure the band was asked for.
+        if (SeparationBanded && !(RedIsSampled && BlueIsSampled))
+        {
+            throw new ArgumentException(
+                "a separation band needs BOTH placements sampled; it has nothing to draw for an explicit one",
+                nameof(MaxSeparation));
+        }
+
+        if (!SeparationBanded && MinSeparation > 0)
+        {
+            throw new ArgumentException(
+                "a minimum separation without a maximum does not switch banded sampling on; set MaxSeparation",
+                nameof(MinSeparation));
+        }
     }
 }
 
@@ -408,8 +538,15 @@ public sealed class DuelEnv
         // point rather than drawing one.
         world.State.Random = new GmlRandom(seed);
 
-        RedSlot = Place(world, spec.RedClass, Team.Red, spec.RedX, spec.RedY);
-        BlueSlot = Place(world, spec.BlueClass, Team.Blue, spec.BlueX, spec.BlueY);
+        if (spec.SeparationBanded)
+        {
+            (RedSlot, BlueSlot) = PlaceInBand(world, spec);
+        }
+        else
+        {
+            RedSlot = Place(world, spec.RedClass, Team.Red, spec.RedX, spec.RedY);
+            BlueSlot = Place(world, spec.BlueClass, Team.Blue, spec.BlueX, spec.BlueY);
+        }
 
         // ⚠️ Seeded from THIS world's seed, so a scripted opponent's own stream
         // is a pure function of (base seed, world, episode) exactly as the
@@ -417,8 +554,11 @@ public sealed class DuelEnv
         // stream and the batch-size independence gate would fail — or worse,
         // pass, because a stagger of 0 is deterministic and the dependence would
         // only appear once two worlds took different numbers of decisions.
-        _redBot = MakeBot(spec.RedDriver, spec.RedTier, Team.Red, spec.RedClass, world, seed);
-        _blueBot = MakeBot(spec.BlueDriver, spec.BlueTier, Team.Blue, spec.BlueClass, world, seed ^ 0x9E3779B9u);
+        _redBot = MakeBot(
+            spec.RedDriver, spec.RedTier, spec.RedRolloutOpponent, Team.Red, spec.RedClass, world, seed);
+        _blueBot = MakeBot(
+            spec.BlueDriver, spec.BlueTier, spec.BlueRolloutOpponent, Team.Blue, spec.BlueClass, world,
+            seed ^ 0x9E3779B9u);
 
         // Both agents start facing one another, which is the only neutral
         // choice: facing is observable (it moves the two-pixel box inflation
@@ -469,7 +609,8 @@ public sealed class DuelEnv
     /// wrong this project has already paid for twice.
     /// </remarks>
     private IInputSource? MakeBot(
-        EnvDriver driver, int tier, Team team, PlayerClass playerClass, ScenarioWorld world, uint seed)
+        EnvDriver driver, int tier, RolloutOpponent opponent, Team team, PlayerClass playerClass,
+        ScenarioWorld world, uint seed)
     {
         switch (driver)
         {
@@ -480,7 +621,13 @@ public sealed class DuelEnv
                 return IdleInput.Instance;
 
             case EnvDriver.Rollout:
-                return new RolloutSearch();
+                // ⚠️ Only the opponent model is exposed, not the whole
+                // RolloutOptions. The horizon and the aim ladder are the
+                // search's own tuning and moving them from the wire would make
+                // "the search baseline" a different thing per batch; the
+                // opponent model is the one knob phase 1 has to report a
+                // difference across. See DuelSpec.RedRolloutOpponent.
+                return new RolloutSearch(new RolloutOptions(Opponent: opponent));
 
             case EnvDriver.Scripted:
                 if (world.Nav is null)
@@ -519,6 +666,129 @@ public sealed class DuelEnv
                 throw new ArgumentOutOfRangeException(nameof(driver), driver, "no such driver");
         }
     }
+
+    /// <summary>
+    /// Places both agents on walkable nodes drawn from the map, inside the
+    /// spec's separation band.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>A PAIR placement, not two draws.</b> A separation is a property of
+    /// the two together, so it cannot be expressed as red's <see cref="Place"/>
+    /// followed by blue's — which is why this is a second path rather than a
+    /// parameter on the first.
+    /// <para>
+    /// The draw is red first, uniformly over the nodes red may stand on; then
+    /// blue uniformly over the nodes blue may stand on whose stand position is
+    /// inside the band. ⚠️ <b>Red first, and out of the world's own
+    /// <c>GmlRandom</c></b>, both for the reasons <see cref="Reset"/> already
+    /// gives: a slot index is a roster index, and a sampled placement must be a
+    /// pure function of the world's seed.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Gate-filtered per team.</b> A node whose gate that team cannot pass
+    /// is a node that team cannot legitimately stand on, and placing there is
+    /// what produced <c>gg2-rl</c>'s four maps at 0 of 8 engagements: the pair
+    /// started behind their own team gates and could not route to one another.
+    /// <c>hasIntel</c> is false because a duel has no briefcase and
+    /// <c>setupGatesClosed</c> is false because <see cref="ScenarioWorld"/> zeroes
+    /// the setup timer.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>The node's MIDPOINT, not a column drawn inside it.</b> A node spans
+    /// several columns and drawing one would add a few pixels of variety on top
+    /// of a draw that already has hundreds of nodes in it — while making every
+    /// placement's own resolution back to its node a thing to check rather than a
+    /// certainty (see <c>EdgeFlights</c>, which pays for exactly that property).
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Retries the red draw rather than widening the band.</b> A band with
+    /// nothing in it for one red node usually has plenty for another, and
+    /// widening silently would answer a question the caller did not ask. After
+    /// <see cref="BandAttempts"/> reds it gives up loudly, naming the map and the
+    /// band, because a band no pair on the map satisfies is a spec error and not
+    /// a rare draw.
+    /// </para>
+    /// </remarks>
+    private static (int Red, int Blue) PlaceInBand(ScenarioWorld world, DuelSpec spec)
+    {
+        var graph = world.Nav
+            ?? throw new InvalidOperationException(
+                $"a separation band needs a nav graph and {world.Map.Name} has none loaded; "
+                + "give the env a nav directory, or drop MaxSeparation to sample spawn points");
+
+        var red = Standable(graph, Team.Red);
+        var blue = Standable(graph, Team.Blue);
+
+        if (red.Count == 0 || blue.Count == 0)
+        {
+            throw new InvalidOperationException(
+                $"{world.Map.Name} has no nodes a {(red.Count == 0 ? Team.Red : Team.Blue)} character may stand on");
+        }
+
+        var candidates = new List<int>();
+
+        for (var attempt = 0; attempt < BandAttempts; attempt++)
+        {
+            var redNode = red[(int)world.State.Random.Next(red.Count)];
+            var redX = Midpoint(graph, redNode);
+            var redY = graph.StandY(redNode);
+
+            candidates.Clear();
+
+            foreach (var node in blue)
+            {
+                // ⚠️ Straight-line distance, and it is deliberately not path
+                // length. What "in range" means here is what a weapon and a
+                // rollout horizon can reach, which is a line; a path metric would
+                // put two agents either side of a thin wall at "0 px apart" and
+                // two on one open floor at 900.
+                var d = Gml.PointDistance(redX, redY, Midpoint(graph, node), graph.StandY(node));
+
+                if (d >= spec.MinSeparation && d <= spec.MaxSeparation)
+                    candidates.Add(node);
+            }
+
+            if (candidates.Count == 0)
+                continue;
+
+            var blueNode = candidates[(int)world.State.Random.Next(candidates.Count)];
+
+            return (
+                world.Place(spec.RedClass, Team.Red, redX, redY),
+                world.Place(spec.BlueClass, Team.Blue, Midpoint(graph, blueNode), graph.StandY(blueNode)));
+        }
+
+        throw new InvalidOperationException(
+            $"no pair of walkable nodes on {world.Map.Name} is {spec.MinSeparation}-{spec.MaxSeparation}px "
+            + $"apart after {BandAttempts} draws; widen the band or pick another map");
+    }
+
+    /// <summary>How many red nodes are tried before a band is called empty.</summary>
+    /// <remarks>
+    /// ⚠️ It is a spec error rather than a rare draw that this catches, so it is
+    /// small on purpose: a band a map really supports is satisfied by the first
+    /// draw almost always, and a band it does not is not going to be satisfied by
+    /// the thousandth.
+    /// </remarks>
+    private const int BandAttempts = 32;
+
+    /// <summary>The nodes a character of this team may legitimately stand on.</summary>
+    private static List<int> Standable(NavGraph graph, Team team)
+    {
+        var nodes = new List<int>(graph.NodeCount);
+
+        for (var i = 0; i < graph.NodeCount; i++)
+        {
+            if (NavGraph.GatePassable(graph.Nodes[i].Gate, team, hasIntel: false, setupGatesClosed: false))
+                nodes.Add(i);
+        }
+
+        return nodes;
+    }
+
+    /// <summary>Where a character standing in the middle of a node sits.</summary>
+    private static double Midpoint(NavGraph graph, int node) =>
+        NavGraph.ColumnWorldX((graph.Nodes[node].X0 + graph.Nodes[node].X1) / 2);
 
     /// <summary>
     /// One side's placement: the coordinates the caller named, or a spawn point

@@ -82,7 +82,7 @@ length, one message-kind byte, payload. Request/response.
 | Message | Carries | Returns |
 |---|---|---|
 | `Hello` | client's protocol version | protocol version, `SIM_UUID`, obs layout version, action encoding version, obs length, head shape. **Mismatch refuses** — the `PROTOCOL_UUID` idiom, not a warning |
-| `MakeBatch` | N, map, per-side classes, spawn placement (explicit positions, or **NaN** for sampled — see below), base seed, tick cap, action repeat k, **per-side driver and skill tier** | ack + initial observations |
+| `MakeBatch` | N, map, per-side classes, spawn placement (explicit positions, or **NaN** for sampled — see below), base seed, tick cap, action repeat k, **per-side driver and skill tier**, **per-side rollout opponent**, **separation band (min, max)** | ack + initial observations |
 | `Step` | N action tuples (one per world: 4 head indices + aim-delta bin) | N × (obs block, reward components, done, termination reason, **the action that side actually took + whether it is reproducible**) |
 | `Reset` | world index, optional new seed | that world's fresh observation |
 | `Snapshot` | world index | the world's state bytes |
@@ -298,6 +298,13 @@ move them. Against a **stationary** opponent the same eight maps read differentl
 `arena_montane` 8 of 8 and `tdm_mantic` 5 of 8 — because that case depends on the
 opponent hunting rather than on both sides wandering into each other.
 
+⚠️ **SUPERSEDED for duels, 2026-08-28: `DuelSpec.MaxSeparation` fixes all four.**
+Gate-filtered nav-node sampling places the pair on nodes each team may actually
+stand on, and the three of these maps re-measured deal 1,009-1,615 damage where
+spawn sampling dealt **zero**. The table stays because it is still the truth
+about *spawn-point* placement, which is what a real respawn does. See "Sampled
+placements that are actually in engagement range" above.
+
 ⚠️ **The four that never engage are not slow, they are unroutable.** Both sampled
 spawns sit behind their own team gates, so a blue bot asked to walk to a red one
 standing in the red spawn is correctly told there is no route
@@ -308,6 +315,137 @@ spawn on those maps, or an arena/tdm map.
 ⚠️ **This is a different experiment from the sampled-placement table above** and
 the two do not contradict each other: that one measured random-head agents, this
 one measures scripted bots.
+
+### Protocol v3: the separation band, the rollout opponent, and a dropped `--nav`
+
+**2026-08-28, all three requested by `gg2-rl`, which was blocked on every one of
+them.** `MakeBatch` gains four fields at the **end** of its body — a
+`RolloutOpponent` per side as `i32`, then a minimum and a maximum separation as
+`f64`. ⚠️ **`ComponentBytes` does NOT move**, so unlike the v2 bump a client only
+has to lengthen what it sends; every reply it already slices is byte-identical.
+
+⚠️ **Two bumps in a day is a cost paid by somebody else**, so v3 carries both
+open asks at once. The bump is not optional for a tail-append: a short frame
+would read the new fields out of whatever followed it, and any non-zero maximum
+separation moves placement off the spawn points entirely.
+
+#### ⛔ `serve` parsed `--nav` and threw it away
+
+`Program.cs` read `--nav` into a local and then built `new EnvServer(maps)`
+without it. **Every served world therefore had a null nav graph and
+`EnvDriver.Scripted` was refused in every batch** — correctly, and for a reason
+the caller could do nothing about. `gg2-rl` could not run phase 1's exit
+criterion in any form.
+
+⚠️ **It is this document's own named failure class**: ENV.md documented a driver
+the served env could not produce, every test upstream passed, and only a caller
+who *acted* on the description could find out. The same shape as the sampled-
+placement row below and as `docs/TRAPS-SIMULATION.md`'s arena claim.
+
+⚠️ **And it survived because nothing could call it.** Top-level statements are
+not callable from a test, `EnvServer`'s nav directory is an optional parameter so
+dropping it compiles, and every existing test constructs `EnvServer` itself —
+`EnvProtocolTests` included, which passes no nav directory and so could never
+have noticed. The fix is therefore structural rather than a fresh pair of eyes:
+the parse and the wiring both moved into **`EnvOptions`**, whose `CreateServer()`
+is the one line that was wrong, and `EnvOptionsTests` drives it over a real
+socket with a `Scripted` side. Re-drop the argument and that test reproduces the
+exact refusal.
+
+#### ✅ Sampled placements that are actually in engagement range
+
+**The problem: no map satisfied phase 1's exit criterion.** Measured by
+`gg2-rl`, `RolloutSearch` against a stationary `Idle`, 90 decisions:
+
+| map | placement | result |
+|---|---|---|
+| `gg_debug` | explicit | 4 distinct actions, 16-0-0 |
+| `arena_lumberyard` | sampled | **2** distinct actions, 0 damage, tick cap |
+| `ctf_2dfort` | sampled | **2** distinct actions, 0 damage, tick cap |
+
+That two-action signature is the horizon trap with distance as the cause instead
+of the refire timer: no candidate can produce damage inside a 20-tick horizon at
+spawn separation, every candidate scores exactly zero, the tie goes to the first,
+and the bot stands still. `RolloutSearch` has no objective layer and no follower,
+so nothing in it walks toward anybody — **it is not a search bug, it is out of
+range.**
+
+And the other half: **`gg_debug` has one spawn point per team**, so sampling
+draws the same duel every time. Sixteen of them printed
+`100.0% [70.7%, 100.0%] p=3.1e-05` off a sample size of one. The duels genuinely
+happened; they were one duel counted sixteen times. ⚠️ **A map that gave
+engagement gave no variety and a map that gave variety gave no engagement.**
+
+`DuelSpec.MaxSeparation` is the answer, and it is a switch as well as a bound:
+**with it set, placements are drawn from the nav graph's walkable nodes** rather
+than from spawn points — gate-filtered per team, paired inside
+`[MinSeparation, MaxSeparation]`, red drawn first out of the world's own
+`GmlRandom` so a placement stays a pure function of the seed.
+
+⚠️ **Gate filtering is the half that fixes the four zeros in the table below.**
+A node whose gate a team may not pass is a node that team may not stand on, and
+placing there is exactly what left `koth_harvest`, `ctf_2dfort`, `koth_valley`
+and `dkoth_atalia` at 0 of 8 — the pair started behind their own team gates and
+could not route to one another.
+
+**Measured, two scripted tier-5 bots, 8 duels × 90 decisions, total damage:**
+
+| map | banded 150-350px | spawn-sampled |
+|---|---|---|
+| `ctf_2dfort` | **1,615** | **0** |
+| `arena_lumberyard` | **1,113** | **0** |
+| `koth_harvest` | **1,009** | **0** |
+
+and on `gg_debug` over 24 seeds: **24 distinct placements banded, 1 spawn-
+sampled.** Both halves, on the maps that had neither.
+
+⚠️ **Refused rather than downgraded, in three ways**, all on the argument the
+half-NaN rule already makes — answering a request with the exact behaviour it
+asked to replace is worse than answering it with an error. A band needs a nav
+graph; a band needs **both** placements sampled; a minimum without a maximum does
+not switch banding on and says so.
+
+⚠️ **Straight-line distance, not path length.** What "in range" means here is
+what a weapon and a rollout horizon reach, which is a line. A path metric would
+call two agents either side of a thin wall 0px apart.
+
+#### ⚠️ The rollout opponent is selectable — and the MAP decides whether it matters
+
+`DuelEnv.MakeBot` answered `EnvDriver.Rollout` with `new RolloutSearch()`, so no
+batch could choose the opponent model. `DuelSpec.RedRolloutOpponent` /
+`BlueRolloutOpponent` now carry it. ⚠️ **Only the opponent model is exposed, not
+the whole `RolloutOptions`** — the horizon and the aim ladder are the search's own
+tuning, and moving them onto the wire would make "the search baseline" a different
+thing per batch.
+
+⚠️⚠️ **AND `new RolloutSearch()` was searching against the OPPOSITE of its
+documented default.** `RolloutOpponent` declared `Idle` first, so `Idle` was zero,
+so `default(RolloutOptions).Opponent` was `Idle` — and `new RolloutSearch()` takes
+`default`. Every caller that took the documented default got the floor instead,
+this repo's own "11-0-1 against tier 5" figure included. It is precisely the trap
+`RolloutOptions.WithDefaults` exists for, and it caught two of the three fields;
+an enum cannot be fixed there at all, because "unset" and "explicitly Idle" are
+the same zero. **The fix is the declaration order, so the order is load-bearing:
+the default member of an enum that rides in a `default`-able struct must be the
+zero one.**
+
+⚠️ **Nothing pinned moved when that was fixed**, and that is the more interesting
+finding. Measured over 36 scenarios — four classes × three maps × three seeds —
+the two opponent models chose **identical action sequences in 26 of them**:
+
+| map | scenarios | diverged |
+|---|---|---|
+| `ctf_2dfort` | 12 | **9** (up to 18 of 21 decisions) |
+| `arena_lumberyard` | 12 | 1 |
+| `gg_debug` | 12 | **0** |
+
+`gg_debug` diverged zero times at every separation tried, against both a scripted
+and a rollout opponent, even with the opponent pressing keys on 34 of 37
+decisions. The opponent's damage is very nearly a constant across candidates, so
+it cancels in the argmax unless the geometry gives a candidate somewhere to be
+that the opponent's fire does not reach — and a flat one-room map does not.
+⚠️ **So an experiment that reports "the opponent model changes nothing" from
+`gg_debug` has measured the map.** Run that comparison on `ctf_2dfort`.
 
 #### ⚠️ The starting facing was in the decoder only, and is now on the character
 

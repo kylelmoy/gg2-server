@@ -17,17 +17,6 @@ namespace Gg2.Bots;
 public enum RolloutOpponent
 {
     /// <summary>
-    /// ⚠️ <b>The opponent presses nothing.</b> Cheapest, and <b>optimistic</b>:
-    /// a search that believes nobody will shoot back walks into fire.
-    /// </summary>
-    /// <remarks>
-    /// Kept because it is the honest floor for a comparison — if a search is not
-    /// better with a moving opponent than with a statue, the opponent model is
-    /// not what is wrong. Not the default.
-    /// </remarks>
-    Idle,
-
-    /// <summary>
     /// <b>The default.</b> Every other character holds the input it is
     /// <em>already</em> holding, for the whole horizon.
     /// </summary>
@@ -51,8 +40,33 @@ public enum RolloutOpponent
     /// out of v0. The seam for it is this enum: a third member and a branch in
     /// <see cref="RolloutSearch.OpponentInput"/>.
     /// </para>
+    /// <para>
+    /// ⚠️ <b>It is FIRST, so that it is zero, and that is a bug fix rather than
+    /// a tidy-up.</b> <see cref="Idle"/> used to be declared first, so
+    /// <c>default(RolloutOptions).Opponent</c> was <see cref="Idle"/> — and
+    /// <c>new RolloutSearch()</c> takes <c>default</c>. <b>Every caller who took
+    /// the documented default got the opposite of it</b>, including
+    /// <c>Gg2.Env</c>'s duels and this repo's own "11-0-1 against tier 5"
+    /// figure. It is exactly the trap <see cref="RolloutOptions.WithDefaults"/>
+    /// was written for and it caught two of the three fields; an enum cannot be
+    /// fixed there at all, because "unset" and "explicitly Idle" are the same
+    /// zero. Ordering is the only fix, so the order is load-bearing: <b>the
+    /// default member of an enum that rides in a <c>default</c>-able struct must
+    /// be the zero one.</b>
+    /// </para>
     /// </remarks>
     HoldLastInput,
+
+    /// <summary>
+    /// ⚠️ <b>The opponent presses nothing.</b> Cheapest, and <b>optimistic</b>:
+    /// a search that believes nobody will shoot back walks into fire.
+    /// </summary>
+    /// <remarks>
+    /// Kept because it is the honest floor for a comparison — if a search is not
+    /// better with a moving opponent than with a statue, the opponent model is
+    /// not what is wrong. Not the default.
+    /// </remarks>
+    Idle,
 }
 
 /// <summary>

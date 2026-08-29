@@ -182,7 +182,7 @@ public static class SmokeRun
     private static void MakeBatch(Stream stream, int worlds, uint seed, int threads)
     {
         var name = System.Text.Encoding.UTF8.GetBytes("gg_debug");
-        var body = new byte[(4 * 2) + name.Length + (4 * 2) + (8 * 4) + (4 * 8)];
+        var body = new byte[(4 * 2) + name.Length + (4 * 2) + (8 * 4) + (4 * 8) + (4 * 2) + (8 * 2)];
         var at = 0;
 
         void Int(int v)
@@ -220,6 +220,16 @@ public static class SmokeRun
         Int((int)EnvDriver.Client);
         Int(0);
         Int(0);
+
+        // ⚠️ v3's four, all at their defaults. The rollout opponents are unread
+        // with no Rollout side, and the separation band is OFF — the smoke run
+        // names its coordinates, and a band is refused with explicit
+        // placements rather than ignored. Written out rather than left off
+        // because the frame length is checked as a whole.
+        Int((int)RolloutOpponent.HoldLastInput);
+        Int((int)RolloutOpponent.HoldLastInput);
+        Real(0);
+        Real(0);
 
         Send(stream, EnvMessage.MakeBatch, body);
 

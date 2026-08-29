@@ -183,12 +183,18 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
     {
         // count, mapNameLength, mapName, redClass, blueClass, redX, redY,
         // blueX, blueY, decisionCap, actionRepeat, seed, threads,
-        // redDriver, blueDriver, redTier, blueTier.
+        // redDriver, blueDriver, redTier, blueTier,
+        // redRolloutOpponent, blueRolloutOpponent, minSeparation, maxSeparation.
         //
-        // ⚠️ The four driver fields are REQUIRED rather than optional-if-absent.
-        // Tolerating a short frame would let a v1 client through the Hello check
-        // it already failed, and the reply it then read would be sliced wrong —
-        // the reward block is a different length in v2.
+        // ⚠️ Every field is REQUIRED rather than optional-if-absent. Tolerating a
+        // short frame would let an older client through the Hello check it
+        // already failed, and it would then read the tail fields out of whatever
+        // followed — for v3 that is the separation band, where a stray non-zero
+        // f64 silently moves placement from spawn points to nav nodes.
+        //
+        // ⚠️ Checked as a whole up front rather than per read, because a
+        // ReadOnlySpan slice past the end throws an ArgumentOutOfRangeException
+        // that says nothing about the protocol.
         //
         // ⚠️ Read with an explicit cursor rather than local helper functions: a
         // `ReadOnlySpan<byte>` is a ref-like type and cannot be captured by a
@@ -208,6 +214,19 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
 
         var map = System.Text.Encoding.UTF8.GetString(body.Slice(at, nameLength));
         at += nameLength;
+
+        // ⚠️ The fixed tail, checked as one number rather than per read. Two
+        // classes and two drivers and two tiers and two rollout opponents at 4
+        // bytes (32), the cap, the repeat, the seed and the thread count at 4
+        // (16), four coordinates and two separations at 8 (48).
+        const int Fixed = 32 + 16 + 48;
+
+        if (body.Length < at + Fixed)
+        {
+            throw new InvalidDataException(
+                $"MakeBatch wants {at + Fixed} bytes and got {body.Length}; "
+                + $"this build speaks protocol v{EnvProtocol.Version}");
+        }
 
         var redClass = (PlayerClass)BinaryPrimitives.ReadInt32LittleEndian(body[at..]);
         at += 4;
@@ -239,6 +258,15 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
         var redTier = BinaryPrimitives.ReadInt32LittleEndian(body[at..]);
         at += 4;
         var blueTier = BinaryPrimitives.ReadInt32LittleEndian(body[at..]);
+        at += 4;
+
+        var redRollout = (RolloutOpponent)BinaryPrimitives.ReadInt32LittleEndian(body[at..]);
+        at += 4;
+        var blueRollout = (RolloutOpponent)BinaryPrimitives.ReadInt32LittleEndian(body[at..]);
+        at += 4;
+        var minSeparation = BinaryPrimitives.ReadDoubleLittleEndian(body[at..]);
+        at += 8;
+        var maxSeparation = BinaryPrimitives.ReadDoubleLittleEndian(body[at..]);
 
         var spec = new DuelSpec
         {
@@ -255,6 +283,10 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
             BlueDriver = blueDriver,
             RedTier = redTier,
             BlueTier = blueTier,
+            RedRolloutOpponent = redRollout,
+            BlueRolloutOpponent = blueRollout,
+            MinSeparation = minSeparation,
+            MaxSeparation = maxSeparation,
         };
 
         // ⚠️ Validated HERE as well as in Reset, so a malformed driver is refused

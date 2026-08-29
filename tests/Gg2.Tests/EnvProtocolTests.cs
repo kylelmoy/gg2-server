@@ -112,9 +112,16 @@ public sealed class EnvProtocolTests : IDisposable
         EnvDriver red = EnvDriver.Client,
         EnvDriver blue = EnvDriver.Client,
         int redTier = 0,
-        int blueTier = 0)
+        int blueTier = 0,
+        RolloutOpponent redRollout = RolloutOpponent.HoldLastInput,
+        RolloutOpponent blueRollout = RolloutOpponent.HoldLastInput,
+        double minSeparation = 0,
+        double maxSeparation = 0,
+        double redX = 600,
+        double blueX = 700,
+        string map = "gg_debug")
     {
-        var name = System.Text.Encoding.UTF8.GetBytes("gg_debug");
+        var name = System.Text.Encoding.UTF8.GetBytes(map);
 
         return Concat(
             Int(count),
@@ -122,8 +129,8 @@ public sealed class EnvProtocolTests : IDisposable
             name,
             Int((int)PlayerClass.Soldier),
             Int((int)PlayerClass.Soldier),
-            Real(600), Real(850),
-            Real(700), Real(850),
+            Real(redX), Real(850),
+            Real(blueX), Real(850),
             Int(cap),
             Int(repeat),
             Int(1234),
@@ -135,7 +142,16 @@ public sealed class EnvProtocolTests : IDisposable
             Int((int)red),
             Int((int)blue),
             Int(redTier),
-            Int(blueTier));
+            Int(blueTier),
+
+            // ⚠️ v3's four. Required for the same reason plus a sharper one: a
+            // short frame would read the separation band out of whatever
+            // followed, and any non-zero maximum moves placement off the spawn
+            // points entirely.
+            Int((int)redRollout),
+            Int((int)blueRollout),
+            Real(minSeparation),
+            Real(maxSeparation));
     }
 
     /// <summary>A handshake agrees on everything a checkpoint depends on.</summary>
