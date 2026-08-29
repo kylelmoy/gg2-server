@@ -2543,6 +2543,69 @@ one nobody would have guessed:
 policy needs no memory of its own scope. A toggle-shaped head would turn one
 dropped or duplicated action into a permanently inverted sniper.
 
+#### ⚠️⚠️ KNOWN ISSUE: the scope makes the scripted sniper WORSE, by about 10%
+
+**2026-08-29. Reported by `gg2-rl`, reproduced here independently, and both of us
+predicted the opposite.** Giving the bot a capability cost it damage.
+
+24 banded sniper duels against `RolloutSearch` on `ctf_2dfort`, 2,400 ticks, tier
+5 — same map, band, cap and classes, only the command channel differing:
+
+| | unscoped | scoped |
+|---|---|---|
+| damage | **3,045** | **2,768** |
+| hits | 87 | **50** |
+| damage a hit | 35.0 | 55.4 |
+| search wins | 7 of 24 | **19 of 24** |
+| scope toggles | 0 | 217 |
+| average separation | 189 | 190 |
+
+⚠️ **The mechanism is FIRE RATE, not the movement penalty** — separation is
+unchanged, so it is not that a 0.6-run-power sniper positions worse. It is
+**1.58× the damage a shot against 0.57× the shots**: `BotClassKeys` waits
+`RifleChargeTime * min(1, distance / ClassRange)` before every shot, and at duel
+range that wait costs more than the charge buys.
+
+⚠️ **`gg2-rl`'s framing, and it is the right one: a rule that has never executed
+against live play is not a tuned rule, it is an untested one.** This port prefers
+the `BOT_*` constants because they have real playtesting behind them — but this
+arm **could not have been played, by construction**, for eight phases, because
+`self.Zoomed` was always false for a bot. It is new code that has just met its
+first opponent.
+
+##### ⚠️ Why it is NOT tuned: the obvious model contradicts the measurement
+
+Sustained DPS, from `Weapons.RifleBeginStep` — scoped damage
+`45 + floor(sqrt(f)*30)` over a cycle of `40 + 105f`, against unscoped 35 over 40:
+
+| distance | charge fraction | scoped DPS | verdict |
+|---|---|---|---|
+| 120 | 0.13 | 1.019 | scope |
+| 190 | 0.21 | **0.933** | scope |
+| 250 | 0.28 | 0.867 | no |
+| 400 | 0.44 | 0.750 | no |
+| 900 | 1.00 | **0.517** | no |
+
+Unscoped is **0.875**. So the model says scoping at 190px is *better* — and the
+measurement at 190px says it is 10% worse. **A threshold fitted from that model
+would be fitted against evidence that already disagrees with it**, and the
+residue it omits (217 toggles zeroing the charge, shots not taken while waiting)
+is exactly the part that matters.
+
+⚠️ The model also says the rule is DPS-negative at *every* range past 250px,
+which cannot be the whole story — a real sniper charges for **burst to kill**, not
+for sustained DPS. Fixing this needs a decision about what the rule optimises and
+more than 24 duels on one map. CLAUDE.md: improve a bot decision where the fix is
+straightforward and measured; **write the hard ones down**.
+
+##### ⚠️ The sign is not stable at small samples
+
+At **8 duels of 1,200 ticks it is a wash** — 1,059 scoped against 1,050 unscoped.
+The 10% loss needs 24 × 2,400. So `BotZoomTests.TheScopeTradesFireRateForDamageAndCurrentlyLoses`
+gates the **mechanism** (damage a hit up, hits down — both pinned) and
+deliberately does **not** assert the net direction, because that sample does not
+carry it. **Anyone re-tuning this rule from a short run will read noise.**
+
 #### ⚠️⚠️ The search does NOT use the new head at its default horizon
 
 **Raised by `gg2-rl` before the change landed, and it was right.** `ScriptedBot`

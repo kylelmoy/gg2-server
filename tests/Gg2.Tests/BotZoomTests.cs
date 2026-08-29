@@ -409,6 +409,138 @@ public sealed class BotZoomTests(Xunit.Abstractions.ITestOutputHelper output)
         Assert.Equal(expected, scoped);
     }
 
+    /// <summary>
+    /// ⚠️⚠️ <b>THE SCOPE COSTS THE SCRIPTED SNIPER ~10% OF ITS DAMAGE</b>, and
+    /// this pins the trade so a future tune is measured rather than guessed.
+    /// </summary>
+    /// <remarks>
+    /// <b>Reported by <c>gg2-rl</c> and reproduced here independently.</b> Giving
+    /// the bot a capability made it worse. Same map, band, cap, tier and classes;
+    /// only the command channel differs. 24 banded sniper duels against
+    /// <c>RolloutSearch</c> on <c>ctf_2dfort</c>, 2,400 ticks:
+    /// <list type="bullet">
+    /// <item><b>unscoped</b>: 3,045 damage, <b>87 hits</b> at 35.0 each, search
+    /// wins 7 of 24.</item>
+    /// <item><b>scoped</b>: 2,768 damage, <b>50 hits</b> at 55.4 each, search wins
+    /// <b>19 of 24</b>, 217 scope toggles, 74% of ticks scoped.</item>
+    /// </list>
+    /// <para>
+    /// ⚠️ <b>The mechanism is fire rate, not the movement penalty</b> — average
+    /// separation was 189 against 190, so positioning is unchanged. 1.58× the
+    /// damage a shot, 0.57× the shots: <c>BotClassKeys</c> waits
+    /// <c>RifleChargeTime * min(1, distance / ClassRange)</c> before every shot,
+    /// and at duel range that wait costs more than the charge buys.
+    /// </para>
+    /// <para>
+    /// ⚠️⚠️ <b>NOT TUNED, deliberately, because the obvious model is contradicted
+    /// by the measurement.</b> Sustained DPS says scoping at 190px is BETTER —
+    /// 0.933 against unscoped 0.875 — and says it is worse beyond about 250px and
+    /// far worse at sniper range (0.517 at 900px). Reality says 190px is 10%
+    /// worse. So a threshold fitted from that model would be fitted against
+    /// evidence that already disagrees with it, and the residue — 217 toggles
+    /// zeroing the charge, shots not taken while waiting — is not in the model at
+    /// all. Fixing it needs a decision about what the rule optimises (burst to
+    /// kill, not sustained DPS) and more than 24 duels on one map.
+    /// CLAUDE.md: improve a bot decision where the fix is straightforward and
+    /// measured, and <b>write the hard ones down</b>.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>A rule that has never executed is not a tuned rule, it is an untested
+    /// one.</b> The <c>BOT_*</c> constants have real playtesting behind them and
+    /// that is why this port prefers them — but this arm could not have been
+    /// played, by construction, for eight phases. It is new code that has just met
+    /// its first opponent.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void TheScopeTradesFireRateForDamageAndCurrentlyLoses()
+    {
+        var scoped = SniperDuels(zoom: true);
+        var plain = SniperDuels(zoom: false);
+
+        output.WriteLine($"scoped {scoped}, unscoped {plain}");
+
+        // ⚠️ THE MECHANISM is what is gated, not the net effect. Both halves of the
+        // trade, pinned: damage per shot up by 1.6x, shots down by a third. Any
+        // future tuning of the charge-by-range rule has to move one of these
+        // without giving back the other.
+        Assert.Equal(35.0, plain.Damage / plain.Hits, 1);
+        Assert.Equal(16, plain.Hits);
+
+        Assert.Equal(54.25, scoped.Damage / scoped.Hits, 2);
+        Assert.Equal(12, scoped.Hits);
+
+        // ⚠️ THE NET EFFECT IS DELIBERATELY NOT ASSERTED HERE, and the reason is
+        // now sharper than "the sample is small". Against a STATIONARY target the
+        // scope WINS — 651 against 560 here — which is what the sustained-DPS
+        // model predicts at this range. It is only in live play that it loses:
+        // 2,768 against 3,045 over 24 banded duels against a real search, with 217
+        // scope toggles. So the regression lives entirely in the dynamic part —
+        // targets lost mid-charge and the charge zeroed by a toggle — and a test
+        // against a dummy cannot see it by construction.
+        //
+        // ⚠️ That is worth more than a pinned direction: it says the fix is about
+        // WHEN to hold the scope, not about the charge arithmetic, and it says a
+        // static bench will endorse the current rule.
+    }
+
+    /// <summary>
+    /// One scripted sniper shooting a target that never moves, with and without
+    /// the scope.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The opponent is DRIVEN BY NOTHING on purpose, and that is a cost
+    /// decision as well as a clean one.</b> The claim being gated is a property of
+    /// the scripted sniper's own firing rule — damage a shot against shots a
+    /// second — so the other side only has to be shootable. Using
+    /// <c>RolloutSearch</c> here, as the measurement in the remarks above does,
+    /// made this single test <b>50 seconds in Debug and took the whole suite from
+    /// 16s to 1m46s</b>: 60 candidates × 20 horizon ticks per decision buys
+    /// nothing this assertion needs.
+    /// <para>
+    /// ⚠️ So the numbers here are NOT the numbers in the remarks above, and must
+    /// not be read as them. Those are 24 banded duels against a live search; these
+    /// are four fixed duels against a stationary target. What carries across is the
+    /// <em>shape</em> — 1.6× the damage a shot, roughly half the shots — which is
+    /// the thing a future tune has to change.
+    /// </para>
+    /// </remarks>
+    private (double Damage, int Hits) SniperDuels(bool zoom)
+    {
+        var damage = 0.0;
+        var hits = 0;
+
+        for (var seed = 1u; seed <= 4; seed++)
+        {
+            var w = ScenarioWorld.Load(
+                "gg_debug", 1, ReferenceTree.IncludedFiles, ReferenceTree.NavCacheDirectory);
+
+            w.State.Random = new GmlRandom(seed);
+
+            var shooter = w.Place(PlayerClass.Sniper, Team.Blue, 600, StandY);
+            w.Place(PlayerClass.Sniper, Team.Red, 600 + (60 * seed), StandY);
+
+            var bot = new ScriptedBot(w.Nav, new NavQuery(Team.Blue), BotSkill.ForTier(5), stagger: (int)seed)
+            {
+                Objective = new BotObjective(w.Nav!, new SpawnPoints(w.Map)),
+            };
+
+            w.Drive(shooter, zoom ? bot : new KeysOnly(bot));
+
+            for (var t = 0; t < 600; t++)
+            {
+                w.Step();
+
+                if (w.Events.DamageDealt[shooter] > 0)
+                    hits++;
+
+                damage += w.Events.DamageDealt[shooter];
+            }
+        }
+
+        return (damage, hits);
+    }
+
     /// <summary>Presents a source as keys-only, hiding its commands.</summary>
     private sealed class KeysOnly(IInputSource inner) : IInputSource
     {
