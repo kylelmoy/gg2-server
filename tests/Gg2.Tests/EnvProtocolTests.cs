@@ -193,13 +193,19 @@ public sealed class EnvProtocolTests : IDisposable
         // ⚠️ Change BOTH or neither. If you are here because you added a field to
         // MakeBatch, the version below is the other half of that change — and
         // gg2-rl has to be told, because its suite pins these from outside.
-        Assert.Equal(3, EnvProtocol.Version);
+        Assert.Equal(4, EnvProtocol.Version);
         Assert.Equal(96, EnvProtocol.MakeBatchFixedBytes);
+
+        // ⚠️ v4's sixth action head, on both sides of the wire. A client a version
+        // behind sends five bytes an agent and every action from the second world
+        // on is read one byte out of step — plausible values, wrong agent.
+        Assert.Equal(6, EnvProtocol.ActionBytes);
+        Assert.Equal(SimulationStamp.ActionEncodingVersion, 2);
 
         // The reward block is the other half of the wire the trainer slices, and
         // v3 deliberately did NOT move it — stated here so a change to it is a
         // conscious edit to this same test rather than a surprise downstream.
-        Assert.Equal(44, EnvProtocol.ComponentBytes);
+        Assert.Equal(48, EnvProtocol.ComponentBytes);
 
         // And the handshake reports the same number this file pins, rather than
         // one computed somewhere else.
@@ -317,14 +323,16 @@ public sealed class EnvProtocolTests : IDisposable
         Assert.Equal(expected, made.Length);
 
         // Five head bytes per agent, red then blue, per world.
-        var actions = new byte[count * 10];
+        var actions = new byte[count * 2 * EnvProtocol.ActionBytes];
 
         for (var i = 0; i < count; i++)
         {
-            actions[(i * 10) + 0] = 2;                              // red: right
-            actions[(i * 10) + 4] = ActionDecoder.AimCentreBin;
-            actions[(i * 10) + 5] = 1;                              // blue: left
-            actions[(i * 10) + 9] = ActionDecoder.AimCentreBin;
+            var pair = i * 2 * EnvProtocol.ActionBytes;
+
+            actions[pair + 0] = 2;                                          // red: right
+            actions[pair + 4] = ActionDecoder.AimCentreBin;
+            actions[pair + EnvProtocol.ActionBytes + 0] = 1;                // blue: left
+            actions[pair + EnvProtocol.ActionBytes + 4] = ActionDecoder.AimCentreBin;
         }
 
         Send(EnvMessage.Step, actions);
@@ -460,7 +468,7 @@ public sealed class EnvProtocolTests : IDisposable
         {
             // Red fires straight at its neighbour every step; blue is the idle
             // driver and is sent an action that must be IGNORED.
-            var actions = new byte[2 * 2 * 5];
+            var actions = new byte[2 * 2 * EnvProtocol.ActionBytes];
 
             for (var w = 0; w < 2; w++)
             {
@@ -491,13 +499,26 @@ public sealed class EnvProtocolTests : IDisposable
                 var horizontal = BinaryPrimitives.ReadInt32LittleEndian(reply.AsSpan(blueAt + 20));
                 var jump = BinaryPrimitives.ReadInt32LittleEndian(reply.AsSpan(blueAt + 24));
                 var aim = BinaryPrimitives.ReadInt32LittleEndian(reply.AsSpan(blueAt + 36));
-                var exact = BinaryPrimitives.ReadInt32LittleEndian(reply.AsSpan(blueAt + 40));
+
+                // ⚠️ v4 inserted Zoom at 40, so `exact` moved to 44. Reading it at
+                // the old offset returned the zoom level and asserted it was 1 —
+                // which is the failure a tail-appended field would NOT have caused
+                // and an inserted one does. It is why the head went at the end of
+                // the ACTION block rather than the end of the record: the action
+                // heads stay contiguous, and the one field that moved is caught
+                // here rather than by a trainer slicing plausible nonsense.
+                var zoom = BinaryPrimitives.ReadInt32LittleEndian(reply.AsSpan(blueAt + 40));
+                var exact = BinaryPrimitives.ReadInt32LittleEndian(reply.AsSpan(blueAt + 44));
 
                 // The bot's action, not the client's — an idle driver presses
                 // nothing and does not turn.
                 Assert.Equal(0, horizontal);
                 Assert.Equal(0, jump);
                 Assert.Equal(ActionDecoder.AimCentreBin, aim);
+
+                // An idle soldier is not a sniper and never scopes.
+                Assert.Equal(0, zoom);
+
                 Assert.Equal(1, exact);
 
                 if (damageTaken > 0)

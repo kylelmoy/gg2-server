@@ -690,7 +690,8 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
     }
 
     /// <summary>
-    /// The commands this bot wants run — currently only the carrier failsafe.
+    /// The commands this bot wants run — the carrier failsafe, and the sniper's
+    /// scope.
     /// </summary>
     /// <remarks>
     /// ⚠️ Through <see cref="ICommandSource"/> and therefore through the one
@@ -699,10 +700,65 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
     /// </remarks>
     public void PollCommands(in WorldView world, int slot, int tick, ref PlayerCommandBuffer commands)
     {
-        if (!_dropIntel)
-            return;
+        if (_dropIntel)
+        {
+            _dropIntel = false;
+            commands.Push(PlayerCommand.DropIntel());
+        }
 
-        _dropIntel = false;
-        commands.Push(PlayerCommand.DropIntel());
+        if (WantsZoom(in world, slot))
+            commands.Push(PlayerCommand.ToggleZoom());
+    }
+
+    /// <summary>
+    /// Whether the scope should be toggled this tick.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>No bot in this port could zoom until 2026-08-29, and the cost was
+    /// the sniper's whole weapon.</b> <c>toggleZoom</c> is not a key — it is a
+    /// client command — and a bot's <see cref="PlayerInput"/> is keys plus an
+    /// aim, so nothing here ever asked for it. <c>Weapons.RifleBeginStep</c>:
+    /// unscoped is a flat <b>35</b>, scoped ramps <b>45 to 75</b> over
+    /// <c>RifleChargeTime</c>. Every scripted sniper in the game fired at 35 for
+    /// ever, and <see cref="BotClassKeys"/>' charge-proportional-to-range arm
+    /// read <c>self.Zoomed</c>, which was always false — <b>unreachable code that
+    /// looked like the feature working</b>.
+    /// <para>
+    /// ⚠️ <b>The rule is a TOGGLE, so it must be edge-shaped, not level-shaped.</b>
+    /// <c>PlayerCommands.ToggleZoom</c> flips; pushing it every tick a sniper has
+    /// a target would scope and unscope at 30 Hz and hold a charge of zero for
+    /// ever — which is a worse sniper than the unscoped one this replaces, and is
+    /// the obvious way to write this wrong. So: zoom in only while unzoomed and
+    /// holding a target, out only while zoomed and holding none.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Unscoping when the target is gone is not tidiness.</b> Scoped
+    /// <c>RunPower</c> is 0.6 against a sniper's normal run, so a bot that stayed
+    /// scoped would cross the map at a third speed and never reach its objective.
+    /// The reference's own <c>toggleZoom</c> is what sets that, and the walk back
+    /// is what the objective layer assumes.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Only the sniper.</b> <c>PlayerCommands.ToggleZoom</c> refuses every
+    /// other class, so pushing it elsewhere is a silent no-op rather than an
+    /// error — checked here so the buffer is not spent on a command that cannot
+    /// run.
+    /// </para>
+    /// </remarks>
+    private bool WantsZoom(in WorldView world, int slot)
+    {
+        if (!world.IsAlive(slot))
+            return false;
+
+        ref readonly var self = ref world.Character(slot);
+
+        if (self.Class != PlayerClass.Sniper)
+            return false;
+
+        // ⚠️ The combat half's own answer about whether there is anything to
+        // shoot, rather than a second opinion invented here — including its
+        // thirty-tick grace after the sightline breaks, so a sniper does not
+        // unscope and rescope every time the target steps behind a post.
+        return Combat.Target.Exists != self.Zoomed;
     }
 }

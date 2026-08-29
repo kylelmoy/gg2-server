@@ -34,9 +34,24 @@ public static class SimulationStamp
 {
     /// <summary>
     /// The wire action's encoding. Bump when <see cref="PlayerInput"/>'s meaning
-    /// changes — a new key bit, a different aim quantisation.
+    /// changes — a new key bit, a different aim quantisation, a new head.
     /// </summary>
-    public const int ActionEncodingVersion = 1;
+    /// <remarks>
+    /// <b>v2, 2026-08-29</b>: <c>EnvAction</c> gains a sixth head,
+    /// <c>Zoom</c> — the sniper's scope, as a LEVEL rather than a toggle. Until
+    /// it, <b>no bot in this port could zoom at all</b>: <c>toggleZoom</c> is a
+    /// client command rather than a key, and a bot's whole output was
+    /// <see cref="PlayerInput"/>. Every bot sniper fired at the unscoped 35
+    /// against a weapon that reaches 75, and a distilled policy would have
+    /// inherited that permanently. See docs/TRAPS-BOTS.md and <c>BotZoomTests</c>.
+    /// <para>
+    /// ⚠️ <b>Done at this moment on purpose.</b> The bump is free until a
+    /// checkpoint exists to invalidate, and <c>gg2-rl</c> held phase 2 — the
+    /// first training run — for it. A sixth head added afterwards would
+    /// invalidate every checkpoint before it and every number derived from them.
+    /// </para>
+    /// </remarks>
+    public const int ActionEncodingVersion = 2;
 
     /// <summary>
     /// The observation layout.

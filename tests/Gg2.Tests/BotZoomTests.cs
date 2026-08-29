@@ -1,0 +1,417 @@
+using Gg2.Bots;
+using Gg2.Env;
+using Gg2.Maps;
+using Gg2.Protocol;
+using Gg2.Simulation;
+
+namespace Gg2.Tests;
+
+/// <summary>
+/// A bot sniper raises its scope, and therefore plays its actual weapon.
+/// </summary>
+/// <remarks>
+/// ⚠️ <b>No bot in this port could zoom until 2026-08-29.</b> <c>toggleZoom</c> is
+/// not a key — it is a client command — and a bot's <see cref="PlayerInput"/> is
+/// keys plus an aim, so nothing ever asked for it. From
+/// <c>Weapons.RifleBeginStep</c>: unscoped is a flat <b>35</b>, scoped ramps
+/// <b>45 to 75</b> over <c>RifleChargeTime</c>. So every scripted sniper in the
+/// game fired at 35 for ever, and <c>BotClassKeys</c>' charge-proportional-to-range
+/// arm read <c>self.Zoomed</c> — always false — which made it <b>unreachable code
+/// that looked like the feature working</b>.
+/// <para>
+/// ⚠️ <b>Two separate gaps, and the second was the one nobody would have
+/// guessed.</b> <see cref="ScriptedBot"/> has implemented
+/// <see cref="ICommandSource"/> since phase 7, and <c>GameServer</c> and
+/// <see cref="HeadlessMatch"/> both poll it — but <see cref="ScenarioWorld"/> did
+/// not, so a duel or a scenario <b>dropped every command a bot emitted</b>. Even
+/// a bot that asked to zoom would have been ignored in exactly the harness where
+/// zooming gets measured.
+/// </para>
+/// <para>
+/// Found chasing <c>gg2-rl</c>'s sniper-v-sniper hole. ⚠️ It is <b>not</b> the
+/// cause of that hole — both sides were unzoomed, so it was symmetric — which is
+/// worth stating because a fix that arrives beside an unexplained number invites
+/// the assumption that it explains it.
+/// </para>
+/// </remarks>
+public sealed class BotZoomTests(Xunit.Abstractions.ITestOutputHelper output)
+{
+    private const string Map = "gg_debug";
+    private const double StandY = 850;
+
+    private static ScenarioWorld World()
+    {
+        ReferenceTree.RequireAvailable();
+        ReferenceTree.RequireNavCache();
+
+        return ScenarioWorld.Load(Map, 1, ReferenceTree.IncludedFiles, ReferenceTree.NavCacheDirectory);
+    }
+
+    private static ScriptedBot Sniper(ScenarioWorld world, Team team) =>
+        new(world.Nav, new NavQuery(team), BotSkill.ForTier(5), stagger: 1)
+        {
+            Objective = new BotObjective(world.Nav!, new SpawnPoints(world.Map)),
+        };
+
+    /// <summary>
+    /// ✅ A scripted sniper with a target scopes, charges, and hits for more than
+    /// the unscoped 35.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Asserted on the DAMAGE, not on the flag.</b> <c>Zoomed</c> going true
+    /// is the mechanism; what the change is for is the weapon, and a bot that
+    /// scoped and never charged (see the toggle-thrash remark on
+    /// <c>ScriptedBot.WantsZoom</c>) would set the flag and still fire for 35.
+    /// <para>
+    /// ⚠️ 45 is <c>RifleBaseDamage</c>, the value at zero charge, so requiring
+    /// strictly more than it is requiring that the charge ramp is really running
+    /// rather than that the scope is merely up.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>PEAK hit damage, not final</b>, and the first draft of this test got
+    /// it wrong. <c>RifleBeginStep</c> zeroes the charge the instant the shot
+    /// clears <c>ReadyToShoot</c>, so reading <c>HitDamage</c> after the loop
+    /// samples a rifle that has just fired and reports the 45 floor — which looks
+    /// exactly like a scope that never charged.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>And the charge stays small on purpose.</b> <c>BotClassKeys</c> fires
+    /// at <c>RifleChargeTime * min(1, distance / ClassRange)</c> — "the Rifle's
+    /// damage IS its range, so a scoped sniper firing early simply cannot reach,
+    /// and one that waited for a full charge at every distance would never shoot
+    /// at anything close". The objective layer walks the bot to its own band at
+    /// about 120px against a <c>ClassRange</c> of 900, so the threshold there is
+    /// about 14 of 105 and the shot lands at <b>55</b>. That is the rule working,
+    /// not the scope failing: 55 against the 35 it used to be stuck at.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void AScriptedSniperScopesAndFiresACharacterisedShot()
+    {
+        var world = World();
+
+        var red = world.Place(PlayerClass.Sniper, Team.Red, 600, StandY);
+        var blue = world.Place(PlayerClass.Sniper, Team.Blue, 900, StandY);
+
+        world.Drive(red, Sniper(world, Team.Red));
+
+        var zoomedAt = -1;
+        var damage = 0.0;
+        var peakHit = 0.0;
+
+        for (var tick = 0; tick < 400; tick++)
+        {
+            world.Step();
+
+            if (zoomedAt < 0 && world.State.Characters[red].Zoomed)
+                zoomedAt = tick;
+
+            peakHit = Math.Max(peakHit, world.State.Weapons[red].HitDamage);
+            damage += world.Events.DamageDealt[red];
+
+            if (!world.State.IsAlive(blue))
+                break;
+        }
+
+        output.WriteLine($"zoomed at t={zoomedAt}, peak hit damage {peakHit}, dealt {damage}");
+
+        Assert.True(zoomedAt >= 0, "the sniper never raised its scope");
+
+        // ⚠️ The point of the whole change, in one number: 55 against the 35 this
+        // bot was stuck at for eight phases. Strictly past RifleBaseDamage's 45,
+        // so the charge ramp is really running rather than the scope merely being
+        // up — and pinned, because a drop back to exactly 45 or 35 is the shape
+        // of this feature silently coming undone.
+        Assert.Equal(55, peakHit);
+
+        Assert.True(damage > 0, "the sniper scoped and never fired");
+    }
+
+    /// <summary>
+    /// ⚠️ THE CONTROL: with the command channel taken away, the same bot is
+    /// pinned at the unscoped 35.
+    /// </summary>
+    /// <remarks>
+    /// This is what the port did for eight phases, reproduced deliberately by
+    /// driving the bot as an <see cref="IInputSource"/> only — which is exactly
+    /// what <see cref="ScenarioWorld"/> used to do to every source it was given.
+    /// <para>
+    /// Without this, deleting <c>WantsZoom</c> or <c>ScenarioWorld.RunCommands</c>
+    /// leaves a green suite: nothing else in the project asserts that a sniper
+    /// ever scopes.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void WithoutTheCommandChannelTheSameSniperIsStuckAt35()
+    {
+        var world = World();
+
+        var red = world.Place(PlayerClass.Sniper, Team.Red, 600, StandY);
+        world.Place(PlayerClass.Sniper, Team.Blue, 900, StandY);
+
+        // ⚠️ Wrapped so the world sees an IInputSource and NOT an ICommandSource,
+        // which is the old behaviour exactly: keys and an aim, nothing else.
+        world.Drive(red, new KeysOnly(Sniper(world, Team.Red)));
+
+        world.Step(400);
+
+        Assert.False(world.State.Characters[red].Zoomed, "a keys-only sniper somehow scoped");
+
+        // RifleUnscopedDamage. The whole cost of the gap, in one number.
+        Assert.Equal(35, world.State.Weapons[red].HitDamage);
+    }
+
+    /// <summary>
+    /// ⚠️ The toggle is edge-shaped, so a sniper that keeps its target keeps its
+    /// charge.
+    /// </summary>
+    /// <remarks>
+    /// <c>PlayerCommands.ToggleZoom</c> <b>flips</b>. Pushing it on every tick a
+    /// sniper has a target would scope and unscope at 30 Hz and hold a charge of
+    /// zero for ever — a worse sniper than the unscoped one, and the obvious way
+    /// to write this wrong. <c>RifleBeginStep</c> zeroes the charge the instant
+    /// the scope drops, so a rising charge over many ticks is the proof it is not
+    /// thrashing.
+    /// </remarks>
+    [Fact]
+    public void TheScopeIsNotToggledEveryTick()
+    {
+        var world = World();
+
+        var red = world.Place(PlayerClass.Sniper, Team.Red, 600, StandY);
+        world.Place(PlayerClass.Sniper, Team.Blue, 900, StandY);
+        world.Drive(red, Sniper(world, Team.Red));
+
+        var flips = 0;
+        var was = false;
+        var peak = 0.0;
+
+        for (var tick = 0; tick < 200; tick++)
+        {
+            world.Step();
+
+            var now = world.State.Characters[red].Zoomed;
+            if (now != was)
+                flips++;
+
+            was = now;
+            peak = Math.Max(peak, world.State.Weapons[red].Charge);
+        }
+
+        output.WriteLine($"{flips} scope changes in 200 ticks, peak charge {peak}");
+
+        // A handful of legitimate changes as targets come and go; not sixty.
+        Assert.True(flips < 10, $"the scope changed {flips} times in 200 ticks; the toggle is level-shaped");
+
+        // ⚠️ Charge is zeroed the moment the scope drops OR the shot fires, so a
+        // peak above the fire threshold is the proof the bot held the scope up
+        // across ticks rather than merely reaching it. It is deliberately not a
+        // big number: BotClassKeys fires at RifleChargeTime * min(1, distance /
+        // ClassRange), and at the band the objective layer walks a sniper to that
+        // threshold is about 14 of 105. Asserting a full charge here would be
+        // asserting that the bot ignores its own range rule.
+        Assert.True(peak >= 14, $"peak charge was only {peak}; the scope is not being held");
+    }
+
+    /// <summary>
+    /// A sniper that loses its target lowers the scope again.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ Not tidiness. Scoped <c>RunPower</c> is 0.6, so a bot that stayed scoped
+    /// would cross the map at a fraction of its speed and never reach an
+    /// objective. <c>PlayerCommands.ToggleZoom</c> is what sets that, and the walk
+    /// back is what the objective layer assumes.
+    /// </remarks>
+    [Fact]
+    public void ASniperWithNoTargetLowersTheScope()
+    {
+        var world = World();
+
+        var red = world.Place(PlayerClass.Sniper, Team.Red, 600, StandY);
+        var blue = world.Place(PlayerClass.Sniper, Team.Blue, 900, StandY);
+        world.Drive(red, Sniper(world, Team.Red));
+
+        // Let it acquire and scope.
+        for (var tick = 0; tick < 200 && !world.State.Characters[red].Zoomed; tick++)
+            world.Step();
+
+        Assert.True(world.State.Characters[red].Zoomed, "the sniper never scoped, so this proves nothing");
+
+        // Take the target away.
+        world.State.Clear(blue);
+        world.Step(200);
+
+        Assert.False(world.State.Characters[red].Zoomed, "the sniper kept its scope up with nothing to shoot");
+        Assert.Equal(ClassStats.For(PlayerClass.Sniper).RunPower, world.State.Characters[red].RunPower);
+    }
+
+    /// <summary>
+    /// ✅ <b>The action space can ask for the scope</b>, and asking for it works.
+    /// </summary>
+    /// <remarks>
+    /// The policy half of the same gap. <see cref="EnvAction.Zoom"/> is v4's sixth
+    /// head, and without it a distilled policy could never learn the sniper —
+    /// only the unscoped third of it.
+    /// <para>
+    /// ⚠️ <b>A LEVEL, not a toggle</b>, which is what this test's shape asserts:
+    /// the same action is sent on every step and the scope goes up once and stays
+    /// up. A toggle-shaped head under the same input would flip every decision
+    /// and hold a charge of zero for ever.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>The control is the same duel with the head at 0.</b> Without it,
+    /// deleting <c>FixedInput.PollCommands</c> would leave a green suite: the head
+    /// would be accepted, echoed back in the reward block, and inert — which is
+    /// precisely the failure mode this whole change exists to close.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData(1, true)]
+    [InlineData(0, false)]
+    public void AClientDrivenSniperScopesWhenTheHeadAsksFor(byte zoom, bool expected)
+    {
+        ReferenceTree.RequireAvailable();
+
+        var env = new DuelEnv(ReferenceTree.IncludedFiles, ReferenceTree.NavCacheDirectory);
+
+        env.Reset(
+            new DuelSpec
+            {
+                Map = Map,
+                RedClass = PlayerClass.Sniper,
+                BlueClass = PlayerClass.Sniper,
+                RedX = 600,
+                RedY = StandY,
+                BlueX = 900,
+                BlueY = StandY,
+                DecisionCap = 20,
+                ActionRepeat = 4,
+            },
+            seed: 7);
+
+        var action = EnvAction.Idle with { Zoom = zoom };
+        var reported = (byte)0;
+
+        for (var i = 0; i < 6; i++)
+        {
+            var (red, _) = env.Step(action, EnvAction.Idle);
+            reported = red.Action.Zoom;
+        }
+
+        Assert.Equal(expected, env.World.State.Characters[env.RedSlot].Zoomed);
+
+        // ⚠️ The reward block echoes what actually happened, so a trainer's own
+        // dataset records the scope it really had rather than the one it asked
+        // for. For a client slot those coincide; asserting it here is what makes
+        // the head observable end to end.
+        Assert.Equal(zoom, reported);
+    }
+
+    /// <summary>
+    /// ⚠️ <b><see cref="RolloutSearch"/> searches OVER the scope</b>, and only
+    /// when it is holding a rifle.
+    /// </summary>
+    /// <remarks>
+    /// Raised by <c>gg2-rl</c> before the measurement was taken rather than after:
+    /// <see cref="ScriptedBot"/> gained the scope on the same day, so a search
+    /// still enumerating five heads would have been measured against a scripted
+    /// sniper playing a 75-damage weapon while itself capped at 35 — and the
+    /// honest reading of that number would have been "the search got worse".
+    /// <para>
+    /// ⚠️ <b>Sniper only, and the count is the point.</b> The zoom dimension
+    /// doubles 60 candidates to 120, and a decision was measured at 2.94 ms for
+    /// 60 (Release, gg_debug). Every other class would be paying twice to evaluate
+    /// the same sixty actions under two labels, because
+    /// <c>PlayerCommands.ToggleZoom</c> refuses them.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void TheSearchOnlyPaysForTheScopeWhenItIsHoldingARifle()
+    {
+        var world = World();
+
+        var sniper = world.Place(PlayerClass.Sniper, Team.Red, 600, StandY);
+        var soldier = world.Place(PlayerClass.Soldier, Team.Blue, 900, StandY);
+
+        var search = new RolloutSearch();
+
+        // The constructor cannot know the class, so the set starts without the
+        // zoom dimension and is rebuilt on the first decision that needs it.
+        Assert.Equal(60, search.CandidateCount);
+
+        var view = new WorldView(in world.State, world.Collision);
+
+        search.Poll(view, soldier, 0);
+        Assert.Equal(60, search.CandidateCount);
+
+        search.Poll(view, sniper, 0);
+        Assert.Equal(120, search.CandidateCount);
+
+        // And back again, so a re-class does not leave a sniper's cost on a scout.
+        search.Poll(view, soldier, 1);
+        Assert.Equal(60, search.CandidateCount);
+    }
+
+    /// <summary>
+    /// ⚠️⚠️ <b>A rollout-driven sniper raises the scope only when its horizon can
+    /// see a shot — and at the DEFAULT horizon it cannot.</b>
+    /// </summary>
+    /// <remarks>
+    /// <b>This is the asymmetry <c>gg2-rl</c> predicted before the change landed</b>,
+    /// measured. <see cref="ScriptedBot"/> uses the scope immediately, because its
+    /// rule is "have a target, be scoped". <see cref="RolloutSearch"/> only uses
+    /// what pays inside its horizon, and for a rifle nothing does:
+    /// <list type="bullet">
+    /// <item><b>Refire is 40 ticks against a 20-tick horizon</b> — the longest
+    /// weapon in the game, and the only one at double it. So for 40 of every 40
+    /// ticks the whole candidate set scores exactly zero, the tie goes to the
+    /// first candidate, and the first candidate is unscoped.</item>
+    /// <item>Measured, <c>gg_debug</c> at 220px: <b>horizon 20 never scopes</b>
+    /// and every decision scores 0; <b>horizon 60 scopes</b> and scores 45-70;
+    /// <b>horizon 90 scopes</b> and scores 70-105.</item>
+    /// </list>
+    /// <para>
+    /// ⚠️ <b>So the head is NOT inert — the horizon is the binding constraint</b>,
+    /// and this test pins both halves so that neither can be mistaken for the
+    /// other. If someone later reports "the search does not use zoom", the
+    /// horizon column here is the answer.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>The default was deliberately NOT changed to fix this.</b> A horizon
+    /// is a whole-bot tuning knob: 20 → 45 was measured at 12 mirror duels a
+    /// class as much better for the soldier and <em>worse</em> for the sniper
+    /// (docs/TRAPS-BOTS.md), and it triples the per-decision cost, which
+    /// <c>gg2-rl</c>'s phase 1 baseline is quoted against. Changing it is a
+    /// separate, measured decision and not a side effect of adding a head.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData(20, false)]
+    [InlineData(60, true)]
+    public void ARolloutDrivenSniperScopesOnlyWhenItsHorizonCanSeeAShot(int horizon, bool expected)
+    {
+        var world = World();
+
+        var red = world.Place(PlayerClass.Sniper, Team.Red, 600, StandY);
+        world.Place(PlayerClass.Sniper, Team.Blue, 820, StandY);
+
+        world.Drive(red, new RolloutSearch(new RolloutOptions(HorizonTicks: horizon)));
+
+        var scoped = false;
+        for (var tick = 0; tick < 120 && !scoped; tick++)
+        {
+            world.Step();
+            scoped = world.State.Characters[red].Zoomed;
+        }
+
+        output.WriteLine($"horizon {horizon}: scoped={scoped}");
+
+        Assert.Equal(expected, scoped);
+    }
+
+    /// <summary>Presents a source as keys-only, hiding its commands.</summary>
+    private sealed class KeysOnly(IInputSource inner) : IInputSource
+    {
+        public PlayerInput Poll(in WorldView world, int slot, int tick) => inner.Poll(in world, slot, tick);
+    }
+}

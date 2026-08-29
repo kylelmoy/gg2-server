@@ -209,13 +209,16 @@ public readonly record struct RolloutOptions(
 /// record it with.
 /// </para>
 /// </remarks>
-public sealed class RolloutSearch : IInputSource
+public sealed class RolloutSearch : IInputSource, ICommandSource
 {
     private readonly RolloutOptions _options;
 
     private readonly ActionDecoder _decoder = new();
 
-    private readonly EnvAction[] _candidates;
+    private EnvAction[] _candidates;
+
+    // Whether _candidates currently carries the zoom dimension. See CandidatesFor.
+    private bool _candidatesAreSniper;
 
     // ⚠️ Fields, not locals: 150 KB each, allocated once. See the remarks.
     private WorldState _baseline;
@@ -240,7 +243,8 @@ public sealed class RolloutSearch : IInputSource
         if (_options.DecisionTicks < 1)
             throw new ArgumentOutOfRangeException(nameof(options), _options.DecisionTicks, "a decision must cover at least one tick");
 
-        _candidates = BuildCandidates(_options);
+        _candidates = BuildCandidates(_options, considerZoom: false);
+        _candidatesAreSniper = false;
         _current = EnvAction.Idle;
     }
 
@@ -278,34 +282,89 @@ public sealed class RolloutSearch : IInputSource
     /// go to the earlier candidate, which is the one nearer "stand still and do
     /// nothing" because of the order these loops run in.
     /// </remarks>
-    private static EnvAction[] BuildCandidates(RolloutOptions options)
+    private static EnvAction[] BuildCandidates(RolloutOptions options, bool considerZoom)
     {
         var aims = options.Aims;
         var fires = options.ConsiderSpecial ? new byte[] { 0, 1, 2 } : [0, 1];
-        var list = new List<EnvAction>(aims.Length * fires.Length * 6);
+        byte[] zooms = considerZoom ? [0, 1] : [0];
+        var list = new List<EnvAction>(aims.Length * fires.Length * zooms.Length * 6);
 
         foreach (var aim in aims)
         {
             foreach (var fire in fires)
             {
-                for (byte horizontal = 0; horizontal < 3; horizontal++)
+                foreach (var zoom in zooms)
                 {
-                    for (byte jump = 0; jump < 2; jump++)
+                    for (byte horizontal = 0; horizontal < 3; horizontal++)
                     {
-                        list.Add(new EnvAction
+                        for (byte jump = 0; jump < 2; jump++)
                         {
-                            Horizontal = horizontal,
-                            Jump = jump,
-                            Down = 0,
-                            Fire = fire,
-                            AimDelta = aim,
-                        });
+                            list.Add(new EnvAction
+                            {
+                                Horizontal = horizontal,
+                                Jump = jump,
+                                Down = 0,
+                                Fire = fire,
+                                AimDelta = aim,
+                                Zoom = zoom,
+                            });
+                        }
                     }
                 }
             }
         }
 
         return [.. list];
+    }
+
+    /// <summary>
+    /// The candidate set for the class this search is currently driving.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Rebuilt when the class changes, and ONLY the sniper pays for the
+    /// zoom dimension.</b> Doubling 60 candidates to 120 doubles the per-decision
+    /// cost — measured at 2.94 ms for 60 (Release, gg_debug) — and
+    /// <c>PlayerCommands.ToggleZoom</c> refuses every class but the sniper, so
+    /// every other class would be paying twice to evaluate the same sixty actions
+    /// under two labels.
+    /// <para>
+    /// ⚠️ <b>Without this the zoom head would be a trap rather than a feature.</b>
+    /// <see cref="ScriptedBot"/> gained the scope on the same day; a search whose
+    /// candidate set was still a five-head enumeration would have been measured
+    /// against a scripted sniper playing a 75-damage weapon while itself capped at
+    /// 35, and the honest reading of that number would have been "the search got
+    /// worse". Raised by <c>gg2-rl</c> before the measurement was taken, which is
+    /// the only reason it is here rather than in a post-mortem.
+    /// </para>
+    /// </remarks>
+    private EnvAction[] CandidatesFor(PlayerClass playerClass)
+    {
+        var wantsZoom = playerClass == PlayerClass.Sniper;
+
+        if (_candidatesAreSniper != wantsZoom)
+        {
+            _candidates = BuildCandidates(_options, wantsZoom);
+            _candidatesAreSniper = wantsZoom;
+        }
+
+        return _candidates;
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// ⚠️ <b>The scope, and it is the only thing this search does that is not a
+    /// key.</b> The chosen candidate's <see cref="EnvAction.Zoom"/> is a level, so
+    /// the command is issued only when it differs from the character — see
+    /// <see cref="ActionDecoder.WantsZoomToggle"/>, which is the one edge detector
+    /// and is shared with the client path.
+    /// </remarks>
+    public void PollCommands(in WorldView world, int slot, int tick, ref PlayerCommandBuffer commands)
+    {
+        if (!world.IsAlive(slot))
+            return;
+
+        if (ActionDecoder.WantsZoomToggle(_current, in world.Character(slot)))
+            commands.Push(PlayerCommand.ToggleZoom());
     }
 
     /// <inheritdoc />
@@ -351,26 +410,31 @@ public sealed class RolloutSearch : IInputSource
     {
         _baseline = world.State;
 
+        // ⚠️ Per CLASS, so only a sniper pays for the zoom dimension — and asked
+        // here rather than in the constructor because a bot can be re-classed
+        // mid-life, exactly as ScriptedBot rebuilds its NavQuery every tick.
+        var candidates = CandidatesFor(world.Character(slot).Class);
+
         var savedAim = _decoder.Aim(slot);
         var best = EnvAction.Idle;
         var bestScore = double.NegativeInfinity;
 
-        for (var i = 0; i < _candidates.Length; i++)
+        for (var i = 0; i < candidates.Length; i++)
         {
             _decoder.SetAim(slot, savedAim);
 
-            var score = Rollout(world.Collision, slot, _candidates[i]);
+            var score = Rollout(world.Collision, slot, candidates[i]);
 
             if (score > bestScore)
             {
                 bestScore = score;
-                best = _candidates[i];
+                best = candidates[i];
             }
         }
 
         _decoder.SetAim(slot, savedAim);
 
-        LastDecisionTicksSimulated = (long)_candidates.Length * _options.HorizonTicks;
+        LastDecisionTicksSimulated = (long)candidates.Length * _options.HorizonTicks;
         LastBestScore = bestScore;
 
         return best;
@@ -403,6 +467,15 @@ public sealed class RolloutSearch : IInputSource
     private double Rollout(CollisionWorld collision, int slot, EnvAction action)
     {
         _fork = _baseline;
+
+        // ⚠️ The candidate's scope is applied to the FORK before it is played, or
+        // the search scores a zoom it never raised — every zoom candidate would
+        // simulate identically to its unzoomed twin, the tie would go to the
+        // earlier one, and the head would look measured while being inert.
+        // PlayerCommands.ToggleZoom is the same method the server calls; it
+        // refuses a non-sniper on its own.
+        if (ActionDecoder.WantsZoomToggle(action, in _fork.Characters[slot]))
+            PlayerCommands.ToggleZoom(ref _fork, slot);
 
         Span<PlayerInput> inputs = stackalloc PlayerInput[WorldState.MaxSlots];
         var score = 0.0;

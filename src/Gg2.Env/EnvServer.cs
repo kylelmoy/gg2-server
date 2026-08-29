@@ -303,8 +303,11 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
     {
         var batch = _batch ?? throw new InvalidOperationException("no batch; send MakeBatch first");
 
-        // Five head bytes per agent, red then blue, per world.
-        var needed = batch.Count * 2 * 5;
+        // ⚠️ SIX head bytes per agent since v4, red then blue, per world — the
+        // sixth is Zoom. A v3 client sending five would be read one agent out of
+        // step from the second world onward, which is why the head count is part
+        // of the version rather than something to tolerate.
+        var needed = batch.Count * 2 * EnvProtocol.ActionBytes;
 
         if (body.Length < needed)
             throw new InvalidDataException($"Step wants {needed} action bytes, got {body.Length}");
@@ -314,8 +317,10 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
 
         for (var i = 0; i < batch.Count; i++)
         {
-            red[i] = ReadAction(body.Slice(i * 10, 5));
-            blue[i] = ReadAction(body.Slice((i * 10) + 5, 5));
+            var pair = i * 2 * EnvProtocol.ActionBytes;
+
+            red[i] = ReadAction(body.Slice(pair, EnvProtocol.ActionBytes));
+            blue[i] = ReadAction(body.Slice(pair + EnvProtocol.ActionBytes, EnvProtocol.ActionBytes));
         }
 
         var redOut = new StepResult[batch.Count];
@@ -333,6 +338,11 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
         Down = b[2],
         Fire = b[3],
         AimDelta = b[4],
+
+        // ⚠️ v4's sixth head. A LEVEL — 0 unscoped, 1 scoped — not a toggle; the
+        // edge is ActionDecoder.WantsZoomToggle's, so a client that keeps sending
+        // 1 stays scoped rather than flickering.
+        Zoom = b[5],
     };
 
     private byte[] Reset(ReadOnlySpan<byte> body)
@@ -471,6 +481,8 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
         BinaryPrimitives.WriteInt32LittleEndian(into.AsSpan(at), r.Action.Fire);
         at += 4;
         BinaryPrimitives.WriteInt32LittleEndian(into.AsSpan(at), r.Action.AimDelta);
+        at += 4;
+        BinaryPrimitives.WriteInt32LittleEndian(into.AsSpan(at), r.Action.Zoom);
         at += 4;
 
         // ⚠️ 1 or 0 rather than a bool byte, keeping the whole block 4-byte typed

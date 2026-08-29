@@ -2516,12 +2516,64 @@ a **client can do something a bot cannot**, which is just as much a gap in the
 seam — and it is invisible to every test, because nothing asserts a bot can
 express the whole action space.
 
-⚠️ **It is recorded here rather than fixed.** Fixing it means giving the input
-seam a channel for a client command, which reaches `IInputSource`, `EnvAction`,
-the action encoding and therefore `SIM_UUID` — and `gg2-rl` has checkpoints keyed
-on that. It is a scope call, not a patch. **What must not happen again is it
-staying a remark inside `ToggleZoom` that nobody reads**: CLAUDE.md, "a gap
-recorded only in a code comment is a gap nobody is tracking".
+✅ **CLOSED 2026-08-29**, on the user's call, with `gg2-rl` holding phase 2 so
+the bump landed before any checkpoint existed to invalidate. What it took:
+
+⚠️ **The seam already had the channel, and my first write-up of this was wrong
+about the cause.** `ICommandSource` has existed since phase 7 and `ScriptedBot`
+already implemented it. Two things were actually missing, and the second is the
+one nobody would have guessed:
+
+1. **Nothing ever pushed `ToggleZoom`.** `ScriptedBot.WantsZoom` does now — an
+   edge, not a level, because `PlayerCommands.ToggleZoom` *flips*: pushing it
+   every tick a sniper has a target scopes and unscopes at 30 Hz and holds a
+   charge of zero for ever, which is a worse sniper than the unscoped one.
+2. ⚠️ **`ScenarioWorld` did not poll `ICommandSource` at all**, so a duel or a
+   scenario **dropped every command a bot emitted**. `GameServer` and
+   `HeadlessMatch` both poll it; the harness where this gets measured did not.
+   Even a bot that asked to zoom would have been ignored.
+
+**And the policy half**: `EnvAction` gains a sixth head, `Zoom`, moving
+`ActionEncodingVersion` 1 → 2, `SIM_UUID` `61edbca3899d1b07` →
+`c526b96e34184138`, and `EnvProtocol.Version` 3 → 4 (six action bytes per agent,
+`ComponentBytes` 44 → 48).
+
+⚠️ **A LEVEL, not a toggle.** The head is the state the agent wants and
+`ActionDecoder.WantsZoomToggle` owns the edge, so the head is idempotent and a
+policy needs no memory of its own scope. A toggle-shaped head would turn one
+dropped or duplicated action into a permanently inverted sniper.
+
+#### ⚠️⚠️ The search does NOT use the new head at its default horizon
+
+**Raised by `gg2-rl` before the change landed, and it was right.** `ScriptedBot`
+uses the scope immediately — its rule is "have a target, be scoped".
+`RolloutSearch` only uses what pays inside its horizon, and **the rifle's 40-tick
+refire is double the 20-tick default**, so the whole candidate set scores exactly
+zero, the tie goes to the first candidate, and the first candidate is unscoped.
+
+Measured, `gg_debug` at 220px:
+
+| horizon | scopes? | decision score |
+|---|---|---|
+| 20 (default) | **no** | 0 throughout |
+| 60 | yes | 45-70 |
+| 90 | yes | 70-105 |
+
+✅ **So the head is not inert — the horizon is the binding constraint**, and
+`BotZoomTests.ARolloutDrivenSniperScopesOnlyWhenItsHorizonCanSeeAShot` pins both
+halves so neither can be mistaken for the other.
+
+⚠️ **The default was deliberately NOT changed to fix it.** A horizon is a
+whole-bot knob: 20 → 45 measured much better for the soldier and *worse* for the
+sniper, it triples the per-decision cost, and `gg2-rl`'s phase 1 baseline is
+quoted against the current one. That is a separate measured decision, not a side
+effect of adding a head.
+
+⚠️ **Consequence for anyone measuring the sniper matchup now**: a scripted sniper
+plays a 75-damage weapon and a default-horizon search still plays the 35-damage
+one, so `gg2-rl`'s 18.4% is expected to get *worse* before it gets better. That
+is the cost of closing the gap in the right order — the class was previously
+unlearnable, which is worse.
 
 ### ⚠️ A horizon shorter than the refire: measured per class, and it is the SOLDIER
 

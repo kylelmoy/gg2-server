@@ -749,7 +749,7 @@ public sealed class DuelEnv
                 // Decoded fresh every tick — the jump edge and the absolute mask
                 // are both properties of doing it here rather than once per
                 // decision.
-                world.Drive(RedSlot, new FixedInput(Decoder.Decode(RedSlot, red, first)));
+                world.Drive(RedSlot, new FixedInput(Decoder.Decode(RedSlot, red, first), red));
             }
             else
             {
@@ -757,7 +757,7 @@ public sealed class DuelEnv
             }
 
             if (_blueBot is null)
-                world.Drive(BlueSlot, new FixedInput(Decoder.Decode(BlueSlot, blue, first)));
+                world.Drive(BlueSlot, new FixedInput(Decoder.Decode(BlueSlot, blue, first), blue));
             else
                 world.Drive(BlueSlot, _blueBot);
 
@@ -801,8 +801,10 @@ public sealed class DuelEnv
         // ⚠️ The decoder FOLLOWS a bot slot rather than driving it, and that is
         // what keeps Snapshot's aim meaningful and lets the next decision's turn
         // be measured against where the bot really is now.
-        var (redAction, redExact) = ActionTaken(_redBot, red, redBotInput, RedSlot, redAimBefore);
-        var (blueAction, blueExact) = ActionTaken(_blueBot, blue, blueBotInput, BlueSlot, blueAimBefore);
+        var (redAction, redExact) = ActionTaken(
+            _redBot, red, redBotInput, RedSlot, redAimBefore, world.State.Characters[RedSlot].Zoomed);
+        var (blueAction, blueExact) = ActionTaken(
+            _blueBot, blue, blueBotInput, BlueSlot, blueAimBefore, world.State.Characters[BlueSlot].Zoomed);
 
         return (
             new StepResult
@@ -879,7 +881,7 @@ public sealed class DuelEnv
     /// </para>
     /// </remarks>
     private (EnvAction Action, bool Exact) ActionTaken(
-        IInputSource? bot, EnvAction sent, PlayerInput taken, int slot, double aimBefore)
+        IInputSource? bot, EnvAction sent, PlayerInput taken, int slot, double aimBefore, bool zoomed)
     {
         if (bot is null)
             return (sent, true);
@@ -913,6 +915,12 @@ public sealed class DuelEnv
             Down = (keys & PlayerKeys.Down) != 0 ? (byte)1 : (byte)0,
             Fire = fire,
             AimDelta = (byte)clamped,
+
+            // ⚠️ Read off the CHARACTER, not off whatever was asked for, and it is
+            // exact by construction because the head is a LEVEL: whatever a bot
+            // did with its scope, "is it scoped now" is the action that reproduces
+            // it. This is the one head that cannot saturate the way the aim can.
+            Zoom = zoomed ? (byte)1 : (byte)0,
         };
 
         // ⚠️ Exact means the BIN reproduces the turn, not that the angle is
@@ -1006,9 +1014,34 @@ public sealed class DuelEnv
     /// the aim advance and the jump edge are decided once and are visible to a
     /// snapshot taken between ticks.
     /// </remarks>
-    private sealed class FixedInput(PlayerInput input) : IInputSource
+    /// <summary>
+    /// One decoded action, held for the tick — keys and aim through
+    /// <see cref="IInputSource"/>, the scope through <see cref="ICommandSource"/>.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Both interfaces, because the action space spans both.</b>
+    /// <see cref="EnvAction.Zoom"/> is not a key — <c>toggleZoom</c> is a client
+    /// command — so a client-driven slot reaches it the same way a bot does, via
+    /// the one dispatch a socket and the control port also use. Without the second
+    /// interface the head would be accepted, echoed back in the reward block, and
+    /// silently do nothing, which is the exact shape of the eight-phase gap it was
+    /// added to close.
+    /// </remarks>
+    private sealed class FixedInput(PlayerInput input, EnvAction action) : IInputSource, ICommandSource
     {
         public PlayerInput Poll(in WorldView world, int slot, int tick) => input;
+
+        public void PollCommands(in WorldView world, int slot, int tick, ref PlayerCommandBuffer commands)
+        {
+            if (!world.IsAlive(slot))
+                return;
+
+            // ⚠️ The edge detector is ActionDecoder's, not a second copy: the head
+            // is a LEVEL and the command FLIPS, and that comparison is the whole
+            // reason the head is idempotent.
+            if (ActionDecoder.WantsZoomToggle(action, in world.Character(slot)))
+                commands.Push(PlayerCommand.ToggleZoom());
+        }
     }
 
     /// <summary>Presses nothing, ever, and goes on looking where it was.</summary>

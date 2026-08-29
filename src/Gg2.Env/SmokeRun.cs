@@ -88,7 +88,7 @@ public static class SmokeRun
         MakeBatch(stream, worlds, seed, threads);
 
         var random = new Random(unchecked((int)seed));
-        var actions = new byte[worlds * 10];
+        var actions = new byte[worlds * 2 * EnvProtocol.ActionBytes];
 
         var finished = 0;
         var steps = 0;
@@ -106,8 +106,10 @@ public static class SmokeRun
         {
             for (var i = 0; i < worlds; i++)
             {
-                Fill(actions.AsSpan(i * 10, 5), random);
-                Fill(actions.AsSpan((i * 10) + 5, 5), random);
+                var pair = i * 2 * EnvProtocol.ActionBytes;
+
+                Fill(actions.AsSpan(pair, EnvProtocol.ActionBytes), random);
+                Fill(actions.AsSpan(pair + EnvProtocol.ActionBytes, EnvProtocol.ActionBytes), random);
             }
 
             Send(stream, EnvMessage.Step, actions);
@@ -142,6 +144,12 @@ public static class SmokeRun
         heads[2] = (byte)random.Next(2);
         heads[3] = (byte)random.Next(3);
         heads[4] = (byte)random.Next(ActionDecoder.AimBins);
+
+        // ⚠️ v4's Zoom head, and the random agent DOES exercise it. The smoke run
+        // is the random-head criterion: a head it never set would be a head the
+        // socket path was never measured on, which is how a field arrives that is
+        // accepted, echoed and inert.
+        heads[5] = (byte)random.Next(2);
     }
 
     /// <summary>

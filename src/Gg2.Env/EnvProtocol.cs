@@ -46,6 +46,15 @@ public static class EnvProtocol
     /// <c>PROTOCOL_UUID</c> idiom, not a warning.
     /// </summary>
     /// <remarks>
+    /// <b>v4, 2026-08-29</b>: the action gains a sixth head, <c>Zoom</c>. That
+    /// changes the wire in BOTH directions — <c>Step</c> carries <b>six</b> bytes
+    /// per agent instead of five, and <see cref="ComponentBytes"/> goes 44 → 48
+    /// because the reward block echoes the action taken. ⚠️ It also moves
+    /// <c>SimulationStamp.ActionEncodingVersion</c> 1 → 2, so a checkpoint
+    /// trained against v3 is not poolable with one trained after it; that is the
+    /// whole reason it was done before <c>gg2-rl</c>'s first training run rather
+    /// than after.
+    /// <para>
     /// <b>v3, 2026-08-28</b>: <c>MakeBatch</c> gains four fields at the END of
     /// its body — a <c>RolloutOpponent</c> per side as i32, then a minimum and a
     /// maximum separation as f64. ⚠️ <b><c>ComponentBytes</c> does NOT move</b>,
@@ -70,7 +79,7 @@ public static class EnvProtocol
     /// sampling and nav-node sampling read off uninitialised bytes.
     /// </para>
     /// </remarks>
-    public const int Version = 3;
+    public const int Version = 4;
 
     /// <summary>
     /// Bytes of <c>MakeBatch</c> body after the map name — the fixed tail.
@@ -109,14 +118,32 @@ public static class EnvProtocol
     /// too</b>, so the reply's layout never depends on which message produced it
     /// — a variable shape here is a shape the trainer has to branch on.
     /// <para>
-    /// ⚠️ <b>Eleven 4-byte fields rather than five plus six packed bytes.</b> The
+    /// ⚠️ <b>v4 made it twelve fields from eleven</b>, the extra one being the
+    /// <c>Zoom</c> head the action gained. The reply's shape moving is why v4 is a
+    /// version bump in both directions rather than a longer request.
+    /// <para>
+    /// ⚠️ <b>Twelve 4-byte fields rather than six plus six packed bytes.</b> The
     /// action heads are 0-14 and would fit in a byte each, but <c>gg2-rl</c>'s
     /// <c>CONTRACT.md</c> maps this block straight into a tensor, and a block that
     /// is 4-byte typed throughout can be viewed as one dtype. Six bytes saved per
     /// agent against a 209-float observation is not a trade worth making.
     /// </para>
+    /// </para>
     /// </remarks>
-    public const int ComponentBytes = 44;
+    public const int ComponentBytes = 48;
+
+    /// <summary>
+    /// Bytes of action heads per agent in a <c>Step</c> request.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>One byte per head, and the count is part of <see cref="Version"/>.</b>
+    /// It went 5 → 6 in v4 when the action gained <c>Zoom</c>. A client a version
+    /// behind sends five, and from the second world onward every agent's action is
+    /// read one byte out of step — plausible values, wrong agent. That is exactly
+    /// why the handshake refuses rather than tolerates, and why this constant is
+    /// asserted beside the version in <c>EnvProtocolTests</c>.
+    /// </remarks>
+    public const int ActionBytes = 6;
 
     /// <summary>
     /// A frame larger than this is refused rather than allocated.

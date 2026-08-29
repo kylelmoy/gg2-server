@@ -36,6 +36,7 @@ namespace Gg2.Bots;
 public sealed class ScenarioWorld
 {
     private readonly IInputSource?[] _sources = new IInputSource?[WorldState.MaxSlots];
+    private PlayerCommandBuffer _commands;
     private WorldState _state;
     private TickEvents _events;
     private int _slots;
@@ -422,6 +423,8 @@ public sealed class ScenarioWorld
 
         for (var i = 0; i < ticks; i++)
         {
+            RunCommands();
+
             for (var slot = 0; slot < _slots; slot++)
             {
                 inputs[slot] = _sources[slot] is { } source
@@ -431,6 +434,69 @@ public sealed class ScenarioWorld
 
             MatchSimulation.Tick(Collision, ref _state, inputs[.._slots], ref _events);
             Tick++;
+        }
+    }
+
+    /// <summary>
+    /// Runs the commands every driven slot asked for this tick.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Until 2026-08-29 this world DROPPED every command a source
+    /// emitted</b>, because it only ever polled <see cref="IInputSource"/>.
+    /// <c>GameServer</c> and <see cref="HeadlessMatch"/> both poll
+    /// <see cref="ICommandSource"/>; a duel and a scenario did not, so a bot in
+    /// one of them could press keys and nothing else. That is not a small gap —
+    /// <b>everything a player can do that is not a key is a command</b>: the
+    /// zoom, the sandvich, dropping the intel, building a sentry. A scenario is
+    /// where those get measured.
+    /// <para>
+    /// ⚠️ <b>BEFORE the poll, not after</b>, matching <see cref="HeadlessMatch"/>
+    /// and the server: a command is the reference's <c>processClientCommands</c>,
+    /// which runs ahead of the tick that reads its effect. A zoom issued after
+    /// the input poll would not change the aim that same tick, and the sniper's
+    /// charge would start a tick late for ever.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Every arm dispatches to the same <see cref="PlayerCommands"/> method
+    /// the server calls.</b> CLAUDE.md's rule about the three places a command
+    /// lives: the body is shared or a bot can do something a client cannot.
+    /// Unhandled kinds are silently skipped rather than thrown, exactly as
+    /// <see cref="HeadlessMatch"/> does — a scenario places no intel and no
+    /// sentry, so those are unreached rather than unsupported.
+    /// </para>
+    /// </remarks>
+    private void RunCommands()
+    {
+        for (var slot = 0; slot < _slots; slot++)
+        {
+            if (_sources[slot] is not ICommandSource source)
+                continue;
+
+            _commands.Clear();
+            source.PollCommands(new WorldView(in _state, Collision), slot, Tick, ref _commands);
+
+            for (var i = 0; i < _commands.Count; i++)
+            {
+                switch (_commands[i].Kind)
+                {
+                    case PlayerCommandKind.ToggleZoom:
+                        PlayerCommands.ToggleZoom(ref _state, slot);
+                        break;
+
+                    case PlayerCommandKind.EatSandvich:
+                        PlayerCommands.EatSandvich(ref _state, slot);
+                        break;
+
+                    // ⚠️ Unreached rather than unsupported, and the distinction
+                    // is HeadlessMatch's: a scenario world places no briefcase,
+                    // no sentry site and no roster to change class on, so the
+                    // rest cannot arise here. When one can, add it against the
+                    // simulation method the server already calls — never a
+                    // second copy of the body.
+                    default:
+                        break;
+                }
+            }
         }
     }
 

@@ -51,8 +51,24 @@ public sealed class SimulationStampTests(ITestOutputHelper output)
     /// find out.
     /// </para>
     /// </para>
+    /// <para>
+    /// ✅ <b>Bumped again 2026-08-29</b>, from <c>61edbca3899d1b07</c>, by
+    /// <c>ActionEncodingVersion</c> going 1 → 2: the action gained a sixth head,
+    /// <c>Zoom</c>. Until it, <b>no bot in this port could zoom at all</b> —
+    /// <c>toggleZoom</c> is a client command rather than a key — so every bot
+    /// sniper fired at the unscoped 35 against a weapon that reaches 75, and a
+    /// distilled policy would have inherited that permanently.
+    /// <para>
+    /// ⚠️ <b>THE LAST FREE BUMP, and it was spent deliberately.</b>
+    /// <c>gg2-rl</c> HELD phase 2 — its first training run — for this, precisely
+    /// so no checkpoint would exist to invalidate. A sixth head added afterwards
+    /// invalidates every checkpoint before it and every number derived from them.
+    /// The next bump is not free, and this remark is the record of who agreed to
+    /// spend this one.
+    /// </para>
+    /// </para>
     /// </remarks>
-    private const string Pinned = "61edbca3899d1b07";
+    private const string Pinned = "c526b96e34184138";
 
     /// <summary>
     /// The stamp is stable, and not a per-process hash.

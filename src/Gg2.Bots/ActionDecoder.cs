@@ -1,3 +1,4 @@
+using Gg2.Simulation;
 using Gg2.Protocol;
 
 namespace Gg2.Bots;
@@ -43,7 +44,39 @@ public readonly record struct EnvAction
     /// </summary>
     public byte AimDelta { get; init; }
 
-    /// <summary>The action that presses nothing and does not turn.</summary>
+    /// <summary>
+    /// 0 unscoped, 1 scoped — the sniper's <c>toggleZoom</c>, as a LEVEL.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>A level, not a toggle, and that is the whole design of this head.</b>
+    /// <c>PlayerCommands.ToggleZoom</c> flips, so a toggle-shaped head would make
+    /// a policy responsible for tracking its own scope state and would turn a
+    /// single dropped or duplicated action into a permanently inverted sniper.
+    /// This head says <em>what the agent wants to be</em>; the decoder compares it
+    /// to the character and issues the command only on a difference. It is
+    /// therefore idempotent, and a policy needs no memory of it.
+    /// <para>
+    /// ⚠️ <b>Zoom is NOT a key</b> — <c>PlayerCommands.ToggleZoom</c>, "it is its
+    /// own client command" — so this head does not reach
+    /// <see cref="ActionDecoder.Decode"/>'s key mask at all. It is routed through
+    /// <c>ICommandSource</c>, the same dispatch a socket and the control port use,
+    /// which is what keeps a bot unable to do anything a client cannot.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Ignored for every class but the sniper</b>, because
+    /// <c>PlayerCommands.ToggleZoom</c> refuses the rest. A policy that sets it on
+    /// a scout is not wrong, it is simply not doing anything.
+    /// </para>
+    /// <para>
+    /// <b>Added 2026-08-29</b>, moving <c>SimulationStamp.ActionEncodingVersion</c>
+    /// 1 → 2. Before it, no bot in this port could zoom at all and every bot
+    /// sniper fired at the unscoped 35 against a weapon that reaches 75 — see
+    /// <c>BotZoomTests</c> and docs/TRAPS-BOTS.md.
+    /// </para>
+    /// </remarks>
+    public byte Zoom { get; init; }
+
+    /// <summary>The action that presses nothing, does not turn and does not scope.</summary>
     public static EnvAction Idle => new() { AimDelta = ActionDecoder.AimCentreBin };
 }
 
@@ -167,6 +200,25 @@ public sealed class ActionDecoder
         // carries would be aiming somewhere no human can — docs/BOTAI.md item 4.
         return PlayerInput.FromAim(keys, _aim[slot], AimDistancePixels);
     }
+
+    /// <summary>
+    /// Whether this action asks for a scope change on this character right now.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The edge detector for a level head</b>, and the one place it lives.
+    /// <see cref="EnvAction.Zoom"/> is the state the agent wants and
+    /// <c>PlayerCommands.ToggleZoom</c> flips, so the command is issued only on a
+    /// difference — which is what makes the head idempotent and what stops a
+    /// scope thrashing at 30 Hz.
+    /// <para>
+    /// ⚠️ <b>Class-checked here</b> so a buffer slot is not spent on a command
+    /// <c>PlayerCommands.ToggleZoom</c> would refuse. Every other class silently
+    /// wants nothing, which is the honest answer rather than an error: an action
+    /// space is uniform across classes on purpose.
+    /// </para>
+    /// </remarks>
+    public static bool WantsZoomToggle(EnvAction action, in CharacterState character) =>
+        character.Class == PlayerClass.Sniper && (action.Zoom != 0) != character.Zoomed;
 
     /// <summary>Degrees for a bin, clamped to the cap.</summary>
     /// <remarks>
