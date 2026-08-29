@@ -152,6 +152,10 @@ public sealed class EnvOptionsTests
             // v6's rollout horizons, both 0 = the search's own default.
             .. Int(0),
             .. Int(0),
+
+            // v7's shadow-search flags, both off.
+            .. Int(0),
+            .. Int(0),
         ];
     }
 

@@ -187,7 +187,7 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
         // blueX, blueY, decisionCap, actionRepeat, seed, threads,
         // redDriver, blueDriver, redTier, blueTier,
         // redRolloutOpponent, blueRolloutOpponent, minSeparation, maxSeparation,
-        // redHorizonTicks, blueHorizonTicks.
+        // redHorizonTicks, blueHorizonTicks, redShadowSearch, blueShadowSearch.
         //
         // ⚠️ Every field is REQUIRED rather than optional-if-absent. Tolerating a
         // short frame would let an older client through the Hello check it
@@ -274,6 +274,11 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
         var redHorizon = BinaryPrimitives.ReadInt32LittleEndian(body[at..]);
         at += 4;
         var blueHorizon = BinaryPrimitives.ReadInt32LittleEndian(body[at..]);
+        at += 4;
+
+        var redShadow = BinaryPrimitives.ReadInt32LittleEndian(body[at..]) != 0;
+        at += 4;
+        var blueShadow = BinaryPrimitives.ReadInt32LittleEndian(body[at..]) != 0;
 
         var spec = new DuelSpec
         {
@@ -296,6 +301,8 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
             MaxSeparation = maxSeparation,
             RedHorizonTicks = redHorizon,
             BlueHorizonTicks = blueHorizon,
+            RedShadowSearch = redShadow,
+            BlueShadowSearch = blueShadow,
         };
 
         // ⚠️ Validated HERE as well as in Reset, so a malformed driver is refused
@@ -514,7 +521,9 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
         var floats = _observations.Length;
         var reply = new byte[
             1 + 4 + (floats * 4) + (batch.Count * 2 * componentBytes)
-            + (kind == EnvMessage.StepScored ? (batch.Count * 2 * 4) + (scoreFloats * 4) : 0)];
+            + (kind == EnvMessage.StepScored
+                ? (batch.Count * 2 * (4 + (6 * 4))) + (scoreFloats * 4)
+                : 0)];
         var at = 0;
 
         reply[at++] = (byte)kind;
@@ -544,8 +553,10 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
             {
                 var world = batch.World(i);
 
-                WriteScores(reply, ref at, world.ScoresFor(world.RedSlot));
-                WriteScores(reply, ref at, world.ScoresFor(world.BlueSlot));
+                WriteScores(
+                    reply, ref at, world.ScoresFor(world.RedSlot), world.SearchActionFor(world.RedSlot));
+                WriteScores(
+                    reply, ref at, world.ScoresFor(world.BlueSlot), world.SearchActionFor(world.BlueSlot));
             }
         }
 
@@ -570,7 +581,8 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
     /// ⚠️ <b>float32</b>, matching the damage fields a score is a difference of.
     /// </para>
     /// </remarks>
-    private static void WriteScores(byte[] into, ref int at, ReadOnlySpan<double> scores)
+    private static void WriteScores(
+        byte[] into, ref int at, ReadOnlySpan<double> scores, EnvAction chosen)
     {
         BinaryPrimitives.WriteInt32LittleEndian(into.AsSpan(at), scores.Length);
         at += 4;
@@ -580,6 +592,28 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
             BinaryPrimitives.WriteSingleLittleEndian(into.AsSpan(at), (float)score);
             at += 4;
         }
+
+        // ⚠️ The action the search CHOSE, six i32, after the distribution — and it
+        // is not derivable from it. A median of four candidates share the best
+        // score and the search picks among them on aim error, so "the argmax" is
+        // not one action. For a shadow slot this is the label: what the expert
+        // would have done in the state the policy reached.
+        //
+        // ⚠️ Written even when the count is zero, so the block's shape does not
+        // depend on whether a slot searched. It is meaningless there and the count
+        // says so.
+        BinaryPrimitives.WriteInt32LittleEndian(into.AsSpan(at), chosen.Horizontal);
+        at += 4;
+        BinaryPrimitives.WriteInt32LittleEndian(into.AsSpan(at), chosen.Jump);
+        at += 4;
+        BinaryPrimitives.WriteInt32LittleEndian(into.AsSpan(at), chosen.Down);
+        at += 4;
+        BinaryPrimitives.WriteInt32LittleEndian(into.AsSpan(at), chosen.Fire);
+        at += 4;
+        BinaryPrimitives.WriteInt32LittleEndian(into.AsSpan(at), chosen.AimDelta);
+        at += 4;
+        BinaryPrimitives.WriteInt32LittleEndian(into.AsSpan(at), chosen.Zoom);
+        at += 4;
     }
 
     /// <summary>

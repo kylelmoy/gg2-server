@@ -119,6 +119,8 @@ public sealed class EnvProtocolTests : IDisposable
         double maxSeparation = 0,
         int redHorizon = 0,
         int blueHorizon = 0,
+        bool redShadow = false,
+        bool blueShadow = false,
         double redX = 600,
         double blueX = 700,
         string map = "gg_debug")
@@ -158,7 +160,12 @@ public sealed class EnvProtocolTests : IDisposable
             // v6's horizons. 0 is "the search's own default" rather than a horizon
             // of zero, which RolloutOptions.WithDefaults resolves.
             Int(redHorizon),
-            Int(blueHorizon));
+            Int(blueHorizon),
+
+            // v7's shadow flags: run a search alongside a Client side, grading
+            // without driving.
+            Int(redShadow ? 1 : 0),
+            Int(blueShadow ? 1 : 0));
     }
 
     /// <summary>
@@ -200,8 +207,8 @@ public sealed class EnvProtocolTests : IDisposable
         // ⚠️ Change BOTH or neither. If you are here because you added a field to
         // MakeBatch, the version below is the other half of that change — and
         // gg2-rl has to be told, because its suite pins these from outside.
-        Assert.Equal(6, EnvProtocol.Version);
-        Assert.Equal(104, EnvProtocol.MakeBatchFixedBytes);
+        Assert.Equal(7, EnvProtocol.Version);
+        Assert.Equal(112, EnvProtocol.MakeBatchFixedBytes);
 
         // ⚠️ v4's sixth action head, on both sides of the wire. A client a version
         // behind sends five bytes an agent and every action from the second world
@@ -369,12 +376,21 @@ public sealed class EnvProtocolTests : IDisposable
             at += 4;
         }
 
+        // ⚠️ v7: six i32 for the action the search CHOSE, after the distribution.
+        // Not derivable from it — a median of four candidates share the best score
+        // and the search picks among them on aim error.
+        at += 6 * 4;
+
         var blueCount = BinaryPrimitives.ReadInt32LittleEndian(scored.AsSpan(at));
         at += 4;
 
         // ⚠️ Zero, written explicitly. An Idle slot did not search; that is not
         // the same as having searched and scored nothing.
         Assert.Equal(0, blueCount);
+
+        // The chosen action is written even for a slot that did not search, so the
+        // block's shape does not depend on which slots did.
+        at += 6 * 4;
 
         Assert.Equal(at, scored.Length);
 

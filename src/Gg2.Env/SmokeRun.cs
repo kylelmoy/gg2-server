@@ -190,7 +190,7 @@ public static class SmokeRun
     private static void MakeBatch(Stream stream, int worlds, uint seed, int threads)
     {
         var name = System.Text.Encoding.UTF8.GetBytes("gg_debug");
-        var body = new byte[(4 * 2) + name.Length + (4 * 2) + (8 * 4) + (4 * 8) + (4 * 2) + (8 * 2) + (4 * 2)];
+        var body = new byte[(4 * 2) + name.Length + (4 * 2) + (8 * 4) + (4 * 8) + (4 * 2) + (8 * 2) + (4 * 4)];
         var at = 0;
 
         void Int(int v)
@@ -242,6 +242,11 @@ public static class SmokeRun
         // v6's horizons, both 0 = the search's own default. The smoke run has no
         // Rollout side, so they are unread; written because the frame length is
         // checked as a whole.
+        Int(0);
+        Int(0);
+
+        // v7's shadow flags, both off. The smoke run measures the socket, and a
+        // shadow search on it would be measuring a search.
         Int(0);
         Int(0);
 

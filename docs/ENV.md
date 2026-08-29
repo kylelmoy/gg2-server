@@ -511,7 +511,7 @@ than something it tracks externally. That is real value and it is also more buil
 plumbing (`SourceRevisionId`) than the problem currently justifies, given the
 consumer already has a working answer.
 
-### ⬅️ DESIGNED, NOT BUILT: the shadow search slot
+### ✅ BUILT 2026-08-29: the shadow search slot
 
 **Asked for by `gg2-rl` 2026-08-29, deferred by the user pending a cheaper
 experiment.** Recorded here so the decision has a design attached rather than
@@ -598,7 +598,31 @@ candidates, best **15.2 at index 6**, runner-up **15.2 at index 7**, margin
 label, and a policy marked wrong for choosing the other. **A one-hot is a lie on
 every such row.**
 
-#### ⬅️ Why the shadow slot is still deferred
+#### ✅ Built as a decisive experiment, with the stopping rule agreed first
+
+**Protocol v7.** `DuelSpec.RedShadowSearch` / `BlueShadowSearch`; the search is
+constructed but **never installed as an input source**, polled after the action
+repeat and before observations, reported through the opt-in `StepScored` block —
+which now also carries **the action the search chose**, six i32 after the
+distribution. ⚠️ Not derivable from the scores: a median of four candidates share
+the best and the search picks among them on aim error.
+
+⚠️ **`DecisionTicks: 1` for a shadow**, so it re-searches on every poll. The
+default cadence of 4 would repeat the previous answer for three of every four rows
+and label them as fresh — the duplicate-row problem from the other direction.
+
+⚠️ **Refused on a non-Client side** rather than doubled: it would run a second
+search whose answer the first already reports, at double the cost, silently.
+
+⚠️ **THE STOPPING RULE, agreed before building**: a few thousand labelled states,
+one retrain, one evaluation. **If it does not beat the +5 that better labels
+bought, the honest conclusion is that behaviour cloning of this search does not
+reach the target and phase 3's self-play is the path.** Three levers have each
+given single digits against a 56-point gap — more data (+3), better labels (+4 to
++5), a better expert (+6, and the target rose as fast). State coverage is the last
+untested one, by elimination rather than by theory.
+
+#### ⬅️ The deferral, and why it ended
 
 `gg2-rl` is training on the `StepScored` distribution instead of a one-hot on the
 argmax — **entirely its own work, next on its list regardless**, and now actually

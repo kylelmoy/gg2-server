@@ -305,6 +305,52 @@ public readonly record struct DuelSpec
     public int BlueHorizonTicks { get; init; }
 
     /// <summary>
+    /// Run a <c>RolloutSearch</c> alongside a <see cref="EnvDriver.Client"/> red
+    /// side, grading the states the client reaches without driving them.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>DAgger's aggregation step, and the reason it exists is measured.</b>
+    /// A policy cloned from search play wins 19.4% where the search wins 84.2%,
+    /// and three levers have each bought single digits against that gap — more
+    /// data (+3 exact match for 2.8x the rows), better labels (+4 to +5), a better
+    /// expert (+6, and the target rose as fast). What is left untested is
+    /// <b>which states the labels are for</b>: cloning fails by compounding error,
+    /// one wrong action reaching a state the expert never visited.
+    /// <para>
+    /// So: <b>the policy acts, the search grades.</b> The next training round sees
+    /// the states the policy actually reaches rather than the ones the search
+    /// reaches.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>The cheap approximation does NOT substitute, and was measured before
+    /// this was built.</b> Collecting with the search driving while a policy holds
+    /// the other slot gives 89.9% blind against 87.8% and similar usable rows —
+    /// but those are states the <em>search</em> reaches while facing a policy, not
+    /// states the policy reaches while acting.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Expensive by construction and never a default</b>: the search cost is
+    /// paid on a slot that is not using it, so a labelling batch costs what a
+    /// <see cref="EnvDriver.Rollout"/> batch costs. Only meaningful with a
+    /// <see cref="EnvDriver.Client"/> driver — a <c>Rollout</c> side already
+    /// reports its own scores — and refused otherwise rather than ignored.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>It grades the state the reply's observation describes.</b> The shadow
+    /// is polled after the action repeat and before the observation is written, so
+    /// the label and the observation are of the same instant. That is the natural
+    /// ordering here rather than an arranged one.
+    /// </para>
+    /// </remarks>
+    public bool RedShadowSearch { get; init; }
+
+    /// <summary>A shadow search grading a client-driven blue side.</summary>
+    public bool BlueShadowSearch { get; init; }
+
+    /// <summary>Whether either side is graded by a search it is not driven by.</summary>
+    public bool HasShadow => RedShadowSearch || BlueShadowSearch;
+
+    /// <summary>
     /// The closest two sampled placements may be, in pixels. 0 for no floor.
     /// </summary>
     /// <remarks>See <see cref="MaxSeparation"/>, which is the switch.</remarks>
@@ -481,6 +527,21 @@ public readonly record struct DuelSpec
                 nameof(MaxSeparation));
         }
 
+        // ⚠️ Refused rather than ignored: a shadow on a Rollout side would run a
+        // second search whose answer the first already reports, at double the
+        // cost, and silently. A caller asking for that has a bug.
+        if (RedShadowSearch && RedDriver != EnvDriver.Client)
+        {
+            throw new ArgumentException(
+                $"a shadow search grades a Client side; red is {RedDriver}", nameof(RedShadowSearch));
+        }
+
+        if (BlueShadowSearch && BlueDriver != EnvDriver.Client)
+        {
+            throw new ArgumentException(
+                $"a shadow search grades a Client side; blue is {BlueDriver}", nameof(BlueShadowSearch));
+        }
+
         if (!SeparationBanded && MinSeparation > 0)
         {
             throw new ArgumentException(
@@ -527,6 +588,12 @@ public sealed class DuelEnv
     // rather than reused: ScriptedBot carries a route, a target and four clocks
     // that belong to one life, and a bot that started an episode mid-plan would
     // make the episode depend on the last one.
+    // ⚠️ Held apart from _redBot/_blueBot on purpose: a shadow is NEVER installed
+    // as an input source. The moment it were, it would be driving.
+    private RolloutSearch? _redShadow;
+
+    private RolloutSearch? _blueShadow;
+
     private IInputSource? _redBot;
     private IInputSource? _blueBot;
 
@@ -583,7 +650,21 @@ public sealed class DuelEnv
     /// </para>
     /// </remarks>
     public ReadOnlySpan<double> ScoresFor(int slot) =>
-        BotFor(slot) is RolloutSearch search ? search.LastScores : ReadOnlySpan<double>.Empty;
+        SearchFor(slot) is { } search ? search.LastScores : ReadOnlySpan<double>.Empty;
+
+    /// <summary>
+    /// What the search behind a slot chose — the DRIVER's action for a
+    /// <see cref="EnvDriver.Rollout"/> side, and what the shadow WOULD have done
+    /// for a client-driven one.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Not derivable from the distribution.</b> A median of four candidates
+    /// share the best score, and the search picks among them on aim error — so
+    /// "the argmax" is not one action and a consumer cannot recover the choice
+    /// from the scores alone.
+    /// </remarks>
+    public EnvAction SearchActionFor(int slot) =>
+        SearchFor(slot) is { } search ? search.LastAction : EnvAction.Idle;
 
     /// <summary>
     /// The candidate actions a rollout slot's scores are aligned with, or empty.
@@ -599,14 +680,14 @@ public sealed class DuelEnv
     /// </remarks>
     public ReadOnlySpan<EnvAction> CandidatesFor(int slot)
     {
-        if (slot == RedSlot && _spec.RedDriver == EnvDriver.Rollout)
+        if (slot == RedSlot && (_spec.RedDriver == EnvDriver.Rollout || _spec.RedShadowSearch))
         {
             return RolloutSearch.CandidatesFor(
                 new RolloutOptions(HorizonTicks: _spec.RedHorizonTicks, Opponent: _spec.RedRolloutOpponent),
                 _spec.RedClass);
         }
 
-        if (slot == BlueSlot && _spec.BlueDriver == EnvDriver.Rollout)
+        if (slot == BlueSlot && (_spec.BlueDriver == EnvDriver.Rollout || _spec.BlueShadowSearch))
         {
             return RolloutSearch.CandidatesFor(
                 new RolloutOptions(HorizonTicks: _spec.BlueHorizonTicks, Opponent: _spec.BlueRolloutOpponent),
@@ -688,6 +769,21 @@ public sealed class DuelEnv
         // stream and the batch-size independence gate would fail — or worse,
         // pass, because a stagger of 0 is deterministic and the dependence would
         // only appear once two worlds took different numbers of decisions.
+        // ⚠️ DecisionTicks 1, so the shadow re-searches on every poll. A labeller
+        // wants an opinion about THIS state; the default cadence of 4 would repeat
+        // the previous decision's answer for three of every four rows and label
+        // them as though they were fresh — which is exactly the duplicate-row
+        // problem gg2-rl already hit from the other direction.
+        _redShadow = spec.RedShadowSearch
+            ? new RolloutSearch(new RolloutOptions(
+                HorizonTicks: spec.RedHorizonTicks, DecisionTicks: 1, Opponent: spec.RedRolloutOpponent))
+            : null;
+
+        _blueShadow = spec.BlueShadowSearch
+            ? new RolloutSearch(new RolloutOptions(
+                HorizonTicks: spec.BlueHorizonTicks, DecisionTicks: 1, Opponent: spec.BlueRolloutOpponent))
+            : null;
+
         _redBot = MakeBot(
             spec.RedDriver, spec.RedTier, spec.RedRolloutOpponent, spec.RedHorizonTicks,
             Team.Red, spec.RedClass, world, seed);
@@ -929,6 +1025,13 @@ public sealed class DuelEnv
         if (_termination == Termination.Running && _decisions >= _spec.DecisionCap)
             _termination = Termination.TickCap;
 
+        // ⚠️ AFTER the action repeat and BEFORE the caller reads observations, so
+        // the grade and the observation describe the same instant — "the search's
+        // opinion of the state as the policy left it". EnvServer writes its
+        // observations from the post-step world, so this ordering is what falls
+        // out of the existing structure rather than something arranged.
+        RunShadows();
+
         // ⚠️ The decoder FOLLOWS a bot slot rather than driving it, and that is
         // what keeps Snapshot's aim meaningful and lets the next decision's turn
         // be measured against where the bot really is now.
@@ -947,7 +1050,7 @@ public sealed class DuelEnv
                 Termination = _termination,
                 Action = redAction,
                 ActionExact = redExact,
-                BestScore = ScoreOf(_redBot),
+                BestScore = ScoreOf(RedSlot),
             },
             new StepResult
             {
@@ -958,7 +1061,7 @@ public sealed class DuelEnv
                 Termination = _termination,
                 Action = blueAction,
                 ActionExact = blueExact,
-                BestScore = ScoreOf(_blueBot),
+                BestScore = ScoreOf(BlueSlot),
             });
     }
 
@@ -971,8 +1074,40 @@ public sealed class DuelEnv
     /// them would collide with the one value that carries meaning — see
     /// <see cref="StepResult.BestScore"/>.
     /// </remarks>
-    private static double ScoreOf(IInputSource? bot) =>
-        bot is RolloutSearch search ? search.LastBestScore : double.NaN;
+    private double ScoreOf(int slot) =>
+        SearchFor(slot) is { } search ? search.LastBestScore : double.NaN;
+
+    /// <summary>
+    /// Asks each shadow search what it would have done in the state the drivers
+    /// just produced.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The return value is DISCARDED, and that is the whole point.</b> A
+    /// shadow grades; it does not drive. Its keys never reach a character and its
+    /// own <c>ActionDecoder</c> is separate, so it cannot disturb the aim of the
+    /// slot it is watching.
+    /// <para>
+    /// ⚠️ <b>Skipped for a dead slot.</b> <c>RolloutSearch.Poll</c> handles that,
+    /// but asking it to grade a corpse would still cost a full search and record a
+    /// score for a state no policy will ever act in.
+    /// </para>
+    /// </remarks>
+    private void RunShadows()
+    {
+        var world = World;
+
+        if (_redShadow is not null && world.State.IsAlive(RedSlot))
+            _redShadow.Poll(new WorldView(in world.State, world.Collision), RedSlot, _decisions);
+
+        if (_blueShadow is not null && world.State.IsAlive(BlueSlot))
+            _blueShadow.Poll(new WorldView(in world.State, world.Collision), BlueSlot, _decisions);
+    }
+
+    /// <summary>The search behind a slot, whether it drives or only grades.</summary>
+    private RolloutSearch? SearchFor(int slot) =>
+        slot == RedSlot ? _redShadow ?? _redBot as RolloutSearch
+        : slot == BlueSlot ? _blueShadow ?? _blueBot as RolloutSearch
+        : null;
 
     /// <summary>Points a character where the decoder says it is looking.</summary>
     /// <remarks>

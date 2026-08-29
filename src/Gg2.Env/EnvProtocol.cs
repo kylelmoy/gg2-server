@@ -95,6 +95,16 @@ public static class EnvProtocol
     /// <c>PROTOCOL_UUID</c> idiom, not a warning.
     /// </summary>
     /// <remarks>
+    /// <b>v7, 2026-08-29</b>: <c>MakeBatch</c> gains a <b>shadow search</b> flag
+    /// per side, two i32 appended (<see cref="MakeBatchFixedBytes"/> 104 → 112),
+    /// and every <see cref="EnvMessage.StepScored"/> per-agent block gains the
+    /// action the search CHOSE — six i32 after the distribution. ⚠️ That second
+    /// part changes a message already in use, which is why this is a bump rather
+    /// than a new kind. The chosen action is not derivable from the scores: a
+    /// median of four candidates share the best, and the search picks among them
+    /// on aim error. Reply shapes for every other message, and the action
+    /// encoding, are untouched — <c>SIM_UUID</c> does not move.
+    /// <para>
     /// <b>v6, 2026-08-29</b>: <c>MakeBatch</c> gains a rollout <b>horizon</b> per
     /// side, two i32 appended, so <see cref="MakeBatchFixedBytes"/> goes 96 to
     /// 104. 0 means the search's own default, which is <b>unchanged</b>: the knob
@@ -150,7 +160,7 @@ public static class EnvProtocol
     /// sampling and nav-node sampling read off uninitialised bytes.
     /// </para>
     /// </remarks>
-    public const int Version = 6;
+    public const int Version = 7;
 
     /// <summary>
     /// Bytes of <c>MakeBatch</c> body after the map name — the fixed tail.
@@ -159,7 +169,7 @@ public static class EnvProtocol
     /// Two classes, two drivers, two tiers and two rollout opponents at four
     /// bytes (32); the decision cap, the action repeat, the seed and the thread
     /// count at four (16); four coordinates and two separations at eight (48);
-    /// two rollout horizons at four (8).
+    /// two rollout horizons and two shadow flags at four (16).
     /// <para>
     /// ⚠️ <b>It lives beside <see cref="Version"/> so that the two cannot move
     /// apart, and that is not tidiness — it is the gate for a bug this file
@@ -180,7 +190,7 @@ public static class EnvProtocol
     /// failing test rather than a silent lie.
     /// </para>
     /// </remarks>
-    public const int MakeBatchFixedBytes = 32 + 16 + 48 + 8;
+    public const int MakeBatchFixedBytes = 32 + 16 + 48 + 8 + 8;
 
     /// <summary>
     /// Bytes of reward components per agent in every reply.

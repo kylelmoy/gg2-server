@@ -231,6 +231,95 @@ public sealed class SearchScoreTests(Xunit.Abstractions.ITestOutputHelper output
     }
 
     /// <summary>
+    /// ✅ <b>A shadow search grades a client-driven slot without driving it</b> —
+    /// DAgger's aggregation step.
+    /// </summary>
+    /// <remarks>
+    /// The policy acts, the search grades, and the next training round sees the
+    /// states the policy actually reaches. Built because three other levers each
+    /// bought single digits against a 56-point cloning gap — more data, better
+    /// labels, a better expert — leaving <b>which states the labels are for</b> as
+    /// the only untested one.
+    /// <para>
+    /// ⚠️ <b>Both halves are asserted and the second is the one that can silently
+    /// fail.</b> A shadow that drove would be a Rollout slot wearing a different
+    /// name, and the symptom would be a corpus labelled for states the policy
+    /// never chose — the exact defect it exists to remove. So this checks the
+    /// client's action is what actually reached the character.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void AShadowSearchGradesWithoutDriving()
+    {
+        ReferenceTree.RequireAvailable();
+        ReferenceTree.RequireNavCache();
+
+        var env = Env();
+        env.Reset(Spec(EnvDriver.Client) with { RedShadowSearch = true }, seed: 11);
+
+        // A deliberate, unmistakable client action: hold RIGHT and do not turn.
+        var action = EnvAction.Idle with { Horizontal = 2 };
+
+        var graded = 0;
+        var startX = env.World.State.Characters[env.RedSlot].X;
+
+        for (var i = 0; i < 12; i++)
+        {
+            var (red, _) = env.Step(action, EnvAction.Idle);
+
+            // ⚠️ THE CLIENT STILL DRIVES, asserted on the CHARACTER rather than on
+            // the reported action. `ActionTaken` echoes what a client SENT without
+            // consulting the world, so `red.Action` would read "right" even if the
+            // shadow had taken the wheel — the first draft of this test asserted
+            // exactly that and a mutation making the shadow drive sailed through
+            // it. The key mask the simulation actually saw is the claim.
+            Assert.True(
+                (env.World.State.Characters[env.RedSlot].KeyState & PlayerKeys.Right) != 0,
+                "the character is not holding RIGHT; something other than the client is driving it");
+
+            // ⚠️ AND THE SEARCH GRADED. A client slot reports NaN without a
+            // shadow; with one it reports a real score.
+            Assert.False(double.IsNaN(red.BestScore), "the shadow did not grade this step");
+
+            if (red.BestScore != 0)
+                graded++;
+
+            if (red.Done)
+                break;
+        }
+
+        Assert.True(graded > 0, "every shadow grade was blind; this scenario cannot show one");
+
+        // And it went somewhere, so "holding RIGHT" was not a mask nothing acted on.
+        Assert.True(
+            env.World.State.Characters[env.RedSlot].X > startX + 20,
+            "the character never moved right; the client's action did not reach the world");
+
+        // The distribution is available for the client slot, which is the label a
+        // soft-target trainer needs.
+        Assert.Equal(60, env.ScoresFor(env.RedSlot).Length);
+        Assert.Equal(60, env.CandidatesFor(env.RedSlot).Length);
+
+        // ⚠️ And the graded action is the SEARCH's, not the client's — that is the
+        // whole product. If these were equal by construction the shadow would be
+        // reporting the policy back to itself.
+        Assert.NotEqual(action, env.SearchActionFor(env.RedSlot));
+    }
+
+    /// <summary>⚠️ A shadow on a driving search is refused, not doubled.</summary>
+    /// <remarks>
+    /// It would run a second search whose answer the first already reports, at
+    /// double the cost, silently. A caller asking for that has a bug.
+    /// </remarks>
+    [Fact]
+    public void AShadowOnANonClientSideIsRefused()
+    {
+        var spec = Spec(EnvDriver.Rollout) with { RedShadowSearch = true };
+
+        Assert.Throws<ArgumentException>(spec.Validate);
+    }
+
+    /// <summary>
     /// The score reported is the search's own, not a recomputation.
     /// </summary>
     /// <remarks>
