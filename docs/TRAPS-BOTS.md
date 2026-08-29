@@ -2359,11 +2359,109 @@ lane's build output and is not gated here, which is why the checked-in gate is
 
 ⚠️ **The other three maps in that flight still take no sticky jump, and that is
 the harness rather than the arm**: `koth_harvest` arrives 4 of 4 by walking
-because A* costs a jump the same as anything else, and on `ctf_truefort` and
-`cp_egypt` the takeoff column does not resolve to the from-node so the route
-starts somewhere else entirely. **A flight harness that does not check its own
-start against the edge it means to fly measures a different edge**, which is
-worth fixing before the next sticky measurement rather than during it.
+because A* costs a jump the same as anything else. **A flight harness that does
+not check its own start against the edge it means to fly measures a different
+edge**, which is worth fixing before the next sticky measurement rather than
+during it.
+
+⚠️ **The second half of that paragraph used to name a cause, and it was wrong.**
+It said that "on `ctf_truefort` and `cp_egypt` the takeoff column does not
+resolve to the from-node so the route starts somewhere else entirely". Measured
+2026-08-28 over every arc edge in every cache: **the takeoff column resolves to
+its own from-node 18,396 times out of 18,396** on the shipped graphs, and 4,132
+of 4,132 on the sticky one. `EdgeFlightTests.EveryArcEdgeResolvesFromItsOwnNodeAndFromItsTakeoffColumn` is the gate. Whatever that hand-rolled harness started
+from, it was not the takeoff column either — and **the correction is the ordinary
+one: a plausible mechanism was written down beside a real symptom, and nothing in
+the repo could contradict it** (CLAUDE.md, "a claim the repo makes about
+itself").
+
+### ✅ The flight harness — `EdgeFlights`, and the honest number
+
+**2026-08-28.** `src/Gg2.Bots/EdgeFlights.cs` is the harness that paragraph asked
+for, in the library beside `ScenarioWorld` rather than in a test, because the
+lane that generates a cache is the one that wants to sweep it:
+
+```csharp
+EdgeFlights.Sweep(() => ScenarioWorld.Load(map, area, maps, nav), NavEdgeType.StickyJump);
+```
+
+It puts one bot on an edge's from-node, sends it to the to-node, and reports one
+of seven outcomes. **Five of them are SKIPS and two are results**, and keeping
+those apart is the entire value:
+
+| outcome | what it means | on today's caches |
+|---|---|---|
+| `StartUnresolved` | the from-node's midpoint is not the from-node | **0**, and provably so |
+| `GoalUnresolved` | the to-node's midpoint does not snap back | **0** |
+| `NoRoute` | A* finds no way at all | 18 sticky, 9 rocket |
+| `RoutedAround` | a route exists and it is **not this hop** | **2,167 of 4,132 sticky** |
+| `Shadowed` | the hop resolves to a cheaper parallel edge | **0** |
+| `Arrived` / `Stranded` | the two real answers | |
+
+⚠️ **`RoutedAround` is the dominant outcome and it is what made the hand-rolled
+number meaningless.** A* costs a jump the same as a walk, so it goes round
+whenever going round is shorter — 47 of `gg_debug`'s 67 rocket jumps, 2,167 of
+the sticky cache's 4,132 arcs. Driven anyway, each of those is a bot walking
+somewhere while a counter says the arc was attempted. **Mutation-checked**:
+delete the check and `gg_debug` reports **67 arrivals out of 67 against 12 real
+flights**.
+
+⚠️ **Arriving is not flying, and the gap is a third.** `EdgeFlight.Manoeuvres`
+counts what the takeoff gate *asked* for; `Flown` is an arrival with at least one
+of them. `gg_debug`: 20 arrivals, 12 flights. `ctf_truefort`: 328 arrivals, 214
+flights. The other arrivals are node pairs the bot could simply walk between, and
+a gate on arrivals alone stays green with the arm deleted.
+
+⚠️ **`Manoeuvres` does not count shots fired.** Measured by ripping the ATTACK
+half out of `PathFollower.ApplyLaunch`: `gg_debug` went 20 arrivals / 12 flights
+→ **16 / 8**, not to zero. The *arrival* count is the half that collapses, which
+is why both are pinned.
+
+#### The number item C existed to produce
+
+**Every sticky arc `gg2-nav-gen` emits, flown**: 24 graphs, 4,132 arcs, 52.7s.
+
+| | |
+|---|---|
+| candidates | 4,132 |
+| posable as a route | **1,947** |
+| arrived | 683 |
+| **flown under the mine jump** | **508** |
+| stranded | 1,264 |
+| blacklist fires | 8,219 |
+
+That is the honest replacement for *"48 real edges flown across four maps, zero
+sticky jumps taken"*. ⚠️ **It is not checked in**, because `build/botnav-sticky`
+is another lane's output behind a flag; the checked-in gates run the same harness
+over `Source/build/botnav`, where a rocket jump and an air jump are the arcs that
+exist.
+
+⚠️ **Two findings in it belong to `gg2-nav-gen` rather than here.**
+
+- **8,219 blacklist fires across 1,947 measured flights** — about 4.2 per flight,
+  against **zero** over `PathFollowerFixtureTests`' 137-node walking leg and
+  **two** over `gg_debug`'s twenty rocket jumps. Most of that is the 1,264
+  stranded arcs burning their budget, but the ratio says the cache's arcs are
+  substantially not flyable by this follower rather than marginally so.
+- **Two maps fly exactly zero**: `arena_lumberyard` (24 posed, 9 arrived, 0
+  flown) and `dkoth_atalia` (26 posed, 6 arrived, 0 flown). Every arrival on both
+  is a walk. Those are the two to look at first.
+
+#### ⚠️ The harness must press what a real bot presses
+
+`PathFollower.ApplyLaunch` was extracted out of `ScriptedBot` for this, and the
+extraction is the point rather than tidiness. The follower owns LEFT / RIGHT /
+JUMP / DOWN and **cannot fire**; a rocket jump needs one key from the combat half
+and a mine jump needs two, on two different ticks. **A driver that keeps only the
+movement keys gets a follower that requests a rocket and never fires it, and
+every arc reads as refused** — which is exactly the failure mode this whole item
+came out of. There is now one copy, and `EdgeFlights.Pilot` and `ScriptedBot`
+both call it.
+
+Likewise `PathFollower.TryResolveHop` is `TryFindEdge` in public, so the harness
+cannot answer "which edge is this hop" a second way. The tie-break it implements
+— strictly cheapest, first-in-order on ties, resolved against
+`BotPathState.PlanQuery` and not the live query — is precisely what item A was.
 
 #### ✅ What the flights did buy: 333 arcs that leaned on a run-up that cannot exist
 

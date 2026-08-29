@@ -319,45 +319,16 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
         var fireKeys = BotCombat.Step(
             Combat, in world, slot, tick, Skill, ref Random, _graph, out var aim, out var aimDistance);
 
-        // ⚠️ The rocket-jump hand-off, and it goes AFTER the combat half because
-        // this is the only place that can see both. The follower owns LEFT / RIGHT /
+        // ⚠️ The launch hand-off, and it goes AFTER the combat half because this
+        // is the only place that can see both. The follower owns LEFT / RIGHT /
         // JUMP / DOWN and cannot fire; combat owns ATTACK and the aim and knows
-        // nothing about the route. A rocket jump needs one key from each.
+        // nothing about the route. A rocket jump needs one key from each, and a
+        // sticky jump needs two on two different ticks.
         //
-        // ⚠️ It OVERRIDES the combat aim rather than being ORed with it. Whatever
-        // the bot was shooting at, the arc it is about to fly is worth more than the
-        // shot, and half an aim is a rocket into a wall beside its own feet.
-        // Character's Begin Step reads aimDirection when it fires the weapon and
-        // reads the ATTACK bit in the same event on the same tick, so the aim must
-        // be down BEFORE the trigger is seen — writing both here is exactly that.
-        if (Path.RocketFire)
-        {
-            aim = PathFollower.RocketAimDegrees;
-            fireKeys |= PlayerKeys.Attack;
-        }
-
-        // The sticky jump's two presses, handed over the same way and for the
-        // same reason. ⚠️ They are on DIFFERENT TICKS — the mine is placed,
-        // settles for NavConstants.SjSetupTicks, and only then is jumped on —
-        // which is why they are two flags rather than one.
-        if (Path.MineFire)
-        {
-            // Straight down, like the rocket: a mine that lands at the feet is
-            // the whole geometry the measured -14.46 launch assumes.
-            aim = PathFollower.RocketAimDegrees;
-            fireKeys |= PlayerKeys.Attack;
-        }
-
-        // ⚠️ SPECIAL, not ATTACK: Minegun's User Event 2 detonates, and its
-        // User Event 1 would place a second mine. And this rides on the SAME
-        // tick as the follower's JUMP press, because Begin Step runs its jump
-        // branch before its right-click branch — so the blast stacks on
-        // `vspeed = -jumpStrength` rather than replacing it.
-        if (Path.MineDetonate)
-        {
-            aim = PathFollower.RocketAimDegrees;
-            fireKeys |= PlayerKeys.Special;
-        }
+        // ⚠️ The body lives on PathFollower rather than here because a second
+        // copy is a harness that measures a different bot — see
+        // PathFollower.ApplyLaunch and EdgeFlights.
+        PathFollower.ApplyLaunch(Path, ref fireKeys, ref aim);
 
         navKeys = ApplyHolds(world, slot, tick, navKeys);
 

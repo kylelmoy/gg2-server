@@ -85,6 +85,59 @@ public sealed class PathFollower
     /// </remarks>
     public const double RocketAimDegrees = 270;
 
+    /// <summary>
+    /// Applies the follower's launch requests to a bot's outgoing keys and aim —
+    /// the one place a route reaches the trigger.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The follower owns LEFT / RIGHT / JUMP / DOWN and cannot fire.</b>
+    /// A rocket jump and a mine jump each need one key from the combat half, so
+    /// the two are married after both have run — see <see cref="ScriptedBot"/>,
+    /// which is the caller this was extracted from.
+    /// <para>
+    /// ⚠️ <b>The aim is OVERWRITTEN rather than blended.</b> Whatever the bot was
+    /// shooting at, the arc it is about to fly is worth more than the shot, and
+    /// half an aim is a rocket into a wall beside its own feet.
+    /// <c>Character.events/Begin Step.xml</c> reads <c>aimDirection</c> when it
+    /// fires the weapon and reads the trigger bit in the same event on the same
+    /// tick, so the aim must be down <em>before</em> the trigger is seen —
+    /// writing both here is exactly that.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>SPECIAL, not ATTACK, for the detonation</b>: Minegun's User Event 2
+    /// detonates and its User Event 1 would place a second mine. And it rides on
+    /// the SAME tick as the follower's JUMP press, because Begin Step runs its
+    /// jump branch before its right-click branch — so the blast stacks on
+    /// <c>vspeed = -jumpStrength</c> rather than replacing it.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>It lives here rather than in <see cref="ScriptedBot"/> because a
+    /// second copy is a harness that measures a different bot.</b> Anything that
+    /// drives a <see cref="PathFollower"/> without this — a fixture, a flight
+    /// harness, an evaluator — gets a follower whose rocket and mine jumps are
+    /// requested and never fired, and the symptom is an arm that looks refused.
+    /// <see cref="EdgeFlights"/> is the harness that needs it.
+    /// </para>
+    /// </remarks>
+    public static void ApplyLaunch(BotPathState state, ref PlayerKeys keys, ref double aimDegrees)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+
+        if (state.RocketFire || state.MineFire)
+        {
+            // Straight down for both: a mine that lands at the feet is the whole
+            // geometry StickyModel.Launch's measured -14.46 assumes.
+            aimDegrees = RocketAimDegrees;
+            keys |= PlayerKeys.Attack;
+        }
+
+        if (state.MineDetonate)
+        {
+            aimDegrees = RocketAimDegrees;
+            keys |= PlayerKeys.Special;
+        }
+    }
+
     private readonly NavGraph _graph;
     private readonly NavSearch _search;
     private readonly List<int> _scratch = [];
@@ -1427,6 +1480,27 @@ public sealed class PathFollower
         }
 
         return found;
+    }
+
+    /// <summary>
+    /// Which edge this follower would steer for a hop of the route it is
+    /// carrying — <see cref="TryFindEdge"/>, in public.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>It exists so that a harness cannot answer the question a second
+    /// way.</b> A route is a list of nodes and a node pair can carry several
+    /// edges; picking the wrong one of them was a live bug on the shipped graphs
+    /// for eight phases (docs/TRAPS-BOTS.md, "A route is a list of NODES"), and
+    /// the tie-break that fixes it — strictly cheapest, first-in-order on ties,
+    /// resolved against <see cref="BotPathState.PlanQuery"/> rather than the live
+    /// one — is exactly the kind of rule a re-implementation drifts away from.
+    /// <see cref="EdgeFlights"/> asks this before it flies anything, so a flight
+    /// that reports a refusal is a refusal of the edge it names.
+    /// </remarks>
+    public bool TryResolveHop(BotPathState state, int from, int to, out NavEdge edge)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        return TryFindEdge(_graph, state, from, to, out edge);
     }
 
     /// <summary>
