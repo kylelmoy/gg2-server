@@ -480,6 +480,73 @@ that the opponent's fire does not reach — and a flat one-room map does not.
 ⚠️ **So an experiment that reports "the opponent model changes nothing" from
 `gg_debug` has measured the map.** Run that comparison on `ctf_2dfort`.
 
+### ⬅️ DESIGNED, NOT BUILT: the shadow search slot
+
+**Asked for by `gg2-rl` 2026-08-29, deferred by the user pending a cheaper
+experiment.** Recorded here so the decision has a design attached rather than
+being re-derived.
+
+**The problem it solves, measured.** Phase 2's first cloned policy wins **12.5%
+[10.5%, 14.8%]** where the search wins **76.9%**, against a target of 69.2% —
+89,454 rows, held-out exact match 0.422. Three explanations were tested and
+eliminated:
+
+| ruled out | evidence |
+|---|---|
+| capacity | wider is **worse** held-out: 0.422 at hidden 64, 0.401 at 256, 0.378 at 512 |
+| an uninformative observation | 1-NN over 71,942 rows scores **0.300** against the network's 0.422, so it generalises past a memorised lookup — `ObservationWriter` is not the bottleneck |
+| failure to learn the basics | the policy beats `EnvDriver.Idle` **82.4%** as a soldier and **100%** as a scout, and scores 5.0% / 5.2% against a scripted tier 5 |
+
+⚠️ **It can aim and fire, and collapses only against something that reacts.** That
+is compounding error: one wrong action reaches a state the search never visited,
+the next prediction is worse there, and it snowballs. ✅ `EnvDriver.Idle` earned
+its keep exactly as its own remark predicts — it is what separates "has not
+learned to shoot" from "cannot recover".
+
+⚠️ **One detail worth keeping**: the cloned soldier loses **6 of 60** duels to an
+opponent that never fires — self-inflicted splash. The search respects its own
+blast radius through `Rollout`'s damage-taken-at-equal-weight term and the clone
+learned that imperfectly. **Splash safety is one of the harder things to distil**,
+and it is a distinct failure from being outfought.
+
+#### The design, and the ordering question is already answered
+
+A slot the **client** drives while `RolloutSearch` still runs and reports what it
+*would* have done — DAgger's aggregation step, and `gg2-rl/docs/DESIGN.md`'s own
+step 3. The policy plays, the search grades, and the next training round sees the
+states the policy actually visits.
+
+- `DuelSpec` gains a per-side shadow flag. The search is **constructed but not
+  installed as the input source**.
+- ✅ **Polled after the action repeat, before `Observations` is written** — which
+  labels *exactly* the observation the reply carries. `gg2-rl` flagged this as
+  possibly awkward; it is not. `EnvBatch.Step` runs the whole repeat and then
+  `EnvServer.Observations` reads the post-step world, so "the search's opinion of
+  the state as the policy left it" is the **natural** ordering rather than a
+  contortion.
+- Reported in the existing **opt-in `StepScored`** block, extended per agent with
+  the argmax action — ⚠️ **sent explicitly rather than left to be derived from the
+  distribution's index**, because recovering it otherwise needs a model of
+  `RolloutSearch`'s candidate enumeration inside the trainer, which is the thing
+  the whole seam exists to avoid.
+- Protocol v7.
+
+⚠️ **Cost: a labelling batch costs what a `Rollout` batch costs** (~2.9 ms a
+decision, Release), because the search runs on a slot that is not using it. Opt-in
+only; never a default.
+
+#### ⬅️ Why it is deferred
+
+`gg2-rl` is training on the `StepScored` distribution instead of a one-hot on the
+argmax — **entirely its own work, next on its list regardless**. That attacks the
+same 0.422 exact-match number from the other end: a near-miss stops being scored
+as a total miss. **Measuring that first says how much the shadow slot actually
+buys**, and it costs nothing but a run that was happening anyway.
+
+⚠️ This is the same discipline that killed `RolloutOptions.CommitTicks` and the
+horizon-45 claim on the same day: **measure before building**, especially when the
+thing to be built is a protocol version.
+
 #### ⚠️ The starting facing was in the decoder only, and is now on the character
 
 `Reset` arranges for both agents to start facing one another, because facing is
