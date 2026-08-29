@@ -181,6 +181,30 @@ public sealed class SeparationBandTests(Xunit.Abstractions.ITestOutputHelper out
         Assert.True(
             banded > spawned * 2,
             $"{map}: banded {banded} is not decisively more than spawn-sampled {spawned}");
+
+        // ⚠️ PINNED EXACTLY, and this is the gate on the DRAW rather than on the
+        // fight. Everything here is seeded — the world's GmlRandom, the scripted
+        // bots' streams, the physics — so the total is a pure function of the
+        // sequence of Random.Next calls the placement makes. Nothing else in the
+        // suite would notice if that sequence changed, and it nearly went
+        // unnoticed: PlaceInBand moved from DuelEnv to ScenarioWorld and the only
+        // reason the move is known to be draw-identical is that these three
+        // numbers were compared by hand before and after. `gg2-rl` asked whether
+        // the move invalidated a run in flight; without this it would have been an
+        // argument rather than an answer.
+        //
+        // ⚠️ A failure here is the RE-RECORD, and it means the placement draw
+        // moved — which makes every duel figure taken against the old one
+        // incomparable, including another lane's. Say so in the commit.
+        var expected = map switch
+        {
+            "ctf_2dfort" => 1614.685077306641,
+            "arena_lumberyard" => 1112.9259714662962,
+            "koth_harvest" => 1008.6998265983821,
+            _ => throw new ArgumentOutOfRangeException(nameof(map), map, "no recorded total for this map"),
+        };
+
+        Assert.Equal(expected, banded);
     }
 
     /// <summary>Total damage over eight duels of two scripted bots.</summary>
