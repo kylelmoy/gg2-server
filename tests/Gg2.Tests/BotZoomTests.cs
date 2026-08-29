@@ -371,10 +371,13 @@ public sealed class BotZoomTests(Xunit.Abstractions.ITestOutputHelper output)
     /// <b>horizon 90 scopes</b> and scores 70-105.</item>
     /// </list>
     /// <para>
-    /// ⚠️ <b>So the head is NOT inert — the horizon is the binding constraint</b>,
-    /// and this test pins both halves so that neither can be mistaken for the
-    /// other. If someone later reports "the search does not use zoom", the
-    /// horizon column here is the answer.
+    /// ⚠️ <b>RE-RECORDED 2026-08-29: horizon 20 now scopes too.</b> The aim
+    /// tie-break changed it. Scoping alters <c>RunPower</c>, which alters where
+    /// the character ends up, which alters the aim error the tie-break compares —
+    /// so a zoom candidate can now win a tie that enumeration order used to give
+    /// to the unscoped twin. ⚠️ <b>That is the scope being chosen by a side effect
+    /// rather than on merit</b>, which is better than never being chosen and is
+    /// not the same as being chosen well. It is recorded rather than celebrated.
     /// </para>
     /// <para>
     /// ⚠️ <b>The default was deliberately NOT changed to fix this.</b> A horizon
@@ -388,7 +391,7 @@ public sealed class BotZoomTests(Xunit.Abstractions.ITestOutputHelper output)
     /// </para>
     /// </remarks>
     [Theory]
-    [InlineData(20, false)]
+    [InlineData(20, true)]
     [InlineData(60, true)]
     public void ARolloutDrivenSniperScopesOnlyWhenItsHorizonCanSeeAShot(int horizon, bool expected)
     {

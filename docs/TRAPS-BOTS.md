@@ -2570,7 +2570,43 @@ corrections.** That is not a strategy, it is enumeration order showing through �
 and it is the same signature as the blind tie-break, reaching decisions that are
 *not* blind.
 
-##### ⚠️ It is NOT fixed, because the obvious fix does not clearly win
+##### ✅ FIXED 2026-08-29 — a lexicographic aim tie-break
+
+Among candidates whose scores are **exactly equal**, prefer the one that leaves
+the searcher pointing closest to its nearest live enemy. ⚠️ **Damage stays the
+only objective**: it is compared only on a tie, so no decision the score settles
+changes and the search cannot trade a hit for a bearing. What it replaces is loop
+order.
+
+**Paired A/B, `ctf_2dfort` banded, tier 5, 60 duels a cell, same seeds:**
+
+| class | before | after |
+|---|---|---|
+| scout | 49-8-3, hard-left 0.892 | **58-1-1**, 0.137 |
+| soldier | 42-5-13, hard-left 0.967 | 42-6-12, 0.048 |
+
+✅ **And the blind fraction falls** — scout 0.810 → 0.649, soldier 0.902 → 0.841,
+and on a fixed 160px soldier duel **0.84 → 0.29** — because better aim lands more
+shots inside the horizon. ⚠️ **That is the signature `RolloutOptions.CommitTicks`
+was built to produce and failed to**: blind falling without win rate falling,
+reached by a different mechanism.
+
+✅ **It also kills `gg2-rl`'s `[0,0,0,0,0,0]` corpus signature.** A blind decision
+now points at the enemy rather than turning hard left, so a blind row is no longer
+identifiable by its action at all — only by `BestScore == 0`. **That makes
+`BestScore` load-bearing rather than convenient.**
+
+⚠️ **Three tests were re-recorded** and one is worth knowing: the sniper now
+scopes at horizon 20, where it never did. Scoping changes `RunPower`, which
+changes where the character ends up, which changes the aim error the tie-break
+compares — so a zoom candidate can win a tie enumeration order used to give to its
+unscoped twin. **That is the scope being chosen by a side effect rather than on
+merit**, which is better than never being chosen and is not the same as being
+chosen well.
+
+##### ❌ The obvious fix, which does NOT win
+
+
 
 Putting no-turn first (`[7, 3, 11, 0, 14]` — same candidate set, different order,
 so ties resolve to *not turning*) removes the bias completely: hard-left share

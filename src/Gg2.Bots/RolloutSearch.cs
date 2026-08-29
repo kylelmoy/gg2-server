@@ -551,21 +551,28 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
         var savedAim = _decoder.Aim(slot);
         var best = EnvAction.Idle;
         var bestScore = double.NegativeInfinity;
+        var bestAimError = double.PositiveInfinity;
 
         for (var i = 0; i < candidates.Length; i++)
         {
             _decoder.SetAim(slot, savedAim);
 
-            var score = Rollout(world.Collision, slot, candidates[i]);
+            var score = Rollout(world.Collision, slot, candidates[i], out var aimError);
 
             // ⚠️ EVERY score is kept, not just the winner's. See LastScores: the
             // distribution is the thing that makes a search a better expert than
             // a reward sample, and it used to be discarded inside this loop.
             _scores[i] = score;
 
-            if (score > bestScore)
+            // ⚠️ LEXICOGRAPHIC: damage first, aim error only as a TIE-BREAK. It
+            // cannot change any decision where the scores differ, so it cannot
+            // trade away the thing the search is actually optimising — it only
+            // replaces enumeration order on the decisions that were arbitrary.
+            // See the aim-tie-break remarks on Rollout.
+            if (score > bestScore || (score == bestScore && aimError < bestAimError))
             {
                 bestScore = score;
+                bestAimError = aimError;
                 best = candidates[i];
             }
         }
@@ -602,7 +609,35 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
     /// and takes none — so the remaining ticks look free.
     /// </para>
     /// </remarks>
-    private double Rollout(CollisionWorld collision, int slot, EnvAction action)
+    /// <param name="aimError">
+    /// Absolute degrees between where this candidate leaves the searcher pointing
+    /// and the bearing to its nearest live enemy, at the end of the rollout.
+    /// <see cref="double.PositiveInfinity"/> when there is nobody to point at.
+    /// </param>
+    /// <remarks>
+    /// ⚠️ <b>The tie-break, and it exists because the search is INDIFFERENT on
+    /// most of its decisions.</b> Measured by <c>gg2-rl</c> over a real corpus:
+    /// <b>85.2%</b> of non-blind decisions have the top two candidates tied, a
+    /// median of <b>6</b> actions share the best score, and only <b>7.8%</b> have
+    /// a unique best. Ties went to the first candidate, and
+    /// <see cref="BuildCandidates"/> loops aim outermost from bin 0 — a hard left
+    /// turn — so the bot took <b>0.966</b> (soldier) and <b>0.929</b> (scout) of
+    /// its decisions with the aim swung hard left. <b>Its aiming was enumeration
+    /// order, not scoring.</b>
+    /// <para>
+    /// ⚠️ <b>Damage stays the only objective.</b> This is compared only when the
+    /// scores are exactly equal, so no decision the score can settle is changed,
+    /// and the search cannot trade a hit for a better bearing. What it replaces is
+    /// loop order.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Measured at the END of the rollout, not the start.</b> Where a
+    /// candidate leaves the character pointing is what the next decision inherits;
+    /// the bearing it started from is the same for every candidate and would
+    /// discriminate nothing.
+    /// </para>
+    /// </remarks>
+    private double Rollout(CollisionWorld collision, int slot, EnvAction action, out double aimError)
     {
         _fork = _baseline;
 
@@ -648,7 +683,40 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
             score += _events.DamageDealt[slot] - _events.DamageTaken[slot];
         }
 
+        aimError = AimErrorToNearestEnemy(collision, slot);
         return score;
+    }
+
+    /// <summary>
+    /// How far off the searcher is pointing from its nearest live enemy, in the
+    /// forked world, in absolute degrees.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ Infinity rather than 0 when there is nobody to aim at, so "no target"
+    /// loses every tie-break to "some target, badly aimed" rather than winning
+    /// them all. A zero here would make every candidate equal again the moment the
+    /// searcher is alone, which is the state this whole tie-break exists to stop
+    /// being decided by loop order.
+    /// </remarks>
+    private double AimErrorToNearestEnemy(CollisionWorld collision, int slot)
+    {
+        if (!_fork.IsAlive(slot))
+            return double.PositiveInfinity;
+
+        var view = new WorldView(in _fork, collision);
+        Span<int> found = stackalloc int[1];
+
+        if (view.NearestEnemies(slot, found) == 0)
+            return double.PositiveInfinity;
+
+        ref readonly var self = ref _fork.Characters[slot];
+        ref readonly var enemy = ref _fork.Characters[found[0]];
+
+        var bearing = Gml.PointDirection(self.X, self.Y, enemy.X, enemy.Y);
+        var aim = self.NetAimDirection * 360.0 / 65536.0;
+
+        // Signed shortest angle into (-180, 180], then absolute.
+        return Math.Abs(((bearing - aim + 540.0) % 360.0) - 180.0);
     }
 
     /// <summary>

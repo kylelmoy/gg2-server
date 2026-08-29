@@ -530,6 +530,68 @@ public sealed class RolloutSearchTests
             + "CommitTicks is not reaching the rollout");
     }
 
+    /// <summary>
+    /// ⚠️ <b>Among tied candidates the search points at the enemy, not hard
+    /// left</b> — the aim tie-break, and it decides most of this bot's decisions.
+    /// </summary>
+    /// <remarks>
+    /// <c>gg2-rl</c> measured, over a real corpus and only visible once the
+    /// candidate actions reached the wire: <b>85.2%</b> of non-blind decisions
+    /// have the top two candidates tied, a median of <b>6</b> actions share the
+    /// best score, and only <b>7.8%</b> have a unique best. Ties went to the first
+    /// candidate and <see cref="RolloutSearch"/> enumerates aim outermost from bin
+    /// 0 — hard left — so the bot took aim bin 0 on <b>0.966</b> (soldier) and
+    /// <b>0.929</b> (scout) of its decisions. <b>Its aiming was enumeration order,
+    /// not scoring.</b>
+    /// <para>
+    /// ⚠️ <b>Lexicographic, so damage stays the only objective.</b> The tie-break
+    /// is compared only when scores are exactly equal, so it cannot change a
+    /// decision the score settles and cannot trade a hit for a bearing. That is
+    /// why it was shippable where reordering the aim ladder was not: reordering
+    /// helped the scout and hurt the soldier, because it answers a tie with "do
+    /// not turn" rather than "point at the target".
+    /// </para>
+    /// <para>
+    /// <b>Paired A/B, <c>ctf_2dfort</c> banded, tier 5, 60 duels a cell, same
+    /// seeds:</b> scout <b>49-8-3 → 58-1-1</b> with hard-left share 0.892 →
+    /// 0.137; soldier <b>42-5-13 → 42-6-12</b> with 0.967 → 0.048. No class
+    /// degrades. ✅ <b>And the blind fraction falls too</b> — scout 0.810 → 0.649,
+    /// soldier 0.902 → 0.841 — because better aim lands more shots inside the
+    /// horizon. That is the signature <c>RolloutOptions.CommitTicks</c> was built
+    /// to produce and failed to.
+    /// </para>
+    /// <para>
+    /// ⚠️ Asserted on a state where the search is INDIFFERENT, which is the only
+    /// state the tie-break can act in. A fresh soldier cannot fire inside its
+    /// horizon, so every candidate scores zero — and the action taken must now be
+    /// one that points at the enemy rather than candidate 0.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void AmongTiedCandidatesTheSearchPointsAtTheEnemy()
+    {
+        var world = Load();
+        var red = world.Place(PlayerClass.Soldier, Team.Red, RedX, StandY);
+        world.Place(PlayerClass.Soldier, Team.Blue, RedX + 160, StandY);
+
+        var bot = new RolloutSearch();
+        bot.Poll(new WorldView(in world.State, world.Collision), red, 0);
+
+        // The premise: this really is a tie. Without it the assertion below could
+        // be satisfied by a scored decision and would prove nothing.
+        Assert.Equal(0, bot.LastBestScore);
+
+        var distinct = new HashSet<double>();
+        foreach (var score in bot.LastScores)
+            distinct.Add(score);
+
+        Assert.Single(distinct);
+
+        // ⚠️ Not hard left. Blue is due east of red and Reset-style facing is not
+        // in play here, so "point at the enemy" is "do not turn".
+        Assert.Equal(ActionDecoder.AimCentreBin, bot.LastAction.AimDelta);
+    }
+
     /// <summary>Presses nothing, for ever — the control for the fight test.</summary>
     private sealed class Passive : IInputSource
     {

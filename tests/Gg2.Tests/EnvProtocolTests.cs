@@ -493,15 +493,13 @@ public sealed class EnvProtocolTests : IDisposable
         Assert.True(best != 0, "the search never scored anything; the argmax would be the blind tie-break");
         Assert.Equal(redCount, scores.Length);
 
-        var bestAt = 0;
-        for (var i = 1; i < scores.Length; i++)
+        var max = scores[0];
+        foreach (var v in scores)
         {
-            if (scores[i] > scores[bestAt])
-                bestAt = i;
+            if (v > max)
+                max = v;
         }
 
-        // THE ALIGNMENT: the action at the distribution's argmax is the action the
-        // reward block says the search took.
         var taken = (
             BinaryPrimitives.ReadInt32LittleEndian(scored.AsSpan(componentsAt + 20)),
             BinaryPrimitives.ReadInt32LittleEndian(scored.AsSpan(componentsAt + 24)),
@@ -510,7 +508,24 @@ public sealed class EnvProtocolTests : IDisposable
             BinaryPrimitives.ReadInt32LittleEndian(scored.AsSpan(componentsAt + 36)),
             BinaryPrimitives.ReadInt32LittleEndian(scored.AsSpan(componentsAt + 40)));
 
-        Assert.Equal(candidates[bestAt], taken);
+        // ⚠️ RE-RECORDED 2026-08-29. This used to assert the taken action was the
+        // candidate at the FIRST argmax index, and that stopped being true when
+        // RolloutSearch gained its aim tie-break: the search now picks among tied
+        // candidates on aim error rather than on enumeration order, so the action
+        // it takes is IN the argmax set without being the earliest member of it.
+        // gg2-rl measured a median of SIX actions sharing the best score, so
+        // "the argmax" was never a single thing to begin with.
+        //
+        // ⚠️ THE ALIGNMENT CLAIM SURVIVES AND IS THE SAME ONE: look the taken
+        // action up in the candidate table and its score must be maximal. A table
+        // returned in a different order from the scores still fails — the action
+        // is found at an index whose score is not the max — which is what the
+        // reversal mutation checks.
+        var takenAt = Array.FindIndex(
+            candidates, c => c == taken);
+
+        Assert.True(takenAt >= 0, "the action taken is not in the candidate table at all");
+        Assert.Equal(max, scores[takenAt]);
     }
 
     /// <summary>A handshake agrees on everything a checkpoint depends on.</summary>
