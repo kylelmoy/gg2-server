@@ -46,13 +46,60 @@ public static class EnvProtocol
     /// <c>PROTOCOL_UUID</c> idiom, not a warning.
     /// </summary>
     /// <remarks>
+    /// <b>v3, 2026-08-28</b>: <c>MakeBatch</c> gains four fields at the END of
+    /// its body — a <c>RolloutOpponent</c> per side as i32, then a minimum and a
+    /// maximum separation as f64. ⚠️ <b><c>ComponentBytes</c> does NOT move</b>,
+    /// so unlike the v2 bump a client only has to lengthen what it sends; every
+    /// reply it already slices is byte-identical. Both fields answer requests
+    /// <c>gg2-rl</c>'s phase 1 was blocked on: reporting the search baseline
+    /// under two opponent models, and sampled placements that are actually within
+    /// engagement range of each other.
+    /// <para>
     /// <b>v2, 2026-08-28</b>: <c>MakeBatch</c> carries a driver and a skill tier
     /// per side, and every reward block carries the action that side actually
     /// took plus whether it is reproducible. ⚠️ <b>A v1 client is refused rather
     /// than tolerated</b> — the reward block changed length, so a v1 reader would
     /// slice a v2 reply into plausible nonsense rather than failing.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Two bumps in a day is a cost paid by somebody else</b>, so v3
+    /// carries both open asks at once rather than one now and one later. Adding
+    /// a field to the tail of one message is not a reason to skip the bump: a
+    /// short frame would read the new fields out of whatever followed, and the
+    /// separation band's f64 would be the difference between spawn-point
+    /// sampling and nav-node sampling read off uninitialised bytes.
+    /// </para>
     /// </remarks>
-    public const int Version = 2;
+    public const int Version = 3;
+
+    /// <summary>
+    /// Bytes of <c>MakeBatch</c> body after the map name — the fixed tail.
+    /// </summary>
+    /// <remarks>
+    /// Two classes, two drivers, two tiers and two rollout opponents at four
+    /// bytes (32); the decision cap, the action repeat, the seed and the thread
+    /// count at four (16); four coordinates and two separations at eight (48).
+    /// <para>
+    /// ⚠️ <b>It lives beside <see cref="Version"/> so that the two cannot move
+    /// apart, and that is not tidiness — it is the gate for a bug this file
+    /// already shipped.</b> <c>dbe8b15</c> added v3's four fields to the body,
+    /// to <c>EnvServer.MakeBatch</c>, to both clients and to
+    /// <c>docs/ENV.md</c>, and left <see cref="Version"/> at 2. The handshake
+    /// then refused the client that was correct and admitted the one that was
+    /// stale, which failed one layer later with an error naming v2 as the thing
+    /// it should be speaking — which it already was. Found by <c>gg2-rl</c>,
+    /// from outside, by sending <c>Hello(3)</c>.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>The version exists to name a mismatch at <see cref="EnvMessage.Hello"/>.</b>
+    /// A frame-length check is a backstop for a mis-framed client, not a
+    /// substitute for it: it fires after the handshake has already said the two
+    /// sides agree. <c>EnvProtocolTests.TheVersionAndTheFrameLayoutMoveTogether</c>
+    /// pins this pair, so changing the body without changing the version is a
+    /// failing test rather than a silent lie.
+    /// </para>
+    /// </remarks>
+    public const int MakeBatchFixedBytes = 32 + 16 + 48;
 
     /// <summary>
     /// Bytes of reward components per agent in every reply.

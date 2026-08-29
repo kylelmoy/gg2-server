@@ -329,6 +329,39 @@ open asks at once. The bump is not optional for a tail-append: a short frame
 would read the new fields out of whatever followed it, and any non-zero maximum
 separation moves placement off the spawn points entirely.
 
+#### ⚠️⚠️ v3 shipped in `dbe8b15` with `Version` still at 2
+
+The four fields went into the body, into `EnvServer.MakeBatch`, into both clients
+and into this document. **The constant was never written.** The edit existed, was
+reviewed, and was not run; the commit message, this file and the message to
+`gg2-rl` then all asserted it had landed.
+
+⚠️ **It inverted the handshake.** A client speaking the real layout sent
+`Hello(3)` and was **refused**; a client speaking the stale one handshook
+**successfully** and failed its first `MakeBatch` on the frame-length check —
+with an error naming v2 as the thing it should be speaking, which it already was.
+**The version exists so a mismatch is named at `Hello`.** A length check is a
+backstop for a mis-framed client, not a substitute for a version.
+
+⚠️ **Nothing here could have caught it, and that is the shape worth remembering.**
+Every test in `EnvProtocolTests` builds its frames from the same constants the
+server reads, so client and server agreed with each other about a layout the
+version misdescribed — self-consistent, and false. Only a caller with an
+independent notion of the version could see it, and one did: `gg2-rl` sent
+`Hello(3)` and got refused. Same failure class as the `--nav` drop below, as
+`docs/TRAPS-SIMULATION.md`'s arena claim, and as the sampled-placement row — **a
+claim the repo makes about itself, that only somebody acting on it can falsify.**
+
+The gate is `EnvProtocolTests.TheVersionAndTheFrameLayoutMoveTogether`, which
+asserts `Version` and `MakeBatchFixedBytes` **together**, and
+`EnvProtocol.MakeBatchFixedBytes` now lives beside `Version` so the body cannot
+grow without somebody editing a line with the version on it.
+
+⚠️ **The process lesson is smaller and blunter: a scripted edit that was written
+is not a scripted edit that was run.** Verify the file, never the script's exit
+code — three other edits in the same commit were grepped afterwards and this one
+was not.
+
 #### ⛔ `serve` parsed `--nav` and threw it away
 
 `Program.cs` read `--nav` into a local and then built `new EnvServer(maps)`

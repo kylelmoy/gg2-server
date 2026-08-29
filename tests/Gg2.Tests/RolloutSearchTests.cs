@@ -322,6 +322,33 @@ public sealed class RolloutSearchTests
     /// draw</b> against <see cref="ScriptedBot"/> at tier 5, soldier and scout.
     /// So one duel is a weak sample of a wide margin rather than a coin flip.
     /// </para>
+    /// <para>
+    /// ⚠️ <b>RE-TAKEN 2026-08-29, because that figure was owed two corrections.</b>
+    /// It ran under <c>new RolloutSearch()</c>, which was silently
+    /// <see cref="RolloutOpponent.Idle"/> rather than the documented
+    /// <see cref="RolloutOpponent.HoldLastInput"/>; and <c>gg2-rl</c> reported
+    /// that a decision cap manufactures draws (its own search-vs-tier-5 on
+    /// <c>ctf_2dfort</c> reads <b>2-0-14 at a 120 cap, 9-2-5 at 300, 12-2-2 at
+    /// 600</b>), so any duel figure has to be shown not to be measuring its clock.
+    /// Twelve duels here, soldier and scout, seeds 1-6:
+    /// </para>
+    /// <list type="bullet">
+    /// <item><b>HoldLastInput: 11-1-0. Idle: 10-0-2.</b> The wide margin survives
+    /// the model correction, so the original number was right about the thing it
+    /// was quoted for even though it named the wrong opponent model.</item>
+    /// <item><b>Identical at 600 and 1,800 ticks.</b> Not cap-limited — the draws
+    /// here are genuine stalemates, and this scenario has almost none.</item>
+    /// </list>
+    /// <para>
+    /// ⚠️⚠️ <b>AND THE POSITION MATTERS FAR MORE THAN EITHER.</b> The same twelve
+    /// duels — same map, same classes, same tier, same budget — run at
+    /// <c>x = 1500</c> instead of <see cref="RedX"/>'s 600 give <b>4-2-6 and
+    /// 3-0-9</b>, budget-invariant out to 5,400 ticks. One spot on
+    /// <c>gg_debug</c> is an 11-1 rout and another is half stalemates. <b>A duel
+    /// figure names its position or it names nothing</b> — that swing is an order
+    /// of magnitude past the opponent model's, which on this map is zero (see
+    /// <c>RolloutOpponentSelectionTests</c>).
+    /// </para>
     /// </remarks>
     [Fact]
     public void ItBeatsTheScriptedBotInADuel()

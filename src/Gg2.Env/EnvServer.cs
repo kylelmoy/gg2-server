@@ -215,16 +215,15 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
         var map = System.Text.Encoding.UTF8.GetString(body.Slice(at, nameLength));
         at += nameLength;
 
-        // ⚠️ The fixed tail, checked as one number rather than per read. Two
-        // classes and two drivers and two tiers and two rollout opponents at 4
-        // bytes (32), the cap, the repeat, the seed and the thread count at 4
-        // (16), four coordinates and two separations at 8 (48).
-        const int Fixed = 32 + 16 + 48;
-
-        if (body.Length < at + Fixed)
+        // ⚠️ The fixed tail, checked as one number rather than per read, and the
+        // number lives on EnvProtocol beside the version — see
+        // EnvProtocol.MakeBatchFixedBytes for why those two are kept together.
+        // This check is the backstop for a mis-framed client; the VERSION is what
+        // names a mismatch, and it names it at Hello.
+        if (body.Length < at + EnvProtocol.MakeBatchFixedBytes)
         {
             throw new InvalidDataException(
-                $"MakeBatch wants {at + Fixed} bytes and got {body.Length}; "
+                $"MakeBatch wants {at + EnvProtocol.MakeBatchFixedBytes} bytes and got {body.Length}; "
                 + $"this build speaks protocol v{EnvProtocol.Version}");
         }
 

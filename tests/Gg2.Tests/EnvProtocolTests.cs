@@ -154,6 +154,86 @@ public sealed class EnvProtocolTests : IDisposable
             Real(maxSeparation));
     }
 
+    /// <summary>
+    /// ⚠️ <b>The version and the frame layout are pinned to each other</b>, so
+    /// changing one without the other is a failing test rather than a silent lie.
+    /// </summary>
+    /// <remarks>
+    /// <b>This is the gate for a bug that shipped.</b> <c>dbe8b15</c> added
+    /// protocol v3's four <c>MakeBatch</c> fields to the body, to
+    /// <c>EnvServer.MakeBatch</c>, to both clients and to <c>docs/ENV.md</c> —
+    /// and left <see cref="EnvProtocol.Version"/> at 2. Every one of those edits
+    /// was consistent with every other; the constant was simply never written,
+    /// and the commit message, the document and the message to <c>gg2-rl</c> all
+    /// asserted that it had been.
+    /// <para>
+    /// ⚠️ <b>What it cost was the handshake's whole purpose.</b> A client
+    /// speaking the real layout sent <c>Hello(3)</c> and was <em>refused</em>;
+    /// a client speaking the stale one handshook <em>successfully</em> and then
+    /// failed its first <c>MakeBatch</c> on the frame-length check — with an
+    /// error naming v2 as the thing it should be speaking, which it already was.
+    /// The version exists so a mismatch is named at
+    /// <see cref="EnvMessage.Hello"/>; a length check is a backstop for a
+    /// mis-framed client, not a substitute for it.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Nothing in this repo could have caught it, and that is the point of
+    /// the pin.</b> Every test here builds its own frames from the same constants
+    /// the server reads, so client and server agreed with each other about a
+    /// layout the version misdescribed. Only a caller with an independent notion
+    /// of the version — <c>gg2-rl</c>, whose <c>test_protocol.py</c> pins these
+    /// against its own — could see it. This test is the local half of that:
+    /// the two numbers are asserted <em>together</em>, so the body cannot grow
+    /// without somebody editing a line with the version on it.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void TheVersionAndTheFrameLayoutMoveTogether()
+    {
+        // ⚠️ Change BOTH or neither. If you are here because you added a field to
+        // MakeBatch, the version below is the other half of that change — and
+        // gg2-rl has to be told, because its suite pins these from outside.
+        Assert.Equal(3, EnvProtocol.Version);
+        Assert.Equal(96, EnvProtocol.MakeBatchFixedBytes);
+
+        // The reward block is the other half of the wire the trainer slices, and
+        // v3 deliberately did NOT move it — stated here so a change to it is a
+        // conscious edit to this same test rather than a surprise downstream.
+        Assert.Equal(44, EnvProtocol.ComponentBytes);
+
+        // And the handshake reports the same number this file pins, rather than
+        // one computed somewhere else.
+        Assert.Equal(EnvProtocol.Version, EnvProtocol.Handshake.Current.ProtocolVersion);
+    }
+
+    /// <summary>
+    /// A body one field short of the layout is refused, and the message names the
+    /// version this build actually speaks.
+    /// </summary>
+    /// <remarks>
+    /// The backstop, gated so that it stays a backstop: it exists for a
+    /// mis-framed client, and a client that is merely a version behind should
+    /// have been stopped at <see cref="EnvMessage.Hello"/> long before here.
+    /// </remarks>
+    [Fact]
+    public void AShortMakeBatchIsRefusedWithTheVersionInIt()
+    {
+        Send(EnvMessage.Hello, Int(EnvProtocol.Version));
+        Receive();
+
+        // A v2-shaped body: everything except the four fields v3 appended.
+        var full = MakeBatchBody(1);
+        Send(EnvMessage.MakeBatch, full.AsSpan(0, full.Length - 24));
+
+        var reply = Receive();
+        Assert.Equal((byte)EnvMessage.Error, reply[0]);
+
+        var length = BinaryPrimitives.ReadInt32LittleEndian(reply.AsSpan(1));
+        var reason = System.Text.Encoding.UTF8.GetString(reply, 5, length);
+
+        Assert.Contains($"protocol v{EnvProtocol.Version}", reason, StringComparison.Ordinal);
+    }
+
     /// <summary>A handshake agrees on everything a checkpoint depends on.</summary>
     [Fact]
     public void HelloAgreesOnTheVersionsAndTheShape()
