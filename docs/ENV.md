@@ -529,7 +529,8 @@ eliminated:
 | failure to learn the basics | the policy beats `EnvDriver.Idle` **82.4%** as a soldier and **100%** as a scout, and scores 5.0% / 5.2% against a scripted tier 5 |
 
 ⚠️ **It can aim and fire, and collapses only against something that reacts.** That
-is compounding error: one wrong action reaches a state the search never visited,
+is **❌ NOT compounding error — see the result below.** The story was: one wrong
+action reaches a state the search never visited,
 the next prediction is worse there, and it snowballs. ✅ `EnvDriver.Idle` earned
 its keep exactly as its own remark predicts — it is what separates "has not
 learned to shoot" from "cannot recover".
@@ -597,6 +598,64 @@ candidates, best **15.2 at index 6**, runner-up **15.2 at index 7**, margin
 **0.0**. Two candidates the search considered exactly equal, one recorded as the
 label, and a policy marked wrong for choosing the other. **A one-hot is a lie on
 every such row.**
+
+#### ⛔ THE ANSWER: expert iteration made the policy WORSE, by 7.2 points
+
+**2026-08-29.** 29,443 labelled states — **ten times** the agreed "few thousand" —
+aggregated with a 69,998-row control from the same expert build:
+
+| corpus | optimal-set | win |
+|---|---|---|
+| control alone (search-driven states) | 0.616 | **19.4%** |
+| control + policy states | 0.560 | **12.2%** |
+| policy states alone | 0.483 | — |
+
+**Not "less than +5". The wrong direction.** ✅ **The stopping rule agreed before
+the build therefore applies**: behaviour cloning of this search does not reach
+75.8%, and self-play initialised from the distilled policy is the path rather
+than a refinement.
+
+⚠️ **The feature was checked first and is not the problem.** Every shadow label
+lies inside the tied-best candidate set, verified across the socket against the
+distribution and the candidate table; the pairing is the one specified here; and
+the blind fraction on shadow data is 75.0% at scale against 78% search-driven, so
+a driving policy does give the search more to score.
+
+##### ❌ AND THE COMPOUNDING-ERROR STORY IS WRONG
+
+This document said the failure was "one wrong action reaches a state the search
+never visited". **The geometry says otherwise**: mean distance from a
+policy-visited state to its nearest search-visited state is **3.19**, against
+**2.97** control-to-control. **The policy is not off-distribution.** Its states are
+simply **harder to label consistently** — a policy trained on them alone scores
+0.483 against the control's 0.616.
+
+⚠️ **So the mechanism DAgger exists to fix is not the one operating here**, which
+is why the fix for it made things worse rather than merely failing to help. The
+`EnvDriver.Idle` result still stands (82.4% / 100% against a statue, ~5% against a
+reactive opponent), so the policy really does fail only against things that react
+— but not because it has left the expert's state space. **No replacement mechanism
+is claimed; inventing one here would be exactly the kind of plausible story this
+project keeps having to retract.**
+
+##### The four levers, all against the same 56-point gap
+
+| lever | effect |
+|---|---|
+| more data (2.8× rows) | +3 exact-match |
+| soft targets | +4 to +5 win |
+| a better expert (+7.3 to it) | +6 win |
+| **expert iteration** | **−7.2 win** |
+
+##### ⚠️ The one untested variant, named rather than implied
+
+This was **β = 0** expert iteration: pure policy rollouts from a 19.4% policy. The
+classical formulation mixes expert and policy actions early, precisely because a
+weak policy visits unhelpful states. ⚠️ **But that rationale is about states being
+off-distribution, and the geometry above says they are not** — so a β schedule
+would likely change the magnitude and not the sign, and −7.2 is a long way from
+the +56 the conclusion turns on. **Recorded as a caveat that does not weaken the
+conclusion, rather than as an untried alternative that might.**
 
 #### ✅ Built as a decisive experiment, with the stopping rule agreed first
 
