@@ -2888,6 +2888,60 @@ reasons:
 It is excellent at what phase 0 uses it for — determinism, throughput, exact tick
 counts. Evaluate on `ctf_2dfort`.
 
+### ⚠️ A CHECK THAT CANNOT DISAGREE — the same bug in three places in one day
+
+**2026-08-29.** Three defects this session were one shape: **something compared
+against a copy of itself.**
+
+| where | the comparison |
+|---|---|
+| `EnvProtocol.Version` | the wire's layout checked against the constant that described it, both edited by the same hand |
+| `HelloAgreesOnTheVersionsAndTheShape` | the advertised head count asserted against a **literal 5** — the advertisement checked against a copy of the advertisement |
+| a check *this repo proposed* to `gg2-rl` | the policy's per-head argmax compared against "its highest-probability action under the full joint implied by the marginals" |
+
+⚠️ **The third is the purest and it was mine.** The joint implied by independent
+marginals **is their product**, and the argmax of a product of independent
+marginals **is** the per-head argmax. Over a full cross-product candidate set the
+two objects are identical by construction and would agree **100% of the time on
+every state**. It would have looked like strong evidence against the coupling
+hypothesis and been evidence of nothing. `gg2-rl` worked that out rather than
+running it.
+
+- ⚠️ **Before running a check, ask what result would falsify it.** If no input
+  produces disagreement, it is not a measurement.
+- ⚠️ **The dangerous version agrees for a REASON that is not the one you want.**
+  All three of these would have passed happily and been reported as confirmation.
+- ✅ The vacuous-pass audit run earlier the same day is the same instinct applied
+  to the test suite, and it needed **three attempts** before the detector was shown
+  to see anything — twice reporting a clean bill from a script that had matched no
+  files at all.
+
+#### ✅ What the meaningful version measured: the architecture is NOT the ceiling
+
+The version with content asks not where the argmax lands but **how much mass the
+product misplaces** — soft-target marginals fitted to the expert, producted over
+this repo's candidate set:
+
+| tied-set size | rows | expert mass | factored mass |
+|---|---|---|---|
+| 1 | 255 | 0.958 | 0.944 |
+| 3 | 131 | 0.990 | 0.853 |
+| 5 | 39 | 0.997 | 0.801 |
+| 7 | 15 | 0.998 | 0.750 |
+| **overall** | 3,862 | **0.978** | **0.934** |
+
+**A product of six marginals fitted exactly to the expert still places 93.4% of
+its mass on the best candidates.** The factorisation costs about four points,
+concentrated on mid-sized tied sets — roughly 5% of rows.
+
+⚠️ **So the trained policy's 0.616 is far below what the representation allows: the
+gap is in what is LEARNED, not in what can be EXPRESSED.** That eliminates the
+last structural explanation. Four are now measured and dead — capacity (wider is
+worse), observation quality (beats 1-NN), state coverage (fixing it worked and cost
+7.2 points of play), representability (93.4% of 97.8%). ✅ **The anti-correlation
+is left unexplained on purpose; neither lane has a fifth candidate and neither
+invented one.**
+
 ### ⚠️ A CORRECTION IS A CLAIM TOO, and I published one on an unexamined number
 
 **2026-08-29, and it is the sharpest process lesson of the day.** `docs/ENV.md`
@@ -2915,6 +2969,12 @@ scrutiny than the assertion it replaces.
   claim over a feature vector nobody normalised.
 - ✅ **Both lanes flagged their own error to the other unprompted.** That is what
   made two rounds of correction cheaper than one round of drift.
+- ⚠️ **The operative rule is narrower than "scrutinise corrections"**, and it is
+  `gg2-rl`'s sharpening: **a correction sourced from the other repo deserves the
+  same interrogation as a feature request from it.** A feature request gets
+  questioned as a matter of course; a correction arrives wearing the costume of
+  care. ⚠️ **Both lanes failed this in the same exchange** — that one took this
+  repo's cross-product fact at face value, and it happened to be right.
 
 ### ⚠️ A route is a list of NODES, and re-deriving its edges was wrong for eight phases
 
