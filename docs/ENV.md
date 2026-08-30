@@ -621,22 +621,64 @@ distribution and the candidate table; the pairing is the one specified here; and
 the blind fraction on shadow data is 75.0% at scale against 78% search-driven, so
 a driving policy does give the search more to score.
 
-##### ❌ AND THE COMPOUNDING-ERROR STORY IS WRONG
+##### ⚠️ A BETTER IMITATOR THAT PLAYS WORSE — and a correction to this section
 
-This document said the failure was "one wrong action reaches a state the search
-never visited". **The geometry says otherwise**: mean distance from a
-policy-visited state to its nearest search-visited state is **3.19**, against
-**2.97** control-to-control. **The policy is not off-distribution.** Its states are
-simply **harder to label consistently** — a policy trained on them alone scores
-0.483 against the control's 0.616.
+⚠️ **This section first said "the policy is not off-distribution", on the strength
+of a distance figure that turned out to be raw Euclidean over the unnormalised
+209-float observation.** That measure weights every column equally and a policy
+does not. **It was wrong, and so was the correction built on it.**
 
-⚠️ **So the mechanism DAgger exists to fix is not the one operating here**, which
-is why the fix for it made things worse rather than merely failing to help. The
-`EnvDriver.Idle` result still stands (82.4% / 100% against a statue, ~5% against a
-reactive opponent), so the policy really does fail only against things that react
-— but not because it has left the expert's state space. **No replacement mechanism
-is claimed; inventing one here would be exactly the kind of plausible story this
-project keeps having to retract.**
+**The operational measure** — label a state by its nearest *control* state and see
+how often that is right:
+
+| | exact |
+|---|---|
+| control → control | 0.204 |
+| dagger → control | **0.074** (36% retained) |
+
+**The policy-visited states ARE meaningfully uncovered.** ✅ And covering them
+helps, exactly as the off-distribution story predicts:
+
+| trained on | control held-out | dagger held-out |
+|---|---|---|
+| control only | 0.616 | 0.422 |
+| dagger only | 0.539 | 0.483 |
+| **both** | **0.624** | **0.503** |
+
+The aggregate is **strictly the best imitator on both held-out sets** — better on
+control states than the control-only policy, better on dagger states than the
+dagger-only one.
+
+⛔⛔ **AND IT WINS 12.2% WHERE THE CONTROL WINS 19.4%, intervals not overlapping.
+A strictly better imitator plays strictly worse.**
+
+##### ⛔ THE REAL FINDING: the optimised quantity has come apart from the judged one
+
+Soft targets improved agreement **and** win rate. Expert iteration improved
+agreement on **every** held-out set and cost **7.2 points** of win rate. **Two
+changes that both improved the optimised quantity moved the objective in opposite
+directions**, so **imitation metrics cannot steer this phase at all.**
+
+That is a stronger reason for the same conclusion: cloning does not reach 75.8%,
+and it is not merely that the levers are small — it is that the thing distillation
+optimises is not the thing phase 2 is judged on.
+
+⚠️ **What still stands from the earlier text**: leaving the expert's state space is
+**not** why the policy loses, since fixing coverage made it a better imitator and a
+worse player. The `EnvDriver.Idle` result also stands — 82.4% / 100% against a
+statue, ~5% against a reactive opponent.
+
+⚠️ **No mechanism is claimed.** There is a plausible one, recorded as
+**unmeasured** so it cannot later be mistaken for a finding: the policy takes a
+**per-head argmax**, and a joint action assembled from six independently-argmaxed
+marginals need not be the action the expert would have played.
+✅ **Narrowed by a fact about this repo**: `RolloutSearch.BuildCandidates` is a
+**full cross product** over horizontal × jump × fire × aim × zoom with `Down`
+pinned to 0 — so a per-head argmax **is always a valid candidate**, and the
+hypothesis is not "an action the expert could not play". What a factored policy
+cannot represent is the **coupling**: the expert's choice among tied candidates
+uses the aim tie-break, which ties the aim head to the others through a simulated
+outcome. Independent heads cannot express that. **Testable, untested.**
 
 ##### The four levers, all against the same 56-point gap
 
@@ -651,11 +693,11 @@ project keeps having to retract.**
 
 This was **β = 0** expert iteration: pure policy rollouts from a 19.4% policy. The
 classical formulation mixes expert and policy actions early, precisely because a
-weak policy visits unhelpful states. ⚠️ **But that rationale is about states being
-off-distribution, and the geometry above says they are not** — so a β schedule
-would likely change the magnitude and not the sign, and −7.2 is a long way from
-the +56 the conclusion turns on. **Recorded as a caveat that does not weaken the
-conclusion, rather than as an untried alternative that might.**
+weak policy visits unhelpful states. ⚠️ **Do not run it — and for the OPPOSITE reason to the one first recorded here.**
+The first argument was "a schedule fixes coverage and coverage is not the
+problem". That was wrong twice over: coverage **was** a problem, and fixing it
+**did** work on the imitation metric — it simply did not improve play. **A
+schedule buys more of the thing that did not help.**
 
 #### ✅ Built as a decisive experiment, with the stopping rule agreed first
 

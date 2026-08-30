@@ -2888,6 +2888,34 @@ reasons:
 It is excellent at what phase 0 uses it for — determinism, throughput, exact tick
 counts. Evaluate on `ctf_2dfort`.
 
+### ⚠️ A CORRECTION IS A CLAIM TOO, and I published one on an unexamined number
+
+**2026-08-29, and it is the sharpest process lesson of the day.** `docs/ENV.md`
+asserted compounding error as the shadow slot's rationale. When `gg2-rl` reported
+a distance measurement suggesting the policy was *not* off-distribution, that
+claim was **marked wrong and the correction committed** — and the correction was
+built on **raw Euclidean distance over the unnormalised 209-float observation**,
+which weights every column equally where a policy does not.
+
+⚠️ **The operational measure said the opposite**: label-transfer from
+policy-visited states to their nearest control state retains **36%** (0.204 →
+0.074). The states **are** meaningfully uncovered. **So the retraction was wrong,
+not just the original claim.**
+
+⚠️ **The same shape as the twelve-duel horizon figure, with the roles reversed.**
+There, a direction was read off a small sample of this repo's own and propagated
+into three documents and a peer's notes. Here, a *peer's* unexamined number was
+propagated into this repo's docs **as a correction**, which is the form least
+likely to be re-questioned — a retraction reads as the careful thing and gets less
+scrutiny than the assertion it replaces.
+
+- ⚠️ **A correction inherits the burden of proof, it does not discharge it.**
+- ⚠️ **Ask which space a distance was computed in.** That one question is the only
+  reason this was caught, and it is worth asking of any "these two sets are close"
+  claim over a feature vector nobody normalised.
+- ✅ **Both lanes flagged their own error to the other unprompted.** That is what
+  made two rounds of correction cheaper than one round of drift.
+
 ### ⚠️ A route is a list of NODES, and re-deriving its edges was wrong for eight phases
 
 **2026-08-28.** `NavSearch` returns `List<int>` — nodes, not edges. So
