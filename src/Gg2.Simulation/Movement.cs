@@ -107,6 +107,33 @@ public static class Movement
 
             if (world.PlaceFree(box, newX, newY, filter))
             {
+                // ⚠️ The loop's fixed point, and the reference has it too — this
+                // is the one line here that is NOT in
+                // `Scripts/Physics/good_move_contact_solid.gml`.
+                //
+                // A step this small changes nothing: `totalMoved` gains zero,
+                // `i` does not fall, and every later iteration recomputes these
+                // same numbers, so the loop never ends. It happens because two
+                // tolerances disagree — GML's fuzzy comparison calls the loop
+                // unfinished while `maxDistance - totalMoved` is above 1e-13
+                // (Gml.Epsilon), but a coordinate in the thousands has a ULP of
+                // about 4.5e-13, so a remaining step under half of that rounds
+                // straight back to where it started. Measured, from a real
+                // hang: at (2698.437089230609, 3933.463891267056) with 2.14e-13
+                // left to travel, both axes came back unchanged.
+                //
+                // Nothing observable is given up by stopping. In this state the
+                // reference does not produce a different answer, it produces no
+                // further frames at all — GM8 spins in the same `while` — and
+                // in every state where a step is representable this test is
+                // false and the arithmetic below is untouched. With it, the
+                // loop is provably finite: every pass either drops `i` — eight
+                // times at most — or moves the position by at least one of its
+                // ULPs, which is orders of magnitude more than a ULP of
+                // `totalMoved` and so strictly shortens what is left.
+                if (newX == mover.X && newY == mover.Y)
+                    break;
+
                 totalMoved += Math.Sqrt(
                     (newX - mover.X) * (newX - mover.X) + (newY - mover.Y) * (newY - mover.Y));
 

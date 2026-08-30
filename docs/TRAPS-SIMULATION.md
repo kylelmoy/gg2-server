@@ -177,6 +177,68 @@ was found: none of them took the fuzzy branch, and none holds a value that could
 reach (2) or (3). **They are sound as they stand and must not be regenerated
 with an old copy of the encoder** — there is no longer an old copy to reach for.
 
+### The crawl that could not finish — 2026-08-30, and the only line in the physics the reference does not have
+
+⛔ **`good_move_contact_solid` can loop for ever, and it is not a transcription
+bug — the reference loops too.** `gg2-rl` reported a `Step` that never returned,
+on `cp_dirtbowl`, killing roughly one long phase 3 run in two. Reproduced here
+at iteration 78 of the run its `docs/CONTRACT.md` names, and caught with a
+temporary iteration guard in `Movement.GoodMoveContactSolid`:
+
+```
+x=2698.437089230609  y=3933.463891267056   dir=118.11026973845824
+maxDistance=2.267464623061927  totalMoved=2.267464623061713   i=8
+```
+
+⚠️ **Two tolerances disagree, and the gap between them is the bug.**
+`maxDistance - totalMoved` is `2.14e-13`. That is **above** `Gml.Epsilon`
+(`1e-13`, absolute — "Settled: GML's comparisons are fuzzy" in
+`docs/SIMULATION.md`), so `Gml.Less(totalMoved, maxDistance)` says the move is
+unfinished. It is **below** half a ULP of the position — a ULP at `y ≈ 3933` is
+`4.547e-13` — so `y + step` rounds straight back to `y`, and so does `x`.
+`totalMoved` gains exactly `0.0`, `i` stays at `8` because the position is free,
+and every later iteration recomputes the same numbers. It is a fixed point, not
+a slow loop: it never ends, and no amount of waiting changes that.
+
+⚠️ **The map is not a coincidence and the class probably is.** The window is
+`(1e-13, ULP(position)/2]`, so it is **empty below about 1024** and widens as the
+coordinate grows: `cp_dirtbowl` is three rounds stacked vertically and is the
+tall map, which is where a `y` in the thousands comes from. Both of `gg2-rl`'s
+occurrences also had a soldier on the other side, and this repo has **not**
+established that a rocket is needed — what the arithmetic needs is a large
+coordinate and a residual that lands in the window.
+
+✅ **The fix is one line, and it is the one place the physics deliberately
+departs from `Scripts/Physics/good_move_contact_solid.gml`:**
+
+```csharp
+if (newX == mover.X && newY == mover.Y)
+    break;
+```
+
+⚠️ **Nothing observable is given up, and that is provable rather than hopeful.**
+Where a step *is* representable the test is false and the arithmetic is
+untouched; where it is not, the reference produces no further frames at all —
+GM8 spins in the same `while`, so there is no behaviour to diverge from. The
+whole 2,343-test suite, every parity fixture included, is unmoved by it, and the
+90-iteration training run reproduces its earlier numbers **exactly** through the
+iteration that used to hang.
+
+⚠️ **A non-terminating loop cannot be gated by calling it.**
+`MovementTests.TheCrawlStopsWhenAStepIsSmallerThanThePositionCanHold` replays
+the recorded state on a worker with a ten-second deadline, because a plain call
+wedges the whole test run instead of going red. It was watched failing before it
+was believed — reverting the one line turns it red in ten seconds.
+
+⚠️ **The other crawls in the project were checked and are safe**, for reasons
+worth keeping: `Movement.MoveOutsideSolid` and `Projectiles.BackOutOfWalls` are
+bounded `for` loops; `Projectiles.SubstepWalk` decrements its *remaining vector*
+rather than reading it back off the position, so a step the position cannot hold
+still ends it; `Weapons.Hitscan` halves a length; the platform lift in
+`CharacterPhysics` moves `0.1` at a time, which no reachable coordinate can
+absorb. **The shape to look for is a loop whose progress is measured by reading
+a coordinate back.**
+
 ### The alarm stage, now measured
 
 - **An alarm set to `n` fires `n` ticks later, and one set to `0` never fires.**

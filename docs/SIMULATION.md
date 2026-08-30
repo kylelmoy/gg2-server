@@ -74,6 +74,13 @@ observable simulation; owe GM8 nothing else. Concretely:
   authoritative.
 - Per-frame recomputation the reference does because it has nowhere to cache.
 
+**Neither, and there is exactly one of them:** a state in which the reference
+does not terminate. `good_move_contact_solid`'s crawl can reach a fixed point
+where GM8 spins for ever (see "The movement solver" below); the port breaks out
+of it. A hang has no observable behaviour to reproduce, so this is not a
+divergence — but it is a departure, and it is written down rather than left for
+a reader to find in a diff.
+
 **Explicitly free, and worth using:** structure the C# for performance and
 testability. Struct-of-arrays for characters, a pure `Step(state, inputs) ->
 state` core with no I/O in it, collision as a queryable service. The reference's
@@ -254,6 +261,17 @@ in a wall. Summarised:
 because the built-in was buggy. It crawls forward in `1/8`-pixel steps. That
 means it is a specification you transcribe, not behaviour you reverse-engineer —
 the single luckiest fact in this port.
+
+⚠️ **It is transcribed with exactly one line added, and that line is the only
+deliberate departure in the physics.** The crawl's `while` can reach a fixed
+point: when what is left to travel is above GML's `1e-13` comparison fuzz but
+below half a ULP of the position — which needs a coordinate in the thousands,
+and is why it surfaced on `cp_dirtbowl` — the step rounds away, `totalMoved`
+stops growing, and the loop never ends. The port breaks out when a step leaves
+both coordinates unchanged. **The reference does not terminate in that state
+either**, so nothing observable is being traded away; there is no later frame to
+match. Measured, with the numbers, in `docs/TRAPS-SIMULATION.md`, "the crawl
+that could not finish".
 
 ## The collision world
 
@@ -593,6 +611,14 @@ cancellation. GML calls that zero and skips the wall check entirely. C#'s
 `hleft != 0` takes it, finds a wall, and slides the character **six pixels** down
 a sloping ceiling — one tick of input turning into a visible teleport, from a
 difference of 3e-14.
+
+⚠️ **What it costs when you do reproduce it.** The epsilon is *absolute*, so it
+does not scale with the numbers it is comparing, and a ULP of a coordinate in the
+thousands is `4.5e-13` — bigger than the epsilon. A distance that is
+"still remaining" by GML's rule can therefore be too small for the position to
+represent, which is a loop that never finishes. That is a real hang, it is in the
+reference too, and it is the subject of `docs/TRAPS-SIMULATION.md`, "the crawl
+that could not finish".
 
 ### Settled: the automatic-movement round trip
 

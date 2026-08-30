@@ -375,4 +375,77 @@ public sealed class MovementTests
         // Whole pixels only, so the .25 survives.
         Assert.Equal(0.25, mover.X - Math.Floor(mover.X), 9);
     }
+
+    /// <summary>
+    /// The crawl terminates when what is left to travel is too small for the
+    /// position to represent — the hang <c>gg2-rl</c> reported on 2026-08-30.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>These numbers are a recording, not a construction.</b> They are the
+    /// state a phase 3 training run reached on <c>cp_dirtbowl</c> (scout against
+    /// a soldier, iteration 78, worker 12, step 30), read out of a temporary
+    /// iteration guard in <see cref="Movement.GoodMoveContactSolid"/>: with
+    /// 2.14e-13 of the distance left, both axes came back unchanged, so
+    /// <c>totalMoved</c> stopped growing while GML's fuzzy comparison — whose
+    /// epsilon is 1e-13 — still called the move unfinished. See
+    /// docs/TRAPS-SIMULATION.md, "the crawl that could not finish".
+    /// <para>
+    /// ⚠️ <b>Any y in the thousands has the same window</b>, which is why
+    /// <c>cp_dirtbowl</c> is where it showed up: a ULP there is about 4.5e-13,
+    /// so a step under 2.27e-13 rounds away while a residual over 1e-13 keeps
+    /// the loop going. Below about y=1024 the window is empty and no map that
+    /// short can produce this.
+    /// </para>
+    /// <para>
+    /// Run on a worker with a deadline because the failure it guards is a
+    /// non-terminating loop: a plain call would wedge the whole test run
+    /// instead of going red, and a regression here leaks the spinning thread
+    /// until the process exits. That is the price of testing termination at
+    /// all.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task TheCrawlStopsWhenAStepIsSmallerThanThePositionCanHold()
+    {
+        var world = new CollisionWorld(
+            LevelMap.FromPng("cp_dirtbowl", ReferenceTree.ReadMap("cp_dirtbowl")));
+
+        var box = Scout;
+        var filter = Filter;
+
+        var start = new MoverState
+        {
+            X = 2699.5054505069743,
+            Y = 3935.463891267056,
+            HSpeed = -1.0683612763655217,
+            VSpeed = -2,
+        };
+
+        Assert.True(
+            world.PlaceFree(box, start.X, start.Y, filter),
+            "the recorded state stood in free space; a map change has invalidated this test");
+
+        var crawl = Task.Run(() =>
+        {
+            var mover = start;
+
+            return (
+                Moved: Movement.GoodMoveContactSolid(
+                    world, box, filter, ref mover,
+                    directionDegrees: 118.11026973845824,
+                    maxDistance: 2.267464623061927,
+                    out _),
+                Mover: mover);
+        });
+
+        var finished = await Task.WhenAny(crawl, Task.Delay(TimeSpan.FromSeconds(10)));
+        Assert.True(ReferenceEquals(finished, crawl), "the crawl did not terminate");
+
+        var (moved, ended) = await crawl;
+
+        // It gets all but the last fraction of a ULP of the way, and it ends
+        // somewhere legal — the two things the caller needs of it.
+        Assert.Equal(2.267464623061927, moved, 9);
+        Assert.True(world.PlaceFree(box, ended.X, ended.Y, filter));
+    }
 }
