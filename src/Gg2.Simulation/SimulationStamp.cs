@@ -20,7 +20,7 @@ namespace Gg2.Simulation;
 /// ⚠️ <b>The surface is chosen, not swept.</b> What goes in is what a policy's
 /// behaviour actually depends on: the physics constants, the <c>BOT_*</c> and
 /// <c>NAV_*</c> blocks, the per-class and per-projectile tables that
-/// <c>docs/SIMULATION.md</c> marks contract, and the two hand-bumped version
+/// <c>docs/SIMULATION.md</c> marks contract, and the three hand-bumped version
 /// numbers below. What stays out is configuration and protocol — a port number or
 /// a maximum name length moving must not invalidate every checkpoint, and
 /// <c>GameConstants</c> is therefore deliberately absent.
@@ -75,6 +75,46 @@ public static class SimulationStamp
     /// </para>
     /// </remarks>
     public const int ObservationLayoutVersion = 1;
+
+    /// <summary>
+    /// What the simulation <em>does</em>, as opposed to the constants it does it
+    /// with. Bump when you knowingly change behaviour that a policy could have
+    /// learned against.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Asked for by <c>gg2-rl</c> on 2026-08-30, and the case for it is a
+    /// commit in this repo.</b> The rest of this surface is constants and two
+    /// encodings, so <c>3bba987</c> changed a line of <c>Movement.cs</c> — control
+    /// flow in the physics — and the stamp could not move. A trainer had no way
+    /// to tell, and the failure that hides behind it is the one this whole type
+    /// exists to prevent: a policy that plays slightly worse for ever with the
+    /// cause invisible.
+    /// <para>
+    /// <b>What counts as a bump.</b> Anything that can move a trajectory, a
+    /// damage number, a projectile path or a stage's position in
+    /// <c>MatchSimulation</c>. ⚠️ <b>What does not: a refactor, a rename, a
+    /// comment, a performance change — or a change demonstrated to be
+    /// unobservable, and DEMONSTRATED is the word.</b> <c>3bba987</c> is exempt
+    /// because two independent 90-iteration training runs reproduced their
+    /// per-iteration numbers to the digit across 1.66M agent-steps, not because
+    /// the argument for it was good. Reasoning is not checking; this project has
+    /// the scars.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Deliberately hand-bumped, and deliberately not a sweep of the
+    /// code.</b> Hashing the assembly would move on a comment, a refactor or a
+    /// compiler upgrade, invalidate every checkpoint for nothing, and teach
+    /// everyone to ignore the stamp. The surface is chosen — see this type's
+    /// remarks — and a number somebody has to remember to bump is the honest
+    /// price of that choice. It shares the failure mode of the two above it: it
+    /// catches the change you knew you were making, not the one you did not.
+    /// </para>
+    /// <para>
+    /// <b>1, 2026-08-30</b>: the behaviour this build has. It is a starting
+    /// point rather than a claim that anything changed.
+    /// </para>
+    /// </remarks>
+    public const int SimulationBehaviourVersion = 1;
 
     /// <summary>The types whose public constants are part of the contract.</summary>
     /// <remarks>
@@ -131,6 +171,7 @@ public static class SimulationStamp
         {
             $"action={ActionEncodingVersion}",
             $"observation={ObservationLayoutVersion}",
+            $"behaviour={SimulationBehaviourVersion}",
         };
 
         // ⚠️ Sorted by name, because reflection's field order is unspecified and

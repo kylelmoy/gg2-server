@@ -68,7 +68,30 @@ public sealed class SimulationStampTests(ITestOutputHelper output)
     /// </para>
     /// </para>
     /// </remarks>
-    private const string Pinned = "c526b96e34184138";
+    /// <remarks>
+    /// ⛔ <b>Bumped again 2026-08-30</b>, from <c>c526b96e34184138</c>, by
+    /// <see cref="SimulationStamp.SimulationBehaviourVersion"/> existing at all —
+    /// a third hand-bumped number, asked for by <c>gg2-rl</c> after
+    /// <c>3bba987</c> changed control flow in the physics and this digest could
+    /// not move. Every other entry on the surface is a constant.
+    /// <para>
+    /// ⛔ <b>THE FIRST BUMP THAT IS NOT FREE, and it was spent on the machinery
+    /// rather than on a change.</b> <c>gg2-rl</c> holds checkpoints — two
+    /// 600-iteration runs among them — and this refuses every one of them until
+    /// they are re-stamped. That cost was accepted in the ask rather than
+    /// discovered afterwards, and it buys the field being present the first time
+    /// somebody changes what the simulation does, instead of being added in the
+    /// same commit and bumped in the same breath.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>The behaviour version is 1 and did NOT count <c>3bba987</c>.</b>
+    /// That change was demonstrated unobservable — two independent 90-iteration
+    /// training runs, per-iteration numbers identical to the digit over 1.66M
+    /// agent-steps — rather than argued to be. The distinction is the whole rule:
+    /// see the constant's remarks.
+    /// </para>
+    /// </remarks>
+    private const string Pinned = "7ff5940d97aa7bed";
 
     /// <summary>
     /// The stamp is stable, and not a per-process hash.
@@ -135,6 +158,11 @@ public sealed class SimulationStampTests(ITestOutputHelper output)
             // The action encoding and the (undesigned) observation layout.
             $"action={SimulationStamp.ActionEncodingVersion}",
             $"observation={SimulationStamp.ObservationLayoutVersion}",
+
+            // ⚠️ And what the simulation DOES, which nothing else here covers:
+            // every other entry is a constant, so a changed line of physics
+            // moved no digest until this existed. See the constant's remarks.
+            $"behaviour={SimulationStamp.SimulationBehaviourVersion}",
         })
         {
             Assert.Contains(entry, surface);

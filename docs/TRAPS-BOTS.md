@@ -1847,9 +1847,21 @@ entries**, and `Require` throws on a mismatch.
 - ⚠️ **The surface is chosen, not swept, and that is the design decision.** In:
   the physics constants, the `BOT_*` and `NAV_*` blocks, the per-class table
   (run power, hit points, double jump, cloak, collision box), the rocket's and
-  mine's blast tables, and two hand-bumped version numbers. **Out: `GameConstants`
-  — configuration and protocol.** A port number or a maximum name length moving
-  must not invalidate every checkpoint; **a stamp that churns gets ignored.**
+  mine's blast tables, and three hand-bumped version numbers. **Out:
+  `GameConstants` — configuration and protocol.** A port number or a maximum name
+  length moving must not invalidate every checkpoint; **a stamp that churns gets
+  ignored.**
+- ⚠️ **`SimulationBehaviourVersion` is the third, added 2026-08-30, and the hole
+  it fills was real for as long as the stamp existed**: every other entry is a
+  constant, so `3bba987` changed a line of physics and the digest could not move.
+  `gg2-rl` found it and asked. **Bump it when you knowingly change what the
+  simulation does** — a trajectory, a damage number, a projectile path, a stage's
+  position in `MatchSimulation`. ⚠️ **Exempt a change only when it is
+  DEMONSTRATED unobservable**, the way `3bba987` was (two 90-iteration training
+  runs, per-iteration numbers identical to the digit over 1.66M agent-steps), not
+  when the argument for it merely sounds good. `SIM_UUID` `c526b96e34184138` →
+  `7ff5940d97aa7bed`, and ⛔ **this is the first bump that invalidated real
+  checkpoints** — a cost accepted in the ask rather than discovered afterwards.
 - ⚠️ **`ClassStats` is where the PHYSICS constants live** — `Gravity`,
   `BaseControl`, `BaseFriction`, `TerminalVSpeed`, `RestSpeed`,
   `RocketJumpGravity` — and not only the per-class table. The first draft omitted
@@ -2888,16 +2900,30 @@ reasons:
 It is excellent at what phase 0 uses it for — determinism, throughput, exact tick
 counts. Evaluate on `ctf_2dfort`.
 
-### ⚠️ A CHECK THAT CANNOT DISAGREE — the same bug in three places in one day
+### ⚠️ A CHECK THAT CANNOT DISAGREE — the same bug in four places now
 
-**2026-08-29.** Three defects this session were one shape: **something compared
-against a copy of itself.**
+**2026-08-29, and a fourth the next day.** Four defects were one shape:
+**something compared against a copy of itself.**
 
 | where | the comparison |
 |---|---|
 | `EnvProtocol.Version` | the wire's layout checked against the constant that described it, both edited by the same hand |
 | `HelloAgreesOnTheVersionsAndTheShape` | the advertised head count asserted against a **literal 5** — the advertisement checked against a copy of the advertisement |
 | a check *this repo proposed* to `gg2-rl` | the policy's per-head argmax compared against "its highest-probability action under the full joint implied by the marginals" |
+| ⛔ `gg2-rl`'s `scripts/fingerprint.py`, **2026-08-30** | the tool written to catch a bump that was supposed to change nothing, hashing `batch.observations` **without ever calling step** |
+
+⛔ **The fourth is the one worth the most.** Asked whether `3bba987` moved the
+world, it answered "OBSERVATIONS IDENTICAL: the world did not move under this
+bump" — and **it could not have said anything else**, because it hashed where each
+duel *starts* and nothing that happens afterwards. It reported a true conclusion
+for a reason that had nothing to do with the question, and it is the instrument
+built specifically to catch this class of error; its own docstring already
+confessed to committing it once, on the zoom bump. ✅ That lane fixed it with a
+separate `motion` hash over stepped decisions and **falsified the instrument
+before believing it** — identical against itself, `PHYSICS MOVED` under a
+deliberately perturbed trajectory. ⚠️ **A verification tool is not exempt from
+the shape it exists to catch, and "it agreed with me" is the least informative
+outcome a check can have.**
 
 ⚠️ **The third is the purest and it was mine.** The joint implied by independent
 marginals **is their product**, and the argmax of a product of independent
@@ -2941,6 +2967,10 @@ worse), observation quality (beats 1-NN), state coverage (fixing it worked and c
 7.2 points of play), representability (93.4% of 97.8%). ✅ **The anti-correlation
 is left unexplained on purpose; neither lane has a fifth candidate and neither
 invented one.**
+
+⚠️ **The 7.2 there is ONE training run a side** — see `docs/ENV.md`, "every win
+rate above is ONE training run a side". The conclusion it supports survives the
+noise by fifty points; the 7.2 itself lives inside it.
 
 ### ⚠️ A CORRECTION IS A CLAIM TOO, and I published one on an unexamined number
 

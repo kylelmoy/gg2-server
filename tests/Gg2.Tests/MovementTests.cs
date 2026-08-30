@@ -397,15 +397,18 @@ public sealed class MovementTests
     /// short can produce this.
     /// </para>
     /// <para>
-    /// Run on a worker with a deadline because the failure it guards is a
+    /// Run on a thread with a deadline because the failure it guards is a
     /// non-terminating loop: a plain call would wedge the whole test run
-    /// instead of going red, and a regression here leaks the spinning thread
-    /// until the process exits. That is the price of testing termination at
-    /// all.
+    /// instead of going red. ⚠️ <b>A dedicated thread rather than
+    /// <c>Task.Run</c>, and that is not a style preference</b> — a pool work
+    /// item in a suite this size can wait on a saturated pool, and a
+    /// wall-clock deadline would then fail for a reason that has nothing to do
+    /// with the crawl. The thread is a background one so that a regression,
+    /// which leaves it spinning for ever, still lets the process exit.
     /// </para>
     /// </remarks>
     [Fact]
-    public async Task TheCrawlStopsWhenAStepIsSmallerThanThePositionCanHold()
+    public void TheCrawlStopsWhenAStepIsSmallerThanThePositionCanHold()
     {
         var world = new CollisionWorld(
             LevelMap.FromPng("cp_dirtbowl", ReferenceTree.ReadMap("cp_dirtbowl")));
@@ -425,23 +428,28 @@ public sealed class MovementTests
             world.PlaceFree(box, start.X, start.Y, filter),
             "the recorded state stood in free space; a map change has invalidated this test");
 
-        var crawl = Task.Run(() =>
+        var moved = 0.0;
+        var ended = default(MoverState);
+
+        var crawl = new Thread(() =>
         {
             var mover = start;
 
-            return (
-                Moved: Movement.GoodMoveContactSolid(
-                    world, box, filter, ref mover,
-                    directionDegrees: 118.11026973845824,
-                    maxDistance: 2.267464623061927,
-                    out _),
-                Mover: mover);
-        });
+            moved = Movement.GoodMoveContactSolid(
+                world, box, filter, ref mover,
+                directionDegrees: 118.11026973845824,
+                maxDistance: 2.267464623061927,
+                out _);
 
-        var finished = await Task.WhenAny(crawl, Task.Delay(TimeSpan.FromSeconds(10)));
-        Assert.True(ReferenceEquals(finished, crawl), "the crawl did not terminate");
+            ended = mover;
+        })
+        {
+            IsBackground = true,
+            Name = nameof(TheCrawlStopsWhenAStepIsSmallerThanThePositionCanHold),
+        };
 
-        var (moved, ended) = await crawl;
+        crawl.Start();
+        Assert.True(crawl.Join(TimeSpan.FromSeconds(10)), "the crawl did not terminate");
 
         // It gets all but the last fraction of a ULP of the way, and it ends
         // somewhere legal — the two things the caller needs of it.

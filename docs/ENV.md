@@ -511,6 +511,49 @@ than something it tracks externally. That is real value and it is also more buil
 plumbing (`SourceRevisionId`) than the problem currently justifies, given the
 consumer already has a working answer.
 
+### ✅ BUILT 2026-08-30: the third hand-bumped number, and what it does not fix
+
+**Asked for by `gg2-rl` after `3bba987`**, the `cp_dirtbowl` hang fix, which
+changed control flow in `Movement.cs` and moved **no** field of that lane's
+dataset identity. The section above is about the bot layer falling outside the
+stamp; this is the simulation's own behaviour falling outside it. **Every other
+entry on the surface is a constant**, so the stamp could express a changed
+gravity and could not express a changed line.
+
+`SimulationStamp.SimulationBehaviourVersion`, on the surface as `behaviour=`.
+`SIM_UUID` `c526b96e34184138` → **`7ff5940d97aa7bed`**.
+
+- **Bump it** when you knowingly change what the simulation does: a trajectory, a
+  damage number, a projectile path, a stage's position in `MatchSimulation`.
+- **Do not** bump it for a refactor, a rename, a comment or a performance change.
+- ⚠️ **Exempt a change only when it is DEMONSTRATED unobservable.** `3bba987` is
+  exempt because two independent 90-iteration training runs reproduced their
+  per-iteration numbers to the digit across 1.66M agent-steps — not because the
+  argument for it was good. This project's own rule: reasoning is not checking.
+
+⛔ **The first bump that was not free.** `gg2-rl` holds checkpoints, two
+600-iteration runs among them, and every one of them is refused until re-stamped.
+That cost was named in the ask and accepted before the work rather than
+discovered after it.
+
+⚠️ **And it is a hand-bumped number, which the section above calls "the weaker
+half of every pairing tried today". That judgement still stands and was not
+quietly dropped.** It is here anyway because the three options are not
+interchangeable:
+
+| mechanism | refuses? | fails how |
+|---|---|---|
+| a swept digest over the code | yes | churns on a comment, a refactor, a compiler upgrade — and a stamp that churns gets ignored |
+| the consumer keying on this repo's commit | **no** — it labels a corpus, it does not refuse a load | over-refuses, cannot drift, and is the strongest of the three where it applies |
+| `SimulationBehaviourVersion` | yes, through `Require` | somebody forgets |
+
+**So it is the forgettable option inside the refusing mechanism, and the reliable
+option is outside it.** ⬅️ The thing that would dominate both is still open and
+still not built: the server reporting its own build revision in the handshake, so
+a consumer keys on something it is *told*. Until then, ⚠️ **the commit SHA beside
+every number remains the real guard, and this number is a second line rather than
+a replacement.**
+
 ### ✅ BUILT 2026-08-29: the shadow search slot
 
 **Asked for by `gg2-rl` 2026-08-29, deferred by the user pending a cheaper
@@ -662,6 +705,43 @@ directions**, so **imitation metrics cannot steer this phase at all.**
 That is a stronger reason for the same conclusion: cloning does not reach 75.8%,
 and it is not merely that the levers are small — it is that the thing distillation
 optimises is not the thing phase 2 is judged on.
+
+###### ⚠️ OPEN, 2026-08-30: every win rate above is ONE training run a side
+
+`gg2-rl` raised this and it is right in structure, so it is recorded next to the
+numbers rather than in a handoff. **A duel-count Wilson interval measures
+evaluation noise. The object being compared here is a training PROCEDURE, and each
+one was sampled once.** "Intervals not overlapping" was the wrong bar: it was
+never the training seed's interval.
+
+**What was measured, and where** — its phase 3, PPO, and reported here at its
+figure: two runs differing **only** in the seed landed **3.9 points** apart on
+trained maps and **7.2** across three, against a 1,600-duel Wilson interval of
+about **±3**. Two of that lane's A/Bs decided on disjoint intervals failed to
+replicate, and one — `entropy_coef` — **reversed sign** at a second seed.
+
+⚠️ **The magnitude does not transfer and is not claimed to.** Those are PPO runs;
+`19.4%` and `12.2%` come from *supervised* distillation on a fixed corpus, whose
+seed variance is plausibly smaller and **has never been measured**. What transfers
+exactly is the structure: nobody varied the seed on either side, so the spread is
+unknown rather than small.
+
+**What survives untouched, and what does not:**
+
+- ✅ **"Cloning does not reach 75.8%" stands.** The gap is ~56 points against a
+  seed spread that would have to be an order of magnitude past anything measured
+  to matter. The stopping rule was agreed on that margin, not on this one.
+- ⚠️ **"Expert iteration is −7.2" and the REAL FINDING above are single-seed
+  claims**, and the REAL FINDING needs the *sign* of two deltas of about 4-7
+  points each to hold. It is the better-supported reading of the evidence, not a
+  settled result, and it should not harden into one by being repeated.
+- ⬅️ **The cheap check that would settle it**: re-run each distillation at a
+  second seed and see whether the ordering survives. Supervised training on a
+  corpus that already exists — hours, not days, and no new machinery.
+
+⚠️ **This is not a retraction and nothing above was deleted.** The distinction
+worth keeping is between a conclusion that survives the noise by fifty points and
+one that lives inside it.
 
 ⚠️ **What still stands from the earlier text**: leaving the expert's state space is
 **not** why the policy loses, since fixing coverage made it a better imitator and a

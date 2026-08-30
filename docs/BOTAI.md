@@ -382,9 +382,18 @@ which side is stale.
 
 ⚠️ **The surface is chosen, not swept.** In: the physics constants (which live on
 `ClassStats`, not only `Gml`), the `BOT_*` and `NAV_*` blocks, the per-class table
-and the blast tables, and the two hand-bumped version numbers. **Out:
+and the blast tables, and the **three** hand-bumped version numbers. **Out:
 `GameConstants` — configuration and protocol.** A port number moving must not
 invalidate every checkpoint, because **a stamp that churns gets ignored**.
+
+⚠️ **The third of those is `SimulationBehaviourVersion`, and it exists because
+everything else on the surface is a CONSTANT.** `3bba987` changed control flow in
+`Movement.cs` — a line of physics — and the stamp could not move; `gg2-rl` asked
+for the gap to be closed on 2026-08-30 and it was, at the cost of the first bump
+that invalidated real checkpoints. **Bump it when you knowingly change what the
+simulation does**; do not bump it for a refactor, and exempt a change only when it
+has been *demonstrated* unobservable rather than argued to be. `docs/ENV.md`, "the
+third hand-bumped number", has the rule and the exemption that was used.
 
 ⚠️ **Round-trip formatting, so a one-ULP change moves it** — `Gml.PointSix` and
 its four siblings *are* gravity and the friction factors, and fifteen digits
