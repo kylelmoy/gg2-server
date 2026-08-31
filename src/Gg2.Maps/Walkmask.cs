@@ -22,6 +22,9 @@ public sealed class Walkmask
 {
     private readonly ulong[] _words;
 
+    /// <summary><see cref="Clearance"/>, built with the mask. See that property.</summary>
+    private readonly byte[] _clearance;
+
     /// <summary>Words per row. Rows are word-aligned so a row never straddles.</summary>
     private readonly int _stride;
 
@@ -31,6 +34,7 @@ public sealed class Walkmask
         Height = height;
         _words = words;
         _stride = stride;
+        _clearance = BuildClearance();
     }
 
     /// <summary>Mask width in cells.</summary>
@@ -61,6 +65,129 @@ public sealed class Walkmask
             return false;
 
         return (_words[y * _stride + (x >> 6)] & (1UL << (x & 63))) != 0;
+    }
+
+    /// <summary>
+    /// For every cell, the Chebyshev distance in cells to the nearest solid
+    /// cell — 0 where the cell is itself solid, <see cref="MaxClearance"/> where
+    /// nothing solid is within that many cells. Row-major, <c>Width</c> stride.
+    /// </summary>
+    /// <remarks>
+    /// <b>An acceleration structure for marching a ray, and nothing else reads
+    /// it.</b> <c>ObservationWriter</c>'s geometry fan samples the mask every
+    /// four pixels out to 320, which is up to 80 probes a ray and 24 rays an
+    /// observation — <b>88% of the cost of writing one</b>, and an observation
+    /// is written for every agent on every decision.
+    /// <para>
+    /// ⚠️ <b>It makes the march skip, never guess.</b> A clearance of <c>c</c>
+    /// says every cell within Chebyshev distance <c>c - 1</c> is open, so every
+    /// world pixel within <c>6c - 7</c> of the probe is open too — one cell of
+    /// slack for the probe's own position inside its cell. A marcher that
+    /// advances by no more than that lands on open ground by construction, so
+    /// the first solid probe it finds is the first solid probe there is. The
+    /// answer is <b>identical</b> to the naive march, not an approximation of
+    /// it; <c>ObservationRayFanTests</c> asserts that against a transcription of
+    /// the naive loop.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Built WITH the mask, and it was lazy first.</b> "A game server never
+    /// marches a ray and should not pay <c>Width * Height</c> bytes for a field
+    /// it will not read" is true and is the wrong trade. Lazy meant the
+    /// <em>first</em> <c>ObservationWriter.Write</c> on a map allocated, which
+    /// broke that type's zero-allocation gate — and broke it
+    /// <b>order-dependently</b>, because the <see cref="Walkmask"/> is shared
+    /// through <c>ScenarioResources</c>, so whether the field already existed
+    /// depended on which test had run first. It passed twice before failing.
+    /// </para>
+    /// <para>
+    /// Eager costs one pass and <c>Width * Height</c> bytes per map — 160 KB and
+    /// about 0.3 ms for <c>ctf_truefort</c>, once, on a load that is itself
+    /// cached. <b>An unconditional property is worth more than that.</b>
+    /// </para>
+    /// </remarks>
+    public ReadOnlySpan<byte> Clearance => _clearance;
+
+    /// <summary>
+    /// The value <see cref="Clearance"/> saturates at. ⚠️ <b>A cap, so a reader
+    /// must treat it as "at least this", never "exactly this"</b> — which is all
+    /// a marcher needs, since it only ever skips forward by what the value
+    /// guarantees.
+    /// </summary>
+    /// <remarks>
+    /// 48 cells is 288 world pixels, which covers the 320-pixel ray range in a
+    /// single skip from anywhere genuinely open. Raising it would buy nothing
+    /// and would stop the field fitting in a byte.
+    /// </remarks>
+    public const byte MaxClearance = 48;
+
+    private byte[] BuildClearance()
+    {
+        var width = Width;
+        var height = Height;
+        var field = new byte[width * height];
+
+        for (var y = 0; y < height; y++)
+        for (var x = 0; x < width; x++)
+            field[(y * width) + x] = IsSolid(x, y) ? (byte)0 : MaxClearance;
+
+        // The two-pass chamfer that computes a Chebyshev transform exactly: a
+        // forward sweep over the four already-visited neighbours, then a
+        // backward sweep over the other four. ⚠️ Off-mask counts as OPEN, like
+        // IsSolid — so the edges are not seeded with zeros, and a ray leaving
+        // the map is not stopped by a wall that is not there.
+        for (var y = 0; y < height; y++)
+        for (var x = 0; x < width; x++)
+        {
+            var at = (y * width) + x;
+            var best = field[at];
+
+            if (best == 0)
+                continue;
+
+            if (x > 0)
+                best = Math.Min(best, (byte)(field[at - 1] + 1));
+
+            if (y > 0)
+            {
+                best = Math.Min(best, (byte)(field[at - width] + 1));
+
+                if (x > 0)
+                    best = Math.Min(best, (byte)(field[at - width - 1] + 1));
+
+                if (x + 1 < width)
+                    best = Math.Min(best, (byte)(field[at - width + 1] + 1));
+            }
+
+            field[at] = best;
+        }
+
+        for (var y = height - 1; y >= 0; y--)
+        for (var x = width - 1; x >= 0; x--)
+        {
+            var at = (y * width) + x;
+            var best = field[at];
+
+            if (best == 0)
+                continue;
+
+            if (x + 1 < width)
+                best = Math.Min(best, (byte)(field[at + 1] + 1));
+
+            if (y + 1 < height)
+            {
+                best = Math.Min(best, (byte)(field[at + width] + 1));
+
+                if (x + 1 < width)
+                    best = Math.Min(best, (byte)(field[at + width + 1] + 1));
+
+                if (x > 0)
+                    best = Math.Min(best, (byte)(field[at + width - 1] + 1));
+            }
+
+            field[at] = best;
+        }
+
+        return field;
     }
 
     /// <summary>

@@ -1,5 +1,6 @@
 using Gg2.Bots;
 using System.Buffers.Binary;
+using System.Runtime.InteropServices;
 using System.Net;
 using System.Net.Sockets;
 using Gg2.Protocol;
@@ -530,10 +531,27 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
         BinaryPrimitives.WriteInt32LittleEndian(reply.AsSpan(at), batch.Count);
         at += 4;
 
-        foreach (var value in _observations)
+        // ⚠️ One copy, not 26,752 four-byte writes. The observations are already
+        // a contiguous float32 block in the layout the wire wants, so on a
+        // little-endian host this is a memcpy — and every host this runs on is
+        // one. The per-float loop is kept for the other case rather than deleted,
+        // because "x86 only" is not a thing this protocol says anywhere.
+        //
+        // ⚠️ This was NOT the bottleneck, and docs/ENV.md said it was. Measured
+        // 2026-08-30: the serialisation is ~2% of a batch-16 round trip against
+        // 49% for the observation writer. See that document's measurement table.
+        if (BitConverter.IsLittleEndian)
         {
-            BinaryPrimitives.WriteSingleLittleEndian(reply.AsSpan(at), value);
-            at += 4;
+            MemoryMarshal.AsBytes(_observations.AsSpan()).CopyTo(reply.AsSpan(at));
+            at += _observations.Length * 4;
+        }
+        else
+        {
+            foreach (var value in _observations)
+            {
+                BinaryPrimitives.WriteSingleLittleEndian(reply.AsSpan(at), value);
+                at += 4;
+            }
         }
 
         for (var i = 0; i < batch.Count; i++)

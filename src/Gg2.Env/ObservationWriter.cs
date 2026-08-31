@@ -245,6 +245,70 @@ public static class ObservationWriter
         }
     }
 
+    /// <summary>Pixels between probes along a ray.</summary>
+    /// <remarks>
+    /// ⚠️ <b>Part of the layout, like a scale.</b> The fan reports the first
+    /// probe that lands on something solid, so the spacing decides which thin
+    /// geometry the policy can see at all. Changing it is a layout bump.
+    /// </remarks>
+    private const double RayStep = 4.0;
+
+    /// <summary>Probes along one ray: <see cref="RayRange"/> / <see cref="RayStep"/>.</summary>
+    private const int RayProbes = (int)(RayRange / RayStep);
+
+    /// <summary>
+    /// The fan's unit directions, which are the same 24 every call.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Computed from the same expression the loop used</b> —
+    /// <c>Math.Cos(i * (2 * Math.PI / Rays))</c>, not a rearrangement of it — so
+    /// every direction is the identical double and the fan is unchanged. This is
+    /// a table for 48 trig calls an observation, not a new set of angles.
+    /// </remarks>
+    private static readonly (double Dx, double Dy)[] RayDirections = BuildRayDirections();
+
+    private static (double, double)[] BuildRayDirections()
+    {
+        var directions = new (double, double)[Rays];
+
+        for (var i = 0; i < Rays; i++)
+        {
+            var angle = i * (2 * Math.PI / Rays);
+            directions[i] = (Math.Cos(angle), Math.Sin(angle));
+        }
+
+        return directions;
+    }
+
+    /// <summary>
+    /// How far, in world pixels, a probe may move from a cell of this clearance
+    /// and still be certain of landing on something open.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Public, and a named function rather than an expression inline in
+    /// the march, because a test has to be able to read it.</b> Making it
+    /// <c>internal</c> instead would have needed <c>InternalsVisibleTo</c> on this
+    /// assembly, which also exposes the <c>Program</c> that top-level statements
+    /// generate and collides with <c>Gg2.Parity</c>'s. The first version of
+    /// <c>ObservationRayFanTests</c> restated <c>6c - 7</c> in its own body and so
+    /// passed every mutation of the constant it existed to protect — including
+    /// <c>6c - 5</c>, which is genuinely unsafe. It now calls this.
+    /// <para>
+    /// The algebra: a clearance of <c>c</c> says every cell within Chebyshev
+    /// distance <c>c - 1</c> is open. A pixel <c>d</c> away from a probe is at
+    /// most <c>floor((d + 5) / 6)</c> cells away — the 5 is the probe's own
+    /// position inside its 6-pixel cell — so <c>d</c> is safe while
+    /// <c>floor((d + 5) / 6) &lt;= c - 1</c>, which holds up to <c>d = 6c - 6</c>.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>One pixel is given back deliberately.</b> <c>6c - 6</c> is the tight
+    /// value; the extra pixel costs at most a quarter of one probe and leaves the
+    /// bound with margin rather than sitting exactly on the boundary of an
+    /// argument about rounding. It is not a slip to be tidied up.
+    /// </para>
+    /// </remarks>
+    public static int SafeSkipPixels(int clearance) => (6 * clearance) - 7;
+
     private static void WriteGeometry(
         in WorldView view, in CharacterState self, Span<float> o, ref int at)
     {
@@ -253,24 +317,52 @@ public static class ObservationWriter
         // primitive answers "is anything in the way", and a policy needs how
         // far, which is a different question and not one the simulation ever
         // has to answer.
+        //
+        // ⚠️ The march SKIPS open ground rather than probing every four pixels,
+        // and the result is identical rather than approximate. Walkmask.Clearance
+        // gives the Chebyshev cell distance to the nearest solid cell; a
+        // clearance of c guarantees every world pixel within 6c - 7 of the probe
+        // is open, so advancing by no more than that lands somewhere already
+        // known to be open and cannot step over the first solid probe. Naive:
+        // 5.02 us a fan averaged over 512 map positions; this: 2.73 us.
+        // ObservationRayFanTests pins the two together.
+        var mask = view.Collision.Mask;
+        var clearance = mask.Clearance;
+        var width = mask.Width;
+        var height = mask.Height;
+        var originX = self.X;
+        var originY = self.Y;
+
         for (var i = 0; i < Rays; i++)
         {
-            var angle = i * (2 * Math.PI / Rays);
-            var dx = Math.Cos(angle);
-            var dy = Math.Sin(angle);
-
+            var (dx, dy) = RayDirections[i];
             var distance = RayRange;
 
-            for (var step = 4.0; step <= RayRange; step += 4.0)
+            for (var probe = 1; probe <= RayProbes; probe++)
             {
-                var x = (int)Math.Round(self.X + (dx * step));
-                var y = (int)Math.Round(self.Y + (dy * step));
+                var step = probe * RayStep;
+                var column = CollisionWorld.CellOf((int)Math.Round(originX + (dx * step)));
+                var row = CollisionWorld.CellOf((int)Math.Round(originY + (dy * step)));
 
-                if (view.Collision.IsSolidAt(x, y))
+                // Off-mask is open — Walkmask.IsSolid's own rule — and carries no
+                // clearance, so a ray outside the map walks probe by probe. That
+                // is rare and correct; seeding the border with a skip would need
+                // a claim about geometry that is not there.
+                if ((uint)column >= (uint)width || (uint)row >= (uint)height)
+                    continue;
+
+                var open = clearance[(row * width) + column];
+
+                if (open == 0)
                 {
                     distance = step;
                     break;
                 }
+
+                var skip = SafeSkipPixels(open) / (int)RayStep;
+
+                if (skip > 1)
+                    probe += skip - 1;
             }
 
             o[at++] = (float)(distance / RayRange);

@@ -935,17 +935,83 @@ no inference path, no weights format (that is `gg2-rl` phase 2's arrival). No
 rollout-search bot (`Gg2.Bots`, `gg2-rl` phase 1). No full-match episodes. No
 reaction-delay model (phase 5 — only its observation field exists).
 
+## ⚠️ The reset reload — five milliseconds to start a one-millisecond episode
+
+**Found 2026-08-30, and it had been there since the env was built.**
+
+`DuelEnv.Reset` called `ScenarioWorld.Load`, which read the map PNG off disk,
+decoded it, decoded the walkmask, built a `CollisionWorld` — and **re-parsed the
+nav cache**, which for `ctf_truefort` is 2 MB of text. **5.121 ms.** An episode
+of 120 decisions is about **0.9 ms** of simulation. So starting an episode cost
+between five and six times as much as running it, and `EnvBatch`'s constructor
+paid it once per world on top.
+
+The split, on `ctf_truefort`: nav parse **4.80 ms**, map decode **0.281 ms**,
+`new CollisionWorld` **0.009 ms**.
+
+`ScenarioResources` fixes it by caching the two things that are **deeply
+immutable** — the `LevelMap` and the `NavGraph` — process-wide, and rebuilding
+the `CollisionWorld` per world for 0.009 ms rather than reasoning about
+`SetCaptureZones`. `ScenarioWorld.Load` reads through it by default, so the test
+suite gets it too.
+
+⚠️ **Why nobody saw it.** Three separate reasons, and each is reusable:
+
+- **It is not on the step path.** Every profile anyone had reasoned about was of
+  a *step*, and a reset is not one. The cost only appears when you ask how often
+  an episode ends — 0.12 times per round trip at batch 16, which multiplied by
+  5.1 ms is 0.61 ms against a 0.14 ms of everything else.
+- **The throughput number was healthy.** 34,073 steps/sec cleared the 20k floor
+  the programme was gated on, so the number that would have prompted the question
+  had already answered a different one and been filed.
+- **`--nav` is passed unconditionally**, by `gg2-rl` and by most tests, even for
+  a duel with no scripted side. A graph nothing was going to use was parsed for
+  every episode of every world. ⚠️ **Still true, and still worth fixing on the
+  caller's side** — it is now 10 µs instead of 5 ms, so it is no longer urgent
+  and no longer interesting, which is exactly how this sort of thing survives.
+
+⚠️ **Allocation went with it**: 2.98 MB per round trip at batch 16 became
+**23.6 KB**, because a reset was building a fresh 145 KB `WorldState`, a
+`CollisionWorld` and a nav graph each time. `CLAUDE.md` forbids allocating in the
+tick loop; nothing forbade it in the reset, and nothing was watching.
+
+⚠️ **The remaining allocation is the reset too** — a `DuelEnv.Reset` still
+builds a whole new `ScenarioWorld` where it could clear the one it has. That is
+~1.5 KB a round trip and about 1% of the time, so it is written down here rather
+than done.
+
 ## Measurements
 
 | Measurement | Value | Build | When |
 |---|---|---|---|
-| Decision steps/sec, batch 1 | **8,753** | Release | 2026-08-28 |
-| Decision steps/sec, batch 64 | **34,073** | Release | 2026-08-28 |
+| Decision steps/sec, batch 1 | 8,753 → **9,060** | Release | 2026-08-28 → 08-30 |
+| Decision steps/sec, batch 64 | 34,073 → **40,700** | Release | 2026-08-28 → 08-30 |
 | Decision steps/sec, batch 64, 2 threads | 36,173 | Release | 2026-08-28 |
 | Decision steps/sec, batch 64, 8 threads | 37,592 | Release | 2026-08-28 |
-| `ObservationWriter.Write`, one call | **~5.0 µs** | Release | 2026-08-28 |
-| Sixteen of them — `gg2-rl` phase 2's budget unit | **79 µs, 7.9% of 1 ms** | Release | 2026-08-28 |
+| **A round trip on a real map with nav, batch 16** — `gg2-rl`'s training shape | **0.749 → 0.204 ms, 3.67x** | Release | 2026-08-30 |
+| — of which the map and nav reload | **0.61 → 0.00 ms** (see "the reset reload") | Release | 2026-08-30 |
+| — of which the observation writer | 0.138 → **0.100 ms** (the ray fan skips open ground) | Release | 2026-08-30 |
+| — of which serialisation | 0.004 ms, **2%** ⚠️ not the lever, see below | Release | 2026-08-30 |
+| Bytes allocated per round trip, batch 16 | **2.98 MB → 23.6 KB**, gen0 collections 250 → 9 per 1,500 rounds | Release | 2026-08-30 |
+| `ScenarioWorld.Load`, `ctf_truefort` with nav | **5.121 → ~0.01 ms** | Release | 2026-08-30 |
+| `ObservationWriter.Write`, ray fan, averaged over 512 map positions | **5.02 → 2.73 µs** | Release | 2026-08-30 |
+| `ObservationWriter.Write`, one call | ~5.0 µs (2026-08-28, one position) → **3.13 µs** averaged over a real duel | Release | 2026-08-28 → 08-30 |
+| Sixteen of them — `gg2-rl` phase 2's budget unit | 79 µs → **50 µs, 5.0% of 1 ms** | Release | 2026-08-28 → 08-30 |
 
+⚠️ **The two `steps/sec` rows are `gg_debug` with no nav, which is this
+measurement's WORST case for the 2026-08-30 work** — there is no 2 MB nav cache
+to stop re-parsing and the map is 636 bytes. The 3.67x row is the configuration
+`gg2-rl` actually trains in. Quoting the 1.28x as "the speedup" understates it by
+almost threefold; quoting the 3.67x as "the throughput" overstates what a smoke
+run will print. **They are different questions and both are here.**
+
+⚠️ **Nothing in that work moved a number.** Observations and reward components
+were digested over 4,012,800 floats across `gg_debug`, `ctf_truefort` and
+`cp_dirtbowl` (multi-area) on the before and after trees:
+`4FFEC587…`, `F6763969…`, `2DDB39FB…` — **identical on both**. So
+`SIM_UUID` did **not** move and no checkpoint was invalidated. That check exists
+because "a refactor cannot change behaviour" is a claim, and this repo has been
+wrong about that kind of claim before.
 ### Observation extraction, measured because somebody was about to design around it
 
 ⚠️ **Asked for by `gg2-rl`**, which had measured the *other* half of phase 2's
@@ -957,6 +1023,18 @@ decision.
 **The answer: extraction dominates inference by about seven to one**, and the
 budget is still comfortable. 79 µs of extraction plus ~14 µs of inference is
 about **9% of 1 ms**, so phase 2 has an order of magnitude in hand.
+
+⚠️ **Updated 2026-08-30: extraction is now ~50 µs for sixteen, so about 6%** —
+the ray fan skips open ground. The ratio to inference is four to one rather than
+seven to one, and extraction still dominates.
+
+⚠️ **And the 5.0 µs figure hid a dependence it should have named.** It was one
+call at one position, and a ray fan costs what the geometry around it costs:
+**3.2 µs in a corridor and 8.3 µs in an open room**, on the pre-2026-08-30 code.
+The row above is now averaged over a real duel instead, which is the number a
+budget should be built on. The flatness *in roster size* below is real and
+unaffected — that is a different variable, and it is the one that was actually
+being claimed.
 
 ⚠️ **It is flat in roster size**, which is the non-obvious part and the reason
 the number is safe to design around: 5.7, 5.1 and 5.0 µs at populations of 2, 8
@@ -987,11 +1065,51 @@ shared memory is not needed yet — which was the decision this number existed t
 make.
 
 ⚠️ **Threads barely help: 34k → 38k across 1 to 8.** That is the informative
-part. The simulation is not the bottleneck; the boundary is. Every step writes
-`worlds × 2 × 209` floats and serialises them one `BinaryPrimitives` call at a
-time in `EnvServer.Observations`, single-threaded, which is ~107 KB per step at
-batch 64. **If throughput ever needs to go up, that loop is the lever and more
-threads are not** — and shared memory would attack exactly this.
+part, and **the conclusion originally drawn from it was wrong.**
+
+### ⛔ Superseded 2026-08-30 — the serialisation loop was never the lever
+
+**What this document said**, from the day the throughput was first measured until
+2026-08-30: *"the simulation is not the bottleneck; the boundary is … every step
+serialises `worlds × 2 × 209` floats one `BinaryPrimitives` call at a time … if
+throughput ever needs to go up, that loop is the lever and more threads are
+not."* `gg2-rl` repeated it in its own `docs/PLAN.md`.
+
+**Measured, at last:** that loop is **2%** of a batch-16 round trip. The three
+things that actually cost anything were
+
+| | share of the round trip, before | |
+|---|---|---|
+| re-reading and re-parsing the map and nav cache **on every episode reset** | **~80%** | nobody had looked |
+| the observation writer, 88% of it the geometry ray fan | ~19% | |
+| serialising the floats | **~1%** | the one named as the lever |
+
+⚠️ **The reasoning that produced the wrong answer is worth keeping, because it
+was not careless.** "Threads move it 1.1x, so the parallel part is not the
+bottleneck" is *sound*, and it correctly located the cost outside
+`MatchSimulation.Tick`. What it then did was pick the most visible serial thing —
+a loop with a per-float call in it, right there in `EnvServer` — and stop.
+**`ScenarioWorld.Load` is serial too, and it is not in `EnvServer`, and it does
+file I/O**; it was invisible precisely because it is on the reset path rather
+than the step path and nobody had asked how often a reset happens.
+
+⚠️ **The general form: an elimination argument tells you which half, not which
+line.** "Not the parallel part" left two candidates and only one of them was on
+screen. The fix is the same as everywhere else in this repo — **measure the
+half you concluded into, do not nominate a line inside it.** One `Stopwatch`
+around three regions settled it in ten minutes.
+
+⚠️ **And a benchmark that warms up for 50 iterations measures tier-0 code.** The
+first attempt at this breakdown reported a duel tick at **23 µs** with one world
+and **2.9 µs** with 64 — the same code, the same content. .NET promotes a method
+after 30 calls but recompiles it in the background, so a short run never leaves
+the unoptimised build, and a *small* configuration finishes before the rejit
+lands. Warm by total work, not by iteration count; the numbers above use ≥60,000
+world-steps of warmup and reproduce to ±1%.
+
+The serialisation is a single `MemoryMarshal.AsBytes` copy now anyway — it was
+two minutes of work and it is worth the 2% — with the per-float loop kept for a
+big-endian host.
 
 ⚠️ **Both figures name their build, and the CLI prints it with the number.**
 CLAUDE.md's standing rule: this project's headroom figure sat stale in four

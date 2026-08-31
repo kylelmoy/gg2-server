@@ -257,6 +257,30 @@ public sealed class ObservationWriterTests
     /// first, because the first call through a code path JITs and that is not an
     /// allocation the steady state makes.
     /// </para>
+    /// <para>
+    /// ⚠️ <b>The warm-up was 5 calls and had to become 200, and the reason is the
+    /// same one that made a benchmark lie earlier the same day.</b> .NET promotes
+    /// a method to tier-1 after <b>30</b> calls, in the background — so 5 warm-up
+    /// calls followed by 50 measured ones puts the promotion <em>inside the
+    /// measured window</em>, and the tiering machinery's own bookkeeping lands on
+    /// the measuring thread. It surfaced as this test failing roughly one run in
+    /// six, with a different byte count each time, on 2026-08-30 when the ray fan
+    /// grew — a bigger method takes longer to promote, so the window widened
+    /// until it was hit.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>The property itself was never in doubt and was checked separately:
+    /// 200,000 calls in a standalone process allocate zero, at tier-0 and at
+    /// tier-1 both.</b> This is a fix to the measurement, not a relaxation of the
+    /// claim — the assertion is still <c>== 0</c>. Do not lower the warm-up
+    /// again; it has to clear 30 with room for the rejit to land.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>The promotion warm-up does NOT step the episode</b>, and the first
+    /// attempt at this fix did — which ran past <c>DecisionCap</c> of 100 and
+    /// threw on every run. Branch coverage needs a few steps; tier-1 needs a few
+    /// hundred writes. They are separate loops because they want different things.
+    /// </para>
     /// </remarks>
     [Fact]
     public void WritingAnObservationAllocatesNothing()
@@ -270,6 +294,16 @@ public sealed class ObservationWriterTests
             var warm = new WorldView(in env.World.State, env.World.Collision);
             ObservationWriter.Write(in warm, env.RedSlot, buffer);
             env.Step(new EnvAction { Fire = 1, AimDelta = ActionDecoder.AimCentreBin }, EnvAction.Idle);
+        }
+
+        // ⚠️ And past tier-1 promotion — 30 calls — WITHOUT stepping. The episode
+        // has a decision cap of 100 and a warm-up that stepped this many times
+        // would run it out and throw, which is what a first attempt at this fix
+        // did on every run. See the remarks.
+        for (var i = 0; i < 300; i++)
+        {
+            var warm = new WorldView(in env.World.State, env.World.Collision);
+            ObservationWriter.Write(in warm, env.RedSlot, buffer);
         }
 
         var before = GC.GetAllocatedBytesForCurrentThread();

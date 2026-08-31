@@ -144,24 +144,49 @@ public sealed class ScenarioWorld
     /// <see cref="Nav"/> null rather than failing — <c>navCacheLoad.gml</c>'s own
     /// contract, and a scenario about physics does not need a graph.
     /// </param>
+    /// <param name="resources">
+    /// The decoded-map cache to read through. <see cref="ScenarioResources.Shared"/>
+    /// by default; pass null to decode fresh.
+    /// </param>
     /// <remarks>
     /// ⚠️ <b><see cref="LevelMap.ForArea"/> at the load site, once.</b> A tall
     /// map is several rounds stacked vertically and only one area's entities
     /// exist; narrowing here is what makes everything downstream — the
     /// collision world included — see the right one. The nav graph is loaded for
     /// the same area for the same reason.
+    /// <para>
+    /// ⚠️ <b>The map and the nav graph come from a cache; the
+    /// <c>CollisionWorld</c> and the <see cref="WorldState"/> never do.</b> This
+    /// method is the episode reset path — a duel batch calls it every time an
+    /// episode ends — and re-parsing <c>ctf_truefort</c>'s 2 MB nav text cost
+    /// <b>5.1 ms</b> against the <b>0.9 ms</b> the episode itself takes to
+    /// simulate. <see cref="ScenarioResources"/> says why sharing those two and
+    /// only those two is safe.
+    /// </para>
     /// </remarks>
-    public static ScenarioWorld Load(string map, int area, string mapDirectory, string? navDirectory)
+    public static ScenarioWorld Load(
+        string map, int area, string mapDirectory, string? navDirectory)
+        => Load(map, area, mapDirectory, navDirectory, ScenarioResources.Shared);
+
+    /// <inheritdoc cref="Load(string, int, string, string?)"/>
+    public static ScenarioWorld Load(
+        string map, int area, string mapDirectory, string? navDirectory, ScenarioResources? resources)
     {
         ArgumentNullException.ThrowIfNull(map);
         ArgumentNullException.ThrowIfNull(mapDirectory);
 
-        var path = Path.Combine(mapDirectory, map + ".png");
-        var level = LevelMap.FromPng(map, File.ReadAllBytes(path)).ForArea(area);
+        LevelMap level;
+        NavGraph? nav;
 
-        NavGraph? nav = null;
-        if (navDirectory is not null)
-            NavCache.TryLoad(navDirectory, map, area, out nav);
+        if (resources is not null)
+        {
+            (level, nav) = resources.Get(map, area, mapDirectory, navDirectory);
+        }
+        else
+        {
+            level = ScenarioResources.Read(map, area, mapDirectory);
+            nav = navDirectory is null ? null : ScenarioResources.ReadNav(map, area, navDirectory);
+        }
 
         return new ScenarioWorld(level, new CollisionWorld(level), nav);
     }
