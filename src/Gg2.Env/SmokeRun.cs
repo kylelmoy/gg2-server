@@ -60,6 +60,11 @@ public static class SmokeRun
         var server = Task.Run(() =>
         {
             using var accepted = listener.AcceptTcpClient();
+
+            // As EnvServer.Serve does, and for the same reason — this run exists
+            // to report the throughput a real client sees.
+            accepted.NoDelay = true;
+
             using var stream = accepted.GetStream();
 
             new EnvServer(mapDirectory).ServeOne(stream);
@@ -69,6 +74,7 @@ public static class SmokeRun
         {
             using var client = new TcpClient();
             client.Connect(IPAddress.Loopback, port);
+            client.NoDelay = true;
 
             using var stream = client.GetStream();
 

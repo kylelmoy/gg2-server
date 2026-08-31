@@ -216,6 +216,105 @@ public sealed class EnvProtocolTests : IDisposable
         Assert.Equal(1f, Observation(reply, 0, 0, GoalAt + 3 + 0));
     }
 
+    /// <summary>
+    /// A frame reaches the socket as ONE write, not a header write followed by a
+    /// body write.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>This is the gate on a latency fix, and the property it pins is
+    /// invisible to every other test here.</b> Two writes put a 4-byte segment on
+    /// the wire ahead of the body, which is exactly what Nagle holds back waiting
+    /// for an ACK. Measured at batch 1 before the fix: <b>12 round trips in
+    /// 20,000 stalled past 10 ms, worst 25.3 ms</b>; after, zero. Every
+    /// correctness test passes either way — a frame that arrives in two segments
+    /// is still a correct frame — so nothing but this would notice a revert.
+    /// <para>
+    /// ⚠️ <b>Throughput cannot see it either.</b> The smoke run reads 40k
+    /// steps/sec before and after, because a tight request/response loop keeps
+    /// the ACK clock running and rarely stalls. It is the trainer stepping N
+    /// workers in lockstep that pays the worst of them.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void AFrameIsOneWrite()
+    {
+        foreach (var size in new[] { 0, 1, 200, 26_752, 200_000 })
+        {
+            var counter = new CountingStream();
+
+            EnvProtocol.WriteFrame(counter, new byte[size]);
+
+            Assert.Equal(1, counter.Writes);
+            Assert.Equal(4 + size, counter.Bytes);
+        }
+    }
+
+    /// <summary>
+    /// And writing one does not allocate, because it is on the per-step path.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Warmed past tier-1 promotion (30 calls) before measuring.</b> .NET
+    /// rejits in the background, so a short warm-up puts the promotion inside the
+    /// measured window and its bookkeeping lands on the measuring thread — which
+    /// made a sibling test in this repo fail one run in six.
+    /// </remarks>
+    [Fact]
+    public void WritingAFrameDoesNotAllocate()
+    {
+        var counter = new CountingStream();
+        var body = new byte[26_752];
+
+        for (var i = 0; i < 300; i++)
+            EnvProtocol.WriteFrame(counter, body);
+
+        var before = GC.GetAllocatedBytesForCurrentThread();
+
+        for (var i = 0; i < 50; i++)
+            EnvProtocol.WriteFrame(counter, body);
+
+        Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
+    }
+
+    /// <summary>Counts writes and bytes, keeps nothing.</summary>
+    private sealed class CountingStream : Stream
+    {
+        public int Writes { get; private set; }
+
+        public long Bytes { get; private set; }
+
+        public override bool CanRead => false;
+
+        public override bool CanSeek => false;
+
+        public override bool CanWrite => true;
+
+        public override long Length => Bytes;
+
+        public override long Position { get => Bytes; set => throw new NotSupportedException(); }
+
+        public override void Flush()
+        {
+        }
+
+        public override void Write(ReadOnlySpan<byte> buffer)
+        {
+            Writes++;
+            Bytes += buffer.Length;
+        }
+
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            ArgumentNullException.ThrowIfNull(buffer);
+            Write(buffer.AsSpan(offset, count));
+        }
+
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+        public override void SetLength(long value) => throw new NotSupportedException();
+    }
+
     private static byte[] GoalBody(int world, int side, int kind, double x, double y) =>
         Concat(Int(world), Int(side), Int(kind), Int(1), Real(x), Real(y));
 

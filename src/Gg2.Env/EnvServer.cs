@@ -63,6 +63,16 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
         try
         {
             using var client = listener.AcceptTcpClient();
+
+            // ⚠️ Nagle OFF. This is a request/response protocol on loopback where
+            // the client is blocked until the reply lands, so there is never a
+            // second small write to coalesce with — Nagle can only ever add
+            // delay. Measured at batch 1 before WriteFrame was coalesced: 12
+            // round trips in 20,000 stalled past 10 ms, worst 25.3 ms. A trainer
+            // stepping N workers in lockstep waits for the worst of them, so a
+            // rare 25 ms stall is not rare at the loop level.
+            client.NoDelay = true;
+
             using var stream = client.GetStream();
 
             ServeOne(stream, cancellation);

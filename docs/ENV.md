@@ -935,6 +935,84 @@ no inference path, no weights format (that is `gg2-rl` phase 2's arrival). No
 rollout-search bot (`Gg2.Bots`, `gg2-rl` phase 1). No full-match episodes. No
 reaction-delay model (phase 5 — only its observation field exists).
 
+## ⛔ Where the training time actually goes — measured from outside, 2026-08-31
+
+**Read this before optimising anything in this project for `gg2-rl`'s sake.**
+
+Two `phase3.py` runs were observed live for 62 seconds, from outside both repos,
+by sampling process CPU counters:
+
+| | CPU |
+|---|---|
+| 16 `gg2-env` workers | **0.67 cores total — 4.2% of one core each** |
+| 2 Python trainers | 1.41 cores |
+| **the whole machine** | **2.08 of 24 logical cores — 8.7% busy** |
+
+⛔ **The machine is 91% idle while training, and the env is 4% of it.** Per run:
+Python is busy about 70% of the wall clock, the env workers about 4%, and the
+rest is neither — round trips, blocking, scheduling.
+
+⚠️ **So making this simulation faster cannot move `gg2-rl`'s iteration time by
+more than a few percent.** The 3.67x of 2026-08-30 is real and the numbers behind
+it are honest; what it bought the *trainer* is bounded by a duty cycle of 4%. An
+env that ran infinitely fast would save that 4% and nothing else.
+
+⚠️ **This is the check that the previous round of work did not do**, and it is a
+cheaper check than any of the optimising was: a single 60-second CPU sample,
+requiring no instrumentation in either repo and no cooperation from the trainer.
+**Measure the consumer's duty cycle before optimising the producer.** A
+throughput benchmark on an idle box answers "how fast can this go", which is a
+different question from "what is anybody waiting for".
+
+⚠️ **The corollary for latency.** A worker that is idle 96% of the time is
+waiting, so what it costs the trainer is *per-round-trip latency*, not
+throughput — and those are different numbers here. That is why the boundary was
+re-measured as latency (below) rather than trusted from the steps/sec table.
+
+⚠️ **And one thing worth knowing about how the pool runs**: the workers are
+restarted periodically — 32 distinct PIDs over 30 seconds with 16 alive. Bring-up
+is **~92 ms** per worker (33 ms spawn to serving, 15 ms connect and handshake,
+43 ms `MakeBatch` at 16 worlds), and in a cold process the load path is
+JIT-dominated: `LevelMap.FromPng` reads **11.4 ms** cold against 0.28 ms warm,
+`NavCache.TryLoad` **18.2 ms** against 4.8 ms. It is amortised over roughly 30
+iterations, so it is small — but it is the reason `ReadyToRun` would be the lever
+if bring-up ever mattered, rather than anything algorithmic.
+
+## The boundary is latency, not throughput (2026-08-31)
+
+Per-round-trip latency over a real socket, `ctf_truefort`, 20,000 timed round
+trips after a 3,000 warm-up:
+
+| batch | before | after | |
+|---|---|---|---|
+| 1 | 79.3 µs mean, 58.3 p50 | **50.7 µs mean, 44.2 p50** | **1.56x** |
+| 16 | 289.2 µs mean, 281.1 p50 | **265.7 µs mean, 258.8 p50** | 1.09x |
+| 64 | — | 961.3 µs mean | — |
+| **round trips stalling past 10 ms, batch 1** | **12 in 20,000, worst 25.3 ms** | **0** | |
+
+Two causes, both fixed:
+
+- **`WriteFrame` wrote the 4-byte header and the body separately.** A small
+  segment ahead of the body is the exact shape Nagle holds back waiting for an
+  ACK. It is one write now, assembled in a **pooled** buffer — a reply is 107 KB
+  at batch 64 and this is the per-step path, so allocating would trade a syscall
+  for the large-object heap. `EnvProtocolTests.AFrameIsOneWrite`.
+- **`NoDelay` was never set.** This is request/response on loopback with the
+  client blocked until the reply lands, so there is never a second small write to
+  coalesce with and Nagle can only add delay. Set on the accepted socket.
+
+⚠️ **The two are independent and both were measured on their own** — `NoDelay`
+alone took the batch-1 mean 79.3 → 69.8, coalescing alone 79.3 → 54.4, together
+50.7. Neither replaces the other: coalescing removes the small segment, `NoDelay`
+covers the frames that are still small.
+
+⚠️ **`smoke` cannot see this and reads 40k steps/sec before and after.** A tight
+request/response loop keeps the ACK clock running and rarely stalls; the trainer
+stepping N workers in lockstep pays the worst of them on every step. **A stall
+that happens 0.06% of the time happens on most steps once there are enough
+workers.** This is why the throughput table above did not move and the change is
+still worth having.
+
 ## ⚠️ The reset reload — five milliseconds to start a one-millisecond episode
 
 **Found 2026-08-30, and it had been there since the env was built.**
@@ -995,6 +1073,11 @@ than done.
 | Bytes allocated per round trip, batch 16 | **2.98 MB → 23.6 KB**, gen0 collections 250 → 9 per 1,500 rounds | Release | 2026-08-30 |
 | `ScenarioWorld.Load`, `ctf_truefort` with nav | **5.121 → ~0.01 ms** | Release | 2026-08-30 |
 | `ObservationWriter.Write`, ray fan, averaged over 512 map positions | **5.02 → 2.73 µs** | Release | 2026-08-30 |
+| **Socket round trip, batch 1** | 79.3 → **50.7 µs mean** | Release | 2026-08-31 |
+| Socket round trip, batch 16 | 289.2 → **265.7 µs mean** | Release | 2026-08-31 |
+| Round trips stalling past 10 ms, batch 1 | **12 in 20,000 → 0** | Release | 2026-08-31 |
+| ⛔ **`gg2-env` share of a live training iteration** | **~4%** — the workers use 4.2% of one core each while the machine sits 91% idle | Release | 2026-08-31 |
+| `gg2-env` worker bring-up, 16 worlds | ~92 ms (33 spawn + 15 handshake + 43 `MakeBatch`) | Release | 2026-08-31 |
 | `ObservationWriter.Write`, one call | ~5.0 µs (2026-08-28, one position) → **3.13 µs** averaged over a real duel | Release | 2026-08-28 → 08-30 |
 | Sixteen of them — `gg2-rl` phase 2's budget unit | 79 µs → **50 µs, 5.0% of 1 ms** | Release | 2026-08-28 → 08-30 |
 
