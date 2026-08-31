@@ -952,10 +952,29 @@ by sampling process CPU counters:
 Python is busy about 70% of the wall clock, the env workers about 4%, and the
 rest is neither — round trips, blocking, scheduling.
 
-⚠️ **So making this simulation faster cannot move `gg2-rl`'s iteration time by
-more than a few percent.** The 3.67x of 2026-08-30 is real and the numbers behind
-it are honest; what it bought the *trainer* is bounded by a duty cycle of 4%. An
-env that ran infinitely fast would save that 4% and nothing else.
+⚠️ **So making this simulation COMPUTE faster cannot move `gg2-rl`'s iteration
+time by more than a few percent.** The 3.67x of 2026-08-30 is real and the
+numbers behind it are honest; what it bought the *trainer* is bounded by a duty
+cycle of 4%. An env that computed infinitely fast would save that 4% and nothing
+else.
+
+⛔ **But "the env is 4% of an iteration" is the wrong sentence and this document
+said it.** 4% is a **CPU** share. **A worker blocked on a round trip burns 0% CPU
+and sits on the trainer's critical path for the whole time it is blocked**, so
+the env's *occupancy* of that path is larger — possibly much larger — and this
+measurement cannot see it. `gg2-rl` expects its own wall-clock figure to come out
+far above 4% and that will **not** be a disagreement; it is the reconciliation:
+
+| | |
+|---|---|
+| this 4% | the env is not **computing** much |
+| `gg2-rl`'s share | the env is what its workers are **waiting for** |
+
+⚠️ **Which is exactly why latency is the right target and throughput was not.**
+You cannot make waiting faster by making the computation faster when the
+computation is not the wait. Both halves of that follow from the same 96%-idle
+number, and the first round of work read only the half that flattered a
+throughput benchmark.
 
 ⚠️ **This is the check that the previous round of work did not do**, and it is a
 cheaper check than any of the optimising was: a single 60-second CPU sample,
@@ -1005,6 +1024,43 @@ Two causes, both fixed:
 alone took the batch-1 mean 79.3 → 69.8, coalescing alone 79.3 → 54.4, together
 50.7. Neither replaces the other: coalescing removes the small segment, `NoDelay`
 covers the frames that are still small.
+
+### ⚠️ Corrected by `gg2-rl`: the fault was ONE-SIDED, and the A/B above hid that
+
+**`gg2-rl`'s client has had `TCP_NODELAY` since its first phase 0 commit**
+(`src/gg2rl/env/protocol.py`, immediately after `create_connection`), **and its
+`send_frame` was already one write** — `sendall(header + body)`, coalesced by
+construction rather than by intent. So:
+
+- **Nagle needs a small unacknowledged segment followed by another small write
+  from the *same sender*.** With `NODELAY` on their side and not on this one,
+  their requests always went immediately and **only this server's replies could
+  ever be held**. The two-write `WriteFrame` was the entire mechanism, and there
+  was never a symmetric version of this bug to find.
+- ⚠️ **The four cells measured above toggled `NoDelay` on BOTH ends at once**,
+  because the benchmark owns both sockets. **So the "NoDelay alone" row describes
+  a configuration no real deployment was ever in** — the real client already had
+  it. The row that corresponds to what `gg2-rl` actually experienced is
+  *two-write server, client `NODELAY` on*, which is not one of the four. The
+  stalls are still real and still theirs: Nagle is a property of the sender, and
+  the sender holding segments was this server.
+- ⚠️ **Keep the server-side `NoDelay` anyway.** It is defence for any client that
+  is not `gg2-rl`, and a server should not depend on its clients configuring
+  their sockets correctly. But **the credit for the measured win belongs to the
+  coalescing**, not to it.
+
+⚠️ **A knock-on neither of us costed: coalescing also fixes the client's READ
+path.** `read_frame` reads 4 header bytes and then the body. Two writes here
+meant that second read could wait for a second segment to arrive; one write means
+the body is already in the client's buffer when the header read returns, so the
+second `recv` returns immediately. That is a syscall's worth of latency per round
+trip on top of the Nagle fix, in the direction being measured.
+
+⚠️ **Buffering the READ side was tried and is WORSE.** Wrapping both ends in a
+`BufferedStream` (1 MB) to serve the body read from memory: batch 1 **50.8 →
+63.3 µs**, batch 16 **249.9 → 269.7 µs**. The extra copy through the buffer costs
+more than the `recv` it saves, because the body has already arrived by then. Do
+not try this again.
 
 ⚠️ **`smoke` cannot see this and reads 40k steps/sec before and after.** A tight
 request/response loop keeps the ACK clock running and rarely stalls; the trainer
@@ -1076,7 +1132,7 @@ than done.
 | **Socket round trip, batch 1** | 79.3 → **50.7 µs mean** | Release | 2026-08-31 |
 | Socket round trip, batch 16 | 289.2 → **265.7 µs mean** | Release | 2026-08-31 |
 | Round trips stalling past 10 ms, batch 1 | **12 in 20,000 → 0** | Release | 2026-08-31 |
-| ⛔ **`gg2-env` share of a live training iteration** | **~4%** — the workers use 4.2% of one core each while the machine sits 91% idle | Release | 2026-08-31 |
+| ⛔ **`gg2-env` CPU share of a live training iteration** | **~4%** — 4.2% of one core each, machine 91% idle. ⚠️ **CPU, not occupancy**: a worker blocked on a round trip burns 0% and still holds the critical path | Release | 2026-08-31 |
 | `gg2-env` worker bring-up, 16 worlds | ~92 ms (33 spawn + 15 handshake + 43 `MakeBatch`) | Release | 2026-08-31 |
 | `ObservationWriter.Write`, one call | ~5.0 µs (2026-08-28, one position) → **3.13 µs** averaged over a real duel | Release | 2026-08-28 → 08-30 |
 | Sixteen of them — `gg2-rl` phase 2's budget unit | 79 µs → **50 µs, 5.0% of 1 ms** | Release | 2026-08-28 → 08-30 |
