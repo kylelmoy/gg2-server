@@ -954,6 +954,26 @@ and `gg2-rl` has said it will bring one if that is how it lands.
 Latency per trip is already 50.7 µs at batch 1; the win would come from doing
 more per exchange, and shared memory is one way of many.
 
+⚠️ **RE-CHECK THIS GATE BEFORE QUOTING IT.** It rests on `gg2-rl` being GIL-bound
+in `collect` and serial in its PPO update, measured 2026-08-31. **If that work has
+landed, this criterion is stale and the answer may have changed** — so the thing
+to do is ask for a current profile, not repeat this paragraph.
+
+⚠️ **That last line is the device, and it is worth more than the criterion it
+guards.** `gg2-rl` supplied it: the entry in its own `CLAUDE.md` that said "the
+boundary is the cost, not the maths" — which is why numpy went unexamined for
+three phases — was caught today **only because whoever last touched it had written
+"re-measure before repeating this sentence" into the claim**. It was the third
+entry-point sentence in that repo to outlive its measurement, and the only one of
+the three that carried its own falsification condition was the only one caught
+before somebody acted on it. **The others were code-right, prose-stale, invisible
+to every test, and findable only by a reader who acted on them.**
+
+⚠️ **So: a claim that would be expensive to act on wrongly should say what would
+show it has gone stale.** It is not a test and cannot be one — this is exactly the
+class `CLAUDE.md` calls "the failure mode no test can catch" — but it survives the
+person who wrote it, which a good intention does not.
+
 ## ⛔ Where the training time actually goes — measured from outside, 2026-08-31
 
 **Read this before optimising anything in this project for `gg2-rl`'s sake.**
@@ -1056,9 +1076,16 @@ suggests, because some of the occupancy is on the far side of the socket.
 ⚠️ **Their ceiling was wrong first, and the control is what caught it.** The first
 version used the thread count (15x). The real ceiling is threads × the fraction of
 a *solo* worker's time that is env — 15 × 61% = 9.09 — because a worker alone is
-only 61% env-bound. They found it by running a sequential arm they had predicted
-would come out at 1.0; it came out at 0.60, which falsified the threshold rather
-than confirming it. **A control that can only agree with you is not a control.**
+only 61% env-bound.
+
+⚠️ **Recorded at the height it actually happened, because `gg2-rl` corrected this
+entry downward against its own credit.** They did **not** run the sequential arm
+expecting to falsify anything. They ran it as an **instrument check**, predicted
+1.0 because that is what "fully serialised" ought to mean, and got **0.60**. The
+whole of the discipline was *not shrugging at a control that disagreed*. **The
+reproducible lesson is "believe the control", not "have good instincts"** — and
+the first version of this paragraph made it the second, which would have made it
+a story about judgement instead of a thing anyone can do.
 
 ⚠️ **What `9f0d344` bought a training iteration is UNMEASURED, and deliberately
 so.** Its effect is a stall tail; their benchmark resolves 0.4% on a slope; and
