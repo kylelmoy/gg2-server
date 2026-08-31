@@ -930,10 +930,29 @@ to do it now rather than after `gg2-rl` phase 2.
 ## Out of scope, so nobody re-opens it
 
 **Serialising the bot layer**, which is what `Snapshot` with a bot-driven slot
-would need — refused explicitly instead. No shared memory until the throughput number above justifies it. No ML runtime,
+would need — refused explicitly instead. No ML runtime,
 no inference path, no weights format (that is `gg2-rl` phase 2's arrival). No
 rollout-search bot (`Gg2.Bots`, `gg2-rl` phase 1). No full-match episodes. No
 reaction-delay model (phase 5 — only its observation field exists).
+
+### ⛔ Shared memory: the refusal stands, and the CRITERION was wrong
+
+This document said "no shared memory until **the throughput number** above
+justifies it". **Throughput was never going to justify it and never could.**
+34,073 steps/sec cleared the floor on day one and the transport has not been the
+bound for a moment since; measuring it harder would only ever have re-confirmed
+that.
+
+⚠️ **The criterion that replaces it**, from the 2026-08-31 profile:
+`gg2-rl`'s collect loop is **69% GIL-bound** — 2.86x overlap against a 9.09x
+ceiling — and its PPO update is 36% of an iteration and entirely serial. Shared
+memory would be feeding a bottleneck that is not the transport. **The honest
+justification is a profile taken AFTER that work showing the loop transport-bound**,
+and `gg2-rl` has said it will bring one if that is how it lands.
+
+⚠️ **And if it ever is justified, the lever is round TRIPS, not their cost.**
+Latency per trip is already 50.7 µs at batch 1; the win would come from doing
+more per exchange, and shared memory is one way of many.
 
 ## ⛔ Where the training time actually goes — measured from outside, 2026-08-31
 
@@ -989,13 +1008,65 @@ throughput — and those are different numbers here. That is why the boundary wa
 re-measured as latency (below) rather than trusted from the steps/sec table.
 
 ⚠️ **And one thing worth knowing about how the pool runs**: the workers are
-restarted periodically — 32 distinct PIDs over 30 seconds with 16 alive. Bring-up
-is **~92 ms** per worker (33 ms spawn to serving, 15 ms connect and handshake,
-43 ms `MakeBatch` at 16 worlds), and in a cold process the load path is
+restarted periodically — 32 distinct PIDs over 30 seconds with 16 alive. That is
+`gg2-rl`'s `rotate_every=10`, **deliberate rather than a leak**: it tears the pool
+down every ten iterations and rebuilds it, which is what buys matchup coverage.
+Bring-up is **~92 ms** per worker (33 ms spawn to serving, 15 ms connect and
+handshake, 43 ms `MakeBatch` at 16 worlds), and in a cold process the load path is
 JIT-dominated: `LevelMap.FromPng` reads **11.4 ms** cold against 0.28 ms warm,
-`NavCache.TryLoad` **18.2 ms** against 4.8 ms. It is amortised over roughly 30
-iterations, so it is small — but it is the reason `ReadyToRun` would be the lever
-if bring-up ever mattered, rather than anything algorithmic.
+`NavCache.TryLoad` **18.2 ms** against 4.8 ms. Amortised over ten iterations it is
+about 0.4%, so it does not matter — but `ReadyToRun` is the lever if that interval
+is ever shortened, rather than anything algorithmic.
+
+### ✅ Reconciled with `gg2-rl`'s own profile — and it is the GIL
+
+**Their measurement, idle machine, `gg2-server` 3bd0c5a, 34 iterations, 10
+discarded, medians, both arms** — a sequential control as well as the concurrent
+run, because a single arm cannot be interpreted:
+
+| | sequential | concurrent |
+|---|---|---|
+| iteration | 982.1 ms | 771.6 ms |
+| collect | 683.7 ms | 494.4 ms |
+| PPO update | 298.4 ms | 277.2 ms — **36%, single-threaded** |
+| `step()` wall, summed | 414.4 ms | **1412.4 ms** |
+| `step()` wall, max | 414.4 ms | 107.3 ms |
+
+Concurrency buys **1.27x**. Overlap reaches **2.86x against a ceiling of 9.09x**,
+so **69% of the available parallelism is lost to the GIL**.
+
+⛔ **The number that reconciles the two measurements is `step()` wall going
+414 → 1412 ms — 3.4x — for the same work.** The env did not get 3.4x slower.
+`step()` wall is socket **plus this server's compute plus the calling thread
+reacquiring the GIL**, and with fifteen threads the third term dominates.
+
+So both figures were right and they are the same system:
+
+| | |
+|---|---|
+| the 4% CPU above | the env is not **computing** much |
+| `gg2-rl`'s occupancy | what its workers are **waiting for** |
+
+⚠️ **And a large part of that occupancy is not this repo at all** — it is their
+own threads queueing for the interpreter *after the reply has already arrived*,
+charged to the call that is waiting. **That makes the case for stopping stronger
+than the 4% did**: an infinitely fast env saves less than the occupancy figure
+suggests, because some of the occupancy is on the far side of the socket.
+
+⚠️ **Their ceiling was wrong first, and the control is what caught it.** The first
+version used the thread count (15x). The real ceiling is threads × the fraction of
+a *solo* worker's time that is env — 15 × 61% = 9.09 — because a worker alone is
+only 61% env-bound. They found it by running a sequential arm they had predicted
+would come out at 1.0; it came out at 0.60, which falsified the threshold rather
+than confirming it. **A control that can only agree with you is not a control.**
+
+⚠️ **What `9f0d344` bought a training iteration is UNMEASURED, and deliberately
+so.** Its effect is a stall tail; their benchmark resolves 0.4% on a slope; and
+the mechanism those stalls would contend with is a GIL queue worth 69% of their
+parallelism. Measuring it would be reporting noise. **Not zero — unmeasured**, and
+the stall elimination is real on its own terms (12 per 20,000 → 0). They also
+retracted an earlier offer that their benchmark "should see a latency change if
+one is there"; at these sizes they no longer believe it can.
 
 ## The boundary is latency, not throughput (2026-08-31)
 
