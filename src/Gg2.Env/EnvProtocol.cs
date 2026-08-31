@@ -64,6 +64,36 @@ public enum EnvMessage : byte
     /// </para>
     /// </remarks>
     Candidates = 9,
+
+    /// <summary>
+    /// Sets the macro goal a slot's observation reports. <c>gg2-rl</c> phase 4.
+    /// </summary>
+    /// <remarks>
+    /// Body: <c>i32</c> world, <c>i32</c> side (0 red, 1 blue), <c>i32</c> kind,
+    /// <c>i32</c> hasTarget, <c>f64</c> x, <c>f64</c> y. A world of <c>-1</c>
+    /// means every world in the batch, which is what a trainer conditioning a
+    /// whole batch on one goal actually wants and saves it 128 round trips.
+    /// Reply: the ordinary observation block, so the caller sees the goal it just
+    /// set reflected in the vector rather than having to step to find out.
+    /// <para>
+    /// ⚠️ <b>No version bump, on <see cref="Candidates"/>'s precedent and for its
+    /// reason</b>: no existing message's body or reply changes by one byte, and a
+    /// client that never sends this is unaffected. <c>gg2-rl</c> had a sweep
+    /// running when this landed; a bump would have refused its handshake for a
+    /// feature it was not using.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>A goal SURVIVES the auto-reset at an episode boundary</b> — see
+    /// <c>DuelEnv.SetGoal</c> for why, and it is the half of this feature most
+    /// likely to surprise.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>An out-of-range kind is REFUSED, not clamped.</b> The goal one-hot
+    /// writes no column for one, which a policy reads as "no goal" rather than as
+    /// an error.
+    /// </para>
+    /// </remarks>
+    SetGoal = 10,
     Reset = 4,
     Snapshot = 5,
     Restore = 6,

@@ -107,7 +107,12 @@ public static class ObservationWriter
     /// stale features are worse than absent ones, because a presence flag of 0
     /// beside a stale position teaches the policy that the flag means nothing.
     /// </remarks>
-    public static void Write(in WorldView view, int slot, Span<float> destination)
+    /// <param name="goal">
+    /// The macro goal to report. <b><c>default</c> is "engage the nearest
+    /// enemy"</b>, which is what this block carried before goals were settable —
+    /// so an unchanged caller writes an unchanged observation.
+    /// </param>
+    public static void Write(in WorldView view, int slot, Span<float> destination, in AgentGoal goal = default)
     {
         if (destination.Length < Length)
         {
@@ -135,7 +140,7 @@ public static class ObservationWriter
         WriteEnemies(in view, slot, in self, destination, ref at);
         WriteProjectiles(in view, slot, in self, destination, ref at);
         WriteGeometry(in view, in self, destination, ref at);
-        WriteGoal(in view, slot, in self, destination, ref at);
+        WriteGoal(in view, slot, in self, in goal, destination, ref at);
 
         System.Diagnostics.Debug.Assert(at == Length, "the writer and Length disagree");
     }
@@ -384,26 +389,56 @@ public static class ObservationWriter
     }
 
     private static void WriteGoal(
-        in WorldView view, int slot, in CharacterState self, Span<float> o, ref int at)
+        in WorldView view, int slot, in CharacterState self, in AgentGoal goal, Span<float> o, ref int at)
     {
-        // ⚠️ Constant "engage the nearest enemy" in a duel, and present from day
-        // one rather than added with the first objective mode. docs/ENV.md's
+        // ⚠️ Was a constant "engage the nearest enemy" until 2026-08-30, and the
+        // block was reserved from day one for exactly this. docs/ENV.md's
         // hybrid-boundary rule: a macro goal the policy has never seen cannot be
         // introduced later without a layout bump and a retrain, and a constant
-        // column costs four floats.
-        Span<int> found = stackalloc int[1];
-        var count = view.NearestEnemies(slot, found);
+        // column costs four floats. gg2-rl phase 4 is what cashed that in.
+        //
+        // ⚠️ A DEFAULT AgentGoal takes the nearest-enemy path below, unchanged,
+        // so every observation written by a caller that knows nothing about goals
+        // is byte-identical to the ones every existing checkpoint trained on.
+        // ObservationRayFanTests' sibling, ObservationGoalTests, pins that.
+        double dx;
+        double dy;
+        var have = false;
 
-        if (count > 0)
+        if (goal.HasTarget)
         {
-            ref readonly var enemy = ref view.Character(found[0]);
+            dx = goal.TargetX - self.X;
+            dy = goal.TargetY - self.Y;
+            have = true;
+        }
+        else
+        {
+            Span<int> found = stackalloc int[1];
 
-            var dx = enemy.X - self.X;
-            var dy = enemy.Y - self.Y;
+            if (view.NearestEnemies(slot, found) > 0)
+            {
+                ref readonly var enemy = ref view.Character(found[0]);
+
+                dx = enemy.X - self.X;
+                dy = enemy.Y - self.Y;
+                have = true;
+            }
+            else
+            {
+                dx = 0;
+                dy = 0;
+            }
+        }
+
+        if (have)
+        {
             var distance = Math.Sqrt((dx * dx) + (dy * dy));
 
             if (distance > 0)
             {
+                // ⚠️ dy first, then dx. That is the order the block has always
+                // been written in and it is what every trained checkpoint reads;
+                // it looks like a transposition and is not one to fix.
                 o[at++] = (float)(dy / distance);
                 o[at++] = (float)(dx / distance);
             }
@@ -419,7 +454,10 @@ public static class ObservationWriter
             at += 3;
         }
 
-        OneHot(o, ref at, 0, GoalKinds);
+        // ⚠️ Validated where the goal is SET. OneHot writes no column at all for
+        // an out-of-range index, which would reach the policy as "no goal" rather
+        // than as an error.
+        OneHot(o, ref at, goal.Kind, GoalKinds);
     }
 
     private static void OneHot(Span<float> o, ref int at, int index, int width)

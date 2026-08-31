@@ -120,6 +120,7 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
         EnvMessage.Step => Step(body),
         EnvMessage.StepScored => Step(body, scored: true),
         EnvMessage.Candidates => Candidates(),
+        EnvMessage.SetGoal => SetGoal(body),
         EnvMessage.Reset => Reset(body),
         EnvMessage.Snapshot => Snapshot(body),
         EnvMessage.Restore => Restore(body),
@@ -367,6 +368,58 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
         Zoom = b[5],
     };
 
+    /// <summary>
+    /// <see cref="EnvMessage.SetGoal"/>: the macro goal one side pursues, in one
+    /// world or in all of them.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The side is red/blue, not a roster slot.</b> A slot index is a
+    /// roster index everywhere in this project and a caller could reasonably send
+    /// one — but the two agents' slots are this world's business and a trainer
+    /// that had to know them would be holding a model of this repo's internals,
+    /// which is the thing the seam exists to avoid.
+    /// </remarks>
+    private byte[] SetGoal(ReadOnlySpan<byte> body)
+    {
+        var batch = _batch ?? throw new InvalidOperationException("no batch; send MakeBatch first");
+
+        const int Needed = (4 * 4) + (8 * 2);
+
+        if (body.Length < Needed)
+            throw new InvalidDataException($"SetGoal wants {Needed} bytes, got {body.Length}");
+
+        var world = BinaryPrimitives.ReadInt32LittleEndian(body);
+        var side = BinaryPrimitives.ReadInt32LittleEndian(body[4..]);
+        var kind = BinaryPrimitives.ReadInt32LittleEndian(body[8..]);
+        var hasTarget = BinaryPrimitives.ReadInt32LittleEndian(body[12..]) != 0;
+        var x = BinaryPrimitives.ReadDoubleLittleEndian(body[16..]);
+        var y = BinaryPrimitives.ReadDoubleLittleEndian(body[24..]);
+
+        if (side is not (0 or 1))
+            throw new InvalidDataException($"a side is 0 (red) or 1 (blue), not {side}");
+
+        if (world != -1 && (uint)world >= (uint)batch.Count)
+            throw new InvalidDataException($"world {world} is not in a batch of {batch.Count}; -1 means all");
+
+        var goal = new AgentGoal { Kind = kind, HasTarget = hasTarget, TargetX = x, TargetY = y };
+
+        // ⚠️ Validated ONCE, before anything is written, so an all-worlds call
+        // with a bad kind does not set half the batch and then refuse.
+        goal.Validate();
+
+        var first = world == -1 ? 0 : world;
+        var last = world == -1 ? batch.Count - 1 : world;
+
+        for (var i = first; i <= last; i++)
+        {
+            var duel = batch.World(i);
+
+            duel.SetGoal(side == 0 ? duel.RedSlot : duel.BlueSlot, goal);
+        }
+
+        return Observations(EnvMessage.SetGoal);
+    }
+
     private byte[] Reset(ReadOnlySpan<byte> body)
     {
         var batch = _batch ?? throw new InvalidOperationException("no batch; send MakeBatch first");
@@ -498,8 +551,20 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
             var world = batch.World(i);
             var view = new WorldView(in world.World.State, world.World.Collision);
 
-            ObservationWriter.Write(in view, world.RedSlot, _observations.AsSpan(((i * 2) + 0) * stride, stride));
-            ObservationWriter.Write(in view, world.BlueSlot, _observations.AsSpan(((i * 2) + 1) * stride, stride));
+            // ⚠️ Each slot's own goal, and default is the nearest-enemy block this
+            // has always written — so a client that never sends SetGoal gets
+            // byte-identical observations. EnvGoalTests pins that.
+            ObservationWriter.Write(
+                in view,
+                world.RedSlot,
+                _observations.AsSpan(((i * 2) + 0) * stride, stride),
+                world.GoalFor(world.RedSlot));
+
+            ObservationWriter.Write(
+                in view,
+                world.BlueSlot,
+                _observations.AsSpan(((i * 2) + 1) * stride, stride),
+                world.GoalFor(world.BlueSlot));
         }
 
         var componentBytes = EnvProtocol.ComponentBytes;

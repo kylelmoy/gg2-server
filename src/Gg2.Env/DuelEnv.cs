@@ -608,6 +608,55 @@ public sealed class DuelEnv
     /// <summary>The decoder, whose aim state belongs to this episode.</summary>
     public ActionDecoder Decoder { get; } = new();
 
+    /// <summary>
+    /// The macro goal each slot is being asked to pursue.
+    /// </summary>
+    /// <remarks>
+    /// Indexed by roster slot, all <c>default</c> — "engage the nearest enemy" —
+    /// until something sets one.
+    /// </remarks>
+    private readonly AgentGoal[] _goals = new AgentGoal[WorldState.MaxSlots];
+
+    /// <summary>What slot <paramref name="slot"/> is being asked to pursue.</summary>
+    public AgentGoal GoalFor(int slot)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(slot);
+        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(slot, WorldState.MaxSlots);
+
+        return _goals[slot];
+    }
+
+    /// <summary>
+    /// Sets the macro goal the observation's goal block reports for this slot.
+    /// </summary>
+    /// <remarks>
+    /// <b><c>gg2-rl</c> phase 4.</b> The scripted layer decides the goal, the
+    /// learned policy always drives keys and aim.
+    /// <para>
+    /// ⚠️ <b>A goal SURVIVES the auto-reset at an episode boundary</b>, and that
+    /// is a decision rather than an oversight. A goal is a property of the slot
+    /// that the trainer set, not of the episode; clearing it would mean a trainer
+    /// had to re-set it after every reset, and <c>EnvBatch.Step</c> resets
+    /// <em>inside</em> the call, so the moment to do that is invisible until the
+    /// reply is read. Losing a goal silently would train the policy on "engage"
+    /// labels while the trainer believed it had asked for something else —
+    /// <c>docs/ENV.md</c>'s recurring failure, the one that still trains.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Refuses an out-of-range kind</b> rather than clamping it, because
+    /// <c>OneHot</c> writes no column at all for one and the policy would read
+    /// that as "no goal".
+    /// </para>
+    /// </remarks>
+    public void SetGoal(int slot, AgentGoal goal)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(slot);
+        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(slot, WorldState.MaxSlots);
+
+        goal.Validate();
+        _goals[slot] = goal;
+    }
+
     /// <summary>The red agent's roster slot.</summary>
     public int RedSlot { get; private set; } = -1;
 

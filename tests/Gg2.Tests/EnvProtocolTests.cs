@@ -104,6 +104,121 @@ public sealed class EnvProtocolTests : IDisposable
         return all;
     }
 
+    /// <summary>
+    /// Where the goal block starts in an observation: the last
+    /// <c>3 + GoalKinds</c> floats.
+    /// </summary>
+    private static int GoalAt =>
+        ObservationWriter.Length - (2 + 1 + ObservationWriter.GoalKinds);
+
+    /// <summary>The float at <paramref name="index"/> of one agent's observation.</summary>
+    private static float Observation(byte[] reply, int world, int side, int index) =>
+        BitConverter.ToSingle(
+            reply,
+            1 + 4 + (((((world * 2) + side) * ObservationWriter.Length) + index) * 4));
+
+    /// <summary>
+    /// <see cref="EnvMessage.SetGoal"/> sets one side's goal in every world, and
+    /// the reply already shows it.
+    /// </summary>
+    /// <remarks>
+    /// <b><c>gg2-rl</c> phase 4.</b> ⚠️ <b>The world of -1 form is the one a
+    /// trainer uses</b>, so it is the one tested; a per-world call is the
+    /// degenerate case of the same loop.
+    /// </remarks>
+    [Fact]
+    public void SetGoalConditionsOneSideOfEveryWorld()
+    {
+        Send(EnvMessage.Hello, Int(EnvProtocol.Version));
+        Receive();
+        Send(EnvMessage.MakeBatch, MakeBatchBody(4));
+        Receive();
+
+        // Straight up from red's spawn, 200 pixels, kind 2.
+        Send(EnvMessage.SetGoal, GoalBody(world: -1, side: 0, kind: 2, x: 600, y: 650));
+
+        var reply = Receive();
+
+        Assert.Equal((byte)EnvMessage.SetGoal, reply[0]);
+
+        for (var world = 0; world < 4; world++)
+        {
+            Assert.Equal(-1f, Observation(reply, world, 0, GoalAt + 0));
+            Assert.Equal(0.5f, Observation(reply, world, 0, GoalAt + 2));
+            Assert.Equal(1f, Observation(reply, world, 0, GoalAt + 3 + 2));
+        }
+
+        // ⚠️ Blue is untouched — a side is a side. Without this the test passes on
+        // a handler that sets both, which is the likelier slip.
+        Assert.Equal(1f, Observation(reply, 0, 1, GoalAt + 3 + 0));
+        Assert.Equal(0f, Observation(reply, 0, 1, GoalAt + 3 + 2));
+    }
+
+    /// <summary>
+    /// A bad kind is refused, and nothing is left set.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The second half is the point.</b> An all-worlds call that validated
+    /// inside the loop would set some of the batch and then refuse, leaving the
+    /// trainer with a batch it has no way to describe — and the refusal would look
+    /// like nothing had happened.
+    /// </remarks>
+    [Fact]
+    public void ARefusedGoalSetsNothing()
+    {
+        Send(EnvMessage.Hello, Int(EnvProtocol.Version));
+        Receive();
+        Send(EnvMessage.MakeBatch, MakeBatchBody(2));
+        Receive();
+
+        Send(EnvMessage.SetGoal, GoalBody(world: -1, side: 0, kind: 9, x: 0, y: 0));
+
+        var refusal = Receive();
+
+        Assert.Equal((byte)EnvMessage.Error, refusal[0]);
+
+        Send(EnvMessage.Step, new byte[2 * 2 * EnvProtocol.ActionBytes]);
+
+        var reply = Receive();
+
+        // Still kind 0 — "engage" — in both worlds.
+        Assert.Equal(1f, Observation(reply, 0, 0, GoalAt + 3 + 0));
+        Assert.Equal(1f, Observation(reply, 1, 0, GoalAt + 3 + 0));
+    }
+
+    /// <summary>
+    /// ⚠️ <see cref="EnvMessage.SetGoal"/> did NOT bump
+    /// <see cref="EnvProtocol.Version"/>, on <see cref="EnvMessage.Candidates"/>'s
+    /// precedent: no existing message's body or reply moved by a byte, so a
+    /// client that never sends it is unaffected.
+    /// </summary>
+    /// <remarks>
+    /// This test exists to make that reasoning explicit rather than implied by an
+    /// absence. <c>TheVersionAndTheFrameLayoutMoveTogether</c> guards the other
+    /// direction — a change to a body that forgets the version.
+    /// </remarks>
+    [Fact]
+    public void AGoalUnawareClientIsUnaffected()
+    {
+        Send(EnvMessage.Hello, Int(EnvProtocol.Version));
+
+        var hello = Receive();
+
+        Assert.Equal((byte)EnvMessage.Hello, hello[0]);
+
+        Send(EnvMessage.MakeBatch, MakeBatchBody(1));
+        Receive();
+        Send(EnvMessage.Step, new byte[2 * EnvProtocol.ActionBytes]);
+
+        var reply = Receive();
+
+        // The goal block is the "engage nearest enemy" one it has always been.
+        Assert.Equal(1f, Observation(reply, 0, 0, GoalAt + 3 + 0));
+    }
+
+    private static byte[] GoalBody(int world, int side, int kind, double x, double y) =>
+        Concat(Int(world), Int(side), Int(kind), Int(1), Real(x), Real(y));
+
     private static byte[] MakeBatchBody(
         int count,
         int cap = 20,

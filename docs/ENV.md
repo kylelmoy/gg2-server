@@ -871,7 +871,7 @@ Egocentric, normalised, fixed-size `float32`. The authoritative field order is
 | Enemies, nearest 2 | presence, relative position and velocity, class one-hot, hp fraction, aim sin/cos, time-since-seen (fixed 0 in v0 — the reaction-delay ring buffer is `gg2-rl` phase 5; the field exists now so the layout does not churn then) |
 | Projectiles, nearest 4 | presence, relative position and velocity, kind one-hot, mine/enemy flag — creation-order tie-break via `ProjectilesWithin` |
 | Geometry | 24-ray fan of normalised distances plus an 8×8 downsampled walkmask patch centred on self |
-| Macro goal | direction sin/cos, distance, goal kind one-hot — constant "engage" in a duel, present from day one per the hybrid-boundary rule |
+| Macro goal | direction sin/cos, distance, goal kind one-hot — **settable per slot since 2026-08-30** (`AgentGoal`, `EnvMessage.SetGoal`); the default is the "engage the nearest enemy" this always carried |
 
 Extraction allocates nothing and never enumerates the whole world
 (`docs/BOTAI.md` item 6 — `NearestEnemies` / `ProjectilesWithin` are the
@@ -1115,6 +1115,81 @@ big-endian host.
 CLAUDE.md's standing rule: this project's headroom figure sat stale in four
 documents because a re-measure forgot to say which configuration it was, and
 Debug reads about half of Release.
+
+## Goal conditioning — `gg2-rl` phase 4's hybrid boundary (2026-08-30)
+
+**Asked for by `gg2-rl`**, and cheap for one reason: the goal block was reserved
+on day one. `WriteGoal`'s original comment — *"a macro goal the policy has never
+seen cannot be introduced later without a layout bump and a retrain, and a
+constant column costs four floats"* — is what turned phase 4's ask into a struct
+instead of a retrain of 83 checkpoints. **It is the clearest case in either repo
+of an early decision paying for itself**, and it is recorded here because the
+next four-float column that looks like waste will look exactly the same.
+
+The shape, which both repos landed on independently:
+
+- `AgentGoal` — a kind (index into `GoalKinds`) and an optional target point.
+- `DuelEnv.SetGoal(slot, goal)` / `GoalFor(slot)`, per roster slot.
+- `EnvMessage.SetGoal` on the wire: world (or `-1` for all), side (0 red, 1
+  blue), kind, hasTarget, x, y. The reply is the ordinary observation block, so a
+  caller sees the goal reflected without having to step.
+- **`default` is exactly the old behaviour**, so an unchanged caller writes an
+  unchanged observation.
+
+⚠️ **`ObservationWriter.LayoutVersion` did NOT move and `SIM_UUID` did not
+either.** Verified the same way the performance work was: observations digested
+over 4,012,800 floats on three maps, `4FFEC587…` / `F6763969…` / `2DDB39FB…`,
+identical to the pre-goal build. `gg2-rl`'s words: *"if the default path ever
+stops being byte-identical, that is a layout bump and a retrain, and I would much
+rather have an uglier API than a silent one."* The ugly half is the optional
+parameter with a meaningful zero. **If `ObservationGoalTests`' first test goes
+red, that is a retrain, not a test to update.**
+
+⚠️ **No protocol version bump either, on `EnvMessage.Candidates`'s precedent**:
+no existing message's body or reply moves by a byte, so a client that never sends
+`SetGoal` is unaffected. `gg2-rl` had a pool sweep running when this landed and a
+bump would have refused its handshake over a feature it was not using.
+`EnvProtocolTests.AGoalUnawareClientIsUnaffected` states that rather than leaving
+it implied by an absence.
+
+### ⚠️ The two decisions inside it that could have gone the other way
+
+**A goal survives the auto-reset.** `EnvBatch.Step` resets a finished world
+*inside* the call, so a trainer has no moment at which to re-set a goal — it
+learns the episode ended by reading the reply, after the next episode has already
+begun. Clearing goals on reset would mean a trainer that set one once silently
+trained on "engage" labels from the second episode onward, which is this
+project's recurring failure: **the bug that still trains**. So a goal is a
+property of the slot, not of the episode. `ObservationGoalTests.AGoalSurvivesAReset`.
+
+⚠️ **`gg2-rl` supplied the stronger form of that argument and it is the one to
+remember**, because the surface reading — "the first observation after a reset can
+carry a stale goal" — *looks* exactly like this project's auto-reset traps and is
+not one. **The goal is IN the observation.** So if an episode's first decision
+carries the previous episode's goal, the policy was conditioned on precisely what
+the observation said it was conditioned on, and the reward is whatever actually
+happened. Observation and action stay consistent; nothing is mislabelled. That is
+what makes the persistence safe, rather than merely convenient.
+
+⚠️ **What it does leave is a distributional wrinkle, and it is the trainer's to
+fix.** Training will want goals to vary per episode, and the first decision of
+each will be conditioned on the previous goal — one decision in a hundred-odd.
+`gg2-rl`'s own remedy if it ever matters is to sample the next goal on seeing
+`world_done`, **not** a protocol change here.
+
+**An out-of-range kind is refused, not clamped.** `OneHot` writes *no column* for
+one, which reaches the policy as "no goal" rather than as an error — and clamping
+to 0 would train on "engage" while the trainer believed it had asked for
+something else. The all-worlds form validates **once, before the loop**, so a bad
+call cannot set half a batch and then refuse.
+
+### What is NOT built
+
+The goal is **set from outside** — nothing in this repo decides one. Phase 4's
+scripted-layer goal emitter (reach node N, hold position) is `gg2-rl`'s, and the
+full-CTF match-play exit criterion (`docs/BOTAI.md` item 8, policy as
+`IInputSource`) is not started; `gg2-rl` asked for duels first and said it would
+bring a policy worth wiring in.
 
 ## Build log
 
