@@ -819,6 +819,41 @@ public sealed class BotObjective
         if (target < 0)
             target = any;
 
+        // ⛔ DUAL KOTH IS WON BY HOLDING THE ENEMY'S HILL, and "nearest unlocked
+        // point" is always your own — so before this, every bot camped the hill
+        // that scored it nothing and neither team ever contested the other's.
+        // Measured 2026-09-01: zero decided matches on both dkoth maps at 5, 10,
+        // 20 and 40 minutes, hold clocks never advancing a single tick, and 34,200
+        // bot-ticks on each team's own hill against ZERO on the enemy's.
+        // docs/TRAPS-BOTS.md, "Dual King of the Hill is unwinnable by bots".
+        //
+        // ⚠️ THE ONE PLACE THIS FILE READS GameMode, and the reason is the one
+        // `gg2-rl` drew: entity identification works while the objective is a
+        // property of the LAYOUT, and dkoth's is a property of the SCORING.
+        // Two capture points is an identical entity signature to a two-point
+        // Control Points map; what differs is that Rounds.StepDkoth runs your
+        // clock while the ENEMY's point is yours. No amount of looking at
+        // entities can recover that, because the entities are the same.
+        //
+        // ⚠️ Both entity-shaped alternatives were rejected for being right by
+        // accident: "prefer a point we do not own" breaks single KotH, where
+        // holding the hill IS the objective; and "chase whichever point is making
+        // the enemy's clock run" has no signal in exactly the state these matches
+        // sit in for ten minutes, where both clocks are stopped.
+        //
+        // ⚠️ A DEFENDER still wants its own hill — losing it starts the enemy's
+        // clock — so this is the attacker's rule only, and the +2000 penalty above
+        // already gives the defender the right answer.
+        if (!defending
+            && state.GameMode == GameMode.DualKingOfTheHill
+            && state.ControlPointCount >= 2)
+        {
+            // Index 0 is KothRedControlPoint and index 1 is KothBlueControlPoint —
+            // ControlPoints.Place puts them in that order and Rounds.StepDkoth
+            // keys the clocks on it.
+            target = team == Team.Red ? 1 : 0;
+        }
+
         if (target < 0 || !TryZoneCentre(world.Collision, target, out wx, out wy))
             return false;
 

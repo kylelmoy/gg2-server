@@ -3153,21 +3153,56 @@ own hill is the nearer one, so **every bot camps the hill that scores it
 nothing** and neither team ever contests the other's. The bots play the mode
 exactly backwards.
 
-### ⚠️ Why the fix is not one line
+### ✅ FIXED 2026-09-01 — and `gg2-rl` supplied the distinction that made it clean
 
-`BotObjective` **deliberately identifies modes by the entities on the map rather
-than by `WorldState.GameMode`** — its own remark: "a mode is not the same question
-as what is on this map". So a `GameMode.DualKingOfTheHill` branch would be the
-first violation of that stance, and the structural alternatives are worse:
+**`BotObjective.ControlPoint` now sends a non-defending bot to the ENEMY's hill
+in this mode, and nowhere else.** After the fix: **19-20 of 20 decided at every
+limit on both maps**, the full 180-second hold reached, and `koth_harvest`
+unchanged at 14/20 and 20/20 — the mode gate means it cannot touch anything else.
 
-- **"Prefer a point our team does not own"** fixes dkoth and breaks single KotH,
-  where holding the hill IS the objective and attackers would wander off one they
-  had just taken.
-- **"Exactly two points, one owned by each team"** is dkoth's signature and is
-  also a reachable mid-match state on a two-point Control Points map.
+⛔ **It is the one place this file reads `GameMode`, and the reason is a boundary
+worth keeping**: **entity identification works while the objective is a property
+of the LAYOUT, and fails when it is a property of the SCORING.** Two capture
+points is an *identical entity signature* to a two-point Control Points map. What
+differs is that `Rounds.StepDkoth` runs your clock while the ENEMY's point is
+yours — and no amount of looking at entities can recover that, because the
+entities are the same. dkoth is the first mode where layout and scoring come
+apart, so this is the stance meeting the case it was never able to cover rather
+than a violation of it.
 
-So it wants a decision about how the bot layer recognises this mode, which is why
-it is written down rather than patched.
+⚠️ **Both entity-shaped alternatives were rejected for being right by accident:**
+
+- **"Prefer a point we do not own"** fixes dkoth and breaks single KotH, where
+  holding the hill IS the objective and attackers would abandon one they had just
+  taken.
+- **"Chase whichever point is making the enemy's clock run"** is a scoring-aware
+  heuristic wearing entity clothing, and it has **no signal in exactly the state
+  these matches sat in for ten minutes** — both clocks stopped. It would work in
+  every match except the broken ones.
+
+### ⚠️ The gate, and why the one this repo already had did not catch it
+
+⛔ **`MatchActuallyHappensTests` already had a liveness test and it did not catch
+this**, because it asserted the wrong liveness. `EveryBotGoesSomewhere` checks
+that the bots MOVE — and in dkoth they moved, briskly, to their own hill. Every
+bot went somewhere and the mode could not be won.
+
+✅ **The rule, `gg2-rl`'s**: a gamemode needs a liveness assertion on **something
+only that mode moves**. Movement is shared by every mode, so it cannot tell a
+working mode from one being played backwards. Here that something is the hold
+clock — the mode's own scoreboard.
+`MatchActuallyHappensTests.TheHillModesScoreboardMoves` asserts it, with the two
+single-hill maps as the control so a failure on all four would be the harness
+rather than the bug. Mutation-checked: it fails on both dkoth maps and passes on
+both koth ones.
+
+⚠️ **And the first version of that gate was VACUOUS.** It carried an
+`|| Outcome != MatchOutcome.Running` escape clause, and the shared `Match()`
+helper caps at 20 kills — so a broken dkoth match still *ended*, on kills, and
+satisfied the assertion without the clock ever moving. **The mutation check is the
+only thing that found it**, and it is the same "a filter is a way to pass by
+discarding everything" shape this repo has shipped before. The test now builds its
+own options with the kill limit out of the way and has no escape clause.
 
 ⚠️ **The shape is the Arena bug's.** A whole gamemode silently not working,
 invisible because nothing asserted the mode *progressed* — `eval` reported instant

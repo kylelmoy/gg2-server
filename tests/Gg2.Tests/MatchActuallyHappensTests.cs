@@ -196,6 +196,84 @@ public sealed class MatchActuallyHappensTests
     /// and would not be a deathmatch.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// The hill modes' own scoreboard actually moves.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>This file already had a liveness test and it did not catch dual KotH,
+    /// because it asserted the wrong liveness.</b>
+    /// <see cref="EveryBotGoesSomewhere"/> checks that the bots MOVE — and in
+    /// dkoth they moved, briskly, to their own team's hill, which scores nothing.
+    /// Every bot went somewhere and the mode could not be won: zero decided
+    /// matches on both dkoth maps at 5, 10, 20 and 40 minutes, with the hold
+    /// clocks never advancing by a single tick.
+    /// <para>
+    /// ⚠️ <b>The rule `gg2-rl` drew from it, and it is the general one</b>: a
+    /// gamemode needs a liveness assertion on <b>something only that mode moves</b>.
+    /// Movement is shared by every mode, so it cannot distinguish a mode that is
+    /// working from one that is being played backwards. Here that something is the
+    /// hold clock — the mode's own scoreboard.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>The single-hill maps are the control</b>, and they are not decoration:
+    /// they were passing throughout, so an assertion that failed on all four would
+    /// be measuring the harness rather than the bug.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData("dkoth_atalia")]
+    [InlineData("dkoth_sixties")]
+    [InlineData("koth_valley")]
+    [InlineData("koth_harvest")]
+    public void TheHillModesScoreboardMoves(string map)
+    {
+        // ⚠️ Its OWN options, with the kill limit out of the way. The shared
+        // Match() helper caps at 20 kills, and with that in place a broken dkoth
+        // match still ENDS — on kills — which let the first version of this test
+        // pass through an `|| Outcome != Running` escape clause without the clock
+        // ever moving. The mutation check caught it; nothing else would have.
+        var match = HeadlessMatch.Load(
+            HeadlessMatchOptions.Default with
+            {
+                Map = map,
+                Bots = 8,
+                Seed = 4242,
+                CapLimit = 1,
+                TimeLimitMinutes = 10,
+                KillLimit = 4000,
+                MaxTicks = 30 * 60 * 3,
+            },
+            ReferenceTree.IncludedFiles,
+            ReferenceTree.NavCacheDirectory);
+
+        var started = Math.Min(match.State.RedTimer, match.State.BlueTimer);
+        var ownerChanges = 0;
+        var lastRed = match.State.ControlPointCount > 0 ? match.State.ControlPoints[0].Team : Team.Spectator;
+
+        // Three minutes: past the 900-tick pregame with time for a hill to fall
+        // and a clock to run. Not the full 180-second hold — this asserts the
+        // scoreboard MOVES, not that somebody wins.
+        while (match.Outcome == MatchOutcome.Running)
+        {
+            match.Step();
+
+            if (match.State.ControlPointCount > 0 && match.State.ControlPoints[0].Team != lastRed)
+            {
+                ownerChanges++;
+                lastRed = match.State.ControlPoints[0].Team;
+            }
+        }
+
+        var now = Math.Min(match.State.RedTimer, match.State.BlueTimer);
+
+        // ⚠️ No escape clause. A hold clock that did not move is the failure,
+        // whatever else the match did.
+        Assert.True(
+            now < started,
+            $"{map}: neither hold clock advanced in three minutes "
+            + $"({started} -> {now}), with {ownerChanges} hill owner changes");
+    }
+
     [Fact]
     public void TeamDeathmatchBotsHuntEachOtherAndFight()
     {
