@@ -1630,6 +1630,68 @@ sampled-from-the-remainder candidates keep out-scoring the top-k ones, the prior
 is bad and pruning is hurting.** Computable every round at no cost, and it fails
 loudly instead of plateauing quietly.
 
+## ⛔ Phase 4 result: the duel win rate does NOT transfer to CTF (2026-09-01)
+
+**The policy is wired in and plays full matches. It fights markedly better and
+captures far worse, and the second half is the larger effect.**
+
+Three arms, 108 matches each, six CTF maps, 8 bots, four trained classes both
+sides, policy on red, scripted on blue:
+
+| | red captures | blue captures | red death share |
+|---|---|---|---|
+| policy, scripted carries intel | **7** | 14 | **43.0%** |
+| policy, policy carries intel | 4 | 12 | 43.1% |
+| **all scripted (control)** | **20** | 12 | **50.6%** |
+
+✅ **Combat improves and it is not subtle.** Red's share of deaths falls from
+50.6% to 43.0% over roughly 5,900 deaths. The control's 50.6% is the sanity
+check: with the same bots on both sides the split is even, so the setup is
+symmetric and the difference is the policy.
+
+⛔ **The objective collapses.** Red goes from 20 captures to 7 — **and blue's
+stays at 12 in every arm**, which is the internal control that says the change is
+entirely on the team that changed. The policy holds control **27-28% of ticks**
+(within 300px of an enemy), and in those ticks it fights rather than advancing,
+because its reward is damage dealt minus taken with **no objective term** —
+`gg2-rl`'s user's decision, on human-likeness grounds.
+
+⚠️ **The obvious fix was tried and does NOT work.** `ScriptedCarriesIntel` keeps
+the macro layer driving while a character carries the flag — the architecture's
+own rule, since an intel carrier is on an objective task. Captures went 4 → 7 at
+n=108, which does not separate; combat was unchanged at 43.1% → 43.0%. **The
+mechanism is broader than the carrier**: bots stop pushing toward the objective
+whenever an enemy is within 300px, not only while holding it.
+
+⚠️ **The default is ON anyway, and the reason is architectural rather than
+measured.** `gg2-rl` specified that the macro layer owns objectives entirely and
+the policy never pursues them; a policy driving an intel carrier is the policy
+affecting the objective. Said plainly here because a default justified by a
+number that does not separate would be exactly the trap this repo spent
+2026-08-31 learning about.
+
+⚠️ **What is NOT established**: whether this is a policy failing at CTF or a
+*hybrid boundary* failing at CTF. The policy was never trained with an objective,
+so it cannot be expected to pursue one; what the measurement shows is that giving
+it the wheel near an enemy is enough to stop the scripted layer pursuing one
+either. Narrowing the engagement range, or gating handover on the macro goal,
+are both untried.
+
+### Stuck bots: present in both arms, and worst in the control
+
+**11 of 864 bots moved under 100px with the policy; 7 of 864 without it**, and
+**the single worst case is a scripted bot in both arms** (`ctf_truefort`, a blue
+Heavy, 18px). At that sample the two do not separate, so the honest statement is
+that stuck bots are a pre-existing scripted-layer behaviour and the policy has not
+been shown to add or remove them. ⚠️ **Without the control arm this would have
+been reported as "the policy causes stuck bots"**, which is what the policy arm
+alone looks like.
+
+`PolicyMatchTests.NoMapLeavesTheBotsStuck` asserts **80% of bots move**, which is
+what is true today — not "all", which would assert a fix nobody has made, and not
+"the furthest bot moved", which the first version asserted and which seven stuck
+bots and one runner would satisfy.
+
 ## Phase 4 handover from `gg2-rl` (2026-08-31) — the artefact, and the hole in it
 
 **Received, nothing built yet.** The duel work is done and a policy exists:

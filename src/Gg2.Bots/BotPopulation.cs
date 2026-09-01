@@ -159,4 +159,59 @@ public static class BotPopulation
                 return picked;
         }
     }
+
+    /// <summary>
+    /// A class for a new bot, restricted to <paramref name="allowed"/>.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>Phase 4 needs this and nothing else provided it.</b> `gg2-rl`'s
+    /// policy was trained on four of the nine classes, and the other five are
+    /// untrained input rather than a class it plays badly — so the honest first
+    /// full-match experiment restricts both teams to the trained four.
+    /// <b><c>ClassLimits</c> is the wrong lever</b>: nothing in the bot path reads
+    /// it, and a default headless match is **50% untrained classes** because
+    /// <see cref="PickClass(ref GmlRandom)"/> draws uniformly from the eight it
+    /// allows, of which four are trained.
+    /// <para>
+    /// ⚠️ <b>The unrestricted overload is untouched, deliberately.</b> Its draw
+    /// sequence is the reference's <c>irandom(8)</c> and every existing fixture
+    /// depends on it; a shared implementation that took an "all classes" set would
+    /// consume the stream differently and move every recorded match.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Rejection sampling, so an impossible set would spin.</b> The set is
+    /// checked first: at least one class in scout..pyro, or it is refused. A bot
+    /// picker that hung would look exactly like a hung match.
+    /// </para>
+    /// </remarks>
+    public static PlayerClass PickClass(ref GmlRandom random, ReadOnlySpan<PlayerClass> allowed)
+    {
+        var possible = false;
+
+        foreach (var playerClass in allowed)
+        {
+            if (playerClass <= PlayerClass.Pyro)
+            {
+                possible = true;
+                break;
+            }
+        }
+
+        if (!possible)
+        {
+            throw new ArgumentException(
+                "no allowed class is one a bot can be picked as; scout..pyro is the range", nameof(allowed));
+        }
+
+        while (true)
+        {
+            var picked = (PlayerClass)random.NextInclusive(8);
+
+            foreach (var playerClass in allowed)
+            {
+                if (playerClass == picked)
+                    return picked;
+            }
+        }
+    }
 }

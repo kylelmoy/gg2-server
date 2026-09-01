@@ -29,7 +29,11 @@ public readonly record struct HeadlessMatchOptions(
     int MaxTicks,
     uint Seed,
     int? RedBots = null,
-    int? BlueBots = null)
+    int? BlueBots = null,
+    PlayerClass[]? AllowedClasses = null,
+    PolicyNetwork? Policy = null,
+    Team? PolicyTeam = null,
+    bool ScriptedCarriesIntel = true)
 {
     /// <summary>
     /// A short match on <c>ctf_truefort</c> with twelve bots. ⚠️ The values are
@@ -319,6 +323,17 @@ public sealed class HeadlessMatch
     public IInputSource? SourceOf(int slot) =>
         slot >= 0 && slot < _sources.Length ? _sources[slot] : null;
 
+    /// <summary>The policy-driven bot in a slot, or null when it is scripted.</summary>
+    /// <remarks>
+    /// Exposed so an evaluation can report how much of a match the policy
+    /// actually drove. ⚠️ <b>"The policy was wired in" and "the policy drove" are
+    /// different claims</b>, and only the second one is worth anything — a
+    /// hybrid whose engagement gate never fired is a scripted bot with extra
+    /// steps, and it would win or lose exactly like one.
+    /// </remarks>
+    public PolicyBot? PolicyBotFor(int slot) =>
+        slot >= 0 && slot < _sources.Length ? _sources[slot] as PolicyBot : null;
+
     /// <summary>Advances one tick.</summary>
     /// <remarks>
     /// ⚠️ <b>A decided round ENDS the match here rather than rotating.</b> A
@@ -534,7 +549,11 @@ public sealed class HeadlessMatch
                 team = BotPopulation.PickTeam(red, blue, ref picker);
             }
 
-            var playerClass = BotPopulation.PickClass(ref picker);
+            // ⚠️ Restricted only when asked. The unrestricted draw is the
+            // reference's and every recorded match depends on its stream.
+            var playerClass = Options.AllowedClasses is { Length: > 0 } allowed
+                ? BotPopulation.PickClass(ref picker, allowed)
+                : BotPopulation.PickClass(ref picker);
 
             // ⚠️ The stagger is the roster slot the bot lands in, which is what
             // makes two bots roll differently and one bot roll the same way
@@ -554,6 +573,48 @@ public sealed class HeadlessMatch
         }
 
         AssignRoles();
+        WrapInPolicy();
+    }
+
+    /// <summary>
+    /// Puts the learned policy in front of each scripted bot it is allowed to
+    /// drive.
+    /// </summary>
+    /// <remarks>
+    /// <b><c>gg2-rl</c>'s phase 4 architecture.</b> ⚠️ <b>AFTER
+    /// <see cref="AssignRoles"/>, not instead of it.</b> The roles, the spread and
+    /// the objective are configured on a <c>ScriptedBot</c> by type, and the
+    /// scripted layer keeps every one of those jobs — the policy only takes keys
+    /// and aim, and only inside <see cref="PolicyBot.EngagementRange"/>.
+    /// <para>
+    /// ⚠️ <b>Called from <see cref="AddBots"/> so it survives <see cref="Reset"/>.</b>
+    /// A method the caller had to remember after every reset is a match that
+    /// silently reverts to scripted halfway through an evaluation.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>A bot whose class the policy was not trained on is left scripted</b>,
+    /// which <see cref="PolicyBot"/> also enforces per tick — a class can change
+    /// mid-match and the wrapper cannot be rebuilt when it does.
+    /// </para>
+    /// </remarks>
+    private void WrapInPolicy()
+    {
+        if (Options.Policy is not { } policy)
+            return;
+
+        for (var slot = 1; slot < _slots; slot++)
+        {
+            if (_sources[slot] is not ScriptedBot scripted)
+                continue;
+
+            if (Options.PolicyTeam is { } team && _state.Players[slot].Team != team)
+                continue;
+
+            _sources[slot] = new PolicyBot(policy, scripted)
+            {
+                ScriptedCarriesIntel = Options.ScriptedCarriesIntel,
+            };
+        }
     }
 
     private void AssignRoles()
