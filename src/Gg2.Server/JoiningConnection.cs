@@ -72,6 +72,12 @@ public sealed class JoiningConnection(ClientConnection connection, DateTime now)
     private readonly ReceiveBuffer _received = new();
     private readonly NetWriter _out = new(256);
 
+    /// <summary>The map advertised to THIS client, latched at the greeting.</summary>
+    private byte[]? _mapFile;
+
+    /// <summary>The transfer in flight, or null when not downloading.</summary>
+    private MapTransfer? _transfer;
+
     private int _expectedBytes = 17;
     private JoinState _messageState;
 
@@ -115,6 +121,20 @@ public sealed class JoiningConnection(ClientConnection connection, DateTime now)
         {
             Connection.Close("handshake timed out");
             return JoinOutcome.Finished;
+        }
+
+        // ⚠️ Above the read, and it does not wait for the client to say anything.
+        // A downloading client sends NOTHING until it has the whole map, so a
+        // pump placed after TryTake below would never run.
+        // serviceJoiningPlayer.gml:8-24 puts it above its own read for the same
+        // reason, and refreshes lastContact (:10) — without which a slow download
+        // times out in the middle of itself.
+        if (State == JoinState.ClientDownloading)
+        {
+            LastContact = now;
+            ServiceDownload(context);
+            FlushOut();
+            return State == JoinState.Done ? JoinOutcome.Finished : JoinOutcome.Pending;
         }
 
         // One step per call, exactly as the reference services one JoiningPlayer
@@ -242,11 +262,26 @@ public sealed class JoiningConnection(ClientConnection connection, DateTime now)
                 return JoinState.Done;
 
             case MessageType.DownloadMap:
-                // Only reachable when a non-empty MD5 was advertised. A
-                // built-in-maps-only server always advertises "", so the
-                // reference's own guard fails and the connection ends.
-                Connection.Close("map download requested for a built-in map");
-                return JoinState.Done;
+                // serviceJoiningPlayer.gml:131-144. The guard is the reference's:
+                // an empty MD5 means an internal map, which "obviously can't be
+                // downloaded" — and the reference's answer to asking anyway is to
+                // fall through and drop the connection.
+                if (_mapFile is null || _mapFile.Length == 0)
+                {
+                    Connection.Close("map download requested for a built-in map");
+                    return JoinState.Done;
+                }
+
+                _transfer = new MapTransfer(_mapFile);
+
+                // ⚠️ A uint LENGTH first, then the bytes with no framing of their
+                // own — the client reads exactly this many and then stops. It is
+                // written before the state changes so it precedes the first
+                // chunk in the stream.
+                _out.WriteUInt(checked((uint)_transfer.Length));
+                FlushOut();
+
+                return JoinState.ClientDownloading;
 
             default:
                 Connection.Close($"unexpected command {command} during handshake");
@@ -278,15 +313,58 @@ public sealed class JoiningConnection(ClientConnection connection, DateTime now)
 
     private void WriteGreeting(in JoinContext context)
     {
+        // ⚠️ Latched here, not read later. serviceJoiningPlayer.gml:93-94 copies
+        // global.currentMap/currentMapMD5 into advertisedMap/advertisedMapMd5 at
+        // exactly this point, so a rotation that lands mid-handshake still serves
+        // the file this client was told the hash of. Reading the live map at
+        // DOWNLOAD_MAP time would hand over bytes whose MD5 the client then
+        // rejects.
+        _mapFile = context.MapFile;
+
         ServerMessages.Hello(
             _out,
             context.ServerName,
             context.CurrentMap,
-            // Empty MD5 means "built into the client", which removes the whole
-            // map-download path from scope.
-            mapMd5: string.Empty,
+            // Empty means "built into the client", and it is also the reference's
+            // own guard against serving one: see the DOWNLOAD_MAP case.
+            mapMd5: context.MapMd5 ?? string.Empty,
             pluginsRequired: false,
             pluginList: string.Empty);
+    }
+
+    /// <summary>
+    /// One tick's worth of map bytes.
+    /// </summary>
+    /// <remarks>
+    /// The budget is the server-wide allowance divided by the number of
+    /// downloads in flight (<c>serviceJoiningPlayer.gml:11</c>), so a second
+    /// client halves the first one's rate rather than doubling the server's
+    /// outgoing bandwidth.
+    /// </remarks>
+    private void ServiceDownload(in JoinContext context)
+    {
+        if (_transfer is null)
+        {
+            State = JoinState.Done;
+            Connection.Close("download state with no transfer");
+            return;
+        }
+
+        var budget = context.MapDownloadBudget;
+        var chunk = _transfer.Next(context.MapDownloadShare, ref budget);
+
+        if (!chunk.IsEmpty)
+            Connection.Send(chunk);
+
+        if (!_transfer.Complete)
+            return;
+
+        // serviceJoiningPlayer.gml:20-23 — the transfer ends and the client goes
+        // back to sending commands. It re-reads the map it just wrote, checks the
+        // hash, and then reserves a slot.
+        _transfer = null;
+        State = JoinState.ExpectCommand;
+        _expectedBytes = 1;
     }
 
     private void FlushOut()
@@ -309,6 +387,32 @@ public readonly struct JoinContext
     public required string Password { get; init; }
 
     public required int PlayerLimit { get; init; }
+
+    /// <summary>
+    /// The current map's MD5, or empty when the client has it built in.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ Empty is not "unknown" — it is the signal that the map cannot be
+    /// downloaded, and the reference's own guard is exactly
+    /// <c>advertisedMapMd5 != ""</c>.
+    /// </remarks>
+    /// <remarks>
+    /// ⚠️ No <c>= string.Empty</c> initialiser: a struct with one needs an
+    /// explicit constructor, and this is built with an object initialiser
+    /// everywhere. A default <see cref="JoinContext"/> therefore has a NULL
+    /// md5 rather than an empty one, which is why <see cref="MapFile"/> is what
+    /// the download guard actually tests.
+    /// </remarks>
+    public string? MapMd5 { get; init; }
+
+    /// <summary>The map file's bytes, or null when there is nothing to serve.</summary>
+    public byte[]? MapFile { get; init; }
+
+    /// <summary>This client's slice of the tick's download budget, in bytes.</summary>
+    public double MapDownloadShare { get; init; }
+
+    /// <summary>What is left of the whole server's per-tick download allowance.</summary>
+    public double MapDownloadBudget { get; init; }
 
     /// <summary>
     /// Seats already taken: roster entries that count, plus every other joining

@@ -94,6 +94,17 @@ public sealed class ServerOptions
     public bool AnnounceToLobby { get; set; }
 
     /// <summary>
+    /// Total bandwidth across all in-flight custom-map downloads, bytes/second.
+    /// </summary>
+    /// <remarks>
+    /// <c>game_init.gml:94</c>, "Total bandwidth limit for map downloads in bytes
+    /// per second", default 50000. ⚠️ <b>Total, not per client</b> — a second
+    /// downloader halves the first one's rate rather than doubling the server's
+    /// outgoing traffic.
+    /// </remarks>
+    public int MapDownloadBytesPerSecond { get; set; } = MapDownload.DefaultBytesPerSecond;
+
+    /// <summary>
     /// Where the built-in map PNGs live — the reference checkout's
     /// <c>Source/gg2/Included Files</c>.
     /// </summary>

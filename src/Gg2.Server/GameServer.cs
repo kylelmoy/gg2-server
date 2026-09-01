@@ -122,6 +122,25 @@ public sealed class GameServer : IDisposable
     /// <summary>The map now loaded, and the one the rotation moves on from.</summary>
     private string _currentMap = string.Empty;
 
+    /// <summary>
+    /// The current map's MD5, or empty when the client has it built in.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ Empty is not "unknown" -- it is the signal that the map cannot be
+    /// downloaded, and the reference guards on exactly that
+    /// (<c>advertisedMapMd5 != ""</c>).
+    /// </remarks>
+    private string _currentMapMd5 = string.Empty;
+
+    /// <summary>The current map's bytes, kept only when it is downloadable.</summary>
+    /// <remarks>
+    /// ⚠️ Held in memory for the life of the map rather than re-read per client:
+    /// the MD5 advertised must be of the bytes actually served, and re-reading
+    /// opens a window where a file edited on disk mid-match is served under the
+    /// old hash. Null for a built-in map, which is most of them.
+    /// </remarks>
+    private byte[]? _currentMapFile;
+
     private string _nextMap = string.Empty;
 
     private int _nextArea = 1;
@@ -492,7 +511,10 @@ public sealed class GameServer : IDisposable
 
         // ServerChangeMap.gml. The MD5 is empty for a built-in map, which is
         // every map this server serves.
-        ServerMessages.ChangeMap(_broadcast, map.Name, string.Empty);
+        // ⚠️ The md5 the map was loaded WITH. ServerChangeMap.gml carries the
+        // same pair the greeting does, so a client already connected across a
+        // rotation onto a custom map learns it has to download.
+        ServerMessages.ChangeMap(_broadcast, map.Name, _currentMapMd5);
         _log.Info($"now playing {map.Name} ({_match.GameMode}), area {_nextArea}");
 
         // GameServerBeginStep.gml:142-143 — "message lobby to update map name".
@@ -2183,6 +2205,20 @@ public sealed class GameServer : IDisposable
 
     private void ServiceJoiningConnections(DateTime now)
     {
+        // GameServerEndStep.gml:12-17 counts the downloads in flight BEFORE
+        // servicing any of them, and divides the tick's allowance between them.
+        // ⚠️ Counted first on purpose: doing it inside the loop would give the
+        // first client a bigger share than the last for no reason anyone could
+        // see from the outside.
+        var downloading = 0;
+        foreach (var joining in _joining)
+            if (joining.State == JoinState.ClientDownloading)
+                downloading++;
+
+        var share = downloading == 0
+            ? 0
+            : _options.MapDownloadBytesPerSecond / (double)(GameConstants.TickRate * downloading);
+
         var context = new JoinContext
         {
             ServerName = _options.ServerName,
@@ -2193,6 +2229,10 @@ public sealed class GameServer : IDisposable
             Password = _options.Password,
             PlayerLimit = _options.PlayerLimit,
             OccupiedSlots = OccupiedSlots(),
+            MapMd5 = _currentMapMd5,
+            MapFile = _currentMapFile,
+            MapDownloadShare = share,
+            MapDownloadBudget = _options.MapDownloadBytesPerSecond / (double)GameConstants.TickRate,
         };
 
         for (var i = _joining.Count - 1; i >= 0; i--)
@@ -2363,9 +2403,26 @@ public sealed class GameServer : IDisposable
 
         var path = Path.Combine(_options.MapDirectory, name + ".png");
         if (!File.Exists(path))
-            throw new FileNotFoundException($"no built-in map at {path}", path);
+            throw new FileNotFoundException($"no map at {path}", path);
 
-        return LevelMap.FromPng(name, File.ReadAllBytes(path));
+        var bytes = File.ReadAllBytes(path);
+
+        // serverGotoMap.gml:4-12 — an internal map advertises NO md5 and cannot
+        // be downloaded; anything else advertises the file's hash so a client
+        // that lacks it knows to ask. InternalMaps is the same switch the client
+        // uses, aliases included.
+        if (InternalMaps.IsInternal(name))
+        {
+            _currentMapMd5 = string.Empty;
+            _currentMapFile = null;
+        }
+        else
+        {
+            _currentMapMd5 = MapDownload.Md5Of(bytes);
+            _currentMapFile = bytes;
+        }
+
+        return LevelMap.FromPng(name, bytes);
     }
 
     public void Dispose()

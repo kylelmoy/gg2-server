@@ -712,7 +712,28 @@ Not everything in the reference is load-bearing for a private headless server:
   Unreachable from a stock client (it only sends packets for plugins the greeting
   advertised, and this server advertises none), so it is a correctness fix rather
   than a working feature. `PluginPacketTests`.
-- **Map download.** Serve only built-in maps and always advertise an empty MD5.
+- ~~**Map download.**~~ ✅ **Implemented 2026-09-01.** A map that is not in
+  `Gg2.Maps.InternalMaps` is advertised with its MD5 and served on
+  `DOWNLOAD_MAP` as a `uint` length followed by the raw file, rate-limited across
+  ticks and shared between simultaneous downloaders
+  (`serviceJoiningPlayer.gml:8-24`, `:131-144`). Before this, a custom map could
+  only be played by people who already had the file.
+  ⚠️ **The MD5 is 32 LOWERCASE hex characters, measured rather than assumed.**
+  `CustomMapGetMapMD5` calls the compiled `GG2DLL_compute_MD5`, so the GML does
+  not say — but the extension ships its source at
+  `Extensions/GG2DLL/GG2DLL/GG2DLL.cpp:485-516`, which formats with
+  `sprintf("%02x")`. Uppercase compares unequal on every client, and the symptom
+  would be a download that completes and is then rejected.
+  ⚠️ **`InternalMaps` carries five ALIASES** — `ctf_2dfort2`, `ctf_2dfortremix`,
+  `dkoth_60s`, `ctf_2dfort1` and `ctf_2dfort[0]` (brackets verbatim, and almost
+  certainly a typo in the reference that the client nonetheless matches). Missing
+  one makes every client re-download a map it already has, under a name it then
+  cannot find. `MapDownloadTests.EveryShippedMapIsInternal` gates the list
+  against what is on disk, because the two are independent and a mismatch is
+  silent.
+  ⚠️ **The bandwidth limit is TOTAL, not per client** — a second downloader
+  halves the first one's rate rather than doubling the server's outgoing traffic.
+  `MapDownloadBytesPerSecond`, default 50000.
 - **UPnP port forwarding** (`GameServerCreate.gml:5-19`).
 - **The loopback socket.** The reference server connects to itself over TCP so
   the host's local player is "just another client". A headless port has no local
