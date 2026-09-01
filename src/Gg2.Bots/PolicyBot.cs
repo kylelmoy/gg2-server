@@ -328,28 +328,8 @@ public sealed class PolicyBot : IInputSource, ICommandSource
     }
 
     /// <summary>Whether the policy should take the wheel this decision.</summary>
-    private bool ShouldEngage(in WorldView world, int slot)
-    {
-        var inRange = DistanceToNearestEnemy(in world, slot) <= Range;
-
-        // ⚠️ MacroTask is a CONJUNCTION, and the range half is not optional.
-        // Gating on the scripted engage hold ALONE was tried and is wrong: that
-        // hold fires out to BotTargeting.ClassRange, which is 800px for a soldier
-        // and 900 for a sniper — three times this range. It took the policy's
-        // share of control from 27% to 71% and handed it the wheel at distances
-        // its observation cannot describe, which is the thing the 400px ceiling
-        // exists to forbid. Captures fell to 3 a hundred matches.
-        //
-        // `gg2-rl` predicted this failure exactly: "your control-share number is
-        // the mechanism dial. A goal-gated handover should cut it sharply. If it
-        // does not move, the gate is not doing what we think." It did not move
-        // down; it more than doubled.
-        return Rule switch
-        {
-            HandoverRule.MacroTask => inRange && _scripted.WantsToEngage,
-            _ => inRange,
-        };
-    }
+    private bool ShouldEngage(in WorldView world, int slot) =>
+        Handover.ShouldEngage(in world, slot, Range, Rule, _scripted.WantsToEngage);
 
     private void Decide(in WorldView world, int slot)
     {
@@ -411,19 +391,4 @@ public sealed class PolicyBot : IInputSource, ICommandSource
         return scripted;
     }
 
-    private static double DistanceToNearestEnemy(in WorldView world, int slot)
-    {
-        Span<int> found = stackalloc int[1];
-
-        if (world.NearestEnemies(slot, found) == 0)
-            return double.PositiveInfinity;
-
-        ref readonly var self = ref world.Character(slot);
-        ref readonly var enemy = ref world.Character(found[0]);
-
-        var dx = enemy.X - self.X;
-        var dy = enemy.Y - self.Y;
-
-        return Math.Sqrt((dx * dx) + (dy * dy));
-    }
 }
