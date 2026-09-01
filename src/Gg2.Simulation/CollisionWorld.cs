@@ -320,8 +320,26 @@ public sealed class CollisionWorld
     /// <paramref name="filter"/> — the walkmask plus whichever solid rectangles
     /// are solid to it.
     /// </summary>
-    public bool PlaceFree(in CharacterBox box, double x, double y, in CollisionFilter filter)
+    public bool PlaceFree(in CharacterBox box, double x, double y, in CollisionFilter filter) =>
+        PlaceFree(box, x, y, filter, default);
+
+    /// <summary>
+    /// <c>place_free</c> with one moving platform temporarily solid as well.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Only the carry passes a non-empty collider</b>, and only around the
+    /// one <c>good_move_contact_solid</c> the reference wraps in
+    /// <c>other.solid = true</c>. A platform is not part of the world's solid set
+    /// — it holds people up through the dropdown path instead — so it is passed
+    /// in for a single call rather than held here.
+    /// </remarks>
+    public bool PlaceFree(
+        in CharacterBox box, double x, double y, in CollisionFilter filter,
+        in PreciseCollision.PlatformCollider platform)
     {
+        if (platform.Meets(box, x, y))
+            return false;
+
         var originX = RoundPosition(x);
         var originY = RoundPosition(y);
 

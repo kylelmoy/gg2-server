@@ -84,14 +84,22 @@ public sealed class SimulationStampTests(ITestOutputHelper output)
     /// same commit and bumped in the same breath.
     /// </para>
     /// <para>
-    /// ⚠️ <b>The behaviour version is 1 and did NOT count <c>3bba987</c>.</b>
-    /// That change was demonstrated unobservable — two independent 90-iteration
-    /// training runs, per-iteration numbers identical to the digit over 1.66M
-    /// agent-steps — rather than argued to be. The distinction is the whole rule:
-    /// see the constant's remarks.
+    /// ⚠️ <b>The behaviour version is 2 as of 2026-09-01: the moving-platform
+    /// CARRY.</b> A platform now moves the character standing on it, so the stage
+    /// moves trajectories and the bump is unconditional. ⚠️ <b>Updated AS the
+    /// bump, which is what this pin's own contract asks for — not repaired as a
+    /// broken test.</b> The sealed-chamber argument that might once have avoided
+    /// it was already dead: <c>gg2-rl</c> seeds duels from nav nodes and 18 of
+    /// <c>gg_debug2</c>'s 70 sit inside sealed regions.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>It did NOT count <c>3bba987</c>.</b> That change was demonstrated
+    /// unobservable — two independent 90-iteration training runs, per-iteration
+    /// numbers identical to the digit over 1.66M agent-steps — rather than argued
+    /// to be. The distinction is the whole rule: see the constant's remarks.
     /// </para>
     /// </remarks>
-    private const string Pinned = "7ff5940d97aa7bed";
+    private const string Pinned = "5dac8a5e7c37ce3a";
 
     /// <summary>
     /// The stamp is stable, and not a per-process hash.
