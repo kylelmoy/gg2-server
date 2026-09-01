@@ -1094,6 +1094,23 @@ public sealed class DuelEnv
                 // rather than substituting DefaultHorizonTicks here and making a
                 // second place that decides what the default is. The same is true
                 // of a zero commitment, which means "the whole horizon" there.
+                //
+                // ⛔ DecisionTicks is NOT passed, so the search decides every 4
+                // ticks whatever action repeat the batch asked for. Those are two
+                // independent quantities that are BOTH 4 today, which makes the
+                // policy continuation correctly configured BY COINCIDENCE RATHER
+                // THAN BY CONSTRUCTION: it re-decides on the search's cadence, and
+                // the policy was trained on the batch's.
+                //
+                // ⚠️ THE TRIGGER, so this is not found by someone reading it back:
+                // if a batch ever runs an action repeat other than 4, the
+                // continuation's cadence does NOT follow, and that is a train/serve
+                // mismatch nothing reports. It is also when the measured cost stops
+                // applying — 1.47 ms at k=20 is stated in the SEARCH's cadence.
+                // Wire them together then; deliberately not done on 2026-09-01,
+                // because the case did not exist yet and the change would have
+                // altered behaviour inside a measurement whose baseline had just
+                // been re-taken. gg2-rl's call, on its own experiment.
                 return new RolloutSearch(new RolloutOptions(
                     HorizonTicks: horizon,
                     Opponent: opponent,
