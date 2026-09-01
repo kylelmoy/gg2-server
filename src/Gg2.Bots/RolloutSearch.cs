@@ -84,9 +84,33 @@ public enum RolloutOpponent
 /// <para>
 /// ⛔ <b>Do not lower it on that reasoning alone.</b> The monotone stretch is
 /// 20-90, and extrapolating off the end of a measured range is how the blind
-/// fraction came to be minimised in the first place. It wants the same sweep run
-/// downward on <c>gg2-rl</c>'s harness, which has the duel counts and the tier
-/// ladder — and the default is theirs to move, at their explicit request.
+/// fraction came to be minimised in the first place.
+/// </para>
+/// <para>
+/// ✅ <b>RUN 2026-08-31, and the refusal above was right for the right reason:
+/// THE CURVE IS NOT MONOTONE BELOW THE DEFAULT.</b> Four classes, in-range band,
+/// tier 5, 288 duels a cell — horizon 8 wins <b>80.4%</b> [73.6, 85.8], 12 wins
+/// 88.5%, 15 wins <b>93.1%</b> [88.1, 96.1], 20 wins 90.8%. So the upward sweep's
+/// monotone fall was <b>one side of a peak</b>, not a slope running off to the
+/// left, and "shorter is simply better" would have been wrong at 8 — where the
+/// interval is cleanly disjoint from 15's.
+/// </para>
+/// <para>
+/// ⚠️ <b>The peak's LOCATION is not established and the default has not moved.</b>
+/// 15 against 20 is 93.1% against 90.8% with overlapping intervals, which is a
+/// thin result confirming an interesting hypothesis — the combination that has
+/// been wrong repeatedly on this project. <c>gg2-rl</c> is re-running that pair at
+/// 864 duels a cell. <b>Do not quote "15 beats 20" until that lands</b>; what is
+/// solid is only that the curve turns over somewhere below the default.
+/// </para>
+/// <para>
+/// ⚠️ <b>That sweep's BLIND column is not comparable and should not be used.</b>
+/// It was measured over the decisions each arm actually generated, and the arms
+/// play differently, so they visit different states — it is non-monotone in a way
+/// that gives it away (8 reads less blind than 12, which no mechanism predicts).
+/// The upward sweep's blind numbers stepped a fixed count precisely to avoid
+/// that. <b>The two sets of blind fractions are from different instruments and
+/// must not be merged.</b>
 /// </para>
 /// </param>
 /// <param name="DecisionTicks">

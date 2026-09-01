@@ -1191,11 +1191,19 @@ Found by applying the lesson here rather than agreeing with it:
 - ⚠️ **`RolloutOptions.HorizonTicks = 20` is a design-time range, not a
   measurement.** `docs/BOTAI.md` item 12 said 15-30 and 20 was picked from it. The
   only sweep ever run went **upward**, 20 to 90, and found the win rate falling
-  monotonically in every class. **Nobody has run it below 20**, and 15 is inside
-  item 12's own range — so the entire measured curve points into an untested
-  region. ⛔ Not lowered: extrapolating off the end of a measured range is exactly
-  how the blind fraction came to be minimised, and the default is `gg2-rl`'s to
-  move at its own request.
+  monotonically in every class. **Nobody had run it below 20**, and 15 is inside
+  item 12's own range — so the entire measured curve pointed into an untested
+  region. ⛔ Not lowered on that: extrapolating off the end of a measured range is
+  exactly how the blind fraction came to be minimised.
+
+  ✅ **`gg2-rl` ran the downward half within the hour, and the refusal was right
+  for the right reason: the curve is NOT monotone below the default.** 288 duels
+  a cell — horizon 8 wins **80.4%** [73.6, 85.8], 15 wins **93.1%** [88.1, 96.1],
+  20 wins 90.8%. The upward sweep's monotone fall was **one side of a peak**, and
+  "shorter is simply better" would have been wrong at 8, where the interval is
+  disjoint from 15's. ⚠️ **The peak's location is NOT established** — 15 against
+  20 overlaps, and a re-run at 864 a cell is pending. Solid: the curve turns over
+  below the default. Not solid: where.
 - ⚠️ **The `CommitTicks` negative result rests partly on 24 duels a cell.** Its
   blind fractions are ratios over many decisions and are not in doubt — 0.523 →
   0.965 is not a sampling artefact. Its **win rates are thin**: 0.375 against
@@ -1461,6 +1469,11 @@ retention table — the policy's top 8 holds the search's best action 78.2% of t
 time, top 12 holds 86.6% — was measured on **60**-candidate sets. Applying the
 same absolute k to a sniper halves the fraction retained, so retention will be
 worse and pruning will cost more.
+
+✅ **Confirmed 2026-08-31**: `gg2-rl` re-ran four classes keeping **27% of each
+class's set** instead of a fixed 16, and the pruning cost went **−8.1 → −6.7
+points**. Correcting the fraction recovered **1.4 points**, in the predicted
+direction — the fixed-k sniper cell really was measuring arithmetic.
 
 ⚠️ **And the sniper is the class most likely to be read wrong because of it.** It
 has the worst blind fraction (92.8% at the default horizon) and twice the
