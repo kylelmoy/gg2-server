@@ -43,6 +43,27 @@ public static class ArmsEval
         int WorstSnipers,
         int Capped);
 
+    /// <summary>
+    /// One row per MATCH, so a later question does not need a re-run.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>This exists because the instrument twice lacked what the analysis wanted,
+    /// and each time it cost a full 21-map re-run.</b> First death COUNTS, without
+    /// which the aggregate could not be computed from its own output; then PER-MATCH
+    /// shares, without which a clustered-standard-error objection could not be
+    /// answered. Both were foreseeable only in the sense that "record the unit of
+    /// observation, not just the total" always is.
+    /// <para>
+    /// ⚠️ <b>A death is not an independent observation; a MATCH is closer to one.</b>
+    /// ~40 deaths arrive together per match, so a test over pooled deaths treats
+    /// clustered data as independent and overstates its own evidence. With per-match
+    /// rows on disk that test can be redone by anybody without re-playing 2,520
+    /// matches. <c>gg2-rl</c> raised it; the fix is the file rather than a correction
+    /// factor nobody can estimate.
+    /// </para>
+    /// </remarks>
+    private static StreamWriter? _rows;
+
     public static void Run(string maps, string nav, string npz, int perMap)
     {
         var policy = PolicyNetwork.Load(npz);
@@ -60,6 +81,12 @@ public static class ArmsEval
         Console.WriteLine("arm 1 all-scripted   arm 2 policy hybrid   arm 3 search hybrid");
         Console.WriteLine();
 
+        if (Environment.GetEnvironmentVariable("BENCH_ARMS_CSV") is { Length: > 0 } csv)
+        {
+            _rows = new StreamWriter(csv, append: false);
+            _rows.WriteLine("map,arm,match,red_deaths,blue_deaths,ticks,max_tick_ms");
+        }
+
         var one = new List<Row>();
         var two = new List<Row>();
         var three = new List<Row>();
@@ -67,12 +94,15 @@ public static class ArmsEval
 
         foreach (var map in list)
         {
-            one.Add(Play(map, maps, nav, null, null, perMap, cap));
-            two.Add(Play(map, maps, nav, policy, null, perMap, cap));
-            three.Add(Play(map, maps, nav, null, search, perMap, cap));
+            one.Add(Play(map, maps, nav, null, null, perMap, cap, "1"));
+            two.Add(Play(map, maps, nav, policy, null, perMap, cap, "2"));
+            three.Add(Play(map, maps, nav, null, search, perMap, cap, "3"));
 
             Console.WriteLine($"  {map,-18} done  {clock.Elapsed.TotalSeconds,6:0}s");
         }
+
+        _rows?.Flush();
+        _rows?.Dispose();
 
         Console.WriteLine();
         Report(one, two, three);
@@ -168,7 +198,7 @@ public static class ArmsEval
 
     private static Row Play(
         string map, string maps, string nav,
-        PolicyNetwork? policy, RolloutOptions? search, int count, int cap)
+        PolicyNetwork? policy, RolloutOptions? search, int count, int cap, string arm)
     {
         long redDeaths = 0, blueDeaths = 0, microTicks = 0, totalTicks = 0;
         var capped = 0;
@@ -192,6 +222,9 @@ public static class ArmsEval
                 SearchMicro = search,
                 PolicyTeam = Team.Red,
             };
+
+            long matchRed = 0, matchBlue = 0, matchTicks = 0;
+            var matchMaxMs = 0.0;
 
             var match = HeadlessMatch.Load(options, maps, nav);
             var tick = new Stopwatch();
@@ -233,6 +266,8 @@ public static class ArmsEval
 
                 maxTickMs = Math.Max(maxTickMs, tick.Elapsed.TotalMilliseconds);
                 totalTicks++;
+                matchTicks++;
+                matchMaxMs = Math.Max(matchMaxMs, tick.Elapsed.TotalMilliseconds);
 
                 for (var slot = 1; slot < WorldState.MaxSlots; slot++)
                 {
@@ -240,11 +275,22 @@ public static class ArmsEval
                         continue;
 
                     if (match.State.Players[slot].Team == Team.Red)
+                    {
                         redDeaths++;
+                        matchRed++;
+                    }
                     else
+                    {
                         blueDeaths++;
+                        matchBlue++;
+                    }
                 }
             }
+
+            // ⚠️ Written BEFORE the running totals absorb them, because the running
+            // totals are exactly what loses the unit of observation.
+            _rows?.WriteLine(
+                $"{map},{arm},{i},{matchRed},{matchBlue},{matchTicks},{matchMaxMs:0.###}");
 
             if (match.Outcome == MatchOutcome.Exhausted)
                 capped++;
