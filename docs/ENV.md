@@ -2022,6 +2022,56 @@ absorbed all but one. Ranking on `decided` sends you to a row that is fine and
   difference. What is true is narrower: **`gen_destroy`'s uniformity is one map's
   answer and nothing here establishes it as the method's.**
 
+### ✅ The 20-minute robustness table — the predicted null, and it is a strong one
+
+**Written up as expected-to-say-nothing before it was run, and it said nothing.**
+21 maps, 400 an arm, Release, 20-minute cap. `permap400-cap20`.
+
+```
+                  decided        red win     DEATH SHARE    stuck
+POLICY    8055/8400 (95.9%)       61.3%         46.4%      94/67200
+CONTROL   8040/8400 (95.7%)       53.6%         50.2%     106/67200
+```
+
+⛔ **DEATH SHARE BETTER UNDER THE POLICY ON 21 OF 21 MAPS AGAIN**, p = 4.8e-7
+one-sided. Against the 5-minute table's **46.3%/50.2%**, this is
+**46.4%/50.2%** — one tenth of a point on one arm.
+
+⛔ **The strength is in what changed underneath it.** Decidedness went from
+**76.0%/76.6% to 95.9%/95.7%**: roughly **1,600 matches per arm** that had never
+expressed an outcome now do, **and the answer did not move.** That is a stronger
+statement than "the criterion survived a re-run" — it survived the removal of
+most of the censoring that prompted the re-run.
+
+The win share moved as its denominator improved, 63.5%/55.8% → **61.3%/53.6%**,
+direction unchanged.
+
+### ⚠️ The untrustworthy rows are a property of the MEASUREMENT, not the map
+
+Decisive counts rise sharply with the cap:
+
+| map | 5-min decisive | 20-min decisive |
+|---|---|---|
+| `ctf_classicwell` | 24/25 | **104/78** |
+| `ctf_orange` | 11/14 | **50/62** |
+| `ctf_conflict` | 18/14 | **90/80** |
+| `gen_destroy` | 157/201 | **382/385** |
+| `ctf_truefort` | 182/219 | **360/372** |
+
+✅ **The two rows marked NOT comparable at five minutes are comparable now** —
+`gen_destroy` 95.5%/96.2% and `ctf_truefort` 90.0%/93.0% decisive — and **both
+keep their sign**: 65.2% vs 50.4%, and 52.5% vs 42.2%.
+
+⚠️ **Two DIFFERENT rows are flagged instead**: `ctf_eiger` at −33 decisive
+(z = −2.6) and `ctf_classicwell` at +26 (z = +2.2). **The set of untrustworthy
+rows changed with the cap.** Do not read a per-map flag as a property of the map;
+it is a property of the map *at that cap*.
+
+⛔ **`cp_egypt` is still 0/0 at twenty minutes** — 400 matches an arm, zero with
+a winner, both arms. **It is the mode, not the clock.** And it still casts a
+death-share vote inside the 21 of 21, which is the argument for the statistic
+with no subset holding at a cap four times longer.
+
 ### ⚠️ The cap-20 instrument is not neutral either
 
 A longer clock gives a stand-off policy four times as long to convert a
