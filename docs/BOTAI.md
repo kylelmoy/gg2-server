@@ -513,17 +513,31 @@ expert iteration, and it arrives as weights behind a seam that already exists.
 
 ## Not asking for
 
+⚠️ **STATUS, 2026-09-01: this list is now partly HISTORY, and it reads as a
+standing scope.** Two of its four items have been crossed on the user's explicit
+call and one turned out to describe exactly what shipped. Marked rather than
+deleted, because the reasons are still the reasons.
+
 To keep the scope honest:
 
-- No ML runtime, tensor library, or ONNX dependency in this repo yet. When a
-  policy exists it loads as weights behind an `IInputSource`.
-- No training loop, replay buffer, or environment API. Those live outside the
-  server.
-- No end-to-end learned bot. The realistic target is a **hybrid**: the scripted
+- ⛔ ~~No ML runtime, tensor library, or ONNX dependency in this repo yet.~~
+  **BUILT.** `PolicyNetwork` runs a `gg2-rl` checkpoint in-process, loaded by
+  `NpyFile` from their own `.npz`. ✅ **The second half of the sentence held
+  exactly**: it loads as weights behind an `IInputSource` (`PolicyBot`), with no
+  tensor library and no dependency — a `Dense` loop and an argmax per head.
+- ✅ **No training loop, replay buffer, or environment API. Those live outside
+  the server.** STILL TRUE and still the rule. `src/Gg2.Env/` is a *seam* — a
+  socket and an observation writer — not a trainer; the loop is `gg2-rl`'s.
+- ✅ **No end-to-end learned bot. The realistic target is a hybrid**: the scripted
   macro layer keeps objective selection, class choice and routing - roughly 2,000
   working lines in `botObjectiveUpdate.gml` and `botPathKeys.gml` - and only the
   ~1-second duel controller is searched or learned. Small observation space,
   dense reward, and it is exactly the part scripting is bad at.
+  ⛔ **This is what shipped, and the measurement went further than the
+  prediction**: the policy is most valuable holding about **7%** of ticks, and
+  widening its window past ~150px *loses the objective* while still improving
+  combat. **The narrow scope is not a cautious first step — it is the result.**
+  `docs/BOTS.md`, and `docs/ENV.md`, "Phase 4 re-measured".
 - Nothing here changes the wire protocol or the simulation's observable
   behaviour. Every constraint above is on structure, not on what the game does.
 

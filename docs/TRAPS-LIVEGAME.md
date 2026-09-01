@@ -163,3 +163,43 @@ projectiles, and these are the things that cost a session a day each:
   Wrap it in `with(...)`.
 - **`pi` is a GM8 constant**, so `for(pi=0; ...)` is a compile error reported as
   "Variable name expected".
+## The samplers, the probes, and handing over the socket
+
+⚠️ **Moved out of `CLAUDE.md` on 2026-09-01, verbatim.** It sat under "Building
+and testing", where every session read it and almost none of them was going to
+run a sampler. Nothing below was re-authored.
+
+`tools/sample-collision.js`, `tools/sample-physics.js`, `tools/sample-rng.js`,
+`tools/sample-primitives.js`, `tools/sample-collision-line.js`,
+`tools/sample-motion.js` and `tools/sample-rotated-box.js` regenerate the engine
+oracles. All seven need a **running game with the agent bridge**; the physics and
+primitives ones also need at least one bot character, and the RNG,
+collision-line, motion and rotated-box ones are happy with any running instance — the last two create and scale their own probe rather than
+borrowing a bot's character, so a dedicated server with an empty match is enough.
+
+`tools/probes/` holds the one-off probes that settled a single question rather
+than generating a fixture — the sprite boxes, the bubble pair, the sentry mask,
+the airblast, the turret. Read the header of one before writing another: each
+records what it cost to get right.
+
+`collision-samples.json` was regenerated on 2026-08-25 with `BulletWall`
+enumerated and `arena_lumberyard` added, so `CollisionSampleTests` compares every
+rectangle the port builds. **`gg_debug` places bullet walls too** — the docs used
+to name only `arena_lumberyard` and `koth_harvest`.
+
+⚠️ **The bridge serves one TCP client at a time and the MCP server process holds
+it.** Once this session has called any `gg2_*` tool, a `node tools/sample-*.js`
+run times out on its first call — even `gg2_ping` — and the game is fine. Hand
+the socket over deliberately: stop the game, restart it with
+`node D:/code/gg2-agent/run-agent.js --port 17777 --name server --role server -- -dedicated -map ctf_truefort`,
+and do not touch `gg2_*` until the tool has finished. The other direction is
+free, because each CLI run exits and releases.
+
+⚠️ **Restoring `gg2.ini` empties the running server's roster.** The dedicated
+server re-reads it, so putting the bots setting back mid-session removes every
+bot and the next probe measures nothing at all. Restore it last.
+
+To bring a bot server up: set `[Bots] Enabled=1`, `FillToPlayers=4`,
+`MinHumans=0` in `gg2.ini`, start the server, and put the ini back when you are
+finished with the game.
+

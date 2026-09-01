@@ -4,6 +4,84 @@ The wire protocol is the easy half. This document is the hard half: what the
 ported simulation must reproduce, and — just as important — what it is free to
 throw away.
 
+## The state itself — what `WorldState` holds, and why
+
+⚠️ **Moved out of `CLAUDE.md` on 2026-09-01, verbatim.** The five rules that bite
+a session before it knows it is near them stayed there; this is the reference
+half, which is worth grepping when you change what the state holds and worth
+nothing to a session that is not going to. Nothing below was re-authored.
+
+`Gg2.Simulation.WorldState` is the flat, cheaply-copyable state `docs/BOTAI.md`
+item 1 asks for: a value type built on `[InlineArray]` slot buffers, holding no
+reference to anything — no map, no config, no logger. Read-only inputs (the
+`CollisionWorld`) are passed **to** `MatchSimulation.Tick`, never held by the
+state. That item is the one the document says cannot be retrofitted, so do not
+put a reference type in there.
+
+It holds characters, their weapons, their sentries, the players behind them
+(`PlayerState`: team, class, respawn timer — phase 6), the two briefcases and
+the cap counters (`IntelState` — phase 6's objective), the round (clock, limits,
+winner, `mapchanging`, the setup timer), the control points, the KotH timers and
+Arena's round state, both generators, Team Deathmatch's kill limit and spawn
+invulnerability, the scoreboard and the domination matrix, the autobalance fuse
+and the class limits, a fixed-capacity projectile pool and the match's own
+`GmlRandom` stream. **`Gg2.Server.MatchState` holds no objective at all any
+more** — the generator and the kill limit were the last of its placeholders. What is left is
+server configuration and the roster's view of the map, and it should keep
+shrinking rather than grow. `StateUpdateWriter` reaches the simulated half
+through delegates (`CharacterLookup`, `SentryLookup`, `ObjectiveLookup`) so it
+never copies a `WorldState`.
+
+The RNG is in the state so that `Tick` stays a pure function and a forked
+rollout forks the stream with it. **Which seeds it produces is free** — every one
+is broadcast — but the stream has to live somewhere copyable, and a default
+`WorldState` starting at seed 0 is what makes a test reproducible. `GameServer`
+overwrites it at startup, which is the reference's `randomize()` and the only
+place outside the simulation that touches it.
+
+**Clear is a death and RemoveSlot is a departure, and the difference shows up in
+what survives.** A weapon dies with its character; a sentry does not, and neither
+does a rocket already in the air. That is the reference — a weapon is created by
+`Character.events/Create.xml`, a sentry belongs to the *player*, and a
+projectile's `ownerPlayer` is a player rather than a character, which is what
+lets it still credit a kill to somebody who died before it landed.
+
+⚠️ **A departure then destroys all of it anyway, and for four phases this port
+did none of that.** `Player.events/Destroy.xml` destroys the character — the
+*whole* Destroy event, not only the flag drop — and then sweeps every `Rocket`,
+`BurningProjectile`, `Shot`, `Needle` and `Sentry` the player owned. The rule
+runs the opposite way from the intuition: a rocket outlives its shooter's
+**death** precisely so it can still credit the kill, and is destroyed the moment
+that player is **gone**, because there is no longer anybody to credit. Until
+2026-08-26 `RemoveSlot` dropped the briefcase and nothing else, so a soldier
+could disconnect and still kill somebody a second later. `docs/SIMULATION.md`,
+"Settled: what a departure destroys"; `RemoveSlotTests`.
+
+⚠️ **And that line is invisible to every code-extracting grep of the
+reference.** `if(object != -1) with(object) instance_destroy();` sits on the
+*same line* as the opening `<argument kind="STRING">` tag, so anything that
+strips lines beginning with a tag hands back a Destroy event that starts three
+lines in. **Third time this project has been caught by the event XML** after the
+`Bubble`'s `action_kill_object` events and the Revolver's `action_set_alarm` —
+the first two were drag-and-drop actions, this one is ordinary code. When an
+event looks like it is missing its first statement, read the raw XML.
+
+**Projectiles are walked in creation order, not pool order.** Pool slots are
+recycled, so `WorldState.Projectiles` says nothing about when anything was
+fired; `LiveProjectileSlot(i)` walks `ProjectileOrder`, which is dense and in
+creation order. `docs/SIMULATION.md` makes that order observable. Handles are
+index-plus-generation and resolve through `TryGetProjectile`, which refuses a
+stale one.
+
+**`ScenarioWorld.Load` reads through a process-wide cache** (`ScenarioResources`):
+the `LevelMap` and `NavGraph` are decoded once per map and shared by every world
+and every test in the process — both are deeply immutable, and the
+`CollisionWorld` is still per-world because `SetCaptureZones` writes to one.
+⚠️ **A map edited on disk mid-process is not re-read** (`resources: null` forces a
+decode), and ⚠️ **a shared cache makes first-call properties order-dependent** —
+it turned `ObservationWriter`'s zero-allocation gate into a coin flip.
+`docs/ENV.md`, "the reset reload".
+
 ## Why any of this is a contract at all
 
 GG2 is a **server-authoritative simulation with client-side prediction**, not a
