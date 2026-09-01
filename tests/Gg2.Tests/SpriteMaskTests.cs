@@ -81,7 +81,7 @@ public sealed class SpriteMaskTests
         Assert.NotNull(mask);
         Assert.Equal(40, mask.Width);
         Assert.Equal(40, mask.Height);
-        Assert.Equal(576, mask.SolidCount);
+        Assert.Equal(586, mask.SolidCount);
     }
 
     /// <summary>

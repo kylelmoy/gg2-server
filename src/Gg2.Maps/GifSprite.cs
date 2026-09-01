@@ -11,16 +11,25 @@ namespace Gg2.Maps;
 /// because five of the eight platform maps use it — including
 /// <c>maw_deathmatch</c>, whose 139 platforms are 40x40 GIF bubbles.
 /// <para>
-/// ⛔ <b>THE FIRST FRAME ONLY, and that is an open question rather than a
-/// decision.</b> <c>stringToResource.gml</c> calls
-/// <c>sprite_add(name, 1, 1, 0, 0, 0)</c> — one subimage — but GM8 is known to
-/// expand an animated GIF into multiple subimages regardless, and the platforms
-/// carry an <c>animationspeed</c> property, so the maps clearly expect animation.
-/// Which subimage's mask GM8 collides against when the image index is advancing
-/// is <b>not established here</b>. If every frame has the same silhouette it does
-/// not matter; <c>maw_deathmatch</c>'s bubbles probably qualify and
-/// <c>ctf_2dfort-ani</c>'s 572x247 <c>NewAnimap</c> probably does not. On the
-/// verification list in <c>docs/TRAPS-SIMULATION.md</c>.
+/// ✅ <b>EVERY frame, unioned — measured against the running game 2026-09-01,
+/// not reasoned.</b> <c>stringToResource.gml</c> asks for one subimage
+/// (<c>sprite_add(name, 1, 1, 0, 0, 0)</c>) and GM8 expands an animated GIF into
+/// several anyway: <c>sprite_get_number</c> answers <b>4</b> for
+/// <c>maw_deathmatch</c>'s bubble. The engine's collision mask is the
+/// <b>union of all of them</b> — GM8 sprites default to one shared mask rather
+/// than separate per-subimage masks — so the shape does NOT change as the
+/// platform animates, and <c>animationspeed</c> stays decoration as far as
+/// collision is concerned.
+/// </para>
+/// <para>
+/// ⚠️ <b><c>removeback</c> is applied PER SUBIMAGE, each sampling its OWN
+/// bottom-left pixel.</b> This is the part no amount of reading would have got
+/// right. The bubble's later frames are 3x5 and 3x7 patches whose own corners are
+/// a different colour from the first frame's, so a single global background
+/// colour leaves three pixels solid that the engine clears. First-frame-only was
+/// out by ten pixels, a global background by three, and this model by
+/// <b>zero</b>. <c>probe-platform-mask.js</c> and
+/// <c>tests/Gg2.Tests/Fixtures/sprite-mask-samples.json</c>.
 /// </para>
 /// </remarks>
 internal static class GifSprite
@@ -34,10 +43,20 @@ internal static class GifSprite
         var packed = file[10];
         var globalTableSize = (packed & 0x80) != 0 ? 2 << (packed & 0x07) : 0;
 
+        // The logical screen, which is the size GM8 reports for the sprite and
+        // therefore the size of the mask however small the later frames are.
+        var width = BinaryPrimitives.ReadUInt16LittleEndian(file.Slice(6, 2));
+        var height = BinaryPrimitives.ReadUInt16LittleEndian(file.Slice(8, 2));
+
+        if (width <= 0 || height <= 0)
+            return null;
+
         var offset = 13;
         var globalTable = ReadColourTable(file, ref offset, globalTableSize);
 
         int? transparentIndex = null;
+        var solid = new bool[width * height];
+        var frames = 0;
 
         while (offset < file.Length)
         {
@@ -59,8 +78,7 @@ internal static class GifSprite
                 if (label == 0xF9 && offset < file.Length && file[offset] >= 4)
                 {
                     var flags = file[offset + 1];
-                    if ((flags & 0x01) != 0)
-                        transparentIndex = file[offset + 4];
+                    transparentIndex = (flags & 0x01) != 0 ? file[offset + 4] : null;
                 }
 
                 SkipSubBlocks(file, ref offset);
@@ -68,26 +86,39 @@ internal static class GifSprite
             }
 
             if (block != 0x2C) // not an image descriptor: unknown, give up
-                return null;
+                break;
 
-            return ReadImage(file, offset, globalTable, transparentIndex, removeBackground);
+            if (!AddFrame(file, ref offset, globalTable, transparentIndex, removeBackground, solid, width, height))
+                break;
+
+            frames++;
+            transparentIndex = null;
         }
 
-        return null;
+        return frames == 0 ? null : new SpriteMask(width, height, solid);
     }
 
-    private static SpriteMask? ReadImage(
-        ReadOnlySpan<byte> file, int offset, byte[]? globalTable,
-        int? transparentIndex, bool removeBackground)
+    /// <summary>
+    /// Unions one subimage into the mask and advances past its data.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The background colour is THIS frame's own bottom-left pixel</b>, not
+    /// the first frame's and not the logical screen's. Measured: using a single
+    /// global background leaves three pixels of <c>maw_deathmatch</c>'s bubble
+    /// solid that the engine clears, because its 3x5 and 3x7 patch frames have a
+    /// different corner colour from the 40x40 first frame.
+    /// </remarks>
+    private static bool AddFrame(
+        ReadOnlySpan<byte> file, ref int offset, byte[]? globalTable,
+        int? transparentIndex, bool removeBackground, bool[] solid, int width, int height)
     {
         if (offset + 10 > file.Length)
-            return null;
+            return false;
 
-        var width = BinaryPrimitives.ReadUInt16LittleEndian(file.Slice(offset + 5, 2));
-        var height = BinaryPrimitives.ReadUInt16LittleEndian(file.Slice(offset + 7, 2));
-
-        if (width <= 0 || height <= 0)
-            return null;
+        var frameX = BinaryPrimitives.ReadUInt16LittleEndian(file.Slice(offset + 1, 2));
+        var frameY = BinaryPrimitives.ReadUInt16LittleEndian(file.Slice(offset + 3, 2));
+        var frameWidth = BinaryPrimitives.ReadUInt16LittleEndian(file.Slice(offset + 5, 2));
+        var frameHeight = BinaryPrimitives.ReadUInt16LittleEndian(file.Slice(offset + 7, 2));
 
         var packed = file[offset + 9];
         var localTableSize = (packed & 0x80) != 0 ? 2 << (packed & 0x07) : 0;
@@ -96,36 +127,53 @@ internal static class GifSprite
         offset += 10;
         var table = ReadColourTable(file, ref offset, localTableSize) ?? globalTable;
 
-        if (offset >= file.Length)
-            return null;
+        if (offset >= file.Length || frameWidth <= 0 || frameHeight <= 0)
+            return false;
 
         var minimumCodeSize = file[offset++];
-        var indices = Lzw(file, ref offset, minimumCodeSize, width * height);
+
+        // ⚠️ Decode from a COPY of the offset, then walk the sub-block chain
+        // properly to find the next frame. Lzw returns the moment it sees the end
+        // code, which leaves its cursor in the middle of a sub-block — following
+        // that cursor lands on a length byte read as a block type, the walk stops,
+        // and only the first frame is ever seen. That is a ten-pixel error on the
+        // bubble and it looks exactly like "GIF animation is not supported".
+        var dataStart = offset;
+        var cursor = offset;
+        var indices = Lzw(file, ref cursor, minimumCodeSize, frameWidth * frameHeight);
+
+        offset = dataStart;
+        SkipSubBlocks(file, ref offset);
 
         if (indices is null)
-            return null;
+            return false;
 
         if (interlaced)
-            indices = Deinterlace(indices, width, height);
+            indices = Deinterlace(indices, frameWidth, frameHeight);
 
-        var solid = new bool[width * height];
+        var background = ColourOf(indices, (frameHeight - 1) * frameWidth, table);
 
-        // removeback samples the bottom-left pixel, exactly as for PNG.
-        var backgroundPixel = SpriteMask.BackgroundPixelIndex(width, height);
-        var background = ColourOf(indices, backgroundPixel, table);
-
-        for (var i = 0; i < solid.Length; i++)
+        for (var y = 0; y < frameHeight; y++)
+        for (var x = 0; x < frameWidth; x++)
         {
-            if (transparentIndex is { } transparent && indices[i] == transparent)
+            var source = (y * frameWidth) + x;
+            if (source >= indices.Length)
+                break;
+
+            if (transparentIndex is { } transparent && indices[source] == transparent)
                 continue;
 
-            if (removeBackground && ColourOf(indices, i, table) == background)
+            if (removeBackground && ColourOf(indices, source, table) == background)
                 continue;
 
-            solid[i] = true;
+            var targetX = frameX + x;
+            var targetY = frameY + y;
+
+            if (targetX < width && targetY < height)
+                solid[(targetY * width) + targetX] = true;
         }
 
-        return new SpriteMask(width, height, solid);
+        return true;
     }
 
     private static int ColourOf(byte[] indices, int pixel, byte[]? table)

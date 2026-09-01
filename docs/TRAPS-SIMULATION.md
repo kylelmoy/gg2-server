@@ -3870,3 +3870,53 @@ was checked.
 say so here with the date, and the `removeback` warning in `SpriteMask` comes
 down. An unverified claim left standing after it was verified is its own kind of
 stale.
+
+#### ✅ RUN 2026-09-01 — three of the six retired, and the GIF model was wrong twice
+
+`probe-platform-mask.js` against a dedicated server. The oracle is checked in as
+`tests/Gg2.Tests/Fixtures/sprite-mask-samples.json` and
+`SpriteMaskOracleTests` holds the decoders to it pixel for pixel.
+
+✅ **1 and 2 — `removeback` samples the BOTTOM-LEFT pixel, and it applies on top
+of an alpha channel.** Both PNGs matched exactly on the first run.
+`sprite-eleplat.png` was the discriminator as intended: 10x2, fully opaque, and
+the engine's mask is the top row solid and the bottom row clear — which is the
+bottom-left rule and nothing else. **The warning that stood on
+`SpriteMask.BackgroundPixelIndex` is now a measurement.**
+
+✅ **3 — scaling is exact replication.** At 3x every sprite has exactly nine
+times the solid pixels (10→90, 184→1656, 586→5274), so the room→source mapping
+is plain floor division, which is what `PreciseCollision` does.
+
+✅ **The anchor was already settled** and needed no probe: `probe-fractional-mask.js`
+established that a precise mask hangs off the ROUNDED position, so
+`PreciseCollision`'s use of `CollisionWorld.RoundPosition` is right by prior
+measurement.
+
+⛔ **5 and 6 — the GIF model was wrong, twice, and only measurement found it.**
+The engine says **586** solid for `bubble1`; this port said 576.
+
+1. **`sprite_get_number` is 4.** GM8 expands an animated GIF into subimages
+   whatever `imgnumb` asks for, and the mask is the **union of all of them** —
+   GM8 sprites default to one shared mask rather than separate per-subimage ones.
+   ✅ **So the shape does NOT change as a platform animates**, and
+   `animationspeed` stays decoration as far as collision goes. First-frame-only
+   was out by 10 pixels.
+2. **`removeback` is applied PER SUBIMAGE, each sampling its OWN bottom-left
+   pixel.** The bubble's later frames are 3x5 and 3x7 patches at (1,16), (0,16)
+   and (1,17) whose own corners differ in colour from the 40x40 first frame; one
+   global background colour left three pixels solid that the engine clears.
+   Per-frame: **zero mismatches.**
+
+⚠️ **The bug that hid the frames is worth naming.** The LZW decoder returns the
+moment it sees the end code, leaving its cursor inside a sub-block — so following
+that cursor reads a length byte as a block type, the walk stops, and only frame 1
+is ever seen. **The same mistake was made twice in one session**, once in the
+throwaway analysis script and once in `GifSprite`, which is a good sign it is the
+natural way to write it. Decode from a copy of the offset and walk the sub-block
+chain separately.
+
+⚠️ **Still open: 4 (a real character box against a mask) and the `grem` sprite**,
+which decodes to 1.0% solid and has not been put in front of the engine. Phase C
+is unrun — everything above used a 1x1 box, so the inclusive-bounds and
+class-box halves of the query are still only self-consistent.
