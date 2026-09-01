@@ -39,6 +39,8 @@ public static class ArmsEval
         long MicroTicks,
         long TotalTicks,
         double MaxTickMs,
+        int WorstDeciders,
+        int WorstSnipers,
         int Capped);
 
     public static void Run(string maps, string nav, string npz, int perMap)
@@ -111,7 +113,8 @@ public static class ArmsEval
                 $"{a.Map,-18} {da,9:0.0%} {db,9:0.0%} {dc,9:0.0%} "
                 + $"{Share(b.MicroTicks, b.TotalTicks),7:0.0%} {Share(c.MicroTicks, c.TotalTicks),7:0.0%} "
                 + $"{a.MaxTickMs,8:0.00} {b.MaxTickMs,8:0.00} {c.MaxTickMs,8:0.00} "
-                + $"{a.Capped + b.Capped + c.Capped,7}");
+                + $"{a.Capped + b.Capped + c.Capped,7}"
+                + $"   worst tick: {c.WorstDeciders} deciding, {c.WorstSnipers} sniper");
         }
 
         Console.WriteLine();
@@ -149,6 +152,8 @@ public static class ArmsEval
         long redDeaths = 0, blueDeaths = 0, microTicks = 0, totalTicks = 0;
         var capped = 0;
         var maxTickMs = 0.0;
+        var worstDeciders = 0;
+        var worstSnipers = 0;
 
         for (var i = 0; i < count; i++)
         {
@@ -180,6 +185,31 @@ public static class ArmsEval
                 match.Step();
                 tick.Stop();
 
+                // ⛔ DECOMPOSE the worst tick rather than only recording it. 92 ms against
+                // a 7.64 ms mean decision is either ~12 coinciding decisions or a few
+                // expensive ones - and those pick DIFFERENT levers: a concurrency cap
+                // bounds coincidence, threading and per-class k attack cost. A sniper
+                // searches 120 candidates against everyone else’s 60, so it is roughly
+                // double the mean before any coincidence. gg2-rl asked for this rather
+                // than guess, having been wrong once today about a mean describing a
+                // distribution.
+                if (tick.Elapsed.TotalMilliseconds > maxTickMs)
+                {
+                    worstDeciders = 0;
+                    worstSnipers = 0;
+
+                    for (var s = 1; s < WorldState.MaxSlots; s++)
+                    {
+                        if (match.SearchBotFor(s) is not { SearchedThisPoll: true })
+                            continue;
+
+                        worstDeciders++;
+
+                        if (match.State.Characters[s].Class == PlayerClass.Sniper)
+                            worstSnipers++;
+                    }
+                }
+
                 maxTickMs = Math.Max(maxTickMs, tick.Elapsed.TotalMilliseconds);
                 totalTicks++;
 
@@ -205,6 +235,8 @@ public static class ArmsEval
             }
         }
 
-        return new Row(map, count, redDeaths, blueDeaths, microTicks, totalTicks, maxTickMs, capped);
+        return new Row(
+            map, count, redDeaths, blueDeaths, microTicks, totalTicks, maxTickMs,
+            worstDeciders, worstSnipers, capped);
     }
 }

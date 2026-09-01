@@ -75,6 +75,19 @@ public sealed class SearchBot : IInputSource, ICommandSource
     /// </remarks>
     public bool RestrictToTrainedClasses { get; init; } = true;
 
+    /// <summary>
+    /// Whether the search actually SEARCHED on the tick just polled, as opposed to
+    /// replaying a decision it already took.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>This is the expensive event, and it is not the same as
+    /// <see cref="SearchDrove"/>.</b> The search drives every tick of a decision and
+    /// searches on one of them, so counting ticks it drove over-reports the cost by
+    /// the decision length. A tick-budget question needs the count of DECISIONS that
+    /// coincided, which is what this reports.
+    /// </remarks>
+    public bool SearchedThisPoll { get; private set; }
+
     /// <summary>Whether the search drove the tick just polled.</summary>
     public bool SearchDrove { get; private set; }
 
@@ -173,13 +186,20 @@ public sealed class SearchBot : IInputSource, ICommandSource
         SearchDrove = true;
         SearchTicks++;
 
-        return _search.Poll(in world, slot, tick);
+        var input = _search.Poll(in world, slot, tick);
+
+        // ⚠️ Read AFTER the poll: LastDecisionTicksSimulated is zeroed at the top of
+        // Poll and set only when it really searched.
+        SearchedThisPoll = _search.LastDecisionTicksSimulated > 0;
+
+        return input;
     }
 
     private PlayerInput Scripted(PlayerInput scripted)
     {
         _searchHadControl = false;
         SearchDrove = false;
+        SearchedThisPoll = false;
         ScriptedTicks++;
 
         return scripted;
