@@ -82,7 +82,8 @@ length, one message-kind byte, payload. Request/response.
 | Message | Carries | Returns |
 |---|---|---|
 | `Hello` | client's protocol version | protocol version, `SIM_UUID`, obs layout version, action encoding version, obs length, head shape. **Mismatch refuses** — the `PROTOCOL_UUID` idiom, not a warning |
-| `MakeBatch` | N, map, per-side classes, spawn placement (explicit positions, or **NaN** for sampled — see below), base seed, tick cap, action repeat k, **per-side driver and skill tier**, **per-side rollout opponent**, **separation band (min, max)** | ack + initial observations |
+| `MakeBatch` | N, map, per-side classes, spawn placement (explicit positions, or **NaN** for sampled — see below), base seed, tick cap, action repeat k, **per-side driver and skill tier**, **per-side rollout opponent**, **separation band (min, max)**, **per-side commitment and continuation handle** | ack + initial observations |
+| `LoadPolicy` | a checkpoint path | handle (1-based) + the `SIM_UUID` it was checked against |
 | `Step` | N action tuples (one per world: 4 head indices + aim-delta bin) | N × (obs block, reward components, done, termination reason, **the action that side actually took + whether it is reproducible**) |
 | `Reset` | world index, optional new seed | that world's fresh observation |
 | `Snapshot` | world index | the world's state bytes |
@@ -911,8 +912,8 @@ across six files:
 
 | file | what is parsed |
 |---|---|
-| `Gg2.Env/EnvProtocol.cs` | `Version`, `ComponentBytes`, `ActionBytes`, `MakeBatchFixedBytes` (tolerates a sum) |
-| `Gg2.Env/EnvServer.cs` | ⚠️ the **ORDER** of the reward block's `Write*LittleEndian` calls |
+| `Gg2.Env/EnvProtocol.cs` | `Version`, `ComponentBytes`, `ActionBytes`, `MakeBatchFixedBytes` (tolerates a sum) — ⚠️ **all four moved or gained a term at v8** |
+| `Gg2.Env/EnvServer.cs` | ⚠️ the **ORDER** of the reward block's `Write*LittleEndian` calls — ⚠️ **v8 added `LoadPolicy` and four reads to `MakeBatch`; the reward block itself is untouched** |
 | `Gg2.Env/DuelEnv.cs` | `enum EnvDriver` — names **and** values |
 | `Gg2.Bots/RolloutSearch.cs` | `enum RolloutOpponent` — names, **positionally** |
 | `Gg2.Bots/ActionDecoder.cs` | `HeadShape => [ … ]` — counted, not evaluated |
@@ -1721,6 +1722,174 @@ written**, because their design constraints did not depend on the refusal.
   the part that must not drift.
 
 ### ✅ The cheap piece — BUILT 2026-08-31
+
+## Protocol v8 — the policy continuation, per side (2026-09-01)
+
+**`gg2-rl`'s step 3.** The rollout search can now keep **acting** past its
+commitment under a trained policy instead of going neutral.
+
+    LoadPolicy = 13            u32 path length + path
+                               -> i32 handle, u32 length + SIM_UUID
+    MakeBatch  + 4 i32         Red/BlueCommitTicks   (0 = the whole horizon)
+                               Red/BlueContinuation  (0 = neutral, else a handle)
+    MakeBatchFixedBytes        112 -> 128
+    EnvProtocol.Version        7 -> 8
+
+⚠️ **`LoadPolicy` is 13, NOT 10.** 10 is `SetGoal`. The shape was specified to
+`gg2-rl` as 10 before that was checked; the id is pinned in
+`EnvProtocolTests.TheVersionAndTheFrameLayoutMoveTogether` so the two repos cannot
+disagree about a number that compiles on both sides and mis-dispatches at run
+time.
+
+⚠️ **Handles are 1-based, because 0 means "no continuation".** A table numbered
+from zero would make the first policy loaded indistinguishable from none — the
+`WorldState` "nobody is 255, never 0" trap one layer out.
+
+⚠️ **The handle is resolved to a `PolicyNetwork` in `EnvServer` and does not reach
+`DuelSpec`**, which carries `Red/BlueContinuationPolicy` instead. Carrying both
+would be two sources of truth for one fact. An unknown handle is refused at the
+protocol edge with a reason on the wire rather than resolving to null and quietly
+giving that side the neutral continuation — an arm silently running the wrong
+experiment.
+
+⛔ **Why this needs weights in the SERVER, when nothing else did.** `EnvDriver`
+has no policy member on purpose: a past checkpoint is `Client`, because the
+trainer holds the weights and drives that slot itself. A continuation cannot work
+that way — it runs **inside the search's fork**, k times per candidate per
+decision, in worlds the socket never sees. This is the first thing in the protocol
+that requires a policy in-process, and it is not a general plug-in seam.
+
+### ⛔ THE RESULT: the continuation works completely, and buys nothing
+
+**Measured by `gg2-rl` 2026-09-01 at `35445e1`** — k=30, 1,008 duels an arm, 6
+maps x 4 classes. `blind@60` is the length-unbiased measure; see "every blind
+fraction in this document is whole-run".
+
+| arm | blind@60 | win share | ms/dec |
+|---|---|---|---|
+| A unpruned, commit=horizon | **64.8%** | 90.7% | 3.99 |
+| B pruned k=30 | 65.3% | 85.6% | 1.97 |
+| C + commit 4, **neutral** | 76.8% | 74.6% | 1.81 |
+| D + commit 4, **policy** | **63.4%** | 73.5% | 2.93 |
+
+✅ **The mechanism does exactly what it was built to do.** Arm D is **less blind
+than unpruned, at 73% of unpruned's cost**. The entanglement between lookahead and
+commitment really does break, and only a continuation that keeps *acting* breaks
+it — the neutral one makes blindness worse (76.8%), which is the failure this
+whole cell was designed around.
+
+⛔ **And it buys nothing, because the premise underneath it was wrong.**
+
+| step | win share | blind |
+|---|---|---|
+| B → C, the short commitment | **−11.0** | +11.5 |
+| C → D, the policy continuation | **−1.1** | −13.4 |
+
+**Removing the blindness recovers NONE of what the short commitment cost.** Not
+some of it — none. The continuation removes 13.4 points of blindness and returns
+1.1 points of win share, which is noise.
+
+⚠️ **So "the search is blind, therefore it is weak" is RETIRED.** Blindness and
+strength are close to independent here, and this is the **second** measurement to
+say so: pruning had already cost 5.1 points of win share while moving blind 0.5.
+**Anything in this repo that reads a blind fraction as a proxy for search quality
+is reading it wrong** — including the horizon sweep in `RolloutOptions.CommitTicks`,
+whose monotone opposition is real and does not license the causal reading it
+invites.
+
+### The verdict: criterion 2 passed, criterion 1 failed by nineteen points
+
+**The head-to-head landed 2026-09-01.** Arm D on red against arm A on blue, one
+world, null exactly **50%**, no ceiling — the pre-registered primary, and what
+per-side configuration was built for.
+
+| | |
+|---|---|
+| D's win share | **27.7%** [24.2%, 31.4%] |
+| A's win share | 56.0% |
+| draws | 16.3% |
+| decisive split | D 33.1% / A 66.9% |
+| cost | D **2.93 ms** against A's 3.99 ms |
+
+⛔ **The interval excludes the 50% threshold by nineteen points.** And note which
+half failed: **D is CHEAPER than A**, so *"at equal cost"* was satisfied outright
+and the criterion failed on **stronger**.
+
+⚠️ **`gg2-rl`'s draw guard fired and did not rescue it.** 16.3% draws against the
+arm table's 0.5–1.4%, so by its own pre-registered rule this is *weaker* evidence
+than the arm table. **Discounted, and the verdict survives the discount by
+nineteen points.** The stalemate has an obvious cause — two strong searches — and
+explains the run taking 4–7x arm A's wall time for the same duel count.
+
+✅ **Both instruments agree, and the ceiling cuts the way that strengthens it.**
+The fallback put D at 73.5% against A's 90.7%; the primary puts D at 27.7%
+against a 50% null. The ceiling flagged as the fallback's weakness would have
+*compressed* A's advantage — and A still won. So the fallback was right for a
+reason that makes the agreement stronger rather than weaker.
+
+⛔ **What the negative retires is worth more than the negative.** *"The search is
+blind, therefore it is weak"* was the load-bearing assumption of the whole
+step-3 case, including the ceiling argument built on this repo's horizon sweep.
+The decomposition above kills it: 13.4 points of blindness removed returns 1.1
+points of win share. **The ceiling was a correlation read as a mechanism.**
+
+⚠️ **What was NOT the cause, each checked rather than assumed:** not the policy
+prior (the exploration monitor never fired at any k in any arm — 2.4% against a
+20.0% null on 40,051 decisions); not cost (D is cheaper); not the commitment's
+phase; and **not the plumbing** —
+`EnvProtocolTests.APolicyLoadedOverTheSocketReachesTheRollout` is why this is
+reportable as a finding at all, because **a severed wire-to-rollout chain produces
+this exact win column.**
+
+⚠️ **What this does NOT establish, and must not be quoted as establishing: that a
+policy continuation cannot work.** It is one policy, at k=30, commit 4, horizon
+20. The obvious reading — that the continuation hands the rollout to something
+weaker than the search it replaces — **is a hypothesis this run does not test**.
+And nobody has an explanation for why the short commitment costs 11 points; only
+that it is not blindness.
+
+✅ **The exploration monitor never fired**: 2.4% against a 20.0% computed null,
+n = 40,051. The policy prior was never the problem, at any k, in any arm.
+
+⚠️ **A negative result here is worth having and was not free.** These numbers
+exist only because the continuation actually worked end to end — **a broken
+wire-to-rollout chain produces the same win column and settles nothing**, and is
+indistinguishable from "the continuation does not help". That is why
+`EnvProtocolTests.APolicyLoadedOverTheSocketReachesTheRollout` gates the whole
+chain rather than just the batch being accepted.
+
+### The cadence is a cost constraint, not a preference
+
+Measured 2026-09-01, Release: one policy decision is **6.58 µs** (inference 3.67,
+observation extraction 2.92). At k=20, horizon 20, against a 2.45 ms unpruned
+baseline:
+
+| continuation cadence | cost | verdict |
+|---|---|---|
+| every tick | **3.48 ms** | ⛔ more than the search it replaces |
+| every `DecisionTicks` (4) | **1.47 ms** | ✅ 1.67x cheaper |
+
+It is also the `action_repeat` the policy was trained at. ⚠️ **Both arguments land
+on the same number, and that is luck worth naming as luck** — if the distribution
+argument were wrong the budget would still forbid cadence 1.
+
+### The phase guard, and where it does NOT fire
+
+`CommitTicks % DecisionTicks == 0` is refused in `RolloutOptions.WithDefaults` —
+where the value is **set**, not where it is read, because a fix belongs at the
+point that makes the mistake unavailable.
+
+⚠️ **It does not fire when the commitment covers the whole horizon**, and the
+first version that did was wrong: `HorizonTicks: 10, DecisionTicks: 4` defaults
+`CommitTicks` to 10, no continuation runs at all, and there is nothing to be out
+of phase. It refused eight existing configurations. **That is CLAUDE.md's "check
+that a criterion could actually fire" in its mirror image — a guard firing where
+the thing it protects does not exist.**
+
+### ⚠️ What this does NOT move
+
+**`SIM_UUID` does not move.** It is deliberately blind to the bot layer, and a
+continuation is a bot decision. No checkpoint is invalidated by v8.
 
 `EnvMessage.StepRestricted = 11` and `StepScoredRestricted = 12`, plus
 `RolloutSearch.RestrictNextDecision` and `DuelEnv.RestrictSearch`.

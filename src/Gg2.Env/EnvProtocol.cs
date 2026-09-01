@@ -147,6 +147,35 @@ public enum EnvMessage : byte
     /// </para>
     /// </remarks>
     StepScoredRestricted = 12,
+
+    /// <summary>
+    /// Loads a policy checkpoint into the server and returns a handle for it.
+    /// </summary>
+    /// <remarks>
+    /// Body: <c>u32</c> path length, then the path. Reply: <c>i32</c> handle,
+    /// then <c>u32</c> length and the <c>SIM_UUID</c> the checkpoint was checked
+    /// against. ⚠️ <b>A stamp mismatch is an <see cref="Error"/>, not a warning</b>
+    /// — <c>SimulationStamp.Require</c> throws, which is the whole point of that
+    /// type: a policy trained against physics that has since changed plays
+    /// slightly worse for ever with the cause invisible.
+    /// <para>
+    /// ⚠️ <b>Handles start at 1, because 0 means "no continuation"</b> in
+    /// <c>MakeBatch</c>'s per-side field. A handle table that started at 0 would
+    /// make the first policy loaded indistinguishable from none — the same
+    /// "nobody is 255, never 0" trap <c>WorldState</c> records, one layer out.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>This is the first thing in this protocol that needs weights in the
+    /// SERVER.</b> <c>EnvDriver</c> deliberately does not have a policy member,
+    /// because a past checkpoint is <c>Client</c>: the trainer holds the weights
+    /// and drives that slot itself. A rollout continuation cannot work that way —
+    /// it runs inside the search's fork, k times per candidate per decision, in
+    /// worlds the socket never sees. That is why this exists and why it is not a
+    /// general plug-in seam.
+    /// </para>
+    /// </remarks>
+    LoadPolicy = 13,
+
     Reset = 4,
     Snapshot = 5,
     Restore = 6,
@@ -178,6 +207,21 @@ public static class EnvProtocol
     /// <c>PROTOCOL_UUID</c> idiom, not a warning.
     /// </summary>
     /// <remarks>
+    /// <b>v8, 2026-09-01</b>: <c>MakeBatch</c> gains a <b>commitment length</b> and
+    /// a <b>continuation policy handle</b> per side, four i32 appended
+    /// (<see cref="MakeBatchFixedBytes"/> 112 → 128), and there is a new message
+    /// <see cref="EnvMessage.LoadPolicy"/>. Together they let the rollout search
+    /// keep ACTING past its commitment under a trained policy instead of going
+    /// neutral — <c>gg2-rl</c>'s step 3, and the cell between two measured
+    /// failures: a long horizon sees damage land and picks an implausible plan, a
+    /// neutral continuation picks a plausible plan and sees nothing land.
+    /// ⚠️ <b>Per side</b>, because the criterion is the new search against the old
+    /// one head-to-head in one world — null exactly 50%, no ceiling — rather than
+    /// each against a scripted tier the search already beats 82.5% of the time.
+    /// Reply shapes for every other message and the action encoding are untouched,
+    /// and <c>SIM_UUID</c> does not move: it is deliberately blind to the bot
+    /// layer, and a continuation is a bot decision.
+    /// <para>
     /// <b>v7, 2026-08-29</b>: <c>MakeBatch</c> gains a <b>shadow search</b> flag
     /// per side, two i32 appended (<see cref="MakeBatchFixedBytes"/> 104 → 112),
     /// and every <see cref="EnvMessage.StepScored"/> per-agent block gains the
@@ -243,7 +287,7 @@ public static class EnvProtocol
     /// sampling and nav-node sampling read off uninitialised bytes.
     /// </para>
     /// </remarks>
-    public const int Version = 7;
+    public const int Version = 8;
 
     /// <summary>
     /// Bytes of <c>MakeBatch</c> body after the map name — the fixed tail.
@@ -252,7 +296,8 @@ public static class EnvProtocol
     /// Two classes, two drivers, two tiers and two rollout opponents at four
     /// bytes (32); the decision cap, the action repeat, the seed and the thread
     /// count at four (16); four coordinates and two separations at eight (48);
-    /// two rollout horizons and two shadow flags at four (16).
+    /// two rollout horizons and two shadow flags at four (16); two commitment
+    /// lengths and two continuation handles at four (16).
     /// <para>
     /// ⚠️ <b>It lives beside <see cref="Version"/> so that the two cannot move
     /// apart, and that is not tidiness — it is the gate for a bug this file
@@ -273,7 +318,7 @@ public static class EnvProtocol
     /// failing test rather than a silent lie.
     /// </para>
     /// </remarks>
-    public const int MakeBatchFixedBytes = 32 + 16 + 48 + 8 + 8;
+    public const int MakeBatchFixedBytes = 32 + 16 + 48 + 8 + 8 + 16;
 
     /// <summary>
     /// Bytes of reward components per agent in every reply.

@@ -198,9 +198,76 @@ public enum RolloutOpponent
 /// idea.</b> The continuation here is neutral — keys released, bearing kept —
 /// because holding the candidate on is exactly what the split removes. A
 /// continuation that kept <em>acting</em>, such as a distilled policy, is a
-/// different experiment and is the one <c>gg2-rl</c> named for phase 3. The knob
-/// is kept so that experiment is a one-line change rather than a
-/// re-implementation, and so this negative is reproducible.
+/// different experiment and is the one <c>gg2-rl</c> named for phase 3.
+/// </para>
+/// <para>
+/// ✅ <b>THAT EXPERIMENT HAS NOW RUN, and the mechanism works exactly as this
+/// paragraph hoped.</b> Protocol v8 added <see cref="ContinuationPolicy"/>;
+/// <c>gg2-rl</c> measured all four arms at k=30, 1,008 duels each, 6 maps × 4
+/// classes, 2026-09-01:
+/// </para>
+/// <list type="table">
+/// <item><term>A unpruned, commit=horizon</term><description>blind@60 <b>64.8%</b>, win 90.7%</description></item>
+/// <item><term>B pruned k=30</term><description>blind 65.3%, win 85.6%</description></item>
+/// <item><term>C + commit 4, neutral</term><description>blind 76.8%, win 74.6%</description></item>
+/// <item><term>D + commit 4, POLICY</term><description>blind <b>63.4%</b>, win 73.5%</description></item>
+/// </list>
+/// <para>
+/// <b>Arm D is less blind than unpruned at 73% of its cost.</b> The
+/// entanglement this parameter exists to break really does break: only a
+/// continuation that keeps acting separates lookahead from commitment, and a
+/// neutral one cannot.
+/// </para>
+/// <para>
+/// ⛔ <b>AND IT BUYS NOTHING, because the premise underneath the whole idea was
+/// wrong.</b> Decomposed: the short commitment costs <b>11.0</b> points of win
+/// share and adds 11.5 of blindness; the policy continuation then removes
+/// <b>13.4</b> points of blindness and returns <b>1.1</b> points of win share —
+/// nothing, within noise. <b>Removing the blindness recovers none of what the
+/// short commitment cost.</b> Not some of it.
+/// </para>
+/// <para>
+/// ⚠️ <b>So "the search is blind, therefore it is weak" is retired.</b> Blindness
+/// and strength are close to independent here, and this is the second measurement
+/// to say so — pruning had already cost 5.1 points of win share while moving
+/// blind 0.5. Anything in this repo that reads a blind fraction as a proxy for
+/// search quality is reading it wrong, and the horizon sweep above is the
+/// clearest example: its monotone opposition is real and does not license the
+/// causal reading it invites.
+/// </para>
+/// <para>
+/// ⚠️ <b>The knob stays, and is now load-bearing rather than speculative.</b> The
+/// numbers above exist only because the continuation actually worked — a broken
+/// one produces the same win column and settles nothing, which is why
+/// <c>EnvProtocolTests.APolicyLoadedOverTheSocketReachesTheRollout</c> gates the
+/// whole wire-to-rollout chain.
+/// </para>
+/// <para>
+/// ⛔ <b>THE VERDICT: criterion 2 passed, criterion 1 failed by nineteen
+/// points.</b> The head-to-head — arm D on red against arm A on blue, one world,
+/// null exactly 50%, no ceiling — put <b>D at 27.7% [24.2%, 31.4%]</b> against
+/// A's 56.0%, with 16.3% draws over 1,008 duels. ⚠️ <b>D is CHEAPER</b> (2.93 ms
+/// against 3.99), so <em>at equal cost</em> was satisfied outright and the
+/// criterion failed on <b>stronger</b>. <c>gg2-rl</c>'s draw guard fired — 16.3%
+/// against the arm table's 0.5-1.4% — so this is weaker evidence than that table
+/// by its own rule, and the verdict survives the discount by nineteen points.
+/// </para>
+/// <para>
+/// ⚠️ <b>Both instruments agree, and the ceiling cuts the way that strengthens
+/// it</b>: it would have compressed A's advantage in the fallback, and A still
+/// won. ⚠️ <b>What was NOT the cause</b>, each checked: not the prior (the
+/// exploration monitor never fired at any k in any arm), not cost, not phase, and
+/// <b>not the plumbing</b> — a severed wire-to-rollout chain produces this exact
+/// win column, which is what
+/// <c>EnvProtocolTests.APolicyLoadedOverTheSocketReachesTheRollout</c> exists to
+/// rule out.
+/// </para>
+/// <para>
+/// ⚠️ <b>This does NOT establish that a policy continuation cannot work.</b> One
+/// policy, k=30, commit 4, horizon 20. That the continuation hands the rollout to
+/// something weaker than the search it replaces is the obvious reading and <b>a
+/// hypothesis this run does not test</b>. Nobody has an explanation for the short
+/// commitment's 11 points either — only that it is not blindness.
 /// </para>
 /// </param>
 /// <param name="ConsiderSpecial">
@@ -213,7 +280,8 @@ public readonly record struct RolloutOptions(
     RolloutOpponent Opponent = RolloutOpponent.HoldLastInput,
     byte[]? AimBins = null,
     bool ConsiderSpecial = false,
-    int CommitTicks = 0)
+    int CommitTicks = 0,
+    PolicyNetwork? ContinuationPolicy = null)
 {
     /// <summary><c>docs/BOTAI.md</c> item 12 says 15-30 ticks; this is the middle.</summary>
     public const int DefaultHorizonTicks = 20;
@@ -247,18 +315,62 @@ public readonly record struct RolloutOptions(
     /// (<c>new RolloutOptions(ConsiderSpecial: true)</c>), so the two forms
     /// disagree, and this is what makes them agree.
     /// </remarks>
-    public RolloutOptions WithDefaults() => this with
+    public RolloutOptions WithDefaults()
     {
-        HorizonTicks = HorizonTicks == 0 ? DefaultHorizonTicks : HorizonTicks,
-        DecisionTicks = DecisionTicks == 0 ? DefaultDecisionTicks : DecisionTicks,
+        var horizon = HorizonTicks == 0 ? DefaultHorizonTicks : HorizonTicks;
+        var decision = DecisionTicks == 0 ? DefaultDecisionTicks : DecisionTicks;
 
         // ⚠️ 0 means "commit for the whole horizon", which is the behaviour this
         // search has always had — see the parameter's own remarks. It is resolved
         // here rather than at the use site so there is one place that decides.
-        CommitTicks = CommitTicks == 0
-            ? (HorizonTicks == 0 ? DefaultHorizonTicks : HorizonTicks)
-            : CommitTicks,
-    };
+        var commit = CommitTicks == 0 ? horizon : CommitTicks;
+
+        // ⛔ THE PHASE GUARD, and it is here — where CommitTicks is SET — rather
+        // than asserted where it is read, because a fix belongs at the point that
+        // makes the mistake unavailable. `gg2-rl` asked for exactly this and
+        // sharpened its own first proposal (a read-site assert) to get it.
+        //
+        // A continuation re-decides every DecisionTicks ticks counting from the
+        // end of the commitment. If the commitment is not a whole number of
+        // decisions, the policy's decision boundaries fall out of phase with the
+        // one the search actually plays — so a candidate is scored under a
+        // continuation whose cadence it will never experience in the real match,
+        // and the whole point of matching the training action_repeat is lost.
+        //
+        // ⚠️ Enforced whether or not a POLICY is attached -- that was the ask, and
+        // a rule that only applies sometimes is one nobody can rely on.
+        //
+        // ⛔ But NOT enforced when no continuation runs at all, and the first
+        // version of this guard got that wrong. `commit == horizon` is the
+        // default and means the candidate is held for the whole rollout, so the
+        // `tick >= CommitTicks` branch is never reached and there are no
+        // continuation decisions to be out of phase. Requiring a multiple there
+        // is a constraint on the HORIZON wearing a commitment's clothes, and it
+        // refused eight existing configurations -- `HorizonTicks: 10,
+        // DecisionTicks: 4` among them -- that have no continuation and never did.
+        //
+        // ⚠️ This is CLAUDE.md's "check that a criterion could actually fire" in
+        // its mirror image: not a gate that can never fire, but one firing where
+        // the thing it protects does not exist. Both are the same mistake about
+        // what a check is FOR, and the tests caught this one in under a minute.
+        if (commit < horizon && commit % decision != 0)
+        {
+            throw new ArgumentException(
+                $"CommitTicks {commit} is not a multiple of DecisionTicks {decision} "
+                + $"(horizon {horizon}, so a continuation does run). "
+                + "A continuation re-decides on the decision cadence counting from the end of "
+                + "the commitment, so a partial decision at the seam puts every later one out "
+                + "of phase with the cadence the policy was trained at.",
+                nameof(CommitTicks));
+        }
+
+        return this with
+        {
+            HorizonTicks = horizon,
+            DecisionTicks = decision,
+            CommitTicks = commit,
+        };
+    }
 }
 
 /// <summary>
@@ -379,6 +491,21 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
     private EnvAction _current;
 
     private int _currentSlot = -1;
+
+    /// <summary>
+    /// The observation and head buffers a policy continuation writes through.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Allocated once per search, never per candidate or per tick.</b> A
+    /// continuation at k=30, horizon 20, cadence 4 runs 120 forward passes per
+    /// decision and a decision happens every four ticks; allocating here would put
+    /// two arrays per pass through the tick loop, which is the allocation rule
+    /// CLAUDE.md states for exactly this path. Null until a policy is attached, so
+    /// a search without one costs nothing.
+    /// </remarks>
+    private float[]? _continuationObservation;
+
+    private int[]? _continuationHeads;
 
     public RolloutSearch(RolloutOptions options = default)
     {
@@ -922,10 +1049,25 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
         Span<PlayerInput> inputs = stackalloc PlayerInput[WorldState.MaxSlots];
         var score = 0.0;
 
+        // ⚠️ Per CANDIDATE, not per search. Each candidate is an independent
+        // forward simulation, so its continuation has to start from the same
+        // state — otherwise candidate n+1 inherits candidate n's last policy
+        // action and the ordering of the candidate list becomes observable.
+        var continuation = EnvAction.Idle;
+
         for (var tick = 0; tick < _options.HorizonTicks; tick++)
         {
             if (!_fork.IsAlive(slot))
                 break;
+
+            // Past the commitment, is this the first tick of a continuation
+            // decision? Counted FROM the end of the commitment, which is what the
+            // phase guard in RolloutOptions.WithDefaults exists to keep whole.
+            var sinceCommit = tick - _options.CommitTicks;
+            var deciding = sinceCommit >= 0 && sinceCommit % _options.DecisionTicks == 0;
+
+            if (deciding && _options.ContinuationPolicy is { } policy)
+                continuation = PolicyContinuation(policy, collision, slot);
 
             for (var other = 0; other < WorldState.MaxSlots; other++)
             {
@@ -935,15 +1077,20 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
                     continue;
                 }
 
-                // ⚠️ Past the commitment the candidate is NOT held. The searcher
-                // keeps the bearing the action turned it to and releases the
-                // keys, which models "I will decide again shortly and am not
-                // committed to this key" — the ordinary receding-horizon split.
-                // With CommitTicks defaulted to the horizon this is unreachable
-                // and the behaviour is exactly what it always was.
+                // ⚠️ Past the commitment the candidate is NOT held. Without a
+                // policy the searcher keeps the bearing the action turned it to
+                // and releases the keys, which models "I will decide again shortly
+                // and am not committed to this key" — the ordinary receding-horizon
+                // split. With CommitTicks defaulted to the horizon this is
+                // unreachable and the behaviour is exactly what it always was.
+                //
+                // ⚠️ With a policy attached the continuation keeps ACTING, which is
+                // the whole point: the neutral continuation picks a plausible plan
+                // and then sees nothing land, because a candidate scores from
+                // damage inside the window where somebody is still playing.
                 inputs[other] = tick < _options.CommitTicks
                     ? _decoder.Decode(slot, action, firstTickOfDecision: tick == 0)
-                    : _decoder.Decode(slot, Continuation, firstTickOfDecision: false);
+                    : _decoder.Decode(slot, continuation, firstTickOfDecision: deciding);
             }
 
             _events = default;
@@ -1004,6 +1151,49 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
     /// </para>
     /// </remarks>
     private static EnvAction Continuation => EnvAction.Idle;
+
+    /// <summary>
+    /// One policy decision for the searcher, taken inside the forked world.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>This is why the continuation cannot be driven from outside.</b> It
+    /// runs inside the fork, k times per candidate per decision, in worlds the
+    /// socket never sees — so unlike a past checkpoint (which is
+    /// <c>EnvDriver.Client</c>, because the trainer holds the weights and can
+    /// drive that slot itself) there is no way to hand this out over the seam.
+    /// It is the first thing in this repo that requires a policy in-process.
+    /// <para>
+    /// ⚠️ <b>The observation is of the FORK</b>, which is the point — a
+    /// continuation reading the real world would be answering about a state the
+    /// candidate did not produce, and every candidate would get the same reply.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>A bot must not draw from <c>WorldState.Random</c> and this does not:
+    /// <see cref="PolicyNetwork.Act"/> takes the argmax of each head.</b> It is
+    /// deterministic given the observation, so a continuation adds no draws to the
+    /// match's stream and cannot make the stream's position depend on how many
+    /// candidates were searched.
+    /// </para>
+    /// </remarks>
+    private EnvAction PolicyContinuation(PolicyNetwork policy, CollisionWorld collision, int slot)
+    {
+        _continuationObservation ??= new float[ObservationWriter.Length];
+        _continuationHeads ??= new int[ActionDecoder.HeadShape.Length];
+
+        var view = new WorldView(in _fork, collision);
+        ObservationWriter.Write(in view, slot, _continuationObservation);
+        policy.Act(_continuationObservation, _continuationHeads);
+
+        return new EnvAction
+        {
+            Horizontal = (byte)_continuationHeads[0],
+            Jump = (byte)_continuationHeads[1],
+            Down = (byte)_continuationHeads[2],
+            Fire = (byte)_continuationHeads[3],
+            AimDelta = (byte)_continuationHeads[4],
+            Zoom = (byte)_continuationHeads[5],
+        };
+    }
 
     /// <summary>
     /// What a character other than the searcher is assumed to be doing.

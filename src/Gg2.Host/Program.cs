@@ -304,8 +304,9 @@ internal static class Program
                             Sends this server's address, name, map and player
                             count there every 30 seconds until it shuts down.
 
-        The 22 built-in maps are checked in at maps/ and are found automatically,
-        so a clone serves a round with no arguments and no reference checkout.
+        The built-in maps — 22 shipped plus the gg_debug2 debug range — are
+        checked in at maps/ and are found automatically, so a clone serves a
+        round with no arguments and no reference checkout.
         --maps, or GG2_MAPS, overrides that; GG2_REFERENCE is still honoured last
         for anyone deliberately serving a Gang-Garrison-2 checkout's own copies.
 

@@ -156,6 +156,14 @@ public sealed class EnvOptionsTests
             // v7's shadow-search flags, both off.
             .. Int(0),
             .. Int(0),
+
+            // v8's commitments and continuation handles, all 0 = the whole
+            // horizon and the neutral continuation. Written rather than left off
+            // because the frame length is checked as a whole.
+            .. Int(0),
+            .. Int(0),
+            .. Int(0),
+            .. Int(0),
         ];
     }
 
