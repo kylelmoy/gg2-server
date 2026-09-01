@@ -198,9 +198,52 @@ public enum RolloutOpponent
 /// idea.</b> The continuation here is neutral — keys released, bearing kept —
 /// because holding the candidate on is exactly what the split removes. A
 /// continuation that kept <em>acting</em>, such as a distilled policy, is a
-/// different experiment and is the one <c>gg2-rl</c> named for phase 3. The knob
-/// is kept so that experiment is a one-line change rather than a
-/// re-implementation, and so this negative is reproducible.
+/// different experiment and is the one <c>gg2-rl</c> named for phase 3.
+/// </para>
+/// <para>
+/// ✅ <b>THAT EXPERIMENT HAS NOW RUN, and the mechanism works exactly as this
+/// paragraph hoped.</b> Protocol v8 added <see cref="ContinuationPolicy"/>;
+/// <c>gg2-rl</c> measured all four arms at k=30, 1,008 duels each, 6 maps × 4
+/// classes, 2026-09-01:
+/// </para>
+/// <list type="table">
+/// <item><term>A unpruned, commit=horizon</term><description>blind@60 <b>64.8%</b>, win 90.7%</description></item>
+/// <item><term>B pruned k=30</term><description>blind 65.3%, win 85.6%</description></item>
+/// <item><term>C + commit 4, neutral</term><description>blind 76.8%, win 74.6%</description></item>
+/// <item><term>D + commit 4, POLICY</term><description>blind <b>63.4%</b>, win 73.5%</description></item>
+/// </list>
+/// <para>
+/// <b>Arm D is less blind than unpruned at 73% of its cost.</b> The
+/// entanglement this parameter exists to break really does break: only a
+/// continuation that keeps acting separates lookahead from commitment, and a
+/// neutral one cannot.
+/// </para>
+/// <para>
+/// ⛔ <b>AND IT BUYS NOTHING, because the premise underneath the whole idea was
+/// wrong.</b> Decomposed: the short commitment costs <b>11.0</b> points of win
+/// share and adds 11.5 of blindness; the policy continuation then removes
+/// <b>13.4</b> points of blindness and returns <b>1.1</b> points of win share —
+/// nothing, within noise. <b>Removing the blindness recovers none of what the
+/// short commitment cost.</b> Not some of it.
+/// </para>
+/// <para>
+/// ⚠️ <b>So "the search is blind, therefore it is weak" is retired.</b> Blindness
+/// and strength are close to independent here, and this is the second measurement
+/// to say so — pruning had already cost 5.1 points of win share while moving
+/// blind 0.5. Anything in this repo that reads a blind fraction as a proxy for
+/// search quality is reading it wrong, and the horizon sweep above is the
+/// clearest example: its monotone opposition is real and does not license the
+/// causal reading it invites.
+/// </para>
+/// <para>
+/// ⚠️ <b>The knob stays, and is now load-bearing rather than speculative.</b> The
+/// numbers above exist only because the continuation actually worked — a broken
+/// one produces the same win column and settles nothing, which is why
+/// <c>EnvProtocolTests.APolicyLoadedOverTheSocketReachesTheRollout</c> gates the
+/// whole wire-to-rollout chain. ⚠️ <b>The vs-scripted table is the FALLBACK
+/// criterion</b>; the pre-registered primary is arm D against arm A head to head
+/// in one world, null exactly 50%. Do not quote these as the verdict without
+/// checking whether that landed.
 /// </para>
 /// </param>
 /// <param name="ConsiderSpecial">

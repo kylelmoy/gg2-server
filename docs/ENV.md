@@ -1759,6 +1759,60 @@ that way — it runs **inside the search's fork**, k times per candidate per
 decision, in worlds the socket never sees. This is the first thing in the protocol
 that requires a policy in-process, and it is not a general plug-in seam.
 
+### ⛔ THE RESULT: the continuation works completely, and buys nothing
+
+**Measured by `gg2-rl` 2026-09-01 at `35445e1`** — k=30, 1,008 duels an arm, 6
+maps x 4 classes. `blind@60` is the length-unbiased measure; see "every blind
+fraction in this document is whole-run".
+
+| arm | blind@60 | win share | ms/dec |
+|---|---|---|---|
+| A unpruned, commit=horizon | **64.8%** | 90.7% | 3.99 |
+| B pruned k=30 | 65.3% | 85.6% | 1.97 |
+| C + commit 4, **neutral** | 76.8% | 74.6% | 1.81 |
+| D + commit 4, **policy** | **63.4%** | 73.5% | 2.93 |
+
+✅ **The mechanism does exactly what it was built to do.** Arm D is **less blind
+than unpruned, at 73% of unpruned's cost**. The entanglement between lookahead and
+commitment really does break, and only a continuation that keeps *acting* breaks
+it — the neutral one makes blindness worse (76.8%), which is the failure this
+whole cell was designed around.
+
+⛔ **And it buys nothing, because the premise underneath it was wrong.**
+
+| step | win share | blind |
+|---|---|---|
+| B → C, the short commitment | **−11.0** | +11.5 |
+| C → D, the policy continuation | **−1.1** | −13.4 |
+
+**Removing the blindness recovers NONE of what the short commitment cost.** Not
+some of it — none. The continuation removes 13.4 points of blindness and returns
+1.1 points of win share, which is noise.
+
+⚠️ **So "the search is blind, therefore it is weak" is RETIRED.** Blindness and
+strength are close to independent here, and this is the **second** measurement to
+say so: pruning had already cost 5.1 points of win share while moving blind 0.5.
+**Anything in this repo that reads a blind fraction as a proxy for search quality
+is reading it wrong** — including the horizon sweep in `RolloutOptions.CommitTicks`,
+whose monotone opposition is real and does not license the causal reading it
+invites.
+
+⚠️ **This is the fallback criterion, not the verdict.** The pre-registered primary
+is arm D against arm A **head to head in one world**, null exactly 50%, no
+ceiling — which is what per-side configuration was built for. It was still running
+when this was written. **Do not quote the table above as the answer without
+checking whether that landed.**
+
+✅ **The exploration monitor never fired**: 2.4% against a 20.0% computed null,
+n = 40,051. The policy prior was never the problem, at any k, in any arm.
+
+⚠️ **A negative result here is worth having and was not free.** These numbers
+exist only because the continuation actually worked end to end — **a broken
+wire-to-rollout chain produces the same win column and settles nothing**, and is
+indistinguishable from "the continuation does not help". That is why
+`EnvProtocolTests.APolicyLoadedOverTheSocketReachesTheRollout` gates the whole
+chain rather than just the batch being accepted.
+
 ### The cadence is a cost constraint, not a preference
 
 Measured 2026-09-01, Release: one policy decision is **6.58 µs** (inference 3.67,
