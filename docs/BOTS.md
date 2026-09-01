@@ -140,6 +140,27 @@ so 19 of 21 agreed, **and 19-of-21 is not the number to quote.** The floor is.
 **Fifteen of twenty-one per-map directions are below the level at which direction
 was shown stable.** So the 17-of-21 is withdrawn as a result, not merely qualified.
 
+✅ **What survives is a licensed SIX-of-six, and it is worth pricing before it is
+quoted beside phase 4’s number in this same file:**
+
+| | signs | one-sided p |
+|---|---|---|
+| arm 3 over arm 2, licensed maps | 6 of 6 | **0.016** |
+| phase 4, policy over control | 21 of 21 | **4.8e-07** |
+
+**Four orders of magnitude apart — 32,768x. Modest, not decisive.** A licensed
+six-of-six is worth more than a laundered seventeen and **is not the same object**
+as the result it sits next to. `gg2-rl` checked the selection and it holds: the
+threshold admits **both signs**, so it cannot bias direction, and **4.2p is
+exogenous** — it came from the policy-versus-control run rather than from the arm
+data it is applied to. A threshold tuned on the same data would have been the
+laundering this whole sequence existed to avoid.
+
+⛔ **And the six are the LARGE-EFFECT maps by construction**, so *"all six favour
+arm 3"* is a statement about where the effect is big and **not about the typical
+map.** The fifteen unlicensed directions are **unknown, not absent** — those are
+different claims and the second is the one supported.
+
 ⚠️ **The pre-committed fallback applies and is being run: the aggregate death share
 WITH ITS DEATH COUNTS**, and the per-map sign test reported as unaffordable. That
 was agreed with `gg2-rl` before the floor existed, **specifically so that neither
