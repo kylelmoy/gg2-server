@@ -30,12 +30,17 @@ it ships with the game and is covered by the ordinary map gates.)
   `resource` property, and this map embeds no sprites. They are observable
   motion on the wire — `gg2-nav-gen` skips the type outright, and the nav
   graph is byte-identical with and without them (measured).
-- ⚠️ **A stock client cannot join it — today.** The server advertises an empty
-  map MD5 ("built into the client"), and `gg_debug2` is not built into the
-  client. Headless-only: tests, bots, `eval`, the env seam, the parity
-  harness. **This claim expires when the moving-platforms lane's custom-map
-  serving merges** (it advertises the MD5 and streams the file); delete this
-  bullet then and say how a client gets the map instead.
+- ✅ **A stock client CAN join it**, as of the custom-map serving merge. This
+  bullet used to say the opposite and named its own expiry; the expiry has
+  arrived, so here is what replaced it. `gg_debug2` is not one of
+  `Gg2.Maps.InternalMaps`' 22 names, so the server advertises **its MD5** rather
+  than the empty string that means "built into the client", and answers
+  `DOWNLOAD_MAP` by streaming the file — a `uint` length then the bytes,
+  rate-limited across ticks and shared between simultaneous downloaders. The
+  client writes it to its own `Maps/`, re-hashes it, and joins.
+  ⚠️ **Nothing is published for that to work**: the map is served off this server
+  over the same socket, to whoever connects. `--lobby` is a different switch and
+  still defaults off.
 
 ## Regenerating
 
