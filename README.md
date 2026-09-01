@@ -150,19 +150,28 @@ dotnet test Gg2.sln
 dotnet run --project src/Gg2.Host -- --map ctf_truefort
 
 # ...and with bots. --bots is a FILL target including humans, not a bot count.
-dotnet run --project src/Gg2.Host -- --map ctf_truefort --bots 12 `
-    --botnav ./nav
+dotnet run --project src/Gg2.Host -- --map ctf_truefort --bots 12
 ```
 
-⚠️ **The nav caches are not shipped.** They are built by `gg2-nav-gen` and
-gitignored here — 34 MB for 24 map areas — so a fresh clone has none. Without
-`--botnav` the bots fight whatever comes to them and do not walk anywhere, which
-is a quiet degradation rather than an error.
+✅ **No arguments, no reference checkout, no setup.** The 22 built-in maps are
+checked in at `maps/` and the 24 nav graphs at `nav/`, so a clone serves a round
+and runs bots that walk. This was not true until 2026-09-01: both entry points
+hard-coded an absolute path to one machine's checkout of a fork, and the server
+refused to start without it.
 
-The test suite reads them from `nav/`, or from `GG2_NAVCACHE` if that is set;
-**188 tests fail without them**, saying so rather than looking broken. They used
-to live in the reference tree's `Source/build/botnav`, which made a third of the
-suite depend on which GG2 checkout you had.
+`--maps` and `--botnav` still override, as do `GG2_MAPS` and `GG2_NAVCACHE`. With
+no nav graphs at all the bots fight whatever comes to them and go nowhere, which
+is a quiet degradation rather than an error — that is what a map with no graph in
+the rotation should do.
+
+⚠️ **`maps/` is a copy of the reference's, and `MapCopyTests` is what keeps it
+honest** — every map is asserted byte-identical whenever a checkout is present.
+`nav/` is 34 MB on disk and about 1.2 MB packed; hex compresses roughly 28:1, so
+checking it in cost far less than the objection to it assumed. `gg2-nav-gen`
+writes there by default.
+
+**The test suite still needs a reference checkout for `Constants.xml` and the
+scripts** — only the maps and nav graphs were decoupled.
 
 ## Why
 
