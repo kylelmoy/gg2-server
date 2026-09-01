@@ -388,10 +388,14 @@ public sealed class MovingPlatformTests
     /// platform's whole swept extent (start to far end, plus its decoded
     /// sprite size) must be unreachable by a flood fill over open cells from
     /// every spawn. The fill is a superset of what a character can reach, so
-    /// "unreached" soundly means "untouchable without a teleport" — and a
-    /// teleport (control port, scenario placement) is a debug act outside the
-    /// checkpoint's claim, the same boundary the custom-map paragraph in
-    /// <see cref="SimulationStamp"/> already draws.
+    /// "unreached" soundly means "no character can walk, jump or fall to it".
+    /// ⚠️ <b>Unreachable does NOT mean no character can ever be there</b> —
+    /// placement paths exist that draw positions from nav nodes rather than
+    /// walking anywhere, and nav-gen emits nodes inside sealed regions. That
+    /// is why this gate licenses only "a shaped platform may exist while
+    /// platforms can touch nothing", and why porting the carry (or the
+    /// standing box) bumps unconditionally — <see cref="SimulationStamp"/>
+    /// carries the whole argument, owed to <c>gg2-rl</c>.
     /// </para>
     /// </remarks>
     [Fact]

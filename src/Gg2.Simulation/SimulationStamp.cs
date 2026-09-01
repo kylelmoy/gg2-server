@@ -140,13 +140,13 @@ public static class SimulationStamp
     /// statements of the same predicate is how one of them goes stale.)
     /// </para>
     /// <para>
-    /// ⛔ <b>What voids this exemption: porting the CARRY.</b> The day a platform
-    /// can move a character, this stage moves trajectories and must bump — and
-    /// that is a change somebody makes deliberately, so it is a condition a person
-    /// can act on rather than one a test must catch. Until then a shipped map
-    /// gaining a platform is not by itself a reason to bump; a shipped map gaining
-    /// a platform with a sprite <em>somewhere a character can be</em> is, and
-    /// that is what goes red.
+    /// ⛔ <b>What voids this exemption: porting the CARRY — or the standing box
+    /// alone.</b> The day a platform can support or move a character, this stage
+    /// moves trajectories and must bump; that is a change somebody makes
+    /// deliberately, so it is a condition a person can act on rather than one a
+    /// test must catch. Until then a shipped map gaining a platform is not by
+    /// itself a reason to bump; a shipped map gaining a platform with a sprite
+    /// <em>somewhere a character can be</em> is, and that is what goes red.
     /// </para>
     /// <para>
     /// ⚠️ <b>The gate narrowed on 2026-09-01, by agreement between the lane that
@@ -155,20 +155,31 @@ public static class SimulationStamp
     /// embedded sprite, inside a sealed chamber whose unreachability is itself
     /// flood-fill-asserted. The first wording ("no shipped platform names a
     /// resource at all") would have forced a bump for it, and a bump would have
-    /// claimed a behaviour change that does not exist twice over: today a
-    /// resourced platform still has no <c>SolidRect</c>, so nothing stands on it
-    /// (<see cref="CharacterPhysics"/>'s dropdown scan says why); and the day the
-    /// box and carry land, a platform no character can reach without a teleport
-    /// still cannot move one. The gate therefore asserts reachability rather
-    /// than absence:
+    /// claimed a behaviour change that does not exist: today a resourced
+    /// platform still has no <c>SolidRect</c>, so nothing stands on it whatever
+    /// its mask says (<see cref="CharacterPhysics"/>'s dropdown scan says why),
+    /// and therefore nothing any placement does can differ. The gate asserts
+    /// reachability rather than absence:
     /// <c>MovingPlatformTests.NoShippedMapPlacesAPlatformThatCouldCarryAnyone</c>
     /// flood-fills each map from its spawns and fails on any resourced
-    /// platform whose swept extent a character could reach. A teleport — the
-    /// control port, a scenario placement — is a debug act outside the
-    /// checkpoint's claim, the same boundary the custom-map paragraph below
-    /// draws; an env or eval run that deliberately places characters inside a
-    /// sealed chamber is measuring platform physics on purpose and cannot
-    /// appeal to this exemption.
+    /// platform whose swept extent a character could reach.
+    /// </para>
+    /// <para>
+    /// ⛔ <b>The sealed chamber buys NO post-carry exemption, and the bump above
+    /// is unconditional — owed to <c>gg2-rl</c>, 2026-09-01.</b> The tempting
+    /// argument — "a platform nobody can walk to still cannot move anyone, so
+    /// the carry could land without a bump as long as every shaped platform is
+    /// sealed" — is false for how training actually places characters:
+    /// <c>gg2-rl</c>'s banded duels draw both spawns from <b>nav nodes</b>, not
+    /// coordinates, and <c>gg2-nav-gen</c> floods the whole walkable mask rather
+    /// than seeding from spawns — <c>gg_debug2</c>'s sealed chambers carry about
+    /// twenty island nodes, measured. An ordinary graph draw could seed a duel
+    /// inside a sealed chamber with no teleport and no intent anywhere in either
+    /// repo. A sealed region is unreachable by <em>walking</em>, not by
+    /// <em>placement</em> — so intent is not a boundary the exemption can be
+    /// drawn around, and reachability answers only today's question (may a
+    /// shaped platform exist while platforms can touch nothing), never
+    /// tomorrow's (may the carry land quietly — no).
     /// </para>
     /// <para>
     /// ⚠️ <b>Custom maps are the live edge.</b> Nothing stops an operator pointing
