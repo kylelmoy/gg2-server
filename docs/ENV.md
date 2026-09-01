@@ -1636,6 +1636,63 @@ loudly instead of plateauing quietly.
 anybody started with.** Six CTF maps, 8 bots, four trained classes both sides,
 policy on red, all-scripted on blue.
 
+### The criterion in its own words: win rate, per map, on every shipped map
+
+⚠️ **`gg2-rl` asked for three things the aggregate above cannot say**, and it was
+right about all three. **21 shipped maps** (`gg_debug` excluded as a test map),
+40 matches a map an arm, the game's own decision rule:
+
+| | decided | red win share | death share | stuck |
+|---|---|---|---|---|
+| policy (macro task, 150px) | 566/840 — **67.4%** | **62.5%** | **46.2%** | 10/6,720 |
+| all scripted | 560/840 — 66.7% | 55.3% | 49.9% | 16/6,720 |
+
+✅ **The cap does not dominate at `CapLimit = 1`** — two thirds of matches decide,
+so the win rate is quotable rather than a statistic about the clock. That was the
+condition for reporting it at all.
+
+⚠️ **The aggregate win share is confounded and should not be quoted alone.**
+Several maps are structurally one-sided — `cp_dirtbowl`, `ctf_avanti`,
+`ctf_classicwell`, `ctf_orange` read 100% red in **both** arms — so 62.5% against
+55.3% mixes a real effect with map asymmetry that is identical in both arms.
+
+⛔ **Three maps read WORSE for the policy at 40 matches. All three evaporated at
+400.**
+
+| map | policy / control at n=40 | at n=400 |
+|---|---|---|
+| `ctf_2dfort` | 42.1% / 55.0% — worse by 12.9 | **59.4% / 47.4% — better by 12.0** |
+| `arena_montane` | 47.4% / 55.6% — worse by 8.2 | 57.2% / 56.6% — no difference |
+| `koth_corinth` | 15.4% / 23.1% — worse by 7.7 | 19.2% / 23.7% — worse by 4.5, ~1.5σ |
+
+**`ctf_2dfort` reversed sign.** 40 matches a map is ~38 decided, so a 12-point
+difference is five wins — noise. ⚠️ **The per-map screen at n=40 cannot resolve a
+per-map regression**, which is what it was for; the three most suspicious were
+re-run and none is resolvable. `koth_corinth` is the one that persists in
+direction, on a map that is 19-24% red in **both** arms, and its death share still
+improves (46.2% against 50.1%).
+
+⚠️ **Stuck bots, per map rather than aggregate**: the policy arm's worst map is
+`ctf_orange` at **1.88%**, against the control's worst of `ctf_classicwell` at
+**2.19%**. No map is worse under the policy than the control's own worst, and the
+three re-run maps had **0 of 9,600** in both arms.
+
+### ⛔ So: met, with the gaps stated
+
+**Met**, on 21 shipped maps, by the game's own decision rule, with a control arm,
+and with no resolvable per-map regression. **The gaps, which belong in the same
+sentence:**
+
+- ⚠️ **`dkoth_atalia` and `dkoth_sixties` produce ZERO decided matches in either
+  arm.** Dual KotH does not resolve at these limits, so the win-rate criterion is
+  **silent** on two of the 21. Death share and stuck bots are fine there; the
+  win rate is untested, not passed.
+- ⚠️ **Per-map differences at 40 matches a map are mostly not resolvable.** "No
+  map regresses" is supported for the three that looked worst and re-run at 400,
+  and is an *absence of evidence* elsewhere.
+- ⚠️ The aggregate win share is confounded by structurally one-sided maps; the
+  death share (46.2% against 49.9%, over every map) is the cleaner aggregate.
+
 ### The handover sweep — 420 matches a point
 
 | rule / range | red caps | blue caps | red's share | red death share | policy share of control |
