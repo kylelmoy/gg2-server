@@ -17,16 +17,25 @@ it ships with the game and is covered by the ordinary map gates.)
   on that set), because "no shipped map does X" is load-bearing and a
   port-authored map must not be able to move it. `GgDebug2MapTests` carries the
   map's own exact census instead.
-- **No `moving_platform`, ever.** The port declares the type and simulates
-  nothing for it, and a non-zero `WorldShape.MovingPlatformCount` would promise
-  `FULL_UPDATE` blocks the writer never writes — a framing break for any stock
-  client on the server, not a missing feature.
-- ⚠️ **A stock client cannot join it.** The server always advertises an empty
+- **`gg_debug2` is the only built-in map that places `moving_platform`** —
+  four of them, since 2026-09-01, added for the moving-platforms work. ⚠️ The
+  first version of this file said a non-zero count would be "a framing break:
+  the writer never writes the blocks", and **that was false when written**:
+  `MatchState.BuildEntities` has fed `StateUpdateWriter`'s five-byte platform
+  blocks since phase 6. What was missing was the *motion* (the positions never
+  advanced), which is the moving-platforms lane's `MovingPlatforms.EndStep`.
+  The map is therefore wire-safe with or without that work merged.
+  ⚠️ **None of the four can ever carry a character**: the carry needs the
+  platform's collision mask, which arrives from an embedded sprite named by a
+  `resource` property, and this map embeds no sprites. They are observable
+  motion on the wire — `gg2-nav-gen` skips the type outright, and the nav
+  graph is byte-identical with and without them (measured).
+- ⚠️ **A stock client cannot join it — today.** The server advertises an empty
   map MD5 ("built into the client"), and `gg_debug2` is not built into the
   client. Headless-only: tests, bots, `eval`, the env seam, the parity
-  harness. Serving it to a real client needs the map-download path
-  (`MessageType.DownloadMap`), which this server deliberately does not
-  implement.
+  harness. **This claim expires when the moving-platforms lane's custom-map
+  serving merges** (it advertises the MD5 and streams the file); delete this
+  bullet then and say how a client gets the map instead.
 
 ## Regenerating
 
@@ -56,11 +65,11 @@ Six matches at seed 1 split 3–3 with zero unfinished. What it has that
 | Zone | Where (cells; world = x6) | What it exercises |
 |---|---|---|
 | Bases | x 2..41 and mirror | Gated **spawn zone** (spawnroom tiles, 2 spawns, medCabinet) behind an interior wall whose doorway carries the team gate; open **intel zone** between that gate and the ungated outer door; roof with a `redteamgate2`/`blueteamgate2` **hatch** over the intel — own team falls through, enemy walks across |
-| Step valley | x 48..75 and mirror | Exact 6px auto-steps down 36px and back up — walkable both ways with no jump |
+| Step valley | x 48..75 and mirror | Exact 6px auto-steps down 36px and back up — walkable both ways with no jump. A `moving_platform` ferry loops horizontally above each valley (world x 300↔420 and its mirror, y 380, 2 px/tick) |
 | Jump ladder | P1/P2/P3 + L1/L2/L3, x 52..105 and mirror | 42px risers: single-jumpable hop to hop, P2 at 84px is double-jump-only from the floor; the ladder tops out one jump from the tower top |
 | Tower | x 115..124, top at row 38 | 168px above the floor: over the ~115px double-jump apex, under the 192px rocket apex — rocket-jump direct, or the ladder the slow way. `MoveBoxUp` elevator on each face (nav-invisible; humans and physics tests) |
 | Tunnel | x 100..139, under the tower | Entered by two `dropdownPlatform` lids in the floor (nav **drop** edges), left by a 48px jump out of either shaft; one-row ceiling dip inside for the ceiling-contact arms |
-| Sealed chambers | x 44..96 / 143..195, rows 6..32, in the sky | **No entrance** — teleport-only, so no nav edge can lead a bot in (flood-fill asserted). Red chamber: killbox, fragbox, playerwall, bulletwall, a mid-air dropdownPlatform, a free-standing probe wall, graduated 1..4-cell steps. Blue chamber: bare flat ground, a clean room for probes |
+| Sealed chambers | x 44..96 / 143..195, rows 6..32, in the sky | **No entrance** — teleport-only, so no nav edge can lead a bot in (flood-fill asserted). Red chamber: killbox, fragbox, playerwall, bulletwall, a mid-air dropdownPlatform, a free-standing probe wall, graduated 1..4-cell steps, and two `moving_platform`s — a vertical hoist at (564, 168) rising 90px on asymmetric speeds (1 up, 3 down: both speed arms, plus the reference's snap-at-start-only asymmetry), and a `trigger:1` platform at (300, 120) that stays parked for ever because no rider can exist without the carry. Blue chamber: bare flat ground, a clean room for probes |
 
 The nav graph (`nav/gg_debug2_a1.txt`, 70 nodes) carries **every edge type the
 bot layer consumes** — walk, jump, fall, drop-through, double-jump, rocket-jump

@@ -43,10 +43,15 @@ public sealed class GgDebug2MapTests
     /// The FULL_UPDATE shape has nothing in it the writer cannot serialise.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The load-bearing zero is <c>MovingPlatformCount</c>: the port declares
-    /// <c>moving_platform</c> and simulates nothing for it, and a non-zero count
-    /// here would make <c>WorldShape</c> promise five-byte blocks the writer
-    /// never writes — a framing break, not a missing feature.
+    /// ⚠️ <b>The four moving platforms are load-bearing for the wire</b>: this is
+    /// the only built-in map that places any, so it is the only place the
+    /// platform blocks' framing is exercised by a real map. The count is safe on
+    /// the wire with or without the platform <em>motion</em> —
+    /// <c>MatchState.BuildEntities</c> has fed <c>StateUpdateWriter</c>'s
+    /// five-byte blocks since phase 6, which this file's first version got
+    /// wrong (it asserted zero "because the writer never writes them"; the
+    /// writer always did — what was missing until the moving-platforms work was
+    /// the positions <em>advancing</em>).
     /// </remarks>
     [Fact]
     public void TheShapeIsPlainCtf()
@@ -54,7 +59,7 @@ public sealed class GgDebug2MapTests
         var shape = GameModes.ShapeOf(Load());
 
         Assert.Equal(GameMode.CaptureTheFlag, shape.GameMode);
-        Assert.Equal(0, shape.MovingPlatformCount);
+        Assert.Equal(4, shape.MovingPlatformCount);
         Assert.Equal(0, shape.ControlPointCount);
         Assert.Equal(0, shape.GeneratorCount);
     }
@@ -80,6 +85,7 @@ public sealed class GgDebug2MapTests
             [EntityTypes.RedTeamGate2] = 1,
             [EntityTypes.BlueTeamGate2] = 1,
             [EntityTypes.DropdownPlatform] = 3,
+            [EntityTypes.MovingPlatform] = 4,
             [EntityTypes.MoveBoxUp] = 2,
             [EntityTypes.BulletWall] = 1,
             [EntityTypes.PlayerWall] = 1,
@@ -97,6 +103,51 @@ public sealed class GgDebug2MapTests
 
         foreach (var entity in map.Entities)
             Assert.True(EntityTypes.IsKnown(entity.Type), $"unknown entity type '{entity.Type}'");
+    }
+
+    /// <summary>
+    /// The four moving platforms carry exactly the routes the generator's
+    /// header promises — the properties are this map's contract with the
+    /// moving-platform simulation.
+    /// </summary>
+    /// <remarks>
+    /// Asserted on the raw entity properties rather than through the
+    /// simulation's own parser, so the pin holds whether or not the platform
+    /// motion has merged: two mirrored valley ferries on a horizontal loop, a
+    /// vertical chamber hoist with asymmetric speeds, and one triggered
+    /// platform that stays parked for ever because the carry (and so any
+    /// rider) does not exist. ⚠️ None of the four can ever carry a character —
+    /// a MovingPlatform's collision mask comes from an embedded sprite named
+    /// by a <c>resource</c> property, and this map embeds none.
+    /// </remarks>
+    [Fact]
+    public void TheMovingPlatformsCarryTheIntendedRoutes()
+    {
+        var platforms = Load().OfType(EntityTypes.MovingPlatform).ToArray();
+
+        Assert.Equal(4, platforms.Length);
+
+        var expected = new (double X, double Y, string Top, string Left, string Up, string Down, string Trigger)[]
+        {
+            (300, 380, "0", "120", "2", "2", "0"),   // red valley ferry
+            (1140, 380, "0", "-120", "2", "2", "0"), // blue valley ferry, mirrored leg
+            (564, 168, "90", "0", "1", "3", "0"),    // chamber hoist, asymmetric speeds
+            (300, 120, "60", "0", "3", "3", "1"),    // chamber parked: triggered, no rider possible
+        };
+
+        for (var i = 0; i < expected.Length; i++)
+        {
+            var (x, y, top, left, up, down, trigger) = expected[i];
+            var platform = platforms[i];
+
+            Assert.Equal(x, platform.X);
+            Assert.Equal(y, platform.Y);
+            Assert.Equal(top, platform.GetString("top"));
+            Assert.Equal(left, platform.GetString("left"));
+            Assert.Equal(up, platform.GetString("upspeed"));
+            Assert.Equal(down, platform.GetString("downspeed"));
+            Assert.Equal(trigger, platform.GetString("trigger"));
+        }
     }
 
     /// <summary>

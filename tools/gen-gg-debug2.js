@@ -25,14 +25,23 @@
 // client, so a joining client would look it up in its internal list and fail.
 // The map is for the headless side: tests, bots, eval, the env seam.
 //
-// ⚠️ No moving_platform, deliberately. The port declares the type but does not
-// simulate it (CharacterPhysics.cs), and a map placing one would also make
-// WorldShape promise FULL_UPDATE blocks the writer never writes.
+// Moving platforms: FOUR, deliberately, since 2026-09-01 — the only built-in
+// map that places any. The wire has carried their five-byte blocks since
+// phase 6 (MatchState.BuildEntities feeds StateUpdateWriter, so the framing is
+// sound with or without motion); the motion itself is the moving-platforms
+// lane's MovingPlatforms.EndStep. ⚠️ None of them can ever CARRY a character:
+// the carry needs a collision mask, a MovingPlatform has no sprite of its own,
+// and the mask normally arrives from an embedded sprite named by the entity's
+// `resource` property — a pipeline neither this generator nor the port speaks.
+// So they are observable motion on the wire, placed where nav cannot need
+// them (gg2-nav-gen skips the type outright, measured: the graph is
+// byte-identical with and without them).
 //
 // The map, in one paragraph: a 240x80-cell (1440x480 world px) mirror-symmetric
-// CTF layout. Two bases (a gated spawn zone deepest, then an open intel zone
-// with a pedestal, an ungated outer door, and a horizontal team gate on a roof
-// hatch over the intel), a stepped valley of exact 6px auto-steps on each approach, a
+// CTF layout. Two bases (a gated spawn zone deepest, then an open intel zone,
+// an ungated outer door, and a horizontal team gate on a roof hatch over the
+// intel), a stepped valley of exact 6px auto-steps on each approach with a
+// looping moving-platform ferry above it, a
 // jump-platform ladder (42px risers: single-jumpable one to the next,
 // double-jump-only straight from the floor), a central tower whose top is 168px
 // above the floor (rocket-jump only; above the ~115px double-jump apex, under
@@ -198,12 +207,29 @@ e('dropdownPlatform', 780, 396);
 // 18px wide (xscale 18/42) by 168px tall (yscale 4), floor to tower top.
 eBoxM('MoveBoxUp', 'MoveBoxUp', 672, 228, 18, { xscale: '0.43', yscale: '4' });
 
+// Moving platforms (see the header). The valley ferries loop x 300..420 and
+// its mirror — the offset is (left, -top), so a horizontal run is top:0, and
+// the mirrored ferry's `left` is negated rather than its position re-derived.
+// Speeds are the Create defaults' neighbourhood, chosen distinct (2 vs the
+// chamber pair's 1/3) so a wire trace tells the four apart at a glance.
+e('moving_platform', 300, 380, { top: '0', left: '120', upspeed: '2', downspeed: '2', trigger: '0' });
+e('moving_platform', 1140, 380, { top: '0', left: '-120', upspeed: '2', downspeed: '2', trigger: '0' });
+
 // The red chamber's test rigs. Interior is x 276..569, y 48..185, floor 186.
 e('dropdownPlatform', 330, 120);   // mid-air, nothing beneath but the floor
 e('bulletwall', 390, 126);         // passes characters, stops shots
 e('playerwall', 408, 126);         // passes shots, stops characters
 e('fragbox', 444, 144);            // gibs on touch
 e('killbox', 498, 144);            // kills on touch
+
+// The chamber's two moving platforms, isolatable by teleport like everything
+// else here. The hoist rises 90px on asymmetric speeds (1 up, 3 down), which
+// exercises both speed arms and the reference's real asymmetry: it snaps back
+// to the start exactly and does NOT snap at the top. The triggered one starts
+// Stopped and stays parked for ever — with no carry there is no rider to
+// trip trigger:1, and that parked state is itself the reference's behaviour.
+e('moving_platform', 564, 168, { top: '90', left: '0', upspeed: '1', downspeed: '3', trigger: '0' });
+e('moving_platform', 300, 120, { top: '60', left: '0', upspeed: '3', downspeed: '3', trigger: '1' });
 
 //---------------------------------------------------------------------------
 // Level data text: {ENTITIES} in the GGON list form (the one every shipped
