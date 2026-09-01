@@ -14,6 +14,17 @@ namespace Gg2.Bots;
 /// example: <c>botAimLead.gml</c> assumes constant velocity plus gravity, which
 /// is the assumption the whole learning programme exists because it is wrong.
 /// </remarks>
+/// ⚠️ <b>The values are EXPLICIT because this enum goes on the wire.</b>
+/// <c>EnvServer.MakeBatch</c> reads it as an <c>i32</c>, so the declaration order
+/// IS the protocol — reordering these two members would be a silent wire change
+/// that compiles, runs, and quietly selects the other opponent model. `gg2-rl`'s
+/// drift gate reads this enum positionally out of this file and is the only thing
+/// that would catch it; the numbers mean it has nothing to catch.
+/// <para>
+/// ⚠️ Same class as the <c>Idle</c>-declared-first bug this seam already hit once,
+/// recorded in the remark below. <c>EnvDriver</c> and <c>PlayerClass</c> were
+/// already explicit; this was the one that was not.
+/// </para>
 public enum RolloutOpponent
 {
     /// <summary>
@@ -55,7 +66,7 @@ public enum RolloutOpponent
     /// be the zero one.</b>
     /// </para>
     /// </remarks>
-    HoldLastInput,
+    HoldLastInput = 0,
 
     /// <summary>
     /// ⚠️ <b>The opponent presses nothing.</b> Cheapest, and <b>optimistic</b>:
@@ -66,7 +77,7 @@ public enum RolloutOpponent
     /// better with a moving opponent than with a statue, the opponent model is
     /// not what is wrong. Not the default.
     /// </remarks>
-    Idle,
+    Idle = 1,
 }
 
 /// <summary>

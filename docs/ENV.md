@@ -897,11 +897,48 @@ thing it describes. `gg2-rl`'s gate reads these files as **text** — deliberate
 so that it cannot agree with this repo by construction — and a relocation is
 indistinguishable from a redefinition to a reader that only has the text.
 
-⚠️ **So a pure refactor of a constant `gg2-rl` tracks is a cross-repo event**, and
-the ones it tracks today are `EnvProtocol.ActionBytes` and the head shape. Moving,
+⚠️ **So a pure refactor of anything `gg2-rl` parses is a cross-repo event.** Moving,
 renaming or re-spelling one is free here and red there. **Say so when it happens**
 rather than letting them find it — the gate fires loudly, which is the point of
 it, but the ten minutes belong to whoever caused it.
+
+⛔ **The full list, as of 2026-09-01 — and a flagging promise built on a partial
+one silently does not cover the rest.** I had named two; there are eight patterns
+across six files:
+
+| file | what is parsed |
+|---|---|
+| `Gg2.Env/EnvProtocol.cs` | `Version`, `ComponentBytes`, `ActionBytes`, `MakeBatchFixedBytes` (tolerates a sum) |
+| `Gg2.Env/EnvServer.cs` | ⚠️ the **ORDER** of the reward block's `Write*LittleEndian` calls |
+| `Gg2.Env/DuelEnv.cs` | `enum EnvDriver` — names **and** values |
+| `Gg2.Bots/RolloutSearch.cs` | `enum RolloutOpponent` — names, **positionally** |
+| `Gg2.Bots/ActionDecoder.cs` | `HeadShape => [ … ]` — counted, not evaluated |
+| `Gg2.Protocol/Team.cs` | `enum PlayerClass` — names **and** values |
+
+⚠️ **Three are more fragile than a constant:**
+
+- **`EnvServer.cs` is the worst.** It reads the *order* of the serialisation calls
+  to check component offsets against the sequence actually written. **Reordering
+  those lines is a real change and the gate is right to fire; reformatting them is
+  not, and the gate cannot tell the difference.** A formatter run over that method
+  will go red.
+- **`EnvDriver` and `RolloutOpponent` are indentation-anchored** (`^\s{4}`). A
+  brace-style or indentation change fires them with no semantic change at all.
+- ✅ **`RolloutOpponent` was positional and is now explicit.** Its declaration
+  order *was* the wire value, so reordering its two members would have been a
+  silent wire change that compiles and runs — the same class as the
+  `Idle`-declared-first bug this seam already hit once. `HoldLastInput = 0` and
+  `Idle = 1` are written down now, so there is nothing left to catch.
+
+⚠️ **The list is `gg2-rl`'s to keep current, not mine** — a gate added and not
+announced is one my flagging cannot cover. They send a diff when it changes.
+
+⚠️ **And flagging is a courtesy on top of a mechanism, never a substitute.** Their
+words, and they are right: *"if the only thing standing between us and a silent
+wire change is you remembering to mention it, the gate has stopped being the
+safety net and become a formality."* Every red stays theirs to investigate —
+"that will just be their refactor again" is exactly how a real one gets waved
+through.
 
 ✅ **And the cost is the gate working.** A checker that followed a refactor
 automatically would follow a real change automatically too. `gg2-rl` recorded the
