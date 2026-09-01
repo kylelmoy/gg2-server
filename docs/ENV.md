@@ -1630,6 +1630,80 @@ sampled-from-the-remainder candidates keep out-scoring the top-k ones, the prior
 is bad and pruning is hurting.** Computable every round at no cost, and it fails
 loudly instead of plateauing quietly.
 
+## Phase 4 handover from `gg2-rl` (2026-08-31) — the artefact, and the hole in it
+
+**Received, nothing built yet.** The duel work is done and a policy exists:
+`checkpoints/vlong_s0/ppo_final.npz`, 19,355 parameters, action repeat 4, layout
+v1, encoding v2, `SIM_UUID 7ff5940d97aa7bed` — **this head, no migration**.
+
+⚠️ **Quote 54.1% / 53.8%, not the artefact's own 58.7% / 57.7%.** The second pair
+carries selection over two seeds; the first is the four-seed mean at the standard
+1200 iterations. The checkpoint was chosen by a rule fixed before looking — the
+final checkpoint of the longest run — and `gg2-rl` explicitly declined its own
+iteration 1600, which scores *better* on held-out maps, because picking it would
+turn the evaluation into a training signal. **The best checkpoint is the right
+thing to ship and the wrong thing to quote.** Phase 2's clone is 26.6% / 24.9%.
+
+The architecture, all measured there: **scripted layer owns movement outside
+engagement range, the policy owns in-range combat, handover at 300px
+straight-line**, costing ~1.7 points. ⛔ **Do not widen past ~400px** — the
+observation saturates (goal distance clamps at `min(d/400, 1)`, rays reach 320px,
+the walkmask patch covers 128px), so beyond that the policy is being given the
+wheel at a range its input cannot describe. ⚠️ **Do not hand movement over
+entirely** either: the policy's own movement is worth ~19.5 points over walking
+straight at the enemy. Goal kind stays **0**; a target point with kind 0 is the
+usable half.
+
+### ⛔ Five of the nine classes are untrained input, and this repo makes it worse
+
+Training used **scout, soldier, sniper, heavy**. The other five class columns
+were constant zero for every decision of every run, self block *and* enemy block,
+so their first-layer weights are still the random He-normal draw — byte-identical
+between iteration 400 and 2400. **Setting one does not inform the policy, it
+injects noise.** Same failure as the goal kinds, found the same way.
+
+⚠️ **The untrained columns are 3, 4, 5, 7 and 8 — interleaved, not a tail.**
+`PlayerClass` is scout 0, soldier 1, sniper 2, demoman 3, medic 4, engineer 5,
+**heavy 6**, spy 7, pyro 8. Anything that assumes "the first four" or a
+contiguous trained prefix is wrong.
+
+⛔ **And a default headless match is 50% untrained classes.**
+`BotPopulation.PickClass` draws uniformly from scout..pyro and rejects only the
+spy — eight classes, of which four are trained. **It does not consult
+`ClassLimits` at all**, and `HeadlessMatch` calls it directly. So:
+
+- `gg2-rl`'s proposed first experiment — restrict both teams to the four trained
+  classes — **is not expressible today.** It needs a class-set parameter on the
+  population picker; `ClassLimits` is the wrong lever because nothing in the bot
+  path reads it.
+- Even the four-class bot **cannot recognise** a nine-class opponent, and half of
+  every default match's roster would be a class it has never seen. It still gets
+  position, velocity, health and aim, which are trained columns, so it may cope —
+  **but it has never once been measured against an enemy it cannot classify.**
+
+### The exit criterion has a half that is not about winning
+
+⚠️ **"200 matches completed" is not a criterion** — `eval` reported arena matches
+as clean wins for two phases because five *instant* rounds reach a cap exactly as
+five real ones do (`MatchActuallyHappensTests` exists for this). Every match must
+assert **duration and deaths** beside the win; a match with no deaths is a failed
+match, not a fast one. And the second half is not optional: **no map may produce
+a stuck bot or a pathing regression.** A duel-strong bot that cannot leave spawn
+is worse than what ships today.
+
+⚠️ **The caveat on all of it**, in `gg2-rl`'s words: this policy has only ever
+played 1v1 duels, 0-300px apart, four classes, no respawns, no objective. A CTF
+match is none of those. The observation has two enemy slots and duels only ever
+filled one.
+
+**Out of scope by decision**: the game objective. The reward stays damage dealt
+minus taken with no objective term — their user's call, on human-likeness
+grounds. The macro layer owns objectives; the policy never pursues them.
+
+⚠️ **Building this reopens `docs/ENV.md`'s "no ML runtime, no inference path, no
+weights format"**, which is a decision to take deliberately rather than by
+starting.
+
 ## Goal conditioning — `gg2-rl` phase 4's hybrid boundary (2026-08-30)
 
 **Asked for by `gg2-rl`**, and cheap for one reason: the goal block was reserved
