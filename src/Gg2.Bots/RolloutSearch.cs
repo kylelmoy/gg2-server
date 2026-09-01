@@ -96,12 +96,20 @@ public enum RolloutOpponent
 /// interval is cleanly disjoint from 15's.
 /// </para>
 /// <para>
-/// ⚠️ <b>The peak's LOCATION is not established and the default has not moved.</b>
-/// 15 against 20 is 93.1% against 90.8% with overlapping intervals, which is a
-/// thin result confirming an interesting hypothesis — the combination that has
-/// been wrong repeatedly on this project. <c>gg2-rl</c> is re-running that pair at
-/// 864 duels a cell. <b>Do not quote "15 beats 20" until that lands</b>; what is
-/// solid is only that the curve turns over somewhere below the default.
+/// ⛔ <b>"15 beats 20" DID NOT HOLD, and the re-run is why this paragraph never
+/// said it did.</b> At 288 a cell it read 93.1% against 90.8%, a clean +2.3 with
+/// the interesting sign. At <b>864</b> a cell: <b>91.6%</b> [88.6, 93.8] against
+/// <b>90.5%</b> [87.6, 92.8] — +1.1, overlapping. ⚠️ <b>The default's cell was
+/// the stable one</b> (90.8 → 90.5) and the 15 cell was the noisy one
+/// (93.1 → 91.6), so the apparent effect was almost entirely one arm being lucky.
+/// </para>
+/// <para>
+/// ✅ <b>So the default STAYS AT 20, and now for a measured reason rather than an
+/// unexamined one</b>: it sits inside the peak region, and the region below it has
+/// been looked at. The peak's location is somewhere between 12 and 20 on present
+/// evidence, with 15 and 20 indistinguishable at 864 a cell. Pinning it further
+/// would want many more duels or seeds and <b>nothing currently depends on the
+/// exact value</b>.
 /// </para>
 /// <para>
 /// ⚠️ <b>That sweep's BLIND column is not comparable and should not be used.</b>
@@ -111,6 +119,14 @@ public enum RolloutOpponent
 /// The upward sweep's blind numbers stepped a fixed count precisely to avoid
 /// that. <b>The two sets of blind fractions are from different instruments and
 /// must not be merged.</b>
+/// </para>
+/// <para>
+/// ⚠️ <b>And it reproduced at 864 a cell — 15 blinder than 20, 62.1% against
+/// 54.7%, at both sample sizes — which does NOT redeem it.</b> A biased
+/// instrument is biased consistently; agreement between two runs of the same
+/// wrong measurement is not evidence about the quantity. If the blind axis ever
+/// matters for this question it wants the fixed-step harness, not a by-product of
+/// a win-rate run.
 /// </para>
 /// </param>
 /// <param name="DecisionTicks">

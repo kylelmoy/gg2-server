@@ -1201,9 +1201,18 @@ Found by applying the lesson here rather than agreeing with it:
   a cell — horizon 8 wins **80.4%** [73.6, 85.8], 15 wins **93.1%** [88.1, 96.1],
   20 wins 90.8%. The upward sweep's monotone fall was **one side of a peak**, and
   "shorter is simply better" would have been wrong at 8, where the interval is
-  disjoint from 15's. ⚠️ **The peak's location is NOT established** — 15 against
-  20 overlaps, and a re-run at 864 a cell is pending. Solid: the curve turns over
-  below the default. Not solid: where.
+  disjoint from 15's. **That is the durable result.**
+
+  ⛔ **"15 beats 20" did NOT survive widening.** At 864 a cell: 91.6% against
+  90.5%, +1.1, overlapping. The default's cell was stable (90.8 → 90.5) and the
+  15 cell was the noisy one (93.1 → 91.6) — the apparent 2.3 was one arm being
+  lucky. ✅ **So the default stays at 20 for a MEASURED reason now**: it is inside
+  the peak region, and the region below it has been looked at. **This entry is
+  resolved** — the setting is no longer one that outlived its justification.
+
+  ⚠️ **It is the fifth number in a day to shrink materially on widening, and the
+  first widened BEFORE being written down as a finding.** It cost a re-run instead
+  of a retraction in two repos, which is the entire value of the rule.
 - ⚠️ **The `CommitTicks` negative result rests partly on 24 duels a cell.** Its
   blind fractions are ratios over many decisions and are not in doubt — 0.523 →
   0.965 is not a sampling artefact. Its **win rates are thin**: 0.375 against
