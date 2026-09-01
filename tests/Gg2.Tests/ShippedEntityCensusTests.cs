@@ -23,12 +23,28 @@ namespace Gg2.Tests;
 /// </para>
 /// <para>
 /// ⚠️ <b><c>gg_debug</c> is why this reads maps rather than
-/// <c>Fixtures/maps.json</c>.</b> The oracle covers 21 of 22 — gg_debug has no
-/// entity list in it — and gg_debug is the map most likely to place something
-/// exotic, being the debug map. It contributes four types nothing else does
-/// (<c>blueteamgate2</c>, <c>redteamgate2</c>, <c>bulletwall_horizontal</c>,
-/// <c>playerwall_horizontal</c>). A census taken from the oracle would have
-/// missed exactly the map worth checking.
+/// <c>Fixtures/maps.json</c>, and the reason generalises.</b> The oracle covers
+/// 21 of 22 — gg_debug has no entity list in it — so a census taken from the
+/// oracle would have "confirmed" this on 21 maps and been silent about the 22nd.
+/// <para>
+/// ⛔ <b>A COVERAGE GAP IS NOT A RANDOM SAMPLE.</b> It is the cases that were
+/// hard to cover, and hard-to-cover usually means unusual — which is the same
+/// property that makes a case likely to be the counterexample. <c>gg_debug</c>
+/// is absent from the oracle <em>because</em> it is odd, and is worth checking
+/// <em>because</em> it is odd. Those are one fact. It contributes four entity
+/// types nothing else does (<c>blueteamgate2</c>, <c>redteamgate2</c>,
+/// <c>bulletwall_horizontal</c>, <c>playerwall_horizontal</c>): a hole that
+/// arbitrary would be bad luck, and a hole that correlates with exoticism is a
+/// systematic blind spot wearing the costume of one missing row.
+/// </para>
+/// <para>
+/// ⚠️ <b>So "21 of 22 passed" is a much weaker statement than it reads as</b>,
+/// and the question to ask of an instrument is not "how much does it cover?" but
+/// <b>"what is it about the uncovered cases that kept them out?"</b> — because
+/// that answer usually names the case you most need. ⚠️ <b>This is distinct from
+/// asking whether a check could fail:</b> a check can be perfectly falsifiable
+/// and pointed at the wrong 95%. Owed to <c>gg2-rl</c>, which took the near-miss
+/// here and found the general form. 2026-09-01.
 /// </para>
 /// </remarks>
 public sealed class ShippedEntityCensusTests
