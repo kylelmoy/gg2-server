@@ -3119,3 +3119,61 @@ the bot is not flying *more* arcs, it is flying the ones it was routed over.
   question.** Every sticky-jump number checked before this was right. The cheap
   move — print what the follower thinks it is doing — was never made, because the
   expensive checks kept looking like progress.
+
+## ⛔ Dual King of the Hill is unwinnable by bots, on both shipped maps
+
+**Found 2026-09-01 while evaluating phase 4, and it is not about the policy** —
+it reproduces with the scripted bot on both sides.
+
+`dkoth_atalia` and `dkoth_sixties` produce **zero decided matches** at every time
+limit tried — 5, 10, 20 and 40 minutes, 20 matches each — and the hold clocks
+never advance by a single tick. `koth_harvest`, the single-hill control, reaches
+the full 180-second hold and decides 20 of 20 at ten minutes.
+
+**One 10-minute `dkoth_atalia` match, instrumented:**
+
+| | on RED's hill | on BLUE's hill |
+|---|---|---|
+| red bot-ticks | **34,200** | **0** |
+| blue bot-ticks | **0** | **34,200** |
+
+Hill owner changes: **0**. Final timers: 5,400 and 5,400, i.e. the starting
+values. Both hills unlocked after the 900-tick pregame, correctly.
+
+### Why
+
+**Dual KotH is won by holding the ENEMY's hill.** `Rounds.StepDkoth` runs red's
+clock while `blue.Owned && blue.Team == Team.Red` — red must take blue's point.
+Each team starts owning its own (`Rounds` sets that explicitly, and the cross-lock
+depends on it).
+
+`BotObjective.ControlPoint` sends every bot to **"whichever unlocked point is
+nearest"**. In dual KotH both points are unlocked from tick 900 and each team's
+own hill is the nearer one, so **every bot camps the hill that scores it
+nothing** and neither team ever contests the other's. The bots play the mode
+exactly backwards.
+
+### ⚠️ Why the fix is not one line
+
+`BotObjective` **deliberately identifies modes by the entities on the map rather
+than by `WorldState.GameMode`** — its own remark: "a mode is not the same question
+as what is on this map". So a `GameMode.DualKingOfTheHill` branch would be the
+first violation of that stance, and the structural alternatives are worse:
+
+- **"Prefer a point our team does not own"** fixes dkoth and breaks single KotH,
+  where holding the hill IS the objective and attackers would wander off one they
+  had just taken.
+- **"Exactly two points, one owned by each team"** is dkoth's signature and is
+  also a reachable mid-match state on a two-point Control Points map.
+
+So it wants a decision about how the bot layer recognises this mode, which is why
+it is written down rather than patched.
+
+⚠️ **The shape is the Arena bug's.** A whole gamemode silently not working,
+invisible because nothing asserted the mode *progressed* — `eval` reported instant
+Arena rounds as clean wins for two phases. Here two of the 22 shipped maps have
+presumably never produced a bot match that could end, and nobody noticed because
+nothing ever asked. ✅ **It was found because `gg2-rl` insisted the exit criterion
+be evaluated per map on every shipped map** rather than on the six that were
+screened.
+
