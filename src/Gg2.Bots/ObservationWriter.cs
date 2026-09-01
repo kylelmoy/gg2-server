@@ -1,7 +1,8 @@
+using Gg2.Maps;
 using Gg2.Protocol;
 using Gg2.Simulation;
 
-namespace Gg2.Env;
+namespace Gg2.Bots;
 
 /// <summary>
 /// The v0 observation layout: egocentric, normalised, fixed-size.

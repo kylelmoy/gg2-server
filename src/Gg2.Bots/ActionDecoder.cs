@@ -101,6 +101,25 @@ public sealed class ActionDecoder
     /// <summary>Bins in the aim-delta head. Odd, so one of them is "no turn".</summary>
     public const int AimBins = 15;
 
+    /// <summary>
+    /// The categorical width of each action head, in wire order: horizontal,
+    /// jump, down, fire, aim, zoom.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>ONE definition, here, because a policy has to agree with it and a
+    /// policy lives in this assembly.</b> It was in <c>EnvProtocol</c>, which
+    /// <c>Gg2.Bots</c> cannot reference — and a second copy of a shape both sides
+    /// index by position is exactly the sniper-candidate-count bug of 2026-08-31,
+    /// where three places that should have agreed about one number did not.
+    /// <c>EnvProtocol.HeadShape</c> now reads this.
+    /// <para>
+    /// ⚠️ <b>One entry per byte of <c>EnvProtocol.ActionBytes</c></b>, in the order
+    /// <c>EnvServer.ReadAction</c> consumes them and the order a trained policy's
+    /// output block is split in.
+    /// </para>
+    /// </remarks>
+    public static ReadOnlySpan<int> HeadShape => [3, 2, 2, 3, AimBins, 2];
+
     /// <summary>The bin that does not turn: the middle one.</summary>
     public const byte AimCentreBin = 7;
 

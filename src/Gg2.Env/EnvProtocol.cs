@@ -469,9 +469,10 @@ public static class EnvProtocol
             ObservationLayoutVersion = ObservationWriter.LayoutVersion,
             ActionEncodingVersion = SimulationStamp.ActionEncodingVersion,
             ObservationLength = ObservationWriter.Length,
-            // horizontal, jump, down, fire, aim, zoom — one entry per byte of
-            // ActionBytes, in the order EnvServer.ReadAction consumes them.
-            HeadShape = [3, 2, 2, 3, ActionDecoder.AimBins, 2],
+            // ⚠️ From ActionDecoder, not restated. A policy in Gg2.Bots has to
+            // agree with this shape and cannot reference this assembly, so the
+            // definition lives there and this reads it.
+            HeadShape = ActionDecoder.HeadShape.ToArray(),
         };
     }
 }

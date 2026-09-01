@@ -1,4 +1,4 @@
-namespace Gg2.Env;
+namespace Gg2.Bots;
 
 /// <summary>
 /// The macro goal an agent is being asked to pursue, which the observation's
