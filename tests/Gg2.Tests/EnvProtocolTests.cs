@@ -369,6 +369,60 @@ public sealed class EnvProtocolTests : IDisposable
         Assert.Equal(76, BitConverter.ToInt32(reply, at + 12));
     }
 
+    /// <summary>
+    /// <c>gg2-rl</c>'s reported repro, as closely as this fixture can reach it:
+    /// a multi-world sniper batch, its exact index list, on step 0.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Six worlds and the real index list, because the single-world test
+    /// above proves the bound and this proves the REPORT.</b> A fix that passed a
+    /// tidied-down version of somebody's repro and not the repro is a fix nobody
+    /// can confirm from outside. The one thing not reproduced is the scripted
+    /// blue side, which needs a nav cache this fixture has no server for — and
+    /// blue's driver cannot reach red's candidate count, which is what was wrong.
+    /// </remarks>
+    [Fact]
+    public void TheReportedSniperReproIsAccepted()
+    {
+        Send(EnvMessage.Hello, Int(EnvProtocol.Version));
+        Receive();
+        Send(
+            EnvMessage.MakeBatch,
+            MakeBatchBody(6, red: EnvDriver.Rollout, redHorizon: 6, redClass: PlayerClass.Sniper));
+        Receive();
+
+        int[] reported = [16, 17, 18, 19, 22, 23, 33, 76];
+
+        Send(
+            EnvMessage.StepScoredRestricted,
+            Concat(new byte[6 * 2 * EnvProtocol.ActionBytes], RestrictionTail(6, red: reported)));
+
+        var reply = Receive();
+
+        Assert.Equal((byte)EnvMessage.StepScoredRestricted, reply[0]);
+
+        // Every world searched exactly those eight, in ascending order.
+        var at = ScoresAt(6);
+
+        for (var world = 0; world < 6; world++)
+        {
+            Assert.Equal(reported.Length, BitConverter.ToInt32(reply, at));
+            at += 4;
+
+            foreach (var expected in reported)
+            {
+                Assert.Equal(expected, BitConverter.ToInt32(reply, at));
+                at += 8;
+            }
+
+            at += 6 * 4;
+
+            // Blue has no search: a zero-length block, then its chosen action.
+            Assert.Equal(0, BitConverter.ToInt32(reply, at));
+            at += 4 + (6 * 4);
+        }
+    }
+
     /// <summary>Where the score block starts in a reply.</summary>
     private static int ScoresAt(int worlds) =>
         1 + 4 + (worlds * 2 * ObservationWriter.Length * 4) + (worlds * 2 * EnvProtocol.ComponentBytes);
