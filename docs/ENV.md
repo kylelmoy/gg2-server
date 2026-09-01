@@ -1630,76 +1630,82 @@ sampled-from-the-remainder candidates keep out-scoring the top-k ones, the prior
 is bad and pruning is hurting.** Computable every round at no cost, and it fails
 loudly instead of plateauing quietly.
 
-## ⛔ Phase 4 result: combat improves, the objective regresses (2026-09-01)
+## ✅ Phase 4 result: the hybrid beats the bot it replaces, on both axes (2026-09-01)
 
-**420 matches an arm, six CTF maps, 8 bots, four trained classes both sides,
-policy on red, scripted on blue.**
+**The exit criterion is met, and the value that got it there is not the one
+anybody started with.** Six CTF maps, 8 bots, four trained classes both sides,
+policy on red, all-scripted on blue.
 
-| arm | red caps | blue caps | red's share | red death share | policy share of control |
+### The handover sweep — 420 matches a point
+
+| rule / range | red caps | blue caps | red's share | red death share | policy share of control |
 |---|---|---|---|---|---|
-| handover on **distance** (300px) | 36 | 48 | 42.9% | **43.0%** | 27.8% |
-| handover on **macro task** | 47 | 53 | 47.0% | **43.8%** | 23.4% |
-| **all scripted (control)** | 76 | 72 | **51.4%** | 50.5% | — |
+| **head split** (no trigger) | 49 | **126** | 28.0% | **55.0%** | 85.1% |
+| distance, 300px | 36 | 48 | 42.9% | 43.0% | 27.8% |
+| macro task, 300px | 47 | 53 | 47.0% | 43.8% | 23.4% |
+| macro task, 220px | 77 | 52 | 59.7% | 44.8% | 14.5% |
+| **macro task, 150px** | **97** | 45 | **68.3%** | 46.0% | **7.0%** |
+| macro task, 80px | 92 | 45 | 67.2% | 47.6% | 2.3% |
+| all scripted (control) | 76 | 72 | 51.4% | 50.5% | — |
 
-✅ **Combat improves substantially and robustly.** Red's share of deaths falls
-from 50.5% to ~43% over roughly 22,000 deaths. The control's 51.4% / 50.5% is the
-symmetry check: same bots both sides, even split, so the setup is fair and the
-difference is the policy.
+### Confirmed at 1,200 matches an arm
 
-⛔ **The objective still regresses.** Red's capture share is 42.9% (distance) and
-47.0% (macro task) against a 51.4% control, and total captures nearly halve —
-84 and 100 against 148. **The hybrid is better at fighting and worse at the
-game.** Phase 4's exit criterion is not met.
+| | red caps | blue caps | red's share | red death share | stuck bots |
+|---|---|---|---|---|---|
+| **macro task, 150px** | **262** | 134 | **66.2%** | **46.8%** | 84 / 9,600 |
+| all scripted | 212 | 198 | 51.7% | 51.5% | 98 / 9,600 |
 
-⚠️ **Gating handover on macro INTENT rather than proximity recovers part of it at
-no combat cost** — 42.9% → 47.0% capture share, 43.0% → 43.8% death share, on
-*less* control (23.4% against 27.8%). ⚠️ **But 36 against 47 captures is about
-1.5 sigma and does not separate**, so `HandoverRule.Distance` remains the default:
-it is the rule `gg2-rl` measured and specified, and swapping a default on an
-unseparated difference is the trap this repo spent 2026-08-31 learning about.
+~400 capture events and ~59,000 deaths an arm. **Better at fighting AND better at
+the objective than the bot it replaces**, and no stuck-bot regression.
 
-### ⚠️ The n=108 reading REVERSED, and it was mine
+⛔ **THE POLICY IS MOST VALUABLE USED SPARINGLY.** At 150px it holds **7%** of
+ticks and wins on both axes; at 300px it holds 23% and loses the objective. More
+policy is not better — the combat gain does rise with range (46.8% → 43.8% death
+share from 150 to 300) but the objective collapses faster than the combat
+improves.
 
-At 108 matches an arm the distance rule read **red 13 captures against blue 6** —
-the policy team apparently out-capturing its opponent — and the control read red
-20 against blue 12, which I took for an inherent red advantage in the setup. At
-420 it is red 36 against blue 48, and the control is **76 against 72, i.e. even**.
+⛔ **`gg2-rl`'s ORIGINAL objection was right and its retraction was wrong.** It had
+argued its user out of a head-level split (policy aims and fires, scripted always
+moves) on a duel measurement, then withdrew that on the grounds the measurement
+compared against random movement rather than competent nav. Measured against
+competent nav: the head split is **worse than all-scripted on both axes** — 55.0%
+death share against a 50.5% control, and 49 captures against 126. Its own
+falsification condition was "the death share slides back toward 50.5%"; it went
+**past** it. **The policy's movement is not a bonus, it is where the combat gain
+comes from**, and splitting the heads leaves the two halves fighting each other.
 
-**Both readings were noise and the conclusion inverted.** This is the same shape
-`gg2-rl` hit five times on 2026-08-31, and the only reason it cost a re-run rather
-than a retraction is that the number was widened *before* it was written down as a
-finding. ⚠️ **A capture is a rare event** — under 0.2 a match — so a hundred
-matches is a few dozen events and a difference of ten is nothing.
+⚠️ **The default moved: `HandoverRule.MacroTask` at `EngagementRange = 150`.**
+`DuelEngagementRange = 300` is kept as a named constant, because the 300 was
+right for duels — every tick a combat tick, nothing else the bot could be doing —
+and too wide for a game with an objective in it. This is the curve `gg2-rl` asked
+for before the default moved.
 
-### ⚠️ Two bugs found by measuring, both mine
+### ⚠️ Two bugs found by measuring, both mine, both in the wiring
 
 **1. The macro layer stopped thinking whenever the policy drove.** `PolicyBot`
-originally polled `ScriptedBot` only on the ticks it handed to it — so for 27% of
-ticks there was no objective planning at all: no re-target, no re-path, no spot
-ban, and stale path state the moment control returned. The scripted layer now
-polls **every tick** and its keys are overridden rather than skipped. That is
-correct on its own merits regardless of what it measures: "the macro layer owns
-objectives" cannot be true if the macro layer is not running.
+polled `ScriptedBot` only on the ticks it handed to it — so for 27% of ticks
+there was no objective planning at all: no re-target, no re-path, no spot ban, and
+stale path state the moment control returned. It now polls **every tick** and its
+keys are overridden rather than skipped. ⚠️ **This voids the original "20 captures
+to 7" in both directions**: a macro layer that is not running would suppress
+captures with no policy involved.
 
-**2. Gating on the scripted engage hold ALONE handed the policy the wheel
-blind.** The hold fires out to `BotTargeting.ClassRange` — **800px for a soldier,
-900 for a sniper** — three times the 300px range, and past the ~400px ceiling
-where the observation saturates. It took the policy's share of control from 27%
-to **71%** and captures to 3. `HandoverRule.MacroTask` is a **conjunction** of
-intent and range for this reason.
+**2. Gating on the scripted engage hold ALONE handed the policy the wheel blind.**
+That hold fires out to `BotTargeting.ClassRange` — **800px for a soldier, 900 for
+a sniper** — three times the engagement range and twice the ~400px where the
+observation saturates. Control share went 27% → **71%** and captures to 3.
+`MacroTask` is a **conjunction** of intent and range for that reason. ✅ `gg2-rl`
+predicted the check that caught it: *"if the gate does not cut the share sharply,
+the gate is not doing what we think"*. It did not cut it; it more than doubled.
 
-✅ **`gg2-rl` predicted that failure exactly and its check is what caught it**:
-*"your control-share number is the mechanism dial. A goal-gated handover should
-cut it sharply. If it does not move, the gate is not doing what we think, and
-that check costs nothing."* It did not move down; it more than doubled.
+### ⚠️ And an n=108 reading that reversed
 
-### Stuck bots: present in both arms, and worst in the control
-
-**42 of 3,360 bots moved under 100px with the policy, 33 of 3,360 without**, and
-the single worst case is a scripted bot in both arms. At that sample they do not
-separate, so stuck bots are a pre-existing scripted-layer behaviour and the policy
-has not been shown to add or remove them. ⚠️ **Without the control arm this would
-have been reported as "the policy causes stuck bots."**
+At 108 matches an arm the distance rule read red **13** captures against blue
+**6**, and the control read **20 against 12** — both apparently a red advantage
+that does not exist. At 420 the control is **76 against 72**, even. **A capture is
+a rare event, under 0.2 a match**, so a hundred matches is a few dozen events and
+a difference of ten is nothing. The failure was not that the sample was small; it
+was that **nobody converted matches into events before choosing the sample size.**
 
 ## Phase 4 handover from `gg2-rl` (2026-08-31) — the artefact, and the hole in it
 

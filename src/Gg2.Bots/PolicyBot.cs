@@ -55,6 +55,34 @@ public enum HandoverRule
     /// </para>
     /// </remarks>
     MacroTask,
+
+    /// <summary>
+    /// No handover at all: the scripted layer always drives MOVEMENT, the policy
+    /// always drives AIM and FIRE.
+    /// </summary>
+    /// <remarks>
+    /// <b><c>gg2-rl</c>'s arm A, and the argument for it is that a parameter we
+    /// keep getting wrong is a parameter worth deleting.</b> Proximity was wrong;
+    /// intent was better; intent alone was catastrophic until it was conjoined
+    /// with range. A head-level split has no trigger to get wrong, and the two
+    /// concerns separate cleanly — the scripted layer never loses its path state
+    /// or its objective, and the policy contributes only what it is measurably
+    /// good at.
+    /// <para>
+    /// ⚠️ <b>`gg2-rl` argued its own user OUT of this shape and has withdrawn the
+    /// objection.</b> The evidence was that the policy's movement is worth 16-23
+    /// points — but measured against RANDOM movement and against walking straight
+    /// at the enemy, never against competent nav-graph movement, because no such
+    /// baseline existed on that side. In a match the alternative is not flailing,
+    /// it is this repo's pathfinder.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>What would falsify it</b>: the death share sliding back toward the
+    /// all-scripted 50.5% would mean the policy's movement was carrying the combat
+    /// gain after all.
+    /// </para>
+    /// </remarks>
+    HeadSplit,
 }
 
 public sealed class PolicyBot : IInputSource, ICommandSource
@@ -63,13 +91,47 @@ public sealed class PolicyBot : IInputSource, ICommandSource
     /// Straight-line pixels within which the policy drives.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>300, measured by <c>gg2-rl</c>, and the ceiling is an observation
-    /// property rather than a preference</b> — see the type's remarks. Straight
-    /// line, not path distance: a wall-separated pair inside 300px is handed to
-    /// the policy, which is one of the two reasons the 1.7-point split cost is a
-    /// lower bound.
+    /// ⚠️ <b>150, and it was 300 until it was measured in matches.</b> The
+    /// ceiling is still an observation property rather than a preference — see the
+    /// type's remarks — but the useful value turned out to be far below it.
+    /// <b>The policy is most valuable used SPARINGLY</b>: at 150px it holds 7% of
+    /// ticks and beats the all-scripted bot on both combat and captures, where at
+    /// 300px it holds 23% and loses the objective. See
+    /// <see cref="DuelEngagementRange"/> for the sweep.
+    /// <para>
+    /// Straight line, not path distance: a wall-separated pair inside the range is
+    /// still handed to the policy.
+    /// </para>
     /// </remarks>
-    public const double EngagementRange = 300.0;
+    public const double EngagementRange = 150.0;
+
+    /// <summary>
+    /// The 300px `gg2-rl` measured in DUELS, kept for reference and no longer the
+    /// default.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>Superseded for match play by the sweep of 2026-09-01</b>, 420 matches
+    /// a point with an all-scripted control, confirmed at 1,200. Red's capture
+    /// share against the same opponent: 47.0% at 300px, 59.7% at 220, <b>68.3% at
+    /// 150</b>, 67.2% at 80, against 51.4% for the all-scripted control. The duel
+    /// figure was right for duels — where every tick is a combat tick and there is
+    /// nothing else the bot could be doing — and too wide for a game with an
+    /// objective in it.
+    /// </remarks>
+    public const double DuelEngagementRange = 300.0;
+
+    /// <summary>
+    /// The range this bot actually uses. <see cref="EngagementRange"/> by default.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Settable so the frontier can be looked for, not so it can be tuned
+    /// by taste.</b> `gg2-rl` measured 300px in duels and warned against widening
+    /// it past ~400 (the observation saturates); narrowing it is the untested
+    /// direction, and the reason to look is that the macro-task gate got MORE
+    /// captures on LESS control at no combat cost, which is a Pareto move rather
+    /// than a slide along a trade.
+    /// </remarks>
+    public double Range { get; init; } = EngagementRange;
 
     /// <summary>
     /// The classes the policy was trained on, and therefore the only ones it may
@@ -128,7 +190,13 @@ public sealed class PolicyBot : IInputSource, ICommandSource
     public bool ScriptedCarriesIntel { get; init; } = true;
 
     /// <summary>Which predicate decides when the policy takes the wheel.</summary>
-    public HandoverRule Rule { get; init; } = HandoverRule.Distance;
+    /// <remarks>
+    /// ⚠️ <b><see cref="HandoverRule.MacroTask"/> by default, from the 2026-09-01
+    /// sweep.</b> It gets more captures on LESS control at a small combat cost
+    /// than <see cref="HandoverRule.Distance"/>, and it is time-bounded, which
+    /// proximity is not.
+    /// </remarks>
+    public HandoverRule Rule { get; init; } = HandoverRule.MacroTask;
 
     public PolicyBot(PolicyNetwork policy, ScriptedBot scripted)
     {
@@ -218,6 +286,17 @@ public sealed class PolicyBot : IInputSource, ICommandSource
         // the scripted layer's follower, this decoder's absolute aim. It also
         // keeps the 300px gate exact rather than needing a hysteresis band nobody
         // measured.
+        if (Rule == HandoverRule.HeadSplit)
+        {
+            if (firstTickOfDecision)
+            {
+                _ticksLeftInDecision = Math.Max(1, _policy.ActionRepeat);
+                Decide(in world, slot);
+            }
+
+            return Merge(scripted, PolicyInput(slot, firstTickOfDecision));
+        }
+
         if (!firstTickOfDecision)
         {
             return _policyHadControl
@@ -243,18 +322,7 @@ public sealed class PolicyBot : IInputSource, ICommandSource
         // would be a policy acting on a rhythm it never saw.
         _ticksLeftInDecision = Math.Max(1, _policy.ActionRepeat);
 
-        ObservationWriter.Write(in world, slot, _observation);
-        _policy.Act(_observation, _heads);
-
-        _action = new EnvAction
-        {
-            Horizontal = (byte)_heads[0],
-            Jump = (byte)_heads[1],
-            Down = (byte)_heads[2],
-            Fire = (byte)_heads[3],
-            AimDelta = (byte)_heads[4],
-            Zoom = (byte)_heads[5],
-        };
+        Decide(in world, slot);
 
         return PolicyInput(slot, firstTick: true);
     }
@@ -262,7 +330,7 @@ public sealed class PolicyBot : IInputSource, ICommandSource
     /// <summary>Whether the policy should take the wheel this decision.</summary>
     private bool ShouldEngage(in WorldView world, int slot)
     {
-        var inRange = DistanceToNearestEnemy(in world, slot) <= EngagementRange;
+        var inRange = DistanceToNearestEnemy(in world, slot) <= Range;
 
         // ⚠️ MacroTask is a CONJUNCTION, and the range half is not optional.
         // Gating on the scripted engage hold ALONE was tried and is wrong: that
@@ -281,6 +349,47 @@ public sealed class PolicyBot : IInputSource, ICommandSource
             HandoverRule.MacroTask => inRange && _scripted.WantsToEngage,
             _ => inRange,
         };
+    }
+
+    private void Decide(in WorldView world, int slot)
+    {
+        ObservationWriter.Write(in world, slot, _observation);
+        _policy.Act(_observation, _heads);
+
+        _action = new EnvAction
+        {
+            Horizontal = (byte)_heads[0],
+            Jump = (byte)_heads[1],
+            Down = (byte)_heads[2],
+            Fire = (byte)_heads[3],
+            AimDelta = (byte)_heads[4],
+            Zoom = (byte)_heads[5],
+        };
+    }
+
+    /// <summary>
+    /// Scripted movement, policy aim and fire.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b><c>Special</c> goes with FIRE, not with movement.</b> It is the
+    /// policy's third fire value — a medic's uber, a sniper's zoom, a soldier's
+    /// nothing — and leaving it on the scripted side would let the two halves
+    /// press two different attacks in one tick.
+    /// <para>
+    /// ⚠️ <b><c>Taunt</c> stays with the scripted layer</b>, because the policy
+    /// has no taunt head and a taunt freezes the character where it stands.
+    /// </para>
+    /// </remarks>
+    private static PlayerInput Merge(PlayerInput scripted, PlayerInput policy)
+    {
+        const PlayerKeys Movement = PlayerKeys.Left | PlayerKeys.Right | PlayerKeys.Jump
+            | PlayerKeys.Down | PlayerKeys.Taunt;
+        const PlayerKeys Combat = PlayerKeys.Attack | PlayerKeys.Special;
+
+        return new PlayerInput(
+            (scripted.Keys & Movement) | (policy.Keys & Combat),
+            policy.NetAimDirection,
+            policy.AimDistance);
     }
 
     private PlayerInput PolicyInput(int slot, bool firstTick)
