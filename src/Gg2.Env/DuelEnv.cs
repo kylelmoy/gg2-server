@@ -681,6 +681,46 @@ public sealed class DuelEnv
         _goals[slot] = goal;
     }
 
+    /// <summary>
+    /// Restricts this slot's search to these candidate indices for its next
+    /// decision.
+    /// </summary>
+    /// <remarks>
+    /// <b><c>gg2-rl</c>'s <c>docs/DESIGN.md</c> step 3</b> — a distilled policy
+    /// prunes the search so it is stronger at equal cost. See
+    /// <see cref="RolloutSearch.RestrictNextDecision"/>, which holds every rule
+    /// that matters: an empty span means "search everything", the indices are a
+    /// SET rather than a ranking, and an out-of-range one is refused rather than
+    /// clamped.
+    /// <para>
+    /// ⚠️ <b>Refused when the slot has no search behind it.</b> A restriction on a
+    /// client- or bot-driven slot restricts nothing, and accepting it silently
+    /// would let a trainer believe it was pruning while it paid for a full search
+    /// — which looks like "pruning does not help" and is not.
+    /// </para>
+    /// </remarks>
+    public void RestrictSearch(int slot, ReadOnlySpan<int> indices)
+    {
+        var search = SearchFor(slot)
+            ?? throw new InvalidOperationException($"slot {slot} has no search to restrict");
+
+        search.RestrictNextDecision(indices);
+    }
+
+    /// <summary>How many candidates the search behind this slot has, or 0 for none.</summary>
+    /// <remarks>
+    /// ⚠️ <b>Per class</b> — a sniper's set carries the zoom dimension and is
+    /// twice the size — so a caller validating indices has to ask per slot rather
+    /// than assume a batch-wide number.
+    /// </remarks>
+    public int CandidateCountFor(int slot) => SearchFor(slot)?.CandidateCount ?? 0;
+
+    /// <summary>
+    /// Which candidate index each entry of <see cref="ScoresFor"/> belongs to.
+    /// </summary>
+    public ReadOnlySpan<int> SearchedIndicesFor(int slot) =>
+        SearchFor(slot) is { } search ? search.LastSearchedIndices : ReadOnlySpan<int>.Empty;
+
     /// <summary>The red agent's roster slot.</summary>
     public int RedSlot { get; private set; } = -1;
 

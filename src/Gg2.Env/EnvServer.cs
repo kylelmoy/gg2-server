@@ -131,6 +131,8 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
         EnvMessage.StepScored => Step(body, scored: true),
         EnvMessage.Candidates => Candidates(),
         EnvMessage.SetGoal => SetGoal(body),
+        EnvMessage.StepRestricted => Step(body, scored: false, restricted: true),
+        EnvMessage.StepScoredRestricted => Step(body, scored: true, restricted: true),
         EnvMessage.Reset => Reset(body),
         EnvMessage.Snapshot => Snapshot(body),
         EnvMessage.Restore => Restore(body),
@@ -328,7 +330,7 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
         return Observations(EnvMessage.MakeBatch);
     }
 
-    private byte[] Step(ReadOnlySpan<byte> body, bool scored = false)
+    private byte[] Step(ReadOnlySpan<byte> body, bool scored = false, bool restricted = false)
     {
         var batch = _batch ?? throw new InvalidOperationException("no batch; send MakeBatch first");
 
@@ -355,14 +357,129 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
         var redOut = new StepResult[batch.Count];
         var blueOut = new StepResult[batch.Count];
 
+        // ⚠️ Applied BEFORE the step and validated in full first, so a bad index
+        // in world 9 cannot leave worlds 0-8 pruned and the batch half in a state
+        // nobody asked for. SetGoal's all-worlds form makes the same choice.
+        if (restricted)
+            Restrict(batch, body[needed..]);
+
         batch.Step(red, blue, redOut, blueOut);
 
         // ⚠️ The reply KIND echoes what was asked for, so a client can tell which
         // shape it is holding without tracking its own request.
-        return scored
-            ? Observations(EnvMessage.StepScored, redOut, blueOut)
-            : Observations(EnvMessage.Step, redOut, blueOut);
+        // ⚠️ The reply KIND echoes what was asked for, so a client can tell which
+        // shape it is holding without tracking its own request.
+        return (scored, restricted) switch
+        {
+            (true, true) => Observations(EnvMessage.StepScoredRestricted, redOut, blueOut),
+            (false, true) => Observations(EnvMessage.StepRestricted, redOut, blueOut),
+            (true, false) => Observations(EnvMessage.StepScored, redOut, blueOut),
+            _ => Observations(EnvMessage.Step, redOut, blueOut),
+        };
     }
+
+    /// <summary>
+    /// Reads and applies the per-slot candidate restrictions trailing a
+    /// <see cref="EnvMessage.StepRestricted"/> body.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Two passes: validate everything, then apply everything.</b> A bad
+    /// index in a late world must not leave the earlier ones pruned — a
+    /// half-restricted batch is a state the trainer has no way to describe, and
+    /// the refusal would look like nothing had happened.
+    /// </remarks>
+    private static void Restrict(EnvBatch batch, ReadOnlySpan<byte> body)
+    {
+        // Pass one: shape and range, touching nothing.
+        var at = 0;
+
+        for (var i = 0; i < batch.Count; i++)
+        {
+            var world = batch.World(i);
+
+            for (var side = 0; side < 2; side++)
+            {
+                var slot = side == 0 ? world.RedSlot : world.BlueSlot;
+
+                if (body.Length < at + 4)
+                    throw new InvalidDataException("a restricted step ran out of restriction blocks");
+
+                var count = BinaryPrimitives.ReadInt32LittleEndian(body[at..]);
+                at += 4;
+
+                if (count < 0)
+                    throw new InvalidDataException($"a restriction count is not negative, got {count}");
+
+                if (body.Length < at + (count * 4))
+                    throw new InvalidDataException($"a restriction of {count} indices is short");
+
+                var candidates = world.CandidateCountFor(slot);
+
+                if (count > 0 && candidates == 0)
+                {
+                    throw new InvalidDataException(
+                        $"world {i} side {side} has no search, so it cannot be restricted");
+                }
+
+                for (var k = 0; k < count; k++)
+                {
+                    var index = BinaryPrimitives.ReadInt32LittleEndian(body[(at + (k * 4))..]);
+
+                    if ((uint)index >= (uint)candidates)
+                    {
+                        throw new InvalidDataException(
+                            $"world {i} side {side}: candidate index {index} is not 0..{candidates - 1}");
+                    }
+                }
+
+                at += count * 4;
+            }
+        }
+
+        // Pass two: apply.
+        at = 0;
+
+        Span<int> indices = stackalloc int[MaxRestrictionIndices];
+
+        for (var i = 0; i < batch.Count; i++)
+        {
+            var world = batch.World(i);
+
+            for (var side = 0; side < 2; side++)
+            {
+                var count = BinaryPrimitives.ReadInt32LittleEndian(body[at..]);
+                at += 4;
+
+                if (count > indices.Length)
+                {
+                    throw new InvalidDataException(
+                        $"a restriction of {count} indices is past the {indices.Length} cap");
+                }
+
+                for (var k = 0; k < count; k++)
+                    indices[k] = BinaryPrimitives.ReadInt32LittleEndian(body[(at + (k * 4))..]);
+
+                at += count * 4;
+
+                var slot = side == 0 ? world.RedSlot : world.BlueSlot;
+
+                // ⚠️ Zero means "search everything", so it is NOT an error on a
+                // slot with no search — every non-searching slot sends it.
+                if (count > 0)
+                    world.RestrictSearch(slot, indices[..count]);
+            }
+        }
+    }
+
+    /// <summary>
+    /// The most candidate indices one slot's restriction may carry.
+    /// </summary>
+    /// <remarks>
+    /// A sniper's candidate set is the largest at 120, and restricting to more
+    /// than the whole set is meaningless. The cap exists so the apply pass can
+    /// use a stack buffer on a frame whose length a client controls.
+    /// </remarks>
+    private const int MaxRestrictionIndices = 256;
 
     private static EnvAction ReadAction(ReadOnlySpan<byte> b) => new()
     {
@@ -583,8 +700,10 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
         // sniper's set is twice a soldier's and a batch can hold both. Assuming
         // one length would truncate half of every mixed batch.
         var scoreFloats = 0;
+        var paired = kind == EnvMessage.StepScoredRestricted;
+        var carriesScores = kind == EnvMessage.StepScored || paired;
 
-        if (kind == EnvMessage.StepScored)
+        if (carriesScores)
         {
             for (var i = 0; i < batch.Count; i++)
             {
@@ -597,8 +716,10 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
         var floats = _observations.Length;
         var reply = new byte[
             1 + 4 + (floats * 4) + (batch.Count * 2 * componentBytes)
-            + (kind == EnvMessage.StepScored
-                ? (batch.Count * 2 * (4 + (6 * 4))) + (scoreFloats * 4)
+            + (carriesScores
+                // ⚠️ A paired block carries an i32 index beside every f32 score,
+                // so its per-score width is EIGHT bytes, not four.
+                ? (batch.Count * 2 * (4 + (6 * 4))) + (scoreFloats * (paired ? 8 : 4))
                 : 0)];
         var at = 0;
 
@@ -640,16 +761,24 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
         // slots searched — a client that had to infer that would be holding a
         // model of this repo's internals, which is the thing the whole seam
         // exists to avoid.
-        if (kind == EnvMessage.StepScored)
+        if (carriesScores)
         {
             for (var i = 0; i < batch.Count; i++)
             {
                 var world = batch.World(i);
 
                 WriteScores(
-                    reply, ref at, world.ScoresFor(world.RedSlot), world.SearchActionFor(world.RedSlot));
+                    reply,
+                    ref at,
+                    world.ScoresFor(world.RedSlot),
+                    world.SearchActionFor(world.RedSlot),
+                    paired ? world.SearchedIndicesFor(world.RedSlot) : ReadOnlySpan<int>.Empty);
                 WriteScores(
-                    reply, ref at, world.ScoresFor(world.BlueSlot), world.SearchActionFor(world.BlueSlot));
+                    reply,
+                    ref at,
+                    world.ScoresFor(world.BlueSlot),
+                    world.SearchActionFor(world.BlueSlot),
+                    paired ? world.SearchedIndicesFor(world.BlueSlot) : ReadOnlySpan<int>.Empty);
             }
         }
 
@@ -674,15 +803,37 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
     /// ⚠️ <b>float32</b>, matching the damage fields a score is a difference of.
     /// </para>
     /// </remarks>
+    /// <param name="indices">
+    /// The candidate index each score belongs to, written before its score as an
+    /// <c>i32</c>. ⚠️ <b>Empty means the unpaired layout</b> — scores alone,
+    /// implicitly 0..n−1 — which is what <see cref="EnvMessage.StepScored"/> has
+    /// always sent and must keep sending byte for byte.
+    /// </param>
     private static void WriteScores(
-        byte[] into, ref int at, ReadOnlySpan<double> scores, EnvAction chosen)
+        byte[] into,
+        ref int at,
+        ReadOnlySpan<double> scores,
+        EnvAction chosen,
+        ReadOnlySpan<int> indices)
     {
         BinaryPrimitives.WriteInt32LittleEndian(into.AsSpan(at), scores.Length);
         at += 4;
 
-        foreach (var score in scores)
+        if (!indices.IsEmpty && indices.Length != scores.Length)
         {
-            BinaryPrimitives.WriteSingleLittleEndian(into.AsSpan(at), (float)score);
+            throw new InvalidOperationException(
+                $"{indices.Length} indices against {scores.Length} scores; they are parallel arrays");
+        }
+
+        for (var i = 0; i < scores.Length; i++)
+        {
+            if (!indices.IsEmpty)
+            {
+                BinaryPrimitives.WriteInt32LittleEndian(into.AsSpan(at), indices[i]);
+                at += 4;
+            }
+
+            BinaryPrimitives.WriteSingleLittleEndian(into.AsSpan(at), (float)scores[i]);
             at += 4;
         }
 

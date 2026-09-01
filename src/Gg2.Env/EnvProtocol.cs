@@ -95,6 +95,58 @@ public enum EnvMessage : byte
     /// </para>
     /// </remarks>
     SetGoal = 10,
+
+    /// <summary>
+    /// <see cref="Step"/>, with the searching slots restricted to a subset of
+    /// their candidates. <c>gg2-rl</c>'s <c>docs/DESIGN.md</c> step 3.
+    /// </summary>
+    /// <remarks>
+    /// Body: <see cref="Step"/>'s actions, then for each world red-then-blue an
+    /// <c>i32</c> count followed by that many <c>i32</c> candidate indices. A
+    /// count of zero means "search everything", which is what every slot without
+    /// a search must send.
+    /// <para>
+    /// ⚠️ <b>A separate kind rather than a tail on <see cref="Step"/>, and NOT
+    /// because a version bump was unwelcome.</b> <c>EnvServer.Step</c> checks
+    /// <c>body.Length &lt; needed</c>, so it already accepts and ignores trailing
+    /// bytes — a new client sending restrictions to an old server would be
+    /// silently unrestricted, and would measure "pruning changes nothing". A kind
+    /// the old server does not know is refused loudly instead.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Rides on the step rather than being set beforehand</b>, because the
+    /// restriction changes every decision and a separate message would double the
+    /// round trips — and round trips are what a trainer actually waits on. See
+    /// <c>docs/ENV.md</c>, "the boundary is latency, not throughput".
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>The indices are a SET.</b> Nothing here may assume they are ordered
+    /// or that the first is anybody's favourite: <c>gg2-rl</c> sends top-(k−m)
+    /// plus m sampled from the pruned remainder, because a search that only
+    /// evaluates what the policy already likes cannot correct the policy where it
+    /// is wrong. <see cref="Gg2.Bots.RolloutSearch.RestrictNextDecision"/>.
+    /// </para>
+    /// </remarks>
+    StepRestricted = 11,
+
+    /// <summary>
+    /// <see cref="StepRestricted"/> plus the score block, which for a restricted
+    /// search carries <c>(index, score)</c> PAIRS.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Pairs, not a full-length block with a sentinel for the unsearched.</b>
+    /// Zero is already a real score — the blind case — and a sentinel is a number
+    /// sitting in a numeric array that somebody will eventually sum, average or
+    /// softmax. The pairs are self-describing about which actions were looked at,
+    /// which is exactly the argument <see cref="Candidates"/> makes one level up.
+    /// <para>
+    /// Reply: <see cref="Step"/>'s, then per agent an <c>i32</c> count, that many
+    /// <c>(i32 index, f32 score)</c> pairs, then the chosen action as six
+    /// <c>i32</c>. An unrestricted slot reports indices 0..n−1, so the shape does
+    /// not depend on whether anybody pruned.
+    /// </para>
+    /// </remarks>
+    StepScoredRestricted = 12,
     Reset = 4,
     Snapshot = 5,
     Restore = 6,

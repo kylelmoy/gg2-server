@@ -315,6 +315,216 @@ public sealed class EnvProtocolTests : IDisposable
         public override void SetLength(long value) => throw new NotSupportedException();
     }
 
+    /// <summary>Where the score block starts in a reply.</summary>
+    private static int ScoresAt(int worlds) =>
+        1 + 4 + (worlds * 2 * ObservationWriter.Length * 4) + (worlds * 2 * EnvProtocol.ComponentBytes);
+
+    /// <summary>
+    /// A restriction tail: per world, red then blue, an i32 count and that many
+    /// i32 indices.
+    /// </summary>
+    private static byte[] RestrictionTail(int worlds, int[]? red = null, int[]? blue = null)
+    {
+        var parts = new List<byte[]>();
+
+        for (var i = 0; i < worlds; i++)
+        {
+            foreach (var side in new[] { red, blue })
+            {
+                var indices = side ?? [];
+
+                parts.Add(Int(indices.Length));
+
+                foreach (var index in indices)
+                    parts.Add(Int(index));
+            }
+        }
+
+        return Concat([.. parts]);
+    }
+
+    private void MakeRolloutBatch(int worlds)
+    {
+        Send(EnvMessage.Hello, Int(EnvProtocol.Version));
+        Receive();
+        Send(EnvMessage.MakeBatch, MakeBatchBody(worlds, red: EnvDriver.Rollout, redHorizon: 6));
+        Receive();
+    }
+
+    /// <summary>
+    /// <see cref="EnvMessage.StepScoredRestricted"/> searches only the named
+    /// candidates and reports them as (index, score) pairs.
+    /// </summary>
+    /// <remarks>
+    /// <b><c>gg2-rl</c>'s DESIGN.md step 3.</b> ⚠️ The pairs are the point: a
+    /// pruned distribution without the indices it is over is "a ranking over an
+    /// unnamed list", and a full-length block with a sentinel could not say which
+    /// actions were looked at — zero is already a real score, the blind case.
+    /// </remarks>
+    [Fact]
+    public void ARestrictedStepScoresOnlyTheNamedCandidates()
+    {
+        MakeRolloutBatch(1);
+
+        var actions = new byte[1 * 2 * EnvProtocol.ActionBytes];
+
+        Send(
+            EnvMessage.StepScoredRestricted,
+            Concat(actions, RestrictionTail(1, red: [4, 9, 30])));
+
+        var reply = Receive();
+
+        Assert.Equal((byte)EnvMessage.StepScoredRestricted, reply[0]);
+
+        var at = ScoresAt(1);
+        var count = BitConverter.ToInt32(reply, at);
+        at += 4;
+
+        Assert.Equal(3, count);
+
+        // Ascending, whatever order they were sent in, and each score beside the
+        // index it belongs to.
+        var indices = new int[count];
+
+        for (var i = 0; i < count; i++)
+        {
+            indices[i] = BitConverter.ToInt32(reply, at);
+            at += 8;
+        }
+
+        Assert.Equal([4, 9, 30], indices);
+    }
+
+    /// <summary>
+    /// An out-of-range index is refused and the batch does not step.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The second half is the point.</b> Validation runs over the whole
+    /// frame before anything is applied, so a bad index in a late world cannot
+    /// leave the earlier ones pruned and the batch in a state the trainer has no
+    /// way to describe.
+    /// </remarks>
+    [Fact]
+    public void ABadCandidateIndexIsRefusedAndNothingSteps()
+    {
+        MakeRolloutBatch(2);
+
+        Send(EnvMessage.Step, new byte[2 * 2 * EnvProtocol.ActionBytes]);
+
+        var before = Observations(Receive(), 2);
+
+        // World 0 is fine, world 1 names a candidate that does not exist.
+        var tail = Concat(
+            Int(2), Int(0), Int(1),
+            Int(0),
+            Int(2), Int(0), Int(9999),
+            Int(0));
+
+        Send(
+            EnvMessage.StepRestricted,
+            Concat(new byte[2 * 2 * EnvProtocol.ActionBytes], tail));
+
+        Assert.Equal((byte)EnvMessage.Error, Receive()[0]);
+
+        // ⚠️ A message that reports observations WITHOUT stepping, so the check is
+        // that the world is where it was rather than that it moved by one step.
+        // SetGoal with the default goal is that message.
+        Send(EnvMessage.SetGoal, Concat(Int(-1), Int(0), Int(0), Int(0), Real(0), Real(0)));
+
+        var after = Observations(Receive(), 2);
+
+        Assert.Equal(before, after);
+
+        // ⚠️ AND world 0 was not left restricted, which is the half the first
+        // version of this test missed entirely: a restriction changes no
+        // observation, so "nothing stepped" passes just as well on a server that
+        // applied world 0's restriction and then refused world 1's. Removing the
+        // validate-everything-first pass was mutation-tested and NOT caught until
+        // this loop existed.
+        var full = RolloutSearch.CandidatesFor(new RolloutOptions(), PlayerClass.Soldier).Length;
+        var searched = false;
+
+        for (var step = 0; step < 8; step++)
+        {
+            Send(EnvMessage.StepScored, new byte[2 * 2 * EnvProtocol.ActionBytes]);
+
+            var reply = Receive();
+            var count = BitConverter.ToInt32(reply, ScoresAt(2));
+
+            if (count == 0)
+                continue;
+
+            Assert.Equal(full, count);
+            searched = true;
+        }
+
+        Assert.True(searched, "world 0 never searched, so the leak could not have shown");
+    }
+
+    /// <summary>The observation block of a reply, as bytes.</summary>
+    private static byte[] Observations(byte[] reply, int worlds) =>
+        reply[(1 + 4)..(1 + 4 + (worlds * 2 * ObservationWriter.Length * 4))];
+
+    /// <summary>
+    /// Restricting a slot that has no search is refused rather than ignored.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Accepting it silently would let a trainer believe it was pruning
+    /// while it paid for a full search</b>, which reads as "pruning does not
+    /// help" and is not.
+    /// </remarks>
+    [Fact]
+    public void RestrictingASlotWithNoSearchIsRefused()
+    {
+        Send(EnvMessage.Hello, Int(EnvProtocol.Version));
+        Receive();
+        Send(EnvMessage.MakeBatch, MakeBatchBody(1));
+        Receive();
+
+        Send(
+            EnvMessage.StepRestricted,
+            Concat(new byte[1 * 2 * EnvProtocol.ActionBytes], RestrictionTail(1, red: [1, 2])));
+
+        Assert.Equal((byte)EnvMessage.Error, Receive()[0]);
+    }
+
+    /// <summary>
+    /// All-zero counts mean "search everything", so a restricted step with no
+    /// restrictions is an ordinary step.
+    /// </summary>
+    [Fact]
+    public void AnEmptyRestrictionIsAnOrdinaryStep()
+    {
+        MakeRolloutBatch(1);
+
+        Send(
+            EnvMessage.StepScoredRestricted,
+            Concat(new byte[1 * 2 * EnvProtocol.ActionBytes], RestrictionTail(1)));
+
+        var reply = Receive();
+        var count = BitConverter.ToInt32(reply, ScoresAt(1));
+
+        Assert.Equal(
+            RolloutSearch.CandidatesFor(new RolloutOptions(), PlayerClass.Soldier).Length,
+            count);
+    }
+
+    /// <summary>
+    /// A truncated restriction tail is refused rather than read off the end.
+    /// </summary>
+    [Fact]
+    public void AShortRestrictionTailIsRefused()
+    {
+        MakeRolloutBatch(2);
+
+        // Two worlds need four blocks; send one.
+        Send(
+            EnvMessage.StepRestricted,
+            Concat(new byte[2 * 2 * EnvProtocol.ActionBytes], Int(0)));
+
+        Assert.Equal((byte)EnvMessage.Error, Receive()[0]);
+    }
+
     private static byte[] GoalBody(int world, int side, int kind, double x, double y) =>
         Concat(Int(world), Int(side), Int(kind), Int(1), Real(x), Real(y));
 

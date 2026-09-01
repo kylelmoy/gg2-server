@@ -271,6 +271,23 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
 
     private int _scoreCount;
 
+    // The candidate index each entry of _scores belongs to. Identity for an
+    // unrestricted search; the restricted set, ascending, otherwise.
+    private int[] _searched = [];
+
+    // The candidates the scores are aligned with, so LastCandidates stays a
+    // parallel array when the searched set is not a prefix.
+    private EnvAction[] _searchedCandidates = [];
+
+    // The restriction for the next decision: one bit per candidate index, or
+    // null for "search everything". See RestrictNextDecision.
+    private bool[]? _restriction;
+
+    // The candidate-set SIZE _restriction was built against. A restriction is
+    // only honoured when this still matches, because index i names a different
+    // action in the 60-list and the 120-list — see Search.
+    private int _restrictionForCount;
+
     // Whether _candidates currently carries the zoom dimension. See CandidatesFor.
     private bool _candidatesAreSniper;
 
@@ -367,7 +384,98 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
     /// would silently mis-align every sniper's distribution against a
     /// soldier-shaped index.
     /// </remarks>
-    public ReadOnlySpan<EnvAction> LastCandidates => _candidates.AsSpan(0, _scoreCount);
+    public ReadOnlySpan<EnvAction> LastCandidates => _searchedCandidates.AsSpan(0, _scoreCount);
+
+    /// <summary>
+    /// Which candidate index each entry of <see cref="LastScores"/> belongs to.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Identity for an unrestricted search</b> — 0, 1, 2 … — so a caller
+    /// that ignores it is correct exactly as long as nobody prunes. Under
+    /// <see cref="RestrictNextDecision"/> it is the searched set, and the scores
+    /// are a distribution over <em>that</em>, not over the whole candidate list.
+    /// <para>
+    /// ⚠️ <b>A distribution without these indices is "a ranking over an unnamed
+    /// list"</b> — the same argument <see cref="LastCandidates"/> makes, one level
+    /// down. It is what makes a pruned search's output usable as a training
+    /// target: `gg2-rl` masks the unevaluated candidates out of its
+    /// cross-entropy rather than giving them a zero target, because zero
+    /// probability means "this action is bad" and the truth is "nobody looked".
+    /// </para>
+    /// </remarks>
+    public ReadOnlySpan<int> LastSearchedIndices => _searched.AsSpan(0, _scoreCount);
+
+    /// <summary>
+    /// Restricts the next decision to these candidate indices.
+    /// </summary>
+    /// <remarks>
+    /// <b><c>gg2-rl</c>'s <c>docs/DESIGN.md</c> step 3</b>: a distilled policy
+    /// orders and prunes the search so it is stronger at equal cost. Measured
+    /// there — the policy's top 8 of 60 contains this search's best action
+    /// <b>78.2%</b> of the time against <b>55.9%</b> for a random 8.
+    /// <para>
+    /// ⚠️ <b>An empty span means "search everything"</b>, which is the default and
+    /// the behaviour every existing caller gets.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>It is a SET, not a ranking, and this must never come to depend on the
+    /// order it arrives in.</b> The candidates are visited in ascending index
+    /// order whatever order they are given, so the decision is a pure function of
+    /// the set — which matters because the tie-break is lexicographic and 85.2% of
+    /// non-blind decisions have the top two candidates tied, so iteration order
+    /// decides a great many of them. Duplicates collapse.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>And the set is deliberately NOT the policy's top k.</b> `gg2-rl` sends
+    /// top-(k−m) plus m sampled from the remainder, because a search that only
+    /// ever evaluates what the policy already likes, feeding a policy trained on
+    /// what the search evaluated, is self-confirming: it cannot be corrected where
+    /// it is wrong, because where it is wrong is where nothing gets looked at.
+    /// **Nothing here may assume index 0 is anybody's favourite.**
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Consumed by the next SEARCH, not the next Poll.</b> A decision is
+    /// held for <see cref="RolloutOptions.DecisionTicks"/> ticks and only its
+    /// first tick searches, so a restriction set mid-decision applies to the
+    /// decision after it rather than being silently dropped.
+    /// </para>
+    /// </remarks>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// An index is negative or past <see cref="CandidateCount"/>. ⚠️ <b>Refused,
+    /// never clamped</b> — an index that silently meant a different action would
+    /// be a wrong search reported with plausible numbers.
+    /// </exception>
+    public void RestrictNextDecision(ReadOnlySpan<int> indices)
+    {
+        if (indices.Length == 0)
+        {
+            _restriction = null;
+            return;
+        }
+
+        var mask = _restriction;
+
+        if (mask is null || mask.Length < _candidates.Length)
+            mask = new bool[_candidates.Length];
+        else
+            Array.Clear(mask);
+
+        foreach (var index in indices)
+        {
+            if ((uint)index >= (uint)_candidates.Length)
+            {
+                _restriction = null;
+
+                throw new ArgumentOutOfRangeException(
+                    nameof(indices), index, $"a candidate index is 0..{_candidates.Length - 1}");
+            }
+
+            mask[index] = true;
+        }
+
+        _restriction = mask;
+        _restrictionForCount = _candidates.Length;
+    }
 
     /// <summary>
     /// The action the current decision settled on — the thing a behaviour-cloning
@@ -544,17 +652,41 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
         // when the class does, so the check is against the current set rather
         // than done once in the constructor.
         if (_scores.Length < candidates.Length)
+        {
             _scores = new double[candidates.Length];
+            _searched = new int[candidates.Length];
+            _searchedCandidates = new EnvAction[candidates.Length];
+        }
 
-        _scoreCount = candidates.Length;
+        // ⚠️ The restriction is DROPPED if the candidate set changed under it, and
+        // the check is on the exact size rather than on the buffer being big
+        // enough. A class swap moves the list between 60 and 120, and
+        // BuildCandidates interleaves zoom inside each (aim, fire) — so index i
+        // in the 120-list is a different action from index i in the 60-list, and
+        // a mask that merely FITS would silently search the wrong six actions.
+        // Searching everything is the safe direction to be wrong in.
+        var restriction = _restrictionForCount == candidates.Length ? _restriction : null;
+
+        _restriction = null;
+        _restrictionForCount = 0;
 
         var savedAim = _decoder.Aim(slot);
         var best = EnvAction.Idle;
         var bestScore = double.NegativeInfinity;
         var bestAimError = double.PositiveInfinity;
+        var kept = 0;
 
+        // ⚠️ ASCENDING candidate order whatever order the restriction arrived in,
+        // so the decision is a pure function of the SET. The tie-break below is
+        // lexicographic and 85.2% of non-blind decisions have their top two tied,
+        // so iteration order decides a great many of them — a search whose answer
+        // depended on how a client happened to sort its indices would be
+        // irreproducible in a way no test would show.
         for (var i = 0; i < candidates.Length; i++)
         {
+            if (restriction is not null && !restriction[i])
+                continue;
+
             _decoder.SetAim(slot, savedAim);
 
             var score = Rollout(world.Collision, slot, candidates[i], out var aimError);
@@ -562,7 +694,10 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
             // ⚠️ EVERY score is kept, not just the winner's. See LastScores: the
             // distribution is the thing that makes a search a better expert than
             // a reward sample, and it used to be discarded inside this loop.
-            _scores[i] = score;
+            _scores[kept] = score;
+            _searched[kept] = i;
+            _searchedCandidates[kept] = candidates[i];
+            kept++;
 
             // ⚠️ LEXICOGRAPHIC: damage first, aim error only as a TIE-BREAK. It
             // cannot change any decision where the scores differ, so it cannot
@@ -579,7 +714,13 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
 
         _decoder.SetAim(slot, savedAim);
 
-        LastDecisionTicksSimulated = (long)candidates.Length * _options.HorizonTicks;
+        _scoreCount = kept;
+
+        // ⚠️ Counted from what was SEARCHED, not from the candidate list. The
+        // whole point of a restriction is that it costs less, and an accounting
+        // figure that ignored it would report a budget nobody spent — this is the
+        // number docs/BOTAI.md item 9 says to watch.
+        LastDecisionTicksSimulated = (long)kept * _options.HorizonTicks;
         LastBestScore = bestScore;
 
         return best;

@@ -1419,10 +1419,39 @@ the notice that it is now a live question rather than a settled one.
   (`CLAUDE.md`). The observation layout it consumes is already stamped, which is
   the part that must not drift.
 
-### The cheap piece, which is independently useful
+### ✅ The cheap piece — BUILT 2026-08-31
 
-The **candidate-index restriction** — `Step`/`StepScored` carrying an optional
-list of indices per searching slot, indices into what `Candidates` returns, empty
+`EnvMessage.StepRestricted = 11` and `StepScoredRestricted = 12`, plus
+`RolloutSearch.RestrictNextDecision` and `DuelEnv.RestrictSearch`.
+**No protocol version bump** — no existing message's body or reply moved, on
+`Candidates`'s precedent. Observations digest identical on all three maps;
+`SIM_UUID` unmoved.
+
+⚠️ **A new KIND rather than a tail on `Step`, and not because a bump was
+unwelcome.** `EnvServer.Step` checks `body.Length < needed`, so it already
+accepts and ignores trailing bytes — a new client sending restrictions to an old
+server would be **silently unrestricted** and would measure "pruning changes
+nothing". A kind the old server does not know is refused loudly instead.
+
+**What is gated, and each of these was mutation-tested:**
+
+| invariant | why it would rot silently |
+|---|---|
+| the decision is a pure function of the SET | the tie-break is lexicographic and 85.2% of non-blind decisions have their top two tied, so iteration order settles many of them. An implementation that walked the client's array would be irreproducible and every other test would pass |
+| a stale mask is dropped on a class change | index *i* names a different action in the 60-list and the 120-list; a mask that merely *fits* would search six wrong actions and report plausible numbers |
+| `LastDecisionTicksSimulated` counts what was searched | the point of a restriction is that it costs less; counting the candidate list reports a budget nobody spent |
+| the restriction is consumed by one decision | a sticky one would prune every later decision invisibly |
+| validate everything, then apply | a bad index in a late world must not leave earlier worlds pruned |
+| the restriction is applied before the step | applying after would restrict the decision *after* the one the client meant |
+
+⛔ **The validate-then-apply gate did not catch its mutation at first**, and the
+reason is worth keeping: a restriction changes **no observation**, so a test that
+checked "nothing stepped" passed just as well against a server that restricted
+world 0 and then refused world 1. It needed a later `StepScored` asserting world
+0's score count was still the full candidate set. **A leak with no observable
+signature needs a test that goes looking for the signature it does have.**
+
+The design, for reference — indices into what `Candidates` returns, empty
 meaning "search everything". `BuildCandidates` is a pure function of
 `(options, class)`, so an index is stable for a batch; ⚠️ **the length changes
 60 ↔ 120 when the class does** (only a sniper carries the zoom dimension), so an
