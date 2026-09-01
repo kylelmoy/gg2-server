@@ -371,6 +371,57 @@ public readonly record struct DuelSpec
     /// <summary>A shadow search grading a client-driven blue side.</summary>
     public bool BlueShadowSearch { get; init; }
 
+    /// <summary>
+    /// How many ticks a candidate's action is HELD before the rollout continues
+    /// under a continuation, for a red side that searches. 0 is the whole horizon.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Per side, and that is the half of this that the criterion needs.</b>
+    /// It lets the new search face the old one head-to-head in one world — null
+    /// exactly 50%, no ceiling, and a win share with draws in the denominator.
+    /// The alternative is each arm against scripted tier 5, where the search
+    /// already wins ~82.5%: a three-point claim fired into seventeen points of
+    /// headroom hard against a ceiling.
+    /// <para>
+    /// ⚠️ <b>Refused unless it is a multiple of the action repeat</b>, in
+    /// <c>RolloutOptions.WithDefaults</c> — a continuation re-decides on the
+    /// decision cadence counting from the end of the commitment, so a partial
+    /// decision at the seam puts every later one out of phase with the cadence the
+    /// policy was trained at. ⚠️ The guard does <b>not</b> fire when the
+    /// commitment covers the whole horizon, because then no continuation runs at
+    /// all and there is nothing to be out of phase.
+    /// </para>
+    /// </remarks>
+    public int RedCommitTicks { get; init; }
+
+    /// <summary>The commitment length for a blue side that searches. 0 is the whole horizon.</summary>
+    public int BlueCommitTicks { get; init; }
+
+    /// <summary>
+    /// The policy driving red's rollout continuation, or null for the neutral one.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The RESOLVED policy, not the wire's handle.</b> <c>MakeBatch</c>
+    /// carries an i32 handle and <c>EnvServer</c> looks it up before building this
+    /// spec, refusing an unknown one there. Carrying both would be two sources of
+    /// truth for one fact, which is the shape of several bugs this repo has
+    /// already paid for; the handle is a wire detail and stops at the socket.
+    /// <para>
+    /// ⚠️ <b>The continuation runs at <c>DecisionTicks</c> cadence, not every
+    /// tick, and that is a cost constraint rather than a preference.</b> Measured
+    /// 2026-09-01: one policy decision is 6.58 µs (inference 3.67, observation
+    /// extraction 2.92), so at k=20 and horizon 20 a per-tick continuation costs
+    /// 3.48 ms against an unpruned baseline of 2.45 ms — <em>more</em> than the
+    /// search it replaces — while at cadence 4 it costs 1.47 ms. It also matches
+    /// the <c>action_repeat</c> the policy was trained at. Both arguments land on
+    /// the same number, which is luck worth naming as luck.
+    /// </para>
+    /// </remarks>
+    public PolicyNetwork? RedContinuationPolicy { get; init; }
+
+    /// <summary>The policy driving blue's rollout continuation, or null.</summary>
+    public PolicyNetwork? BlueContinuationPolicy { get; init; }
+
     /// <summary>Whether either side is graded by a search it is not driven by.</summary>
     public bool HasShadow => RedShadowSearch || BlueShadowSearch;
 
@@ -520,6 +571,14 @@ public readonly record struct DuelSpec
         // ⚠️ Refused rather than clamped, like the skill tier: a negative or absurd
         // horizon is a trainer bug, and silently substituting the default would
         // make a sweep report a curve it never measured.
+        if (RedCommitTicks < 0 || BlueCommitTicks < 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(RedCommitTicks),
+                RedCommitTicks < 0 ? RedCommitTicks : BlueCommitTicks,
+                "a commitment is not negative; 0 means the whole horizon");
+        }
+
         if (RedHorizonTicks < 0 || BlueHorizonTicks < 0)
         {
             throw new ArgumentOutOfRangeException(
@@ -833,7 +892,10 @@ public sealed class DuelEnv
         if (slot == RedSlot && (_spec.RedDriver == EnvDriver.Rollout || _spec.RedShadowSearch))
         {
             options = new RolloutOptions(
-                HorizonTicks: _spec.RedHorizonTicks, Opponent: _spec.RedRolloutOpponent);
+                HorizonTicks: _spec.RedHorizonTicks,
+                Opponent: _spec.RedRolloutOpponent,
+                CommitTicks: _spec.RedCommitTicks,
+                ContinuationPolicy: _spec.RedContinuationPolicy);
             playerClass = _spec.RedClass;
 
             return true;
@@ -842,7 +904,10 @@ public sealed class DuelEnv
         if (slot == BlueSlot && (_spec.BlueDriver == EnvDriver.Rollout || _spec.BlueShadowSearch))
         {
             options = new RolloutOptions(
-                HorizonTicks: _spec.BlueHorizonTicks, Opponent: _spec.BlueRolloutOpponent);
+                HorizonTicks: _spec.BlueHorizonTicks,
+                Opponent: _spec.BlueRolloutOpponent,
+                CommitTicks: _spec.BlueCommitTicks,
+                ContinuationPolicy: _spec.BlueContinuationPolicy);
             playerClass = _spec.BlueClass;
 
             return true;
@@ -931,22 +996,30 @@ public sealed class DuelEnv
         // the previous decision's answer for three of every four rows and label
         // them as though they were fresh — which is exactly the duplicate-row
         // problem gg2-rl already hit from the other direction.
+        // ⚠️ DecisionTicks 1 so a shadow grades EVERY state the client reaches.
+        // That makes the phase guard vacuous here (any commitment is a multiple of
+        // 1), which is correct rather than lucky: a shadow's continuation decides
+        // every tick because its commitment is measured in single ticks too.
         _redShadow = spec.RedShadowSearch
             ? new RolloutSearch(new RolloutOptions(
-                HorizonTicks: spec.RedHorizonTicks, DecisionTicks: 1, Opponent: spec.RedRolloutOpponent))
+                HorizonTicks: spec.RedHorizonTicks, DecisionTicks: 1, Opponent: spec.RedRolloutOpponent,
+                CommitTicks: spec.RedCommitTicks, ContinuationPolicy: spec.RedContinuationPolicy))
             : null;
 
         _blueShadow = spec.BlueShadowSearch
             ? new RolloutSearch(new RolloutOptions(
-                HorizonTicks: spec.BlueHorizonTicks, DecisionTicks: 1, Opponent: spec.BlueRolloutOpponent))
+                HorizonTicks: spec.BlueHorizonTicks, DecisionTicks: 1, Opponent: spec.BlueRolloutOpponent,
+                CommitTicks: spec.BlueCommitTicks, ContinuationPolicy: spec.BlueContinuationPolicy))
             : null;
 
         _redBot = MakeBot(
             spec.RedDriver, spec.RedTier, spec.RedRolloutOpponent, spec.RedHorizonTicks,
-            Team.Red, spec.RedClass, world, seed);
+            Team.Red, spec.RedClass, world, seed,
+            spec.RedCommitTicks, spec.RedContinuationPolicy);
         _blueBot = MakeBot(
             spec.BlueDriver, spec.BlueTier, spec.BlueRolloutOpponent, spec.BlueHorizonTicks,
-            Team.Blue, spec.BlueClass, world, seed ^ 0x9E3779B9u);
+            Team.Blue, spec.BlueClass, world, seed ^ 0x9E3779B9u,
+            spec.BlueCommitTicks, spec.BlueContinuationPolicy);
 
         // Both agents start facing one another, which is the only neutral
         // choice: facing is observable (it moves the two-pixel box inflation
@@ -998,7 +1071,8 @@ public sealed class DuelEnv
     /// </remarks>
     private IInputSource? MakeBot(
         EnvDriver driver, int tier, RolloutOpponent opponent, int horizon, Team team,
-        PlayerClass playerClass, ScenarioWorld world, uint seed)
+        PlayerClass playerClass, ScenarioWorld world, uint seed,
+        int commitTicks, PolicyNetwork? continuation)
     {
         switch (driver)
         {
@@ -1009,17 +1083,22 @@ public sealed class DuelEnv
                 return IdleInput.Instance;
 
             case EnvDriver.Rollout:
-                // ⚠️ Only the opponent model is exposed, not the whole
-                // RolloutOptions. The horizon and the aim ladder are the
-                // search's own tuning and moving them from the wire would make
-                // "the search baseline" a different thing per batch; the
-                // opponent model is the one knob phase 1 has to report a
-                // difference across. See DuelSpec.RedRolloutOpponent.
+                // ⚠️ Still NOT the whole RolloutOptions. The aim ladder and the
+                // candidate set stay the search's own tuning, because putting them
+                // on the wire would make "the search baseline" a different thing
+                // per batch. What is exposed is what an experiment has to vary to
+                // report a difference: the opponent model (phase 1), the horizon
+                // (v6), and now the commitment and the continuation (v8).
                 // ⚠️ A zero horizon reaches RolloutOptions.WithDefaults, which is
                 // where "0 means the declared default" is already implemented —
                 // rather than substituting DefaultHorizonTicks here and making a
-                // second place that decides what the default is.
-                return new RolloutSearch(new RolloutOptions(HorizonTicks: horizon, Opponent: opponent));
+                // second place that decides what the default is. The same is true
+                // of a zero commitment, which means "the whole horizon" there.
+                return new RolloutSearch(new RolloutOptions(
+                    HorizonTicks: horizon,
+                    Opponent: opponent,
+                    CommitTicks: commitTicks,
+                    ContinuationPolicy: continuation));
 
             case EnvDriver.Scripted:
                 if (world.Nav is null)

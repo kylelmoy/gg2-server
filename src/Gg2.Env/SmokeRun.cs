@@ -196,7 +196,13 @@ public static class SmokeRun
     private static void MakeBatch(Stream stream, int worlds, uint seed, int threads)
     {
         var name = System.Text.Encoding.UTF8.GetBytes("gg_debug");
-        var body = new byte[(4 * 2) + name.Length + (4 * 2) + (8 * 4) + (4 * 8) + (4 * 2) + (8 * 2) + (4 * 4)];
+        // ⚠️ Sized from EnvProtocol.MakeBatchFixedBytes rather than by adding a
+        // term per version. The hand-summed form had to be edited in step with
+        // every bump and silently wrote past its end when v8 added four fields —
+        // an ArgumentOutOfRangeException from BinaryPrimitives, three layers from
+        // the cause. The count and the name length are the only parts that are
+        // not fixed.
+        var body = new byte[4 + 4 + name.Length + EnvProtocol.MakeBatchFixedBytes];
         var at = 0;
 
         void Int(int v)
@@ -253,6 +259,14 @@ public static class SmokeRun
 
         // v7's shadow flags, both off. The smoke run measures the socket, and a
         // shadow search on it would be measuring a search.
+        Int(0);
+        Int(0);
+
+        // v8's commitments and continuation handles, all 0. A continuation is a
+        // forward pass per candidate per decision, so one here would make this
+        // measure a policy rather than the socket.
+        Int(0);
+        Int(0);
         Int(0);
         Int(0);
 

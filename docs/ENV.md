@@ -82,7 +82,8 @@ length, one message-kind byte, payload. Request/response.
 | Message | Carries | Returns |
 |---|---|---|
 | `Hello` | client's protocol version | protocol version, `SIM_UUID`, obs layout version, action encoding version, obs length, head shape. **Mismatch refuses** — the `PROTOCOL_UUID` idiom, not a warning |
-| `MakeBatch` | N, map, per-side classes, spawn placement (explicit positions, or **NaN** for sampled — see below), base seed, tick cap, action repeat k, **per-side driver and skill tier**, **per-side rollout opponent**, **separation band (min, max)** | ack + initial observations |
+| `MakeBatch` | N, map, per-side classes, spawn placement (explicit positions, or **NaN** for sampled — see below), base seed, tick cap, action repeat k, **per-side driver and skill tier**, **per-side rollout opponent**, **separation band (min, max)**, **per-side commitment and continuation handle** | ack + initial observations |
+| `LoadPolicy` | a checkpoint path | handle (1-based) + the `SIM_UUID` it was checked against |
 | `Step` | N action tuples (one per world: 4 head indices + aim-delta bin) | N × (obs block, reward components, done, termination reason, **the action that side actually took + whether it is reproducible**) |
 | `Reset` | world index, optional new seed | that world's fresh observation |
 | `Snapshot` | world index | the world's state bytes |
@@ -911,8 +912,8 @@ across six files:
 
 | file | what is parsed |
 |---|---|
-| `Gg2.Env/EnvProtocol.cs` | `Version`, `ComponentBytes`, `ActionBytes`, `MakeBatchFixedBytes` (tolerates a sum) |
-| `Gg2.Env/EnvServer.cs` | ⚠️ the **ORDER** of the reward block's `Write*LittleEndian` calls |
+| `Gg2.Env/EnvProtocol.cs` | `Version`, `ComponentBytes`, `ActionBytes`, `MakeBatchFixedBytes` (tolerates a sum) — ⚠️ **all four moved or gained a term at v8** |
+| `Gg2.Env/EnvServer.cs` | ⚠️ the **ORDER** of the reward block's `Write*LittleEndian` calls — ⚠️ **v8 added `LoadPolicy` and four reads to `MakeBatch`; the reward block itself is untouched** |
 | `Gg2.Env/DuelEnv.cs` | `enum EnvDriver` — names **and** values |
 | `Gg2.Bots/RolloutSearch.cs` | `enum RolloutOpponent` — names, **positionally** |
 | `Gg2.Bots/ActionDecoder.cs` | `HeadShape => [ … ]` — counted, not evaluated |
@@ -1721,6 +1722,75 @@ written**, because their design constraints did not depend on the refusal.
   the part that must not drift.
 
 ### ✅ The cheap piece — BUILT 2026-08-31
+
+## Protocol v8 — the policy continuation, per side (2026-09-01)
+
+**`gg2-rl`'s step 3.** The rollout search can now keep **acting** past its
+commitment under a trained policy instead of going neutral.
+
+    LoadPolicy = 13            u32 path length + path
+                               -> i32 handle, u32 length + SIM_UUID
+    MakeBatch  + 4 i32         Red/BlueCommitTicks   (0 = the whole horizon)
+                               Red/BlueContinuation  (0 = neutral, else a handle)
+    MakeBatchFixedBytes        112 -> 128
+    EnvProtocol.Version        7 -> 8
+
+⚠️ **`LoadPolicy` is 13, NOT 10.** 10 is `SetGoal`. The shape was specified to
+`gg2-rl` as 10 before that was checked; the id is pinned in
+`EnvProtocolTests.TheVersionAndTheFrameLayoutMoveTogether` so the two repos cannot
+disagree about a number that compiles on both sides and mis-dispatches at run
+time.
+
+⚠️ **Handles are 1-based, because 0 means "no continuation".** A table numbered
+from zero would make the first policy loaded indistinguishable from none — the
+`WorldState` "nobody is 255, never 0" trap one layer out.
+
+⚠️ **The handle is resolved to a `PolicyNetwork` in `EnvServer` and does not reach
+`DuelSpec`**, which carries `Red/BlueContinuationPolicy` instead. Carrying both
+would be two sources of truth for one fact. An unknown handle is refused at the
+protocol edge with a reason on the wire rather than resolving to null and quietly
+giving that side the neutral continuation — an arm silently running the wrong
+experiment.
+
+⛔ **Why this needs weights in the SERVER, when nothing else did.** `EnvDriver`
+has no policy member on purpose: a past checkpoint is `Client`, because the
+trainer holds the weights and drives that slot itself. A continuation cannot work
+that way — it runs **inside the search's fork**, k times per candidate per
+decision, in worlds the socket never sees. This is the first thing in the protocol
+that requires a policy in-process, and it is not a general plug-in seam.
+
+### The cadence is a cost constraint, not a preference
+
+Measured 2026-09-01, Release: one policy decision is **6.58 µs** (inference 3.67,
+observation extraction 2.92). At k=20, horizon 20, against a 2.45 ms unpruned
+baseline:
+
+| continuation cadence | cost | verdict |
+|---|---|---|
+| every tick | **3.48 ms** | ⛔ more than the search it replaces |
+| every `DecisionTicks` (4) | **1.47 ms** | ✅ 1.67x cheaper |
+
+It is also the `action_repeat` the policy was trained at. ⚠️ **Both arguments land
+on the same number, and that is luck worth naming as luck** — if the distribution
+argument were wrong the budget would still forbid cadence 1.
+
+### The phase guard, and where it does NOT fire
+
+`CommitTicks % DecisionTicks == 0` is refused in `RolloutOptions.WithDefaults` —
+where the value is **set**, not where it is read, because a fix belongs at the
+point that makes the mistake unavailable.
+
+⚠️ **It does not fire when the commitment covers the whole horizon**, and the
+first version that did was wrong: `HorizonTicks: 10, DecisionTicks: 4` defaults
+`CommitTicks` to 10, no continuation runs at all, and there is nothing to be out
+of phase. It refused eight existing configurations. **That is CLAUDE.md's "check
+that a criterion could actually fire" in its mirror image — a guard firing where
+the thing it protects does not exist.**
+
+### ⚠️ What this does NOT move
+
+**`SIM_UUID` does not move.** It is deliberately blind to the bot layer, and a
+continuation is a bot decision. No checkpoint is invalidated by v8.
 
 `EnvMessage.StepRestricted = 11` and `StepScoredRestricted = 12`, plus
 `RolloutSearch.RestrictNextDecision` and `DuelEnv.RestrictSearch`.

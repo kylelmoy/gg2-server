@@ -136,8 +136,104 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
         EnvMessage.Reset => Reset(body),
         EnvMessage.Snapshot => Snapshot(body),
         EnvMessage.Restore => Restore(body),
+        EnvMessage.LoadPolicy => LoadPolicy(body),
         _ => Error($"unknown message {(byte)kind}"),
     };
+
+    /// <summary>
+    /// Policies loaded by <see cref="EnvMessage.LoadPolicy"/>, by handle.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Index 0 is never used, because 0 means "no continuation" on the
+    /// wire.</b> Handles are <c>_policies.Count</c> after the add, so the first is
+    /// 1. A table numbered from zero would make the first policy loaded
+    /// indistinguishable from none — <c>WorldState</c>'s "nobody is 255, never 0"
+    /// trap, one layer out and with the same fix: never let the sentinel be a
+    /// valid value.
+    /// <para>
+    /// ⚠️ <b>Never emptied.</b> A handle stays valid for the connection's life, so
+    /// a batch made earlier cannot have its policy pulled out from under it. A
+    /// checkpoint is a few hundred KB and a training run loads one or two.
+    /// </para>
+    /// </remarks>
+    private readonly List<PolicyNetwork> _policies = [];
+
+    /// <summary>
+    /// Loads a checkpoint and returns its handle, refusing a stamp mismatch.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b><c>SimulationStamp.Require</c> throws and that is deliberate.</b> A
+    /// policy trained against physics that has since changed does not error and
+    /// does not warn — it plays slightly worse for ever with the cause invisible.
+    /// Refusing at load is the <c>PROTOCOL_UUID</c> idiom one layer in, and the
+    /// reply carries the stamp so the caller can log what it was checked against
+    /// rather than having to ask separately.
+    /// </remarks>
+    private byte[] LoadPolicy(ReadOnlySpan<byte> body)
+    {
+        if (body.Length < 4)
+            return Error("LoadPolicy body is short: expected a u32 path length");
+
+        var length = BinaryPrimitives.ReadInt32LittleEndian(body);
+
+        if (length < 0 || body.Length < 4 + length)
+            return Error($"LoadPolicy path length {length} does not fit its {body.Length}-byte body");
+
+        var path = System.Text.Encoding.UTF8.GetString(body.Slice(4, length));
+
+        if (!File.Exists(path))
+            return Error($"no policy checkpoint at {path}");
+
+        PolicyNetwork policy;
+
+        try
+        {
+            policy = PolicyNetwork.Load(path);
+        }
+        catch (Exception e)
+        {
+            // ⚠️ A stamp mismatch arrives here, and it must reach the trainer as a
+            // refusal with the reason rather than as a dropped connection.
+            return Error($"{path}: {e.Message}");
+        }
+
+        _policies.Add(policy);
+        var handle = _policies.Count;
+
+        var stamp = System.Text.Encoding.UTF8.GetBytes(SimulationStamp.Uuid);
+        var reply = new byte[1 + 4 + 4 + stamp.Length];
+
+        reply[0] = (byte)EnvMessage.LoadPolicy;
+        BinaryPrimitives.WriteInt32LittleEndian(reply.AsSpan(1), handle);
+        BinaryPrimitives.WriteInt32LittleEndian(reply.AsSpan(5), stamp.Length);
+        stamp.CopyTo(reply.AsSpan(9));
+
+        return reply;
+    }
+
+    /// <summary>
+    /// Turns a wire handle into a policy: 0 is none, anything else must exist.
+    /// </summary>
+    private bool TryResolvePolicy(int handle, out PolicyNetwork? policy, out string why)
+    {
+        policy = null;
+        why = string.Empty;
+
+        if (handle == 0)
+            return true;
+
+        if (handle < 1 || handle > _policies.Count)
+        {
+            why = $"continuation handle {handle} is not 1..{_policies.Count}; "
+                + "load a policy with LoadPolicy first, and 0 means the neutral continuation";
+
+            return false;
+        }
+
+        policy = _policies[handle - 1];
+
+        return true;
+    }
 
     private static byte[] Error(string reason)
     {
@@ -293,6 +389,25 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
         var redShadow = BinaryPrimitives.ReadInt32LittleEndian(body[at..]) != 0;
         at += 4;
         var blueShadow = BinaryPrimitives.ReadInt32LittleEndian(body[at..]) != 0;
+        at += 4;
+
+        // v8: the commitment and the continuation, per side. ⚠️ The handle is
+        // resolved to a policy HERE rather than carried into DuelSpec, so there is
+        // one source of truth for "which policy drives this side" and an unknown
+        // handle is refused at the protocol edge with a reason on the wire.
+        var redCommit = BinaryPrimitives.ReadInt32LittleEndian(body[at..]);
+        at += 4;
+        var blueCommit = BinaryPrimitives.ReadInt32LittleEndian(body[at..]);
+        at += 4;
+        var redContinuation = BinaryPrimitives.ReadInt32LittleEndian(body[at..]);
+        at += 4;
+        var blueContinuation = BinaryPrimitives.ReadInt32LittleEndian(body[at..]);
+
+        if (!TryResolvePolicy(redContinuation, out var redPolicy, out var why))
+            return Error(why);
+
+        if (!TryResolvePolicy(blueContinuation, out var bluePolicy, out why))
+            return Error(why);
 
         var spec = new DuelSpec
         {
@@ -317,6 +432,10 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
             BlueHorizonTicks = blueHorizon,
             RedShadowSearch = redShadow,
             BlueShadowSearch = blueShadow,
+            RedCommitTicks = redCommit,
+            BlueCommitTicks = blueCommit,
+            RedContinuationPolicy = redPolicy,
+            BlueContinuationPolicy = bluePolicy,
         };
 
         // ⚠️ Validated HERE as well as in Reset, so a malformed driver is refused

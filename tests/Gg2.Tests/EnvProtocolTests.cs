@@ -653,6 +653,10 @@ public sealed class EnvProtocolTests : IDisposable
         int blueHorizon = 0,
         bool redShadow = false,
         bool blueShadow = false,
+        int redCommit = 0,
+        int blueCommit = 0,
+        int redContinuation = 0,
+        int blueContinuation = 0,
         double redX = 600,
         double blueX = 700,
         string map = "gg_debug",
@@ -698,7 +702,156 @@ public sealed class EnvProtocolTests : IDisposable
             // v7's shadow flags: run a search alongside a Client side, grading
             // without driving.
             Int(redShadow ? 1 : 0),
-            Int(blueShadow ? 1 : 0));
+            Int(blueShadow ? 1 : 0),
+
+            // v8's four. The commitment (0 = the whole horizon) and a LoadPolicy
+            // handle for the continuation (0 = the neutral one). Required for the
+            // same reason as every block above: a short frame reads them out of
+            // whatever follows, and a garbage handle is refused while a garbage
+            // commitment would silently change what every candidate is scored on.
+            Int(redCommit),
+            Int(blueCommit),
+            Int(redContinuation),
+            Int(blueContinuation));
+    }
+
+    // --- v8: LoadPolicy and the per-side continuation --------------------------
+
+    /// <summary>An <see cref="EnvMessage.Error"/> reply's reason string.</summary>
+    private static string Text(byte[] reply) =>
+        System.Text.Encoding.UTF8.GetString(reply, 5, BitConverter.ToInt32(reply, 1));
+
+    private static byte[] LoadPolicyBody(string path)
+    {
+        var bytes = System.Text.Encoding.UTF8.GetBytes(path);
+
+        return Concat(Int(bytes.Length), bytes);
+    }
+
+    private static string PolicyPath =>
+        Path.Combine(AppContext.BaseDirectory, "Fixtures", "policy", "ppo_final.npz");
+
+    /// <summary>
+    /// A checkpoint loads, returns handle 1, and reports the stamp it was checked
+    /// against.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Handle 1, not 0.</b> 0 means "no continuation" in <c>MakeBatch</c>, so
+    /// a table numbered from zero would make the first policy loaded
+    /// indistinguishable from none.
+    /// </remarks>
+    [Fact]
+    public void APolicyLoadsAndReturnsAHandleStartingAtOne()
+    {
+        Send(EnvMessage.Hello, Int(EnvProtocol.Version));
+        Receive();
+
+        Send(EnvMessage.LoadPolicy, LoadPolicyBody(PolicyPath));
+
+        var reply = Receive();
+
+        Assert.Equal((byte)EnvMessage.LoadPolicy, reply[0]);
+        Assert.Equal(1, BitConverter.ToInt32(reply, 1));
+
+        var length = BitConverter.ToInt32(reply, 5);
+        var stamp = System.Text.Encoding.UTF8.GetString(reply, 9, length);
+
+        Assert.Equal(SimulationStamp.Uuid, stamp);
+
+        // A second load is a second handle, not the same one.
+        Send(EnvMessage.LoadPolicy, LoadPolicyBody(PolicyPath));
+        Assert.Equal(2, BitConverter.ToInt32(Receive(), 1));
+    }
+
+    /// <summary>A checkpoint that is not there is a refusal, not a crash.</summary>
+    [Fact]
+    public void AMissingCheckpointIsRefusedWithItsPath()
+    {
+        Send(EnvMessage.Hello, Int(EnvProtocol.Version));
+        Receive();
+
+        Send(EnvMessage.LoadPolicy, LoadPolicyBody(@"D:
+o\such\policy.npz"));
+
+        var reply = Receive();
+
+        Assert.Equal((byte)EnvMessage.Error, reply[0]);
+        Assert.Contains("no policy checkpoint at", Text(reply), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// ⚠️ A continuation handle nobody loaded is refused, and nothing is built.
+    /// </summary>
+    /// <remarks>
+    /// The same discipline as a bad candidate index: refused at the protocol edge
+    /// with a reason on the wire, rather than resolving to null and quietly giving
+    /// that side the neutral continuation — which would be an arm silently running
+    /// the wrong experiment.
+    /// </remarks>
+    [Fact]
+    public void AnUnknownContinuationHandleIsRefused()
+    {
+        Send(EnvMessage.Hello, Int(EnvProtocol.Version));
+        Receive();
+
+        Send(EnvMessage.MakeBatch, MakeBatchBody(1, red: EnvDriver.Rollout, redContinuation: 7));
+
+        var reply = Receive();
+
+        Assert.Equal((byte)EnvMessage.Error, reply[0]);
+        Assert.Contains("continuation handle 7", Text(reply), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// ⚠️ <b>The continuation is PER SIDE</b>, which is the half the criterion needs.
+    /// </summary>
+    /// <remarks>
+    /// It is what lets the new search face the old one head-to-head in one world:
+    /// null exactly 50%, no ceiling, and a win share with draws in the
+    /// denominator. A batch naming a policy for red and 0 for blue has to build,
+    /// because that duel <em>is</em> the experiment.
+    /// </remarks>
+    [Fact]
+    public void OneSideMayHaveAContinuationAndTheOtherNot()
+    {
+        Send(EnvMessage.Hello, Int(EnvProtocol.Version));
+        Receive();
+
+        Send(EnvMessage.LoadPolicy, LoadPolicyBody(PolicyPath));
+        var handle = BitConverter.ToInt32(Receive(), 1);
+
+        Send(
+            EnvMessage.MakeBatch,
+            MakeBatchBody(
+                1,
+                red: EnvDriver.Rollout,
+                blue: EnvDriver.Rollout,
+                redCommit: 4,
+                blueCommit: 4,
+                redContinuation: handle,
+                blueContinuation: 0));
+
+        Assert.Equal((byte)EnvMessage.MakeBatch, Receive()[0]);
+    }
+
+    /// <summary>
+    /// ⚠️ A misphased commitment is refused over the socket, not thrown into it.
+    /// </summary>
+    [Fact]
+    public void AMisphasedCommitmentIsRefusedOverTheWire()
+    {
+        Send(EnvMessage.Hello, Int(EnvProtocol.Version));
+        Receive();
+
+        // repeat 2 is this helper's default action repeat; 3 is not a multiple.
+        Send(
+            EnvMessage.MakeBatch,
+            MakeBatchBody(1, red: EnvDriver.Rollout, redHorizon: 20, redCommit: 3));
+
+        var reply = Receive();
+
+        Assert.Equal((byte)EnvMessage.Error, reply[0]);
+        Assert.Contains("not a multiple", Text(reply), StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -740,8 +893,14 @@ public sealed class EnvProtocolTests : IDisposable
         // ⚠️ Change BOTH or neither. If you are here because you added a field to
         // MakeBatch, the version below is the other half of that change — and
         // gg2-rl has to be told, because its suite pins these from outside.
-        Assert.Equal(7, EnvProtocol.Version);
-        Assert.Equal(112, EnvProtocol.MakeBatchFixedBytes);
+        Assert.Equal(8, EnvProtocol.Version);
+        Assert.Equal(128, EnvProtocol.MakeBatchFixedBytes);
+
+        // ⚠️ v8's LoadPolicy is 13, NOT 10 — 10 is SetGoal. The shape was
+        // specified to gg2-rl as 10 before that was checked, and pinning the id
+        // here is what stops the two repos disagreeing about a number that
+        // compiles fine on both sides and mis-dispatches at run time.
+        Assert.Equal(13, (int)EnvMessage.LoadPolicy);
 
         // ⚠️ v4's sixth action head, on both sides of the wire. A client a version
         // behind sends five bytes an agent and every action from the second world
