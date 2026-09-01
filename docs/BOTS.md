@@ -84,6 +84,55 @@ retrain first**, and would not look broken without one.
 
 Numbers, tables and scope: `docs/ENV.md`, "Phase 4 re-measured".
 
+### ⛔ Arm 3, the search as micro-controller: unshippable on the tick, verdict-pending on deaths
+
+**21 maps, 40 matches an arm, 8 bots, 5-minute cap, `BENCH_ARMS`, 2026-09-01.**
+Arm 1 all-scripted, arm 2 policy hybrid, arm 3 search hybrid — same 150px gate,
+same macro layer, one thing different.
+
+#### ✅ SETTLED: the tick gate fails, and n cannot rescue it
+
+⛔ **Arm 3 exceeds the 33.3 ms budget on 20 of 21 maps.** Worst 80.65 ms
+(`ctf_eiger`); the single map under is `ctf_avanti` at **31.70 ms**, which is not
+headroom. Arms 1 and 2 sit at 0.8–7.2 ms throughout.
+
+⚠️ **This half does not depend on the sample size, and the reason is the shape of
+the statistic rather than the size of the run.** A worst tick is a **maximum over
+every tick of every match**, not a rate. **A small sample weakens a share; it
+cannot weaken a maximum** — if anything 40 matches *understates* a worst case.
+`gg2-rl` made that argument and it is why this half is reportable now.
+
+#### ⚠️ NOT SETTLED: the death-share sign count is not yet interpretable
+
+The raw counts are **arm 3 better than arm 1 on 20 of 21**, and **better than arm 2
+on 17 of 21**. ⛔ **Do not read the second as a result.**
+
+| |arm 3 − arm 2| | maps |
+|---|---|
+| under 0.5 points | **6** |
+| under 1.0 point | **9** |
+
+**All four maps where arm 3 reads worse are worse by 0.0–0.4 points**, and nine of
+the twenty-one carry effects under a point. A sign test counts DIRECTIONS, so a map
+whose direction is noise is a whole observation lost rather than a slightly noisier
+one. **Nine such maps is not a 17-of-21.**
+
+⚠️ **`tools/bench/stability.py` is the check**, and what it reports is the smallest
+effect at which every map held its direction between two sample sizes — **not the
+agreement count**, because direction stability is a property of effect size relative
+to noise and not of `n`. Until that floor is known against this table’s effects,
+**the sign test is unlicensed and the honest report is the aggregate death share
+with its death counts.**
+
+#### ⚠️ And the experiment costs what it costs
+
+**Arm 3 is roughly twenty times slower to evaluate than either other arm** — this
+run took 1,916 seconds and arm 3 is nearly all of it. `gg2-rl` pre-registered 400
+matches an arm without knowing that. ⛔ **"Run it at 400 because the pre-registration
+says so" is not one of the honest outcomes** when the pre-registration was written
+in ignorance of the cost; the outcomes are *40 is enough, shown* or *this criterion
+is unaffordable at this size, said plainly*.
+
 ### ⛔ A duel does not CONTAIN what a match contains, and every absence is a zero
 
 ⛔ **One mechanism, and this project found it twice in one day as two unrelated
