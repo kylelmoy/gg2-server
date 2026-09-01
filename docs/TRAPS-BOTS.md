@@ -255,7 +255,7 @@ platforms lane's independent 18/70 on `gg_debug2`, node-for-node):
 | `gg_debug2` | 18/70 | the two sealed chambers, by design |
 | `arena_montane`, `ctf_2dfort`, `ctf_classicwell` | 0 | — |
 | `ctf_avanti` | 1/324 | one stray node |
-| `ctf_conflict` | **105/762** | real unreachable regions; uninvestigated |
+| `ctf_conflict` | **105/762** | decorative scenery, located and looked at: the red factory's rooftop strip sealed under the map's top edge (one 1,212px node at y222), the 45° faces of the tall blue-side structure (single-cell diagonal chains, y0..240 at x3612..3852 and similar), and enclosed pockets inside the rock masses at the bottom and left. Real standable terrain in sealed air pockets — no cache anomaly |
 | `cp_dirtbowl` | **541/835** (a2 626/837, a3 493/837) | ⚠️ **the multi-area trap**: `ForArea` narrows entities and NOT terrain, so every area's cache carries nodes on all three stages' ground while that area's spawns reach only their own stage |
 
 ⚠️ **The multi-area row is the general trap**: on any staged map, roughly
