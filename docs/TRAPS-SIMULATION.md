@@ -3706,3 +3706,59 @@ stamp's claim either way.
 ⚠️ **`WorldState.MaxMovingPlatforms` is 16 and is a guess, not a measurement** —
 nothing places one, so there is no maximum to size against. Overrunning it drops
 platforms silently, the same shape as `MaxProjectiles`; raising it is the fix.
+
+#### What the map archive says about moving platforms — measured 2026-09-01
+
+⚠️ **The carry is NOT hypothetical, and "no shipped map places one" was hiding
+that.** Scanned all 2,348 maps in `D:\code\gg2-maps\maps` with this port's own
+`LevelMap.FromPng`: **1,838 parsed, and 8 of them place a moving platform.**
+
+| map | platforms |
+|---|---|
+| `maw_deathmatch` | **139** |
+| `cp_scrap` | 18 |
+| `dj_bugs` | 16 |
+| `Happy-Holidays-AT-The-RaveYard` | 11 |
+| `ctf_2dfort-ani` | 5 |
+| `CTF_Boat_struggle` | 4 |
+| `Sani-request-marina-shakedown` | 3 |
+| `surf_mup` | 1 |
+
+⚠️ **Every one of them names a `resource`**, which settles the open question in
+the other direction from what would have been convenient: `crane1`, `roof`,
+`elevator2`, `Platform`, `ji`, `pl`, `Boat`, `SURF`, `animap`, `NewAnimap`,
+`Joe`, `joe`, `bubble1`. There is no real map that leaves the sprite unset, so
+"a platform with no mask" is not the common case — it is the case this port
+currently produces for all of them.
+
+**What the real values look like**, which is worth having before anyone tunes the
+motion: `top` from 0 to 1518, `left` from 0 to 20000, speeds from 0 to 10000, and
+`scale` up to 6. Several are decorative — `upspeed=0, downspeed=0, top=0` — which
+lands in the `totalDist <= 0` arm and parks them, matching the reference.
+`maw_deathmatch`'s 139 bubbles are `trigger=1`, so they wait to be stood on and
+in this port will wait for ever.
+
+⛔ **What the carry would actually cost, so it is scoped rather than guessed.**
+The mask comes from `stringToResource` → `sprite_add(name, 1, 1, 0, 0, 0)`, and
+`docs/SIMULATION.md` records that **a runtime-added GM8 sprite uses PRECISE,
+per-pixel collision**. So the carry needs:
+
+1. embedded sprite bytes decoded out of the map's `meta` properties (PNG or GIF,
+   the format sniffed from the first three characters);
+2. a **precise per-pixel collision primitive**, scaled by `image_xscale`/
+   `image_yscale` — which nothing else in this port has or needs, everything else
+   being walkmask cells and axis-aligned rectangles;
+3. `removeback = 1` handling, so the sprite's background colour becomes
+   transparency and therefore non-colliding;
+4. only then the `with(Character)` block itself, including its
+   `good_move_contact_solid` push with the platform made temporarily solid.
+
+⚠️ **That is a subsystem, not a function**, and it is the reason this is written
+down rather than attempted. ⚠️ **It is also the ceiling on `MaxMovingPlatforms`
+being 16** — `maw_deathmatch` places 139, so that map would silently lose 123 of
+them. Raise the ceiling before anyone points a server at it.
+
+⚠️ **Separately: 510 of the 2,348 archive maps failed to parse here.** Not
+investigated. It may be entirely non-map PNGs in the archive, or it may be a real
+gap in `LevelMap.FromPng` — nobody has looked, and the number is large enough
+that it should not be assumed benign.
