@@ -703,6 +703,65 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
     public EnvAction LastAction => _current;
 
     /// <summary>
+    /// Would the next <see cref="Poll"/> for this slot start a NEW decision.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>For a gate that hands control to this search, so it changes hands on
+    /// the search's boundary rather than on one of its own.</b> Two controllers
+    /// with independent cadences flap against each other at the threshold, and
+    /// each holds state the other does not maintain — the scripted layer's
+    /// follower, this search's absolute aim. <c>PolicyBot</c> already refuses to
+    /// swap mid-decision for exactly that reason; a caller driving this class has
+    /// to be able to ask the same question, and <b>inventing a second counter to
+    /// answer it is the two-cadence bug with extra steps.</b>
+    /// <para>
+    /// ⚠️ <b>Takes the slot, because a slot change forces a boundary.</b>
+    /// <see cref="Poll"/> resets the decision when the slot moves, so a
+    /// parameterless property would answer for the wrong character on the tick a
+    /// bot is re-assigned and would be wrong exactly once, silently.
+    /// </para>
+    /// </remarks>
+    public bool AtDecisionBoundary(int slot) => slot != _currentSlot || _ticksLeftInDecision <= 0;
+
+    /// <summary>
+    /// Points this search's decoder at where the character is ACTUALLY aiming.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>Call this on every handover INTO the search, or the first decision
+    /// after each one turns from a bearing nobody is pointing at.</b> The decoder
+    /// carries an absolute aim across ticks and advances it by the turn each
+    /// action asks for. While another controller holds the character — the
+    /// scripted layer writes the bearing directly — that carried value goes stale,
+    /// and <see cref="Poll"/>'s own resync only fires when the <em>slot</em>
+    /// changes, which a handover is not.
+    /// <para>
+    /// ⚠️ <b>This is a wrong-verdict bug rather than a wrong-number bug, which is
+    /// why it is public rather than a note.</b> A search aiming from a stale
+    /// bearing does not fail; it fights slightly worse, in exactly the engagements
+    /// a handover exists to hand it, and reports as "the search hybrid
+    /// underperforms". That is indistinguishable from a real negative — the same
+    /// failure class as a severed wire-to-rollout chain in step 3, and the second
+    /// time on this seam that the danger was a wrong conclusion rather than a
+    /// wrong measurement.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Takes the world rather than degrees on purpose.</b> The wire's aim is
+    /// a <c>ushort</c> over a full turn and the conversion is
+    /// <c>* 360.0 / 65536.0</c>; a caller handed a degrees parameter has to know
+    /// that, and <c>PolicyBot</c> already carries its own copy of the expression.
+    /// One more copy is one more place to get a magic constant wrong.
+    /// </para>
+    /// <para>
+    /// ✅ <b>Unreachable in a duel, so no existing figure moves.</b> An
+    /// <c>EnvDriver.Rollout</c> side has no handover and no scripted layer writing
+    /// its bearing, so <c>_currentSlot</c> never changes hands and the stale path
+    /// cannot occur. The 82.5% and every other duel number stand.
+    /// </para>
+    /// </remarks>
+    public void ResyncAim(in WorldView world, int slot) =>
+        _decoder.SetAim(slot, world.Character(slot).NetAimDirection * 360.0 / 65536.0);
+
+    /// <summary>
     /// The candidate set: every combination the search considers, in a fixed
     /// order.
     /// </summary>
