@@ -32,6 +32,7 @@ public readonly record struct HeadlessMatchOptions(
     int? BlueBots = null,
     PlayerClass[]? AllowedClasses = null,
     PolicyNetwork? Policy = null,
+    RolloutOptions? SearchMicro = null,
     Team? PolicyTeam = null,
     bool ScriptedCarriesIntel = true,
     HandoverRule HandoverRule = HandoverRule.MacroTask,
@@ -337,6 +338,10 @@ public sealed class HeadlessMatch
     public PolicyBot? PolicyBotFor(int slot) =>
         slot >= 0 && slot < _sources.Length ? _sources[slot] as PolicyBot : null;
 
+    /// <summary>The <see cref="SearchBot"/> driving a slot, or null.</summary>
+    public SearchBot? SearchBotFor(int slot) =>
+        slot >= 0 && slot < _sources.Length ? _sources[slot] as SearchBot : null;
+
     /// <summary>Advances one tick.</summary>
     /// <remarks>
     /// ⚠️ <b>A decided round ENDS the match here rather than rotating.</b> A
@@ -602,8 +607,19 @@ public sealed class HeadlessMatch
     /// </remarks>
     private void WrapInPolicy()
     {
-        if (Options.Policy is not { } policy)
+        // ⚠️ ONE loop for both micro-controllers, so the arms cannot differ in which
+        // slots get wrapped, which team is chosen, or which gate settings apply. Two
+        // loops would let arm 2 and arm 3 diverge on something nobody enumerated, and
+        // the comparison exists to isolate the controller.
+        if (Options.Policy is null && Options.SearchMicro is null)
             return;
+
+        if (Options.Policy is not null && Options.SearchMicro is not null)
+        {
+            throw new ArgumentException(
+                "a match runs one micro-controller, not two: Policy and SearchMicro are both set",
+                nameof(Options));
+        }
 
         for (var slot = 1; slot < _slots; slot++)
         {
@@ -613,12 +629,19 @@ public sealed class HeadlessMatch
             if (Options.PolicyTeam is { } team && _state.Players[slot].Team != team)
                 continue;
 
-            _sources[slot] = new PolicyBot(policy, scripted)
-            {
-                ScriptedCarriesIntel = Options.ScriptedCarriesIntel,
-                Rule = Options.HandoverRule,
-                Range = Options.EngagementRange,
-            };
+            _sources[slot] = Options.Policy is { } policy
+                ? new PolicyBot(policy, scripted)
+                {
+                    ScriptedCarriesIntel = Options.ScriptedCarriesIntel,
+                    Rule = Options.HandoverRule,
+                    Range = Options.EngagementRange,
+                }
+                : new SearchBot(new RolloutSearch(Options.SearchMicro!.Value), scripted)
+                {
+                    ScriptedCarriesIntel = Options.ScriptedCarriesIntel,
+                    Rule = Options.HandoverRule,
+                    Range = Options.EngagementRange,
+                };
         }
     }
 

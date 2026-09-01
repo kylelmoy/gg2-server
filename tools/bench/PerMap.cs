@@ -17,7 +17,7 @@ namespace Bench;
 /// </remarks>
 public static class PerMapEval
 {
-    private static readonly string[] Maps =
+    internal static readonly string[] Maps =
     [
         "arena_lumberyard", "arena_montane", "cp_dirtbowl", "cp_egypt",
         "ctf_2dfort", "ctf_avanti", "ctf_classicwell", "ctf_conflict", "ctf_eiger",

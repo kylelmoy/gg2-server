@@ -74,6 +74,16 @@ if (Environment.GetEnvironmentVariable("BENCH_SWEEP") is { } sweepArg)
     return;
 }
 
+if (Environment.GetEnvironmentVariable("BENCH_ARMS") is { } armsN)
+{
+    Bench.ArmsEval.Run(
+        maps,
+        Environment.GetEnvironmentVariable("GG2_NAV")!,
+        Environment.GetEnvironmentVariable("NPZ")!,
+        int.Parse(armsN));
+    return;
+}
+
 if (Environment.GetEnvironmentVariable("BENCH_PERMAP") is { } pm)
 {
     Bench.PerMapEval.Run(maps, Environment.GetEnvironmentVariable("GG2_NAV")!, Environment.GetEnvironmentVariable("NPZ")!, int.Parse(pm));
