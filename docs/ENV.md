@@ -1738,6 +1738,15 @@ loudly instead of plateauing quietly.
 
 ## ✅ Phase 4 result: the hybrid beats the bot it replaces, on both axes (2026-09-01)
 
+> ⛔⛔ **SUPERSEDED IN ITS STATISTICS, NOT IN ITS CONCLUSION.** Every number below
+> was measured at a **5-minute match cap** and is CENSORED — on some maps half
+> the arm never expressed an outcome — and every win share below is over
+> `decided`, which **includes draws** and is not the win share's denominator.
+> **Read "Phase 4 re-measured" further down before quoting anything here.** The
+> conclusion survived the correction and two of its results got stronger; the
+> figures did not.
+
+
 **The exit criterion is met, and the value that got it there is not the one
 anybody started with.** Six CTF maps, 8 bots, four trained classes both sides,
 policy on red, all-scripted on blue.
@@ -1869,6 +1878,204 @@ that does not exist. At 420 the control is **76 against 72**, even. **A capture 
 a rare event, under 0.2 a match**, so a hundred matches is a few dozen events and
 a difference of ten is nothing. The failure was not that the sample was small; it
 was that **nobody converted matches into events before choosing the sample size.**
+
+## ⛔⛔ Phase 4 re-measured: every earlier number was CENSORED (2026-09-01)
+
+⚠️ **Read this before quoting any phase 4 figure written above.** The result
+stands; the statistic it was quoted on does not, and the correction took a day.
+
+### What was wrong
+
+Every phase 4 measurement used a **5-minute match cap**, and on several maps that
+cap was truncating the distribution the statistics were computed from. On
+`gen_destroy` the **CONTROL** arm decides **50.3% of matches at five minutes and
+97.0% at twenty**, with a mean length of 382.6s against a 300s ceiling.
+
+⚠️ **The mean length was the giveaway and two sessions read past it.** "342s
+against a 300s cap" is not a mean, it is a boundary. A "7.8% rise in mean length"
+that both sessions agreed was too small to explain a 40%→20% decidedness fall was
+not small — it was **truncated**. Uncensored the same quantity is
+**342s → 790s at 450px**, a factor of 2.3.
+
+⛔ **And there are TWO layers, not one.** Underneath the cap:
+**`MatchOutcome.Decided` INCLUDES A DRAW.** `HeadlessMatch.cs:84` says so in as
+many words — "a team won, **or the round was drawn**" — and `Rounds.cs` calls
+`Decide(ref state, Team.Spectator)` in five places. So `decided` is **not** the
+win share's denominator; wins-plus-losses is, and on some maps it is a fraction
+of the decided count:
+
+| map | decided | **decisive** | the quoted win share was over |
+|---|---|---|---|
+| `ctf_classicwell` (control) | 337/400 | **25** | 6% of the arm, not 84% |
+| `ctf_orange` | 384/400 | **11** | eleven matches |
+| `ctf_conflict` | 187/400 | **18** | eighteen matches |
+| `cp_egypt` | 396/400 | **0** | ⛔ the win share is literally 0/0 |
+
+⚠️ **`decided` is a GOOD name, and that is what made it dangerous.** A bad name
+would have prompted the lookup. This was not a hidden fact — it was documented on
+the line above the field — so the defence that works for the cap layer (add a
+column) does not work here. **The only defence that scales is to read the
+definition of a field before quoting it in an argument, and it is expensive
+enough that nobody will do it every time.** Which is the real argument for the
+rule below.
+
+### ⛔ The rule: prefer the statistic with no subset
+
+Not "be careful with filtered statistics" — a label travels and a filter does
+not. **A statistic computed over a subset must display the subset's size in the
+same row**, never in a caption, because that is the only place a copy-paste
+cannot separate them. `PerMapEval` and `RangeSweep` print `capped` and the
+decisive count beside every win share now.
+
+✅ **`cp_egypt` is the argument for the rule rather than an example of it.** Its
+win share is undefined — 0 decisive matches out of 400 — and **it still casts a
+death-share vote and sits inside the 21-of-21 below.** The statistic with no
+subset works on a map where the filtered one does not exist.
+
+### ✅ The corrected criterion — 21 maps, 400 an arm, Release, HEAD `679afb8`
+
+⛔ **DEATH SHARE IS BETTER UNDER THE POLICY ON 21 OF 21 MAPS.**
+**Sign test p = 4.8e-7 one-sided (9.5e-7 two-sided).** Aggregate **46.3% against
+50.2%**.
+
+The death share is the right statistic because **no match is excluded** — drawn,
+capped and decisive all contribute their deaths, so neither censoring layer
+touches it.
+
+⚠️ **It is not defect-free: the aggregate is a ratio of summed counts and is
+therefore LENGTH-WEIGHTED**, and the policy's matches are the long ones. The
+unweighted alternative (a mean of per-match ratios) removes the weighting and
+**needs a denominator per match**, so a zero-death match has no ratio and would
+have to be dropped — reintroducing a filter. ✅ **Measured rather than argued,
+12 arms and 2,400 matches: ZERO zero-death matches, and the two estimators agree
+to 0.58 points worst case (0.06–0.31 typical) against effects of 4 to 12
+points.** The weighting does not bite. **Re-check if the cap ever shortens** —
+zero-death is cap-dependent in principle.
+
+⚠️ **The sign test removes the CROSS-map weighting and not the within-map one.**
+One vote per map stops a 20-minute `ctf_classicwell` match counting twenty times
+a short one *across* maps; each map's own figure is still pooled.
+
+### ⛔ WHICH CLAIM THIS IS — n=1 POLICY
+
+**The criterion is about the shipped artefact**, one checkpoint, and the sign
+test licenses exactly that, strongly. ⛔ **It does NOT license "a policy trained
+this way beats scripted."** `gg2-rl` measures training variance at a **6.2-point
+four-seed spread — larger than the 3.9-point aggregate effect here** — and one
+policy says nothing about it. **The 21 maps buy precision; seeds buy
+generalisation, and only the first was purchased.** That repo has been wrong
+about exactly this twice (the jitter term and `entropy_coef`, both decided on one
+seed with disjoint intervals, both reversed on the second).
+
+### The win share, as a per-map diagnostic only
+
+⚠️ **Not 21 verdicts** — 21 significance tests at n=400 is a multiple-comparison
+problem wearing the costume of a finer answer. The table finds broken rows; the
+aggregate plus the sign test is the claim.
+
+**Ranked on `decisive`, NOT on `decided`** — three rows are not over comparable
+populations:
+
+```
+gen_destroy      -44 decisive  (-11.0%)  z -3.1   67.5% vs 50.2%   NOT comparable
+ctf_truefort     -37 decisive  ( -9.2%)  z -2.6   47.3% vs 39.3%   NOT comparable
+ctf_eiger        -11 decisive  ( -2.8%)  z -0.8   90.9% vs 77.3%
+```
+
+⛔ **The two rankings disagree, and the worked example is worth more than the
+principle.** `ctf_classicwell` ranks **2nd on `decided` (−31) and 16th on
+`decisive` (−1)**: the cap layer moved 31 matches on that map and the draw layer
+absorbed all but one. Ranking on `decided` sends you to a row that is fine and
+**clears `ctf_truefort`, which is not**.
+
+### ✅ What survived the correction, and what it strengthened
+
+- ⛔ **The objective collapse at a wide handover is REAL, not censoring.**
+  `ctf_truefort` at 300px is **32.6% win share against a 45.7% control with 69%
+  of matches finishing** under a 20-minute cap. `ctf_classicwell` at 450px is
+  **4-133, a 2.9% win share, at 31% capped**. On some maps it is total.
+- ✅ **`gen_destroy` — flagged as the likely artefact — is where the policy most
+  clearly WINS.** At 150px under a 20-minute cap: **124-62 against 93-101,
+  z = +3.70**, and the five-minute table could not have said so. Going looking for
+  an inflated number found a suppressed one.
+- ✅ **Pre-registered stratification: the advantage is REAL AND UNIFORM.**
+  Splitting the cap-20 matches at the old 300s boundary, the policy's advantage is
+  **+17.6 points among matches the 5-minute runs could already see (z = +2.40)
+  and +20.1 points among those only the longer clock revealed (z = +2.83)**. The
+  control's own stratum gap is −3.3 points ("long matches are closer matches",
+  real, about three points, both arms). Difference-in-differences **+2.5 points**.
+  The cap hid a random third; it did not manufacture the advantage.
+  ⚠️ **At n=20 the same quantity read 54.5-vs-77.8 and pointed at the wrong
+  answer.** Only the control's strata make it readable.
+- ⚠️ **`koth_harvest` runs the other way** and is worth knowing: at 150px the
+  advantage is **+15.8 points inside 300s and +1.9 beyond**. The stratum split is
+  map-dependent, so gen_destroy's uniformity is not a general law.
+
+### ⚠️ The cap-20 instrument is not neutral either
+
+A longer clock gives a stand-off policy four times as long to convert a
+stalemate, and `KillLimit` and `CapLimit` are unchanged — so it does not only
+reveal outcomes, it can change **which limit binds**. ✅ **Measured and small**:
+on `tdm_mantic` the terminating condition goes from `killlimit=189 timecap=11`
+(control) to `killlimit=184 timecap=16` at 150px. Five matches in 200. On
+`gen_destroy` and `koth_harvest` every decided match ends on the objective in
+every arm, so the risk does not fire there at all.
+
+### ✅ `policy 0px` reproduces the scripted control EXACTLY
+
+A hybrid whose engagement gate never opens is **behaviourally identical** to the
+plain scripted bot — same decided count, same death counts to the unit, same mean
+length — at n=10, n=200 and n=400. ⚠️ **This was load-bearing for every phase 4
+comparison and had never been checked**, and it **could not have been checked by
+reasoning**: "a gate that never opens obviously changes nothing" is the kind of
+obvious that ships bugs. It rules out the wrapper, the extra `ScriptedBot.Poll`
+and the class restriction in one row.
+
+⛔ **Both findings on this page came out of a CONTROL ROW THAT WAS NOT THE
+EXPERIMENT.** `policy 0px` was added only to validate that assumption; the
+censoring fell out of the same row. **Do not drop a control arm as redundant.**
+
+### Two maps whose behaviour is a property of the map
+
+- ⛔ **`cp_egypt` never produces a winner.** 400 matches an arm, 396 and 400
+  decided, **0 decisive**. Any future measurement reading a win rate there reads
+  0/0.
+- ⛔ **`ctf_classicwell` cannot finish in twenty minutes.** **82% of CONTROL
+  matches hit a 20-minute cap** and still count as `decided`, because a capped
+  round there is a draw. It will corrupt any measurement that reads `decided`.
+
+### ⚠️ The retracted number, kept because the retraction is the lesson
+
+`gg2-rl` reported censoring rising monotonically with the policy's share of
+control across four arms, **p = 0.042**, and withdrew it. The four arms are
+**cumulative in construction** — 450px acts everywhere 300px acts and more — so
+monotonicity is close to structural, and the test's null is one nobody holds.
+⚠️ **Range and control share are not two variables; they are one knob read two
+ways**, so "confounded with range" understates it: anything monotone in one is
+monotone in all.
+
+✅ **The observation survives and needs no test**: 3%→27% censoring against
+0%→35% control share. **What went is the false precision, not the pattern.**
+
+⛔ **THE RULE THAT ACTUALLY WORKED: write the test and its possible outcomes down
+before the data exists.** Of everything measured on 2026-09-01, the stratification
+is the **only pre-registered test**, and it is the only answer either session
+would defend unqualified. Two of the day's written-down predictions were
+falsified, **which is the mechanism working**. Everything else was a description
+with a p-value attached — a real pattern, correctly computed, decorated with a
+number implying a test was at risk when none was. ⚠️ **A p-value on a post-hoc
+quantity and one on a pre-registered test PRINT IDENTICALLY.**
+
+### ⚠️ And the trap that was flagged an hour before it was walked into
+
+`Rounds.cs:565` compares the kill limit against `RedCaps`/`BlueCaps`, so **the
+same pair means captures in CTF and kills in TDM**. This was written up and sent
+to `gg2-rl` as a warning — and then the bench's own terminating-condition
+classifier keyed off "which limit is configured", which is not enough, because
+both always are. With `CapLimit = 1` every TDM match with a single kill was
+labelled `caplimit`, and `tdm_mantic` printed `caplimit=200` in all five arms —
+which reads as a clean finding. **The mode has to gate it.** ⚠️ **Knowing a field
+is overloaded does not stop you reading it.**
 
 ## Phase 4 handover from `gg2-rl` (2026-08-31) — the artefact, and the hole in it
 
