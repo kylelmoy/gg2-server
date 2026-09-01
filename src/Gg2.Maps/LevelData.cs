@@ -55,7 +55,8 @@ public static class LevelData
     }
 
     /// <summary>
-    /// Pulls the level-data text out of a map PNG's <c>zTXt</c> chunk.
+    /// Pulls the level-data text out of a map PNG's text chunk — <c>tEXt</c>,
+    /// <c>zTXt</c> or <c>iTXt</c>, as libpng and therefore the game accept.
     /// </summary>
     /// <remarks>
     /// The text is a GM8 byte string, so it is decoded Latin-1: the entity block
@@ -79,17 +80,20 @@ public static class LevelData
             var type = png.Slice(offset + 4, 4);
             var data = png.Slice(offset + 8, (int)length);
 
-            if (type.SequenceEqual("zTXt"u8))
-            {
-                var nul = data.IndexOf((byte)0);
-                if (nul > 0 && Gg2Text.Decode(data[..nul]) == Keyword)
-                {
-                    // After the keyword's NUL comes one compression-method byte
-                    // (0 = zlib deflate), then the zlib stream itself.
-                    var compressed = data[(nul + 2)..];
-                    return Inflate(compressed);
-                }
-            }
+            // ⚠️ ALL THREE text chunk types, not just zTXt. The game reads its
+            // level data through libpng's png_get_text
+            // (Extensions/GG2DLL/GG2DLL/GG2DLL.cpp:357-368), which hands back
+            // tEXt, zTXt and iTXt alike — already decompressed — and the DLL then
+            // matches on the keyword alone, ignoring how it was stored.
+            //
+            // ⚠️ Reading only zTXt made this port STRICTER THAN THE GAME, and not
+            // in a corner: 510 of the 2,348 maps in the archive failed here and
+            // open fine in GG2. The game WRITES zTXt (:288), so every map saved by
+            // GG2 itself worked — the failures are maps written by other tools,
+            // which is most of an archive. Found 2026-09-01 after `gg2-nav-gen`
+            // hit the identical bug in its own reader.
+            if (TryReadText(type, data, out var text))
+                return text;
 
             if (type.SequenceEqual("IEND"u8))
                 break;
@@ -98,6 +102,74 @@ public static class LevelData
         }
 
         throw new MapFormatException($"PNG carries no \"{Keyword}\" chunk");
+    }
+
+    /// <summary>
+    /// The level-data text out of one PNG text chunk, if that is what it is.
+    /// </summary>
+    /// <remarks>
+    /// The three layouts, from the PNG spec:
+    /// <list type="bullet">
+    /// <item><c>tEXt</c>: <c>keyword \0 text</c> — Latin-1, uncompressed.</item>
+    /// <item><c>zTXt</c>: <c>keyword \0 method text</c> — one method byte, then
+    /// a zlib stream.</item>
+    /// <item><c>iTXt</c>: <c>keyword \0 flag method language \0 translated \0
+    /// text</c> — two extra NUL-terminated fields before the text, and the text
+    /// is compressed only when the flag is 1.</item>
+    /// </list>
+    /// <para>
+    /// ⚠️ <b><c>iTXt</c> text is UTF-8 by the spec, and GG2 level data is raw
+    /// bytes.</b> A map stored that way would have every byte above 0x7F
+    /// re-encoded, and the entity block can carry embedded sprite resources as
+    /// arbitrary bytes — so it would round-trip wrong. It is accepted here
+    /// because libpng accepts it and the game therefore does; no archive map was
+    /// found using it, so the decoding below is Latin-1 like the others rather
+    /// than UTF-8. <b>If an iTXt map ever turns up broken, this is the line.</b>
+    /// </para>
+    /// </remarks>
+    private static bool TryReadText(ReadOnlySpan<byte> type, ReadOnlySpan<byte> data, out string text)
+    {
+        text = string.Empty;
+
+        var compressed = type.SequenceEqual("zTXt"u8);
+        var international = type.SequenceEqual("iTXt"u8);
+
+        if (!compressed && !international && !type.SequenceEqual("tEXt"u8))
+            return false;
+
+        var nul = data.IndexOf((byte)0);
+        if (nul <= 0 || Gg2Text.Decode(data[..nul]) != Keyword)
+            return false;
+
+        var body = data[(nul + 1)..];
+
+        if (international)
+        {
+            // flag, method, then language and translated-keyword, each
+            // NUL-terminated and both usually empty.
+            if (body.Length < 2)
+                return false;
+
+            var compressionFlag = body[0];
+            body = body[2..];
+
+            for (var field = 0; field < 2; field++)
+            {
+                var end = body.IndexOf((byte)0);
+                if (end < 0)
+                    return false;
+
+                body = body[(end + 1)..];
+            }
+
+            text = compressionFlag == 1 ? Inflate(body) : Gg2Text.Decode(body);
+            return true;
+        }
+
+        // zTXt spends one byte on the compression method (0 = zlib); tEXt is the
+        // text itself with nothing in between.
+        text = compressed ? Inflate(body[1..]) : Gg2Text.Decode(body);
+        return true;
     }
 
     private static string Inflate(ReadOnlySpan<byte> compressed)

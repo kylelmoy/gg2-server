@@ -3762,3 +3762,43 @@ them. Raise the ceiling before anyone points a server at it.
 investigated. It may be entirely non-map PNGs in the archive, or it may be a real
 gap in `LevelMap.FromPng` — nobody has looked, and the number is large enough
 that it should not be assumed benign.
+
+#### The archive re-measured after the tEXt fix — and the shape question answered
+
+⚠️ **The 510 parse failures were this port being stricter than the game.**
+`LevelData.Extract` read `zTXt` only; the game reads through libpng's
+`png_get_text`, which returns `tEXt`, `zTXt` and `iTXt` alike
+(`Extensions/GG2DLL/GG2DLL/GG2DLL.cpp:357-368`). GG2 *writes* `zTXt` (:288), so
+every map saved by the game itself worked and every map from another editor did
+not. Fixed 2026-09-01. ⚠️ **`gg2-nav-gen` had the identical bug in its own
+reader and found 438 affected maps; this port recovered 438 too** — two
+independent readers, same count, which is what makes it a diagnosis rather than a
+coincidence.
+
+**Archive parse rate: 1,838 → 2,276 of 2,348.** The 72 that still fail are
+honest: 65 carry no level-data chunk at all (ordinary PNGs in the archive), 2 are
+not PNGs, and 5 hit `entity '0' has a non-numeric y: 'PayloadNode'` — a custom
+entity from a gamemode mod, **not investigated**.
+
+✅ **Every embedded sprite resource decodes intact**, which was the open risk on
+the platform carry. 31 resources across the 8 platform maps, all recovered from
+the `meta` block with PNG or GIF signatures whole — so GGON carries raw bytes
+through the Latin-1 level-data string without corruption. That was the cheapest
+thing that could have sunk the carry and it did not.
+
+⛔ **The bounding-box shortcut is NOT viable, and this is the measurement that
+settles it.** Of 31 platform sprites, **12 carry a transparency mechanism** in
+the file (RGBA PNG, or a GIF transparent-colour flag) and 18 are opaque; one
+(`animap`, 9 bytes) is a truncated GIF that GM8 would fail to load, leaving
+`sprite_index = -1` and no collision at all. Weighted by platform *instances*
+rather than by sprite, the transparent ones cover **175 of 197 — 89%**. The
+decisive case is `maw_deathmatch`: **139 of its platforms are 40x40 GIF
+"bubbles"**, and a bounding box round a bubble is a square round a circle.
+
+⚠️ **Two honest limits on that number.** A file carrying an alpha channel is not
+proof that any pixel is actually transparent — that would need a real pixel
+decode, which was not done. And it cuts the other way too: **`removeback = 1` is
+always on**, so the 18 "opaque" sprites also have their background colour carved
+out at load, and several are plainly shaped rather than rectangular (`Boat`
+111x31, `piston` 60x161, `room1`/`room2` 20x76). So 89% is a *floor* on how many
+platforms are irregular, not an estimate.
