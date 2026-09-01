@@ -19,21 +19,37 @@ namespace Gg2.Host;
 /// ⚠️ <b>A map with no nav cache is reported, not skipped silently.</b> Bots
 /// with no graph do not walk anywhere, so on any full-size map the two teams
 /// never meet and every match comes back <c>0-0, unfinished</c> — which reads
-/// exactly like a bot change that broke capturing. The caches are gitignored in
-/// the reference and are not shipped, so this is the common case on a fresh
-/// checkout rather than an exotic one.
+/// exactly like a bot change that broke capturing. The caches are checked in at
+/// <c>nav/</c> and resolved automatically as of 2026-09-01, so this is now the
+/// exception rather than the fresh-checkout default — but a deleted <c>nav/</c>
+/// or an ungenerated custom map still lands here, and the column is what says
+/// so.
 /// </para>
 /// </remarks>
 internal static class Evaluate
 {
     public static int Run(string[] args)
     {
-        var mapDirectory = Flag(args, "--maps")
-            ?? (Environment.GetEnvironmentVariable("GG2_REFERENCE") is { Length: > 0 } reference
-                ? Path.Combine(reference, "Source", "gg2", "Included Files")
-                : @"D:\code\Gang-Garrison-2\Source\gg2\Included Files");
+        // ⚠️ The same resolution the server itself uses. Until 2026-09-01 this
+        // defaulted to a hard-coded absolute path into one machine's checkout of
+        // the bot fork — the standalone change (maps checked in at maps/) had
+        // fixed every entry point but this one, so `eval` with no flags read a
+        // tree CLAUDE.md said nothing depended on any more. Note the resolved
+        // maps/ includes the port-authored gg_debug2, so a no-flag eval covers
+        // 23 maps, not 22.
+        var mapDirectory = Flag(args, "--maps") ?? Gg2.Server.MapDirectory.Resolve();
 
-        var navDirectory = Flag(args, "--botnav");
+        if (mapDirectory.Length == 0)
+        {
+            Console.Error.WriteLine("no map directory: pass --maps, or run from a checkout with maps/");
+            return 1;
+        }
+
+        // Resolved rather than null so a plain `eval` measures bots that can
+        // navigate — the doc comment above names the navless footgun this
+        // removes. The per-map nav column still says which maps had a cache.
+        var navDirectory = Flag(args, "--botnav")
+            ?? (Gg2.Server.MapDirectory.ResolveNav() is { Length: > 0 } resolvedNav ? resolvedNav : null);
 
         var matches = Int(args, "--matches", 4);
         var threads = Int(args, "--threads", Environment.ProcessorCount);

@@ -293,8 +293,9 @@ internal static class Program
           --tick-stats      log a histogram of tick intervals every 30s and at
                             shutdown; safe with clients connected
 
-        The 22 built-in maps are checked in at maps/ and are found automatically,
-        so a clone serves a round with no arguments and no reference checkout.
+        The built-in maps — 22 shipped plus the gg_debug2 debug range — are
+        checked in at maps/ and are found automatically, so a clone serves a
+        round with no arguments and no reference checkout.
         --maps, or GG2_MAPS, overrides that; GG2_REFERENCE is still honoured last
         for anyone deliberately serving a Gang-Garrison-2 checkout's own copies.
 

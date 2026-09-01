@@ -368,8 +368,8 @@ public sealed class NavGraphFixtureTests
     /// which edge each hop meant — and it used to take the first match. Nothing
     /// in the repo said how often a pair carries more than one.
     /// <para>
-    /// It carries more than one <b>11,615 times</b>, and the two that matter are
-    /// class-refusable: <b>833 node pairs where a soldier's route is costed as a
+    /// It carries more than one <b>11,662 times</b>, and the two that matter are
+    /// class-refusable: <b>837 node pairs where a soldier's route is costed as a
     /// rocket jump while the index yields a double jump first</b>. That soldier
     /// pressed for a second jump its class does not have, flew an ordinary 57px
     /// hop where the arc wanted 276, and eventually blacklisted a good edge.
@@ -379,7 +379,7 @@ public sealed class NavGraphFixtureTests
     /// <para>
     /// ⚠️ <b>A generator that stopped emitting parallel edges would make every one
     /// of those tests pass while testing nothing</b>, and nothing else here would
-    /// notice — the caches are gitignored and rebuilt out of band. So the counts
+    /// notice — the caches are built out of band by gg2-nav-gen. So the counts
     /// are exact, and a move is the re-record: check the generator changed the way
     /// you meant, update the numbers, and say so in the commit.
     /// </para>
@@ -462,9 +462,11 @@ public sealed class NavGraphFixtureTests
             }
         }
 
-        Assert.Equal(104_087, pairs);
-        Assert.Equal(11_670, multi);
-        Assert.Equal(11_615, mixed);
+        // Re-recorded 2026-09-01 when the port-authored gg_debug2 joined the nav
+        // cache (+501 pairs, +58 multi, +47 mixed, +38/+4 soldier, +34/0 scout).
+        Assert.Equal(104_588, pairs);
+        Assert.Equal(11_728, multi);
+        Assert.Equal(11_662, mixed);
 
         // ⚠️ TWO different faults, and keeping them apart is the point.
         //
@@ -477,10 +479,10 @@ public sealed class NavGraphFixtureTests
         // where the edge the index yields first is one this traveller may not use
         // at all. A soldier crossing any of them pressed for a second jump its
         // class does not have.
-        Assert.Equal(4_654, soldierMisresolved);
-        Assert.Equal(833, soldierUnflyable);
+        Assert.Equal(4_692, soldierMisresolved);
+        Assert.Equal(837, soldierUnflyable);
 
-        Assert.Equal(3_821, scoutMisresolved);
+        Assert.Equal(3_855, scoutMisresolved);
         Assert.Equal(0, scoutUnflyable);
     }
 

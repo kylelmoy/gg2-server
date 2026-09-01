@@ -153,8 +153,9 @@ dotnet run --project src/Gg2.Host -- --map ctf_truefort
 dotnet run --project src/Gg2.Host -- --map ctf_truefort --bots 12
 ```
 
-✅ **No arguments, no reference checkout, no setup.** The 22 built-in maps are
-checked in at `maps/` and the 24 nav graphs at `nav/`, so a clone serves a round
+✅ **No arguments, no reference checkout, no setup.** The 22 shipped maps — plus
+`gg_debug2`, a port-authored CTF debug range (`docs/DEBUG-MAPS.md`) — are
+checked in at `maps/` and the 25 nav graphs at `nav/`, so a clone serves a round
 and runs bots that walk. This was not true until 2026-09-01: both entry points
 hard-coded an absolute path to one machine's checkout of a fork, and the server
 refused to start without it.

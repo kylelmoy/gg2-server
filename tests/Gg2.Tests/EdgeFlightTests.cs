@@ -135,7 +135,8 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
 
         output.WriteLine($"{edges} arc edges; midpoint resolves {midResolves}, takeoff column {takeoffResolves}");
 
-        Assert.Equal(18_396, edges);
+        // Re-recorded 2026-09-01: gg_debug2's graph adds 113 arc edges.
+        Assert.Equal(18_509, edges);
         Assert.Equal(edges, midResolves);
         Assert.Equal(edges, takeoffResolves);
     }
@@ -338,7 +339,8 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
 
         output.WriteLine($"{arcs} routable arcs across both teams; {shadowed} shadowed");
 
-        Assert.Equal(36_585, arcs);
+        // Re-recorded 2026-09-01: gg_debug2's graph adds 212 routable arcs.
+        Assert.Equal(36_797, arcs);
         Assert.Equal(0, shadowed);
     }
 }
