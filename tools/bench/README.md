@@ -86,6 +86,7 @@ guard site and a method signature.
 |---|---|
 | `BENCH_PERMAP=<n>` | **the criterion.** Every shipped map, `n` matches an arm, policy against an all-scripted control. Prints absolute win and death counts, a two-proportion z per comparison, and `capped`. `BENCH_CAP=<minutes>` sets the match cap. |
 | `BENCH_SWEEP=<n>` | **the mechanism.** Control plus policy at each engagement range in `BENCH_RANGES`. Prints the policy's share of control, both death-share estimators, the zero-death count, why each match ended, and — at `BENCH_CAP > 5` — the matches stratified by the 300-second boundary. |
+| `BENCH_CONST=1` | prints `SimulationStamp.Uuid`, `ObservationWriter.Length`, `ActionDecoder.AimBins` and the encoding version. ⚠️ **This is how you read the digest** when a stamp bump lands and `gg2-rl` needs to know whether its checkpoints survive — cheaper and less error-prone than running the test that pins it. |
 | `BENCH_POLICYCOST=1` | one forward pass and one observation extraction, in nanoseconds. `OBS` points at an observations fixture. |
 | `BENCH_SEARCH=1` | a `RolloutSearch` decision's cost, split into the per-candidate fork and the per-candidate tick by sweeping the horizon. ⚠️ **`BENCH_POP=<n>` sets how many characters are ALIVE** and defaults to 2 — see trap 6. `BENCH_CLASS=sniper` measures the 120-candidate set; `BENCH_CADENCE` sets the continuation cadence. |
 | `BENCH_EVAL=<n>` | the handover-rule and engagement-range comparison that chose the 150px default. |
@@ -103,8 +104,16 @@ because they were never in git and would otherwise be lost, not because they are
 maintained.
 
 `Alloc` `Cmp` `Cold` `Digest` `Duel` `Geom` `Latency` `Obs` `Ray` `Reset`
-`Search` `Tick` — the `Gg2.Env` throughput and allocation work
+`Tick` — the `Gg2.Env` throughput and allocation work
 (`docs/BOTS.md`, "The environment seam"). `Dkoth` and `Dkoth2` verified one bug
 fix and are superseded by `BENCH_PERMAP`.
 
 ⚠️ **A number from one of these is older than the code.** Re-run before quoting.
+
+⚠️ **`Search` was on that list until 2026-09-01 while also being in the table
+above** — a file calling the same mode current and superseded in two places, found
+by auditing the modes against `Program.cs` rather than by reading. **`BENCH_CONST`
+was in neither**, so a mode that prints the simulation digest existed and was
+documented nowhere. ⛔ **Nothing checks this table against the code**, which is the
+shape CLAUDE.md names: the instrument making a claim about itself that only a
+reader who acts on it can falsify.
