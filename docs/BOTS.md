@@ -125,12 +125,30 @@ the twenty-one carry effects under a point. A sign test counts DIRECTIONS, so a 
 whose direction is noise is a whole observation lost rather than a slightly noisier
 one. **Nine such maps is not a 17-of-21.**
 
-⚠️ **`tools/bench/stability.py` is the check**, and what it reports is the smallest
-effect at which every map held its direction between two sample sizes — **not the
-agreement count**, because direction stability is a property of effect size relative
-to noise and not of `n`. Until that floor is known against this table’s effects,
-**the sign test is unlicensed and the honest report is the aggregate death share
-with its death counts.**
+✅ **THE CHECK HAS RUN, AND THE SIGN TEST IS NOT LICENSED.**
+`BENCH_PERMAP` at n=40 against n=400, policy versus control, 2026-09-01:
+
+⛔ **Directions held for every map with |effect| ≥ 4.2 points.** Two maps flipped
+below it — `arena_lumberyard` +1.4p → −4.1p and `arena_montane` +3.5p → −0.4p —
+so 19 of 21 agreed, **and 19-of-21 is not the number to quote.** The floor is.
+
+| arm 2 vs arm 3, |effect| against the 4.2p floor | maps |
+|---|---|
+| at or above — licensed | **6** |
+| below — unlicensed | **15** |
+
+**Fifteen of twenty-one per-map directions are below the level at which direction
+was shown stable.** So the 17-of-21 is withdrawn as a result, not merely qualified.
+
+⚠️ **The pre-committed fallback applies and is being run: the aggregate death share
+WITH ITS DEATH COUNTS**, and the per-map sign test reported as unaffordable. That
+was agreed with `gg2-rl` before the floor existed, **specifically so that neither
+side could go looking for a third statistic that happened to survive** — two
+statistics with a rule between them is a check; three chosen afterwards is a search.
+
+⛔ **And the first version of `BENCH_ARMS` printed shares without their counts**, so
+the aggregate could not be computed from its own output. Trap 1, in the mode whose
+author had extended trap 1 that morning. Fixed; the run is being repeated.
 
 #### ⛔ RETRACTED: "shippable at 8 bots, unshippable at 12"
 

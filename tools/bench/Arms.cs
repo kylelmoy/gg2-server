@@ -91,7 +91,7 @@ public static class ArmsEval
     {
         Console.WriteLine(
             $"{"map",-18} {"a1 death",9} {"a2 death",9} {"a3 death",9} "
-            + $"{"a2 ctl",7} {"a3 ctl",7} {"a1 tick",8} {"a2 tick",8} {"a3 tick",8} {"capped",7}");
+            + $"{"a3 dths",7} {"a2 ctl",7} {"a3 ctl",7} {"a1 tick",8} {"a2 tick",8} {"a3 tick",8} {"capped",7}");
 
         int betterThanOne = 0, betterThanTwo = 0, worseThanOne = 0, worseThanTwo = 0;
         double worstTick = 0;
@@ -111,6 +111,7 @@ public static class ArmsEval
 
             Console.WriteLine(
                 $"{a.Map,-18} {da,9:0.0%} {db,9:0.0%} {dc,9:0.0%} "
+                + $"{c.RedDeaths + c.BlueDeaths,7} "
                 + $"{Share(b.MicroTicks, b.TotalTicks),7:0.0%} {Share(c.MicroTicks, c.TotalTicks),7:0.0%} "
                 + $"{a.MaxTickMs,8:0.00} {b.MaxTickMs,8:0.00} {c.MaxTickMs,8:0.00} "
                 + $"{a.Capped + b.Capped + c.Capped,7}"
@@ -118,6 +119,26 @@ public static class ArmsEval
         }
 
         Console.WriteLine();
+        // ⛔ THE AGGREGATE, WITH ITS COUNTS. The per-map sign test is licensed only
+        // where each map’s effect clears the floor stability.py reports, and on this
+        // comparison 15 of 21 maps fall below it. So the aggregate is the statistic
+        // that survives - and a share without its denominator is trap 1, which this
+        // very method printed for a whole run before anybody noticed.
+        long r1 = 0, b1 = 0, r2 = 0, b2 = 0, r3 = 0, b3 = 0;
+
+        for (var i = 0; i < one.Count; i++)
+        {
+            r1 += one[i].RedDeaths; b1 += one[i].BlueDeaths;
+            r2 += two[i].RedDeaths; b2 += two[i].BlueDeaths;
+            r3 += three[i].RedDeaths; b3 += three[i].BlueDeaths;
+        }
+
+        Console.WriteLine();
+        Console.WriteLine("aggregate death share, pooled over every map and match:");
+        Console.WriteLine($"  arm 1  {Share(r1, r1 + b1),7:0.0%}   {r1,7} of {r1 + b1,7} deaths");
+        Console.WriteLine($"  arm 2  {Share(r2, r2 + b2),7:0.0%}   {r2,7} of {r2 + b2,7} deaths");
+        Console.WriteLine($"  arm 3  {Share(r3, r3 + b3),7:0.0%}   {r3,7} of {r3 + b3,7} deaths");
+
         Console.WriteLine(
             $"death share, arm 3 vs arm 1: better on {betterThanOne} maps, worse on {worseThanOne}");
         Console.WriteLine(
