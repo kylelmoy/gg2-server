@@ -84,6 +84,37 @@ retrain first**, and would not look broken without one.
 
 Numbers, tables and scope: `docs/ENV.md`, "Phase 4 re-measured".
 
+### ⚠️ The policy is off-distribution in every MATCH, and always has been
+
+**`gg2-rl` 2026-09-01, verified here rather than taken.**
+`ObservationWriter.Enemies` is **2** and a duel has **one**, so the second enemy
+block — indices **[38, 57)** of the 209 — is **constant zero in every training
+observation this project has produced.** Its first-layer weights are therefore
+the random initialisation, unchanged from iteration 100 to final
+(`max|delta| = 0.0`, their measurement). Feeding it a real enemy encoding changes
+**45.2%** of the policy’s decisions.
+
+✅ **Checked on this side**: an observation taken in a two-character duel has that
+block all zero; add a second enemy and features inside it light up. So a policy
+driving a bot in an 8- or 12-bot match is reading a block it never saw during
+training, through weights nothing ever trained.
+
+⛔ **What this does NOT qualify.** It is not new, and it is not a defect in any
+arm-2 measurement: **phase 4’s 21-of-21 was itself an 8-bot match result**, so that
+number was obtained with this property present. Arm 2 and phase 4 are off
+distribution in the same way and remain comparable to each other.
+
+⚠️ **What it DOES qualify** is what "the policy" means in any match comparison:
+**its controller is provably untrained on the condition the benchmark puts it in.**
+A search has no equivalent — it re-derives from the world in front of it — so an
+arm-2/arm-3 comparison is not two controllers meeting the same standard. **State
+that beside the comparison rather than letting it be discovered afterwards.**
+
+⚠️ **Falsification, since this is a claim about training data**: it dies the moment
+anything trains on observations with two or more enemies present. Check
+`ObservationWriter.Enemies` against the population the trainer actually runs before
+repeating it.
+
 ### ⛔ A policy is DATED by the physics. A search is dated by nothing.
 
 **`gg2-rl`'s observation, 2026-09-01, and it is a maintenance property rather
