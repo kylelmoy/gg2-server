@@ -1791,9 +1791,43 @@ public sealed class GameServer : IDisposable
                 ExecuteEatSandvich(IdOf(entry));
                 break;
 
+            // ⚠️ A plugin packet is KICKED, not ignored, and that IS the
+            // reference's behaviour rather than a policy of ours.
+            // processClientCommands.gml:338-362 hands the packet to
+            // _PluginPacketPush, which returns false when the id is not in
+            // global.pluginPacketBuffers — a map populated only by
+            // loadserverplugins. A server with no plugins loaded has an empty
+            // map, so EVERY id is unrecognised and every sender is kicked with
+            // KICK_BAD_PLUGIN_PACKET. This server never loads plugins (it
+            // cannot: they are GML), so that branch is the only reachable one.
+            //
+            // ⚠️ Unreachable from a stock client, deliberately. It only sends
+            // plugin packets after loading the plugin list the HELLO advertised,
+            // and JoiningConnection advertises none — so reaching this means a
+            // client that made something up, which is exactly who the reference
+            // kicks.
+            case MessageType.PluginPacket:
+            {
+                var kick = new NetWriter(2);
+                ServerMessages.Kick(kick, KickReason.BadPluginPacket);
+                client.Connection.Send(kick.WrittenSpan);
+
+                // ⚠️ Flush BEFORE closing, or the kick is buffered and thrown
+                // away and the client just sees a dropped connection with no
+                // reason. The reference writes to the socket and then destroys
+                // it, which has the same requirement; the multi-client refusal
+                // above is the other place in this file that gets it right.
+                client.Connection.Flush();
+                client.Connection.Close("unrecognised plugin packet id");
+
+                _log.Info($"kicked {entry.Name}: plugin packet on a server with no plugins");
+                break;
+            }
+
+            // The reference's own answer to a reward request from a server with
+            // no auth configured is silence, and silence is a valid answer here.
             case MessageType.RewardRequest:
             case MessageType.RewardChallengeResponse:
-            case MessageType.PluginPacket:
                 break;
 
             default:

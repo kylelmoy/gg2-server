@@ -695,7 +695,23 @@ Not everything in the reference is load-bearing for a private headless server:
   external auth server. Answer `REWARD_REQUEST` with nothing and never grant
   rewards.
 - **Plugins** (`PLUGIN_PACKET`, `pluginList`). Advertise an empty plugin list and
-  `pluginsRequired = 0`; the client's plugin path is then never entered.
+  `pluginsRequired = 0`; the client's plugin path is then never entered. ✅ Done,
+  and it is the only part that can be.
+  ⛔ **Plugin support proper is NOT portable, and this is the reason rather than
+  a preference.** A GG2 plugin is a zip of GML fetched from ganggarrison.com and
+  executed inside Game Maker 8 (`loadserverplugins.gml`, `extractzip.gml`). A C#
+  server cannot run one, so `PluginPacketSend`, the packet queues and the whole
+  `Scripts/Plugins/API` surface have no meaning here. **Do not open this as a
+  task**; the only way it becomes possible is a GML interpreter, which is a
+  bigger project than this server.
+  ⚠️ **What WAS wrong, and was fixed on 2026-09-01: a plugin packet is KICKED,
+  not ignored.** `processClientCommands.gml:338-362` calls `_PluginPacketPush`,
+  which returns false for an id absent from `global.pluginPacketBuffers` — a map
+  filled only by `loadserverplugins`. With no plugins loaded the map is empty,
+  **every** id is unrecognised, and the sender gets `KICK_BAD_PLUGIN_PACKET`.
+  Unreachable from a stock client (it only sends packets for plugins the greeting
+  advertised, and this server advertises none), so it is a correctness fix rather
+  than a working feature. `PluginPacketTests`.
 - **Map download.** Serve only built-in maps and always advertise an empty MD5.
 - **UPnP port forwarding** (`GameServerCreate.gml:5-19`).
 - **The loopback socket.** The reference server connects to itself over TCP so
