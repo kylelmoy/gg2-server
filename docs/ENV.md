@@ -2007,9 +2007,20 @@ absorbed all but one. Ranking on `decided` sends you to a row that is fine and
   The cap hid a random third; it did not manufacture the advantage.
   ⚠️ **At n=20 the same quantity read 54.5-vs-77.8 and pointed at the wrong
   answer.** Only the control's strata make it readable.
-- ⚠️ **`koth_harvest` runs the other way** and is worth knowing: at 150px the
-  advantage is **+15.8 points inside 300s and +1.9 beyond**. The stratum split is
-  map-dependent, so gen_destroy's uniformity is not a general law.
+- ⚠️ **`koth_harvest` LOOKS like it runs the other way and does not survive a
+  test.** At 150px the advantage is **+15.8 points inside 300s (z = +2.79) and
+  +1.9 beyond (z = +0.22)** — which reads as a strong stratum difference. But the
+  quantity that claim needs is the **difference in differences**, and that is
+  **+14.0 points at z = +1.40**: not significant. `gen_destroy`'s is −2.6 points
+  at z = −0.26. **Neither map shows a significant stratum difference**, and the
+  two are not distinguishable from each other.
+  ⛔ **The first version of this entry said "`koth_harvest` runs the other way"**
+  on the strength of two point estimates with no test between them — which is the
+  exact failure this page is about, committed while writing the page about it.
+  The two per-stratum z-scores are each significant and say nothing about whether
+  the strata DIFFER; comparing two significant numbers is not a test of their
+  difference. What is true is narrower: **`gen_destroy`'s uniformity is one map's
+  answer and nothing here establishes it as the method's.**
 
 ### ⚠️ The cap-20 instrument is not neutral either
 
