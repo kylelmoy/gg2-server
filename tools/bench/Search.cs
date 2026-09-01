@@ -28,7 +28,8 @@ public static class SearchBench
         var horizons = new[] { 20, 40, 80, 160, 320 };
         var results = new List<(int Horizon, double Us)>();
 
-        Console.WriteLine($"map={map}  RolloutSearch decision cost by horizon");
+        var pop = int.TryParse(Environment.GetEnvironmentVariable("BENCH_POP"), out var pv) && pv > 2 ? pv : 2;
+        Console.WriteLine($"map={map}  population={pop}  RolloutSearch decision cost by horizon");
 
         foreach (var horizon in horizons)
         {
@@ -36,6 +37,23 @@ public static class SearchBench
             var cls = Environment.GetEnvironmentVariable("BENCH_CLASS") == "sniper" ? PlayerClass.Sniper : PlayerClass.Soldier;
             var red = world.Place(cls, Team.Red, 600, 850);
             var blue = world.Place(PlayerClass.Soldier, Team.Blue, 760, 850);
+
+            // ⚠️ BENCH_POP: how many characters are ALIVE in the world, total.
+            // A rollout re-simulates every one of them for every tick of every
+            // candidate, so a decision measured in a 2-character duel is not the
+            // decision a 12-bot match pays for. This is the term a duel number
+            // silently omits, and the reason a per-decision cost does not
+            // transfer between them. Default 2 keeps the old readings comparable.
+            var population = int.TryParse(Environment.GetEnvironmentVariable("BENCH_POP"), out var p) && p > 2 ? p : 2;
+
+            for (var extra = 2; extra < population; extra++)
+            {
+                world.Place(
+                    PlayerClass.Soldier,
+                    extra % 2 == 0 ? Team.Red : Team.Blue,
+                    500 + (extra * 37),
+                    850);
+            }
 
             for (var i = 0; i < 20; i++)
                 world.Step();
