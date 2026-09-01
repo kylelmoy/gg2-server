@@ -292,6 +292,30 @@ public readonly record struct DuelSpec
     /// knob and asked explicitly that the default not move with it.
     /// </para>
     /// <para>
+    /// ⛔ <b>THE SWEEP RAN AND THE ANSWER IS "SHORTER", so stop reading the
+    /// paragraphs above as an open question.</b> <c>gg2-rl</c>'s
+    /// <c>docs/PLAN.md</c>, 2026-08-29: a longer horizon makes the search
+    /// <b>monotonically worse in every class</b> — sniper 68.4% → 22.8%, soldier
+    /// 93.8% → 63.7% from the default out to 90. The blind fraction falls exactly
+    /// as intended and the win rate falls with it, anti-correlated everywhere. So
+    /// <b>the blind fraction was the wrong thing to minimise</b>, and this
+    /// remark's own framing — "the number this exists for is the BLIND FRACTION,
+    /// not the win rate" — is the half that did not survive the measurement it
+    /// asked for.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>The diagnosis, which is why the knob still earns its place:</b>
+    /// lookahead and commitment are entangled by the SCORING. A candidate scores
+    /// on damage landing inside the window it is acting in, so a longer window
+    /// scores a longer commitment to one action, and committing longer is worse
+    /// however far you can see. <see cref="RolloutOptions.CommitTicks"/> was built
+    /// to separate them and did not: a neutral continuation after the commit
+    /// leaves 0.965 of a sniper's rows blind, worse than horizon 20, because a
+    /// character that stops acting stops generating damage to score.
+    /// <b>A continuation that keeps ACTING is the untried experiment</b> — see
+    /// <c>docs/ENV.md</c>, "the policy as the rollout continuation".
+    /// </para>
+    /// <para>
     /// ⚠️ <b>Only the horizon is exposed, not the rest of <c>RolloutOptions</c>.</b>
     /// The aim ladder and the candidate set are the search's own tuning, and
     /// putting them on the wire would make "the search baseline" a different thing

@@ -1353,6 +1353,91 @@ CLAUDE.md's standing rule: this project's headroom figure sat stale in four
 documents because a re-measure forgot to say which configuration it was, and
 Debug reads about half of Release.
 
+## The policy as the rollout continuation — costed, not built (2026-08-31)
+
+**`gg2-rl`'s `docs/DESIGN.md` step 3**, and the only part of that method that
+compounds. Asked about, not asked for. Recorded here because the **cost model is
+this repo's to supply** and the estimate that came with the ask was out by ~4x.
+
+### The measured cost model for a search decision
+
+Release, `gg_debug`, 60 candidates, `DecisionTicks: 1`, horizon swept 20→320 and
+fitted:
+
+| | |
+|---|---|
+| per candidate, fixed | **~10-12 µs** — the `_fork = _baseline` copy, a 145 KB `WorldState` |
+| per candidate-tick | **~2.1 µs** |
+| a decision at horizon 20 | **~2.79 ms** |
+
+⚠️ **The fork does not scale with horizon**, which is why pruning frees more than
+a candidates-times-horizon account suggests: it removes whole forks, not just
+ticks.
+
+### What a policy continuation would cost, including the term the ask omitted
+
+A continuation means the policy drives the rollout after the commit window — so
+**an observation and a forward pass per tick per candidate**.
+
+| per candidate-tick | |
+|---|---|
+| simulation | 2.1 µs |
+| ⛔ **`ObservationWriter.Write`** | **~3.1 µs** |
+| forward pass (`gg2-rl`'s figure) | ~1.6 µs |
+| **total** | **~6.8 µs — 3.2x the bare tick** |
+
+⛔ **Extraction is the largest of the three and was not in the estimate.** The ask
+costed 1,200 forward passes at ~1.9 ms and concluded "+50%". Adding the
+observations those passes need:
+
+| at horizon 20 | cost | against today's 2.79 ms |
+|---|---|---|
+| 60 candidates, continuation | **8.8 ms** | **+215%**, not +50% |
+| 8 candidates, continuation | **1.17 ms** | **cheaper than the search we run now** |
+
+⚠️ **The conclusion survives the correction and gets stronger.** Pruning does not
+merely make the continuation affordable — **pruned-with-continuation costs less
+than unpruned-without**. But the reason is mostly this repo's observation writer,
+not the network, so the number to watch when anyone re-estimates this is the
+extraction row.
+
+### The shape, if it is ever built
+
+⚠️ **`docs/ENV.md`'s own "out of scope" list says "no ML runtime, no inference
+path, no weights format".** That was written before `gg2-rl` phase 2 existed. It
+would have to be reopened **deliberately**, not quietly, and this paragraph is
+the notice that it is now a live question rather than a settled one.
+
+- ⚠️ **Weights over the wire, in the batch — NOT a file format.** A weights file
+  in this repo is a second source of truth about what a checkpoint is, and a
+  version coupling with a trainer that already couples through `SIM_UUID`.
+  Arriving in `MakeBatch` and living for the batch's life has neither.
+- ⚠️ **Not a callback over the socket.** 1,200 round trips a decision at 50 µs
+  each is 60 ms; the whole decision is 2.8 ms.
+- **No allocation in the rollout loop** — scratch buffers per search instance.
+- **Not in `SIM_UUID`.** A search is a bot, and this project's bots are its own
+  (`CLAUDE.md`). The observation layout it consumes is already stamped, which is
+  the part that must not drift.
+
+### The cheap piece, which is independently useful
+
+The **candidate-index restriction** — `Step`/`StepScored` carrying an optional
+list of indices per searching slot, indices into what `Candidates` returns, empty
+meaning "search everything". `BuildCandidates` is a pure function of
+`(options, class)`, so an index is stable for a batch; ⚠️ **the length changes
+60 ↔ 120 when the class does** (only a sniper carries the zoom dimension), so an
+implementation must validate against the current count and **refuse**, never
+clamp — an index silently meaning a different action is the worst failure
+available here.
+
+⚠️ **One interaction to decide before building it**: `LastScores` is aligned 1:1
+with the full candidate list and `StepScored`'s block is that array. A pruned
+search evaluates k of them, so either the block stops being aligned with
+`Candidates`, or it carries a sentinel for unsearched — **and zero cannot be the
+sentinel, because zero is a real score** (the blind case, already documented).
+Whichever is chosen puts holes in the distribution that the *next* round of
+distillation trains on.
+
 ## Goal conditioning — `gg2-rl` phase 4's hybrid boundary (2026-08-30)
 
 **Asked for by `gg2-rl`**, and cheap for one reason: the goal block was reserved
