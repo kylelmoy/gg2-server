@@ -46,6 +46,28 @@ namespace Gg2.Tests;
 /// and pointed at the wrong 95%. Owed to <c>gg2-rl</c>, which took the near-miss
 /// here and found the general form. 2026-09-01.
 /// </para>
+/// <para>
+/// ⛔ <b>The discriminator, without which the rule above flags everything and is
+/// therefore useless: is the oddity ASSERTED or EXCUSED?</b>
+/// <list type="bullet">
+/// <item><b>Excused</b> — the case is skipped, and the hole is enriched for
+/// counterexamples. That is this class's <c>gg_debug</c> entity gap.</item>
+/// <item><b>Asserted</b> — the case is carried, with its own different expected
+/// values. That is
+/// <c>WalkmaskTests.MapBoundsMatchTheWalkmaskOnEveryMapButGgDebug</c>, which
+/// names the exception in its own title and then asserts gg_debug's 720x384 and
+/// that its walkmask width does NOT match. <b>That is coverage of a second
+/// behaviour and is better than a uniform check weakened until the odd case
+/// fits.</b></item>
+/// </list>
+/// ⚠️ <b>A rule that flagged every named exception would be worse than no
+/// rule</b> — work with no yield, then ignored, then unavailable on the day it
+/// mattered. It only showed that false-positive rate when the rule was actually
+/// run over this suite: one real hole, one look-alike already handled well, no
+/// third. ⚠️ <b>That is what a good rule's yield looks like</b>, and it is worth
+/// saying because the instinctive test of a rule is "did it find a lot", which
+/// selects for rules that fire too often.
+/// </para>
 /// </remarks>
 public sealed class ShippedEntityCensusTests
 {
