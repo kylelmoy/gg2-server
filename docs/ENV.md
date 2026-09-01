@@ -1797,27 +1797,56 @@ is reading it wrong** — including the horizon sweep in `RolloutOptions.CommitT
 whose monotone opposition is real and does not license the causal reading it
 invites.
 
-⚠️ **Two criteria, on two axes, and only one of them has been answered.**
+### The verdict: criterion 2 passed, criterion 1 failed by nineteen points
 
-- **Criterion 1 — is the search STRONGER at equal cost?** The **win** axis, and
-  the headline. Its pre-registered primary is **arm D on red against arm A on
-  blue** in one world, null exactly 50%, no ceiling — which is what per-side
-  configuration was built for. **The table above is its FALLBACK**, and it was
-  still running when this was written.
-- **Criterion 2 — did the entanglement break?** The **blind** axis. No fallback,
-  and it **passed**: `r = +1.166`, and `D_blind@60` 63.4% against unpruned's
-  64.8%.
+**The head-to-head landed 2026-09-01.** Arm D on red against arm A on blue, one
+world, null exactly **50%**, no ceiling — the pre-registered primary, and what
+per-side configuration was built for.
 
-⛔ **So do NOT read "arm D is weaker than arm A" off this table as settled.** The
-fallback measures both against a scripted bot the search already beats 90.7% of
-the time, and `gg2-rl` pre-registered that ceiling as the reason the fallback is
-the worse instrument. **If the head-to-head disagrees with it, that disagreement
-is itself the finding** — which it cannot be if either repo has already written
-the fallback's answer down as fact.
+| | |
+|---|---|
+| D's win share | **27.7%** [24.2%, 31.4%] |
+| A's win share | 56.0% |
+| draws | 16.3% |
+| decisive split | D 33.1% / A 66.9% |
+| cost | D **2.93 ms** against A's 3.99 ms |
 
-⚠️ **This qualification is meant to be REPLACED, not to stand.** A standing
-qualification outlives its condition; when the head-to-head lands, write the
-verdict in here and delete this paragraph.
+⛔ **The interval excludes the 50% threshold by nineteen points.** And note which
+half failed: **D is CHEAPER than A**, so *"at equal cost"* was satisfied outright
+and the criterion failed on **stronger**.
+
+⚠️ **`gg2-rl`'s draw guard fired and did not rescue it.** 16.3% draws against the
+arm table's 0.5–1.4%, so by its own pre-registered rule this is *weaker* evidence
+than the arm table. **Discounted, and the verdict survives the discount by
+nineteen points.** The stalemate has an obvious cause — two strong searches — and
+explains the run taking 4–7x arm A's wall time for the same duel count.
+
+✅ **Both instruments agree, and the ceiling cuts the way that strengthens it.**
+The fallback put D at 73.5% against A's 90.7%; the primary puts D at 27.7%
+against a 50% null. The ceiling flagged as the fallback's weakness would have
+*compressed* A's advantage — and A still won. So the fallback was right for a
+reason that makes the agreement stronger rather than weaker.
+
+⛔ **What the negative retires is worth more than the negative.** *"The search is
+blind, therefore it is weak"* was the load-bearing assumption of the whole
+step-3 case, including the ceiling argument built on this repo's horizon sweep.
+The decomposition above kills it: 13.4 points of blindness removed returns 1.1
+points of win share. **The ceiling was a correlation read as a mechanism.**
+
+⚠️ **What was NOT the cause, each checked rather than assumed:** not the policy
+prior (the exploration monitor never fired at any k in any arm — 2.4% against a
+20.0% null on 40,051 decisions); not cost (D is cheaper); not the commitment's
+phase; and **not the plumbing** —
+`EnvProtocolTests.APolicyLoadedOverTheSocketReachesTheRollout` is why this is
+reportable as a finding at all, because **a severed wire-to-rollout chain produces
+this exact win column.**
+
+⚠️ **What this does NOT establish, and must not be quoted as establishing: that a
+policy continuation cannot work.** It is one policy, at k=30, commit 4, horizon
+20. The obvious reading — that the continuation hands the rollout to something
+weaker than the search it replaces — **is a hypothesis this run does not test**.
+And nobody has an explanation for why the short commitment costs 11 points; only
+that it is not blindness.
 
 ✅ **The exploration monitor never fired**: 2.4% against a 20.0% computed null,
 n = 40,051. The policy prior was never the problem, at any k, in any arm.

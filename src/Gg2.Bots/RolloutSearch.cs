@@ -243,17 +243,31 @@ public enum RolloutOpponent
 /// whole wire-to-rollout chain.
 /// </para>
 /// <para>
-/// ⚠️ <b>TWO CRITERIA, AND ONLY ONE IS ANSWERED.</b> <b>Criterion 2</b> — did the
-/// entanglement break — is the <em>blind</em> axis, has no fallback, and
-/// <b>passed</b>. <b>Criterion 1</b> — is the search stronger at equal cost — is
-/// the <em>win</em> axis and the headline, and <b>the table above is only its
-/// FALLBACK</b>; its pre-registered primary is arm D on red against arm A on blue
-/// in one world at a 50% null, which was still running when this was written.
-/// ⛔ <b>Do not read "D is weaker than A" off the win column as settled</b>: the
-/// fallback measures both against a bot the search already beats 90.7% of the
-/// time, and that ceiling is the reason it is the worse instrument. <b>Replace
-/// this paragraph with the verdict when it lands</b> rather than leaving the
-/// qualification to outlive its condition.
+/// ⛔ <b>THE VERDICT: criterion 2 passed, criterion 1 failed by nineteen
+/// points.</b> The head-to-head — arm D on red against arm A on blue, one world,
+/// null exactly 50%, no ceiling — put <b>D at 27.7% [24.2%, 31.4%]</b> against
+/// A's 56.0%, with 16.3% draws over 1,008 duels. ⚠️ <b>D is CHEAPER</b> (2.93 ms
+/// against 3.99), so <em>at equal cost</em> was satisfied outright and the
+/// criterion failed on <b>stronger</b>. <c>gg2-rl</c>'s draw guard fired — 16.3%
+/// against the arm table's 0.5-1.4% — so this is weaker evidence than that table
+/// by its own rule, and the verdict survives the discount by nineteen points.
+/// </para>
+/// <para>
+/// ⚠️ <b>Both instruments agree, and the ceiling cuts the way that strengthens
+/// it</b>: it would have compressed A's advantage in the fallback, and A still
+/// won. ⚠️ <b>What was NOT the cause</b>, each checked: not the prior (the
+/// exploration monitor never fired at any k in any arm), not cost, not phase, and
+/// <b>not the plumbing</b> — a severed wire-to-rollout chain produces this exact
+/// win column, which is what
+/// <c>EnvProtocolTests.APolicyLoadedOverTheSocketReachesTheRollout</c> exists to
+/// rule out.
+/// </para>
+/// <para>
+/// ⚠️ <b>This does NOT establish that a policy continuation cannot work.</b> One
+/// policy, k=30, commit 4, horizon 20. That the continuation hands the rollout to
+/// something weaker than the search it replaces is the obvious reading and <b>a
+/// hypothesis this run does not test</b>. Nobody has an explanation for the short
+/// commitment's 11 points either — only that it is not blindness.
 /// </para>
 /// </param>
 /// <param name="ConsiderSpecial">
