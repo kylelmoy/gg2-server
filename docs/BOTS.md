@@ -84,6 +84,40 @@ retrain first**, and would not look broken without one.
 
 Numbers, tables and scope: `docs/ENV.md`, "Phase 4 re-measured".
 
+### ⛔ A policy is DATED by the physics. A search is dated by nothing.
+
+**`gg2-rl`'s observation, 2026-09-01, and it is a maintenance property rather
+than a performance one — so no criterion in this project measures it.**
+
+`PolicyNetwork` carries weights fitted to one version of the simulation, which is
+what `SimulationStamp` exists to police: change the physics and a checkpoint is
+**wrong**, silently, and `Require` refuses it. `RolloutSearch` carries no weights
+at all — it **re-derives from the simulation in front of it, every decision**. So
+the same physics change that invalidates a policy leaves a search **automatically
+correct.**
+
+    a shipped policy   every physics change costs a retrain, forever
+    a shipped search   every physics change is absorbed for free
+
+⚠️ **For a bot meant to live on a public server against a simulation still being
+changed, maintenance may be the larger term** — and it is one the death-share
+criterion cannot see, in either direction.
+
+⚠️ **Written down BEFORE the bump that prompted it landed**, deliberately. The
+platform lane had `SimulationBehaviourVersion` bumped in its working tree and the
+observation was made while the outcome was still unknown; recorded afterwards it
+would read as a rationalisation of whichever way that went. **Its falsification is
+cheap and should be checked rather than assumed: if the physics stops changing,
+this argument is worth nothing.**
+
+⚠️ **And the cost of a bump lands unevenly on the arms, worth stating plainly
+rather than under the argument above.** An all-scripted arm and a search-hybrid arm
+carry no checkpoint and survive; **a policy-hybrid arm dies until somebody
+retrains**, and that arm is the comparability anchor. Without it, a search-hybrid
+comparison answers "does this beat all-scripted" rather than the question actually
+asked. **Phase 4's 21-of-21 also becomes a statement about superseded physics**,
+which is a real loss to this project independent of what any new arm shows.
+
 ---
 
 ## ⛔ Measuring a bot change
