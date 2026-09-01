@@ -1167,6 +1167,46 @@ that happens 0.06% of the time happens on most steps once there are enough
 workers.** This is why the throughput table above did not move and the change is
 still worth having.
 
+## ⚠️ A setting that outlived the configuration it was chosen for
+
+**`gg2-rl`'s finding, 2026-08-31, and it is a distinct failure from a stale
+claim.** Its default duel count was chosen when duels were long and rare — the
+(150,350) band — and the in-range band it uses now resolves far faster, so the
+same wall-clock budget buys many more duels. Nobody re-derived the default after
+changing the task. The result: **four numbers in one day that moved substantially
+when the sample was widened**, one from −4.5 to −13.7 points at four times the
+duels.
+
+⚠️ **The dangerous half is the CONFIRMATIONS.** Nobody widens a sample that
+already agreed with them, so a thin sample that matched a prior is never re-run
+and never corrected. `gg2-rl` audited its own results on that basis and found one
+genuinely exposed (an engagement result, ~500 duels, never widened) and one saved
+by accident (the +22 prior lift, replicated at n=11,215 by the exploration
+monitor it built for a different purpose).
+
+### The same shape, twice, in THIS repo
+
+Found by applying the lesson here rather than agreeing with it:
+
+- ⚠️ **`RolloutOptions.HorizonTicks = 20` is a design-time range, not a
+  measurement.** `docs/BOTAI.md` item 12 said 15-30 and 20 was picked from it. The
+  only sweep ever run went **upward**, 20 to 90, and found the win rate falling
+  monotonically in every class. **Nobody has run it below 20**, and 15 is inside
+  item 12's own range — so the entire measured curve points into an untested
+  region. ⛔ Not lowered: extrapolating off the end of a measured range is exactly
+  how the blind fraction came to be minimised, and the default is `gg2-rl`'s to
+  move at its own request.
+- ⚠️ **The `CommitTicks` negative result rests partly on 24 duels a cell.** Its
+  blind fractions are ratios over many decisions and are not in doubt — 0.523 →
+  0.965 is not a sampling artefact. Its **win rates are thin**: 0.375 against
+  0.625 at n=24 barely separate. "It slides back along the same trade" is solid on
+  the blind axis and provisional on the win axis, and that distinction was not
+  drawn when the result was written down.
+
+⚠️ **This is deliberately NOT in `CLAUDE.md`.** That file is already 17% over its
+own budget and I put it there twice yesterday; a third "my addition is the
+exception" is the failure it warns about. It lives with the settings it is about.
+
 ## ⚠️ The reset reload — five milliseconds to start a one-millisecond episode
 
 **Found 2026-08-30, and it had been there since the env was built.**

@@ -75,6 +75,19 @@ public enum RolloutOpponent
 /// <param name="HorizonTicks">
 /// How far each candidate is played forward. <c>docs/BOTAI.md</c> item 12 says
 /// 15-30; 20 is the default.
+/// ⚠️ <b>That default is a DESIGN-TIME RANGE, not a measurement, and the only
+/// direction anyone has measured says it should come down.</b> <c>gg2-rl</c>'s
+/// sweep (2026-08-29) took it from 20 out to 90 and found the win rate falling
+/// monotonically in every class — sniper 68.4% → 22.8%, soldier 93.8% → 63.7%.
+/// <b>Nobody has run it BELOW 20</b>, and 15 is inside item 12's own range, so
+/// the whole measured curve points into an untested region.
+/// <para>
+/// ⛔ <b>Do not lower it on that reasoning alone.</b> The monotone stretch is
+/// 20-90, and extrapolating off the end of a measured range is how the blind
+/// fraction came to be minimised in the first place. It wants the same sweep run
+/// downward on <c>gg2-rl</c>'s harness, which has the duel counts and the tier
+/// ladder — and the default is theirs to move, at their explicit request.
+/// </para>
 /// </param>
 /// <param name="DecisionTicks">
 /// How many ticks one decision covers before the search runs again — the action
@@ -100,8 +113,8 @@ public enum RolloutOpponent
 /// <para>
 /// ❌ <b>MEASURED 2026-08-29, AND IT DOES NOT HELP.</b> The signature of a real
 /// fix was agreed in advance — the blind fraction falling <em>without</em> the
-/// win rate falling. It does the opposite. <c>ctf_2dfort</c> banded, tier 5, 24
-/// duels a cell:
+/// win rate falling. It does the opposite. <c>ctf_2dfort</c> banded, tier 5,
+/// <b>24 duels a cell</b> — see the sample-size caveat below:
 /// </para>
 /// <list type="bullet">
 /// <item>sniper, horizon 60: commit=horizon <b>0.523 blind / 0.375 win</b>;
@@ -116,6 +129,18 @@ public enum RolloutOpponent
 /// and the reason is the same refire arithmetic: a candidate scores from damage
 /// landing inside the window where it is acting, and shortening the commitment
 /// shortens that window.
+/// </para>
+/// <para>
+/// ⚠️ <b>AND THE WIN-RATE HALF IS THIN — 24 duels a cell.</b> `gg2-rl` found
+/// four results on 2026-08-31 that moved substantially when the sample was
+/// widened, one of them from −4.5 to −13.7 points at four times the duels, and
+/// concluded its default duel count had been chosen for a task that no longer
+/// existed. <b>These cells are smaller than that default.</b> The BLIND fractions
+/// here are ratios over many decisions and are not in doubt; 0.523 → 0.965 is not
+/// a sampling artefact. The win rates are: 0.375 against 0.625 at n = 24 barely
+/// separate. So <b>"it slides back along the same trade" is solid on the blind
+/// axis and provisional on the win axis</b>, and anybody about to act on the win
+/// half should widen it first.
 /// </para>
 /// <para>
 /// ⚠️ <b>This is a negative result about THIS continuation, not about the
