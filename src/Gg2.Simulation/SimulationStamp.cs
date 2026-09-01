@@ -144,7 +144,30 @@ public static class SimulationStamp
     /// that is a change somebody makes deliberately, so it is a condition a person
     /// can act on rather than one a test must catch. Until then a shipped map
     /// gaining a platform is not by itself a reason to bump; a shipped map gaining
-    /// a platform <em>with a sprite</em> is, and that is what goes red.
+    /// a platform with a sprite <em>somewhere a character can be</em> is, and
+    /// that is what goes red.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>The gate narrowed on 2026-09-01, by agreement between the lane that
+    /// wrote it and the lane that trips it, when <c>gg_debug2</c> gained the
+    /// raft</b> — a resourced platform placed to give the mask pipeline a real
+    /// embedded sprite, inside a sealed chamber whose unreachability is itself
+    /// flood-fill-asserted. The first wording ("no shipped platform names a
+    /// resource at all") would have forced a bump for it, and a bump would have
+    /// claimed a behaviour change that does not exist twice over: today a
+    /// resourced platform still has no <c>SolidRect</c>, so nothing stands on it
+    /// (<see cref="CharacterPhysics"/>'s dropdown scan says why); and the day the
+    /// box and carry land, a platform no character can reach without a teleport
+    /// still cannot move one. The gate therefore asserts reachability rather
+    /// than absence:
+    /// <c>MovingPlatformTests.NoShippedMapPlacesAPlatformThatCouldCarryAnyone</c>
+    /// flood-fills each map from its spawns and fails on any resourced
+    /// platform whose swept extent a character could reach. A teleport — the
+    /// control port, a scenario placement — is a debug act outside the
+    /// checkpoint's claim, the same boundary the custom-map paragraph below
+    /// draws; an env or eval run that deliberately places characters inside a
+    /// sealed chamber is measuring platform physics on purpose and cannot
+    /// appeal to this exemption.
     /// </para>
     /// <para>
     /// ⚠️ <b>Custom maps are the live edge.</b> Nothing stops an operator pointing
