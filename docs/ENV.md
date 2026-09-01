@@ -2077,6 +2077,43 @@ with a p-value attached — a real pattern, correctly computed, decorated with a
 number implying a test was at risk when none was. ⚠️ **A p-value on a post-hoc
 quantity and one on a pre-registered test PRINT IDENTICALLY.**
 
+### ⛔ Who caught them: not the author, and not a review pass
+
+**Eight errors across two sessions on 2026-09-01, and none was caught by the
+person who made it.** Not one was found by re-reading either. What found them:
+
+| what found it | errors |
+|---|---|
+| a **control arm** kept for completeness, not as the experiment | 2 |
+| a **pre-registered** test with its outcomes written down first | 1 |
+| **grepping the definition** of a field about to be quoted | 2 |
+| **the other session reading the claim** | 3 |
+| a review pass | **0** |
+
+⚠️ **The reason is specific to this class, and it is why "be more careful" fails
+here.** Every one of the eight was about what a number *meant* — a denominator, a
+definition, a null, an overloaded field, a significant result beside a
+non-significant one read as a contrast. **An author re-reading their own number
+recovers the meaning they intended, which is exactly the meaning that was
+wrong.** The author is the one reader guaranteed to reconstruct the mistake.
+
+✅ **So the cross-session seam earned more as a READER than as an interface**, and
+the actionable form is **send a claim across it early** rather than review harder
+on either side. A cheap habit rather than a virtue, which is the only kind that
+survives a busy day.
+
+⚠️ **This is NOT an argument against review.** None of the eight was a transposed
+index or a wrong sign, and a review pass would have caught one in any of the same
+files. **Cheap contradicting actions for questions of meaning; review for
+questions of mechanism.**
+
+⛔ **And the fix that worked, three times, was structural rather than
+resolve**: gate the classifier on the game mode instead of remembering the
+aliasing; print the subset size in the row instead of the caption; write explicit
+enum values instead of a convention about declaration order. **Remove the need to
+get it right rather than relying on getting it right** — the CTF/TDM aliasing was
+*remembered*, written up, sent as a warning, and walked into an hour later.
+
 ### ⚠️ And the trap that was flagged an hour before it was walked into
 
 `Rounds.cs:565` compares the kill limit against `RedCaps`/`BlueCaps`, so **the
