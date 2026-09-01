@@ -320,6 +320,17 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
     }
 
     /// <summary>How many candidate actions each decision evaluates.</summary>
+    /// <summary>
+    /// The candidate set currently BUILT — which is the class this search last
+    /// drove, not the class it is about to.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Not the number to validate a restriction against.</b> The constructor
+    /// builds without the zoom dimension, so this reads 60 for a sniper until its
+    /// first decision has searched. Use
+    /// <see cref="CandidateCountFor(RolloutOptions, PlayerClass)"/>, which is a
+    /// function of the class rather than of history.
+    /// </remarks>
     public int CandidateCount => _candidates.Length;
 
     /// <summary>
@@ -445,7 +456,7 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
     /// never clamped</b> — an index that silently meant a different action would
     /// be a wrong search reported with plausible numbers.
     /// </exception>
-    public void RestrictNextDecision(ReadOnlySpan<int> indices)
+    public void RestrictNextDecision(ReadOnlySpan<int> indices, PlayerClass playerClass)
     {
         if (indices.Length == 0)
         {
@@ -453,28 +464,33 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
             return;
         }
 
+        // ⚠️ The count for the class this slot WILL be searched as, never the
+        // instance's CandidateCount — that reads 60 for a sniper until its first
+        // decision, which refused a valid index 76 on step 0. See
+        // CandidateCountFor.
+        var count = CandidateCountFor(_options, playerClass);
         var mask = _restriction;
 
-        if (mask is null || mask.Length < _candidates.Length)
-            mask = new bool[_candidates.Length];
+        if (mask is null || mask.Length < count)
+            mask = new bool[count];
         else
             Array.Clear(mask);
 
         foreach (var index in indices)
         {
-            if ((uint)index >= (uint)_candidates.Length)
+            if ((uint)index >= (uint)count)
             {
                 _restriction = null;
 
                 throw new ArgumentOutOfRangeException(
-                    nameof(indices), index, $"a candidate index is 0..{_candidates.Length - 1}");
+                    nameof(indices), index, $"a candidate index is 0..{count - 1}");
             }
 
             mask[index] = true;
         }
 
         _restriction = mask;
-        _restrictionForCount = _candidates.Length;
+        _restrictionForCount = count;
     }
 
     /// <summary>
@@ -569,6 +585,42 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
     /// </remarks>
     public static ReadOnlySpan<EnvAction> CandidatesFor(RolloutOptions options, PlayerClass playerClass) =>
         BuildCandidates(options.WithDefaults(), considerZoom: playerClass == PlayerClass.Sniper);
+
+    /// <summary>
+    /// How many candidates <see cref="CandidatesFor(RolloutOptions, PlayerClass)"/>
+    /// would return, without building them.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>This exists because a THIRD source for the count shipped a bug.</b>
+    /// <c>DuelEnv.CandidatesFor</c> derives the set from the batch spec's class
+    /// and answers 120 for a sniper before the first step; the instance
+    /// <see cref="CandidateCount"/> answers whatever class was last SEARCHED, and
+    /// the constructor builds without the zoom dimension — so it answers 60 for a
+    /// sniper until its first decision. The restriction validator read the
+    /// instance and refused a perfectly valid index 76, on step 0 only, for
+    /// snipers only. Found by <c>gg2-rl</c> within an hour of it shipping.
+    /// <para>
+    /// ⚠️ <b>Anything that needs "how many candidates will this SLOT have" must
+    /// come here or to <c>CandidatesFor</c>, never to
+    /// <see cref="CandidateCount"/>.</b>
+    /// <c>RolloutRestrictionTests.EveryCountSourceAgrees</c> pins the two together
+    /// for every class, because an arithmetic count that drifted from the loop
+    /// that builds the list would be the same bug wearing a different hat.
+    /// </para>
+    /// </remarks>
+    public static int CandidateCountFor(RolloutOptions options, PlayerClass playerClass)
+    {
+        var settled = options.WithDefaults();
+
+        // BuildCandidates' loop nest, counted rather than walked: aims, then
+        // fire (special or not), then zoom (sniper only), then 3 horizontal by
+        // 2 jump.
+        return settled.Aims.Length
+            * (settled.ConsiderSpecial ? 3 : 2)
+            * (playerClass == PlayerClass.Sniper ? 2 : 1)
+            * 3
+            * 2;
+    }
 
     private EnvAction[] CandidatesFor(PlayerClass playerClass)
     {

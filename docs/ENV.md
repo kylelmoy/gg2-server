@@ -1433,6 +1433,39 @@ accepts and ignores trailing bytes — a new client sending restrictions to an o
 server would be **silently unrestricted** and would measure "pruning changes
 nothing". A kind the old server does not know is refused loudly instead.
 
+### ⛔ And it shipped with a bug: the sniper, on step 0 only
+
+**Found by `gg2-rl` within an hour**, and every test above passed over it.
+
+Only a sniper carries the zoom dimension, so its candidate set is **120**. But
+`RolloutSearch`'s constructor builds with `considerZoom: false`, and the set is
+only rebuilt from the slot's class inside `Search` — so the instance
+`CandidateCount` reads **60 for a sniper until its first decision has searched**.
+The restriction validator asked the instance. Index 76 — valid, and inside what
+`Candidates` had just reported — was refused, **on step 0 and only on step 0**,
+because by step 1 the set has been rebuilt and the bug evaporates.
+
+⚠️ **Three sources disagreed about one number**: `Candidates` said 120, the score
+block said 120, the validator said 60. `DuelEnv.CandidatesFor` was already right
+and already documented as *"derived from the spec rather than read off the live
+search, so it is answerable before the first Step"* — **the bug was adding a
+fourth way to ask instead of using it.**
+
+The fix is that `DuelEnv.TrySearchShape` is the only place that decides what
+shape a slot's candidate set has, and `RolloutSearch.CandidateCountFor(options,
+class)` is the only arithmetic. Gated by
+`EnvProtocolTests.ASniperIsRestrictableOnStepZero` (the exact repro, and it must
+be step 0) and `RolloutRestrictionTests.EveryCountSourceAgrees` (all nine
+classes, three option shapes, comparing the arithmetic against the built list so
+neither can drift).
+
+⚠️ **The generalisable part.** Refusing rather than clamping is what turned this
+into a loud failure in seconds instead of a sniper quietly searching the wrong
+half of its options — that decision paid for itself immediately. But **a bound
+that is wrong in the safe direction still breaks the caller**: the refusal killed
+the step rather than dropping the mask. *Validate against the thing that decides,
+not against a thing that usually agrees with it.*
+
 **What is gated, and each of these was mutation-tested:**
 
 | invariant | why it would rot silently |

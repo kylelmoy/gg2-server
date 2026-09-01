@@ -1,4 +1,5 @@
 using Gg2.Bots;
+using Gg2.Env;
 using Gg2.Protocol;
 using Gg2.Simulation;
 
@@ -38,6 +39,86 @@ public sealed class RolloutRestrictionTests
 
     private static RolloutSearch Search() => new(new RolloutOptions(DecisionTicks: 1));
 
+    /// <summary>
+    /// Every way of asking "how many candidates" gives the same answer.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>The gate on the CLASS of bug, not on the instance of it.</b> Shipping
+    /// candidate pruning shipped a third source for this number — the validator
+    /// asked the live <c>RolloutSearch.CandidateCount</c>, which is the set
+    /// currently built and reads 60 for a sniper until its first decision, while
+    /// <c>Candidates</c> and the score block both said 120. `gg2-rl` found it in
+    /// an hour; every test here passed over it.
+    /// <para>
+    /// ⚠️ <b>An arithmetic count that drifted from the loop that builds the list
+    /// would be the same bug wearing a different hat</b>, which is why this
+    /// compares the two rather than asserting either against a literal.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData(PlayerClass.Scout)]
+    [InlineData(PlayerClass.Soldier)]
+    [InlineData(PlayerClass.Sniper)]
+    [InlineData(PlayerClass.Medic)]
+    [InlineData(PlayerClass.Heavy)]
+    [InlineData(PlayerClass.Spy)]
+    [InlineData(PlayerClass.Engineer)]
+    [InlineData(PlayerClass.Pyro)]
+    [InlineData(PlayerClass.Demoman)]
+    public void EveryCountSourceAgrees(PlayerClass playerClass)
+    {
+        foreach (var options in new[]
+        {
+            new RolloutOptions(),
+            new RolloutOptions(ConsiderSpecial: true),
+            new RolloutOptions(HorizonTicks: 45, DecisionTicks: 1),
+        })
+        {
+            Assert.Equal(
+                RolloutSearch.CandidatesFor(options, playerClass).Length,
+                RolloutSearch.CandidateCountFor(options, playerClass));
+        }
+    }
+
+    /// <summary>
+    /// And a duel answers the same number for a slot BEFORE its first step.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Before the first step is the whole point</b> — a restriction arrives
+    /// WITH step 0, so a count that only becomes right after a search has run is
+    /// right too late. That is exactly how the sniper bug presented.
+    /// </remarks>
+    [Theory]
+    [InlineData(PlayerClass.Sniper, 120)]
+    [InlineData(PlayerClass.Soldier, 60)]
+    public void ADuelKnowsItsCandidateCountBeforeSteppingOnce(PlayerClass playerClass, int expected)
+    {
+        var env = new DuelEnv(ReferenceTree.IncludedFiles);
+
+        env.Reset(
+            new DuelSpec
+            {
+                Map = Map,
+                RedClass = playerClass,
+                BlueClass = PlayerClass.Soldier,
+                RedX = 600,
+                RedY = 850,
+                BlueX = 760,
+                BlueY = 850,
+                DecisionCap = 40,
+                ActionRepeat = 2,
+                RedDriver = EnvDriver.Rollout,
+                RedHorizonTicks = 6,
+            },
+            seed: 3);
+
+        Assert.Equal(expected, env.CandidateCountFor(env.RedSlot));
+        Assert.Equal(env.CandidatesFor(env.RedSlot).Length, env.CandidateCountFor(env.RedSlot));
+
+        // A non-searching slot has no candidates and no count.
+        Assert.Equal(0, env.CandidateCountFor(env.BlueSlot));
+    }
+
     [Fact]
     public void AnEmptyRestrictionSearchesEverything()
     {
@@ -45,7 +126,7 @@ public sealed class RolloutRestrictionTests
         var search = Search();
         var view = new WorldView(in world.State, world.Collision);
 
-        search.RestrictNextDecision([]);
+        search.RestrictNextDecision([], PlayerClass.Soldier);
         search.Poll(in view, red, 0);
 
         Assert.Equal(search.CandidateCount, search.LastScores.Length);
@@ -64,7 +145,7 @@ public sealed class RolloutRestrictionTests
         var view = new WorldView(in world.State, world.Collision);
         int[] keep = [7, 2, 40, 2, 19];
 
-        search.RestrictNextDecision(keep);
+        search.RestrictNextDecision(keep, PlayerClass.Soldier);
         search.Poll(in view, red, 0);
 
         // Duplicates collapse; ascending order regardless of how they arrived.
@@ -98,7 +179,7 @@ public sealed class RolloutRestrictionTests
 
         Assert.Equal(search.CandidateCount * 10L, search.LastDecisionTicksSimulated);
 
-        search.RestrictNextDecision([1, 2, 3]);
+        search.RestrictNextDecision([1, 2, 3], PlayerClass.Soldier);
         search.Poll(in view, red, 1);
 
         Assert.Equal(30L, search.LastDecisionTicksSimulated);
@@ -131,7 +212,7 @@ public sealed class RolloutRestrictionTests
                 keep[i] = random.Next(60);
 
             var forward = Search();
-            forward.RestrictNextDecision(keep);
+            forward.RestrictNextDecision(keep, PlayerClass.Soldier);
             var a = forward.Poll(in view, red, 0);
 
             var shuffled = (int[])keep.Clone();
@@ -143,7 +224,7 @@ public sealed class RolloutRestrictionTests
             }
 
             var reversed = Search();
-            reversed.RestrictNextDecision(shuffled);
+            reversed.RestrictNextDecision(shuffled, PlayerClass.Soldier);
             var b = reversed.Poll(in view, red, 0);
 
             Assert.Equal(a, b);
@@ -175,7 +256,7 @@ public sealed class RolloutRestrictionTests
         int[] keep = [3, 11, 27, 44];
 
         var pruned = Search();
-        pruned.RestrictNextDecision(keep);
+        pruned.RestrictNextDecision(keep, PlayerClass.Soldier);
         pruned.Poll(in view, red, 0);
 
         for (var i = 0; i < keep.Length; i++)
@@ -194,7 +275,7 @@ public sealed class RolloutRestrictionTests
     {
         var search = Search();
 
-        Assert.Throws<ArgumentOutOfRangeException>(() => search.RestrictNextDecision([0, index]));
+        Assert.Throws<ArgumentOutOfRangeException>(() => search.RestrictNextDecision([0, index], PlayerClass.Soldier));
     }
 
     /// <summary>
@@ -207,7 +288,7 @@ public sealed class RolloutRestrictionTests
         var search = Search();
         var view = new WorldView(in world.State, world.Collision);
 
-        Assert.Throws<ArgumentOutOfRangeException>(() => search.RestrictNextDecision([1, 2, 999]));
+        Assert.Throws<ArgumentOutOfRangeException>(() => search.RestrictNextDecision([1, 2, 999], PlayerClass.Soldier));
 
         search.Poll(in view, red, 0);
 
@@ -246,7 +327,7 @@ public sealed class RolloutRestrictionTests
         search.Poll(in view, sniper, 0);
         Assert.Equal(120, search.CandidateCount);
 
-        search.RestrictNextDecision([100, 101, 102]);
+        search.RestrictNextDecision([100, 101, 102], PlayerClass.Sniper);
 
         // Now the same slot is a soldier: 60 candidates, and the mask is stale.
         world.State.Characters[sniper].Class = PlayerClass.Soldier;
@@ -276,7 +357,7 @@ public sealed class RolloutRestrictionTests
         search.Poll(in view, red, 0);
         Assert.Equal(search.CandidateCount, search.LastScores.Length);
 
-        search.RestrictNextDecision([5, 6]);
+        search.RestrictNextDecision([5, 6], PlayerClass.Soldier);
 
         // Ticks 1-3 are held, not searched, and must not consume the restriction.
         search.Poll(in view, red, 1);
@@ -299,7 +380,7 @@ public sealed class RolloutRestrictionTests
         var search = Search();
         var view = new WorldView(in world.State, world.Collision);
 
-        search.RestrictNextDecision([5, 6]);
+        search.RestrictNextDecision([5, 6], PlayerClass.Soldier);
         search.Poll(in view, red, 0);
         Assert.Equal(2, search.LastScores.Length);
 

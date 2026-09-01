@@ -315,6 +315,60 @@ public sealed class EnvProtocolTests : IDisposable
         public override void SetLength(long value) => throw new NotSupportedException();
     }
 
+    /// <summary>
+    /// A SNIPER can be restricted on step 0, with an index only its doubled
+    /// candidate set contains.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>Regression for a bug <c>gg2-rl</c> found within an hour of the
+    /// feature shipping, and which every test here passed over.</b> Only a sniper
+    /// carries the zoom dimension, so its set is 120; but
+    /// <c>RolloutSearch</c>'s constructor builds without zoom, so the instance
+    /// <c>CandidateCount</c> read <b>60</b> until the first decision had searched.
+    /// The validator asked the instance, so index 76 — perfectly valid, and inside
+    /// what <see cref="EnvMessage.Candidates"/> reported — was refused on step 0
+    /// and only on step 0.
+    /// <para>
+    /// ⚠️ <b>Three sources disagreed about one number</b>: <c>Candidates</c> said
+    /// 120, the score block said 120, the validator said 60. The fix is that
+    /// <c>DuelEnv.TrySearchShape</c> is now the only place that decides, and this
+    /// test is the one that would have caught it — <b>step 0 specifically</b>,
+    /// because by step 1 the search has rebuilt its set and the bug evaporates.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ASniperIsRestrictableOnStepZero()
+    {
+        Send(EnvMessage.Hello, Int(EnvProtocol.Version));
+        Receive();
+        Send(
+            EnvMessage.MakeBatch,
+            MakeBatchBody(1, red: EnvDriver.Rollout, redHorizon: 6, redClass: PlayerClass.Sniper));
+        Receive();
+
+        Send(EnvMessage.Candidates, []);
+
+        var candidates = Receive();
+
+        Assert.Equal(120, BitConverter.ToInt32(candidates, 1));
+
+        // Index 76 exists only in the sniper's doubled set. No step in between:
+        // the bug was on the FIRST one.
+        Send(
+            EnvMessage.StepScoredRestricted,
+            Concat(new byte[1 * 2 * EnvProtocol.ActionBytes], RestrictionTail(1, red: [16, 76])));
+
+        var reply = Receive();
+
+        Assert.Equal((byte)EnvMessage.StepScoredRestricted, reply[0]);
+
+        var at = ScoresAt(1);
+
+        Assert.Equal(2, BitConverter.ToInt32(reply, at));
+        Assert.Equal(16, BitConverter.ToInt32(reply, at + 4));
+        Assert.Equal(76, BitConverter.ToInt32(reply, at + 12));
+    }
+
     /// <summary>Where the score block starts in a reply.</summary>
     private static int ScoresAt(int worlds) =>
         1 + 4 + (worlds * 2 * ObservationWriter.Length * 4) + (worlds * 2 * EnvProtocol.ComponentBytes);
@@ -547,7 +601,8 @@ public sealed class EnvProtocolTests : IDisposable
         bool blueShadow = false,
         double redX = 600,
         double blueX = 700,
-        string map = "gg_debug")
+        string map = "gg_debug",
+        PlayerClass redClass = PlayerClass.Soldier)
     {
         var name = System.Text.Encoding.UTF8.GetBytes(map);
 
@@ -555,7 +610,7 @@ public sealed class EnvProtocolTests : IDisposable
             Int(count),
             Int(name.Length),
             name,
-            Int((int)PlayerClass.Soldier),
+            Int((int)redClass),
             Int((int)PlayerClass.Soldier),
             Real(redX), Real(850),
             Real(blueX), Real(850),

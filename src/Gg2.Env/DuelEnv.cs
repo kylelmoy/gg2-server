@@ -704,7 +704,11 @@ public sealed class DuelEnv
         var search = SearchFor(slot)
             ?? throw new InvalidOperationException($"slot {slot} has no search to restrict");
 
-        search.RestrictNextDecision(indices);
+        // ⚠️ The class comes from the SPEC, so the bound is right on step 0. See
+        // TrySearchShape.
+        TrySearchShape(slot, out _, out var playerClass);
+
+        search.RestrictNextDecision(indices, playerClass);
     }
 
     /// <summary>How many candidates the search behind this slot has, or 0 for none.</summary>
@@ -712,8 +716,17 @@ public sealed class DuelEnv
     /// ⚠️ <b>Per class</b> — a sniper's set carries the zoom dimension and is
     /// twice the size — so a caller validating indices has to ask per slot rather
     /// than assume a batch-wide number.
+    /// <para>
+    /// ⛔ <b>From the spec, NOT from the live search.</b> The first version read
+    /// <c>RolloutSearch.CandidateCount</c>, which is the set currently built and
+    /// therefore 60 for a sniper until its first decision — so a valid index 76
+    /// was refused on step 0 and only on step 0. <see cref="TrySearchShape"/>.
+    /// </para>
     /// </remarks>
-    public int CandidateCountFor(int slot) => SearchFor(slot)?.CandidateCount ?? 0;
+    public int CandidateCountFor(int slot) =>
+        TrySearchShape(slot, out var options, out var playerClass)
+            ? RolloutSearch.CandidateCountFor(options, playerClass)
+            : 0;
 
     /// <summary>
     /// Which candidate index each entry of <see cref="ScoresFor"/> belongs to.
@@ -791,23 +804,54 @@ public sealed class DuelEnv
     /// <c>RolloutSearch.LastCandidates</c>.
     /// </para>
     /// </remarks>
-    public ReadOnlySpan<EnvAction> CandidatesFor(int slot)
+    public ReadOnlySpan<EnvAction> CandidatesFor(int slot) =>
+        TrySearchShape(slot, out var options, out var playerClass)
+            ? RolloutSearch.CandidatesFor(options, playerClass)
+            : ReadOnlySpan<EnvAction>.Empty;
+
+    /// <summary>
+    /// The options and class a searching slot's candidate set is shaped by, from
+    /// the SPEC rather than from the live search.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>One decision, used by everything that asks about a slot's candidate
+    /// set.</b> <see cref="CandidatesFor"/>, <see cref="CandidateCountFor"/> and
+    /// <see cref="RestrictSearch"/> all come here, because the first version of
+    /// the restriction path answered the count from the live
+    /// <c>RolloutSearch.CandidateCount</c> instead — which reads 60 for a sniper
+    /// until its first decision has searched, and refused a valid index 76 on
+    /// step 0. <b>Three places that should have agreed about one number did not,
+    /// and the fix is that there is now one place.</b>
+    /// <para>
+    /// ⚠️ Answerable before the first <see cref="Step"/>, which is the property
+    /// that makes it usable for validating a restriction that arrives WITH the
+    /// first step.
+    /// </para>
+    /// </remarks>
+    private bool TrySearchShape(int slot, out RolloutOptions options, out PlayerClass playerClass)
     {
         if (slot == RedSlot && (_spec.RedDriver == EnvDriver.Rollout || _spec.RedShadowSearch))
         {
-            return RolloutSearch.CandidatesFor(
-                new RolloutOptions(HorizonTicks: _spec.RedHorizonTicks, Opponent: _spec.RedRolloutOpponent),
-                _spec.RedClass);
+            options = new RolloutOptions(
+                HorizonTicks: _spec.RedHorizonTicks, Opponent: _spec.RedRolloutOpponent);
+            playerClass = _spec.RedClass;
+
+            return true;
         }
 
         if (slot == BlueSlot && (_spec.BlueDriver == EnvDriver.Rollout || _spec.BlueShadowSearch))
         {
-            return RolloutSearch.CandidatesFor(
-                new RolloutOptions(HorizonTicks: _spec.BlueHorizonTicks, Opponent: _spec.BlueRolloutOpponent),
-                _spec.BlueClass);
+            options = new RolloutOptions(
+                HorizonTicks: _spec.BlueHorizonTicks, Opponent: _spec.BlueRolloutOpponent);
+            playerClass = _spec.BlueClass;
+
+            return true;
         }
 
-        return ReadOnlySpan<EnvAction>.Empty;
+        options = new RolloutOptions();
+        playerClass = default;
+
+        return false;
     }
 
     /// <summary>The live world, for an observation writer to read.</summary>
