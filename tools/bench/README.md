@@ -103,10 +103,19 @@ These answered one question each and are unlikely to be run again. They are here
 because they were never in git and would otherwise be lost, not because they are
 maintained.
 
-`Alloc` `Cmp` `Cold` `Digest` `Duel` `Geom` `Latency` `Obs` `Ray` `Reset`
-`Tick` — the `Gg2.Env` throughput and allocation work
-(`docs/BOTS.md`, "The environment seam"). `Dkoth` and `Dkoth2` verified one bug
-fix and are superseded by `BENCH_PERMAP`.
+`BENCH_ALLOC` `BENCH_CMP` `BENCH_COLD` `BENCH_DIGEST` `BENCH_DUEL` `BENCH_GEOM`
+`BENCH_LAT` `BENCH_OBS` `BENCH_RAY` `BENCH_RESET`
+`BENCH_TICK` — the `Gg2.Env` throughput and allocation work
+(`docs/BOTS.md`, "The environment seam"). `BENCH_LAT` takes `BENCH_NODELAY` and
+`BENCH_BUFFERED` to vary the socket. `BENCH_DKOTH` verified one bug
+fix and is superseded by `BENCH_PERMAP`, which also takes `BENCH_CONFIRM` to
+re-run a cell.
+
+⚠️ **Named by the variable you TYPE, not by the class that implements it.** This
+list said `Alloc`, `Latency` and `Dkoth` until 2026-09-01, and the variables are
+`BENCH_ALLOC`, `BENCH_LAT` and `BENCH_DKOTH` — two of the three not derivable
+from the name given. **A mode documented under a name that cannot be typed is
+undocumented**, which is what `BenchModeCoverageTests` now says mechanically.
 
 ⚠️ **A number from one of these is older than the code.** Re-run before quoting.
 
