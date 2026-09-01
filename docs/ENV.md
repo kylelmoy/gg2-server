@@ -1018,11 +1018,27 @@ to do it now rather than after `gg2-rl` phase 2.
 
 ## Out of scope, so nobody re-opens it
 
-**Serialising the bot layer**, which is what `Snapshot` with a bot-driven slot
-would need — refused explicitly instead. No ML runtime,
-no inference path, no weights format (that is `gg2-rl` phase 2's arrival). No
-rollout-search bot (`Gg2.Bots`, `gg2-rl` phase 1). No full-match episodes. No
-reaction-delay model (phase 5 — only its observation field exists).
+⛔ **Four of the five items below are HISTORICAL as of 2026-09-01, and the
+heading is the trap.** "Out of scope, so nobody re-opens it" reads as a standing
+refusal; four of these were phase boundaries that have since been crossed, on the
+user's explicit call each time. **A list like this decays into a lie the moment
+the programme advances past it, and nothing in the repo goes red when it does** —
+the failure mode `CLAUDE.md` names. Struck through rather than deleted, because
+the reasons they were out of scope are still the reasons to be careful:
+
+| item | state |
+|---|---|
+| **Serialising the bot layer** — what `Snapshot` with a bot-driven slot would need | ✅ **still refused**, and this is the one real entry |
+| ~~No ML runtime, no inference path, no weights format~~ | ⛔ **built** — `NpyFile`, `PolicyNetwork`, `PolicyBot`, gated logit-for-logit against `gg2-rl`'s numpy |
+| ~~No rollout-search bot~~ | ⛔ **built** — `RolloutSearch`, with candidate pruning |
+| ~~No full-match episodes~~ | ⛔ **built** — `MatchRunner`, 21 maps × 400 matches × two arms |
+| ~~No reaction-delay model~~ | **still true** — only its observation field exists |
+
+⚠️ **The refusal that stands is the first one, and it stands for a reason that has
+not changed**: a `Snapshot` that had to serialise a bot's own `GmlRandom`, its
+path, its target and its objective state would make every one of those a wire
+format, and the bot layer is the part of this repo that is explicitly allowed to
+change freely. `docs/TRAPS-BOTS.md` has the argument.
 
 ### ⛔ Shared memory: the refusal stands, and the CRITERION was wrong
 
@@ -1582,10 +1598,11 @@ not.**
 
 ### The shape, if it is ever built
 
-⚠️ **`docs/ENV.md`'s own "out of scope" list says "no ML runtime, no inference
-path, no weights format".** That was written before `gg2-rl` phase 2 existed. It
-would have to be reopened **deliberately**, not quietly, and this paragraph is
-the notice that it is now a live question rather than a settled one.
+⚠️ **This was written when the "out of scope" list still refused an ML runtime**,
+and the notice was that reopening it had to be deliberate rather than quiet. ✅ It
+WAS reopened, deliberately, on 2026-08-30 — see the struck-through table under
+"Out of scope". **The paragraphs below were written before that and are kept as
+written**, because their design constraints did not depend on the refusal.
 
 - ⚠️ **Weights over the wire, in the batch — NOT a file format.** A weights file
   in this repo is a second source of truth about what a checkpoint is, and a
@@ -1923,9 +1940,10 @@ filled one.
 minus taken with no objective term — their user's call, on human-likeness
 grounds. The macro layer owns objectives; the policy never pursues them.
 
-⚠️ **Building this reopens `docs/ENV.md`'s "no ML runtime, no inference path, no
-weights format"**, which is a decision to take deliberately rather than by
-starting.
+⚠️ **Building this reopened `docs/ENV.md`'s "no ML runtime, no inference path, no
+weights format"** — flagged before starting so the decision was taken rather than
+drifted into. ✅ The user took it (*"Full phase 4"*), and the list is struck
+through under "Out of scope".
 
 ## Goal conditioning — `gg2-rl` phase 4's hybrid boundary (2026-08-30)
 
