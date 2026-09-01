@@ -91,6 +91,7 @@ guard site and a method signature.
 | `BENCH_POLICYCOST=1` | one forward pass and one observation extraction, in nanoseconds. `OBS` points at an observations fixture. |
 | `BENCH_SEARCH=1` | a `RolloutSearch` decision's cost, split into the per-candidate fork and the per-candidate tick by sweeping the horizon. ⚠️ **`BENCH_POP=<n>` sets how many characters are ALIVE** and defaults to 2 — see trap 6. `BENCH_CLASS=sniper` measures the 120-candidate set; `BENCH_CADENCE` sets the continuation cadence. |
 | `BENCH_EVAL=<n>` | the handover-rule and engagement-range comparison that chose the 150px default. |
+| `stability.py <small> <large>` | ⛔ **does a per-map death-share DIRECTION survive the sample size?** Two `BENCH_PERMAP` tables at different match counts. ⚠️ **Prints the smallest effect at which every direction held, and says to quote THAT rather than the agreement count** — direction stability is a property of effect size relative to noise, not of `n`, so "21 of 21 agreed" goes wrong the moment somebody applies it to a one-point effect. |
 | `analyse.py <table>` | reads a `BENCH_PERMAP` table and prints what it cannot show by eye: the decisive denominator per map, a filter-equality z, the maps ranked by **differential** censoring, and the death-share signs counted mechanically. |
 
 ⚠️ **`analyse.py` ranks on `decisive`, not on `decided`, and prints the `decided`
