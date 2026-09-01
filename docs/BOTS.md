@@ -161,15 +161,36 @@ arm 3"* is a statement about where the effect is big and **not about the typical
 map.** The fifteen unlicensed directions are **unknown, not absent** — those are
 different claims and the second is the one supported.
 
-⚠️ **The pre-committed fallback applies and is being run: the aggregate death share
-WITH ITS DEATH COUNTS**, and the per-map sign test reported as unaffordable. That
-was agreed with `gg2-rl` before the floor existed, **specifically so that neither
-side could go looking for a third statistic that happened to survive** — two
-statistics with a rule between them is a check; three chosen afterwards is a search.
+✅ **THE FALLBACK HAS RUN. The aggregate death share, pooled over every map and
+match, with its counts:**
 
-⛔ **And the first version of `BENCH_ARMS` printed shares without their counts**, so
-the aggregate could not be computed from its own output. Trap 1, in the mode whose
-author had extended trap 1 that morning. Fixed; the run is being repeated.
+| arm | death share | deaths | vs arm 2 | vs arm 1 |
+|---|---|---|---|---|
+| 1 all-scripted | 49.82% | 17,432 / 34,990 | — | — |
+| 2 policy hybrid | 46.17% | 16,167 / 35,015 | — | z = −9.66 |
+| 3 **search hybrid** | **44.55%** | 14,954 / 33,567 | **z = −4.26** | z = −13.82 |
+
+⛔ **The aggregate is decisive where the sign test was not.** Arm 3 beats arm 2 by
+1.62 points at **z = −4.26** (p ≈ 1e-5 one-sided) on ~34,000 deaths an arm — against
+the licensed six-map sign test’s p = 0.016. **The statistic that survived the
+stability check is also the stronger one**, which is not what anybody expected when
+it was chosen as a fallback.
+
+⚠️ **Read the denominators, not only the shares.** Arm 3 records **1,448 fewer total
+deaths** than arm 2 — 4.1% — so its matches are less lethal overall as well as
+less lethal to its own side. That is a real difference between the arms and not a
+censoring artefact, but a share alone would have hidden it.
+
+#### ⛔ And on the re-run the tick gate fails on 21 of 21
+
+The first run had `ctf_avanti` at **31.70 ms** — the single map under budget. On the
+re-run the same map reads **47.36 ms**, and the lowest arm-3 tick anywhere is
+`koth_gallery` at **45.50 ms**. **Every map fails.**
+
+✅ **That is `gg2-rl`’s coverage rule confirmed by accident, on this repo’s own
+data.** A max under budget was **no evidence of a pass** — and the one map that
+appeared to pass did not survive being measured twice. Had anybody built on that
+reading, the thing it licensed would have evaporated on the next run.
 
 #### ⛔ RETRACTED: "shippable at 8 bots, unshippable at 12"
 
