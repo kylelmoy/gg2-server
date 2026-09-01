@@ -136,14 +136,40 @@ public static class NpyFile
     /// <remarks>
     /// ⚠️ <b>Not a pickle interpreter.</b> It finds the element list that numpy
     /// emits for an object array — <c>NEWFALSE, EMPTY_LIST, MEMOIZE, MARK</c> —
-    /// and then reads exactly the <c>SHORT_BINUNICODE</c> entries that follow,
-    /// stopping at <c>APPENDS</c>. Any other opcode in that run, or a count that
-    /// disagrees with the header's shape, is a refusal.
+    /// and then reads the entries that follow, stopping at <c>APPENDS</c>. Any
+    /// other opcode in that run, or a count that disagrees with the header's
+    /// shape, is a refusal.
     /// <para>
     /// ⚠️ <b>The count cross-check is the load-bearing part.</b> The header says
     /// how many elements there should be, independently of the pickle, so a scan
     /// that locked on to the wrong place has to produce the right NUMBER of
     /// strings as well as the right ones.
+    /// </para>
+    /// <para>
+    /// ⛔ <b>A REPEATED STRING IS A <c>BINGET</c>, NOT A SECOND
+    /// <c>SHORT_BINUNICODE</c>, AND THAT WAS A BUG HERE UNTIL 2026-09-01.</b>
+    /// Pickle memoizes, so the second time an object is written it emits a
+    /// back-reference. This loop read only <c>SHORT_BINUNICODE</c>, stopped dead
+    /// on the <c>BINGET</c> and threw "did not end at APPENDS". Found by
+    /// <c>gg2-rl</c>, whose metadata is <c>['2', 'uuid', '2', ...]</c> — an
+    /// action-encoding version and a layout version that are both small integers,
+    /// which is the ordinary case rather than a freak one.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>It fired for them and not here because pickle's memo is keyed by
+    /// object IDENTITY, not by value.</b> This repo's fixture holds two distinct
+    /// <c>'2'</c> objects and pickles them as two strings; theirs holds one object
+    /// twice and pickles the second as a back-reference. So whether a checkpoint
+    /// loads depended on whether the trainer happened to reuse a variable —
+    /// invisible from the file, and flipped by a one-line refactor upstream.
+    /// <b>The phase-4 21-map table loaded by luck.</b>
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Resolving a back-reference needs the memo's absolute numbering</b>,
+    /// and the element list is not slot 0 — in a real checkpoint it is 18, behind
+    /// the <c>_reconstruct</c> preamble. <see cref="CountMemoSlots"/> walks that
+    /// preamble to count them, and <b>refuses on an opcode it does not know</b>
+    /// rather than guessing a length and silently miscounting.
     /// </para>
     /// </remarks>
     public static string[] ReadStrings(byte[] npy)
@@ -167,18 +193,57 @@ public static class NpyFile
         if (start < 0)
             throw new InvalidDataException("no element list found in the metadata pickle");
 
+        // The EMPTY_LIST at start+1 is memoized at start+2, so the first element's
+        // own MEMOIZE takes the slot after that one.
+        var memo = CountMemoSlots(npy, start + 2) + 1;
+
         var at = start + 4;
         var found = new List<string>();
+        var byIndex = new Dictionary<int, string>();
 
-        while (at < npy.Length && npy[at] == 0x8c)
+        while (at < npy.Length)
         {
-            var length = npy[at + 1];
-            found.Add(Encoding.UTF8.GetString(npy, at + 2, length));
-            at += 2 + length;
+            string value;
 
-            // MEMOIZE follows every element numpy writes here.
-            if (at < npy.Length && npy[at] == 0x94)
-                at++;
+            if (npy[at] == 0x8c)
+            {
+                // SHORT_BINUNICODE: a fresh string, which numpy then memoizes.
+                var length = npy[at + 1];
+                value = Encoding.UTF8.GetString(npy, at + 2, length);
+                at += 2 + length;
+
+                if (at < npy.Length && npy[at] == 0x94)
+                {
+                    byIndex[memo] = value;
+                    memo++;
+                    at++;
+                }
+            }
+            else if (npy[at] == 0x68 || npy[at] == 0x6a)
+            {
+                // BINGET / LONG_BINGET: a repeat of a string already written.
+                // WARNING: a back-reference is NOT re-memoized, so the counter must
+                // not advance here or every later slot is off by one.
+                var wide = npy[at] == 0x6a;
+                var slot = wide ? BitConverter.ToInt32(npy, at + 1) : npy[at + 1];
+
+                if (!byIndex.TryGetValue(slot, out var referenced))
+                {
+                    throw new InvalidDataException(
+                        $"the metadata references memo slot {slot}, which is not a string this "
+                        + "element list wrote — either the scan locked on to the wrong list, or "
+                        + "the pickle refers back into the reconstruct preamble");
+                }
+
+                value = referenced;
+                at += wide ? 5 : 2;
+            }
+            else
+            {
+                break;
+            }
+
+            found.Add(value);
         }
 
         if (at >= npy.Length || npy[at] != 0x65)
@@ -191,6 +256,82 @@ public static class NpyFile
         }
 
         return [.. found];
+    }
+
+    /// <summary>
+    /// How many memo slots the pickle has assigned before <paramref name="limit"/>.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Counting <c>0x94</c> bytes would be wrong</b> — that value occurs
+    /// inside a FRAME length, inside a string's UTF-8 and inside any binary
+    /// payload. This walks opcodes so it counts only real <c>MEMOIZE</c>s, and it
+    /// <b>throws on an opcode it does not know</b> rather than assuming a length:
+    /// a miscount resolves a back-reference to the WRONG string, which is a wrong
+    /// policy loaded rather than an error.
+    /// <para>
+    /// The table covers what <c>numpy._core.multiarray._reconstruct</c> emits for
+    /// an object array, plus the put/get family an older protocol would use. It is
+    /// deliberately not the whole of pickle.
+    /// </para>
+    /// </remarks>
+    private static int CountMemoSlots(byte[] npy, int limit)
+    {
+        var (_, at) = ReadHeader(npy);
+        var slots = 0;
+
+        while (at < limit)
+        {
+            var op = npy[at];
+
+            switch (op)
+            {
+                case 0x94: slots++; at += 1; break;                             // MEMOIZE
+                case 0x71: slots++; at += 2; break;                             // BINPUT
+                case 0x72: slots++; at += 5; break;                             // LONG_BINPUT
+
+                case 0x80: at += 2; break;                                      // PROTO
+                case 0x95: at += 9; break;                                      // FRAME
+                case 0x8c: at += 2 + npy[at + 1]; break;                        // SHORT_BINUNICODE
+                case 0x43: at += 2 + npy[at + 1]; break;                        // SHORT_BINBYTES
+                case 0x58: at += 5 + BitConverter.ToInt32(npy, at + 1); break;  // BINUNICODE
+                case 0x42: at += 5 + BitConverter.ToInt32(npy, at + 1); break;  // BINBYTES
+                case 0x4b: at += 2; break;                                      // BININT1
+                case 0x4d: at += 3; break;                                      // BININT2
+                case 0x4a: at += 5; break;                                      // BININT
+                case 0x68: at += 2; break;                                      // BINGET
+                case 0x6a: at += 5; break;                                      // LONG_BINGET
+
+                // Zero-operand opcodes.
+                case 0x28: // MARK
+                case 0x29: // EMPTY_TUPLE
+                case 0x2e: // STOP
+                case 0x4e: // NONE
+                case 0x52: // REDUCE
+                case 0x5d: // EMPTY_LIST
+                case 0x61: // APPEND
+                case 0x62: // BUILD
+                case 0x65: // APPENDS
+                case 0x73: // SETITEM
+                case 0x74: // TUPLE
+                case 0x75: // SETITEMS
+                case 0x7d: // EMPTY_DICT
+                case 0x85: // TUPLE1
+                case 0x86: // TUPLE2
+                case 0x87: // TUPLE3
+                case 0x88: // NEWTRUE
+                case 0x89: // NEWFALSE
+                case 0x93: // STACK_GLOBAL
+                    at += 1;
+                    break;
+
+                default:
+                    throw new InvalidDataException(
+                        $"unknown pickle opcode 0x{op:x2} at {at} while counting memo slots; "
+                        + "this reader knows only what numpy writes for an object array");
+            }
+        }
+
+        return slots;
     }
 
     private static (string Header, int Data) ReadHeader(byte[] npy)
