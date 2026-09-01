@@ -3626,3 +3626,83 @@ Gated by `SentryCauseFixtureTests` (the replay, plus a control that reads the
 gate geometry straight off the map and needs no simulation),
 `SentryKillFixtureTests` and two unit tests in `SentryTests`. All four go red
 when `Sentries.GateCollisionStep` is removed — measured, not assumed.
+
+### Moving platforms: the motion is ported, the carry cannot be
+
+Landed 2026-09-01. `MovingPlatforms`, `WorldState.MovingPlatforms`, and a stage
+in `MatchSimulation.Tick`. Reference:
+`Objects/Map elements/Colliders/MovingPlatform.events` — Create for the defaults,
+User Event 1 for the map's overrides, End Step for the motion, User Events 10
+and 11 for the wire.
+
+**What was actually wrong before.** The wire was complete in both directions and
+had been since phase 6 — `MovingPlatformBlock`, the reader, the writer. What fed
+the writer was `MatchState`, which held the entity's **load position and never
+advanced it**. So a custom map's platform sat still on every client while each
+client's own End Step walked its local copy away from it. A block that frames
+correctly is not a block that says anything true.
+
+**The five wire bytes** are `write_ushort(x_*5)`, `write_ushort(y_*5)`,
+`write_ubyte(movementState)`, on `QUICK_UPDATE` and `FULL_UPDATE` and nothing on
+an `INPUTSTATE`. ⚠️ **`x_`, not `x`** — the underscored pair is the real
+position the motion accumulates into, and GM8's `x`/`y` are `round()`ed copies it
+draws and collides with. No count prefix: the client sizes the read off its own
+copy of the map, so writer and reader must agree or the stream desynchronises
+permanently.
+
+⚠️ **The degree round-trip must not be simplified.** The reference takes a
+`point_direction`, converts it back with `degtorad`, and feeds `cos`/`sin` — so a
+platform moving straight up has a horizontal step of `cos(90°)`, 6.1e-17 rather
+than 0. Normalising `(left, -top)` directly is arithmetically nicer and is a
+divergence.
+
+✅ **And a correction to what that first said here.** The residue does **not**
+make `x_` creep. At a real map coordinate it is ~14 orders of magnitude below the
+position's own ULP, so `x_ += 1.8e-16` at `x_ = 300` is exactly `x_`. It is
+visible only at the origin, which is where `MovingPlatformTests` has to show it.
+The transcription stays faithful anyway — "unobservable at the coordinates shipped
+maps use" is a weaker claim than "identical", and the second is free.
+
+⚠️ **The clamp is asymmetric and that is not a slip.** Reaching the far end only
+flips `movementState`; reaching the start assigns `startX`/`startY` back. So a
+platform whose travel is not a whole number of steps overshoots its stated top,
+turns round from there, and is snapped exactly on the return — which is what
+makes the cycle an exact number of ticks for ever instead of drifting.
+
+⛔ **The carry is NOT ported, and it is gated on something else.** The
+reference's End Step ends with a `with(Character)` block that picks up whoever is
+standing on the platform and shoves whoever it runs into. Every branch of it is a
+`place_meeting` against the platform's own mask — and **a `MovingPlatform` has no
+sprite**. `MovingPlatform.xml` declares `<sprite/>` empty, unlike its parent
+`DropdownPlatform`'s `sprite44`; the mask arrives at run time from an embedded
+sprite named by the entity's `resource` property and decoded out of the map's
+metadata by `CustomMapCreateEntitiesFromEntityData.gml:68-88`. **That pipeline is
+part of the unported custom-map work** (`docs/PROTOCOL.md`, "What a headless
+server can skip"), so this port cannot know a platform's box — and GM8 with
+`sprite_index = -1` collides with nothing, so every branch of the carry is a
+no-op there too. **What is ported is therefore the whole of the reference's
+behaviour for every map this port can currently load, not a subset of it.**
+
+✅ **The parent is the good news for the day it lands.** Because
+`MovingPlatform`'s parent IS `DropdownPlatform`, every `with(DropdownPlatform)`
+and `place_meeting(…, DropdownPlatform)` in the character physics already means
+"or a moving platform". So a character will stand on one through
+`CharacterPhysics`'s existing dropdown path with no new standing rule — only the
+carry has to be written.
+
+⚠️ **`SIM_UUID` was deliberately NOT bumped, and this is the condition that
+voids that.** A new stage in `MatchSimulation` is normally a bump. It is exempt
+because the stage is *structurally* unreachable on every shipped map:
+`MovingPlatforms.EndStep` iterates `min(state.MovingPlatformCount,
+definitions.Length)`, both come from the map's entities, and **all 22 shipped maps
+place none** — so the loop body cannot execute and the tick is bit-identical.
+**`MovingPlatformTests.NoShippedMapPlacesAMovingPlatform` is the gate: if it goes
+red, bump `SimulationBehaviourVersion` and do not reason about it.** The
+alternative was invalidating `gg2-rl`'s trained checkpoint, which
+`PolicyNetwork.Load` hard-refuses on a stamp mismatch. Note the exemption is about
+what a *checkpoint* was trained against; a match on a custom map is outside the
+stamp's claim either way.
+
+⚠️ **`WorldState.MaxMovingPlatforms` is 16 and is a guess, not a measurement** —
+nothing places one, so there is no maximum to size against. Overrunning it drops
+platforms silently, the same shape as `MaxProjectiles`; raising it is the fix.

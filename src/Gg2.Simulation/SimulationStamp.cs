@@ -113,6 +113,37 @@ public static class SimulationStamp
     /// <b>1, 2026-08-30</b>: the behaviour this build has. It is a starting
     /// point rather than a claim that anything changed.
     /// </para>
+    /// <para>
+    /// ⚠️ <b>NOT bumped for moving platforms, 2026-09-01, and this is the second
+    /// exemption on record.</b> <c>MovingPlatforms.EndStep</c> is a new stage in
+    /// <see cref="MatchSimulation.Tick"/>, which the rule above would normally
+    /// make a bump. It is exempt because the stage is <b>structurally
+    /// unreachable</b> on every map a policy can play, not because it looked
+    /// harmless: <c>EndStep</c> iterates
+    /// <c>min(state.MovingPlatformCount, definitions.Length)</c>, both of which
+    /// come from the map's <c>MovingPlatform</c> entities, and <b>all 22 shipped
+    /// maps place none</b> — so the loop body cannot execute and the tick is
+    /// bit-identical. <c>WorldState</c> also grew by 384 bytes of storage that
+    /// nothing on those maps ever writes.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>What would void this exemption, and what checks it.</b> A shipped
+    /// map gaining a moving platform, or a custom map being loaded, makes the
+    /// stage reachable and the exemption false — at which point a policy
+    /// checkpoint trained before today is playing a different game with the cause
+    /// invisible, which is the exact failure this type exists to prevent.
+    /// <c>MovingPlatformTests.NoShippedMapPlacesAMovingPlatform</c> is the
+    /// mechanical gate: <b>if it ever goes red, bump this and do not reason about
+    /// it.</b> That is the difference between this exemption and the arena claim
+    /// CLAUDE.md records — that one rested on reading the code and concluding, and
+    /// nothing would have contradicted it.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Custom maps are the live edge.</b> Nothing stops an operator pointing
+    /// <c>--map</c> at a map with a platform on it today. The exemption is about
+    /// what the <em>checkpoint</em> was trained against, and no training run uses
+    /// a custom map; a match on one is outside the stamp's claim either way.
+    /// </para>
     /// </remarks>
     public const int SimulationBehaviourVersion = 1;
 

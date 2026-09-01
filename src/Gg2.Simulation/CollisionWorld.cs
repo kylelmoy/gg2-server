@@ -44,6 +44,7 @@ public sealed class CollisionWorld
         _cabinets = Gg2.Simulation.Cabinets.Build(map);
         _killBoxes = Gg2.Simulation.KillBoxes.Build(map);
         _moveBoxes = Gg2.Simulation.MoveBoxes.Build(map);
+        _movingPlatforms = Gg2.Simulation.MovingPlatforms.Build(map);
     }
 
     public LevelMap Map { get; }
@@ -112,6 +113,22 @@ public sealed class CollisionWorld
     /// six down. See <see cref="MoveBoxes"/>.
     /// </remarks>
     public IReadOnlyList<MoveBoxRect> MoveBoxes => _moveBoxes;
+
+    private readonly MovingPlatformDefinition[] _movingPlatforms;
+
+    /// <summary>
+    /// The map's <c>MovingPlatform</c> configuration, in level-data order.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>A span, and the tick path must use it rather than a list</b> — the
+    /// same boxing-in-the-tick rule <see cref="RectSpan"/> carries.
+    /// <para>
+    /// ⚠️ <b>Zero on all 22 shipped maps</b>, so everything downstream of this is
+    /// reachable only from a custom map or a hand-built one. That is why
+    /// <c>MovingPlatformTests</c> builds its entities rather than loading one.
+    /// </para>
+    /// </remarks>
+    public ReadOnlySpan<MovingPlatformDefinition> MovingPlatforms => _movingPlatforms;
 
     /// <summary>
     /// <c>collision_point(x, y, SpawnRoom, 0, 0) &gt;= 0</c>: is this

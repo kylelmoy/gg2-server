@@ -356,6 +356,18 @@ public static class MatchSimulation
         // moveStatus, and neither reads the other. See MoveBoxes.CollisionStep.
         MoveBoxes.CollisionStep(world, ref state);
 
+        // The moving platforms' End Step, before every character's. A platform
+        // is a map object and so older than anything a match creates, and GM8
+        // runs an event in instance-id order — the same rule that puts
+        // Generators.BeginStep above the character loop at the top of this tick.
+        //
+        // ⚠️ In the reference this event ALSO carries its riders, inside a
+        // `with(Character)` that runs before those characters' own End Steps.
+        // That half is not ported and cannot be until a platform has a collision
+        // box; MovingPlatforms' remarks say why, and the position of this call is
+        // what the carry will need when it lands.
+        MovingPlatforms.EndStep(world.MovingPlatforms, ref state);
+
         // End Step, which is also where anything that ran out of hp dies. GM8's
         // instance_destroy takes effect at once, so a character killed here is
         // gone before the next slot's End Step runs — which is why the death is

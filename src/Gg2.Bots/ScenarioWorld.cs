@@ -109,6 +109,7 @@ public sealed class ScenarioWorld
         // shields exactly as they would in a real match, and decide nothing.
         // A map with no generators gets none and nothing changes.
         Generators.Place(ref _state, Map);
+        MovingPlatforms.Place(ref _state, Map);
 
         // Slot 0 is the server's own reserved player and always exists, which is
         // what makes CharacterState.Nobody 255 rather than 0. A scenario has no

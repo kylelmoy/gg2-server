@@ -49,6 +49,20 @@ public struct ProjectileBuffer<T>
 }
 
 /// <summary>
+/// A fixed-capacity inline buffer, one entry per moving platform.
+/// </summary>
+/// <remarks>
+/// Inline for the same reason the others are. Sixteen because no shipped map
+/// places a moving platform at all, so there is no measured maximum to size
+/// against — see <see cref="WorldState.MaxMovingPlatforms"/>.
+/// </remarks>
+[InlineArray(WorldState.MaxMovingPlatforms)]
+public struct MovingPlatformBuffer<T>
+{
+    private T _element0;
+}
+
+/// <summary>
 /// Everything one match's simulation can read or write, and nothing else.
 /// </summary>
 /// <remarks>
@@ -308,6 +322,34 @@ public struct WorldState
 
     /// <summary>Control points this state has room for. Five is the most a map places.</summary>
     public const int MaxControlPoints = 8;
+
+    /// <summary>
+    /// The map's moving platforms, in level-data order. Only the first
+    /// <see cref="MovingPlatformCount"/> are real.
+    /// </summary>
+    /// <remarks>
+    /// Their fixed configuration is <em>not</em> here — it is a
+    /// <see cref="MovingPlatformDefinition"/> passed to the tick beside the
+    /// <see cref="CollisionWorld"/>. What a platform carries per tick is only the
+    /// three values that go on the wire.
+    /// </remarks>
+    public MovingPlatformBuffer<MovingPlatformState> MovingPlatforms;
+
+    /// <summary>How many of <see cref="MovingPlatforms"/> the map placed.</summary>
+    public int MovingPlatformCount;
+
+    /// <summary>
+    /// Moving platforms this state has room for.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>No shipped map places one</b>, so this ceiling has never been
+    /// approached and 16 is a guess rather than a measurement. It is the same
+    /// class of ceiling as <see cref="MaxProjectiles"/>: overrunning it silently
+    /// drops platforms a custom map placed, which is a divergence rather than
+    /// graceful degradation. <see cref="MovingPlatforms.Reset"/> is where it
+    /// clamps, and raising the number is the fix.
+    /// </remarks>
+    public const int MaxMovingPlatforms = 16;
 
     // --- the round -----------------------------------------------------------
 

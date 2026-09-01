@@ -260,7 +260,8 @@ public sealed class GameServer : IDisposable
         var map = OpenMap(_options.Map, area: 1);
 
         _stateWriter = new StateUpdateWriter(
-            _match, TryGetCharacter, TryGetSentry, Objective, Statistics, Dominating);
+            _match, TryGetCharacter, TryGetSentry, Objective, Statistics, Dominating,
+            MovingPlatformBlocks);
 
         _listener = new TcpListener(IPAddress.Any, _options.Port);
         _listener.Server.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, false);
@@ -345,6 +346,7 @@ public sealed class GameServer : IDisposable
         // way: the map cannot live in the state, so their positions are copied
         // in here.
         Generators.Place(ref _world, map);
+        MovingPlatforms.Place(ref _world, map);
 
         // The round's own configuration, with the ini's own clamps
         // (game_init.gml:96, 101 — both max(1, min(255, ...))). A zero means
@@ -1457,6 +1459,32 @@ public sealed class GameServer : IDisposable
 
         sentry = CharacterWire.ToSentryBlock(_world.Sentries[slot]);
         return true;
+    }
+
+    /// <summary>
+    /// Every moving platform's block, straight off the live world.
+    /// </summary>
+    /// <remarks>
+    /// <c>MovingPlatform.events/User Event 10.xml</c>: <c>x_ * 5</c> and
+    /// <c>y_ * 5</c> as ushorts, then the movement state. ⚠️ The underscored
+    /// pair, so the quantisation is the extension's <c>write_ushort</c> of a real
+    /// and nothing else — no GML <c>round()</c> on the way.
+    /// </remarks>
+    private int MovingPlatformBlocks(Span<MovingPlatformBlock> platforms)
+    {
+        var count = Math.Min(_world.MovingPlatformCount, platforms.Length);
+
+        for (var i = 0; i < count; i++)
+        {
+            ref readonly var platform = ref _world.MovingPlatforms[i];
+
+            platforms[i] = new MovingPlatformBlock(
+                WireQuantise.ToUShort(platform.X * 5),
+                WireQuantise.ToUShort(platform.Y * 5),
+                platform.MovementState);
+        }
+
+        return count;
     }
 
     // --- the roster and its clients -----------------------------------------

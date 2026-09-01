@@ -299,6 +299,7 @@ public sealed class HeadlessMatch
 
         Intel.Place(ref _state, Map);
         Generators.Place(ref _state, Map);
+        MovingPlatforms.Place(ref _state, Map);
 
         ControlPoints.Place(ref _state, Map, out var zones);
         Collision.SetCaptureZones(zones);

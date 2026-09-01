@@ -155,6 +155,10 @@ public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSim
         // docs/PARITY.md.
         Intel.Place(ref _state, level);
 
+        // Beside the other map objects. Zero on every shipped map, so this is
+        // reachable only from a custom map a recording was made on.
+        MovingPlatforms.Place(ref _state, level);
+
         // ⚠️ The mode FIRST, and it is not cosmetic: ControlPoints.Place
         // switches on state.GameMode to decide which entity types are points,
         // so a defaulted (Capture the Flag) mode places none of a King of the

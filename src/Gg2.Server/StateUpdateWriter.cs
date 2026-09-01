@@ -20,6 +20,21 @@ public delegate bool CharacterLookup(int slot, out CharacterBlock character, out
 public delegate bool SentryLookup(int slot, out SentryBlock sentry);
 
 /// <summary>
+/// Answers what the map's moving platforms look like on the wire.
+/// </summary>
+/// <remarks>
+/// A delegate for the same reason <see cref="CharacterLookup"/> is: the state
+/// lives in a <c>WorldState</c> the writer must never copy.
+/// <para>
+/// ⚠️ <b>Returns the count as well as filling the span</b>, because a platform's
+/// block carries no count prefix — the client sizes the read from its own copy of
+/// the map. A writer that emitted a different number from the one the client
+/// expects desynchronises the stream permanently rather than glitching.
+/// </para>
+/// </remarks>
+public delegate int MovingPlatformLookup(Span<MovingPlatformBlock> platforms);
+
+/// <summary>
 /// What the objective contributes to a <c>FULL_UPDATE</c> or a
 /// <c>CAPS_UPDATE</c>: the two briefcases and the two cap counters.
 /// </summary>
@@ -178,8 +193,22 @@ public sealed class StateUpdateWriter(
     SentryLookup? sentries = null,
     ObjectiveLookup? objective = null,
     StatsLookup? statistics = null,
-    DominationLookup? dominations = null)
+    DominationLookup? dominations = null,
+    MovingPlatformLookup? movingPlatforms = null)
 {
+    /// <summary>
+    /// How many platform blocks one update can carry.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Must not be smaller than <c>WorldState.MaxMovingPlatforms</c></b>,
+    /// which is 16. It is written out rather than referenced because this
+    /// assembly deliberately does not <c>using Gg2.Simulation</c> — the writer
+    /// reaches the world through delegates precisely so it cannot copy one — and
+    /// <c>MovingPlatformFramingTests</c> pins the two together so the duplication
+    /// cannot drift.
+    /// </remarks>
+    private const int MaxMovingPlatformBlocks = 16;
+
     /// <summary>
     /// Writes one update of the given tier.
     /// </summary>
@@ -213,8 +242,20 @@ public sealed class StateUpdateWriter(
             // One block per MovingPlatform, in instance order, with no count
             // prefix — the client has the same map loaded and knows how many
             // there are. No shipped map has any.
-            foreach (var platform in match.MovingPlatforms)
-                WriteMovingPlatform(writer, tier, platform);
+            //
+            // ⚠️ The positions come from the simulation, not from the map. Until
+            // 2026-09-01 this wrote match.MovingPlatforms, which was the entity's
+            // LOAD position and never moved — so a custom map's platform sat
+            // still on every client while the client's own End Step walked its
+            // local copy away from it. MovingPlatforms.Step is what moves them.
+            if (movingPlatforms is not null)
+            {
+                Span<MovingPlatformBlock> blocks = stackalloc MovingPlatformBlock[MaxMovingPlatformBlocks];
+                var count = movingPlatforms(blocks);
+
+                for (var i = 0; i < count; i++)
+                    WriteMovingPlatform(writer, tier, blocks[i]);
+            }
         }
 
         var scores = _objective;
@@ -441,16 +482,16 @@ public sealed class StateUpdateWriter(
     /// <c>Objects/Map elements/Colliders/MovingPlatform.events/User Event 10.xml</c>
     /// — nothing at all on an INPUTSTATE tick.
     /// </summary>
-    private static void WriteMovingPlatform(NetWriter writer, MessageType tier, MovingPlatformState platform)
+    private static void WriteMovingPlatform(NetWriter writer, MessageType tier, MovingPlatformBlock platform)
     {
         if (tier is not (MessageType.QuickUpdate or MessageType.FullUpdate))
             return;
 
-        // x_ * 5 with no GML round(): the extension's own conversion is the
-        // whole quantisation. Note the underscored x_, which is the platform's
-        // real position — x is the rounded copy GM8 draws.
-        writer.WriteUShortFromReal(platform.X * 5);
-        writer.WriteUShortFromReal(platform.Y * 5);
+        // The quantisation is already in the block: x_ * 5 with no GML round(),
+        // the extension's own conversion being the whole of it. Note the
+        // underscored x_ — x is the rounded copy GM8 draws.
+        writer.WriteUShort(platform.X);
+        writer.WriteUShort(platform.Y);
         writer.WriteUByte(platform.MovementState);
     }
 

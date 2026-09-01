@@ -106,8 +106,12 @@ public static class CharacterPhysics
         // character" is the same question as "the character moved down one meets
         // the platform", which is what is asked here.
         //
-        // ⚠️ MovingPlatform is still not modelled, and no shipped map places
-        // one.
+        // ⚠️ A MovingPlatform would land in this scan too — its parent object IS
+        // DropdownPlatform, so `place_meeting(…, DropdownPlatform)` matches one —
+        // but it never has a SolidRect to be found by. It has no sprite of its
+        // own, so its collision box comes from an embedded resource in a custom
+        // map, and that pipeline is not ported. MovingPlatforms carries the
+        // detail; its motion IS simulated, only its box and its carry are not.
         else if ((character.KeyState & PlayerKeys.Down) == 0)
         {
             foreach (ref readonly var rect in world.RectSpan)

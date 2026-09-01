@@ -18,15 +18,6 @@ public sealed class ControlPointState
     public double Capping { get; set; }
 }
 
-public sealed class MovingPlatformState
-{
-    public double X { get; set; }
-
-    public double Y { get; set; }
-
-    public byte MovementState { get; set; }
-}
-
 /// <summary>
 /// Everything a state update needs that is not a character.
 /// </summary>
@@ -86,8 +77,6 @@ public sealed class MatchState
     /// </remarks>
     public List<ControlPointState> ControlPoints { get; } = [];
 
-    public List<MovingPlatformState> MovingPlatforms { get; } = [];
-
     // --- scoreboard and HUD --------------------------------------------------
 
     public byte CapLimit { get; set; }
@@ -112,20 +101,18 @@ public sealed class MatchState
     /// <summary>Per-class limits, ten of them, sent on every <c>FULL_UPDATE</c>.</summary>
     public byte[] ClassLimits { get; } = new byte[10];
 
-    private void BuildEntities()
-    {
-        foreach (var entity in Map.Entities)
-        {
-            switch (entity.Type)
-            {
-                case EntityTypes.MovingPlatform:
-                    MovingPlatforms.Add(new MovingPlatformState { X = entity.X, Y = entity.Y });
-                    break;
-            }
-        }
-
-        BuildControlPoints();
-    }
+    /// <summary>
+    /// ⚠️ Nothing left to build from the entity list.
+    /// </summary>
+    /// <remarks>
+    /// The moving platforms were the last thing here, and they moved into
+    /// <c>Gg2.Simulation.WorldState</c> on 2026-09-01 because they had to start
+    /// actually moving — this class held their LOAD position and nothing ever
+    /// advanced it. That is the shrink this type's own remarks ask for; the
+    /// method stays only as the seam <see cref="BuildControlPoints"/> is reached
+    /// through.
+    /// </remarks>
+    private void BuildEntities() => BuildControlPoints();
 
     private void BuildControlPoints()
     {
