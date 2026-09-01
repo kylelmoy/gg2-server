@@ -1227,6 +1227,8 @@ than done.
 | Bytes allocated per round trip, batch 16 | **2.98 MB → 23.6 KB**, gen0 collections 250 → 9 per 1,500 rounds | Release | 2026-08-30 |
 | `ScenarioWorld.Load`, `ctf_truefort` with nav | **5.121 → ~0.01 ms** | Release | 2026-08-30 |
 | `ObservationWriter.Write`, ray fan, averaged over 512 map positions | **5.02 → 2.73 µs** | Release | 2026-08-30 |
+| `RolloutSearch` decision, 60 candidates, horizon 20 | **3.22 ms** (fork 11.1 µs/candidate, tick 2.13 µs) | Release | 2026-08-31 |
+| `RolloutSearch` decision, 120 candidates (sniper) | **5.83 ms** | Release | 2026-08-31 |
 | **Socket round trip, batch 1** | 79.3 → **50.7 µs mean** | Release | 2026-08-31 |
 | Socket round trip, batch 16 | 289.2 → **265.7 µs mean** | Release | 2026-08-31 |
 | Round trips stalling past 10 ms, batch 1 | **12 in 20,000 → 0** | Release | 2026-08-31 |
@@ -1400,6 +1402,32 @@ merely make the continuation affordable — **pruned-with-continuation costs les
 than unpruned-without**. But the reason is mostly this repo's observation writer,
 not the network, so the number to watch when anyone re-estimates this is the
 extraction row.
+
+### ⚠️ The affordability frontier is PER CLASS, and a fixed k over-prunes the sniper
+
+Measured 2026-08-31, Release, `gg_debug`, horizon swept and fitted per class:
+
+| | candidates | fork | tick | a decision at horizon 20 | continuation affordable to |
+|---|---|---|---|---|---|
+| soldier (and everyone else) | 60 | 11.1 µs | 2.13 µs | **3.22 ms** | **k ≈ 21** |
+| **sniper** | **120** | 11.2 µs | 1.87 µs | **5.83 ms** | **k ≈ 40** |
+
+The per-candidate costs are the same; the sniper simply has twice the set, so its
+unpruned decision costs twice as much and it can afford twice the k.
+
+⛔ **Which means a k chosen for a soldier is twice as aggressive on a sniper.**
+k=8 is 13.3% of a soldier's candidates and **6.7% of a sniper's**. `gg2-rl`'s
+retention table — the policy's top 8 holds the search's best action 78.2% of the
+time, top 12 holds 86.6% — was measured on **60**-candidate sets. Applying the
+same absolute k to a sniper halves the fraction retained, so retention will be
+worse and pruning will cost more.
+
+⚠️ **And the sniper is the class most likely to be read wrong because of it.** It
+has the worst blind fraction (92.8% at the default horizon) and twice the
+branching factor, so "pruning hurts snipers more" is exactly the conclusion an
+absolute k would manufacture — when the cause would be **k/N halved**, not
+anything about snipers. **Scale k with the candidate set, or state that you did
+not.**
 
 ### The shape, if it is ever built
 
