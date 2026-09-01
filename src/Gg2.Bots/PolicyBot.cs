@@ -26,6 +26,37 @@ namespace Gg2.Bots;
 /// the policy is being handed the wheel at a range its own input cannot describe.
 /// </para>
 /// </remarks>
+/// <summary>What decides when the policy takes the wheel.</summary>
+public enum HandoverRule
+{
+    /// <summary>An enemy within <see cref="PolicyBot.EngagementRange"/>.</summary>
+    /// <remarks>
+    /// ⛔ <b>Measured to cost the objective.</b> The 300px came from a DUEL
+    /// measurement, where every tick is a combat tick and there is nothing else
+    /// the bot could be doing. In CTF "an enemy is near" means "stop pursuing the
+    /// objective", because that is all the policy knows to do with the wheel.
+    /// </remarks>
+    Distance,
+
+    /// <summary>
+    /// The scripted layer would itself stop and fight — its own engage hold.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Intent AND range</b>, reusing the predicate the macro layer already
+    /// had rather than inventing a second one. Crucially the hold is
+    /// <b>time-bounded</b>: it lapses <c>BotConstants.EngageTicks</c> after the
+    /// target was acquired, so control returns and the route resumes. The distance
+    /// rule has no timer at all.
+    /// <para>
+    /// ⚠️ <b>The range half is not redundant.</b> The scripted hold fires out to
+    /// <c>BotTargeting.ClassRange</c> — 800px for a soldier, 900 for a sniper — so
+    /// intent alone hands the policy the wheel far past where its observation
+    /// saturates. See <c>PolicyBot.ShouldEngage</c> for what that measured.
+    /// </para>
+    /// </remarks>
+    MacroTask,
+}
+
 public sealed class PolicyBot : IInputSource, ICommandSource
 {
     /// <summary>
@@ -96,6 +127,9 @@ public sealed class PolicyBot : IInputSource, ICommandSource
     /// </remarks>
     public bool ScriptedCarriesIntel { get; init; } = true;
 
+    /// <summary>Which predicate decides when the policy takes the wheel.</summary>
+    public HandoverRule Rule { get; init; } = HandoverRule.Distance;
+
     public PolicyBot(PolicyNetwork policy, ScriptedBot scripted)
     {
         ArgumentNullException.ThrowIfNull(policy);
@@ -152,6 +186,20 @@ public sealed class PolicyBot : IInputSource, ICommandSource
 
         ref readonly var self = ref world.Character(slot);
 
+        // ⛔ THE SCRIPTED LAYER THINKS EVERY TICK, WHETHER OR NOT IT DRIVES.
+        //
+        // The first version polled it only on the ticks it drove — so for the 27%
+        // of ticks the policy held the wheel, the macro layer did no objective
+        // planning at all: no re-target, no re-path, no spot ban, and its path
+        // state was stale the moment control came back. A bot that meets enemies
+        // often therefore stopped pursuing the objective even between fights.
+        // Captures fell 20 to 7 over a hundred matches; docs/ENV.md has the arms.
+        //
+        // ⚠️ It costs a scripted poll every tick, which is the cheap half of this
+        // bot, and it is what makes "the macro layer owns objectives" true rather
+        // than aspirational.
+        var scripted = _scripted.Poll(in world, slot, tick);
+
         // A dead or untrained-class character is the scripted layer's entirely —
         // and so is one carrying the intel, which is an objective task and
         // therefore the macro layer's by the architecture's own rule.
@@ -159,9 +207,7 @@ public sealed class PolicyBot : IInputSource, ICommandSource
             || !IsTrained(self.Class)
             || (ScriptedCarriesIntel && self.CarryingIntel))
         {
-            _policyHadControl = false;
-
-            return Scripted(in world, slot, tick);
+            return Scripted(scripted);
         }
 
         var firstTickOfDecision = _ticksLeftInDecision <= 0;
@@ -175,18 +221,12 @@ public sealed class PolicyBot : IInputSource, ICommandSource
         if (!firstTickOfDecision)
         {
             return _policyHadControl
-                ? PolicyInput(in world, slot, firstTick: false)
-                : Scripted(in world, slot, tick);
+                ? PolicyInput(slot, firstTick: false)
+                : Scripted(scripted);
         }
 
-        var inRange = DistanceToNearestEnemy(in world, slot) <= EngagementRange;
-
-        if (!inRange)
-        {
-            _policyHadControl = false;
-
-            return Scripted(in world, slot, tick);
-        }
+        if (!ShouldEngage(in world, slot))
+            return Scripted(scripted);
 
         // ⚠️ Resync the decoder's absolute aim on every handover INTO the policy.
         // The scripted layer writes the character's bearing directly, so a decoder
@@ -203,9 +243,7 @@ public sealed class PolicyBot : IInputSource, ICommandSource
         // would be a policy acting on a rhythm it never saw.
         _ticksLeftInDecision = Math.Max(1, _policy.ActionRepeat);
 
-        var view = world;
-
-        ObservationWriter.Write(in view, slot, _observation);
+        ObservationWriter.Write(in world, slot, _observation);
         _policy.Act(_observation, _heads);
 
         _action = new EnvAction
@@ -218,10 +256,34 @@ public sealed class PolicyBot : IInputSource, ICommandSource
             Zoom = (byte)_heads[5],
         };
 
-        return PolicyInput(in world, slot, firstTick: true);
+        return PolicyInput(slot, firstTick: true);
     }
 
-    private PlayerInput PolicyInput(in WorldView world, int slot, bool firstTick)
+    /// <summary>Whether the policy should take the wheel this decision.</summary>
+    private bool ShouldEngage(in WorldView world, int slot)
+    {
+        var inRange = DistanceToNearestEnemy(in world, slot) <= EngagementRange;
+
+        // ⚠️ MacroTask is a CONJUNCTION, and the range half is not optional.
+        // Gating on the scripted engage hold ALONE was tried and is wrong: that
+        // hold fires out to BotTargeting.ClassRange, which is 800px for a soldier
+        // and 900 for a sniper — three times this range. It took the policy's
+        // share of control from 27% to 71% and handed it the wheel at distances
+        // its observation cannot describe, which is the thing the 400px ceiling
+        // exists to forbid. Captures fell to 3 a hundred matches.
+        //
+        // `gg2-rl` predicted this failure exactly: "your control-share number is
+        // the mechanism dial. A goal-gated handover should cut it sharply. If it
+        // does not move, the gate is not doing what we think." It did not move
+        // down; it more than doubled.
+        return Rule switch
+        {
+            HandoverRule.MacroTask => inRange && _scripted.WantsToEngage,
+            _ => inRange,
+        };
+    }
+
+    private PlayerInput PolicyInput(int slot, bool firstTick)
     {
         _ticksLeftInDecision--;
         PolicyDrove = true;
@@ -230,13 +292,14 @@ public sealed class PolicyBot : IInputSource, ICommandSource
         return _decoder.Decode(slot, _action, firstTick);
     }
 
-    private PlayerInput Scripted(in WorldView world, int slot, int tick)
+    private PlayerInput Scripted(PlayerInput scripted)
     {
         _ticksLeftInDecision = 0;
+        _policyHadControl = false;
         PolicyDrove = false;
         ScriptedTicks++;
 
-        return _scripted.Poll(in world, slot, tick);
+        return scripted;
     }
 
     private static double DistanceToNearestEnemy(in WorldView world, int slot)

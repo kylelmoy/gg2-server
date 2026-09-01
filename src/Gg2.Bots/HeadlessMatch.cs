@@ -33,7 +33,8 @@ public readonly record struct HeadlessMatchOptions(
     PlayerClass[]? AllowedClasses = null,
     PolicyNetwork? Policy = null,
     Team? PolicyTeam = null,
-    bool ScriptedCarriesIntel = true)
+    bool ScriptedCarriesIntel = true,
+    HandoverRule HandoverRule = HandoverRule.Distance)
 {
     /// <summary>
     /// A short match on <c>ctf_truefort</c> with twelve bots. ⚠️ The values are
@@ -613,6 +614,7 @@ public sealed class HeadlessMatch
             _sources[slot] = new PolicyBot(policy, scripted)
             {
                 ScriptedCarriesIntel = Options.ScriptedCarriesIntel,
+                Rule = Options.HandoverRule,
             };
         }
     }

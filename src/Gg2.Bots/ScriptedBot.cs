@@ -175,6 +175,24 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
     public BotRole Role { get; set; }
 
     /// <summary>
+    /// Whether this bot decided, on its most recent poll, to stop walking and
+    /// fight — its engage hold.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Exposed so PolicyBot can hand the wheel over on INTENT rather than on
+    /// proximity</b>, and assigned from the same expression the hold itself uses
+    /// rather than recomputed. A second copy of this predicate would be the
+    /// sniper-candidate-count bug again: two places that should agree about one
+    /// decision, disagreeing.
+    /// <para>
+    /// ⚠️ <b>It is time-bounded</b> — <c>BotConstants.EngageTicks</c> after the
+    /// target was acquired the hold lapses and the bot resumes its route. That
+    /// bound is the property a distance rule does not have.
+    /// </para>
+    /// </remarks>
+    public bool WantsToEngage { get; private set; }
+
+    /// <summary>
     /// This bot's constant lateral goal offset — <see cref="BotRoles.SpreadX"/>.
     /// </summary>
     /// <remarks>
@@ -494,10 +512,12 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
         // band, and until that is found this condition would be an ungated change
         // to shipped behaviour with no demonstrated effect. docs/TRAPS-BOTS.md,
         // "Team Deathmatch", has the measurement and the open question.
-        if (!self.CarryingIntel
+        WantsToEngage = !self.CarryingIntel
             && distance <= BotTargeting.ClassRange(self.Class)
             && tick - Combat.TargetAt <= BotConstants.EngageTicks
-            && GoalDistance(in self) > BotConstants.EngageGoalNear)
+            && GoalDistance(in self) > BotConstants.EngageGoalNear;
+
+        if (WantsToEngage)
         {
             navKeys &= ~(PlayerKeys.Left | PlayerKeys.Right);
             Path.StuckTicks = 0;
