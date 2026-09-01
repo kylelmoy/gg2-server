@@ -16,6 +16,19 @@ public static class GameConstants
     public const string GameNameString = "Gang Garrison 2";
 
     /// <summary>
+    /// <c>GAME_URL_STRING</c>, announced to the lobby as the <c>game_url</c> pair.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Carried since 2026-09-01 and not before.</b> It sat in
+    /// <c>ConstantsTests.NotCarried</c> as "client UI", which was right until
+    /// <c>Gg2.Server.LobbyRegistration</c> needed it — the client shows it on a
+    /// menu AND the server puts it in the registration packet. A constant being
+    /// presentation in one place is not evidence it is presentation everywhere,
+    /// which is worth remembering for the rest of that exclusion list.
+    /// </remarks>
+    public const string GameUrlString = "http://www.ganggarrison.com";
+
+    /// <summary>
     /// Sent as its 16 bytes in textual order, hyphens removed
     /// (<c>Scripts/Versioning/parseUuid.gml</c>). All 16 are compared by the
     /// server; a single wrong byte means no stock client ever connects.

@@ -221,6 +221,13 @@ internal static class Program
                     options.TickStats = true;
                     break;
 
+                // ⚠️ The only switch that reaches outside this machine. Opt-in,
+                // never a default: it publishes this server's address, name,
+                // map and player count to ganggarrison.com every 30 seconds.
+                case "--lobby":
+                    options.AnnounceToLobby = true;
+                    break;
+
                 case "--control-port":
                     options.ControlPort = RequireInt(name, value);
                     options.ControlPortEnabled = true;
@@ -292,6 +299,10 @@ internal static class Program
                             0 asks the OS for a free port)
           --tick-stats      log a histogram of tick intervals every 30s and at
                             shutdown; safe with clients connected
+          --lobby           list this server publicly at ganggarrison.com, so it
+                            appears in the client's server browser (default: off).
+                            Sends this server's address, name, map and player
+                            count there every 30 seconds until it shuts down.
 
         The 22 built-in maps are checked in at maps/ and are found automatically,
         so a clone serves a round with no arguments and no reference checkout.

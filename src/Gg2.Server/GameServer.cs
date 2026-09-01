@@ -129,6 +129,16 @@ public sealed class GameServer : IDisposable
     /// <summary><c>GameServer.currentMapIndex</c> into the rotation.</summary>
     private int _rotationIndex;
 
+    /// <summary>
+    /// The public-lobby announcer, or null when <c>--lobby</c> was not passed.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Null is the default and means "announce nothing".</b> Every call
+    /// site below is null-conditional rather than wrapped in an option check, so
+    /// a forgotten check cannot accidentally publish this server's address.
+    /// </remarks>
+    private LobbyAnnouncer? _lobby;
+
     public GameServer(ServerOptions options, IServerLog log)
     {
         options.Validate();
@@ -271,6 +281,16 @@ public sealed class GameServer : IDisposable
         _log.Info(
             $"listening on {BoundPort}, map {map.Name} ({_match.GameMode}, " +
             $"{map.Walkmask.Width}x{map.Walkmask.Height} cells), {_options.PlayerLimit} slots");
+
+        // ⚠️ Off unless asked for: this publishes the server's address to a
+        // third party. The first registration goes out here rather than waiting
+        // for the 30-second cadence, so a short-lived server still gets listed.
+        if (_options.AnnounceToLobby)
+        {
+            _lobby = new LobbyAnnouncer(_log);
+            _log.Info($"announcing to lobby {GameConstants.LobbyServerHost}:{GameConstants.LobbyServerPort}");
+            AnnounceToLobby();
+        }
 
         // ⚠️ Loopback only and off unless configured — it executes commands
         // against a live game, which is the same reason the GM8 bridge is.
@@ -475,6 +495,11 @@ public sealed class GameServer : IDisposable
         ServerMessages.ChangeMap(_broadcast, map.Name, string.Empty);
         _log.Info($"now playing {map.Name} ({_match.GameMode}), area {_nextArea}");
 
+        // GameServerBeginStep.gml:142-143 — "message lobby to update map name".
+        // The listing shows the map, so without this it advertises the previous
+        // one for up to 30 seconds after a rotation.
+        AnnounceToLobby();
+
         // ⚠️ A segment is one map, so the header's map name cannot go stale —
         // and the new segment's preamble is taken against the world OpenMap has
         // just built, before anything broadcasts on it.
@@ -647,6 +672,13 @@ public sealed class GameServer : IDisposable
         var now = DateTime.UtcNow;
 
         _frame++;
+
+        // GameServerBeginStep.gml:5-8, `frame mod 900`: the 30-second lobby
+        // re-announcement, at the very top of the server's own Begin Step.
+        // ⚠️ Cheap to leave unguarded because _lobby is null unless --lobby was
+        // passed, and the modulo runs either way.
+        if (_lobby is not null && _frame % LobbyRegistration.ReRegisterIntervalTicks == 0)
+            AnnounceToLobby();
 
         ServiceClients();
 
@@ -1973,6 +2005,13 @@ public sealed class GameServer : IDisposable
         var client = _clients[clientIndex];
         var rosterIndex = _roster.IndexOf(client.Entry);
 
+        // ⚠️ Read BEFORE the removal. GameServerBeginStep.gml:46-49 re-announces
+        // only when the server WAS full, so that a list showing "10/10" stops
+        // showing it the moment a slot opens — the case where a stale entry
+        // actually costs somebody a game. Sampling after the remove would make
+        // the test `occupied == limit` never true and the branch dead.
+        var wasFull = OccupiedSlots() == _options.PlayerLimit;
+
         _clients.RemoveAt(clientIndex);
 
         if (rosterIndex > 0)
@@ -1998,6 +2037,9 @@ public sealed class GameServer : IDisposable
 
         _log.Info($"{client.Entry.Name} left ({reason}); {_roster.Count - 1} of {_options.PlayerLimit} slots used");
         client.Connection.Dispose();
+
+        if (wasFull)
+            AnnounceToLobby();
     }
 
     // --- broadcast -----------------------------------------------------------
@@ -2143,6 +2185,40 @@ public sealed class GameServer : IDisposable
         }
     }
 
+    /// <summary>
+    /// Re-announces this server to the lobby, if announcing is on at all.
+    /// </summary>
+    /// <remarks>
+    /// <c>sendLobbyRegistration.gml</c> is called from four places in the
+    /// reference and all four are wired here: the 30-second cadence
+    /// (<c>GameServerBeginStep.gml:5-8</c>), a map change (:143), a completed
+    /// join (<c>serviceJoiningPlayer.gml:171</c>), and a leave that un-fills a
+    /// server that was full (<c>GameServerBeginStep.gml:46-49</c>).
+    /// <para>
+    /// ⚠️ <b>The count is <see cref="OccupiedSlots"/>, which is humans.</b> Bots
+    /// are excluded from it and the packet's own bot field is a hard zero — so a
+    /// server full of bots advertises as empty. That is the reference's
+    /// behaviour, transcribed rather than improved; see
+    /// <see cref="LobbyRegistration"/>.
+    /// </para>
+    /// </remarks>
+    private void AnnounceToLobby()
+    {
+        if (_lobby is null)
+            return;
+
+        _lobby.Register(new LobbyServerInfo
+        {
+            ServerId = _lobby.ServerId,
+            ServerName = _options.ServerName,
+            Map = _match.Map.Name,
+            Port = checked((ushort)BoundPort),
+            PlayerLimit = checked((ushort)_options.PlayerLimit),
+            OccupiedSlots = checked((ushort)OccupiedSlots()),
+            Passworded = _options.Password.Length > 0,
+        });
+    }
+
     private int OccupiedSlots()
     {
         var count = _roster.OccupiedSlots;
@@ -2232,6 +2308,10 @@ public sealed class GameServer : IDisposable
         _log.Info(
             $"{entry.Name} joined as player {_roster.Count - 1}; "
             + $"{_roster.Count - 1} of {_options.PlayerLimit} slots used");
+
+        // serviceJoiningPlayer.gml:171 — tell the lobby the player count moved,
+        // rather than letting the list show a stale one for up to 30 seconds.
+        AnnounceToLobby();
     }
 
     // --- map loading ---------------------------------------------------------
@@ -2260,6 +2340,19 @@ public sealed class GameServer : IDisposable
         // a recording lost here is a recording that never existed.
         _recorder?.Dispose();
         _recorder = null;
+
+        // GameServer.events/Destroy.xml:16-17. Best effort, and before the
+        // sockets go: a listing nobody takes down lingers until the lobby's own
+        // timeout, advertising a server that is not there.
+        //
+        // ⚠️ The reference does a BLOCKING DNS lookup here, on purpose, so the
+        // datagram is out before GM8 tears the networking extension down. .NET's
+        // UdpClient.Send resolves synchronously too, so the same guarantee holds
+        // without the sleep loop — but it does mean Dispose can block briefly on
+        // a slow resolver.
+        _lobby?.Unregister();
+        _lobby?.Dispose();
+        _lobby = null;
 
         _control?.Dispose();
         _control = null;

@@ -671,8 +671,26 @@ event rather than a tick boundary for exactly that reason.
 
 Not everything in the reference is load-bearing for a private headless server:
 
-- **Lobby registration** (`sendLobbyRegistration.gml`) announces to
-  `ganggarrison.com:29944`. Skip it, or gate it behind a flag that defaults off.
+- ~~**Lobby registration**~~ ✅ **Implemented 2026-09-01, behind `--lobby`, which
+  defaults off** — the second half of what this entry asked for.
+  `LobbyRegistration` builds the two datagrams and `LobbyAnnouncer` sends them;
+  all four of the reference's re-announce triggers are wired (the 30-second
+  cadence, a map change, a join, and a leave that un-fills a full server), plus
+  the unregister at shutdown.
+  ⚠️ **The packet is BIG-endian** — `set_little_endian(lobbyBuffer, false)` — so
+  it is the one thing in this project not written through `NetWriter`. A
+  little-endian packet is not rejected loudly; the server just never appears,
+  which looks exactly like the flag being off.
+  ⚠️ **Verified against the GML, NOT against the live service.**
+  `ganggarrison.com:29944` is a third party, is not in the reference tree, and
+  was not contacted — `LobbyRegistrationTests` asserts this port agrees with
+  `sendLobbyRegistration.gml`, which is a different claim from "the lobby accepts
+  it". If a `--lobby` server never appears in the browser, check the service
+  before re-deriving the layout.
+  ⚠️ **A server full of bots advertises as empty**: the count is
+  `getNumberOfOccupiedSlots`, which is humans, and the packet's own bot field is a
+  hard zero in the reference. Transcribed rather than corrected — that field's
+  meaning belongs to the lobby, not to us.
 - **Reward/auth** (`REWARD_*`, `Documentation/Authentication.txt`) talks to an
   external auth server. Answer `REWARD_REQUEST` with nothing and never grant
   rewards.

@@ -75,6 +75,25 @@ public sealed class ServerOptions
     public bool Autobalance { get; set; } = true;
 
     /// <summary>
+    /// Announce this server to the public lobby at
+    /// <c>ganggarrison.com:29944</c>, so it appears in the client's server list.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>OFF by default, and the default is the point.</b> The reference's
+    /// ini has <c>UseLobby</c> on — because a person ticked a box in a hosting
+    /// menu to get there. A headless binary has no such moment, so
+    /// <c>docs/PROTOCOL.md</c> asks for a flag that defaults off: running
+    /// <c>gg2-server</c> must not publish an address to a third party.
+    /// <para>
+    /// It is the only outbound connection this project makes. Turning it on
+    /// sends a UDP datagram every 30 seconds, plus one on each map change, each
+    /// join, and each leave that un-fills a full server, plus an unregister at
+    /// shutdown.
+    /// </para>
+    /// </remarks>
+    public bool AnnounceToLobby { get; set; }
+
+    /// <summary>
     /// Where the built-in map PNGs live — the reference checkout's
     /// <c>Source/gg2/Included Files</c>.
     /// </summary>

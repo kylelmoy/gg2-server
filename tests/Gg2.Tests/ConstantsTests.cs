@@ -109,6 +109,7 @@ public sealed class ConstantsTests
     [
         ("GAME_VERSION_STRING", GameConstants.GameVersionString),
         ("GAME_NAME_STRING", GameConstants.GameNameString),
+        ("GAME_URL_STRING", GameConstants.GameUrlString),
         ("PROTOCOL_UUID", GameConstants.ProtocolUuid),
         ("GG2_LOBBY_UUID", GameConstants.Gg2LobbyUuid),
         ("LOBBY_SERVER_HOST", GameConstants.LobbyServerHost),
@@ -124,7 +125,6 @@ public sealed class ConstantsTests
     {
         // Client-side presentation and updater plumbing. A headless server has
         // no menus, no music, no particles and does not self-update.
-        ["GAME_URL_STRING"] = "client UI",
         ["PLUGIN_SOURCE"] = "client plugin downloader",
         ["PLUGIN_SOURCE_NOTICE"] = "client plugin downloader",
         ["BACKGROUND_SOURCE"] = "client UI",
