@@ -118,8 +118,16 @@ across `Player`, `Character`, weapons, `MovingPlatform` and `HUD`.
 | Tuning constants | `Constants.xml`, the `BOT_*` block |
 | Design notes | `Documentation/Bots.md` |
 
+⚠️ **This whole section is about the bot FORK (`D:\code\Gang-Garrison-2`), not
+the reference.** Stock GG2 — which is what `GG2_REFERENCE` now points at — has no
+`Scripts/Bots/`, no `Scripts/BotNav/`, no `BOT_*` or `NAV_*` constants and no
+`Documentation/Bots.md`. This port's bot layer has diverged from the fork's, so
+nothing here is a specification for anything; it is a map of where the ideas came
+from.
+
 **Nav graph generation is no longer in the game.** It lives in
-`D:\code\gg2-nav-gen` and writes `Source/build/botnav/<map>_a<area>.txt`. The
+`D:\code\gg2-nav-gen` and writes `botnav/<map>_a<area>.txt`, which this repo
+keeps in its gitignored `nav/` (or wherever `GG2_NAVCACHE` points). The
 cache format is documented in `D:\code\gg2-agent\tools\navgraph.js` — it is
 `ds_grid_write`'s column-major layout with sixteen-byte cells and the double four
 bytes in, which is not the obvious format. Do not re-derive it by hand.

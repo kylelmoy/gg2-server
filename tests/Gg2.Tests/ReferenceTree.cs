@@ -12,12 +12,23 @@ namespace Gg2.Tests;
 /// Set <c>GG2_REFERENCE</c> to override the path. The tree is <b>read-only</b>
 /// from this repo (CLAUDE.md).
 /// </para>
+/// <para>
+/// ⚠️ <b>The default is stock upstream GG2, not the bot fork.</b> It used to be
+/// <c>D:\code\Gang-Garrison-2</c>, a fork carrying 42 commits of its own bot and
+/// nav work — 69 extra scripts and 198 extra constants. Tests grew to assert
+/// against those, so "the specification" quietly meant one person's branch. This
+/// port's bot layer has since diverged from that branch anyway, which leaves no
+/// reason to check anything against it. Stock GG2 is the thing a stock client
+/// runs, and that is the only thing this port owes compatibility to.
+/// </para>
 /// </remarks>
 public static class ReferenceTree
 {
     public const string EnvironmentVariable = "GG2_REFERENCE";
 
-    private const string DefaultPath = @"D:\code\Gang-Garrison-2";
+    public const string NavCacheEnvironmentVariable = "GG2_NAVCACHE";
+
+    private const string DefaultPath = @"D:\code\Gang-Garrison-2-upstream";
 
     /// <summary>Root of the checkout, whether or not it exists.</summary>
     public static string Root =>
@@ -29,17 +40,28 @@ public static class ReferenceTree
     public static string IncludedFiles => Path.Combine(Root, "Source", "gg2", "Included Files");
 
     /// <summary>
-    /// Where <c>gg2-nav-gen</c> writes the bot nav caches.
+    /// Where the bot nav caches live: <c>GG2_NAVCACHE</c>, or <c>nav/</c> at the
+    /// root of this repo.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <c>Source/build/</c> is gitignored in the reference and is the user's
-    /// own build directory, so this may be absent or empty on a fresh checkout —
-    /// unlike the maps, which ship. A test that needs it must say so
-    /// (<see cref="RequireNavCache"/>) rather than failing as if the tree were
-    /// missing.
+    /// ⚠️ <b>Deliberately NOT under <see cref="Root"/>.</b> These used to be read
+    /// from the reference's <c>Source/build/botnav</c> — the GM8 build directory
+    /// of whichever checkout <c>GG2_REFERENCE</c> pointed at — which quietly made
+    /// 190-odd bot tests depend on a fork that had run the in-game generator.
+    /// A nav graph is <em>this project's</em> artefact and the reference knows
+    /// nothing about it, so it does not belong in a tree CLAUDE.md calls
+    /// read-only.
+    /// <para>
+    /// They are gitignored (34 MB of hex for 24 map areas) and rebuilt by
+    /// <c>gg2-nav-gen</c>, so a fresh clone has none. A test that needs them must
+    /// say so with <see cref="RequireNavCache"/> rather than failing as if
+    /// something were broken.
+    /// </para>
     /// </remarks>
     public static string NavCacheDirectory =>
-        Path.Combine(Root, "Source", "build", Gg2.Bots.NavCache.DirectoryName);
+        Environment.GetEnvironmentVariable(NavCacheEnvironmentVariable) is { Length: > 0 } fromEnv
+            ? fromEnv
+            : Path.Combine(RepositoryRoot, "nav");
 
     public static bool IsAvailable => Directory.Exists(IncludedFiles);
 
@@ -52,10 +74,37 @@ public static class ReferenceTree
             $"""
              No bot nav caches at {NavCacheDirectory}.
 
-             These are written by gg2-nav-gen, not shipped with the reference, and
-             Source/build/ is gitignored — so a fresh checkout has none. Run the
-             generator over the built-in maps to produce them.
+             These are written by gg2-nav-gen and gitignored here, so a fresh clone
+             has none. Run the generator over the built-in maps, then either copy
+             its output to that directory or point {NavCacheEnvironmentVariable} at it.
              """);
+
+    /// <summary>
+    /// This repo's root, found by walking up from the test binary until
+    /// <c>Gg2.sln</c> turns up.
+    /// </summary>
+    /// <remarks>
+    /// The alternative — copying the caches into the build output the way
+    /// <c>Fixtures/</c> is copied — would put 34 MB through every build, twice
+    /// over for Debug and Release.
+    /// </remarks>
+    private static string RepositoryRoot
+    {
+        get
+        {
+            for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
+                 directory is not null;
+                 directory = directory.Parent)
+            {
+                if (File.Exists(Path.Combine(directory.FullName, "Gg2.sln")))
+                    return directory.FullName;
+            }
+
+            // Only reachable if the tests are run from outside the tree; the
+            // env var is then the way in, and RequireNavCache says so.
+            return AppContext.BaseDirectory;
+        }
+    }
 
     public static string MapPath(string map) => Path.Combine(IncludedFiles, map + ".png");
 

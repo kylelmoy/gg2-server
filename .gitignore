@@ -31,3 +31,10 @@ traces/
 
 # Machine-specific overrides, never team config.
 .claude/settings.local.json
+
+# The bot nav graphs. These are gg2-nav-gen's output, not the reference's and
+# not this repo's source: 34 MB of hex for 24 map areas, rebuilt by running the
+# generator. They used to be read out of the reference tree's GM8 build
+# directory, which coupled the test suite to one particular checkout of a fork.
+# ReferenceTree.NavCacheDirectory now looks here, or at GG2_NAVCACHE.
+nav/

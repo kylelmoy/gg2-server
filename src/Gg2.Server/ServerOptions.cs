@@ -81,8 +81,8 @@ public sealed class ServerOptions
     public string MapDirectory { get; set; } = string.Empty;
 
     /// <summary>
-    /// Where the bot nav caches live — the reference's
-    /// <c>Source/build/botnav</c>.
+    /// Where the bot nav caches live — <c>gg2-nav-gen</c>'s output, kept in this
+    /// repo's gitignored <c>nav/</c>.
     /// </summary>
     /// <remarks>
     /// ⚠️ Empty, and a missing cache, are both fine and mean different things:

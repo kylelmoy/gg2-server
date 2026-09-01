@@ -686,3 +686,35 @@ Not everything in the reference is load-bearing for a private headless server:
 
 None of that is visible to a stock client beyond a server that has no plugins,
 no rewards, and only built-in maps.
+
+### The census behind that list, 2026-09-01
+
+⚠️ **Done once against stock upstream GG2 so nobody re-derives it.** All 330
+scripts and 687 object-event files, against `src/`. The list above is what a
+headless server skips; this is what makes it a *complete* list rather than a
+plausible one.
+
+**Fully covered, checked rather than assumed:**
+
+- **All 15 client commands** in `processClientCommands.gml` reach
+  `GameServer.cs`'s switch. `REWARD_REQUEST`, `REWARD_CHALLENGE_RESPONSE` and
+  `PLUGIN_PACKET` are answered with silence, which is the reference's own answer
+  from a server with no auth.
+- **Every map entity type** registered by `builder_init.gml`'s `addEntity` block
+  is in `EntityTypes.cs`; every simulation-bearing object in `InGameElements`
+  and `GameElements` has a home in `Gg2.Simulation`.
+- **All ten classes**, `Quote` included.
+
+**Client-only, so absent on purpose** — the three that look server-side and are
+not, each settled by grep rather than by reading:
+
+- **Gear/hats** (613 lines, five `GEAR_*` constants). Grepped
+  `Objects/Networking`, `Scripts/GameServer`, `Scripts/Serialization` and
+  `Scripts/Events`: **gear never touches the wire.** It is a client draw derived
+  from reward state, which is why `ConstantsTests.NotCarried` can list the
+  constants as "rewards, out of scope" without a gap behind it.
+- **Holidays** (81 lines). `xmasTime.gml` is nothing but `sprite_assign` calls
+  and `calculateAprilFools` sets a global that only drawing code reads.
+- **Kill Log** (302 lines). Called from the `doEvent*` scripts, which run
+  server-side too — but it builds a `ds_map` for `Objects/Overlays/KillLog`'s
+  **Draw** event. A HUD list, not state.

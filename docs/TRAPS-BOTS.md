@@ -167,10 +167,14 @@ PlayerCommandBuffer, ICommandSource}`, `Gg2.Server.NetworkInputSource`,
   `cp_dirtbowl` has three graphs over one mask.
 - **A miss is a quiet `false`, not an error** (`NavCache.TryLoad`): a server with
   an ungenerated map in its rotation should keep serving it to humans.
-- ⚠️ **The caches live in `Source/build/botnav/`, which is gitignored in the
-  reference and is not shipped.** A fresh checkout has none, so
-  `NavGraphFixtureTests` says that rather than failing as if the tree were
-  missing (`ReferenceTree.RequireNavCache`). All 24 present on this machine load.
+- ⚠️ **The caches live in this repo's gitignored `nav/`, or wherever
+  `GG2_NAVCACHE` points.** A fresh clone has none, so `NavGraphFixtureTests` says
+  that rather than failing as if the tree were missing
+  (`ReferenceTree.RequireNavCache`). All 24 present on this machine load.
+  ⚠️ **They were in the reference's `Source/build/botnav` until 2026-09-01** —
+  the GM8 build directory of whichever checkout `GG2_REFERENCE` named — which
+  made **188 tests** depend on having a fork that had run the in-game generator.
+  Moving them was what let the reference become stock upstream GG2.
 
 ### Phase 7 item 3: the scenario harness, and a world with no gamemode in it
 
@@ -307,7 +311,7 @@ generator degrades into `BotPathState.UnsupportedEdgeTicks` instead of silently
 flying an arc nobody modelled. **Do not paper over a new kind with an approximate
 jump**: an arc the generator did not validate is exactly what the whole takeoff
 apparatus exists to prevent. ✅ **No shipped graph contains a type-7 edge** —
-measured across all 24 caches in `Source/build/botnav` — and `NavSearch` refuses
+measured across all 24 caches in `nav/` — and `NavSearch` refuses
 one to anybody without `NavQuery.CanStickyJump`, which the reference's own A*
 cannot do.
 
@@ -1707,8 +1711,10 @@ invisible: an arrived bot would leave its whole route crowded for ever.
 `BotStabTests`. The reference is `botStabWindow.gml` and
 `botClassKeys.gml:146-163`.
 
-✅ **Every script in the reference's bot layer is ported.**
-`BotLayerCoverageTests.Unported` is **empty**, and `docs/PLAN.md` says so.
+✅ **Every script in the bot fork's layer was ported**, as of phase 7's close.
+⚠️ **That is history, not a live invariant.** `BotLayerCoverageTests` asserted it
+and was deleted on 2026-09-01: the reference is stock GG2, which has no bot
+layer, and this port's bots have diverged from the fork's. `docs/BOTS.md`.
 
 - ⚠️ **The obvious test — "the enemy is within `BOT_STAB_RANGE` right now" — is
   aimed a full second early.** The press *freezes* the spy (`runPower` and
@@ -1930,8 +1936,7 @@ worth knowing precisely because so much moved underneath them.
   moves at all is a behaviour change and not noise.
 - ⚠️ **Both directions: a leg that got FASTER fails too.** A baseline nobody
   re-records stops describing the thing it names — the same reason
-  `ScenarioSuiteTests.Unmet` is checked both ways and
-  `BotLayerCoverageTests.Unported` asserts its own length.
+  `ScenarioSuiteTests.Unmet` is checked both ways.
 - ⚠️ **A failure there is the re-record, not a broken test.** Check the change is
   one you meant, then that it went the way you meant, then update the row and say
   so in the commit — the discipline the pinned `SIM_UUID` asks for.
@@ -2445,8 +2450,7 @@ is why both are pinned.
 That is the honest replacement for *"48 real edges flown across four maps, zero
 sticky jumps taken"*. ⚠️ **It is not checked in**, because `build/botnav-sticky`
 is another lane's output behind a flag; the checked-in gates run the same harness
-over `Source/build/botnav`, where a rocket jump and an air jump are the arcs that
-exist.
+over `nav/`, where a rocket jump and an air jump are the arcs that exist.
 
 ⚠️ **Two findings in it belong to `gg2-nav-gen` rather than here.**
 

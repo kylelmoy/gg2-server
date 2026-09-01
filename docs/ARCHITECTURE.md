@@ -237,7 +237,8 @@ Two things to carry over rather than reinvent:
 
 - **The nav graph generator already lives outside the game**, and the port
   **reads its cache** (phase 7 item 2): `gg2-nav-gen` builds
-  `Source/build/botnav/<map>_a<area>.txt` offline; `Gg2.Bots.NavCache` loads it
+  `botnav/<map>_a<area>.txt` offline — kept in this repo's gitignored `nav/`
+  since 2026-09-01, previously in the reference tree — and `Gg2.Bots.NavCache` loads it
   and `Gg2.Bots.NavGraph` is the model, with the coordinate conversions, the
   node lookup, the gate rules and the two indices `navCacheLoad.gml` derives
   rather than stores. Moving *generation* into `Gg2.Bots` is a natural

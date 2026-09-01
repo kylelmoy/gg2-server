@@ -22,8 +22,8 @@ Common to most modes:
 
 | variable | meaning |
 |---|---|
-| `GG2_REFERENCE` | the reference checkout (default `D:\code\Gang-Garrison-2`) |
-| `GG2_NAV` | the bot nav cache directory |
+| `GG2_REFERENCE` | the reference checkout (default `D:\code\Gang-Garrison-2-upstream` — stock GG2, **not** the bot fork) |
+| `GG2_NAV` | the bot nav cache directory — normally `<repo>/nav`. ⚠️ Not the same name as the test suite's `GG2_NAVCACHE`, and required here rather than defaulted |
 | `NPZ` | a `gg2-rl` policy checkpoint |
 | `BENCH_MAP`, `BENCH_FOCUS` | which map, or a comma-separated list |
 
@@ -44,6 +44,16 @@ four that are built into the code here:
 4. **Keep the control arm even when it looks redundant.** Two of the biggest
    findings of 2026-09-01 came out of a control row added only to validate an
    assumption.
+5. ⛔ **Every constant in a printed expression carries its date and the mode that
+   produced it, in the comment beside it.** `Search.cs` held a bare `4.7` as the
+   per-tick cost of a policy continuation. It was an estimate, it was 1.4x low,
+   and it drove the `(affordable)`/`(OVER)` column that this repo *and* `gg2-rl`
+   read for a day. **A bare literal in an expression is indistinguishable from a
+   measurement at the call site** — no citation, no date, nothing to prompt the
+   lookup — so the plausible reading is the one that stops anybody checking. It
+   survived in the file whose README you are reading, three lines under a warning
+   that its numbers go stale. Found by trying to *compute* something with it, not
+   by reading it.
 
 ## Modes that matter for bot work
 

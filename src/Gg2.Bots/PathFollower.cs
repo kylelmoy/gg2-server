@@ -53,7 +53,7 @@ namespace Gg2.Bots;
 /// </para>
 /// <para>
 /// ✅ <b>Unreachable on every shipped map, measured 2026-08-28</b> by walking all
-/// 24 cached graphs in <c>Source/build/botnav</c> and counting edge kinds:
+/// 24 cached graphs in <c>nav/</c> and counting edge kinds:
 /// Walk 18,785, Fall 11,558, Jump 67,013, DropThrough 5, DoubleJump 2,382,
 /// RocketJump 16,014 — and <b>StickyJump 0</b>. (<see cref="NavEdgeType.MoveBox"/>
 /// is 0 too; its arm is a deliberate no-op rather than a gap.) ⚠️ <b>Nothing

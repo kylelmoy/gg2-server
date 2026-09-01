@@ -108,12 +108,12 @@ wobble at the update cadence — which is the wire's `x*5` quantisation, not a
 disagreement. The server's recorded state replayed offline reproduces the
 client's trajectory bit for bit.
 
-**Phase 7** — the bots. All 7,202 lines of the reference's bot layer are ported:
-the nav format and A\*, the path follower with its jump and rocket-jump branches,
-targeting and aim, the combat controller, the objective layer and the population
-manager. `BotLayerCoverageTests.Unported` is empty and asserted so, which guards
-the other direction too — a name added there without `docs/PLAN.md` growing to
-match fails the build.
+**Phase 7** — the bots: the nav format and A\*, the path follower with its jump
+and rocket-jump branches, targeting and aim, the combat controller, the objective
+layer and the population manager. This was seeded by porting all 7,202 lines of a
+GG2 *fork's* bot layer; stock GG2 has none, and the two have since diverged, so
+the bots here are judged by measurement rather than by correspondence
+(`docs/BOTS.md`).
 
 ⚠️ **The reference's bot layer is treated as INCOMPLETE rather than as a
 specification**, unlike every other phase. A bot's decisions are this project's
@@ -151,13 +151,18 @@ dotnet run --project src/Gg2.Host -- --map ctf_truefort
 
 # ...and with bots. --bots is a FILL target including humans, not a bot count.
 dotnet run --project src/Gg2.Host -- --map ctf_truefort --bots 12 `
-    --botnav D:\code\Gang-Garrison-2\Sourceuildotnav
+    --botnav ./nav
 ```
 
-⚠️ **The nav caches are not shipped.** They are gitignored in the reference and
-are built by `gg2-nav-gen`, so a fresh checkout has none — without `--botnav` the
-bots fight whatever comes to them and do not walk anywhere, which is a quiet
-degradation rather than an error.
+⚠️ **The nav caches are not shipped.** They are built by `gg2-nav-gen` and
+gitignored here — 34 MB for 24 map areas — so a fresh clone has none. Without
+`--botnav` the bots fight whatever comes to them and do not walk anywhere, which
+is a quiet degradation rather than an error.
+
+The test suite reads them from `nav/`, or from `GG2_NAVCACHE` if that is set;
+**188 tests fail without them**, saying so rather than looking broken. They used
+to live in the reference tree's `Source/build/botnav`, which made a third of the
+suite depend on which GG2 checkout you had.
 
 ## Why
 
@@ -213,12 +218,13 @@ should be discarded in favour of whatever is fastest and most testable in C#.
 | [`docs/SOURCEMAP.md`](docs/SOURCEMAP.md) | Where everything lives in the reference tree. |
 | [`docs/BOTAI.md`](docs/BOTAI.md) | Constraints the port must honour to keep search-based and learned bots possible. Structure only; no ML in this repo. |
 
-## The five repositories
+## The six repositories
 
 | Repo | What |
 |---|---|
 | `gg2-server` (this one) | The C# server. Nothing else. |
-| `Gang-Garrison-2` | The reference implementation and the client. **Read-only from here.** |
+| `Gang-Garrison-2-upstream` | **The reference implementation.** Stock GG2 v2.9.2, cloned from `Gang-Garrison-2/Gang-Garrison-2`. What `GG2_REFERENCE` defaults to. **Read-only from here.** |
+| `Gang-Garrison-2` | A bot fork of the above, 42 commits ahead. The checkout the live game is built and run from, so the client and the parity harness mean this one. **Not the specification** — its bot layer and nav constants are its own, and this port's bots have diverged from them. **Read-only from here.** |
 | `gg2-agent` | Tooling for the GM8 game: build scripts, the agent bridge, the MCP server, nav analysis. The parity harness leans on it. |
 | `gg2-nav-gen` | Offline bot nav-graph generator. Already outside the game; the port reads its cache. |
 | `gg2-rl` | Bot-policy trainer. Documentation only and blocked on this repo; see its `docs/CONTRACT.md` for what it needs from here. |

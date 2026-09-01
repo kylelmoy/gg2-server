@@ -58,10 +58,15 @@ near them", has the state rules that apply to everyone, bot work included.
 | the training environment seam | `src/Gg2.Env/` | `EnvProtocolTests` |
 | the measurement instrument | `tools/bench/` | not in `Gg2.sln`; build explicitly |
 
-All 7,202 lines of the reference's bot layer are ported.
-`BotLayerCoverageTests.Unported` is empty **and asserted so**, which guards the
-other direction too: a name added there without `docs/PLAN.md` growing to match
-fails the build.
+⚠️ **There is nothing to be "ported" against any more.** This layer was seeded
+from a bot fork of GG2, and phase 7 closed by porting all 7,202 lines of it —
+but stock GG2 ships no bots, the fork has moved, and this port's bots have
+diverged from both. `BotLayerCoverageTests`, which asserted that script-name
+list, was deleted on 2026-09-01 along with the fork-only constant checks; see
+CLAUDE.md, "Except the bot layer".
+
+**So the only judge of a bot change is measurement.** That is what the rest of
+this file is for, and it is why the section below is the one not to skip.
 
 ### The hybrid, and the result that decides how to use it
 

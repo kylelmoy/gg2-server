@@ -17,7 +17,7 @@ namespace Gg2.Tests;
 /// 48 real edges on four maps" — that was true, useless, and about a bug three
 /// layers away (docs/TRAPS-BOTS.md, "the arm was never asked").
 /// <para>
-/// ⚠️ <b>These pin counts against <c>Source/build/botnav</c>, which is
+/// ⚠️ <b>These pin counts against the nav caches in <c>nav/</c>, which are
 /// <c>gg2-nav-gen</c>'s output and not checked in.</b> Same exposure as
 /// <see cref="PathFollowerFixtureTests"/>'s 137-node route, and the same
 /// discipline: a failure here is the <b>re-record</b> — check the change is one
@@ -81,7 +81,7 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
     /// docs/TRAPS-BOTS.md said the first flight harness measured the wrong edges
     /// because "on <c>ctf_truefort</c> and <c>cp_egypt</c> the takeoff column does
     /// not resolve to the from-node". Measured here over all 18,396 rocket-jump
-    /// and air-jump edges in <c>Source/build/botnav</c>: <b>the takeoff column
+    /// and air-jump edges in <c>nav/</c>: <b>the takeoff column
     /// resolves to the from-node every single time</b>, and so does the midpoint.
     /// Whatever that harness started from, it was neither of these.
     /// <para>

@@ -14,9 +14,9 @@ namespace Gg2.Tests;
 /// questions: "does this reader match the documented format" and "does the
 /// documented format match what the generator emits".
 /// <para>
-/// ⚠️ <b>These need <c>Source/build/botnav/</c>, which is gitignored in the
-/// reference and is not shipped.</b> A checkout that has never run the generator
-/// has none, which is why they say so with
+/// ⚠️ <b>These need the nav caches in <c>nav/</c>, which are gitignored here and
+/// not shipped.</b> A clone whose generator has never been run has none, which is
+/// why they say so with
 /// <see cref="ReferenceTree.RequireNavCache"/> rather than failing as if the
 /// tree were missing.
 /// </para>

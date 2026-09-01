@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Gg2.Protocol;
 
@@ -94,7 +95,11 @@ public sealed class ConstantsTests
         ("ASSIST_TIME", GameConstants.AssistTime),
         ("HP_PER_POINT", GameConstants.HpPerPoint),
         ("INTEL_MAX_TIMER", GameConstants.IntelMaxTimer),
-        ("NAV_CELL_SIZE", GameConstants.CellSize),
+
+        // ⚠️ GameConstants.CellSize is NOT here. It used to be checked against
+        // NAV_CELL_SIZE, which exists only in the bot fork — the nav graph is
+        // this project's own and stock GG2 has no opinion on its resolution.
+        // Nothing in the reference can confirm it, so nothing pretends to.
         ("CHARACTER_ANIMATION_NORMAL", GameConstants.CharacterAnimationNormal),
         ("CHARACTER_ANIMATION_INTEL", GameConstants.CharacterAnimationIntel),
         ("CHARACTER_ANIMATION_LEN", GameConstants.CharacterAnimationLen),
@@ -161,10 +166,6 @@ public sealed class ConstantsTests
         ["REAL"] = "GML ini parser",
         ["BOOL"] = "GML ini parser",
         ["HEX"] = "GML ini parser",
-
-        // Nav-graph build progress states, internal to the offline generator.
-        ["NAV_BUILD_IDLE"] = "nav generator internal",
-        ["NAV_BUILD_DONE"] = "nav generator internal",
     };
 
     private static readonly ReferenceConstants Reference = ReferenceConstants.Load();
@@ -222,15 +223,37 @@ public sealed class ConstantsTests
             Assert.Equal(Reference.Number(Enum.GetName(stat)!.ToUpperInvariant()), (int)stat);
     }
 
+    /// <summary>
+    /// The seven input bits, against the place stock GG2 actually assembles
+    /// them.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Read out of an object event, not out of <c>Constants.xml</c>.</b>
+    /// Stock GG2 has no <c>KEY_*</c> constants at all — <c>PlayerControl</c>'s
+    /// Begin Step ors literal <c>$XX</c> masks into <c>keybyte</c>, and those
+    /// literals are the whole definition. The named constants this test used to
+    /// read were added by a fork, so pointing <c>GG2_REFERENCE</c> at an upstream
+    /// checkout turned the strongest check on the input byte into a
+    /// "Constants.xml has no numeric constant named KEY_JUMP" failure.
+    /// <para>
+    /// These bits are <b>observable wire</b>: every <c>INPUTSTATE</c> a client
+    /// sends is one byte of them, so this is not a check worth losing to make a
+    /// path resolve.
+    /// </para>
+    /// </remarks>
     [Fact]
     public void KeyBitsMatchTheReference()
     {
+        var masks = ReferenceKeyBits();
+
         foreach (var key in Enum.GetValues<PlayerKeys>())
         {
             if (key == PlayerKeys.None)
-                continue; // The reference has no KEY_NONE; 0 is just no bits.
+                continue; // Not a bit: 0 is the absence of all of them.
 
-            Assert.Equal(Reference.Number("KEY_" + Enum.GetName(key)!.ToUpperInvariant()), (byte)key);
+            var name = Enum.GetName(key)!;
+            Assert.True(masks.ContainsKey(name), $"PlayerControl's Begin Step ors no mask for {name}");
+            Assert.Equal(masks[name], (byte)key);
         }
     }
 
@@ -246,13 +269,6 @@ public sealed class ConstantsTests
     {
         foreach (var (name, value) in Strings)
             Assert.Equal(Reference.Text(name), value);
-    }
-
-    [Fact]
-    public void NavAndBotBlocksAreCarriedInFull()
-    {
-        AssertBlockMatches("NAV_", typeof(NavConstants));
-        AssertBlockMatches("BOT_", typeof(BotConstants));
     }
 
     /// <summary>
@@ -282,21 +298,49 @@ public sealed class ConstantsTests
 
     // --- helpers -------------------------------------------------------------
 
-    private static void AssertBlockMatches(string prefix, Type table)
+    /// <summary>
+    /// The <c>keybyte |= $XX</c> lines of <c>PlayerControl</c>'s Begin Step,
+    /// keyed by the <see cref="PlayerKeys"/> member each one is.
+    /// </summary>
+    /// <remarks>
+    /// Each line names the setting it reads before it ors its mask —
+    /// <c>keyboard_check(global.left) || keyboard_check(global.left2)) keybyte |=
+    /// $40;</c> — so the first <c>global.</c> identifier on the line, with any
+    /// trailing alternate-binding digit dropped, is the key's name.
+    /// </remarks>
+    private static Dictionary<string, byte> ReferenceKeyBits()
     {
-        var fields = table.GetFields()
-            .Where(f => f.IsLiteral)
-            .ToDictionary(f => f.Name, f => Convert.ToDouble(f.GetRawConstantValue(), CultureInfo.InvariantCulture));
+        ReferenceTree.RequireAvailable();
 
-        foreach (var name in Reference.Names)
+        var path = Path.Combine(
+            ReferenceTree.Root, "Source", "gg2", "Objects", "InGameElements",
+            "PlayerControl.events", "Begin Step.xml");
+
+        Assert.True(File.Exists(path), $"the reference tree has no PlayerControl Begin Step at {path}");
+
+        // Object event code is XML-escaped inside the .xml (CLAUDE.md, "Reading
+        // the reference"), so `||` survives but `&&` and comparisons do not.
+        var source = File.ReadAllText(path)
+            .Replace("&lt;", "<", StringComparison.Ordinal)
+            .Replace("&gt;", ">", StringComparison.Ordinal)
+            .Replace("&quot;", "\"", StringComparison.Ordinal)
+            .Replace("&apos;", "'", StringComparison.Ordinal)
+            .Replace("&amp;", "&", StringComparison.Ordinal);
+
+        var bits = new Dictionary<string, byte>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (Match match in Regex.Matches(
+                     source,
+                     @"global\.(?<key>[A-Za-z]+)\d?\b[^\r\n]*?keybyte\s*\|=\s*\$(?<mask>[0-9A-Fa-f]+)"))
         {
-            if (!name.StartsWith(prefix, StringComparison.Ordinal) || NotCarried.ContainsKey(name))
-                continue;
-
-            var member = ToPascal(name[prefix.Length..]);
-            Assert.True(fields.ContainsKey(member), $"{table.Name} has no member for {name} (expected {member})");
-            Assert.Equal(Reference.Number(name), fields[member]);
+            bits[match.Groups["key"].Value] = Convert.ToByte(match.Groups["mask"].Value, 16);
         }
+
+        // Seven allocated bits; $04 is unallocated. A regex that silently
+        // matched fewer would make the assertions below vacuous.
+        Assert.Equal(7, bits.Count);
+
+        return bits;
     }
 
     private static HashSet<string> CarriedNames()
@@ -318,36 +362,14 @@ public sealed class ConstantsTests
         foreach (var playerClass in Enum.GetValues<PlayerClass>())
             names.Add("CLASS_" + Enum.GetName(playerClass)!.ToUpperInvariant());
 
-        foreach (var key in Enum.GetValues<PlayerKeys>())
-            names.Add("KEY_" + Enum.GetName(key)!.ToUpperInvariant());
+        // No KEY_* loop: stock GG2 has no such constants. KeyBitsMatchTheReference
+        // reads the masks out of PlayerControl's Begin Step instead.
 
         foreach (var stat in Enum.GetValues<StatIndex>())
             names.Add(Enum.GetName(stat)!.ToUpperInvariant());
 
-        foreach (var (table, prefix) in new[] { (typeof(NavConstants), "NAV_"), (typeof(BotConstants), "BOT_") })
-        foreach (var field in table.GetFields().Where(f => f.IsLiteral))
-            names.Add(prefix + ToScreamingSnake(field.Name));
-
         return names;
     }
-
-    private static string ToScreamingSnake(string pascal)
-    {
-        var sb = new System.Text.StringBuilder(pascal.Length + 8);
-        for (var i = 0; i < pascal.Length; i++)
-        {
-            if (i > 0 && char.IsUpper(pascal[i]))
-                sb.Append('_');
-            sb.Append(char.ToUpperInvariant(pascal[i]));
-        }
-
-        return sb.ToString();
-    }
-
-    private static string ToPascal(string screamingSnake) =>
-        string.Concat(screamingSnake
-            .Split('_')
-            .Select(w => w.Length == 0 ? w : char.ToUpperInvariant(w[0]) + w[1..].ToLowerInvariant()));
 
     /// <summary>The reference's own constant table, read straight out of the XML.</summary>
     private sealed class ReferenceConstants

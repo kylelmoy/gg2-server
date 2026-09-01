@@ -12,7 +12,7 @@ namespace Gg2.Tests;
 /// up on real geometry — which is a different question, and the one that catches
 /// an assumption about the graph rather than about A*.
 /// <para>
-/// ⚠️ These need <c>Source/build/botnav/</c>, gitignored in the reference and not
+/// ⚠️ These need the nav caches in <c>nav/</c>, gitignored here and not
 /// shipped. See <see cref="ReferenceTree.RequireNavCache"/>.
 /// </para>
 /// </remarks>
