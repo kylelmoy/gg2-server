@@ -134,9 +134,10 @@ public static class SimulationStamp
     /// worse than no gate: it reads as diligence while checking nothing. Both
     /// halves are corrected — the claim above no longer depends on absence, and
     /// <c>MovingPlatformTests.NoShippedMapPlacesAPlatformThatCouldCarryAnyone</c>
-    /// now scans both map sources and asserts the property that matters: that no
-    /// shipped platform names a <c>resource</c>, without which it has no sprite,
-    /// no mask, and nothing can stand on it in GM8 either.
+    /// now scans both map sources and asserts the property that matters. (What
+    /// that property IS narrowed again the same day; the paragraph below is the
+    /// current one, and this sentence deliberately does not restate it — two
+    /// statements of the same predicate is how one of them goes stale.)
     /// </para>
     /// <para>
     /// ⛔ <b>What voids this exemption: porting the CARRY.</b> The day a platform

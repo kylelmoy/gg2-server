@@ -433,10 +433,29 @@ public sealed class MovingPlatformTests
                 var left = entity.GetReal("left", 0);
                 var top = entity.GetReal("top", 60);
 
+                // ⚠️ SCALED, and leaving this out made the gate fail OPEN.
+                // A map sets the footprint three different ways — the `scale`
+                // property that User Event 1 reads into image_xscale, and the
+                // `xscale`/`yscale` the entity loader applies — and real maps go
+                // up to 6 (`cp_scrap`, `surf_mup`). At 6 a 24x12 sprite covers
+                // 144x72, so an unscaled extent checks a fraction of what the
+                // platform really sweeps and can pass one that reaches a spawn.
+                // The largest of the three is used because over-estimating the
+                // extent fails CLOSED, which is the only safe direction here.
+                var scale = Math.Max(
+                    entity.GetReal("scale", 1),
+                    Math.Max(entity.XScale, entity.YScale));
+
+                if (scale < 1)
+                    scale = 1;
+
+                var width = mask.Width * scale;
+                var height = mask.Height * scale;
+
                 var x0 = Math.Min(entity.X, entity.X + left);
-                var x1 = Math.Max(entity.X, entity.X + left) + mask.Width;
+                var x1 = Math.Max(entity.X, entity.X + left) + width;
                 var y0 = Math.Min(entity.Y, entity.Y - top);
-                var y1 = Math.Max(entity.Y, entity.Y - top) + mask.Height;
+                var y1 = Math.Max(entity.Y, entity.Y - top) + height;
 
                 for (var cy = (int)Math.Floor(y0 / 6); cy <= (int)Math.Floor(y1 / 6); cy++)
                 for (var cx = (int)Math.Floor(x0 / 6); cx <= (int)Math.Floor(x1 / 6); cx++)
