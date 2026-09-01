@@ -855,6 +855,101 @@ o\such\policy.npz"));
     }
 
     /// <summary>
+    /// ⛔ END TO END: a policy loaded over the socket really drives the search.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The gap this closes is the one arm D would otherwise have found.</b>
+    /// <c>ContinuationTests</c> proves the search uses a policy when handed one
+    /// in-process; <c>OneSideMayHaveAContinuationAndTheOtherNot</c> proves a batch
+    /// naming a handle is accepted. Neither <b>steps</b>, so nothing checked that
+    /// a handle read off the wire, resolved through the table and carried into
+    /// <c>MakeBot</c> reaches the rollout at all. Every one of those links could
+    /// have been broken with both existing tests green.
+    /// <para>
+    /// Two batches from the same seed, one with a handle and one with 0, compared
+    /// on the action the SEARCH chose. Identical means the continuation is not
+    /// arriving.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void APolicyLoadedOverTheSocketReachesTheRollout()
+    {
+        Send(EnvMessage.Hello, Int(EnvProtocol.Version));
+        Receive();
+
+        Send(EnvMessage.LoadPolicy, LoadPolicyBody(PolicyPath));
+        var handle = BitConverter.ToInt32(Receive(), 1);
+
+        Assert.Equal(1, handle);
+
+        var neutral = RedActionsOverSteps(continuation: 0);
+        var driven = RedActionsOverSteps(continuation: handle);
+
+        Assert.Equal(neutral.Count, driven.Count);
+        Assert.NotEmpty(neutral);
+
+        var same = true;
+
+        for (var i = 0; i < neutral.Count; i++)
+            if (neutral[i] != driven[i])
+                same = false;
+
+        Assert.False(
+            same,
+            "the search chose the same action at every step with and without a continuation "
+            + "handle, so the handle is not reaching RolloutSearch — check EnvServer resolving "
+            + "it, DuelSpec carrying it, and MakeBot passing it into RolloutOptions");
+    }
+
+    /// <summary>
+    /// The red side's chosen action each step, for a rollout-driven duel.
+    /// </summary>
+    private List<(int Horizontal, int Aim)> RedActionsOverSteps(int continuation)
+    {
+        Send(
+            EnvMessage.MakeBatch,
+            MakeBatchBody(
+                count: 1,
+                cap: 60,
+                red: EnvDriver.Rollout,
+                blue: EnvDriver.Idle,
+                // ⚠️ commit 4 because the search's DecisionTicks is 4 and is NOT the
+                // batch's action repeat — MakeBot does not wire the wire's `repeat`
+                // into RolloutOptions, so the continuation cadence is the search's
+                // own 4 whatever k the batch asked for. commit 2 here is refused by
+                // the phase guard, which is the guard being right.
+                redHorizon: 12,
+                redCommit: 4,
+                redContinuation: continuation,
+                redX: 600,
+                blueX: 680,
+                map: "ctf_truefort"));
+
+        var made = Receive();
+
+        Assert.True(
+            made[0] == (byte)EnvMessage.MakeBatch,
+            made[0] == (byte)EnvMessage.Error ? Text(made) : $"unexpected reply {made[0]}");
+
+        var componentsAt = 1 + 4 + (1 * 2 * ObservationWriter.Length * 4);
+        var chosen = new List<(int, int)>();
+
+        for (var step = 0; step < 10; step++)
+        {
+            Send(EnvMessage.Step, new byte[1 * 2 * EnvProtocol.ActionBytes]);
+
+            var reply = Receive();
+            Assert.Equal((byte)EnvMessage.Step, reply[0]);
+
+            chosen.Add((
+                BinaryPrimitives.ReadInt32LittleEndian(reply.AsSpan(componentsAt + 20)),
+                BinaryPrimitives.ReadInt32LittleEndian(reply.AsSpan(componentsAt + 36))));
+        }
+
+        return chosen;
+    }
+
+    /// <summary>
     /// ⚠️ <b>The version and the frame layout are pinned to each other</b>, so
     /// changing one without the other is a failing test rather than a silent lie.
     /// </summary>
