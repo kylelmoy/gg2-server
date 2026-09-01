@@ -694,6 +694,35 @@ Not everything in the reference is load-bearing for a private headless server:
 - **Reward/auth** (`REWARD_*`, `Documentation/Authentication.txt`) talks to an
   external auth server. Answer `REWARD_REQUEST` with nothing and never grant
   rewards.
+  ⛔ **Assessed 2026-09-01 and the answer is still "skip" — deliberately, not by
+  default.** The protocol is fully specified in the tree and would be
+  straightforward to write, so this is a decision rather than a blocker. Three
+  reasons, in order of weight:
+  1. **The game server would have to make outbound HTTP requests to
+     `ganggarrison.com` carrying player identities.** The flow is
+     `REWARD_REQUEST <user_id>` → server challenge → `hmac_md5(key, challenge +
+     serverIp)` → the *server* forwards it to the auth server and gets the user's
+     data back (`rewardAuthStart.gml`, `Scripts/Faucet HTTP/`). That is a
+     third-party dependency and a privacy consideration on behalf of users, and
+     it is not a thing to add unilaterally.
+  2. **It cannot be verified.** The auth server is not in the reference tree and
+     must not be contacted from here, so any implementation would ship as an
+     unverifiable claim — the failure mode this repo keeps recording.
+  3. **Every effect is cosmetic.** ⚠️ This one is worth stating because the call
+     sites look alarming: `hasReward`/`hasClassReward` are read from
+     `Character`'s Create, Begin Step and End Step, from `Weapon`'s Create and
+     from `Revolver`'s User Event 1 — all *simulation* events. They are still
+     decoration: `GoldTrail` changes a falling `LooseSheet`'s sprite,
+     `TauntMoney_` spawns a `Money` object during a taunt, `BH` adds a
+     bobble-head overlay to a stab. **And the `random`/`choose` draws inside
+     those branches do not perturb the observable stream** — particles are on
+     GM8's free-running generator, which `GmlRandom`'s remarks and
+     `docs/SIMULATION.md` already exclude from the seeded one. So a player with
+     rewards does not simulate differently.
+
+  What stays true meanwhile: `REWARD_REQUEST` and `REWARD_CHALLENGE_RESPONSE` are
+  answered with silence, which is the reference's own behaviour on a server with
+  no auth configured.
 - **Plugins** (`PLUGIN_PACKET`, `pluginList`). Advertise an empty plugin list and
   `pluginsRequired = 0`; the client's plugin path is then never entered. ✅ Done,
   and it is the only part that can be.

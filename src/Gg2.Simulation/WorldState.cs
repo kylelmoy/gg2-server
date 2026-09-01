@@ -342,14 +342,27 @@ public struct WorldState
     /// Moving platforms this state has room for.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>No shipped map places one</b>, so this ceiling has never been
-    /// approached and 16 is a guess rather than a measurement. It is the same
-    /// class of ceiling as <see cref="MaxProjectiles"/>: overrunning it silently
-    /// drops platforms a custom map placed, which is a divergence rather than
-    /// graceful degradation. <see cref="MovingPlatforms.Reset"/> is where it
-    /// clamps, and raising the number is the fix.
+    /// ⚠️ <b>Was 16, which was a guess, and the guess was WRONG.</b> No shipped
+    /// map places a platform, so nothing here ever reached the ceiling — but a
+    /// scan of the 2,348-map archive on 2026-09-01 found eight custom maps that
+    /// do, and <c>maw_deathmatch</c> places <b>139</b>. At 16 that map would have
+    /// silently lost 123 of them. Raised to 192 the same day, which is the fix
+    /// <see cref="MaxProjectiles"/>' remarks prescribe for this class of ceiling:
+    /// overrunning is a divergence, not graceful degradation.
+    /// <para>
+    /// ⚠️ <b>It costs a bigger <see cref="WorldState"/>, and the state is copied
+    /// per rollout candidate.</b> 176 extra slots is on the order of 4 KB against
+    /// a ~145 KB state — a few percent on the fork copy <c>docs/ENV.md</c> prices
+    /// at 10-12 µs, paid on every map including the 22 that place none. If that
+    /// ever matters, the answer is to stop carrying platforms in-line, not to
+    /// shrink the ceiling back below a real map.
+    /// </para>
+    /// <para>
+    /// 192 rather than 139: a round number above the largest real map, with room
+    /// for a bigger one. <see cref="MovingPlatforms.Reset"/> is where it clamps.
+    /// </para>
     /// </remarks>
-    public const int MaxMovingPlatforms = 16;
+    public const int MaxMovingPlatforms = 192;
 
     // --- the round -----------------------------------------------------------
 

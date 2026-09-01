@@ -201,13 +201,13 @@ public sealed class StateUpdateWriter(
     /// </summary>
     /// <remarks>
     /// ⚠️ <b>Must not be smaller than <c>WorldState.MaxMovingPlatforms</c></b>,
-    /// which is 16. It is written out rather than referenced because this
+    /// which is 192. It is written out rather than referenced because this
     /// assembly deliberately does not <c>using Gg2.Simulation</c> — the writer
     /// reaches the world through delegates precisely so it cannot copy one — and
     /// <c>MovingPlatformFramingTests</c> pins the two together so the duplication
     /// cannot drift.
     /// </remarks>
-    private const int MaxMovingPlatformBlocks = 16;
+    private const int MaxMovingPlatformBlocks = 192;
 
     /// <summary>
     /// Writes one update of the given tier.
