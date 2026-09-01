@@ -3,12 +3,14 @@
 A headless Gang Garrison 2 server in C#, wire-compatible with the stock Game
 Maker 8 client.
 
-**Status: phases 0–7 of [`docs/PLAN.md`](docs/PLAN.md) are done.** All eight game
-modes run end to end, the server plays match after match on its own, and every
-field of a state update carries a real value. **And the bots play**: a server
-started with `--bots 12` fills itself with twelve that walk the map, take the
-objective and fight over it — at **half a percent of the per-tick budget**, which
-is the headroom this project exists to buy.
+**Status: phases 0–8 of [`docs/PLAN.md`](docs/PLAN.md) are done, and phase 9 —
+a learned policy — is in progress.** All eight game modes run end to end, the
+server plays match after match on its own, and every field of a state update
+carries a real value. **And the bots play**: a server started with `--bots 12`
+fills itself with twelve that walk the map, take the objective and fight over
+it — at **half a percent of the per-tick budget**, which is the headroom this
+project exists to buy. A headless runner plays 44 matches across all 22 maps in
+3.3 seconds.
 
 A stock client connects, picks a team and class, spawns, fights, dies,
 respawns, captures the objective, and sees the round end and the map change.
@@ -105,6 +107,42 @@ Sampling the client's own position every frame against a wall shows a 0.094px
 wobble at the update cadence — which is the wire's `x*5` quantisation, not a
 disagreement. The server's recorded state replayed offline reproduces the
 client's trajectory bit for bit.
+
+**Phase 7** — the bots. All 7,202 lines of the reference's bot layer are ported:
+the nav format and A\*, the path follower with its jump and rocket-jump branches,
+targeting and aim, the combat controller, the objective layer and the population
+manager. `BotLayerCoverageTests.Unported` is empty and asserted so, which guards
+the other direction too — a name added there without `docs/PLAN.md` growing to
+match fails the build.
+
+⚠️ **The reference's bot layer is treated as INCOMPLETE rather than as a
+specification**, unlike every other phase. A bot's decisions are this project's
+own; the wire and the observable simulation are not.
+
+**Phase 8** — the fast loop. Unpaced ticking, a human-play recorder, a headless
+match runner and a loopback control port. **44 matches across all 22 maps in
+3.3 seconds, 3,548x real time.** ⚠️ All four switches are off by default and the
+first two must stay off wherever a client is connected — clients pace themselves
+at 30 Hz, and an unpaced server desynchronises every one at once.
+
+**Phase 9, in progress** — a learned policy. `PolicyNetwork` runs a checkpoint
+trained by the sibling `gg2-rl` project in this process, gated logit-for-logit
+against that project's own numpy on 64 real states; `PolicyBot` hands it the
+keys and aim inside a 150px engagement window while the scripted layer keeps
+movement, routing and objectives.
+
+⛔ **The result nobody predicted: the policy is most valuable used sparingly.** At
+150px it holds about **7% of ticks** and beats the all-scripted bot — better
+death share on **21 of 21 maps** over 400 matches a map, sign test p = 4.8e-7.
+Widen the window and the combat gain keeps rising while the objective collapses
+faster: at 450px on one map the policy wins **4 rounds to 133**.
+
+⚠️ **That claim is about one checkpoint, not about the method.** It licenses "the
+shipped artefact beats the scripted control" and not "a policy trained this way
+beats scripted" — training variance across seeds is larger than the effect.
+`docs/ENV.md`, "Phase 4 re-measured", has both tables, the scope statement and
+the two layers of censoring that made every earlier version of these numbers
+wrong.
 
 ```powershell
 $env:PATH = "$env:LOCALAPPDATA\Microsoft\dotnet;$env:PATH"   # .NET 9, user-local
