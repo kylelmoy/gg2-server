@@ -172,14 +172,27 @@ public static class SimulationStamp
     /// sealed" — is false for how training actually places characters:
     /// <c>gg2-rl</c>'s banded duels draw both spawns from <b>nav nodes</b>, not
     /// coordinates, and <c>gg2-nav-gen</c> floods the whole walkable mask rather
-    /// than seeding from spawns — <c>gg_debug2</c>'s sealed chambers carry about
-    /// twenty island nodes, measured. An ordinary graph draw could seed a duel
-    /// inside a sealed chamber with no teleport and no intent anywhere in either
-    /// repo. A sealed region is unreachable by <em>walking</em>, not by
-    /// <em>placement</em> — so intent is not a boundary the exemption can be
-    /// drawn around, and reachability answers only today's question (may a
-    /// shaped platform exist while platforms can touch nothing), never
-    /// tomorrow's (may the carry land quietly — no).
+    /// than seeding from spawns — <c>gg_debug2</c>'s sealed chambers carry
+    /// <b>exactly 18</b> island nodes. Measured independently in this repo, not
+    /// taken on report: load <c>nav/gg_debug2_a1.txt</c>, flood the walkmask from
+    /// the spawn entities, and count nodes whose stand cell the flood never
+    /// reaches. One of them is <c>(348,145)</c> — beside the raft at
+    /// <c>(282,150)</c>. An ordinary graph draw could seed a duel inside a sealed
+    /// chamber with no teleport and no intent anywhere in either repo. A sealed
+    /// region is unreachable by <em>walking</em>, not by <em>placement</em> — so
+    /// intent is not a boundary the exemption can be drawn around.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Which leaves the gate a TRIPWIRE rather than a proof, and it is
+    /// worth being exact about that or somebody will try to extend it.</b> What
+    /// licenses today's no-bump is not reachability — it is that a
+    /// <c>MovingPlatform</c> has no <c>SolidRect</c> at all, so it touches nothing
+    /// whether a character can get to it or not, and the raft would be equally
+    /// harmless in the middle of a spawn room. The flood fill earns its keep as an
+    /// early warning: it fires when a shipped map gains a shaped platform
+    /// somewhere a character can walk, which is the moment the mask pipeline stops
+    /// being theoretical. <b>It is not, and must not be turned into, an argument
+    /// that some platforms are exempt from the carry bump.</b>
     /// </para>
     /// <para>
     /// ⚠️ <b>Custom maps are the live edge.</b> Nothing stops an operator pointing
