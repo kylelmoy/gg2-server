@@ -3802,3 +3802,71 @@ always on**, so the 18 "opaque" sprites also have their background colour carved
 out at load, and several are plainly shaped rather than rectangular (`Boat`
 111x31, `piston` 60x161, `room1`/`room2` 20x76). So 89% is a *floor* on how many
 platforms are irregular, not an estimate.
+
+#### Verifying the precise mask against the running game — the plan
+
+⛔ **NOT YET RUN. Everything in `SpriteMask`, `PngSprite`, `GifSprite` and
+`PreciseCollision` is self-consistent and UNVERIFIED.** The suite proves the port
+agrees with itself; it cannot prove GM8 agrees. This is the plan that would
+settle it, written while the decisions were fresh.
+
+⚠️ **The live game is exclusive** (`docs/PARALLEL.md`): one session holds the
+bridge, and while it does, no other lane calls a `gg2_*` tool or runs a sampler.
+Take it before starting, and say so in the handoff.
+
+**What is actually uncertain**, worst first — this is the list a probe has to
+retire, not a general "check it works":
+
+| # | Uncertainty | Why it bites | Settled by |
+|---|---|---|---|
+| 1 | **`removeback` samples the BOTTOM-LEFT pixel** | Taken from Game Maker's docs, never measured. Wrong corner ⇒ a different shape for **18 of 31** sprites, which are opaque and carved by nothing else | A |
+| 2 | Does `removeback` also apply on top of an **alpha channel**? | This port applies both. If GM8 skips it for RGBA, every alpha sprite is over-carved | A |
+| 3 | Scaling maps room→source by **floor division** | Real maps scale up to 6x; an off-by-one at a boundary is a pixel of standing room | B |
+| 4 | Character box vs mask, and **rounding at the edge** | A character is never on an integer coordinate; this decides nearly every real query | C |
+| 5 | **Which frame of an animated GIF** collides | Wide open. If frames differ, `animationspeed` stops being decoration and becomes simulation | D |
+| 6 | `grem` decodes to **1.0% solid** | A 56x70 sprite with 39 solid pixels is either a nearly-blank first frame or a bug in this port's GIF path | A, D |
+
+**Phase A — the mask, at scale 1.** The core, and it retires 1, 2 and 6 on its
+own.
+
+1. Copy `tests/Gg2.Tests/Fixtures/sprite-{ji.png,eleplat.png,bubble1.gif}` and
+   `grem` into the game's working directory.
+2. In the game, do exactly what the reference does —
+   `s = sprite_add(file, 1, 1, 0, 0, 0)` — then attach it:
+   `o = instance_create(0, 0, SpriteObject); o.sprite_index = s;`
+3. Dump the engine's own mask with a `collision_point(xx, yy, o, true, false)`
+   grid, one character per pixel, rows separated. ⚠️ **`prec = 1` is the whole
+   point**: it is what makes GM8 answer per pixel rather than by bounding box.
+4. Compare byte for byte against `SpriteMask.Decode`.
+
+   ⚠️ **`eleplat` is the sharp instrument**: 10x2, no alpha, and this port has it
+   exactly half carved. If the corner rule is wrong it disagrees on the first
+   fixture rather than the fifth. `ji` (RGBA) answers 2 in the same run.
+   ⚠️ **Keep the dump under a few thousand characters** — do not try this on
+   `SURF` (973x198); sample it instead.
+
+**Phase B — scaling.** Repeat A with `image_xscale = image_yscale = 3`, dump the
+3x grid, compare against `PreciseCollision.Meets` with a 1x1 box. Retires 3.
+
+**Phase C — a real character.** Place a Scout and a Heavy (the widest box) near a
+platform edge and compare `place_meeting(x, y, o)` against
+`PreciseCollision.Meets` with that class's `CharacterBox`, **sweeping x in 0.1
+steps across the boundary**. The sweep is the point: a single position agreeing
+proves nothing about the rounding. Retires 4.
+
+**Phase D — animation.** `sprite_get_number(s)` on `Joe` (80x80) and `NewAnimap`.
+If it is 1, GM8 took one frame and this port is right by construction. If it is
+more, dump the mask at each `image_index` and see whether the silhouettes differ.
+Retires 5, and tells us whether the carry needs an animation clock.
+
+**How to record it.** ⚠️ Follow the parity discipline, not an ad-hoc note: any
+mask that disagrees becomes a checked-in fixture with the engine's answer as the
+oracle, the way `sprite-box-samples.json` already works for character boxes. A
+probe run that finds no disagreement should still leave its grids behind — "we
+checked and it matched" is only worth anything if the next person can see what
+was checked.
+
+⚠️ **Do not skip the negative result.** If Phase A agrees on all four sprites,
+say so here with the date, and the `removeback` warning in `SpriteMask` comes
+down. An unverified claim left standing after it was verified is its own kind of
+stale.
