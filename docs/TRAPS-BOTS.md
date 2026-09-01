@@ -3187,10 +3187,12 @@ this**, because it asserted the wrong liveness. `EveryBotGoesSomewhere` checks
 that the bots MOVE — and in dkoth they moved, briskly, to their own hill. Every
 bot went somewhere and the mode could not be won.
 
-✅ **The rule, `gg2-rl`'s**: a gamemode needs a liveness assertion on **something
-only that mode moves**. Movement is shared by every mode, so it cannot tell a
-working mode from one being played backwards. Here that something is the hold
-clock — the mode's own scoreboard.
+✅ **The rule, `gg2-rl`'s, in its sharpened form**: the rule is not "assert
+liveness" — it is that **the signal must be one only this mode can produce.** A
+shared signal is a liveness assertion that cannot fail for the reason you care
+about. Movement is shared by every mode, so it cannot tell a working mode from
+one being played backwards; the hold clock is the mode's own scoreboard and
+nothing else moves it.
 `MatchActuallyHappensTests.TheHillModesScoreboardMoves` asserts it, with the two
 single-hill maps as the control so a failure on all four would be the harness
 rather than the bug. Mutation-checked: it fails on both dkoth maps and passes on

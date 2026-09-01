@@ -884,6 +884,31 @@ queries). Every count above is v0-tunable; a change is a layout bump.
 repeat's k ticks. The jitter penalty stays trainer-side — it is a function of
 the actions, which the trainer already has.
 
+## ⛔ `SIM_UUID` is blind to the bot layer, and that is the layer the opponents live in
+
+**Established 2026-09-01, by `gg2-rl` checking something it could have assumed.**
+
+The stamp covers physics constants, the class tables, the action encoding, the
+observation layout and a hand-bumped behaviour version. **It does not cover
+`Gg2.Bots`.** That is correct — a bot is not observable simulation, and this
+project's bots are its own — but it has a consequence nobody had written down:
+
+⚠️ **Every opponent in every win rate `gg2-rl` has ever reported is a scripted bot
+running `BotObjective`.** So a change confined to bot decision-making moves no
+stamp, invalidates no checkpoint, and **changes the thing every historical number
+was measured against**. The fingerprint cannot see it: placement and stepped
+motion come back identical because they *are* identical.
+
+When `BotObjective` changed for dual KotH, `gg2-rl` re-scored its checkpoint
+rather than trusting the fingerprint, and got **49.3% / 48.4% to the decimal** —
+its recorded numbers. The fix was mode-gated and duels carry no gamemode, so
+neutrality was expected; **the point is that it was established rather than
+assumed, and the fingerprint would have said "identical" either way.**
+
+✅ **The rule both repos now hold**: when the bot layer moves, re-score rather
+than fingerprint. A digest that cannot go red for the change you made is not
+evidence about that change.
+
 ## The stamp
 
 Obs layout version and action encoding version fold into `SimulationStamp`, as
