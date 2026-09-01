@@ -233,6 +233,37 @@ PlayerCommandBuffer, ICommandSource}`, `Gg2.Server.NetworkInputSource`,
   and a harness only exercised through the thing it measures cannot tell a
   broken bot from a broken runner.
 
+### Island nodes: a nav graph describes the terrain, not the playable map
+
+⚠️ **Do not sample nav NODES as if they were places a match visits.** Nodes are
+emitted wherever the walkmask offers standable ground with clearance —
+`gg2-nav-gen` floods the whole mask, not from spawns — so a graph carries nodes
+in regions no walking character can reach. Routing is immune (A* never reaches
+an island over edges); anything that draws *nodes* directly is not, which is
+how `gg2-rl`'s banded duel placement came to be able to seed episodes inside
+`gg_debug2`'s sealed chambers with no teleport and no intent (2026-09-01, the
+finding that made the moving-platform `SimulationStamp` bump unconditional).
+
+**Measured, 2026-09-01** — island nodes per area-1 cache, where "island" means
+no cell of the node's stand box is reached by a 4-connected flood over open
+cells seeded at that area's spawn entities (a superset of character
+reachability, so an undercount if anything; method calibrated to the
+platforms lane's independent 18/70 on `gg_debug2`, node-for-node):
+
+| map | islands | mechanism |
+|---|---|---|
+| `gg_debug2` | 18/70 | the two sealed chambers, by design |
+| `arena_montane`, `ctf_2dfort`, `ctf_classicwell` | 0 | — |
+| `ctf_avanti` | 1/324 | one stray node |
+| `ctf_conflict` | **105/762** | real unreachable regions; uninvestigated |
+| `cp_dirtbowl` | **541/835** (a2 626/837, a3 493/837) | ⚠️ **the multi-area trap**: `ForArea` narrows entities and NOT terrain, so every area's cache carries nodes on all three stages' ground while that area's spawns reach only their own stage |
+
+⚠️ **The multi-area row is the general trap**: on any staged map, roughly
+two-thirds of every per-area graph is other stages' terrain. A node draw on
+`cp_dirtbowl_a1` lands outside the played stage more often than inside it.
+`tests/Gg2.Tests/MovingPlatformTests.ReachableFromSpawns` is the checked-in
+flood; the census itself was a scratch diagnostic (this table is its record).
+
 ### Phase 7 item 4a: A* over the nav graph
 
 `Gg2.Bots.{NavSearch, NavQuery}`, `NavGraph.EdgeKey`. Gated by `NavSearchTests`
