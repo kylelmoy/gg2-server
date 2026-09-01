@@ -1537,7 +1537,24 @@ it. **The conclusion flips on this parameter**, so a continuation number quoted
 without its cadence means nothing.
 
 Release, `ctf_truefort`, `tools/bench` at `0ecd237`, `BENCH_POLICYCOST=1` and
-`BENCH_SEARCH=1`:
+`BENCH_SEARCH=1`.
+
+⛔ **EVERY SEARCH FIGURE BELOW IS A TWO-CHARACTER DUEL, AND POPULATION IS A TERM
+IN ALL OF THEM.** A rollout re-simulates every live character for every tick of
+every candidate, so the same decision costs **7.6 ms at twelve characters against
+2.47 ms at two** — 3.1x. Measured 2026-09-01 with `BENCH_POP`:
+
+| population | a decision at horizon 20 | per-candidate tick |
+|---|---|---|
+| 2 | 2,473 µs | 1.866 µs |
+| 6 | 3,762 µs | 2.966 µs |
+| 12 | **7,645 µs** | 5.853 µs |
+
+⚠️ **A duel is not a small match; it is a match with population set to 2**, so a
+duel number has that term silently at its minimum and it never looks like an
+approximation — it looks like a number with no term in it. `gg2-rl`'s framing, and
+it has now cost this seam three times on three different quantities. **Do not
+quote anything below into a match without re-measuring at that population.**
 
 | term | measured | the 2026-08-31 figure |
 |---|---|---|
@@ -1554,6 +1571,13 @@ horizon 20, against the soldier's own 2.45 ms unpruned baseline:
 |---|---|---|
 | every tick (cadence 1) | **3.48 ms** | ⛔ **OVER** — 1.4x *more* than the search it replaces |
 | every 4 ticks (`DecisionTicks`) | **1.47 ms** | ✅ **1.67x cheaper than today's search** |
+
+⚠️ **Both are population-2 figures and the ratio is what transfers, not the
+milliseconds.** The comparison is sound at any population because both arms pay
+the same simulation term; the absolute numbers are duel numbers. The policy
+decision itself (6.58 µs) does **not** scale with population — inference reads one
+observation — so at higher populations the continuation is a *smaller* fraction of
+a decision, not a larger one.
 
 ⚠️ **Cadence 4 is not a cheap approximation of cadence 1 — it is the only
 affordable option**, and it is also the cadence the policy was trained at
