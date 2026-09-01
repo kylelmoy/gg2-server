@@ -6,14 +6,33 @@ namespace Gg2.Tests;
 /// Which level entities the 22 shipped maps actually place, and how many.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>"What do the shipped maps never contain?" is the question that licenses
-/// a simulation stage doing nothing</b>, and until this existed it was answered
-/// by looking. <c>SimulationStamp.SimulationBehaviourVersion</c> went 1 → 2 on
-/// 2026-09-01 for moving platforms, noting that <b>no shipped map places one</b>
-/// — and its author was right to bump anyway, on the grounds that <em>"I could
-/// not find a map that reaches it" is reasoning, not a demonstration</em>. This
-/// is the demonstration. Checked across all 22 maps: <c>moving_platform</c>
-/// appears zero times.
+/// ⚠️ <b>"What do the shipped maps never contain?" is a question this port keeps
+/// needing, and until this existed it was answered by looking.</b> Checked across
+/// all 22 maps: <c>moving_platform</c> appears zero times, and the full census
+/// below is asserted in both directions.
+/// <para>
+/// ⛔ <b>This class's own first version was a stale claim within the hour, and
+/// the correction is left visible on purpose.</b> It was written on 2026-09-01
+/// against an in-flight change that added a moving-platform stage to
+/// <c>MatchSimulation.Tick</c> and bumped
+/// <c>SimulationStamp.SimulationBehaviourVersion</c> to 2, and it said this test
+/// was <em>the reason</em> that stage could be treated as inert. <b>That work was
+/// withdrawn the same day</b> — there is no <c>MovingPlatforms</c> type, no such
+/// stage, and the behaviour version is 1. Every word about it was true when
+/// written and false an hour later, with nobody editing the sentence: exactly the
+/// failure this repository already records, committed by someone who had spent
+/// the day writing about it.
+/// </para>
+/// <para>
+/// ⚠️ <b>The lesson, since the value is in what survives.</b> The census is worth
+/// having on its own; what was not worth having was tying its <em>rationale</em>
+/// to a change that had not landed. <b>A test should justify itself by what it
+/// checks, not by what currently depends on it</b> — dependants move, and a
+/// rationale that names one rots the moment it does. <c>moving_platform</c> is a
+/// real GG2 entity type this port knows (<see cref="EntityTypes.MovingPlatform"/>)
+/// and implements nothing for; that is reason enough to notice if a map ever
+/// starts placing one.
+/// </para>
 /// <para>
 /// ⚠️ <b>The census is the point, not the platform.</b> This is
 /// <see cref="MessageCoverageTests"/>'s question asked of map content: a type
@@ -51,7 +70,8 @@ namespace Gg2.Tests;
 /// therefore useless: is the oddity ASSERTED or EXCUSED?</b>
 /// <list type="bullet">
 /// <item><b>Excused</b> — the case is skipped, and the hole is enriched for
-/// counterexamples. That is this class's <c>gg_debug</c> entity gap.</item>
+/// counterexamples. That is the <c>gg_debug</c> entity gap in
+/// <c>Fixtures/maps.json</c> that this class exists to route around.</item>
 /// <item><b>Asserted</b> — the case is carried, with its own different expected
 /// values. That is
 /// <c>WalkmaskTests.MapBoundsMatchTheWalkmaskOnEveryMapButGgDebug</c>, which
@@ -145,13 +165,13 @@ public sealed class ShippedEntityCensusTests
     /// ⚠️ <b>No shipped map places a <c>moving_platform</c>.</b>
     /// </summary>
     /// <remarks>
-    /// Its own test rather than a line of the census, because this one is
-    /// *depended on*: it is the reason <c>MovingPlatforms.EndStep</c> does
-    /// nothing on any shipped map, and therefore the reason the stamp bump that
-    /// added it was expected to be behaviour-neutral in practice. ⚠️ <b>If this
-    /// ever fails, that expectation is void</b> — a map now reaches the stage,
-    /// and anything that assumed the stage was inert has to be re-checked rather
-    /// than re-explained.
+    /// Its own test rather than a line of the census, because the census answers
+    /// "did anything change" and this answers a specific question that has been
+    /// asked once and will be again: <b>does this port have to simulate moving
+    /// platforms?</b> Today it does not, because nothing places one. ⚠️ <b>If this
+    /// ever fails the answer has changed</b> — a shipped map now needs behaviour
+    /// this port does not implement, and <see cref="EntityTypes.MovingPlatform"/>
+    /// being a known type is not the same as it being a simulated one.
     /// </remarks>
     [Fact]
     public void NoShippedMapPlacesAMovingPlatform()
@@ -160,10 +180,9 @@ public sealed class ShippedEntityCensusTests
 
         Assert.True(
             placed == 0,
-            $"{placed} moving_platform(s) are now placed by a shipped map. "
-            + "MovingPlatforms.EndStep is no longer inert on the shipped set, so anything "
-            + "resting on 'no shipped map places one' — SimulationStamp's behaviour-2 note "
-            + "among them — needs re-checking rather than re-explaining.");
+            $"{placed} moving_platform(s) are now placed by a shipped map. Anything "
+            + "resting on 'no shipped map places one' needs re-checking rather than "
+            + "re-explaining — and this port would owe the behaviour itself.");
     }
 
     /// <summary>
