@@ -84,7 +84,26 @@ retrain first**, and would not look broken without one.
 
 Numbers, tables and scope: `docs/ENV.md`, "Phase 4 re-measured".
 
-### ⚠️ The policy is off-distribution in every MATCH, and always has been
+### ⛔ A duel does not CONTAIN what a match contains, and every absence is a zero
+
+⛔ **One mechanism, and this project found it twice in one day as two unrelated
+bugs.** A reduced setting does not *contain* things a real one does — a duel has no
+second enemy, no projectile crossfire, no sentry, no bystander — and **every
+absence arrives as a legal-looking ZERO rather than as an error.** Nobody has to
+notice a wrong value; somebody has to notice an absent one.
+
+| the duel lacks | the zero shows up in | it was read as |
+|---|---|---|
+| a second enemy | the observation column, so the gradient | "the policy is trained" |
+| projectiles, sentries, bystanders | the per-tick simulation cost | "a decision costs 7.64 ms" |
+
+⚠️ **The operative form is `gg2-rl`’s and it is stronger than "vary the
+population":** the question is not *what did I forget to vary* but **what does the
+reduced setting not CONTAIN.** Naming one missing term feels like having found the
+gap, and this repo named population and then took a cost measurement that was still
+3-6x low for four other reasons.
+
+#### The weights half
 
 **`gg2-rl` 2026-09-01, verified here rather than taken.**
 `ObservationWriter.Enemies` is **2** and a duel has **one**, so the second enemy
@@ -109,6 +128,17 @@ distribution in the same way and remain comparable to each other.
 A search has no equivalent — it re-derives from the world in front of it — so an
 arm-2/arm-3 comparison is not two controllers meeting the same standard. **State
 that beside the comparison rather than letting it be discovered afterwards.**
+
+#### The clock half
+
+⛔ **A search decision costs 7.64 ms in a twelve-character bench SCENARIO and
+22-44 ms in a real match** — 3-6x, measured 2026-09-01 by decomposing arm 3’s worst
+tick. Every candidate re-simulates every projectile in flight, every sentry and
+every bystander for every tick of the horizon, and a scenario has none of them.
+
+⚠️ **The 7.64 ms was itself a correction** — of a 2.94 ms duel figure, made by this
+repo, about population. It was right about population and still 3-6x low, which is
+the whole argument for the operative form above.
 
 ⚠️ **Falsification, since this is a claim about training data**: it dies the moment
 anything trains on observations with two or more enemies present. Check
