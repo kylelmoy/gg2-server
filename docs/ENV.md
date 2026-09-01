@@ -662,7 +662,10 @@ than a refinement.
 lies inside the tied-best candidate set, verified across the socket against the
 distribution and the candidate table; the pairing is the one specified here; and
 the blind fraction on shadow data is 75.0% at scale against 78% search-driven, so
-a driving policy does give the search more to score.
+a driving policy does give the search more to score. ⚠️ **Both are WHOLE-RUN
+blind fractions and are inflated** — see "every blind fraction in this document
+is whole-run" below; the 3-point gap is only trustworthy if the two runs were the
+same length, which was not recorded.
 
 ##### ⚠️ A BETTER IMITATOR THAT PLAYS WORSE — and a correction to this section
 
@@ -1523,56 +1526,158 @@ Debug reads about half of Release.
 compounds. Asked about, not asked for. Recorded here because the **cost model is
 this repo's to supply** and the estimate that came with the ask was out by ~4x.
 
-### The measured cost model for a search decision
+### ⚠️ RE-MEASURED 2026-09-01 — the cadence is the whole answer, and it was missing
+
+⛔ **Everything below the next two tables was costed at a continuation running
+EVERY tick, and that is the expensive cell of a two-cell question nobody had
+split.** Re-measured today because `gg2-rl` proposed the cheap cell — a
+continuation on the search's own decision cadence — and neither side had costed
+it. **The conclusion flips on this parameter**, so a continuation number quoted
+without its cadence means nothing.
+
+Release, `ctf_truefort`, `tools/bench` at `0ecd237`, `BENCH_POLICYCOST=1` and
+`BENCH_SEARCH=1`:
+
+| term | measured | the 2026-08-31 figure |
+|---|---|---|
+| forward pass, `PolicyNetwork.Act` | **3.67 µs** | ~1.6 µs — **2.3x LOW**, and it was `gg2-rl`'s own estimate |
+| `ObservationWriter.Write` | **2.92 µs** | ~3.1 µs — close |
+| **one policy decision** | **6.58 µs** | — |
+| per candidate-tick, simulation | **1.830 µs** (soldier), **1.797 µs** (sniper) | 2.1 µs |
+| a decision at horizon 20 | **2.45 ms** (soldier, 60), **4.56 ms** (sniper, 120) | 2.79 / 3.22 / 5.83 ms |
+
+⛔ **The affordability verdict depends entirely on the cadence**, at k=20,
+horizon 20, against the soldier's own 2.45 ms unpruned baseline:
+
+| continuation cadence | cost at k=20 | verdict |
+|---|---|---|
+| every tick (cadence 1) | **3.48 ms** | ⛔ **OVER** — 1.4x *more* than the search it replaces |
+| every 4 ticks (`DecisionTicks`) | **1.47 ms** | ✅ **1.67x cheaper than today's search** |
+
+⚠️ **Cadence 4 is not a cheap approximation of cadence 1 — it is the only
+affordable option**, and it is also the cadence the policy was trained at
+(`action_repeat` 4, and `RolloutOptions.DecisionTicks` already defaults to 4 and
+says so). Anyone re-proposing this should state the cadence as a constraint
+rather than a preference; "why not every tick?" has a number for an answer.
+
+⚠️ **DO NOT BUILD ON THE FORK TERM.** It reads **7.29 µs** for a soldier and
+**2.07 µs** for a sniper — a 3.5x disagreement about the same 145 KB
+`WorldState` copy, which cannot be real. It is a least-squares *intercept* over
+horizons 20→320, so it is an extrapolation to horizon 0 dominated by the far
+points and is simply not determined by that fit. At k=20/horizon 20 it is ~10%
+of the total, so it moves the headline by ~7% and changes no decision — but the
+tables below quote it to three figures and should not be read that way. **The
+tick term is the well-determined one** (1.830 against 1.797 across classes, which
+is the agreement you would expect from a physics tick).
+
+⚠️ **`tools/bench/Search.cs` held 4.7 µs hardcoded** as the continuation cost —
+an estimate, 1.4x low, driving the `(affordable)`/`(OVER)` column that both this
+repo and `gg2-rl` were reading. It is now the measured 6.58 µs with the cadence
+as `BENCH_CADENCE`. ⚠️ **Re-measure before quoting any of this**: it is a number,
+and it is older than the next change to `ObservationWriter` or `PolicyNetwork`.
+
+### ⛔ EVERY BLIND FRACTION IN THIS DOCUMENT IS WHOLE-RUN, AND THEREFORE INFLATED
+
+**Measured by `gg2-rl` 2026-09-01, and it lands on this repo's numbers, not only
+on theirs.** A blind fraction quoted over a whole duel is a rate whose
+denominator is **an outcome of the arm**: a weaker search takes longer to end a
+duel, and the decisions it adds are late ones where nothing lands.
+
+| arm A, same run | blind |
+|---|---|
+| whole duel | **74.9%** |
+| first 60 decisions, n = 56,804 | **64.8%** |
+
+⛔ **Ten points.** So the whole-duel share is not merely biased *between* arms —
+**it overstates blindness in absolute terms too**, because late-duel decisions
+are much blinder than early ones. Neither repo had said that out loud before it
+was measured.
+
+⚠️ **Read every blind number in this file with that on it** — the 75.0% shadow
+against 78% search-driven above, the sniper's 92.8%, the 0.523 → figures. All are
+whole-run rates. **A gap between two such numbers is only trustworthy if the two
+runs were the same length**, and none of them recorded whether they were.
+**Truncate at a common decision index before comparing, or say you did not.**
+
+⚠️ Falsification condition: if anyone re-measures a blind fraction here at a
+fixed decision count and it does *not* come in below the whole-run figure, this
+entry is wrong and the length effect is not what produced the gap.
+
+### ✅ The env reproduces bit-exactly across processes, at 106k decisions
+
+`gg2-rl` re-ran arm A with the same seeds in a fresh process: **105,979
+decisions, the same integer**, over 1,008 duels. That is `MatchSimulation`,
+`RolloutSearch` and the `Gg2.Env` seam together, and it is a **stronger
+determinism result than anything in `Gg2.Tests`**, which checks within-process
+determinism only. Worth having because the length-bias finding rests on comparing
+decision counts *between* arms, and that comparison means nothing unless the
+counts are stable *within* one.
+
+### The 2026-08-31 cost model — SUPERSEDED above, kept for the reasoning
+
+⚠️ **The numbers in the rest of this section are the cadence-1 case and three of
+them are wrong.** What survives is the *shape* of the argument — that extraction
+is a first-class term, that the fork does not scale with horizon, and that the
+affordability frontier is per class — and that shape is why the re-measurement
+was worth doing rather than a repeat.
 
 Release, `gg_debug`, 60 candidates, `DecisionTicks: 1`, horizon swept 20→320 and
 fitted:
 
 | | |
 |---|---|
-| per candidate, fixed | **~10-12 µs** — the `_fork = _baseline` copy, a 145 KB `WorldState` |
-| per candidate-tick | **~2.1 µs** |
-| a decision at horizon 20 | **~2.79 ms** |
+| per candidate, fixed | ~10-12 µs — the `_fork = _baseline` copy, a 145 KB `WorldState` |
+| per candidate-tick | ~2.1 µs |
+| a decision at horizon 20 | ~2.79 ms |
 
 ⚠️ **The fork does not scale with horizon**, which is why pruning frees more than
 a candidates-times-horizon account suggests: it removes whole forks, not just
-ticks.
+ticks. ✅ **This part stands** — it is the slope/intercept split itself, not the
+intercept's value.
 
 ### What a policy continuation would cost, including the term the ask omitted
 
 A continuation means the policy drives the rollout after the commit window — so
-**an observation and a forward pass per tick per candidate**.
+**an observation and a forward pass per tick per candidate** *at cadence 1*.
 
 | per candidate-tick | |
 |---|---|
 | simulation | 2.1 µs |
-| ⛔ **`ObservationWriter.Write`** | **~3.1 µs** |
-| forward pass (`gg2-rl`'s figure) | ~1.6 µs |
-| **total** | **~6.8 µs — 3.2x the bare tick** |
+| ⛔ **`ObservationWriter.Write`** | ~3.1 µs |
+| forward pass (`gg2-rl`'s figure) | ~1.6 µs — ⛔ **measured 3.67 µs, see above** |
+| **total** | ~6.8 µs — ⛔ **measured 8.41 µs at cadence 1, 3.48 µs at cadence 4** |
 
-⛔ **Extraction is the largest of the three and was not in the estimate.** The ask
-costed 1,200 forward passes at ~1.9 ms and concluded "+50%". Adding the
-observations those passes need:
+⛔ **Extraction is the largest of the three and was not in the estimate.** ⚠️
+**That ranking is now WRONG and the correction is instructive**: extraction was
+the largest against a forward pass estimated at 1.6 µs, and the forward pass
+really costs 3.67 µs, so **inference is the larger term**. The lesson the
+original entry drew — "vectorising the forward pass buys much less than deleting
+a call" — is therefore reversed, and it was reversed by measuring the term that
+had been taken on trust.
 
 | at horizon 20 | cost | against today's 2.79 ms |
 |---|---|---|
-| 60 candidates, continuation | **8.8 ms** | **+215%**, not +50% |
-| 8 candidates, continuation | **1.17 ms** | **cheaper than the search we run now** |
+| 60 candidates, continuation | ~8.8 ms | +215%, not +50% |
+| 8 candidates, continuation | ~1.17 ms | cheaper than the search we run now |
 
 ⚠️ **The conclusion survives the correction and gets stronger.** Pruning does not
 merely make the continuation affordable — **pruned-with-continuation costs less
-than unpruned-without**. But the reason is mostly this repo's observation writer,
-not the network, so the number to watch when anyone re-estimates this is the
-extraction row.
+than unpruned-without**. ✅ **Still true, and true by a wider margin at cadence
+4.**
 
 ### ⚠️ The affordability frontier is PER CLASS, and a fixed k over-prunes the sniper
 
-Measured 2026-08-31, Release, `gg_debug`, horizon swept and fitted per class:
+Measured 2026-08-31, Release, `gg_debug`, horizon swept and fitted per class.
+⚠️ **The `fork` column and the two decision costs are superseded** by the
+2026-09-01 re-measurement above (2.45 / 4.56 ms on `ctf_truefort`, and the fork
+term is not determined by this fit at all). **The ratio is what this table is
+for, and the ratio holds**: the sniper's set is twice the size, so its unpruned
+decision costs twice as much and it affords twice the k.
 
 | | candidates | fork | tick | a decision at horizon 20 | continuation affordable to |
 |---|---|---|---|---|---|
-| soldier (and everyone else) | 60 | 11.1 µs | 2.13 µs | **3.22 ms** | **k ≈ 21** |
-| **sniper** | **120** | 11.2 µs | 1.87 µs | **5.83 ms** | **k ≈ 40** |
+| soldier (and everyone else) | 60 | ~11 µs ⚠️ | 2.13 µs | 3.22 ms ⚠️ | **k ≈ 21** |
+| **sniper** | **120** | ~11 µs ⚠️ | 1.87 µs | 5.83 ms ⚠️ | **k ≈ 40** |
 
 The per-candidate costs are the same; the sniper simply has twice the set, so its
 unpruned decision costs twice as much and it can afford twice the k.

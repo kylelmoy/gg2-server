@@ -171,6 +171,19 @@ public static class RangeSweep
         // Printing both plus the zero-death count makes the disagreement itself
         // the answer: agreement settles it by observation rather than by a
         // plausibility claim about whether death ratios vary with match length.
+        //
+        // ⚠️ BUT THIS MEASURES THE BIAS RATHER THAN REMOVING IT, and do not read
+        // the two rows as meaning it is handled. `gg2-rl` hit the same family in
+        // its blind share on 2026-09-01 -- a rate whose denominator is itself an
+        // outcome of the arm -- and fixed it by TRUNCATING every duel at a common
+        // decision index, which removes the bias by construction. Where a common
+        // cut point exists that is strictly better, because instrumentation still
+        // has to be reasoned about correctly at every point of use, and this
+        // project's record is of correct reasoning failing exactly there.
+        //
+        // Not changed here because a match has no obvious common cut point the way
+        // a fixed-length duel does -- maps end on different limits. ⚠️ If one is
+        // ever found, prefer it to this.
         var perMatchShare = 0.0;
         var perMatchCount = 0;
         var zeroDeath = 0;

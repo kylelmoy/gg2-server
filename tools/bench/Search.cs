@@ -98,7 +98,23 @@ public static class SearchBench
             var tickK = slope / candidates * k;
             var affordable = (budget - forkK) / tickK;
 
-            var withCont = (intercept / candidates) + (20 * ((slope / candidates) + 4.7));
+            // ⚠️ MEASURED, not estimated: BENCH_POLICYCOST=1 on 2026-09-01, Release,
+            // reads inference 3.67 us and observation extraction 2.92 us — 6.58 us
+            // per policy decision. This line held 4.7 us, which was an estimate and
+            // was 1.4x LOW, and it drives the (affordable)/(OVER) verdicts below.
+            //
+            // ⚠️ The cadence is what makes a continuation affordable, so it is a
+            // parameter rather than a constant. At cadence 1 the continuation costs
+            // 6.58 us EVERY tick and k=20 is over budget; at the search's own
+            // DecisionTicks of 4 it is amortised to 1.65 us and k=20 fits twice over.
+            // Re-measure before quoting: this is a number, and it is older than the
+            // next change to ObservationWriter or PolicyNetwork.
+            const double policyDecisionUs = 6.58;
+            var cadence = double.TryParse(
+                Environment.GetEnvironmentVariable("BENCH_CADENCE"), out var c) && c >= 1 ? c : 4;
+
+            var withCont = (intercept / candidates)
+                + (20 * ((slope / candidates) + (policyDecisionUs / cadence)));
 
             Console.WriteLine(
                 $"    keep {k,2}: horizon {affordable,5:0} at equal cost, or a CONTINUATION at horizon 20 "
