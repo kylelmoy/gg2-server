@@ -25,6 +25,25 @@ rather than adjusting for it.
     comes back near -2   ->  the pooled headline was overstated, and we would
                              rather know than have it found later
 
+⛔ AND THIS TEST IS BIASED TOO, IN THE OPPOSITE DIRECTION. `gg2-rl`, before the
+first result existed:
+
+    pooled z over DEATHS       OVERSTATES  -- clustered deaths as independent
+    match-level t over MATCHES UNDERSTATES -- every match weighted equally, so a
+                                              2-death match counts as much as an
+                                              80-death one; small-match binomial
+                                              noise inflates the SD and deflates t
+
+So the two BRACKET the answer and neither is "the" number. Both significant means
+the conclusion is robust to the choice of unit, which is worth more than either
+alone. If they disagree, NEITHER is the answer and a weighted or mixed model is
+the only honest next step.
+
+⚠️ They also estimate DIFFERENT QUANTITIES, separate from the precision point: the
+pooled share is the share across all deaths; the match-level mean is the share of
+the average match. Both defensible, not the same thing -- so a small gap between
+them is not automatically evidence about clustering.
+
 ⚠️ A ZERO-DEATH MATCH HAS NO SHARE and must be dropped, which reintroduces a
 filter.  The count of dropped matches is printed per arm, because a filter that
 differs between arms is what invalidates the comparison -- not a filter that is
@@ -97,8 +116,13 @@ def main(path):
         print(f"arm {lo} vs arm {hi}: {diff:+.4%} points, Welch t = {t:+.2f}, df = {df:.0f}")
 
     print()
-    print("Compare with the POOLED test's z. A large gap means the pooled figure was")
-    print("counting clustered deaths as independent observations.")
+    print("BRACKET, not a verdict. The pooled z over deaths OVERSTATES (clustering);")
+    print("this t over matches UNDERSTATES (equal weighting, small-match noise).")
+    print("Both significant -> robust to the choice of unit. Disagreeing -> neither is")
+    print("the answer, and a weighted or mixed model is the honest next step.")
+    print()
+    print("They also estimate different quantities: the share across ALL DEATHS versus")
+    print("the share of the AVERAGE MATCH. A small gap is not evidence about clustering.")
 
 
 if __name__ == "__main__":
