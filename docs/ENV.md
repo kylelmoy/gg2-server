@@ -884,6 +884,33 @@ queries). Every count above is v0-tunable; a change is a layout bump.
 repeat's k ticks. The jitter penalty stays trainer-side — it is a function of
 the actions, which the trainer already has.
 
+## ⚠️ `gg2-rl` reads this repo's SOURCE as data, so moving a constant crosses the seam
+
+**Learned 2026-09-01 when `6f75f5f` turned its drift gate red — correctly, on a
+change that was an improvement.**
+
+That commit moved `HeadShape` out of a literal in `EnvProtocol.cs` into
+`ActionDecoder.HeadShape`, so a policy in `Gg2.Bots` could reach the one
+definition instead of a second copy. **No value changed**, the runtime handshake
+still reports `(3,2,2,3,15,2)`, and the literal no longer sits apart from the
+thing it describes. `gg2-rl`'s gate reads these files as **text** — deliberately,
+so that it cannot agree with this repo by construction — and a relocation is
+indistinguishable from a redefinition to a reader that only has the text.
+
+⚠️ **So a pure refactor of a constant `gg2-rl` tracks is a cross-repo event**, and
+the ones it tracks today are `EnvProtocol.ActionBytes` and the head shape. Moving,
+renaming or re-spelling one is free here and red there. **Say so when it happens**
+rather than letting them find it — the gate fires loudly, which is the point of
+it, but the ten minutes belong to whoever caused it.
+
+✅ **And the cost is the gate working.** A checker that followed a refactor
+automatically would follow a real change automatically too. `gg2-rl` recorded the
+matching hazard on its side: **if the pattern ever stops matching, do not relax
+it — go and find where the thing moved to.** A gate that stops finding what it
+checks passes by looking at nothing, which is the vacuous-assertion shape from the
+other direction — failing open, but only until somebody loosens the regex to get
+green.
+
 ## ⛔ `SIM_UUID` is blind to the bot layer, and that is the layer the opponents live in
 
 **Established 2026-09-01, by `gg2-rl` checking something it could have assumed.**
