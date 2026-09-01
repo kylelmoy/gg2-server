@@ -360,20 +360,38 @@ public sealed class MovingPlatformTests
         return map.WithEntities([.. map.Entities, Entity()]);
     }
 
-    /// <summary>No shipped map places one, and the census that says so is mechanical.</summary>
+    /// <summary>
+    /// No built-in map puts a platform that could carry anyone where anyone
+    /// can be: a platform naming a <c>resource</c> must sweep only cells no
+    /// spawn can reach.
+    /// </summary>
     /// <remarks>
     /// ⚠️ This is the claim the rest of this file rests on — every "hand-built
     /// because there is no fixture" remark, and the whole argument that the
-    /// missing carry is unreachable. If a map ever gains one, this goes red and
-    /// those remarks need re-reading rather than the test relaxing.
+    /// missing carry is unreachable in play.
     /// <para>
     /// ⛔ <b>It is also the gate on a <c>SIM_UUID</c> exemption, which is the
     /// expensive half.</b> <see cref="SimulationStamp"/> did NOT bump for the
-    /// moving-platform stage, on the grounds that the stage is structurally
-    /// unreachable while this test passes. <b>If this goes red, bump
-    /// <c>SimulationBehaviourVersion</c> — do not reason about whether the new
-    /// map's platform matters.</b> A checkpoint trained before 2026-09-01 would
-    /// otherwise be playing a different simulation with nothing to say so.
+    /// moving-platform stage; that type's remarks carry the reasoning and name
+    /// this test. <b>If this goes red, bump <c>SimulationBehaviourVersion</c> —
+    /// do not reason about whether the new map's platform matters.</b> A
+    /// checkpoint trained before 2026-09-01 would otherwise be playing a
+    /// different simulation with nothing to say so.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Narrowed 2026-09-01 from "no platform names a resource at all",
+    /// by agreement between the moving-platforms lane (which wrote the gate)
+    /// and the debug-map lane (which trips it)</b>, when <c>gg_debug2</c>
+    /// gained the raft — a resourced platform inside a sealed chamber that
+    /// exists precisely to give the mask pipeline a real embedded sprite to
+    /// verify against. The narrowing is mechanical, not a name carve-out: the
+    /// platform's whole swept extent (start to far end, plus its decoded
+    /// sprite size) must be unreachable by a flood fill over open cells from
+    /// every spawn. The fill is a superset of what a character can reach, so
+    /// "unreached" soundly means "untouchable without a teleport" — and a
+    /// teleport (control port, scenario placement) is a debug act outside the
+    /// checkpoint's claim, the same boundary the custom-map paragraph in
+    /// <see cref="SimulationStamp"/> already draws.
     /// </para>
     /// </remarks>
     [Fact]
@@ -384,21 +402,113 @@ public sealed class MovingPlatformTests
         var carriers = new List<string>();
 
         foreach (var (name, map) in ShippedMaps())
-        foreach (var entity in map.Entities)
         {
-            if (entity.Type != EntityTypes.MovingPlatform)
-                continue;
+            bool[]? reachable = null;
 
-            // No resource means no sprite, which means no mask, which means
-            // nothing can stand on it — in GM8 as much as here.
-            var resource = entity.GetString("resource");
-            if (string.IsNullOrEmpty(resource))
-                continue;
+            foreach (var entity in map.Entities)
+            {
+                if (entity.Type != EntityTypes.MovingPlatform)
+                    continue;
 
-            carriers.Add($"{name}: platform with resource '{resource}'");
+                // No resource means no sprite, which means no mask, which means
+                // nothing can stand on it — in GM8 as much as here.
+                var resourceName = entity.GetString("resource");
+                if (string.IsNullOrEmpty(resourceName))
+                    continue;
+
+                // A resource that names nothing, or bytes SpriteMask rejects,
+                // is a platform with sprite_index = -1: shapeless, permitted.
+                var resource = map.Metadata?.GetString(resourceName);
+                var mask = resource is null
+                    ? null
+                    : SpriteMask.Decode(System.Text.Encoding.Latin1.GetBytes(resource));
+
+                if (mask is null)
+                    continue;
+
+                reachable ??= ReachableFromSpawns(map);
+
+                // The swept extent: everywhere any pixel of the sprite can be
+                // over a full cycle. The offset is (left, -top).
+                var left = entity.GetReal("left", 0);
+                var top = entity.GetReal("top", 60);
+
+                var x0 = Math.Min(entity.X, entity.X + left);
+                var x1 = Math.Max(entity.X, entity.X + left) + mask.Width;
+                var y0 = Math.Min(entity.Y, entity.Y - top);
+                var y1 = Math.Max(entity.Y, entity.Y - top) + mask.Height;
+
+                for (var cy = (int)Math.Floor(y0 / 6); cy <= (int)Math.Floor(y1 / 6); cy++)
+                for (var cx = (int)Math.Floor(x0 / 6); cx <= (int)Math.Floor(x1 / 6); cx++)
+                {
+                    if (cx < 0 || cy < 0 || cx >= map.Walkmask.Width || cy >= map.Walkmask.Height)
+                        continue;
+
+                    if (reachable[(cy * map.Walkmask.Width) + cx])
+                    {
+                        carriers.Add(
+                            $"{name}: platform with resource '{resourceName}' sweeps cell ({cx}, {cy}), "
+                            + "which a character can reach from a spawn");
+                        cx = map.Walkmask.Width;
+                        cy = map.Walkmask.Height;
+                    }
+                }
+            }
         }
 
         Assert.Empty(carriers);
+    }
+
+    /// <summary>
+    /// Open cells a flood fill from every spawn entity can reach — a superset
+    /// of anywhere a character can actually get without a teleport.
+    /// </summary>
+    private static bool[] ReachableFromSpawns(LevelMap map)
+    {
+        var mask = map.Walkmask;
+        var reached = new bool[mask.Width * mask.Height];
+        var frontier = new Queue<(int X, int Y)>();
+
+        foreach (var entity in map.Entities)
+        {
+            if (!entity.Type.StartsWith("redspawn", StringComparison.Ordinal)
+                && !entity.Type.StartsWith("bluespawn", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var x = (int)entity.X / 6;
+            var y = (int)entity.Y / 6;
+
+            if (x < 0 || y < 0 || x >= mask.Width || y >= mask.Height || mask.IsSolid(x, y))
+                continue;
+
+            if (!reached[(y * mask.Width) + x])
+            {
+                reached[(y * mask.Width) + x] = true;
+                frontier.Enqueue((x, y));
+            }
+        }
+
+        while (frontier.TryDequeue(out var at))
+        {
+            Span<(int X, int Y)> next =
+                [(at.X - 1, at.Y), (at.X + 1, at.Y), (at.X, at.Y - 1), (at.X, at.Y + 1)];
+
+            foreach (var (x, y) in next)
+            {
+                if (x < 0 || y < 0 || x >= mask.Width || y >= mask.Height)
+                    continue;
+
+                if (mask.IsSolid(x, y) || reached[(y * mask.Width) + x])
+                    continue;
+
+                reached[(y * mask.Width) + x] = true;
+                frontier.Enqueue((x, y));
+            }
+        }
+
+        return reached;
     }
 
     /// <summary>
