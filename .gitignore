@@ -32,9 +32,18 @@ traces/
 # Machine-specific overrides, never team config.
 .claude/settings.local.json
 
-# The bot nav graphs. These are gg2-nav-gen's output, not the reference's and
-# not this repo's source: 34 MB of hex for 24 map areas, rebuilt by running the
-# generator. They used to be read out of the reference tree's GM8 build
-# directory, which coupled the test suite to one particular checkout of a fork.
-# ReferenceTree.NavCacheDirectory now looks here, or at GG2_NAVCACHE.
-nav/
+# The bot nav graphs at nav/ are CHECKED IN as of 2026-09-01, deliberately.
+#
+# They are gg2-nav-gen's output rather than this repo's source, which is the
+# usual argument for ignoring them -- and it loses to the fact that without them
+# a clone cannot run a bot, and regenerating them needs a Game Maker 8 build of
+# a fork that most people cloning this will never have. A generated artefact
+# whose generator is not reproducible from this repository is, in practice, a
+# source file.
+#
+# 34 MB on disk and ~1.2 MB packed: hex text compresses about 28:1, so the
+# objection that they would bloat the repository was measured and is wrong.
+#
+# They used to be read out of the reference tree's GM8 build directory, which
+# coupled the test suite to one particular checkout of a fork.
+# ReferenceTree.NavCacheDirectory looks at nav/, or at GG2_NAVCACHE.

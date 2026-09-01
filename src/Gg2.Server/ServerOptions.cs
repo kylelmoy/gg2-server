@@ -198,7 +198,15 @@ public sealed class ServerOptions
             throw new ArgumentOutOfRangeException(nameof(PlayerLimit), PlayerLimit, "player limit must be 1..48");
 
         if (MapDirectory.Length == 0)
-            throw new InvalidOperationException($"{nameof(MapDirectory)} must point at the built-in map PNGs");
+        {
+            // ⚠️ Reachable only if the checked-in maps/ is missing AND nothing
+            // was passed, which means a partial checkout rather than a mistake
+            // the caller made. Say where it looked. See MapDirectory.Resolve.
+            throw new InvalidOperationException(
+                $"{nameof(MapDirectory)} is empty: no maps/ beside the executable or above it, "
+                + "no GG2_MAPS, no GG2_REFERENCE. The 22 built-in maps are checked in at maps/ "
+                + "in this repository; pass --maps to serve a different set.");
+        }
 
         // Positive infinity is the one non-finite value that means something
         // here (unpaced). NaN and anything <= 0 are refused rather than

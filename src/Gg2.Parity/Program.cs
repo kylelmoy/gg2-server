@@ -228,10 +228,50 @@ internal static class Program
         return null;
     }
 
-    private static string DefaultMapDirectory() =>
-        Environment.GetEnvironmentVariable("GG2_REFERENCE") is { Length: > 0 } reference
-            ? Path.Combine(reference, "Source", "gg2", "Included Files")
-            : @"D:\code\Gang-Garrison-2\Source\gg2\Included Files";
+    /// <summary>
+    /// Where the built-in maps are, without a reference checkout.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>A parallel copy of <c>Gg2.Server.MapDirectory.Resolve</c></b> — see
+    /// that type for why the probe order is what it is. This project does not
+    /// reference <c>Gg2.Server</c>, and the resolver cannot live in
+    /// <c>Gg2.Maps</c> because <c>Gg2.Simulation</c> references that and
+    /// CLAUDE.md keeps file access out of everything the simulation can reach.
+    /// <b>Change one, change the other.</b>
+    /// </remarks>
+    private static string DefaultMapDirectory()
+    {
+        const string sentinel = "ctf_truefort.png";
+        bool Holds(string d) => File.Exists(Path.Combine(d, sentinel));
+
+        if (Environment.GetEnvironmentVariable("GG2_MAPS") is { Length: > 0 } explicitPath
+            && Holds(explicitPath))
+        {
+            return explicitPath;
+        }
+
+        var beside = Path.Combine(AppContext.BaseDirectory, "maps");
+        if (Holds(beside))
+            return beside;
+
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
+             directory is not null;
+             directory = directory.Parent)
+        {
+            var candidate = Path.Combine(directory.FullName, "maps");
+            if (Holds(candidate))
+                return candidate;
+        }
+
+        if (Environment.GetEnvironmentVariable("GG2_REFERENCE") is { Length: > 0 } reference)
+        {
+            var included = Path.Combine(reference, "Source", "gg2", "Included Files");
+            if (Holds(included))
+                return included;
+        }
+
+        return string.Empty;
+    }
 
     /// <summary>
     /// Frames what was recorded and prints a message census.

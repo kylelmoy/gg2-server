@@ -52,10 +52,11 @@ public static class ReferenceTree
     /// nothing about it, so it does not belong in a tree CLAUDE.md calls
     /// read-only.
     /// <para>
-    /// They are gitignored (34 MB of hex for 24 map areas) and rebuilt by
-    /// <c>gg2-nav-gen</c>, so a fresh clone has none. A test that needs them must
-    /// say so with <see cref="RequireNavCache"/> rather than failing as if
-    /// something were broken.
+    /// ⚠️ <b>They are CHECKED IN as of 2026-09-01</b> (34 MB on disk, ~1.2 MB
+    /// packed — hex compresses about 28:1), so a fresh clone has them and can run
+    /// a bot. They were gitignored until then, which meant regenerating them
+    /// needed a Game Maker 8 build of a fork. <see cref="RequireNavCache"/> still
+    /// guards, because a clone can still delete them.
     /// </para>
     /// </remarks>
     public static string NavCacheDirectory =>
@@ -106,7 +107,37 @@ public static class ReferenceTree
         }
     }
 
-    public static string MapPath(string map) => Path.Combine(IncludedFiles, map + ".png");
+    /// <summary>
+    /// Where the built-in map PNGs are read from: <c>maps/</c> at the root of
+    /// this repo, or the reference's <c>Included Files</c> if that is missing.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The maps are checked in as of 2026-09-01</b>, which reverses this
+    /// type's original "the map tests read the maps out of it rather than
+    /// copying them here". That decision had a real reason — <em>a copied map is
+    /// a map that can silently go stale</em> — and copying them does not answer
+    /// it by itself. <see cref="MapCopyTests"/> is the answer: whenever a
+    /// reference checkout is present, every copied map is asserted
+    /// byte-identical to the reference's. So the copy is gated rather than
+    /// trusted, and the tests stop needing a checkout to run at all.
+    /// <para>
+    /// ⚠️ <b>Falling back to the reference matters for more than tidiness.</b>
+    /// <c>LevelEntityTests</c> compares every entity against
+    /// <c>Fixtures/maps.json</c>; pointing it at a copy that is never checked
+    /// against the reference would leave both sides reading the same bytes and
+    /// gate nothing about drift, which is the coverage that check preserves.
+    /// </para>
+    /// </remarks>
+    public static string MapsDirectory
+    {
+        get
+        {
+            var copied = Path.Combine(RepositoryRoot, "maps");
+            return File.Exists(Path.Combine(copied, "ctf_truefort.png")) ? copied : IncludedFiles;
+        }
+    }
+
+    public static string MapPath(string map) => Path.Combine(MapsDirectory, map + ".png");
 
     /// <summary>
     /// The bytes of a built-in map's PNG, with a failure message that says what
@@ -114,10 +145,17 @@ public static class ReferenceTree
     /// </summary>
     public static byte[] ReadMap(string map)
     {
-        RequireAvailable();
-
+        // ⚠️ Deliberately NOT RequireAvailable(): the maps are checked in, so a
+        // map test no longer needs a reference checkout. RequireAvailable still
+        // guards the tests that read Constants.xml or the scripts, which really
+        // do need one.
         var path = MapPath(map);
-        Assert.True(File.Exists(path), $"the reference tree has no map at {path}");
+
+        Assert.True(
+            File.Exists(path),
+            $"no map at {path}. The 22 built-in maps are checked in at maps/; "
+            + $"set {EnvironmentVariable} to read them from a checkout instead.");
+
         return File.ReadAllBytes(path);
     }
 

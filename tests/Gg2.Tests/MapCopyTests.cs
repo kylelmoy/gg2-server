@@ -1,0 +1,145 @@
+using Gg2.Maps;
+using Gg2.Protocol;
+
+namespace Gg2.Tests;
+
+/// <summary>
+/// The maps checked in at <c>maps/</c> are the reference's, unchanged.
+/// </summary>
+/// <remarks>
+/// ⚠️ <b>This exists because copying them in removed a gate, and something had
+/// to put it back.</b> <see cref="ReferenceTree"/> used to say: "the map tests
+/// read the maps out of it rather than copying them here. That is deliberate: a
+/// copied map is a map that can silently go stale." That reasoning was right.
+/// The maps were copied in anyway on 2026-09-01, because the server could not
+/// serve a single round without a Game Maker checkout of another repository —
+/// and the objection is answered here rather than waved away.
+/// <para>
+/// ⚠️ <b><c>LevelEntityTests</c> is NOT this check, though it looks like it.</b>
+/// It compares parsed entities against <c>Fixtures/maps.json</c>, which gates
+/// the C# parser against the JS one that wrote the oracle. Before the copy it
+/// *also* caught reference drift, because it read the live tree; after the copy
+/// both sides would read the same copied bytes and that half would be gone. This
+/// restores exactly that half, and compares bytes rather than parsed output so
+/// it cannot be fooled by a change both parsers agree about.
+/// </para>
+/// <para>
+/// ⚠️ <b>Skipped rather than failed with no checkout</b>, which is the whole
+/// point of copying them: the suite must run on a clone that has no reference.
+/// A gate that only fires where a reference exists is worth having — CI and any
+/// developer who has one will run it — and a gate that made the copy pointless
+/// would not be.
+/// </para>
+/// </remarks>
+public sealed class MapCopyTests
+{
+    private static string CopiedMaps => Path.Combine(RepositoryRoot(), "maps");
+
+    private static string RepositoryRoot()
+    {
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
+             directory is not null;
+             directory = directory.Parent)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "Gg2.sln")))
+                return directory.FullName;
+        }
+
+        return AppContext.BaseDirectory;
+    }
+
+    /// <summary>
+    /// Every copied map is byte-identical to the reference's, where there is one.
+    /// </summary>
+    [Fact]
+    public void EveryCopiedMapIsByteIdenticalToTheReference()
+    {
+        if (!Directory.Exists(ReferenceTree.IncludedFiles))
+            return; // No checkout here; the copy is all there is. See the remarks.
+
+        var copied = Directory.GetFiles(CopiedMaps, "*.png").OrderBy(p => p, StringComparer.Ordinal);
+        var checkedAny = false;
+
+        foreach (var path in copied)
+        {
+            var name = Path.GetFileName(path);
+            var reference = Path.Combine(ReferenceTree.IncludedFiles, name);
+
+            Assert.True(
+                File.Exists(reference),
+                $"maps/{name} is not in the reference at {ReferenceTree.IncludedFiles} — "
+                + "either the copy gained a map the stock game does not ship, or the "
+                + "reference moved and the copy is now the only record of it.");
+
+            Assert.True(
+                File.ReadAllBytes(path).AsSpan().SequenceEqual(File.ReadAllBytes(reference)),
+                $"maps/{name} differs from the reference's copy. ⚠️ This is the failure "
+                + "the copy was introduced knowing it could have: re-copy from the "
+                + "reference, and regenerate Fixtures/maps.json and the nav graphs, "
+                + "because both were derived from the old bytes.");
+
+            checkedAny = true;
+        }
+
+        Assert.True(checkedAny, $"no maps found at {CopiedMaps}");
+    }
+
+    /// <summary>
+    /// The copy holds every map the reference ships, not merely matching ones.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The test above passes vacuously on a subset.</b> Deleting twenty
+    /// maps from <c>maps/</c> leaves the two that remain byte-identical and says
+    /// nothing about the twenty, which is the direction that would break a server
+    /// at run time rather than at build time — <c>--map</c> on a missing name
+    /// throws only when somebody asks for it.
+    /// </remarks>
+    [Fact]
+    public void TheCopyHoldsEveryMapTheReferenceShips()
+    {
+        if (!Directory.Exists(ReferenceTree.IncludedFiles))
+            return;
+
+        var wanted = Directory.GetFiles(ReferenceTree.IncludedFiles, "*.png")
+            .Select(Path.GetFileName)
+            .OfType<string>()
+            .OrderBy(n => n, StringComparer.Ordinal)
+            .ToArray();
+
+        var have = Directory.GetFiles(CopiedMaps, "*.png")
+            .Select(Path.GetFileName)
+            .OfType<string>()
+            .ToHashSet(StringComparer.Ordinal);
+
+        var missing = wanted.Where(n => !have.Contains(n)).ToArray();
+
+        Assert.True(
+            missing.Length == 0,
+            $"maps/ is missing {missing.Length} of the reference's maps: {string.Join(", ", missing)}");
+    }
+
+    /// <summary>
+    /// The server's own resolver finds the copy, and it parses.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The two tests above compare bytes and would both pass if nothing
+    /// could load them.</b> This is the end-to-end half: read a map the way the
+    /// server does and check it is a map, so "standalone" means the server works
+    /// rather than that the files are present.
+    /// </remarks>
+    [Fact]
+    public void TheCopiedMapsLoadThroughTheServersOwnResolver()
+    {
+        var directory = Gg2.Server.MapDirectory.Resolve();
+
+        Assert.False(
+            directory.Length == 0,
+            "MapDirectory.Resolve found nothing — a server would refuse to start here");
+
+        var map = LevelMap.FromPng("ctf_truefort", File.ReadAllBytes(
+            Path.Combine(directory, "ctf_truefort.png")));
+
+        Assert.Equal(GameMode.CaptureTheFlag, GameModes.Of(map));
+        Assert.NotEmpty(map.Entities);
+    }
+}
