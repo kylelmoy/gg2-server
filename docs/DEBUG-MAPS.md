@@ -18,18 +18,25 @@ it ships with the game and is covered by the ordinary map gates.)
   port-authored map must not be able to move it. `GgDebug2MapTests` carries the
   map's own exact census instead.
 - **`gg_debug2` is the only built-in map that places `moving_platform`** —
-  four of them, since 2026-09-01, added for the moving-platforms work. ⚠️ The
+  five of them, since 2026-09-01, added for the moving-platforms work. ⚠️ The
   first version of this file said a non-zero count would be "a framing break:
   the writer never writes the blocks", and **that was false when written**:
   `MatchState.BuildEntities` has fed `StateUpdateWriter`'s five-byte platform
   blocks since phase 6. What was missing was the *motion* (the positions never
   advanced), which is the moving-platforms lane's `MovingPlatforms.EndStep`.
   The map is therefore wire-safe with or without that work merged.
-  ⚠️ **None of the four can ever carry a character**: the carry needs the
+  ⚠️ **Only the chamber raft can ever carry a character**: the carry needs the
   platform's collision mask, which arrives from an embedded sprite named by a
-  `resource` property, and this map embeds no sprites. They are observable
-  motion on the wire — `gg2-nav-gen` skips the type outright, and the nav
-  graph is byte-identical with and without them (measured).
+  `resource` property, and the raft is the one platform that names one (the
+  other four deliberately never grow a shape — the census test pins that).
+  ⚠️ **The raft narrows the moving-platforms `SIM_UUID` exemption rather than
+  voiding it** — see `SimulationStamp` and
+  `MovingPlatformTests`: the exemption's premise is now "no platform with a
+  shape is reachable in play", which the raft satisfies because it lives in
+  the sealed chamber, and the two lanes agreed that wording rather than either
+  quietly widening it. All five are nav-invisible — `gg2-nav-gen` skips the
+  type outright, and the nav graph is byte-identical with and without them
+  (measured).
 - ✅ **A stock client CAN join it**, as of the custom-map serving merge. This
   bullet used to say the opposite and named its own expiry; the expiry has
   arrived, so here is what replaced it. `gg_debug2` is not one of
@@ -74,7 +81,7 @@ Six matches at seed 1 split 3–3 with zero unfinished. What it has that
 | Jump ladder | P1/P2/P3 + L1/L2/L3, x 52..105 and mirror | 42px risers: single-jumpable hop to hop, P2 at 84px is double-jump-only from the floor; the ladder tops out one jump from the tower top |
 | Tower | x 115..124, top at row 38 | 168px above the floor: over the ~115px double-jump apex, under the 192px rocket apex — rocket-jump direct, or the ladder the slow way. `MoveBoxUp` elevator on each face (nav-invisible; humans and physics tests) |
 | Tunnel | x 100..139, under the tower | Entered by two `dropdownPlatform` lids in the floor (nav **drop** edges), left by a 48px jump out of either shaft; one-row ceiling dip inside for the ceiling-contact arms |
-| Sealed chambers | x 44..96 / 143..195, rows 6..32, in the sky | **No entrance** — teleport-only, so no nav edge can lead a bot in (flood-fill asserted). Red chamber: killbox, fragbox, playerwall, bulletwall, a mid-air dropdownPlatform, a free-standing probe wall, graduated 1..4-cell steps, and two `moving_platform`s — a vertical hoist at (564, 168) rising 90px on asymmetric speeds (1 up, 3 down: both speed arms, plus the reference's snap-at-start-only asymmetry), and a `trigger:1` platform at (300, 120) that stays parked for ever because no rider can exist without the carry. Blue chamber: bare flat ground, a clean room for probes |
+| Sealed chambers | x 44..96 / 143..195, rows 6..32, in the sky | **No entrance** — teleport-only, so no nav edge can lead a bot in (flood-fill asserted). Red chamber: killbox, fragbox, playerwall, bulletwall, a mid-air dropdownPlatform, a free-standing probe wall, graduated 1..4-cell steps, and three `moving_platform`s — a vertical hoist at (564, 168) rising 90px on asymmetric speeds (1 up, 3 down: both speed arms, plus the reference's snap-at-start-only asymmetry), a `trigger:1` platform at (300, 120) that stays parked for ever because no rider can exist without the carry, and **the raft** at (282, 150), the only platform anywhere with a collision shape: a 24x12 embedded PNG (`resource:raftsprite` in the meta block, raw file bytes as a GGON string), non-rectangular — full 24x2 deck over a hull tapering 1px a side per row — and removeback-discriminating: **178 solid pixels under GM8's bottom-left background rule, 110 under a wrong top-left reading**, so a live-game probe can settle that corner from the count alone. Blue chamber: bare flat ground, a clean room for probes |
 
 The nav graph (`nav/gg_debug2_a1.txt`, 70 nodes) carries **every edge type the
 bot layer consumes** — walk, jump, fall, drop-through, double-jump, rocket-jump

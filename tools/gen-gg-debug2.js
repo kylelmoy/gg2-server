@@ -25,17 +25,17 @@
 // client, so a joining client would look it up in its internal list and fail.
 // The map is for the headless side: tests, bots, eval, the env seam.
 //
-// Moving platforms: FOUR, deliberately, since 2026-09-01 — the only built-in
+// Moving platforms: FIVE, deliberately, since 2026-09-01 — the only built-in
 // map that places any. The wire has carried their five-byte blocks since
 // phase 6 (MatchState.BuildEntities feeds StateUpdateWriter, so the framing is
 // sound with or without motion); the motion itself is the moving-platforms
-// lane's MovingPlatforms.EndStep. ⚠️ None of them can ever CARRY a character:
-// the carry needs a collision mask, a MovingPlatform has no sprite of its own,
-// and the mask normally arrives from an embedded sprite named by the entity's
-// `resource` property — a pipeline neither this generator nor the port speaks.
-// So they are observable motion on the wire, placed where nav cannot need
-// them (gg2-nav-gen skips the type outright, measured: the graph is
-// byte-identical with and without them).
+// lane's MovingPlatforms.EndStep. ⚠️ Four of the five can never CARRY a
+// character: the carry needs a collision mask from an embedded sprite named
+// by the entity's `resource` property, and only the chamber raft names one —
+// see its own section below for the embed format and the discriminating
+// removeback design. All five are placed where nav cannot need them
+// (gg2-nav-gen skips the type outright, measured: the graph is byte-identical
+// with and without them).
 //
 // The map, in one paragraph: a 240x80-cell (1440x480 world px) mirror-symmetric
 // CTF layout. Two bases (a gated spawn zone deepest, then an open intel zone,
@@ -232,6 +232,122 @@ e('moving_platform', 564, 168, { top: '90', left: '0', upspeed: '1', downspeed: 
 e('moving_platform', 300, 120, { top: '60', left: '0', upspeed: '3', downspeed: '3', trigger: '1' });
 
 //---------------------------------------------------------------------------
+// PNG plumbing, shared by the map art and the embedded sprite below.
+//---------------------------------------------------------------------------
+
+const CRC_TABLE = new Int32Array(256);
+for (let n = 0; n < 256; n++) {
+  let c = n;
+  for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+  CRC_TABLE[n] = c;
+}
+function crc32(buf) {
+  let c = 0xffffffff;
+  for (const b of buf) c = CRC_TABLE[(c ^ b) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+function chunk(type, data) {
+  const out = Buffer.alloc(12 + data.length);
+  out.writeUInt32BE(data.length, 0);
+  out.write(type, 4, 'latin1');
+  data.copy(out, 8);
+  out.writeUInt32BE(crc32(out.subarray(4, 8 + data.length)), 8 + data.length);
+  return out;
+}
+
+// An 8-bit indexed, non-interlaced PNG - the shape gg2-server's PngSprite
+// decoder and GM8's own loader both accept.
+function makePng(width, height, palette, pixels, extraChunks = []) {
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8;  // bit depth
+  ihdr[9] = 3;  // indexed colour
+  // [10..12] compression/filter/interlace = 0
+
+  const raw = Buffer.alloc((width + 1) * height);
+  for (let y = 0; y < height; y++) {
+    raw[y * (width + 1)] = 0; // filter: none
+    for (let x = 0; x < width; x++) raw[y * (width + 1) + 1 + x] = pixels[y * width + x];
+  }
+
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk('IHDR', ihdr),
+    chunk('PLTE', Buffer.from(palette.flat())),
+    chunk('IDAT', zlib.deflateSync(raw, { level: 9 })),
+    ...extraChunks,
+    chunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+
+//---------------------------------------------------------------------------
+// The fifth moving platform: the ONLY one with a collision shape. Its sprite
+// is embedded in the meta block the way the reference embeds one - the raw
+// PNG file bytes as a GGON string under the key the entity's `resource`
+// names - and stringToResource re-loads it with sprite_add(name, 1, 1, 0, 0,
+// 0): removeback ON, so every pixel matching the BOTTOM-LEFT pixel's colour
+// is transparent.
+//
+// The raft is deliberately non-rectangular (a full 24x2 deck over a hull that
+// tapers one pixel a side per row), because a bounding-box collider would be
+// wrong for it - that is the case the precise-mask work exists for. And it is
+// deliberately DISCRIMINATING about removeback's corner: the top-left pixel
+// is wood, the bottom-left is background, so the correct bottom-left rule
+// yields 178 solid pixels and a wrong top-left reading would yield the other
+// 110. A probe against the running game can tell the two apart from the count
+// alone.
+//---------------------------------------------------------------------------
+
+const RAFT_W = 24;
+const RAFT_H = 12;
+const raft = new Uint8Array(RAFT_W * RAFT_H); // 0 background, 1 wood
+
+for (let x = 0; x < RAFT_W; x++) { raft[x] = 1; raft[RAFT_W + x] = 1; } // the deck
+for (let y = 2; y < RAFT_H; y++) {
+  const inset = y - 1; // hull rows 2..11 taper 1px a side per row
+  for (let x = inset; x < RAFT_W - inset; x++) raft[y * RAFT_W + x] = 1;
+}
+
+let raftSolid = 0;
+for (const p of raft) raftSolid += p;
+if (raftSolid !== 178) throw new Error(`raft solid count ${raftSolid}, expected 178`);
+if (raft[(RAFT_H - 1) * RAFT_W] !== 0) throw new Error('raft bottom-left must be background');
+if (raft[0] !== 1) throw new Error('raft top-left must be wood, or the sprite stops discriminating');
+
+const raftPng = makePng(RAFT_W, RAFT_H, [
+  [0x46, 0x5d, 0x8f], // 0 background - removeback erases this
+  [0x7a, 0x52, 0x30], // 1 wood
+], raft);
+
+// A GGON single-quoted string holding arbitrary bytes: the tokenizer's five
+// escapes cover everything that cannot appear raw, and Latin-1 round-trips
+// the rest (ggon_parse_tokens.gml; Gg2.Maps.Ggon is the transcription).
+function ggonBytes(buffer) {
+  let out = "'";
+  for (const b of buffer) {
+    if (b === 0x27) out += "\\'";
+    else if (b === 0x5c) out += '\\\\';
+    else if (b === 0x0a) out += '\\n';
+    else if (b === 0x0d) out += '\\r';
+    else if (b === 0x09) out += '\\t';
+    else if (b === 0x00) out += '\\0';
+    else out += String.fromCharCode(b);
+  }
+  return out + "'";
+}
+
+entities[0].raftsprite = ggonBytes(raftPng); // onto the meta pseudo-entity
+
+// It shuttles over the red chamber's floor, left of the graduated steps, so a
+// mask or carry probe can teleport beside it and watch it in isolation.
+e('moving_platform', 282, 150, {
+  top: '0', left: '60', upspeed: '1', downspeed: '1', trigger: '0',
+  resource: 'raftsprite',
+});
+
+//---------------------------------------------------------------------------
 // Level data text: {ENTITIES} in the GGON list form (the one every shipped
 // map but gg_debug uses), then {WALKMASK} in compressWalkmask.gml's 6-bit
 // encoding.
@@ -295,55 +411,11 @@ for (const entity of entities) {
   art[cy * W + cx] = entity.type === 'killbox' || entity.type === 'fragbox' ? 4 : 5;
 }
 
-const CRC_TABLE = new Int32Array(256);
-for (let n = 0; n < 256; n++) {
-  let c = n;
-  for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-  CRC_TABLE[n] = c;
-}
-function crc32(buf) {
-  let c = 0xffffffff;
-  for (const b of buf) c = CRC_TABLE[(c ^ b) & 0xff] ^ (c >>> 8);
-  return (c ^ 0xffffffff) >>> 0;
-}
-
-function chunk(type, data) {
-  const out = Buffer.alloc(12 + data.length);
-  out.writeUInt32BE(data.length, 0);
-  out.write(type, 4, 'latin1');
-  data.copy(out, 8);
-  out.writeUInt32BE(crc32(out.subarray(4, 8 + data.length)), 8 + data.length);
-  return out;
-}
-
-const ihdr = Buffer.alloc(13);
-ihdr.writeUInt32BE(W, 0);
-ihdr.writeUInt32BE(H, 4);
-ihdr[8] = 8;  // bit depth
-ihdr[9] = 3;  // indexed colour
-// [10..12] compression/filter/interlace = 0
-
-const plte = Buffer.from(PALETTE.flat());
-
-const raw = Buffer.alloc((W + 1) * H);
-for (let y = 0; y < H; y++) {
-  raw[y * (W + 1)] = 0; // filter: none
-  for (let x = 0; x < W; x++) raw[y * (W + 1) + 1 + x] = art[y * W + x];
-}
-const idat = zlib.deflateSync(raw, { level: 9 });
-
 const keyword = 'Gang Garrison 2 Level Data';
 const compressed = zlib.deflateSync(Buffer.from(levelData, 'latin1'), { level: 9 });
 const ztxt = Buffer.concat([Buffer.from(keyword + '\0\0', 'latin1'), compressed]);
 
-const png = Buffer.concat([
-  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-  chunk('IHDR', ihdr),
-  chunk('PLTE', plte),
-  chunk('IDAT', idat),
-  chunk('zTXt', ztxt),
-  chunk('IEND', Buffer.alloc(0)),
-]);
+const png = makePng(W, H, PALETTE, art, [chunk('zTXt', ztxt)]);
 
 const outPath = path.join(__dirname, '..', 'maps', 'gg_debug2.png');
 fs.writeFileSync(outPath, png);
@@ -353,4 +425,5 @@ for (const c of grid) solidCount += c;
 console.log(
   `gg_debug2.png: ${png.length} bytes, ${W}x${H} cells, ` +
   `${solidCount} solid (${((100 * solidCount) / (W * H)).toFixed(1)}%), ` +
-  `${entities.length - 1} entities + meta -> ${outPath}`);
+  `${entities.length - 1} entities + meta, ` +
+  `raft sprite ${RAFT_W}x${RAFT_H} = ${raftSolid} solid px -> ${outPath}`);

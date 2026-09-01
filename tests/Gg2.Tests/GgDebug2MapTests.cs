@@ -59,7 +59,7 @@ public sealed class GgDebug2MapTests
         var shape = GameModes.ShapeOf(Load());
 
         Assert.Equal(GameMode.CaptureTheFlag, shape.GameMode);
-        Assert.Equal(4, shape.MovingPlatformCount);
+        Assert.Equal(5, shape.MovingPlatformCount);
         Assert.Equal(0, shape.ControlPointCount);
         Assert.Equal(0, shape.GeneratorCount);
     }
@@ -85,7 +85,7 @@ public sealed class GgDebug2MapTests
             [EntityTypes.RedTeamGate2] = 1,
             [EntityTypes.BlueTeamGate2] = 1,
             [EntityTypes.DropdownPlatform] = 3,
-            [EntityTypes.MovingPlatform] = 4,
+            [EntityTypes.MovingPlatform] = 5,
             [EntityTypes.MoveBoxUp] = 2,
             [EntityTypes.BulletWall] = 1,
             [EntityTypes.PlayerWall] = 1,
@@ -125,7 +125,7 @@ public sealed class GgDebug2MapTests
     {
         var platforms = Load().OfType(EntityTypes.MovingPlatform).ToArray();
 
-        Assert.Equal(4, platforms.Length);
+        Assert.Equal(5, platforms.Length);
 
         var expected = new (double X, double Y, string Top, string Left, string Up, string Down, string Trigger)[]
         {
@@ -133,6 +133,7 @@ public sealed class GgDebug2MapTests
             (1140, 380, "0", "-120", "2", "2", "0"), // blue valley ferry, mirrored leg
             (564, 168, "90", "0", "1", "3", "0"),    // chamber hoist, asymmetric speeds
             (300, 120, "60", "0", "3", "3", "1"),    // chamber parked: triggered, no rider possible
+            (282, 150, "0", "60", "1", "1", "0"),    // chamber raft: the one with a sprite
         };
 
         for (var i = 0; i < expected.Length; i++)
@@ -147,7 +148,47 @@ public sealed class GgDebug2MapTests
             Assert.Equal(up, platform.GetString("upspeed"));
             Assert.Equal(down, platform.GetString("downspeed"));
             Assert.Equal(trigger, platform.GetString("trigger"));
+
+            // Only the raft names a resource: the other four must never grow a
+            // collision shape by accident, because everything the map promises
+            // about them assumes they cannot touch a character.
+            Assert.Equal(i == 4 ? "raftsprite" : null, platform.GetString("resource"));
         }
+    }
+
+    /// <summary>
+    /// The raft's embedded sprite survives the round trip: the meta block holds
+    /// the key the entity names, and its bytes are the PNG the generator wrote.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The binding is by name and nothing on this side validates it</b> —
+    /// a platform naming a missing resource just gets no sprite and collides
+    /// with nothing, exactly like the reference (<c>stringToResource</c>
+    /// returns -1). So the linkage is asserted here, where it can fail loudly.
+    /// The <em>shape</em> is the moving-platforms work's to gate
+    /// (<c>SpriteMask.Decode</c>); the design facts it will want are pinned in
+    /// the generator: 24x12, non-rectangular, <b>178 solid pixels under the
+    /// bottom-left removeback rule and 110 under a wrong top-left reading</b>,
+    /// which is what makes the sprite a discriminating probe target.
+    /// </remarks>
+    [Fact]
+    public void TheRaftSpriteIsEmbeddedAndWellFormed()
+    {
+        var map = Load();
+
+        var resource = Assert.IsType<string>(map.Metadata?.GetString("raftsprite"));
+        var bytes = System.Text.Encoding.Latin1.GetBytes(resource);
+
+        // The PNG signature, byte for byte — also what stringToResource sniffs
+        // (characters 2-4 spelling "PNG").
+        Assert.True(bytes.Length > 60, $"raft sprite is only {bytes.Length} bytes");
+        Assert.Equal(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }, bytes[..8]);
+
+        // IHDR: 24x12, bit depth 8, indexed — the shape PngSprite.Decode accepts.
+        Assert.Equal(24u, System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(16)));
+        Assert.Equal(12u, System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(20)));
+        Assert.Equal(8, bytes[24]);
+        Assert.Equal(3, bytes[25]);
     }
 
     /// <summary>
