@@ -138,6 +138,11 @@ public sealed class ShippedEntityCensusTests
         var maps = Directory.GetFiles(ReferenceTree.MapsDirectory, "*.png")
             .Select(Path.GetFileNameWithoutExtension)
             .OfType<string>()
+            // A SHIPPED-map census: the port-authored maps are deliberately
+            // outside it, or adding one would silently change what "no shipped
+            // map does X" means. GgDebug2MapTests carries gg_debug2's own
+            // exact census instead.
+            .Where(n => !ReferenceTree.PortAuthoredMaps.Contains(n))
             .OrderBy(n => n, StringComparer.Ordinal)
             .ToArray();
 

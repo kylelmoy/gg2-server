@@ -11,15 +11,17 @@ namespace Gg2.Server;
 /// <see cref="ServerOptions.MapDirectory"/> threw if it was not set. A clone of
 /// this repo could not serve a single round.
 /// <para>
-/// ⚠️ <b>They are 22 PNGs and 457 KB.</b> The old comment said "there is nowhere
+/// ⚠️ <b>They are 23 PNGs and 458 KB</b> — the reference's 22, plus the
+/// port-authored <c>gg_debug2</c> (docs/DEBUG-MAPS.md), which no census of the
+/// shipped maps should count. The old comment said "there is nowhere
 /// else to get them: they ship inside the Game Maker project", which was true
 /// about their origin and wrong about the consequence — nothing stopped them
 /// being copied, and the cost of not copying them was a hard dependency on
 /// another repository for the product's core function.
 /// </para>
 /// <para>
-/// ⚠️ <b>Kept byte-identical to the reference's, and <c>maps.json</c> is what
-/// says so.</b> <c>LevelEntityTests.MatchesTheEntityOracle</c> reads every map
+/// ⚠️ <b>The reference's 22 are kept byte-identical to it, and <c>maps.json</c>
+/// is what says so.</b> <c>LevelEntityTests.MatchesTheEntityOracle</c> reads every map
 /// through this resolver and compares each entity against the checked-in oracle,
 /// so a map that drifted from the reference's fails the suite. Copying them here
 /// did not weaken that gate; it pointed it at the copy.

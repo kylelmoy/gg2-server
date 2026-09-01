@@ -14,12 +14,13 @@
   </ItemGroup>
 
   <!--
-    The 22 built-in maps travel WITH the server, so `dotnet publish` produces a
-    directory that serves a round on a machine with no Gang-Garrison-2 checkout.
+    The built-in maps (22 shipped plus the port-authored gg_debug2) travel WITH
+    the server, so `dotnet publish` produces a directory that serves a round on a
+    machine with no Gang-Garrison-2 checkout.
     ⚠️ Without this the repo-root walk in MapDirectory.Resolve still finds them
     from bin/, so `dotnet run` works and a PUBLISHED server does not — which is
     the failure that only shows up on the deployment nobody tests.
-    457 KB, and Link keeps them in a maps/ subdirectory rather than loose.
+    458 KB, and Link keeps them in a maps/ subdirectory rather than loose.
   -->
   <ItemGroup>
     <Content Include="..\..\maps\*.png" Link="maps\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />

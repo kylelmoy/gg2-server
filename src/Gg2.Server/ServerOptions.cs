@@ -204,7 +204,7 @@ public sealed class ServerOptions
             // the caller made. Say where it looked. See MapDirectory.Resolve.
             throw new InvalidOperationException(
                 $"{nameof(MapDirectory)} is empty: no maps/ beside the executable or above it, "
-                + "no GG2_MAPS, no GG2_REFERENCE. The 22 built-in maps are checked in at maps/ "
+                + "no GG2_MAPS, no GG2_REFERENCE. The built-in maps are checked in at maps/ "
                 + "in this repository; pass --maps to serve a different set.");
         }
 
