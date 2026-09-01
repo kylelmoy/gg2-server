@@ -117,26 +117,34 @@ public static class SimulationStamp
     /// ⚠️ <b>NOT bumped for moving platforms, 2026-09-01, and this is the second
     /// exemption on record.</b> <c>MovingPlatforms.EndStep</c> is a new stage in
     /// <see cref="MatchSimulation.Tick"/>, which the rule above would normally
-    /// make a bump. It is exempt because the stage is <b>structurally
-    /// unreachable</b> on every map a policy can play, not because it looked
-    /// harmless: <c>EndStep</c> iterates
-    /// <c>min(state.MovingPlatformCount, definitions.Length)</c>, both of which
-    /// come from the map's <c>MovingPlatform</c> entities, and <b>all 22 shipped
-    /// maps place none</b> — so the loop body cannot execute and the tick is
-    /// bit-identical. <c>WorldState</c> also grew by 384 bytes of storage that
-    /// nothing on those maps ever writes.
+    /// make a bump. It is exempt because a platform <b>cannot reach a
+    /// character</b>, not because it looked harmless: the stage writes only to
+    /// <see cref="WorldState.MovingPlatforms"/> — the three values that go on the
+    /// wire — and the one path from there to a character is the <em>carry</em>,
+    /// which is not ported. No trajectory, damage number or projectile can differ,
+    /// whatever a map places.
     /// </para>
     /// <para>
-    /// ⚠️ <b>What would void this exemption, and what checks it.</b> A shipped
-    /// map gaining a moving platform, or a custom map being loaded, makes the
-    /// stage reachable and the exemption false — at which point a policy
-    /// checkpoint trained before today is playing a different game with the cause
-    /// invisible, which is the exact failure this type exists to prevent.
-    /// <c>MovingPlatformTests.NoShippedMapPlacesAMovingPlatform</c> is the
-    /// mechanical gate: <b>if it ever goes red, bump this and do not reason about
-    /// it.</b> That is the difference between this exemption and the arena claim
-    /// CLAUDE.md records — that one rested on reading the code and concluding, and
-    /// nothing would have contradicted it.
+    /// ⚠️ <b>The first wording of this exemption said the stage was structurally
+    /// unreachable because no shipped map places a platform. That was true on
+    /// 2026-09-01 and stopped being true within the week</b>, when
+    /// <c>gg_debug2</c> arrived in this repo's own <c>maps/</c> with four of them
+    /// — and the test named as the gate <b>could not have noticed</b>, because it
+    /// scanned only the <em>reference's</em> maps. A gate that cannot fire is
+    /// worse than no gate: it reads as diligence while checking nothing. Both
+    /// halves are corrected — the claim above no longer depends on absence, and
+    /// <c>MovingPlatformTests.NoShippedMapPlacesAPlatformThatCouldCarryAnyone</c>
+    /// now scans both map sources and asserts the property that matters: that no
+    /// shipped platform names a <c>resource</c>, without which it has no sprite,
+    /// no mask, and nothing can stand on it in GM8 either.
+    /// </para>
+    /// <para>
+    /// ⛔ <b>What voids this exemption: porting the CARRY.</b> The day a platform
+    /// can move a character, this stage moves trajectories and must bump — and
+    /// that is a change somebody makes deliberately, so it is a condition a person
+    /// can act on rather than one a test must catch. Until then a shipped map
+    /// gaining a platform is not by itself a reason to bump; a shipped map gaining
+    /// a platform <em>with a sprite</em> is, and that is what goes red.
     /// </para>
     /// <para>
     /// ⚠️ <b>Custom maps are the live edge.</b> Nothing stops an operator pointing

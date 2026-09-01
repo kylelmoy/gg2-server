@@ -377,20 +377,73 @@ public sealed class MovingPlatformTests
     /// </para>
     /// </remarks>
     [Fact]
-    public void NoShippedMapPlacesAMovingPlatform()
+    public void NoShippedMapPlacesAPlatformThatCouldCarryAnyone()
     {
         ReferenceTree.RequireAvailable();
 
-        var withPlatforms = new List<string>();
+        var carriers = new List<string>();
 
-        foreach (var path in Directory.GetFiles(ReferenceTree.IncludedFiles, "*.png"))
+        foreach (var (name, map) in ShippedMaps())
+        foreach (var entity in map.Entities)
         {
-            var name = Path.GetFileNameWithoutExtension(path)!;
+            if (entity.Type != EntityTypes.MovingPlatform)
+                continue;
 
-            if (MovingPlatforms.Build(LevelMap.FromPng(name, ReferenceTree.ReadMap(name))).Length > 0)
-                withPlatforms.Add(name);
+            // No resource means no sprite, which means no mask, which means
+            // nothing can stand on it — in GM8 as much as here.
+            var resource = entity.GetString("resource");
+            if (string.IsNullOrEmpty(resource))
+                continue;
+
+            carriers.Add($"{name}: platform with resource '{resource}'");
         }
 
-        Assert.Empty(withPlatforms);
+        Assert.Empty(carriers);
+    }
+
+    /// <summary>
+    /// Every map this server can serve — the client's built-in 22 <b>and</b> this
+    /// repo's own <c>maps/</c>.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Both, and that is the whole point of this helper.</b> The first
+    /// version of the test above scanned only the reference's <c>Included
+    /// Files</c>, so a map added to <c>maps/</c> could never trip it — and
+    /// <c>gg_debug2</c> places four platforms. A gate that cannot fire reads as
+    /// diligence while checking nothing, and this one is load-bearing:
+    /// <see cref="SimulationStamp"/>'s exemption names it.
+    /// </remarks>
+    private static IEnumerable<(string Name, LevelMap Map)> ShippedMaps()
+    {
+        var directories = new List<string> { ReferenceTree.IncludedFiles };
+
+        var own = Path.Combine(RepositoryRoot(), "maps");
+        if (Directory.Exists(own))
+            directories.Add(own);
+
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var directory in directories)
+        foreach (var path in Directory.GetFiles(directory, "*.png"))
+        {
+            var name = Path.GetFileNameWithoutExtension(path)!;
+            if (!seen.Add(name))
+                continue;
+
+            yield return (name, LevelMap.FromPng(name, File.ReadAllBytes(path)));
+        }
+    }
+
+    private static string RepositoryRoot()
+    {
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
+             directory is not null;
+             directory = directory.Parent)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "Gg2.sln")))
+                return directory.FullName;
+        }
+
+        return AppContext.BaseDirectory;
     }
 }
