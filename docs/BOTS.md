@@ -112,6 +112,14 @@ on 17 of 21**. ⛔ **Do not read the second as a result.**
 | under 0.5 points | **6** |
 | under 1.0 point | **9** |
 
+⚠️ **And the capped exposure belongs in the same breath as those counts, not in a
+later section.** `cp_dirtbowl` capped **85 of 120** match-arms, `koth_gallery` 78,
+`ctf_conflict` 72. **Death share counts deaths in capped matches too, so it is far
+less exposed than a win share would be — but "less exposed" is not "unexposed"**,
+and this repo has already paid for treating those as the same thing. `gg2-rl`’s
+rule, and it is trap 1: if the floor ever licenses the sign test, **the capped
+number goes in the row beside the share, not in a paragraph under it.**
+
 **All four maps where arm 3 reads worse are worse by 0.0–0.4 points**, and nine of
 the twenty-one carry effects under a point. A sign test counts DIRECTIONS, so a map
 whose direction is noise is a whole observation lost rather than a slightly noisier
@@ -123,6 +131,21 @@ agreement count**, because direction stability is a property of effect size rela
 to noise and not of `n`. Until that floor is known against this table’s effects,
 **the sign test is unlicensed and the honest report is the aggregate death share
 with its death counts.**
+
+#### ⛔ RETRACTED: "shippable at 8 bots, unshippable at 12"
+
+**That was mine and it was wrong.** A three-map, six-match run read **31.15 ms** at
+eight bots and I reported it as *"passes with 6% to spare"*, against 92.38 ms at
+twelve — framed as a fact about bot counts. `gg2-rl` carried it to its user as
+*"shippable at 8, unshippable at 12"*.
+
+⛔ **The 21-map table fails on 20 of 21 maps AT EIGHT BOTS.** The 8-bot pass was one
+map’s luck generalised — the same configuration-read-as-general error this file
+records twice already, made by the person who wrote those entries, hours later.
+
+⚠️ **And it makes the verdict stronger rather than weaker.** *"Too expensive at 12,
+fine at 8"* is a deployment question with a knob. **"Fails 20 of 21 at eight" is
+not: there is no measured bot count at which this ships as built.**
 
 #### ⚠️ And the experiment costs what it costs
 
