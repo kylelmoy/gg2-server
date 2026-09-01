@@ -240,10 +240,20 @@ public enum RolloutOpponent
 /// numbers above exist only because the continuation actually worked — a broken
 /// one produces the same win column and settles nothing, which is why
 /// <c>EnvProtocolTests.APolicyLoadedOverTheSocketReachesTheRollout</c> gates the
-/// whole wire-to-rollout chain. ⚠️ <b>The vs-scripted table is the FALLBACK
-/// criterion</b>; the pre-registered primary is arm D against arm A head to head
-/// in one world, null exactly 50%. Do not quote these as the verdict without
-/// checking whether that landed.
+/// whole wire-to-rollout chain.
+/// </para>
+/// <para>
+/// ⚠️ <b>TWO CRITERIA, AND ONLY ONE IS ANSWERED.</b> <b>Criterion 2</b> — did the
+/// entanglement break — is the <em>blind</em> axis, has no fallback, and
+/// <b>passed</b>. <b>Criterion 1</b> — is the search stronger at equal cost — is
+/// the <em>win</em> axis and the headline, and <b>the table above is only its
+/// FALLBACK</b>; its pre-registered primary is arm D on red against arm A on blue
+/// in one world at a 50% null, which was still running when this was written.
+/// ⛔ <b>Do not read "D is weaker than A" off the win column as settled</b>: the
+/// fallback measures both against a bot the search already beats 90.7% of the
+/// time, and that ceiling is the reason it is the worse instrument. <b>Replace
+/// this paragraph with the verdict when it lands</b> rather than leaving the
+/// qualification to outlive its condition.
 /// </para>
 /// </param>
 /// <param name="ConsiderSpecial">

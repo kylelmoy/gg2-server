@@ -1797,11 +1797,27 @@ is reading it wrong** — including the horizon sweep in `RolloutOptions.CommitT
 whose monotone opposition is real and does not license the causal reading it
 invites.
 
-⚠️ **This is the fallback criterion, not the verdict.** The pre-registered primary
-is arm D against arm A **head to head in one world**, null exactly 50%, no
-ceiling — which is what per-side configuration was built for. It was still running
-when this was written. **Do not quote the table above as the answer without
-checking whether that landed.**
+⚠️ **Two criteria, on two axes, and only one of them has been answered.**
+
+- **Criterion 1 — is the search STRONGER at equal cost?** The **win** axis, and
+  the headline. Its pre-registered primary is **arm D on red against arm A on
+  blue** in one world, null exactly 50%, no ceiling — which is what per-side
+  configuration was built for. **The table above is its FALLBACK**, and it was
+  still running when this was written.
+- **Criterion 2 — did the entanglement break?** The **blind** axis. No fallback,
+  and it **passed**: `r = +1.166`, and `D_blind@60` 63.4% against unpruned's
+  64.8%.
+
+⛔ **So do NOT read "arm D is weaker than arm A" off this table as settled.** The
+fallback measures both against a scripted bot the search already beats 90.7% of
+the time, and `gg2-rl` pre-registered that ceiling as the reason the fallback is
+the worse instrument. **If the head-to-head disagrees with it, that disagreement
+is itself the finding** — which it cannot be if either repo has already written
+the fallback's answer down as fact.
+
+⚠️ **This qualification is meant to be REPLACED, not to stand.** A standing
+qualification outlives its condition; when the head-to-head lands, write the
+verdict in here and delete this paragraph.
 
 ✅ **The exploration monitor never fired**: 2.4% against a 20.0% computed null,
 n = 40,051. The policy prior was never the problem, at any k, in any arm.
