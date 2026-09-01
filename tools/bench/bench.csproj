@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>bench</AssemblyName>
+    <RootNamespace>Bench</RootNamespace>
+
+    <!-- ⚠️ NOT warnings-as-errors, unlike the rest of the tree. A bench mode is
+         written to answer one question and is often left in place with an unused
+         local or a commented-out arm; failing the build over that would make the
+         instrument more expensive to use than to skip, which is how measurement
+         stops happening. The projects it references keep the strict settings. -->
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+
+    <!-- Deliberately NOT in Gg2.sln: `dotnet test Gg2.sln` should not build a
+         benchmark, and CI should not run one. Build it explicitly. -->
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/Gg2.Env/Gg2.Env.csproj" />
+    <ProjectReference Include="../../src/Gg2.Bots/Gg2.Bots.csproj" />
+    <ProjectReference Include="../../src/Gg2.Simulation/Gg2.Simulation.csproj" />
+  </ItemGroup>
+</Project>
