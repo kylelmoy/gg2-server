@@ -2,6 +2,7 @@ using System.Globalization;
 using Gg2.Bots;
 using Gg2.Protocol;
 using Gg2.Server;
+using Gg2.Simulation;
 
 namespace Gg2.Host;
 
@@ -129,6 +130,9 @@ internal static class Program
         // order is the kind of thing nobody notices until a measurement is wrong.
         // Whichever comes second reconciles the two.
         var searchThreads = Math.Clamp(Environment.ProcessorCount / 3, 1, 8);
+
+        string? policyPath = null;
+        var ignoreStamp = false;
 
         for (var i = 0; i < args.Length; i++)
         {
@@ -271,6 +275,28 @@ internal static class Program
                 // which bot they just fought. "trained" is the shorthand for making
                 // every bot the configuration that was actually measured -- at the cost
                 // of a roster missing five classes. Say which you ran.
+                // docs/BOTS.md's arm 2: gg2-rl's trained checkpoint driving keys and
+                // aim inside the same engagement window --search-bots uses.
+                case "--policy":
+                    policyPath = Require(name, value);
+                    i++;
+                    break;
+
+                // ⛔ BYPASSES THE SIMULATION STAMP, which exists to stop a policy
+                // running against a simulation it was not trained on. It is honest
+                // ONLY when the difference between the two simulations cannot reach
+                // the maps being played, and that is a claim to CHECK rather than
+                // assume: the 2026-09-02 case was the moving-platform carry, and
+                // MovingPlatforms.Build reads the `moving_platform` entity, which
+                // appears in ZERO shipped maps.
+                //
+                // ⚠️ The server prints both stamps and the reason when this is used,
+                // because a bypassed guard that leaves no trace is worse than no
+                // guard: the next reader cannot tell the run was overridden.
+                case "--policy-ignore-stamp":
+                    ignoreStamp = true;
+                    break;
+
                 case "--bot-classes":
                 {
                     var text = Require(name, value);
@@ -350,6 +376,25 @@ internal static class Program
             }
         }
 
+        if (policyPath is not null)
+        {
+            var policy = PolicyNetwork.Load(policyPath, ignoreStamp);
+
+            // ⛔ ALWAYS printed, not only when overridden. A run whose stamps agree
+            // says so; a run that bypassed the guard says THAT, loudly, on the same
+            // line. A bypassed guard that leaves no trace in the output is worse
+            // than no guard, because the next reader cannot tell it happened.
+            Console.WriteLine(
+                $"policy {Path.GetFileName(policyPath)}: trained against {policy.SimulationUuid}, "
+                + $"this build is {SimulationStamp.Uuid}"
+                + (policy.SimulationUuid == SimulationStamp.Uuid
+                    ? " (match)"
+                    : "  <-- STAMP MISMATCH, BYPASSED by --policy-ignore-stamp. Everything this "
+                      + "policy decides was learned on a different simulation."));
+
+            options.Bots = options.Bots with { Policy = policy };
+        }
+
         return options;
     }
 
@@ -389,6 +434,14 @@ internal static class Program
                             threads the search splits its candidates across
                             (default: cores/3, capped at 8). Changes cost only,
                             never a decision.
+          --policy <path>   drive bots with a trained policy checkpoint (.npz)
+                            inside their engagement window - docs/BOTS.md arm 2.
+                            Mutually exclusive with --search-bots.
+          --policy-ignore-stamp
+                            load a checkpoint whose simulation stamp does NOT
+                            match this build. Only honest when the simulation
+                            difference cannot reach the maps being played, which
+                            is a claim to check. Both stamps are always printed.
           --bot-classes <list|trained>
                             restrict the bot class draw (default: the reference's
                             own draw of eight). 'trained' is Scout, Soldier,

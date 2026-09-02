@@ -81,6 +81,14 @@ public sealed class PolicyNetwork
     public int ActionRepeat { get; }
 
     /// <summary>The simulation stamp this policy was trained against.</summary>
+    /// <summary>
+    /// The simulation stamp this checkpoint was TRAINED against.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ Not necessarily this build’s — see the <c>ignoreSimulationStamp</c>
+    /// argument to <see cref="Load(string, bool)"/>. Compare it against
+    /// <c>SimulationStamp.Uuid</c> before trusting anything a policy decides.
+    /// </remarks>
     public string SimulationUuid { get; }
 
     /// <summary>
@@ -98,7 +106,7 @@ public sealed class PolicyNetwork
     /// produces metadata that fails them.
     /// </para>
     /// </remarks>
-    public static PolicyNetwork Load(Stream npz)
+    public static PolicyNetwork Load(Stream npz, bool ignoreSimulationStamp = false)
     {
         ArgumentNullException.ThrowIfNull(npz);
 
@@ -127,8 +135,21 @@ public sealed class PolicyNetwork
 
         if (!string.Equals(simulationUuid, SimulationStamp.Uuid, StringComparison.Ordinal))
         {
-            throw new InvalidOperationException(
-                $"this policy was trained against simulation {simulationUuid}, and this build is {SimulationStamp.Uuid}");
+            // ⛔ THE OVERRIDE DOES NOT MAKE THE POLICY VALID, it makes the refusal
+            // the caller’s decision. The stamp says this checkpoint was trained
+            // against a different simulation; whether that difference can REACH the
+            // maps being played is a question this type cannot answer and the caller
+            // sometimes can. See Gg2.Host’s --policy-ignore-stamp, which exists for
+            // exactly one case: a simulation change confined to a feature no shipped
+            // map contains.
+            //
+            // ⚠️ It stays an EXCEPTION by default and an explicit argument to bypass,
+            // because a flag that defaults to lenient is a guard nobody has.
+            if (!ignoreSimulationStamp)
+            {
+                throw new InvalidOperationException(
+                    $"this policy was trained against simulation {simulationUuid}, and this build is {SimulationStamp.Uuid}");
+            }
         }
 
         if (actionEncoding != SimulationStamp.ActionEncodingVersion)
@@ -203,13 +224,13 @@ public sealed class PolicyNetwork
     }
 
     /// <summary>Loads a checkpoint from a path.</summary>
-    public static PolicyNetwork Load(string path)
+    public static PolicyNetwork Load(string path, bool ignoreSimulationStamp = false)
     {
         ArgumentNullException.ThrowIfNull(path);
 
         using var file = File.OpenRead(path);
 
-        return Load(file);
+        return Load(file, ignoreSimulationStamp);
     }
 
     /// <summary>

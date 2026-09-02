@@ -208,9 +208,21 @@ public sealed class BotPopulationService
         // ⚠️ Every site that wants the macro layer asks ScriptedBot.Of, never
         // `is ScriptedBot`. See IWrapsScriptedBot for what breaks otherwise, and
         // note the Query assignment below still reaches the right object.
-        IInputSource source = options.SearchMicro is { } search
-            ? new SearchBot(new RolloutSearch(search), bot)
-            : bot;
+        // ⚠️ ONE micro-controller or none, and refused rather than ranked. The
+        // same rule HeadlessMatch.WrapInPolicy enforces, for the same reason: two
+        // arms that can both be on is an experiment nobody can describe.
+        if (options.Policy is not null && options.SearchMicro is not null)
+        {
+            throw new ArgumentException(
+                "a server runs one micro-controller, not two: Policy and SearchMicro are both set",
+                nameof(options));
+        }
+
+        IInputSource source = options.Policy is { } policy
+            ? new PolicyBot(policy, bot)
+            : options.SearchMicro is { } search
+                ? new SearchBot(new RolloutSearch(search), bot)
+                : bot;
 
         var slot = _server.AddBot(name, team, playerClass, source);
 

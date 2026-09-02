@@ -81,6 +81,12 @@ public sealed class WrappedBotVisibilityTests
     {
         var options = new ServerOptions
         {
+            // ⛔ ANY FREE PORT. This test bound the default 8190 and passed only
+            // while nothing else held it — it went red the moment a real server was
+            // running on this machine for a playtest, which is an environment this
+            // test has no business caring about. ServerHarness has always done this.
+            Port = 0,
+
             MapDirectory = MapDirectory.Resolve(),
             NavCacheDirectory = MapDirectory.ResolveNav(),
             Map = "ctf_truefort",

@@ -59,7 +59,8 @@ public readonly record struct BotPopulationOptions(
     int Difficulty = 3,
     string NamePrefix = "[BOT] ",
     RolloutOptions? SearchMicro = null,
-    PlayerClass[]? AllowedClasses = null)
+    PlayerClass[]? AllowedClasses = null,
+    PolicyNetwork? Policy = null)
 {
     /// <summary>
     /// The reference's own <c>[Bots]</c> defaults.
@@ -94,7 +95,8 @@ public readonly record struct BotPopulationOptions(
         Difficulty: 3,
         NamePrefix: "[BOT] ",
         SearchMicro: null,
-        AllowedClasses: null);
+        AllowedClasses: null,
+        Policy: null);
 }
 
 /// <summary>
