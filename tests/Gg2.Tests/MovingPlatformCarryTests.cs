@@ -28,24 +28,29 @@ namespace Gg2.Tests;
 /// <c>KillBoxes.CollisionStep</c> has, and for the same reason.
 /// </para>
 /// <para>
-/// ⛔ <b>WHAT IS STILL UNCOVERED, measured rather than estimated.</b> Neutralising
-/// <see cref="MovingPlatforms.Carry"/> now fails seven of the eight tests here
-/// (the survivor is <see cref="TheRoundedPairCatchesUpAtTheEndOfTheTick"/>, which
-/// is about <c>EndStep</c>'s bookkeeping and correctly does not depend on the
-/// carry). But neutralising <c>PushOut</c> <b>alone</b> still leaves the entire
-/// suite green — <b>2,609 passing</b>. So:
-/// <list type="bullet">
-/// <item><b>Uncovered: all of <c>PushOut</c></b> — the platform driving into
-/// somebody, the rewind, and the roll-back that puts back anyone who did not end
-/// up on top. That roll-back is the subtlety the port's own remarks flag, and
-/// nothing tests it.</item>
-/// <item><b>Uncovered: <c>StandOn</c>'s blocked branch</b> — a rider pinned
-/// against a wall is left where they are rather than shoved into it. Needs a
-/// platform placed against real geometry.</item>
-/// </list>
-/// ⚠️ Both need the character positioned in the swept volume rather than on top,
-/// which is a geometry problem this fixture's search helper does not solve.
-/// <b>Do not read the seven-of-eight above as covering the carry.</b>
+/// ⛔ <b>WHAT IS COVERED AND WHAT IS NOT, measured rather than estimated.</b>
+/// Neutralising <see cref="MovingPlatforms"/>' carry fails seven of the ten tests
+/// here; neutralising the push-out alone fails
+/// <see cref="ThePushOutCarriesSomebodyARisingPlatformDrivesInto"/>; and deleting
+/// the roll-back's restore fails
+/// <see cref="ThePushOutRollsBackSomebodyItMerelyBrushes"/> — it leaves the
+/// character displaced by 0.39px, which is precisely the teleport that branch
+/// exists to prevent.
+/// </para>
+/// <para>
+/// ⚠️ <b>Still uncovered: the blocked-destination branch.</b> Both
+/// <c>StandOn</c> and the push-out refuse to move a rider whose destination is
+/// not <c>PlaceFree</c> — somebody pinned against a wall is left where they are
+/// rather than shoved into it. Measured for <c>StandOn</c>: making it ignore
+/// <c>PlaceFree</c> entirely leaves the whole suite green at <b>2,611</b>. It
+/// needs a platform placed against real map geometry, which every fixture here
+/// deliberately avoids by working on open ground.
+/// </para>
+/// <para>
+/// ⚠️ Three of the ten assert an ABSENCE and would pass on a deleted carry, so
+/// each states its own control in the same test. That is not decoration: an
+/// earlier draft of this file had four such tests with no controls, all ten
+/// passed, and neutralising the carry failed only four of them.
 /// </para>
 /// </remarks>
 public sealed class MovingPlatformCarryTests
@@ -378,6 +383,176 @@ public sealed class MovingPlatformCarryTests
         // The control: the same platform WITH its mask carries the same rider.
         Assert.Equal(0, CarriedY(maskless: true));
         Assert.NotEqual(0, CarriedY());
+    }
+
+    /// <summary>The integer step this platform is about to take.</summary>
+    /// <remarks>
+    /// ⚠️ Taken by running <see cref="MovingPlatforms.Step"/> on a COPY rather
+    /// than by assuming a sign convention. The step goes through
+    /// <c>point_direction</c> and <c>cos</c>/<c>sin</c>, so a "purely vertical"
+    /// platform's horizontal component is 6.1e-17 rather than 0 — deriving it
+    /// here would be a second opinion about arithmetic the port is deliberately
+    /// faithful to.
+    /// </remarks>
+    private static (double X, double Y) StepOf(
+        in MovingPlatformDefinition definition, in MovingPlatformState platform)
+    {
+        var probe = platform;
+        MovingPlatforms.Step(definition, ref probe);
+
+        return (Gml.Round(probe.X) - platform.RoundedX, Gml.Round(probe.Y) - platform.RoundedY);
+    }
+
+    /// <summary>
+    /// A spot in the platform's <b>swept volume</b>: clear of it now, not
+    /// standing on it, and overlapping where it is about to be.
+    /// </summary>
+    /// <param name="fromAbove">
+    /// True to want a spot the platform reaches by moving VERTICALLY into it —
+    /// the character ends up on top and is carried. False to want one it reaches
+    /// HORIZONTALLY, where the character ends up beside it and is rolled back.
+    /// </param>
+    /// <remarks>
+    /// ⛔ <b>These are <see cref="MovingPlatforms"/>' own three entry conditions
+    /// for the push-out</b>, in its order — <c>!Meets(x, y)</c>,
+    /// <c>!Meets(x, y + 1)</c>, <c>Meets(x - stepX, y - stepY)</c>. Searched
+    /// rather than computed, for the same reason <see cref="PutRiderOnTop"/>
+    /// searches: the answer depends on three different origin conventions, and a
+    /// fixture that re-derives them is a fixture that can disagree with the code
+    /// about what it is testing.
+    /// </remarks>
+    private static (double X, double Y)? FindSweptSpot(
+        in MovingPlatformDefinition definition,
+        in MovingPlatformState platform,
+        double stepX,
+        double stepY,
+        bool fromAbove)
+    {
+        var probe = CharacterState.Fresh(PlayerClass.Scout, Team.Red);
+        var box = probe.Box;
+        var collider = ColliderFor(definition, platform);
+
+        for (var dy = -64.0; dy <= 64; dy++)
+        {
+            for (var dx = -64.0; dx <= 64; dx++)
+            {
+                var x = platform.RoundedX + dx;
+                var y = platform.RoundedY + dy;
+
+                if (collider.Meets(box, x, y) || collider.Meets(box, x, y + 1))
+                    continue;
+
+                if (!collider.Meets(box, x - stepX, y - stepY))
+                    continue;
+
+                // Which shift alone produces the overlap tells the two apart.
+                var vertical = collider.Meets(box, x, y - stepY);
+
+                if (vertical == fromAbove)
+                    return (x, y);
+            }
+        }
+
+        return null;
+    }
+
+    private static void Put(ref WorldState state, int slot, double x, double y, double vspeed)
+    {
+        var character = CharacterState.Fresh(PlayerClass.Scout, Team.Red);
+        character.X = x;
+        character.Y = y;
+        character.Facing = 1;
+        character.VSpeed = vspeed;
+
+        state.Characters[slot] = character;
+        state.Weapons[slot] = WeaponState.Spawn(PlayerClass.Scout, x, y);
+        state.Alive[slot] = true;
+        state.AddPlayer(slot);
+        state.Players[slot].Team = Team.Red;
+        state.Players[slot].Class = PlayerClass.Scout;
+    }
+
+    /// <summary>
+    /// ⛔ The push-out's carried branch: a rising platform drives into somebody
+    /// just above it, backs them out onto its top, and takes them with it.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The rewind moves them the "wrong" way on purpose.</b>
+    /// <c>good_move_contact_solid</c> heads towards
+    /// <c>(x - stepX, y - stepY)</c> — <em>against</em> the platform's motion —
+    /// until it touches the platform at its OLD position. For a rising platform
+    /// that is downwards, which lands the character on the old top surface; the
+    /// carry then lifts them by the step. The net move is therefore SMALLER than
+    /// the step, and that is the signature this asserts rather than a clean
+    /// one-step lift.
+    /// </remarks>
+    [Fact]
+    public void ThePushOutCarriesSomebodyARisingPlatformDrivesInto()
+    {
+        var (state, definitions) = Scene();
+        var platform = state.MovingPlatforms[0];
+        var (stepX, stepY) = StepOf(definitions[0], platform);
+
+        var spot = FindSweptSpot(definitions[0], platform, stepX, stepY, fromAbove: true);
+
+        Assert.True(spot is not null, "no spot in the rising platform's swept volume");
+
+        Put(ref state, 0, spot!.Value.X, spot.Value.Y, vspeed: 3);
+        MovingPlatforms.EndStep(World, ref state, definitions);
+
+        // Carried: lifted, and the vspeed zeroed exactly as a rider's is.
+        Assert.True(
+            state.Characters[0].Y < spot.Value.Y,
+            $"the platform drove into them and left them at {state.Characters[0].Y}, "
+            + $"not above {spot.Value.Y}");
+
+        Assert.Equal(0, state.Characters[0].VSpeed);
+    }
+
+    /// <summary>
+    /// ⛔ The push-out's ROLL-BACK: somebody a platform merely brushes is put
+    /// back exactly where they were.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The trap this branch exists for.</b> The rewind has already moved
+    /// the character by the time the "did they end up on top" test runs, so
+    /// leaving them there would teleport anyone a platform passed near. The
+    /// reference restores the original position and the port has to as well.
+    /// <para>
+    /// ⛔ <b>This assertion is an ABSENCE, so it needs its meaning from
+    /// elsewhere</b> — an unchanged position is also what a push-out that never
+    /// ran produces. Two things supply it: the carried case above proves the
+    /// fixture reaches the push-out at all, and the roll-back was
+    /// mutation-checked — deleting the restore leaves the character displaced and
+    /// fails this test. Neither is visible from the assertion alone, which is why
+    /// it is written down here.
+    /// </para>
+    /// <para>
+    /// ⚠️ The vspeed is asserted UNTOUCHED, which is the half that separates a
+    /// roll-back from a carry: only the carried branch zeroes it.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ThePushOutRollsBackSomebodyItMerelyBrushes()
+    {
+        // A platform travelling sideways: whoever it drives into ends up beside
+        // it, never on top, so the roll-back is the only reachable outcome.
+        var (state, definitions) = Scene(top: 0, left: 64);
+        var platform = state.MovingPlatforms[0];
+        var (stepX, stepY) = StepOf(definitions[0], platform);
+
+        Assert.True(stepX != 0, "the sideways platform did not move sideways");
+
+        var spot = FindSweptSpot(definitions[0], platform, stepX, stepY, fromAbove: false);
+
+        Assert.True(spot is not null, "no spot beside the sideways platform's swept volume");
+
+        Put(ref state, 0, spot!.Value.X, spot.Value.Y, vspeed: 3);
+        MovingPlatforms.EndStep(World, ref state, definitions);
+
+        Assert.Equal(spot.Value.X, state.Characters[0].X);
+        Assert.Equal(spot.Value.Y, state.Characters[0].Y);
+        Assert.Equal(3, state.Characters[0].VSpeed);
     }
 
     /// <summary>
