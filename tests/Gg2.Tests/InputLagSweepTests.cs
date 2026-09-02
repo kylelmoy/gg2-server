@@ -1,6 +1,8 @@
+using Gg2.Bots;
 using Gg2.Maps;
 using Gg2.Parity;
 using Gg2.Protocol;
+using Gg2.Server;
 
 namespace Gg2.Tests;
 
@@ -32,12 +34,13 @@ namespace Gg2.Tests;
 /// tick, so every window is an independent measurement.
 /// </para>
 /// <para>
-/// ⚠️ <b>What this gates is the RECORDING, not the port.</b> Run against a
-/// reference trace it says the reference's stream is in phase and the port's
-/// physics agrees with it — which is what validates the instrument. Pointing it
-/// at a recording made by this port's own <c>--record</c> is what would have
-/// caught <c>486ef3e</c>, and that is not wired up here: no port-made recording
-/// is checked in. docs/PARITY.md says so in the same words.
+/// ⚠️ <b>A reference trace and a port recording gate DIFFERENT things, and both
+/// are here.</b> Against a reference trace the sweep says the reference's stream
+/// is in phase and the port's physics agrees with it — that validates the
+/// instrument, but it grades the port's PHYSICS and never its server. Against a
+/// recording this server made itself it grades what the server PUBLISHES, which
+/// is where <c>486ef3e</c> lived. See
+/// <see cref="ThisServersOwnRecordingIsInPhase"/>.
 /// </para>
 /// </remarks>
 public class InputLagSweepTests
@@ -59,9 +62,13 @@ public class InputLagSweepTests
     /// dominated by them at every lag equally — which would flatten the very
     /// curve this reads.
     /// </remarks>
-    private static long ErrorAtLag(string fixture, int lag)
+    private static long ErrorAtLag(string fixture, int lag) =>
+        ErrorAtLagOf(
+            Path.Combine(AppContext.BaseDirectory, "Fixtures", fixture + ".trace"), fixture, lag);
+
+    /// <inheritdoc cref="ErrorAtLag"/>
+    private static long ErrorAtLagOf(string path, string name, int lag)
     {
-        var path = Path.Combine(AppContext.BaseDirectory, "Fixtures", fixture + ".trace");
         Assert.True(File.Exists(path), $"missing {path}");
 
         var trace = Trace.Decode(File.ReadAllBytes(path));
@@ -72,7 +79,7 @@ public class InputLagSweepTests
         {
             Compare = Fields.Trajectory,
             InputLag = lag,
-        }.Replay(fixture, trace.Header.Map, ticks, ReplayMode.OpenLoop, stopAtFirstBadTick: false);
+        }.Replay(name, trace.Header.Map, ticks, ReplayMode.OpenLoop, stopAtFirstBadTick: false);
 
         return report.PercentileXError(99) + report.PercentileYError(99);
     }
@@ -85,6 +92,57 @@ public class InputLagSweepTests
             curve[lag] = ErrorAtLag(fixture, lag);
 
         return curve;
+    }
+
+    private static IReadOnlyDictionary<int, long> SweepTrace(string path)
+    {
+        var curve = new Dictionary<int, long>();
+
+        for (var lag = -MaxLag; lag <= MaxLag; lag++)
+            curve[lag] = ErrorAtLagOf(path, Path.GetFileName(path), lag);
+
+        return curve;
+    }
+
+    /// <summary>
+    /// Runs a bot match with <c>--record</c> on and hands back the trace it
+    /// wrote.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ The recorder writes its header on <c>Close</c>, so the harness has to
+    /// be disposed before the file is readable — that is what the scope below is
+    /// for, not tidiness.
+    /// </remarks>
+    private static string RecordABotMatch(string directory)
+    {
+        using (var harness = new ServerHarness(options =>
+        {
+            options.Map = "gg_debug";
+            options.RecordingDirectory = directory;
+
+            // ⚠️ Without nav the bots never move, and a recording of six
+            // characters standing still is in phase at every lag — the curve goes
+            // flat and the gate becomes vacuous. TheSweepIsNotFlat... is what
+            // notices, and it is why that test exists for this fixture too.
+            options.NavCacheDirectory = MapDirectory.ResolveNav();
+            options.Bots = BotPopulationOptions.Default with
+            {
+                Enabled = true,
+                FillToPlayers = 6,
+                MaxBots = 6,
+                MinHumans = 0,
+            };
+        }))
+        {
+            harness.TickUntil(() => harness.Server.RosterCount > 1, "the bots joined");
+            harness.Tick(900);
+        }
+
+        var traces = Directory.GetFiles(directory, "*.trace");
+
+        Assert.True(traces.Length > 0, $"the server recorded nothing into {directory}");
+
+        return traces[0];
     }
 
     private static string Describe(IReadOnlyDictionary<int, long> curve) =>
@@ -141,6 +199,60 @@ public class InputLagSweepTests
         Assert.True(
             curve[-1] > curve[0],
             $"a -1 tick lag cost nothing, so this fixture cannot detect an early keystate [{Describe(curve)}]");
+    }
+
+    /// <summary>
+    /// ⛔ <b>The configuration that would have caught <c>486ef3e</c></b>: this
+    /// server's OWN recording is in phase.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Grades what the server PUBLISHES, which the reference fixtures
+    /// cannot.</b> Replaying a reference trace exercises the port's physics
+    /// against somebody else's stream; replaying the port's own recording asks
+    /// whether the keys this server put on the wire explain the positions it put
+    /// beside them. <c>486ef3e</c> was exactly that mismatch — the simulation had
+    /// the right keys and only the broadcast was stale — so it is invisible to
+    /// every other test in this file.
+    /// <para>
+    /// ⚠️ Both halves in one test rather than two, because the recording is the
+    /// expensive part: a 900-tick bot match per lag, five times. Splitting them
+    /// would double it for no extra coverage.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ThisServersOwnRecordingIsInPhase()
+    {
+        var directory = Path.Combine(
+            Path.GetTempPath(), "gg2-tests", $"lagsweep-{Guid.NewGuid():N}");
+
+        try
+        {
+            var curve = SweepTrace(RecordABotMatch(directory));
+            var best = curve.OrderBy(e => e.Value).ThenBy(e => Math.Abs(e.Key)).First().Key;
+
+            Assert.True(
+                best == 0,
+                $"this server's own keys explain its own positions best at lag {best}, not 0 — "
+                + $"the broadcast is publishing a different tick's input than it simulated "
+                + $"[{Describe(curve)}]");
+
+            // ⚠️ The vacuity half. Bots standing still are in phase at every lag.
+            Assert.True(
+                curve[1] > curve[0] && curve[-1] > curve[0],
+                $"being a tick out cost nothing, so this recording could not have "
+                + $"detected a stale keystate [{Describe(curve)}]");
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch (IOException)
+            {
+                // A leftover temp trace is not worth failing a test run over.
+            }
+        }
     }
 
     /// <summary>

@@ -2559,10 +2559,24 @@ wire units, summed over x and y:
 | `reference-gg_debug-closedtdm` | 174 | 94 | **4** | 287 | 337 |
 
 ⚠️ **A one-tick phase error is a 20-70x change in prediction error**, so this is
-not a marginal statistic that needs care to read. ⚠️ **`486ef3e` would only have
-shown against a PORT-made recording**, though: run on a reference trace the sweep
-grades the reference's stream and the port's physics, not the port's server.
-Pointing it at `--record` output is the missing half and is not wired up.
+not a marginal statistic that needs care to read.
+
+✅ **And it is pointed at the port too, which is the half that closes the loop.**
+A reference trace grades the reference's stream and the port's PHYSICS; a
+recording this server made with `--record` grades what the server PUBLISHES,
+which is where `486ef3e` lived. `ThisServersOwnRecordingIsInPhase` records a
+900-tick bot match and sweeps it:
+
+| build | −2 | −1 | 0 | +1 | +2 | argmin |
+|---|---|---|---|---|---|---|
+| **HEAD** | 180 | 102 | **4** | 109 | 186 | **0** ✅ |
+| `486ef3e` reintroduced | 219 | 134 | 102 | **8** | 81 | **+1** ⛔ |
+
+⛔ **That second row is the bug that started the hunt, reproduced and caught.**
+The mutation is one deletion — the `ApplyInput` loop above `WriteStateUpdate`, so
+`KeyState` is written only inside `MatchSimulation.Tick` — and the curve inverts
+exactly as the design predicted: the keys filed under tick N are really tick
+N−1's, so the motion is explained by the next row down.
 
 ### ⚠️ The trap: coverage, and it has bitten this repo twice
 
@@ -2651,16 +2665,15 @@ started this hunt is the one the framing instruments cannot see at all.
 
 ### ⛔ Known holes in the instruments as built
 
+✅ **One of the three is closed**: the lag sweep now runs against a recording this
+server makes in-test, and the `486ef3e` mutation is caught. Two remain.
+
 - **The fingerprint groups by TICK, not by flush.** One tick is one flush in this
   server so they coincide, but a change that flushed twice in a tick would put
   both in one group and go unnoticed. Found by mutation, not by reasoning:
   *adding* a second `FlushBroadcast()` passes every test, while *moving* the
   flush — the real `cdaa62a` shape — is caught. Closing it needs the sidecar's
   timing or an assertion that the server flushes at most once a tick.
-- **The lag sweep is not pointed at the port.** It runs on checked-in reference
-  traces, which validates the instrument; the configuration that would have
-  caught `486ef3e` needs a `--record` recording of this server replayed the same
-  way, and no port-made recording is checked in.
 - **`FlushFrames.Group` has never been run against a real reference recording.**
   Its gap heuristic is unvalidated until somebody records a framed session and
   checks the grouping against `buffer_size(global.sendBuffer)`.
