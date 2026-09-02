@@ -118,8 +118,7 @@ public sealed class RolloutThreadingTests
     [Fact]
     public void ThreadsAndAContinuationPolicyAreRefusedTogether()
     {
-        var policy = PolicyNetwork.Load(
-            Path.Combine(AppContext.BaseDirectory, "Fixtures", "policy", "ppo_final.npz"));
+        var policy = PolicyFixture.Load();
 
         var error = Assert.Throws<ArgumentException>(
             () => new RolloutSearch(new RolloutOptions(Threads: 4, ContinuationPolicy: policy)));

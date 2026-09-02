@@ -23,8 +23,7 @@ namespace Gg2.Tests;
 /// </remarks>
 public sealed class ContinuationTests
 {
-    private static PolicyNetwork Policy() =>
-        PolicyNetwork.Load(Path.Combine(AppContext.BaseDirectory, "Fixtures", "policy", "ppo_final.npz"));
+    private static PolicyNetwork Policy() => PolicyFixture.Load();
 
     /// <summary>
     /// Two soldiers 80px apart on <c>ctf_truefort</c> — close enough that a rocket

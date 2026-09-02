@@ -2479,6 +2479,11 @@ is overloaded does not stop you reading it.**
 `checkpoints/vlong_s0/ppo_final.npz`, 19,355 parameters, action repeat 4, layout
 v1, encoding v2, `SIM_UUID 7ff5940d97aa7bed` — **this head, no migration**.
 
+⚠️ **"This head" expired on 2026-09-02.** The moving-platform carry took
+`SIM_UUID` to `5dac8a5e7c37ce3a` and the checkpoint has not moved with it. See
+"The checkpoint is a FIXTURE now" below for what this repo does about that; the
+short version is **nothing here waits on `gg2-rl` any more**.
+
 ⚠️ **Quote 54.1% / 53.8%, not the artefact's own 58.7% / 57.7%.** The second pair
 carries selection over two seeds; the first is the four-seed mean at the standard
 1200 iterations. The checkpoint was chosen by a rule fixed before looking — the
@@ -2547,6 +2552,59 @@ grounds. The macro layer owns objectives; the policy never pursues them.
 weights format"** — flagged before starting so the decision was taken rather than
 drifted into. ✅ The user took it (*"Full phase 4"*), and the list is struck
 through under "Out of scope".
+
+## ⛔ The checkpoint is a FIXTURE now, not a policy (2026-09-02)
+
+**The carry moved `SIM_UUID` from `7ff5940d97aa7bed` to `5dac8a5e7c37ce3a` and 25
+tests went red on that one cause.** They were correct to: a policy trained against
+a different simulation is acting on numbers that do not mean what it learned they
+meant, and `PolicyNetwork.Load` refuses rather than warns. But the only route back
+to green ran through **another repo** — `gg2-rl` re-stamping or retraining — and
+the user's call was that the trained policy may not be carried forward at all.
+**A suite that cannot be made green from inside this repo is not this repo's
+suite.**
+
+⚠️ **What changed is what is asked of the file, not the file.** The bytes are
+untouched and still say `7ff5940d97aa7bed`. `tests/Gg2.Tests/PolicyFixture.cs` is
+the one place that knows this, and it offers exactly two things:
+
+| | What it is | Who uses it |
+|---|---|---|
+| `PolicyFixture.Load()` | the file as it is, with `ignoreSimulationStamp` | everything that just needs *a network* — `PolicyMatchTests`, `ContinuationTests`, `SearchBotTests`, `RolloutThreadingTests`, `NpyMemoTests`, the numpy oracle in `PolicyNetworkTests` |
+| `PolicyFixture.MintedForThisBuild` | a temp copy of the same weights carrying **this build's** stamp | `EnvProtocolTests`, and only it |
+
+⛔ **The minted copy exists so that one guard is not weakened to suit a test.**
+`EnvServer.LoadPolicy` refuses a foreign stamp *by design* — that refusal is the
+trainer's protection and the reason protocol v8 reports the stamp in its reply.
+Passing an override down the wire, or adding an ignore flag to the protocol, would
+delete the guard along with the red. Minting a checkpoint the server legitimately
+accepts tests the accept path without touching the refusal.
+
+⚠️ **The refusal is now gated in both directions, which it was not before.**
+
+- `TheCheckedInCheckpointIsRefusedWithoutTheOverride` — the shipped file is
+  foreign and plain `Load` says so, naming both stamps.
+- `ACheckpointStampedForThisBuildIsAccepted` — **the half that was missing.** Every
+  other caller passes the override, so a `Load` that refused *everything* would
+  have left the suite green.
+- `AForeignStampIsRefused` — starts from the minted copy and corrupts its stamp.
+  It used to corrupt the checked-in one, which stopped meaning anything the moment
+  that file became foreign on its own.
+
+⚠️ **`PolicyFixture.TrainedStamp` is hard-coded on purpose, and it is the
+falsification condition.** A helper that read the stamp out of the file would
+absorb a retrain silently — and a retrained checkpoint is the one event that
+should send somebody back to this section. If `ppo_final.npz` is ever replaced
+with one this build accepts, `TheCheckpointDescribesItselfAndItsOwnSimulation`
+goes red, and **the fix is to delete the two overrides, not to update the
+constant.**
+
+⚠️ **This does not make the policy valid and nothing here claims it is.** What the
+fixture is good for is unchanged and is real: 19,355 measured parameters and a
+numpy oracle, which is what `TheForwardPassAgreesWithTheTrainer` compares against
+logit for logit. What it is no longer good for is any statement about how well a
+bot plays. **Every phase-4 behavioural number in this document was measured on a
+simulation that no longer exists** — re-measure before quoting one.
 
 ## Goal conditioning — `gg2-rl` phase 4's hybrid boundary (2026-08-30)
 

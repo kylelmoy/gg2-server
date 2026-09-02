@@ -184,8 +184,7 @@ public sealed class NpyMemoTests
     [Fact]
     public void TheCheckedInCheckpointCarriesADuplicateAndStillLoads()
     {
-        var policy = PolicyNetwork.Load(
-            Path.Combine(AppContext.BaseDirectory, "Fixtures", "policy", "ppo_final.npz"));
+        var policy = PolicyFixture.Load();
 
         Assert.Equal(ObservationWriter.Length, policy.ObservationLength);
     }

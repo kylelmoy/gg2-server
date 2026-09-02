@@ -14,6 +14,16 @@ namespace Gg2.Tests;
 /// read out of that repo's working tree, because a gate that depends on another
 /// repo's uncommitted state is not a gate.
 /// <para>
+/// ⛔ <b>Its stamp is no longer this build's, and nothing here waits for that to
+/// be fixed.</b> The moving-platform carry bumped <c>SIM_UUID</c> on 2026-09-02;
+/// the checkpoint still says <c>7ff5940d97aa7bed</c> and always will. Every test
+/// below treats it as a <b>numerics fixture</b> — real weights, a real numpy
+/// oracle — rather than as a policy this project intends to run, and reaches it
+/// through <see cref="PolicyFixture"/>, which is where that decision is written
+/// down. The refusal itself is still gated, on a checkpoint minted for this build
+/// and then corrupted, so the guard is tested without a live checkpoint existing.
+/// </para>
+/// <para>
 /// ⚠️ <b>The fixture compares LOGITS against numpy, not just the argmax.</b> Two
 /// implementations can agree on every head and still differ — a wrong head offset
 /// produces a plausible ranking over the wrong actions, which is the failure
@@ -30,20 +40,72 @@ namespace Gg2.Tests;
 /// </remarks>
 public sealed class PolicyNetworkTests
 {
-    private static string Directory => Path.Combine(AppContext.BaseDirectory, "Fixtures", "policy");
+    private static string Directory => PolicyFixture.Directory;
 
-    private static string Checkpoint => Path.Combine(Directory, "ppo_final.npz");
+    private static string Checkpoint => PolicyFixture.Checkpoint;
 
-    private static PolicyNetwork Load() => PolicyNetwork.Load(Checkpoint);
+    private static PolicyNetwork Load() => PolicyFixture.Load();
 
+    /// <summary>
+    /// The checkpoint describes itself, and it describes a simulation that is not
+    /// this one.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The stamp assertion is the falsification condition for
+    /// <see cref="PolicyFixture"/>.</b> Everything that type says rests on this
+    /// file being the one `gg2-rl` handed over, trained against
+    /// <c>7ff5940d97aa7bed</c>. If a retrained checkpoint is ever dropped in, this
+    /// goes red rather than absorbing it — at which point the overrides
+    /// <c>PolicyFixture.Load</c> and <c>MintedForThisBuild</c> exist for should
+    /// come out, not be updated.
+    /// </remarks>
     [Fact]
-    public void TheCheckpointDescribesItselfAndMatchesThisBuild()
+    public void TheCheckpointDescribesItselfAndItsOwnSimulation()
     {
         var policy = Load();
 
         Assert.Equal(ObservationWriter.Length, policy.ObservationLength);
-        Assert.Equal(SimulationStamp.Uuid, policy.SimulationUuid);
+        Assert.Equal(PolicyFixture.TrainedStamp, policy.SimulationUuid);
         Assert.Equal(4, policy.ActionRepeat);
+        Assert.True(policy.HeadShape.SequenceEqual(ActionDecoder.HeadShape));
+
+        Assert.NotEqual(SimulationStamp.Uuid, policy.SimulationUuid);
+    }
+
+    /// <summary>
+    /// Loading the checked-in checkpoint without the override is a refusal.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>This is the red the 2026-09-02 carry produced, kept as an
+    /// assertion.</b> 25 tests failed on it; they now say what they meant, and this
+    /// one holds the fact they were accidentally carrying — the shipped checkpoint
+    /// does not belong to this build and <c>Load</c> says so rather than playing it.
+    /// </remarks>
+    [Fact]
+    public void TheCheckedInCheckpointIsRefusedWithoutTheOverride()
+    {
+        var refusal = Assert.Throws<InvalidOperationException>(() => PolicyNetwork.Load(Checkpoint));
+
+        Assert.Contains(PolicyFixture.TrainedStamp, refusal.Message, StringComparison.Ordinal);
+        Assert.Contains(SimulationStamp.Uuid, refusal.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A checkpoint carrying this build's stamp loads with no override at all.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The accept path, which the test above cannot cover.</b> Without it a
+    /// <c>Load</c> that refused <em>every</em> checkpoint would pass everything
+    /// here — and the whole suite would still be green, because every other caller
+    /// passes the override.
+    /// </remarks>
+    [Fact]
+    public void ACheckpointStampedForThisBuildIsAccepted()
+    {
+        var policy = PolicyNetwork.Load(PolicyFixture.MintedForThisBuild);
+
+        Assert.Equal(SimulationStamp.Uuid, policy.SimulationUuid);
+        Assert.Equal(ObservationWriter.Length, policy.ObservationLength);
         Assert.True(policy.HeadShape.SequenceEqual(ActionDecoder.HeadShape));
     }
 
@@ -178,11 +240,14 @@ public sealed class PolicyNetworkTests
     [Fact]
     public void AForeignStampIsRefused()
     {
-        var bytes = File.ReadAllBytes(Checkpoint);
+        // ⚠️ The MINTED copy, because this has to start from a checkpoint this
+        // build accepts. Corrupting the checked-in one proves nothing — it is
+        // already refused, and the test would pass on a Load that never looked.
+        var bytes = File.ReadAllBytes(PolicyFixture.MintedForThisBuild);
         var text = System.Text.Encoding.ASCII.GetString(bytes);
         var at = text.IndexOf(SimulationStamp.Uuid, StringComparison.Ordinal);
 
-        Assert.True(at > 0, "the stamp should be findable in the checkpoint");
+        Assert.True(at > 0, "the stamp should be findable in the minted checkpoint");
 
         // Flip one character of the stamp in place: same length, different value.
         bytes[at] = bytes[at] == (byte)'0' ? (byte)'1' : (byte)'0';

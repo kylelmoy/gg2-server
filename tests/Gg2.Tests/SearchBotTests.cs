@@ -190,9 +190,7 @@ public sealed class SearchBotTests
     public void TheTwoArmsHandOverAtTheSameDistances(int gap)
     {
         var policyWorld = World();
-        var policy = new PolicyBot(
-            PolicyNetwork.Load(Path.Combine(AppContext.BaseDirectory, "Fixtures", "policy", "ppo_final.npz")),
-            Scripted(policyWorld));
+        var policy = new PolicyBot(PolicyFixture.Load(), Scripted(policyWorld));
 
         var policyRed = Duel(policyWorld, gap);
 

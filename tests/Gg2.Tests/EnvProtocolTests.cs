@@ -728,8 +728,13 @@ public sealed class EnvProtocolTests : IDisposable
         return Concat(Int(bytes.Length), bytes);
     }
 
-    private static string PolicyPath =>
-        Path.Combine(AppContext.BaseDirectory, "Fixtures", "policy", "ppo_final.npz");
+    /// <summary>
+    /// ⚠️ <b>The minted copy, not the checked-in fixture.</b>
+    /// <c>EnvServer.LoadPolicy</c> refuses a foreign stamp by design and the
+    /// fixture's is foreign — see <see cref="PolicyFixture"/>. Testing this path
+    /// with the override would delete the guard it exists to exercise.
+    /// </summary>
+    private static string PolicyPath => PolicyFixture.MintedForThisBuild;
 
     /// <summary>
     /// A checkpoint loads, returns handle 1, and reports the stamp it was checked

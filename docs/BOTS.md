@@ -407,6 +407,26 @@ comparison answers "does this beat all-scripted" rather than the question actual
 asked. **Phase 4's 21-of-21 also becomes a statement about superseded physics**,
 which is a real loss to this project independent of what any new arm shows.
 
+✅ **It landed, and the prediction held to the letter (2026-09-02).** The carry
+took `SIM_UUID` to `5dac8a5e7c37ce3a`; **25 tests went red, every one of them a
+policy test**, and not one search or scripted test moved. The policy arm died
+exactly as described and the cost was exactly the one written down here in
+advance.
+
+⛔ **The repair is NOT a retrain, and that is a decision rather than an
+inability.** The user's call was that the trained policy may not be carried
+forward, so this repo stopped waiting on `gg2-rl`: the checkpoint is now a
+**fixture** — real weights and a numpy oracle for `PolicyNetwork`'s arithmetic —
+reached through `tests/Gg2.Tests/PolicyFixture.cs`, and nothing in the suite
+depends on that repo doing anything. `docs/ENV.md`, "The checkpoint is a FIXTURE
+now, not a policy".
+
+⚠️ **So the loss above is now realised, not hypothetical**: every phase-4
+behavioural number in `docs/ENV.md` describes a simulation this build no longer
+is. The 21-of-21 death-share result is history, not a current claim, and
+**re-measuring it needs a checkpoint trained against this head** — which nobody
+has and nobody is currently making.
+
 ---
 
 ## ⛔ Measuring a bot change

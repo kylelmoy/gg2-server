@@ -27,8 +27,7 @@ namespace Gg2.Tests;
 /// </remarks>
 public sealed class PolicyMatchTests
 {
-    private static PolicyNetwork Policy() =>
-        PolicyNetwork.Load(Path.Combine(AppContext.BaseDirectory, "Fixtures", "policy", "ppo_final.npz"));
+    private static PolicyNetwork Policy() => PolicyFixture.Load();
 
     /// <summary>
     /// The four classes the policy was trained on. Everything else is untrained
