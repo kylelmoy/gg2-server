@@ -110,10 +110,33 @@ internal static class Program
             File.WriteAllBytes(output, bytes);
         }
 
+        // ⛔ The read boundaries, which the trace format deliberately does not
+        // carry and which are the ONLY carrier of the flush boundary — the byte
+        // stream is identical whichever side of the flush a message was appended
+        // on. docs/PARITY.md, "Which flush a message rides". Written beside the
+        // trace rather than into it so every existing recording stays valid.
+        var frames = new FlushFrames { Marks = [.. Offsets(recorder.Chunks)] };
+        var framesPath = FlushFrames.PathFor(output);
+
+        File.WriteAllBytes(framesPath, frames.Encode());
+
         Console.WriteLine($"{bytes.Length} bytes in {recorder.Chunks.Count} reads over {seconds}s -> {output}");
+        Console.WriteLine($"{frames.Marks.Count} read boundaries -> {framesPath}");
 
         Summarise(bytes, recorder.Map, Flag(args, "--maps"));
         return 0;
+    }
+
+    /// <summary>Running byte offset of each recorded read.</summary>
+    private static IEnumerable<FrameMark> Offsets(IReadOnlyList<Recorder.Chunk> chunks)
+    {
+        var offset = 0;
+
+        foreach (var chunk in chunks)
+        {
+            yield return new FrameMark(offset, chunk.At);
+            offset += chunk.Bytes.Length;
+        }
     }
 
     private static int Replay(string[] args)

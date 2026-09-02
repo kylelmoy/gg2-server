@@ -2523,10 +2523,12 @@ independently on each side**, not a trace diff.
 it covers messages no bot session will ever emit — static, and it is the thing
 that goes red on a regression. Build this first.
 
-**2. A framed recording, for a lead/trail fingerprint.** `Recorder.Chunk(TimeSpan
-At, byte[] Bytes)` already captures timestamped read boundaries and
-`AllBytes()` throws them away. Persist them as a **`.frames` sidecar** rather
-than changing the trace format — that keeps `.trace` byte-for-byte what it is,
+**2. A framed recording, for a lead/trail fingerprint.** ✅ **BUILT** —
+`FlushFrames` and `FlushFingerprint` in `src/Gg2.Parity/FlushFrames.cs`,
+`gg2-parity record` writes the sidecar, `FlushFingerprintTests` is the gate.
+`Recorder.Chunk(TimeSpan At, byte[] Bytes)` already captured timestamped read
+boundaries and `AllBytes()` threw them away. They are persisted as a **`.frames`
+sidecar** rather than by changing the trace format — that keeps `.trace` byte-for-byte what it is,
 preserving all three reasons the format is raw bytes, and leaves every existing
 recording valid. Then group messages by flush and record, per group, which ones
 precede the state update and which follow it.
@@ -2539,13 +2541,28 @@ the quantity in question. Calibrate on a short run, then trust timing for long
 ones. The port side needs none of this: `--record` already tees inside
 `FlushBroadcast`, so its groups are exact by construction.
 
-**3. A lag sweep, for the half the other two cannot see.** ⚠️ **`486ef3e` — keys
+**3. A lag sweep, for the half the other two cannot see.** ✅ **BUILT** —
+`Replayer.InputLag` and `InputLagSweepTests`. ⚠️ **`486ef3e` — keys
 reaching clients a tick late — is a CONTENT-phase bug, and instruments 1 and 2
 both miss it entirely.** Catching it: re-simulate open-loop with the recorded
 keys shifted by L ∈ {−2…+2} and take the argmin of prediction error. A correct
 stream has argmin L = 0; that bug puts it at +1. It is self-diagnosing on a
 single side's recording, and running it against a reference recording validates
 the instrument rather than the port.
+
+✅ **Measured 2026-09-02, and the signal is enormous.** p99 open-loop drift in
+wire units, summed over x and y:
+
+| fixture | −2 | −1 | **0** | +1 | +2 |
+|---|---|---|---|---|---|
+| `reference-ctf_truefort-closedcombat` | 186 | 105 | **4** | 175 | 304 |
+| `reference-gg_debug-closedtdm` | 174 | 94 | **4** | 287 | 337 |
+
+⚠️ **A one-tick phase error is a 20-70x change in prediction error**, so this is
+not a marginal statistic that needs care to read. ⚠️ **`486ef3e` would only have
+shown against a PORT-made recording**, though: run on a reference trace the sweep
+grades the reference's stream and the port's physics, not the port's server.
+Pointing it at `--record` output is the missing half and is not wired up.
 
 ### ⚠️ The trap: coverage, and it has bitten this repo twice
 
@@ -2631,6 +2648,22 @@ the table; only the port's own stage flags can grade an instance.
 
 ⚠️ **Read the bottom row before deciding the table is enough.** The bug that
 started this hunt is the one the framing instruments cannot see at all.
+
+### ⛔ Known holes in the instruments as built
+
+- **The fingerprint groups by TICK, not by flush.** One tick is one flush in this
+  server so they coincide, but a change that flushed twice in a tick would put
+  both in one group and go unnoticed. Found by mutation, not by reasoning:
+  *adding* a second `FlushBroadcast()` passes every test, while *moving* the
+  flush — the real `cdaa62a` shape — is caught. Closing it needs the sidecar's
+  timing or an assertion that the server flushes at most once a tick.
+- **The lag sweep is not pointed at the port.** It runs on checked-in reference
+  traces, which validates the instrument; the configuration that would have
+  caught `486ef3e` needs a `--record` recording of this server replayed the same
+  way, and no port-made recording is checked in.
+- **`FlushFrames.Group` has never been run against a real reference recording.**
+  Its gap heuristic is unvalidated until somebody records a framed session and
+  checks the grouping against `buffer_size(global.sendBuffer)`.
 
 ## Tier 4 — behaviour scenarios
 

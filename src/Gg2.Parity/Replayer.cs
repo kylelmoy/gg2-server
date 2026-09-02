@@ -152,6 +152,31 @@ public sealed class Replayer(ITraceSimulation simulation)
     public bool UpdatesPrecedeTheirTick { get; init; } = true;
 
     /// <summary>
+    /// Feed each tick the keys and aim recorded <paramref name="InputLag"/>
+    /// ticks away, instead of its own. Zero — the default — is the real replay.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>This exists to be swept, not to be set.</b> docs/PARITY.md's
+    /// instrument 3: a stream whose inputs are in phase predicts best at lag 0,
+    /// and one whose server published each tick's keys a tick late predicts best
+    /// at <c>+1</c>. That is the whole signature of <c>486ef3e</c>, and it is a
+    /// CONTENT-phase bug the flush-boundary instruments cannot see at all.
+    /// <para>
+    /// ⚠️ <b>Only meaningful in <see cref="ReplayMode.OpenLoop"/>.</b> Closed
+    /// loop diverges on the first mismatch and never gets far enough for a
+    /// prediction error to mean anything; open loop re-anchors at every
+    /// position-bearing tick, so each window is an independent measurement of
+    /// how well those inputs explain the motion that followed.
+    /// </para>
+    /// <para>
+    /// ⚠️ The lag shifts <b>only the inputs</b>. Everything else — the events,
+    /// the fire seeds, the anchors — stays on its own tick, because the question
+    /// is which tick's keys explain this tick's motion.
+    /// </para>
+    /// </remarks>
+    public int InputLag { get; init; }
+
+    /// <summary>
     /// Print this slot's SIMULATED state on every tick in
     /// <see cref="DumpFrom"/>..<see cref="DumpTo"/>, or null for no dump.
     /// </summary>
@@ -282,7 +307,9 @@ public sealed class Replayer(ITraceSimulation simulation)
                 ReconcileControlPoints(tick, mismatches);
             }
 
-            Advance(tick);
+            // ⚠️ The inputs may come from a DIFFERENT tick — see InputLag. At
+            // the default of 0 this is `ticks[index]`, i.e. `tick` itself.
+            Advance(tick, ticks[Math.Clamp(index + InputLag, 0, ticks.Count - 1)]);
             replayed++;
 
             // A death is reported in the *next* tick's message block, for the
@@ -1076,14 +1103,31 @@ public sealed class Replayer(ITraceSimulation simulation)
             + $"moveStatus {c.MoveStatus} hp {c.Hp,4}");
     }
 
-    private void Advance(TraceTick tick)
+    /// <param name="tick">The tick being run, which sizes the input array.</param>
+    /// <param name="inputs">
+    /// The tick whose keys and aim to use. The same object as
+    /// <paramref name="tick"/> unless <see cref="InputLag"/> is set.
+    /// </param>
+    /// <remarks>
+    /// ⚠️ <b>The ROSTER comes from <paramref name="tick"/>, the keys from
+    /// <paramref name="inputs"/>.</b> A lagged tick can have a different number
+    /// of slots — somebody joined or left in between — and taking the length
+    /// from the wrong one would hand the simulation a roster it is not on. A
+    /// slot the lagged tick does not have keeps its own tick's input, which is
+    /// the same fallback a slot that sent nothing gets.
+    /// </remarks>
+    private void Advance(TraceTick tick, TraceTick inputs)
     {
-        var inputs = new PlayerInput[tick.Slots.Length];
+        var built = new PlayerInput[tick.Slots.Length];
 
-        for (var slot = 0; slot < inputs.Length; slot++)
-            inputs[slot] = tick.Slots[slot].Input;
+        for (var slot = 0; slot < built.Length; slot++)
+        {
+            built[slot] = slot < inputs.Slots.Length
+                ? inputs.Slots[slot].Input
+                : tick.Slots[slot].Input;
+        }
 
-        simulation.Tick(inputs);
+        simulation.Tick(built);
     }
 
     /// <summary>
