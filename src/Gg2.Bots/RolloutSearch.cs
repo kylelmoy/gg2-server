@@ -270,7 +270,28 @@ public enum RolloutOpponent
 /// commitment's 11 points either — only that it is not blindness.
 /// </para>
 /// </param>
+/// <param name="Threads">
+/// How many threads the candidate loop runs across. <b>1 — serial — is the
+/// default and the shipped behaviour</b>; 0 means the same thing.
+/// </param>
+/// <remarks>
+/// ⚠️ <b>A decision is IDENTICAL at every thread count, and that is gated</b> by
+/// <c>RolloutThreadingTests</c> rather than argued: candidates are scored into
+/// per-index slots and the winner is picked afterwards in ascending order, so the
+/// lexicographic tie-break sees the order it saw serially. It is a cost knob and
+/// nothing else.
+/// <para>
+/// ⛔ <b>It is REFUSED together with a <c>ContinuationPolicy</c>.</b>
+/// <see cref="PolicyNetwork"/> forwards through shared <c>_hiddenA</c>/
+/// <c>_hiddenB</c>/<c>_output</c> scratch, so two lanes calling it at once race
+/// on the hidden layer and produce a silently wrong action. Refusing at
+/// construction is the only version of this that cannot be got wrong by
+/// accident; making the forward re-entrant is the fix if the combination is ever
+/// wanted.
+/// </para>
+/// </remarks>
 /// <param name="ConsiderSpecial">
+
 /// Whether the right-click head is searched. Off by default: for most classes it
 /// is a reload or nothing, and it triples nothing useful.
 /// </param>
@@ -281,7 +302,8 @@ public readonly record struct RolloutOptions(
     byte[]? AimBins = null,
     bool ConsiderSpecial = false,
     int CommitTicks = 0,
-    PolicyNetwork? ContinuationPolicy = null)
+    PolicyNetwork? ContinuationPolicy = null,
+    int Threads = 0)
 {
     /// <summary><c>docs/BOTAI.md</c> item 12 says 15-30 ticks; this is the middle.</summary>
     public const int DefaultHorizonTicks = 20;
@@ -364,11 +386,34 @@ public readonly record struct RolloutOptions(
                 nameof(CommitTicks));
         }
 
+        var threads = Threads == 0 ? 1 : Threads;
+
+        if (threads < 1)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(Threads), Threads, "a search runs on at least one thread");
+        }
+
+        // ⛔ See the Threads remarks: PolicyNetwork forwards through shared scratch,
+        // so a threaded search with a continuation is a data race on the hidden
+        // layer. It would not throw and it would not look wrong — it would just
+        // decide from a half-written activation, which is the shape of bug this
+        // repo has no instrument for. Refused where the combination is chosen.
+        if (threads > 1 && ContinuationPolicy is not null)
+        {
+            throw new ArgumentException(
+                $"Threads {threads} cannot be combined with a ContinuationPolicy: "
+                + "PolicyNetwork.Act writes through per-instance hidden-layer scratch and "
+                + "is not re-entrant, so concurrent candidates would race on it.",
+                nameof(Threads));
+        }
+
         return this with
         {
             HorizonTicks = horizon,
             DecisionTicks = decision,
             CommitTicks = commit,
+            Threads = threads,
         };
     }
 }
@@ -482,30 +527,11 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
     // ⚠️ Fields, not locals: 150 KB each, allocated once. See the remarks.
     private WorldState _baseline;
 
-    private WorldState _fork;
-
-    private TickEvents _events;
-
     private int _ticksLeftInDecision;
 
     private EnvAction _current;
 
     private int _currentSlot = -1;
-
-    /// <summary>
-    /// The observation and head buffers a policy continuation writes through.
-    /// </summary>
-    /// <remarks>
-    /// ⚠️ <b>Allocated once per search, never per candidate or per tick.</b> A
-    /// continuation at k=30, horizon 20, cadence 4 runs 120 forward passes per
-    /// decision and a decision happens every four ticks; allocating here would put
-    /// two arrays per pass through the tick loop, which is the allocation rule
-    /// CLAUDE.md states for exactly this path. Null until a policy is attached, so
-    /// a search without one costs nothing.
-    /// </remarks>
-    private float[]? _continuationObservation;
-
-    private int[]? _continuationHeads;
 
     public RolloutSearch(RolloutOptions options = default)
     {
@@ -953,6 +979,49 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
     /// class of bug <c>ActionDecoder.Aim</c>'s own remark warns about for
     /// snapshots, and it is silent — the bot simply aims somewhere nobody chose.
     /// </remarks>
+    /// <summary>
+    /// Everything ONE candidate rollout mutates, so candidates can run apart.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The candidate loop is embarrassingly parallel once this exists</b>, and
+    /// it was not before: every rollout wrote the same <c>_fork</c>, the same
+    /// <c>_events</c> and the same <c>_decoder</c>. What it READS — the baseline, the
+    /// options, the <c>CollisionWorld</c> — is immutable for the duration of a
+    /// decision, and <c>Gg2.Simulation</c> holds no mutable statics, so
+    /// <c>MatchSimulation.Tick</c> is pure over its arguments.
+    /// <para>
+    /// ⛔ <b>A fork is a 145 KB <c>WorldState</c> copy, so lanes are allocated ONCE
+    /// and reused</b> across decisions. k lanes rather than k forks per decision is
+    /// the difference between a pool and a leak.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Determinism does not come from the lanes; it comes from the REDUCTION.</b>
+    /// Scores are written to a per-candidate slot and the winner is chosen afterwards
+    /// in ascending candidate order, so the lexicographic tie-break sees exactly the
+    /// order it saw serially — which matters because 85.2% of non-blind decisions have
+    /// their top two tied and iteration order decides them.
+    /// </para>
+    /// </remarks>
+    private sealed class Lane
+    {
+        internal WorldState Fork;
+        internal TickEvents Events;
+        internal readonly ActionDecoder Decoder = new();
+        internal float[]? Observation;
+        internal int[]? Heads;
+    }
+
+    private readonly Lane _serial = new();
+
+    private Lane[] _lanes = [];
+
+    // ⚠️ Indexed by CANDIDATE index, not by search order, so a worker writes its
+    // own slot and the reduction reads them back in ascending order. That is the
+    // whole determinism argument; see the Lane remarks.
+    private double[] _scoreByIndex = [];
+
+    private double[] _aimByIndex = [];
+
     private EnvAction Search(in WorldView world, int slot)
     {
         _baseline = world.State;
@@ -970,6 +1039,8 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
             _scores = new double[candidates.Length];
             _searched = new int[candidates.Length];
             _searchedCandidates = new EnvAction[candidates.Length];
+            _scoreByIndex = new double[candidates.Length];
+            _aimByIndex = new double[candidates.Length];
         }
 
         // ⚠️ The restriction is DROPPED if the candidate set changed under it, and
@@ -988,7 +1059,6 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
         var best = EnvAction.Idle;
         var bestScore = double.NegativeInfinity;
         var bestAimError = double.PositiveInfinity;
-        var kept = 0;
 
         // ⚠️ ASCENDING candidate order whatever order the restriction arrived in,
         // so the decision is a pure function of the SET. The tie-break below is
@@ -996,28 +1066,42 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
         // so iteration order decides a great many of them — a search whose answer
         // depended on how a client happened to sort its indices would be
         // irreproducible in a way no test would show.
+        var kept = 0;
+
         for (var i = 0; i < candidates.Length; i++)
         {
-            if (restriction is not null && !restriction[i])
-                continue;
+            if (restriction is null || restriction[i])
+                _searched[kept++] = i;
+        }
 
-            _decoder.SetAim(slot, savedAim);
+        // ⛔ SCORING AND CHOOSING ARE SEPARATE PASSES, and that is what makes the
+        // threaded path identical to the serial one rather than merely similar.
+        // Scores land in per-candidate slots in whatever order the workers finish;
+        // the winner is picked below in ascending order, so the lexicographic
+        // tie-break sees exactly the sequence it saw when there was one thread.
+        if (_options.Threads > 1 && kept > 1)
+            ScoreParallel(world.Collision, slot, savedAim, candidates, kept);
+        else
+            ScoreSerial(world.Collision, slot, savedAim, candidates, kept);
 
-            var score = Rollout(world.Collision, slot, candidates[i], out var aimError);
+        for (var n = 0; n < kept; n++)
+        {
+            var i = _searched[n];
+            var score = _scoreByIndex[i];
 
-            // ⚠️ EVERY score is kept, not just the winner's. See LastScores: the
+            // ⚠️ EVERY score is kept, not just the winner’s. See LastScores: the
             // distribution is the thing that makes a search a better expert than
             // a reward sample, and it used to be discarded inside this loop.
-            _scores[kept] = score;
-            _searched[kept] = i;
-            _searchedCandidates[kept] = candidates[i];
-            kept++;
+            _scores[n] = score;
+            _searchedCandidates[n] = candidates[i];
 
             // ⚠️ LEXICOGRAPHIC: damage first, aim error only as a TIE-BREAK. It
             // cannot change any decision where the scores differ, so it cannot
             // trade away the thing the search is actually optimising — it only
             // replaces enumeration order on the decisions that were arbitrary.
             // See the aim-tie-break remarks on Rollout.
+            var aimError = _aimByIndex[i];
+
             if (score > bestScore || (score == bestScore && aimError < bestAimError))
             {
                 bestScore = score;
@@ -1038,6 +1122,72 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
         LastBestScore = bestScore;
 
         return best;
+    }
+
+    /// <summary>Every kept candidate, scored on this thread.</summary>
+    private void ScoreSerial(
+        CollisionWorld collision, int slot, double savedAim, EnvAction[] candidates, int kept)
+    {
+        for (var n = 0; n < kept; n++)
+        {
+            var i = _searched[n];
+            _serial.Decoder.SetAim(slot, savedAim);
+            _scoreByIndex[i] = Rollout(collision, slot, candidates[i], _serial, out var aimError);
+            _aimByIndex[i] = aimError;
+        }
+    }
+
+    /// <summary>Every kept candidate, scored across <c>Threads</c> lanes.</summary>
+    /// <remarks>
+    /// ⚠️ <b>Contiguous chunks, one lane each, no work stealing.</b> A worker owns
+    /// its lane for the whole call, so nothing is shared and nothing is locked —
+    /// which is the only reason a 145 KB fork per lane is affordable at all. The
+    /// split is by count rather than by cost and candidates are not equal-cost (a
+    /// candidate that dies early stops at its own <c>IsAlive</c> break), so the tail
+    /// is ragged and the speedup is below the thread count before any other effect.
+    /// <para>
+    /// ⚠️ <b><c>Parallel.For</c> allocates</b> — the closure, the task objects, the
+    /// range state — inside what CLAUDE.md calls the tick loop. That is real and it
+    /// is deliberately INSIDE the measurement rather than excluded from it: a
+    /// threading factor quoted with its own overhead removed is not the factor the
+    /// tick budget would see.
+    /// </para>
+    /// </remarks>
+    private void ScoreParallel(
+        CollisionWorld collision, int slot, double savedAim, EnvAction[] candidates, int kept)
+    {
+        var workers = Math.Min(_options.Threads, kept);
+        EnsureLanes(workers);
+
+        Parallel.For(0, workers, w =>
+        {
+            var lane = _lanes[w];
+            var from = (int)((long)kept * w / workers);
+            var to = (int)((long)kept * (w + 1) / workers);
+
+            for (var n = from; n < to; n++)
+            {
+                var i = _searched[n];
+                lane.Decoder.SetAim(slot, savedAim);
+                _scoreByIndex[i] = Rollout(collision, slot, candidates[i], lane, out var aimError);
+                _aimByIndex[i] = aimError;
+            }
+        });
+    }
+
+    /// <summary>At least <paramref name="workers"/> lanes exist, and are reused.</summary>
+    private void EnsureLanes(int workers)
+    {
+        if (_lanes.Length >= workers)
+            return;
+
+        var grown = new Lane[workers];
+        Array.Copy(_lanes, grown, _lanes.Length);
+
+        for (var w = _lanes.Length; w < workers; w++)
+            grown[w] = new Lane();
+
+        _lanes = grown;
     }
 
     /// <summary>
@@ -1092,9 +1242,10 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
     /// discriminate nothing.
     /// </para>
     /// </remarks>
-    private double Rollout(CollisionWorld collision, int slot, EnvAction action, out double aimError)
+    private double Rollout(
+        CollisionWorld collision, int slot, EnvAction action, Lane lane, out double aimError)
     {
-        _fork = _baseline;
+        lane.Fork = _baseline;
 
         // ⚠️ The candidate's scope is applied to the FORK before it is played, or
         // the search scores a zoom it never raised — every zoom candidate would
@@ -1102,8 +1253,8 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
         // earlier one, and the head would look measured while being inert.
         // PlayerCommands.ToggleZoom is the same method the server calls; it
         // refuses a non-sniper on its own.
-        if (ActionDecoder.WantsZoomToggle(action, in _fork.Characters[slot]))
-            PlayerCommands.ToggleZoom(ref _fork, slot);
+        if (ActionDecoder.WantsZoomToggle(action, in lane.Fork.Characters[slot]))
+            PlayerCommands.ToggleZoom(ref lane.Fork, slot);
 
         Span<PlayerInput> inputs = stackalloc PlayerInput[WorldState.MaxSlots];
         var score = 0.0;
@@ -1116,7 +1267,7 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
 
         for (var tick = 0; tick < _options.HorizonTicks; tick++)
         {
-            if (!_fork.IsAlive(slot))
+            if (!lane.Fork.IsAlive(slot))
                 break;
 
             // Past the commitment, is this the first tick of a continuation
@@ -1126,13 +1277,13 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
             var deciding = sinceCommit >= 0 && sinceCommit % _options.DecisionTicks == 0;
 
             if (deciding && _options.ContinuationPolicy is { } policy)
-                continuation = PolicyContinuation(policy, collision, slot);
+                continuation = PolicyContinuation(policy, collision, slot, lane);
 
             for (var other = 0; other < WorldState.MaxSlots; other++)
             {
                 if (other != slot)
                 {
-                    inputs[other] = OpponentInput(in _fork, other);
+                    inputs[other] = OpponentInput(in lane.Fork, other);
                     continue;
                 }
 
@@ -1148,17 +1299,17 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
                 // and then sees nothing land, because a candidate scores from
                 // damage inside the window where somebody is still playing.
                 inputs[other] = tick < _options.CommitTicks
-                    ? _decoder.Decode(slot, action, firstTickOfDecision: tick == 0)
-                    : _decoder.Decode(slot, continuation, firstTickOfDecision: deciding);
+                    ? lane.Decoder.Decode(slot, action, firstTickOfDecision: tick == 0)
+                    : lane.Decoder.Decode(slot, continuation, firstTickOfDecision: deciding);
             }
 
-            _events = default;
-            MatchSimulation.Tick(collision, ref _fork, inputs, ref _events);
+            lane.Events = default;
+            MatchSimulation.Tick(collision, ref lane.Fork, inputs, ref lane.Events);
 
-            score += _events.DamageDealt[slot] - _events.DamageTaken[slot];
+            score += lane.Events.DamageDealt[slot] - lane.Events.DamageTaken[slot];
         }
 
-        aimError = AimErrorToNearestEnemy(collision, slot);
+        aimError = AimErrorToNearestEnemy(collision, slot, lane);
         return score;
     }
 
@@ -1173,19 +1324,19 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
     /// searcher is alone, which is the state this whole tie-break exists to stop
     /// being decided by loop order.
     /// </remarks>
-    private double AimErrorToNearestEnemy(CollisionWorld collision, int slot)
+    private double AimErrorToNearestEnemy(CollisionWorld collision, int slot, Lane lane)
     {
-        if (!_fork.IsAlive(slot))
+        if (!lane.Fork.IsAlive(slot))
             return double.PositiveInfinity;
 
-        var view = new WorldView(in _fork, collision);
+        var view = new WorldView(in lane.Fork, collision);
         Span<int> found = stackalloc int[1];
 
         if (view.NearestEnemies(slot, found) == 0)
             return double.PositiveInfinity;
 
-        ref readonly var self = ref _fork.Characters[slot];
-        ref readonly var enemy = ref _fork.Characters[found[0]];
+        ref readonly var self = ref lane.Fork.Characters[slot];
+        ref readonly var enemy = ref lane.Fork.Characters[found[0]];
 
         var bearing = Gml.PointDirection(self.X, self.Y, enemy.X, enemy.Y);
         var aim = self.NetAimDirection * 360.0 / 65536.0;
@@ -1234,23 +1385,23 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
     /// candidates were searched.
     /// </para>
     /// </remarks>
-    private EnvAction PolicyContinuation(PolicyNetwork policy, CollisionWorld collision, int slot)
+    private EnvAction PolicyContinuation(PolicyNetwork policy, CollisionWorld collision, int slot, Lane lane)
     {
-        _continuationObservation ??= new float[ObservationWriter.Length];
-        _continuationHeads ??= new int[ActionDecoder.HeadShape.Length];
+        lane.Observation ??= new float[ObservationWriter.Length];
+        lane.Heads ??= new int[ActionDecoder.HeadShape.Length];
 
-        var view = new WorldView(in _fork, collision);
-        ObservationWriter.Write(in view, slot, _continuationObservation);
-        policy.Act(_continuationObservation, _continuationHeads);
+        var view = new WorldView(in lane.Fork, collision);
+        ObservationWriter.Write(in view, slot, lane.Observation);
+        policy.Act(lane.Observation, lane.Heads);
 
         return new EnvAction
         {
-            Horizontal = (byte)_continuationHeads[0],
-            Jump = (byte)_continuationHeads[1],
-            Down = (byte)_continuationHeads[2],
-            Fire = (byte)_continuationHeads[3],
-            AimDelta = (byte)_continuationHeads[4],
-            Zoom = (byte)_continuationHeads[5],
+            Horizontal = (byte)lane.Heads[0],
+            Jump = (byte)lane.Heads[1],
+            Down = (byte)lane.Heads[2],
+            Fire = (byte)lane.Heads[3],
+            AimDelta = (byte)lane.Heads[4],
+            Zoom = (byte)lane.Heads[5],
         };
     }
 

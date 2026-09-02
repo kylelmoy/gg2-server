@@ -84,6 +84,15 @@ if (Environment.GetEnvironmentVariable("BENCH_ARMS") is { } armsN)
     return;
 }
 
+if (Environment.GetEnvironmentVariable("BENCH_THREADS") is { } threadsN)
+{
+    Bench.ThreadsBench.Run(
+        maps,
+        Environment.GetEnvironmentVariable("GG2_NAV")!,
+        int.Parse(threadsN));
+    return;
+}
+
 if (Environment.GetEnvironmentVariable("BENCH_PERMAP") is { } pm)
 {
     Bench.PerMapEval.Run(maps, Environment.GetEnvironmentVariable("GG2_NAV")!, Environment.GetEnvironmentVariable("NPZ")!, int.Parse(pm));

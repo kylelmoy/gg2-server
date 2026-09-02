@@ -31,7 +31,7 @@ Common to most modes:
 
 The whole reason this exists in the repo rather than in a scratch directory is
 the set of measurement traps in `docs/BOTS.md`, "Measuring a bot change". The
-seven built into the code here.
+eight built into the code here.
 
 ⛔ **Traps 1, 5 and 7 are ONE rule wearing three coats, and naming it stops this
 list growing an entry per instance: remove the separation that lets a qualifier be
@@ -94,6 +94,21 @@ guard site and a method signature.
    survived in the file whose README you are reading, three lines under a warning
    that its numbers go stale. Found by trying to *compute* something with it, not
    by reading it.
+8. ⛔ **The first timing in a process is not a timing, and trap 3 does not cover
+   this.** `BENCH_THREADS` reported **11.81x on four threads** and **6.12x on the
+   mean**. Both are arithmetically impossible, which is the only reason anybody
+   looked: the serial rung ran first and paid the JIT for the simulation, the bot
+   layer and the collision world, and every later rung was warm.
+   ⚠️ **The impossible number is the LUCKY case.** The same defect on a two-rung
+   ladder produces something near **1.9x on two threads** — exactly what a correct
+   measurement looks like, and it would have been written down.
+   ⚠️ **Trap 3 was already in this file and did not stop it.** Trap 3 warms the
+   code a mode measures; this is a mode whose FIRST ROW is the baseline for the
+   rows beneath it, so the warm-up has to precede the comparison rather than the
+   call. Any mode that reads one row as a baseline for later rows is exposed; a
+   mode that compares arms *within* a row is not.
+   ⚠️ **Re-measure before repeating any factor out of this mode** — it is a
+   wall-clock ratio on a 24-core machine, and it is not portable to another one.
 
 ## Modes that matter for bot work
 
@@ -106,6 +121,8 @@ guard site and a method signature.
 | `BENCH_POLICYCOST=1` | one forward pass and one observation extraction, in nanoseconds. `OBS` points at an observations fixture. |
 | `BENCH_SEARCH=1` | a `RolloutSearch` decision's cost, split into the per-candidate fork and the per-candidate tick by sweeping the horizon. ⚠️ **`BENCH_POP=<n>` sets how many characters are ALIVE** and defaults to 2 — see trap 6. `BENCH_CLASS=sniper` measures the 120-candidate set; `BENCH_CADENCE` sets the continuation cadence. |
 | `BENCH_EVAL=<n>` | the handover-rule and engagement-range comparison that chose the 150px default. |
+| `BENCH_THREADS=<n>` | **can arm 3 be made affordable.** Arm 3 ONLY, `n` matches a map, replayed at each thread count in `BENCH_THREAD_LADDER` (default `1,2,4,8`) — the same seeds, so every rung plays the identical match and the tick columns are paired. Prints max and mean tick per rung, the speedup on each, and the tick gate at the top rung. ⛔ **The serial column is only the arm-3 baseline at the SAME `BENCH_BOTS`, `BENCH_CAP` and match count** — a max is monotone in coverage, so a cheaper run reproduces a smaller number and flatters nothing but itself. |
+| `BENCH_THREAD_LADDER=<a,b,c>` | the thread counts `BENCH_THREADS` walks. ⚠️ **The last rung is the one the gate is read at**, and the speedup columns are all relative to the first. |
 | `BENCH_ARMS_CSV=<path>` | with `BENCH_ARMS`, writes **one row per MATCH** — map, arm, index, red and blue deaths, ticks, max tick. ⛔ **Record the unit of observation, not just the total**: the totals lose the unit, and this bench twice needed a full 21-map re-run because a later question wanted deaths per match rather than deaths per map. |
 | `clustered.py <csv>` | ⛔ **the match-level death-share test.** A death is not an independent observation — ~40 arrive together per match — so a pooled test over ~34,000 deaths overstates its own evidence. This makes each MATCH one observation and compares arms with Welch t, sidestepping clustering rather than correcting for a correlation nobody can estimate. ⚠️ Prints the zero-death drop rate **per arm**, because what invalidates a comparison is a filter that DIFFERS between arms. |
 | `stability.py <small> <large>` | ⛔ **does a per-map death-share DIRECTION survive the sample size?** Two `BENCH_PERMAP` tables at different match counts. ⚠️ **Prints the smallest effect at which every direction held, and says to quote THAT rather than the agreement count** — direction stability is a property of effect size relative to noise, not of `n`, so "21 of 21 agreed" goes wrong the moment somebody applies it to a one-point effect. |
