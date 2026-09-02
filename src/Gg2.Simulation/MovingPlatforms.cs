@@ -204,8 +204,31 @@ public static class MovingPlatforms
     public static void EndStep(CollisionWorld world, ref WorldState state)
     {
         ArgumentNullException.ThrowIfNull(world);
+        EndStep(world, ref state, world.MovingPlatforms);
+    }
 
-        var definitions = world.MovingPlatforms;
+    /// <inheritdoc cref="EndStep(CollisionWorld, ref WorldState)"/>
+    /// <param name="definitions">
+    /// The platforms to run, which is <see cref="CollisionWorld.MovingPlatforms"/>
+    /// in play.
+    /// </param>
+    /// <remarks>
+    /// ⚠️ <b>Taken explicitly so a test can supply a platform with a MASK.</b>
+    /// A definition's mask comes from an embedded resource the map entity names,
+    /// and <b>every moving platform in every shipped map resolves to null</b> —
+    /// so a platform loaded from a map carries nobody and the whole of
+    /// <see cref="Carry"/> is unreachable through <see cref="CollisionWorld"/>.
+    /// That is why the carry went 362 lines with no coverage at all. The same
+    /// shape as <c>KillBoxes.CollisionStep</c>, and for the same reason: the
+    /// shipped maps cannot reach the code.
+    /// </remarks>
+    public static void EndStep(
+        CollisionWorld world,
+        ref WorldState state,
+        ReadOnlySpan<MovingPlatformDefinition> definitions)
+    {
+        ArgumentNullException.ThrowIfNull(world);
+
         var count = Math.Min(state.MovingPlatformCount, definitions.Length);
 
         for (var i = 0; i < count; i++)
