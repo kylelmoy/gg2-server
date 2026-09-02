@@ -21,6 +21,19 @@ namespace Gg2.Bots;
 /// anchors the published tuning tables are quoted at.
 /// </param>
 /// <param name="NamePrefix">What a bot's name starts with.</param>
+/// <param name="AllowedClasses">
+/// Null draws the reference's own <c>irandom(8)</c>; a non-empty set restricts the
+/// draw to it.
+/// </param>
+/// <remarks>
+/// ⚠️ <b>Restricting classes and enabling <c>SearchMicro</c> are SEPARATE
+/// decisions and this keeps them separate.</b> <c>SearchBot</c> engages only on the
+/// four classes the policy was trained for
+/// (<see cref="PolicyBot.TrainedClasses"/>), so a server drawing all eight runs a
+/// mix of arm 3 and arm 1 and a playtester cannot tell which bot they just fought.
+/// Restricting the draw makes every bot the measured configuration — at the cost
+/// of a roster missing five classes. <b>Say which you ran.</b>
+/// </remarks>
 /// <param name="SearchMicro">
 /// Non-null gives every bot a <see cref="RolloutSearch"/> micro-controller inside
 /// its engagement window, with the scripted layer still owning movement, routing
@@ -45,7 +58,8 @@ public readonly record struct BotPopulationOptions(
     int MinHumans = 1,
     int Difficulty = 3,
     string NamePrefix = "[BOT] ",
-    RolloutOptions? SearchMicro = null)
+    RolloutOptions? SearchMicro = null,
+    PlayerClass[]? AllowedClasses = null)
 {
     /// <summary>
     /// The reference's own <c>[Bots]</c> defaults.
@@ -79,7 +93,8 @@ public readonly record struct BotPopulationOptions(
         MinHumans: 1,
         Difficulty: 3,
         NamePrefix: "[BOT] ",
-        SearchMicro: null);
+        SearchMicro: null,
+        AllowedClasses: null);
 }
 
 /// <summary>

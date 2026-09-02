@@ -1,5 +1,6 @@
 using System.Globalization;
 using Gg2.Bots;
+using Gg2.Protocol;
 using Gg2.Server;
 
 namespace Gg2.Host;
@@ -83,6 +84,29 @@ internal static class Program
 
         server.Run(stopping.Token);
         return 0;
+    }
+
+    /// <summary>A comma-separated class list, or a clear error naming the bad one.</summary>
+    private static PlayerClass[] ParseClasses(string flag, string text)
+    {
+        var names = text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var picked = new PlayerClass[names.Length];
+
+        for (var i = 0; i < names.Length; i++)
+        {
+            if (!Enum.TryParse(names[i], ignoreCase: true, out PlayerClass playerClass)
+                || playerClass > PlayerClass.Pyro)
+            {
+                throw new ArgumentException(
+                    $"{flag}: '{names[i]}' is not a class a bot can be. "
+                    + "Scout, Pyro, Soldier, Heavy, Demoman, Medic, Engineer, Spy, Sniper, "
+                    + "or 'trained' for the four the policy was trained on.");
+            }
+
+            picked[i] = playerClass;
+        }
+
+        return picked;
     }
 
     private static ServerOptions Parse(string[] args)
@@ -241,6 +265,27 @@ internal static class Program
                     i++;
                     break;
 
+                // ⚠️ SEPARATE from --search-bots on purpose. SearchBot engages only
+                // on the four classes the policy was trained for, so a server drawing
+                // all eight runs a MIX of arm 3 and arm 1 and a playtester cannot tell
+                // which bot they just fought. "trained" is the shorthand for making
+                // every bot the configuration that was actually measured -- at the cost
+                // of a roster missing five classes. Say which you ran.
+                case "--bot-classes":
+                {
+                    var text = Require(name, value);
+
+                    options.Bots = options.Bots with
+                    {
+                        AllowedClasses = string.Equals(text, "trained", StringComparison.OrdinalIgnoreCase)
+                            ? [.. PolicyBot.TrainedClasses]
+                            : ParseClasses(name, text),
+                    };
+
+                    i++;
+                    break;
+                }
+
                 case "--bot-difficulty":
                     options.Bots = options.Bots with { Difficulty = RequireInt(name, value) };
                     i++;
@@ -344,6 +389,12 @@ internal static class Program
                             threads the search splits its candidates across
                             (default: cores/3, capped at 8). Changes cost only,
                             never a decision.
+          --bot-classes <list|trained>
+                            restrict the bot class draw (default: the reference's
+                            own draw of eight). 'trained' is Scout, Soldier,
+                            Sniper and Heavy - the only classes --search-bots
+                            engages on, so pass it to make EVERY bot the
+                            configuration the bench measured.
           --botnav <path>   override the bot nav graphs (default: nav/)
           --speed <n|max>   run at n times real time, or 'max' for unpaced
                             (default 1)

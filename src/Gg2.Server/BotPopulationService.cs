@@ -172,7 +172,12 @@ public sealed class BotPopulationService
         _server.CountTeams(out var red, out var blue);
 
         var team = BotPopulation.PickTeam(red, blue, ref _random);
-        var playerClass = BotPopulation.PickClass(ref _random);
+        // ⚠️ Restricted only when asked. The unrestricted draw is the reference's
+        // irandom(8) and every recorded match depends on its stream — the same rule
+        // HeadlessMatch follows, for the same reason.
+        var playerClass = options.AllowedClasses is { Length: > 0 } allowed
+            ? BotPopulation.PickClass(ref _random, allowed)
+            : BotPopulation.PickClass(ref _random);
 
         _nameCounter++;
         var name = options.NamePrefix + _nameCounter.ToString(System.Globalization.CultureInfo.InvariantCulture);
