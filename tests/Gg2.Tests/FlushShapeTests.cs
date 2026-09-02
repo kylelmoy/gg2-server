@@ -12,9 +12,19 @@ namespace Gg2.Tests;
 /// ⛔ <b>Nothing tested WHEN the broadcast buffer is flushed, and that let a
 /// second one-tick delivery bug live beside the first.</b>
 /// <c>GameServerEndStep.gml:7-8</c> writes <c>global.sendBuffer</c> to every
-/// socket and clears it in the server's END Step — after everything that frame
-/// has been appended. So the reference's packet for tick N is
-/// <c>[state update N][events N]</c>.
+/// socket and clears it in the server's END Step. So the reference's packet for
+/// tick N is <c>[state update N][events N]</c>.
+/// <para>
+/// ⚠️ <b>"After everything that frame has been appended" is what this comment
+/// used to say, and it is FALSE.</b> The GameServer is the oldest instance in
+/// the game, so its End Step is the FIRST End Step of the frame: a
+/// <c>PLAYER_DEATH</c>, a sentry's <c>DESTRUCTION</c> and the <c>BALANCE</c> a
+/// death triggers are all appended in a Character's or a Sentry's own End Step,
+/// miss that flush, and ship on tick N+1. Measured against the running game on
+/// 2026-09-02 — see <c>GameServer.BroadcastEndStepEvents</c> for the probe and
+/// the byte arithmetic. <b>So "events N" above means the Begin Step, alarm and
+/// collision-stage ones only.</b>
+/// </para>
 /// <para>
 /// This port flushed directly under <c>WriteStateUpdate</c>, before the
 /// simulation ran. Everything <c>AdvanceSimulation</c> appends — WEAPON_FIRE,
@@ -79,6 +89,7 @@ public sealed class FlushShapeTests
 
         var ticksWithBytes = 0;
         var leadingEvents = 0;
+        var leadingDeaths = 0;
 
         for (var tick = 0; tick < 600; tick++)
         {
@@ -91,14 +102,25 @@ public sealed class FlushShapeTests
 
             ticksWithBytes++;
 
-            // ⚠️ Scoped to the messages AdvanceSimulation appends, which is what
-            // the flush position governs. PLAYER_JOIN legitimately leads the next
-            // packet: ServiceJoiningConnections runs after the flush, and moving
-            // the flush past it changes what a JOINING client sees — 23 tests in
-            // JoinAndBroadcastTests and FullUpdateLayoutTests say so. The join
-            // sequence is a separate contract this fix is not licensed to move.
-            if ((MessageType)bytes[0] is MessageType.WeaponFire or MessageType.PlayerDeath)
+            // ⚠️ Scoped to WEAPON_FIRE, which a Character appends in its BEGIN
+            // Step and which must therefore ride in its own tick's packet.
+            //
+            // ⛔ PLAYER_DEATH is deliberately NOT in this set any more, and its
+            // absence is the whole 2026-09-02 finding: a death is appended in the
+            // Character's END Step, after the GameServer's End Step flush, so it
+            // LEADS the next tick's packet in the reference too. Counted below
+            // instead, and required to happen.
+            //
+            // PLAYER_JOIN likewise legitimately leads: ServiceJoiningConnections
+            // runs after the flush, and moving the flush past it changes what a
+            // JOINING client sees — 23 tests in JoinAndBroadcastTests and
+            // FullUpdateLayoutTests say so. The join sequence is a separate
+            // contract this fix is not licensed to move.
+            if ((MessageType)bytes[0] is MessageType.WeaponFire)
                 leadingEvents++;
+
+            if ((MessageType)bytes[0] is MessageType.PlayerDeath)
+                leadingDeaths++;
         }
 
         // ⚠️ Not vacuous: a run where the client received nothing, or where no
@@ -107,6 +129,16 @@ public sealed class FlushShapeTests
         Assert.True(ticksWithBytes > 400, $"only {ticksWithBytes} ticks sent anything");
 
         Assert.Equal(0, leadingEvents);
+
+        // ⛔ The other direction, and it is the half that would go quiet if the
+        // End Step broadcasts were folded back above the flush: a death has to
+        // LEAD a packet, because the reference's flush has already gone by the
+        // time a Character's End Step appends one. Zero here means either the
+        // bots stopped killing each other — check the companion test — or the
+        // boundary moved back.
+        Assert.True(
+            leadingDeaths > 0,
+            "no packet led with a PLAYER_DEATH; the End Step flush boundary has moved");
     }
 
     /// <summary>

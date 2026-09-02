@@ -109,6 +109,18 @@ public sealed class GameServer : IDisposable
     private bool _capsSyncPending;
 
     /// <summary>
+    /// The setup-timer value that owes every client a <c>CAPS_UPDATE</c>:
+    /// <c>global.setupTimer == 180</c>, <c>GameServerBeginStep.gml:55</c>.
+    /// </summary>
+    /// <remarks>
+    /// Six seconds before the gates open, and the same tick the reference plays
+    /// the first of its countdown sounds (<c>ControlPointHUD.events/Step.xml</c>
+    /// :23-24 lists 180, 150, 120 and 90 together). Only the 180 reaches the
+    /// wire; the rest are audio.
+    /// </remarks>
+    private const int SetupSyncTick = 180;
+
+    /// <summary>
     /// <c>GameServer.impendingMapChange</c>: ticks until the map actually
     /// changes, or -1 when none is pending.
     /// </summary>
@@ -801,6 +813,15 @@ public sealed class GameServer : IDisposable
         // and this change is not licensed to move it.
         FlushBroadcast();
 
+        // ⛔ AFTER THE FLUSH, and measured — see BroadcastEndStepEvents. The
+        // reference's flush is in the GameServer's End Step, which is the FIRST
+        // End Step of the frame, so a death, a sentry's destruction and the
+        // BALANCE a death triggers all miss it and ship on the next tick.
+        // Appending them above the flush delivered every one a tick EARLY —
+        // the mirror of the bug cdaa62a fixed, and left behind by it.
+        if (advancing)
+            BroadcastEndStepEvents(live);
+
         _control?.Service();
 
         AcceptConnections(now);
@@ -1031,7 +1052,15 @@ public sealed class GameServer : IDisposable
         // the first thing in a frame. See ServeRoundEnd.
         ServeRoundEnd();
 
+        // ⚠️ Before the tick, and the position is measured rather than tidy —
+        // see the method.
+        RequestGeneratorScoreboardSync();
+
         MatchSimulation.Tick(_collision, ref _world, _inputs.AsSpan(0, count), ref _events, _spawnPoints);
+
+        // ⚠️ And this one after it, equally deliberately. Same method-level
+        // reasoning, opposite answer.
+        RequestSetupScoreboardSync();
 
         // Fires before deaths, because a weapon fires in a character's Begin
         // Step and a character dies in its End Step — so within one tick the
@@ -1055,11 +1084,52 @@ public sealed class GameServer : IDisposable
         BroadcastSentryLandings(count);
         BroadcastSpawns(count);
         BroadcastIntelGrabsAndCaptures(count);
+    }
+
+    /// <summary>
+    /// The three messages the reference appends in an End Step — <b>after</b>
+    /// its own flush, and so delivered on the following tick.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>MEASURED against the running game on 2026-09-02, not inferred.</b>
+    /// <c>GameServerEndStep.gml:7-10</c> flushes and clears <c>global.sendBuffer</c>
+    /// in the GameServer's End Step, and the GameServer is the OLDEST instance in
+    /// the game (<c>start_server.gml:7</c>, <c>persistent</c>) — so under GM8's
+    /// instance-id event order its End Step runs before every other object's, and
+    /// anything a Character or a Sentry appends in <em>its</em> End Step misses
+    /// that flush.
+    /// <para>
+    /// The probe: two bots killed on one frame, watching
+    /// <c>buffer_size(global.sendBuffer)</c> once a frame from the agent bridge's
+    /// Step — which is after every Begin Step and before every End Step. The frame
+    /// after the deaths read <b>17 bytes against a 5-byte steady state</b>, and the
+    /// 12 left over close exactly: 5 + 5 for the two <c>PLAYER_DEATH</c>s
+    /// (<c>sendEventPlayerDeath.gml</c>) and 2 for the <c>BALANCE</c> notice
+    /// (<c>ServerBalanceTeams.gml:29-30</c>) that a death's own
+    /// <c>ServerBalanceTeams</c> writes. Those bytes could only have been appended
+    /// during the PREVIOUS frame's End Steps and survived its flush.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>This changes WHEN the bytes leave and never their order.</b> The
+    /// buffer is FIFO, so these still follow the same messages they followed
+    /// before and still precede the next tick's update — which is exactly why no
+    /// trace can see it, and why <c>cdaa62a</c> got the boundary half right.
+    /// </para>
+    /// <para>
+    /// ⚠️ Relative order among the three is left EXACTLY as it was, so the flush
+    /// point is the only thing this changed. (The reference interleaves each
+    /// character's <c>BALANCE</c> with its own death and puts every sentry's
+    /// destruction after all of them; nothing observes the difference, and
+    /// straightening it is not this change's business.)
+    /// </para>
+    /// </remarks>
+    private void BroadcastEndStepEvents(int count)
+    {
         BroadcastPlayerDeaths(count);
         BroadcastSentryDestructions(count);
 
-        // Last: the only in-tick BALANCE comes from a death's own
-        // ServerBalanceTeams, which runs after doEventPlayerDeath.
+        // The only in-tick BALANCE comes from a death's own ServerBalanceTeams,
+        // which runs after doEventPlayerDeath.
         BroadcastTeamBalance();
     }
 
@@ -2172,30 +2242,90 @@ public sealed class GameServer : IDisposable
 
     // --- broadcast -----------------------------------------------------------
 
+    /// <summary>
+    /// <c>Generator.events/Begin Step.xml:24-25</c>: a live generator asks the
+    /// scoreboard to resync every minute, on top of the two-minute heartbeat.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Below <see cref="WriteStateUpdate"/>, so the flag it sets is read
+    /// on the NEXT tick.</b> That is the reference's timing, not a delay this
+    /// port adds: a <c>Generator</c> is a room object and the GameServer is
+    /// persistent and older, so the generator's Begin Step runs after
+    /// <c>GameServerBeginStep.gml:55</c> has already tested <c>syncTimer</c>
+    /// that frame. Keyed on <c>GameServer.frame</c> rather than living in
+    /// <c>Gg2.Simulation</c> because that counter is the server's own and not
+    /// part of the world — the same reason the map-change countdown is here.
+    /// <para>
+    /// ⚠️ <b>And ABOVE <see cref="MatchSimulation.Tick"/>, which is the half
+    /// that is easy to get wrong.</b> The reference's guard is an
+    /// <c>else if</c> under <c>if hp &lt;= 0</c> — a generator about to be
+    /// destroyed does not ask — and it reads that <c>hp</c> in the generator's
+    /// own Begin Step, before any character has acted. Reading it after the tick
+    /// would swallow the request whenever a generator died later in the same
+    /// tick. Reachable only on a multiple of 1800, which is precisely the kind
+    /// of tick nothing would ever notice going wrong.
+    /// </para>
+    /// </remarks>
+    private void RequestGeneratorScoreboardSync()
+    {
+        if (_frame % 1800 != 0)
+            return;
+
+        if ((_world.RedGenerator.Exists && !Gml.LessOrEqual(_world.RedGenerator.Hp, 0))
+            || (_world.BlueGenerator.Exists && !Gml.LessOrEqual(_world.BlueGenerator.Hp, 0)))
+        {
+            _capsSyncPending = true;
+        }
+    }
+
+    /// <summary>
+    /// <c>GameServerBeginStep.gml:55</c>'s third trigger — the setup timer
+    /// reaching 180, six seconds before the gates open.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>After <see cref="MatchSimulation.Tick"/>, unlike
+    /// <see cref="RequestGeneratorScoreboardSync"/>.</b> The reference reads a
+    /// value the HUD's Step decrements — <c>ControlPointHUD.events/Step.xml</c>
+    /// :21-22 and <c>InvasionHUD.events/Step.xml</c>:18-19, both younger than
+    /// the GameServer — so the frame that decrements it to 180 is not the frame
+    /// that sees 180. <see cref="Rounds.StepSetupTimer"/> is this port's copy of
+    /// those five lines, so the value after the tick is the one the reference's
+    /// next Begin Step reads.
+    /// <para>
+    /// ⚠️ <b>This trigger did not exist until 2026-09-02</b>, and the comment
+    /// standing where it belonged said it "waits on the setup timer being
+    /// simulated" — which had stopped being true at some point nobody recorded:
+    /// <c>WorldState.SetupTimer</c> is simulated and goes out on the wire.
+    /// CLAUDE.md's "a claim the repo makes about itself", found by reading
+    /// rather than by any test, because no test could.
+    /// </para>
+    /// </remarks>
+    private void RequestSetupScoreboardSync()
+    {
+        if (_world.SetupTimer == SetupSyncTick)
+            _capsSyncPending = true;
+    }
+
     private void WriteStateUpdate()
     {
         // Cadence is part of the contract: the client dead-reckons between the
         // position-bearing updates. Every tick but the seventh is an INPUTSTATE.
-        // GameServerBeginStep.gml:88, and it comes *before* the tiered update in
-        // the same event: an extra scoreboard message when something scored, and
-        // a two-minute heartbeat so a client that missed one is corrected
-        // eventually. (`global.setupTimer == 180`, its third trigger, waits on
-        // the setup timer being simulated.)
-        // Generator.events/Begin Step.xml:22: a live generator asks for a
-        // scoreboard update every minute, on top of the two-minute heartbeat
-        // below. Here rather than in Gg2.Simulation because it is keyed on
-        // GameServer.frame, which is the server's own counter and not part of
-        // the world — the same reason the map-change countdown lives here.
+        // GameServerBeginStep.gml:55-67 — an extra scoreboard message when
+        // something asked for one, and a two-minute heartbeat so a client that
+        // missed one is corrected eventually.
         //
-        // The reference's guard is `else if`, under `if hp <= 0`: a generator
-        // that is about to be destroyed does not ask.
-        if (_frame % 1800 == 0
-            && ((_world.RedGenerator.Exists && !Gml.LessOrEqual(_world.RedGenerator.Hp, 0))
-                || (_world.BlueGenerator.Exists && !Gml.LessOrEqual(_world.BlueGenerator.Hp, 0))))
-        {
-            _capsSyncPending = true;
-        }
-
+        // ⛔ NOTHING MAY SET _capsSyncPending FROM IN HERE. `syncTimer` has no
+        // writer inside GameServerBeginStep either: all nine of its setters are
+        // objects YOUNGER than the GameServer, so every one of them runs after
+        // line 55 has already tested it, and the extra message lands on the
+        // FOLLOWING tick. A set-and-consume in this method is a CAPS_UPDATE a
+        // tick early — which is what the generator's minute timer did from the
+        // day it landed until 2026-09-02. The two triggers keyed on the
+        // last two that were still asked for up here — the generator's minute
+        // timer and the setup timer's six-second mark — are in
+        // RequestGeneratorScoreboardSync and RequestSetupScoreboardSync now,
+        // below the broadcast with every other request.
+        // CapsSyncPhaseTests is the gate.
         if (_capsSyncPending || _frame % 3600 == 0)
         {
             _stateWriter.Write(_broadcast, MessageType.CapsUpdate);

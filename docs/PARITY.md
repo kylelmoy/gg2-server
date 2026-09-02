@@ -129,10 +129,17 @@ and the third is the one that matters:
    **same path** (`docs/BOTAI.md`, item 3). A second logging format invented
    later is exactly how the two drift apart.
 
-`TraceParser` turns it into ticks. A tick is delimited by its state update,
-which is always the *last* thing the server writes for that tick —
-`GameServerBeginStep.gml` queues command responses first and appends the update
-afterwards, and the whole buffer goes out in End Step. `FULL_UPDATE` and
+`TraceParser` turns it into ticks. A tick is delimited by its state update.
+
+⚠️ **That is a framing CONVENTION, not a fact about the server, and this comment
+used to claim it was the second.** It said the update is "always the last thing
+the server writes for that tick". It is not: every Begin Step event — a
+`WEAPON_FIRE`, a generator's destruction — is appended after it, and a
+`PLAYER_DEATH` is appended after the flush entirely. So `TraceParser`'s "tick N"
+is really *[the events of N-1][the update serialised at the top of N]*, which is
+coherent — the events of a frame travel with the state that frame ended in — but
+it is not what the sentence said. See `docs/TRAPS-SIMULATION.md`, "The GameServer
+is the OLDEST instance, so its flush is the FIRST End Step". `FULL_UPDATE` and
 `CAPS_UPDATE` are not tick boundaries: the first is sent on the join path
 outside the cadence, the second goes out *in addition* to that tick's update.
 

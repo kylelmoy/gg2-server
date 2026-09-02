@@ -2568,6 +2568,100 @@ lives in a different `SlotBuffer` for each, and an abstraction that hides which
 buffer is being read is exactly the one that can silently sort by an unrelated
 number. Eight lines of duplication is the cheaper mistake.
 
+### The GameServer is the OLDEST instance, so its flush is the FIRST End Step
+
+⛔ **Measured against the running game on 2026-09-02**, and it is the same
+instance-id rule as the section above pointed at a different object. `GameServer`
+is created by `start_server.gml:7` and is `<persistent>true</persistent>`, so it
+predates every room object and every character. Under GM8's instance-id event
+order that means:
+
+- `GameServerBeginStep` runs **before every other Begin Step**, and
+- `GameServerEndStep` — the flush — runs **before every other End Step**.
+
+**The consequence, and it is the one that costs a session:** anything appended to
+`global.sendBuffer` in a Character's or a Sentry's own End Step **misses that
+frame's flush and ships on the next tick**. Three messages are in that position:
+
+| append | site |
+|---|---|
+| `PLAYER_DEATH` | `Character.events/End Step.xml:34-47` |
+| sentry `DESTRUCTION` | `Sentry.events/End Step.xml`, the `hp<=0` block |
+| `BALANCE` | `with(GameServer) ServerBalanceTeams()`, `Character.events/End Step.xml:42-44` |
+
+⚠️ **`docs/PARITY.md` and `FlushShapeTests` both used to say the flush happens
+"after everything that frame has been appended". It does not**, and both have been
+corrected. The state update is not the last thing written for its tick either —
+every Begin Step event appends after it.
+
+#### The probe, because no trace can settle this
+
+⛔ **A recording is structurally blind to it.** The send buffer is FIFO, so the
+flush point changes which TCP segment a message rides in and **never** the byte
+order: both orderings produce an identical stream. There is no discriminator to
+look for in a trace, and looking for one is wasted time.
+
+What works is reading the buffer from inside the game, once a frame:
+
+```
+gg2_watch add probe string(buffer_size(global.sendBuffer)) + "b " + string(instance_number(Character)) + "c"
+gg2_speed 0.05          # 2 fps, or the trace outruns a gg2_log round trip
+gg2_eval  with(Character) hp = -1000;
+```
+
+⚠️ **The agent bridge's hook is its own Step event** (`AgentBridge.id` 100015
+against `GameServer.id` 100024), so the sample lands after every Begin Step and
+before every End Step — which is exactly the window a leftover shows up in.
+
+**The reading, and the arithmetic closes exactly.** Two bots killed on one frame:
+the steady state with no characters was **5 bytes**, and the frame after the
+deaths read **17** — 12 left over, being 5 + 5 for the two `PLAYER_DEATH`s
+(`sendEventPlayerDeath.gml`, five `write_ubyte`s) and 2 for the `BALANCE` notice
+(`ServerBalanceTeams.gml:29-30`). Those bytes can only have been appended in the
+previous frame's End Steps and survived its flush.
+
+⚠️ **Four things that cost time getting there, in order:**
+
+- **`gg2_step` freezes at the bridge's Step, not between frames**, and a frozen
+  instance is unreachable by object name — `GameServer.frame` and
+  `instance_number(Character)` both fail, while `global.` reads still work. Slow
+  the game with `gg2_speed` instead of stepping it.
+- **A watch expression that dereferences an object which may not exist throws
+  every frame**, puts up a dialog every frame, and drags the game to ~4 fps.
+  `Character.hp` did exactly that the moment the character died. Guard it or
+  watch `instance_number` only.
+- **A character standing in a spawn room is restored to `maxHp` every tick**, so
+  `hp = -1000` does nothing and looks like the death path being unreachable. Move
+  it to mid-map first — in the *same* eval, per "the game keeps stepping between
+  `gg2_eval` calls".
+- **Use `botAdd(team, class, name)` rather than a driven client.** A bot is a
+  server-side Player with no socket, so neither the 60-second AFK team-unpick nor
+  the spectator's five-minute self-disconnect can take the character away
+  mid-measurement. Both did, first.
+
+#### What is fixed, and what is still open
+
+✅ **The delivery half is fixed** — `GameServer.BroadcastEndStepEvents`, appended
+after `FlushBroadcast()`, gated by `FlushShapeTests` in both directions (no
+`WEAPON_FIRE` may lead a packet; a `PLAYER_DEATH` must). Mutation-checked.
+
+⚠️ **A death now shares a packet with the respawn it caused**, because the
+one-tick respawn's `PLAYER_SPAWN` is an alarm-stage append on tick D+1 and the
+death is a leftover from D. A test that drains until it finds the death consumes
+the spawn in the same drain — `SimulatedServerTests` was rewritten for it.
+
+⛔ **The join-snapshot half is NOT fixed.** `acceptJoiningPlayer` and
+`serviceJoiningPlayer` are `GameServerEndStep.gml:18-20`, so the reference's join
+`FULL_UPDATE` is serialised *before* `Character.events/End Step` — before the
+stair-climb `y += 6`, the room-bounds clamp, the `hp > maxHp` clamp, the sandvich
+heal, `cloakAlpha` and the taunt index. This port runs the whole tick inside
+`MatchSimulation.Tick`, so its join burst is taken after all of them. Closing it
+means splitting the simulation's End Step out of that call, which is a change to
+the stage boundary and serialised across lanes; it is worth a whole session, not
+a corner of one. **What being wrong costs: one joining client, once, sees a
+snapshot at most one tick stale in those six fields, corrected by the next
+`QUICK_UPDATE` seven ticks later.**
+
 ### The map test was the last place a projectile was still a box
 
 ✅ **Closed 2026-08-27**, and it was worth more than the character path that
@@ -3633,6 +3727,15 @@ when `Sentries.GateCollisionStep` is removed — measured, not assumed.
 `7ff5940d97aa7bed` to `5dac8a5e7c37ce3a` — **is not exercised by a single test**.
 Neutralised the whole function with an early return and ran the suite: **25
 failures before, 25 after, identical sets.** Not "weakly covered": zero.
+
+⚠️ **Re-measured on a GREEN suite, 2026-09-02**, because the original reading was
+taken while 25 tests were red for an unrelated reason and "the same 25" is a
+weaker statement than it looks. With the stamp red cleaned up (`PolicyFixture`)
+the suite is **2,572 passing, and 2,572 still pass with the carry neutralised.**
+The gap is unchanged and is now stated against a baseline of zero.
+⚠️ **The mutation has to be opaque to the compiler** — a bare `return` at the top
+is `error CS0162` under warnings-as-errors, so the probe returns on a condition
+the compiler cannot fold.
 
 ⚠️ **`PreciseCollisionOracleTests` gates the COLLISION PRIMITIVE, not the carry.**
 The probe settled that a character is a rectangle to GM8, that bounds are

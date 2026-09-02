@@ -360,13 +360,26 @@ public sealed class SimulatedServerTests
 
         // Aim 0 is due right, and red's spawn point is the left-hand one.
         var deaths = new List<ServerMessage>();
+        var spawnsWithTheDeath = new List<ServerMessage>();
 
         for (var tick = 0; tick < 120 && deaths.Count == 0; tick++)
         {
             shooter.SendInputState(new PlayerInput(PlayerKeys.Attack, 0, 0));
             victim.SendInputState(new PlayerInput(PlayerKeys.None, 0, 0));
             harness.Tick();
-            deaths.AddRange(reader.Drain(shooter).Where(m => m.Type == MessageType.PlayerDeath));
+
+            var drained = reader.Drain(shooter);
+            deaths.AddRange(drained.Where(m => m.Type == MessageType.PlayerDeath));
+
+            // ⚠️ The replacement arrives in the SAME packet as the death, so it
+            // has to be caught on this drain or it is consumed and lost. A death
+            // is appended in the Character's End Step, which is AFTER the
+            // GameServer's End Step flush, so it ships on tick D+1 — and the
+            // one-tick respawn's PLAYER_SPAWN is appended in D+1's alarm stage,
+            // which is before that same flush. Measured against the running game
+            // on 2026-09-02; see GameServer.BroadcastEndStepEvents.
+            if (deaths.Count > 0)
+                spawnsWithTheDeath.AddRange(drained.Where(m => m.Type == MessageType.PlayerSpawn));
         }
 
         var death = Assert.Single(deaths);
@@ -381,7 +394,7 @@ public sealed class SimulatedServerTests
         // The replacement is what proves the body was destroyed rather than
         // merely announced — a PLAYER_SPAWN cannot go out for a character that
         // still exists.
-        var respawned = false;
+        var respawned = spawnsWithTheDeath.Any(m => m.Payload[0] == victimSlot);
 
         for (var tick = 0; tick < 10 && !respawned; tick++)
         {
