@@ -290,7 +290,8 @@ public sealed class ControlPort : IDisposable
             json.Append("{\"slot\":").Append(slot);
             json.Append(",\"team\":\"").Append(_server.TeamOf(slot)).Append('"');
             json.Append(",\"class\":\"").Append(_server.ClassOf(slot)).Append('"');
-            json.Append(",\"bot\":").Append(_server.SourceOf(slot) is Gg2.Bots.ScriptedBot ? "true" : "false");
+            json.Append(",\"bot\":").Append(
+                Gg2.Bots.ScriptedBot.Of(_server.SourceOf(slot)) is not null ? "true" : "false");
             json.Append(",\"alive\":").Append(_server.IsAlive(slot) ? "true" : "false");
 
             if (_server.TryGetExactPosition(slot, out var x, out var y, out var hp))

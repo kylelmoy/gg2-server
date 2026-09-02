@@ -21,13 +21,31 @@ namespace Gg2.Bots;
 /// anchors the published tuning tables are quoted at.
 /// </param>
 /// <param name="NamePrefix">What a bot's name starts with.</param>
+/// <param name="SearchMicro">
+/// Non-null gives every bot a <see cref="RolloutSearch"/> micro-controller inside
+/// its engagement window, with the scripted layer still owning movement, routing
+/// and objectives — <c>docs/BOTS.md</c>’s arm 3. Null is the all-scripted arm 1.
+/// </param>
+/// <remarks>
+/// ⚠️ <b>Arm 3 is the better BOT and the more expensive one.</b> It beat the
+/// policy hybrid on death share pooled over ~34,000 deaths (44.55% against 46.17%,
+/// z = −4.26) and over 840 matches an arm (−3.59 points, t = −5.60). It also costs
+/// far more per decision, which is what <c>RolloutOptions.Threads</c> is for.
+/// <para>
+/// ⛔ <b>Measured at 8 bots, not 12.</b> A rollout re-simulates every live
+/// character for every tick of every candidate, so its cost rises with the
+/// POPULATION as well as with the bot count — <c>tools/bench/README.md</c> trap 5.
+/// Nothing here has been measured at a full server with humans in it.
+/// </para>
+/// </remarks>
 public readonly record struct BotPopulationOptions(
     bool Enabled = false,
     int FillToPlayers = 8,
     int MaxBots = 8,
     int MinHumans = 1,
     int Difficulty = 3,
-    string NamePrefix = "[BOT] ")
+    string NamePrefix = "[BOT] ",
+    RolloutOptions? SearchMicro = null)
 {
     /// <summary>
     /// The reference's own <c>[Bots]</c> defaults.
@@ -60,7 +78,8 @@ public readonly record struct BotPopulationOptions(
         MaxBots: 8,
         MinHumans: 1,
         Difficulty: 3,
-        NamePrefix: "[BOT] ");
+        NamePrefix: "[BOT] ",
+        SearchMicro: null);
 }
 
 /// <summary>

@@ -41,6 +41,24 @@ namespace Gg2.Bots;
 /// </remarks>
 public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
 {
+
+    /// <summary>
+    /// The <see cref="ScriptedBot"/> driving a slot, through any micro-controller
+    /// wrapped around it — or null if the slot is not a bot at all.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>Use this instead of <c>source is ScriptedBot</c>.</b> A slot driven by
+    /// <see cref="SearchBot"/> or <see cref="PolicyBot"/> IS a bot, and the direct
+    /// type test says it is not — silently, at four sites in the live server, one
+    /// of which frees nav reservations on removal and another of which hands every
+    /// bot the new graph on a map change. See <see cref="IWrapsScriptedBot"/>.
+    /// </remarks>
+    public static ScriptedBot? Of(IInputSource? source) => source switch
+    {
+        ScriptedBot bot => bot,
+        IWrapsScriptedBot wrapper => wrapper.Scripted,
+        _ => null,
+    };
     /// <summary>How long a spot that never planned is banned for.</summary>
     /// <remarks>The reference's own literal 300, ten seconds.</remarks>
     private const int SpotBanTicks = 300;

@@ -111,7 +111,7 @@ public sealed class BotPopulationService
 
         foreach (var slot in _server.BotSlots)
         {
-            if (_server.SourceOf(slot) is ScriptedBot bot)
+            if (ScriptedBot.Of(_server.SourceOf(slot)) is { } bot)
                 bot.SetMap(Nav);
         }
 
@@ -195,7 +195,19 @@ public sealed class BotPopulationService
         if (Nav is not null && Spawns is not null)
             bot.Objective = new BotObjective(Nav, Spawns);
 
-        var slot = _server.AddBot(name, team, playerClass, bot);
+        // ⛔ THE WRAPPER GOES ON BEFORE AddBot, so the slot never briefly holds a
+        // bare ScriptedBot that something else could latch onto, and it wraps the
+        // SAME instance the lines above configured — the search owns keys and aim
+        // inside its engagement window and delegates everything else back.
+        //
+        // ⚠️ Every site that wants the macro layer asks ScriptedBot.Of, never
+        // `is ScriptedBot`. See IWrapsScriptedBot for what breaks otherwise, and
+        // note the Query assignment below still reaches the right object.
+        IInputSource source = options.SearchMicro is { } search
+            ? new SearchBot(new RolloutSearch(search), bot)
+            : bot;
+
+        var slot = _server.AddBot(name, team, playerClass, source);
 
         // ⚠️ The query has to carry the class the server actually gave it, which
         // is checkClasslimits' answer and not the one asked for — the search's
@@ -234,7 +246,7 @@ public sealed class BotPopulationService
         // longer walking its route, and leaving the counts up charges every future
         // search on that team extra for an edge nothing is on. This is the third
         // of the three removal sites the idempotence flag exists for.
-        if (_server.SourceOf(pick) is ScriptedBot leaving)
+        if (ScriptedBot.Of(_server.SourceOf(pick)) is { } leaving)
             Occupancy.Remove(leaving.Path);
 
         _server.RemoveBot(pick);
@@ -264,7 +276,7 @@ public sealed class BotPopulationService
             var team = _server.TeamOf(slot);
             var playerClass = _server.ClassOf(slot);
 
-            if (_server.SourceOf(slot) is not ScriptedBot bot)
+            if (ScriptedBot.Of(_server.SourceOf(slot)) is not { } bot)
                 continue;
 
             earlier.Clear();

@@ -1,4 +1,5 @@
 using System.Globalization;
+using Gg2.Bots;
 using Gg2.Server;
 
 namespace Gg2.Host;
@@ -99,6 +100,12 @@ internal static class Program
             NavCacheDirectory = MapDirectory.ResolveNav(),
         };
 
+        // ⚠️ Held OUTSIDE the switch because --search-threads and --search-bots
+        // can arrive in either order, and a flag whose effect depends on argument
+        // order is the kind of thing nobody notices until a measurement is wrong.
+        // Whichever comes second reconciles the two.
+        var searchThreads = Math.Clamp(Environment.ProcessorCount / 3, 1, 8);
+
         for (var i = 0; i < args.Length; i++)
         {
             var name = args[i];
@@ -193,6 +200,46 @@ internal static class Program
                     i++;
                     break;
                 }
+
+                // docs/BOTS.md's arm 3: a RolloutSearch micro-controller inside
+                // each bot's engagement window, the scripted layer still owning
+                // movement, routing and objectives.
+                //
+                // ⚠️ IT IS THE BETTER BOT AND THE EXPENSIVE ONE. Better on death
+                // share than both the all-scripted control and the policy hybrid,
+                // pooled over ~34,000 deaths and over 840 matches an arm. Its cost
+                // is why --search-threads exists.
+                //
+                // ⛔ NOT MEASURED WITH HUMANS IN THE SERVER. A rollout re-simulates
+                // every live character for every tick of every candidate, so cost
+                // rises with the population, and every number quoted for it comes
+                // from 8-bot headless matches. Watch --tick-stats while playing.
+                case "--search-bots":
+                    options.Bots = options.Bots with
+                    {
+                        SearchMicro = new RolloutOptions(Threads: searchThreads),
+                    };
+
+                    break;
+
+                // ⚠️ Threads change NO decision -- RolloutThreadingTests gates that
+                // at 2, 4 and 8 -- so this is a pure cost knob. It is also the one
+                // place this server is not single-threaded, and the pool it uses is
+                // the process's: a burst inside a tick takes cores from nothing else
+                // here, but it is not free on a shared machine.
+                case "--search-threads":
+                    searchThreads = RequireInt(name, value);
+
+                    if (options.Bots.SearchMicro is not null)
+                    {
+                        options.Bots = options.Bots with
+                        {
+                            SearchMicro = new RolloutOptions(Threads: searchThreads),
+                        };
+                    }
+
+                    i++;
+                    break;
 
                 case "--bot-difficulty":
                     options.Bots = options.Bots with { Difficulty = RequireInt(name, value) };
@@ -289,6 +336,14 @@ internal static class Program
           --bots <n>        fill the server to n players with bots (0 = off)
           --bot-difficulty <1-5>
                             how good they are (default 3)
+          --search-bots     give every bot a rollout-search micro-controller inside
+                            its engagement window (default: off). Better on death
+                            share than the scripted bot and much more expensive;
+                            never yet measured with humans in the server.
+          --search-threads <n>
+                            threads the search splits its candidates across
+                            (default: cores/3, capped at 8). Changes cost only,
+                            never a decision.
           --botnav <path>   override the bot nav graphs (default: nav/)
           --speed <n|max>   run at n times real time, or 'max' for unpaced
                             (default 1)

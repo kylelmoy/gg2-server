@@ -85,7 +85,7 @@ public enum HandoverRule
     HeadSplit,
 }
 
-public sealed class PolicyBot : IInputSource, ICommandSource
+public sealed class PolicyBot : IInputSource, ICommandSource, IWrapsScriptedBot
 {
     /// <summary>
     /// Straight-line pixels within which the policy drives.
@@ -197,6 +197,11 @@ public sealed class PolicyBot : IInputSource, ICommandSource
     /// proximity is not.
     /// </remarks>
     public HandoverRule Rule { get; init; } = HandoverRule.MacroTask;
+
+    /// <summary>The macro layer this wraps. See <see cref="IWrapsScriptedBot"/>.</summary>
+    public ScriptedBot ScriptedBot => _scripted;
+
+    ScriptedBot IWrapsScriptedBot.Scripted => _scripted;
 
     public PolicyBot(PolicyNetwork policy, ScriptedBot scripted)
     {

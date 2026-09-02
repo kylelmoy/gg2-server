@@ -43,7 +43,7 @@ namespace Gg2.Bots;
 /// constraint is the tick tail, not the duty cycle</b>; `tools/bench`, trap 6.
 /// </para>
 /// </remarks>
-public sealed class SearchBot : IInputSource, ICommandSource
+public sealed class SearchBot : IInputSource, ICommandSource, IWrapsScriptedBot
 {
     private readonly RolloutSearch _search;
     private readonly ScriptedBot _scripted;
@@ -56,6 +56,11 @@ public sealed class SearchBot : IInputSource, ICommandSource
         _search = search;
         _scripted = scripted;
     }
+
+    /// <summary>The macro layer this wraps. See <see cref="IWrapsScriptedBot"/>.</summary>
+    public ScriptedBot ScriptedBot => _scripted;
+
+    ScriptedBot IWrapsScriptedBot.Scripted => _scripted;
 
     /// <summary>The engagement window. Phase 4's measured 150px by default.</summary>
     public double Range { get; init; } = PolicyBot.EngagementRange;
