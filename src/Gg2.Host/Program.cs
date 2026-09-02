@@ -258,15 +258,15 @@ internal static class Program
                     i++;
                     break;
 
-                // The tick budget an IMicroArbiter spends per tick, in
-                // IMicroController.DecisionCost units. ⛔ REQUIRED when more than
-                // one controller is configured, because without an arbiter the
+                // MICROSECONDS of controller work per tick. ⛔ REQUIRED when more
+                // than one controller is configured, because without an arbiter the
                 // first tier always drives and the second would be dead weight
                 // nobody could see.
                 //
-                // ⚠️ NOT A MEASUREMENT AND NOT TUNED. The units are relative and
-                // unmeasured — IMicroController.DecisionCost says so — so a number
-                // here is an experiment, not a configuration. Watch --tick-stats.
+                // ⚠️ The per-decision COSTS are measured (policy 7 us, search 4800
+                // at twelve live characters); the BUDGET is not tuned. The tick is
+                // 33,300 us, so 10000 caps concurrent search decisions at two.
+                // Watch --tick-stats.
                 //
                 // ⛔ The arbiter reads the TICK, never a clock: a match with one in
                 // it still replays from its seed. See IMicroArbiter.
@@ -486,13 +486,14 @@ internal static class Program
                             inside their engagement window - docs/BOTS.md arm 2.
                             Combine with --search-bots to give bots both, most
                             expensive first; that needs --bot-arbiter.
-          --bot-arbiter <units>
-                            per-tick budget, shared by every bot, deciding which
-                            controller may spend a decision when several bots
-                            engage on the same tick. Cheaper tiers, then the
-                            scripted layer, once it runs out. REQUIRED with more
-                            than one controller. The units are relative and NOT
-                            measured - watch --tick-stats.
+          --bot-arbiter <us>
+                            per-tick budget in MICROSECONDS of controller work,
+                            shared by every bot, deciding which controller may
+                            spend a decision when several bots engage on the same
+                            tick. Cheaper tiers, then the scripted layer, once it
+                            runs out. REQUIRED with more than one controller.
+                            A tick is 33300us; a search decision measures ~4800 at
+                            12 live characters and a policy decision ~7.
           --policy-ignore-stamp
                             load a checkpoint whose simulation stamp does NOT
                             match this build. Only honest when the simulation

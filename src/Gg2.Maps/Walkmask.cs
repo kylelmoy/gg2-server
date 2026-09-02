@@ -68,6 +68,99 @@ public sealed class Walkmask
     }
 
     /// <summary>
+    /// Whether any cell in the inclusive rectangle is solid — the same question
+    /// as <see cref="IsSolid"/> over every cell in it, one masked word read per
+    /// row instead of one test per cell.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>This is what the bitset was built for and for six phases nothing
+    /// called it.</b> This class's own summary has said since phase 3 that the
+    /// storage is a word-strided bitset "because <c>PlaceFree</c> is the hottest
+    /// call in the server and a character rectangle spans only a handful of cells
+    /// — the test wants to be a few masked word reads, not a byte loop". Both
+    /// <c>CollisionWorld.PlaceFreeInMask</c> overloads were the byte loop. The
+    /// description was true of the layout and false of every consumer, which is
+    /// CLAUDE.md's "a claim the repo makes about itself" wearing a performance
+    /// hat: nothing could fail, because the loop was correct.
+    /// <para>
+    /// ⚠️ <b>Measured, 2026-09-02, Release, a soldier on <c>ctf_truefort</c>:</b>
+    /// a box test visits <b>18 cells over 6 rows</b> and its three columns land
+    /// in ONE word per row, so this reads 6 words where the loop ran 18 tests.
+    /// <c>PlaceFreeInMask</c> 17.1 ns → 6.8 ns, and a 10px crawl — which calls it
+    /// about thirteen times — 310 ns → 179 ns.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Exactly the same predicate, including off-mask.</b> Out-of-range is
+    /// OPEN, as <see cref="IsSolid"/> has it, so the rectangle is clamped rather
+    /// than rejected and a box hanging off the edge of the map reports only what
+    /// the cells inside say. <c>WalkmaskBoxTests</c> asserts the equivalence
+    /// against the naive loop over every shipped map, edges included, rather than
+    /// leaving it to reading.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Bits above <see cref="Width"/> in a row's last word are excluded by
+    /// the clamp</b>, so this does not depend on the decoder leaving them zero —
+    /// a dependency that would be invisible until a map whose width is not a
+    /// multiple of 64 had junk there.
+    /// </para>
+    /// </remarks>
+    public bool AnySolidInBox(int firstColumn, int lastColumn, int firstRow, int lastRow)
+    {
+        // Clamp rather than reject: off-mask is open, so a box overhanging the
+        // map asks only about the part that exists.
+        var c0 = firstColumn < 0 ? 0 : firstColumn;
+        var c1 = lastColumn >= Width ? Width - 1 : lastColumn;
+        var r0 = firstRow < 0 ? 0 : firstRow;
+        var r1 = lastRow >= Height ? Height - 1 : lastRow;
+
+        if (c0 > c1 || r0 > r1)
+            return false;
+
+        var firstWord = c0 >> 6;
+        var lastWord = c1 >> 6;
+
+        // The bits of the span's first and last word that are inside it. When the
+        // span lies in one word — the common case, because three columns straddle
+        // a 64-cell boundary about one position in twenty — the two are ANDed.
+        var lowMask = ulong.MaxValue << (c0 & 63);
+        var highMask = ulong.MaxValue >> (63 - (c1 & 63));
+
+        var words = _words;
+
+        if (firstWord == lastWord)
+        {
+            var mask = lowMask & highMask;
+
+            for (var row = r0; row <= r1; row++)
+            {
+                if ((words[(row * _stride) + firstWord] & mask) != 0)
+                    return true;
+            }
+
+            return false;
+        }
+
+        for (var row = r0; row <= r1; row++)
+        {
+            var at = row * _stride;
+
+            if ((words[at + firstWord] & lowMask) != 0)
+                return true;
+
+            for (var word = firstWord + 1; word < lastWord; word++)
+            {
+                if (words[at + word] != 0)
+                    return true;
+            }
+
+            if ((words[at + lastWord] & highMask) != 0)
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// For every cell, the Chebyshev distance in cells to the nearest solid
     /// cell — 0 where the cell is itself solid, <see cref="MaxClearance"/> where
     /// nothing solid is within that many cells. Row-major, <c>Width</c> stride.

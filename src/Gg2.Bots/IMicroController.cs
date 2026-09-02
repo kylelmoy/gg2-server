@@ -49,17 +49,42 @@ public interface IMicroController
     string Name { get; }
 
     /// <summary>
-    /// A relative cost per DECISION, in whatever units an arbiter is configured
-    /// in. 1 is the unit.
+    /// What one DECISION costs, in <b>microseconds</b>.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>These are not measurements and no expression may treat them as
-    /// one.</b> They order the tiers for <see cref="IMicroArbiter"/> and nothing
-    /// else. `tools/bench/README.md` trap 7 is the standing example of what
-    /// happens when a bare constant in an expression is read as a measured cost:
-    /// a <c>4.7</c> that was an estimate, was 1.4x low, and drove an
-    /// affordable/OVER column in two repos for a day. <b>Measure with
-    /// <c>BENCH_SEARCH</c> or <c>BENCH_POLICYCOST</c> before quoting a ratio.</b>
+    /// ⛔ <b>Microseconds, and that is a correction.</b> This was "a relative cost
+    /// per DECISION, 1 is the unit", with the two shipped controllers at 4 and 1 —
+    /// <b>a 4:1 ratio where the measured one is about 695:1</b>. A policy decision
+    /// is 6.9 µs (2.2 extracting the observation, 4.7 in the forward pass); a
+    /// search decision at twelve live characters is 4,795 µs. An arbiter budgeting
+    /// in the old units would have admitted four policy decisions as the price of
+    /// one search and been wrong by more than two orders of magnitude.
+    /// <para>
+    /// ⚠️ <b>Found by measuring, on the day after it was written, and it had a
+    /// comment saying it was not a measurement.</b> Saying so is not enough when
+    /// the numbers are also the arbiter's arithmetic —
+    /// <c>tools/bench/README.md</c> trap 7 is this exact shape.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>A microsecond unit makes a budget mean something.</b> The tick is
+    /// 33,300 µs, so <c>--bot-arbiter 10000</c> is "ten milliseconds of controller
+    /// work a tick" and caps concurrent search decisions at two. In the old units
+    /// the number named nothing.
+    /// </para>
+    /// <para>
+    /// ⛔ <b>A constant cannot be right for the search, and this is the honest
+    /// approximation rather than a claim.</b> A rollout re-simulates every live
+    /// character for every tick of every candidate, so its cost scales with
+    /// POPULATION, horizon and candidate count — <c>BENCH_SEARCH</c> shows
+    /// 2.47 ms at two characters against 7.64 ms at twelve on an earlier build.
+    /// The value below names the configuration it was measured at. <b>Re-measure
+    /// with <c>BENCH_SEARCH</c> and <c>BENCH_POLICYCOST</c> before trusting a
+    /// budget derived from it.</b>
+    /// </para>
+    /// <para>
+    /// ⚠️ The default of 1 belongs to a controller that has not measured itself —
+    /// a stub or a test double. A real one overrides it.
+    /// </para>
     /// </remarks>
     int DecisionCost => 1;
 

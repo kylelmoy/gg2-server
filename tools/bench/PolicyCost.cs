@@ -19,7 +19,15 @@ public static class PolicyCost
 {
     public static void Run(string npz, string observations, string maps, string nav)
     {
-        var policy = PolicyNetwork.Load(npz);
+        // ⛔ The stamp check is BYPASSED, and for this mode that is not a
+        // compromise. A forward pass is the same arithmetic whatever simulation
+        // the weights were trained against — the shapes come from the checkpoint,
+        // the cost comes from the shapes, and nothing here reads a behaviour. The
+        // only checkpoint that exists is stamp-invalid for this build
+        // (docs/ENV.md, "The checkpoint is a FIXTURE now"), so without this the
+        // mode cannot run at all and the number it exists to produce is
+        // unobtainable. Churn.cs bypasses for a different reason and says so.
+        var policy = PolicyNetwork.Load(npz, ignoreSimulationStamp: true);
         var raw = File.ReadAllBytes(observations);
         var rows = BitConverter.ToInt32(raw, 0);
         var length = BitConverter.ToInt32(raw, 4);

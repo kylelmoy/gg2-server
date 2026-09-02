@@ -98,7 +98,11 @@ The single hottest call in the server is `placeFree`. Design it deliberately:
 
 - The walkmask is a **bitset** — `ulong[]` with a row stride, one bit per mask
   cell, one cell per 6 × 6 world pixels. A character rectangle spans a handful of
-  cells; the test is a few masked word reads.
+  cells; the test is a few masked word reads — `Walkmask.AnySolidInBox`.
+  ⛔ **That last clause was aspirational until 2026-09-02.** The layout was always
+  the bitset; every consumer was a cell-by-cell loop calling `IsSolid`, in **four
+  separate copies**. Nothing could fail, because the loop was correct — see
+  "Where a tick actually goes" below.
 - Solid rectangles (gates, player walls, platforms) are a small array of AABBs
   tested afterwards.
 - **Solidity is a query filter, not global state.** The reference toggles a
@@ -119,6 +123,107 @@ bool PlaceFree(in Rect box, double x, double y, in CollisionFilter filter);
 This is both faster and clearer, and it makes gate semantics — which depend on
 the asking character's team *and* whether it carries intel — a parameter instead
 of a hidden mutation.
+
+## Where a tick actually goes
+
+**Measured 2026-09-02, Release, 24-core box, `ctf_truefort`, soldiers.** ⚠️ **A
+wall-clock figure on one machine — re-measure before quoting, and say which
+build.** The probe is a throwaway; what survives is the shape.
+
+| | cost |
+|---|---|
+| `CollisionWorld.PlaceFree` (character box + filter) | **13.9 ns** |
+| `Walkmask.AnySolidInBox` alone | 8.8 ns |
+| `Movement.GoodMoveContactSolid`, a 10px fall | **177 ns** — about 13 `PlaceFree`s |
+| `MatchSimulation.Tick`, 12 live characters | **3.7 µs** |
+| `WorldState` whole-struct copy (156,624 bytes) | 2.2 µs |
+| a `RolloutSearch` decision, 60 candidates × horizon 20, population 12 | **4.8 ms** |
+
+### The three things this settles, because each one was assumed wrong first
+
+⛔ **1. The tick is per-CHARACTER, not per-slot.** Sweeping the population 2→32
+gives ~0.45 µs a live character and a fixed cost of **0.26 µs** — about 5% at
+twelve. The nine `for (slot = 0; slot < MaxSlots; slot++)` passes over 64 mostly
+empty slots are **not** worth compacting; that was the first hypothesis and it is
+wrong by an order of magnitude.
+
+⛔ **2. `PlaceFree` is the leaf, and the crawl is the multiplier.**
+`good_move_contact_solid` asks it **once per pixel of travel**, so a character
+moving ten pixels pays thirteen box tests on that axis alone. This is why
+`placeFree` is "the single hottest call in the server" and why the mask layout
+was chosen — the cost is the call count, not the call.
+
+⛔ **3. The `WorldState` copy is NOT where a search spends its time.** At
+population 12 a candidate is 2.2 µs of fork against 20 ticks at 3.7 µs — the fork
+is about **3%**. ⚠️ **`BENCH_SEARCH` prints a per-candidate intercept that was
+labelled "fork" and read 27 µs**, an order of magnitude above the actual copy,
+because the intercept also carries the zoom check, the decoder and the aim-error
+scan. **Shrinking `WorldState` buys ~3% of a candidate, not ~25%.** The label is
+corrected and `tools/bench/Search.cs` says so at the call site.
+
+### What the word path bought, and what it did not
+
+Switching all four cell loops to `Walkmask.AnySolidInBox`:
+
+| | before | after | |
+|---|---|---|---|
+| `PlaceFree` | 24.5 ns | 13.9 ns | **−43%** |
+| `GoodMoveContactSolid`, 10px | 310 ns | 177 ns | **−43%** |
+| `MatchSimulation.Tick` @ pop 12 | 4.57 µs | 3.74 µs | **−18%** |
+| search decision @ pop 12, h20 | 6,364 µs | 4,795 µs | **−25%** |
+
+⚠️ **The tick figure held across the whole population sweep** (2, 8, 12, 16, 24,
+32), all six in the same direction at 8–24%, and the search figure held across all
+five horizons — which is why these are quoted and the one below is not.
+
+⛔ **It is NOT measurable in the twelve-scripted-bot server tick, and that is
+reported rather than buried.** `TwelveBotsRunWellUnderTheTickBudget`, interleaved
+Release runs: **before 0.172–0.190 ms, after 0.151–0.178 ms.** The distributions
+overlap; a single before/after pair read 0.190 → 0.174 and would have been written
+down as −8%. **That figure is dominated by the scripted bot layer — nav, targeting,
+objectives — not by collision**, so a collision win is invisible in it by
+construction. ⚠️ **CLAUDE.md's 0.151 ms is inside this spread, so it is a sample
+from it rather than a number that moved.**
+
+### Why this is the lever for the bot layer
+
+A rollout search re-simulates every live character for every tick of every
+candidate, so **the simulation tick is multiplied by candidates × horizon** — 1,200
+at the shipped settings. **Anything taken off `MatchSimulation.Tick` is taken off a
+search decision at 1,200×**, which is the opposite of the scripted-bot case above,
+where the same saving disappears into the bot layer's own cost. That asymmetry is
+the whole reason to look here.
+
+### Still on the table, measured and not taken
+
+- **`PlaceFree`'s rect scan is fine.** It is a linear pass over every solid
+  rectangle, and the worst shipped map has **13** (`ctf_conflict`). The comment
+  claiming "small and rarely more than a dozen, so a linear scan beats any index"
+  is accurate — checked, not assumed.
+- **`stackalloc ProjectileHandle[512]` costs 18 ps a call** even zeroed, against a
+  3.7 µs tick. There is no `SkipLocalsInit` in this repo and it would buy nothing
+  here. ⚠️ Recorded so the next reader does not chase it: the four 512-element
+  stackallocs look alarming and are not.
+- ⛔ **`RolloutSearch`'s 64-slot opponent loop: MEASURED at 1.1%, and rejected.**
+  43.4 ns a simulated tick, so 52 µs of a 4,795 µs decision. ⚠️ **The safe version
+  saves less than that**, because skipping dead slots is *not* equivalent: today
+  they are written `PlayerInput.None` every tick, and a slot that dies mid-rollout
+  — or respawns inside the horizon — would otherwise keep its last live input.
+  Preserving that means clearing what just died, which costs about what the loop
+  costs. **1% is not worth a silent, rare divergence in what the search decides.**
+- ⛔ **Memoising the last mask query: MEASURED at 43.9% hit rate, and rejected.**
+  Consecutive `AnySolidInBox` calls repeat their cell rectangle 43.9% of the time
+  over 3,000 ticks of a twelve-character world (537,549 calls). ⚠️ **The arithmetic
+  predicted ~83%** — one pixel of a crawl only crosses a 6px cell boundary every
+  sixth step — and real motion is 2D with the crawl alternating axes, so the
+  prediction was wrong by half. At 8.8 ns a mask test that ceiling is ~3.9 ns
+  against a ~1 ns compare and a `[ThreadStatic]` read. ⛔ **And it cannot live on
+  `CollisionWorld`**: `RolloutOptions.Threads` shares one across worker threads, so
+  a mutable memo there races and `RolloutThreadingTests`' identity gate is exactly
+  what would catch it — after it had changed a decision.
+- **`WorldState` is 156,624 bytes against `ACloneStaysWithinItsBudget`'s 160 KB
+  ceiling — 98%.** ⛔ **One ordinary field away from red**, and worth knowing
+  before somebody adds one and reads the failure as a surprise.
 
 ## Bots: the actual point of the project
 

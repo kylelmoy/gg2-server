@@ -345,9 +345,21 @@ public sealed class WorldStateTests
         //    the same class of silent off-by-one as a roster index, and this
         //    file exists to keep those out.
         //
-        // Four fifths of the state is still the 512-slot projectile pool, so the
-        // next real lever is that number, and shrinking it is a behaviour
-        // change: see WorldState.MaxProjectiles.
+        // ⚠️ MEASURED 2026-09-02: the state is 156,624 bytes, which is 98% of the
+        // 160 KB ceiling below. This assertion is one ordinary addition away from
+        // firing, and the next person to add a field will read it as a surprise
+        // unless it says so here.
+        //
+        // The 512-slot projectile pool is 86 KB of that — 55%, not the "four
+        // fifths" this comment claimed, which was true two growth steps ago.
+        // Characters are 22 KB, Players 14.3, Sentries 9.7, Weapons 8.7,
+        // MovingPlatforms 7.7. Shrinking the pool is a behaviour change: see
+        // WorldState.MaxProjectiles.
+        //
+        // ⚠️ The clone cost is NOT where a rollout search spends its time, which is
+        // the reason to know the number rather than a reason to shrink it. Measured
+        // at population 12: the whole-struct copy is 2.2 us against 20 simulated
+        // ticks at 3.7 us each, so the fork is about 3% of a candidate.
         Assert.True(size < 160 * 1024, $"WorldState is {size} bytes");
     }
 

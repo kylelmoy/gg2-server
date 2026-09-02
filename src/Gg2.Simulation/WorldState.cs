@@ -116,8 +116,10 @@ public struct WorldState
     /// <para>
     /// The cost is paid on every clone, which is why it is not larger still:
     /// each slot is a <see cref="ProjectileState"/> plus a generation plus an
-    /// order entry, and at this capacity the pool is about 43 KB of the whole
-    /// state's 66 KB. <c>WorldStateTests.ACloneStaysWithinItsBudget</c> is the
+    /// order entry, and at this capacity the pool is <b>86 KB of the whole
+    /// state's 156.6 KB — 55%</b> (measured 2026-09-02; it said "43 KB of 66 KB",
+    /// which was true at the end of phase 5 stage 3 and has been wrong since).
+    /// <c>WorldStateTests.ACloneStaysWithinItsBudget</c> is the
     /// tripwire on that number.
     /// </para>
     /// <para>

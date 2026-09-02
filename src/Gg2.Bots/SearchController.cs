@@ -45,12 +45,27 @@ public sealed class SearchController : IMicroController
     public string Name => "search";
 
     /// <summary>
-    /// ⛔ <b>NOT a measurement.</b> See <see cref="IMicroController.DecisionCost"/>:
-    /// this orders the tiers and nothing else. A search decision really is far more
-    /// than four policy forward passes — measure it with <c>BENCH_SEARCH</c> and
-    /// <c>BENCH_POLICYCOST</c> before quoting any ratio, including this one.
+    /// <b>4,800 µs</b> at twelve live characters, horizon 20, 60 candidates.
     /// </summary>
-    public int DecisionCost => 4;
+    /// <remarks>
+    /// ⚠️ <b>Measured 2026-09-02, Release, <c>BENCH_SEARCH</c> at
+    /// <c>BENCH_POP=12</c> on <c>ctf_truefort</c>: 4,795 µs a decision.</b> It was
+    /// <b>4</b> in the invented units this replaced, against a policy's 1 — a 4:1
+    /// ratio where the measured one is <b>695:1</b>.
+    /// <para>
+    /// ⛔ <b>This constant is wrong the moment the configuration changes, and it
+    /// cannot be otherwise.</b> Cost is candidates × (per-candidate + horizon ×
+    /// per-tick), and the per-tick term scales with the number of live characters
+    /// because a rollout re-simulates all of them. Halve the population and this
+    /// roughly halves. <b>It is here so an arbiter's arithmetic is out by tens of
+    /// percent rather than by two orders of magnitude</b>, which is what it was.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Re-measure before deriving a budget from it</b> —
+    /// <c>BENCH_SEARCH=1 BENCH_POP=&lt;n&gt;</c>.
+    /// </para>
+    /// </remarks>
+    public int DecisionCost => 4800;
 
     public bool DecidedThisPoll { get; private set; }
 

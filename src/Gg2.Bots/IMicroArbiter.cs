@@ -32,11 +32,26 @@ namespace Gg2.Bots;
 /// settable for exactly that.
 /// </para>
 /// <para>
-/// ⚠️ <b>Nothing here is measured yet.</b> The tiers, the costs and any budget are
-/// a mechanism for an experiment, not a tuned configuration — see
-/// <see cref="IMicroController.DecisionCost"/>. <b>The falsification condition:</b>
-/// if a downgrading arbiter does not move a <c>BENCH_THREADS</c>-style p99.9
-/// column, it is not doing what this file says it does.
+/// ✅ <b>The costs ARE measured now, in microseconds</b> — a policy decision is
+/// 6.9 µs and a search decision 4,795 µs at twelve live characters
+/// (2026-09-02, <c>BENCH_POLICYCOST</c> and <c>BENCH_SEARCH</c>). ⛔ <b>They were
+/// invented relative units at 4 and 1 for a day</b>, a 4:1 ratio where the real
+/// one is 695:1; see <see cref="IMicroController.DecisionCost"/>.
+/// </para>
+/// <para>
+/// ⚠️ <b>So a budget names something now.</b> The tick is 33,300 µs, which makes
+/// <c>UnitsPerTick = 10000</c> "ten milliseconds of controller work a tick" and
+/// caps concurrent search decisions at two. <b>No budget has been TUNED</b> — the
+/// mechanism is measured, the policy for setting it is not.
+/// </para>
+/// <para>
+/// ⛔ <b>The search's constant is configuration-dependent and cannot not be.</b>
+/// Its cost scales with population, horizon and candidate count. Re-measure with
+/// <c>BENCH_SEARCH=1 BENCH_POP=&lt;n&gt;</c> before deriving a budget.
+/// </para>
+/// <para>
+/// <b>The falsification condition:</b> if a downgrading arbiter does not move a
+/// <c>BENCH_THREADS</c>-style p99.9 column, it is not doing what this file says.
 /// </para>
 /// </remarks>
 public interface IMicroArbiter
@@ -74,7 +89,7 @@ public interface IMicroArbiter
 }
 
 /// <summary>
-/// A fixed number of decision-cost units per tick, spent most-capable-first.
+/// A fixed budget of controller microseconds per tick, spent most-capable-first.
 /// </summary>
 /// <remarks>
 /// The simplest arbiter that answers the question this seam was built for: when
@@ -105,8 +120,8 @@ public sealed class DecisionQuotaArbiter : IMicroArbiter
     private int _spent;
 
     /// <param name="unitsPerTick">
-    /// The budget. In <see cref="IMicroController.DecisionCost"/> units, which are
-    /// relative and unmeasured — see that member.
+    /// The budget, in <b>microseconds of controller work per tick</b>. See
+    /// <see cref="IMicroController.DecisionCost"/>. The tick itself is 33,300 µs.
     /// </param>
     public DecisionQuotaArbiter(int unitsPerTick)
     {

@@ -46,6 +46,17 @@ public sealed class PolicyController : IMicroController
 
     public string Name => "policy";
 
+    /// <summary>
+    /// <b>7 µs</b> — 2.2 extracting the observation plus 4.7 in the forward pass.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Measured 2026-09-02, Release, <c>BENCH_POLICYCOST</c></b> on the
+    /// 209→64→64→27 checkpoint: 4,733 ns a forward pass over a million calls,
+    /// 2,165 ns an observation. Both allocate 40 bytes total, not per call.
+    /// <b>Re-measure if the network's shape changes</b> — this is linear in it.
+    /// </remarks>
+    public int DecisionCost => 7;
+
     public bool DecidedThisPoll { get; private set; }
 
     /// <summary>

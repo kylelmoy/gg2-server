@@ -87,7 +87,14 @@ retrain first**, and would not look broken without one.
 
 Numbers, tables and scope: `docs/ENV.md`, "Phase 4 re-measured".
 
-### ⛔ Arm 3, the search as micro-controller: unshippable on the tick, verdict-pending on deaths
+### ⛔ Arm 3, the search as micro-controller: unshippable SINGLE-THREADED, verdict-pending on deaths
+
+⚠️ **This heading said "unshippable on the tick" until 2026-09-02 and that is now
+too strong.** It holds for the single-threaded server, which is the design — but
+**at eight threads and twelve bots arm 3 clears the budget on the max as well as
+the p99.9**, over 21 maps and 126 matches. See "Arm 3 AT TWELVE BOTS" below before
+acting on anything in this section. **What is written here is the 8-bot,
+single-threaded measurement of 2026-09-01 and stays as the record of it.**
 
 **21 maps, 40 matches an arm, 8 bots, 5-minute cap, `BENCH_ARMS`, 2026-09-01.**
 Arm 1 all-scripted, arm 2 policy hybrid, arm 3 search hybrid — same 150px gate,
@@ -374,6 +381,50 @@ code:**
   factor costs in cores before recommending it** — 8 threads for 4–5x is under
   60% efficiency.
 
+### ✅ Arm 3 AT TWELVE BOTS — the gate is cleared on the MAX, at eight threads
+
+**`BENCH_THREADS=6 BENCH_BOTS=12`, 21 maps, 6 matches a map, ladder 1/8, 5-minute
+cap, Release, 24 cores, 2026-09-02, post-word-path build.** This is the
+configuration the ladder above said was missing: **the shipping bot count, not
+the 8 every earlier arm-3 number was taken at**, and 6 matches a map rather than 4.
+
+| statistic | serial | 8 threads |
+|---|---|---|
+| **max**, worst map | **80.74 ms** (`ctf_eiger`) | **18.26 ms** (`gen_destroy`) |
+| maps over 33.3 ms on the max | **19 of 21** | **0 of 21** |
+| **p99.9**, worst map | 32.11 ms (`dkoth_atalia`) | 6.37 ms (`tdm_mantic`) |
+| maps over budget on the p99.9 | 0 of 21 | 0 of 21 |
+| mean, worst map | 0.659 ms | 0.162 ms |
+
+⛔ **This is the first configuration in which arm 3 passes on the statistic the
+"unshippable" verdict was written against.** That verdict was a *max*, and at
+eight threads the worst max over 21 maps and 126 matches is **18.26 ms — 55% of
+budget.**
+
+✅ **The serial column reproduces the original verdict almost exactly**, which is
+worth more than either number alone: 2026-09-01 reported **80.65 ms** worst on
+`ctf_eiger` at 8 bots; this run reads **80.74 ms** on the same map at 12. ⚠️ **Two
+different bot counts and match counts, so treat the agreement as a sanity check on
+the instrument, not as a measurement that the two configurations cost the same.**
+
+⚠️ **The serial p99.9 passes on all 21 — but `dkoth_atalia` is at 32.11 of 33.3,
+which is 96% of budget.** At 8 bots the worst p99.9 was 29.4. **There is no serial
+headroom left at twelve.**
+
+⛔ **What this does NOT establish.** The max is one draw from a heavy tail — the
+bench's own note records three identical runs at 72, 98 and 97 ms — and **a max is
+monotone in coverage**, so 6 matches a map passing does not mean 40 would.
+**Widening coverage can only make it worse.** The claim supported is "no tick
+exceeded budget in 126 matches a map-set at eight threads", not "no tick will".
+
+⚠️ **And it costs eight cores.** The server is single-threaded by design; the
+speedup is **3.98–5.33x on the p99.9**, so eight threads for ~4.5x is under 60%
+efficiency. **Say what a factor costs in cores before recommending it.**
+
+⚠️ **The order-spread column reads 100.8% on `arena_montane`** and 55–72% on four
+others. At 6 matches that is 3 even and 3 odd, so it is still seed-dominated: it
+bounds the **mean** columns, not the p99.9's.
+
 ### ⛔ A duel does not CONTAIN what a match contains, and every absence is a zero
 
 ⛔ **One mechanism, and this project found it twice in one day as two unrelated
@@ -560,12 +611,32 @@ the in-tick decision a pure function of the budget it was given.
 is deterministic and it is not fair; an arbiter wanting fairness must rotate on
 something derived from the **tick**.
 
-⚠️ **NOTHING HERE IS MEASURED.** `IMicroController.DecisionCost` is a relative
-ordering, not a cost — `tools/bench/README.md` trap 7 is the standing example of a
-bare literal being read as a measurement for a day. **The falsification condition:
-if a downgrading arbiter does not move a `BENCH_THREADS`-style p99.9 column, it is
-not doing what this section says it does.** Measure with `BENCH_SEARCH` and
-`BENCH_POLICYCOST` before quoting any ratio.
+✅ **The costs are MEASURED now, in microseconds** — `BENCH_POLICYCOST` and
+`BENCH_SEARCH`, 2026-09-02, Release:
+
+| decision | cost |
+|---|---|
+| policy: observation + forward pass | **6.9 µs** (2.2 + 4.7) |
+| search: 60 candidates × horizon 20, twelve live characters | **4,795 µs** |
+| the tick itself | 33,300 µs |
+
+⛔ **`DecisionCost` shipped for a day as invented relative units — search 4,
+policy 1 — where the measured ratio is 695:1.** An arbiter budgeting in those
+units would have priced four policy decisions as one search and been wrong by two
+orders of magnitude. **It is microseconds now**, which is what makes
+`--bot-arbiter 10000` mean "ten milliseconds of controller work a tick" and cap
+concurrent search decisions at two. `tools/bench/README.md` trap 7 is exactly this
+shape, and the field carried a comment saying it was not a measurement — **which
+did not help, because the numbers were also the arbiter's arithmetic.**
+
+⛔ **The search's constant is configuration-dependent and cannot not be**: cost
+scales with population, horizon and candidate count. Re-measure with
+`BENCH_SEARCH=1 BENCH_POP=<n>` before deriving a budget.
+
+⚠️ **No budget has been TUNED.** The mechanism and the costs are measured; what
+`UnitsPerTick` should be is not. **The falsification condition: if a downgrading
+arbiter does not move a `BENCH_THREADS`-style p99.9 column, it is not doing what
+this section says it does.**
 
 ## ⛔ Measuring a bot change
 

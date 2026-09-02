@@ -307,12 +307,10 @@ public sealed class CollisionWorld
         var firstRow = CellOf(originY + box.Top);
         var lastRow = CellOf(originY + box.Bottom);
 
-        for (var row = firstRow; row <= lastRow; row++)
-        for (var column = firstColumn; column <= lastColumn; column++)
-            if (_mask.IsSolid(column, row))
-                return false;
-
-        return true;
+        // ⚠️ One masked word read per row, not one test per cell — see
+        // Walkmask.AnySolidInBox, which is what the bitset layout was built for
+        // and what neither of these two overloads did until 2026-09-02.
+        return !_mask.AnySolidInBox(firstColumn, lastColumn, firstRow, lastRow);
     }
 
     /// <summary>
@@ -355,10 +353,11 @@ public sealed class CollisionWorld
         var firstRow = CellOf(top);
         var lastRow = CellOf(bottom);
 
-        for (var row = firstRow; row <= lastRow; row++)
-        for (var column = firstColumn; column <= lastColumn; column++)
-            if (_mask.IsSolid(column, row))
-                return false;
+        // ⚠️ One masked word read per row — Walkmask.AnySolidInBox. This is the
+        // hottest of the four copies of this loop: the movement crawl asks it
+        // once per pixel of travel.
+        if (_mask.AnySolidInBox(firstColumn, lastColumn, firstRow, lastRow))
+            return false;
 
         // Small and rarely more than a dozen, so a linear scan beats any index
         // that would have to be rebuilt when a gate opens.
@@ -433,10 +432,11 @@ public sealed class CollisionWorld
         var firstRow = CellOf(box.Top);
         var lastRow = CellOf(box.Bottom);
 
-        for (var row = firstRow; row <= lastRow; row++)
-        for (var column = firstColumn; column <= lastColumn; column++)
-            if (_mask.IsSolid(column, row))
-                return false;
+        // ⚠️ One masked word read per row — Walkmask.AnySolidInBox. This is the
+        // hottest of the four copies of this loop: the movement crawl asks it
+        // once per pixel of travel.
+        if (_mask.AnySolidInBox(firstColumn, lastColumn, firstRow, lastRow))
+            return false;
 
         foreach (var rect in _rects)
             if (rect.Overlaps(box.Left, box.Right, box.Top, box.Bottom) && rect.IsSolidTo(filter))
@@ -555,12 +555,10 @@ public sealed class CollisionWorld
         var firstRow = CellOf(box.Top);
         var lastRow = CellOf(box.Bottom);
 
-        for (var row = firstRow; row <= lastRow; row++)
-        for (var column = firstColumn; column <= lastColumn; column++)
-            if (_mask.IsSolid(column, row))
-                return false;
-
-        return true;
+        // ⚠️ One masked word read per row, not one test per cell — see
+        // Walkmask.AnySolidInBox, which is what the bitset layout was built for
+        // and what neither of these two overloads did until 2026-09-02.
+        return !_mask.AnySolidInBox(firstColumn, lastColumn, firstRow, lastRow);
     }
 
     /// <summary>

@@ -12,11 +12,21 @@ namespace Bench;
 /// <remarks>
 /// The question is `gg2-rl`'s: if the policy prunes 60 candidates to k, can the
 /// freed budget be spent on depth? Cost is
-/// <c>candidates x (fork + horizon x tick)</c> — the fork is a 145 KB
-/// <c>WorldState</c> copy per candidate and does NOT scale with horizon, so
-/// pruning frees more than a naive candidates-times-horizon account suggests.
-/// A horizon sweep separates the two terms: the slope is candidates x tick, the
-/// intercept is candidates x fork.
+/// <c>candidates x (fork + horizon x tick)</c> — the per-candidate term does NOT
+/// scale with horizon, so pruning frees more than a naive
+/// candidates-times-horizon account suggests. A horizon sweep separates the two:
+/// the slope is candidates x tick, the intercept is candidates x everything else.
+/// <para>
+/// ⛔ <b>The column this prints as "fork" is the INTERCEPT, not the state copy,
+/// and the two differ by an order of magnitude.</b> It read 27.1 us a candidate at
+/// population 12 while the <c>WorldState</c> assignment itself measures
+/// <b>2.2 us</b> — the rest is the zoom check, the decoder, the aim-error scan and
+/// the per-candidate bookkeeping. This file said "the fork is a 145 KB WorldState
+/// copy per candidate" and a reader would have gone looking for 25 us of memcpy
+/// that is not there. <b>Shrinking <c>WorldState</c> buys about 3% of a
+/// candidate, not 25%.</b> Measured 2026-09-02; see <c>docs/ARCHITECTURE.md</c>,
+/// "Where a tick actually goes".
+/// </para>
 /// </remarks>
 public static class SearchBench
 {
@@ -102,7 +112,11 @@ public static class SearchBench
 
         Console.WriteLine();
         Console.WriteLine($"  fit: cost = {intercept:0.00} us + {slope:0.000} us x horizon");
-        Console.WriteLine($"  per candidate: fork {intercept / candidates:0.000} us, tick {slope / candidates:0.000} us");
+        // ⛔ "intercept", not "fork". It was labelled fork and it is not the state
+        // copy — that measures 2.2 us where this reads 27. See this class's remarks.
+        Console.WriteLine(
+            $"  per candidate: intercept {intercept / candidates:0.000} us "
+            + $"(NOT the state copy — see SearchBench remarks), tick {slope / candidates:0.000} us");
         Console.WriteLine();
 
         // What horizon does k candidates buy at the cost of 60 at horizon 20?
