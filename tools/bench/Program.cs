@@ -84,6 +84,16 @@ if (Environment.GetEnvironmentVariable("BENCH_ARMS") is { } armsN)
     return;
 }
 
+if (Environment.GetEnvironmentVariable("BENCH_CHURN") is { } churnN)
+{
+    Bench.ChurnBench.Run(
+        maps,
+        Environment.GetEnvironmentVariable("GG2_NAV")!,
+        Environment.GetEnvironmentVariable("NPZ")!,
+        int.Parse(churnN));
+    return;
+}
+
 if (Environment.GetEnvironmentVariable("BENCH_THREADS") is { } threadsN)
 {
     Bench.ThreadsBench.Run(
