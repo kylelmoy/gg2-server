@@ -237,9 +237,26 @@ their outcome:
 | 7 middling | 45.3 | 45.9% | 43.9% | −2.0p | −2.63 |
 | 7 bloody | 63.4 | 45.9% | 44.9% | −1.0p | −1.58 |
 
-**So it is a fact about the bot**: the search hybrid’s advantage is large and clear
-on maps that are quiet under scripted play (t = −4.77) and **not distinguishable
-from zero on bloody ones** (t = −1.58).
+⛔ **Three per-bucket t’s are NOT a test that the buckets differ**, and the claim is
+about the difference. `gg2-rl` caught it — *"significant beside non-significant read
+as a contrast"* is its own entry — and reconstructed the interaction from the t’s.
+**Recomputed here from the per-match rows, which is the better source:**
+
+    quiet minus bloody:  -6.68p   SE 1.75   z = -3.83   two-sided p = 1.3e-4
+    (its reconstruction: -6.7p    SE 1.73   z = -3.86   p = 1.1e-4)
+
+**So the buckets genuinely differ, and the trend is established rather than
+eyeballed.**
+
+| maps by arm-1 lethality | gap | 95% CI |
+|---|---|---|
+| 7 quiet | −7.72p | [−10.90, −4.54] |
+| 7 middling | −2.01p | [−3.50, −0.52] |
+| 7 bloody | −1.04p | **[−2.33, +0.25]** |
+
+⚠️ **"Not distinguishable from zero on bloody maps" is NOT "zero on bloody maps."**
+That interval spans a real advantage to a slight disadvantage. **The TREND is
+established; the bloody bucket’s value is not**, and the two are different claims.
 
 #### ⛔ RETRACTED: "it helps most where the tick budget is least pressured"
 
