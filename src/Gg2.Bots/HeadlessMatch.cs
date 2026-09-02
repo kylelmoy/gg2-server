@@ -215,17 +215,29 @@ public sealed class HeadlessMatch
         string mapDirectory,
         string? navDirectory)
     {
-        var png = File.ReadAllBytes(Path.Combine(mapDirectory, options.Map + ".png"));
-
-        // ⚠️ Narrowed to the area FIRST, and everything downstream sees only
-        // that. A tall map is several rounds stacked vertically and only one
-        // area's entities exist — cp_dirtbowl writes six control points and
-        // plays two.
-        var map = LevelMap.FromPng(options.Map, png).ForArea(options.Area);
-
-        NavGraph? nav = null;
-        if (navDirectory is { Length: > 0 } && NavCache.TryLoad(navDirectory, options.Map, options.Area, out var loaded))
-            nav = loaded;
+        // ⚠️ Through the SHARED cache, so a batch of matches on one map decodes it
+        // once. Measured 2026-09-02: this call was 18.0 ms against 283.5 ms to play
+        // a 9,000-tick match — 6% of every match, paid again for bytes that had not
+        // changed. Most of the 18 ms is the nav graph rather than the PNG.
+        //
+        // ⛔ Only the deeply immutable half is shared. On() builds a fresh
+        // CollisionWorld and SpawnPoints per match, which is what keeps this safe:
+        // CollisionWorld.SetCaptureZones writes to it, so it must never be cached.
+        // ScenarioResources' own remarks carry the full argument.
+        //
+        // ⚠️ The cache is NEVER INVALIDATED, which is right for a batch runner and
+        // wrong for a long-lived server — a map edited on disk mid-process is not
+        // served again. Nothing in Gg2.Server reaches this path; GameServer loads
+        // its own. On(options, map, nav) is the uncached way in for a caller that
+        // needs a re-read.
+        //
+        // ⚠️ The map is narrowed to the AREA before anything downstream sees it. A
+        // tall map is several rounds stacked vertically and only one area's
+        // entities exist — cp_dirtbowl writes six control points and plays two.
+        // ScenarioResources.Read does that narrowing, and the area is part of its
+        // key.
+        var (map, nav) = ScenarioResources.Shared.Get(
+            options.Map, options.Area, mapDirectory, navDirectory);
 
         return On(options, map, nav);
     }

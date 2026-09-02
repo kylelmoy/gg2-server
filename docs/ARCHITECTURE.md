@@ -323,6 +323,48 @@ minority of ticks.**
 swept box into the floor underfoot. Recorded because the margin looks free and is
 not.
 
+### ✅ Map data is decoded ONCE per process, and where it deliberately is not
+
+⛔ **`HeadlessMatch.Load` re-decoded the map and re-parsed the nav graph on every
+match.** Measured 2026-09-02: **18.0 ms against 283.5 ms to play a 9,000-tick
+match — 6% of every match**, paid again for bytes that had not changed. It goes
+through `ScenarioResources.Shared` now: **18.36 ms → 0.08 ms** on the second ask,
+a 230x cut.
+
+⚠️ **Most of the 18 ms is the NAV GRAPH, not the PNG.** A warm
+`LevelMap.FromPng` + `ForArea` is 2.78 ms; the rest is nav text. Anyone attacking
+load time should start there.
+
+**Holding everything in memory is cheap**, which is what makes this a
+non-question: **23 decoded maps are 9.0 MB** (about 400 KB each) and **23 nav
+graphs 5.7 MB** — call it 15 MB for every shipped map and its graph, against a
+156 KB `WorldState` per forked candidate.
+
+⛔ **Only the deeply immutable half is shared, and that division is the entire
+safety argument.** `LevelMap` and `NavGraph` are `init`-only throughout;
+**`CollisionWorld` is NOT** — `SetCaptureZones` writes to it — and neither is
+`SpawnPoints`. `HeadlessMatch.On` builds both per match, at 0.009 ms, so there is
+nothing to gain by widening the cache and a whole class of irreproducibility to
+lose. `SharedMapDataTests` gates the split in both directions: **sharing the
+`CollisionWorld` too fails it, and reverting to an uncached load fails it.**
+
+⚠️ **The cache is NEVER INVALIDATED**, so a map edited on disk mid-process is not
+served again. **That is right for a batch runner and wrong for a long-lived
+server** — and the server does not use this path. `GameServer` still calls
+`LevelMap.FromPng` on rotation, deliberately.
+
+⛔ **Do not assert on `ScenarioResources.Shared.Count` in a test.** It is
+process-wide, so whether an ask adds an entry depends on which tests ran first — a
+draft of `SharedMapDataTests` did, passed alone and failed in the suite, *including
+its control*. **Reference identity (`Assert.Same`) is the stronger claim anyway**
+and holds whatever else the process has done.
+
+⚠️ **Is the live server worth caching too?** It would save ~18 ms once per map
+rotation, which fits inside a single 33.3 ms tick and drops no frame — **no
+measured problem**, against giving up re-reading an edited map. The memory is not
+the obstacle; the absence of a symptom is. **What would change this: a rotation
+spike showing up in `--tick-stats`.**
+
 ### Still on the table, measured and not taken
 
 - **`PlaceFree`'s rect scan is fine.** It is a linear pass over every solid
