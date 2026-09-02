@@ -220,10 +220,45 @@ experiment produced about the bot rather than about the method.** It also fits t
 lethality shift: arm 3 records **4.1% fewer total deaths** and a median of 41 a
 match against arm 2’s 45.
 
-⚠️ **Read the buckets with their own caveat**: a share over 1–9 deaths is a noisy
-individual estimate, so the −9.1p rests on the mean of ~125 noisy-but-unbiased
-observations. **The monotone trend across four buckets is the signal, not any one
-row.**
+⛔ **THE BUCKETS ABOVE CONDITION ON A POST-TREATMENT VARIABLE, and `gg2-rl` caught
+it before the threading decision.** Deaths-in-match is an *outcome* of the arm —
+arm 3 causes 4.1% fewer — so the high-death bucket selects arm 3’s **failures**
+against arm 2’s typical matches, and the low-death bucket selects arm 3’s
+**successes**. **That manufactures a monotone shrinking advantage with no mechanism** —
+exactly the shape observed.
+
+✅ **RE-CUT on a pre-treatment axis, and the trend SURVIVES.** Maps bucketed by
+**arm 1’s own death rate** — arm 1 never sees arms 2 or 3, so the bucket cannot be
+their outcome:
+
+| maps by arm-1 lethality | a1 deaths/match | arm 2 | arm 3 | gap | t |
+|---|---|---|---|---|---|
+| 7 quiet | 16.2 | 46.6% | 38.9% | **−7.7p** | −4.77 |
+| 7 middling | 45.3 | 45.9% | 43.9% | −2.0p | −2.63 |
+| 7 bloody | 63.4 | 45.9% | 44.9% | −1.0p | −1.58 |
+
+**So it is a fact about the bot**: the search hybrid’s advantage is large and clear
+on maps that are quiet under scripted play (t = −4.77) and **not distinguishable
+from zero on bloody ones** (t = −1.58).
+
+#### ⛔ RETRACTED: "it helps most where the tick budget is least pressured"
+
+**Mine, and checking the link killed it.** I read the lethality trend as meaning
+the search earns its keep exactly where it is cheap. **Quiet maps are not cheap:**
+
+    quiet maps      arm-3 worst tick  70.11 ms
+    middling maps                     72.12 ms
+    bloody maps                       65.07 ms
+    correlation, map lethality vs arm-3 worst tick:  r = +0.16
+
+⚠️ **The tick cost is essentially independent of map lethality** — it is driven by
+decisions coinciding, which happens everywhere. **The death-share advantage varies
+by map; the tick cost does not.** Those are two independent facts and I had
+conflated them into a mechanism.
+
+✅ **Which leaves threading NEUTRAL rather than weakened**: if it fixed the tick
+cost, the search would deliver its map-varying advantage everywhere, and there is
+no "it only helps where it is already affordable" to argue against it.
 
 #### ⛔ And on the re-run the tick gate fails on 21 of 21
 
