@@ -114,15 +114,33 @@ public static class SimulationStamp
     /// point rather than a claim that anything changed.
     /// </para>
     /// <para>
-    /// ⚠️ <b>NOT bumped for moving platforms, 2026-09-01, and this is the second
-    /// exemption on record.</b> <c>MovingPlatforms.EndStep</c> is a new stage in
-    /// <see cref="MatchSimulation.Tick"/>, which the rule above would normally
-    /// make a bump. It is exempt because a platform <b>cannot reach a
-    /// character</b>, not because it looked harmless: the stage writes only to
-    /// <see cref="WorldState.MovingPlatforms"/> — the three values that go on the
-    /// wire — and the one path from there to a character is the <em>carry</em>,
-    /// which is not ported. No trajectory, damage number or projectile can differ,
-    /// whatever a map places.
+    /// ⛔ <b>2, 2026-09-01: THE CARRY. The exemption below is spent — read it as
+    /// history, not as a live licence.</b> <c>MovingPlatforms.Carry</c> moves a
+    /// character with the platform it is standing on and backs one out of a
+    /// platform that drives into it, so this stage now moves trajectories
+    /// directly. That is the unconditional bump the paragraphs below said it
+    /// would be, taken the moment it became true rather than argued around.
+    /// <para>
+    /// ⚠️ <b>Every checkpoint trained against <c>7ff5940d97aa7bed</c> is
+    /// invalid</b> and <see cref="Require"/> will refuse it. That is the stamp
+    /// working, not a regression — but it means <c>gg2-rl</c> must re-stamp or
+    /// retrain before a policy loads, and until then <c>PolicyBot</c> cannot run.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Reachability bought nothing here and was never going to.</b> The
+    /// sealed-chamber argument was already dead — <c>gg2-rl</c> seeds duels from
+    /// nav nodes, and 18 of <c>gg_debug2</c>'s 70 are inside sealed regions — so
+    /// there was no version of this change that could have shipped unbumped.
+    /// </para>
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>HISTORY: NOT bumped for moving platforms, earlier on 2026-09-01.</b>
+    /// <c>MovingPlatforms.EndStep</c> arrived as a new stage in
+    /// <see cref="MatchSimulation.Tick"/> that only moved the platform. It was
+    /// exempt because a platform <b>could not reach a character</b> — the stage
+    /// wrote only to <see cref="WorldState.MovingPlatforms"/>, and the one path
+    /// from there to a character was the carry, which did not exist yet. That
+    /// held for exactly as long as the carry was missing.
     /// </para>
     /// <para>
     /// ⚠️ <b>The first wording of this exemption said the stage was structurally
@@ -201,7 +219,7 @@ public static class SimulationStamp
     /// a custom map; a match on one is outside the stamp's claim either way.
     /// </para>
     /// </remarks>
-    public const int SimulationBehaviourVersion = 1;
+    public const int SimulationBehaviourVersion = 2;
 
     /// <summary>The types whose public constants are part of the contract.</summary>
     /// <remarks>

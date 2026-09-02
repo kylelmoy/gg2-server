@@ -96,6 +96,38 @@ public static class PreciseCollision
     }
 
     /// <summary>
+    /// One moving platform, made solid for the length of a single query.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The reference does exactly this and it is the oddest three lines in
+    /// the End Step:</b> <c>other.solid = true; good_move_contact_solid(...);
+    /// other.solid = false;</c>. A platform is <b>not</b> solid at any other
+    /// moment — it holds people up through the dropdown path, not through
+    /// <c>place_free</c> — so this is not a collider the world can own. It is
+    /// handed to one call and forgotten.
+    /// <para>
+    /// A default instance has a null mask and is solid to nothing, which is what
+    /// every caller outside the carry passes.
+    /// </para>
+    /// </remarks>
+    public readonly record struct PlatformCollider
+    {
+        public SpriteMask? Mask { get; init; }
+
+        public double X { get; init; }
+
+        public double Y { get; init; }
+
+        public int XScale { get; init; }
+
+        public int YScale { get; init; }
+
+        /// <summary>Whether a character's box at this position meets the platform.</summary>
+        public bool Meets(in CharacterBox box, double characterX, double characterY) =>
+            Mask is not null && PreciseCollision.Meets(Mask, X, Y, XScale, YScale, box, characterX, characterY);
+    }
+
+    /// <summary>
     /// A scale property as GM8 would use it, clamped to something a mask can be
     /// indexed by.
     /// </summary>

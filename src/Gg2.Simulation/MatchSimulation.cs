@@ -366,7 +366,7 @@ public static class MatchSimulation
         // That half is not ported and cannot be until a platform has a collision
         // box; MovingPlatforms' remarks say why, and the position of this call is
         // what the carry will need when it lands.
-        MovingPlatforms.EndStep(world.MovingPlatforms, ref state);
+        MovingPlatforms.EndStep(world, ref state);
 
         // End Step, which is also where anything that ran out of hp dies. GM8's
         // instance_destroy takes effect at once, so a character killed here is

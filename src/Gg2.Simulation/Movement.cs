@@ -73,6 +73,28 @@ public static class Movement
         double directionDegrees,
         double maxDistance,
         out Contact contact)
+        => GoodMoveContactSolid(
+            world, box, filter, ref mover, directionDegrees, maxDistance, out contact, default);
+
+    /// <summary>
+    /// <c>good_move_contact_solid</c> with one moving platform temporarily solid.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ The reference wraps exactly one call in <c>other.solid = true</c> /
+    /// <c>other.solid = false</c> — the branch where a platform drives INTO a
+    /// character and has to back them out along its own motion. Nothing else in
+    /// the game makes a platform solid, so the collider is a parameter rather
+    /// than world state.
+    /// </remarks>
+    public static double GoodMoveContactSolid(
+        CollisionWorld world,
+        in CharacterBox box,
+        in CollisionFilter filter,
+        ref MoverState mover,
+        double directionDegrees,
+        double maxDistance,
+        out Contact contact,
+        in PreciseCollision.PlatformCollider platform)
     {
         contact = default;
 
@@ -105,7 +127,7 @@ public static class Movement
             var newX = mover.X + moveX * i / MaxI;
             var newY = mover.Y + moveY * i / MaxI;
 
-            if (world.PlaceFree(box, newX, newY, filter))
+            if (world.PlaceFree(box, newX, newY, filter, platform))
             {
                 // ⚠️ The loop's fixed point, and the reference has it too — this
                 // is the one line here that is NOT in

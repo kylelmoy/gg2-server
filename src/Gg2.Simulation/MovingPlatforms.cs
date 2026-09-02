@@ -13,32 +13,27 @@ namespace Gg2.Simulation;
 /// User Events 10 and 11 for the five bytes each one puts on every
 /// <c>QUICK_UPDATE</c> and <c>FULL_UPDATE</c>.
 /// <para>
-/// ⚠️ <b>The carry is NOT here, and that is a real gap rather than a
-/// simplification.</b> The reference's End Step ends with a <c>with(Character)</c>
-/// block that picks up whoever is standing on the platform and pushes whoever it
-/// runs into. Every branch of it is a <c>place_meeting</c> against the platform's
-/// own collision mask — and <b>a <c>MovingPlatform</c> has no sprite</b>
-/// (<c>MovingPlatform.xml</c> declares <c>&lt;sprite/&gt;</c> empty, unlike its
-/// parent <c>DropdownPlatform</c>'s <c>sprite44</c>). Its mask arrives at run
-/// time from an embedded sprite named by the entity's <c>resource</c> property
-/// and decoded out of the map's metadata by
-/// <c>CustomMapCreateEntitiesFromEntityData.gml:68-88</c>. **That pipeline is not
-/// ported**, so this port cannot know a platform's box, and GM8 with
-/// <c>sprite_index = -1</c> collides with nothing — every branch of the carry is
-/// a no-op there. What is written below is therefore the whole of the reference's
-/// behaviour for every map this port can currently load, not a subset of it.
-/// **Porting the carry is gated on the custom-map resource path**, and
-/// <c>docs/TRAPS-SIMULATION.md</c>, "moving platforms", says so with the
-/// falsification condition attached.
+/// ✅ <b>The carry landed 2026-09-01</b> — the <c>with(Character)</c> block that
+/// picks up riders and shoves whoever the platform drives into. It was gated for
+/// a week on something else entirely: every branch of it is a
+/// <c>place_meeting</c> against the platform's own mask, and <b>a
+/// <c>MovingPlatform</c> has no sprite</b> (<c>MovingPlatform.xml</c> declares
+/// <c>&lt;sprite/&gt;</c> empty, unlike its parent <c>DropdownPlatform</c>'s
+/// <c>sprite44</c>). The mask comes from an embedded resource in the map's own
+/// metadata, so the decoders and <see cref="PreciseCollision"/> had to exist
+/// first, and both are now verified against the running game.
+/// <para>
+/// ⚠️ <b>A platform with no usable <c>resource</c> still carries nobody</b>, and
+/// that is the reference's behaviour rather than a shortcut: GM8 leaves
+/// <c>sprite_index = -1</c> and collides with nothing. All four of
+/// <c>gg_debug2</c>'s original platforms are like that; its raft is not.
 /// </para>
 /// <para>
-/// ⚠️ <b>The parent matters for the other direction.</b> Because
-/// <c>MovingPlatform</c>'s parent IS <c>DropdownPlatform</c>, every
-/// <c>with(DropdownPlatform)</c> and <c>place_meeting(…, DropdownPlatform)</c> in
-/// the character physics already means "or a moving platform". So the day a box
-/// exists, a character stands on one through
-/// <see cref="CharacterPhysics"/>'s existing dropdown path and no new standing
-/// rule is needed — only the carry.
+/// ⚠️ <b>The parent still matters, and it is why STANDING needed no new rule.</b>
+/// Because <c>MovingPlatform</c>'s parent IS <c>DropdownPlatform</c>, every
+/// <c>with(DropdownPlatform)</c> in the character physics already means "or a
+/// moving platform". What is here is only the part that has no equivalent: moving
+/// a character <em>with</em> the platform.
 /// </para>
 /// </remarks>
 public static class MovingPlatforms
@@ -72,11 +67,60 @@ public static class MovingPlatforms
             if (entity.Type != EntityTypes.MovingPlatform)
                 continue;
 
-            platforms.Add(Of(entity));
+            platforms.Add(Of(entity) with
+            {
+                Mask = MaskOf(map, entity),
+                Scale = PreciseCollision.ScaleOf(ScaleOf(entity)),
+            });
         }
 
         return [.. platforms];
     }
+
+    /// <summary>
+    /// The platform's collision shape, decoded from the map's own metadata.
+    /// </summary>
+    /// <remarks>
+    /// <c>stringToResource.gml</c>: the entity names a <c>resource</c>, the value
+    /// is the raw bytes of a PNG or GIF stored as a string in the <c>meta</c>
+    /// block, and <c>sprite_add(name, 1, 1, 0, 0, 0)</c> turns it into a sprite.
+    /// <para>
+    /// ⚠️ <b>Every failure here returns null, and every one of them is also what
+    /// GM8 does.</b> No <c>resource</c>, a name the metadata does not carry, or
+    /// bytes neither decoder accepts all leave <c>sprite_index = -1</c> — a
+    /// platform that moves and collides with nothing. <c>ctf_2dfort-ani</c>'s
+    /// <c>animap</c> is a real instance: nine bytes of truncated GIF.
+    /// </para>
+    /// </remarks>
+    private static SpriteMask? MaskOf(LevelMap map, LevelEntity entity)
+    {
+        var name = entity.GetString("resource");
+        if (string.IsNullOrEmpty(name))
+            return null;
+
+        var resource = map.Metadata?.GetString(name);
+        if (resource is null)
+            return null;
+
+        // The level-data text is decoded Latin-1, so each char is one byte.
+        var bytes = new byte[resource.Length];
+        for (var i = 0; i < resource.Length; i++)
+            bytes[i] = (byte)resource[i];
+
+        return SpriteMask.Decode(bytes);
+    }
+
+    /// <summary>
+    /// The entity's scale, which a map may set three different ways.
+    /// </summary>
+    /// <remarks>
+    /// User Event 1 reads a <c>scale</c> property into <c>image_xscale</c> and
+    /// <c>image_yscale</c>; the entity loader separately applies <c>xscale</c> and
+    /// <c>yscale</c>. Real maps use one, the other, or both — <c>cp_scrap</c> sets
+    /// all three to 3.
+    /// </remarks>
+    private static double ScaleOf(LevelEntity entity) =>
+        Math.Max(entity.GetReal("scale", 1), Math.Max(entity.XScale, entity.YScale));
 
     /// <summary>One entity as a definition.</summary>
     /// <remarks>
@@ -139,18 +183,247 @@ public static class MovingPlatforms
             {
                 X = definitions[i].StartX,
                 Y = definitions[i].StartY,
+
+                // Create.xml: x = round(x_) at birth, so the lagging copy starts
+                // in step rather than at zero. A zeroed RoundedX would make the
+                // first tick's step the platform's whole map coordinate.
+                RoundedX = Gml.Round(definitions[i].StartX),
+                RoundedY = Gml.Round(definitions[i].StartY),
+
                 MovementState = definitions[i].Trigger == 0 ? Up : Stopped,
             };
         }
     }
 
     /// <summary>Every platform's End Step, in instance order.</summary>
-    public static void EndStep(ReadOnlySpan<MovingPlatformDefinition> definitions, ref WorldState state)
+    /// <remarks>
+    /// Motion then carry, per platform, which is the reference's order inside one
+    /// End Step — and platforms run in instance order, so an earlier one has
+    /// already moved its riders before a later one looks at them.
+    /// </remarks>
+    public static void EndStep(CollisionWorld world, ref WorldState state)
     {
+        ArgumentNullException.ThrowIfNull(world);
+
+        var definitions = world.MovingPlatforms;
         var count = Math.Min(state.MovingPlatformCount, definitions.Length);
 
         for (var i = 0; i < count; i++)
-            Step(definitions[i], ref state.MovingPlatforms[i]);
+        {
+            ref var platform = ref state.MovingPlatforms[i];
+            ref readonly var definition = ref definitions[i];
+
+            var before = platform;
+            Step(definition, ref platform);
+
+            // colldx/colldy: the integer step, measured against the LAGGING
+            // rounded position. The reference computes both before assigning
+            // x/y, which is why RoundedX still holds last tick's value here.
+            var stepX = Gml.Round(platform.X) - before.RoundedX;
+            var stepY = Gml.Round(platform.Y) - before.RoundedY;
+
+            // MovingPlatform/End Step.xml — the block runs when the platform
+            // moved, OR when a trigger platform is parked waiting to be stood on.
+            // ⚠️ That second arm is why a stopped trigger platform still scans:
+            // it is how it notices a rider and starts.
+            var moved = stepX != 0 || stepY != 0;
+            var waitingOnATrigger = platform.MovementState == Stopped && definition.Trigger > 0;
+
+            if (moved || waitingOnATrigger)
+            {
+                Carry(world, ref state, in definition, ref platform, in before, stepX, stepY);
+
+                platform.RoundedX = Gml.Round(platform.X);
+                platform.RoundedY = Gml.Round(platform.Y);
+            }
+        }
+    }
+
+    /// <summary>
+    /// <c>with(Character)</c>: pick up the riders, and shove whoever the platform
+    /// drove into.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Every test here is against the platform at its PREVIOUS rounded
+    /// position</b> (<paramref name="before"/>), because the reference does not
+    /// assign <c>x</c>/<c>y</c> until after this block. The platform is where it
+    /// was; <paramref name="stepX"/>/<paramref name="stepY"/> is where it is
+    /// going.
+    /// <para>
+    /// ⚠️ <b>A platform with no mask carries nobody</b>, and the early return is
+    /// not an optimisation — GM8 with <c>sprite_index = -1</c> collides with
+    /// nothing, so every branch below would be false anyway.
+    /// </para>
+    /// </remarks>
+    private static void Carry(
+        CollisionWorld world,
+        ref WorldState state,
+        in MovingPlatformDefinition definition,
+        ref MovingPlatformState platform,
+        in MovingPlatformState before,
+        double stepX,
+        double stepY)
+    {
+        if (definition.Mask is not { } mask)
+            return;
+
+        var collider = new PreciseCollision.PlatformCollider
+        {
+            Mask = mask,
+            X = before.RoundedX,
+            Y = before.RoundedY,
+            XScale = definition.Scale,
+            YScale = definition.Scale,
+        };
+
+        // The vertical component of this tick's motion, which the "passing
+        // through" refusal compares a rising character's vspeed against.
+        var dy = platform.Y - before.Y;
+
+        for (var slot = 0; slot < WorldState.MaxSlots; slot++)
+        {
+            if (!state.Alive[slot])
+                continue;
+
+            ref var character = ref state.Characters[slot];
+            var box = character.Box;
+
+            // Holding DOWN drops you through: "Cannot collide or move along if
+            // they hold down".
+            if ((character.KeyState & PlayerKeys.Down) != 0)
+                continue;
+
+            // ⚠️ Two-part on purpose, and the reference comments on it: checking
+            // only for upward motion would let a rising platform pass through
+            // somebody rising more slowly, and comparing vspeeds alone would stop
+            // a platform carrying anyone downwards.
+            if (character.VSpeed < 0 && character.VSpeed < dy)
+                continue;
+
+            // Already inside it: not picked up.
+            if (collider.Meets(box, character.X, character.Y))
+                continue;
+
+            if (collider.Meets(box, character.X, character.Y + 1))
+            {
+                StandOn(world, ref state, in definition, ref platform, ref character, slot, stepX, stepY);
+                continue;
+            }
+
+            // Not standing on it, but the platform has driven into them. Back
+            // them out along the platform's own motion and see whether they end
+            // up on top.
+            if (!collider.Meets(box, character.X - stepX, character.Y - stepY))
+                continue;
+
+            PushOut(world, ref state, in definition, ref platform, ref character, slot,
+                stepX, stepY, in collider);
+        }
+    }
+
+    /// <summary>A rider: move them with the platform, unless that would bury them.</summary>
+    private static void StandOn(
+        CollisionWorld world,
+        ref WorldState state,
+        in MovingPlatformDefinition definition,
+        ref MovingPlatformState platform,
+        ref CharacterState character,
+        int slot,
+        double stepX,
+        double stepY)
+    {
+        var box = character.Box;
+        var filter = character.Filter;
+
+        // charSetSolids()/charUnsetSolids() around a place_free: the rider is
+        // moved only if the destination is clear, so somebody pinned against a
+        // wall is left where they are rather than pushed into it.
+        if (world.PlaceFree(box, character.X + stepX, character.Y + stepY, filter))
+        {
+            character.X += stepX;
+            character.Y += stepY;
+
+            // ⚠️ Zeroed, not preserved. A rider is not falling, and leaving the
+            // accumulated gravity would make them drop the instant they step off.
+            character.VSpeed = 0;
+        }
+
+        // The trigger, which only a rider can pull: 1 is anybody, 2 is an intel
+        // carrier only.
+        if (platform.MovementState != Stopped)
+            return;
+
+        var carriesIntel = state.Characters[slot].CarryingIntel;
+
+        if (definition.Trigger == 1 || (definition.Trigger == 2 && carriesIntel))
+            platform.MovementState = Up;
+    }
+
+    /// <summary>
+    /// The platform drove into somebody: back them out, and carry them if they
+    /// ended up on top.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Rewind, test, then commit or roll back.</b> The reference moves the
+    /// character with <c>good_move_contact_solid</c> against the platform made
+    /// briefly solid, checks whether they now stand on it, and <b>restores their
+    /// original position if they do not</b>. Leaving them where the rewind put
+    /// them would teleport anyone a platform merely brushed.
+    /// </remarks>
+    private static void PushOut(
+        CollisionWorld world,
+        ref WorldState state,
+        in MovingPlatformDefinition definition,
+        ref MovingPlatformState platform,
+        ref CharacterState character,
+        int slot,
+        double stepX,
+        double stepY,
+        in PreciseCollision.PlatformCollider collider)
+    {
+        var box = character.Box;
+        var filter = character.Filter;
+
+        var originalX = character.X;
+        var originalY = character.Y;
+
+        var mover = new MoverState { X = character.X, Y = character.Y };
+
+        Movement.GoodMoveContactSolid(
+            world, box, filter, ref mover,
+            CharacterHitObstacle.PointDirection(character.X, character.Y, character.X - stepX, character.Y - stepY),
+            CharacterHitObstacle.PointDistance(character.X, character.Y, character.X - stepX, character.Y - stepY),
+            out _,
+            collider);
+
+        character.X = mover.X;
+        character.Y = mover.Y;
+
+        var carried = false;
+
+        if (collider.Meets(box, character.X, character.Y + 1)
+            && world.PlaceFree(box, character.X + stepX, character.Y + stepY, filter))
+        {
+            character.X += stepX;
+            character.Y += stepY;
+            character.VSpeed = 0;
+            carried = true;
+        }
+
+        if (!carried)
+        {
+            character.X = originalX;
+            character.Y = originalY;
+            return;
+        }
+
+        if (platform.MovementState != Stopped)
+            return;
+
+        var carriesIntel = state.Characters[slot].CarryingIntel;
+
+        if (definition.Trigger == 1 || (definition.Trigger == 2 && carriesIntel))
+            platform.MovementState = Up;
     }
 
     /// <summary>
@@ -253,6 +526,21 @@ public static class MovingPlatforms
 /// </remarks>
 public readonly record struct MovingPlatformDefinition
 {
+    /// <summary>The platform's collision shape, or null when it has none.</summary>
+    /// <remarks>
+    /// ⚠️ <b>Null is the common case and is not a failure.</b> A
+    /// <c>MovingPlatform</c> has no sprite of its own; the mask comes from an
+    /// embedded resource the entity names, and a platform with no
+    /// <c>resource</c>, a name that resolves to nothing, or bytes no decoder
+    /// accepts keeps <c>sprite_index = -1</c> in GM8 too. Such a platform moves
+    /// and carries nobody — which is all four of <c>gg_debug2</c>'s original
+    /// platforms.
+    /// </remarks>
+    public SpriteMask? Mask { get; init; }
+
+    /// <summary><c>image_xscale</c>/<c>image_yscale</c>; real maps set 1 to 6.</summary>
+    public int Scale { get; init; }
+
     /// <summary>Where the entity sits in the map, and where a full cycle returns it to.</summary>
     public required double StartX { get; init; }
 
@@ -306,9 +594,21 @@ public struct MovingPlatformState
     /// <summary>0 stopped, 1 outbound, 2 returning.</summary>
     public byte MovementState;
 
-    /// <summary>GM8's <c>x</c> — the rounded copy it draws and collides with.</summary>
-    public readonly double RoundedX => Gml.Round(X);
+    /// <summary>
+    /// GM8's <c>x</c> — the rounded copy it draws and collides with.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>STORED, and it LAGS <see cref="X"/> by one step during the End
+    /// Step.</b> The reference computes <c>colldx = round(x_) - round(x)</c>
+    /// after moving <c>x_</c> but before assigning <c>x</c>, so throughout the
+    /// carry the platform's mask sits at its PREVIOUS rounded position while
+    /// <c>colldx</c> describes the step it is about to take. Deriving this from
+    /// <c>X</c> instead would put the mask where the platform is going rather
+    /// than where it is, and every rider would be tested against the wrong
+    /// pixels.
+    /// </remarks>
+    public double RoundedX;
 
-    /// <summary>GM8's <c>y</c>.</summary>
-    public readonly double RoundedY => Gml.Round(Y);
+    /// <summary>GM8's <c>y</c>. Lags <see cref="Y"/> the same way.</summary>
+    public double RoundedY;
 }
