@@ -202,6 +202,11 @@ search decision at 1,200×**, which is the opposite of the scripted-bot case abo
 where the same saving disappears into the bot layer's own cost. That asymmetry is
 the whole reason to look here.
 
+⚠️ **The scripted case has its own lever and it is NOT the tick** — see "Where a
+headless bot match's tick goes" below. In a twelve-bot match the simulation is
+38% and one A\* search is 30%, so a saving on `MatchSimulation.Tick` pays a
+rollout search 1,200× and pays a scripted bot barely at all.
+
 ### ⛔ Where `PlaceFree` calls actually come from — and why the crawl is not the target
 
 **Measured 2026-09-02 over 2,940 ticks of a real bot match** (`ctf_truefort`, 12
@@ -364,6 +369,142 @@ rotation, which fits inside a single 33.3 ms tick and drops no frame — **no
 measured problem**, against giving up re-reading an edited map. The memory is not
 the obstacle; the absence of a symptom is. **What would change this: a rotation
 spike showing up in `--tick-stats`.**
+
+### ⛔ Where a headless bot MATCH's tick goes — and A\* is the biggest thing here
+
+**Measured 2026-09-02, Release, net10.0, 24-core box, `ctf_truefort`, twelve
+scripted bots, four headless matches of 9,000 ticks each.** In-process
+`Stopwatch` timers around named stages; the instrumentation is throwaway and its
+own overhead measured **0.05 µs of the 6 µs tick**, because `GetTimestamp` here
+is an rdtsc-backed read of about 3 ns.
+
+⚠️ **This is a different quantity from the sweep above**, which is twelve live
+characters standing still in a `ScenarioWorld`. This is a match: bots think,
+people die and respawn, projectiles fly.
+
+| | µs a tick | share |
+|---|---|---|
+| **the bots' `Poll`** | **9.24** | **61%** |
+| `PathFollower.Step` | 5.7 | 38% |
+| — of which **`NavSearch.Find`** | **4.5** | **30%** |
+| `BotCombat.Step` | 3.0 | 20% |
+| — of which `KeepOrDropTarget` + `LookForOne` | 0.87 | 6% |
+| `UpdateObjective` | 0.58 | 4% |
+| the rocket dodge, the query rebuild, the holds | 0.78 | 5% |
+| **`MatchSimulation.Tick`** | **5.72** | **38%** |
+| the Begin Step character loop (with `Generators.BeginStep`) | 1.67 | 11% |
+| the Step character loop (with `Rounds`/`Arena`) | 1.02 | 7% |
+| `Projectiles.Collide` | 1.01 | 7% |
+| `Projectiles.Move` | 0.65 | 4% |
+| `Timers.Advance` | 0.49 | 3% |
+| `MovingPlatforms.EndStep` + the End Step loop | 0.36 | 2% |
+| `Intel.CollisionStep`, `TickEvents.ClearOutputs`, cabinets, the rest | 0.62 | 4% |
+| the command drain, `_events = default` | 0.17 | 1% |
+| **total** | **15.13** | |
+
+⛔ **`NavSearch.Find` alone is 30% of the whole system** — more than every stage
+of the simulation put together bar the two character loops. **That is where a
+bot-layer performance question starts**, and nothing in this repo said so before
+2026-09-02: collision had been attacked four times over and the A\* underneath
+the path follower never once.
+
+**One search costs 15.2 µs and pops 203 nodes**, at 0.245 searches a tick — a bot
+re-plans every 45-89 ticks (`BotConstants.ReplanTicks` plus its own stagger) and
+each search expands about a third of a 687-node graph.
+
+⛔ **The heuristic is NOT the problem, which was the first guess.** Measured over
+a thousand searches: the straight-line estimate is **0.914 of the true path
+cost**. It is tight, the units of `NavEdge.Cost` and the cell-space distance
+really do agree, and A\* is not degenerating into Dijkstra. **Do not go looking
+for a scale error here.**
+
+⛔ **A quarter of a search is the priority queue.** A faithful microbenchmark of
+exactly the heap traffic one search does — 475 enqueues and 425 dequeues on a
+`PriorityQueue<int, double>`, interleaved the way the frontier interleaves them —
+costs **6.84 µs against the search's 29 µs**. ⚠️ **Replacing it is not free**:
+.NET's is a 4-ary heap at about 7.6 ns an operation, already near the floor, and
+a hand-written one would have to reproduce its tie-breaking exactly or two
+equal-cost routes would swap. On a symmetric map that is a real event, and it
+would move bot behaviour for no stated reason.
+
+### ⛔ The .NET sampling profiler was wrong THREE times here. Use in-process timers.
+
+`dotnet-trace --providers Microsoft-DotNETCore-SampleProfiler` on this workload
+produced confident, large, wrong numbers, each then settled against a direct
+timer or an A/B:
+
+| the sampler said | it actually is | how it was settled |
+|---|---|---|
+| `Buffer.ZeroMemoryInternal` is **63%** of an `eval` run | every memset-shaped thing in the tick is **under 2%** | stage timers — `_events = default` on a 6,160-byte `TickEvents` is **0.067 µs** |
+| `Projectiles.Collide` is **27.6%** of the run | **6.7%** — 1.01 µs of a 15.13 µs tick | stage timers summing to what the outer timer reads |
+| `Reconstruct`'s memmove is **33%** of A\* | **1.2%** | removed the memmove entirely and re-measured |
+| `PriorityQueue.RemoveRootNode` is **0.87%** of A\* | the heap is **24%** | a microbenchmark of the same operation counts |
+
+⚠️ **Its ORDERING of managed methods was roughly right** — it put `NavSearch.Find`
+at 31% of an `eval` run against a measured 30%, and that is what pointed this
+session at A\* in the first place. **Its magnitudes below that were not.** The
+pattern is that leaf attribution lands on runtime helpers — `memset`, `memmove` —
+that are not where the time is.
+
+⛔ **So: use the sampler to pick the method, a `Stopwatch` around named stages to
+size it, and an A/B to confirm anything you change.** The check that makes a
+stage table trustworthy is cheap and was applied here: **the stages must sum to
+what an outer timer reads around the whole call** — 6.009 against 6.04 µs.
+⚠️ And the trap `3aa644e`'s memo number hit applies to any A\* bench too: a
+reading taken before the JIT has tiered up says **57-70 µs** for the same search
+that settles at **15.2**.
+
+### ✅ Two exact-equivalence wins in `NavSearch.Find`, and four things that measured nothing
+
+**Landed 2026-09-02.** Both are bit-identical by construction and gated by
+mutation: forcing `hasBlocked` false reddens 2 tests, `hasOccupancy` false
+reddens 1, and dropping the `Reverse()` reddens 41.
+
+- **The blacklist and occupancy lookups are hoisted out of the edge loop.** Both
+  collections are nearly always empty — a bot's blacklist averaged **0.15
+  entries** a search, and the occupancy map is null whenever one team fields the
+  bots — and an empty one still cost the key arithmetic plus an
+  interface-dispatched lookup on each of about 2,000 edges a search.
+- **`Reconstruct` appends and reverses** instead of `path.Insert(0, …)`, which
+  was quadratic in the route length: about two thousand element moves to produce
+  a sixty-node route.
+
+⚠️ **Interleaved A/B, both arms twice, Release**, over the same four 9,000-tick
+matches:
+
+| | HEAD | after | |
+|---|---|---|---|
+| one A\* search, 1,000-pair bench | 30.9 µs | 29.3 µs | **−5.0%** |
+| the bots' `Poll` | 9.24 µs | 8.90 µs | **−3.7%** |
+| the whole tick | 15.13 µs | 14.75 µs | **−2.5%** |
+
+✅ **The three pinned bot measurements did NOT move, and here that is the expected
+result rather than an absent alarm** — the change is meant to be bit-identical,
+and the A\* bench moving 5% is the independent evidence that the edited code is
+reached at all. CLAUDE.md's "a pin that does not move is equally an alarm" cuts
+that way only for a change meant to alter behaviour.
+
+⛔ **Four things measured and NOT taken**, each built and measured rather than
+reasoned about:
+
+- **A compact 16-byte search-side edge array** — A\* reads four of `NavEdge`'s
+  nine fields and the struct is 56 bytes. **~1%**, isolated by an interleaved A/B
+  against the other change. Rejected: a second representation of the edge set,
+  and a second place the routability rule could drift, for one percent.
+- **Precomputed per-node heuristic centres**, so a relaxation reads two doubles
+  instead of loading a `NavNode`: **0.0%**. Rejected.
+- **`Projectiles.Collide`'s `stackalloc ProjectileHandle[512]` sized to the live
+  count instead** — 4 KB of stack zeroed every tick, including the many ticks
+  with nothing in the air. It read as a 3% win on one pass and **did not survive
+  an interleaved A/B**: nine alternations put it inside the drift. Rejected, and
+  the code is unchanged.
+- **`BotTargeting.Find`'s two `stackalloc`s**, 1.5 KB a bot a tick. Shrunk to 8
+  entries as a measurement — wrong behaviour, right question — and the tick did
+  not move.
+
+⚠️ **The last two confirm the note below that the 512-element `stackalloc`s "look
+alarming and are not"**, and together with the sampler's three misses they have
+one shape: **zeroing is not where this program spends its time.**
 
 ### Still on the table, measured and not taken
 

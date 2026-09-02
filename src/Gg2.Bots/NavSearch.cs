@@ -194,6 +194,17 @@ public sealed class NavSearch
         var goalX = (_graph.Nodes[goal].X0 + _graph.Nodes[goal].X1) / 2.0;
         var goalY = (double)_graph.Nodes[goal].Row;
 
+        // ⚠️ Hoisted out of the edge loop, and it is a measurement rather than
+        // tidiness. Both collections are usually EMPTY — a bot's blacklist
+        // averaged 0.15 entries a search over a ctf_truefort match, and the
+        // occupancy map is null whenever the caller fields one team — but an
+        // empty one still cost the key arithmetic plus an interface-dispatched
+        // lookup on every edge the frontier touched, about two thousand a
+        // search. Neither can become non-empty mid-search: nothing in this loop
+        // writes to either.
+        var hasBlocked = blocked is { Count: > 0 };
+        var hasOccupancy = occupancy is { Count: > 0 };
+
         _gScore[start] = 0;
         _open.Enqueue(start, 0);
 
@@ -270,15 +281,19 @@ public sealed class NavSearch
                 if (!NavGraph.EdgeRoutable(in edge, in query))
                     continue;
 
-                var key = NavGraph.EdgeKey(current, next);
-
-                if (blocked is not null && blocked.Contains(key))
-                    continue;
-
                 var cost = edge.Cost;
 
-                if (occupancy is not null && occupancy.TryGetValue(key, out var crowd))
-                    cost *= 1 + (BotConstants.OccupancyCost * crowd);
+                // The key is only built when somebody is going to look it up.
+                if (hasBlocked || hasOccupancy)
+                {
+                    var key = NavGraph.EdgeKey(current, next);
+
+                    if (hasBlocked && blocked!.Contains(key))
+                        continue;
+
+                    if (hasOccupancy && occupancy!.TryGetValue(key, out var crowd))
+                        cost *= 1 + (BotConstants.OccupancyCost * crowd);
+                }
 
                 var tentative = _gScore[current] + cost;
                 var existing = _gScore[next];
@@ -346,9 +361,17 @@ public sealed class NavSearch
             if (at < 0)
                 break;
 
-            path.Insert(0, at);
+            path.Add(at);
             guard++;
         }
+
+        // ⚠️ Walked goal-first and turned round at the end, rather than
+        // front-inserted the way the reference writes it. Insert(0, …) shifts
+        // the whole list on every step, so a sixty-node route moved about two
+        // thousand elements to produce sixty — quadratic in a route length the
+        // search already has in hand. The order this leaves behind is the same
+        // one, including the path[0] guard below.
+        path.Reverse();
 
         if (path[0] != start)
         {

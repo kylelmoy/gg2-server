@@ -643,6 +643,14 @@ this section says it does.**
 **Read this before running an evaluation, not after.** Every phase-4 number was
 wrong once for the reasons below, and none of the errors was caught by review.
 
+⚠️ **Measuring a bot's COST is a different job from measuring its play, and it
+has its own trap: the .NET sampling profiler is not usable here.** It was wrong
+three times in a row on this workload, by factors of five to forty, always in the
+direction of blaming a runtime memset. Use the sampler to pick a method, an
+in-process `Stopwatch` around named stages to size it, and an interleaved A/B to
+confirm anything you change — `docs/ARCHITECTURE.md`, "The .NET sampling profiler
+was wrong THREE times here".
+
 ### The statistic
 
 - ⛔ **Prefer the statistic with no subset.** A label travels and a filter does

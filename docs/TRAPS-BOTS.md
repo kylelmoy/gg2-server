@@ -271,6 +271,15 @@ flood; the census itself was a scratch diagnostic (this table is its record).
 reference is `Scripts/BotNav/navFindPath.gml`, whose header is the best
 documentation in the bot layer — read it before changing anything here.
 
+⛔ **This is the most expensive thing in the whole server, measured 2026-09-02:
+one search is 15.2 µs and the searches come to 30% of a twelve-bot match's
+tick** — more than any stage of the simulation. The cost breakdown, the two
+exact-equivalence wins taken, the four candidates that measured nothing, and the
+evidence that the heuristic is *not* the problem (it is 0.914 of the true cost)
+are in `docs/ARCHITECTURE.md`, "Where a headless bot match's tick goes".
+⚠️ **A quarter of a search is `PriorityQueue`**, and replacing it would have to
+reproduce .NET's tie-breaking exactly or equal-cost routes swap.
+
 - ⚠️ **A closed node is RE-OPENED when a cheaper route arrives, and that is what
   makes the search optimal rather than merely fast.** Skipping an already-closed
   neighbour is only sound when the heuristic is *consistent*, which is strictly
