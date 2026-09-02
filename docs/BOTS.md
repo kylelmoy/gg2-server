@@ -181,6 +181,50 @@ deaths** than arm 2 — 4.1% — so its matches are less lethal overall as well 
 less lethal to its own side. That is a real difference between the arms and not a
 censoring artefact, but a share alone would have hidden it.
 
+#### ✅ Both units agree, and the gap between them is a fact about the BOT
+
+**`gg2-rl` objected that the pooled z treats ~34,000 clustered deaths as
+independent** — ~40 arrive together per match — and that it is therefore an upper
+bound on the evidence. **And then that the match-level fix is biased the other way**,
+weighting a 2-death match like an 80-death one. So the two **bracket** the answer:
+
+| unit | arm 3 vs arm 2 | statistic |
+|---|---|---|
+| pooled over ~34,000 **deaths** | −1.62 points | z = **−4.26** |
+| over 840 **matches** an arm | −3.59 points | t = **−5.60**, df 1678 |
+
+✅ **Both significant, so the conclusion is robust to the choice of unit** — the
+pre-registered "both" branch. ⚠️ **Zero-death matches: none, in any arm**, so the
+filter that worried us does not exist here.
+
+⛔ **But the supposedly CONSERVATIVE unit came back STRONGER, which the bias
+analysis did not predict — and the reason is not clustering.** It is `gg2-rl`’s
+other point: **the two estimate different quantities**, and here they differ a lot.
+Bucketed by how lethal the match was:
+
+| deaths in match | arm 2 share | arm 3 share | gap |
+|---|---|---|---|
+| 1–9 | 46.0% | 37.0% | **−9.1p** |
+| 10–24 | 45.7% | 39.5% | −6.2p |
+| 25–49 | 46.3% | 43.5% | −2.8p |
+| 50–99 | 46.3% | 45.4% | **−0.8p** |
+
+⛔ **The search hybrid’s advantage is concentrated in QUIET matches and very nearly
+vanishes in bloodbaths** — monotone across four buckets, 118–370 matches an arm in
+each. The pooled statistic is dominated by the high-death matches where the
+advantage is −0.8p; the match-level mean weights the quiet ones equally, where it is
+−9.1p. **Neither number is wrong and neither is "the" effect.**
+
+⚠️ **This was invisible in both aggregates and is the most interesting thing the
+experiment produced about the bot rather than about the method.** It also fits the
+lethality shift: arm 3 records **4.1% fewer total deaths** and a median of 41 a
+match against arm 2’s 45.
+
+⚠️ **Read the buckets with their own caveat**: a share over 1–9 deaths is a noisy
+individual estimate, so the −9.1p rests on the mean of ~125 noisy-but-unbiased
+observations. **The monotone trend across four buckets is the signal, not any one
+row.**
+
 #### ⛔ And on the re-run the tick gate fails on 21 of 21
 
 The first run had `ctf_avanti` at **31.70 ms** — the single map under budget. On the
