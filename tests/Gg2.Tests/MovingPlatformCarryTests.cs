@@ -28,29 +28,29 @@ namespace Gg2.Tests;
 /// <c>KillBoxes.CollisionStep</c> has, and for the same reason.
 /// </para>
 /// <para>
-/// ⛔ <b>WHAT IS COVERED AND WHAT IS NOT, measured rather than estimated.</b>
-/// Neutralising <see cref="MovingPlatforms"/>' carry fails seven of the ten tests
-/// here; neutralising the push-out alone fails
-/// <see cref="ThePushOutCarriesSomebodyARisingPlatformDrivesInto"/>; and deleting
-/// the roll-back's restore fails
-/// <see cref="ThePushOutRollsBackSomebodyItMerelyBrushes"/> — it leaves the
-/// character displaced by 0.39px, which is precisely the teleport that branch
-/// exists to prevent.
+/// ⛔ <b>COVERAGE, measured rather than estimated.</b> Neutralising the carry
+/// fails <b>nine of the eleven</b> tests here. The two survivors are meant to
+/// survive: <see cref="TheRoundedPairCatchesUpAtTheEndOfTheTick"/> is about
+/// <c>EndStep</c>'s bookkeeping and correctly does not depend on the carry, and
+/// <see cref="ThePushOutRollsBackSomebodyItMerelyBrushes"/> asserts an absence
+/// whose meaning comes from a mutation instead — see its own remarks.
 /// </para>
 /// <para>
-/// ⚠️ <b>Still uncovered: the blocked-destination branch.</b> Both
-/// <c>StandOn</c> and the push-out refuse to move a rider whose destination is
-/// not <c>PlaceFree</c> — somebody pinned against a wall is left where they are
-/// rather than shoved into it. Measured for <c>StandOn</c>: making it ignore
-/// <c>PlaceFree</c> entirely leaves the whole suite green at <b>2,611</b>. It
-/// needs a platform placed against real map geometry, which every fixture here
-/// deliberately avoids by working on open ground.
+/// Each branch has been killed on its own, and the failure each produces is the
+/// bug it exists to prevent:
+/// <list type="bullet">
+/// <item>Neutralising the push-out fails the carried case.</item>
+/// <item>Deleting the roll-back's restore leaves the character displaced by
+/// <b>0.39px</b> — the teleport that branch prevents.</item>
+/// <item>Making <c>StandOn</c> ignore <c>PlaceFree</c> shoves a blocked rider
+/// <b>2px into a ceiling</b> (220 → 218).</item>
+/// </list>
 /// </para>
 /// <para>
-/// ⚠️ Three of the ten assert an ABSENCE and would pass on a deleted carry, so
-/// each states its own control in the same test. That is not decoration: an
-/// earlier draft of this file had four such tests with no controls, all ten
-/// passed, and neutralising the carry failed only four of them.
+/// ⚠️ <b>Four of the eleven assert an ABSENCE</b> and would pass on a deleted
+/// carry, so each states its own control. That is not decoration: an earlier
+/// draft had four such tests with no controls, all of them passed, and
+/// neutralising the carry failed only four of eight.
 /// </para>
 /// </remarks>
 public sealed class MovingPlatformCarryTests
@@ -553,6 +553,121 @@ public sealed class MovingPlatformCarryTests
         Assert.Equal(spot.Value.X, state.Characters[0].X);
         Assert.Equal(spot.Value.Y, state.Characters[0].Y);
         Assert.Equal(3, state.Characters[0].VSpeed);
+    }
+
+    /// <summary>
+    /// The gap between a platform's rounded y and the y a rider stands at, taken
+    /// once on open ground so it can be reused anywhere on the map.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ Measured through the same search <see cref="PutRiderOnTop"/> uses, for
+    /// the same reason: it is the carry's own definition of "standing on", not a
+    /// second opinion about box origins.
+    /// </remarks>
+    private static double OnTopOffset()
+    {
+        var (state, definitions) = Scene();
+        var platform = state.MovingPlatforms[0];
+
+        PutRiderOnTop(ref state, 0, definitions[0], platform);
+
+        return state.Characters[0].Y - platform.RoundedY;
+    }
+
+    /// <summary>
+    /// Somewhere on the real map a character fits, but cannot rise by
+    /// <paramref name="lift"/> — a ceiling.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>Searched on the shipped map rather than invented.</b> This is the one
+    /// branch of the carry that cannot be reached on open ground: it needs a
+    /// destination that is genuinely not <c>PlaceFree</c>, which means real
+    /// geometry. Scanning for it is cheaper and far more honest than hard-coding
+    /// a coordinate that a future map edit would silently turn into open air —
+    /// the test would still pass and would be testing nothing.
+    /// </remarks>
+    private static (double X, double Y)? FindCeiling(double lift)
+    {
+        var probe = CharacterState.Fresh(PlayerClass.Scout, Team.Red);
+        var box = probe.Box;
+        var filter = probe.Filter;
+        var map = World.Map;
+
+        for (var y = 64.0; y < map.Height - 64; y += 4)
+        {
+            for (var x = 64.0; x < map.Width - 64; x += 4)
+            {
+                if (!World.PlaceFree(box, x, y, filter))
+                    continue;
+
+                if (!World.PlaceFree(box, x, y - lift, filter))
+                    return (x, y);
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// ⛔ A rider whose destination is blocked is LEFT WHERE THEY ARE, not shoved
+    /// into the wall.
+    /// </summary>
+    /// <remarks>
+    /// <c>charSetSolids()</c>/<c>charUnsetSolids()</c> around a <c>place_free</c>:
+    /// the reference moves the rider only if the destination is clear. A platform
+    /// rising into a ceiling therefore slides out from under whoever is standing
+    /// on it rather than pushing them through the map.
+    /// <para>
+    /// ⚠️ <b>The vspeed is asserted UNTOUCHED as well as the position.</b> The
+    /// zeroing lives inside the same <c>if</c>, so a blocked rider keeps whatever
+    /// they had — and checking only the position would pass on an implementation
+    /// that skipped the move but still zeroed the fall.
+    /// </para>
+    /// <para>
+    /// ⚠️ The control is <see cref="CarriedY()"/>: the same rider on open ground
+    /// IS moved. Without it this is another absence that a deleted carry would
+    /// satisfy.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ARiderWhoseDestinationIsBlockedIsNotMoved()
+    {
+        var (state, definitions) = Scene();
+        var (stepX, stepY) = StepOf(definitions[0], state.MovingPlatforms[0]);
+
+        Assert.True(stepY < 0, "the fixture platform should be rising");
+
+        // The rider has to be unable to follow the platform up.
+        var ceiling = FindCeiling(-stepY);
+
+        Assert.True(ceiling is not null, "no ceiling anywhere on the map; the search is broken");
+
+        var offset = OnTopOffset();
+
+        // Put the platform where standing on it puts the rider under the ceiling.
+        state.MovingPlatforms[0].X = ceiling!.Value.X;
+        state.MovingPlatforms[0].Y = ceiling.Value.Y - offset;
+        state.MovingPlatforms[0].RoundedX = ceiling.Value.X;
+        state.MovingPlatforms[0].RoundedY = ceiling.Value.Y - offset;
+
+        Put(ref state, 0, ceiling.Value.X, ceiling.Value.Y, vspeed: 3);
+
+        // ⚠️ Assert the rider really is on top before running, or a fixture that
+        // drifted would test the "not touching it" path and still look green.
+        var collider = ColliderFor(definitions[0], state.MovingPlatforms[0]);
+        var box = state.Characters[0].Box;
+
+        Assert.False(collider.Meets(box, ceiling.Value.X, ceiling.Value.Y));
+        Assert.True(collider.Meets(box, ceiling.Value.X, ceiling.Value.Y + 1));
+
+        MovingPlatforms.EndStep(World, ref state, definitions);
+
+        Assert.Equal(ceiling.Value.X, state.Characters[0].X);
+        Assert.Equal(ceiling.Value.Y, state.Characters[0].Y);
+        Assert.Equal(3, state.Characters[0].VSpeed);
+
+        // The control: an unblocked rider on open ground is carried.
+        Assert.NotEqual(0, CarriedY(static (ref WorldState s) => s.Characters[0].VSpeed = 3));
     }
 
     /// <summary>
