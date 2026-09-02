@@ -145,7 +145,6 @@ the two layers of censoring that made every earlier version of these numbers
 wrong.
 
 ```powershell
-$env:PATH = "$env:LOCALAPPDATA\Microsoft\dotnet;$env:PATH"   # .NET 9, user-local
 dotnet test Gg2.sln
 dotnet run --project src/Gg2.Host -- --map ctf_truefort
 

@@ -255,7 +255,7 @@ Two things to carry over rather than reinvent:
 ## Runtime settings
 
 ```xml
-<TargetFramework>net9.0</TargetFramework>
+<TargetFramework>net10.0</TargetFramework>
 <ServerGarbageCollection>true</ServerGarbageCollection>
 <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
 <TieredPGO>true</TieredPGO>
@@ -265,6 +265,32 @@ Two things to carry over rather than reinvent:
 Native AOT is attractive for startup and memory but not required; revisit once
 the thing runs. Do not enable any fast-math-equivalent switch — there isn't one
 in .NET, which is part of why C# is a reasonable choice here.
+
+### ⚠️ The TFM moved 9.0 → 10.0 on 2026-09-02, and what that proved
+
+**The whole suite was green on both** — 2,601 passing, including every parity
+fixture and all three pinned bot measurements. The absence of a fast-math switch
+is what makes a runtime bump defensible here at all.
+
+⚠️ **What it establishes is "no observable difference", not "bit-identical
+doubles".** The wire quantises position to 1/5 px and velocity to 1/8.5, so a
+*sub-quantum* floating-point change would not show in a closed-loop fixture at
+all. `ClientPredictionGateTests` pins p99 open-loop drift to exact integers over
+long windows and did not move either, which is the tightest instrument there is —
+but it is still a bound, not a proof.
+
+⛔ **`SIM_UUID` does NOT cover the runtime.** `SimulationStamp.Lines()` digests
+constants and version numbers only, and deliberately so: its own comment says a
+stamp depending on reflection order "would move between runtimes for nothing". So
+a runtime that *did* change the physics would go on asserting the same
+simulation, and `gg2-rl`'s checkpoint guard would not notice. **The parity
+fixtures are the only thing that would.** Re-run them on any runtime change; the
+stamp will not do it for you.
+
+⚠️ **The practical reason the move happened**: the machine-wide install carries
+runtimes 6.0, 8.0 and 10.0 and **no 9.0**, so a net9.0 build could only be run by
+a user-local SDK that is not on `PATH`. Both `dotnet test` and a directly
+launched `.exe` failed in ways that look like anything but a missing runtime.
 
 ## The control surface — built, 2026-08-27
 
