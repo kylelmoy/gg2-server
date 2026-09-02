@@ -202,27 +202,19 @@ public sealed class BotPopulationService
 
         // ⛔ THE WRAPPER GOES ON BEFORE AddBot, so the slot never briefly holds a
         // bare ScriptedBot that something else could latch onto, and it wraps the
-        // SAME instance the lines above configured — the search owns keys and aim
+        // SAME instance the lines above configured — a controller owns keys and aim
         // inside its engagement window and delegates everything else back.
         //
         // ⚠️ Every site that wants the macro layer asks ScriptedBot.Of, never
         // `is ScriptedBot`. See IWrapsScriptedBot for what breaks otherwise, and
         // note the Query assignment below still reaches the right object.
-        // ⚠️ ONE micro-controller or none, and refused rather than ranked. The
-        // same rule HeadlessMatch.WrapInPolicy enforces, for the same reason: two
-        // arms that can both be on is an experiment nobody can describe.
-        if (options.Policy is not null && options.SearchMicro is not null)
-        {
-            throw new ArgumentException(
-                "a server runs one micro-controller, not two: Policy and SearchMicro are both set",
-                nameof(options));
-        }
-
-        IInputSource source = options.Policy is { } policy
-            ? new PolicyBot(policy, bot)
-            : options.SearchMicro is { } search
-                ? new SearchBot(new RolloutSearch(search), bot)
-                : bot;
+        //
+        // ⚠️ ONE field, so there is nothing to rank and nothing to refuse. This
+        // was a ternary over two nullable options plus a hand-written "both are
+        // set" throw, duplicated here and in HeadlessMatch — BotBrainSpec carries
+        // an ORDERED LIST instead, and IMicroArbiter is what picks between its
+        // tiers per decision.
+        IInputSource source = options.Brain is { } brain ? brain.Wrap(bot) : bot;
 
         var slot = _server.AddBot(name, team, playerClass, source);
 

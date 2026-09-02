@@ -33,7 +33,7 @@ public sealed class PolicyMatchTests
     /// The four classes the policy was trained on. Everything else is untrained
     /// input, not a class it plays badly.
     /// </summary>
-    private static PlayerClass[] Trained => [.. PolicyBot.TrainedClasses];
+    private static PlayerClass[] Trained => [.. PolicyController.TrainedClasses];
 
     private static HeadlessMatchOptions Options(string map, uint seed, PlayerClass[]? classes, PolicyNetwork? policy) =>
         HeadlessMatchOptions.Default with
@@ -46,8 +46,8 @@ public sealed class PolicyMatchTests
             KillLimit = 20,
             MaxTicks = 30 * 60 * 4,
             AllowedClasses = classes,
-            Policy = policy,
-            PolicyTeam = Team.Red,
+            Brain = policy is null ? null : BotBrainSpec.Of(new PolicyMicroSpec(policy)),
+            HybridTeam = Team.Red,
         };
 
     private sealed record Played(
@@ -96,9 +96,9 @@ public sealed class PolicyMatchTests
 
         for (var slot = 1; slot < WorldState.MaxSlots; slot++)
         {
-            if (match.PolicyBotFor(slot) is { } bot)
+            if (match.HybridBotFor(slot) is { } bot)
             {
-                policyTicks += bot.PolicyTicks;
+                policyTicks += bot.MicroTicks;
                 scriptedTicks += bot.ScriptedTicks;
             }
 
@@ -202,7 +202,7 @@ public sealed class PolicyMatchTests
                 continue;
 
             Assert.True(
-                PolicyBot.IsTrained(match.State.Players[slot].Class),
+                PolicyController.IsTrained(match.State.Players[slot].Class),
                 $"slot {slot} is a {match.State.Players[slot].Class}, which the policy was not trained on");
 
             counted++;
@@ -237,7 +237,7 @@ public sealed class PolicyMatchTests
 
                 total++;
 
-                if (!PolicyBot.IsTrained(match.State.Players[slot].Class))
+                if (!PolicyController.IsTrained(match.State.Players[slot].Class))
                     untrained++;
             }
         }
@@ -271,12 +271,12 @@ public sealed class PolicyMatchTests
 
         for (var slot = 1; slot < WorldState.MaxSlots; slot++)
         {
-            if (match.PolicyBotFor(slot) is not { } bot)
+            if (match.HybridBotFor(slot) is not { } bot)
                 continue;
 
             wrapped++;
 
-            Assert.Equal(0, bot.PolicyTicks);
+            Assert.Equal(0, bot.MicroTicks);
             Assert.True(bot.ScriptedTicks > 0);
         }
 

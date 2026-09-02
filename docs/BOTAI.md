@@ -523,7 +523,8 @@ To keep the scope honest:
 - ⛔ ~~No ML runtime, tensor library, or ONNX dependency in this repo yet.~~
   **BUILT.** `PolicyNetwork` runs a `gg2-rl` checkpoint in-process, loaded by
   `NpyFile` from their own `.npz`. ✅ **The second half of the sentence held
-  exactly**: it loads as weights behind an `IInputSource` (`PolicyBot`), with no
+  exactly**: it loads as weights behind an `IInputSource` (`HybridBot` driving a
+  `PolicyController`), with no
   tensor library and no dependency — a `Dense` loop and an argmax per head.
 - ✅ **No training loop, replay buffer, or environment API. Those live outside
   the server.** STILL TRUE and still the rule. `src/Gg2.Env/` is a *seam* — a

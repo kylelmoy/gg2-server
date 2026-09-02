@@ -211,9 +211,9 @@ public static class PerMapEval
                 TimeLimitMinutes = cap,
                 KillLimit = 40,
                 MaxTicks = 30 * 60 * cap,
-                AllowedClasses = [.. PolicyBot.TrainedClasses],
-                Policy = policy,
-                PolicyTeam = Team.Red,
+                AllowedClasses = [.. PolicyController.TrainedClasses],
+                Brain = policy is null ? null : BotBrainSpec.Of(new PolicyMicroSpec(policy)),
+                HybridTeam = Team.Red,
             };
 
             var match = HeadlessMatch.Load(options, maps, nav);

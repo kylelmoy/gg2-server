@@ -52,7 +52,7 @@ public static class PolicyEval
             "ctf_classicwell", "ctf_eiger",
         ];
 
-        var trained = PolicyBot.TrainedClasses.ToArray();
+        var trained = PolicyController.TrainedClasses.ToArray();
         var clock = Stopwatch.StartNew();
 
         var redWins = 0;
@@ -89,10 +89,15 @@ public static class PolicyEval
                     KillLimit = 40,
                     MaxTicks = 30 * 60 * 5,
                     AllowedClasses = trained,
-                    Policy = policy,
-                    PolicyTeam = Team.Red,
-                    HandoverRule = rule,
-                    EngagementRange = range,
+                    Brain = policy is null
+                        ? null
+                        : new BotBrainSpec
+                        {
+                            Tiers = [new PolicyMicroSpec(policy)],
+                            Rule = rule,
+                            Range = range,
+                        },
+                    HybridTeam = Team.Red,
                 };
 
                 var match = HeadlessMatch.Load(options, maps, nav);
@@ -141,9 +146,9 @@ public static class PolicyEval
 
                 for (var slot = 1; slot < WorldState.MaxSlots; slot++)
                 {
-                    if (match.PolicyBotFor(slot) is { } bot)
+                    if (match.HybridBotFor(slot) is { } bot)
                     {
-                        policyTicks += bot.PolicyTicks;
+                        policyTicks += bot.MicroTicks;
                         scriptedTicks += bot.ScriptedTicks;
                     }
 
@@ -162,7 +167,7 @@ public static class PolicyEval
                         worstTravel = travel[slot];
                         worstTravelMap =
                             $"{map} seed {seed} slot {slot} {team} {match.State.Players[slot].Class}"
-                            + $" {(match.PolicyBotFor(slot) is null ? "scripted" : "hybrid")}";
+                            + $" {(match.HybridBotFor(slot) is null ? "scripted" : "hybrid")}";
                     }
                 }
 

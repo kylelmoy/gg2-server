@@ -223,9 +223,9 @@ public static class ThreadsBench
             TimeLimitMinutes = cap,
             KillLimit = 40,
             MaxTicks = 30 * 60 * cap,
-            AllowedClasses = [.. PolicyBot.TrainedClasses],
-            SearchMicro = new RolloutOptions(Threads: threads),
-            PolicyTeam = Team.Red,
+            AllowedClasses = [.. PolicyController.TrainedClasses],
+            Brain = BotBrainSpec.Of(new SearchMicroSpec(new RolloutOptions(Threads: threads))),
+            HybridTeam = Team.Red,
         };
 
         var match = HeadlessMatch.Load(options, maps, nav);

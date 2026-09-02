@@ -26,29 +26,35 @@ namespace Gg2.Bots;
 /// draw to it.
 /// </param>
 /// <remarks>
-/// ⚠️ <b>Restricting classes and enabling <c>SearchMicro</c> are SEPARATE
-/// decisions and this keeps them separate.</b> <c>SearchBot</c> engages only on the
+/// ⚠️ <b>Restricting classes and configuring a <c>Brain</c> are SEPARATE decisions
+/// and this keeps them separate.</b> The shipped controllers engage only on the
 /// four classes the policy was trained for
-/// (<see cref="PolicyBot.TrainedClasses"/>), so a server drawing all eight runs a
-/// mix of arm 3 and arm 1 and a playtester cannot tell which bot they just fought.
-/// Restricting the draw makes every bot the measured configuration — at the cost
-/// of a roster missing five classes. <b>Say which you ran.</b>
+/// (<see cref="PolicyController.TrainedClasses"/>), so a server drawing all eight
+/// runs a mix of the hybrid arm and the all-scripted one and a playtester cannot
+/// tell which bot they just fought. Restricting the draw makes every bot the
+/// measured configuration — at the cost of a roster missing five classes. <b>Say
+/// which you ran.</b>
 /// </remarks>
-/// <param name="SearchMicro">
-/// Non-null gives every bot a <see cref="RolloutSearch"/> micro-controller inside
-/// its engagement window, with the scripted layer still owning movement, routing
-/// and objectives — <c>docs/BOTS.md</c>’s arm 3. Null is the all-scripted arm 1.
+/// <param name="Brain">
+/// Non-null gives every bot the micro-controllers in it inside its engagement
+/// window, with the scripted layer still owning movement, routing and objectives.
+/// Null is the all-scripted arm 1. See <see cref="BotBrainSpec"/>.
 /// </param>
 /// <remarks>
-/// ⚠️ <b>Arm 3 is the better BOT and the more expensive one.</b> It beat the
-/// policy hybrid on death share pooled over ~34,000 deaths (44.55% against 46.17%,
-/// z = −4.26) and over 840 matches an arm (−3.59 points, t = −5.60). It also costs
-/// far more per decision, which is what <c>RolloutOptions.Threads</c> is for.
+/// ⚠️ <b>The search arm is the better BOT and the more expensive one.</b> It beat
+/// the policy hybrid on death share pooled over ~34,000 deaths (44.55% against
+/// 46.17%, z = −4.26) and over 840 matches an arm (−3.59 points, t = −5.60). It
+/// also costs far more per decision, which is what <c>RolloutOptions.Threads</c>
+/// and <see cref="IMicroArbiter"/> are for.
 /// <para>
 /// ⛔ <b>Measured at 8 bots, not 12.</b> A rollout re-simulates every live
 /// character for every tick of every candidate, so its cost rises with the
 /// POPULATION as well as with the bot count — <c>tools/bench/README.md</c> trap 5.
 /// Nothing here has been measured at a full server with humans in it.
+/// </para>
+/// <para>
+/// ⛔ <b>Both of those numbers describe <c>SIM_UUID 7ff5940d97aa7bed</c> and this
+/// build is not that simulation.</b> Re-measure before repeating one.
 /// </para>
 /// </remarks>
 public readonly record struct BotPopulationOptions(
@@ -58,9 +64,8 @@ public readonly record struct BotPopulationOptions(
     int MinHumans = 1,
     int Difficulty = 3,
     string NamePrefix = "[BOT] ",
-    RolloutOptions? SearchMicro = null,
     PlayerClass[]? AllowedClasses = null,
-    PolicyNetwork? Policy = null)
+    BotBrainSpec? Brain = null)
 {
     /// <summary>
     /// The reference's own <c>[Bots]</c> defaults.
@@ -94,9 +99,8 @@ public readonly record struct BotPopulationOptions(
         MinHumans: 1,
         Difficulty: 3,
         NamePrefix: "[BOT] ",
-        SearchMicro: null,
         AllowedClasses: null,
-        Policy: null);
+        Brain: null);
 }
 
 /// <summary>

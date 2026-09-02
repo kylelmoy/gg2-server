@@ -31,12 +31,8 @@ public readonly record struct HeadlessMatchOptions(
     int? RedBots = null,
     int? BlueBots = null,
     PlayerClass[]? AllowedClasses = null,
-    PolicyNetwork? Policy = null,
-    RolloutOptions? SearchMicro = null,
-    Team? PolicyTeam = null,
-    bool ScriptedCarriesIntel = true,
-    HandoverRule HandoverRule = HandoverRule.MacroTask,
-    double EngagementRange = PolicyBot.EngagementRange)
+    BotBrainSpec? Brain = null,
+    Team? HybridTeam = null)
 {
     /// <summary>
     /// A short match on <c>ctf_truefort</c> with twelve bots. ⚠️ The values are
@@ -327,20 +323,21 @@ public sealed class HeadlessMatch
     public IInputSource? SourceOf(int slot) =>
         slot >= 0 && slot < _sources.Length ? _sources[slot] : null;
 
-    /// <summary>The policy-driven bot in a slot, or null when it is scripted.</summary>
+    /// <summary>The hybrid bot in a slot, or null when it is all-scripted.</summary>
     /// <remarks>
-    /// Exposed so an evaluation can report how much of a match the policy
-    /// actually drove. ⚠️ <b>"The policy was wired in" and "the policy drove" are
-    /// different claims</b>, and only the second one is worth anything — a
-    /// hybrid whose engagement gate never fired is a scripted bot with extra
+    /// Exposed so an evaluation can report how much of a match a controller
+    /// actually drove. ⚠️ <b>"The controller was wired in" and "the controller
+    /// drove" are different claims</b>, and only the second one is worth anything —
+    /// a hybrid whose engagement gate never fired is a scripted bot with extra
     /// steps, and it would win or lose exactly like one.
+    /// <para>
+    /// ⚠️ <b>ONE accessor for every arm.</b> It was two — one per wrapper class —
+    /// and the bench summed <c>PolicyTicks</c> and <c>SearchTicks</c> into one
+    /// column with a comment explaining that exactly one of them is always zero.
+    /// </para>
     /// </remarks>
-    public PolicyBot? PolicyBotFor(int slot) =>
-        slot >= 0 && slot < _sources.Length ? _sources[slot] as PolicyBot : null;
-
-    /// <summary>The <see cref="SearchBot"/> driving a slot, or null.</summary>
-    public SearchBot? SearchBotFor(int slot) =>
-        slot >= 0 && slot < _sources.Length ? _sources[slot] as SearchBot : null;
+    public HybridBot? HybridBotFor(int slot) =>
+        slot >= 0 && slot < _sources.Length ? _sources[slot] as HybridBot : null;
 
     /// <summary>Advances one tick.</summary>
     /// <remarks>
@@ -581,67 +578,51 @@ public sealed class HeadlessMatch
         }
 
         AssignRoles();
-        WrapInPolicy();
+        WrapInBrain();
     }
 
     /// <summary>
-    /// Puts the learned policy in front of each scripted bot it is allowed to
-    /// drive.
+    /// Puts each bot's micro-controllers in front of its scripted layer.
     /// </summary>
     /// <remarks>
     /// <b><c>gg2-rl</c>'s phase 4 architecture.</b> ⚠️ <b>AFTER
     /// <see cref="AssignRoles"/>, not instead of it.</b> The roles, the spread and
     /// the objective are configured on a <c>ScriptedBot</c> by type, and the
-    /// scripted layer keeps every one of those jobs — the policy only takes keys
-    /// and aim, and only inside <see cref="PolicyBot.EngagementRange"/>.
+    /// scripted layer keeps every one of those jobs — a controller only takes keys
+    /// and aim, and only inside <see cref="HybridBot.EngagementRange"/>.
     /// <para>
     /// ⚠️ <b>Called from <see cref="AddBots"/> so it survives <see cref="Reset"/>.</b>
     /// A method the caller had to remember after every reset is a match that
     /// silently reverts to scripted halfway through an evaluation.
     /// </para>
     /// <para>
-    /// ⚠️ <b>A bot whose class the policy was not trained on is left scripted</b>,
-    /// which <see cref="PolicyBot"/> also enforces per tick — a class can change
+    /// ⚠️ <b>A bot whose class no controller will drive is left scripted</b>,
+    /// which <see cref="HybridBot"/> also enforces per tick — a class can change
     /// mid-match and the wrapper cannot be rebuilt when it does.
     /// </para>
+    /// <para>
+    /// ⛔ <b>ONE loop, whatever the arm.</b> When each controller had its own
+    /// option field this was a ternary and a hand-written "both are set" throw, and
+    /// a third arm meant a third branch here and another in
+    /// <c>BotPopulationService</c>. <see cref="BotBrainSpec"/> is one field, so the
+    /// arms cannot differ in which slots get wrapped, which team is chosen or which
+    /// gate settings apply — the comparison exists to isolate the controller.
+    /// </para>
     /// </remarks>
-    private void WrapInPolicy()
+    private void WrapInBrain()
     {
-        // ⚠️ ONE loop for both micro-controllers, so the arms cannot differ in which
-        // slots get wrapped, which team is chosen, or which gate settings apply. Two
-        // loops would let arm 2 and arm 3 diverge on something nobody enumerated, and
-        // the comparison exists to isolate the controller.
-        if (Options.Policy is null && Options.SearchMicro is null)
+        if (Options.Brain is not { } brain)
             return;
-
-        if (Options.Policy is not null && Options.SearchMicro is not null)
-        {
-            throw new ArgumentException(
-                "a match runs one micro-controller, not two: Policy and SearchMicro are both set",
-                nameof(Options));
-        }
 
         for (var slot = 1; slot < _slots; slot++)
         {
             if (_sources[slot] is not ScriptedBot scripted)
                 continue;
 
-            if (Options.PolicyTeam is { } team && _state.Players[slot].Team != team)
+            if (Options.HybridTeam is { } team && _state.Players[slot].Team != team)
                 continue;
 
-            _sources[slot] = Options.Policy is { } policy
-                ? new PolicyBot(policy, scripted)
-                {
-                    ScriptedCarriesIntel = Options.ScriptedCarriesIntel,
-                    Rule = Options.HandoverRule,
-                    Range = Options.EngagementRange,
-                }
-                : new SearchBot(new RolloutSearch(Options.SearchMicro!.Value), scripted)
-                {
-                    ScriptedCarriesIntel = Options.ScriptedCarriesIntel,
-                    Rule = Options.HandoverRule,
-                    Range = Options.EngagementRange,
-                };
+            _sources[slot] = brain.Wrap(scripted);
         }
     }
 

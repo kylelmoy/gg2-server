@@ -53,8 +53,11 @@ near them", has the state rules that apply to everyone, bot work included.
 |---|---|---|
 | the scripted bot — nav, A\*, path following, targeting, combat, objectives, population | `src/Gg2.Bots/` | `ScenarioSuiteTests`, `BotObjectiveTests`, `PathFollowerFixtureTests` |
 | the learned policy — loads a `gg2-rl` `.npz`, 209→64→64→27, argmax per head | `PolicyNetwork.cs` | `PolicyNetworkTests` — logit-for-logit against their numpy |
-| the hybrid — policy takes keys and aim inside an engagement window, scripted layer keeps movement, routing, objectives, class | `PolicyBot.cs` | `PolicyMatchTests` |
-| the rollout-search bot | `RolloutSearch.cs` | `RolloutRestrictionTests` |
+| the hybrid — a controller takes keys and aim inside an engagement window, scripted layer keeps movement, routing, objectives, class | `HybridBot.cs` | `PolicyMatchTests`, `SearchBotTests`, `HybridBotSeamTests` |
+| **the controller seam** — how a new bot implementation drops in | `IMicroController.cs`, `BotBrainSpec.cs` | `HybridBotSeamTests` |
+| the per-tick controller budget across bots | `IMicroArbiter.cs` | `HybridBotSeamTests` |
+| the policy as a controller | `PolicyController.cs` | `PolicyMatchTests` |
+| the rollout search, and as a controller | `RolloutSearch.cs`, `SearchController.cs` | `RolloutRestrictionTests`, `SearchBotTests` |
 | the training environment seam | `src/Gg2.Env/` | `EnvProtocolTests` |
 | the measurement instrument | `tools/bench/` | not in `Gg2.sln`; build explicitly |
 
@@ -77,7 +80,7 @@ the combat gain keeps rising while the objective collapses faster.
 ⚠️ **Widening the window re-acquires constraints the narrow one sidesteps.** Goal
 conditioning is the one to know about: the checkpoint's `kind1/2/3` input columns
 were constant through training, so their first-layer weights are still the random
-initialisation. `PolicyBot` never sets a goal kind — it gates *when* the policy
+initialisation. `HybridBot` never sets a goal kind — it gates *when* the policy
 drives rather than conditioning *what it pursues* — and that is what makes the
 untrained columns harmless. **A macro layer that conditions the policy needs a
 retrain first**, and would not look broken without one.
@@ -312,6 +315,65 @@ says so" is not one of the honest outcomes** when the pre-registration was writt
 in ignorance of the cost; the outcomes are *40 is enough, shown* or *this criterion
 is unaffordable at this size, said plainly*.
 
+### ⚠️ The threading ladder has RUN, and it moves the question rather than answering it
+
+**`BENCH_THREADS=4`, 21 maps, 4 matches a map, arm 3 only, 8 bots, 5-minute cap,
+ladder 1/2/4/8, Release, 24 cores, 2026-09-02, against the post-carry
+`SIM_UUID 5dac8a5e7c37ce3a`.** The pre-merge run was killed at 16 maps and this is
+the restart the handoff asked for.
+
+| | serial (1 thread) | 8 threads | speedup |
+|---|---|---|---|
+| **p99.9 tick**, worst map | 29.37 ms (`arena_montane`) | 5.14 ms | 4.05–5.71x across 21 maps |
+| **mean tick**, worst map | 0.318 ms (`ctf_2dfort`) | 0.078 ms | 2.38–4.49x |
+| **max tick**, worst map | 55.27 ms (`tdm_mantic`) | 9.70 ms | *not a statistic — see below* |
+
+⛔ **P99.9 PASSES ON ALL 21 MAPS AT EVERY RUNG, INCLUDING SERIAL.** The worst map
+needed **0.88x** to reach 33.3 ms — that is, it was already under before a single
+thread was added. **So threading is not what decides whether arm 3 is affordable,
+and the ladder's headline factor is the least interesting thing in the table.**
+
+⚠️ **This does NOT overturn the "unshippable on the tick" verdict above, and it is
+important not to read it as if it did.** That verdict is a **maximum** over 40
+matches a map; this is a **p99.9** over 4. The two are different statistics at
+different coverage and neither refutes the other:
+
+- **A tail statistic is monotone in coverage**, exactly like a max. 4 matches a map
+  is ~36,000 ticks, so this p99.9 is roughly the 36th-worst tick; the same estimate
+  over 40 matches would be the 360th. **Widening coverage can only make it worse.**
+- **The max here is 55.27 ms against the old run's 80.65 ms, and that is expected
+  rather than an improvement** — a max over 4 matches is a max over less. ⛔ **Do
+  not quote it as a change.**
+
+✅ **What the ladder does settle is which statistic the verdict was resting on.**
+`Threads.cs` records that three identical runs put the serial max at **72.37**,
+**98.31** and **97.47 ms** against a mean of 0.47 — 200x the mean, with gen0/1/2
+deltas of 0/0/0 across the worst tick and a worst-tick index in mid-match. **A
+single draw from a tail that heavy is not a number to gate on**, and the p99.9
+column says the distribution underneath it is nowhere near the budget.
+
+⛔ **The open question is therefore NOT "how many threads" but "what is the max,
+really".** Answering it needs coverage (40 matches a map, as the original run had)
+and the **12-bot shipping configuration** — every number on this page is 8 bots,
+and a rollout re-simulates every live character, so cost rises with the population.
+
+⚠️ **Portability and confounds, so the factor is not repeated as a property of the
+code:**
+
+- **A wall-clock ratio on a 24-core box.** It is not portable to another machine,
+  and `Parallel.For`'s own overhead is inside it.
+- **The order-spread column reads 222.7% on `koth_corinth`, 132.2% on
+  `ctf_avanti` and 111.7% on `ctf_waterway`.** That column is an upper bound on
+  the rung-order effect **confounded with seeds**, and at 4 matches a map it is 2
+  even and 2 odd — so it is mostly seed variance. **It bounds the mean columns'
+  trustworthiness, not the p99.9's**, and it is the reason to re-run at higher `n`
+  before quoting a mean factor.
+- ⛔ **A thread pool inside the tick is an architectural change, not a tuning
+  knob.** The server is single-threaded by design, and `HeadlessMatch` results
+  being thread-count independent is a property this repo gates. **Say what a
+  factor costs in cores before recommending it** — 8 threads for 4–5x is under
+  60% efficiency.
+
 ### ⛔ A duel does not CONTAIN what a match contains, and every absence is a zero
 
 ⛔ **One mechanism, and this project found it twice in one day as two unrelated
@@ -429,6 +491,82 @@ has and nobody is currently making.
 
 ---
 
+## Swapping the bot logic out — the seam, 2026-09-02
+
+⛔ **Read this before writing another bot.** Adding a way to fight is one class
+implementing `IMicroController`, and **nothing else** — no new option field, no
+new branch in `HeadlessMatch` or `BotPopulationService`, no new wrapper.
+
+| you want | you write |
+|---|---|
+| a new way to fight | `class MyThing : IMicroController` — six members |
+| to run it in a match | `Brain = BotBrainSpec.Of(new MyThingSpec())` |
+| to run it on a live server | a `--flag` that appends a `MicroControllerSpec` to the host's `tiers` list |
+| to compare it against another | two `BotBrainSpec`s, same gate — see "Measuring a bot change" below |
+
+**The shape.** `HybridBot` owns the handover architecture — the gate, the intel
+carve-out, "the scripted layer thinks every tick", the aim resync, the counters —
+and knows nothing about how a controller decides. `IMicroController` is what it
+hands to. `BotBrainSpec` is the recipe a caller configures: an ordered tier list,
+the gate settings, and an optional `IMicroArbiter`.
+
+⚠️ **It was two near-identical classes until 2026-09-02.** `PolicyBot` and
+`SearchBot` restated the same ~200 lines, and each option record carried a
+nullable field per controller plus a hand-written "both are set" throw —
+**duplicated in `HeadlessMatch` and `BotPopulationService`, so a third arm meant
+editing both.** The duplication was not only a tidiness cost: `SearchBot` counted
+`ScriptedPolls` and `PolicyBot` did not, so the invariant that says the macro layer
+never stopped planning during a fight — **arm 2's measured bug, 20 captures down to
+7** — was testable on one arm and not the other. Every arm gets every counter now.
+
+⚠️ **`HandoverRule.HeadSplit` had ZERO tests until that merge**, and nothing in the
+suite, the bench or the host ever selected it. It is gated now
+(`HybridBotSeamTests`); a branch nobody selects is a branch nobody can refactor
+safely.
+
+### ⛔ What the merge was checked against, because the suite could not have caught it
+
+Every pre-existing assertion about a hybrid is an **inequality** (`PolicyTicks > 0`),
+so a green suite does not establish that a restructure preserved behaviour. What
+does: **`BENCH_CHURN` output byte-identical across the merge**, all three arms, two
+maps, every input-derived statistic — and **mutation-checked to prove the
+comparison could fail**, by deleting the aim resync and watching every arm-2 and
+arm-3 row move while arm 1 stayed put.
+
+⚠️ **Repeat that check, not the test run, for any future change to `HybridBot`.**
+`BENCH_ARMS` cannot stand in for it: it loads the checkpoint *without* the stamp
+bypass, so arm 2 cannot run at all on this build. `BENCH_CHURN` loads with the
+bypass and is the only mode that exercises all three arms today.
+
+### Choosing a controller by what the machine can afford
+
+⛔ **The constraint is the TICK TAIL, not the duty cycle.** A search decision is a
+large fraction of a 33.3 ms tick on its own, and handovers are **correlated** —
+several bots have an enemy in range during the same firefight — so the worst tick
+is several coinciding decisions rather than one expensive bot. **A per-bot setting
+cannot see that.** One `IMicroArbiter`, shared by every bot on a server, can:
+`HybridBot` asks it which tier may spend this decision, and a refused bot drops to
+a cheaper tier or to the scripted layer.
+
+⛔ **DO NOT READ A CLOCK INSIDE AN ARBITER.** An answer that depends on wall-clock
+time makes a match unreproducible: `HeadlessMatch` stops being a function of its
+seed, `eval` stops being thread-count independent — a property this repo *gates*
+rather than assumes — and a parity fixture recorded with bots in it stops
+replaying. **The measured resource number belongs outside the tick**: read
+`--tick-stats` between ticks and write `DecisionQuotaArbiter.UnitsPerTick`, keeping
+the in-tick decision a pure function of the budget it was given.
+
+⚠️ **Spend is ordered by roster slot**, so a low slot takes the budget first. That
+is deterministic and it is not fair; an arbiter wanting fairness must rotate on
+something derived from the **tick**.
+
+⚠️ **NOTHING HERE IS MEASURED.** `IMicroController.DecisionCost` is a relative
+ordering, not a cost — `tools/bench/README.md` trap 7 is the standing example of a
+bare literal being read as a measurement for a day. **The falsification condition:
+if a downgrading arbiter does not move a `BENCH_THREADS`-style p99.9 column, it is
+not doing what this section says it does.** Measure with `BENCH_SEARCH` and
+`BENCH_POLICYCOST` before quoting any ratio.
+
 ## ⛔ Measuring a bot change
 
 **Read this before running an evaluation, not after.** Every phase-4 number was
@@ -527,6 +665,7 @@ invalidate a checkpoint, and a change to what an observation *means* does.
 | you are touching | read |
 |---|---|
 | anything in `src/Gg2.Bots/` | `docs/TRAPS-BOTS.md` — one section per phase-7 item, by name |
+| adding or swapping a bot implementation | "Swapping the bot logic out" above — `IMicroController` and nothing else |
 | the nav format, A\*, the path follower | same, items 2, 4a, 4b-i, 4b-ii |
 | targeting, aim, the combat controller | same, items 4c-i, 4c-ii |
 | the objective layer | same, item 4g, plus "Dual King of the Hill is unwinnable by bots" |

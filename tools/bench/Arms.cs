@@ -94,9 +94,9 @@ public static class ArmsEval
 
         foreach (var map in list)
         {
-            one.Add(Play(map, maps, nav, null, null, perMap, cap, "1"));
-            two.Add(Play(map, maps, nav, policy, null, perMap, cap, "2"));
-            three.Add(Play(map, maps, nav, null, search, perMap, cap, "3"));
+            one.Add(Play(map, maps, nav, null, perMap, cap, "1"));
+            two.Add(Play(map, maps, nav, BotBrainSpec.Of(new PolicyMicroSpec(policy)), perMap, cap, "2"));
+            three.Add(Play(map, maps, nav, BotBrainSpec.Of(new SearchMicroSpec(search)), perMap, cap, "3"));
 
             Console.WriteLine($"  {map,-18} done  {clock.Elapsed.TotalSeconds,6:0}s");
         }
@@ -198,7 +198,7 @@ public static class ArmsEval
 
     private static Row Play(
         string map, string maps, string nav,
-        PolicyNetwork? policy, RolloutOptions? search, int count, int cap, string arm)
+        BotBrainSpec? brain, int count, int cap, string arm)
     {
         long redDeaths = 0, blueDeaths = 0, microTicks = 0, totalTicks = 0;
         var capped = 0;
@@ -217,10 +217,9 @@ public static class ArmsEval
                 TimeLimitMinutes = cap,
                 KillLimit = 40,
                 MaxTicks = 30 * 60 * cap,
-                AllowedClasses = [.. PolicyBot.TrainedClasses],
-                Policy = policy,
-                SearchMicro = search,
-                PolicyTeam = Team.Red,
+                AllowedClasses = [.. PolicyController.TrainedClasses],
+                Brain = brain,
+                HybridTeam = Team.Red,
             };
 
             long matchRed = 0, matchBlue = 0, matchTicks = 0;
@@ -254,7 +253,7 @@ public static class ArmsEval
 
                     for (var s = 1; s < WorldState.MaxSlots; s++)
                     {
-                        if (match.SearchBotFor(s) is not { SearchedThisPoll: true })
+                        if (match.HybridBotFor(s) is not { DecidedThisPoll: true })
                             continue;
 
                         worstDeciders++;
@@ -297,8 +296,11 @@ public static class ArmsEval
 
             for (var slot = 1; slot < WorldState.MaxSlots; slot++)
             {
-                microTicks += match.PolicyBotFor(slot)?.PolicyTicks ?? 0;
-                microTicks += match.SearchBotFor(slot)?.SearchTicks ?? 0;
+                // ⚠️ ONE accessor for every arm. This was two lines summing
+                // PolicyTicks and SearchTicks, with a comment that exactly one of
+                // them is always zero — an arity the wrapper split forced on every
+                // reader of this column.
+                microTicks += match.HybridBotFor(slot)?.MicroTicks ?? 0;
             }
         }
 

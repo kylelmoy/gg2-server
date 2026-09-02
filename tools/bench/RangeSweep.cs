@@ -210,10 +210,14 @@ public static class RangeSweep
                 TimeLimitMinutes = cap,
                 KillLimit = 40,
                 MaxTicks = 30 * 60 * cap,
-                AllowedClasses = [.. PolicyBot.TrainedClasses],
-                Policy = policy,
-                PolicyTeam = Team.Red,
-                EngagementRange = policy is null ? HeadlessMatchOptions.Default.EngagementRange : range,
+                AllowedClasses = [.. PolicyController.TrainedClasses],
+                // ⚠️ The control arm carries NO brain, so the range it would have
+                // used is not a question that arises — where this had to name the
+                // default explicitly to keep the two arms comparable.
+                Brain = policy is null
+                    ? null
+                    : new BotBrainSpec { Tiers = [new PolicyMicroSpec(policy)], Range = range },
+                HybridTeam = Team.Red,
             };
 
             var match = HeadlessMatch.Load(options, maps, nav);
@@ -238,10 +242,10 @@ public static class RangeSweep
 
             for (var slot = 1; slot < WorldState.MaxSlots; slot++)
             {
-                if (match.PolicyBotFor(slot) is not { } bot)
+                if (match.HybridBotFor(slot) is not { } bot)
                     continue;
 
-                policyTicks += bot.PolicyTicks;
+                policyTicks += bot.MicroTicks;
                 scriptedTicks += bot.ScriptedTicks;
             }
 

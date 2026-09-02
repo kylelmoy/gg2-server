@@ -7,7 +7,7 @@ namespace Gg2.Bots;
 /// scripted layer.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>Extracted from <see cref="PolicyBot"/> on 2026-09-01 so a second
+/// ⚠️ <b>Extracted from <c>PolicyBot</c> on 2026-09-01 so a second
 /// micro-controller could use it, and extracted rather than copied on purpose.</b>
 /// CLAUDE.md's rule for the command path is the same rule here: a second copy
 /// lets one bot engage where the other would not, and the difference between two
@@ -15,10 +15,17 @@ namespace Gg2.Bots;
 /// an experiment comparing controllers must not measure.
 /// <para>
 /// ⚠️ <b>A pure move.</b> Every line below came out of <c>PolicyBot</c> unchanged,
-/// because <c>PolicyBot</c> is phase 4's shipped arm and the experiment this was
+/// because that class was phase 4's shipped arm and the experiment this was
 /// extracted for uses it as the comparability anchor. If its behaviour moved by a
 /// hair, that anchor is gone and nobody would see it. <c>ScenarioSuiteTests</c>,
 /// <c>PolicyMatchTests</c> and the pinned baselines are what say it did not.
+/// </para>
+/// <para>
+/// ⚠️ <b><c>PolicyBot</c> and <c>SearchBot</c> were merged into
+/// <see cref="HybridBot"/> on 2026-09-02</b>, which is when this stopped being the
+/// only shared thing between the arms and became one piece of a gate they both
+/// run. The extraction's reason still stands and is now structural: there is one
+/// gate, so two arms cannot differ in it.
 /// </para>
 /// </remarks>
 internal static class Handover

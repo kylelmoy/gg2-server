@@ -1033,7 +1033,7 @@ the reasons they were out of scope are still the reasons to be careful:
 | item | state |
 |---|---|
 | **Serialising the bot layer** — what `Snapshot` with a bot-driven slot would need | ✅ **still refused**, and this is the one real entry |
-| ~~No ML runtime, no inference path, no weights format~~ | ⛔ **built** — `NpyFile`, `PolicyNetwork`, `PolicyBot`, gated logit-for-logit against `gg2-rl`'s numpy |
+| ~~No ML runtime, no inference path, no weights format~~ | ⛔ **built** — `NpyFile`, `PolicyNetwork`, `PolicyController`, gated logit-for-logit against `gg2-rl`'s numpy |
 | ~~No rollout-search bot~~ | ⛔ **built** — `RolloutSearch`, with candidate pruning |
 | ~~No full-match episodes~~ | ⛔ **built** — `MatchRunner`, 21 maps × 400 matches × two arms |
 | ~~No reaction-delay model~~ | **still true** — only its observation field exists |
@@ -2152,7 +2152,7 @@ for before the default moved.
 
 ### ⚠️ Two bugs found by measuring, both mine, both in the wiring
 
-**1. The macro layer stopped thinking whenever the policy drove.** `PolicyBot`
+**1. The macro layer stopped thinking whenever the policy drove.** `HybridBot`
 polled `ScriptedBot` only on the ticks it handed to it — so for 27% of ticks
 there was no objective planning at all: no re-target, no re-path, no spot ban, and
 stale path state the moment control returned. It now polls **every tick** and its

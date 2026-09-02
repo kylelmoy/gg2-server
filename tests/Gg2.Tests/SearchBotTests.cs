@@ -8,7 +8,8 @@ namespace Gg2.Tests;
 /// Arm 3: the scripted bot with a <see cref="RolloutSearch"/> micro-controller.
 /// </summary>
 /// <remarks>
-/// ⛔ <b>What these gate is that ONE thing differs from <see cref="PolicyBot"/>.</b>
+/// ⛔ <b>What these gate is that ONE thing differs from the policy arm: which
+/// controller <see cref="HybridBot"/> hands to.</b>
 /// An arm-2/arm-3 comparison is a comparison of controllers only if the gate, the
 /// range, the rule, the intel carve-out and the every-tick scripted poll are the
 /// same on both sides. A difference in any of those makes the experiment measure
@@ -23,11 +24,11 @@ public sealed class SearchBotTests
     private static ScriptedBot Scripted(ScenarioWorld world) =>
         new(world.Nav, new NavQuery(Team.Red), BotSkill.ForTier(5), stagger: 0);
 
-    private static SearchBot Bot(ScenarioWorld world, out ScriptedBot scripted)
+    private static HybridBot Bot(ScenarioWorld world, out ScriptedBot scripted)
     {
         scripted = Scripted(world);
 
-        return new SearchBot(new RolloutSearch(new RolloutOptions(HorizonTicks: 8)), scripted);
+        return new HybridBot(new SearchController(new RolloutOptions(HorizonTicks: 8)), scripted);
     }
 
     /// <summary>Places red and a blue enemy <paramref name="gap"/> px away.</summary>
@@ -40,7 +41,7 @@ public sealed class SearchBotTests
         return red;
     }
 
-    private static void Run(SearchBot bot, ScenarioWorld world, int red, int ticks)
+    private static void Run(HybridBot bot, ScenarioWorld world, int red, int ticks)
     {
         for (var tick = 0; tick < ticks; tick++)
         {
@@ -67,8 +68,8 @@ public sealed class SearchBotTests
 
         Run(bot, world, red, 12);
 
-        Assert.False(bot.SearchDrove);
-        Assert.Equal(0, bot.SearchTicks);
+        Assert.False(bot.MicroDrove);
+        Assert.Equal(0, bot.MicroTicks);
         Assert.Equal(12, bot.ScriptedTicks);
     }
 
@@ -83,7 +84,7 @@ public sealed class SearchBotTests
         Run(bot, world, red, 12);
 
         Assert.True(
-            bot.SearchTicks > 0,
+            bot.MicroTicks > 0,
             "the search never took the wheel with an enemy 80px away, so the handover is not "
             + "reaching it — check Handover.ShouldEngage and RolloutSearch.AtDecisionBoundary");
     }
@@ -107,7 +108,7 @@ public sealed class SearchBotTests
         // keep the search away, which is the property being asserted.
         var carrying = World();
         var scriptedA = Scripted(carrying);
-        var withIntel = new SearchBot(new RolloutSearch(new RolloutOptions(HorizonTicks: 8)), scriptedA)
+        var withIntel = new HybridBot(new SearchController(new RolloutOptions(HorizonTicks: 8)), scriptedA)
         {
             Rule = HandoverRule.Distance,
         };
@@ -119,7 +120,7 @@ public sealed class SearchBotTests
         // The contrast: identical but for the intel. Without it the search MUST
         // drive, or the zero above says nothing.
         var empty = World();
-        var withoutIntel = new SearchBot(new RolloutSearch(new RolloutOptions(HorizonTicks: 8)), Scripted(empty))
+        var withoutIntel = new HybridBot(new SearchController(new RolloutOptions(HorizonTicks: 8)), Scripted(empty))
         {
             Rule = HandoverRule.Distance,
         };
@@ -128,10 +129,10 @@ public sealed class SearchBotTests
         Run(withoutIntel, empty, redB, 12);
 
         Assert.True(
-            withoutIntel.SearchTicks > 0,
+            withoutIntel.MicroTicks > 0,
             "the search did not drive even without the intel, so the zero below proves nothing");
 
-        Assert.Equal(0, withIntel.SearchTicks);
+        Assert.Equal(0, withIntel.MicroTicks);
     }
 
     /// <summary>
@@ -160,8 +161,8 @@ public sealed class SearchBotTests
 
         Run(bot, world, red, 16);
 
-        Assert.True(bot.SearchTicks > 0, "the search never drove, so this proves nothing");
-        Assert.Equal(16, bot.SearchTicks + bot.ScriptedTicks);
+        Assert.True(bot.MicroTicks > 0, "the search never drove, so this proves nothing");
+        Assert.Equal(16, bot.MicroTicks + bot.ScriptedTicks);
 
         // ⛔ The load-bearing assertion, and WantsToEngage alone was NOT it: with
         // the scripted poll moved behind `if it drives`, this class still passed,
@@ -180,9 +181,16 @@ public sealed class SearchBotTests
     /// <remarks>
     /// ⚠️ <b>Behavioural rather than structural.</b> Asserting that both call
     /// <c>Handover</c> would pass on two classes calling it with different
-    /// arguments. This runs a real <see cref="PolicyBot"/> and a real
-    /// <see cref="SearchBot"/> over the same world and asserts they agree about
-    /// who drives — which is the property the experiment actually needs.
+    /// arguments. This runs a real <see cref="PolicyController"/> and a real
+    /// <see cref="SearchController"/> over the same world and asserts they agree
+    /// about who drives — which is the property the experiment actually needs.
+    /// <para>
+    /// ⚠️ <b>Weaker than it was, and deliberately kept.</b> Both arms are now the
+    /// same <see cref="HybridBot"/>, so the gate is shared by construction and this
+    /// can no longer catch two gates drifting apart. What it still catches is a
+    /// CONTROLLER that changes when the gate fires — an <c>AtDecisionBoundary</c>
+    /// or a <c>Drives</c> that disagrees between them.
+    /// </para>
     /// </remarks>
     [Theory]
     [InlineData(80)]
@@ -190,7 +198,7 @@ public sealed class SearchBotTests
     public void TheTwoArmsHandOverAtTheSameDistances(int gap)
     {
         var policyWorld = World();
-        var policy = new PolicyBot(PolicyFixture.Load(), Scripted(policyWorld));
+        var policy = new HybridBot(new PolicyController(PolicyFixture.Load()), Scripted(policyWorld));
 
         var policyRed = Duel(policyWorld, gap);
 
@@ -207,7 +215,7 @@ public sealed class SearchBotTests
 
         Run(search, searchWorld, searchRed, 12);
 
-        Assert.Equal(policy.PolicyTicks > 0, search.SearchTicks > 0);
+        Assert.Equal(policy.MicroTicks > 0, search.MicroTicks > 0);
     }
 
     /// <summary>
@@ -234,7 +242,7 @@ public sealed class SearchBotTests
 
         // In range: the search takes the wheel.
         Run(bot, world, red, 8);
-        Assert.True(bot.SearchTicks > 0, "the search never drove, so this proves nothing");
+        Assert.True(bot.MicroTicks > 0, "the search never drove, so this proves nothing");
 
         // ⚠️ Force control OUT through a real gate path rather than by moving the
         // enemy: picking up the intel is the carve-out, is deterministic, and does
@@ -249,12 +257,12 @@ public sealed class SearchBotTests
         // And now control comes BACK.
         world.State.Characters[red].CarryingIntel = false;
 
-        var before = bot.SearchTicks;
+        var before = bot.MicroTicks;
         var view = new WorldView(in world.State, world.Collision);
         var taken = bot.Poll(in view, red, 12);
 
         Assert.True(
-            bot.SearchTicks > before,
+            bot.MicroTicks > before,
             "control did not come back to the search, so this proves nothing");
 
         var wanted = taken.NetAimDirection * 360.0 / 65536.0;
@@ -274,7 +282,7 @@ public sealed class SearchBotTests
     /// <remarks>
     /// ⚠️ <b>Two controllers with independent cadences flap against each other at
     /// the threshold</b>, and each holds state the other does not maintain — the
-    /// macro layer’s follower, the search’s absolute aim. <c>PolicyBot</c> refuses
+    /// macro layer’s follower, the search’s absolute aim. The policy arm refuses
     /// to swap mid-decision for that reason and this must too.
     /// <para>
     /// Checked deterministically rather than by jittering the range: engage, then
@@ -297,7 +305,7 @@ public sealed class SearchBotTests
         bot.Poll(in view, red, 0);
         world.Step();
 
-        Assert.True(bot.SearchDrove, "the search did not take over, so this proves nothing");
+        Assert.True(bot.MicroDrove, "the search did not take over, so this proves nothing");
 
         // Now make the gate want the scripted layer back, mid-decision.
         world.State.Characters[enemy].X = world.State.Characters[red].X + 4000;
@@ -306,7 +314,7 @@ public sealed class SearchBotTests
         bot.Poll(in next, red, 1);
 
         Assert.True(
-            bot.SearchDrove,
+            bot.MicroDrove,
             "control went back to the scripted layer on the tick after the search took a " +
             "decision — the gate is re-evaluating every tick instead of on the search’s " +
             "decision boundary, which is the two-cadence flap this design refuses");

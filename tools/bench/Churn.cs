@@ -81,8 +81,12 @@ public static class ChurnBench
             {
                 var tally = Measure(
                     map, maps, nav, perMap, cap, bots,
-                    arm == 2 ? policy : null,
-                    arm == 3 ? new RolloutOptions(Threads: 4) : null);
+                    arm switch
+                    {
+                        2 => BotBrainSpec.Of(new PolicyMicroSpec(policy)),
+                        3 => BotBrainSpec.Of(new SearchMicroSpec(new RolloutOptions(Threads: 4))),
+                        _ => null,
+                    });
 
                 Console.WriteLine(
                     $"{map,-16} {arm,-4} {tally.PerSecond(tally.HorizontalChanges),9:0.00} "
@@ -111,7 +115,7 @@ public static class ChurnBench
 
     private static Tally Measure(
         string map, string maps, string nav, int count, int cap, int bots,
-        PolicyNetwork? policy, RolloutOptions? search)
+        BotBrainSpec? brain)
     {
         var tally = new Tally();
 
@@ -126,10 +130,9 @@ public static class ChurnBench
                 TimeLimitMinutes = cap,
                 KillLimit = 40,
                 MaxTicks = 30 * 60 * cap,
-                AllowedClasses = [.. PolicyBot.TrainedClasses],
-                Policy = policy,
-                SearchMicro = search,
-                PolicyTeam = Team.Red,
+                AllowedClasses = [.. PolicyController.TrainedClasses],
+                Brain = brain,
+                HybridTeam = Team.Red,
             };
 
             var match = HeadlessMatch.Load(options, maps, nav);

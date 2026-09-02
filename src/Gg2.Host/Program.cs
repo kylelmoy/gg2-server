@@ -125,14 +125,16 @@ internal static class Program
             NavCacheDirectory = MapDirectory.ResolveNav(),
         };
 
-        // ⚠️ Held OUTSIDE the switch because --search-threads and --search-bots
-        // can arrive in either order, and a flag whose effect depends on argument
-        // order is the kind of thing nobody notices until a measurement is wrong.
-        // Whichever comes second reconciles the two.
+        // ⚠️ Every bot-controller flag is COLLECTED here and reconciled once,
+        // after the switch. A flag whose effect depends on argument order is the
+        // kind of thing nobody notices until a measurement is wrong, and
+        // --search-threads before --search-bots was exactly that.
         var searchThreads = Math.Clamp(Environment.ProcessorCount / 3, 1, 8);
 
         string? policyPath = null;
         var ignoreStamp = false;
+        var searchBots = false;
+        int? arbiterUnits = null;
 
         for (var i = 0; i < args.Length; i++)
         {
@@ -243,11 +245,7 @@ internal static class Program
                 // rises with the population, and every number quoted for it comes
                 // from 8-bot headless matches. Watch --tick-stats while playing.
                 case "--search-bots":
-                    options.Bots = options.Bots with
-                    {
-                        SearchMicro = new RolloutOptions(Threads: searchThreads),
-                    };
-
+                    searchBots = true;
                     break;
 
                 // ⚠️ Threads change NO decision -- RolloutThreadingTests gates that
@@ -257,24 +255,26 @@ internal static class Program
                 // here, but it is not free on a shared machine.
                 case "--search-threads":
                     searchThreads = RequireInt(name, value);
-
-                    if (options.Bots.SearchMicro is not null)
-                    {
-                        options.Bots = options.Bots with
-                        {
-                            SearchMicro = new RolloutOptions(Threads: searchThreads),
-                        };
-                    }
-
                     i++;
                     break;
 
-                // ⚠️ SEPARATE from --search-bots on purpose. SearchBot engages only
-                // on the four classes the policy was trained for, so a server drawing
-                // all eight runs a MIX of arm 3 and arm 1 and a playtester cannot tell
-                // which bot they just fought. "trained" is the shorthand for making
-                // every bot the configuration that was actually measured -- at the cost
-                // of a roster missing five classes. Say which you ran.
+                // The tick budget an IMicroArbiter spends per tick, in
+                // IMicroController.DecisionCost units. ⛔ REQUIRED when more than
+                // one controller is configured, because without an arbiter the
+                // first tier always drives and the second would be dead weight
+                // nobody could see.
+                //
+                // ⚠️ NOT A MEASUREMENT AND NOT TUNED. The units are relative and
+                // unmeasured — IMicroController.DecisionCost says so — so a number
+                // here is an experiment, not a configuration. Watch --tick-stats.
+                //
+                // ⛔ The arbiter reads the TICK, never a clock: a match with one in
+                // it still replays from its seed. See IMicroArbiter.
+                case "--bot-arbiter":
+                    arbiterUnits = RequireInt(name, value);
+                    i++;
+                    break;
+
                 // docs/BOTS.md's arm 2: gg2-rl's trained checkpoint driving keys and
                 // aim inside the same engagement window --search-bots uses.
                 case "--policy":
@@ -297,6 +297,13 @@ internal static class Program
                     ignoreStamp = true;
                     break;
 
+                // ⚠️ SEPARATE from --search-bots and --policy on purpose. Both
+                // shipped controllers engage only on the four classes the policy was
+                // trained for, so a server drawing all eight runs a MIX of the hybrid
+                // arm and the all-scripted one, and a playtester cannot tell which bot
+                // they just fought. "trained" is the shorthand for making every bot
+                // the configuration that was actually measured -- at the cost of a
+                // roster missing five classes. Say which you ran.
                 case "--bot-classes":
                 {
                     var text = Require(name, value);
@@ -304,7 +311,7 @@ internal static class Program
                     options.Bots = options.Bots with
                     {
                         AllowedClasses = string.Equals(text, "trained", StringComparison.OrdinalIgnoreCase)
-                            ? [.. PolicyBot.TrainedClasses]
+                            ? [.. PolicyController.TrainedClasses]
                             : ParseClasses(name, text),
                     };
 
@@ -376,6 +383,17 @@ internal static class Program
             }
         }
 
+        // ⛔ ONE PLACE BUILDS THE BRAIN, at the end, from flags collected above.
+        // The flag handlers used to write BotPopulationOptions.SearchMicro
+        // directly, which made --search-threads order-dependent: given BEFORE
+        // --search-bots it was picked up, given after it had to re-write the
+        // option it had just found. Collecting first and building once removes
+        // the ordering entirely.
+        var tiers = new List<MicroControllerSpec>();
+
+        if (searchBots)
+            tiers.Add(new SearchMicroSpec(new RolloutOptions(Threads: searchThreads)));
+
         if (policyPath is not null)
         {
             var policy = PolicyNetwork.Load(policyPath, ignoreStamp);
@@ -392,7 +410,37 @@ internal static class Program
                     : "  <-- STAMP MISMATCH, BYPASSED by --policy-ignore-stamp. Everything this "
                       + "policy decides was learned on a different simulation."));
 
-            options.Bots = options.Bots with { Policy = policy };
+            // ⚠️ AFTER the search, so tier 0 is the more expensive controller and
+            // an arbiter under pressure drops to the policy before it drops to the
+            // scripted layer. Ordering is the arbiter's whole input — HybridBot.
+            tiers.Add(new PolicyMicroSpec(policy));
+        }
+
+        if (tiers.Count > 1 && arbiterUnits is null)
+        {
+            // ⛔ Refused rather than defaulted. With no arbiter tier 0 always
+            // drives, so a second controller would be configured, reported, and
+            // never once consulted — which is exactly the shape of claim this repo
+            // keeps catching: something the server says it is doing and is not.
+            throw new ArgumentException(
+                $"{tiers.Count} bot controllers were configured but no --bot-arbiter <units>; "
+                + "without one the first tier always drives and the rest are dead weight");
+        }
+
+        if (tiers.Count > 0)
+        {
+            options.Bots = options.Bots with
+            {
+                Brain = new BotBrainSpec
+                {
+                    Tiers = tiers,
+
+                    // ⛔ ONE arbiter for the whole server, shared by every bot. A
+                    // per-bot one cannot see the coinciding decisions that make the
+                    // tick tail, which is the only reason it exists.
+                    Arbiter = arbiterUnits is { } units ? new DecisionQuotaArbiter(units) : null,
+                },
+            };
         }
 
         return options;
@@ -436,7 +484,15 @@ internal static class Program
                             never a decision.
           --policy <path>   drive bots with a trained policy checkpoint (.npz)
                             inside their engagement window - docs/BOTS.md arm 2.
-                            Mutually exclusive with --search-bots.
+                            Combine with --search-bots to give bots both, most
+                            expensive first; that needs --bot-arbiter.
+          --bot-arbiter <units>
+                            per-tick budget, shared by every bot, deciding which
+                            controller may spend a decision when several bots
+                            engage on the same tick. Cheaper tiers, then the
+                            scripted layer, once it runs out. REQUIRED with more
+                            than one controller. The units are relative and NOT
+                            measured - watch --tick-stats.
           --policy-ignore-stamp
                             load a checkpoint whose simulation stamp does NOT
                             match this build. Only honest when the simulation

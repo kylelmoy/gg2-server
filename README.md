@@ -127,7 +127,7 @@ at 30 Hz, and an unpaced server desynchronises every one at once.
 
 **Phase 9, in progress** — a learned policy. `PolicyNetwork` runs a checkpoint
 trained by the sibling `gg2-rl` project in this process, gated logit-for-logit
-against that project's own numpy on 64 real states; `PolicyBot` hands it the
+against that project's own numpy on 64 real states; `HybridBot` hands it the
 keys and aim inside a 150px engagement window while the scripted layer keeps
 movement, routing and objectives.
 

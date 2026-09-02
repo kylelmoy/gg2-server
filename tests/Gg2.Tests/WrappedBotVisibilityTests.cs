@@ -33,7 +33,7 @@ public sealed class WrappedBotVisibilityTests
         var bare = Bare();
 
         Assert.Same(bare, ScriptedBot.Of(bare));
-        Assert.Same(bare, ScriptedBot.Of(new SearchBot(new RolloutSearch(), bare)));
+        Assert.Same(bare, ScriptedBot.Of(new HybridBot(new SearchController(new RolloutOptions()), bare)));
     }
 
     [Fact]
@@ -59,7 +59,7 @@ public sealed class WrappedBotVisibilityTests
                             c.GetParameters().Any(p => p.ParameterType == typeof(ScriptedBot))))
             .ToArray();
 
-        // Not vacuous: SearchBot and PolicyBot both take a ScriptedBot today.
+        // Not vacuous: HybridBot takes a ScriptedBot today.
         Assert.NotEmpty(wrappers);
 
         foreach (var type in wrappers)
@@ -96,7 +96,7 @@ public sealed class WrappedBotVisibilityTests
                 FillToPlayers = 6,
                 MaxBots = 6,
                 MinHumans = 0,
-                SearchMicro = new RolloutOptions(Threads: 2),
+                Brain = BotBrainSpec.Of(new SearchMicroSpec(new RolloutOptions(Threads: 2))),
             },
         };
 
@@ -112,7 +112,7 @@ public sealed class WrappedBotVisibilityTests
         foreach (var slot in slots)
         {
             // The roster holds the WRAPPER...
-            Assert.IsType<SearchBot>(server.SourceOf(slot));
+            Assert.IsType<HybridBot>(server.SourceOf(slot));
 
             // ...and every site that wants the macro layer still reaches it.
             Assert.NotNull(ScriptedBot.Of(server.SourceOf(slot)));
