@@ -711,12 +711,53 @@ public sealed class GameServer : IDisposable
 
         ServiceBots();
 
+        // ⛔ THE INPUT HAS TO REACH THE WORLD BEFORE THE UPDATE IS SERIALISED,
+        // and for six phases it did not. The broadcast reads
+        // _world.Characters[slot].KeyState; KeyState is written only by
+        // CharacterState.ApplyInput, which runs inside MatchSimulation.Tick —
+        // i.e. in AdvanceSimulation, BELOW this. So every INPUTSTATE and
+        // QUICK_UPDATE carried the PREVIOUS tick's keys.
+        //
+        // The reference writes keyState straight onto the character in
+        // processClientCommands (GameServerBeginStep.gml:52) and serialises after
+        // it, at line 66. This is that ordering.
+        //
+        // ⚠️ Clients dead-reckon each character from the last keys they heard
+        // until the next position update, every 7th tick, so one-tick-stale keys
+        // mispredict every character for most of every gap — forever, invisibly,
+        // and looking exactly like lag while the server sits inside its budget.
+        // A jump is the worst case: GG2 jumps on the PRESSED edge, so a late key
+        // can miss the edge against the client's own previous keystate entirely
+        // and the character then snaps upward on the next position update.
+        // InputReachesTheWireTests is the gate, with a bot variant that has no
+        // socket so the network cannot explain a failure.
+        //
+        // ⚠️ MatchSimulation.Tick applies the SAME inputs again below, and that
+        // is deliberate rather than tolerated. The simulation must stay a pure
+        // function of (state, inputs) — CLAUDE.md's first non-negotiable — so it
+        // cannot depend on the server having pre-applied anything. The second
+        // apply contributes nothing: ApplyInput ORs the edge into PressedKeys and
+        // then sets LastKeyState = KeyState, so the second call ORs zero, and
+        // PressedKeys is not cleared until CharacterPhysics has consumed it
+        // (CharacterPhysics.cs:306, at the end of the Begin Step). The edge
+        // survives, once.
+        var advancing = AdvancesThisTick();
+        var live = Math.Min(_roster.Count, WorldState.MaxSlots);
+
+        if (advancing)
+        {
+            GatherInputs(live);
+
+            for (var slot = 0; slot < live; slot++)
+            {
+                if (_world.Alive[slot])
+                    _world.Characters[slot].ApplyInput(_inputs[slot]);
+            }
+        }
+
         // Order matters and is the reference's. GameServerBeginStep.gml
         // serialises the update *before* any Character's Step runs, so one
-        // update carries this tick's input alongside last tick's position — the
-        // pairing docs/PARITY.md's replayer calls UpdatesPrecedeTheirTick, and
-        // getting it the other way round makes the port look systematically
-        // slow to every client.
+        // update carries this tick's input alongside last tick's position.
         WriteStateUpdate();
         FlushBroadcast();
 
@@ -727,8 +768,8 @@ public sealed class GameServer : IDisposable
         // that froze it. Clients keep receiving updates of an unchanging world,
         // which is what "frozen" looks like from a client that re-simulates
         // between updates.
-        if (AdvancesThisTick())
-            AdvanceSimulation();
+        if (advancing)
+            AdvanceSimulation(live);
 
         _control?.Service();
 
@@ -948,16 +989,17 @@ public sealed class GameServer : IDisposable
     /// is what docs/BOTAI.md item 1 rules out, and a per-tick array here would
     /// be exactly that.
     /// </remarks>
-    private void AdvanceSimulation()
+    /// <param name="count">
+    /// Roster slots whose input was gathered and applied before the broadcast.
+    /// ⚠️ Gathered THERE and not here, so every source is polled exactly once a
+    /// tick — a bot polled twice would think twice and could answer differently.
+    /// </param>
+    private void AdvanceSimulation(int count)
     {
         // Before the tick, because it reads the round the *previous* tick
         // decided — the reference checks it in the server's Begin Step, which is
         // the first thing in a frame. See ServeRoundEnd.
         ServeRoundEnd();
-
-        var count = Math.Min(_roster.Count, WorldState.MaxSlots);
-
-        GatherInputs(count);
 
         MatchSimulation.Tick(_collision, ref _world, _inputs.AsSpan(0, count), ref _events, _spawnPoints);
 
