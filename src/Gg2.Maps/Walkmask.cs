@@ -28,6 +28,85 @@ public sealed class Walkmask
     /// <summary>Words per row. Rows are word-aligned so a row never straddles.</summary>
     private readonly int _stride;
 
+    /// <summary>
+    /// One bitset per precomputed box SHAPE: bit (c, r) is set when the
+    /// <c>w x h</c> cell rectangle whose top-left corner is (c, r) contains
+    /// anything solid. <see cref="EroShape"/> indexes it; null entries are shapes
+    /// that were not worth a table.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>This is a morphological EROSION of the mask, precomputed once per
+    /// map, and it exists because the shapes a character box produces are almost
+    /// constant.</b> A box's cell rectangle is <c>w</c> or <c>w+1</c> columns by
+    /// <c>h</c> or <c>h+1</c> rows — the pixel size is fixed per class and only the
+    /// sub-cell phase of the position varies — so a handful of shapes answers
+    /// nearly every query. <b>Measured over 2,940 ticks of real bot matches: FOUR
+    /// shapes (3x6, 4x6, 3x7, 4x7) cover 86.7%, 88.4% and 94.5% of all mask
+    /// queries on three maps</b>, and off-map queries are 0.02%. Pyro's two shapes
+    /// were added on top so that every class in the bot draw is covered.
+    /// <para>
+    /// ⚠️ <b>At CELL resolution, which is what makes it small.</b> One bit per
+    /// possible top-left cell is the same footprint as the mask itself — about
+    /// 20 KB a shape on <c>ctf_truefort</c>, 80 KB for the four. A per-PIXEL table
+    /// would be 36x that and would not stay in cache, which is the version of this
+    /// idea that does not work.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>The lookup is exact, not conservative.</b> It answers the same
+    /// question <see cref="AnySolidInBox"/> answers, so there is no fallback path
+    /// for a "maybe" — a shape is either tabulated or it is not.
+    /// </para>
+    /// </remarks>
+    private readonly ulong[][] _eroded;
+
+    /// <summary>
+    /// Whether a <paramref name="width"/> x <paramref name="height"/> cell
+    /// rectangle has a precomputed table.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Exposed for a TEST, and the test is the point.</b> Equivalence alone
+    /// cannot tell a working table from one nothing reaches — both are green. This
+    /// lets <c>WalkmaskBoxTests</c> assert that the shapes real character boxes
+    /// produce are the shapes that are tabulated, so a change to
+    /// <c>CharacterBox.For</c> that quietly moved every query onto the general path
+    /// fails instead of merely getting slower.
+    /// </remarks>
+    public static bool IsTabulatedShape(int width, int height) => EroShape(width, height) >= 0;
+
+    /// <summary>
+    /// The table index for a <paramref name="width"/> x <paramref name="height"/>
+    /// cell rectangle, or -1 where no table exists.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>3-4 columns by 5-7 rows, and that set is DERIVED from the shipped
+    /// character boxes rather than guessed.</b> A box's cell rectangle is fixed by
+    /// its pixel size and the sub-cell phase of its position, so each class
+    /// produces at most two widths and two heights. Enumerated over all 36 phases:
+    /// <b>13 px wide is ALWAYS 3 columns and 19 px is ALWAYS 4</b> — only 15 px
+    /// varies. Scout, Soldier, Sniper, Demoman, Medic, Engineer, Heavy and Spy are
+    /// 3-4 x 6-7; <b>Pyro is 3-4 x 5-6</b>, which is why the row range starts at 5.
+    /// <para>
+    /// ⚠️ <b>Quote alone falls outside (4-5 rows) and takes the general path</b> —
+    /// correct, merely slower, and it is not in the bot class draw:
+    /// <c>Program.ParseClasses</c> refuses anything above Pyro.
+    /// </para>
+    /// <para>
+    /// ⛔ <b>This set was wrong when it was REASONED about, and a test control
+    /// caught it.</b> The first version excluded Heavy on a hand-derived claim that
+    /// a 19 px box spans 4-5 columns. It spans exactly 4. <b>Enumerate the phases;
+    /// do not derive them by hand</b> — <c>WalkmaskBoxTests</c> now asserts the
+    /// intersection mechanically.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Widening further is a memory decision — about 20 KB a shape — and
+    /// wants a shape-mix measurement rather than a guess.</b> Four shapes measured
+    /// at 87-95% of all mask queries over three real matches; Pyro's two were added
+    /// on top so that every class in the draw is covered.
+    /// </para>
+    /// </remarks>
+    private static int EroShape(int width, int height) =>
+        width is 3 or 4 && height is >= 5 and <= 7 ? ((width - 3) * 3) + (height - 5) : -1;
+
     private Walkmask(int width, int height, ulong[] words, int stride)
     {
         Width = width;
@@ -35,6 +114,7 @@ public sealed class Walkmask
         _words = words;
         _stride = stride;
         _clearance = BuildClearance();
+        _eroded = BuildEroded();
     }
 
     /// <summary>Mask width in cells.</summary>
@@ -106,6 +186,21 @@ public sealed class Walkmask
     /// </remarks>
     public bool AnySolidInBox(int firstColumn, int lastColumn, int firstRow, int lastRow)
     {
+        // ⚠️ THE TABLE FIRST, because it answers most queries and answers them
+        // exactly. A shape is tabulated only for rectangles wholly on the map, so
+        // the unsigned bounds tests below are the whole precondition — where they
+        // hold, clamping is a no-op and the tabulated rectangle IS the rectangle
+        // asked about. Off-map queries measure 0.02% of the total.
+        var shape = EroShape(lastColumn - firstColumn + 1, lastRow - firstRow + 1);
+
+        if (shape >= 0
+            && (uint)firstColumn < (uint)Width && (uint)lastColumn < (uint)Width
+            && (uint)firstRow < (uint)Height && (uint)lastRow < (uint)Height)
+        {
+            return (_eroded[shape][(firstRow * _stride) + (firstColumn >> 6)]
+                & (1UL << (firstColumn & 63))) != 0;
+        }
+
         // Clamp rather than reject: off-mask is open, so a box overhanging the
         // map asks only about the part that exists.
         var c0 = firstColumn < 0 ? 0 : firstColumn;
@@ -212,6 +307,94 @@ public sealed class Walkmask
     /// and would stop the field fitting in a byte.
     /// </remarks>
     public const byte MaxClearance = 48;
+
+    /// <summary>
+    /// Builds one bitset per <see cref="EroShape"/>: does the <c>w x h</c> cell
+    /// rectangle at (c, r) hold anything solid?
+    /// </summary>
+    /// <remarks>
+    /// A separable sliding OR — a horizontal pass over <c>w</c> columns, then a
+    /// vertical pass over <c>h</c> rows of that — so the cost is linear in cells
+    /// rather than in cells x w x h. Sub-millisecond per map.
+    /// <para>
+    /// ⚠️ <b>Rectangles that would run off the right or bottom edge are left
+    /// CLEAR, and nothing reads them</b>: <see cref="AnySolidInBox"/> only consults
+    /// a table when the whole rectangle is on the map. Leaving them clear rather
+    /// than solid keeps a stray read failing open, which matches what off-mask
+    /// means everywhere else in this class.
+    /// </para>
+    /// </remarks>
+    private ulong[][] BuildEroded()
+    {
+        var tables = new ulong[6][];
+
+        // How many solid cells the sliding window currently holds. A count rather
+        // than a boolean, so the window advances in O(1) — recomputing the OR over
+        // the whole window at every position is what made the first version of
+        // this six times slower and 14.5 ms a map.
+        var rowOr = new bool[Width * Height];
+
+        foreach (var width in (ReadOnlySpan<int>)[3, 4])
+        {
+            // Horizontal: does [c, c + width) hold anything solid on row r?
+            for (var r = 0; r < Height; r++)
+            {
+                var solid = 0;
+
+                for (var d = 0; d < width && d < Width; d++)
+                {
+                    if (IsSolid(d, r))
+                        solid++;
+                }
+
+                for (var c = 0; c < Width; c++)
+                {
+                    rowOr[(r * Width) + c] = solid > 0;
+
+                    if (IsSolid(c, r))
+                        solid--;
+
+                    if (IsSolid(c + width, r))
+                        solid++;
+                }
+            }
+
+            foreach (var height in (ReadOnlySpan<int>)[5, 6, 7])
+            {
+                var shape = EroShape(width, height);
+                var table = new ulong[_words.Length];
+
+                // Vertical: the same sliding window down each column, over the
+                // horizontal pass rather than over the mask.
+                for (var c = 0; c + width <= Width; c++)
+                {
+                    var solid = 0;
+
+                    for (var d = 0; d < height && d < Height; d++)
+                    {
+                        if (rowOr[(d * Width) + c])
+                            solid++;
+                    }
+
+                    for (var r = 0; r + height <= Height; r++)
+                    {
+                        if (solid > 0)
+                            table[(r * _stride) + (c >> 6)] |= 1UL << (c & 63);
+
+                        if (rowOr[(r * Width) + c])
+                            solid--;
+
+                        if (r + height < Height && rowOr[((r + height) * Width) + c])
+                            solid++;
+                    }
+                }
+
+                tables[shape] = table;
+            }
+        }
+
+        return tables;
+    }
 
     private byte[] BuildClearance()
     {

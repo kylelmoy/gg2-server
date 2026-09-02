@@ -185,6 +185,138 @@ public sealed class WalkmaskBoxTests
     }
 
     /// <summary>
+    /// Every tabulated shape, at every position on the map, against the cell loop.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>This is the direct gate on the precomputed erosion tables</b>
+    /// (<c>Walkmask.BuildEroded</c>), and it is separate from the sweeps above
+    /// because those reach the tables only incidentally — through whichever shapes
+    /// a Heavy box happens to produce. This walks each tabulated shape across every
+    /// legal top-left cell, which is exactly the domain the table covers and
+    /// nothing else.
+    /// <para>
+    /// ⚠️ <b>The table is an EXACT answer, not a conservative one.</b> There is no
+    /// "maybe" path to fall through to, so a wrong bit is a wrong collision answer
+    /// — a character walking through a wall, or stopped by nothing.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData("ctf_truefort")]
+    [InlineData("ctf_2dfort")]
+    [InlineData("koth_valley")]
+    public void EveryTabulatedShapeMatchesTheCellLoopEverywhereOnTheMap(string map)
+    {
+        var mask = Mask(map);
+        var checkedCells = 0L;
+        var solid = 0L;
+
+        for (var w = 1; w <= 6; w++)
+        for (var h = 1; h <= 9; h++)
+        {
+            if (!Walkmask.IsTabulatedShape(w, h))
+                continue;
+
+            for (var r = 0; r + h <= mask.Height; r++)
+            for (var c = 0; c + w <= mask.Width; c++)
+            {
+                var expected = Naive(mask, c, c + w - 1, r, r + h - 1);
+
+                Assert.Equal(expected, mask.AnySolidInBox(c, c + w - 1, r, r + h - 1));
+
+                checkedCells++;
+
+                if (expected)
+                    solid++;
+            }
+        }
+
+        // ⚠️ Both directions really occurred, and the shapes really exist. Without
+        // these the test passes on a `return false` and on an empty shape set.
+        Assert.True(checkedCells > 100_000, $"{map}: only {checkedCells} positions — no shapes tabulated?");
+        Assert.True(solid > 1000, $"{map}: only {solid} solid answers — sample is degenerate");
+        Assert.True(solid < checkedCells, $"{map}: every answer was solid — sample is degenerate");
+    }
+
+    /// <summary>
+    /// The shapes real character boxes produce are the shapes that are tabulated.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>Equivalence cannot catch a table nothing reaches.</b> If
+    /// <c>CharacterBox.For</c> changed so that no query matched a tabulated shape,
+    /// every test above would stay green and every query would quietly take the
+    /// general path — the optimisation gone, nothing red. This asserts the
+    /// intersection directly.
+    /// <para>
+    /// ⚠️ <b>Scout, Soldier, Sniper, Demoman, Medic, Engineer and Spy are covered;
+    /// Heavy, Pyro and Quote are NOT, and that is deliberate.</b> Their boxes fall
+    /// outside 3-4 columns by 6-7 rows, and tabulating them costs ~20 KB a shape
+    /// for classes that are a minority of queries — measured at 87-95% coverage
+    /// from the four shapes alone. <b>Widening the set is a memory decision; the
+    /// way to justify it is a shape-mix measurement, not a guess.</b>
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void TheClassesTheTableTargetsReallyProduceTabulatedShapes()
+    {
+        // ⚠️ Every class in the bot draw. `ParseClasses` refuses anything above
+        // Pyro, so this is the whole playable set.
+        var covered = new[]
+        {
+            PlayerClass.Scout, PlayerClass.Soldier, PlayerClass.Sniper,
+            PlayerClass.Demoman, PlayerClass.Medic, PlayerClass.Engineer,
+            PlayerClass.Heavy, PlayerClass.Spy, PlayerClass.Pyro,
+        };
+
+        foreach (var playerClass in covered)
+        {
+            var box = CharacterBox.For(playerClass);
+            var tabulated = 0;
+            var total = 0;
+
+            // Every sub-cell phase of a position, which is what varies the shape.
+            for (var x = 0; x < GameConstants.CellSize; x++)
+            for (var y = 0; y < GameConstants.CellSize; y++)
+            {
+                var w = CollisionWorld.CellOf(600 + x + box.Right) - CollisionWorld.CellOf(600 + x + box.Left) + 1;
+                var h = CollisionWorld.CellOf(800 + y + box.Bottom) - CollisionWorld.CellOf(800 + y + box.Top) + 1;
+
+                total++;
+
+                if (Walkmask.IsTabulatedShape(w, h))
+                    tabulated++;
+            }
+
+            Assert.Equal(total, tabulated);
+        }
+
+        // ⛔ The control, and it earned its place: the first version of this test
+        // named Heavy here on a hand-derived claim that a 19 px box spans 4-5
+        // columns. It spans exactly 4, Heavy was already covered, and the control
+        // failed — which is the only reason the shape set was enumerated rather
+        // than reasoned about. Quote is genuinely outside (4-5 rows).
+        var quote = CharacterBox.For(PlayerClass.Quote);
+        var quoteUncovered = 0;
+
+        for (var y = 0; y < GameConstants.CellSize; y++)
+        {
+            var h = CollisionWorld.CellOf(800 + y + quote.Bottom) - CollisionWorld.CellOf(800 + y + quote.Top) + 1;
+
+            if (!Walkmask.IsTabulatedShape(3, h))
+                quoteUncovered++;
+        }
+
+        // ⚠️ SOME, not all: Quote's two heights are 4 and 5, and 5 became
+        // tabulated when Pyro's shapes were added — so exactly the h=4 phases fall
+        // through. Asserting "all six" here failed, which is the correct outcome
+        // for a control written from a guess rather than from the enumeration.
+        Assert.True(
+            quoteUncovered is > 0 and < GameConstants.CellSize,
+            $"Quote had {quoteUncovered} of {GameConstants.CellSize} phases untabulated; "
+            + "expected some but not all, or the predicate is answering the same way "
+            + "for everything and the equality above proves nothing");
+    }
+
+    /// <summary>
     /// An empty range — the caller asking about nothing — is open, both ways.
     /// </summary>
     /// <remarks>

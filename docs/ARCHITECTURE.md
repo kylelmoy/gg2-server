@@ -98,7 +98,9 @@ The single hottest call in the server is `placeFree`. Design it deliberately:
 
 - The walkmask is a **bitset** — `ulong[]` with a row stride, one bit per mask
   cell, one cell per 6 × 6 world pixels. A character rectangle spans a handful of
-  cells; the test is a few masked word reads — `Walkmask.AnySolidInBox`.
+  cells; the test is a few masked word reads — `Walkmask.AnySolidInBox` — or,
+  for the shapes a character box actually produces, a single bit read from a
+  precomputed erosion table.
   ⛔ **That last clause was aspirational until 2026-09-02.** The layout was always
   the bitset; every consumer was a cell-by-cell loop calling `IsSolid`, in **four
   separate copies**. Nothing could fail, because the loop was correct — see
@@ -129,12 +131,18 @@ of a hidden mutation.
 **Measured 2026-09-02, Release, 24-core box, `ctf_truefort`, soldiers.** ⚠️ **A
 wall-clock figure on one machine — re-measure before quoting, and say which
 build.** The probe is a throwaway; what survives is the shape.
+⚠️ **These are the CURRENT figures, after both the word path and the erosion
+tables.** The two sections below give the before/after for each.
+⛔ **The tick row and the sweep under it come from a ScenarioWorld holding twelve
+LIVE characters that are standing still** — read it as the cost of twelve live
+characters, not of a match. A static scenario is not a workload; see the memo
+correction below.
 
 | | cost |
 |---|---|
-| `CollisionWorld.PlaceFree` (character box + filter) | **13.9 ns** |
-| `Walkmask.AnySolidInBox` alone | 8.8 ns |
-| `Movement.GoodMoveContactSolid`, a 10px fall | **177 ns** — about 13 `PlaceFree`s |
+| `CollisionWorld.PlaceFree` (character box + filter) | **12.0 ns** |
+| `Walkmask.AnySolidInBox` alone | 7.0 ns |
+| `Movement.GoodMoveContactSolid`, a 10px fall | **145 ns** — about 13 `PlaceFree`s |
 | `MatchSimulation.Tick`, 12 live characters | **3.7 µs** |
 | `WorldState` whole-struct copy (156,624 bytes) | 2.2 µs |
 | a `RolloutSearch` decision, 60 candidates × horizon 20, population 12 | **4.8 ms** |
@@ -224,6 +232,62 @@ an early return that only fires while spinjumping, so it is rare — and reusing
 stored value would need proof that nothing moved the character between the two
 stages.
 
+### ✅ The erosion tables: precomputing the box test, because the SHAPE barely varies
+
+⛔ **`Walkmask.AnySolidInBox` is a table lookup for nine of the ten character
+classes now**, one bit read instead of a word scan per row.
+
+**The observation that makes it cheap.** A character box's *cell rectangle* is
+fixed by its pixel size and the sub-cell phase of its position, so each class
+produces at most **two widths and two heights** — enumerated over all 36 phases,
+13 px wide is ALWAYS 3 columns, 19 px is ALWAYS 4, and only 15 px varies. So a
+handful of shapes answers nearly every query. **Measured over 2,940 ticks of real
+bot matches: four shapes (3x6, 4x6, 3x7, 4x7) cover 86.7%, 88.4% and 94.5% of all
+mask queries on three maps**, with 0.02% off-map. Pyro's two (3x5, 4x5) were added
+so every class in the bot draw is covered; only Quote falls through.
+
+⛔ **At CELL resolution, which is the whole reason it fits.** One bit per possible
+top-left cell is the same footprint as the mask — **about 20 KB a shape, 120 KB
+for six** on `ctf_truefort`. **A per-PIXEL table would be 36x that**, would not
+stay in cache, and is the version of this idea that does not work.
+
+**Built by a separable sliding OR** — a horizontal pass over `w` columns, then a
+vertical pass over `h` rows of that — so it is linear in cells. ⚠️ **1.5 ms a map
+warm, 2.7 ms cold.** The first version re-scanned the whole window at every
+position and cost 6x that. `HeadlessMatch.Load` does NOT cache maps, so this is
+paid per match: ~2% of `eval`'s per-match budget.
+
+| measurement | word scan | erosion table | |
+|---|---|---|---|
+| `AnySolidInBox` | 8.9 ns | **7.0 ns** | −21% |
+| `PlaceFree` | 14.2 ns | **12.0 ns** | −16% |
+| `GoodMoveContactSolid`, 10 px | 180 ns | **145 ns** | −19% |
+| `MatchSimulation.Tick` @ 12 chars | 3.83 µs | **3.65 µs** | −5% |
+| **search decision, per-horizon slope** | **258.6 µs** | **234.8 µs** | **−9.2%** |
+
+⚠️ **Interleaved A/B in ONE binary behind a switch, ON/OFF/ON/OFF**, so machine
+drift lands on both arms — the mask, `PlaceFree` and crawl ranges do not overlap.
+⚠️ **The per-horizon SLOPE is the statistic to read for the search**, not the
+single horizon-20 reading: it is a regression over five horizons, where the
+one-point numbers overlap between arms.
+
+⛔ **A wrong bit here is a wrong collision answer** — a character through a wall,
+or stopped by nothing. The lookup is exact rather than conservative, so there is
+no "maybe" path to fall through to. `WalkmaskBoxTests` walks every tabulated shape
+across every legal position on three maps and **mutation-checks four ways**:
+horizontal window short (7 red), vertical window short (7), shape-index collision
+(3), bounds test missing an edge (3).
+
+⛔ **Equivalence alone cannot catch a table nothing reaches** — a set of shapes no
+query matches is green and slow. `IsTabulatedShape` is public for exactly that
+test, which asserts the shapes real boxes produce ARE the tabulated ones.
+
+⚠️ **The shape set was WRONG when it was reasoned about, and the test control
+caught it.** The first version excluded Heavy on a hand-derived claim that a 19 px
+box spans 4-5 columns; it spans exactly 4, so the control — "a class left out must
+not be fully covered" — failed. **Enumerate the phases; do not derive them by
+hand.**
+
 ### ⛔ Binary search on the crawl is UNSOUND, and the hitscan analogy is where it breaks
 
 **The question comes up because `good_move_contact_solid` steps one pixel at a
@@ -270,7 +334,8 @@ not.
   here. ⚠️ Recorded so the next reader does not chase it: the four 512-element
   stackallocs look alarming and are not.
 - ⛔ **`RolloutSearch`'s 64-slot opponent loop: MEASURED at 1.1%, and rejected.**
-  43.4 ns a simulated tick, so 52 µs of a 4,795 µs decision. ⚠️ **The safe version
+  43.4 ns a simulated tick, so 52 µs of a 4,795 µs decision. ⚠️ Its share rises
+  slightly as the tick gets cheaper — re-measure before rejecting it a second time. ⚠️ **The safe version
   saves less than that**, because skipping dead slots is *not* equivalent: today
   they are written `PlayerInput.None` every tick, and a slot that dies mid-rollout
   — or respawns inside the horizon — would otherwise keep its last live input.
