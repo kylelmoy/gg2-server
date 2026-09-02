@@ -3627,6 +3627,45 @@ gate geometry straight off the map and needs no simulation),
 `SentryKillFixtureTests` and two unit tests in `SentryTests`. All four go red
 when `Sentries.GateCollisionStep` is removed — measured, not assumed.
 
+### ⛔ The carry LANDED, and NOTHING IN THE SUITE COVERS IT (2026-09-02)
+
+`MovingPlatforms.Carry` — 362 lines, and the reason `SIM_UUID` moved from
+`7ff5940d97aa7bed` to `5dac8a5e7c37ce3a` — **is not exercised by a single test**.
+Neutralised the whole function with an early return and ran the suite: **25
+failures before, 25 after, identical sets.** Not "weakly covered": zero.
+
+⚠️ **`PreciseCollisionOracleTests` gates the COLLISION PRIMITIVE, not the carry.**
+The probe settled that a character is a rectangle to GM8, that bounds are
+inclusive and that position rounds half to even — all real, all about
+`PreciseCollision`. The commit that landed the carry says it is "gated by
+`PreciseCollisionOracleTests`", and that sentence is **false in the way this repo
+keeps getting caught by**: the thing named is genuinely tested and is not the
+thing claimed.
+
+⛔ **This was found by trying to USE the merge, not by reviewing it.** The
+question asked was "can a stamp-mismatched policy run on `ctf_2dfort`", and the
+A/B that answered it came back identical on 23 maps — which is only evidence if
+the comparison can detect the carry at all. It cannot. **An A/B with no
+demonstrated sensitivity is not a null result, it is no result**, and chasing
+that is what turned up the coverage gap.
+
+### ✅ NO SHIPPED MAP CONTAINS A MOVING PLATFORM (2026-09-02)
+
+`MovingPlatforms.Build` reads exactly one entity type, `EntityTypes.MovingPlatform`
+= `"moving_platform"`. Counted across the checked-in oracle
+(`tests/Gg2.Tests/Fixtures/maps.json`, 22 shipped maps): **zero occurrences.**
+
+⚠️ **Two entities look like it and are not.** `tdm_mantic` carries 4
+`dropdownPlatform` (the jump-through kind) and 15 `MoveBoxUp`/`MoveBoxDown`.
+Neither reaches `Build`. **Only `gg_debug2` — this port’s own debug map — has
+moving platforms**, five of them, and even 40 bot matches there are byte-identical
+either side of the carry, because no bot ever stood on one.
+
+✅ **So the carry cannot fire on any map the server rotates through**, which is
+what makes `--policy-ignore-stamp` honest for a shipped map rather than merely
+convenient. ⚠️ **Re-check this before repeating it**: it is a fact about the map
+set, and a new map with a `moving_platform` entity falsifies it silently.
+
 ### Moving platforms: the motion is ported, the carry cannot be
 
 Landed 2026-09-01. `MovingPlatforms`, `WorldState.MovingPlatforms`, and a stage
