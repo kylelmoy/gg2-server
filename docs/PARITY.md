@@ -2665,10 +2665,8 @@ started this hunt is the one the framing instruments cannot see at all.
 
 ### ⛔ Known holes in the instruments as built
 
-✅ **Two of the three are closed.** The lag sweep runs against a recording this
-server makes in-test and catches the `486ef3e` mutation; and a tick is now
-*proved* to be exactly one flush, which is what makes the fingerprint's
-tick-grouping mean what it says. One remains.
+✅ **All three are closed**, and the last one produced the first
+reference-graded evidence in the repo. Kept below as the record of what each was.
 
 - ✅ **CLOSED** — the fingerprint still groups by tick, but
   `FlushFingerprintTests.ATickIsExactlyOneFlush` proves a tick is one flush, so
@@ -2676,9 +2674,24 @@ tick-grouping mean what it says. One remains.
   double-flush mutation passed it**: `FlushBroadcast` returns without counting on
   an empty buffer, so only ticks that append events after the update can tell the
   two apart. It runs six bots now, and the mutation reads 637 against 600.
-- **`FlushFrames.Group` has never been run against a real reference recording.**
-  Its gap heuristic is unvalidated until somebody records a framed session and
-  checks the grouping against `buffer_size(global.sendBuffer)`.
+- ✅ **CLOSED, and it grades the TABLE rather than the port.** 40 seconds of six
+  bots on a live GG2 2.9.2 server were recorded framed on 2026-09-02 and checked
+  in as `reference-ctf_truefort-framed.trace` (+ `.frames`).
+  `ReferenceFlushFingerprintTests` is the gate.
+
+  **1,188 reads against 1,196 state updates** — the reference sends one packet a
+  tick and coalescing is 0.7%, so the timing inference has a wide plateau. The
+  fingerprint is byte-for-byte identical from a 2ms gap to a 28ms one; group
+  counts are 1,187 at 2/5/10ms and 1,141 at 20/28ms, and `Group`'s ambiguity
+  count reads 0 at the low end against 950 at 20ms, which is how to tell which
+  end is safe.
+
+  ⛔ **And the fingerprint confirms the stage table from the reference's own
+  wire**: every `PLAYER_DEATH` leads its packet, every `WEAPON_FIRE` trails,
+  `PLAYER_SPAWN` and `GRAB_INTEL` trail, `PLAYER_CHANGECLASS`/`CHANGETEAM` lead.
+  **That is the End Step finding reproduced with no shared assumption with the
+  `buffer_size` measurement** — one instrument read the buffer from inside the
+  game, the other never touched it and read the wire.
 
 ## Tier 4 — behaviour scenarios
 
