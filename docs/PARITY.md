@@ -2495,6 +2495,143 @@ That last one is the sharpest tool in the box: `syncWrongness` already exists as
 a variable on `Character`, and reading the client-side character's `x`/`y` while
 the ported server runs turns "feels rubbery" into a number.
 
+## Which flush a message rides, and how to test it
+
+⛔ **The bug class this exists for: a value or message on the wrong side of the
+reference's serialise/flush boundary.** Four instances were found between
+2026-09-01 and 09-02 (`22f15e1`, `486ef3e`, `cdaa62a`, `3689ef7`) and two more
+while writing this section. All of them shipped correct bytes at the wrong
+moment, and **the tier-1 and tier-2 harnesses above are structurally blind to
+every one of them.**
+
+### Why a recording cannot see it, and why a diff cannot either
+
+⛔ **The send buffer is FIFO.** Moving the flush point changes which TCP segment
+a message rides in and **never the byte order** — both orderings produce a
+bit-identical stream. There is no discrepancy in a `.trace` to find, and looking
+for one is wasted time. `cdaa62a` was live while a 3,599-tick closed-loop replay
+came back with **zero** divergence.
+
+⛔ **And two live sessions cannot be diffed.** This port's bot layer diverged
+from the fork's and owes it nothing, so the two sides never produce comparable
+event sequences. The comparison has to be a **structural fingerprint computed
+independently on each side**, not a trace diff.
+
+### The three instruments, cheapest first
+
+**1. The stage table below, plus a gate on the port's routing.** Exhaustive —
+it covers messages no bot session will ever emit — static, and it is the thing
+that goes red on a regression. Build this first.
+
+**2. A framed recording, for a lead/trail fingerprint.** `Recorder.Chunk(TimeSpan
+At, byte[] Bytes)` already captures timestamped read boundaries and
+`AllBytes()` throws them away. Persist them as a **`.frames` sidecar** rather
+than changing the trace format — that keeps `.trace` byte-for-byte what it is,
+preserving all three reasons the format is raw bytes, and leaves every existing
+recording valid. Then group messages by flush and record, per group, which ones
+precede the state update and which follow it.
+
+⚠️ **Grouping by arrival time is a heuristic** — TCP coalescing, and the
+reference is not known to set `TCP_NODELAY`. Calibrate it against something that
+cannot be wrong: `gg2_watch buffer_size(global.sendBuffer)` sampled at the
+bridge's Step gives the **leftover prefix length** directly, which is exactly
+the quantity in question. Calibrate on a short run, then trust timing for long
+ones. The port side needs none of this: `--record` already tees inside
+`FlushBroadcast`, so its groups are exact by construction.
+
+**3. A lag sweep, for the half the other two cannot see.** ⚠️ **`486ef3e` — keys
+reaching clients a tick late — is a CONTENT-phase bug, and instruments 1 and 2
+both miss it entirely.** Catching it: re-simulate open-loop with the recorded
+keys shifted by L ∈ {−2…+2} and take the argmin of prediction error. A correct
+stream has argmin L = 0; that bug puts it at +1. It is self-diagnosing on a
+single side's recording, and running it against a reference recording validates
+the instrument rather than the port.
+
+### ⚠️ The trap: coverage, and it has bitten this repo twice
+
+`FlushShapeTests`' first fixture gave its bots no nav graphs, so they never met,
+never fired, and the real assertion passed on empty traffic.
+`BenchModeCoverageTests` exists because a mode went undocumented for a week.
+
+**A fingerprint over a CTF bot session will never see** generator destruction,
+arena transitions, sentry destruction, map change, or team balance. So the
+analysis must report **unseen message types as a first-class result** — an empty
+row is otherwise indistinguishable from agreement — and the session needs a
+gamemode rotation, not one long match.
+
+Two practical limits on "a long session": the recorder joins as a spectator and
+**a spectator self-disconnects at exactly five minutes**, so it needs
+reconnection or a non-spectator recorder; and the fork's bots have to be turned
+on (`botAdd(team, class, name)`).
+
+### The table
+
+**Stage decides everything**, because `GameServerEndStep` is the FIRST End Step
+of the frame — see `docs/TRAPS-SIMULATION.md`, "The GameServer is the OLDEST
+instance". Anything appended at or after another object's End Step misses that
+frame's flush.
+
+| stage | rides |
+|---|---|
+| `GameServerBeginStep` before `serializeState` | this tick, **ahead of** the update |
+| any Begin Step, alarm, Step, or collision event | this tick, **after** the update |
+| any non-`GameServer` End Step | **the next tick**, ahead of that update |
+| `acceptJoiningPlayer` / `serviceJoiningPlayer` | the next tick (they run after the flush) |
+
+| message | reference append site | stage |
+|---|---|---|
+| `PLAYER_LEAVE` | `GameServerBeginStep.gml:41` | pre-update |
+| `PLAYER_JOIN`, `CHANGETEAM`, `CHANGECLASS`, `CHANGENAME`, `CHATBUBBLE`, `OMNOMNOMNOM`, `TOGGLE_ZOOM`, `DESTROY_SENTRY` (command), `BUILD_SENTRY` | `processClientCommands.gml` | pre-update |
+| `PLAYER_DEATH` (class-change suicide) | `processClientCommands.gml:88` | pre-update |
+| `DROP_INTEL` (command) | `processClientCommands.gml` | pre-update |
+| `CAPS_UPDATE` | `GameServerBeginStep.gml:57` | pre-update |
+| `INPUTSTATE` / `QUICK_UPDATE` | `GameServerBeginStep.gml:64-66` | the update |
+| `MAP_END` | `GameServerBeginStep.gml:88-92` | post-update |
+| `CHANGE_MAP` | `GameServerBeginStep.gml:104` | post-update |
+| `GENERATOR_DESTROY` | `Generator.events/Begin Step.xml` | post-update |
+| `DESTROY_SENTRY` (owner left the class/team, or overlap) | `Sentry.events/Begin Step.xml:1-3` | post-update |
+| `SENTRY` position | `Sentry.events/Begin Step.xml` | post-update |
+| `WEAPON_FIRE` | `Weapons/*.events/User Event 1.xml`, from Character Begin Step | post-update |
+| `DROP_INTEL` (ubered carrier) | `Character.events/Begin Step.xml` | post-update |
+| `UBER`, `UBERREADY` | `Medigun.events/User Event 1,2`, `Collision with HealingCabinet` | post-update |
+| `PLAYER_SPAWN` | `PlayerSpawn.gml`, from `Player.alarm[5]` | post-update (alarm) |
+| `RETURN_INTEL` (recovery timer) | `Intelligence.events/Alarm 0.xml` | post-update (alarm) |
+| `UNLOCKCP` | `ArenaHUD`/`KothHUD`/`DKothHUD` `Step.xml` | post-update |
+| `ARENA_*` | `ArenaHUD.events/Step.xml`, `serverArena*.gml` | post-update |
+| `GRAB_INTEL` | `Character.events/Collision with Intelligence{Red,Blue}.xml` | post-update |
+| `SCORE_INTEL` | `Character.events/Collision with IntelligenceBase{Red,Blue}.xml` | post-update |
+| **`PLAYER_DEATH`** (damage) | `Character.events/End Step.xml:34-47` | ⛔ **NEXT TICK** |
+| **`RETURN_INTEL`** (carrier killed by a kill box, frag box or pitfall) | `Character.events/Destroy.xml:20-32`, reached from `doEventPlayerDeath` | ⛔ **NEXT TICK** |
+| **`BALANCE`** | `with(GameServer) ServerBalanceTeams()`, `Character.events/End Step.xml:42-44` | ⛔ **NEXT TICK** |
+| **`DESTROY_SENTRY`** (`hp <= 0`) | `Sentry.events/End Step.xml` | ⛔ **NEXT TICK** |
+| `PLAYER_JOIN` + join burst | `serviceJoiningPlayer.gml`, from `GameServerEndStep.gml:18-20` | next tick |
+
+⛔ **Three message types appear TWICE, in different stages, and the type alone
+does not say which flush an instance rides.** `PLAYER_DEATH`, `RETURN_INTEL` and
+`DESTROY_SENTRY` each have one pre-flush site and one post-flush site. **This is
+the single most important line in the table**: two of the six bugs in this class
+were exactly a broadcast keyed on the message type instead of on the stage that
+produced it. `TickEvents.ReturnedRedIntelInEndStep` and
+`TickEvents.SentryDestroyedInEndStep` exist to carry that distinction, and
+`WireStageTests` gates them.
+
+⚠️ **A type-level lead/trail fingerprint therefore cannot settle those three** —
+it can only catch a type that should *never* lead and did. Instrument 2 grades
+the table; only the port's own stage flags can grade an instance.
+
+### What each instrument would have caught
+
+| bug | table + routing gate | fingerprint | lag sweep |
+|---|---|---|---|
+| `cdaa62a` every event a tick late | ✅ | ✅ | ✗ |
+| `3689ef7` deaths a tick early | ✅ | ✗ (type appears both sides) | ✗ |
+| `RETURN_INTEL` on a pit death | ✅ | ✗ | ✗ |
+| `DESTROY_SENTRY` from Begin Step | ✅ | ✗ | ✗ |
+| `486ef3e` keys a tick late | ✗ | ✗ | ✅ |
+
+⚠️ **Read the bottom row before deciding the table is enough.** The bug that
+started this hunt is the one the framing instruments cannot see at all.
+
 ## Tier 4 — behaviour scenarios
 
 `gg2-agent/tools/bot-scenarios.js` is an existing suite of "can a bot still walk

@@ -1082,6 +1082,11 @@ public sealed class GameServer : IDisposable
         BroadcastIntelDrops(count);
         BroadcastIntelReturns();
         BroadcastSentryLandings(count);
+
+        // ⚠️ The BEGIN STEP destructions belong here, above the flush, beside
+        // the landings that share their event. Only the hp<=0 ones are late.
+        BroadcastSentryDestructions(count);
+
         BroadcastSpawns(count);
         BroadcastIntelGrabsAndCaptures(count);
     }
@@ -1126,7 +1131,19 @@ public sealed class GameServer : IDisposable
     private void BroadcastEndStepEvents(int count)
     {
         BroadcastPlayerDeaths(count);
-        BroadcastSentryDestructions(count);
+
+        // ⚠️ Immediately after the deaths, because that is where the reference
+        // puts it: Character.events/End Step.xml sends the death and then calls
+        // doEventPlayerDeath, which destroys the body, and Destroy.xml's return
+        // is appended from inside that. A carrier killed by a pit returns the
+        // flag AFTER its own PLAYER_DEATH, never before.
+        if (_events.ReturnedRedIntelInEndStep)
+            ServerMessages.ReturnIntel(_broadcast, Team.Red);
+
+        if (_events.ReturnedBlueIntelInEndStep)
+            ServerMessages.ReturnIntel(_broadcast, Team.Blue);
+
+        BroadcastEndStepSentryDestructions(count);
 
         // The only in-tick BALANCE comes from a death's own ServerBalanceTeams,
         // which runs after doEventPlayerDeath.
@@ -1298,10 +1315,14 @@ public sealed class GameServer : IDisposable
     /// </remarks>
     private void BroadcastIntelReturns()
     {
-        if (_events.ReturnedRedIntel)
+        // ⚠️ The alarm-stage returns ONLY. A return that came out of a dying
+        // carrier's Destroy is appended in the Character's End Step, after the
+        // reference has already flushed — see TickEvents.ReturnedRedIntelInEndStep
+        // and BroadcastEndStepEvents.
+        if (_events.ReturnedRedIntel && !_events.ReturnedRedIntelInEndStep)
             ServerMessages.ReturnIntel(_broadcast, Team.Red);
 
-        if (_events.ReturnedBlueIntel)
+        if (_events.ReturnedBlueIntel && !_events.ReturnedBlueIntelInEndStep)
             ServerMessages.ReturnIntel(_broadcast, Team.Blue);
     }
 
@@ -1496,15 +1517,33 @@ public sealed class GameServer : IDisposable
     }
 
     /// <summary>
-    /// Tells every client about the sentries the tick destroyed —
-    /// <c>DESTROY_SENTRY</c>, with the killer and their healer.
+    /// The sentries destroyed in a <b>Begin Step</b> — an owner who stopped
+    /// being an engineer of that team, or two sentries too close together.
     /// </summary>
-    private void BroadcastSentryDestructions(int count)
+    /// <remarks>
+    /// <c>Sentry.events/Begin Step.xml:1-3</c>, which makes its own tick's
+    /// flush. Its <c>hp &lt;= 0</c> sibling does not; see
+    /// <see cref="BroadcastEndStepSentryDestructions"/>.
+    /// </remarks>
+    private void BroadcastSentryDestructions(int count) =>
+        BroadcastSentryDestructions(count, inEndStep: false);
+
+    /// <summary>
+    /// The sentries destroyed in their own <b>End Step</b> by running out of
+    /// hit points, which ship on the following tick.
+    /// </summary>
+    private void BroadcastEndStepSentryDestructions(int count) =>
+        BroadcastSentryDestructions(count, inEndStep: true);
+
+    private void BroadcastSentryDestructions(int count, bool inEndStep)
     {
         for (var slot = 0; slot < count; slot++)
         {
-            if (!_events.SentryDestroyed[slot])
+            if (!_events.SentryDestroyed[slot]
+                || _events.SentryDestroyedInEndStep[slot] != inEndStep)
+            {
                 continue;
+            }
 
             var destruction = _events.SentryDestructions[slot];
             ServerMessages.DestroySentry(

@@ -181,7 +181,7 @@ public static class Deaths
         state.Clear(slot);
 
         if (boxSource && carriedFlag is Team.Red or Team.Blue)
-            Intel.Return(ref state, carriedFlag, ref events);
+            Intel.Return(ref state, carriedFlag, ref events, inEndStep: true);
 
         if (!state.HasPlayer[slot])
             return;

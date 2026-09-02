@@ -285,8 +285,12 @@ public static class Sentries
             || sentry.Team != state.Players[slot].Team
             || AnySentryInCircle(state, sentry.X, sentry.Y + 10, OverlapClearance, slot))
         {
+            // ⚠️ inEndStep: FALSE. This is the Begin Step destruction
+            // (Sentry.events/Begin Step.xml:1-3), which makes its own tick's
+            // flush — unlike the hp<=0 one below.
             ReportDestruction(ref state, slot, ref events,
-                CharacterState.Nobody, CharacterState.Nobody, DamageSource.None);
+                CharacterState.Nobody, CharacterState.Nobody, DamageSource.None,
+                inEndStep: false);
             Destroy(world, ref state, slot);
             return;
         }
@@ -530,7 +534,9 @@ public static class Sentries
                     assistant = healer;
             }
 
-            ReportDestruction(ref state, slot, ref events, killer, assistant, sentry.LastDamageSource);
+            ReportDestruction(
+                ref state, slot, ref events, killer, assistant, sentry.LastDamageSource,
+                inEndStep: true);
             Destroy(world, ref state, slot);
             return;
         }
@@ -548,9 +554,11 @@ public static class Sentries
         ref TickEvents events,
         byte killer,
         byte assistant,
-        DamageSource source)
+        DamageSource source,
+        bool inEndStep)
     {
         events.SentryDestroyed[slot] = true;
+        events.SentryDestroyedInEndStep[slot] = inEndStep;
         events.SentryDestructions[slot] = new SentryDestroyedEvent(slot, killer, assistant, source);
 
         // doEventDestruction.gml:20-24. ⚠️ Not awarded for an owner detonating

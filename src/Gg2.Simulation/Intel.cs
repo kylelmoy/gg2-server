@@ -629,7 +629,14 @@ public static class Intel
     /// give the flag a collision; nothing in the shipped game reads them.
     /// </para>
     /// </remarks>
-    public static void Return(ref WorldState state, Team team, ref TickEvents events)
+    /// <param name="inEndStep">
+    /// True for <c>Character.events/Destroy.xml</c>'s return, which runs inside
+    /// the Character's End Step and so misses that frame's flush; false for
+    /// <c>Intelligence.events/Alarm 0.xml</c>'s, which does not. See
+    /// <see cref="TickEvents.ReturnedRedIntelInEndStep"/>.
+    /// </param>
+    public static void Return(
+        ref WorldState state, Team team, ref TickEvents events, bool inEndStep = false)
     {
         if (team is not (Team.Red or Team.Blue))
             return;
@@ -644,9 +651,15 @@ public static class Intel
         flag.RecoverTimer = Timers.Inactive;
 
         if (team == Team.Red)
+        {
             events.ReturnedRedIntel = true;
+            events.ReturnedRedIntelInEndStep = inEndStep;
+        }
         else
+        {
             events.ReturnedBlueIntel = true;
+            events.ReturnedBlueIntelInEndStep = inEndStep;
+        }
     }
 
     /// <summary>

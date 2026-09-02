@@ -238,6 +238,21 @@ public struct TickEvents
     /// </remarks>
     public SlotBuffer<bool> SentryDestroyed;
 
+    /// <summary>
+    /// Of the destructions above, the ones the reference appends in the
+    /// sentry's <b>End Step</b> — and which therefore ship on the FOLLOWING tick.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>Two call sites, two stages.</b> <c>Sentry.events/End Step.xml</c>
+    /// is the <c>hp &lt;= 0</c> death, after the GameServer's End Step has
+    /// flushed. <c>Sentry.events/Begin Step.xml:1-3</c> is the other one — an
+    /// owner who stopped being an engineer of that team, or two sentries too
+    /// close — and a Begin Step append makes its own tick's flush like any
+    /// other. Keying the broadcast on <see cref="SentryDestroyed"/> alone sends
+    /// one of the two on the wrong tick whichever side it is put.
+    /// </remarks>
+    public SlotBuffer<bool> SentryDestroyedInEndStep;
+
     /// <summary>How each destroyed sentry died, where <see cref="SentryDestroyed"/> is set.</summary>
     public SlotBuffer<SentryDestroyedEvent> SentryDestructions;
 
@@ -296,6 +311,32 @@ public struct TickEvents
 
     /// <inheritdoc cref="ReturnedRedIntel"/>
     public bool ReturnedBlueIntel;
+
+    /// <summary>
+    /// Of the returns above, the ones the reference appends in an <b>End
+    /// Step</b> — and which therefore ship on the FOLLOWING tick.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>A return has two call sites in two different stages, and only one
+    /// of them makes this tick's flush.</b> <c>Intelligence.events/Alarm 0.xml</c>
+    /// is the recovery timer, in the alarm stage, and rides its own tick.
+    /// <c>Character.events/Destroy.xml:20-32</c> is a carrier killed by a kill
+    /// box, a frag box or a pitfall — and Destroy runs from inside
+    /// <c>doEventPlayerDeath</c>, which the Character's End Step calls after the
+    /// GameServer's End Step has already flushed.
+    /// <para>
+    /// ⚠️ <b>So the message type alone does not say which flush it rides</b>, and
+    /// a broadcast keyed only on <see cref="ReturnedRedIntel"/> puts the
+    /// death-driven one a tick early and — since 2026-09-02 put PLAYER_DEATH on
+    /// the far side of the flush — <em>ahead</em> of the death that caused it.
+    /// The reference emits the death first and the return from inside it.
+    /// docs/PARITY.md, "Which flush a message rides".
+    /// </para>
+    /// </remarks>
+    public bool ReturnedRedIntelInEndStep;
+
+    /// <inheritdoc cref="ReturnedRedIntelInEndStep"/>
+    public bool ReturnedBlueIntelInEndStep;
 
     /// <summary>
     /// Whether the red team's generator was destroyed during the tick just run
@@ -448,6 +489,7 @@ public struct TickEvents
             Ubered[slot] = false;
             SentryLanded[slot] = false;
             SentryDestroyed[slot] = false;
+            SentryDestroyedInEndStep[slot] = false;
             GrabbedIntel[slot] = false;
             DroppedIntel[slot] = false;
             ScoredIntel[slot] = false;
@@ -458,6 +500,8 @@ public struct TickEvents
 
         ReturnedRedIntel = false;
         ReturnedBlueIntel = false;
+        ReturnedRedIntelInEndStep = false;
+        ReturnedBlueIntelInEndStep = false;
         BalanceNoticed = false;
         RedGeneratorDestroyed = false;
         BlueGeneratorDestroyed = false;
