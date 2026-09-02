@@ -95,6 +95,24 @@ public sealed class GameServer : IDisposable
     private long _frame;
 
     /// <summary>
+    /// Flushes performed. <b>Exactly one per tick that sent anything</b>, which
+    /// is the reference's shape: <c>GameServerEndStep.gml:7-10</c> writes the
+    /// buffer to every socket and clears it once, in one event.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>Exposed because a test cannot see this from outside and one needs
+    /// to.</b> <c>FlushFingerprintTests</c> groups messages by TICK — it ticks
+    /// once and drains — and that is only the same thing as grouping by flush
+    /// while this invariant holds. A second flush inside one tick would put two
+    /// groups' worth of messages into one drain and the fingerprint would read
+    /// as if nothing had changed; found by mutation, and this counter is what
+    /// closes it.
+    /// </remarks>
+    public long FlushCount => _flushes;
+
+    private long _flushes;
+
+    /// <summary>
     /// <c>GameServer.syncTimer</c>: something changed the scoreboard, so the
     /// next tick owes every client a <c>CAPS_UPDATE</c> on top of its ordinary
     /// one.
@@ -2379,6 +2397,8 @@ public sealed class GameServer : IDisposable
     {
         if (_broadcast.IsEmpty)
             return;
+
+        _flushes++;
 
         // One identical byte stream to every client: one serialisation, N sends.
         // Keep it that way — it is why the send path is nearly free.

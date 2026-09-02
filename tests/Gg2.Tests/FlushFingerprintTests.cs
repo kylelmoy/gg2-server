@@ -22,16 +22,15 @@ namespace Gg2.Tests;
 /// ambiguity.
 /// </para>
 /// <para>
-/// ⛔ <b>These are TICK groups, not flush groups, and the difference is a real
-/// hole.</b> One tick is one flush in this server, so the two coincide — but a
-/// change that made a tick flush TWICE would put both flushes in one drain and
-/// this fingerprint would not notice. Found by mutation: adding a second
-/// <c>FlushBroadcast()</c> under <c>WriteStateUpdate</c> while leaving the real
-/// one in place passes every test here. <b>Moving</b> the flush — the actual
-/// <c>cdaa62a</c> shape — is caught. What would close the hole is the
-/// <c>.frames</c> sidecar's timing, or an assertion that the server flushes at
-/// most once a tick; neither is built, and this paragraph is the record that it
-/// is a gap rather than an oversight.
+/// ⛔ <b>These are TICK groups, and they are only flush groups because
+/// <see cref="ATickIsExactlyOneFlush"/> says so.</b> A change that made a tick
+/// flush TWICE would put both flushes in one drain and every assertion here
+/// would read as if nothing had happened. That is not hypothetical: it was found
+/// by mutation — adding a second <c>FlushBroadcast()</c> under
+/// <c>WriteStateUpdate</c> while leaving the real one in place passed every test
+/// in this file, while <em>moving</em> the flush (the real <c>cdaa62a</c> shape)
+/// was caught. <b>The one-flush-per-tick assertion is load-bearing for
+/// everything below it</b>, not a tidy extra.
 /// </para>
 /// <para>
 /// ⚠️ <b>What this cannot settle</b>: three message types have call sites on both
@@ -65,10 +64,16 @@ public sealed class FlushFingerprintTests
         }
     }
 
-    /// <summary>Ticks a bot match one tick at a time, one flush group per tick.</summary>
-    private static FlushFingerprint FingerprintOfABotMatch(int ticks = 900)
-    {
-        using var harness = new ServerHarness(options =>
+    /// <summary>Six bots fighting on <see cref="Map"/>.</summary>
+    /// <remarks>
+    /// ⚠️ Shared with <see cref="ATickIsExactlyOneFlush"/> deliberately: that
+    /// gate is only meaningful on traffic where ticks APPEND EVENTS after the
+    /// state update. On an idle server a stray second flush finds an empty
+    /// buffer and returns without counting, so the mutation it exists to catch
+    /// passes — measured, not supposed.
+    /// </remarks>
+    private static ServerHarness BotMatch() =>
+        new(options =>
         {
             options.Map = Map;
 
@@ -84,6 +89,11 @@ public sealed class FlushFingerprintTests
                 MinHumans = 0,
             };
         });
+
+    /// <summary>Ticks a bot match one tick at a time, one flush group per tick.</summary>
+    private static FlushFingerprint FingerprintOfABotMatch(int ticks = 900)
+    {
+        using var harness = BotMatch();
 
         var client = harness.JoinClient("watcher");
         harness.TickUntil(() => harness.Server.RosterCount > 1, "the client joined");
@@ -192,6 +202,45 @@ public sealed class FlushFingerprintTests
             "a bot match now reaches a message type this ledger says it cannot — "
             + $"widen the fingerprint's coverage rather than the ledger. Seen: "
             + $"[{string.Join(", ", cannotReach.Except(unseen))}]");
+    }
+
+    /// <summary>
+    /// ⛔ A tick flushes exactly once — the invariant every other test in this
+    /// file rests on.
+    /// </summary>
+    /// <remarks>
+    /// <c>GameServerEndStep.gml:7-10</c> writes the buffer to every socket and
+    /// clears it once, in one event, so one tick is one packet. This file groups
+    /// messages by tick and calls the groups flushes; that is only true while
+    /// this holds.
+    /// <para>
+    /// ⚠️ <b>Equality, not "at most one".</b> <c>WriteStateUpdate</c> writes
+    /// something on every advancing tick, so the buffer is never empty and the
+    /// flush is never skipped — an inequality would pass on a server that had
+    /// stopped broadcasting altogether.
+    /// </para>
+    /// <para>
+    /// ⛔ <b>Six bots, not an idle server, and that is the whole test.</b>
+    /// <c>FlushBroadcast</c> returns without counting when the buffer is empty,
+    /// so on an idle server a second flush per tick finds nothing to send and the
+    /// count stays right. The first version of this test was idle and the
+    /// mutation it exists to catch passed it.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ATickIsExactlyOneFlush()
+    {
+        using var harness = BotMatch();
+
+        harness.JoinClient("watcher");
+        harness.TickUntil(() => harness.Server.RosterCount > 1, "the client joined");
+        harness.Tick(120);
+
+        var before = harness.Server.FlushCount;
+
+        harness.Tick(600);
+
+        Assert.Equal(600, harness.Server.FlushCount - before);
     }
 
     /// <summary>

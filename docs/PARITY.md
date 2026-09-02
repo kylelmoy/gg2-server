@@ -2665,15 +2665,17 @@ started this hunt is the one the framing instruments cannot see at all.
 
 ### ⛔ Known holes in the instruments as built
 
-✅ **One of the three is closed**: the lag sweep now runs against a recording this
-server makes in-test, and the `486ef3e` mutation is caught. Two remain.
+✅ **Two of the three are closed.** The lag sweep runs against a recording this
+server makes in-test and catches the `486ef3e` mutation; and a tick is now
+*proved* to be exactly one flush, which is what makes the fingerprint's
+tick-grouping mean what it says. One remains.
 
-- **The fingerprint groups by TICK, not by flush.** One tick is one flush in this
-  server so they coincide, but a change that flushed twice in a tick would put
-  both in one group and go unnoticed. Found by mutation, not by reasoning:
-  *adding* a second `FlushBroadcast()` passes every test, while *moving* the
-  flush — the real `cdaa62a` shape — is caught. Closing it needs the sidecar's
-  timing or an assertion that the server flushes at most once a tick.
+- ✅ **CLOSED** — the fingerprint still groups by tick, but
+  `FlushFingerprintTests.ATickIsExactlyOneFlush` proves a tick is one flush, so
+  the grouping means what it says. ⚠️ **Its first version was idle and the
+  double-flush mutation passed it**: `FlushBroadcast` returns without counting on
+  an empty buffer, so only ticks that append events after the update can tell the
+  two apart. It runs six bots now, and the mutation reads 637 against 600.
 - **`FlushFrames.Group` has never been run against a real reference recording.**
   Its gap heuristic is unvalidated until somebody records a framed session and
   checks the grouping against `buffer_size(global.sendBuffer)`.
