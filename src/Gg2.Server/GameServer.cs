@@ -759,7 +759,6 @@ public sealed class GameServer : IDisposable
         // serialises the update *before* any Character's Step runs, so one
         // update carries this tick's input alongside last tick's position.
         WriteStateUpdate();
-        FlushBroadcast();
 
         // ⚠️ Freezing skips EXACTLY this call, and everything around it keeps
         // running. A freeze that skipped the whole tick would stop servicing
@@ -770,6 +769,37 @@ public sealed class GameServer : IDisposable
         // between updates.
         if (advancing)
             AdvanceSimulation(live);
+
+        // ⛔ THE FLUSH BELONGS AFTER THE SIMULATION, not under the update.
+        // GameServerEndStep.gml:7-8 writes global.sendBuffer to every socket and
+        // clears it in the server's END Step, after everything that frame has
+        // been appended — so the reference's packet for tick N holds the state
+        // update AND that tick's events together.
+        //
+        // Flushing directly under WriteStateUpdate split them across two sends:
+        // the update for tick N went out mid-tick, and everything
+        // AdvanceSimulation appends — WEAPON_FIRE, PLAYER_DEATH, ubers, intel
+        // drops, generator destruction, arena — waited for the NEXT tick's
+        // flush. Every event message was delivered a tick late, and ahead of the
+        // update it should have followed.
+        //
+        // ⚠️ This changes only WHEN the bytes leave, never their order or their
+        // content: they were already appended in the reference's order into the
+        // same buffer. Which is exactly why a closed-loop replay cannot see it —
+        // a trace records the stream, and the stream is identical. Found by
+        // reading GameServerEndStep after a 3,599-tick replay came back with
+        // ZERO physics divergence and the symptom was still there.
+        //
+        // ⚠️ A client simulates every projectile itself from WEAPON_FIRE and the
+        // shooter's keys; there is no projectile message. A late WEAPON_FIRE
+        // starts the client's rocket a tick behind the server's.
+        //
+        // ⛔ BEFORE AcceptConnections, deliberately. Flushing after it delivers
+        // this tick's broadcast to a client that joined DURING this tick, ahead
+        // of its own join burst — JoinAndBroadcastTests and FullUpdateLayoutTests
+        // both catch that, 23 of them. The join sequence is a separate contract
+        // and this change is not licensed to move it.
+        FlushBroadcast();
 
         _control?.Service();
 
