@@ -152,6 +152,30 @@ public sealed class Replayer(ITraceSimulation simulation)
     public bool UpdatesPrecedeTheirTick { get; init; } = true;
 
     /// <summary>
+    /// Print this slot's SIMULATED state on every tick in
+    /// <see cref="DumpFrom"/>..<see cref="DumpTo"/>, or null for no dump.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>A trace carries positions only every seventh tick, so the six ticks
+    /// between two comparisons have no "expected" value at all.</b> When a
+    /// divergence appears at one comparison and the one before it was exact, the
+    /// error was made somewhere in that gap and the trace cannot say where. This
+    /// dumps what the PORT did across the gap, which is the only per-tick view
+    /// available — the reference's endpoints bracket it.
+    /// <para>
+    /// ⚠️ <b>Wire units, because that is what can be compared.</b> x and y are
+    /// x*5, hspeed and vspeed are *8.5, all as the quantised bytes the reference
+    /// would have sent. A dump in world units would be more readable and would
+    /// not line up with the mismatch rows above it.
+    /// </para>
+    /// </remarks>
+    public int? DumpSlot { get; init; }
+
+    public int DumpFrom { get; init; }
+
+    public int DumpTo { get; init; } = int.MaxValue;
+
+    /// <summary>
     /// Replays <paramref name="ticks"/> and reports what disagreed.
     /// </summary>
     /// <param name="traceName">For the report.</param>
@@ -202,6 +226,10 @@ public sealed class Replayer(ITraceSimulation simulation)
 
             // One update carries this tick's input and last tick's position, so
             // the comparison happens before the inputs are consumed.
+            // ⚠️ Dumped HERE, at the same instant Reconcile compares, so a dumped
+            // row and a mismatch row for the same tick describe the same moment.
+            Dump(tick.Index, tick.HasPositions);
+
             if (UpdatesPrecedeTheirTick && tick.HasPositions)
             {
                 Reconcile(tick, mismatches, xErrors, yErrors, ref comparisons, ref resyncs);
@@ -1026,6 +1054,26 @@ public sealed class Replayer(ITraceSimulation simulation)
             else
                 simulation.ClearCharacter(slot);
         }
+    }
+
+    /// <summary>One line of the port's own state, for a tick inside the window.</summary>
+    private void Dump(int tick, bool compared)
+    {
+        if (DumpSlot is not { } slot || tick < DumpFrom || tick > DumpTo)
+            return;
+
+        if (!simulation.TryGetCharacter(slot, out var c))
+        {
+            Console.WriteLine($"  tick {tick,5}  slot {slot}: no character");
+            return;
+        }
+
+        // ⚠️ The marker matters: only the starred rows have anything in the trace
+        // to be right or wrong about. The rest are the port talking to itself.
+        Console.WriteLine(
+            $"  tick {tick,5} {(compared ? "*" : " ")} x {c.X,6} y {c.Y,6} "
+            + $"hspeed {c.HSpeed,5} vspeed {c.VSpeed,5} "
+            + $"moveStatus {c.MoveStatus} hp {c.Hp,4}");
     }
 
     private void Advance(TraceTick tick)

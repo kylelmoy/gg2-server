@@ -186,7 +186,26 @@ internal static class Program
             // on every tick after it — but it is the way to tell a real maths
             // error from anchor quantisation: a maths error diverges, and
             // quantisation stays bounded.
-            var report = new Replayer(Build()) { Compare = compare }
+            // --dump-slot <n> [--dump-from a] [--dump-to b] prints the PORT's own
+            // per-tick state for one slot. A trace has positions only every
+            // seventh tick, so when a divergence appears at one comparison and
+            // the previous one was exact, the error was made in the six ticks
+            // between and the trace cannot say which. This shows what the port
+            // did across that gap.
+            var dumpSlot = Flag(args, "--dump-slot");
+
+            var report = new Replayer(Build())
+                {
+                    Compare = compare,
+                    DumpSlot = dumpSlot is null
+                        ? null
+                        : int.Parse(dumpSlot, CultureInfo.InvariantCulture),
+                    DumpFrom = int.Parse(
+                        Flag(args, "--dump-from") ?? "0", CultureInfo.InvariantCulture),
+                    DumpTo = int.Parse(
+                        Flag(args, "--dump-to") ?? int.MaxValue.ToString(CultureInfo.InvariantCulture),
+                        CultureInfo.InvariantCulture),
+                }
                 .Replay(args[0], trace.Header.Map, ticks, mode, stopAtFirstBadTick: !args.Contains("--no-stop"));
 
             Console.WriteLine();
@@ -665,7 +684,8 @@ internal static class Program
           census <trace> [--map <name>] [--maps <path>]
           recover <file.trace.part> [--map <name>] [--source <text>]
           diff   <a> <b>
-          replay <trace> [--maps <path>]
+          replay <trace> [--maps <path>] [--no-stop] [--all-fields]
+                 [--dump-slot <n>] [--dump-from <tick>] [--dump-to <tick>]
 
         The recorder joins as a passive spectator and never sends an INPUTSTATE
         of its own, so what it writes down is the server's own broadcast: every
