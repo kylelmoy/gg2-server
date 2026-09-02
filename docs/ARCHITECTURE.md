@@ -194,6 +194,71 @@ search decision at 1,200×**, which is the opposite of the scripted-bot case abo
 where the same saving disappears into the bot layer's own cost. That asymmetry is
 the whole reason to look here.
 
+### ⛔ Where `PlaceFree` calls actually come from — and why the crawl is not the target
+
+**Measured 2026-09-02 over 2,940 ticks of a real bot match** (`ctf_truefort`, 12
+bots, Release), attributed by calling method:
+
+| caller | share | what it asks |
+|---|---|---|
+| `CharacterPhysics.Step` | **28%** | the move target, and `y+1` |
+| `CharacterPhysics.BeginStepInput` | **28%** | stuck-in-wall at `(x,y)`, obstacle below at `y+1` |
+| `CharacterPhysics.UpdateSpinjump` | **14%** | rubbing a wall at `x±1` |
+| `CharacterPhysics.BeginStepAccelerate` | **14%** | `y-0.1`, the surf check |
+| `CharacterPhysics.EndStep` | **10.5%** | the stair climb — `y+6`, `y+7`, `y+12`, `y+13` |
+| **`Movement.GoodMoveContactSolid`** | **4.0%** | the crawl |
+| `CharacterHitObstacle.Resolve` | 1.6% | the four escapes |
+
+⛔ **The crawl is 4-7% of the calls, not the bulk**, and it averages **4.6-5.0
+`PlaceFree` calls** — not the ~13 a 10 px benchmark suggests, because a character
+moves a few pixels in a tick, not ten. **Eliminating the crawl entirely would buy
+under 7%.**
+
+⛔ **The other 84% are GM8's own per-character-per-tick probes, and they are the
+specification.** Each names a distinct position — `(x,y)`, `y+1`, `y-0.1`, `y+6`,
+`y+7`, `y+12`, `y+13`, `y-gravity`, `x±1`, `(x+hspeed, y+vspeed)` — so there is no
+redundancy to remove: they are different questions, and the reference asks all of
+them. ⚠️ **One exception, and it is small**: `UpdateSpinjump` re-asks `y+1`, which
+`BeginStepInput` already stored in `CharacterState.ObstacleBelow`. It sits behind
+an early return that only fires while spinjumping, so it is rare — and reusing the
+stored value would need proof that nothing moved the character between the two
+stages.
+
+### ⛔ Binary search on the crawl is UNSOUND, and the hitscan analogy is where it breaks
+
+**The question comes up because `good_move_contact_solid` steps one pixel at a
+time and a sniper's hitscan does not.** The two are different queries:
+
+- A **hitscan** asks *"is anything solid on this segment?"* — **disjunctive**, no
+  ordering. A conservative skip (the `Walkmask.Clearance` field, which
+  `ObservationWriter`'s ray fan uses) can jump ahead by a distance proven to
+  contain nothing, and the answer is unchanged.
+- The **crawl** asks *"where is the FIRST obstruction?"* The free/blocked
+  predicate along the path is **not monotone** — a character can pass a pillar and
+  land in open space beyond it. ⛔ **A binary search assumes free-then-blocked and
+  would tunnel straight through.** That is not a parity risk; it is wrong.
+
+✅ **The sound member of that family was built and measured, and it is worthless.**
+A swept-AABB pre-test — the union of the start and end boxes, tested once — is
+conservative (a straight-line sweep of an AABB is contained in the AABB of its
+endpoints) and would be **bit-identical**, because the elision is
+`clear || PlaceFree(...)`: the loop's arithmetic never changes, only a predicate
+known to be true goes unevaluated. ⚠️ `RoundPosition` is half-to-even and
+`floor(v) <= round(v) <= ceil(v)`, so flooring and ceiling the endpoints brackets
+every rounded position with **no margin** — and a margin is not free, see below.
+
+⛔ **The swept path is clear on 0.9-3.3% of crawls.** Measured across three maps.
+That is worth **~0.1% of all `PlaceFree` calls**, and the reason is structural
+rather than incidental: **gravity puts the destination inside the floor.** A
+grounded character carries a downward velocity component every tick, so the end
+box overlaps the ground it is standing on — and stopping it there is exactly what
+the crawl is for. **A clear sweep means airborne with nothing nearby, which is the
+minority of ticks.**
+
+⚠️ **A 1-pixel safety margin took the clear rate from 3.3% to 2.9%** by pushing the
+swept box into the floor underfoot. Recorded because the margin looks free and is
+not.
+
 ### Still on the table, measured and not taken
 
 - **`PlaceFree`'s rect scan is fine.** It is a linear pass over every solid
@@ -211,16 +276,16 @@ the whole reason to look here.
   — or respawns inside the horizon — would otherwise keep its last live input.
   Preserving that means clearing what just died, which costs about what the loop
   costs. **1% is not worth a silent, rare divergence in what the search decides.**
-- ⛔ **Memoising the last mask query: MEASURED at 43.9% hit rate, and rejected.**
-  Consecutive `AnySolidInBox` calls repeat their cell rectangle 43.9% of the time
-  over 3,000 ticks of a twelve-character world (537,549 calls). ⚠️ **The arithmetic
-  predicted ~83%** — one pixel of a crawl only crosses a 6px cell boundary every
-  sixth step — and real motion is 2D with the crawl alternating axes, so the
-  prediction was wrong by half. At 8.8 ns a mask test that ceiling is ~3.9 ns
-  against a ~1 ns compare and a `[ThreadStatic]` read. ⛔ **And it cannot live on
-  `CollisionWorld`**: `RolloutOptions.Threads` shares one across worker threads, so
-  a mutable memo there races and `RolloutThreadingTests`' identity gate is exactly
-  what would catch it — after it had changed a decision.
+- ⛔ **Memoising the last mask query: 17-19% hit rate in a real match, rejected.**
+  ⚠️ **This said 43.9% for a day and that number was wrong** — it was taken on a
+  `ScenarioWorld` whose characters were standing still, which is not a workload.
+  Re-measured 2026-09-02 over 2,940 ticks of real bot matches: **19.2%**
+  (`ctf_truefort`), **17.3%** (`ctf_2dfort`), **18.6%** (`koth_valley`). At 8.8 ns
+  a mask test the gross ceiling is ~1.6 ns against a ~1 ns compare paid on every
+  call — **a wash.** ⚠️ **The thread-safety objection recorded with the old number
+  was also wrong**: a `[ThreadStatic]` memo keyed on the `Walkmask` reference is
+  sound across workers and across forks, because the mask is immutable and gates
+  live in `_rects`. The hit rate is the reason, not the threading.
 - **`WorldState` is 156,624 bytes against `ACloneStaysWithinItsBudget`'s 160 KB
   ceiling — 98%.** ⛔ **One ordinary field away from red**, and worth knowing
   before somebody adds one and reads the failure as a surprise.
