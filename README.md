@@ -123,6 +123,12 @@ default is derived from measured per-decision costs but has never itself been
 tuned — a stated guess, and the constant records what would show it wrong.
 [`docs/BOTS.md`](docs/BOTS.md) is the front door for all of it.
 
+Bots need a nav graph, and the 25 shipped with the repository cover the built-in
+maps. ✅ **Anything else — a custom map, an edited one — gets one built at the map
+change**, in 20 to 190 ms, because everything a graph needs is in the map's own
+PNG. `--no-navgen` turns that off; `gg2-server navgen` builds them offline.
+[`docs/NAVGEN.md`](docs/NAVGEN.md).
+
 ⚠️ The only checkpoint that exists was trained against a simulation this build no
 longer is, so it lives here as a **test fixture** rather than as something to
 run; the loader prints both simulation stamps and refuses the mismatch unless
@@ -214,6 +220,7 @@ here, and it is worth reading first.
 | [`docs/ENV.md`](docs/ENV.md) | The `Gg2.Env` seam, the policy checkpoint format and what the phase-9 numbers do and do not license. |
 | [`docs/SOURCEMAP.md`](docs/SOURCEMAP.md) | Where everything lives in the reference tree. |
 | [`docs/DEBUG-MAPS.md`](docs/DEBUG-MAPS.md) | `gg_debug2`, the port-authored debug range. |
+| [`docs/NAVGEN.md`](docs/NAVGEN.md) | **The nav-graph generator**: how a map PNG becomes a bot nav graph, the oracle that proves the port, and how a custom map gets one on the fly. |
 | [`docs/DEPLOY.md`](docs/DEPLOY.md) | **Running it on a server**: Linux portability and what actually backs that claim, measured hardware requirements, and the ways a deployment differs from a checkout. |
 | [`docs/PARALLEL.md`](docs/PARALLEL.md) | Lane ownership, if more than one session is working at once. |
 | `docs/TRAPS-*.md` | The expensive part: facts measured once against the running game, one section per port stage, for [simulation](docs/TRAPS-SIMULATION.md), [bots](docs/TRAPS-BOTS.md) and [the live game](docs/TRAPS-LIVEGAME.md). **Grep these before writing.** |
@@ -225,7 +232,7 @@ here, and it is worth reading first.
 | `Gang-Garrison-2-upstream` | **The reference implementation.** Stock GG2 v2.9.2, cloned from [`Gang-Garrison-2/Gang-Garrison-2`](https://github.com/Gang-Garrison-2/Gang-Garrison-2). What `GG2_REFERENCE` defaults to. Read-only from here. |
 | `Gang-Garrison-2` | A bot fork of the above, and the checkout the live game is built from. **Not the specification** — this port's bots have diverged from its. Read-only from here. |
 | `gg2-agent` | Tooling for the GM8 game: build scripts, the agent bridge, the MCP server, nav analysis. |
-| `gg2-nav-gen` | Offline bot nav-graph generator; its output is what `nav/` holds. |
+| `gg2-nav-gen` | The original Node nav-graph generator. ⚠️ **Superseded** — `src/Gg2.Nav` is a port of it, and `NavGeneratorTests` reproduces all 25 of its checked-in graphs character for character. Kept because it still works and has a worker pool. |
 | `gg2-rl` | Bot-policy trainer, on the other side of the `gg2-env` seam. |
 
 ## Reference version

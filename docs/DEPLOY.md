@@ -190,14 +190,14 @@ was stated accurately and was measuring the wrong thing.
 
 | | working tree | compressed |
 |---|---|---|
-| hex text, as `gg2-nav-gen` writes it | 35.68 MB | 1.112 MB |
+| hex text, as the generator writes it | 35.68 MB | 1.112 MB |
 | **gzipped, as shipped** | **1.11 MB** | 1.11 MB |
 | a hand-rolled packed binary, *rejected* | 4.06 MB | 1.111 MB |
 
 ⚠️ **The third row is why there is no custom nav format.** A binary encoding
 shrinks the tree 8.8x and what actually ships by **0.1%** — everything it removes
 is redundancy deflate was already removing. It would cost a `NAV_CACHE_VERSION`
-bump coordinated with `gg2-nav-gen`, a new writer, a new reader and a new way for
+bump, a new writer, a new reader and a new way for
 header and payload to disagree, to save 3 MB of disk and about 8 ms per map
 change. Do not re-propose it without a reason that is not size.
 
@@ -207,59 +207,68 @@ change. Do not re-propose it without a reason that is not size.
 `BotPopulationService.MapChanged` does — re-measure before reusing it if nav ever
 loads per-round or eagerly for a rotation.
 
-#### Regenerating them — `gg2-nav-gen` needs no changes
+#### Regenerating them — one command
 
-✅ **The generator writes `.txt` and that is fine; nothing about it had to
-change.** `NavCache` reads both containers.
+✅ **The generator is in this repository as of 2026-09-03** (`src/Gg2.Nav`,
+`docs/NAVGEN.md`), and `gg2-server navgen` does the whole cycle:
 
-⛔ **But a plain `.txt` WINS over a shipped `.txt.gz`, and the reason matters.**
-`gg2-nav-gen` writes `<map>_a<area>.txt` into `../gg2-server/nav` by default —
-the same directory that holds the checked-in `.txt.gz`. So the only way a plain
-file appears beside a compressed one is that somebody just ran the generator, and
-the rule is **what somebody just wrote beats what shipped**. The first version of
-this preferred the compressed file, on the reasonable-sounding grounds that it is
-what shipped; that made a regeneration *silently do nothing*, and nothing caught
-it, because `NavManifestTests` hashes the **maps** — which a regeneration does not
-touch. `NavCache.FindFile`.
+```bash
+dotnet run --project src/Gg2.Host -- navgen          # every map in maps/
+dotnet run --project src/Gg2.Host -- navgen --check  # did anything move? exit 1 if so
+dotnet test Gg2.sln
+```
+
+It writes the shipped `.txt.gz`, deletes a stale `.txt` beside it, and rewrites
+`manifest.tsv` — and **skips a graph identical to the one on disk**, so
+`git status` afterwards names the graphs a change actually moved.
+
+⚠️ **The manifest step used to be separate and skipping it was silent.** It left
+the old pairing recorded, and every new graph was then refused at run time, which
+looks exactly like a bot bug. It is not a step any more.
+
+⛔ **A plain `.txt` still WINS over a shipped `.txt.gz`, and the reason matters.**
+An outside generator (`gg2-nav-gen`) writes `<map>_a<area>.txt` into
+`../gg2-server/nav` by default — the same directory that holds the checked-in
+`.txt.gz`. So the only way a plain file appears beside a compressed one is that
+somebody just ran one, and the rule is **what somebody just wrote beats what
+shipped**. The first version of this preferred the compressed file, on the
+reasonable-sounding grounds that it is what shipped; that made a regeneration
+*silently do nothing*, and nothing caught it, because `NavManifestTests` hashes
+the **maps** — which a regeneration does not touch. `NavCache.FindFile`.
 
 ⚠️ The server logs when it finds both, naming the one it used. One of the two is
 always being ignored, and which is not visible from outside.
 
-The full cycle:
-
-```bash
-npx gg2navgen build --all      # writes .txt into gg2-server/nav
-tools/compress-nav.sh          # gzip -9 -n, verify the roundtrip, delete the .txt
-GG2_UPDATE_NAV_MANIFEST=1 dotnet test Gg2.sln --filter NavManifestTests
-dotnet test Gg2.sln
-```
-
-⚠️ **The suite catches a half-finished cycle**:
-`NavContainerTests.TheCheckedInGraphsAreCompressed` fails with the loose files
-named and these commands in the message. **The manifest step is not optional if
-the maps moved** — skipping it leaves the old pairing recorded and the new graphs
-refused at runtime.
-
-✅ **`gzip -9 -n` is deterministic**, so decompressing and recompressing a
-checked-in graph reproduces it byte for byte (verified 2026-09-03). A
-regeneration that changed nothing produces no git diff; without `-n` the
-timestamp field would rewrite all 25 files every time.
-
-⚠️ **The alternative — teaching `gg2-nav-gen` to write `.txt.gz` — was not
-taken.** It is another repository and another lane (`docs/PARALLEL.md`), the
-reader has to accept `.txt` regardless for anyone running an older generator, and
-a two-line script here buys the same thing without a cross-repo version skew.
+`tools/compress-nav.sh` is now only for `gg2-nav-gen`'s output; `navgen` writes
+the shipped container itself. ✅ Both are deterministic — the same graph gives the
+same bytes, so a regeneration that changed nothing produces no git diff. ⚠️ The
+two do not produce the *same* bytes as each other (zlib and .NET pack the same
+input differently), which is why `NavGeneratorTests` compares the decompressed
+**text**: the format is the text, the gzip is a container.
 
 #### It can still fail, and it still says so
 
-Without a nav directory the server runs, serves rounds and fills with bots —
-**bots that fight whatever reaches them and never walk anywhere**. That
-degradation is intentional (`NavCache.TryLoad`'s contract, inherited from
-`navCacheLoad.gml`: a missing graph is not an error), which is what made it
-quiet. The startup warning:
+✅ **A map with no graph is no longer a map with no bot navigation.** The server
+builds one at the map change — 20 to 190 ms depending on the map, logged —
+because everything a graph needs is in the map's own PNG. That is what makes a
+**custom map** navigable, and it is on by default:
 
 ```
-no nav directory: bots will fight but not navigate. Pass --botnav <path> or set GG2_NAVCACHE
+built a nav graph for mymap area 1 in 86ms - 687 nodes, 6747 edges
+```
+
+`--no-navgen` turns it off, and `--navgen-save` writes the result into `--botnav`
+so the next map change reads it instead of rebuilding. `docs/NAVGEN.md`.
+
+With generation off and no nav directory, the server runs, serves rounds and
+fills with bots — **bots that fight whatever reaches them and never walk
+anywhere**. That degradation is intentional (`NavCache.TryLoad`'s contract,
+inherited from `navCacheLoad.gml`: a missing graph is not an error), which is
+what made it quiet. The startup warning:
+
+```
+no nav directory and --no-navgen: bots will fight but not navigate.
+Pass --botnav <path>, set GG2_NAVCACHE, or drop --no-navgen
 ```
 
 Three ways to satisfy it, in the order `ResolveNav` probes: `GG2_NAVCACHE`, a
@@ -267,16 +276,22 @@ Three ways to satisfy it, in the order `ResolveNav` probes: `GG2_NAVCACHE`, a
 walking up from it. `--botnav <path>` sets it explicitly.
 
 ⚠️ A **per-map** miss is a different and much older message — `no nav cache for
-<map> area <n>` — and means the directory was found but that one map has no
-graph generated. Both can appear in the same run.
+<map> area <n>` — and now appears only with `--no-navgen`, because otherwise the
+graph is about to be built.
 
-⚠️ **And a third, new one**, when a graph and its map have drifted apart:
+⚠️ **And a third**, when a graph and its map have drifted apart:
 
 ```
 nav graph for <map> area <n> was built against different geometry and has been
-refused; bots on it will not navigate. Regenerate it with gg2-nav-gen, or delete
+refused. Rebuild it with `gg2-server navgen --map <map>`, or delete
 nav/manifest.tsv's line for it to load it anyway
 ```
+
+⛔ **That one is then rebuilt AND overwritten on disk, even without
+`--navgen-save`** — the file describes terrain that is not there, so leaving it
+means every restart refuses it again and any other tool reading the directory
+still gets the wrong graph. A map that simply never had a graph is not a fault to
+correct, and its generated graph stays in memory.
 
 #### `manifest.tsv` — which map each graph was built from
 

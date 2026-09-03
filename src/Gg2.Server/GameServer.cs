@@ -196,6 +196,17 @@ public sealed class GameServer : IDisposable, IPluginHost
     // hand out safely.
     private BotPopulationService? _population;
 
+    /// <summary>
+    /// The bot population manager, once <see cref="Start"/> has made one.
+    /// </summary>
+    /// <remarks>
+    /// Internal, for tests that need to see which nav graph a map change actually
+    /// ended up with — "the server built one for this custom map" is otherwise
+    /// only observable through a log line, and a test that asserts on log text is
+    /// pinned to the wording rather than to the behaviour.
+    /// </remarks>
+    internal BotPopulationService? Population => _population;
+
     // One bot's commands for one tick, reused across bots and across ticks: an
     // inline buffer, so this field is the whole storage and ServiceBots
     // allocates nothing.
@@ -583,11 +594,17 @@ public sealed class GameServer : IDisposable, IPluginHost
         // every publish since 2026-09-03 — but it is still reachable, by pointing
         // GG2_NAVCACHE somewhere empty or by copying the binary without its
         // directory, and the warning is what makes either legible. docs/DEPLOY.md.
-        if (_options.Bots.Enabled && _options.NavCacheDirectory.Length == 0)
+        // ⚠️ And it is no longer unconditional: with --navgen on (the default) the
+        // server builds the graph itself, so the bots DO navigate and the old
+        // warning would be plainly false. What survives is the case where
+        // generation is off too, which is the only one where the missing directory
+        // still costs anything.
+        if (_options.Bots.Enabled && _options.NavCacheDirectory.Length == 0 && !_options.NavGenerate)
         {
             _log.Info(
-                "no nav directory: bots will fight but not navigate. "
-                + "Pass --botnav <path> or set GG2_NAVCACHE (docs/DEPLOY.md)");
+                "no nav directory and --no-navgen: bots will fight but not navigate. "
+                + "Pass --botnav <path>, set GG2_NAVCACHE, or drop --no-navgen "
+                + "(docs/DEPLOY.md)");
         }
 
         // ⚠️ Not _world.Random and not _spawnRandom. See IPluginHost.Random.

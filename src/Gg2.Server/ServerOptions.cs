@@ -293,18 +293,66 @@ public sealed class ServerOptions
     public string MapDirectory { get; set; } = string.Empty;
 
     /// <summary>
-    /// Where the bot nav caches live — <c>gg2-nav-gen</c>'s output, kept in this
-    /// repo's gitignored <c>nav/</c>.
+    /// Where the bot nav caches live — this repo's checked-in <c>nav/</c>.
     /// </summary>
     /// <remarks>
     /// ⚠️ Empty, and a missing cache, are both fine and mean different things:
-    /// empty is "this server does not navigate", a miss is "this map has no cache
-    /// generated". Neither is an error, because a server with an ungenerated map
+    /// empty is "this server has no graph directory", a miss is "this map has no
+    /// graph in it". Neither is an error, because a server with an ungenerated map
     /// in its rotation should keep serving it — <c>navCacheLoad.gml</c>'s own
-    /// contract. The directory is gitignored in the reference and is not shipped,
-    /// so a fresh checkout has none.
+    /// contract.
+    /// <para>
+    /// ✅ <b>And neither now means bots that do not navigate</b>, because
+    /// <see cref="NavGenerate"/> builds the missing graph. What this directory
+    /// decides is whether a graph is <em>read</em> rather than built, and whether
+    /// a built one has anywhere to be saved.
+    /// </para>
     /// </remarks>
     public string NavCacheDirectory { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Build a nav graph on the fly for a map that has none, instead of serving
+    /// it with bots that do not navigate.
+    /// </summary>
+    /// <remarks>
+    /// ✅ <b>On by default, and it is what makes a CUSTOM map navigable.</b> The
+    /// 25 checked-in graphs cover the shipped maps; anything else — a map an
+    /// operator added, a stage of a multi-area map nobody generated, a map edited
+    /// since its graph was built — had no graph and therefore no bot movement, and
+    /// that reads exactly like a broken bot layer rather than like missing data.
+    /// Everything a graph needs is in the map's own PNG, so there was never a
+    /// reason for it to be missing data.
+    /// <para>
+    /// ⚠️ <b>It runs on the tick thread at the map change, and it is not free</b> —
+    /// a large map is a few hundred milliseconds. A map change already stalls (the
+    /// clients are loading, and nothing is being simulated), so the cost lands
+    /// where there is nothing to disturb; <c>BotPopulationService.MapChanged</c>
+    /// logs how long it took, so an operator who cares can see it rather than
+    /// guess. Turn it off with <c>--no-navgen</c> and the old behaviour — bots that
+    /// fight whatever reaches them and walk nowhere — comes back.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>A generated graph is held in memory and not written anywhere</b>
+    /// unless <see cref="NavGenerateWrite"/> says so. A server writing files into
+    /// its own install directory as a side effect of a map rotation is a surprise;
+    /// paying a few hundred milliseconds once per map change is not.
+    /// </para>
+    /// </remarks>
+    public bool NavGenerate { get; set; } = true;
+
+    /// <summary>
+    /// Save a graph built by <see cref="NavGenerate"/> into
+    /// <see cref="NavCacheDirectory"/>, so the next map change reads it instead of
+    /// rebuilding it.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Off by default because it writes to disk and the operator did not ask
+    /// it to.</b> Worth turning on for a server whose rotation is mostly custom
+    /// maps, where the alternative is rebuilding the same graphs every rotation.
+    /// The manifest is written with it — a graph with no manifest line is a graph
+    /// nothing checks against its map afterwards.
+    /// </remarks>
+    public bool NavGenerateWrite { get; set; }
 
     /// <summary>
     /// How fast <see cref="GameServer.Run"/> paces the tick loop, relative to

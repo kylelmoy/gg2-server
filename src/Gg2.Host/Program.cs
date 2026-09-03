@@ -44,6 +44,33 @@ internal static class Program
             }
         }
 
+        // `gg2-server navgen ...` builds the bot nav graphs instead of serving.
+        // A subcommand for the same reason `eval` is one: it shares almost none
+        // of the server's options, and the ones it looks like it shares (--maps,
+        // --botnav/--out) would have to mean the same thing in both.
+        if (args.Length > 0 && args[0] == "navgen")
+        {
+            var rest = args[1..];
+
+            if (rest.Contains("--help") || rest.Contains("-h"))
+            {
+                NavGen.PrintUsage();
+                return 0;
+            }
+
+            try
+            {
+                return NavGen.Run(rest);
+            }
+            catch (Exception e) when (e is ArgumentException or FormatException or IOException)
+            {
+                Console.Error.WriteLine(e.Message);
+                Console.Error.WriteLine();
+                NavGen.PrintUsage();
+                return 2;
+            }
+        }
+
         if (args.Contains("--help") || args.Contains("-h"))
         {
             PrintUsage();
@@ -520,6 +547,27 @@ internal static class Program
                 case "--botnav":
                     options.NavCacheDirectory = Require(name, value);
                     i++;
+                    break;
+
+                // ⚠️ Generation is ON by default and this turns it off, rather
+                // than the other way round. Everything a graph needs is in the
+                // map's own PNG, so a map with no graph was never missing
+                // anything that had to be missing — and the failure it caused,
+                // bots that fight whatever reaches them and walk nowhere, reads
+                // as a broken bot layer rather than as absent data. The opt-out
+                // is here for a server that would rather have a predictable map
+                // change than navigating bots on a custom map.
+                case "--no-navgen":
+                    options.NavGenerate = false;
+                    break;
+
+                // Worth having on a rotation that is mostly custom maps, where
+                // the alternative is rebuilding the same graphs every time round.
+                // Off by default because it writes files the operator did not ask
+                // for. ⚠️ A graph REFUSED by the manifest is rewritten either way
+                // — that file describes terrain that is not there.
+                case "--navgen-save":
+                    options.NavGenerateWrite = true;
                     break;
 
                 // The [Bots] section. `--bots N` is the fill target, which is what
@@ -1081,6 +1129,13 @@ internal static class Program
                             policy controllers engage on, so pass it to make EVERY
                             bot the configuration the bench measured.
           --botnav <path>   override the bot nav graphs (default: nav/)
+          --no-navgen       do not build a nav graph for a map that has none.
+                            On by default, and it is what makes a CUSTOM map
+                            navigable: everything a graph needs is in the map
+                            PNG, so a missing one costs a few hundred ms at the
+                            map change rather than a round of motionless bots.
+          --navgen-save     save a graph built that way into --botnav, so the
+                            next map change reads it (default: memory only)
           --speed <n|max>   run at n times real time, or 'max' for unpaced
                             (default 1)
           --record <path>   write replayable .trace recordings of this server's
@@ -1169,6 +1224,10 @@ internal static class Program
         `gg2-server eval` plays bot matches across maps instead of serving one,
         faster than real time and with nobody watching - phase 8's exit
         criterion. See `gg2-server eval --help`.
+
+        `gg2-server navgen` builds the bot nav graphs, with no game running, and
+        rewrites nav/manifest.tsv with them. That is for checking graphs in; a
+        server builds a missing one itself. See `gg2-server navgen --help`.
 
         --control-port opens a line-of-JSON control surface on 127.0.0.1 only:
         read state, freeze, step N ticks, set the speed or the bot count, change

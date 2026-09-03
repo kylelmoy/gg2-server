@@ -61,7 +61,8 @@ public class DeploymentTests
     }
 
     /// <summary>
-    /// A server told to run bots with no nav directory at all says so at startup.
+    /// A server told to run bots with no nav directory <em>and</em> no generator
+    /// says so at startup.
     /// </summary>
     /// <remarks>
     /// ⚠️ <b>The silent case, and the one a deployment hits.</b>
@@ -73,13 +74,46 @@ public class DeploymentTests
     /// ⚠️ <b>When this was written it was the DEFAULT outcome of deploying</b>,
     /// because <c>nav/</c> was 34 MB and shipped only behind
     /// <c>-p:PublishNav=true</c>. Gzipping the graphs to 1.2 MB removed the flag
-    /// and with it the default; the warning stays because the state is still
-    /// reachable — an empty <c>GG2_NAVCACHE</c>, or a binary copied without its
-    /// directory. docs/DEPLOY.md, "the nav graphs".
+    /// and with it the default.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>And <c>--navgen</c> removed the rest of it, so this test now needs
+    /// <c>--no-navgen</c> to reach the state at all.</b> With the generator on —
+    /// the default — a server with no nav directory builds each map's graph
+    /// itself and the bots DO navigate, so the old warning would have been
+    /// plainly false. That is worth stating rather than quietly deleting: a
+    /// warning left firing after the thing it warned about stopped happening is
+    /// how an operator learns to ignore the log.
     /// </para>
     /// </remarks>
     [Fact]
-    public void BotsWithNoNavDirectoryWarnAtStartup()
+    public void BotsWithNoNavDirectoryAndNoGeneratorWarnAtStartup()
+    {
+        using var harness = new ServerHarness(options =>
+        {
+            options.Bots = BotPopulationOptions.Default with { Enabled = true, MinHumans = 0 };
+            options.NavCacheDirectory = string.Empty;
+            options.NavGenerate = false;
+        });
+
+        Assert.True(
+            harness.Log.Contains("bots will fight but not navigate"),
+            "a server running bots with no nav directory and no generator started silently");
+    }
+
+    /// <summary>
+    /// ⛔ And with the generator on — the default — there is nothing to warn
+    /// about, because the bots navigate.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Both halves, because the warning going quiet is only right if the
+    /// thing it warned about really stopped.</b> Asserting only that the message
+    /// is absent would pass against a change that deleted the warning and left
+    /// the bots standing still, which is the same failure with the alarm turned
+    /// off — the shape CLAUDE.md keeps finding.
+    /// </remarks>
+    [Fact]
+    public void BotsWithNoNavDirectoryNavigateAnywayAndSayNothing()
     {
         using var harness = new ServerHarness(options =>
         {
@@ -87,9 +121,11 @@ public class DeploymentTests
             options.NavCacheDirectory = string.Empty;
         });
 
-        Assert.True(
+        Assert.False(
             harness.Log.Contains("bots will fight but not navigate"),
-            "a server running bots with no nav directory started silently");
+            "warned about bots that cannot navigate on a server whose bots can");
+
+        Assert.NotNull(harness.Server.Population?.Nav);
     }
 
     /// <summary>

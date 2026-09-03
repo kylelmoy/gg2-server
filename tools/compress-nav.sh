@@ -2,11 +2,19 @@
 #
 # Compress freshly generated nav graphs into the container this repository ships.
 #
-# gg2-nav-gen writes <map>_a<area>.txt straight into gg2-server/nav — the same
-# directory that holds the checked-in .txt.gz files. The loader prefers the plain
-# file (NavCache.FindFile: what somebody just wrote beats what shipped), so a
-# regeneration takes effect immediately and correctly. This script is the second
-# half: it puts the result back into the shipped form.
+# ⚠️ SUPERSEDED for this repository's own generator. `gg2-server navgen` writes
+# the shipped .txt.gz, deletes any stale .txt beside it, and rewrites
+# manifest.tsv — one command, no second half to forget:
+#
+#   dotnet run --project src/Gg2.Host -- navgen
+#   dotnet test Gg2.sln
+#
+# What is left for this script is the OTHER generator. gg2-nav-gen (the Node
+# one, still its own repository) writes <map>_a<area>.txt straight into
+# gg2-server/nav — the same directory that holds the checked-in .txt.gz files.
+# The loader prefers the plain file (NavCache.FindFile: what somebody just wrote
+# beats what shipped), so a regeneration takes effect immediately and correctly.
+# This script is that run's second half:
 #
 #   npx gg2navgen build --all        # or however you drive the generator
 #   tools/compress-nav.sh

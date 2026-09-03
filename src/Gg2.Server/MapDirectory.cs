@@ -115,9 +115,16 @@ public static class MapDirectory
     /// preserves that; it must not start throwing.
     /// </para>
     /// <para>
-    /// <c>GG2_NAVCACHE</c> is the variable <c>gg2-nav-gen</c> writes to and
+    /// <c>GG2_NAVCACHE</c> is the variable <c>gg2-server navgen</c> writes to and
     /// <c>ReferenceTree.NavCacheDirectory</c> reads, so one setting moves the
     /// whole seam.
+    /// <para>
+    /// ⛔ <b>This is the SERVER's answer and <c>navgen</c> deliberately does not
+    /// use it.</b> The probe walks up from the executable, and <c>nav/</c> is
+    /// copied into the build output — so a tool taking this answer would write its
+    /// graphs into <c>bin/</c> and report success. <c>NavGen.DefaultOutput</c>
+    /// anchors on the working directory instead.
+    /// </para>
     /// </para>
     /// </remarks>
     public static string ResolveNav()

@@ -1,6 +1,7 @@
 using System.Globalization;
 using Gg2.Bots;
 using Gg2.Maps;
+using Gg2.Nav;
 
 namespace Gg2.Host;
 
@@ -16,14 +17,20 @@ namespace Gg2.Host;
 /// the determinism guarantee, are there.
 /// </para>
 /// <para>
-/// ⚠️ <b>A map with no nav cache is reported, not skipped silently.</b> Bots
-/// with no graph do not walk anywhere, so on any full-size map the two teams
-/// never meet and every match comes back <c>0-0, unfinished</c> — which reads
-/// exactly like a bot change that broke capturing. The caches are checked in at
-/// <c>nav/</c> and resolved automatically as of 2026-09-01, so this is now the
-/// exception rather than the fresh-checkout default — but a deleted <c>nav/</c>
-/// or an ungenerated custom map still lands here, and the column is what says
-/// so.
+/// ⚠️ <b>A map with no nav graph is reported, not skipped silently.</b> Bots with
+/// no graph do not walk anywhere, so on any full-size map the two teams never
+/// meet — <b>measured 2026-09-03 on two custom CTF maps, 4 matches each: with no
+/// graph, 8 of 8 are 0-0 draws at the time limit; with one built, both maps
+/// produce real wins and captures.</b> ⛔ Note the failure shape: those draws are
+/// <em>finished</em> matches, so an "N completed" criterion is satisfied by a map
+/// nothing happened on. CLAUDE.md, "a match that ends is not a match that
+/// happened".
+/// <para>
+/// ✅ <b>So <c>eval</c> builds a missing graph rather than measuring without
+/// one</b>, the same as the server, and the nav column says which maps were
+/// <c>built</c> rather than read. <c>--no-navgen</c> restores the old behaviour,
+/// which is what the measurement above used as its control.
+/// </para>
 /// </para>
 /// </remarks>
 internal static class Evaluate
@@ -50,6 +57,12 @@ internal static class Evaluate
         // removes. The per-map nav column still says which maps had a cache.
         var navDirectory = Flag(args, "--botnav")
             ?? (Gg2.Server.MapDirectory.ResolveNav() is { Length: > 0 } resolvedNav ? resolvedNav : null);
+
+        // ⚠️ On by default, matching the server. A map with no graph measured as
+        // though it had one is the failure this whole column exists to make
+        // visible, and building the graph removes the failure rather than the
+        // symptom.
+        var noNavGen = args.Contains("--no-navgen");
 
         var matches = Int(args, "--matches", 4);
         var threads = Int(args, "--threads", Environment.ProcessorCount);
@@ -102,10 +115,40 @@ internal static class Evaluate
             }
 
             NavGraph? nav = null;
+            var navSource = "MISSING";
+
             if (navDirectory is { Length: > 0 }
                 && NavCache.TryLoad(navDirectory, name, options.Area, out var loaded))
             {
                 nav = loaded;
+                navSource = "ok";
+            }
+            else if (!noNavGen)
+            {
+                // ⚠️ The same build the server does at a map change, for the same
+                // reason and with more force: a bot with no graph does not walk
+                // anywhere, so on a full-size map the teams never meet and every
+                // match comes back 0-0 and unfinished — which reads exactly like a
+                // bot change that broke capturing. `eval` is where a bot change is
+                // MEASURED, so "the map had no graph" has to be the one thing it
+                // cannot quietly be measuring. CLAUDE.md: a match that ends is not
+                // a match that happened.
+                //
+                // The column still says which graphs were built rather than read,
+                // because a built one is only as good as the generator and that is
+                // worth seeing in the results rather than inferring.
+                try
+                {
+                    nav = NavCache.Parse(
+                        NavGenerator.Build(map, options.Area).Text, name, options.Area);
+                    navSource = "built";
+                }
+                catch (Exception e) when (e is ArgumentException or FormatException
+                    or InvalidOperationException or IndexOutOfRangeException)
+                {
+                    navSource = "unbuildable";
+                    Console.Error.WriteLine($"{name}: could not build a nav graph: {e.Message}");
+                }
             }
 
             var results = MatchRunner.Run(options with { Map = name }, matches, map, nav, threads);
@@ -114,7 +157,7 @@ internal static class Evaluate
 
             Console.WriteLine(
                 $"{name,-26} {summary.RedWins,4} {summary.BlueWins,4} {summary.Draws,4} "
-                + $"{summary.Exhausted,5} {summary.MeanTicks,10:0}  {(nav is null ? "MISSING" : "ok")}");
+                + $"{summary.Exhausted,5} {summary.MeanTicks,10:0}  {navSource}");
         }
 
         clock.Stop();
@@ -154,13 +197,17 @@ internal static class Evaluate
           --seed <n>        batch seed (default 1)
           --maps <path>     where the built-in map PNGs live
           --botnav <path>   where the bot nav caches live
+          --no-navgen       do not build a graph for a map that has none
 
         Results do not depend on --threads: match i is seeded from its index, so
         it is the same match whether it ran first, last or concurrently. That is
         checked by HeadlessMatchTests rather than asserted here.
 
-        Without --botnav the bots do not walk anywhere, so on a full-size map the
-        teams never meet and every match comes back 0-0 and unfinished. The nav
-        column says which maps had a cache.
+        The nav column says where each map's graph came from: `ok` read from
+        --botnav, `built` generated on the spot because there was none, `MISSING`
+        with --no-navgen and no cache. ⚠️ MISSING means the bots do not walk
+        anywhere, so on a full-size map the teams never meet and every match comes
+        back 0-0 and unfinished — which reads exactly like a bot change that broke
+        capturing.
         """);
 }
