@@ -38,7 +38,6 @@ public sealed class MirrorClient : IDisposable
     private readonly List<string> _impossible = [];
     private readonly Func<string, LevelMap> _maps;
 
-    private int _consumed;
 
     public MirrorClient(LoopbackClient socket, Func<string, LevelMap> maps, string firstMap)
     {
@@ -80,14 +79,17 @@ public sealed class MirrorClient : IDisposable
     {
         Socket.Poll();
 
-        // LoopbackClient accumulates rather than draining, so take only what is
-        // new. Take() would fight with any test that also reads the raw stream.
-        var received = Socket.Received;
-
-        for (var i = _consumed; i < received.Count; i++)
-            _buffer.Append([received[i]]);
-
-        _consumed = received.Count;
+        // ⛔ DRAINS the socket rather than indexing into it. LoopbackClient.Take
+        // REMOVES bytes from its own list, so a mirror that remembered "I have
+        // read the first N" would silently skip or re-read the moment any test
+        // also took bytes from the same client — a harness that mis-reads
+        // quietly is worse than no harness, because it still goes green.
+        //
+        // ⚠️ The consequence is a rule: a LoopbackClient with a mirror on it
+        // belongs to the mirror. Read messages through Messages/Of, never
+        // through Socket.Take.
+        if (Socket.Received.Count > 0)
+            _buffer.Append(Socket.Take(Socket.Received.Count));
 
         while (_stream.TryRead(_buffer, out var message))
         {

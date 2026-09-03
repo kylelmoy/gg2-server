@@ -82,6 +82,19 @@ public sealed class ClientRosterAgreementTests
                 + $"and {mirror.Teams[slot]} to the client");
         }
 
+        // ⚠️ Names too, and not for completeness: a stream that has slipped its
+        // framing produces phantom roster entries with EMPTY names — that is
+        // what a real client showed when this was broken, 13 entries against the
+        // server's 5. Comparing only teams would let "everybody is a spectator
+        // and there are eight of them" pass.
+        for (var slot = 0; slot < server.Count; slot++)
+        {
+            Assert.True(
+                harness.Server.EntryOf(slot).Name == mirror.Names[slot],
+                $"{when}: slot {slot} is '{harness.Server.EntryOf(slot).Name}' on the server "
+                + $"and '{mirror.Names[slot]}' to the client");
+        }
+
         // ⛔ And the sharper question, which team equality does not ask: was this
         // client ever handed a character for somebody it holds as a spectator?
         // That is the GM8 fatal error, not an approximation of it.

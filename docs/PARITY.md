@@ -2611,11 +2611,21 @@ in-process), and the client's read loop is `do { … } until(roomchange)`, so it
 cannot parse a post-`CHANGE_MAP` update with the old shape. Both were plausible
 and both were wrong.
 
-⚠️ **A latent one found on the way and NOT fixed:** `Rounds.ResetForNewMap` never
-clears `WorldState.MovingPlatforms`. Irrelevant to every shipped map, none of
-which places one, but a rotation between custom maps with different platform
-counts would leave that block the wrong length — the same class of bug as the one
-above. Untested.
+✅ **Generalised, since the class outlives the instance.**
+`GamemodeRotationTests` rotates a client through one shipped map of **every**
+gamemode — seven of the eight have one — waiting for a `CAPS_UPDATE` after each
+so the HUD block is actually written, and checks the roster still adds up. The
+bug was found against exactly one pair of modes because that is the pair somebody
+happened to put in a rotation; the sweep is what makes the other twenty a
+property of the suite. Mutation-checked: against a writer that captures once it
+fails so hard the client never sees the next `CHANGE_MAP` at all.
+
+⚠️ **A third suspicion was raised and then CHECKED, and it was wrong:**
+`Rounds.ResetForNewMap` does not clear `WorldState.MovingPlatformCount`, which
+looked like the same class of bug. It is not — `MovingPlatforms.Reset` assigns
+the count unconditionally and `OpenMap` calls it on every rotation, so the block
+is always the new map's length. Recorded because an unverified "possible bug"
+left lying around costs a later reader the same afternoon it cost this one.
 
 ## Which flush a message rides, and how to test it
 
