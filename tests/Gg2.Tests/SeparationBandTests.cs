@@ -198,9 +198,9 @@ public sealed class SeparationBandTests(Xunit.Abstractions.ITestOutputHelper out
         // incomparable, including another lane's. Say so in the commit.
         var expected = map switch
         {
-            "ctf_2dfort" => 1614.685077306641,
-            "arena_lumberyard" => 1112.9259714662962,
-            "koth_harvest" => 1008.6998265983821,
+            "ctf_2dfort" => 1425.0518090166911,
+            "arena_lumberyard" => 1216.7336722737139,
+            "koth_harvest" => 877.59966840777997,
             _ => throw new ArgumentOutOfRangeException(nameof(map), map, "no recorded total for this map"),
         };
 

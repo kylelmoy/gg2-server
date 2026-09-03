@@ -81,6 +81,49 @@ public static class NavConstants
     public const double RjControl = 0.65;   // NAV_RJ_CONTROL
     public const int RjFriction = 1;   // NAV_RJ_FRICTION
     public const int RjDamage = 30;   // NAV_RJ_DAMAGE
+
+    /// <summary>
+    /// How much A\* inflates its heuristic. 1.0 is an ordinary optimal search.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>This is a deliberate quality-for-speed trade and it has no reference
+    /// behind it</b> — <c>navFindPath.gml</c> searches at 1.0 and re-opens closed
+    /// nodes. CLAUDE.md puts the bot layer outside the "the reference is the
+    /// specification" rule, and the user asked for the speed.
+    /// <para>
+    /// <b>Measured 2026-09-02</b>, twelve bots on <c>ctf_truefort</c>, against 1.0
+    /// with re-opening: the bots' whole <c>Poll</c> costs <b>−17.3%</b> and the
+    /// tick <b>−10.1%</b>, for graph routes <b>4.0% more expensive on average</b>
+    /// (worst seen 1.71×). ✅ <b>Every route that existed is still found</b> — the
+    /// found-counts over all 25 shipped graphs are identical, 19,468 routes.
+    /// </para>
+    /// <para>
+    /// ⛔ <b>The statistic that chose 1.3 is the SUITE TOTAL, because every
+    /// per-leg number is noise.</b> Summed walking time over
+    /// <c>ScenarioSuiteTests</c>' fourteen legs: <b>6,259 ticks at 1.0 and 6,142
+    /// at 1.3</b>, with 6,261 / 6,234 / 6,255 / 6,306 at 1.0-skip / 1.05 / 1.1 /
+    /// 1.2 — a ±2% band that does not move in one direction — and <b>no leg fails
+    /// at any weight tried</b>. At <b>1.5 it is 6,416, +2.5%</b>, and that is
+    /// where it starts to cost.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Two single-leg pins disagree at 1.3 and both are inside that band</b>:
+    /// <c>BotObjectiveTests</c>' intel run got 6% FASTER (1,697 → 1,598) and
+    /// <c>PathFollowerFixtureTests</c>' leg 14% slower (1,572 → 1,786). **Do not
+    /// tune on either.** ⛔ Nor on the suite's rocket-jump count: it is 6 at 1.0,
+    /// 7 at 1.2, 7 at 1.25, 6 again at 1.3, 7 at 1.35, then 9 at 1.4 — it wobbles
+    /// inside a band before it steps, so a weight picked because it landed on 6
+    /// is fitted to noise. What the step at 1.4 is good for is staying clear of
+    /// it.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>What would show this is wrong</b>: bots visibly detouring, or taking
+    /// rocket jumps they do not need — the arcs cost hp, and an inflated heuristic
+    /// commits to greedy-looking routes earlier. Lower it before looking anywhere
+    /// else.
+    /// </para>
+    /// </remarks>
+    public const double SearchWeight = 1.3;
     public const int RjMaxTicks = 100;   // NAV_RJ_MAX_TICKS
     public const int RjMaxPerSide = 2;   // NAV_RJ_MAX_PER_SIDE
     public const int RjPenalty = 10;   // NAV_RJ_PENALTY

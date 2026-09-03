@@ -168,7 +168,7 @@ public sealed class NavSearchTests
     /// </para>
     /// </remarks>
     [Fact]
-    public void AClosedNodeIsReopenedWhenACheaperRouteArrives()
+    public void AClosedNodeIsNotReopenedAndTheRouteIsTheWorseOne()
     {
         // ⚠️ `admissible: false` on purpose, and it is the point of the fixture.
         // A heuristic that never overestimates is not enough to make skipping a
@@ -198,11 +198,19 @@ public sealed class NavSearchTests
         var path = new List<int>();
 
         Assert.True(search.Find(0, 3, new NavQuery(Team.Red), path));
-        Assert.Equal([0, 2, 1, 3], path);
 
-        // The re-open is reported, so the fixture cannot silently stop
-        // exercising it the way its first draft did.
-        Assert.True(search.Reopens > 0, "no node was re-opened, so this gates nothing");
+        // ⛔ [0, 2, 1, 3] costs 102 and is the OPTIMAL route. This search returns
+        // [0, 1, 3], which costs 140 — 37% worse — and that is the deliberate
+        // trade, not a bug. N is closed at cost 40 before M re-prices it at 2,
+        // and a closed node is never revisited.
+        //
+        // ⚠️ This fixture used to assert the optimal answer and gate the re-open
+        // that produced it. It is kept, inverted, because the cost of the trade
+        // is worth having written down somewhere it cannot rot: an adversarial
+        // graph is where the loss is largest, and on the 25 shipped graphs the
+        // same change costs 0.6% of route cost on average. NavConstants.
+        // SearchWeight carries the whole measurement and the reason.
+        Assert.Equal([0, 1, 3], path);
     }
 
     /// <summary>

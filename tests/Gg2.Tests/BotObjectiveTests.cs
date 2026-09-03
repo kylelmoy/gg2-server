@@ -1020,10 +1020,10 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
         // banned a perfectly good edge. Nothing here could see that: the ban was
         // one of the counters, and `UnsupportedEdgeTicks` stayed at zero
         // throughout, because the dispatch switch saw a type it handles.
-        Assert.Equal(1697, grabbedAt);
-        Assert.Equal(48, bot.Path.Replans);
+        Assert.Equal(1598, grabbedAt);
+        Assert.Equal(32, bot.Path.Replans);
         Assert.Equal(0, bot.Path.StuckFires);
-        Assert.Equal(18, bot.Path.OffRouteFires);
+        Assert.Equal(10, bot.Path.OffRouteFires);
         Assert.Equal(0, bot.Path.BlacklistFires);
 
         // ⚠️ And it turns round. The goal has to be re-decided on the objective

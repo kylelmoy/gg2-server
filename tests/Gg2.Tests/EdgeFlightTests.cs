@@ -172,8 +172,8 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
         output.WriteLine($"{Map} rocket jumps: {EdgeFlights.Summarise(flights)}");
 
         Assert.Equal(67, flights.Count);
-        Assert.Equal(20, measured);
-        Assert.Equal(20, arrived);
+        Assert.Equal(21, measured);
+        Assert.Equal(21, arrived);
         Assert.Equal(12, flown);
 
         // ⚠️ TWO, and pinning the real number rather than a hoped-for zero is the
@@ -202,9 +202,9 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
         output.WriteLine($"{Map} air jumps: {EdgeFlights.Summarise(flights)}");
 
         Assert.Equal(23, flights.Count);
-        Assert.Equal(10, measured);
-        Assert.Equal(10, arrived);
-        Assert.Equal(9, flown);
+        Assert.Equal(11, measured);
+        Assert.Equal(11, arrived);
+        Assert.Equal(10, flown);
         Assert.Equal(0, blacklists);
     }
 
@@ -233,7 +233,7 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
         var flights = EdgeFlights.Sweep(world, NavEdgeType.RocketJump);
 
         var skipped = flights.Where(f => f.Outcome == EdgeFlightOutcome.RoutedAround).ToList();
-        Assert.Equal(47, skipped.Count);
+        Assert.Equal(46, skipped.Count);
 
         // None of them is counted, in either direction: not as an arrival and not
         // as a refusal.

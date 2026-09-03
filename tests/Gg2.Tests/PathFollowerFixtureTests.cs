@@ -255,11 +255,11 @@ public sealed class PathFollowerFixtureTests(Xunit.Abstractions.ITestOutputHelpe
         // `NAV_EDGE_BUCKET` truncation was found, and a bot that starts banning
         // edges again still arrives — just slowly, inside any budget, with the
         // route quality gone and nothing red.
-        Assert.Equal(137, route.Count);
-        Assert.Equal(1572, state.ArrivedAt);
-        Assert.Equal(33, state.Replans);
+        Assert.Equal(121, route.Count);
+        Assert.Equal(1786, state.ArrivedAt);
+        Assert.Equal(39, state.Replans);
         Assert.Equal(0, state.StuckFires);
-        Assert.Equal(4, state.OffRouteFires);
+        Assert.Equal(10, state.OffRouteFires);
         Assert.Equal(0, state.BlacklistFires);
 
         // The control: the same bot with no goal presses nothing and goes

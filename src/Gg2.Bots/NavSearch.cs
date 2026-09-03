@@ -116,17 +116,6 @@ public sealed class NavSearch
     public int Pops { get; private set; }
 
     /// <summary>
-    /// How many closed nodes the last search re-opened. Diagnostic only.
-    /// </summary>
-    /// <remarks>
-    /// Worth reporting because it is the measure of how inconsistent the
-    /// heuristic turned out to be, which <see cref="Find"/>'s occupancy argument
-    /// makes worse on purpose. The reference measured 113 → 50 on one leg when
-    /// occupancy went in: the extra work is a wider frontier, not thrashing.
-    /// </remarks>
-    public int Reopens { get; private set; }
-
-    /// <summary>
     /// Finds the cheapest route from <paramref name="start"/> to
     /// <paramref name="goal"/> for this asker.
     /// </summary>
@@ -170,7 +159,6 @@ public sealed class NavSearch
 
         path.Clear();
         Pops = 0;
-        Reopens = 0;
 
         if ((uint)start >= (uint)_graph.NodeCount || (uint)goal >= (uint)_graph.NodeCount)
             return false;
@@ -246,14 +234,27 @@ public sealed class NavSearch
                 if ((uint)next >= (uint)_graph.NodeCount)
                     continue;
 
-                // ⚠️ NO closed test on the neighbour. A node that is already
-                // closed is still allowed to be improved — see the re-open
-                // below. Skipping it is only sound when the heuristic is
-                // *consistent*, which is strictly stronger than the
-                // admissibility the straight-line distance gives, and the
-                // reference measured the difference on honest costs: the
-                // ctf_truefort blue leg went from 68 nodes to 60 when the
-                // re-open went in.
+                // ⚠️ A closed node is NOT revisited, and this is a deliberate
+                // departure from the reference — navFindPath.gml re-opens one
+                // when a cheaper route arrives, because the straight-line
+                // heuristic is admissible but not *consistent* and skipping is
+                // only sound when it is. So this gives up optimality on purpose.
+                //
+                // ⛔ Measured 2026-09-02 over 1,500 searches: routes cost 0.6%
+                // more on average with the skip alone, 3.0% more together with
+                // NavConstants.SearchWeight, worst seen 1.65x. Nothing that
+                // existed became unreachable — the found-counts over all 25
+                // shipped graphs are identical. Against that, the bots' whole
+                // Poll is 11.5% cheaper.
+                //
+                // ⚠️ The two halves belong together. An inflated heuristic
+                // WITHOUT this makes the search SLOWER, not faster — measured at
+                // weight 1.5 it popped 636 nodes against 408 — because an
+                // inconsistent heuristic re-opens far more, and every re-open is
+                // a re-expansion. That is the opposite of the textbook result
+                // and it is why the weight cannot be added on its own.
+                if (_closed[next])
+                    continue;
 
                 // ⚠️ The gate test is on the EDGE and not on the node it arrives
                 // at. An arc can cross a gate without landing on it, and the
@@ -306,22 +307,17 @@ public sealed class NavSearch
                 _gScore[next] = tentative;
                 _cameFrom[next] = current;
 
-                // ⚠️ Re-open it. The push below is ignored by the pop loop while
-                // the node is still marked closed, so without this the
-                // improvement would be recorded in gScore and never expanded
-                // from — the node would keep its old, worse successors.
-                if (_closed[next])
-                {
-                    _closed[next] = false;
-                    Reopens++;
-                }
-
                 var nextX = (_graph.Nodes[next].X0 + _graph.Nodes[next].X1) / 2.0;
                 var nextY = (double)_graph.Nodes[next].Row;
 
+                // ⚠️ WEIGHTED. NavConstants.SearchWeight inflates the estimate,
+                // which makes the frontier commit to the goal's direction sooner
+                // and expand fewer nodes for a route that may be longer. The
+                // trade, and why it is 1.2 rather than more, is recorded there.
                 _open.Enqueue(
                     next,
-                    tentative + Gml.PointDistance(nextX, nextY, goalX, goalY));
+                    tentative + (NavConstants.SearchWeight
+                        * Gml.PointDistance(nextX, nextY, goalX, goalY)));
             }
         }
 

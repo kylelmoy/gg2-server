@@ -277,6 +277,15 @@ tick** — more than any stage of the simulation. The cost breakdown, the two
 exact-equivalence wins taken, the four candidates that measured nothing, and the
 evidence that the heuristic is *not* the problem (it is 0.914 of the true cost)
 are in `docs/ARCHITECTURE.md`, "Where a headless bot match's tick goes".
+⛔ **A\* GIVES UP OPTIMALITY ON PURPOSE as of 2026-09-02** — a closed node is
+never revisited and the heuristic is inflated by `NavConstants.SearchWeight`
+(1.3). **Bot `Poll` −18.9%, tick −12.0%**, for routes 4% more expensive on
+average; every route that existed is still found (19,468 across all 25 graphs,
+unchanged). ⚠️ **The two halves only work together — inflating without the
+closed-set skip makes the search SLOWER**, 636 pops against 408, because an
+inconsistent heuristic re-opens more. The whole measurement, and the three
+instruments that could NOT choose the weight, are in `docs/ARCHITECTURE.md`.
+
 ⛔ **A quarter of a search is `PriorityQueue`, and replacing it is REJECTED** — a
 hand-written 4-ary heap reproducing .NET's tie-breaking exactly (checksummed
 identical over 425,000 pops) is 7% faster than it, half a percent of a tick.

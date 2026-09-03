@@ -99,7 +99,7 @@ public sealed class SimulationStampTests(ITestOutputHelper output)
     /// to be. The distinction is the whole rule: see the constant's remarks.
     /// </para>
     /// </remarks>
-    private const string Pinned = "5dac8a5e7c37ce3a";
+    private const string Pinned = "9de9dc341dd95af9";
 
     /// <summary>
     /// The stamp is stable, and not a per-process hash.

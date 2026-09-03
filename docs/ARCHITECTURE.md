@@ -427,11 +427,13 @@ the path follower never once.
 re-plans every 45-89 ticks (`BotConstants.ReplanTicks` plus its own stagger) and
 each search expands about a third of a 687-node graph.
 
-⛔ **The heuristic is NOT the problem, which was the first guess.** Measured over
-a thousand searches: the straight-line estimate is **0.914 of the true path
-cost**. It is tight, the units of `NavEdge.Cost` and the cell-space distance
-really do agree, and A\* is not degenerating into Dijkstra. **Do not go looking
-for a scale error here.**
+⛔ **The heuristic is NOT wrongly scaled, which was the first guess.** Measured
+over a thousand searches: the straight-line estimate is **0.914 of the true path
+cost**. The units of `NavEdge.Cost` and the cell-space distance really do agree,
+and A\* was not degenerating into Dijkstra. **Do not go looking for a scale
+error.** ⚠️ It is now inflated *deliberately* — see "A\* gives up optimality on
+purpose" below — which is a different thing from a scale error and is measured as
+a trade rather than a fix.
 
 ⛔ **A quarter of a search is the priority queue.** A faithful microbenchmark of
 exactly the heap traffic one search does — 475 enqueues and 425 dequeues on a
@@ -689,6 +691,83 @@ maps, each segment asked both ways, with the production no-candidates overload a
 the control. Both mutations now redden it, and it asserts the sweep is not
 degenerate — some segment must be blocked by a **rect alone**, and the filter
 must actually be narrowing the set.
+
+### ✅ A\* gives up optimality on purpose — the largest win in the layer
+
+**Landed 2026-09-02**, and unlike everything above it this one **changes what the
+bots do**. It is allowed to: CLAUDE.md puts `src/Gg2.Bots/` outside "the
+reference is the specification", and the user asked for the speed.
+
+Two halves, and **they only work together**:
+
+- **A closed node is never revisited.** `navFindPath.gml` re-opens one when a
+  cheaper route arrives, because the straight-line heuristic is admissible but
+  not *consistent*. Skipping is what makes each node cost one expansion.
+- **The heuristic is inflated by `NavConstants.SearchWeight` = 1.3**, so the
+  frontier commits toward the goal sooner.
+
+⛔ **Inflating WITHOUT the closed-set skip makes the search SLOWER, which is the
+opposite of the textbook result.** Measured: at weight 1.5 it popped **636 nodes
+against 408** at weight 1.0. An inconsistent heuristic re-opens far more, and
+every re-open is a re-expansion — so the weight cannot be added on its own.
+
+| | before | after | |
+|---|---|---|---|
+| the bots' `Poll` | 7.97 µs | 6.46 | **−18.9%** |
+| the whole tick | 13.91 | 12.24 | **−12.0%** |
+
+### ⛔ How the operating point was chosen, and every instrument that could not choose it
+
+✅ **Completeness first, because it is the one property that must not move**: the
+found-counts over all 25 shipped graphs are **identical, 19,468 routes**. Nothing
+that had a route lost one. Only *which* route changed — 23 of the 25
+`NavRouteIdentityTests` digests moved.
+
+⛔ **The statistic that chose 1.3 is the SUITE TOTAL: summed walking time over
+`ScenarioSuiteTests`' fourteen legs.** It is the only aggregate available, and
+every per-leg number is noise around it:
+
+| weight | suite total, ticks | rocket jumps | legs failing |
+|---|---|---|---|
+| 1.0, re-opening (before) | 6,259 | 6 | 0 |
+| 1.0, closed-set skip | 6,261 | 6 | 0 |
+| 1.05 / 1.1 / 1.2 | 6,234 / 6,255 / 6,306 | 6 / 7 / 7 | 0 |
+| **1.3** | **6,142** | **6** | **0** |
+| 1.5 | 6,416 (**+2.5%**) | 9 | 0 |
+
+**A ±2% band that does not move in one direction, and no leg fails at any weight
+tried.** 1.5 is where it starts to cost.
+
+⚠️ **Three instruments were tried and are useless for choosing, which is worth
+more than the choice:**
+
+- **Two single-leg pins disagree at 1.3, in opposite directions.**
+  `BotObjectiveTests`' intel run got *better* on all three of its counters —
+  1,697 → 1,598 ticks, 48 → 32 re-plans, 18 → 10 off-route fires — while
+  `PathFollowerFixtureTests`' leg got *worse*: 1,572 → 1,786 ticks, 33 → 39
+  re-plans, 4 → 10 off-route. **Both are one leg. Neither is evidence.**
+- ⛔ **The suite's rocket-jump count is NOT MONOTONE in the weight**: 6 at 1.0,
+  **7 at 1.2, 7 at 1.25, 6 again at 1.3, 7 at 1.35**, then 9 at 1.4, 9 at 1.5, 12
+  at 1.7. It wobbles inside a band before it steps. **A weight picked because the
+  count landed on 6 is fitted to noise** — an early draft of this change picked
+  1.2 for exactly that reason, on a value never actually measured.
+- **`eval` over all 23 maps cannot separate any of it.** Unfinished matches 3 /
+  2 / 2 / 3 and drawn 28 / 30 / 31 / 28 at weights 1.0 / 1.0-skip / 1.3 / 2.0.
+  ⚠️ **That is not a clean bill of health** — both teams get the same nav, so a
+  change that made every bot worse is invisible to a symmetric outcome. It is
+  reported because "the outcome tests did not complain" is exactly the reasoning
+  CLAUDE.md warns about, and it is why 2.0 was rejected on route inflation
+  (**+18.8%** mean, worst 4.5×) rather than on anything `eval` said.
+
+⚠️ **`SIM_UUID` moved, `5dac8a5e7c37ce3a` → `9de9dc341dd95af9`, and that is
+correct.** `NavConstants` is deliberately inside the stamp: a policy trained
+against the old nav layer *is* dated by this. The only checkpoint that exists was
+already stamp-invalid and is a test fixture, so it costs nothing today.
+
+⚠️ **`NavSearchTests`' re-open fixture is kept and INVERTED** rather than deleted.
+On its adversarial graph the optimal route costs 102 and this search now returns
+one costing 140 — 37% worse. That is the largest loss the change can produce, and
+it is worth having written down next to the 0.6% it costs on the shipped graphs.
 
 ### Still on the table, measured and not taken
 

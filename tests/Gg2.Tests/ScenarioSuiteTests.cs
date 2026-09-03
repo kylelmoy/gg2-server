@@ -116,10 +116,10 @@ public sealed class ScenarioSuiteTests(ITestOutputHelper output)
     {
         ["valley-floor-to-point"] = 219,
         ["valley-spawn-to-point"] = 523,
-        ["valley-point-to-spawn"] = 456,
+        ["valley-point-to-spawn"] = 438,
         ["valley-shaft-crate-to-point"] = 95,
         ["valley-shaft-floor-to-point"] = 161,
-        ["truefort-spawn-to-intel"] = 1667,
+        ["truefort-spawn-to-intel"] = 1568,
         ["truefort-blue-spawn-exit-west"] = 53,
         ["avanti-ramp-pocket-to-intel"] = 217,
         ["gallery-pit-climb"] = 216,

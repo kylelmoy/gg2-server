@@ -38,7 +38,10 @@ public sealed class NavRouteIdentityTests
     private const int Pairs = 250;
 
     /// <summary>
-    /// The digest of every route on every shipped graph, recorded 2026-09-02.
+    /// The digest of every route on every shipped graph. ⚠️ RE-RECORDED 2026-09-02
+    /// when the search took NavConstants.SearchWeight and stopped re-opening: 23 of
+    /// the 25 digests moved and every found-count is unchanged, which is the
+    /// property that mattered — no route that existed became unreachable.
     /// </summary>
     /// <remarks>
     /// ⚠️ <b>A digest rather than a list, and that is a real trade.</b> The whole
@@ -50,31 +53,31 @@ public sealed class NavRouteIdentityTests
     /// </remarks>
     private static readonly Dictionary<string, (ulong Digest, int Found)> Expected = new()
     {
-        ["arena_lumberyard_a1"] = (10514204138076923365UL, 984),
-        ["arena_montane_a1"] = (10774525117234734373UL, 1000),
-        ["cp_dirtbowl_a1"] = (9408628745105843925UL, 325),
-        ["cp_dirtbowl_a2"] = (768434093238317508UL, 309),
-        ["cp_dirtbowl_a3"] = (14014788429071462633UL, 312),
-        ["cp_egypt_a1"] = (3784015884580481042UL, 964),
-        ["ctf_2dfort_a1"] = (2467835284698470974UL, 912),
-        ["ctf_avanti_a1"] = (6155707305438397906UL, 854),
-        ["ctf_classicwell_a1"] = (13063700373258992013UL, 890),
-        ["ctf_conflict_a1"] = (2957873570329430096UL, 670),
-        ["ctf_eiger_a1"] = (3448352152090564932UL, 970),
-        ["ctf_oldfort_a1"] = (8416221332878611751UL, 534),
-        ["ctf_orange_a1"] = (18087844139615926066UL, 880),
-        ["ctf_truefort_a1"] = (16709727838697993278UL, 844),
-        ["ctf_waterway_a1"] = (5529595418921208772UL, 924),
-        ["dkoth_atalia_a1"] = (17861022462424952168UL, 782),
-        ["dkoth_sixties_a1"] = (6028042130964159184UL, 826),
-        ["gen_destroy_a1"] = (6906681881436860920UL, 990),
+        ["arena_lumberyard_a1"] = (14788675366214503893UL, 984),
+        ["arena_montane_a1"] = (11295441403353704709UL, 1000),
+        ["cp_dirtbowl_a1"] = (14162545353670478030UL, 325),
+        ["cp_dirtbowl_a2"] = (15506444063556699280UL, 309),
+        ["cp_dirtbowl_a3"] = (4885258262418318904UL, 312),
+        ["cp_egypt_a1"] = (5210553772887417302UL, 964),
+        ["ctf_2dfort_a1"] = (2611945521325008427UL, 912),
+        ["ctf_avanti_a1"] = (12893365823046489519UL, 854),
+        ["ctf_classicwell_a1"] = (13597301971318768909UL, 890),
+        ["ctf_conflict_a1"] = (4945426045024243719UL, 670),
+        ["ctf_eiger_a1"] = (16551968544854263959UL, 970),
+        ["ctf_oldfort_a1"] = (7240544624571533099UL, 534),
+        ["ctf_orange_a1"] = (12549215511932400003UL, 880),
+        ["ctf_truefort_a1"] = (10566035562846899415UL, 844),
+        ["ctf_waterway_a1"] = (7712211561662090991UL, 924),
+        ["dkoth_atalia_a1"] = (4804870971441709201UL, 782),
+        ["dkoth_sixties_a1"] = (15780653206685659676UL, 826),
+        ["gen_destroy_a1"] = (10330741463005333567UL, 990),
         ["gg_debug2_a1"] = (3234777014370026277UL, 1000),
         ["gg_debug_a1"] = (14260607603416349530UL, 525),
-        ["koth_corinth_a1"] = (14293742026984698879UL, 948),
-        ["koth_gallery_a1"] = (14541886310115183703UL, 960),
-        ["koth_harvest_a1"] = (7414901515782611266UL, 577),
-        ["koth_valley_a1"] = (10114470687210194900UL, 856),
-        ["tdm_mantic_a1"] = (5806549828593998757UL, 632),
+        ["koth_corinth_a1"] = (5519080838724246400UL, 948),
+        ["koth_gallery_a1"] = (13737592279165596173UL, 960),
+        ["koth_harvest_a1"] = (17422843924765240433UL, 577),
+        ["koth_valley_a1"] = (12764766492475167033UL, 856),
+        ["tdm_mantic_a1"] = (5864869011259159109UL, 632),
     };
 
     /// <summary>
