@@ -225,13 +225,22 @@ public sealed class GameServer : IDisposable
     private bool _aprilFools;
 
     /// <summary>
-    /// The instant this tick started, for everything that measures a duration.
+    /// <c>current_time</c>: milliseconds since this process started, held still
+    /// for the tick.
     /// </summary>
     /// <remarks>
-    /// Taken once per <see cref="Tick"/> and shared, so two things that happen
-    /// in one tick cannot disagree about when it was.
+    /// Sampled once per <see cref="Tick"/> and shared, so two things that happen
+    /// in one tick cannot disagree about when it was — which is also GM8's
+    /// behaviour, where <c>current_time</c> is read many times inside one step.
+    /// <para>
+    /// ⚠️ <b>Monotonic, deliberately.</b> Everything that reads this is measuring
+    /// an elapsed duration, and a wall clock is the wrong instrument for that: an
+    /// NTP correction or a DST step going backwards would stall the name throttle
+    /// for as long as the jump. <see cref="LocalClock"/> is the wall clock, is
+    /// separate, and is only ever asked what day it is.
+    /// </para>
     /// </remarks>
-    private DateTime _now;
+    private long _nowMs;
 
     /// <summary>
     /// The minimum gap between one player's accepted <c>PLAYER_CHANGENAME</c>
@@ -241,7 +250,7 @@ public sealed class GameServer : IDisposable
     /// <c>processClientCommands.gml:293-296</c>, <c>current_time -
     /// lastNamechange &lt; 1000</c>.
     /// </remarks>
-    private const double NameChangeIntervalMs = 1000;
+    private const long NameChangeIntervalMs = 1000;
 
     public GameServer(ServerOptions options, IServerLog log)
     {
@@ -1032,7 +1041,7 @@ public sealed class GameServer : IDisposable
     public void Tick()
     {
         var now = DateTime.UtcNow;
-        _now = now;
+        _nowMs = Environment.TickCount64;
 
         _frame++;
 
@@ -2577,10 +2586,10 @@ public sealed class GameServer : IDisposable
         // ⚠️ The throttled command is DROPPED, not deferred. The reference's
         // `break` leaves the socket's other commands to carry on, so a client
         // spamming renames simply has most of them ignored.
-        if ((_now - entry.LastNameChange).TotalMilliseconds < NameChangeIntervalMs)
+        if (entry.LastNameChangeMs is { } last && _nowMs - last < NameChangeIntervalMs)
             return;
 
-        entry.LastNameChange = _now;
+        entry.LastNameChangeMs = _nowMs;
         entry.Name = Gg2Text.Decode(payload);
 
         ServerMessages.PlayerChangeName(_broadcast, IdOf(entry), entry.Name);

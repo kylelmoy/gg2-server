@@ -47,17 +47,25 @@ public sealed class RosterEntry
     public bool QueueJump { get; set; }
 
     /// <summary>
-    /// When this player's last accepted <c>PLAYER_CHANGENAME</c> was processed.
+    /// <see cref="Environment.TickCount64"/> at this player's last accepted
+    /// <c>PLAYER_CHANGENAME</c>, or null if they have never renamed.
     /// </summary>
     /// <remarks>
-    /// <c>player.lastNamechange</c>. ⚠️ <b><see cref="DateTime.MinValue"/> is the
-    /// right default</b>, not "now": the reference's field does not exist until
-    /// the first rename, and <c>variable_local_exists</c> makes that first one
-    /// unconditional. Defaulting to the join instant would silently swallow a
-    /// rename sent in the first second after connecting, which is exactly when
-    /// a client sends one.
+    /// <c>player.lastNamechange</c>, and ⚠️ <b>a MONOTONIC millisecond counter
+    /// rather than a wall clock</b> — GM8's <c>current_time</c> is milliseconds
+    /// since the program started. A <see cref="DateTime"/> here would be wrong in
+    /// a way that never shows up in a test: an NTP correction or a DST step
+    /// moving the clock backwards would stall every rename on the server until
+    /// real time caught up again.
+    /// <para>
+    /// ⚠️ <b>Null rather than a sentinel</b>, which is <c>variable_local_exists</c>
+    /// exactly: the reference's variable does not exist until the first rename,
+    /// so that one is unconditional. A zero default would instead throttle the
+    /// first rename of a server that had been up for less than a second, and
+    /// subtracting from <see cref="long.MinValue"/> overflows.
+    /// </para>
     /// </remarks>
-    public DateTime LastNameChange { get; set; } = DateTime.MinValue;
+    public long? LastNameChangeMs { get; set; }
 
     /// <summary>
     /// The user id this client asked to authenticate as, or null if it never

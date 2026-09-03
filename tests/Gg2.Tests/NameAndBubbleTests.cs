@@ -108,15 +108,16 @@ public sealed class NameAndBubbleTests
         harness.Tick(2);
         Assert.Equal("first", harness.Server.EntryOf(slot).Name);
 
-        // Immediately after, on the same wall clock.
+        // Immediately after, inside the same second.
         Rename(client, "second");
         harness.Tick(2);
         Assert.Equal("first", harness.Server.EntryOf(slot).Name);
 
-        // ⚠️ The clock is real here rather than injected, so this test moves it
-        // by hand instead of sleeping. LastNameChange is the only state the
-        // throttle reads.
-        harness.Server.EntryOf(slot).LastNameChange = DateTime.MinValue;
+        // ⚠️ The clock is real and monotonic (GM8's current_time), so a test
+        // cannot inject one — it clears the only state the throttle reads
+        // instead of sleeping a second. Null is "has never renamed", which is
+        // the reference's variable_local_exists.
+        harness.Server.EntryOf(slot).LastNameChangeMs = null;
 
         Rename(client, "third");
         harness.Tick(2);
