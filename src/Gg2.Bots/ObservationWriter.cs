@@ -176,10 +176,22 @@ public static class ObservationWriter
         // a policy: "the special I am holding is this full". They never coexist on
         // one character, so a column each would be columns of zeros.
         //
-        // ⚠️ This comment used to claim the column also carried a SNIPER's charge.
-        // It never has — a sniper falls to the `_` arm — and the sniper is a
-        // TRAINED class, so that was a claim about what a policy could see that
-        // was false for every run ever done.
+        // ⛔ KNOWN GAP, and it is the sharpest one in this file: a SNIPER's rifle
+        // charge is NOT here. This comment used to claim it was.
+        //
+        // WeaponState.Charge is real state, and Weapons.cs:733 sets rifle damage
+        // to base + sqrt(Charge / RifleChargeTime) * (max - base) over 105 ticks.
+        // So charge IS the sniper's damage. Sniper falls to the `_` arm, and
+        // Sniper is in PolicyController.TrainedClasses — which means a trained
+        // sniper policy fires without being able to see the one variable that
+        // determines what the shot does, and cannot learn to hold it.
+        //
+        // ⚠️ Verified with gg2-rl 2026-09-03, who found it from the stale comment
+        // and priced it: closing it is an ObservationLayoutVersion bump and a full
+        // retrain, so it is THEIR call and not a free improvement. Pinned by
+        // MedicPolicyScopeTests.ASnipersChargeIsInvisibleToThePolicy so that
+        // closing it is a deliberate change to a recorded fact rather than a
+        // silent one.
         //
         // ⛔ THE MEDIC'S UBER IS DELIBERATELY NOT HERE, removed 2026-09-03 at
         // gg2-rl's request and on this side's call. Three facts make it the right

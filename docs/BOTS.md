@@ -605,6 +605,24 @@ once per 900-tick window), creep it back up after a quiet window, never above
 `--bot-arbiter`. **The cost model only has to be right up to a constant factor;
 the loop supplies the factor.**
 
+⛔ **A DUEL HAS NO ARBITER, so nothing on this path reaches `gg2-rl`.**
+`Gg2.Env` references `Gg2.Protocol`, `Gg2.Maps`, `Gg2.Simulation` and `Gg2.Bots`
+— **not `Gg2.Server`** — and nothing in `src/Gg2.Env/` mentions `IMicroArbiter`
+or `BotBrainSpec` at all. So `HybridBot.Choose` short-circuits at
+`_arbiter is null`, `DecisionCostFor` is never called, and a duel cannot be moved
+by the cost model or the budget however wrong either is.
+
+⚠️ **Both sides guessed at this on 2026-09-03 and both guessed wrong.** This side
+pre-registered movement in `gg2-rl`'s arm A from the cost-model change; arm A
+reproduced to the integer across it (89.8%, 103,613 decisions, 1,008 duels).
+`gg2-rl` had earlier attributed arm A movement to "the bot layer" across a
+19-commit span. **Neither of us can see the other's call graph**, and a prediction
+about a peer's harness is worth exactly as much as the reference to it. The
+mechanism being right does not make the reach right.
+✅ **What that reproduction DOES buy**: the medic term, the observation change and
+the stamp split provably left the duels alone. It says nothing about the server
+path, where the arbiter is real — that needs a match-level instrument.
+
 ⛔ **The budget may only change BETWEEN ticks.** It lives in `GameServer.Run`,
 which `HeadlessMatch`, the env and `eval` never call — so `Choose` stays a pure
 function of tick, poll order, costs and budget, and `RolloutThreadingTests` and

@@ -154,6 +154,53 @@ public sealed class MedicPolicyScopeTests
         Assert.NotEqual(empty, full);
     }
 
+    /// <summary>
+    /// ⛔ KNOWN GAP, PINNED: a sniper's rifle charge is invisible to the policy.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <c>WeaponState.Charge</c> is real state and <c>Weapons.cs:733</c> sets rifle
+    /// damage to <c>base + sqrt(Charge / RifleChargeTime) * (max - base)</c> over
+    /// 105 ticks — so charge <em>is</em> the sniper's damage. Sniper falls to the
+    /// shared column's <c>_</c> arm and Sniper is in
+    /// <c>PolicyController.TrainedClasses</c>, so <b>a trained sniper policy fires
+    /// without being able to see what its shot will do, and cannot learn to hold
+    /// it.</b>
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>This test asserts the WRONG behaviour on purpose.</b> Closing the gap
+    /// is an <c>ObservationLayoutVersion</c> bump and a full retrain, which is
+    /// <c>gg2-rl</c>'s cost to price and not a free improvement to hand them. The
+    /// pin exists so that closing it FAILS HERE and becomes a deliberate change to
+    /// a recorded fact — the alternative is a gap that lives in one evening's chat
+    /// message, which is exactly how the sandvich went missing for eight phases.
+    /// </para>
+    /// <para>
+    /// ⛔ <b>When it is closed:</b> delete this test, bump
+    /// <c>ObservationLayoutVersion</c>, and say in the commit that every existing
+    /// checkpoint is dated by it.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ASnipersChargeIsInvisibleToThePolicy()
+    {
+        var empty = ObservationOfSniper(charge: 0);
+        var full = ObservationOfSniper(charge: Weapons.RifleChargeTime);
+
+        Assert.Equal(empty, full);
+    }
+
+    private static float[] ObservationOfSniper(double charge)
+    {
+        var state = MedicWithEnemy(out var slot, out _);
+        state.Characters[slot].Class = PlayerClass.Sniper;
+        state.Weapons[slot] = WeaponState.Spawn(
+            PlayerClass.Sniper, state.Characters[slot].X, state.Characters[slot].Y);
+        state.Weapons[slot].Charge = charge;
+
+        return Observation(in state, slot);
+    }
+
     private static float[] ObservationOfMedic(double uberCharge)
     {
         var state = MedicWithEnemy(out var medic, out _);

@@ -258,6 +258,16 @@ public static class SimulationStamp
     /// rather than a reason to refuse to run.
     /// </para>
     /// <para>
+    /// <para>
+    /// ✅ <b>And a routing change really can move behaviour, which is why this is
+    /// REPORTED rather than dropped.</b> <c>gg2-rl</c> established on 2026-09-03
+    /// that <c>SearchWeight</c> is a <c>NavConstant</c>, so the A* weight
+    /// 1.0 → 1.3 and the <c>SIM_UUID</c> bump that accompanied it had <b>one
+    /// cause, not two</b> — and their arm A moved measurably across it. A surface
+    /// whose edits change how the bots play is exactly the surface you want a
+    /// digest for; what it does not justify is <em>refusing to run</em>.
+    /// </para>
+    /// <para>
     /// ⚠️ <b>Nothing here is read at inference.</b> A policy drives keys and aim
     /// inside an engagement window; routing is the scripted layer's, and the
     /// observation's geometry rays come from <c>Walkmask</c>, not from these.
