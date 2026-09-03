@@ -827,7 +827,18 @@ public static class Rounds
         return intel.X != intel.HomeX || intel.Y != intel.HomeY;
     }
 
-    internal static void Decide(ref WorldState state, Team winner)
+    /// <summary>
+    /// Ends the round with <paramref name="winner"/>.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Public only so an operator or a plugin can end a round the way the
+    /// clock does</b> — <c>global.winners = ...</c> is what the reference's own
+    /// <c>votenextround</c> plugin writes, and a server that ended a round by
+    /// any other route would produce a sequence no client has ever been sent.
+    /// <see cref="Team.Spectator"/> is "nobody won", which is what a vote to
+    /// skip the map means.
+    /// </remarks>
+    public static void Decide(ref WorldState state, Team winner)
     {
         state.Winner = winner;
         state.RoundDecided = true;

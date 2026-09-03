@@ -133,4 +133,10 @@ public sealed class ServerPlugins
         foreach (var plugin in _plugins)
             plugin.Implementation?.Tick();
     }
+
+    public void MapChanged(string map)
+    {
+        foreach (var plugin in _plugins)
+            plugin.Implementation?.MapChanged(map);
+    }
 }

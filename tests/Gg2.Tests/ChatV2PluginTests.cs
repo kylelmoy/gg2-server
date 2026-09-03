@@ -24,76 +24,10 @@ public sealed class ChatV2PluginTests
     private const byte GlobalChat = 1;
     private const byte TeamChat = 2;
 
-    /// <summary>A host with a roster and nothing else.</summary>
-    private sealed class FakeHost : IPluginHost
-    {
-        private sealed record Player(string Name, Team Team, string Address, bool Client)
-        {
-            public string Name { get; set; } = Name;
-        }
-
-        private readonly List<Player> _players = [];
-
-        /// <summary>Every <c>PluginPacketSendTo</c>, in order.</summary>
-        public List<(int Slot, byte[] Data)> Sent { get; } = [];
-
-        /// <summary>Every <c>PluginPacketSend</c>, in order.</summary>
-        public List<byte[]> Broadcast { get; } = [];
-
-        public List<string> Logged { get; } = [];
-
-        public List<(int Slot, string Name)> Renames { get; } = [];
-
-        public long CurrentTimeMilliseconds { get; set; }
-
-        public int PlayerCount => _players.Count;
-
-        public int Add(string name, Team team, string address = "10.0.0.1", bool client = true)
-        {
-            _players.Add(new Player(name, team, address, client));
-            return _players.Count - 1;
-        }
-
-        public void RemoveAt(int slot) => _players.RemoveAt(slot);
-
-        public string NameOf(int slot) => _players[slot].Name;
-
-        public Team TeamOf(int slot) => _players[slot].Team;
-
-        public string RemoteAddressOf(int slot) => _players[slot].Client ? _players[slot].Address : string.Empty;
-
-        public bool IsClient(int slot) => _players[slot].Client;
-
-        public void Rename(int slot, string name)
-        {
-            _players[slot].Name = name;
-            Renames.Add((slot, name));
-        }
-
-        public void SendPluginPacketToAll(int packetId, ReadOnlySpan<byte> data) =>
-            Broadcast.Add(data.ToArray());
-
-        public void SendPluginPacketTo(int slot, int packetId, ReadOnlySpan<byte> data) =>
-            Sent.Add((slot, data.ToArray()));
-
-        public void Log(string message) => Logged.Add(message);
-
-        /// <summary>The messages sent to one slot, decoded from their length prefixes.</summary>
-        public List<string> MessagesTo(int slot)
-        {
-            var messages = new List<string>();
-            foreach (var (target, data) in Sent)
-                if (target == slot)
-                    messages.Add(Gg2Text.Decode(data.AsSpan(1, data[0])));
-
-            return messages;
-        }
-    }
-
     /// <summary>A host, a plugin bound to packet id 0, and slot 0 already added.</summary>
-    private static (FakeHost Host, ChatV2Plugin Plugin) Fresh()
+    private static (FakePluginHost Host, ChatV2Plugin Plugin) Fresh()
     {
-        var host = new FakeHost();
+        var host = new FakePluginHost();
         var plugin = new ChatV2Plugin();
         plugin.Attach(new PluginChannel(host, 0));
 
@@ -105,7 +39,7 @@ public sealed class ChatV2PluginTests
         return (host, plugin);
     }
 
-    private static int Join(FakeHost host, ChatV2Plugin plugin, string name, Team team, string address = "10.0.0.1")
+    private static int Join(FakePluginHost host, ChatV2Plugin plugin, string name, Team team, string address = "10.0.0.1")
     {
         var slot = host.Add(name, team, address);
         plugin.PlayerAdded(slot);

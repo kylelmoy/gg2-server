@@ -70,6 +70,19 @@ public sealed class ServerOptions
     /// </remarks>
     public bool ServerPluginsRequired { get; set; }
 
+    /// <summary>
+    /// The maps a plugin's map vote may offer. Empty falls back to the map
+    /// rotation, and then to every map in <see cref="MapDirectory"/>.
+    /// </summary>
+    /// <remarks>
+    /// The reference's <c>votemap</c> plugin reads a <c>votableMaps.txt</c> and
+    /// falls back to <c>global.map_rotation</c>. ⚠️ <b>The third fallback is
+    /// this port's</b>: with no rotation configured — a single-map server, which
+    /// is the default — the reference's votemap can only answer "No maps were
+    /// found!", so the feature is off exactly where it would be most used.
+    /// </remarks>
+    public IReadOnlyList<string> VotableMaps { get; set; } = [];
+
 
     /// <summary>
     /// Connections allowed from one address. Not enforced for loopback, which is

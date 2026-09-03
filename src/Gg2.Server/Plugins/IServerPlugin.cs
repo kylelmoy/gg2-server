@@ -12,12 +12,24 @@ namespace Gg2.Server.Plugins;
 /// <c>socket_remote_ip</c>, <c>current_time</c>, <c>global.sendBuffer</c> and
 /// <c>Scripts/Plugins/API</c>'s two send functions.
 /// <para>
-/// ⛔ <b>Nothing here reaches the simulation.</b> A plugin may say things on the
-/// wire and may rename a player; it may not move a character, spawn a
-/// projectile or draw from <c>WorldState.Random</c>. That stream is observable
-/// simulation — every client re-derives a weapon's spread from its position — so
-/// a plugin drawing from it would make the game depend on what the plugins were
-/// saying. Same rule, and the same reason, as the one CLAUDE.md states for bots.
+/// ⛔ <b>Nothing here reaches the simulation DIRECTLY.</b> A plugin can end a
+/// round, move a player across teams and kick somebody — the reference's own
+/// vote plugins do all three — but every one of those goes through the same
+/// <see cref="GameServer"/> method a client command or the control port uses.
+/// A plugin may not touch <c>WorldState</c>, and in particular may not draw from
+/// <c>WorldState.Random</c>: that stream is observable simulation, every client
+/// re-derives a weapon's spread from its position, so a plugin drawing from it
+/// would make the game depend on what the plugins were saying. Use
+/// <see cref="Random"/> here instead. Same rule, and the same reason, as the one
+/// CLAUDE.md states for bots — a plugin must not be able to produce a state a
+/// client could not.
+/// </para>
+/// <para>
+/// ⚠️ This list grew on 2026-09-03 for the vote commands, and the earlier
+/// version of this paragraph said flatly that a plugin "may not move a
+/// character". Keeping the growth honest is the point: <b>anything added here is
+/// a capability the reference's plugins had</b>, routed through an existing
+/// server operation. Adding one that is not is a decision, not a convenience.
 /// </para>
 /// </remarks>
 public interface IPluginHost
@@ -77,6 +89,56 @@ public interface IPluginHost
 
     /// <summary>The server log, for anything a plugin would have drawn on screen.</summary>
     void Log(string message);
+
+    // --- what the vote commands need ----------------------------------------
+
+    /// <summary>
+    /// An id for the player at <paramref name="slot"/> that does not move when
+    /// the roster compacts.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>The only safe way to remember a player across time.</b> A vote runs
+    /// for thirty seconds; a slot index means something different the moment
+    /// anybody disconnects, so a vote holding one would kick whoever inherited
+    /// the number. The reference's plugin API has exactly this as
+    /// <c>Player.gid</c>, which is some evidence it is the right shape.
+    /// ⚠️ <b>Never put it on the wire</b> — clients name players by position.
+    /// </remarks>
+    long StableIdOf(int slot);
+
+    /// <summary>The slot holding <paramref name="stableId"/>, or -1 if they left.</summary>
+    int SlotOfStableId(long stableId);
+
+    /// <summary>Disconnects a player with a <c>KICK</c> they can read a reason for.</summary>
+    bool Kick(int slot, string reason);
+
+    /// <summary>
+    /// Moves a player onto <paramref name="team"/>, skipping the balance
+    /// refusal a client's own request goes through — and skipping nothing else.
+    /// </summary>
+    void SetTeam(int slot, Team team);
+
+    /// <summary>Ends the round with nobody winning, and rotates.</summary>
+    bool EndRound();
+
+    /// <summary>
+    /// Makes the next round's map <paramref name="map"/>. False if there is no
+    /// such map.
+    /// </summary>
+    bool SetNextMap(string map);
+
+    /// <summary>The maps a map vote may offer, in configuration order.</summary>
+    IReadOnlyList<string> VotableMaps { get; }
+
+    /// <summary>
+    /// A random source for a plugin's own shuffles and tie-breaks.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>NOT <c>WorldState.Random</c>.</b> That one is observable simulation
+    /// and a plugin drawing from it would move every client's re-derived weapon
+    /// spread. This is the server's own, and nothing on the wire depends on it.
+    /// </remarks>
+    Random Random { get; }
 }
 
 /// <summary>
@@ -164,6 +226,17 @@ public interface IServerPlugin
     void Tick();
 
     /// <summary>
+    /// A new round has started on <paramref name="map"/> — a rotation, a vote,
+    /// or the server opening its first map.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ Fired for the FIRST map too, before any client can connect, so a
+    /// plugin need not special-case startup. Every roster entry is a spectator
+    /// again by the time this runs, on a first-area change.
+    /// </remarks>
+    void MapChanged(string map);
+
+    /// <summary>
     /// A <c>PLUGIN_PACKET</c> for this plugin arrived from
     /// <paramref name="slot"/>.
     /// </summary>
@@ -196,6 +269,8 @@ public abstract class ServerPlugin : IServerPlugin
     public virtual void PlayerRemoving(int slot) { }
 
     public virtual void Tick() { }
+
+    public virtual void MapChanged(string map) { }
 
     public virtual void Receive(int slot, ReadOnlySpan<byte> data) { }
 }

@@ -64,6 +64,7 @@ public sealed class CliCoverageTests
         ("WelcomeMessage", ["--welcome", "hello"], o => o.WelcomeMessage),
         ("ServerPluginList", ["--plugins", "chat_v2_pr"], o => o.ServerPluginList),
         ("ServerPluginsRequired", ["--plugins-required"], o => o.ServerPluginsRequired),
+        ("VotableMaps", ["--votable-maps", "ctf_truefort,koth_valley"], o => string.Join(',', o.VotableMaps)),
         ("PlayerLimit", ["--players", "24"], o => o.PlayerLimit),
         ("MultiClientLimit", ["--multi-client-limit", "1"], o => o.MultiClientLimit),
         ("Map", ["--map", "koth_valley"], o => o.Map),

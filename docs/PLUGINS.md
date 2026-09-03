@@ -11,6 +11,13 @@ teams; the second client — which had the same `PlayerName` — was renamed
 bottom of this file, because the harness cannot prove the client half loaded at
 all.
 
+✅ **The chat commands landed 2026-09-03 too** — `/votekick`, `/votemute`,
+`/votemap`, `/votescramble`, `/votenextround`, `/party` and `/help`, ported from
+five of Lorgan3's server-side plugins and baked into the same implementation.
+⚠️ **Those extend a different chat plugin from the one this server advertises**,
+which has a vote dialog `chat_v2_pr` does not, so the vote is text here. See
+"The chat commands" below before assuming anything about how they look.
+
 This document is the whole subject: what the reference does, what half of it a
 C# server can do, the seam an implementation plugs into, and how a plugin gets
 ported. `docs/PROTOCOL.md` carries the two wire fields; everything else is here.
@@ -322,6 +329,143 @@ key bindings, the colour rendering, the wrapping, the options menu, and the
 `cheatycheat` object that stops you moving while typing. Also the host's own
 chat window: a headless server has no window, so `event4` becomes a line in the
 server log.
+
+---
+
+## The chat commands — `/votekick` and friends
+
+`ChatV2Commands.cs`, folded into the same plugin. Ported from Lorgan3's five
+**local** server plugins — `party.gml`, `votekick.gml`, `votemap.gml`,
+`votemute.gml`, `votescramble.gml` (forum topic 33773). Those are dropped in a
+server's own `Plugins/` directory and loaded by `loadplugins.gml`, so only the
+machine running the server ever has them; nothing is sent to a client.
+
+⛔ **They extend a DIFFERENT chat plugin from the one this server advertises, and
+that is the fact the whole design turns on.** Every one of them registers into
+`global.commandMap` / `global.voteCommandMap` and calls `global.sendVote`,
+`global.sendVoteResults`, `global.findPlayer` and `Player.gid`. **None of those
+exist in `chat_v2_pr`** — it has no command parsing and, the part that actually
+matters, **no vote dialog**. The clients here run `chat_v2_pr`'s GML and cannot
+be given one, because this port does not get to change what the site serves.
+
+So **the vote UI becomes text.** The server announces the question and the
+options as chat lines, and players answer by typing. Everything else is the
+reference's, cited per rule in the source.
+
+⚠️ **This works because the client half does not know commands exist.** It sends
+`/votekick bob` as an ordinary chat message; the server sees the leading slash,
+acts, and never echoes it. Nothing on the wire changed, and a client with no
+plugin at all is unaffected.
+
+### The commands
+
+| Command | What it does |
+|---|---|
+| `/help [command]` | lists them, or explains one |
+| `/party` | Party hard. |
+| `/votekick <name>` | vote to disconnect somebody |
+| `/votemute <name>` | vote to take somebody out of chat |
+| `/votescramble` | vote to reshuffle the teams |
+| `/votenextround` | vote to end the round now |
+| `/votemap [name]` | vote for the next map |
+| `/yes`, `/no` | answer a yes/no vote |
+| `/vote <n>` | answer a numbered vote |
+| `/kick`, `/nextround` | host only — see below |
+
+### The rules, and where they come from
+
+| Rule | Value | Source |
+|---|---|---|
+| vote length | 30 seconds | `sendVote(30 * 30, ...)`, all five |
+| one vote at a time | — | `global.chatWindow.alarm[0] > 0`, all five |
+| kick | **90%** | `votekick.gml:89` |
+| mute | **70%** | `votemute.gml:92` |
+| scramble, next round | **> 50%** | `votescramble.gml:68`, `votemap.gml:280` |
+| one named map | **>= 50%** | `votemap.gml:204` |
+| map choice | most votes, ties at random | `votemap.gml:141-183` |
+| map options offered | 8, plus "keep default" | `votemap.gml:83`, `:131` |
+| map vote per round | once | `selectedmap`, `votemap.gml:42` |
+| the target may not vote | — | `target.mayVote = false`, `votekick.gml:40` |
+
+⚠️ **`global.chatWindow.alarm[0]` is the VOTE TIMER, not the chat window's
+fade.** In `chat_v2_pr` that same alarm is the four-second fade, so the
+expression reads as "wait four seconds after anybody speaks" — which is not what
+it means in the plugin these extend: the refusal message divides it by 30 and
+calls the result seconds, and `sendVote` is given `30 * 30`. Reading it the other
+way would have shipped a cooldown nobody asked for.
+
+### Where this deliberately differs
+
+⚠️ **The quorum counts players who could vote, not the roster.** The reference is
+`yes + no < floor(ds_list_size(global.players) / 2)` — the whole roster, host and
+all. This server **fills with bots by default**, and a bot cannot type, so the
+reference's sum makes the quorum unreachable on every bot server: the feature
+would look implemented and never once pass a vote. Here the divisor is the
+clients who are in chat. The reference had no bots, so on its own servers the two
+sums are the same number.
+
+⚠️ **`/kick` and `/nextround` answer "You can only use this command as host."**
+and nothing else. That *is* the reference's behaviour for a client, and a
+headless server has no host player, so it is the only reachable branch. The
+operator's equivalent is the control port.
+
+⚠️ **A vote kick is one disconnection, not a ban.** The reference sets
+`target.kicked` and keeps a `chatKicklist` its chat plugin consults on reconnect.
+A server-wide ban list is a bigger decision than a chat plugin should make by
+itself, and a half-built one that only some paths consult is worse than none.
+What does persist is the chat mute — it shares the ban list the spam check
+already keeps — so a vote-kicked player can come back, and comes back unable to
+talk.
+
+⚠️ **A successful map vote overrides the next round only.** The reference assigns
+`global.map_rotation` a one-entry list and never restores it, so one vote
+replaces the server's rotation for the rest of its life.
+
+⚠️ **`--votable-maps` falls back twice**: to the map rotation, as the reference
+does, and then to every map in `--maps`. Without that third step a single-map
+server — the default — can only answer "No maps were found!", which is exactly
+where a map vote is most wanted.
+
+⚠️ **A vote still running when the map changes is dropped, not resolved.** A
+scramble or a round-end vote landing in the round *after* the one it was called
+in would act on a world nobody voted about.
+
+⚠️ **Commands count towards the anti-spam limit**, like any other message. Six of
+anything in two seconds is a mute.
+
+### What the plugin needed from the server, and why it is safe
+
+The vote commands are the reason `IPluginHost` grew: `Kick`, `SetTeam`,
+`EndRound`, `SetNextMap`, `VotableMaps`, `StableIdOf` / `SlotOfStableId`, and a
+`Random`.
+
+⛔ **Every one routes through a `GameServer` method a client command or the
+control port already uses** — `ApplyChangeTeam`, `Rounds.Decide`, the same kick
+path. A plugin still may not touch `WorldState`, and in particular may not draw
+from `WorldState.Random`: that stream is observable simulation, so a map-list
+shuffle taken from it would move every client's re-derived weapon spread. This is
+CLAUDE.md's rule for bots, one layer out — **a plugin must not be able to produce
+a state a client could not.**
+
+⛔ **`StableIdOf` is the one that is not a convenience.** A vote runs for thirty
+seconds, which is long enough for two people to disconnect, and a slot index
+means something different after each one. A vote holding a slot index kicks
+whoever inherited the number. The reference's plugin API has exactly this as
+`Player.gid`, which is some evidence it is the right shape rather than a local
+invention. ⚠️ **It is never on the wire** — clients name players by position, and
+that is not negotiable.
+
+### Testing this
+
+`ChatV2CommandTests`, against `FakePluginHost`.
+
+⛔ **Three of those tests were hollow and mutation found all three**, after they
+had been written, read and passed. Two voted unanimously to test a threshold —
+which passes at *every* threshold — and one asserted a scramble moved nobody,
+which is also true when a two-player scramble deals them the teams they already
+had. **A threshold needs a row on each side of it**, and an effect under test has
+to be one that cannot happen by luck. The fixed tests say so in their own remarks
+so the lesson survives the diff.
 
 ---
 

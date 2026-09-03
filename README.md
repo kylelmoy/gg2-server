@@ -207,7 +207,7 @@ here, and it is worth reading first.
 | [`docs/PARITY.md`](docs/PARITY.md) | How the port is proven to match the reference. |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | The C# structure, shaped for performance and testability, and where a tick actually goes. |
 | [`docs/PLAN.md`](docs/PLAN.md) | The phased implementation plan and its exit criteria. |
-| [`docs/PLUGINS.md`](docs/PLUGINS.md) | **Server-sent plugins**: the wire fields, the seam a C# server half plugs into, how a plugin is ported, and `chat_v2_pr`. |
+| [`docs/PLUGINS.md`](docs/PLUGINS.md) | **Server-sent plugins**: the wire fields, the seam a C# server half plugs into, how a plugin is ported, `chat_v2_pr`, and its `/votekick` command layer. |
 | [`docs/BOTS.md`](docs/BOTS.md) | **Start here for bots**: the rules, what exists, and how to measure a bot change. |
 | [`docs/BOTAI.md`](docs/BOTAI.md) | Structural constraints that are cheap now and impossible to retrofit. |
 | [`docs/ENV.md`](docs/ENV.md) | The `Gg2.Env` seam, the policy checkpoint format and what the phase-9 numbers do and do not license. |

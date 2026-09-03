@@ -73,6 +73,13 @@ public sealed class GameServer : IDisposable, IPluginHost
     /// </summary>
     private long _pluginClock = Environment.TickCount64;
 
+    /// <summary>
+    /// The plugins' own random source. Seeded from the port for the same reason
+    /// <c>_spawnRandom</c> is: two servers on one machine roll differently and
+    /// one server rolls the same way every run.
+    /// </summary>
+    private Random _pluginRandom = new(0);
+
     private TcpListener? _listener;
     private Roster _roster = null!;
     private MatchState _match = null!;
@@ -194,6 +201,18 @@ public sealed class GameServer : IDisposable, IPluginHost
     private byte[]? _currentMapFile;
 
     private string _nextMap = string.Empty;
+
+    /// <summary>
+    /// A map that replaces the rotation's pick for the next round only, or null.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>One shot, and that is a deliberate difference from the reference's
+    /// votemap plugin</b>, which assigns <c>global.map_rotation</c> a
+    /// single-entry list and never puts the real one back — so one successful
+    /// vote replaces the server's rotation for the rest of its life. A
+    /// one-round override is what the players are actually voting for.
+    /// </remarks>
+    private string? _nextMapOverride;
 
     private int _nextArea = 1;
 
@@ -379,6 +398,9 @@ public sealed class GameServer : IDisposable, IPluginHost
         // stream is observable simulation and a bot joining must not move it.
         _population = new BotPopulationService(this, _log, (uint)_options.Port);
 
+        // ⚠️ Not _world.Random and not _spawnRandom. See IPluginHost.Random.
+        _pluginRandom = new Random(_options.Port * 7919);
+
         var map = OpenMap(OpeningMap(), area: 1);
 
         _stateWriter = new StateUpdateWriter(
@@ -541,6 +563,12 @@ public sealed class GameServer : IDisposable, IPluginHost
         // (botNavRelease); this is both, in the one place a map is opened.
         _population?.MapChanged(map, area, _options.NavCacheDirectory);
 
+        // ⚠️ Fires for the FIRST map too — OpenMap is how the server opens at
+        // all — so a plugin's per-round state is initialised before any client
+        // can connect rather than one round late. _plugins is
+        // ServerPlugins.None until LoadPlugins runs, which is a no-op here.
+        _plugins.MapChanged(name);
+
         return map;
     }
 
@@ -575,7 +603,7 @@ public sealed class GameServer : IDisposable, IPluginHost
             else
             {
                 _nextArea = 1;
-                _nextMap = NextMapInRotation();
+                _nextMap = TakeNextMapOverride() ?? NextMapInRotation();
             }
 
             Rounds.BeginMapChange(ref _world);
@@ -1255,6 +1283,100 @@ public sealed class GameServer : IDisposable, IPluginHost
         _log.Info($"control: {_nextMap} area {_nextArea} in ten seconds");
 
         return true;
+    }
+
+    /// <summary>
+    /// Ends the round now, with nobody winning, and rotates.
+    /// </summary>
+    /// <remarks>
+    /// <c>global.winners = TEAM_SPECTATOR</c>, which is what the reference's
+    /// <c>votenextround</c> plugin writes. ⚠️ Down the ordinary round-end path —
+    /// <see cref="ServeRoundEnd"/> picks it up on the next tick and runs the
+    /// same <c>MAP_END</c>, countdown and rotation a real win does. Refused
+    /// while a map change is already in flight, so two votes cannot stack two
+    /// countdowns.
+    /// </remarks>
+    public bool RequestRoundEnd()
+    {
+        if (_world.MapChanging || _world.RoundDecided)
+            return false;
+
+        Rounds.Decide(ref _world, Team.Spectator);
+        _log.Info("round ended on request");
+        return true;
+    }
+
+    /// <summary>
+    /// Makes the next round's map <paramref name="map"/> instead of the
+    /// rotation's pick. Returns false if there is no such map.
+    /// </summary>
+    public bool RequestNextMap(string map)
+    {
+        if (!MapExists(map))
+            return false;
+
+        _nextMapOverride = map;
+        _log.Info($"next map overridden to {map}");
+        return true;
+    }
+
+    private string? TakeNextMapOverride()
+    {
+        var map = _nextMapOverride;
+        _nextMapOverride = null;
+
+        // ⚠️ Re-checked at USE time, not only when it was set. A rotation can
+        // outlive a --maps directory change, and a MAP_END naming a map the
+        // server cannot then open would strand every client on a load screen.
+        return map is not null && MapExists(map) ? map : null;
+    }
+
+    /// <summary>
+    /// Disconnects the client at <paramref name="slot"/> with a <c>KICK</c>.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ Flush before close, or the client sees a dropped connection with no
+    /// reason — the same requirement as every other kick in this file.
+    /// <c>KICK_NAME</c> is the only reason byte the client has a string for that
+    /// is not about plugins or multi-client, and the reference's own vote-kick
+    /// plugin simply drops the socket with none at all; a reason the client can
+    /// render is strictly better than that.
+    /// </remarks>
+    public bool KickPlayer(int slot, string reason)
+    {
+        if (slot <= 0 || slot >= _roster.Count)
+            return false;
+
+        var connection = _roster[slot].Connection;
+        if (connection is null || connection.IsClosed)
+            return false;
+
+        var writer = new NetWriter(2);
+        ServerMessages.Kick(writer, KickReason.Name);
+        connection.Send(writer.WrittenSpan);
+        connection.Flush();
+        connection.Close(reason);
+
+        _log.Info($"kicked {_roster[slot].Name}: {reason}");
+        return true;
+    }
+
+    /// <summary>
+    /// Moves a player onto <paramref name="team"/> whether or not they could
+    /// have asked for it.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>The balance refusal is what this skips, and nothing else.</b> It
+    /// goes through <see cref="ApplyChangeTeam"/> — the same death, class
+    /// re-check and pair of broadcasts a client's own team change produces — so
+    /// a scramble cannot put a player in a state a client command could not.
+    /// </remarks>
+    public void ForceTeam(int slot, Team team)
+    {
+        if (slot < 0 || slot >= _roster.Count || _roster[slot].Team == team)
+            return;
+
+        ApplyChangeTeam(_roster[slot], team);
     }
 
     /// <summary>Changes the bot fill target; the population manager converges on it.</summary>
@@ -2429,6 +2551,32 @@ public sealed class GameServer : IDisposable, IPluginHost
         if (resolved is not Team team)
             return;
 
+        ApplyChangeTeam(entry, team);
+    }
+
+    /// <summary>
+    /// The half of a team change after the request has been resolved: the
+    /// death, the class re-check, the two broadcasts and the rebalance.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>Split out so a FORCED move reuses this and nothing else.</b> A
+    /// scramble has to put people on the team it picked, including the bigger
+    /// one, so it cannot go through <see cref="PlayerCommands.ResolveRequestedTeam"/>
+    /// — and the reference's own scramble plugin skips exactly that check and
+    /// nothing else, writing <c>player.team</c> and calling
+    /// <c>ServerPlayerChangeteam</c> directly.
+    /// <para>
+    /// ⚠️ The rule this keeps is CLAUDE.md's for bots, one layer out: an
+    /// operator or a plugin uses the <em>same</em> method a client command uses,
+    /// so nothing can do something a client cannot. Reaching into
+    /// <see cref="WorldState"/> from either would be the bug this shape
+    /// prevents.
+    /// </para>
+    /// </remarks>
+    private void ApplyChangeTeam(RosterEntry entry, Team team)
+    {
+        var slot = IdOf(entry);
+
         // getCharacterObject(player.class) != -1 or TEAM_SPECTATOR:
         // every class the port accepts has a character object, so the
         // clause is always true here.
@@ -3012,6 +3160,66 @@ public sealed class GameServer : IDisposable, IPluginHost
     long IPluginHost.CurrentTimeMilliseconds => _pluginClock;
 
     void IPluginHost.Log(string message) => _log.Info(message);
+
+    long IPluginHost.StableIdOf(int slot) => _roster[slot].StableId;
+
+    int IPluginHost.SlotOfStableId(long stableId) => _roster.SlotOfStableId(stableId);
+
+    bool IPluginHost.Kick(int slot, string reason) => KickPlayer(slot, reason);
+
+    void IPluginHost.SetTeam(int slot, Team team) => ForceTeam(slot, team);
+
+    bool IPluginHost.EndRound() => RequestRoundEnd();
+
+    bool IPluginHost.SetNextMap(string map) => RequestNextMap(map);
+
+    /// <summary>
+    /// <c>--votable-maps</c>, then the rotation, then every map on disk.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ The third fallback is this port's. The reference's votemap plugin
+    /// stops at the rotation and answers "No maps were found!" without one —
+    /// which is every single-map server, i.e. the default, i.e. exactly where a
+    /// map vote is most wanted.
+    /// </remarks>
+    IReadOnlyList<string> IPluginHost.VotableMaps
+    {
+        get
+        {
+            if (_options.VotableMaps.Count > 0)
+                return _options.VotableMaps;
+
+            if (_rotation.Count > 0)
+                return _rotation;
+
+            return _installedMaps ??= InstalledMaps();
+        }
+    }
+
+    /// <summary>
+    /// ⛔ <b>NOT <see cref="WorldState.Random"/>.</b> That stream is observable
+    /// simulation; a plugin drawing from it would move every client's re-derived
+    /// weapon spread. This is <see cref="_spawnRandom"/>'s sibling: the server's
+    /// own, seeded from the port so two servers on one machine differ.
+    /// </remarks>
+    Random IPluginHost.Random => _pluginRandom;
+
+    private IReadOnlyList<string>? _installedMaps;
+
+    private List<string> InstalledMaps()
+    {
+        var maps = new List<string>();
+
+        foreach (var path in Directory.EnumerateFiles(_options.MapDirectory, "*.png"))
+        {
+            var name = Path.GetFileNameWithoutExtension(path);
+            if (name.Length != 0)
+                maps.Add(name);
+        }
+
+        maps.Sort(StringComparer.Ordinal);
+        return maps;
+    }
 
     /// <summary>
     /// A plugin renaming a player, which is the one game-visible thing the

@@ -36,7 +36,7 @@ namespace Gg2.Server.Plugins;
 /// <c>string</c> slice.
 /// </para>
 /// </remarks>
-public sealed class ChatV2Plugin : ServerPlugin
+public sealed partial class ChatV2Plugin : ServerPlugin
 {
     /// <summary>Per-player state; the reference keeps these on the <c>Player</c> instance.</summary>
     private sealed class Chatter
@@ -139,6 +139,8 @@ public sealed class ChatV2Plugin : ServerPlugin
     /// </remarks>
     public override void Tick()
     {
+        TickVote();
+
         // Ascending, and re-reading PlayerCount each time: Rename below changes
         // a name but never the roster's shape, so the bound is stable.
         for (var slot = 0; slot < Host.PlayerCount && _chatters.Has(slot); slot++)
@@ -216,6 +218,17 @@ public sealed class ChatV2Plugin : ServerPlugin
                     break;
 
                 var message = ReadMessage(data);
+
+                // ⚠️ Intercepted BEFORE the delivery, so a command is never
+                // echoed as chat. The client half has no idea commands exist —
+                // it sends "/votekick bob" as ordinary text — which is what
+                // makes a whole command layer possible without touching the GML.
+                if (TryRunCommand(slot, message))
+                {
+                    CheckForSpam(slot);
+                    break;
+                }
+
                 Deliver(Format(slot, message, TeamEveryone), TeamEveryone);
 
                 // ⚠️ AFTER the delivery, which is the reference's order: the
@@ -231,8 +244,18 @@ public sealed class ChatV2Plugin : ServerPlugin
                 if (team == Team.Spectator || !chatter.HasChat)
                     break;
 
-                var audience = 1 + (int)team;
                 var message = ReadMessage(data);
+
+                // A command typed into team chat is still a command. A player
+                // who forgot which box they were in would otherwise broadcast
+                // "/votekick bob" to their team as a sentence.
+                if (TryRunCommand(slot, message))
+                {
+                    CheckForSpam(slot);
+                    break;
+                }
+
+                var audience = 1 + (int)team;
                 Deliver(Format(slot, message, audience), audience);
                 CheckForSpam(slot);
                 break;
@@ -329,6 +352,26 @@ public sealed class ChatV2Plugin : ServerPlugin
     }
 
     /// <summary>
+    /// One line to one player, for a command's reply.
+    /// </summary>
+    /// <remarks>
+    /// The reference sends these with the same <c>sendChatMessage</c> it
+    /// broadcasts with, passing a target as a fourth argument. ⚠️ It reaches a
+    /// player who is not in chat: a command's answer has to arrive even when the
+    /// answer is "you are muted", or the command looks broken rather than
+    /// refused.
+    /// </remarks>
+    private void Whisper(int slot, string message)
+    {
+        if (message.Length > MaxMessageLength)
+            message = message[..MaxMessageLength];
+
+        _out.Reset();
+        _out.WriteString1(message);
+        Channel.SendTo(slot, _out.WrittenSpan);
+    }
+
+    /// <summary>
     /// <c>event7</c>: more than five messages inside two seconds mutes the
     /// sender.
     /// </summary>
@@ -352,11 +395,7 @@ public sealed class ChatV2Plugin : ServerPlugin
                 var name = Host.NameOf(slot);
                 Deliver($"{ColourOrange}{name} has been muted due to spamming.", TeamEveryone);
 
-                chatter.HasChat = false;
-
-                var address = Host.RemoteAddressOf(slot);
-                if (address.Length != 0)
-                    _banlist.Add(address);
+                Mute(slot);
             }
         }
         else
@@ -365,6 +404,19 @@ public sealed class ChatV2Plugin : ServerPlugin
         }
 
         chatter.LastChatTime = now;
+    }
+
+    /// <summary>
+    /// Takes a player out of chat and remembers their address, so a reconnect
+    /// cannot rejoin it.
+    /// </summary>
+    private void Mute(int slot)
+    {
+        _chatters[slot].HasChat = false;
+
+        var address = Host.RemoteAddressOf(slot);
+        if (address.Length != 0 && !_banlist.Contains(address))
+            _banlist.Add(address);
     }
 
     /// <summary>

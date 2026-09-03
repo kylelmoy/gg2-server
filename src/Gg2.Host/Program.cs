@@ -363,6 +363,13 @@ internal static class Program
                 case "--plugins-required":
                     options.ServerPluginsRequired = true;
                     break;
+                case "--votable-maps":
+                    // The same "comma-separated names, or a path to a file of
+                    // them" shape --rotation takes, because it is the same kind
+                    // of list and the reference's own votableMaps.txt is a file.
+                    options.VotableMaps = ParseRotation(name, Require(name, value));
+                    i++;
+                    break;
                 case "--maps":
                     options.MapDirectory = Require(name, value);
                     i++;
@@ -840,6 +847,9 @@ internal static class Program
                             comma-separated (e.g. chat_v2_pr)
           --plugins-required
                             clients must load them to join
+          --votable-maps <list|path>
+                            maps a plugin map vote may offer (default: the
+                            rotation, else every map in --maps)
           --multi-client-limit <n>
                             connections allowed from one address (default 3);
                             loopback is exempt
