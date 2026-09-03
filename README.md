@@ -91,7 +91,7 @@ you are most likely to want:
 | `--class-limit <n\|list>` | unlimited | One limit for every class, or per class as `medic=1,spy=0`. **Per team**, not per server; `255` is unlimited and `0` bans. |
 | `--no-autobalance` | on | Stop moving a player across when one team is two larger. |
 | `--bots <n>` | `0` | **Fill target including humans**, not a bot count — a server filling to 8 with 3 people on it runs 5 bots. |
-| `--bot-difficulty <1-5>` | `3` | How good they are. |
+| `--bot-difficulty <1-5>` | `5` | How good they are. The lower tiers are a handicap ladder — aim error, an acquire delay, a hold-fire roll — so pass a lower one for beatable bots. |
 | `--lobby` | off | List the server publicly at ganggarrison.com so it appears in the client's browser. |
 | `--tick-stats` | off | Log a histogram of tick intervals every 30s. Safe with clients connected. |
 

@@ -43,7 +43,13 @@ public readonly record struct HeadlessMatchOptions(
         Map: "ctf_truefort",
         Area: 1,
         Bots: 12,
-        Difficulty: 3,
+        // ⚠️ 5, matching BotPopulationOptions, changed 2026-09-02 with it.
+        // Moving the SERVER's default without moving the instrument's would mean
+        // `eval` measured tier-3 bots while the server shipped tier-5 ones — the
+        // arms comparison would stop describing the configuration people play
+        // against, which is the failure this repo keeps finding in other clothes.
+        // ⛔ Every eval number recorded before this date was taken at tier 3.
+        Difficulty: 5,
         CapLimit: 5,
         TimeLimitMinutes: 15,
         KillLimit: 30,

@@ -738,7 +738,10 @@ internal static class Program
                             default)
           --bots <n>        fill the server to n players with bots (0 = off)
           --bot-difficulty <1-5>
-                            how good they are (default 3)
+                            how good they are (default 5, the top tier). The
+                            lower tiers are a handicap ladder - aim error, an
+                            acquire delay, a hold-fire roll - so pass a lower
+                            one for beatable bots.
           --search-bots     give every bot a rollout-search micro-controller inside
                             its engagement window (default: off). Better on death
                             share than the scripted bot and much more expensive;

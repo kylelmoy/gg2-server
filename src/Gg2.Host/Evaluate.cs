@@ -148,6 +148,8 @@ internal static class Evaluate
           --threads <n>     matches at once (default: processor count)
           --bots <n>        bots per match (default 12)
           --bot-difficulty <1-5>
+                            how good they are (default 5). Every eval number
+                            recorded before 2026-09-02 was taken at 3.
           --max-ticks <n>   ceiling per match (default 36000, twenty minutes)
           --seed <n>        batch seed (default 1)
           --maps <path>     where the built-in map PNGs live

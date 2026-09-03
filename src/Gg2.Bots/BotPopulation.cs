@@ -19,6 +19,14 @@ namespace Gg2.Bots;
 /// 1 to 5, straight into <see cref="BotSkill.ForTier"/>. ⚠️ It is one point on a
 /// continuous skill scale in even steps, so tiers 1, 4 and 5 land exactly on the
 /// anchors the published tuning tables are quoted at.
+/// <para>
+/// ⚠️ <b>Defaults to 5, the top tier, which is NOT the reference's own default of
+/// 3</b> (changed 2026-09-02 by request). The lower tiers are a deliberate
+/// handicap ladder — aim error, an acquire delay, a hold-fire roll
+/// (<c>docs/TRAPS-BOTS.md</c>, "the see → acquire → aim-settled → fire chain") —
+/// so this is "as good as the layer gets" rather than "unconfigured". A server
+/// that wants beatable bots must now ask for them.
+/// </para>
 /// </param>
 /// <param name="NamePrefix">What a bot's name starts with.</param>
 /// <param name="AllowedClasses">
@@ -62,7 +70,7 @@ public readonly record struct BotPopulationOptions(
     int FillToPlayers = 8,
     int MaxBots = 8,
     int MinHumans = 1,
-    int Difficulty = 3,
+    int Difficulty = 5,
     string NamePrefix = "[BOT] ",
     PlayerClass[]? AllowedClasses = null,
     BotBrainSpec? Brain = null)
@@ -97,7 +105,7 @@ public readonly record struct BotPopulationOptions(
         FillToPlayers: 8,
         MaxBots: 8,
         MinHumans: 1,
-        Difficulty: 3,
+        Difficulty: 5,
         NamePrefix: "[BOT] ",
         AllowedClasses: null,
         Brain: null);

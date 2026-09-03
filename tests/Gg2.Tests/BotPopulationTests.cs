@@ -168,7 +168,10 @@ public sealed class BotPopulationTests(ITestOutputHelper output)
         Assert.Equal(8, options.FillToPlayers);
         Assert.Equal(8, options.MaxBots);
         Assert.Equal(1, options.MinHumans);
-        Assert.Equal(3, options.Difficulty);
+        // ⚠️ 5, the TOP tier, and not the reference's 3 — changed 2026-09-02 by
+        // request. `BotDifficultyReachesTheBot` is the gate that it survives the
+        // trip to an actual bot; this one only pins the record.
+        Assert.Equal(5, options.Difficulty);
         Assert.Equal("[BOT] ", options.NamePrefix);
 
         // ⚠️ The control, and the whole reason this test exists: the zeroed form is
@@ -497,5 +500,90 @@ public sealed class BotPopulationTests(ITestOutputHelper output)
         Assert.True(
             perTick < Budget / 4,
             $"{perTick:0.00}ms a tick with 12 bots, against a {Budget:0.0}ms budget");
+    }
+
+    // ------------------------------------------------------------------
+    // The difficulty actually reaching a bot
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// The configured difficulty reaches the <see cref="ScriptedBot"/>, and the
+    /// default that reaches it is tier 5.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>The gate the default change owed.</b> Pinning
+    /// <c>BotPopulationOptions.Difficulty</c> proves what the record says and
+    /// nothing about what the server does with it: a
+    /// <c>BotSkill.ForTier(3)</c> hard-coded in <c>BotPopulationService</c> would
+    /// leave every difficulty pin green and every bot on the wrong tier. This
+    /// walks the whole path — options, population service, the bot's own
+    /// <see cref="ScriptedBot.Skill"/>.
+    /// <para>
+    /// ⚠️ <b>The second half is the control, and it is what makes the first half
+    /// mean anything.</b> Asserting only "the default bot equals ForTier(5)"
+    /// passes just as well if the plumbing ignores the option and every bot is
+    /// tier 5 by accident. Tier 1 must produce a DIFFERENT skill through the same
+    /// path, or the assertion above is comparing a constant to itself.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void BotDifficultyReachesTheBot()
+    {
+        ReferenceTree.RequireNavCache();
+
+        Assert.Equal(BotSkill.ForTier(5), SkillOfFirstBot(difficulty: null));
+        Assert.Equal(BotSkill.ForTier(5), SkillOfFirstBot(difficulty: 5));
+
+        var handicapped = SkillOfFirstBot(difficulty: 1);
+
+        Assert.Equal(BotSkill.ForTier(1), handicapped);
+        Assert.NotEqual(BotSkill.ForTier(5), handicapped);
+    }
+
+    /// <summary>
+    /// Fills a server with bots and returns the first one's skill.
+    /// </summary>
+    /// <param name="difficulty">
+    /// Null leaves <see cref="BotPopulationOptions.Default"/>'s alone, which is
+    /// the case the default change is about — passing 5 explicitly would test the
+    /// flag and not the default.
+    /// </param>
+    private static BotSkill SkillOfFirstBot(int? difficulty)
+    {
+        using var harness = new ServerHarness(o =>
+        {
+            o.Map = Map;
+            o.NavCacheDirectory = ReferenceTree.NavCacheDirectory;
+
+            // ⚠️ `with`, from Default rather than from a zeroed struct — see the
+            // factory's own remarks. MinHumans 0 because no client connects here.
+            o.Bots = BotPopulationOptions.Default with
+            {
+                Enabled = true,
+                FillToPlayers = 2,
+                MaxBots = 2,
+                MinHumans = 0,
+            };
+
+            if (difficulty is { } tier)
+                o.Bots = o.Bots with { Difficulty = tier };
+        });
+
+        harness.Tick(2);
+
+        // ⚠️ A fill of 2 is TWO bots, not one: slot 0 is the reserved server
+        // spectator and does not count towards the fill.
+        var slots = harness.Server.BotSlots;
+        Assert.Equal(2, slots.Count);
+
+        var skills = slots
+            .Select(slot => Assert.IsType<ScriptedBot>(harness.Server.SourceOf(slot)).Skill)
+            .ToArray();
+
+        // Every bot on one server gets the same tier — a per-bot difference would
+        // mean the option is being read somewhere it should not be.
+        Assert.Equal(skills[0], skills[1]);
+
+        return skills[0];
     }
 }
