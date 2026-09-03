@@ -198,11 +198,29 @@ public sealed class PathFollowerFixtureTests(Xunit.Abstractions.ITestOutputHelpe
         // (`truefort-spawn-to-intel`), and it is not slack: the leg chosen here
         // is the LONGEST steerable one on ctf_truefort, not spawn-to-intel.
         //
-        // Measured 2026-08-27: a 137-node route, arrived at tick 1,572, with 33
-        // re-plans, 0 stuck fires, 4 off-route events and 0 blacklists. The
-        // reference quotes 2,200-2,500 ticks "with no blacklists now" for its own
-        // SHORTER leg, so this port is now comfortably ahead of it on a longer
-        // route.
+        // ⚠️ RE-RECORDED 2026-09-02: 1,786 ticks, 39 re-plans, 0 stuck fires, 10
+        // off-route events, 0 blacklists. It read **1,572 / 33 / 4 / 0** measured
+        // 2026-08-27.
+        //
+        // ✅ The move is the A* weight going 1.0 → 1.3, and it was MEASURED AND
+        // ATTRIBUTED when it happened — docs/ARCHITECTURE.md records this leg
+        // getting worse (1,572 → 1,786) while `BotObjectiveTests`' intel run got
+        // better on all three counters (1,697 → 1,598, 48 → 32, 18 → 10), and
+        // concludes that two single-leg pins disagreeing in opposite directions is
+        // not evidence for choosing a weight. This is a re-record of a known
+        // change, NOT a drift that went unnoticed.
+        //
+        // ⛔ What WAS missing is the gate. Until this commit the only assertion
+        // here was `Arrived` inside a 6,000-tick budget — 71% slack against a
+        // 1,786-tick leg, the identical hole `BotObjectiveTests` closed for the
+        // intel run and `ScenarioSuiteTests` for the suite. CLAUDE.md calls this
+        // "the third of three end-to-end bot measurements, pinned exactly, in both
+        // directions"; it was the one of the three that was not pinned at all, so
+        // the next move would have been silent. The pin below makes the claim
+        // true. Reproduced across three separate process runs.
+        //
+        // The reference quotes 2,200-2,500 ticks "with no blacklists now" for its
+        // own SHORTER leg, so this port is still ahead of it on a longer route.
         //
         // ⚠️ It read 2,655 / 76 / 34 / 9 when this was written, and that gap was
         // recorded here as "this port misses more marginal arcs — the thing to
@@ -214,14 +232,34 @@ public sealed class PathFollowerFixtureTests(Xunit.Abstractions.ITestOutputHelpe
         // entirely by a lossy read three layers below it.
         const int Budget = 6000;
 
+        var arrivedAt = -1;
+
         for (var tick = 0; tick < Budget && !state.Arrived; tick++)
+        {
             world.Step();
+            arrivedAt = tick;
+        }
 
         Assert.True(
             state.Arrived,
             $"did not arrive in {Budget} ticks: {Math.Abs(world.State.Characters[slot].X - state.GoalX):0.#}px "
             + $"short, replans {state.Replans}, stuck {state.StuckFires}, off-route {state.OffRouteFires}, "
             + $"blacklisted {state.BlacklistFires}");
+
+        // ⚠️ PINNED, exactly, and a failure here is the RE-RECORD rather than a
+        // broken test — the same discipline `BotObjectiveTests`' intel run and
+        // `ScenarioSuiteTests.Baseline` ask for, and exact for the same reason:
+        // every draw is seeded, the graph comes off disk and the physics is IEEE
+        // doubles, so a number that moves at all is a behaviour change, not noise.
+        //
+        // ⛔ AND THE OTHER DIRECTION: a pin that does NOT move when you changed
+        // something real says the change never reached what it measures. Quote the
+        // diff with the number, never the number alone.
+        Assert.Equal(1786, arrivedAt);
+        Assert.Equal(39, state.Replans);
+        Assert.Equal(0, state.StuckFires);
+        Assert.Equal(10, state.OffRouteFires);
+        Assert.Equal(0, state.BlacklistFires);
 
         output.WriteLine(
             $"{route.Count} nodes, arrived t={state.ArrivedAt}, replans {state.Replans}, "

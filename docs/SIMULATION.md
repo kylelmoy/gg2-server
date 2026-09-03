@@ -1741,10 +1741,14 @@ who died before it landed. `WorldState.Clear`, never `RemoveSlot`: a death is no
 a departure, the player keeps their roster index, and compacting would hand every
 slot above them to the wrong person.
 
-**Not implemented, and both need state that does not exist yet.** `Destroy.xml`
-drops carried intel (`doEventDropIntel`) and arms the respawn on
-`player.alarm[5]` — a timer on the *player*. Neither the objective nor
-player-side timers are in `WorldState`; phase 6.
+**Both landed in phase 6**, and this paragraph said they had not for three
+phases afterwards. `Destroy.xml` drops carried intel (`doEventDropIntel`) and
+arms the respawn on `player.alarm[5]`. The respawn is `Deaths.Kill` arming
+`PlayerState.RespawnTimer`, run by `Timers`' alarm-5 stage; the drop is in
+`WorldState.Clear` rather than in `Deaths`, because every way a character stops
+existing has to drop the flag and a death is only one of them.
+⚠️ **A "not implemented yet" sentence has no test behind it and nothing goes red
+when it comes true.** Grep before repeating one.
 
 **Two other death paths exist and are not the hp check.**
 `processClientCommands.gml:80-115` and `:145-175` kill a character when its
@@ -1870,10 +1874,30 @@ branch of the tail this port transcribes so far. ⚠️ Its
 magazine, so every reload body in the game (`if ammoCount < maxAmmo`) does
 nothing and all that survives is the `alarm[5] = -1` after it.
 
-**Not implemented:** the `setup` clause in the charge rate (a control-point map
-during its setup timer charges at the hurt rate off a full-health patient; no
-mode this port runs has a `ControlPointSetupGate`), and every stat counter
-(`HEALING`, `POINTS`, `INVULNS`).
+**Not implemented: the `setup` clause in the charge rate.** A map with a setup
+gate, during its setup timer, charges at the hurt rate (2.5) off a full-health
+patient rather than the healthy rate (1.75) — `Medigun.events/User Event
+1.xml:92-98`, where `setup` is `instance_exists(ControlPointSetupGate) &&
+areSetupGatesClosed()`.
+
+⚠️ **This entry used to add "no mode this port runs has a
+`ControlPointSetupGate`", and that was false from phase 6 onwards.** The map
+entity is `SetupGate` and `builder_init.gml:301` builds a
+`ControlPointSetupGate` from it, so the first half is `state.AttackDefend`; the
+second is `state.SetupTimer > 0`, which `MatchSimulation` already mirrors onto
+every character as `SetupGatesClosed`. `Rounds.Start` arms the timer for Invasion
+(`ctf_avanti`) and for attack/defend control points, so the branch is reachable
+on shipped maps and a medic's charge rate is wrong there for the length of a
+setup timer. The fix is one condition; it is **observable simulation**, so it
+lands with the parity fixtures re-run, the three pinned bot measurements
+re-recorded, and a **hand bump of `SimulationStamp.SimulationBehaviourVersion`**
+— not on its own. ⛔ **The stamp does not catch this one by itself**: its surface
+is chosen rather than swept, so a changed branch condition moves no hash and
+invalidates no checkpoint until somebody bumps that version deliberately.
+
+✅ **The stat counters landed and this entry did not say so.** `HEALING` is
+`Healing.cs:308`, `INVULNS` is `Weapons.cs:2410`, and `POINTS` is awarded from
+`Scoring`, `Intel`, `ControlPoints` and `Healing`.
 
 ### Settled: afterburn, and the flame that starts it
 
@@ -3035,7 +3059,11 @@ Nine collision events, four of which the port has projectiles for.
   the flag it reads can never be set on a rocket.
 - **`SentryTurret` does not target generators**; its End Step calls `damageAuto`
   on a character it acquired. `Rifle`, `BladeB`, `StabMask` and `Bubble` have
-  generator events and belong to weapons the port has not implemented.
+  generator events of their own. ⚠️ This line used to end "and belong to weapons
+  the port has not implemented", which was true when it was written and stopped
+  being true in phase 5 — every weapon is implemented, hitscan reaches a
+  generator through `Weapons.cs:812`, and the stab's generator multiplier is
+  `Weapons.StabGeneratorFactor`.
 
 #### The round
 

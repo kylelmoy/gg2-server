@@ -311,11 +311,33 @@ public static class Healing
         {
             // `if(healTarget.object.hp < healTarget.object.maxHp or setup)`.
             //
-            // `setup` is `areSetupGatesClosed()` — a control-point map during
-            // its setup timer, where a medic charges at the hurt rate off a
-            // full-health patient. No mode this port runs has a
-            // ControlPointSetupGate, and CollisionFilter already carries the
-            // gate state for the day one does.
+            // ⛔ KNOWN GAP: the `setup` clause is NOT implemented, so during a
+            // setup timer a medic beaming a full-health patient charges at 1.75
+            // where the reference charges at 2.5.
+            //
+            // ⚠️ The comment here used to say "No mode this port runs has a
+            // ControlPointSetupGate", and that has been FALSE since phase 6.
+            // Medigun User Event 1.xml:92-98 computes `setup` as
+            // `instance_exists(ControlPointSetupGate) && areSetupGatesClosed()`,
+            // and both halves exist here: the map entity is `SetupGate`
+            // (builder_init.gml:301 creates a ControlPointSetupGate from it), so
+            // the first half is `state.AttackDefend`, and the second is
+            // `state.SetupTimer > 0` — already mirrored onto every character as
+            // `SetupGatesClosed` by MatchSimulation. It is reachable on shipped
+            // maps: Rounds.Start arms the timer for Invasion (ctf_avanti) and
+            // for attack/defend control points.
+            //
+            // Closing it is one condition — `|| (state.AttackDefend &&
+            // character.SetupGatesClosed)` — and it is left open deliberately
+            // rather than for want of state: it is OBSERVABLE simulation, so it
+            // lands with the parity fixtures re-run, the three pinned bot
+            // measurements re-recorded, and a HAND bump of
+            // SimulationStamp.SimulationBehaviourVersion.
+            //
+            // ⛔ The stamp will NOT catch this one by itself. Its surface is
+            // "chosen, not swept" — constants and tables, not branch conditions
+            // — so a changed charge rate here moves no hash and invalidates no
+            // checkpoint unless somebody bumps that version deliberately.
             weapon.UberCharge += Gml.Less(patient.Hp, maxHp) ? UberChargeHurt : UberChargeHealthy;
 
             if (Gml.GreaterOrEqual(weapon.UberCharge, WeaponState.MaxUberCharge))

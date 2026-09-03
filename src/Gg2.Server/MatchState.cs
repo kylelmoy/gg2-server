@@ -42,7 +42,12 @@ public sealed class MatchState
 
         CapLimit = options.CapLimit;
         RespawnTimeSeconds = options.RespawnTimeSeconds;
-        Array.Fill(ClassLimits, options.ClassLimit);
+        // Ten independent values since the [Classlimits] section became
+        // reachable from configuration. ⚠️ EffectiveClassLimits, because this is
+        // the array that reaches the wire and GameServer.ApplyOptions enforces
+        // the same one — a limit shown on the client's HUD that the server does
+        // not apply is invisible from inside either side.
+        options.EffectiveClassLimits().AsSpan(0, ClassLimits.Length).CopyTo(ClassLimits);
 
         BuildEntities();
     }

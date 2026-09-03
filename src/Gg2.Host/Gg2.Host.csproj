@@ -14,6 +14,17 @@
   </ItemGroup>
 
   <!--
+    ⚠️ So CliCoverageTests can call Program.Parse. That test is the gate this
+    project did not have: it asserts every settable ServerOptions property is
+    reachable from a flag, or is named as deliberately absent. Seven were
+    reachable only from C# — implemented, wired to real behaviour, and
+    unsettable by anyone running the binary — and nothing went red.
+  -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Gg2.Tests" />
+  </ItemGroup>
+
+  <!--
     The built-in maps (22 shipped plus the port-authored gg_debug2) travel WITH
     the server, so `dotnet publish` produces a directory that serves a round on a
     machine with no Gang-Garrison-2 checkout.

@@ -1,5 +1,6 @@
 using Gg2.Bots;
 using Gg2.Protocol;
+using Gg2.Simulation;
 
 namespace Gg2.Server;
 
@@ -39,8 +40,27 @@ public sealed class ServerOptions
     /// </summary>
     public int MultiClientLimit { get; set; } = 3;
 
-    /// <summary>Which built-in map to serve first.</summary>
-    public string Map { get; set; } = "ctf_truefort";
+    /// <summary>
+    /// Which built-in map to serve first. <b>Empty means "the first entry of
+    /// <see cref="MapRotation"/> after the shuffle"</b>, and falls back to
+    /// <c>ctf_truefort</c> when the rotation is empty too.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ The empty case is <c>global.launchMap</c>: <c>game_init.gml:377-380</c>
+    /// makes <c>-map X</c> a rotation of exactly one, and
+    /// <c>GameServerCreate.gml:110-113</c> opens on <c>nextMapInRotation()</c>
+    /// only when no map was named. A pinned map here does NOT collapse the
+    /// rotation, which is the one place this diverges on purpose — a headless
+    /// server wants "start here, then rotate", and <c>MapRotationTests</c> gates
+    /// it.
+    /// </remarks>
+    public string Map { get; set; } = DefaultMap;
+
+    /// <summary>
+    /// The map a server with no preference at all opens on — the reference's own
+    /// first entry in <c>[Maps]</c>.
+    /// </summary>
+    public const string DefaultMap = "ctf_truefort";
 
     /// <summary>
     /// The map rotation, in order. Empty means "just <see cref="Map"/>", which
@@ -65,8 +85,88 @@ public sealed class ServerOptions
 
     public int TdmInvulnerabilitySeconds { get; set; } = 5;
 
-    /// <summary>Per-class limit applied to all ten classes. 255 means no limit.</summary>
-    public byte ClassLimit { get; set; } = 255;
+    /// <summary>
+    /// The <c>[Classlimits]</c> section: how many of each class one team may
+    /// hold, indexed by <see cref="PlayerClass"/>. 255 means no limit.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Ten independent values, as <c>readClasslimitsFromIni.gml</c> reads them —
+    /// this used to be a single scalar filled across all ten, which made the
+    /// simulation's per-class enforcement (<c>Classlimits.Pick</c>) unreachable
+    /// from configuration. <see cref="ClassLimitsBy"/> builds one from names.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Zero means the class is FULL, not unlimited.</b> A defaulted
+    /// <c>new byte[10]</c> bans every class, and the simulation's answer to that
+    /// is to hand out the requested class anyway — see <c>Classlimits.Pick</c>'s
+    /// last line. Use <see cref="NoClassLimits"/> rather than an array literal.
+    /// </para>
+    /// </remarks>
+    public byte[] ClassLimits { get; set; } = NoClassLimits();
+
+    /// <summary>Ten 255s: the reference's own default, meaning "no limit".</summary>
+    public static byte[] NoClassLimits()
+    {
+        var limits = new byte[TeamBalance.ClassCount];
+        Array.Fill(limits, (byte)255);
+        return limits;
+    }
+
+    /// <summary>
+    /// <see cref="ClassLimits"/> with every limit that cannot bind relaxed to
+    /// 255 — the array both the enforcement and the wire must see.
+    /// </summary>
+    /// <remarks>
+    /// <c>GameServerCreate.gml:42-46</c>, <c>if (global.classlimits[a] &gt;=
+    /// global.playerLimit) global.classlimits[a] = 255;</c>. It mutates
+    /// <c>global.classlimits</c> in place, before the first
+    /// <c>serializeState</c>, so the reference's enforcement and the
+    /// <c>FULL_UPDATE</c> it broadcasts are the same clamped numbers.
+    /// <para>
+    /// ⚠️ <b>Both callers must use this, not <see cref="ClassLimits"/>.</b>
+    /// Clamping in one place only would put a limit on the client's HUD that the
+    /// server does not apply, or apply one the client does not show — and
+    /// neither shows up as an error anywhere.
+    /// </para>
+    /// </remarks>
+    public byte[] EffectiveClassLimits()
+    {
+        var limits = (byte[])ClassLimits.Clone();
+
+        for (var i = 0; i < limits.Length; i++)
+        {
+            if (limits[i] >= PlayerLimit)
+                limits[i] = 255;
+        }
+
+        return limits;
+    }
+
+    /// <summary>
+    /// Ten limits with the named classes overridden, the rest unlimited.
+    /// </summary>
+    public static byte[] ClassLimitsBy(params (PlayerClass Class, byte Limit)[] overrides)
+    {
+        var limits = NoClassLimits();
+
+        foreach (var (playerClass, limit) in overrides)
+            limits[(int)playerClass] = limit;
+
+        return limits;
+    }
+
+    /// <summary>
+    /// How <see cref="MapRotation"/> is ordered at startup.
+    /// </summary>
+    /// <remarks>
+    /// <c>global.shuffleRotation</c>, applied once by <see cref="GameServer.Start"/>
+    /// — <c>GameServerCreate.gml:92-108</c>, which is where the reference does it
+    /// too. ⚠️ It draws from <see cref="System.Random.Shared"/> and <b>never</b>
+    /// from <c>WorldState.Random</c>: that stream is observable simulation and
+    /// every client re-derives weapon spreads from its position.
+    /// </remarks>
+    public ShuffleMode ShuffleRotation { get; set; } = ShuffleMode.None;
 
     /// <summary>
     /// <c>global.autobalance</c>: move a player across when one team is two
@@ -226,6 +326,18 @@ public sealed class ServerOptions
         // index stops fitting in the ubyte every message uses to name a player.
         if (PlayerLimit is < 1 or > 48)
             throw new ArgumentOutOfRangeException(nameof(PlayerLimit), PlayerLimit, "player limit must be 1..48");
+
+        // ⚠️ Length, not content: a short array would index out of bounds deep in
+        // GameServer.ApplyOptions, and a long one would silently drop the tail.
+        // Zeroes are legal here and mean "this class is full" — see ClassLimits.
+        if (ClassLimits.Length != TeamBalance.ClassCount)
+        {
+            throw new ArgumentException(
+                $"{nameof(ClassLimits)} must have exactly {TeamBalance.ClassCount} entries, "
+                + $"one per class, and has {ClassLimits.Length}. "
+                + $"Use {nameof(ServerOptions)}.{nameof(NoClassLimits)}() for the default.",
+                nameof(ClassLimits));
+        }
 
         if (MapDirectory.Length == 0)
         {

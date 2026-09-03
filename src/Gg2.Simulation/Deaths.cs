@@ -22,12 +22,15 @@ namespace Gg2.Simulation;
 /// tell everybody.
 /// </para>
 /// <para>
-/// <b>What is deliberately still missing.</b> Dropping carried intel:
-/// <c>Destroy.xml</c> calls <c>doEventDropIntel</c> and the objective still
-/// lives in <c>Gg2.Server.MatchState</c>; it arrives with the objective.
-/// Respawn is here since phase 6 — <see cref="Kill"/> arms
-/// <see cref="PlayerState.RespawnTimer"/> and <see cref="Timers"/>' alarm-5
-/// stage runs <c>PlayerSpawn</c>.
+/// <b>Nothing of <c>Destroy.xml</c> is missing, as of phase 6.</b> Respawn is
+/// here — <see cref="Kill"/> arms <see cref="PlayerState.RespawnTimer"/> and
+/// <see cref="Timers"/>' alarm-5 stage runs <c>PlayerSpawn</c> — and the
+/// carried-intel drop is in <see cref="WorldState.Clear"/>, where every way a
+/// character stops existing goes through it rather than only this one.
+/// ⚠️ <b>This paragraph said the drop was missing for three phases after it
+/// landed.</b> A "still missing" note is a claim about coverage, and the only
+/// thing that can falsify one is a reader acting on it; re-check before
+/// repeating it.
 /// </para>
 /// </remarks>
 public static class Deaths
@@ -105,11 +108,12 @@ public static class Deaths
     /// <c>currentWeapon</c>) and leaves the sentry and any projectile already in
     /// the air, which is the reference's own split.
     /// <para>
-    /// <b>One thing <c>Destroy.xml</c> does that this does not.</b> It drops
-    /// carried intel (<c>doEventDropIntel</c>), which needs an objective in
-    /// <see cref="WorldState"/> rather than in <c>Gg2.Server.MatchState</c> —
-    /// that arrives with the objective itself. The respawn arming it also does
-    /// is below, now that the player and their timer live in the state.
+    /// ⚠️ <b>The carried-intel drop is <see cref="WorldState.Clear"/>'s, not
+    /// this method's</b>, and that is deliberate rather than a gap: a death is
+    /// only one of the ways a character stops existing, and putting
+    /// <c>doEventDropIntel</c> here would leave a flag stuck to a player who
+    /// disconnected or changed team. See the comment on the drop itself for why
+    /// none of those paths broadcasts a <c>DROP_INTEL</c>.
     /// </para>
     /// </remarks>
     /// <param name="world">

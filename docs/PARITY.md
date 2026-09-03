@@ -790,8 +790,13 @@ spawn marker at `y = 162` sits after two ticks of gravity.
   is exact for 3,043 ticks.
 - ❌ **The collision mask.** Established for `ctf_2dfort` by asking the engine
   and the port the same column.
-- ❌ **Dropdown platforms**, which the port does not implement: `tdm_mantic` has
-  **four** and is exact, `ctf_2dfort` has **none** and diverges.
+- ❌ **Dropdown platforms**: `tdm_mantic` has **four** and is exact, `ctf_2dfort`
+  has **none** and diverges — so whichever way the port handled them, they are
+  not the difference. ⚠️ This line used to read "which the port does not
+  implement", and that stopped being true in phase 4: `CharacterPhysics` has the
+  Begin Step ground test, the Step drop-through and the stair-descent guard
+  (`CharacterPhysics.cs:100-119, 390-416, 942`). The *elimination* was always
+  sound; only the parenthetical went stale.
 - ❌ **Player walls and bullet walls**: `gg_debug` has 2/1/2 of them,
   `ctf_2dfort` has none, and both diverge.
 

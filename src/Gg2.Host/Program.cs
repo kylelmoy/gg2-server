@@ -61,8 +61,24 @@ internal static class Program
             PrintUsage();
             return 2;
         }
+        catch (Exception e) when (e is IOException or InvalidOperationException)
+        {
+            // ⚠️ No usage text for these two. A missing config file or a missing
+            // maps/ directory is not a mistake in the command line, and burying
+            // the one sentence that says which file under sixty lines of flags
+            // is how a clear error becomes an unread one.
+            Console.Error.WriteLine(e.Message);
+            return 2;
+        }
 
         var log = new ConsoleLog();
+
+        // ⚠️ INSIDE the try. ServerOptions.Validate runs in the GameServer
+        // constructor, so `--players 100` used to leave an unhandled
+        // ArgumentOutOfRangeException and a stack trace where the usage text
+        // belongs — the parse succeeded and nothing above this caught what came
+        // after it. Parse now validates too; this is the second net, for a
+        // caller that builds options some other way.
         using var server = new GameServer(options, log);
 
         try
@@ -85,6 +101,116 @@ internal static class Program
 
         server.Run(stopping.Token);
         return 0;
+    }
+
+    /// <summary>
+    /// The value after <paramref name="flag"/>, or null when it was not given.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>A pre-pass helper, and it does not understand the grammar.</b> It
+    /// finds the flag anywhere in the argument list, which is right for
+    /// <c>--config</c> and for "was --map given" and would be wrong for anything
+    /// whose value could itself look like a flag. Do not grow it into a parser;
+    /// the switch below is the parser.
+    /// </remarks>
+    private static string? ValueOf(string[] args, string flag)
+    {
+        for (var i = 0; i < args.Length; i++)
+        {
+            if (args[i] == flag)
+                return i + 1 < args.Length ? args[i + 1] : string.Empty;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// <c>--rotation</c>: a comma-separated list, or a rotation file's path.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>An existing file wins over the comma split</b>, and a map name
+    /// cannot contain a path separator, so the two cannot collide. A path that
+    /// does not exist falls through to the comma split and then fails as an
+    /// unloadable map name, which names the thing that is wrong.
+    /// </remarks>
+    private static IReadOnlyList<string> ParseRotation(string flag, string text)
+    {
+        if (File.Exists(text))
+            return ServerConfigFile.ReadRotationFile(text);
+
+        var maps = text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        if (maps.Length == 0)
+            throw new ArgumentException($"{flag}: no maps in '{text}'");
+
+        return maps;
+    }
+
+    /// <summary>
+    /// <c>--shuffle</c>: the ini's 0/1/2, or the names this port gives them.
+    /// </summary>
+    private static ShuffleMode ParseShuffle(string flag, string text) => text.ToLowerInvariant() switch
+    {
+        "none" or "off" or "0" => ShuffleMode.None,
+        "arena-last" or "1" => ShuffleMode.AvoidArenaFirst,
+        "any" or "on" or "2" => ShuffleMode.Any,
+        _ => throw new ArgumentException(
+            $"{flag}: '{text}' is not a shuffle mode. "
+            + "none, arena-last (shuffle but do not open on an arena map), or any."),
+    };
+
+    /// <summary>
+    /// <c>--class-limit</c>: one number for every class, or <c>name=n</c> pairs.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>0 bans a class and 255 unlimits it</b>, which is the reference's
+    /// encoding and is the wrong way round from every intuition. It is stated in
+    /// the usage text for exactly that reason.
+    /// </remarks>
+    private static byte[] ParseClassLimits(string flag, string text)
+    {
+        if (byte.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var everyClass))
+        {
+            var uniform = new byte[10];
+            Array.Fill(uniform, everyClass);
+            return uniform;
+        }
+
+        var limits = ServerOptions.NoClassLimits();
+
+        foreach (var pair in text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var separator = pair.IndexOf('=', StringComparison.Ordinal);
+
+            if (separator < 0)
+            {
+                throw new ArgumentException(
+                    $"{flag}: '{pair}' is neither a number for every class nor a "
+                    + "<class>=<limit> pair, such as 'medic=1,spy=0'.");
+            }
+
+            var className = pair[..separator].Trim();
+            var limitText = pair[(separator + 1)..].Trim();
+
+            if (!Enum.TryParse(className, ignoreCase: true, out PlayerClass playerClass)
+                || !Enum.IsDefined(playerClass))
+            {
+                throw new ArgumentException(
+                    $"{flag}: '{className}' is not a class. Scout, Soldier, Sniper, Demoman, "
+                    + "Medic, Engineer, Heavy, Spy, Pyro or Quote.");
+            }
+
+            if (!byte.TryParse(limitText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var limit))
+            {
+                throw new FormatException(
+                    $"{flag}: '{className}' needs a limit of 0..255, got '{limitText}'. "
+                    + "0 bans the class; 255 is unlimited.");
+            }
+
+            limits[(int)playerClass] = limit;
+        }
+
+        return limits;
     }
 
     /// <summary>A comma-separated class list, or a clear error naming the bad one.</summary>
@@ -110,7 +236,17 @@ internal static class Program
         return picked;
     }
 
-    private static ServerOptions Parse(string[] args)
+    /// <summary>
+    /// The command line, applied over the defaults and over <c>--config</c>.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Internal so <c>CliCoverageTests</c> can reach it.</b> That test is
+    /// the gate this file did not have: every settable <see cref="ServerOptions"/>
+    /// property must be reachable from a flag or named as deliberately absent.
+    /// Seven of them were not, and nothing went red — the options existed, were
+    /// wired to real behaviour, and could only be set from C#.
+    /// </remarks>
+    internal static ServerOptions Parse(string[] args)
     {
         var options = new ServerOptions
         {
@@ -135,6 +271,22 @@ internal static class Program
         var ignoreStamp = false;
         var searchBots = false;
         int? arbiterUnits = null;
+
+        // ⛔ --config is applied BEFORE the loop, in its own pass, so a flag
+        // always beats the file no matter which side of it the flag appears on.
+        // The alternative — handling it in the switch like everything else —
+        // makes `--map koth_valley --config gg2.ini` and `--config gg2.ini --map
+        // koth_valley` two different servers, and the one that silently loses
+        // the flag is the one somebody will write.
+        var configPath = ValueOf(args, "--config");
+
+        if (configPath is not null)
+            ServerConfigFile.Apply(options, configPath);
+
+        // ⚠️ Latched before the loop for the same reason OpeningMap needs it: a
+        // rotation with no --map opens on the rotation, and "no --map" has to
+        // survive a config file that set one.
+        var mapPinnedOnCommandLine = ValueOf(args, "--map") is not null;
 
         for (var i = 0; i < args.Length; i++)
         {
@@ -173,6 +325,73 @@ internal static class Program
                     break;
                 case "--maps":
                     options.MapDirectory = Require(name, value);
+                    i++;
+                    break;
+
+                // Consumed by the pre-pass above; here only so it is not an
+                // "unknown option". ⚠️ Do not read it a second time — the pass
+                // that applies it has already run and doing it again would let
+                // the file overwrite flags given before it.
+                case "--config":
+                    i++;
+                    break;
+
+                // A comma-separated list, or the path of a reference-format
+                // rotation file (`sampleMapRotation.txt`). ⚠️ A rotation does
+                // NOT collapse to one map the way the reference's `-map` does;
+                // --map still pins the opening map and the rotation runs after
+                // it. ServerOptions.Map says why.
+                case "--rotation":
+                    options.MapRotation = ParseRotation(name, Require(name, value));
+                    i++;
+                    break;
+
+                case "--shuffle":
+                    options.ShuffleRotation = ParseShuffle(name, Require(name, value));
+                    i++;
+                    break;
+
+                // ⚠️ Floored at 1 like --cap-limit and --time-limit, so
+                // --kill-limit 0 is a one-kill round rather than an endless one.
+                // The "0 means no limit" escape belongs to WorldState.
+                case "--kill-limit":
+                    options.KillLimit = (ushort)RequireInt(name, value);
+                    i++;
+                    break;
+
+                // ⚠️ NOT floored at 1 — 0 really is "no spawn protection" here,
+                // which is the reference's own max(0, ...) and the one limit in
+                // this group with nothing to escape.
+                case "--tdm-invuln":
+                    options.TdmInvulnerabilitySeconds = RequireInt(name, value);
+                    i++;
+                    break;
+
+                // Either one number for every class, or `scout=1,medic=2`.
+                // ⚠️ A limit is PER TEAM, not per server: --class-limit medic=1
+                // is one medic each, two on the map.
+                case "--class-limit":
+                    options.ClassLimits = ParseClassLimits(name, Require(name, value));
+                    i++;
+                    break;
+
+                case "--autobalance":
+                    options.Autobalance = true;
+                    break;
+
+                case "--no-autobalance":
+                    options.Autobalance = false;
+                    break;
+
+                case "--multi-client-limit":
+                    options.MultiClientLimit = RequireInt(name, value);
+                    i++;
+                    break;
+
+                // ⚠️ TOTAL across every download in flight, not per client — a
+                // second downloader halves the first one's rate.
+                case "--map-download-limit":
+                    options.MapDownloadBytesPerSecond = RequireInt(name, value);
                     i++;
                     break;
 
@@ -383,6 +602,13 @@ internal static class Program
             }
         }
 
+        // ⚠️ `--map` beats a rotation; without one the rotation picks the opening
+        // map, which is GameServerCreate.gml:110-113. Expressed by emptying Map
+        // rather than by a second option, because "which map do we open on" then
+        // has ONE answer in one place — see ServerOptions.Map and OpeningMap.
+        if (!mapPinnedOnCommandLine && options.MapRotation.Count != 0)
+            options.Map = string.Empty;
+
         // ⛔ ONE PLACE BUILDS THE BRAIN, at the end, from flags collected above.
         // The flag handlers used to write BotPopulationOptions.SearchMicro
         // directly, which made --search-threads order-dependent: given BEFORE
@@ -443,6 +669,15 @@ internal static class Program
             };
         }
 
+        // ⛔ HERE, not only in the GameServer constructor. Validate throws
+        // ArgumentOutOfRangeException, and construction happens after this
+        // method returns — so `--players 100` reached the user as an unhandled
+        // exception and a stack trace instead of the message Validate wrote for
+        // them. Inside Parse it lands in Main's catch, which prints the message
+        // and the usage. The constructor still validates, for callers that do
+        // not come through here.
+        options.Validate();
+
         return options;
     }
 
@@ -466,11 +701,41 @@ internal static class Program
           --password <text> require a password
           --players <n>     seats for clients, 1..48 (default 10)
           --welcome <text>  message sent to each joiner
+          --multi-client-limit <n>
+                            connections allowed from one address (default 3);
+                            loopback is exempt
           --maps <path>     override the built-in map PNGs (default: maps/)
+          --map-download-limit <n>
+                            TOTAL bytes/second across all custom-map downloads
+                            in flight, not per client (default 50000)
+          --config <path>   read a reference-format gg2.ini: its [Settings],
+                            [Server], [Maps] and [Classlimits] sections, plus the
+                            rotation file its MapRotation key names. Applied
+                            BEFORE every flag, so a flag always wins wherever it
+                            appears. The file is never written back.
+          --rotation <list|path>
+                            the map rotation: comma-separated names, or the path
+                            of a rotation file (one map per line, # comments).
+                            Without --map the server opens on its first entry.
+          --shuffle <mode>  none (default), arena-last (shuffle, but do not open
+                            on an arena map), or any. Shuffled once at startup.
           --time-limit <n>  round clock in minutes, 1..255 (default 15)
           --cap-limit <n>   captures to win, 1..255 (default 5)
           --respawn-time <n>
                             seconds a death lasts (default 5)
+          --kill-limit <n>  kills to win a deathmatch round, 1..65535
+                            (default 30)
+          --tdm-invuln <n>  seconds of spawn protection in team deathmatch
+                            (default 5; 0 is none, and is allowed)
+          --class-limit <n|list>
+                            one limit for every class, or per class as
+                            'medic=1,spy=0'. PER TEAM, not per server.
+                            255 is unlimited and 0 bans the class; a limit at or
+                            above --players is stored as unlimited, as the
+                            reference stores it.
+          --no-autobalance  do not move a player across when one team is two
+                            larger (--autobalance turns it back on; on by
+                            default)
           --bots <n>        fill the server to n players with bots (0 = off)
           --bot-difficulty <1-5>
                             how good they are (default 3)
@@ -533,10 +798,16 @@ internal static class Program
         every one of them at once. It is for a headless server nobody is
         watching, which is what phase 8 is about.
 
-        --time-limit and --cap-limit are floored at 1, exactly as the
-        reference's own ini is (game_init.gml:96, 101), so a zero is a
+        --time-limit, --cap-limit and --kill-limit are floored at 1, exactly as
+        the reference's own ini is (game_init.gml:96, 101, 103), so a zero is a
         one-minute round rather than an endless one. There is no "no limit" —
-        for a long session pass a large number.
+        for a long session pass a large number. --tdm-invuln is the exception
+        and really does accept 0, because the reference floors that one at 0.
+
+        Without --rotation or a --config carrying one, the rotation is empty and
+        the server replays --map for ever. That is NOT what the reference does:
+        a stock dedicated server with no -map plays the twenty-map [Maps]
+        rotation, which is what `--config gg2.ini` reproduces here.
 
         --bots is a FILL target including humans, not a bot count: a server
         filling to 8 with 3 people on it runs 5 bots. The nav graphs are checked

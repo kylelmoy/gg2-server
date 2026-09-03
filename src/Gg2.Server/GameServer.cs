@@ -179,6 +179,20 @@ public sealed class GameServer : IDisposable
     private int _rotationIndex;
 
     /// <summary>
+    /// <see cref="ServerOptions.MapRotation"/> after <see cref="ShuffleMode"/> has
+    /// been applied — the list <see cref="NextMapInRotation"/> actually walks.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Shuffled ONCE, in <see cref="Start"/>, not per map change.</b>
+    /// <c>GameServerCreate.gml:92-108</c> shuffles at server creation and
+    /// <c>nextMapInRotation</c> then walks a fixed order for the life of the
+    /// server, so a shuffle per round would change what "rotation" means: every
+    /// map would become reachable twice in a row and none would be guaranteed to
+    /// come up at all.
+    /// </remarks>
+    private IReadOnlyList<string> _rotation = [];
+
+    /// <summary>
     /// The public-lobby announcer, or null when <c>--lobby</c> was not passed.
     /// </summary>
     /// <remarks>
@@ -289,6 +303,15 @@ public sealed class GameServer : IDisposable
         _roster = new Roster(_options.ServerPlayerName);
         _world = default;
 
+        // GameServerCreate.gml:92-108, before the first serverGotoMap: the
+        // rotation is ordered once and then walked in that order for ever.
+        // ⚠️ Random.Shared, never _world.Random and never _spawnRandom — the
+        // first is observable simulation, and the second is seeded from the port
+        // so that a bot population rolls the same way on every run, which is the
+        // opposite of what a shuffle wants.
+        _rotation = MapRotationShuffle.Apply(
+            _options.MapRotation, _options.ShuffleRotation, Random.Shared);
+
         // The reference's randomize(), and the only place the simulation's
         // random stream is ever written from outside it. A default WorldState
         // starts at seed 0, which is deterministic and right for a test or a
@@ -316,7 +339,7 @@ public sealed class GameServer : IDisposable
         // stream is observable simulation and a bot joining must not move it.
         _population = new BotPopulationService(this, _log, (uint)_options.Port);
 
-        var map = OpenMap(_options.Map, area: 1);
+        var map = OpenMap(OpeningMap(), area: 1);
 
         _stateWriter = new StateUpdateWriter(
             _match, TryGetCharacter, TryGetSentry, Objective, Statistics, Dominating,
@@ -439,13 +462,19 @@ public sealed class GameServer : IDisposable
         // protection" here, so there is nothing to escape.
         _world.TdmInvulnerabilityTicks = (int)(_options.TdmInvulnerabilitySeconds * 30 * 0.2);
 
-        // game_init.gml:105 and the [Classlimits] section. ⚠️ A zeroed
-        // ClassLimits would mean every class is full, so this is not optional
-        // even on a server that enforces nothing — see WorldState.ClassLimits.
         _world.Autobalance = _options.Autobalance;
 
+        // game_init.gml:105 and the [Classlimits] section, ten independent
+        // values. ⚠️ A zeroed ClassLimits would mean every class is full, so
+        // this is not optional even on a server that enforces nothing — see
+        // WorldState.ClassLimits.
+        //
+        // ⚠️ EffectiveClassLimits, not ClassLimits: MatchState broadcasts the
+        // same array and the two must not disagree. See the remarks there.
+        var classLimits = _options.EffectiveClassLimits();
+
         for (var i = 0; i < TeamBalance.ClassCount; i++)
-            _world.ClassLimits[i] = _options.ClassLimit;
+            _world.ClassLimits[i] = classLimits[i];
 
         // ControlPointHUD.events/Create.xml decides which of the two
         // control-point arrangements a map is by looking for a setup gate.
@@ -559,6 +588,32 @@ public sealed class GameServer : IDisposable
     }
 
     /// <summary>
+    /// The map the server opens on: <see cref="ServerOptions.Map"/> when one was
+    /// named, otherwise the shuffled rotation's first entry.
+    /// </summary>
+    /// <remarks>
+    /// <c>GameServerCreate.gml:110-113</c> — <c>if(global.launchMap == "")
+    /// serverGotoMap(nextMapInRotation()) else serverGotoMap(global.launchMap)</c>.
+    /// ⚠️ <b>The rotation index stays at 0 either way</b>, so the map after the
+    /// opening one is <c>rotation[1]</c>: opening on <c>rotation[0]</c> must not
+    /// also consume it, or the first round would be the only one that map ever
+    /// gets and a rotation of two would degenerate to a rotation of one.
+    /// <para>
+    /// ⚠️ <c>ctf_truefort</c> is the last resort rather than an error, because
+    /// an empty <see cref="ServerOptions.Map"/> with an empty rotation is a
+    /// caller that expressed no preference at all — and it is the reference's
+    /// own first map.
+    /// </para>
+    /// </remarks>
+    private string OpeningMap()
+    {
+        if (_options.Map.Length != 0)
+            return _options.Map;
+
+        return _rotation.Count != 0 ? _rotation[0] : ServerOptions.DefaultMap;
+    }
+
+    /// <summary>
     /// <c>nextMapInRotation.gml</c>: the next loadable entry after the current
     /// one, wrapping.
     /// </summary>
@@ -570,7 +625,7 @@ public sealed class GameServer : IDisposable
     /// </remarks>
     private string NextMapInRotation()
     {
-        var rotation = _options.MapRotation;
+        var rotation = _rotation;
         if (rotation.Count == 0)
             return _currentMap;
 

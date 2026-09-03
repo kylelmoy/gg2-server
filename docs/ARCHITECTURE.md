@@ -1,6 +1,6 @@
 # Proposed C# architecture
 
-Shaped by the two goals in `README.md`: performance headroom for much heavier
+Shaped by the two goals in `docs/STATUS.md`: performance headroom for much heavier
 bot logic, and a faster loop for writing and testing that logic. The reference
 implementation's structure is an artefact of Game Maker 8 and carries no weight
 here.
