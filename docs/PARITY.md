@@ -2620,6 +2620,47 @@ in-process), and the client's read loop is `do { … } until(roomchange)`, so it
 cannot parse a post-`CHANGE_MAP` update with the old shape. Both were plausible
 and both were wrong.
 
+### ⚠️ Multi-area maps: one bug fixed, and one intermittent client fatal OPEN
+
+**Checked 2026-09-03 because nobody could say whether multi-stage maps had ever
+been exercised. They had not.** `cp_dirtbowl` is the only shipped map with more
+than one area — three, sharing one 800x700 walkmask and differing only in
+entities, stacked vertically (area 2 sits at y≈2200).
+
+✅ **A real bug, fixed:** `ServerStream` skipped the area byte in `MAP_END`, the
+only place the wire states the area after a join. Any reader on it sat on area 1
+for ever — wrong `ForArea` narrowing, and it wiped teams on an advance that
+**keeps** them. `MultiAreaMapTests` gates it, mutation-checked.
+
+✅ **Verified live** with a real GM8 client: area 1 → 2 → 3 with two and with six
+bots, area 1 → 3 directly, and natural rotations, all with **zero client errors**.
+Teams survive an advance on both sides, and the geometry narrows correctly.
+✅ **Both branches of the advance decision were seen live**: the defenders holding
+rotates away, and red winning on the *last* area rotates rather than advancing
+(`3 < 3` is false).
+
+⛔ **STILL OPEN — an intermittent client fatal, seen ONCE and not reproduced.**
+One run (six bots, driven 1 → 2 → 3) killed the client one second after reaching
+area 3 with the same GM8 error as the stale-`MatchState` bug:
+`Attempted to get a sprite for unknown team ID: 2`, preceded by a `show_message`
+with no readable text — almost certainly "Wrong number of players while
+deserializing state". A second run with the same bot count and the same path was
+clean, as were four other multi-area runs.
+
+⚠️ **What that rules in and out.** The server binary was functionally identical
+across both runs — the `MAP_END` fix is to a *reader* the server does not use —
+so this is not a regression between them and not the fix failing. It is
+intermittent, which means timing or a state only some runs reach. ⚠️ **Do not
+assume it is the same bug as the stale `MatchState`**: that one was deterministic
+and is gated; this one is not, and sharing a symptom is not sharing a cause. The
+symptom is generic — it is what *any* framing slip looks like once the client
+reads a subobject bit for a spectator.
+
+**Where to start:** run `cp_dirtbowl` with six or more bots and drive
+1 → 2 → 3 repeatedly with `--record` on, until it fires; the recorded segment
+either shows the slip or proves the stream was clean and the client's own state
+was not.
+
 ✅ **Generalised, since the class outlives the instance.**
 `GamemodeRotationTests` rotates a client through one shipped map of **every**
 gamemode — seven of the eight have one — waiting for a `CAPS_UPDATE` after each
