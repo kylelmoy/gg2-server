@@ -61,6 +61,16 @@ public sealed class MirrorClient : IDisposable
 
     public string? CurrentMap => _stream.CurrentMap;
 
+    /// <summary>
+    /// The map area this client believes it is playing, 1-based.
+    /// </summary>
+    /// <remarks>
+    /// From <c>MAP_END</c>, which is the only message that ever states it after a
+    /// join — <c>CHANGE_MAP</c> carries the map name alone. It decides both how
+    /// the reader narrows entities and whether a <c>CHANGE_MAP</c> wipes teams.
+    /// </remarks>
+    public int CurrentMapArea => _stream.CurrentMapArea;
+
     /// <summary>Every message framed so far.</summary>
     public IReadOnlyList<ServerMessage> Messages => _messages;
 

@@ -387,7 +387,24 @@ public sealed class ServerStream
             case MessageType.MapEnd:
             {
                 var next = reader.ReadString1();
-                reader.Skip(2); // winners, currentMapArea
+                reader.Skip(1); // winners
+
+                // ⛔ THE AREA COMES FROM HERE, and this reader used to skip it.
+                // <c>ClientBeginStep.gml:461-469</c> assigns
+                // <c>global.currentMapArea</c> out of MAP_END, ten seconds before
+                // the CHANGE_MAP that acts on it — and CHANGE_MAP carries only
+                // the map NAME, so this is the only place on the wire the area is
+                // ever stated after a join.
+                //
+                // ⚠️ Two things below depend on it and both were wrong on a
+                // multi-area map: the entity narrowing a reader does with
+                // ForArea, and the rule that a CHANGE_MAP wipes every team —
+                // which the client applies on area 1 ONLY. Pushing through
+                // cp_dirtbowl's three areas keeps everybody's team, and a reader
+                // stuck on area 1 would have cleared them and then disagreed with
+                // every real client about who was on which side.
+                CurrentMapArea = reader.ReadUByte();
+
                 return Done(type, ref reader, start, text: next);
             }
 
