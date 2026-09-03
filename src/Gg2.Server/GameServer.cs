@@ -4,6 +4,7 @@ using System.Net.Sockets;
 using Gg2.Maps;
 using Gg2.Protocol;
 using Gg2.Simulation;
+using Gg2.Bots;
 
 namespace Gg2.Server;
 
@@ -701,6 +702,13 @@ public sealed class GameServer : IDisposable
         var stats = _options.TickStats ? new TickPacing(TickInterval.TotalMilliseconds) : null;
         var lastStart = clock.Elapsed;
 
+        // ⚠️ ALWAYS ON, unlike --tick-stats. A healthy server prints nothing, so
+        // there is no cost to leaving it armed, and a tick that overruns its
+        // budget is the one thing an operator cannot see from inside the game:
+        // the symptom is a client rubberbanding, which looks like the player's
+        // own network. LateTickMonitor rate-limits itself; see its remarks.
+        var late = new LateTickMonitor();
+
         while (!cancellation.IsCancellationRequested)
         {
             if (stats is not null)
@@ -753,6 +761,21 @@ public sealed class GameServer : IDisposable
             nextTick += tickLength;
             var wait = nextTick - clock.Elapsed;
 
+            // ⚠️ Below the unpaced `continue` above, so `tickLength` is real
+            // here. A negative wait is the tick's work having overrun its own
+            // budget, which is the only definition of "late" that does not need
+            // a second clock.
+            if (LateTickMonitor.IsLate(-wait.TotalMilliseconds, tickLength.TotalMilliseconds)
+                && late.Record(
+                    _frame, -wait.TotalMilliseconds, tickLength.TotalMilliseconds, LateContext())
+                    is { } warning)
+            {
+                _log.Info(warning);
+            }
+
+            if (late.Poll(_frame) is { } summary)
+                _log.Info(summary);
+
             if (wait > TimeSpan.Zero)
             {
                 cancellation.WaitHandle.WaitOne(wait);
@@ -766,8 +789,45 @@ public sealed class GameServer : IDisposable
             }
         }
 
+        if (late.Flush() is { } pending)
+            _log.Info(pending);
+
         if (stats is not null)
             _log.Info(stats.Report());
+    }
+
+    /// <summary>
+    /// What the server was doing on a tick that ran late.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Built only when a tick is actually late</b> — it walks the roster,
+    /// and doing that every tick to feed a line that is almost never printed
+    /// would be paying the diagnostic's cost on the healthy path.
+    /// </remarks>
+    private LateTickContext LateContext()
+    {
+        var bots = 0;
+        var characters = 0;
+
+        for (var i = 0; i < _roster.Count; i++)
+        {
+            if (_roster[i].IsBot)
+                bots++;
+
+            if (_world.IsAlive(i))
+                characters++;
+        }
+
+        return new LateTickContext(
+            Clients: _clients.Count,
+            Bots: bots,
+            Characters: characters,
+            Map: _currentMap,
+
+            // Only DecisionQuotaArbiter can say what it spent, and only a tiered
+            // server has one. Null means "nothing to report", never "zero".
+            ArbiterSpentMicroseconds:
+                (_options.Bots.Brain?.Arbiter as DecisionQuotaArbiter)?.SpentThisTick);
     }
 
     /// <summary>
