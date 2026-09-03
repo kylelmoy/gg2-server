@@ -480,6 +480,11 @@ after any change to the wire fields or to a plugin implementation.
 `docs/TRAPS-LIVEGAME.md` and the `gg2-playtest` skill are the general rules —
 **exactly one session holds the live game**, and the bridge serves one TCP client.
 
+⛔ **Before you blame your change for a client dying: read the last section of
+this file.** A rotation kills every connected client on a server with bots, it
+has nothing to do with plugins, and the server log says only
+`ConnectionReset`.
+
 1. **Two ini keys, or every launch stops on a modal.** In
    `D:/code/Gang-Garrison-2/Source/build/gg2.ini`, under `[Settings]`:
    `ServerPluginsPrompt=0` (else the client raises the "download these plugins?"
@@ -507,3 +512,101 @@ after any change to the wire fields or to a plugin implementation.
 the population manager drops a bot to make room for each human, so the first
 client's slot moves between its join and its first message. That is exactly the
 path `PluginPlayerTable` exists for, and it is free to exercise here.
+---
+
+## ⛔ A rotation kills every connected client, and it needs bots
+
+**Found 2026-09-03 while live-testing `/votenextround`. NOT caused by the plugin
+layer — reproduced with `--plugins` off — and NOT fixed. It is written here
+because this is the file that sent somebody to drive a real client, and the bug
+is invisible from the test suite.**
+
+### What happens
+
+A stock GM8 client connected to this server dies with a GM8 fatal error about
+**twenty-five seconds after any map rotation**:
+
+```
+FATAL ERROR in action number 1 of Create Event for object Character:
+Attempted to get a sprite for unknown team ID: 2
+```
+
+Team 2 is `TEAM_SPECTATOR`. The client is creating a `Character` for a player its
+own roster has as a spectator, so **the server and the client disagree about
+somebody's team after a rotation**. The server never sends `PLAYER_SPAWN` for a
+spectator — `Timers.PlayerSpawn` guards `player.Team is not (Team.Red or
+Team.Blue)` — so the disagreement is in what the client was told, not in what the
+server did.
+
+The server sees only `ConnectionReset` and refills the empty slot with a bot, so
+**nothing in the server log says anything went wrong.**
+
+### The two narrowing runs, both against a real client
+
+| Run | Rotation | Bots | Client |
+|---|---|---|---|
+| plugins on, `/votenextround` | ctf_truefort → koth_valley | 4 | ⛔ died, 25s after the change |
+| **plugins off**, `--time-limit 1` | ctf_truefort → koth_valley | 4 | ⛔ died, 25s after the change |
+| plugins off, `--time-limit 1` | ctf_truefort → koth_valley | **0** | ✅ survived, clean launcher log |
+
+So: **an ordinary time-limit rotation is enough, and bots are required.**
+
+### What was ruled out, and what was not
+
+Ruled out:
+
+- The plugin layer. The middle run has none.
+- `/votenextround` and `RequestRoundEnd`. The middle run rotates on the clock.
+- The server spawning a spectator. The guard is there and is correct.
+
+Not yet established — **do not treat any of this as diagnosed**:
+
+- Where the team desync is introduced. `Rounds.ResetForNewMap` sets every player
+  to spectator on the server and the client does the same for itself
+  (`ClientBeginStep.gml:543`, inside `global.currentMapArea == 1`), so the reset
+  itself looks symmetric.
+- Why 25 seconds, twice, to the second. Something periodic, and nothing in the
+  server log fires at that cadence.
+- ⚠️ **A separate suspicion worth checking first, because it may be the same
+  bug:** `BotPopulationService.Service` returns early when `bots == target`, and
+  nothing else re-teams a bot. After a rotation every bot has been set to
+  spectator — so it looks as though **bots may simply stop playing after the
+  first rotation**. If that is true it is a bigger bug than the crash and the
+  crash may be a symptom of whatever half-re-teams them.
+
+### How to reproduce it in three minutes
+
+```
+gg2-server --port 8190 --map ctf_truefort --bots 4 --time-limit 1 \
+           --rotation ctf_truefort,koth_valley
+cd D:/Code/gg2-agent && node run-agent.js --port 17778 --name client1 \
+    --role client --keep -- -server 127.0.0.1 -port 8190
+```
+
+Wait for `now playing koth_valley`, wait another 30 seconds, then:
+
+```
+tail D:/code/Gang-Garrison-2/Source/build/agent_launcher_17778.log
+```
+
+⚠️ **The launcher log is the only place the failure appears.** The server log
+shows a `ConnectionReset` and nothing else, which is indistinguishable from a
+player closing the game.
+
+### Why no test caught it
+
+⛔ **Every rotation test in the suite is the server talking to itself.** The
+server's own state stays perfectly consistent across a rotation — the desync only
+exists in what a *client* was told, and the only thing that reads that is a
+client. `MapRotationTests` and `MatchActuallyHappensTests` are both green.
+
+That makes this an instance of the failure mode CLAUDE.md names: the code is
+self-consistent and the description ("a stock client has played a round start to
+finish", phase 6) is true only for **one** round. Nobody had watched a second
+one.
+
+⚠️ **What would make this catchable without a GM8 client:** a harness client that
+maintains its own roster from the broadcast — teams included — and asserts it
+matches the server's after a rotation. `LoopbackClient` already parses the stream;
+it does not model a roster. That is the gate this project is missing, and it is
+worth more than a fix for this one symptom.
