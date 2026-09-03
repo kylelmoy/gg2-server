@@ -277,8 +277,13 @@ tick** — more than any stage of the simulation. The cost breakdown, the two
 exact-equivalence wins taken, the four candidates that measured nothing, and the
 evidence that the heuristic is *not* the problem (it is 0.914 of the true cost)
 are in `docs/ARCHITECTURE.md`, "Where a headless bot match's tick goes".
-⚠️ **A quarter of a search is `PriorityQueue`**, and replacing it would have to
-reproduce .NET's tie-breaking exactly or equal-cost routes swap.
+⛔ **A quarter of a search is `PriorityQueue`, and replacing it is REJECTED** — a
+hand-written 4-ary heap reproducing .NET's tie-breaking exactly (checksummed
+identical over 425,000 pops) is 7% faster than it, half a percent of a tick.
+✅ **`NavRouteIdentityTests` pins the exact routes on all 25 shipped graphs now**,
+which nothing did before: every other nav test asserts properties that hold just
+as well for a different route, and expanding a node's edges in reverse order
+reddens that one test and no other.
 
 - ⚠️ **A closed node is RE-OPENED when a cheaper route arrives, and that is what
   makes the search optimal rather than merely fast.** Skipping an already-closed

@@ -425,11 +425,9 @@ for a scale error here.**
 ⛔ **A quarter of a search is the priority queue.** A faithful microbenchmark of
 exactly the heap traffic one search does — 475 enqueues and 425 dequeues on a
 `PriorityQueue<int, double>`, interleaved the way the frontier interleaves them —
-costs **6.84 µs against the search's 29 µs**. ⚠️ **Replacing it is not free**:
-.NET's is a 4-ary heap at about 7.6 ns an operation, already near the floor, and
-a hand-written one would have to reproduce its tie-breaking exactly or two
-equal-cost routes would swap. On a symmetric map that is a real event, and it
-would move bot behaviour for no stated reason.
+costs **6.84 µs against the search's 29 µs**. ⚠️ **Replacing it was tried and rejected** — see "The A\* priority queue" below:
+a hand-written 4-ary heap reproducing .NET's tie-breaking exactly is **7% faster
+than it**, which is half a percent of a tick.
 
 ### ⛔ The .NET sampling profiler was wrong THREE times here. Use in-process timers.
 
@@ -591,6 +589,87 @@ actually unsound, and it has to be worked out rather than guessed.**
 `ObservationWriter.SafeSkipPixels` forwards to it and a test asserts they agree
 across the whole clearance range — because the failure mode of two copies is one
 marcher stepping over a wall, which nothing else in this repo would notice.
+
+### ⛔ The A\* priority queue: replaced, measured, and REJECTED
+
+**The heap is 24% of a search** and was the last large A\* lever on the queue. A
+4-ary min-heap replicating `PriorityQueue<int, double>`'s exact sift semantics —
+same arity, same parent index, same first-minimal-child rule — was written and
+benchmarked on the traffic one search does (475 enqueues, 425 dequeues,
+interleaved as the frontier interleaves them):
+
+| | µs for one search's heap traffic |
+|---|---|
+| `PriorityQueue<int, double>` | 6.50 |
+| hand-written 4-ary | **6.03** |
+
+**−7% of the heap, which is −1.7% of a search and −0.5% of the tick. Not worth
+it.** ✅ **And the pop order was identical**, checksummed over 425,000 dequeues —
+so the semantics *can* be reproduced; there is simply nothing to win.
+⚠️ **.NET's `PriorityQueue` is already a 4-ary heap of 16-byte nodes at about
+7.6 ns an operation**, which is close to the floor for this shape. **Do not spend
+a session here.**
+
+### ✅ `NavRouteIdentityTests` — the gate the nav layer never had
+
+⛔ **Nothing pinned what routes A\* returns.** `NavSearchFixtureTests` asserts
+*properties* — a route is a walkable chain, it starts and ends where it was asked
+to, a team gate takes routes away — and **every one of them holds for a route
+that is not the route this port returns.** The three pinned bot measurements
+cover three legs. Everything else was unguarded.
+
+⚠️ **Equal-cost routes are the normal case here, not a corner case**: half the
+shipped maps are symmetric, so two mirror-image routes of identical cost are
+routine and which one comes back is decided by the order the frontier pops —
+today an implementation detail of `PriorityQueue`.
+
+**A digest of every route over all 25 shipped graphs**, 250 start/goal pairs per
+team per rocket-jump capability, folded into one FNV-1a per graph with the
+found-count beside it. ⛔ **Mutation-checked, and the result is the argument for
+it: expanding a node's edges in reverse order reddens exactly ONE test — this
+one.** The other 2,642 pass. **A failure here is a re-record, and a digest that
+does *not* move when the search was deliberately changed is the alarm.**
+
+### ⛔ Hoisting the solid-rect broad phase: 24% off the rect loop, and REJECTED
+
+`CollisionLineBlocksBullets` walks every solid rect on the map and calls
+`CollisionLine.Hits`, which opens with a bounding-box rejection — **but only
+after a `LineCollider` has been built for the rect**, eight fields including two
+`Aabb`s, for a gate on the far side of the map. A soldier's arc test runs that
+loop ten times a shot. Extracting the rejection as `CollisionLine.MightMeet` and
+calling it before the collider is built:
+
+| | before | after | |
+|---|---|---|---|
+| the rect loop | 0.603 µs a tick | 0.456 | **−24%** |
+| the whole tick | — | — | **could not be resolved** |
+
+⛔ **Rejected on the same rule as `Projectiles.Collide`'s `stackalloc`: a change
+the end-to-end A/B cannot see does not ship.** Six alternations put the two arms
+on top of each other, and the mask half of the same call moved *up* by 0.05 µs
+for no reason anybody established — so the net is under 1% of a tick against a
+noise floor of about 2%.
+
+⚠️ **The measurement is kept because the next idea depends on it.** Doing the
+rejection **once per arc instead of once per segment** — thirteen rect tests a
+shot rather than a hundred and thirty — would take most of the remaining
+0.456 µs, about 2.8% of a tick. It needs `CollisionWorld` to expose the solid
+rects overlapping a box, which is a simulation API for a bot-only saving; that is
+the trade, and it has not been made.
+
+### ⛔ What the rejected attempt taught about test coverage
+
+⚠️ **The first version of the hoist was a private copy of the interval inside
+`CollisionWorld`, and mutating it to `bbox_right` instead of `bbox_right + 1`
+left all 2,643 tests GREEN.** A collision quietly refused at the edge of a gate
+is invisible to this suite. Making it call `CollisionLine`'s own body instead
+took the same mutation to **4 red**, because that body is under
+`CollisionLineTests`' 9,014-segment oracle.
+
+⛔ **That is the whole argument for "one body" stated as a measurement rather
+than as taste**: the duplicate was not merely a drift risk, it was a drift risk
+*with no test behind it*, and the shared version inherits a gate that already
+exists.
 
 ### Still on the table, measured and not taken
 
