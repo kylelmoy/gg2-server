@@ -577,6 +577,50 @@ is the only thing standing between that and a published number.
 **What it buys is COST, not skill.** It makes bot-vs-bot fights cheaper and
 very slightly worse.
 
+### The controller budget calibrates itself to the machine
+
+Two things decide whether a bot may spend an expensive decision: what the
+decision costs, and what this tick can afford. Both used to be constants.
+
+**Cost is affine in the live character count, measured.** A rollout re-simulates
+every live character for every tick of every candidate, so `SearchController`
+takes the population. `BENCH_SEARCH` at horizon 20, 60 candidates, `gg_debug`,
+Release, 2026-09-03:
+
+| live characters | 2 | 6 | 12 | 20 |
+|---|---|---|---|---|
+| µs a decision | 1831 | 2624 | 3617 | 5116 |
+
+Least squares gives `1490 + 181·N`, within 2% at every point — so **59% of the
+cost scales with population and 41% does not**. A proportional model would be
+~3x low at duel populations, which is exactly where a scenario or a
+two-character bench lives. A policy forward pass is flat and ignores the count.
+
+**The budget walks itself down.** The reference cost was measured on one machine,
+on one map; a rented VPS makes every decision cost more and no compiled-in
+constant can know that. The arbiter never uses the absolute scale — only
+`cost <= budget - spent` — so `MicroBudgetController` calibrates the budget by
+AIMD instead: halve it when a tick uses more than 80% of its interval (at most
+once per 900-tick window), creep it back up after a quiet window, never above
+`--bot-arbiter`. **The cost model only has to be right up to a constant factor;
+the loop supplies the factor.**
+
+⛔ **The budget may only change BETWEEN ticks.** It lives in `GameServer.Run`,
+which `HeadlessMatch`, the env and `eval` never call — so `Choose` stays a pure
+function of tick, poll order, costs and budget, and `RolloutThreadingTests` and
+`EnvBatchTests.ABotDrivenBatchIsTheSameHoweverManyThreads` keep meaning what they
+say. `--fixed-bot-budget` pins it.
+
+⚠️ **It responds to TOTAL tick pressure, not to controller-attributable
+pressure**, so it will throttle bots for slowness that is not theirs. That is the
+safe direction — if the tick is at risk, cutting optional work is right whatever
+the cause — but it is surprising from outside, so every cut logs what the
+controllers actually spent.
+
+⚠️ **Bots get quietly worse under load.** A benchmark on a busy machine would
+measure a different bot; that is why this is structurally absent from every
+measurement path rather than merely defaulted off.
+
 **The shape.** `HybridBot` owns the handover architecture — the gate, the intel
 carve-out, "the scripted layer thinks every tick", the aim resync, the counters —
 and knows nothing about how a controller decides. `IMicroController` is what it

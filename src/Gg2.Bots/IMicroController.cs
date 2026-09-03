@@ -85,8 +85,22 @@ public interface IMicroController
     /// ⚠️ The default of 1 belongs to a controller that has not measured itself —
     /// a stub or a test double. A real one overrides it.
     /// </para>
+    /// <para>
+    /// ⚠️ <b>It takes the live character count because cost is not a constant.</b>
+    /// A rollout re-simulates every live character for every tick of every
+    /// candidate, so its cost is affine in the population — measured, see
+    /// <c>SearchController</c>. A controller whose cost really is flat (a policy
+    /// forward pass is a fixed-size network) simply ignores the argument.
+    /// </para>
+    /// <para>
+    /// ⛔ <b>Only the RATIO between controllers is ever used</b>, by
+    /// <c>DecisionQuotaArbiter</c>: <c>cost &lt;= budget - spent</c>. Nothing reads
+    /// the absolute scale, which is why a number measured on one machine is still
+    /// useful on another — see <c>MicroBudgetController</c>, which calibrates the
+    /// budget to whatever these numbers happen to mean on the machine it is on.
+    /// </para>
     /// </remarks>
-    int DecisionCost => 1;
+    int DecisionCostFor(int liveCharacters) => 1;
 
     /// <summary>
     /// Whether this controller may drive a character of this class at all.

@@ -55,7 +55,12 @@ public sealed class PolicyController : IMicroController
     /// 2,165 ns an observation. Both allocate 40 bytes total, not per call.
     /// <b>Re-measure if the network's shape changes</b> — this is linear in it.
     /// </remarks>
-    public int DecisionCost => 7;
+    /// <remarks>
+    /// ⚠️ <b>Flat in the population, unlike the search.</b> A forward pass is a
+    /// fixed-size network over a fixed-length observation; nothing in it walks the
+    /// roster. The argument is ignored deliberately rather than by omission.
+    /// </remarks>
+    public int DecisionCostFor(int liveCharacters) => 7;
 
     public bool DecidedThisPoll { get; private set; }
 

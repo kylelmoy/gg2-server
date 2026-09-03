@@ -92,6 +92,17 @@ public static class BotModes
     public static bool UsesSearch(this BotMode mode) =>
         mode is BotMode.Search or BotMode.Tiered;
 
-    /// <summary>Whether this mode has more than one tier, and so needs an arbiter.</summary>
-    public static bool NeedsArbiter(this BotMode mode) => mode is BotMode.Tiered;
+    /// <summary>
+    /// Whether this mode runs any micro-controller, and so needs a budget.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>ANY controller, not just more than one.</b> An arbiter has two jobs
+    /// and only the first needs a choice: it picks between tiers, and it GATES —
+    /// returning -1 once the budget is spent, which drops that bot to the scripted
+    /// layer. A single-tier mode still wants the second. Reading it as "choose
+    /// between tiers" left <see cref="BotMode.Search"/> with no throttle at all,
+    /// and twelve bots searching on one tick is over the tick budget before the
+    /// simulation runs.
+    /// </remarks>
+    public static bool NeedsArbiter(this BotMode mode) => mode != BotMode.Scripted;
 }

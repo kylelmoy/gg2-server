@@ -56,6 +56,31 @@ public readonly ref struct WorldView
 
     public bool IsAlive(int slot) => _state.IsAlive(slot);
 
+    /// <summary>
+    /// How many characters are alive right now.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The cost driver for a rollout search</b>, which re-simulates every
+    /// one of them for every tick of every candidate — see
+    /// <c>SearchController.DecisionCostFor</c>. It is a count of live CHARACTERS
+    /// and not of players: a spectator or a dead player costs a rollout nothing.
+    /// </remarks>
+    public int LiveCharacters
+    {
+        get
+        {
+            var count = 0;
+
+            for (var slot = 0; slot < WorldState.MaxSlots; slot++)
+            {
+                if (_state.Alive[slot])
+                    count++;
+            }
+
+            return count;
+        }
+    }
+
     /// <summary>The character in <paramref name="slot"/>. Only valid when <see cref="IsAlive"/>.</summary>
     public ref readonly CharacterState Character(int slot) => ref _state.Characters[slot];
 

@@ -774,6 +774,27 @@ public sealed class GameServer : IDisposable
         // own network. LateTickMonitor rate-limits itself; see its remarks.
         var late = new LateTickMonitor();
 
+        // ⛔ HERE and nowhere else. The budget may only move BETWEEN ticks, or
+        // Choose stops being a pure function of (tick, poll order, costs, budget)
+        // and a match stops replaying. Run is also the one entry point that
+        // HeadlessMatch, the env and eval never call, which is what keeps a
+        // benchmark from picking this up by accident.
+        var arbiter = _options.AdaptiveBotBudget
+            ? _options.Bots.Brain?.Arbiter as DecisionQuotaArbiter
+            : null;
+
+        var budget = arbiter is null
+            ? null
+            : new MicroBudgetController(
+                ceiling: arbiter.UnitsPerTick,
+
+                // ⚠️ The floor is one policy decision, not zero: a budget of zero
+                // would also starve the cheap tier, and the whole point of tiering
+                // is that the cheap one survives the expensive one being cut.
+                floor: MicroBudgetController.PolicyFloorUnits,
+                step: MicroBudgetController.DefaultStepUnits,
+                windowTicks: LateTickMonitor.WindowTicks);
+
         while (!cancellation.IsCancellationRequested)
         {
             if (stats is not null)
@@ -846,6 +867,24 @@ public sealed class GameServer : IDisposable
 
             if (late.Poll(_frame) is { } summary)
                 _log.Info(summary);
+
+            // ⚠️ AFTER the late check and BEFORE the wait, so it sees this tick's
+            // pressure and the next tick runs on the adjusted budget.
+            if (budget is not null && arbiter is not null)
+            {
+                var used = tickLength - wait;
+
+                if (budget.Observe(
+                        _frame,
+                        used.TotalMilliseconds,
+                        tickLength.TotalMilliseconds,
+                        arbiter.SpentThisTick) is { } moved)
+                {
+                    _log.Info(moved);
+                }
+
+                arbiter.UnitsPerTick = budget.Units;
+            }
 
             if (wait > TimeSpan.Zero)
             {

@@ -52,6 +52,11 @@ public sealed class HybridBotSeamTests
 
         public int DecisionCost { get; }
 
+        // ⚠️ Flat: a double's cost is whatever the test said it was, and a test
+        // that varied with the population would be measuring the model rather
+        // than the seam it exists to exercise.
+        public int DecisionCostFor(int liveCharacters) => DecisionCost;
+
         public bool DecidedThisPoll => true;
 
         /// <summary>Classes this refuses, to exercise the eligibility mask.</summary>
@@ -285,13 +290,13 @@ public sealed class HybridBotSeamTests
         var arbiter = new DecisionQuotaArbiter(unitsPerTick: 2);
         var tiers = new IMicroController[] { new Stub("only", cost: 2) };
 
-        Assert.Equal(0, arbiter.Choose(tick: 10, slot: 1, tiers, eligible: 1));
+        Assert.Equal(0, arbiter.Choose(tick: 10, slot: 1, tiers, eligible: 1, liveCharacters: 12));
         arbiter.Admitted(tick: 10, slot: 1, tier: 0, cost: 2);
 
-        Assert.Equal(-1, arbiter.Choose(tick: 10, slot: 2, tiers, eligible: 1));
+        Assert.Equal(-1, arbiter.Choose(tick: 10, slot: 2, tiers, eligible: 1, liveCharacters: 12));
 
         // Same budget, next tick.
-        Assert.Equal(0, arbiter.Choose(tick: 11, slot: 2, tiers, eligible: 1));
+        Assert.Equal(0, arbiter.Choose(tick: 11, slot: 2, tiers, eligible: 1, liveCharacters: 12));
     }
 
     /// <summary>
@@ -353,7 +358,8 @@ public sealed class HybridBotSeamTests
 
     private sealed class AlwaysTierZero : IMicroArbiter
     {
-        public int Choose(int tick, int slot, IReadOnlyList<IMicroController> tiers, uint eligible) => 0;
+        public int Choose(
+            int tick, int slot, IReadOnlyList<IMicroController> tiers, uint eligible, int liveCharacters) => 0;
 
         public void Admitted(int tick, int slot, int tier, int cost)
         {

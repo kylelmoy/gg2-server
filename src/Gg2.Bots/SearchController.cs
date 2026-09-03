@@ -45,27 +45,87 @@ public sealed class SearchController : IMicroController
     public string Name => "search";
 
     /// <summary>
-    /// <b>4,800 µs</b> at twelve live characters, horizon 20, 60 candidates.
+    /// The reference measurement: <b>4,795 µs</b> at
+    /// <see cref="ReferencePopulation"/> live characters, horizon 20, 60
+    /// candidates, on <c>ctf_truefort</c>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Measured 2026-09-02, Release, <c>BENCH_SEARCH</c> at
-    /// <c>BENCH_POP=12</c> on <c>ctf_truefort</c>: 4,795 µs a decision.</b> It was
-    /// <b>4</b> in the invented units this replaced, against a policy's 1 — a 4:1
-    /// ratio where the measured one is <b>695:1</b>.
+    /// ⚠️ Measured 2026-09-02, Release, <c>BENCH_SEARCH</c> at
+    /// <c>BENCH_POP=12</c>. It was <b>4</b> in the invented units this replaced,
+    /// against a policy's 1 — a 4:1 ratio where the measured one is <b>685:1</b>.
+    /// </remarks>
+    public const int ReferenceCost = 4795;
+
+    /// <summary>The population <see cref="ReferenceCost"/> was measured at.</summary>
+    public const int ReferencePopulation = 12;
+
+    /// <summary>
+    /// Permille of <see cref="ReferenceCost"/> that scales with the live
+    /// character count — <b>593</b> — with the remaining 407 flat.
+    /// </summary>
+    /// <remarks>
     /// <para>
-    /// ⛔ <b>This constant is wrong the moment the configuration changes, and it
-    /// cannot be otherwise.</b> Cost is candidates × (per-candidate + horizon ×
-    /// per-tick), and the per-tick term scales with the number of live characters
-    /// because a rollout re-simulates all of them. Halve the population and this
-    /// roughly halves. <b>It is here so an arbiter's arithmetic is out by tens of
-    /// percent rather than by two orders of magnitude</b>, which is what it was.
+    /// ⚠️ <b>MEASURED, 2026-09-03, and it is not proportionality.</b>
+    /// <c>BENCH_SEARCH</c> at horizon 20 and 60 candidates on <c>gg_debug</c>,
+    /// Release, swept over four populations:
+    /// </para>
+    /// <code>
+    ///   live characters   2      6     12     20
+    ///   µs a decision  1831   2624   3617   5116
+    /// </code>
+    /// <para>
+    /// Least squares gives <c>1490 + 181·N</c>, within 2% at every point — so the
+    /// cost is <b>affine in the population, not proportional to it</b>, and
+    /// 181×12/3662 = 59% of the reference cost is the part that moves. ⛔ <b>A
+    /// proportional model would be roughly 2× low at duel populations</b>, which
+    /// is exactly where a scenario or a two-character bench would use it.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Re-measure before deriving a budget from it</b> —
-    /// <c>BENCH_SEARCH=1 BENCH_POP=&lt;n&gt;</c>.
+    /// ⚠️ <b>The SHAPE is measured here and the SCALE is not.</b> The sweep is on
+    /// <c>gg_debug</c> and reads 3,617 µs at twelve where <c>ctf_truefort</c> read
+    /// 4,795, so the map is worth a third of the cost. Only the shape is taken
+    /// from the sweep; the absolute anchor stays the earlier
+    /// <c>ctf_truefort</c> measurement so this change recalibrates nothing.
+    /// </para>
+    /// <para>
+    /// ⛔ <b>And the scale does not need to be right.</b> Only the ratio between
+    /// controllers reaches the arbiter, and <c>MicroBudgetController</c>
+    /// calibrates the budget to whatever these numbers mean on the machine it is
+    /// running on. What has to be right is that this tracks true cost <em>up to a
+    /// constant factor</em> — which is what the sweep establishes and what
+    /// re-running it on another map or machine would re-establish.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>What would show this wrong:</b> a <c>BENCH_SEARCH</c> sweep whose
+    /// points do not sit on a line, or whose intercept share is far from 59%.
+    /// Re-run it after any change to the candidate set, the horizon, or what a
+    /// rollout tick simulates.
     /// </para>
     /// </remarks>
-    public int DecisionCost => 4800;
+    public const int PopulationPermille = 593;
+
+    /// <summary>
+    /// <see cref="ReferenceCost"/> adjusted to this population, affine.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Integer arithmetic throughout.</b> The result feeds
+    /// <c>DecisionQuotaArbiter.Choose</c>, so it decides which controller drives a
+    /// bot — keeping it exact keeps that decision reproducible without relying on
+    /// floating-point being identical everywhere.
+    /// </remarks>
+    public int DecisionCostFor(int liveCharacters)
+    {
+        var population = Math.Max(0, liveCharacters);
+
+        var flat = (long)(1000 - PopulationPermille) * ReferencePopulation;
+        var scaled = (long)PopulationPermille * population;
+        var cost = ReferenceCost * (flat + scaled) / (1000L * ReferencePopulation);
+
+        // ⚠️ At least 1: a zero cost is a controller the arbiter would admit
+        // without limit, and an empty server should not be the one configuration
+        // with no budget at all.
+        return (int)Math.Max(1, cost);
+    }
 
     public bool DecidedThisPoll { get; private set; }
 

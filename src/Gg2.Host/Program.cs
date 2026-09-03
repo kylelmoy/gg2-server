@@ -518,6 +518,15 @@ internal static class Program
                     options.IdleWhenEmpty = false;
                     break;
 
+                // ⛔ Pins the controller budget at --bot-arbiter instead of letting
+                // the server walk it down when ticks crowd their deadline. The
+                // budget's units come from a cost measured on ONE machine; this
+                // flag is for when you would rather have the number you set than
+                // the number this machine can afford.
+                case "--fixed-bot-budget":
+                    options.AdaptiveBotBudget = false;
+                    break;
+
                 // ⚠️ Threads change NO decision -- RolloutThreadingTests gates that
                 // at 2, 4 and 8 -- so this is a pure cost knob. It is also the one
                 // place this server is not single-threaded, and the pool it uses is
@@ -702,6 +711,13 @@ internal static class Program
         // made the mode unreachable without a number nobody has tuned, which is a
         // worse default than a stated guess -- see the constant, which says what
         // would show it is wrong.
+        // ⚠️ EVERY mode with a controller gets a budget, not just tiered. The Q2
+        // reasoning that "one tier has nothing to choose between, so an arbiter is
+        // pure cost" was wrong: an arbiter's second job is to GATE, and with one
+        // tier it still returns -1 and drops the bot to the scripted layer once
+        // the budget is spent. Without one, `--bot-mode search` let all twelve
+        // bots search on the same tick -- 12 x ~4,800 us against a 33,300 us tick,
+        // which is over budget before the simulation runs at all.
         if (mode.NeedsArbiter())
             arbiterUnits ??= DecisionQuotaArbiter.DefaultTieredBudgetMicroseconds;
 
@@ -881,6 +897,13 @@ internal static class Program
                             (default 0 with --bots). Below it the target is ZERO
                             rather than the fill, so 1 means "only run bots when
                             somebody is actually playing".
+          --fixed-bot-budget
+                            keep the bot controller budget pinned at
+                            --bot-arbiter. By default the server walks it down
+                            when ticks crowd their deadline and back up when they
+                            do not, because the budget's units come from a cost
+                            measured on one machine and yours is a different one.
+                            Every change is logged.
           --no-idle-when-empty
                             keep ticking at full rate with nobody connected.
                             By default a server with no clients, no joiners and

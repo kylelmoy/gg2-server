@@ -376,6 +376,34 @@ public sealed class ServerOptions
     /// </remarks>
     public const int IdleTickRate = 2;
 
+    /// <summary>
+    /// Let the server discover how much bot-controller work this machine can
+    /// afford, instead of trusting a constant measured on another one.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ⛔ <b>The reason it exists.</b> <c>SearchController</c>'s reference cost was
+    /// measured on one machine, on one map, in Release. A rented VPS makes every
+    /// decision cost more and no compiled-in constant can know that. The arbiter
+    /// never uses the absolute scale — only <c>cost &lt;= budget - spent</c> — so
+    /// the answer is a budget that calibrates itself rather than a better guess.
+    /// <c>MicroBudgetController</c> does the walking.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b><c>--bot-arbiter</c> stays an upper bound.</b> This only ever holds
+    /// the budget at or below the configured number.
+    /// </para>
+    /// <para>
+    /// ⛔ <b>On for the live server, and structurally absent everywhere a
+    /// measurement is taken.</b> It lives in <see cref="GameServer.Run"/>, which
+    /// <c>HeadlessMatch</c>, the env and <c>eval</c> never call — so a benchmark
+    /// cannot pick it up by accident, and the thread-invariance pins keep meaning
+    /// what they say. ⚠️ Bots get quietly worse under load, which is the point and
+    /// is also why every move it makes is logged.
+    /// </para>
+    /// </remarks>
+    public bool AdaptiveBotBudget { get; set; } = true;
+
     /// <summary>The <c>[Bots]</c> section. Off by default, as in the reference.</summary>
     /// <remarks>
     /// ⚠️ <see cref="BotPopulationOptions.Default"/>, never <c>new()</c> — see the

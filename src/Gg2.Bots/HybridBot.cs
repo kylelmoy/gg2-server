@@ -363,7 +363,7 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
         if (!Handover.ShouldEngage(in world, slot, Range, Rule, _scripted.WantsToEngage, Engage))
             return Scripted(scripted);
 
-        var chosen = Choose(tick, slot, eligible);
+        var chosen = Choose(in world, tick, slot, eligible);
 
         if (chosen < 0)
             return Scripted(scripted);
@@ -400,7 +400,7 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
     private PlayerInput HeadSplit(
         in WorldView world, int slot, int tick, PlayerInput scripted, uint eligible)
     {
-        var chosen = Choose(tick, slot, eligible);
+        var chosen = Choose(in world, tick, slot, eligible);
 
         if (chosen < 0)
             return Scripted(scripted);
@@ -449,12 +449,15 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
     /// cadence may not be at a boundary — and a budget spent on a decision that
     /// never happened is a budget that under-serves the next bot for no reason.
     /// </remarks>
-    private int Choose(int tick, int slot, uint eligible)
+    private int Choose(in WorldView world, int tick, int slot, uint eligible)
     {
         if (_arbiter is null)
             return BitOperations.TrailingZeroCount(eligible);
 
-        var chosen = _arbiter.Choose(tick, slot, _tiers, eligible);
+        // ⚠️ Read here rather than passed down from Poll: it is a 64-entry scan
+        // against a decision that costs thousands of microseconds, and threading
+        // it through two more signatures buys nothing measurable.
+        var chosen = _arbiter.Choose(tick, slot, _tiers, eligible, world.LiveCharacters);
 
         // ⛔ An arbiter naming an ineligible tier is a bug in the arbiter, and
         // honouring it would drive a class a controller refuses. Refused here
@@ -511,7 +514,7 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
 
             // ⚠️ Charged on the DECISION, not on the tick, and only once it really
             // happened. See Choose.
-            _arbiter?.Admitted(tick, slot, tier, _tiers[tier].DecisionCost);
+            _arbiter?.Admitted(tick, slot, tier, _tiers[tier].DecisionCostFor(world.LiveCharacters));
         }
 
         return input;

@@ -75,7 +75,13 @@ public interface IMicroArbiter
     /// <see cref="Admitted"/> is what says one really happened. Spending a budget
     /// here would under-serve later bots for decisions that never occurred.
     /// </remarks>
-    int Choose(int tick, int slot, IReadOnlyList<IMicroController> tiers, uint eligible);
+    /// <param name="liveCharacters">
+    /// Live characters, for <see cref="IMicroController.DecisionCostFor"/>.
+    /// ⚠️ A search decision's cost is affine in this, so an arbiter that assumed a
+    /// constant is out by roughly 2x between a duel and a full server.
+    /// </param>
+    int Choose(
+        int tick, int slot, IReadOnlyList<IMicroController> tiers, uint eligible, int liveCharacters);
 
     /// <summary>
     /// Called once per decision that was actually taken, after it was taken.
@@ -162,7 +168,8 @@ public sealed class DecisionQuotaArbiter : IMicroArbiter
     /// <summary>Units spent on the tick most recently seen. For a test and a diagnostic.</summary>
     public int SpentThisTick => _spent;
 
-    public int Choose(int tick, int slot, IReadOnlyList<IMicroController> tiers, uint eligible)
+    public int Choose(
+        int tick, int slot, IReadOnlyList<IMicroController> tiers, uint eligible, int liveCharacters)
     {
         if (tick != _tick)
         {
@@ -179,7 +186,7 @@ public sealed class DecisionQuotaArbiter : IMicroArbiter
             if ((eligible & (1u << i)) == 0)
                 continue;
 
-            if (tiers[i].DecisionCost <= left)
+            if (tiers[i].DecisionCostFor(liveCharacters) <= left)
                 return i;
         }
 

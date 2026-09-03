@@ -41,25 +41,31 @@ public sealed class BotModeTests
         Assert.Null(BrainOf("--bot-mode", "0"));
     }
 
+    /// <remarks>
+    /// ⚠️ <b>This assertion was wrong when it was written, 2026-09-02.</b> It read
+    /// <c>Assert.Null(brain.Arbiter)</c> on the reasoning that one tier has
+    /// nothing to choose between — but an arbiter's second job is to GATE, and
+    /// with one tier it still returns -1 once the budget is spent and drops the
+    /// bot to the scripted layer. Search mode therefore had no throttle at all,
+    /// and twelve bots searching on one tick is 12 × ~4,800 µs against a 33,300 µs
+    /// tick. <c>MicroBudgetTests.SingleTierModesAlsoGetABudget</c> is the gate.
+    /// </remarks>
     [Fact]
-    public void SearchBuildsOneSearchTierAndNoArbiter()
+    public void SearchBuildsOneSearchTierWithABudget()
     {
         var brain = Assert.IsType<BotBrainSpec>(BrainOf("--bot-mode", "search"));
 
         Assert.IsType<SearchMicroSpec>(Assert.Single(brain.Tiers));
-
-        // One tier: an arbiter would have nothing to choose between, and paying
-        // for one would be pure cost.
-        Assert.Null(brain.Arbiter);
+        Assert.IsType<DecisionQuotaArbiter>(brain.Arbiter);
     }
 
     [Fact]
-    public void PolicyBuildsOnePolicyTierAndNoArbiter()
+    public void PolicyBuildsOnePolicyTierWithABudget()
     {
         var brain = Assert.IsType<BotBrainSpec>(BrainOf(WithPolicy("--bot-mode", "policy")));
 
         Assert.IsType<PolicyMicroSpec>(Assert.Single(brain.Tiers));
-        Assert.Null(brain.Arbiter);
+        Assert.IsType<DecisionQuotaArbiter>(brain.Arbiter);
     }
 
     /// <summary>
@@ -126,11 +132,17 @@ public sealed class BotModeTests
         Assert.Equal(shapes.Length, shapes.Distinct(StringComparer.Ordinal).Count());
     }
 
+    /// <remarks>
+    /// ⚠️ The arbiter is no longer what tells the modes apart — every mode with a
+    /// controller has one now — so the tier list is doing all the work. It is kept
+    /// in the shape because a mode that lost its budget would still be a
+    /// difference worth failing on.
+    /// </remarks>
     private static string Shape(BotBrainSpec? brain) =>
         brain is null
             ? "scripted"
             : string.Join('+', brain.Tiers.Select(tier => tier.GetType().Name))
-              + (brain.Arbiter is null ? "" : "/arbiter");
+              + (brain.Arbiter is null ? "/no-arbiter" : "/arbiter");
 
     /// <summary>Numbers and names name the same four modes.</summary>
     /// <remarks>
