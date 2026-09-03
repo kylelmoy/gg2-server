@@ -409,10 +409,10 @@ the work below. ✅ **Cumulatively, on the same probe and interleaved against
 
 | | before | after | |
 |---|---|---|---|
-| the bots' `Poll` | 9.33 µs | 8.06 | **−13.6%** |
-| `MatchSimulation.Tick` | 5.84 | 5.60 | **−4.1%** |
-| the whole tick | 15.36 | 13.86 | **−9.8%** |
-| `eval`, 16 serial matches | 8.70 s | 7.90 s | **+10.8% throughput** |
+| the bots' `Poll` | 9.36 µs | 6.52 | **−30.3%** |
+| `MatchSimulation.Tick` | 5.83 | 5.57 | **−4.4%** |
+| the whole tick | 15.36 | 12.27 | **−20.1%** |
+| `eval`, serial, one thread | 1,830x real time | 2,098x | **+14.7%** |
 
 ⚠️ **Release, net10.0, 24-core box, `ctf_truefort`, twelve bots** — and the build
 matters, as CLAUDE.md's headroom note says.
