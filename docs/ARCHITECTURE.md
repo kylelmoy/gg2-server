@@ -403,8 +403,19 @@ people die and respawn, projectiles fly.
 | **total** | **15.13** | |
 
 ⚠️ **These are the figures the analysis below rests on, and the total has since
-moved**: the two `NavSearch` wins and the line-walk skip take it to **13.96 µs**.
-The shares are what matter here, and they are the shares *before* any of it.
+moved.** The shares are what matter here, and they are the shares *before* any of
+the work below. ✅ **Cumulatively, on the same probe and interleaved against
+`f25f86b`** — four alternations, arms completely non-overlapping:
+
+| | before | after | |
+|---|---|---|---|
+| the bots' `Poll` | 9.33 µs | 8.06 | **−13.6%** |
+| `MatchSimulation.Tick` | 5.84 | 5.60 | **−4.1%** |
+| the whole tick | 15.36 | 13.86 | **−9.8%** |
+| `eval`, 16 serial matches | 8.70 s | 7.90 s | **+10.8% throughput** |
+
+⚠️ **Release, net10.0, 24-core box, `ctf_truefort`, twelve bots** — and the build
+matters, as CLAUDE.md's headroom note says.
 
 ⛔ **`NavSearch.Find` alone is 30% of the whole system** — more than every stage
 of the simulation put together bar the two character loops. **That is where a
