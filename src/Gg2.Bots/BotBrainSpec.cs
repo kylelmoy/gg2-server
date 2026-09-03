@@ -88,6 +88,17 @@ public sealed record BotBrainSpec
     /// <summary>The handover rule. <c>MacroTask</c> is the shipped conjunction.</summary>
     public HandoverRule Rule { get; init; } = HandoverRule.MacroTask;
 
+    /// <summary>
+    /// Whether a bot opponent is worth engaging the controller for.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b><see cref="EngageOpponents.Anyone"/> here, and <c>HumansOnly</c> on
+    /// the live server.</b> A headless bot-vs-bot match has no humans, so
+    /// defaulting this to <c>HumansOnly</c> would make every arm measurement
+    /// silently measure the all-scripted control. See the enum.
+    /// </remarks>
+    public EngageOpponents Engage { get; init; } = EngageOpponents.Anyone;
+
     /// <summary>The engagement window. The measured 150px by default.</summary>
     public double Range { get; init; } = HybridBot.EngagementRange;
 
@@ -145,6 +156,7 @@ public sealed record BotBrainSpec
         {
             Rule = Rule,
             Range = Range,
+            Engage = Engage,
             ScriptedCarriesIntel = ScriptedCarriesIntel,
         };
     }

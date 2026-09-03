@@ -309,6 +309,30 @@ public sealed class ServerOptions
     /// </remarks>
     public bool TickStats { get; set; }
 
+    /// <summary>
+    /// Whether bots run their expensive micro-controller against each other, or
+    /// only against human players.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ⚠️ <b>False by default, which is NOT the library default.</b>
+    /// <c>BotBrainSpec.Engage</c> defaults to <c>Anyone</c> so that a headless
+    /// bot-vs-bot match still exercises the controller — with no humans in it,
+    /// <c>HumansOnly</c> would make every arm measurement silently measure the
+    /// all-scripted control. A live server wants the opposite: the search and
+    /// policy controllers exist to be good against people, and a 4,800 µs search
+    /// decision spent on two bots shooting at each other in an empty corner is
+    /// most of what a populated server pays for.
+    /// </para>
+    /// <para>
+    /// ⛔ <b>Turning this on does not make the bots better.</b> It makes
+    /// bot-vs-bot fights cheaper and slightly worse. Any measurement of a
+    /// controller taken with this true and no humans present is measuring the
+    /// scripted layer, whatever <c>--bot-mode</c> said.
+    /// </para>
+    /// </remarks>
+    public bool BotEngagesBotsToo { get; set; }
+
     /// <summary>The <c>[Bots]</c> section. Off by default, as in the reference.</summary>
     /// <remarks>
     /// ⚠️ <see cref="BotPopulationOptions.Default"/>, never <c>new()</c> — see the

@@ -1982,6 +1982,15 @@ public sealed class GameServer : IDisposable
         var slot = _roster.Add(entry);
         _world.AddPlayer(slot);
 
+        // ⚠️ Mirrored into the world so BOT CODE can tell a person from a bot —
+        // Handover.ShouldEngage under EngageOpponents.HumansOnly. ⛔ Nothing in
+        // MatchSimulation may read it; BotIsNotVisibleToTheSimulationTests is the
+        // gate. It goes here rather than being read off the roster so a bot's
+        // decisions stay a pure function of WorldState and remain replayable.
+        //
+        // ⚠️ AFTER AddPlayer, which writes PlayerState.Fresh over the slot.
+        _world.Players[slot].IsBot = true;
+
         ServerMessages.PlayerJoin(_broadcast, entry.Name);
 
         // botAdd.gml:26 — the class it counts with is the one checkClasslimits

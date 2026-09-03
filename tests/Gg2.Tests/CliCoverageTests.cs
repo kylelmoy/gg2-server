@@ -74,6 +74,7 @@ public sealed class CliCoverageTests
         ("ClassLimits", ["--class-limit", "medic=1"], o => string.Join(',', o.ClassLimits)),
         ("ShuffleRotation", ["--shuffle", "any"], o => o.ShuffleRotation),
         ("Autobalance", ["--no-autobalance"], o => o.Autobalance),
+        ("BotEngagesBotsToo", ["--bot-engages-bots"], o => o.BotEngagesBotsToo),
         ("AnnounceToLobby", ["--lobby"], o => o.AnnounceToLobby),
         ("MapDownloadBytesPerSecond", ["--map-download-limit", "12345"], o => o.MapDownloadBytesPerSecond),
         ("MapDirectory", ["--maps", "some/other/maps"], o => o.MapDirectory),

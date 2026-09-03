@@ -38,15 +38,36 @@ internal static class Handover
     /// range test rather than passing it on a map wider than the constant somebody
     /// picked.
     /// </remarks>
-    internal static double DistanceToNearestEnemy(in WorldView world, int slot)
+    internal static double DistanceToNearestEnemy(
+        in WorldView world, int slot, EngageOpponents engage = EngageOpponents.Anyone)
     {
-        Span<int> found = stackalloc int[1];
+        // ⚠️ Under HumansOnly the NEAREST enemy may be a bot while a human stands
+        // just behind it, so this cannot ask for one result and filter it — that
+        // would report "no human in range" whenever a bot was closer, which is
+        // most of the time on a populated server. NearestEnemies returns the
+        // roster in distance order, so the whole span is asked for and walked
+        // until the first one that counts.
+        var wanted = engage == EngageOpponents.Anyone ? 1 : WorldState.MaxSlots;
+        Span<int> found = stackalloc int[wanted];
 
-        if (world.NearestEnemies(slot, found) == 0)
+        var count = world.NearestEnemies(slot, found);
+
+        var enemySlot = -1;
+
+        for (var i = 0; i < count; i++)
+        {
+            if (engage == EngageOpponents.HumansOnly && world.Player(found[i]).IsBot)
+                continue;
+
+            enemySlot = found[i];
+            break;
+        }
+
+        if (enemySlot < 0)
             return double.PositiveInfinity;
 
         ref readonly var self = ref world.Character(slot);
-        ref readonly var enemy = ref world.Character(found[0]);
+        ref readonly var enemy = ref world.Character(enemySlot);
 
         // ⚠️ Raw Math.Sqrt, NOT Gml.PointDistance, because this is a verbatim move
         // and the two are not obviously the same function. The first draft of this
@@ -77,9 +98,20 @@ internal static class Handover
     /// </para>
     /// </remarks>
     internal static bool ShouldEngage(
-        in WorldView world, int slot, double range, HandoverRule rule, bool wantsToEngage)
+        in WorldView world,
+        int slot,
+        double range,
+        HandoverRule rule,
+        bool wantsToEngage,
+        EngageOpponents engage = EngageOpponents.Anyone)
     {
-        var inRange = DistanceToNearestEnemy(in world, slot) <= range;
+        // ⚠️ Only the RANGE half is filtered by `engage`. `wantsToEngage` is the
+        // scripted layer's own engage hold and is deliberately left alone: it
+        // decides whether the bot stops to fight at all, which must not change
+        // with who it is fighting, or a HumansOnly server would have bots ignore
+        // each other entirely rather than merely fight each other with the
+        // cheaper brain.
+        var inRange = DistanceToNearestEnemy(in world, slot, engage) <= range;
 
         return rule switch
         {

@@ -20,4 +20,15 @@
     <ProjectReference Include="..\Gg2.Simulation\Gg2.Simulation.csproj" />
   </ItemGroup>
 
+
+  <!--
+    ⚠️ So HumanOnlyHandoverTests can call Handover directly. The handover
+    predicate is the whole of EngageOpponents' behaviour and testing it only
+    through a live HybridBot would mean a match's worth of setup per assertion,
+    which is how a gate ends up asserting less than it looks like it does.
+  -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Gg2.Tests" />
+  </ItemGroup>
+
 </Project>

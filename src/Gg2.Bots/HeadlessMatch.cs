@@ -584,6 +584,14 @@ public sealed class HeadlessMatch
             var slot = _slots;
 
             _state.AddPlayer(slot);
+
+            // ⚠️ Every player in a headless match IS a bot, and saying so keeps
+            // EngageOpponents.HumansOnly HONEST here rather than accidentally
+            // correct: a match that left this false would report "humans
+            // everywhere" and engage the controller on every fight, which is the
+            // default behaviour and would hide the setting being ignored.
+            // ⛔ Nothing in MatchSimulation reads it — see PlayerState.IsBot.
+            _state.Players[slot].IsBot = true;
             _state.Players[slot].Team = team;
             _state.Players[slot].Class = playerClass;
 

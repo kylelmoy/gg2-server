@@ -555,6 +555,28 @@ new branch in `HeadlessMatch` or `BotPopulationService`, no new wrapper.
 | to run it on a live server | a `BotMode` value, and the arm that builds its `MicroControllerSpec` in the host's `tiers` list |
 | to compare it against another | two `BotBrainSpec`s, same gate — see "Measuring a bot change" below |
 
+### The handover is HUMAN-ONLY on a live server, and NOT in a measurement
+
+`EngageOpponents` decides whether a bot hands the wheel to its micro-controller
+for another **bot**, or only for a **human**. The two defaults disagree on
+purpose:
+
+| | default | why |
+|---|---|---|
+| `BotBrainSpec.Engage` (library) | `Anyone` | A headless bot-vs-bot match has **no humans in it**. `HumansOnly` here would make `HeadlessMatch`, the scenarios and `tools/bench` silently measure the all-scripted control and report it as a controller result. |
+| `gg2-server` (live) | `HumansOnly` | The expensive controllers exist to be good against **people**. A 4,800 us search decision spent on two bots shooting at each other in an empty corner is most of what a populated server pays for. `--bot-engages-bots` restores `Anyone`. |
+
+**Every arm number in this document was measured under `Anyone`**, which is the
+only setting under which a bot-vs-bot match exercises a controller at all.
+A controller measurement taken under `HumansOnly` with no humans present is
+measuring the scripted layer, whatever `--bot-mode` said -- and both arms would
+simply converge, so the result would look like a finding rather than a mistake.
+`HumanOnlyHandoverTests.TheLibraryDefaultIsAnyoneSoHeadlessMeasurementsStillEngage`
+is the only thing standing between that and a published number.
+
+**What it buys is COST, not skill.** It makes bot-vs-bot fights cheaper and
+very slightly worse.
+
 **The shape.** `HybridBot` owns the handover architecture — the gate, the intel
 carve-out, "the scripted layer thinks every tick", the aim resync, the counters —
 and knows nothing about how a controller decides. `IMicroController` is what it

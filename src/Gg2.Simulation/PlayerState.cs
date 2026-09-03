@@ -49,6 +49,37 @@ public struct PlayerState
     public bool Humiliated;
 
     /// <summary>
+    /// Whether this roster slot is driven by a bot rather than by a socket.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>NOTHING IN <c>MatchSimulation</c> MAY READ THIS, ever.</b> "The
+    /// simulation never special-cases a bot" is one of the three rules that
+    /// outrank everything in the bot layer (<c>CLAUDE.md</c>): a bot is an
+    /// <c>IInputSource</c> like a socket, and a simulation that branched on this
+    /// would let a bot do something a client cannot.
+    /// <c>BotIsNotVisibleToTheSimulationTests</c> is the gate — it runs the same
+    /// scripted inputs with the flag set every way and requires the resulting
+    /// world to be identical.
+    /// <para>
+    /// It is here so that <b>bot code</b> can tell a human opponent from another
+    /// bot — <c>Handover.ShouldEngage</c> under
+    /// <c>EngageOpponents.HumansOnly</c>. It lives in <see cref="WorldState"/>
+    /// rather than being read off the server's roster so that a bot's decisions
+    /// stay a pure function of the state: a handover that depended on
+    /// server-side data no snapshot carries could not be replayed, which is the
+    /// property <c>docs/BOTS.md</c> asks of every bot input.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Default false means "human", which is the safe direction.</b> A slot
+    /// nobody set is treated as a person, so the worst a missed assignment can do
+    /// is engage the controller more often than intended — never less. The
+    /// opposite default would silently downgrade real players to scripted
+    /// opponents.
+    /// </para>
+    /// </remarks>
+    public bool IsBot;
+
+    /// <summary>
     /// <c>player.alarm[5]</c>: ticks until <c>PlayerSpawn()</c>. Rests at
     /// <see cref="Timers.Inactive"/>.
     /// </summary>

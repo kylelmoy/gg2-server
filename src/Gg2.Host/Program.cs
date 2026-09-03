@@ -482,6 +482,17 @@ internal static class Program
                     i++;
                     break;
 
+                // ⛔ Restores the pre-2026-09-02 behaviour, and it is what every
+                // recorded arm measurement was taken under. Without it a bot only
+                // hands the wheel to its micro-controller for a HUMAN enemy, so a
+                // bot-vs-bot fight on a live server stays on the scripted layer --
+                // which is a cost saving, not a skill one. ⚠️ A measurement taken
+                // WITHOUT this flag and without humans present is measuring the
+                // scripted layer whatever --bot-mode said.
+                case "--bot-engages-bots":
+                    options.BotEngagesBotsToo = true;
+                    break;
+
                 // ⚠️ Threads change NO decision -- RolloutThreadingTests gates that
                 // at 2, 4 and 8 -- so this is a pure cost knob. It is also the one
                 // place this server is not single-threaded, and the pool it uses is
@@ -710,6 +721,12 @@ internal static class Program
                 {
                     Tiers = tiers,
 
+                    // ⛔ The server's default is the OPPOSITE of BotBrainSpec's,
+                    // deliberately -- see ServerOptions.BotEngagesBotsToo.
+                    Engage = options.BotEngagesBotsToo
+                        ? EngageOpponents.Anyone
+                        : EngageOpponents.HumansOnly,
+
                     // ⛔ ONE arbiter for the whole server, shared by every bot. A
                     // per-bot one cannot see the coinciding decisions that make the
                     // tick tail, which is the only reason it exists.
@@ -829,6 +846,13 @@ internal static class Program
                             match this build. Only honest when the simulation
                             difference cannot reach the maps being played, which
                             is a claim to check. Both stamps are always printed.
+          --bot-engages-bots
+                            let bots run their expensive micro-controller against
+                            each other too. Without this a bot only hands the
+                            wheel to --bot-mode's controller for a HUMAN enemy and
+                            a bot-vs-bot fight stays scripted, which is a COST
+                            saving and not a skill one. Every recorded arm
+                            measurement was taken with this behaviour.
           --bot-classes <list|trained>
                             restrict the bot class draw (default: the reference's
                             own draw of eight). 'trained' is Scout, Soldier,
