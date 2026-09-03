@@ -546,6 +546,93 @@ kbd {
 .pbar { width: 46px; height: 4px; border-radius: 99px; background: #0b0f15; overflow: hidden; }
 .pbar > span { display: block; height: 100%; background: var(--ink-2); }
 
+/* ---------- performance charts -------------------------------------------
+ *
+ * Six small multiples on one time axis. The series colors are the data-viz
+ * palette's dark steps, validated against this card's surface (#151b24) rather
+ * than assumed: aqua/orange/violet clear every check all-pairs — worst CVD
+ * ΔE 9.4, worst normal-vision ΔE 24.6, all ≥ 3:1 contrast.
+ *
+ * ⚠️ They are deliberately NOT the team colors. Red and blue mean RED and BLU
+ * everywhere else on this page, and a chart series wearing one would read as a
+ * team's number.
+ */
+
+.charts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--line);
+}
+
+.chart {
+  margin: 0;
+  padding: 12px 14px 10px;
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+
+.chart figcaption {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.chart-title {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: .09em;
+  color: var(--ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chart-value { font: 650 15px/1 var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.chart-value i { font-style: normal; font-size: 10.5px; color: var(--ink-3); margin-left: 2px; }
+
+.chart-legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 10.5px; color: var(--ink-2); }
+.chart-legend span { display: inline-flex; align-items: center; gap: 5px; }
+
+/* A 2px key beside the label — identity comes from a colored mark next to the
+   text, never from coloring the text. */
+.chart-legend i { width: 10px; height: 2px; border-radius: 1px; flex: none; }
+
+.chart-canvas { display: block; width: 100%; height: 84px; cursor: crosshair; }
+
+.chart-axis {
+  display: flex;
+  justify-content: space-between;
+  margin: 0;
+  padding: 7px 14px 0;
+  font-size: 10.5px;
+  color: var(--ink-3);
+  border-top: 1px solid var(--line);
+}
+
+.at {
+  font: 500 11.5px var(--mono);
+  color: var(--ink-2);
+  padding: 3px 8px;
+  border-radius: 5px;
+  background: #0f141b;
+  border: 1px solid var(--line);
+}
+
+.seg-sm .seg-btn { padding: 4px 9px; font-size: 11px; }
+
+.kpis { gap: 20px; }
+
+.kpi { display: inline-flex; align-items: baseline; gap: 6px; font-size: 12px; }
+.kpi i { font-style: normal; color: var(--ink-3); font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em; }
+.kpi b { font: 600 13px var(--mono); font-variant-numeric: tabular-nums; }
+.kpi b.warn { color: var(--amber); }
+
 /* ---------- roster ------------------------------------------------------- */
 
 .table-wrap { max-height: 460px; overflow: auto; }
@@ -690,6 +777,10 @@ kbd {
 
 /* ---------- responsive --------------------------------------------------- */
 
+@media (max-width: 1320px) {
+  .charts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 @media (max-width: 1180px) {
   .grid { grid-template-columns: minmax(0, 1fr); }
   .col-side { flex-direction: row; flex-wrap: wrap; }
@@ -714,6 +805,8 @@ kbd {
      third of a screen of empty space under its content. */
   .col-side { flex-direction: column; }
   .col-side > .card { flex: none; }
+  .charts { grid-template-columns: minmax(0, 1fr); }
+  .kpis { gap: 14px 18px; }
   .c-num:nth-child(n+6), .roster th:nth-child(n+6) { display: none; }
   .c-hp, .roster th.c-hp { width: 74px; }
   .table-wrap { max-height: none; }

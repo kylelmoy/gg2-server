@@ -1,8 +1,8 @@
 # The web admin panel — `gg2-server --web`
 
 A browser console for a running server: who is on it, where they are, what the
-round is doing, how close the tick is to its deadline, and the operator controls
-— freeze, step, speed, bot count, map change, teleport, kick.
+round is doing, six graphs of how the process is coping, and the operator
+controls — freeze, step, speed, bot count, map change, teleport, kick.
 
 Built 2026-09-03. It is the **only** surface in this project that is meant to be
 reachable from the network, and everything below follows from that.
@@ -151,11 +151,12 @@ All JSON, all under the session cookie except the first four.
 | `POST /api/login` | `{password}` | sets the cookie, returns the CSRF token |
 | `POST /api/logout` | — | clears it |
 | `GET /api/state` | — | one fresh state object, run on the tick thread |
-| `GET /api/events` | — | server-sent events: `state` snapshots and `log` lines |
+| `GET /api/events` | — | server-sent events: `state` snapshots, `log` lines and `perf` samples |
 | `POST /api/command` | a control-port command | freeze, resume, step, speed, bots, map, teleport, kick, command |
 | `GET /api/maps` | — | what this server could change to, plus its rotation |
 | `GET /api/map.png?name=` | — | a map's PNG, for the live map |
 | `GET /api/log?after=` | — | the scrollback, by sequence number |
+| `GET /api/perf?after=` | — | the performance history, by sequence number |
 
 ⚠️ **`/api/command` takes the control port's own commands, unchanged.** Both
 transports go through `ControlCommands`, which is the one place any of them is
@@ -233,6 +234,87 @@ shows what came back.
   the DOM through `textContent`, never `innerHTML`, and the CSP is the second
   net.
 
+## The performance graphs
+
+Six small multiples on one time axis — **tick time**, **CPU**, **memory**, **late
+ticks**, **bytes sent** and **load** (live characters, bots, humans) — over the
+last five minutes at 1 Hz, with a synchronised crosshair so a hitch in one can be
+read against every other at the same instant. That is the whole reason they are
+six frames rather than six numbers: "the tick spiked, and *at the same second*
+the character count jumped and gen-2 collected" is an answer, and six separate
+readouts are not.
+
+`PerfHistory` samples on the tick thread once a second. ⚠️ **It samples whether
+or not anybody is watching, which is the opposite of the state snapshot and is
+deliberate**: an operator opens the panel *because* something already happened,
+so a history that started when they arrived would answer a question nobody has.
+The per-tick cost of that is one `Environment.TickCount64` comparison; the
+syscalls are at 1 Hz. Both halves are gated —
+`NobodyWatchingMeansNoSnapshots` and `ThePerformanceHistoryIsCollectedWithNobodyWatching`.
+
+⚠️ **The samples go over the wire as arrays of bare numbers** against a `fields`
+list, because 300 samples × 15 named fields is 60 KB of repeated key names for
+5 KB of data. `EveryPerformanceRowMatchesTheDeclaredFields` is what stops the
+list and the rows drifting apart — a column added to one and not the other
+silently shifts every series after it onto the wrong chart.
+
+### ⚠️ CPU is measured over five seconds, not one, and that is a measurement fact
+
+**Windows accounts process CPU at the 15.625 ms clock interrupt**, so a
+one-second delta of `Process.TotalProcessorTime` can only ever be a multiple of
+**1.56%**. Measured on this server: with ten bots it really uses about 0.4% of a
+core, and the per-second series was an alternating `0.00 / 1.56 / 0.00` sawtooth
+that read as spiking. Over a five-second trailing window the same quantum is
+0.31%, below what anybody reads off a graph. The series therefore lags a step
+change by up to five seconds, and the chart's caption says `5s`.
+
+⚠️ **It is a percentage of ONE core, not of the machine.** The tick loop is a
+single thread, so "60% of one core" is the number that says how close it is to
+being the bottleneck; dividing by the core count would hide that behind a
+comfortable-looking 7%. It can exceed 100 — GC and the panel's own threads are in
+it.
+
+### The rest of what the graphs had to be told
+
+- ⚠️ **The tick budget joins the y-scale only once the data is within a quarter
+  of it.** Forcing 33.3 ms into a chart whose real values are 0.1-0.5 ms flattens
+  every one of them onto the baseline: the reference line destroys the resolution
+  of the thing it is a reference for. So a healthy server's chart zooms into its
+  own range, and the budget line appears — with its label — exactly when a tick
+  starts getting near it.
+- ⚠️ **`_lateTicks` is incremented outside the `&&` the warning hangs off.**
+  `LateTickMonitor` rate-limits itself, returning null for most late ticks so the
+  log is not a flood; counting only when it produced a line would have
+  under-reported by exactly the amount the rate limiter suppressed, which on a
+  struggling server is nearly all of them.
+- ⚠️ **A departing client's bytes are retired into a running total before it is
+  removed.** Summing the live connections alone would make the figure drop
+  whenever somebody disconnected, and a rate derived from it would go negative at
+  exactly the moment an operator was looking to see why.
+- ⚠️ **`ClientConnection.BytesSent` counts what the socket accepted, not what was
+  queued.** A client whose receive window is full has bytes going nowhere, and
+  counting those would report bandwidth a congested link is not carrying — which
+  is the client the operator is looking at the graph about.
+- ⚠️ **The series colors are not the team colors.** Red and blue mean RED and BLU
+  everywhere else on this page. The charts use the data-viz palette's aqua,
+  orange and violet, validated against this card's own surface rather than
+  assumed: worst all-pairs CVD ΔE 9.4, worst normal-vision ΔE 24.6, all ≥ 3:1
+  contrast. Late ticks wear the status *warning* step, because that series means
+  "something is wrong" rather than "series four", and its title carries the label
+  so the color is never alone.
+- ⚠️ **One y-axis per chart, ever.** Working set and managed heap share a frame
+  because they share a unit; tick time and CPU do not and never will. A second
+  y-scale invents a correlation that is not in the data.
+- ⚠️ **`.seg-btn` is scoped to its own group.** The speed selector's handler was
+  bound to every `.seg-btn` on the page, so each of the charts' range buttons also
+  asked "change the tick rate?" — and the snapshot handler cleared their
+  selection once a tick. Found by clicking one.
+
+⛔ **None of these numbers is a benchmark number.** They are measured over
+whatever the server happened to be doing, map loads and GC included, on a machine
+that is also running a browser. `tools/bench/` is where a per-tick cost comes
+from, and it says which build it was measured in.
+
 ## What it deliberately does not do
 
 - **No chat, and no way to send one.** A client command the panel could issue and
@@ -253,6 +335,6 @@ shows what came back.
 
 | | |
 |---|---|
-| `WebAdminTests` | over a real socket with a real HTTP client: every route refuses an unauthenticated request, the CSRF header is required, the map route takes a map name and nothing else, a command reaches the tick thread, every control-port verb is reachable, the page is served, the security headers are present, nobody watching means no snapshots, and an open stream does get them |
+| `WebAdminTests` | over a real socket with a real HTTP client: every route refuses an unauthenticated request, the CSRF header is required, the map route takes a map name and nothing else, a command reaches the tick thread, every control-port verb is reachable, the page is served, the security headers are present, nobody watching means no snapshots but does mean a performance history, every sample row matches the declared fields, and an open stream gets both |
 | `AdminSessionTests` | the password, the tokens, both timeouts, the lockout and its ceiling, per-address isolation, the session cap, and the generated password's alphabet — all on an injected clock, so no test sleeps |
 | `CliCoverageTests` | every `--web-*` flag moves the option it names; a settings flag with no `--web` is refused; `--web` alone is not remote |

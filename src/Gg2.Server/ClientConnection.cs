@@ -58,6 +58,18 @@ public sealed class ClientConnection : IDisposable
     public int PendingSendBytes => _pendingEnd - _pendingStart;
 
     /// <summary>
+    /// Bytes this connection has actually put on the wire.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>What the socket accepted, not what was queued.</b> A client whose
+    /// receive window is full has bytes in <see cref="PendingSendBytes"/> that
+    /// have not gone anywhere, and counting those would report bandwidth a
+    /// congested link is not carrying — which is exactly the client the operator
+    /// is looking at the graph about.
+    /// </remarks>
+    public long BytesSent { get; private set; }
+
+    /// <summary>
     /// Drains whatever the kernel has, appending it to
     /// <paramref name="destination"/>. Returns the byte count.
     /// </summary>
@@ -137,6 +149,7 @@ public sealed class ClientConnection : IDisposable
                 return;
             }
 
+            BytesSent += sent;
             _pendingStart += sent;
             if (_pendingStart == _pendingEnd)
                 _pendingStart = _pendingEnd = 0;

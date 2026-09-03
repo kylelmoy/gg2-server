@@ -110,6 +110,7 @@ public sealed class WebAdminTests : IDisposable
     [InlineData("/api/maps")]
     [InlineData("/api/log")]
     [InlineData("/api/map.png?name=ctf_truefort")]
+    [InlineData("/api/perf")]
     public async Task EveryApiRouteRefusesAnUnauthenticatedRequest(string path)
     {
         var reply = await _http.GetAsync(path);
@@ -430,6 +431,89 @@ public sealed class WebAdminTests : IDisposable
         await SignedInAsync();
         await ReadAsync("/api/state");
         Assert.Equal(0, _harness.Server.WebSnapshotCount);
+    }
+
+    /// <summary>
+    /// ⛔ The performance history IS collected with nobody watching, which is the
+    /// opposite of the snapshot and is the point.
+    /// </summary>
+    /// <remarks>
+    /// An operator opens the panel <em>because</em> something already happened. A
+    /// graph that started when they arrived answers a question nobody has — so
+    /// this asymmetry is deliberate, and both halves of it are gated: the
+    /// snapshot must not be built, and the history must be.
+    /// </remarks>
+    [Fact]
+    public async Task ThePerformanceHistoryIsCollectedWithNobodyWatching()
+    {
+        await SignedInAsync();
+        await WaitFor(() => _harness.Server.WebSnapshotCount == 0, "no snapshot to have been built");
+
+        // Two sample intervals, so this cannot pass on a single lucky sample.
+        await Task.Delay(PerfHistory.IntervalMs * 2 + 400);
+
+        var perf = await ReadAsync("/api/perf");
+        var samples = perf.GetProperty("samples");
+
+        Assert.True(samples.GetArrayLength() > 0, "no samples were collected");
+
+        // ⛔ And nobody was watching for any of it.
+        Assert.Equal(0, _harness.Server.WebSnapshotCount);
+    }
+
+    /// <summary>
+    /// ⛔ The field list and the rows cannot drift apart.
+    /// </summary>
+    /// <remarks>
+    /// The samples go over the wire as arrays of bare numbers — 300 samples of
+    /// fifteen named fields would be 60 KB of repeated key names for 5 KB of data
+    /// — so the panel reads them positionally against the <c>fields</c> array. A
+    /// column added to one and not the other silently shifts every series after
+    /// it onto the wrong chart, which looks like a server problem and is not one.
+    /// </remarks>
+    [Fact]
+    public async Task EveryPerformanceRowMatchesTheDeclaredFields()
+    {
+        await SignedInAsync();
+        await Task.Delay(PerfHistory.IntervalMs + 400);
+
+        var perf = await ReadAsync("/api/perf");
+        var fields = perf.GetProperty("fields");
+
+        Assert.Equal(PerfHistory.Fields.Length, fields.GetArrayLength());
+
+        for (var i = 0; i < PerfHistory.Fields.Length; i++)
+            Assert.Equal(PerfHistory.Fields[i], fields[i].GetString());
+
+        var samples = perf.GetProperty("samples");
+        Assert.True(samples.GetArrayLength() > 0, "no samples were collected");
+
+        foreach (var sample in samples.EnumerateArray())
+            Assert.Equal(PerfHistory.Fields.Length, sample.GetArrayLength());
+    }
+
+    /// <summary>The history reaches a browser over the same stream as the rest.</summary>
+    /// <remarks>
+    /// ⚠️ The backlog goes out on the stream's FIRST pass, so a panel that has
+    /// just connected draws a full five minutes immediately instead of filling in
+    /// over the next five.
+    /// </remarks>
+    [Fact]
+    public async Task PerformanceSamplesArriveOnTheStream()
+    {
+        await SignedInAsync();
+        await Task.Delay(PerfHistory.IntervalMs + 400);
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/events");
+        using var reply = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+
+        await using var body = await reply.Content.ReadAsStreamAsync();
+        using var reader = new StreamReader(body, Encoding.UTF8);
+
+        var perf = await ReadEventAsync(reader, "perf");
+
+        Assert.Contains("\"tickMean\"", perf, StringComparison.Ordinal);
+        Assert.Contains("\"samples\":[[", perf, StringComparison.Ordinal);
     }
 
     /// <summary>And the stream does subscribe, so the panel is not simply dead.</summary>

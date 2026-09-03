@@ -86,6 +86,48 @@ public sealed class GameServer : IDisposable
     private DateTime _startedUtc = DateTime.UtcNow;
 
     /// <summary>
+    /// The tick's own cost since the last time a sampler took it: the sum, the
+    /// worst, and how many ticks that was over.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>An accumulator rather than a history, and the reader RESETS it.</b>
+    /// The alternative — keeping a ring here — would put a policy about how far
+    /// back somebody wants to look into <see cref="GameServer"/>, and would cost
+    /// the same on a server nobody is watching. <see cref="TakeTickWork"/> is
+    /// called once a second by the web panel's sampler and by nothing else.
+    /// ⚠️ Written in <see cref="Run"/> only, so it is zero everywhere a benchmark
+    /// runs — <c>HeadlessMatch</c>, the env and <c>eval</c> drive Tick directly.
+    /// </remarks>
+    private double _tickWorkSumMs;
+
+    /// <inheritdoc cref="_tickWorkSumMs"/>
+    private double _tickWorkPeakMs;
+
+    /// <inheritdoc cref="_tickWorkSumMs"/>
+    private int _tickWorkCount;
+
+    /// <summary>Ticks that overran their pacing interval since startup.</summary>
+    /// <remarks>
+    /// ⚠️ <b>Pacing, never simulation</b>, the same as <see cref="LateTickMonitor"/>
+    /// — a tick computes the same thing whenever it runs. A rising count is a
+    /// delivery problem, and its symptom is a client visibly correcting.
+    /// ⚠️ <see cref="Run"/> only, for the reason above.
+    /// </remarks>
+    private long _lateTicks;
+
+    /// <inheritdoc cref="_lateTicks"/>
+    private double _worstOverrunMs;
+
+    /// <summary>Bytes sent by connections that have since gone.</summary>
+    /// <remarks>
+    /// ⚠️ Kept so the total only ever rises. Summing the LIVE connections alone
+    /// would make the total drop whenever somebody disconnected, and a rate
+    /// derived from it would go negative at exactly the moment an operator was
+    /// looking to see why.
+    /// </remarks>
+    private long _bytesRetired;
+
+    /// <summary>
     /// While true, <see cref="Tick"/> services the network and broadcasts but
     /// does not advance the simulation.
     /// </summary>
@@ -984,7 +1026,12 @@ public sealed class GameServer : IDisposable
             // ⛔ NOT a benchmark number: it is an EMA over whatever the server was
             // doing, map loads included. tools/bench/ is where a per-tick cost
             // comes from.
-            _tickWorkMs = (_tickWorkMs * 15 + (clock.Elapsed - tickStarted).TotalMilliseconds) / 16;
+            var tickWorkMs = (clock.Elapsed - tickStarted).TotalMilliseconds;
+
+            _tickWorkMs = (_tickWorkMs * 15 + tickWorkMs) / 16;
+            _tickWorkSumMs += tickWorkMs;
+            _tickWorkPeakMs = Math.Max(_tickWorkPeakMs, tickWorkMs);
+            _tickWorkCount++;
 
             // ⚠️ Re-read every tick rather than captured before the loop: the
             // control port can change the speed on a running server, and a
@@ -1028,12 +1075,24 @@ public sealed class GameServer : IDisposable
             // here. A negative wait is the tick's work having overrun its own
             // budget, which is the only definition of "late" that does not need
             // a second clock.
-            if (LateTickMonitor.IsLate(-wait.TotalMilliseconds, tickLength.TotalMilliseconds)
-                && late.Record(
-                    _frame, -wait.TotalMilliseconds, tickLength.TotalMilliseconds, LateContext())
-                    is { } warning)
+            // ⚠️ The count is incremented OUTSIDE the `&&` the warning used to
+            // hang off. LateTickMonitor rate-limits itself — it returns null for
+            // most late ticks so the log is not a flood — so counting only when
+            // it produced a line would have under-reported by exactly the amount
+            // the rate limiter suppressed, which on a struggling server is nearly
+            // all of them.
+            var overrunMs = -wait.TotalMilliseconds;
+
+            if (LateTickMonitor.IsLate(overrunMs, tickLength.TotalMilliseconds))
             {
-                _log.Info(warning);
+                _lateTicks++;
+                _worstOverrunMs = Math.Max(_worstOverrunMs, overrunMs);
+
+                if (late.Record(_frame, overrunMs, tickLength.TotalMilliseconds, LateContext())
+                    is { } warning)
+                {
+                    _log.Info(warning);
+                }
             }
 
             if (late.Poll(_frame) is { } summary)
@@ -1340,6 +1399,48 @@ public sealed class GameServer : IDisposable
 
     /// <inheritdoc cref="_tickWorkMs"/>
     public double TickWorkMilliseconds => _tickWorkMs;
+
+    /// <summary>Ticks that overran their pacing interval since startup.</summary>
+    /// <inheritdoc cref="_lateTicks" path="/remarks"/>
+    public long LateTicks => _lateTicks;
+
+    /// <summary>The worst overrun seen, in milliseconds past the interval.</summary>
+    public double WorstOverrunMilliseconds => _worstOverrunMs;
+
+    /// <summary>Bytes this server has put on the wire, across every connection.</summary>
+    public long BytesSent
+    {
+        get
+        {
+            var total = _bytesRetired;
+
+            foreach (var client in _clients)
+                total += client.Connection.BytesSent;
+
+            return total;
+        }
+    }
+
+    /// <summary>
+    /// The mean and worst tick cost since the last call, and resets.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>Reading it clears it</b>, so there is exactly one caller — the web
+    /// panel's sampler, once a second, on this thread. A second caller would
+    /// silently halve both of their windows.
+    /// ⚠️ <paramref name="ticks"/> is zero on a server whose <see cref="Run"/>
+    /// loop is not the thing driving it; the caller must not divide by it.
+    /// </remarks>
+    public void TakeTickWork(out double meanMs, out double peakMs, out int ticks)
+    {
+        ticks = _tickWorkCount;
+        meanMs = ticks == 0 ? 0 : _tickWorkSumMs / ticks;
+        peakMs = _tickWorkPeakMs;
+
+        _tickWorkSumMs = 0;
+        _tickWorkPeakMs = 0;
+        _tickWorkCount = 0;
+    }
 
     /// <summary>The gamemode the loaded map is being played as.</summary>
     public GameMode GameMode => _match.GameMode;
@@ -3078,6 +3179,10 @@ public sealed class GameServer : IDisposable
         // actually costs somebody a game. Sampling after the remove would make
         // the test `occupied == limit` never true and the branch dead.
         var wasFull = OccupiedSlots() == _options.PlayerLimit;
+
+        // ⚠️ Before the removal, or this connection's traffic vanishes from the
+        // running total. See _bytesRetired.
+        _bytesRetired += client.Connection.BytesSent;
 
         _clients.RemoveAt(clientIndex);
 

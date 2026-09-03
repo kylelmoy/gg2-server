@@ -90,6 +90,7 @@ function connect() {
   });
 
   stream.addEventListener('log', (event) => appendLog(JSON.parse(event.data)));
+  stream.addEventListener('perf', (event) => appendPerf(JSON.parse(event.data)));
 
   stream.addEventListener('error', () => {
     live('lost');
@@ -142,6 +143,7 @@ function render(next) {
   banner(next);
   scores(next);
   tiles(next);
+  kpis();
   roster(next);
   objective(next);
 
@@ -236,7 +238,11 @@ function tiles(s) {
   $('step-1').disabled = !s.frozen;
   $('step-30').disabled = !s.frozen;
 
-  for (const button of document.querySelectorAll('.seg-btn')) {
+  // ⚠️ Scoped to #speed-seg. `.seg-btn` alone also matches the charts' range
+  // buttons, which have no data-speed — so this cleared their selection on every
+  // snapshot, and the click handler below made each of them ask "change the tick
+  // rate?".
+  for (const button of document.querySelectorAll('#speed-seg .seg-btn')) {
     button.classList.toggle('is-on', String(s.speed) === button.dataset.speed);
   }
 
@@ -577,6 +583,447 @@ function toWorld(event) {
   };
 }
 
+/* ---------- performance charts ---------------------------------------------
+ *
+ * Six small multiples on one time axis, fed by the `perf` event. The reasons
+ * behind the shape of this section, in the order somebody would question them:
+ *
+ *   - **One axis per chart, never two.** Working set and managed heap share a
+ *     chart because they share a unit; tick time and CPU do not and never will.
+ *     A second y-scale invents a correlation that is not in the data.
+ *   - **Small multiples rather than one crowded plot**, because the question is
+ *     "which of these moved at the same instant" and a shared time axis with a
+ *     shared crosshair answers it better than six series in one frame.
+ *   - **The colors are the data-viz palette's dark steps, validated against this
+ *     card's surface** (aqua/orange/violet: worst CVD ΔE 9.4, worst
+ *     normal-vision ΔE 24.6, all ≥ 3:1). ⚠️ Deliberately NOT the team colors —
+ *     red and blue mean RED and BLU everywhere else on this page.
+ *   - **Late ticks wear the status warning color**, because that series means
+ *     "something is wrong" rather than "series four". Its title carries the
+ *     label, so the color is never alone.
+ */
+
+const SERIES = {
+  aqua: '#199e70',
+  orange: '#d95926',
+  violet: '#9085e9',
+  warning: '#fab219',
+};
+
+/**
+ * One entry per chart: what it plots, in what unit, and how it is scaled.
+ *
+ * `floor` stops an idle server's noise being drawn as mountains — without it a
+ * tick graph that never leaves 0.1ms fills the frame and looks alarming.
+ */
+const CHARTS = [
+  {
+    key: 'tick',
+    title: 'Tick time',
+    unit: 'ms',
+    floor: 5,
+    digits: 2,
+    rule: (s) => s.tickBudget,
+    ruleLabel: (ms) => `${ms.toFixed(1)}ms budget`,
+    series: [
+      { field: 'tickMean', label: 'mean', color: SERIES.aqua, fill: true },
+      { field: 'tickPeak', label: 'worst', color: SERIES.orange },
+    ],
+  },
+  {
+    key: 'cpu',
+    title: 'CPU',
+    unit: '% of one core, 5s',
+    floor: 10,
+    digits: 1,
+    series: [{ field: 'cpu', label: 'cpu', color: SERIES.aqua, fill: true }],
+  },
+  {
+    key: 'mem',
+    title: 'Memory',
+    unit: 'MB',
+    floor: 64,
+    digits: 0,
+    series: [
+      { field: 'rss', label: 'resident', color: SERIES.aqua, fill: true },
+      { field: 'heap', label: 'managed heap', color: SERIES.violet },
+    ],
+  },
+  {
+    key: 'late',
+    title: 'Late ticks',
+    unit: 'per second',
+    floor: 2,
+    digits: 0,
+    series: [{ field: 'late', label: 'late', color: SERIES.warning, fill: true }],
+  },
+  {
+    key: 'net',
+    title: 'Sent',
+    unit: 'KB/s',
+    floor: 8,
+    digits: 1,
+    series: [{ field: 'bytes', label: 'out', color: SERIES.aqua, fill: true, scale: 1 / 1024 }],
+  },
+  {
+    key: 'load',
+    title: 'Load',
+    unit: 'count',
+    floor: 4,
+    digits: 0,
+    series: [
+      { field: 'characters', label: 'alive', color: SERIES.aqua, fill: true },
+      { field: 'bots', label: 'bots', color: SERIES.orange },
+      { field: 'humans', label: 'humans', color: SERIES.violet },
+    ],
+  },
+];
+
+const INK_3 = '#6b788b';
+const GRID = '#232c39';
+const SURFACE = '#151b24';
+
+let perf = [];
+let perfSeen = -1;
+let range = 300;
+let hover = -1;
+
+/** Builds the perf card once, then only redraws. */
+function buildCharts() {
+  const host = $('charts');
+
+  if (host.childElementCount > 0) return;
+
+  for (const chart of CHARTS) {
+    const figure = document.createElement('figure');
+    figure.className = 'chart';
+
+    const caption = document.createElement('figcaption');
+    const title = document.createElement('span');
+    title.className = 'chart-title';
+    title.textContent = `${chart.title} · ${chart.unit}`;
+
+    const value = document.createElement('span');
+    value.className = 'chart-value';
+    value.id = `v-${chart.key}`;
+    value.textContent = '—';
+
+    caption.append(title, value);
+    figure.appendChild(caption);
+
+    // ⚠️ A legend only for two or more series. One series has one color, and the
+    // caption already names it; a box with a single swatch restates the title.
+    if (chart.series.length > 1) {
+      const legend = document.createElement('div');
+      legend.className = 'chart-legend';
+
+      for (const series of chart.series) {
+        const item = document.createElement('span');
+        const key = document.createElement('i');
+        key.style.background = series.color;
+        item.append(key, series.label);
+        legend.appendChild(item);
+      }
+
+      figure.appendChild(legend);
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.className = 'chart-canvas';
+    canvas.dataset.chart = chart.key;
+    canvas.setAttribute('role', 'img');
+    canvas.setAttribute('aria-label',
+      `${chart.title} in ${chart.unit} over the last five minutes`);
+
+    figure.appendChild(canvas);
+    host.appendChild(figure);
+  }
+
+  host.addEventListener('mousemove', onChartHover);
+  host.addEventListener('mouseleave', () => { hover = -1; drawCharts(); });
+
+  for (const button of $('range-seg').querySelectorAll('.seg-btn')) {
+    button.addEventListener('click', () => {
+      range = Number(button.dataset.range);
+
+      for (const other of $('range-seg').querySelectorAll('.seg-btn'))
+        other.classList.toggle('is-on', other === button);
+
+      $('axis-from').textContent = `${range / 60} minute${range === 60 ? '' : 's'} ago`;
+      drawCharts();
+    });
+  }
+}
+
+/**
+ * Folds a `perf` event's rows into the history.
+ *
+ * ⚠️ Keyed on `seq` and never on arrival order: the stream can re-send a sample
+ * that landed while it was serialising the last batch, and the server says so
+ * rather than taking a lock on the tick thread's writer.
+ */
+function appendPerf(payload) {
+  const index = {};
+  payload.fields.forEach((name, i) => { index[name] = i; });
+
+  for (const row of payload.samples) {
+    const seq = row[index.seq];
+
+    if (seq <= perfSeen) continue;
+    perfSeen = seq;
+
+    const sample = {};
+    for (const name of payload.fields) sample[name] = row[index[name]];
+    perf.push(sample);
+  }
+
+  // The server keeps five minutes; so does this, so a tab left open for a day
+  // does not grow without bound.
+  if (perf.length > 300) perf = perf.slice(-300);
+
+  drawCharts();
+  kpis();
+}
+
+function windowed() {
+  return perf.slice(-range);
+}
+
+function drawCharts() {
+  const data = windowed();
+
+  for (const chart of CHARTS)
+    drawChart(chart, data);
+
+  const at = $('chart-at');
+
+  if (hover >= 0 && data[hover]) {
+    at.hidden = false;
+    at.textContent = new Date(data[hover].at).toLocaleTimeString();
+  } else {
+    at.hidden = true;
+  }
+}
+
+/** 1, 2 or 5 × 10ⁿ at or above `value` — so the top gridline is a round number. */
+function niceCeil(value) {
+  if (!(value > 0)) return 1;
+
+  const power = 10 ** Math.floor(Math.log10(value));
+  const step = value / power;
+
+  return (step <= 1 ? 1 : step <= 2 ? 2 : step <= 5 ? 5 : 10) * power;
+}
+
+function drawChart(chart, data) {
+  const canvas = document.querySelector(`canvas[data-chart="${chart.key}"]`);
+  if (!canvas) return;
+
+  const pixels = Math.min(2, window.devicePixelRatio || 1);
+  const width = canvas.clientWidth;
+  const height = canvas.clientHeight;
+
+  if (width === 0) return;
+
+  canvas.width = Math.round(width * pixels);
+  canvas.height = Math.round(height * pixels);
+
+  const g = canvas.getContext('2d');
+  g.setTransform(pixels, 0, 0, pixels, 0, 0);
+  g.clearRect(0, 0, width, height);
+
+  const pad = { top: 10, right: 4, bottom: 4, left: 4 };
+  const plotW = width - pad.left - pad.right;
+  const plotH = height - pad.top - pad.bottom;
+
+  const value = (sample, series) => (sample[series.field] || 0) * (series.scale || 1);
+
+  let peak = chart.floor;
+
+  for (const sample of data) {
+    for (const series of chart.series)
+      peak = Math.max(peak, value(sample, series));
+  }
+
+  // ⚠️ The budget joins the SCALE only once the data is within a quarter of it,
+  // and this is not cosmetic. Forcing 33.3ms into a chart whose real values are
+  // 0.1-0.5ms flattens every one of them onto the baseline: the reference line
+  // destroys the resolution of the thing it is a reference for. So a healthy
+  // server's chart zooms into its own range, and the budget line appears — with
+  // its label — exactly when a tick starts getting near it, which is when it is
+  // worth looking at.
+  const rule = chart.rule && data.length > 0 ? chart.rule(data[data.length - 1]) : 0;
+
+  if (rule > 0 && peak > rule * 0.25) peak = Math.max(peak, rule);
+
+  const top = niceCeil(peak);
+  const x = (i) => pad.left + (data.length < 2 ? plotW : (i / (data.length - 1)) * plotW);
+  const y = (v) => pad.top + plotH - Math.min(1, v / top) * plotH;
+
+  // Grid: hairline, solid, one step off the surface, and recessive. Two lines —
+  // the top and the middle — because the baseline is the plot's own floor.
+  g.strokeStyle = GRID;
+  g.lineWidth = 1;
+
+  for (const fraction of [0, 0.5, 1]) {
+    const line = Math.round(pad.top + plotH * fraction) + 0.5;
+    g.beginPath();
+    g.moveTo(pad.left, line);
+    g.lineTo(pad.left + plotW, line);
+    g.stroke();
+  }
+
+  g.fillStyle = INK_3;
+  g.font = '10px ui-monospace, Consolas, monospace';
+  g.textBaseline = 'alphabetic';
+  // ⚠️ The axis label rounds harder than the readout. `niceCeil` only ever
+  // returns 1, 2 or 5 × 10ⁿ, so "50.00" was two decimal places of nothing.
+  g.fillText(top >= 10 ? String(top) : top.toFixed(chart.digits), pad.left + 1, pad.top - 2);
+
+  if (data.length === 0) {
+    g.fillText('waiting for the first sample', pad.left + 1, pad.top + plotH / 2);
+    return;
+  }
+
+  // The reference line — the tick budget — is solid and in text ink, not a
+  // series color and not dashed: it is chrome that happens to be horizontal, and
+  // a dashed rule reads as noise.
+  if (rule > 0) {
+    const line = Math.round(y(rule)) + 0.5;
+
+    if (line > pad.top && line < pad.top + plotH) {
+      g.strokeStyle = '#3a4655';
+      g.beginPath();
+      g.moveTo(pad.left, line);
+      g.lineTo(pad.left + plotW, line);
+      g.stroke();
+
+      const label = chart.ruleLabel(rule);
+      g.fillStyle = INK_3;
+      g.fillText(label, pad.left + plotW - g.measureText(label).width - 1, line - 3);
+    }
+  }
+
+  for (const series of chart.series) {
+    if (series.fill) {
+      g.beginPath();
+      g.moveTo(x(0), pad.top + plotH);
+
+      data.forEach((sample, i) => g.lineTo(x(i), y(value(sample, series))));
+
+      g.lineTo(x(data.length - 1), pad.top + plotH);
+      g.closePath();
+      g.fillStyle = series.color;
+
+      // A wash, never a saturated block: the area says "this is the one to read
+      // first", the line carries the shape.
+      g.globalAlpha = 0.12;
+      g.fill();
+      g.globalAlpha = 1;
+    }
+
+    g.beginPath();
+    data.forEach((sample, i) => {
+      const at = y(value(sample, series));
+      if (i === 0) g.moveTo(x(i), at); else g.lineTo(x(i), at);
+    });
+
+    g.strokeStyle = series.color;
+    g.lineWidth = 2;
+    g.lineJoin = 'round';
+    g.lineCap = 'round';
+    g.stroke();
+
+    // The end marker, with a 2px ring in the surface color so it stays legible
+    // where two series cross.
+    const last = data.length - 1;
+    g.beginPath();
+    g.arc(x(last), y(value(data[last], series)), 3, 0, Math.PI * 2);
+    g.fillStyle = series.color;
+    g.fill();
+    g.strokeStyle = SURFACE;
+    g.lineWidth = 2;
+    g.stroke();
+  }
+
+  if (hover >= 0 && hover < data.length) {
+    const line = Math.round(x(hover)) + 0.5;
+
+    g.strokeStyle = '#4a5666';
+    g.lineWidth = 1;
+    g.beginPath();
+    g.moveTo(line, pad.top);
+    g.lineTo(line, pad.top + plotH);
+    g.stroke();
+
+    for (const series of chart.series) {
+      g.beginPath();
+      g.arc(line, y(value(data[hover], series)), 3.5, 0, Math.PI * 2);
+      g.fillStyle = series.color;
+      g.fill();
+      g.strokeStyle = SURFACE;
+      g.lineWidth = 2;
+      g.stroke();
+    }
+  }
+
+  // The headline number: the hovered sample if there is one, otherwise the
+  // newest. Direct labels on a 300-point line would be chaos, so the caption is
+  // where every value in this chart gets read.
+  const shown = data[hover >= 0 && hover < data.length ? hover : data.length - 1];
+  const readout = chart.series
+    .map((series) => format(value(shown, series), chart.digits))
+    .join(' / ');
+
+  $(`v-${chart.key}`).textContent = readout;
+}
+
+function format(value, digits) {
+  return value >= 1000
+    ? Math.round(value).toLocaleString()
+    : value.toFixed(digits);
+}
+
+function onChartHover(event) {
+  const canvas = event.target.closest('.chart-canvas');
+  if (!canvas) return;
+
+  const data = windowed();
+  if (data.length === 0) return;
+
+  const box = canvas.getBoundingClientRect();
+  const fraction = (event.clientX - box.left - 4) / Math.max(1, box.width - 8);
+
+  hover = Math.max(0, Math.min(data.length - 1, Math.round(fraction * (data.length - 1))));
+  drawCharts();
+}
+
+/** The running totals beside the graphs. */
+function kpis() {
+  const last = perf[perf.length - 1];
+  if (!last || !state) return;
+
+  $('kpi-rate').textContent = last.ticks;
+  $('kpi-gc').textContent = last.gc;
+
+  const late = $('kpi-late');
+  late.textContent = state.server.lateTicks.toLocaleString();
+  late.classList.toggle('warn', state.server.lateTicks > 0);
+
+  $('kpi-worst').textContent = state.server.worstOverrunMs > 0
+    ? `+${state.server.worstOverrunMs.toFixed(1)}ms`
+    : 'none';
+
+  $('kpi-sent').textContent = bytes(state.server.bytesSent);
+}
+
+function bytes(value) {
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+  if (value < 1024 * 1024 * 1024) return `${(value / 1024 / 1024).toFixed(1)} MB`;
+  return `${(value / 1024 / 1024 / 1024).toFixed(2)} GB`;
+}
+
 /* ---------- log ------------------------------------------------------------ */
 
 function appendLog(lines) {
@@ -694,6 +1141,7 @@ function showApp() {
   $('boot').hidden = true;
   $('login').hidden = true;
   $('app').hidden = false;
+  buildCharts();
   connect();
   refreshLog();
 }
@@ -754,7 +1202,7 @@ $('freeze').addEventListener('click', () => send({ cmd: state && state.frozen ? 
 $('step-1').addEventListener('click', () => send({ cmd: 'step', ticks: 1 }, true));
 $('step-30').addEventListener('click', () => send({ cmd: 'step', ticks: 30 }));
 
-for (const button of document.querySelectorAll('.seg-btn')) {
+for (const button of document.querySelectorAll('#speed-seg .seg-btn')) {
   button.addEventListener('click', async () => {
     const value = button.dataset.speed;
 
@@ -875,7 +1323,10 @@ document.addEventListener('keydown', (event) => {
   }
 });
 
-window.addEventListener('resize', () => { if (state) drawMap(); });
+window.addEventListener('resize', () => {
+  if (state) drawMap();
+  if (perf.length > 0) drawCharts();
+});
 
 /* ---------- start ----------------------------------------------------------- */
 

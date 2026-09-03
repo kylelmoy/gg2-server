@@ -90,6 +90,7 @@ public sealed class WebAdminServer : IDisposable
     private readonly LogRing _logRing;
     private readonly WebAdminOptions _options;
     private readonly AdminSessions _sessions;
+    private readonly PerfHistory _perf = new();
     private readonly ConcurrentQueue<Pending> _queue = new();
     private readonly CancellationTokenSource _stopping = new();
 
@@ -213,6 +214,13 @@ public sealed class WebAdminServer : IDisposable
             // an error — it ran.
             pending.Result.TrySetResult(ControlCommands.Dispatch(_server, pending.Body));
         }
+
+        // ⚠️ Sampled whether or not anybody is watching, which is the OPPOSITE of
+        // the snapshot below and is deliberate: an operator opens the panel
+        // because something already happened, and a graph that started when they
+        // arrived answers a question nobody has. The per-tick cost is the one
+        // TickCount64 comparison inside Sample. See PerfHistory.
+        _perf.Sample(_server);
 
         // ⚠️ Only while a browser is actually watching. A server with the panel
         // enabled and nobody on it pays nothing per tick beyond this comparison,
@@ -411,6 +419,13 @@ public sealed class WebAdminServer : IDisposable
             case ("GET", "/api/log"):
                 return await JsonAsync(stream, 200, LogSince(request.Q("after")), token);
 
+            case ("GET", "/api/perf"):
+                return await JsonAsync(
+                    stream,
+                    200,
+                    _perf.ToJson(long.TryParse(request.Q("after"), out var after) ? after : -1),
+                    token);
+
             case ("POST", "/api/command"):
                 return await JsonAsync(stream, 200, await ExecuteAsync(request.Body), token);
 
@@ -498,6 +513,7 @@ public sealed class WebAdminServer : IDisposable
 
             var seenVersion = -1L;
             var seenLog = -1L;
+            var seenPerf = -1L;
             var idle = 0;
 
             while (!token.IsCancellationRequested)
@@ -513,14 +529,41 @@ public sealed class WebAdminServer : IDisposable
                     idle = 0;
                 }
 
-                if (_logRing.Sequence != seenLog)
+                // ⚠️ `> 0 &&`, and the sequence is read ONCE. Without the first
+                // guard a ring with nothing in it compares unequal to the -1 this
+                // starts at on every pass, resets `idle` every 100 ms, and the
+                // keep-alive below never fires.
+                var logSequence = _logRing.Sequence;
+
+                if (logSequence > 0 && logSequence - 1 != seenLog)
                 {
                     var lines = _logRing.Since(seenLog, out _);
-                    seenLog = _logRing.Sequence - 1;
+                    seenLog = logSequence - 1;
 
                     if (lines.Count > 0)
+                    {
                         await SendEventAsync(stream, "log", LogJson(lines), token);
+                        idle = 0;
+                    }
+                }
 
+                // ⚠️ The backlog goes out on the FIRST pass too — seenPerf starts
+                // at -1 — so a browser that has just connected is handed the last
+                // five minutes in one event and draws a full graph immediately
+                // rather than an empty one that fills in over five minutes.
+                var perfSequence = _perf.Sequence;
+
+                if (perfSequence > 0 && perfSequence - 1 != seenPerf)
+                {
+                    // ⚠️ A sample can land between these two lines, in which case
+                    // it is sent again on the next pass. The panel keys on `seq`
+                    // and ignores one it already has — a duplicate is cheaper
+                    // than the lock this would otherwise need on the tick
+                    // thread's own writer.
+                    var samples = _perf.ToJson(seenPerf);
+                    seenPerf = perfSequence - 1;
+
+                    await SendEventAsync(stream, "perf", samples, token);
                     idle = 0;
                 }
 

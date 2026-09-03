@@ -210,6 +210,14 @@ public static class ControlCommands
         json.Append(",\"tickBudgetMs\":")
             .Append(Number(Math.Round(server.TickInterval.TotalMilliseconds, 3)));
         json.Append(",\"idle\":").Append(server.IsIdle ? "true" : "false");
+
+        // Since-startup totals. The per-second history behind the panel's graphs
+        // is PerfHistory, over its own stream; these are the running counts a
+        // number beside a graph wants.
+        json.Append(",\"lateTicks\":").Append(server.LateTicks);
+        json.Append(",\"worstOverrunMs\":")
+            .Append(Number(Math.Round(server.WorstOverrunMilliseconds, 1)));
+        json.Append(",\"bytesSent\":").Append(server.BytesSent);
         json.Append(",\"botFill\":").Append(server.Options.Bots.FillToPlayers);
 
         // ⚠️ Sent because it is the reason a bot count set from the panel can
