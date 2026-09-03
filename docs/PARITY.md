@@ -2500,6 +2500,41 @@ That last one is the sharpest tool in the box: `syncWrongness` already exists as
 a variable on `Character`, and reading the client-side character's `x`/`y` while
 the ported server runs turns "feels rubbery" into a number.
 
+### ⛔ The gap in every tier above: nothing compares what a client was TOLD
+
+**Every automated gate this project has reads the SERVER.** The replayer compares
+the port's state against a recording; the scenario suite reads `WorldState`; the
+server tests tick a `GameServer` and assert on its own roster and world. Tier 3
+is the only thing that watches a client and it is manual, so **a bug that lives
+entirely in the divergence between the server's belief and the client's cannot go
+red**, however green the suite is.
+
+⚠️ **Two instances were found on 2026-09-03, independently, by different routes,
+and neither was found by a test.**
+
+- **`CLIENT_SETTINGS` was never rebroadcast.** The server stored a player's
+  queue-jump preference and told nobody, so every other client dead-reckoned that
+  character on the wrong jump rule. Found by reading the reference's command
+  switch against ours, not by anything failing.
+- **A map rotation kills every connected stock client** ~25 seconds later
+  (`unknown team ID: 2` — the client is building a `Character` for somebody its
+  own roster has as a spectator). Found by `gg2-plugins` driving a real GM8
+  client. `MapRotationTests` and `MatchActuallyHappensTests` both pass, because
+  the server's own state stays perfectly consistent across a rotation.
+
+**Two of one shape in one day is a category, not a coincidence.** The shape:
+*the server is self-consistent and correct, and what it emitted does not add up
+to the same world.* Phase 6's "a stock client has played a round start to finish"
+is true — and it was one round, and nobody had watched a second one.
+
+⛔ **What would close it: a harness client that maintains its own roster from the
+broadcast — teams, classes, names, settings — and asserts it matches the
+server's.** `LoopbackClient` already parses the stream and keeps none of it.
+That is a tier-2½ gate, cheap, in-process, and it is the only kind of test that
+could have caught either bug above. ⚠️ **Until it exists, treat "the suite is
+green" as saying nothing whatever about client agreement**, and do not let a
+green run stand in for driving a real client through a rotation.
+
 ## Which flush a message rides, and how to test it
 
 ⛔ **The bug class this exists for: a value or message on the wrong side of the
