@@ -1,0 +1,607 @@
+using System.Net;
+using System.Net.Http.Json;
+using System.Text;
+using System.Text.Json;
+using Gg2.Server;
+
+namespace Gg2.Tests;
+
+/// <summary>
+/// The remote admin panel — <c>gg2-server --web</c>.
+/// </summary>
+/// <remarks>
+/// <para>
+/// ⛔ <b>This is the only thing in the project that answers to the network, so
+/// the tests that matter most are the refusals.</b> Every other surface here is
+/// either a game client on a port a player already trusts or a loopback tool. A
+/// bug in this file's subject is somebody else's server.
+/// </para>
+/// <para>
+/// ⚠️ <b>A real socket and a real HTTP client, not a call into the handler.</b>
+/// The parser is hand-written (see <c>HttpExchange.cs</c>) and half of what is
+/// being asserted — that a cookie is <c>HttpOnly</c>, that a 401 really is a 401,
+/// that the CSRF header is required — is only true if the bytes on the wire say
+/// so. Testing the method behind it would assert the design and not the server.
+/// </para>
+/// <para>
+/// ⚠️ <b>The server is ticked by a background thread.</b> Unlike
+/// <c>ControlPortTests</c>, an HTTP request cannot be interleaved with manual
+/// ticks from the test thread: the panel's commands are queued and drained by
+/// <c>Pump</c>, so a request would deadlock against a server nobody is ticking.
+/// One thread ticks, the test thread does HTTP, and that is the same split the
+/// running server has.
+/// </para>
+/// </remarks>
+public sealed class WebAdminTests : IDisposable
+{
+    private const string Password = "correct-horse-battery-staple";
+
+    private readonly ServerHarness _harness;
+    private readonly CancellationTokenSource _stopping = new();
+    private readonly Thread _ticker;
+    private readonly HttpClientHandler _handler;
+    private readonly HttpClient _http;
+
+    public WebAdminTests()
+    {
+        _harness = new ServerHarness(o => o.Web = WebAdminOptions.Disabled with
+        {
+            Enabled = true,
+
+            // ⚠️ Port 0: an ephemeral port read back from the server, for the
+            // reason ControlPortTests gives — a hard-coded one makes the suite
+            // un-parallelisable and the failure intermittent.
+            Port = 0,
+            Password = Password,
+        });
+
+        // ⚠️ MinHumans defaults to 1, and below it the population manager's
+        // target is ZERO rather than the fill — so a bot test on a server with
+        // nobody connected would silently never get a bot. The panel says the
+        // same thing to an operator rather than looking like a broken button.
+        _harness.Options.Bots = _harness.Options.Bots with { MinHumans = 0 };
+
+        _ticker = new Thread(Tick) { IsBackground = true, Name = "web-admin-test-tick" };
+        _ticker.Start();
+
+        _handler = new HttpClientHandler { CookieContainer = new CookieContainer(), UseCookies = true };
+        _http = new HttpClient(_handler)
+        {
+            BaseAddress = new Uri($"http://127.0.0.1:{_harness.Server.WebBoundPort}/"),
+            Timeout = TimeSpan.FromSeconds(20),
+        };
+    }
+
+    private void Tick()
+    {
+        while (!_stopping.IsCancellationRequested)
+        {
+            _harness.Server.Tick();
+
+            // Roughly a tick's worth, so a snapshot cadence measured in ticks
+            // still takes about the time it would on a real server.
+            Thread.Sleep(1);
+        }
+    }
+
+    public void Dispose()
+    {
+        _stopping.Cancel();
+        _ticker.Join(TimeSpan.FromSeconds(5));
+        _http.Dispose();
+        _handler.Dispose();
+        _harness.Dispose();
+        _stopping.Dispose();
+    }
+
+    // --- the refusals --------------------------------------------------------
+
+    /// <summary>
+    /// ⛔ Nothing behind the password answers without one.
+    /// </summary>
+    /// <remarks>
+    /// A <see cref="Theory"/> over every route rather than one endpoint, because
+    /// the gate is a single <c>if</c> in the router and a route added above it is
+    /// exactly how one would come to be public. A new route must be added here.
+    /// </remarks>
+    [Theory]
+    [InlineData("/api/state")]
+    [InlineData("/api/events")]
+    [InlineData("/api/maps")]
+    [InlineData("/api/log")]
+    [InlineData("/api/map.png?name=ctf_truefort")]
+    public async Task EveryApiRouteRefusesAnUnauthenticatedRequest(string path)
+    {
+        var reply = await _http.GetAsync(path);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, reply.StatusCode);
+    }
+
+    [Fact]
+    public async Task ACommandRefusesAnUnauthenticatedRequest()
+    {
+        var reply = await _http.PostAsync("/api/command", Json("""{"cmd":"freeze"}"""));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, reply.StatusCode);
+        Assert.False(_harness.Server.IsFrozen);
+    }
+
+    [Fact]
+    public async Task TheWrongPasswordIsRefused()
+    {
+        var reply = await SignInAsync("not the password");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, reply.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await _http.GetAsync("/api/state")).StatusCode);
+    }
+
+    /// <summary>
+    /// ⛔ A valid session is not enough: a mutating request must echo the token
+    /// issued at sign-in.
+    /// </summary>
+    /// <remarks>
+    /// This is the whole cross-site defence behind the <c>SameSite=Strict</c>
+    /// cookie, and it is invisible from the panel — which always sends the header
+    /// — so nothing but this test would notice it being dropped.
+    /// </remarks>
+    [Fact]
+    public async Task ACommandWithoutTheCsrfTokenIsRefusedEvenWithAValidSession()
+    {
+        await SignInAsync(Password);
+
+        var reply = await _http.PostAsync("/api/command", Json("""{"cmd":"freeze"}"""));
+
+        Assert.Equal(HttpStatusCode.Forbidden, reply.StatusCode);
+        Assert.False(_harness.Server.IsFrozen);
+    }
+
+    /// <summary>
+    /// ⛔ The map route joins its argument to a directory, so it takes a map
+    /// name and nothing else.
+    /// </summary>
+    [Theory]
+    [InlineData("../../../../Windows/win")]
+    [InlineData("..%2f..%2fsecret")]
+    [InlineData("ctf_truefort.png")]
+    [InlineData("C:\\Windows\\win")]
+    [InlineData("")]
+    public async Task TheMapImageRouteTakesAMapNameAndNothingElse(string name)
+    {
+        var csrf = await SignedInAsync();
+        Assert.NotEqual(string.Empty, csrf);
+
+        var reply = await _http.GetAsync($"/api/map.png?name={Uri.EscapeDataString(name)}");
+
+        // 400 for "that is not a name", 404 for a name that is one and does not
+        // exist. Neither is 200, which is the assertion.
+        Assert.True(
+            reply.StatusCode is HttpStatusCode.BadRequest or HttpStatusCode.NotFound,
+            $"'{name}' was answered with {(int)reply.StatusCode}");
+    }
+
+    // --- signing in ----------------------------------------------------------
+
+    [Fact]
+    public async Task TheRightPasswordSignsInAndTheSessionCookieIsHttpOnly()
+    {
+        var reply = await SignInAsync(Password);
+
+        Assert.Equal(HttpStatusCode.OK, reply.StatusCode);
+
+        var cookie = Assert.Single(reply.Headers.GetValues("Set-Cookie"));
+
+        Assert.Contains("HttpOnly", cookie, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("SameSite=Strict", cookie, StringComparison.OrdinalIgnoreCase);
+
+        // ⚠️ NOT Secure, and that is right on plain HTTP: a browser drops a
+        // Secure cookie on an unencrypted connection, so setting it there would
+        // make the panel impossible to sign in to rather than safer.
+        Assert.DoesNotContain("Secure", cookie, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// ⚠️ A reload must not mean signing in again, so a browser holding a valid
+    /// cookie gets its CSRF token back.
+    /// </summary>
+    [Fact]
+    public async Task SessionReportsTheCsrfTokenToAnAlreadySignedInBrowser()
+    {
+        var issued = await SignedInAsync();
+        var session = await ReadAsync("/api/session");
+
+        Assert.True(session.GetProperty("authenticated").GetBoolean());
+        Assert.Equal(issued, session.GetProperty("csrf").GetString());
+    }
+
+    [Fact]
+    public async Task SessionTellsAnUnauthenticatedBrowserNothingButTheServerName()
+    {
+        var session = await ReadAsync("/api/session");
+
+        Assert.False(session.GetProperty("authenticated").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, session.GetProperty("csrf").ValueKind);
+        Assert.Equal(_harness.Options.ServerName, session.GetProperty("name").GetString());
+    }
+
+    [Fact]
+    public async Task SigningOutInvalidatesTheSession()
+    {
+        await SignedInAsync();
+        Assert.Equal(HttpStatusCode.OK, (await _http.GetAsync("/api/state")).StatusCode);
+
+        await _http.PostAsync("/api/logout", null);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await _http.GetAsync("/api/state")).StatusCode);
+    }
+
+    // --- what it can do ------------------------------------------------------
+
+    [Fact]
+    public async Task StateDescribesTheRunningServer()
+    {
+        await SignedInAsync();
+
+        var state = await ReadAsync("/api/state");
+
+        Assert.True(state.GetProperty("ok").GetBoolean());
+        Assert.Equal(_harness.Server.CurrentMap, state.GetProperty("map").GetString());
+        Assert.Equal("CaptureTheFlag", state.GetProperty("match").GetProperty("mode").GetString());
+
+        // The map's own dimensions, so the panel can put a player on it. Art
+        // pixels times six; ctf_truefort is 891 cells wide.
+        Assert.Equal(_harness.Server.MapWidth, state.GetProperty("match").GetProperty("width").GetInt32());
+
+        // Slot 0 is the reserved server player and is always on the roster.
+        var players = state.GetProperty("players");
+        Assert.Equal(_harness.Server.RosterCount, players.GetArrayLength());
+        Assert.Equal(0, players[0].GetProperty("slot").GetInt32());
+    }
+
+    /// <summary>
+    /// ⛔ A command posted on a socket thread lands on the tick thread.
+    /// </summary>
+    /// <remarks>
+    /// The property this whole class is built around: nothing on an HTTP thread
+    /// touches <c>WorldState</c>, so a command is queued and <c>Pump</c> runs it
+    /// between two ticks. A reply that has arrived means it has already run.
+    /// </remarks>
+    [Fact]
+    public async Task ACommandReachesTheServer()
+    {
+        var csrf = await SignedInAsync();
+
+        Assert.True((await CommandAsync(csrf, """{"cmd":"freeze"}""")).GetProperty("ok").GetBoolean());
+        Assert.True(_harness.Server.IsFrozen);
+
+        Assert.True((await CommandAsync(csrf, """{"cmd":"resume"}""")).GetProperty("ok").GetBoolean());
+        Assert.False(_harness.Server.IsFrozen);
+    }
+
+    /// <summary>
+    /// ⛔ The panel and the control port are one dispatch, not two.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Every verb the control port answers is answered here, because both go
+    /// through <see cref="ControlCommands"/>. ⚠️ <b>What this establishes is that
+    /// each verb is <em>reachable</em>, not that it does the same thing</b> — it
+    /// asserts the reply is not "unknown cmd". If someone gives the panel its own
+    /// switch statement, this test keeps passing until the two lists differ,
+    /// which is the point at which it starts failing.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Adding a verb to <c>ControlCommands</c> means adding a row here</b>,
+    /// and the negative control below is what says the assertion can fail at all.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData("""{"cmd":"ping"}""")]
+    [InlineData("""{"cmd":"state"}""")]
+    [InlineData("""{"cmd":"freeze"}""")]
+    [InlineData("""{"cmd":"resume"}""")]
+    [InlineData("""{"cmd":"step","ticks":1}""")]
+    [InlineData("""{"cmd":"speed","value":1}""")]
+    [InlineData("""{"cmd":"bots","fill":0}""")]
+    [InlineData("""{"cmd":"map","name":"koth_valley"}""")]
+    [InlineData("""{"cmd":"teleport","slot":1,"x":100,"y":100}""")]
+    [InlineData("""{"cmd":"kick","slot":1}""")]
+    [InlineData("""{"cmd":"command","kind":"ToggleZoom","slot":1}""")]
+    public async Task EveryControlPortVerbIsReachableFromThePanel(string body)
+    {
+        var csrf = await SignedInAsync();
+        var reply = await CommandAsync(csrf, body);
+
+        // Refusals are fine — there is no slot 1 on an empty server — but
+        // "unknown cmd" means the verb did not arrive.
+        if (!reply.GetProperty("ok").GetBoolean())
+            Assert.DoesNotContain("unknown cmd", reply.GetProperty("error").GetString()!, StringComparison.Ordinal);
+    }
+
+    /// <summary>The negative control for the theory above.</summary>
+    [Fact]
+    public async Task AnUnknownVerbSaysSo()
+    {
+        var csrf = await SignedInAsync();
+        var reply = await CommandAsync(csrf, """{"cmd":"selfdestruct"}""");
+
+        Assert.False(reply.GetProperty("ok").GetBoolean());
+        Assert.Contains("unknown cmd", reply.GetProperty("error").GetString()!, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// ⚠️ Kicking a bot is refused, and says why.
+    /// </summary>
+    /// <remarks>
+    /// A bot has no connection to close and the population manager would put it
+    /// straight back, so a kick that appeared to work would be the panel lying
+    /// about what it did. The message names the thing to change instead.
+    /// </remarks>
+    [Fact]
+    public async Task KickingABotIsRefusedAndNamesTheBotCountInstead()
+    {
+        var csrf = await SignedInAsync();
+
+        await CommandAsync(csrf, """{"cmd":"bots","fill":2}""");
+        await WaitFor(() => _harness.Server.BotSlots.Count > 0, "a bot to be added");
+
+        var slot = _harness.Server.BotSlots[0];
+        var reply = await CommandAsync(csrf, $$"""{"cmd":"kick","slot":{{slot}}}""");
+
+        Assert.False(reply.GetProperty("ok").GetBoolean());
+        Assert.Contains("bot", reply.GetProperty("error").GetString()!, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(slot, _harness.Server.BotSlots);
+    }
+
+    /// <summary>Slot 0 is the reserved server player and is not kickable.</summary>
+    [Fact]
+    public async Task KickingTheReservedSlotIsRefused()
+    {
+        var csrf = await SignedInAsync();
+        var reply = await CommandAsync(csrf, """{"cmd":"kick","slot":0}""");
+
+        Assert.False(reply.GetProperty("ok").GetBoolean());
+        Assert.Equal(KickOutcome.NoSuchSlot, _harness.Server.KickPlayer(0));
+    }
+
+    // --- the page ------------------------------------------------------------
+
+    /// <summary>
+    /// ⛔ The panel's files are compiled in, and a build that dropped one would
+    /// serve a working binary and a broken page.
+    /// </summary>
+    [Theory]
+    [InlineData("/", "text/html", "<title>gg2-server</title>")]
+    [InlineData("/app.css", "text/css", ":root")]
+    [InlineData("/app.js", "text/javascript", "/api/events")]
+    [InlineData("/favicon.svg", "image/svg+xml", "<svg")]
+    public async Task ThePageIsServedWithoutSigningIn(string path, string type, string contains)
+    {
+        var reply = await _http.GetAsync(path);
+        var body = await reply.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, reply.StatusCode);
+        Assert.Equal(type, reply.Content.Headers.ContentType!.MediaType);
+        Assert.Contains(contains, body, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// ⚠️ The CSP has no <c>unsafe-inline</c>, which is why the page's CSS and
+    /// JavaScript are separate routes.
+    /// </summary>
+    /// <remarks>
+    /// The panel renders player-chosen names into the DOM. Losing this header is
+    /// the difference between a name that renders as text and one that runs.
+    /// </remarks>
+    [Fact]
+    public async Task EveryReplyCarriesTheSecurityHeaders()
+    {
+        var reply = await _http.GetAsync("/");
+        var policy = Assert.Single(reply.Headers.GetValues("Content-Security-Policy"));
+
+        Assert.Contains("default-src 'self'", policy, StringComparison.Ordinal);
+        Assert.DoesNotContain("unsafe-inline", policy, StringComparison.Ordinal);
+        Assert.Contains("frame-ancestors 'none'", policy, StringComparison.Ordinal);
+        Assert.Equal("nosniff", Assert.Single(reply.Headers.GetValues("X-Content-Type-Options")));
+        Assert.Equal("DENY", Assert.Single(reply.Headers.GetValues("X-Frame-Options")));
+    }
+
+    // --- what it costs -------------------------------------------------------
+
+    /// <summary>
+    /// ⛔ A server with the panel enabled and nobody watching builds no
+    /// snapshots.
+    /// </summary>
+    /// <remarks>
+    /// The claim that makes leaving <c>--web</c> on reasonable, and precisely the
+    /// kind of sentence this repo has been wrong about before — so it is measured
+    /// rather than asserted in a comment. The panel has been up and ticking for
+    /// the whole of this test's life; the number is still zero.
+    /// </remarks>
+    [Fact]
+    public async Task NobodyWatchingMeansNoSnapshots()
+    {
+        // Long enough for many multiples of the snapshot cadence to have gone by.
+        await Task.Delay(300);
+        Assert.Equal(0, _harness.Server.WebSnapshotCount);
+
+        // And the negative control: a one-shot /api/state does not subscribe
+        // either, because it is answered by running `state` on the tick thread
+        // rather than out of the published snapshot.
+        await SignedInAsync();
+        await ReadAsync("/api/state");
+        Assert.Equal(0, _harness.Server.WebSnapshotCount);
+    }
+
+    /// <summary>And the stream does subscribe, so the panel is not simply dead.</summary>
+    [Fact]
+    public async Task AnOpenEventStreamGetsSnapshots()
+    {
+        await SignedInAsync();
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/events");
+        using var reply = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+
+        Assert.Equal(HttpStatusCode.OK, reply.StatusCode);
+        Assert.Equal("text/event-stream", reply.Content.Headers.ContentType!.MediaType);
+
+        await using var body = await reply.Content.ReadAsStreamAsync();
+        using var reader = new StreamReader(body, Encoding.UTF8);
+
+        // ⚠️ Not "the first event": the stream also carries the server's log, and
+        // a server that has just started has a backlog of it waiting. Asserting
+        // on event ONE made this a race against how much had been logged.
+        var state = await ReadEventAsync(reader, "state");
+
+        Assert.Contains("\"ok\":true", state, StringComparison.Ordinal);
+
+        // ⚠️ The placeholder must never reach a browser: the panel renders the
+        // first state event it is given, and one with no fields in it threw.
+        Assert.DoesNotContain("no snapshot yet", state, StringComparison.Ordinal);
+        Assert.True(_harness.Server.WebSnapshotCount > 0);
+    }
+
+    // --- the password --------------------------------------------------------
+
+    /// <summary>
+    /// ⛔ There is no configuration in which the panel is unauthenticated.
+    /// </summary>
+    /// <remarks>
+    /// "No password" means "one you did not choose", printed once at startup. The
+    /// generated one is asserted to actually work, because a password nobody can
+    /// use is the same outage as a broken panel — and to be long enough that
+    /// <see cref="AdminSessions"/>'s lockout is not the only thing standing
+    /// between a stranger and the server.
+    /// </remarks>
+    [Fact]
+    public async Task AnUnconfiguredPasswordIsGeneratedRatherThanAbsent()
+    {
+        using var harness = new ServerHarness(o => o.Web = WebAdminOptions.Disabled with
+        {
+            Enabled = true,
+            Port = 0,
+            Password = string.Empty,
+        });
+
+        var generated = harness.Server.WebPassword;
+
+        Assert.True(generated.Length >= 16, $"a generated password of {generated.Length} characters");
+
+        // ⚠️ Read BEFORE the ticking thread starts. RecordingLog is a bare List
+        // and Start() has already written the line, so this is the one moment it
+        // can be read without racing the server's own logging.
+        Assert.True(harness.Log.Contains(generated), "the generated password was never printed");
+
+        using var stopping = new CancellationTokenSource();
+        var ticker = new Thread(() =>
+        {
+            while (!stopping.IsCancellationRequested)
+            {
+                harness.Server.Tick();
+                Thread.Sleep(1);
+            }
+        }) { IsBackground = true };
+
+        ticker.Start();
+
+        try
+        {
+            using var http = new HttpClient
+            {
+                BaseAddress = new Uri($"http://127.0.0.1:{harness.Server.WebBoundPort}/"),
+                Timeout = TimeSpan.FromSeconds(20),
+            };
+
+            var wrong = await http.PostAsync("/api/login", Json("""{"password":""}"""));
+            Assert.Equal(HttpStatusCode.Unauthorized, wrong.StatusCode);
+
+            var right = await http.PostAsync(
+                "/api/login",
+                Json(JsonSerializer.Serialize(new { password = generated })));
+
+            Assert.Equal(HttpStatusCode.OK, right.StatusCode);
+        }
+        finally
+        {
+            stopping.Cancel();
+            ticker.Join(TimeSpan.FromSeconds(5));
+        }
+    }
+
+    // --- helpers -------------------------------------------------------------
+
+    private static StringContent Json(string body) => new(body, Encoding.UTF8, "application/json");
+
+    private Task<HttpResponseMessage> SignInAsync(string password) =>
+        _http.PostAsync("/api/login", Json(JsonSerializer.Serialize(new { password })));
+
+    /// <summary>Signs in and returns the CSRF token.</summary>
+    private async Task<string> SignedInAsync()
+    {
+        var reply = await SignInAsync(Password);
+        reply.EnsureSuccessStatusCode();
+
+        using var document = JsonDocument.Parse(await reply.Content.ReadAsStringAsync());
+        return document.RootElement.GetProperty("csrf").GetString()!;
+    }
+
+    private async Task<JsonElement> ReadAsync(string path)
+    {
+        var reply = await _http.GetAsync(path);
+        return JsonDocument.Parse(await reply.Content.ReadAsStringAsync()).RootElement.Clone();
+    }
+
+    private async Task<JsonElement> CommandAsync(string csrf, string body)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/command") { Content = Json(body) };
+        request.Headers.Add("X-CSRF-Token", csrf);
+
+        var reply = await _http.SendAsync(request);
+        return JsonDocument.Parse(await reply.Content.ReadAsStringAsync()).RootElement.Clone();
+    }
+
+    /// <summary>Reads whole server-sent events until one of the named kind arrives.</summary>
+    private static async Task<string> ReadEventAsync(StreamReader reader, string wanted)
+    {
+        var text = new StringBuilder();
+
+        // Bounded, so a stream that never produces one fails the test rather than
+        // hanging the suite. Heartbeat comment lines are skipped.
+        for (var line = 0; line < 4000; line++)
+        {
+            var next = await reader.ReadLineAsync();
+
+            if (next is null)
+                break;
+
+            if (next.Length == 0)
+            {
+                if (text.ToString().StartsWith($"event: {wanted}", StringComparison.Ordinal))
+                    return text.ToString();
+
+                text.Clear();
+                continue;
+            }
+
+            if (next[0] == ':')
+                continue;
+
+            text.Append(next).Append('\n');
+        }
+
+        Assert.Fail($"no complete '{wanted}' event arrived on the stream");
+        return string.Empty;
+    }
+
+    private static async Task WaitFor(Func<bool> condition, string description)
+    {
+        for (var attempt = 0; attempt < 200; attempt++)
+        {
+            if (condition())
+                return;
+
+            await Task.Delay(10);
+        }
+
+        Assert.Fail($"gave up waiting for {description}");
+    }
+}

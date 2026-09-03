@@ -331,6 +331,16 @@ public sealed class ServerOptions
     public bool ControlPortEnabled { get; set; }
 
     /// <summary>
+    /// The <c>[Web]</c> section: the remote admin panel. <b>Off by default.</b>
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <see cref="WebAdminOptions.Disabled"/>, never <c>new()</c> — a zeroed
+    /// one has a null bind address and throws at startup rather than at
+    /// construction. Same trap as <see cref="Bots"/>.
+    /// </remarks>
+    public WebAdminOptions Web { get; set; } = WebAdminOptions.Disabled;
+
+    /// <summary>
     /// Logs a histogram of tick intervals every 30 seconds and at shutdown.
     /// </summary>
     /// <remarks>
@@ -446,6 +456,10 @@ public sealed class ServerOptions
 
     public void Validate()
     {
+        // ⚠️ First, because it is the one that can be reachable from the network:
+        // a configuration error here is the one worth failing fast on.
+        Web.Validate();
+
         if (Port is < 0 or > 65535)
             throw new ArgumentOutOfRangeException(nameof(Port), Port, "port must be 0..65535");
 

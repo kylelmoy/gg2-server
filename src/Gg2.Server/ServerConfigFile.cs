@@ -160,6 +160,34 @@ public static class ServerConfigFile
         options.ShuffleRotation = ShuffleFrom(
             Int(ini, "Server", "ShuffleRotation", (int)options.ShuffleRotation));
 
+        // --- [Web] -----------------------------------------------------------
+        //
+        // ⚠️ No reference keys to transcribe: stock GG2 has no admin panel, so
+        // this whole section is this port's own. It is here rather than
+        // command-line-only because the one thing an operator should not have to
+        // put in a process listing is the admin password.
+        //
+        // ⚠️ Enabled is keyed off Port being PRESENT, not off it being non-zero:
+        // 0 means "ask the OS for a free port" everywhere else in this project
+        // and must keep meaning that here.
+        if (Text(ini, "Web", "Port", string.Empty).Length != 0)
+        {
+            options.Web = options.Web with
+            {
+                Enabled = true,
+                Port = Int(ini, "Web", "Port", options.Web.Port),
+            };
+        }
+
+        options.Web = options.Web with
+        {
+            Bind = Text(ini, "Web", "Bind", options.Web.Bind),
+            Password = Text(ini, "Web", "Password", options.Web.Password),
+            CertificatePath = Text(ini, "Web", "Certificate", options.Web.CertificatePath),
+            CertificatePassword =
+                Text(ini, "Web", "CertificatePassword", options.Web.CertificatePassword),
+        };
+
         // --- [Classlimits] ---------------------------------------------------
         var limits = options.ClassLimits.Length == TeamBalance.ClassCount
             ? (byte[])options.ClassLimits.Clone()

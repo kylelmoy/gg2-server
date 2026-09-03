@@ -27,6 +27,22 @@
   </ItemGroup>
 
 
+  <!--
+    The web admin panel's four files, compiled in. WebAssets says why they are
+    embedded rather than served off disk; the short version is that a deployment
+    cannot then have a working binary and a missing page, and that there is no
+    directory to traverse.
+    ⚠️ LogicalName is set by hand rather than left to the default
+    <RootNamespace>.<folder>.<file> derivation, because that derivation mangles a
+    name with a dot in it and every one of these has one.
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="Web\Assets\index.html" LogicalName="Gg2.Server.Web.Assets.index.html" />
+    <EmbeddedResource Include="Web\Assets\app.css" LogicalName="Gg2.Server.Web.Assets.app.css" />
+    <EmbeddedResource Include="Web\Assets\app.js" LogicalName="Gg2.Server.Web.Assets.app.js" />
+    <EmbeddedResource Include="Web\Assets\favicon.svg" LogicalName="Gg2.Server.Web.Assets.favicon.svg" />
+  </ItemGroup>
+
   <!-- So IdleServerTests can read PacingInterval without timing Run(). -->
   <ItemGroup>
     <InternalsVisibleTo Include="Gg2.Tests" />

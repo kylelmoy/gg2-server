@@ -1173,3 +1173,27 @@ PlayerCommand)`** — the `command` verb — rather than being reimplemented.
 CLAUDE.md's "three places" rule, honoured by not adding a fourth. What is
 control-port-only is the operator actions no client can ask for: freeze, step,
 teleport, map change, bot count, speed.
+
+### And a second transport for it — built, 2026-09-03
+
+✅ **`gg2-server --web <port>` hosts an admin panel in a browser**, and it is the
+only surface in this project meant to be reachable from the network.
+**`docs/WEBADMIN.md`** is the subject file: the flags, the auth model, the HTTP
+subset, the endpoints and what the panel deliberately does not do.
+
+⛔ **Every verb moved to `ControlCommands`, and both surfaces are now transport.**
+The control port and the panel cannot drift into two slightly different control
+surfaces because there is one dispatch, one set of replies and one set of error
+messages. `kick` is the one verb the panel added and the control port gained it
+for free.
+
+⚠️ **The panel does NOT service its sockets from inside `Tick`, and the
+difference from the control port is deliberate.** A control-port client is a tool
+on loopback; a panel client is across a network and may be slow, hostile, or a
+phone that went into a tunnel mid-reply, and writing to it from the tick thread
+would let it stall the simulation for every player on the server by not reading.
+Instead the socket threads touch nothing: commands are queued and drained by
+`Pump` on the tick thread, and reads are answered from a JSON snapshot the tick
+thread republishes — and only while a browser is actually watching, which
+`WebAdminTests.NobodyWatchingMeansNoSnapshots` gates rather than asserting in a
+comment.

@@ -85,8 +85,15 @@ internal static class Program
         {
             server.Start();
         }
-        catch (Exception e) when (e is IOException or FileNotFoundException or ArgumentException)
+        catch (Exception e) when (e is IOException
+                                      or FileNotFoundException
+                                      or ArgumentException
+                                      or System.Net.Sockets.SocketException)
         {
+            // ⚠️ SocketException is NOT an IOException, so a port already in use
+            // printed a stack trace where this sentence belongs. There are two
+            // listeners to collide now — the game port and --web — and a
+            // stack trace is the least useful way to be told about either.
             Console.Error.WriteLine($"unable to start: {e.Message}");
             return 1;
         }
@@ -312,6 +319,10 @@ internal static class Program
         // kind of thing nobody notices until a measurement is wrong, and
         // --search-threads before --search-bots was exactly that.
         var searchThreads = Math.Clamp(Environment.ProcessorCount / 3, 1, 8);
+
+        // The last --web-* settings flag seen, so one given without --web can be
+        // refused by name after the loop rather than silently doing nothing.
+        string? webSetting = null;
 
         string? policyPath = null;
         var ignoreStamp = false;
@@ -681,6 +692,50 @@ internal static class Program
                     i++;
                     break;
 
+                // ⚠️ The one surface that can be reachable from the network, so
+                // every flag around it defaults to the safe answer: loopback,
+                // and a password generated and printed rather than absent.
+                // WebAdminOptions and WebAdminServer have the argument.
+                case "--web":
+                    options.Web = options.Web with
+                    {
+                        Enabled = true,
+                        Port = RequireInt(name, value),
+                    };
+                    i++;
+                    break;
+
+                // ⚠️ These four SETTLE the panel and do not turn it on. Only
+                // --web (or a [Web] Port in the config) does that, and a settings
+                // flag with no panel to configure is REFUSED below rather than
+                // ignored — the same rule --policy without a mode that consults
+                // it follows. Silently accepting `--web-bind 0.0.0.0` on a server
+                // with no panel is a flag that does nothing, which is the exact
+                // bug CliCoverageTests exists for.
+                case "--web-bind":
+                    webSetting = name;
+                    options.Web = options.Web with { Bind = Require(name, value) };
+                    i++;
+                    break;
+
+                case "--web-password":
+                    webSetting = name;
+                    options.Web = options.Web with { Password = Require(name, value) };
+                    i++;
+                    break;
+
+                case "--web-tls":
+                    webSetting = name;
+                    options.Web = options.Web with { CertificatePath = Require(name, value) };
+                    i++;
+                    break;
+
+                case "--web-tls-password":
+                    webSetting = name;
+                    options.Web = options.Web with { CertificatePassword = Require(name, value) };
+                    i++;
+                    break;
+
                 // ⚠️ Pacing only. Nothing about the simulation is rate-dependent
                 // — every duration in the game is counted in ticks — so this
                 // changes throughput and nothing else. It must stay at 1 on any
@@ -711,6 +766,16 @@ internal static class Program
         // has ONE answer in one place — see ServerOptions.Map and OpeningMap.
         if (!mapPinnedOnCommandLine && options.MapRotation.Count != 0)
             options.Map = string.Empty;
+
+        // ⛔ Refused rather than ignored. Also after the loop, so the order the
+        // flags appear in does not matter and a [Web] Port in --config counts as
+        // having turned the panel on.
+        if (webSetting is not null && !options.Web.Enabled)
+        {
+            throw new ArgumentException(
+                $"{webSetting} configures the web admin panel and none is being hosted. "
+                + "Add --web <port> to host one, or drop the flag.");
+        }
 
         // ⚠️ AFTER the loop, so it beats --bots's own MinHumans = 0 wherever the
         // two appear relative to each other.
@@ -983,6 +1048,33 @@ internal static class Program
           --control-port <n>
                             open the loopback control port (default: off;
                             0 asks the OS for a free port)
+          --web <n>         host the web admin panel on port n (default: off;
+                            0 asks the OS for a free port). Shows the roster, the
+                            live map, the round and the log, and drives freeze,
+                            step, speed, bot count, map change, teleport and kick
+                            — the same verbs as --control-port, through a browser.
+                            ⚠ Binds 127.0.0.1 unless --web-bind says otherwise, so
+                            this alone is NOT remotely reachable.
+          --web-bind <addr> the address the panel listens on (default 127.0.0.1).
+                            Like every --web-* setting below, it CONFIGURES the
+                            panel and does not turn one on; given without --web it
+                            is refused rather than ignored.
+                            0.0.0.0 accepts connections from anywhere, which is
+                            what makes it a REMOTE admin panel and what makes
+                            --web-tls matter.
+          --web-password <text>
+                            the panel's password. There is no way to turn
+                            authentication off: without this the server generates
+                            one and prints it at startup, so an unattended panel
+                            is never open. Five wrong guesses from an address
+                            start a lockout that doubles.
+          --web-tls <path>  serve the panel over HTTPS with this PKCS#12
+                            (.pfx) certificate. ⚠ Without it, on a non-loopback
+                            bind, the admin password and every session cookie
+                            cross the network in the clear — a reverse proxy or an
+                            SSH tunnel is the other answer.
+          --web-tls-password <text>
+                            the certificate's password, if it has one
           --tick-stats      log a histogram of tick intervals every 30s and at
                             shutdown; safe with clients connected
           --lobby           list this server publicly at ganggarrison.com, so it

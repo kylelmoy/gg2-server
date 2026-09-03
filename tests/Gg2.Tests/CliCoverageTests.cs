@@ -90,6 +90,18 @@ public sealed class CliCoverageTests
         ("ControlPortEnabled", ["--control-port", "0"], o => o.ControlPortEnabled),
         ("TickStats", ["--tick-stats"], o => o.TickStats),
         ("Bots", ["--bots", "8"], o => o.Bots),
+
+        // ⚠️ One row per WEB FLAG, not one per property, and they all name the
+        // same property. Web is a record so its structural equality makes the
+        // comparison real, but a single row would leave four of the five flags
+        // ungated — and --web-password silently doing nothing is the failure
+        // this whole test class exists for.
+        ("Web", ["--web", "8191"], o => o.Web),
+        ("Web", ["--web", "0", "--web-bind", "0.0.0.0"], o => o.Web.Bind),
+        ("Web", ["--web", "0", "--web-password", "hunter2"], o => o.Web.Password),
+        ("Web", ["--web", "0", "--web-tls", "some/cert.pfx"], o => o.Web.CertificatePath),
+        ("Web", ["--web", "0", "--web-tls", "some/cert.pfx", "--web-tls-password", "pw"],
+            o => o.Web.CertificatePassword),
     ];
 
     /// <summary>
@@ -175,6 +187,59 @@ public sealed class CliCoverageTests
         // (Parameter 'PlayerLimit')" for `--players 100`. Worth knowing before
         // somebody "fixes" a test that looks like it should match the flag.
         Assert.NotEmpty(thrown.Message);
+    }
+
+    /// <summary>
+    /// ⛔ A <c>--web-*</c> setting with no <c>--web</c> is refused, not ignored.
+    /// </summary>
+    /// <remarks>
+    /// The failure it prevents is <c>--web-password</c> on a server with no
+    /// panel: accepted, dropped on the floor, and indistinguishable from working
+    /// until somebody needs the password. The same rule <c>--policy</c> without a
+    /// mode that consults it follows.
+    /// </remarks>
+    [Theory]
+    [InlineData("--web-bind", "0.0.0.0")]
+    [InlineData("--web-password", "hunter2")]
+    [InlineData("--web-tls", "cert.pfx")]
+    [InlineData("--web-tls-password", "pw")]
+    public void AWebSettingWithoutAPanelIsRefused(string flag, string value)
+    {
+        var thrown = Assert.Throws<ArgumentException>(() => Program.Parse([flag, value]));
+
+        Assert.Contains(flag, thrown.Message, StringComparison.Ordinal);
+        Assert.Contains("--web", thrown.Message, StringComparison.Ordinal);
+
+        // And the control: with a panel to configure, the same flag is fine.
+        // ⚠️ --web-tls is in the control line for every case, because
+        // --web-tls-password on its own is refused by WebAdminOptions.Validate
+        // for a different and equally deliberate reason: a certificate password
+        // with no certificate to open.
+        Program.Parse(["--web", "0", "--web-tls", "cert.pfx", flag, value]);
+    }
+
+    /// <summary>
+    /// ⚠️ <c>--web</c> alone binds LOOPBACK. Making it remote is a second,
+    /// explicit decision.
+    /// </summary>
+    /// <remarks>
+    /// This is the one default in the project whose being wrong would put an
+    /// admin console on the internet, so it is asserted rather than left to the
+    /// record struct's initialiser.
+    /// </remarks>
+    [Fact]
+    public void TheWebPanelIsNotRemoteUnlessItIsToldToBe()
+    {
+        var web = Program.Parse(["--web", "8191"]).Web;
+
+        Assert.True(web.Enabled);
+        Assert.Equal("127.0.0.1", web.Bind);
+        Assert.False(web.IsRemote);
+
+        Assert.True(Program.Parse(["--web", "8191", "--web-bind", "0.0.0.0"]).Web.IsRemote);
+
+        // And off entirely without the flag.
+        Assert.False(Program.Parse([]).Web.Enabled);
     }
 
     /// <summary>A bad flag name is a usage error too, and names itself.</summary>

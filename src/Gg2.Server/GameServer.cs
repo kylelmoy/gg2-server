@@ -8,6 +8,24 @@ using Gg2.Bots;
 
 namespace Gg2.Server;
 
+/// <summary>What <see cref="GameServer.KickPlayer"/> did.</summary>
+/// <remarks>
+/// Three outcomes rather than a bool, because "there is no such slot" and "that
+/// slot is a bot" need different sentences in front of an operator: the second
+/// one is a person who should be changing the bot count instead.
+/// </remarks>
+public enum KickOutcome
+{
+    /// <summary>The connection was sent a <c>KICK</c> and closed.</summary>
+    Kicked,
+
+    /// <summary>No roster entry at that index, or it was the reserved slot 0.</summary>
+    NoSuchSlot,
+
+    /// <summary>A bot, or a slot whose connection has already gone.</summary>
+    NotAConnection,
+}
+
 /// <summary>Where the server reports what it did. Nothing here is on the wire.</summary>
 public interface IServerLog
 {
@@ -41,6 +59,31 @@ public sealed class GameServer : IDisposable
 
     /// <summary>Null unless a control port was configured — off by default.</summary>
     private ControlPort? _control;
+
+    /// <summary>Null unless <c>--web</c> was given — off by default.</summary>
+    private WebAdminServer? _web;
+
+    /// <summary>The panel's scrollback. Null unless <c>--web</c> was given.</summary>
+    private readonly LogRing? _webLog;
+
+    /// <summary>
+    /// A smoothed cost of <see cref="Tick"/> itself, in milliseconds.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Measured in <see cref="Run"/> only, so it is zero everywhere a
+    /// benchmark runs.</b> <c>HeadlessMatch</c>, the env and <c>eval</c> drive
+    /// <see cref="Tick"/> directly and never see this; it exists so an operator
+    /// watching the panel can see the tick approaching its deadline, which is
+    /// the one thing that is invisible from inside the game.
+    /// ⛔ <b>Not a benchmark number.</b> It is an EMA over whatever the server
+    /// happened to be doing, including the map load on a rotation; quoting it as
+    /// a per-tick cost would be quoting a different measurement from
+    /// <c>tools/bench/</c>'s.
+    /// </remarks>
+    private double _tickWorkMs;
+
+    /// <summary>When <see cref="Start"/> ran, for the panel's uptime.</summary>
+    private DateTime _startedUtc = DateTime.UtcNow;
 
     /// <summary>
     /// While true, <see cref="Tick"/> services the network and broadcasts but
@@ -256,7 +299,14 @@ public sealed class GameServer : IDisposable
     {
         options.Validate();
         _options = options;
-        _log = log;
+
+        // ⚠️ The web panel shows the server's log, so the log has to be captured
+        // as well as printed — and the wrap happens HERE rather than in Start()
+        // so that the lines Start() itself writes (the listening line, the map,
+        // the generated password) are in the buffer a browser sees. A panel whose
+        // log begins after startup is missing the half an operator most wants.
+        _webLog = options.Web.Enabled ? new LogRing() : null;
+        _log = _webLog is null ? log : new TeeLog(log, _webLog);
 
         // Once up front as well as on the cadence, so the first thirty seconds
         // of a server started on April 1st are not the odd ones out.
@@ -433,6 +483,8 @@ public sealed class GameServer : IDisposable
             () => _match, TryGetCharacter, TryGetSentry, Objective, Statistics, Dominating,
             MovingPlatformBlocks);
 
+        _startedUtc = DateTime.UtcNow;
+
         _listener = new TcpListener(IPAddress.Any, _options.Port);
         _listener.Server.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, false);
         _listener.Start();
@@ -469,6 +521,16 @@ public sealed class GameServer : IDisposable
         {
             _control = new ControlPort(this, _log);
             _control.Start(_options.ControlPort);
+        }
+
+        // ⚠️ The one surface that CAN be reachable from the network, and the
+        // only reason it is allowed to be: managing a server you are not sitting
+        // at is what it is for. Its own thread, a password that cannot be empty,
+        // and every command marshalled back onto this one — WebAdminServer.
+        if (_options.Web.Enabled)
+        {
+            _web = new WebAdminServer(this, _log, _webLog!, _options.Web);
+            _web.Start();
         }
 
         // ⚠️ Last, and after OpenMap: the first segment's preamble is a
@@ -911,7 +973,18 @@ public sealed class GameServer : IDisposable
                     _log.Info(stats.Report());
             }
 
+            var tickStarted = clock.Elapsed;
+
             Tick();
+
+            // ⚠️ Two Stopwatch reads a tick, unconditionally, for the panel's
+            // "tick ms" tile. Against a 33,300us budget the pair costs tens of
+            // nanoseconds, and the alternative — arming it only when --web is on
+            // — makes the paced loop two different loops.
+            // ⛔ NOT a benchmark number: it is an EMA over whatever the server was
+            // doing, map loads included. tools/bench/ is where a per-tick cost
+            // comes from.
+            _tickWorkMs = (_tickWorkMs * 15 + (clock.Elapsed - tickStarted).TotalMilliseconds) / 16;
 
             // ⚠️ Re-read every tick rather than captured before the loop: the
             // control port can change the speed on a running server, and a
@@ -1179,6 +1252,13 @@ public sealed class GameServer : IDisposable
 
         _control?.Service();
 
+        // ⚠️ Not "service": the web admin's sockets are handled on its own
+        // threads and this only drains what they queued, plus publishing the
+        // snapshot they read. See WebAdminServer.Pump — a remote client that
+        // stops reading must never be able to stall a tick, which is exactly
+        // what servicing it here would allow.
+        _web?.Pump(_frame);
+
         AcceptConnections(now);
         ServiceJoiningConnections(now);
 
@@ -1249,6 +1329,165 @@ public sealed class GameServer : IDisposable
     /// <inheritdoc cref="RoundDecided"/>
     public Team RoundWinner => _world.Winner;
 
+    // --- what an operator surface reads -------------------------------------
+    //
+    // ControlCommands.State builds the control port's and the web panel's one
+    // shared view out of these. They are reads, they run on the tick thread with
+    // everything else, and none of them is on any hot path.
+
+    /// <summary>Seconds since <see cref="Start"/>.</summary>
+    public double UptimeSeconds => (DateTime.UtcNow - _startedUtc).TotalSeconds;
+
+    /// <inheritdoc cref="_tickWorkMs"/>
+    public double TickWorkMilliseconds => _tickWorkMs;
+
+    /// <summary>The gamemode the loaded map is being played as.</summary>
+    public GameMode GameMode => _match.GameMode;
+
+    /// <summary><c>map_width()</c> in world pixels. See <see cref="LevelMap.Width"/>.</summary>
+    public int MapWidth => _match.Map.Width;
+
+    /// <inheritdoc cref="MapWidth"/>
+    public int MapHeight => _match.Map.Height;
+
+    /// <summary>The 1-based area of a multi-area map being played.</summary>
+    public byte CurrentMapArea => _match.CurrentMapArea;
+
+    /// <inheritdoc cref="CurrentMapArea"/>
+    public int TotalMapAreas => _match.TotalMapAreas;
+
+    /// <summary>Ticks left on the setup gate, or 0 when there is none.</summary>
+    public int SetupTimer => _world.SetupTimer;
+
+    /// <summary>
+    /// The map the server is on its way to, or empty when it is not changing.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>A map change is a ten-second countdown, not an event</b>
+    /// (<c>Rounds.MapChangeDelay</c>: <c>MAP_END</c> goes out, then the load).
+    /// An operator surface that reported only "accepted" would look like nothing
+    /// had happened for ten seconds.
+    /// </remarks>
+    public string NextMap => _world.MapChanging ? _nextMap : string.Empty;
+
+    /// <summary>Ticks until the pending map change lands, or -1 when there is none.</summary>
+    public int MapChangeCountdown => _mapChangeCountdown;
+
+    /// <summary><c>global.redCaps</c>. ⚠️ Also the team's kill count in deathmatch.</summary>
+    public int RedCaps => _world.RedCaps;
+
+    /// <inheritdoc cref="RedCaps"/>
+    public int BlueCaps => _world.BlueCaps;
+
+    /// <summary>How many control points the loaded map has.</summary>
+    public int ControlPointCount => _world.ControlPointCount;
+
+    /// <summary>One control point's ownership and capture progress.</summary>
+    /// <remarks>
+    /// ⚠️ Fully qualified: <c>Gg2.Server.ControlPointState</c> also exists, on
+    /// <see cref="MatchState"/>, and is a different type holding the map's copy
+    /// rather than the simulation's.
+    /// </remarks>
+    public Gg2.Simulation.ControlPointState ControlPointAt(int index) => _world.ControlPoints[index];
+
+    /// <summary>A team's briefcase — where it is, and whether it is on the ground.</summary>
+    public IntelState IntelOf(Team team) => team == Team.Red ? _world.RedIntel : _world.BlueIntel;
+
+    /// <summary>
+    /// The slot carrying <paramref name="team"/>'s briefcase, or -1.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>A team carries the OTHER team's intel</b>, so red's briefcase is
+    /// held by a blue player. Getting this backwards puts the marker on the
+    /// wrong side of the map, which looks like a physics bug and is not one.
+    /// </remarks>
+    public int IntelCarrier(Team team)
+    {
+        var thief = team == Team.Red ? Team.Blue : Team.Red;
+        var live = Math.Min(_roster.Count, WorldState.MaxSlots);
+
+        for (var slot = 0; slot < live; slot++)
+        {
+            if (_world.IsAlive(slot)
+                && _roster[slot].Team == thief
+                && _world.Characters[slot].CarryingIntel)
+            {
+                return slot;
+            }
+        }
+
+        return -1;
+    }
+
+    /// <summary>Whether the character in <paramref name="slot"/> is holding a briefcase.</summary>
+    public bool IsCarryingIntel(int slot) =>
+        slot >= 0 && slot < WorldState.MaxSlots
+        && _world.IsAlive(slot)
+        && _world.Characters[slot].CarryingIntel;
+
+    /// <summary>One roster entry's scoreboard, as the wire's stats block.</summary>
+    public PlayerStatsBlock StatisticsOf(int slot) => Statistics(slot);
+
+    /// <summary>A roster entry's name.</summary>
+    public string NameOf(int slot) => _roster[slot].Name;
+
+    /// <summary>Whether this slot is a network client rather than a bot or slot 0.</summary>
+    public bool IsConnected(int slot) => _roster[slot].Connection is { IsClosed: false };
+
+    /// <summary>
+    /// A connected player's address, or the empty string.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Only an operator sees this.</b> It never reaches the game's wire —
+    /// the reference does not put addresses on it and neither does this port —
+    /// and the web panel shows it behind the same password as everything else.
+    /// </remarks>
+    public string AddressOf(int slot) =>
+        _roster[slot].Connection?.RemoteAddress.ToString() ?? string.Empty;
+
+    /// <summary>
+    /// Closes a player's connection.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ⚠️ <b>An operator action with no client equivalent</b>, and the only one
+    /// that ends a connection, so it does not go through <c>Execute</c>. The
+    /// client is sent the reference's own <c>KICK</c> message with
+    /// <see cref="KickReason.Operator"/> so it shows the player a kick rather
+    /// than a dropped connection, and the flush happens BEFORE the close — the
+    /// reference's plugin-packet
+    /// kick has the same requirement, and without it the message is buffered,
+    /// thrown away, and the player just sees a dropped connection.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>A bot is refused rather than removed.</b> A bot has no connection to
+    /// close, and the population manager would put it straight back on the next
+    /// tick; the honest answer is that the bot count is the thing to change.
+    /// </para>
+    /// </remarks>
+    public KickOutcome KickPlayer(int slot, string reason = "")
+    {
+        if (slot <= 0 || slot >= _roster.Count)
+            return KickOutcome.NoSuchSlot;
+
+        var connection = _roster[slot].Connection;
+
+        if (connection is null || connection.IsClosed)
+            return KickOutcome.NotAConnection;
+
+        var writer = new NetWriter(2);
+        ServerMessages.Kick(writer, KickReason.Operator);
+        connection.Send(writer.WrittenSpan);
+        connection.Flush();
+        connection.Close(reason.Length == 0 ? "kicked by the operator" : reason);
+
+        _log.Info(
+            $"kicked {_roster[slot].Name} (slot {slot})"
+            + (reason.Length == 0 ? string.Empty : $": {reason}"));
+
+        return KickOutcome.Kicked;
+    }
+
     /// <summary>
     /// The control port actually bound, or 0 when there is none.
     /// </summary>
@@ -1258,6 +1497,25 @@ public sealed class GameServer : IDisposable
     /// one makes the suite un-parallelisable and the failure intermittent.
     /// </remarks>
     public int ControlBoundPort => _control?.BoundPort ?? 0;
+
+    /// <summary>The web admin's port, or 0 when there is none.</summary>
+    /// <inheritdoc cref="ControlBoundPort" path="/remarks"/>
+    public int WebBoundPort => _web?.BoundPort ?? 0;
+
+    /// <summary>The password the web admin will accept, generated or configured.</summary>
+    public string WebPassword => _web?.Password ?? string.Empty;
+
+    /// <summary>
+    /// How many state snapshots the panel has published.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>A test hook, and it gates a claim rather than a behaviour</b>: the
+    /// panel is meant to cost a server with nobody watching nothing per tick, and
+    /// "only builds a snapshot when somebody is subscribed" is exactly the kind of
+    /// sentence this repo has been wrong about before. WebAdminTests watches this
+    /// number fail to move.
+    /// </remarks>
+    internal long WebSnapshotCount => _web?.SnapshotCount ?? 0;
 
     /// <summary>Whether the simulation is frozen.</summary>
     public bool IsFrozen => _frozen;
@@ -3268,6 +3526,9 @@ public sealed class GameServer : IDisposable
 
         _control?.Dispose();
         _control = null;
+
+        _web?.Dispose();
+        _web = null;
 
         foreach (var client in _clients)
             client.Connection.Dispose();

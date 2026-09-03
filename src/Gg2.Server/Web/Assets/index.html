@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="robots" content="noindex, nofollow">
+<title>gg2-server</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+
+<!-- Shown until /api/session answers, so the page never flashes the wrong view. -->
+<div id="boot" class="boot"><div class="spinner" aria-label="Loading"></div></div>
+
+<main id="login" class="login" hidden>
+  <form class="login-card" id="login-form" autocomplete="on">
+    <div class="login-mark">
+      <svg class="mark" viewBox="0 0 32 32" width="38" height="38" aria-hidden="true" focusable="false"><rect x="1" y="1" width="30" height="30" rx="8.5" fill="#12161d" stroke="#2c3542"/><path d="M7.5 23.5 16 6.5 16 23.5Z" fill="#e2564f"/><path d="M16 6.5 24.5 23.5 16 23.5Z" fill="#4f92dc"/><path d="M7.5 23.5h17" stroke="#8b97a8" stroke-width="1.6" stroke-linecap="round"/></svg>
+    </div>
+    <h1>gg2-server</h1>
+    <p class="login-name" id="login-server">&nbsp;</p>
+
+    <label class="field">
+      <span>Password</span>
+      <input type="password" id="password" name="password" autocomplete="current-password"
+             required autofocus spellcheck="false">
+    </label>
+
+    <button class="btn btn-primary btn-block" type="submit" id="login-button">Sign in</button>
+
+    <p class="login-error" id="login-error" role="alert" aria-live="polite" hidden></p>
+    <p class="login-note" id="login-insecure" hidden>
+      This connection is not encrypted. Your password crosses the network in the clear.
+    </p>
+  </form>
+</main>
+
+<div id="app" class="app" hidden>
+
+  <header class="topbar">
+    <div class="brand">
+      <svg class="mark" viewBox="0 0 32 32" width="26" height="26" aria-hidden="true" focusable="false"><rect x="1" y="1" width="30" height="30" rx="8.5" fill="#12161d" stroke="#2c3542"/><path d="M7.5 23.5 16 6.5 16 23.5Z" fill="#e2564f"/><path d="M16 6.5 24.5 23.5 16 23.5Z" fill="#4f92dc"/><path d="M7.5 23.5h17" stroke="#8b97a8" stroke-width="1.6" stroke-linecap="round"/></svg>
+      <div class="brand-text">
+        <strong id="server-name">gg2-server</strong>
+        <span class="brand-sub"><span id="server-port"></span></span>
+      </div>
+    </div>
+
+    <div class="chips" id="chips">
+      <span class="chip" id="chip-map" title="Current map"><i class="chip-key">map</i><b>—</b></span>
+      <span class="chip" id="chip-mode" title="Gamemode"><i class="chip-key">mode</i><b>—</b></span>
+      <span class="chip" id="chip-uptime" title="Time since this server started"><i class="chip-key">up</i><b>—</b></span>
+    </div>
+
+    <div class="topbar-right">
+      <span class="live" id="live" data-state="connecting"><span class="live-dot"></span><span id="live-text">connecting</span></span>
+      <button class="btn btn-quiet" id="logout" type="button">Sign out</button>
+    </div>
+  </header>
+
+  <div class="banner" id="banner" hidden role="status"></div>
+
+  <section class="scoreboard" aria-label="Round">
+    <div class="score score-red">
+      <span class="score-team">RED</span>
+      <span class="score-value" id="score-red">0</span>
+    </div>
+
+    <div class="score-mid">
+      <div class="clock" id="clock">--:--</div>
+      <div class="clock-sub" id="clock-sub">round</div>
+      <div class="setup" id="setup" hidden>SETUP <b id="setup-time"></b></div>
+    </div>
+
+    <div class="score score-blue">
+      <span class="score-value" id="score-blue">0</span>
+      <span class="score-team">BLU</span>
+    </div>
+  </section>
+
+  <section class="tiles" aria-label="Server health">
+    <div class="tile">
+      <span class="tile-key">tick</span>
+      <span class="tile-value"><b id="tile-tick">—</b><i>ms</i></span>
+      <div class="meter"><span id="tile-tick-bar"></span></div>
+      <span class="tile-note" id="tile-tick-note">of budget</span>
+    </div>
+    <div class="tile">
+      <span class="tile-key">players</span>
+      <span class="tile-value"><b id="tile-players">—</b><i id="tile-slots"></i></span>
+      <span class="tile-note" id="tile-bots">—</span>
+    </div>
+    <div class="tile">
+      <span class="tile-key">speed</span>
+      <span class="tile-value"><b id="tile-speed">—</b><i>×</i></span>
+      <span class="tile-note" id="tile-state">running</span>
+    </div>
+    <div class="tile">
+      <span class="tile-key">frame</span>
+      <span class="tile-value"><b id="tile-frame">—</b></span>
+      <span class="tile-note" id="tile-area"></span>
+    </div>
+  </section>
+
+  <div class="grid">
+
+    <div class="col col-main">
+      <article class="card card-map">
+        <header class="card-head">
+          <h2>Live map</h2>
+          <div class="card-tools">
+            <label class="toggle" title="Click the map to move the selected player there">
+              <input type="checkbox" id="teleport-mode">
+              <span>Click to teleport</span>
+            </label>
+          </div>
+        </header>
+        <div class="map-wrap">
+          <canvas id="map" width="1200" height="700"></canvas>
+          <div class="map-empty" id="map-empty">no map loaded</div>
+          <div class="map-tip" id="map-tip" hidden></div>
+        </div>
+        <footer class="card-foot" id="objective"></footer>
+      </article>
+
+      <article class="card">
+        <header class="card-head">
+          <h2>Players</h2>
+          <div class="card-tools">
+            <input type="search" id="filter" placeholder="Filter" spellcheck="false" aria-label="Filter players">
+          </div>
+        </header>
+        <div class="table-wrap">
+          <table class="roster">
+            <thead>
+              <tr>
+                <th class="c-slot">#</th>
+                <th class="c-name">Player</th>
+                <th class="c-class">Class</th>
+                <th class="c-hp">Health</th>
+                <th class="c-num">K</th>
+                <th class="c-num">D</th>
+                <th class="c-num">Caps</th>
+                <th class="c-num">Pts</th>
+                <th class="c-act"></th>
+              </tr>
+            </thead>
+            <tbody id="roster"></tbody>
+          </table>
+          <p class="empty" id="roster-empty" hidden>Nobody is connected.</p>
+        </div>
+      </article>
+    </div>
+
+    <div class="col col-side">
+      <article class="card">
+        <header class="card-head"><h2>Simulation</h2></header>
+        <div class="card-body stack">
+          <div class="btn-row">
+            <button class="btn btn-primary" id="freeze" type="button">Freeze</button>
+            <button class="btn" id="step-1" type="button" disabled>Step 1</button>
+            <button class="btn" id="step-30" type="button" disabled>Step 30</button>
+          </div>
+          <p class="hint" id="freeze-hint">Space freezes and resumes, <kbd>.</kbd> steps one tick.</p>
+
+          <div class="control">
+            <label for="speed">Speed</label>
+            <div class="seg" id="speed-seg" role="group" aria-label="Speed">
+              <button class="seg-btn" data-speed="0.25" type="button">¼×</button>
+              <button class="seg-btn" data-speed="0.5" type="button">½×</button>
+              <button class="seg-btn is-on" data-speed="1" type="button">1×</button>
+              <button class="seg-btn" data-speed="2" type="button">2×</button>
+              <button class="seg-btn" data-speed="max" type="button">max</button>
+            </div>
+            <p class="hint warn" id="speed-warn" hidden>
+              Anything but 1× desynchronises every connected client.
+            </p>
+          </div>
+        </div>
+      </article>
+
+      <article class="card">
+        <header class="card-head"><h2>Bots</h2></header>
+        <div class="card-body stack">
+          <div class="control">
+            <label for="bots">Fill the server to</label>
+            <div class="stepper">
+              <button class="btn btn-icon" id="bots-down" type="button" aria-label="Fewer bots">−</button>
+              <input type="number" id="bots" min="0" max="48" value="0" inputmode="numeric">
+              <button class="btn btn-icon" id="bots-up" type="button" aria-label="More bots">+</button>
+              <button class="btn btn-primary" id="bots-apply" type="button">Apply</button>
+            </div>
+            <p class="hint">0 turns bots off. Humans always displace bots.</p>
+            <p class="hint warn" id="bots-warn" hidden></p>
+          </div>
+        </div>
+      </article>
+
+      <article class="card">
+        <header class="card-head"><h2>Map</h2></header>
+        <div class="card-body stack">
+          <div class="control">
+            <label for="map-pick">Change to</label>
+            <div class="row">
+              <input list="map-list" id="map-pick" placeholder="Search maps" spellcheck="false" autocomplete="off">
+              <datalist id="map-list"></datalist>
+              <button class="btn btn-primary" id="map-go" type="button">Go</button>
+            </div>
+            <p class="hint">Ends the round immediately for everyone on the server.</p>
+          </div>
+          <div class="rotation" id="rotation" hidden>
+            <span class="rotation-key">rotation</span>
+            <div class="rotation-list" id="rotation-list"></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="card card-log">
+        <header class="card-head">
+          <h2>Log</h2>
+          <div class="card-tools">
+            <label class="toggle"><input type="checkbox" id="log-follow" checked><span>Follow</span></label>
+          </div>
+        </header>
+        <div class="log" id="log" role="log" aria-live="off"></div>
+      </article>
+    </div>
+  </div>
+
+  <footer class="foot">
+    <span id="foot-note">gg2-server web admin</span>
+  </footer>
+</div>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<dialog class="confirm" id="confirm">
+  <h3 id="confirm-title">Are you sure?</h3>
+  <p id="confirm-body"></p>
+  <div class="btn-row btn-row-end">
+    <button class="btn" value="cancel" id="confirm-no" type="button">Cancel</button>
+    <button class="btn btn-danger" value="ok" id="confirm-yes" type="button">Confirm</button>
+  </div>
+</dialog>
+
+<script src="/app.js" defer></script>
+</body>
+</html>
