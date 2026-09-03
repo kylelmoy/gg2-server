@@ -1663,9 +1663,11 @@ public sealed class PathFollower
         state.PathStale = state.HasPath;
 
         // Event-driven: plan on the next follower tick rather than waiting out
-        // the timer.
+        // the timer. ⚠️ That is why this is counted: a goal reissue is a search,
+        // and it is the majority of them — see BotPathState.GoalsSet.
         state.ReplanAt = 0;
         state.PlanFailUntil = 0;
+        state.GoalsSet++;
         return true;
     }
 }

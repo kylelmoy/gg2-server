@@ -442,6 +442,121 @@ costs **6.84 µs against the search's 29 µs**. ⚠️ **Replacing it was tried 
 a hand-written 4-ary heap reproducing .NET's tie-breaking exactly is **7% faster
 than it**, which is half a percent of a tick.
 
+### ⛔ The bot poll BELOW the top level — the combat half is AT ITS FLOOR
+
+**Measured 2026-09-02, Release, net10.0, `ctf_truefort`, twelve scripted bots,
+twelve whole matches (162,000 ticks) with a probe-off control arm.** The tick
+this was taken on reads **13.18 µs** with the probe removed and 15.91 with it in,
+so the probe is not free — see the overhead note below — and the shares are what
+transfer, not the absolute microseconds.
+
+| | µs a tick | ns a call | calls a tick |
+|---|---|---|---|
+| **`BotCombat.Step`** | **3.22** | 298 | 10.8 |
+| `BotClassKeys.For` | 0.73 | 72 | 10.1 |
+| — of which **`BotArc.Clear`** | **0.47** | **654** | 0.9 |
+| `KeepOrDropTarget` | 0.40 | 37 | 10.8 |
+| — of which the perceive-cadence sightline | 0.10 | 219 | 0.46 |
+| `LookForOne` | 0.36 | 33 | 10.8 |
+| — of which `BotTargeting.Find` | 0.17 | 335 | 0.55 |
+| `SolveAim` | 0.38 | 144 | 2.7 |
+| — of which **`BotAim.FloorUnder`** | **0.19** | **267** | 0.68 |
+| — of which `BotAim.Solve` itself | 0.10 | 143 | 0.68 |
+| the medic's ally lookup | 0.18 | 17 | 10.8 |
+| `Perceive` | 0.05 | 18 | 2.7 |
+
+✅ **The three items the queue named reproduce**: `KeepOrDropTarget` 0.49 → 0.40,
+`LookForOne` 0.38 → 0.36, `SolveAim` 0.39 → 0.38. ⛔ **And there is nothing
+hiding under them.** Each is one callee plus a cadence test, the residual in
+`BotCombat.Step` after its six children is 1.13 µs against 1.34 µs of probe
+overhead for those children, and **`BotSuppress.Spot` never fires at all** in a
+twelve-bot `ctf_truefort` match — 0 calls in 162,000 ticks.
+
+⛔ **So the combat half has no large exact-equivalence win left**, and the three
+biggest things in it are each doing the work they exist for:
+
+- **`BotArc.Clear` at 654 ns** is 58% segment walk, 15% `BulletRectsIn`, 27%
+  laying out the samples. ⚠️ **The rect filter part 9 added has already done its
+  job** — it returns **0.05 rects a call** — so what is left is the mask walk
+  along the parabola, one sample a pixel, which is the test itself. Reordering
+  the ten segments to try the likeliest blocker first was **costed and
+  rejected**: 42% of calls are blocked, segment 10 is a third of those, and the
+  arithmetic comes to 7.74 → 7.50 segments walked a call (**3%**), because the
+  58% of calls that are CLEAR walk all ten whatever the order.
+- **`BotAim.FloorUnder` at 267 ns is twice `BotAim.Solve`'s 143.** It is
+  `NavGraph.SnapObjective`, and it costs **4.0 downward `NodeFromWorld` probes a
+  call**. The ballistic solver everyone would look at first is the cheaper half.
+- **`BotTargeting.Find` at 335 ns** scans all 64 roster slots twice — once for
+  characters, once for sentries — for a roster of about thirteen. ⚠️ **That
+  pattern is 75 loops across the repo and about 40 of them are in
+  `Gg2.Simulation`**, which is the other 40% of the tick; a roster high-water
+  bound in `WorldState` is one change that reaches all of them, and it is not
+  worth doing for `BotTargeting.Find` alone.
+
+⚠️ **Below about 100 ns a call, a `Stopwatch` stage timer is measuring itself.**
+`GetTimestamp` costs **14 ns** on this box (5,000,000 iterations, warm) and
+`Stopwatch.Frequency` is **10 MHz** — a 100 ns quantum, unbiased over many calls
+but not per call. A region timed at 17-45 ns a call, which is most of this table,
+is within the instrument. The rows to trust are the ones in the hundreds.
+
+⛔ **The claim above that the probe costs "0.05 µs of the 6 µs tick, because
+`GetTimestamp` is an rdtsc-backed read of about 3 ns" is WRONG and is left in
+place with this correction beside it.** Measured 2026-09-02: 14 ns a read, and a
+sixteen-bucket probe over a twelve-bot poll costs **2.3-2.7 µs of a 13 µs tick**
+— 20%, not 0.8%. Any attribution taken with one needs the probe-off control arm
+that `BENCH_COMBAT` runs, and the two numbers reported side by side.
+
+### ⛔ The A\* budget is owned by the OBJECTIVE layer, not by the re-plan cadence
+
+**Measured 2026-09-02, same configuration.** A twelve-bot `ctf_truefort` match
+runs **321.1 searches a thousand ticks** at 8.5 µs each — **2.79 µs of a 12.3 µs
+tick, 23%**. Where they come from:
+
+| | searches / 1000 ticks | share |
+|---|---|---|
+| **a goal reissue** (`SetGoal` arms `ReplanAt = 0`) | **181.1** | **56%** |
+| the re-plan timer expiring | 97.3 | 30% |
+| a lost route, a stuck bot, an unroutable edge | 42.7 | 13% |
+
+⛔ **`BotConstants.ReplanTicks` is therefore the smaller half, and raising it is
+REJECTED on measurement.** The ladder, each rung built and run round-robin
+against the others so a drift in the machine hits all of them:
+
+| `ReplanTicks` | searches / 1000t | `ScenarioSuiteTests` total | rocket jumps |
+|---|---|---|---|
+| **45 (shipping)** | **321.1** | **6,142** | **6** |
+| 60 | 304.7 (−5.1%) | 6,764 (**+10.1%**) | 9 |
+| 90 | 289.2 (−9.9%) | 7,157 (**+16.5%**) | 8 — and `gallery-pit-climb` FAILS |
+| 135 | 266.4 (−17.0%) | — | — |
+| 180 | 251.6 (−21.6%) | — | — |
+
+⚠️ **Quadrupling the interval removes only 22% of the searches**, because the
+objective layer keeps forcing them, and it buys that with walking time at
+roughly one-for-one. **The cadence is at a good value; do not spend a session
+tuning it.**
+
+⛔ **The reading that "the timer drives 75% of searches" is WRONG and is the
+trap here.** Every event-driven re-plan sets `ReplanAt = 0` rather than calling
+`Plan` directly, so the call site under `tick >= state.ReplanAt` counts the timer
+AND every event together — 278 a thousand ticks, of which only 97 are actually
+the timer. **Split them on whether `ReplanAt` was 0**, which is what
+`BotPathState.GoalsSet` now records permanently.
+
+⚠️ **The goal reissues are NOT oscillation, which was the next guess.** Only
+**5.5 a thousand ticks** land back within 48px of the goal before last. Of the
+114 that move from a goal the bot already had, 30% move 48-96px, 29% 96-144px and
+15% more than 336px — progressive retargeting, not jitter. The other 67 are bots
+with no goal at all. **So the lever left on this side is
+`BotConstants.GoalRetargetDist`, and it is a behaviour change that
+`ScenarioSuiteTests` CANNOT see** — every leg there has one fixed goal and calls
+`SetGoal` once. It needs `BotObjectiveTests`' intel run and `eval`.
+
+⛔ **Clearing A\*'s three arrays is NOT the win it looks like.** `Array.Fill` on
+`_gScore` and `_cameFrom` plus `Array.Clear` on `_closed` is O(node count) a
+search whatever the search explores, which reads like a generation-stamp
+opportunity. Measured: **0.038 µs a tick — 1.4% of A\*, 0.3% of the tick.** A
+search pops about 100 nodes of `ctf_truefort`'s 687. Do not re-derive this.
+
 ### ⛔ The .NET sampling profiler was wrong THREE times here. Use in-process timers.
 
 `dotnet-trace --providers Microsoft-DotNETCore-SampleProfiler` on this workload

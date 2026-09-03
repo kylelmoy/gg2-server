@@ -286,6 +286,29 @@ closed-set skip makes the search SLOWER**, 636 pops against 408, because an
 inconsistent heuristic re-opens more. The whole measurement, and the three
 instruments that could NOT choose the weight, are in `docs/ARCHITECTURE.md`.
 
+⛔ **THE SEARCH BUDGET IS OWNED BY THE OBJECTIVE LAYER, NOT BY THE CADENCE**
+— measured 2026-09-02 and the thing to know before touching any of it. A
+twelve-bot `ctf_truefort` match runs **321 searches a thousand ticks**, and
+**181 of them are a goal reissue**: `PathFollower.SetGoal` sets `ReplanAt = 0`,
+so every time `ScriptedBot.UpdateObjective` decides the goal has moved more than
+`BOT_GOAL_RETARGET_DIST` the bot buys a full A\* on its next follower tick. The
+re-plan timer is 97 and a lost route 43.
+⛔ **Raising `BotConstants.ReplanTicks` is REJECTED, measured**: 45 → 90 removes
+**9.9%** of the searches and costs **16.5%** of `ScenarioSuiteTests`' total
+walking time, with `gallery-pit-climb` failing outright; 45 → 60 is −5.1% for
++10.1%. Quadrupling it to 180 removes only 22%, because the objective layer goes
+on forcing them. **Do not spend a session tuning the cadence.**
+⚠️ **And do not read the call-site counts as the timer's**: every event-driven
+re-plan sets `ReplanAt = 0` rather than calling `Plan`, so the site under
+`tick >= state.ReplanAt` fires 278 times a thousand ticks while the timer itself
+accounts for 97. `BotPathState.GoalsSet` is the split, recorded permanently, and
+`BENCH_COMBAT` prints it beside `Replans`.
+⚠️ **The reissues are progressive, not oscillation** — only 5.5 a thousand ticks
+come back within 48px of the goal before last — so the lever that is left is
+`BOT_GOAL_RETARGET_DIST`, and ⛔ **`ScenarioSuiteTests` cannot see it**: every leg
+there has one fixed goal and calls `SetGoal` once. That measurement needs
+`BotObjectiveTests`' intel run and `eval`.
+
 ⛔ **A quarter of a search is `PriorityQueue`, and replacing it is REJECTED** — a
 hand-written 4-ary heap reproducing .NET's tie-breaking exactly (checksummed
 identical over 425,000 pops) is 7% faster than it, half a percent of a tick.
@@ -604,6 +627,30 @@ Gated by `BotCombatTests`. The reference is `botCombatUpdate.gml`,
 
 ✅ **A bot now sees, acquires, aims and fires.** ⚠️ Nothing wires it to a server
 yet — that is 4d.
+
+⛔ **THE COMBAT HALF IS AT ITS FLOOR, measured 2026-09-02.** `BotCombat.Step` is
+**3.2 µs of a 13.2 µs twelve-bot tick (24%)**, and every part of it has now been
+attributed: `BotClassKeys.For` 0.73 (of which **`BotArc.Clear` 0.47 at 654 ns a
+call**), `KeepOrDropTarget` 0.40, `SolveAim` 0.38, `LookForOne` 0.36, the medic's
+ally lookup 0.18, `Perceive` 0.05. **There is no unattributed cost under any of
+them** — each is one callee plus a cadence test — and **there is no large
+exact-equivalence win left.** The table, and the three things measured and
+rejected, are in `docs/ARCHITECTURE.md`, "The bot poll BELOW the top level".
+The headlines, so nobody re-derives them:
+
+- ⚠️ **`BotAim.FloorUnder` (267 ns) is TWICE `BotAim.Solve` (143 ns).** The
+  ballistic solver is the cheap half; the expensive half is
+  `NavGraph.SnapObjective`, at 4.0 downward `NodeFromWorld` probes a call.
+- ⚠️ **`BotSuppress.Spot` never fires** in a twelve-bot `ctf_truefort` match —
+  0 calls in 162,000 ticks. Anything measured about it comes from a fixture.
+- ⚠️ **Reordering `BotArc.Clear`'s ten segments to try the likeliest blocker
+  first was costed and REJECTED** — 3%, because the 58% of calls that are clear
+  walk all ten whatever the order. Its rect filter already returns **0.05 rects a
+  call**, so what remains is the mask walk itself.
+- ⛔ **Below about 100 ns a call a `Stopwatch` stage timer measures itself**:
+  `GetTimestamp` is 14 ns here and `Stopwatch.Frequency` is 10 MHz. Most of the
+  combat rows are 17-45 ns a call. **Trust the rows in the hundreds and run the
+  probe-off control arm**, which is a fifth of the poll.
 
 **The see → acquire → aim-settled → fire chain is the whole difficulty model.**
 Four gates, all off `BotSkill`:

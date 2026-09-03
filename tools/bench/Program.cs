@@ -21,6 +21,14 @@ var spec = new DuelSpec
     ActionRepeat = 2,
 };
 
+if (Environment.GetEnvironmentVariable("BENCH_COMBAT") is { } combatTicks)
+{
+    var cnd = Environment.GetEnvironmentVariable("GG2_NAV");
+    if (cnd is not null && !Directory.Exists(cnd)) cnd = null;
+    Bench.CombatBench.Run(maps, cnd, Environment.GetEnvironmentVariable("BENCH_MAP") ?? "ctf_truefort", int.Parse(combatTicks));
+    return;
+}
+
 if (Environment.GetEnvironmentVariable("BENCH_SEARCH") == "1")
 {
     var snd = Environment.GetEnvironmentVariable("GG2_NAV");

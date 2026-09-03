@@ -31,7 +31,8 @@ Common to most modes:
 
 The whole reason this exists in the repo rather than in a scratch directory is
 the set of measurement traps in `docs/BOTS.md`, "Measuring a bot change". The
-eight built into the code here.
+nine built into the code here — ⚠️ and that count has been wrong once already; if
+the list below is longer than this sentence says, the list is right.
 
 ⛔ **Traps 1, 5 and 7 are ONE rule wearing three coats, and naming it stops this
 list growing an entry per instance: remove the separation that lets a qualifier be
@@ -110,6 +111,20 @@ guard site and a method signature.
    ⚠️ **Re-measure before repeating any factor out of this mode** — it is a
    wall-clock ratio on a 24-core machine, and it is not portable to another one.
 
+9. ⛔ **The first SECONDS of a bench process on this box run 5-30x slow, and trap
+   3 and trap 8 both miss it.** A settled twelve-bot match is ~12 µs a tick; the
+   first ~15,000 ticks read **50-260**, reproducibly, with every region scaling
+   together and the A\* call count unchanged — so it is a clock or scheduler ramp,
+   not a code path and not the JIT. ⚠️ **Trap 3 warms by iteration count and trap
+   8 warms the first row of a ladder; this outlasts both by an order of magnitude
+   in wall clock**, and a mode that warms by ticks reports the ramp as its
+   measurement. `BENCH_COMBAT` warms with a **stability test on wall time** and
+   prints `settled=`; a ladder should build every rung first and then run them
+   **round-robin**, which is what makes a slow drift hit all of them equally.
+   ⚠️ It also means the mean across runs is a measure of what else was on the
+   machine. **Quote the minimum, and repeat the run when min and median disagree
+   by more than a few percent.**
+
 ## Modes that matter for bot work
 
 | variable | what it does |
@@ -117,6 +132,7 @@ guard site and a method signature.
 | `BENCH_PERMAP=<n>` | **the criterion.** Every shipped map, `n` matches an arm, policy against an all-scripted control. Prints absolute win and death counts, a two-proportion z per comparison, and `capped`. `BENCH_CAP=<minutes>` sets the match cap. |
 | `BENCH_SWEEP=<n>` | **the mechanism.** Control plus policy at each engagement range in `BENCH_RANGES`. Prints the policy's share of control, both death-share estimators, the zero-death count, why each match ended, and — at `BENCH_CAP > 5` — the matches stratified by the 300-second boundary. |
 | `BENCH_ARMS=<n>` | **arm 3.** Every shipped map, `n` matches an arm, THREE arms: all-scripted, policy hybrid, search hybrid. Prints death share per arm, each hybrid’s control share, and ⛔ **max tick time per arm as a co-primary GATE** — an arm over 33.3 ms is unshippable whatever its death share, and the death-share criterion cannot see it. `BENCH_BOTS=<n>` sets the bot count: ⚠️ **8 keeps the death share comparable to phase 4; 12 is the shipping configuration and the one whose tick tail matters.** Run both and say which each number came from. |
+| `BENCH_COMBAT=<n>` | **what a twelve-bot match costs, and how many A\* searches it buys.** `n` whole matches on `BENCH_MAP`, after a warm-up that runs matches until three consecutive ones agree within 8%. Prints min/med/max µs a tick, `searches`/1000 ticks and `goals`/1000 ticks — the second being `BotPathState.GoalsSet`, the half of the search budget the objective layer owns (**181 of 321** on `ctf_truefort`). ⛔ **Read the minimum, not the mean**, and ⛔ **a run printing `settled=False` measured the ramp** — see the file's own remarks and trap 9. |
 | `BENCH_CONST=1` | prints `SimulationStamp.Uuid`, `ObservationWriter.Length`, `ActionDecoder.AimBins` and the encoding version. ⚠️ **This is how you read the digest** when a stamp bump lands and `gg2-rl` needs to know whether its checkpoints survive — cheaper and less error-prone than running the test that pins it. |
 | `BENCH_POLICYCOST=1` | one forward pass and one observation extraction, in nanoseconds. `OBS` points at an observations fixture. |
 | `BENCH_SEARCH=1` | a `RolloutSearch` decision's cost, split into the per-candidate fork and the per-candidate tick by sweeping the horizon. ⚠️ **`BENCH_POP=<n>` sets how many characters are ALIVE** and defaults to 2 — see trap 6. `BENCH_CLASS=sniper` measures the 120-candidate set; `BENCH_CADENCE` sets the continuation cadence. |
