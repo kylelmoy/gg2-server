@@ -551,6 +551,37 @@ with no goal at all. **So the lever left on this side is
 `ScenarioSuiteTests` CANNOT see** — every leg there has one fixed goal and calls
 `SetGoal` once. It needs `BotObjectiveTests`' intel run and `eval`.
 
+⛔ **AND THE SEARCH BUDGET IS CONSERVED — BOTH THROTTLES DISPLACE SEARCHES
+RATHER THAN REMOVING THEM.** `BotConstants.GoalRetargetDist`, laddered the same
+way, twelve bots on `ctf_truefort`:
+
+| `GoalRetargetDist` | goal reissues / 1000t | **searches / 1000t** |
+|---|---|---|
+| **48 (shipping)** | **181.1** | **321.1** |
+| 96 | 155.5 (−14.1%) | **321.2 (0.0%)** |
+| 144 | 127.8 (−29.4%) | 300.6 (−6.4%) |
+
+⚠️ **Cutting the reissues by a seventh removes NOTHING.** A bot given a staler
+goal goes off route or runs out of route instead, and re-plans from there: at 144
+the goal reissues are down 53 a thousand ticks and the timer-and-lost-route
+searches are up 33, so **about three fifths of every search removed at one
+throttle comes back at another.** Both counters are committed
+(`BotPathState.GoalsSet` beside `Replans`), so this is checkable without a probe.
+
+⛔ **So "fewer searches" is CLOSED as a lever.** The cadence costs walking time
+one-for-one, the retarget threshold buys nothing, and between them they are 86%
+of the budget. **What is left of the queue's item is a smaller graph**, which is
+the one thing here that changes the cost of a search rather than their number.
+
+⚠️ **And nothing in this repo could have seen a `GoalRetargetDist` REGRESSION
+even if the lever had worked** — a gate that cannot fire, in CLAUDE.md's sense.
+`ScenarioSuiteTests` gives every leg one fixed goal and calls `SetGoal` once;
+`BotObjectiveTests`' intel run chases a flag that does not move until it is
+grabbed; `eval` and `BENCH_PERMAP` change both teams at once and are blind to a
+symmetric one. **Measuring that knob honestly needs it to become per-bot first,
+so an arm can differ from its control** — and building that criterion is the
+item, not the tuning.
+
 ⛔ **Clearing A\*'s three arrays is NOT the win it looks like.** `Array.Fill` on
 `_gScore` and `_cameFrom` plus `Array.Clear` on `_closed` is O(node count) a
 search whatever the search explores, which reads like a generation-stamp

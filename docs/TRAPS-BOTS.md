@@ -303,6 +303,20 @@ re-plan sets `ReplanAt = 0` rather than calling `Plan`, so the site under
 `tick >= state.ReplanAt` fires 278 times a thousand ticks while the timer itself
 accounts for 97. `BotPathState.GoalsSet` is the split, recorded permanently, and
 `BENCH_COMBAT` prints it beside `Replans`.
+⛔ **AND THE BUDGET IS CONSERVED: `BOT_GOAL_RETARGET_DIST` BUYS NOTHING EITHER.**
+48 → 96 cuts goal reissues 14% and leaves the search count **exactly where it
+was** (321.1 → 321.2); 48 → 144 cuts them 29% for **6.4%** fewer searches. A bot
+with a staler goal goes off route or runs out of route and re-plans from there —
+about three fifths of every search removed at one throttle returns at another.
+⛔ **"Fewer searches" is therefore CLOSED as a lever**: the two throttles are 86%
+of the budget, one costs walking time one-for-one and the other buys nothing.
+A smaller graph is what is left.
+⚠️ **Also worth knowing before anyone tries: no criterion in this repo could see
+a `BOT_GOAL_RETARGET_DIST` regression** — the suite's legs have one fixed goal,
+the intel run's flag does not move until it is grabbed, and `eval` changes both
+teams at once. **The knob would have to become per-bot first**, so an arm can
+differ from its control.
+
 ⚠️ **The reissues are progressive, not oscillation** — only 5.5 a thousand ticks
 come back within 48px of the goal before last — so the lever that is left is
 `BOT_GOAL_RETARGET_DIST`, and ⛔ **`ScenarioSuiteTests` cannot see it**: every leg
