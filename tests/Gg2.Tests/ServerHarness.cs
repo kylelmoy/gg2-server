@@ -15,7 +15,7 @@ public sealed class ServerHarness : IDisposable
 {
     private readonly List<LoopbackClient> _clients = [];
 
-    public ServerHarness(Action<ServerOptions>? configure = null)
+    public ServerHarness(Action<ServerOptions>? configure = null, Action<GameServer>? configureServer = null)
     {
         ReferenceTree.RequireAvailable();
 
@@ -30,6 +30,12 @@ public sealed class ServerHarness : IDisposable
         configure?.Invoke(Options);
 
         Server = new GameServer(Options, Log);
+
+        // ⚠️ Before Start(), which is where plugin hashes are resolved. A test
+        // that let that fall through to the default source would be reaching
+        // ganggarrison.com over HTTP from a unit test.
+        configureServer?.Invoke(Server);
+
         Server.Start();
     }
 
@@ -92,8 +98,12 @@ public sealed class ServerHarness : IDisposable
         Assert.Equal(Options.ServerName, client.TakeString1());
         Assert.Equal(Options.Map, client.TakeString1());
         Assert.Equal(string.Empty, client.TakeString1()); // built-in map: no MD5
-        Assert.Equal(0, client.TakeByte());               // pluginsRequired
-        Assert.Equal(string.Empty, client.TakeString2()); // pluginList
+        // ⚠️ Read from the server rather than hardcoded to "no plugins". These
+        // two fields sit between the map hash and everything after it, so a
+        // harness that assumed them would mis-frame every later assertion the
+        // moment a test configured a plugin list.
+        Assert.Equal(Options.ServerPluginsRequired ? (byte)1 : (byte)0, client.TakeByte());
+        Assert.Equal(Server.AdvertisedPlugins, client.TakeString2());
 
         client.SendReserveSlot(name);
         TickUntil(() => client.Received.Count > 0, "the slot reservation");

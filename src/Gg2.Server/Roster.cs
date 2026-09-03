@@ -20,6 +20,23 @@ public sealed class RosterEntry
     /// <summary>The socket this player speaks through, or null for a bot or slot 0.</summary>
     public ClientConnection? Connection { get; init; }
 
+    /// <summary>
+    /// An id that does <b>not</b> move when the roster compacts.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Never on the wire, and never a substitute for the slot index.</b>
+    /// Everything a client sees names a player by position, and that is not
+    /// negotiable. This exists for the server's own side of a question that
+    /// outlives a departure — "the vote running right now is about whom?" — where
+    /// a slot index would silently retarget when somebody unrelated
+    /// disconnects.
+    /// <para>
+    /// The reference's plugin API has exactly this, as <c>Player.gid</c>, which
+    /// is some evidence it is the right shape rather than a convenience.
+    /// </para>
+    /// </remarks>
+    public long StableId { get; internal set; }
+
     public bool IsBot { get; init; }
 
     /// <summary>
@@ -141,13 +158,16 @@ public sealed class Roster
 {
     private readonly List<RosterEntry> _entries = [];
 
+    /// <summary>Never reused, so a departed player's id matches nobody.</summary>
+    private long _nextStableId;
+
     /// <summary>
     /// Creates the roster with slot 0 filled by a permanent spectator standing
     /// in for the reference's local player.
     /// </summary>
     public Roster(string serverPlayerName)
     {
-        _entries.Add(new RosterEntry { Name = serverPlayerName, Team = Team.Spectator });
+        _entries.Add(new RosterEntry { Name = serverPlayerName, Team = Team.Spectator, StableId = _nextStableId++ });
     }
 
     public int Count => _entries.Count;
@@ -162,8 +182,19 @@ public sealed class Roster
     /// <summary>Appends an entry; its id is the index it lands at.</summary>
     public int Add(RosterEntry entry)
     {
+        entry.StableId = _nextStableId++;
         _entries.Add(entry);
         return _entries.Count - 1;
+    }
+
+    /// <summary>The slot holding <paramref name="stableId"/>, or -1 if it left.</summary>
+    public int SlotOfStableId(long stableId)
+    {
+        for (var i = 0; i < _entries.Count; i++)
+            if (_entries[i].StableId == stableId)
+                return i;
+
+        return -1;
     }
 
     /// <summary>Removes the entry at <paramref name="index"/>, compacting the list.</summary>

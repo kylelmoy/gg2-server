@@ -328,8 +328,13 @@ public sealed class JoiningConnection(ClientConnection connection, DateTime now)
             // Empty means "built into the client", and it is also the reference's
             // own guard against serving one: see the DOWNLOAD_MAP case.
             mapMd5: context.MapMd5 ?? string.Empty,
-            pluginsRequired: false,
-            pluginList: string.Empty);
+            // ⚠️ The client derives each plugin's packet id from this string's
+            // ORDER, so it is the server's plugin set verbatim and never
+            // re-sorted. Empty means "no plugins", and the client's whole plugin
+            // path is then skipped (ClientBeginStep.gml:60,
+            // `string_length(plugins)`).
+            pluginsRequired: context.PluginsRequired,
+            pluginList: context.PluginList ?? string.Empty);
     }
 
     /// <summary>
@@ -419,4 +424,27 @@ public readonly struct JoinContext
     /// connection that has already reserved.
     /// </summary>
     public required int OccupiedSlots { get; init; }
+
+    /// <summary>
+    /// The greeting's <c>pluginList</c>: <c>name@md5</c> per plugin, joined by
+    /// commas, or empty for a server with none.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ No <c>= string.Empty</c> initialiser, for the same reason
+    /// <see cref="MapMd5"/> has none — an object-initialised struct with one
+    /// needs an explicit constructor. A default <see cref="JoinContext"/>
+    /// therefore has a null list, and the greeting writes the empty string for
+    /// it.
+    /// </remarks>
+    public string? PluginList { get; init; }
+
+    /// <summary>
+    /// Whether the client must load those plugins to join.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ Advisory. It picks which dialog the client shows and nothing else; the
+    /// reference server does not check that a client complied and neither does
+    /// this one. See <c>ServerOptions.ServerPluginsRequired</c>.
+    /// </remarks>
+    public bool PluginsRequired { get; init; }
 }

@@ -6,12 +6,17 @@ namespace Gg2.Tests;
 /// What a server with no plugins does with a <c>PLUGIN_PACKET</c>.
 /// </summary>
 /// <remarks>
-/// ⛔ <b>Plugin support itself is not portable and this is not an attempt at
-/// it.</b> A GG2 plugin is a zip of GML downloaded from ganggarrison.com and
-/// executed inside Game Maker 8 (<c>loadserverplugins.gml</c>,
-/// <c>extractzip.gml</c>); a C# server cannot run one. What IS portable is the
-/// behaviour of a server that has loaded none, and that behaviour is not
-/// "ignore".
+/// ⚠️ <b>This file used to open by saying plugin support "is not portable and
+/// this is not an attempt at it".</b> That was wrong, and it is worth leaving
+/// the correction here rather than deleting the claim: a plugin is ONE script
+/// with <c>global.isHost</c> branches in it, so only the client's half has to be
+/// GML. The host's half can be C# that speaks the same packets, and as of
+/// 2026-09-03 it is — see <c>docs/PLUGINS.md</c>, <see cref="PluginWireTests"/>
+/// and <see cref="ChatV2PluginTests"/>.
+/// <para>
+/// What this file still covers, unchanged, is the <b>default</b>: a server with
+/// no plugins configured, whose answer to a plugin packet is not "ignore".
+/// </para>
 /// <para>
 /// <c>processClientCommands.gml:338-362</c> passes the packet to
 /// <c>_PluginPacketPush</c>, which returns false when the id is absent from
@@ -23,18 +28,24 @@ namespace Gg2.Tests;
 /// <para>
 /// ⚠️ <b>A stock client cannot reach this</b>, which is why it went unnoticed:
 /// the client only sends plugin packets for plugins in the list the HELLO
-/// advertised, and this server advertises none. Reaching it means a client that
-/// invented a packet id — exactly who the reference kicks.
+/// advertised, and a server with none advertises none. Reaching it means a
+/// client that invented a packet id — exactly who the reference kicks. The same
+/// holds once plugins ARE loaded, for any id above the list's last;
+/// <see cref="PluginWireTests"/> covers that boundary.
 /// </para>
 /// </remarks>
 public sealed class PluginPacketTests
 {
-    /// <summary>The HELLO promises no plugins, which is what keeps the kick unreachable.</summary>
+    /// <summary>
+    /// With nothing configured, the HELLO promises no plugins — which is what
+    /// keeps the kick unreachable for a default server.
+    /// </summary>
     /// <remarks>
-    /// ⚠️ The load-bearing half of the pair. If this ever advertised a plugin,
-    /// stock clients would start sending packets the server can only answer by
-    /// kicking them — so the advertisement and the kick have to stay consistent,
-    /// and the advertisement is the one that must not change.
+    /// ⚠️ The load-bearing half of the pair: the advertisement and the kick must
+    /// agree, or a stock client sends packets the server can only answer by
+    /// kicking it. That invariant is now the general one — the kick's boundary
+    /// is the advertised list's length — and this asserts the default end of it,
+    /// that configuring nothing advertises nothing.
     /// </remarks>
     [Fact]
     public void TheGreetingAdvertisesNoPluginsAndDoesNotRequireThem()

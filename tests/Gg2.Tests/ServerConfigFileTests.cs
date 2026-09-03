@@ -326,21 +326,21 @@ public sealed class ServerConfigFileTests : IDisposable
     /// than half-honoured.
     /// </summary>
     /// <remarks>
-    /// <c>docs/PROTOCOL.md</c> lists plugins, rewards and UPnP as deliberately
-    /// absent. ⚠️ This test is here so that stays a decision: if somebody adds
-    /// <c>ServerPluginList</c> to the reader without implementing plugins, the
-    /// server would advertise a plugin list it cannot serve and every client
-    /// would hang waiting for one.
+    /// <c>docs/PROTOCOL.md</c> lists rewards and UPnP as deliberately absent.
+    /// ⚠️ This test used to cover <c>ServerPluginList</c> too, with the reason
+    /// "the server would advertise a plugin list it cannot serve". That reason
+    /// expired when the plugin layer landed — see
+    /// <see cref="PluginConfigTests"/>, which now asserts the opposite for those
+    /// two keys. It is worth knowing that the ignore came out <em>with</em> the
+    /// implementation and not before it.
     /// </remarks>
     [Fact]
-    public void PluginAndUpnpKeysAreIgnored()
+    public void UnimplementedServerKeysAreIgnored()
     {
         var options = Load(Write("gg2.ini",
             """
             [Server]
             ServerName=x
-            ServerPluginList=SomePlugin
-            ServerPluginsRequired=1
             Attempt UPnP Forwarding=1
             """));
 

@@ -127,6 +127,15 @@ public static class ServerConfigFile
         options.ServerName = Text(ini, "Server", "ServerName", options.ServerName);
         options.WelcomeMessage = Text(ini, "Server", "WelcomeMessage", options.WelcomeMessage);
         options.Password = Text(ini, "Server", "Password", options.Password);
+
+        // ⚠️ These two used to be deliberately ignored, and the note saying so
+        // was right at the time: reading ServerPluginList without implementing
+        // plugins would advertise a list the server could not serve. It can now
+        // — see ServerPlugins — so the ignore came out with the implementation
+        // and not before.
+        options.ServerPluginList = Text(ini, "Server", "ServerPluginList", options.ServerPluginList);
+        options.ServerPluginsRequired = Bool(
+            ini, "Server", "ServerPluginsRequired", options.ServerPluginsRequired);
         options.Autobalance = Bool(ini, "Server", "AutoBalance", options.Autobalance);
         options.MapDownloadBytesPerSecond = Int(
             ini,
