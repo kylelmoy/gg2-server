@@ -2547,11 +2547,12 @@ failing to *send* something. A disagreement between the port's writer and the
 **reference client's** reader is invisible to it by construction, because both
 ends of the comparison are ours.
 
-⚠️ **That is not hypothetical: a live bug sits in exactly that blind spot right
-now** — a gamemode-changing rotation desynchronises a real stock client. It
-reproduces every time against a GM8 client and **does not reproduce in-process at
-all**, which is the signature of a writer-vs-reference-reader disagreement. See
-"A gamemode change desynchronises a stock client" below.
+⚠️ **That is not hypothetical.** The gamemode-change desync below sat in exactly
+this blind spot: it killed every stock client and **did not reproduce in-process
+at all**, because the port's reader and writer agreed with each other about a
+layout the reference client read differently. ✅ It is fixed, and the gate now
+covers it — but only because the test was made to run long enough to emit the
+message that carries the layout.
 
 **So the tiers now stand as:** the mirror covers "did the server say it", the
 fixtures cover "does the port match a recording of the reference", and **nothing
@@ -2559,48 +2560,61 @@ covers "does a stock client read what the port writes"** except driving one by
 hand. ⚠️ **Do not let a green suite, this gate included, stand in for driving a
 real client through a rotation.**
 
-### ⛔ A gamemode change desynchronises a stock client — OPEN
+### ✅ A gamemode change desynchronised every stock client — FOUND AND FIXED
 
-**Reproduced against a real GM8 client twice on 2026-09-03, not fixed.** The
-symptom and the original three narrowing runs are `docs/PLUGINS.md`, "A rotation
-kills every connected client, and it needs bots"; this is only what the live runs
-here added.
+**Found 2026-09-03 by `gg2-plugins` against a real client, diagnosed and fixed
+here the same day.** The symptom and the original narrowing runs are
+`docs/PLUGINS.md`; this is the cause.
 
-**What is now known:**
+⛔ **`StateUpdateWriter` captured its `MatchState` once, in `Start`, and
+`GameServer.OpenMap` replaces `_match` with a NEW object on every rotation.** So
+after any map change the writer still held the *previous* map's match — and
+`WriteHud` switches on `match.GameMode`. A CTF → KotH rotation therefore kept
+emitting a **CTF** HUD block while every client read a **KotH** one.
 
-- ⚠️ **It needs a GAMEMODE change, not a rotation.** `koth_valley` →
-  `koth_valley` with four bots ran a full round, a win and a rotation with
-  **zero** client errors; the client left only on the documented five-minute
-  spectator timeout. `ctf_truefort` → `koth_valley` killed a client both times.
-- **The first symptom is `drawControlPointStatus: Unknown variable teamoffset`**,
-  about a second after `CHANGE_MAP`. That is the client holding a control-point
-  team outside `{-1, 0, 1}` — i.e. reading the block at the wrong offset.
-- **Then the roster grows phantoms**: 13 entries, eight with empty names, against
-  the server's 5. The client dies ~25-30s later; the server sees only a
-  `ConnectionReset` and refills the slot with a bot.
-- **Starting fresh on `koth_valley` is clean**, so the KOTH layout is not simply
-  wrong.
+The HUD block rides on `FULL_UPDATE` and `CAPS_UPDATE` only, so nothing broke
+until the first scoreboard update after the change. Then the stream
+desynchronised permanently: `show_message("Wrong number of players while
+deserializing state")`, a control-point team read out of range
+(`drawControlPointStatus: Unknown variable teamoffset`), phantom roster entries
+with empty names — 13 against the server's 5 — and a fatal error 25 to 30
+seconds later. The server saw only a `ConnectionReset`.
 
-**Eliminated, so nobody re-derives them:**
+**Fixed** by making the writer take a `Func<MatchState>` rather than a
+`MatchState`, so it cannot hold a stale one. `CapLimit`, `ClassLimits`,
+`RespawnTimeSeconds` and `CurrentMapArea` were stale by the same mechanism —
+those are values rather than lengths, so they corrupted a joining client's
+scoreboard instead of the stream, and nothing had noticed.
 
-- The client parsing a post-`CHANGE_MAP` update with the old shape.
-  `ClientBeginStep.gml`'s read loop is `do { … } until(roomchange)` and
-  `CHANGE_MAP` sets `roomchange`, so it stops reading at exactly that message.
-- Ordering on the server. `WriteStateUpdate` runs above `ServeRoundEnd`, so the
-  tick's packet is `[update, old shape][CHANGE_MAP]` — the reference's order.
-- The KOTH HUD block. It matches `KothHUD`'s User Event 12 field for field:
-  `cpUnlock`, `redTimer`, `blueTimer`, then per point `team`, `cappingTeam`,
-  `capping`. ⚠️ **Checked twice** — the first check said the reference wrote only
-  two fields, which was an artefact of an XML-stripping grep dropping the first
-  line of each code block. Do not read GML through `grep -v '^\s*<'`.
-- Moving platforms. Neither map places one.
-- Team desync as the mechanism: the two rosters **agree** across the rotation
-  in-process, and `MirrorClient` reports no impossible character.
+⚠️ **Why every existing test missed it, which is worth more than the fix.**
 
-**The one unverified suspicion, and it is only that:** `Rounds.ResetForNewMap`
-does not clear `WorldState.MovingPlatforms`. Irrelevant to these two maps, which
-place none, but a rotation between maps with different platform counts would
-leave the block the wrong length. Untested.
+- **Same-gamemode rotations are harmless**, because the stale gamemode equals the
+  live one. A `koth_valley` → `koth_valley` rotation with four bots ran clean
+  against a real client. So "rotation" was never the variable; **gamemode change**
+  was, and a same-mode rotation is not a control for it.
+- **`ClientRosterAgreementTests` was already watching and still missed it.** The
+  gate was right; the *exercise* was too short. Nothing was capturing anything
+  after the rotation, so no `CAPS_UPDATE` was emitted in the few hundred ticks
+  those tests run, and the broken layout was never written.
+  ⛔ **A layout test has to make the layout actually get written.**
+  `TheHudBlockAfterAGamemodeChangeIsTheNewGamemodes` runs to the two-minute
+  scoreboard heartbeat for exactly that reason, and asserts a `CAPS_UPDATE`
+  arrived before asserting anything about it.
+- **The trace fixtures could not have caught it either.** No recording in this
+  project contains a map rotation, so the one comparison against the reference's
+  own bytes never crosses a gamemode change.
+
+⚠️ **Two dead ends recorded so the next reader does not repeat them:** the
+control-point *values* are correct across a rotation (`team=-1`, verified
+in-process), and the client's read loop is `do { … } until(roomchange)`, so it
+cannot parse a post-`CHANGE_MAP` update with the old shape. Both were plausible
+and both were wrong.
+
+⚠️ **A latent one found on the way and NOT fixed:** `Rounds.ResetForNewMap` never
+clears `WorldState.MovingPlatforms`. Irrelevant to every shipped map, none of
+which places one, but a rotation between custom maps with different platform
+counts would leave that block the wrong length — the same class of bug as the one
+above. Untested.
 
 ## Which flush a message rides, and how to test it
 

@@ -354,6 +354,7 @@ public sealed class GameServer : IDisposable
     /// </remarks>
     public bool SimulatedQueueJump(int slot) => _world.Players[slot].QueueJump;
 
+
     public bool IsAlive(int slot) => _world.IsAlive(slot);
 
     /// <summary>
@@ -425,8 +426,11 @@ public sealed class GameServer : IDisposable
 
         var map = OpenMap(OpeningMap(), area: 1);
 
+        // ⚠️ `() => _match`, not `_match`. OpenMap replaces the MatchState on
+        // every rotation, and a writer that captured the object once wrote the
+        // PREVIOUS map's gamemode for ever — see StateUpdateWriter.Match.
         _stateWriter = new StateUpdateWriter(
-            _match, TryGetCharacter, TryGetSentry, Objective, Statistics, Dominating,
+            () => _match, TryGetCharacter, TryGetSentry, Objective, Statistics, Dominating,
             MovingPlatformBlocks);
 
         _listener = new TcpListener(IPAddress.Any, _options.Port);

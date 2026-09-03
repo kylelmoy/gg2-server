@@ -189,7 +189,8 @@ public sealed class SentryUpdateLayoutTests
             return captured.HasSentry[slot];
         }
 
-        var stateWriter = new StateUpdateWriter(match, Characters, Sentry);
+        var stateWriter = new StateUpdateWriter(
+() => match, Characters, Sentry);
 
         var writer = new NetWriter();
         stateWriter.Write(writer, MessageType.FullUpdate);

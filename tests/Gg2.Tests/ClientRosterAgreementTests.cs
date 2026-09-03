@@ -222,6 +222,70 @@ public sealed class ClientRosterAgreementTests
     }
 
     /// <summary>
+    /// ⛔ The HUD block after a GAMEMODE-changing rotation must be the new
+    /// gamemode's.
+    /// </summary>
+    /// <remarks>
+    /// <b>This is the bug that killed every connected stock client.</b>
+    /// <c>GameServer.OpenMap</c> replaces <c>_match</c> on every rotation, and
+    /// <c>StateUpdateWriter</c> captured that object once at <c>Start</c> — so
+    /// after a CTF → KotH change it kept writing a <em>CTF</em> HUD block while
+    /// the client read a KotH one. The stream desynchronised permanently at the
+    /// first <c>CAPS_UPDATE</c> after the change.
+    /// <para>
+    /// ⚠️ <b>Why the rest of this file missed it, which is the lesson.</b> The
+    /// HUD block rides on <c>FULL_UPDATE</c> and <c>CAPS_UPDATE</c> only
+    /// (<c>serializeState.gml</c>), and after a rotation nothing was capturing
+    /// anything, so no <c>CAPS_UPDATE</c> was ever emitted in the few hundred
+    /// ticks the other tests run. The gate was right and the exercise was too
+    /// short. **A layout test has to make the layout actually get written.**
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>A same-gamemode rotation is NOT a control for this</b> — koth →
+    /// koth was healthy against a real client precisely because the stale
+    /// gamemode happened to equal the live one. The pair that matters is
+    /// gamemode-changing versus not.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void TheHudBlockAfterAGamemodeChangeIsTheNewGamemodes()
+    {
+        using var harness = Rotating(bots: 0);
+
+        var client = harness.JoinClient("watcher");
+        using var mirror = new MirrorClient(client, Load, First);
+
+        harness.Tick(30);
+        Rotate(harness, mirror);
+
+        Assert.Equal(Second, mirror.CurrentMap);
+
+        var before = mirror.Of(MessageType.CapsUpdate).Count;
+
+        // ⚠️ Run to the two-minute scoreboard heartbeat, which is what actually
+        // puts a HUD block on the wire. `_frame % 3600` — see WriteStateUpdate.
+        for (var i = 0; i < 3700 && mirror.Of(MessageType.CapsUpdate).Count == before; i++)
+        {
+            harness.Tick(1);
+            mirror.Pump();
+        }
+
+        var caps = mirror.Of(MessageType.CapsUpdate);
+
+        // Not vacuous: without a CAPS_UPDATE this test asserts nothing at all.
+        Assert.True(caps.Count > before, "no CAPS_UPDATE was emitted after the rotation");
+
+        // The reader was given the NEW map's shape, so a stale CTF HUD block
+        // makes the state come back the wrong length or the stream unreadable.
+        // KotH's HUD is cpUnlock, redTimer, blueTimer and one point; CTF's is a
+        // different size, so the two cannot be confused silently.
+        var update = caps[^1];
+        Assert.NotNull(update.State);
+
+        AssertAgrees(harness, mirror, "after a gamemode-changing rotation");
+    }
+
+    /// <summary>
     /// Runs the map change and settles.
     /// </summary>
     /// <remarks>

@@ -374,7 +374,8 @@ public sealed class DominationTests
         byte Dominating(int killer, int victim) => Dominations.Get(captured, killer, victim);
 
         var writer = new NetWriter();
-        new StateUpdateWriter(match, NoCharacters, null, null, null, Dominating)
+        new StateUpdateWriter(
+() => match, NoCharacters, null, null, null, Dominating)
             .Write(writer, MessageType.FullUpdate);
 
         var reader = new NetReader(writer.WrittenSpan[1..]);
@@ -408,7 +409,8 @@ public sealed class DominationTests
         }
 
         var writer = new NetWriter();
-        new StateUpdateWriter(match, NoCharacters).Write(writer, MessageType.FullUpdate);
+        new StateUpdateWriter(
+() => match, NoCharacters).Write(writer, MessageType.FullUpdate);
 
         var reader = new NetReader(writer.WrittenSpan[1..]);
         PlayerClass[] classes = [PlayerClass.Scout, PlayerClass.Soldier];

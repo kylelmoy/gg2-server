@@ -188,7 +188,7 @@ public readonly record struct ObjectiveBlock(
 /// </para>
 /// </remarks>
 public sealed class StateUpdateWriter(
-    MatchState match,
+    Func<MatchState> match,
     CharacterLookup characters,
     SentryLookup? sentries = null,
     ObjectiveLookup? objective = null,
@@ -208,6 +208,38 @@ public sealed class StateUpdateWriter(
     /// cannot drift.
     /// </remarks>
     private const int MaxMovingPlatformBlocks = 192;
+
+    /// <summary>
+    /// The match as it is <em>now</em>, never as it was when this writer was
+    /// built.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>A supplier, and this is a bug fix rather than a style choice.</b>
+    /// <c>GameServer.OpenMap</c> replaces <c>_match</c> with a NEW
+    /// <see cref="MatchState"/> on every rotation, and this writer used to
+    /// capture the object once at <c>Start</c>. So after any map change it kept
+    /// writing the <em>previous</em> map's <see cref="MatchState.GameMode"/> —
+    /// and <see cref="WriteHud"/> switches on exactly that.
+    /// <para>
+    /// ⚠️ <b>What that cost: every connected stock client died on a
+    /// gamemode-changing rotation.</b> A CTF → KotH change kept emitting a CTF
+    /// HUD block while the client read a KotH one, so the stream desynchronised
+    /// permanently at the first <c>CAPS_UPDATE</c> or <c>FULL_UPDATE</c> after
+    /// the change — phantom roster entries, "Wrong number of players while
+    /// deserializing state", and a fatal error 25-30 seconds later. A rotation
+    /// between two maps of the SAME gamemode was harmless, which is what made it
+    /// look like a rotation bug rather than a staleness bug.
+    /// <c>docs/PARITY.md</c>, "A gamemode change desynchronises a stock client".
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>The cap limit, the class limits, the respawn time and the map area
+    /// were stale too</b>, so a client joining after a rotation was also told the
+    /// wrong ones. Those are values rather than lengths, so they corrupted the
+    /// scoreboard rather than the stream, and nothing noticed.
+    /// </para>
+    /// </remarks>
+    private MatchState Match => match();
+
 
     /// <summary>
     /// Writes one update of the given tier.
@@ -232,11 +264,11 @@ public sealed class StateUpdateWriter(
         // The client aborts with "Wrong number of players while deserializing
         // state" if this disagrees with its own roster size, so every
         // PLAYER_JOIN and PLAYER_LEAVE must already have reached it.
-        writer.WriteUByte(checked((byte)match.Roster.Count));
+        writer.WriteUByte(checked((byte)Match.Roster.Count));
 
         if (tier != MessageType.CapsUpdate)
         {
-            for (var i = 0; i < match.Roster.Count; i++)
+            for (var i = 0; i < Match.Roster.Count; i++)
                 WritePlayer(writer, tier, i);
 
             // One block per MovingPlatform, in instance order, with no count
@@ -265,21 +297,21 @@ public sealed class StateUpdateWriter(
             WriteIntel(writer, scores.RedIntel);
             WriteIntel(writer, scores.BlueIntel);
 
-            writer.WriteUByte(match.CapLimit);
+            writer.WriteUByte(Match.CapLimit);
             writer.WriteUByteFromReal(scores.RedCaps);
             writer.WriteUByteFromReal(scores.BlueCaps);
-            writer.WriteUByte(match.RespawnTimeSeconds);
+            writer.WriteUByte(Match.RespawnTimeSeconds);
             WriteHud(writer, tier);
 
             for (var i = 0; i < 10; i++)
-                writer.WriteUByte(match.ClassLimits[i]);
+                writer.WriteUByte(Match.ClassLimits[i]);
         }
 
         if (tier == MessageType.CapsUpdate)
         {
             writer.WriteUByteFromReal(scores.RedCaps);
             writer.WriteUByteFromReal(scores.BlueCaps);
-            writer.WriteUByte(match.RespawnTimeSeconds);
+            writer.WriteUByte(Match.RespawnTimeSeconds);
             WriteHud(writer, tier);
         }
     }
@@ -292,7 +324,7 @@ public sealed class StateUpdateWriter(
     /// </summary>
     private void WritePlayer(NetWriter writer, MessageType tier, int index)
     {
-        var player = match.Roster[index];
+        var player = Match.Roster[index];
 
         if (tier == MessageType.FullUpdate)
         {
@@ -331,7 +363,7 @@ public sealed class StateUpdateWriter(
             // already declared. ⚠️ Self is skipped rather than written as a
             // zero, so the row is one byte shorter than the roster and a reader
             // that took `count` bytes would be one ahead per player.
-            for (var i = 0; i < match.Roster.Count; i++)
+            for (var i = 0; i < Match.Roster.Count; i++)
             {
                 if (i != index)
                     writer.WriteUByte(dominations?.Invoke(index, i) ?? 0);
@@ -534,7 +566,7 @@ public sealed class StateUpdateWriter(
     /// </remarks>
     private void WriteHud(NetWriter writer, MessageType tier)
     {
-        switch (match.GameMode)
+        switch (Match.GameMode)
         {
             case GameMode.CaptureTheFlag:
                 writer.WriteUByteFromReal(_objective.TimeLimitMinutes);
@@ -603,7 +635,7 @@ public sealed class StateUpdateWriter(
                 break;
 
             default:
-                throw new InvalidOperationException($"no HUD block for {match.GameMode}");
+                throw new InvalidOperationException($"no HUD block for {Match.GameMode}");
         }
     }
 

@@ -157,7 +157,8 @@ public sealed class MovingPlatformUpdateLayoutTests
         }
 
         var writer = new NetWriter();
-        new StateUpdateWriter(match, NoCharacters, movingPlatforms: Platforms).Write(writer, tier);
+        new StateUpdateWriter(
+() => match, NoCharacters, movingPlatforms: Platforms).Write(writer, tier);
         return writer;
     }
 
