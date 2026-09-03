@@ -596,27 +596,24 @@ player closing the game.
 ### Why no test caught it
 
 ⛔ **Every rotation test in the suite is the server talking to itself.** The
-server's own state stays perfectly consistent across a rotation — the desync only
-exists in what a *client* was told, and the only thing that reads that is a
+server's own state stays perfectly consistent across a rotation — the desync
+exists only in what a *client* was told, and the only thing that reads that is a
 client. `MapRotationTests` and `MatchActuallyHappensTests` are both green.
 
-That makes this an instance of the failure mode CLAUDE.md names: the code is
-self-consistent and the description ("a stock client has played a round start to
-finish", phase 6) is true only for **one** round. Nobody had watched a second
-one.
+⛔ **This is an instance of a category, not a one-off, and the category is
+written up in `docs/PARITY.md`, "The gap in every tier above: nothing compares
+what a client was TOLD".** Read that rather than this: it names the second
+instance found the same day by a different route (`CLIENT_SETTINGS` never being
+rebroadcast), why none of the three automated tiers can see either, and what
+would close it — a harness client that keeps its own roster from the broadcast.
+⚠️ **Do not restate the argument here.** Two write-ups of one claim in two files
+is how they come apart.
 
-⚠️ **What would make this catchable without a GM8 client:** a harness client that
-maintains its own roster from the broadcast — teams included — and asserts it
-matches the server's after a rotation. `LoopbackClient` already parses the stream;
-it does not model a roster. That is the gate this project is missing, and it is
-worth more than a fix for this one symptom.
+⚠️ That section arrives with the gg2-server lane's `audit-gaps-2026-09-03`
+(`a8d5ecd`). If the pointer dangles, that branch has not merged yet — the
+argument is in its commit message either way.
 
-⛔ **A SECOND bug of the same shape was found independently on 2026-09-03**, by
-the gg2-server lane's audit and by a different route: **the server was not
-rebroadcasting `CLIENT_SETTINGS`**, so a client's queue-jump preference reached
-the server and never reached anybody else. Two sides holding different views of a
-player, with the server's own state looking perfectly correct throughout.
-<br>That is not a coincidence, it is the category: **this port has no test that
-compares what a client was TOLD against what the server BELIEVES.** Every gate it
-does have reads the server. Two independent bugs of the shape in one day is the
-argument for building the harness-side roster rather than fixing either symptom.
+⚠️ **The bug is the evidence for that gate, not the reason for it.** Build the
+harness client even if this turns out to be a one-line fix in
+`BotPopulationService`; a one-line fix would leave the whole surface exactly as
+uncovered as it was this morning.
