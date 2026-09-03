@@ -113,6 +113,15 @@ Do not re-derive any of them.
   `CollisionWorld.CollisionLineHitsMask` is the map's side of it and
   `LineCollider.ForCharacter` is a character's; the map is reached through
   `Obstacle`, because `CustomMapO` descends from it.
+  ✅ **The walk SKIPS open ground as of 2026-09-02 and the answer is identical
+  rather than approximate** — `Walkmask.Clearance` says how far the next solid
+  cell is, so the samples jumped over cannot be the first solid one. It is worth
+  −7% of a twelve-bot tick, almost all of it a soldier's ballistic line-of-sight
+  test. ⛔ **The parity fixtures do not gate it and cannot**: a recorded hitscan
+  is short and the skip only engages in the open. `CollisionLineSkipTests` is the
+  gate, and `docs/ARCHITECTURE.md`, "The line walk skips open ground", has the
+  measurement and the mutation table — including three mutations that pass
+  *because they are still correct*.
   ⚠️ **The two pixels the facing inflation adds to `bbox_left` are not
   reachable by a hitscan.** They are in the box GM8 reports and the mask rejects
   them. So `distance_to_object` uses the inflated box and `collision_line`

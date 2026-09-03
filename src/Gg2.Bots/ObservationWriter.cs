@@ -313,7 +313,7 @@ public static class ObservationWriter
     /// argument about rounding. It is not a slip to be tidied up.
     /// </para>
     /// </remarks>
-    public static int SafeSkipPixels(int clearance) => (6 * clearance) - 7;
+    public static int SafeSkipPixels(int clearance) => Walkmask.SafeSkipPixels(clearance);
 
     private static void WriteGeometry(
         in WorldView view, in CharacterState self, Span<float> o, ref int at)

@@ -491,6 +491,30 @@ public sealed class CollisionWorld
     public readonly struct WalkmaskLookup(Walkmask mask) : CollisionLine.IMask
     {
         public bool IsSolid(int x, int y) => mask.IsSolid(x, y);
+
+        /// <summary>
+        /// The map's clearance field, which is what makes a long line test cheap.
+        /// See <see cref="CollisionLine.IMask.SafeSkipPixels"/> and
+        /// <see cref="Walkmask.SafeSkipPixels"/>.
+        /// </summary>
+        /// <remarks>
+        /// ⚠️ <b>The bounds test cannot fire through <see cref="MapCollider"/>
+        /// today and is kept anyway</b>, which was checked rather than assumed:
+        /// that collider's mask box is <c>[0, Width - 1] × [0, Height - 1]</c>,
+        /// exactly the walkmask's extent, and <c>CollisionLine.Walk</c> tests
+        /// against it before asking. It stays because <c>IMask</c> makes no
+        /// promise that its caller bounds-checked — the same reason
+        /// <see cref="Walkmask.IsSolid"/> carries its own off-mask rule — and
+        /// because an out-of-range read here would be a silently wrong skip
+        /// rather than a crash.
+        /// </remarks>
+        public int SafeSkipPixels(int x, int y)
+        {
+            if ((uint)x >= (uint)mask.Width || (uint)y >= (uint)mask.Height)
+                return 0;
+
+            return Walkmask.SafeSkipPixels(mask.Clearance[(y * mask.Width) + x]);
+        }
     }
 
     /// <summary>

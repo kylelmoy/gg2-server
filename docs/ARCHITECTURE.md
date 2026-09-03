@@ -402,6 +402,10 @@ people die and respawn, projectiles fly.
 | the command drain, `_events = default` | 0.17 | 1% |
 | **total** | **15.13** | |
 
+⚠️ **These are the figures the analysis below rests on, and the total has since
+moved**: the two `NavSearch` wins and the line-walk skip take it to **13.96 µs**.
+The shares are what matter here, and they are the shares *before* any of it.
+
 ⛔ **`NavSearch.Find` alone is 30% of the whole system** — more than every stage
 of the simulation put together bar the two character loops. **That is where a
 bot-layer performance question starts**, and nothing in this repo said so before
@@ -505,6 +509,88 @@ reasoned about:
 ⚠️ **The last two confirm the note below that the 512-element `stackalloc`s "look
 alarming and are not"**, and together with the sampler's three misses they have
 one shape: **zeroing is not where this program spends its time.**
+
+### ✅ The line walk skips open ground, which was the largest single win here
+
+**Landed 2026-09-02, after the A\* work above.** `CollisionLine.Walk` samples the
+mask **once per pixel of the segment**, which is GM8's own rule and is not
+negotiable — but *which* of those samples get asked is.
+<see cref="Walkmask.Clearance"/> already existed for the observation ray fan, and
+now the walk reads it too: a sample standing on a cell of clearance `c` may
+advance `6c - 7` pixels, because every pixel that close is known to be open.
+
+⛔ **The reason it is worth so much is `BotArc.Clear`.** A soldier or demoman with
+a target tests its ballistic arc for line of sight — ten segments spanning a
+rocket's whole flight, hundreds of pixels of mostly empty air. **Measured at
+1.25 µs a call and 1.06 calls a tick: 9% of the entire tick from one call**, and
+10.5 of the 10.5 `CollisionLineBlocksBullets` calls a tick were its. The mask
+walk was 71% of that; the solid-rect loop is the other 29% and is unchanged.
+
+⚠️ **Interleaved A/B, six alternations, Release**, twelve bots on `ctf_truefort`.
+**Every reading of one arm sits below every reading of the other**; the figures
+are the minima, and the means agree:
+
+| | before | after | |
+|---|---|---|---|
+| the bots' `Poll` | 8.89 µs | 8.11 µs | **−8.8%** |
+| `MatchSimulation.Tick` | 5.94 µs | 5.65 µs | **−4.9%** |
+| the whole tick | 15.01 µs | 13.96 µs | **−7.0%** |
+| `eval`, 16 serial matches | 8.30 s | 7.60 s | **+9.2% throughput** |
+
+✅ **The simulation gains too, which was not the target** — a sentry's line of
+sight and a hitscan weapon go through the same walk. It is a smaller share there
+because those lines are short.
+
+### ⛔ The gate: `CollisionLineSkipTests`, and why the parity fixtures are not it
+
+**113 parity fixtures pass and prove nothing about this.** A hitscan in a
+recorded trace is a short line between two people in a firefight; the skip only
+engages over open ground, and an over-long one would step over a thin ledge in
+the middle of a map no trace ever shoots across. **This is CLAUDE.md's "a green
+fixture is not confirmation of a box", and it applies to a whole optimisation
+rather than to one edge.**
+
+⚠️ **The control is the production walk with a mask that refuses to promise**, not
+a transcription of it — a struct answering `IsSolid` identically and `0` from
+`SafeSkipPixels`, which is the documented "walk pixel by pixel" answer. So the
+two runs differ in the skip and nothing else, and there is no second copy of the
+rounding, the major-axis choice or the cell mapping to go stale. 20,000 segments
+a map over three maps, endpoints swept across the whole map and 20% beyond it, at
+three reaches.
+
+⛔ **The witness is a PROBE COUNT, not a threshold.** Two runs that agree prove
+nothing if the fast one never skipped, so the counting control asserts the
+skipping walk probes the mask **less than half** as often. A first draft asserted
+"more than 10,000 of 20,000 segments could skip" and failed on `cp_dirtbowl` at
+8,603 — **the fix was to state the property rather than lower the bar**, which is
+the same trap as fitting a tick count until a death total passes.
+
+### ⚠️ Mutation-checking this found that three "obvious" mutations are SOUND
+
+⛔ **Do not read a passing mutation here as a hole in the test.** The bound has a
+deliberate pixel of slack (`6c - 7` where `6c - 6` is tight) *and* the loop gives
+another back (`i += skip - 1`), so the first two pixels of over-skip are still
+correct:
+
+| mutation | result | why |
+|---|---|---|
+| `6c - 5` | **green, and rightly** | still inside the tight bound |
+| `i += skip` | **green, and rightly** | skips to distance `6c - 7`, exactly what is promised |
+| off-mask promises 64 | **green** | unreachable — the walk bounds-checks first, see `WalkmaskLookup.SafeSkipPixels` |
+| **`6c - 4`** — the first genuinely unsafe value | **3 red** | |
+| `12c - 7` | **3 red** | |
+| **`i += skip + 2`** | **2 red** | |
+
+⚠️ **`ObservationWriter`'s own note says a `6c - 5` mutation once passed a test
+written to catch it.** That is the same phenomenon and not a coincidence: the
+constant has margin, so a mutation of ±1 is not a bug and a test that reddened on
+it would be wrong. **The mutation to reach for here is the first value that is
+actually unsound, and it has to be worked out rather than guessed.**
+
+⚠️ **The bound now has two readers and one body**, `Walkmask.SafeSkipPixels`.
+`ObservationWriter.SafeSkipPixels` forwards to it and a test asserts they agree
+across the whole clearance range — because the failure mode of two copies is one
+marcher stepping over a wall, which nothing else in this repo would notice.
 
 ### Still on the table, measured and not taken
 

@@ -49,6 +49,29 @@ public static class CollisionLine
     {
         /// <summary>Whether the mask covers a pixel, in sprite coordinates.</summary>
         bool IsSolid(int x, int y);
+
+        /// <summary>
+        /// How many pixels the walk may advance from an <em>open</em> sample at
+        /// (<paramref name="x"/>, <paramref name="y"/>) without being able to
+        /// step over anything solid. Zero means "no idea, walk pixel by pixel".
+        /// </summary>
+        /// <remarks>
+        /// ⛔ <b>It makes the walk SKIP, never guess, and the answer is identical
+        /// rather than approximate.</b> <see cref="Walk{TMask}"/> advances at most
+        /// one pixel on each axis per step — the major axis is chosen so the
+        /// slope's magnitude is at most one — so <c>k</c> steps move the sample
+        /// point by a Chebyshev distance of exactly <c>k</c>. A mask that reports
+        /// <c>n</c> here is promising that every pixel within <c>n</c> of this one
+        /// is open, so the samples the walk jumps over cannot be the first solid
+        /// one.
+        /// <para>
+        /// ⚠️ <b>Zero is the honest answer wherever the promise cannot be made</b>
+        /// — off the mask, or for a mask with no clearance field. Returning
+        /// anything else is a bullet through a wall, and no test of the walk's
+        /// ordinary cases would notice.
+        /// </para>
+        /// </remarks>
+        int SafeSkipPixels(int x, int y);
     }
 
     /// <summary>
@@ -64,6 +87,12 @@ public static class CollisionLine
     public readonly struct FilledMask : IMask
     {
         public bool IsSolid(int x, int y) => true;
+
+        /// <summary>
+        /// Never reached: a filled mask is solid at every in-bounds pixel, so the
+        /// walk returns on its first in-bounds sample and never asks.
+        /// </summary>
+        public int SafeSkipPixels(int x, int y) => 0;
     }
 
     /// <summary>
@@ -184,10 +213,27 @@ public static class CollisionLine
             var mx = collider.OriginX + (int)Math.Floor((px - instX) / collider.XScale);
             var my = collider.OriginY + (int)Math.Floor((py - instY) / collider.YScale);
 
-            if (mx >= collider.Mask.Left && my >= collider.Mask.Top &&
-                mx <= collider.Mask.Right && my <= collider.Mask.Bottom &&
-                mask.IsSolid(mx, my))
+            if (mx < collider.Mask.Left || my < collider.Mask.Top ||
+                mx > collider.Mask.Right || my > collider.Mask.Bottom)
+            {
+                // Off the mask. No hit, and no promise to skip on — see
+                // IMask.SafeSkipPixels.
+                continue;
+            }
+
+            if (mask.IsSolid(mx, my))
                 return true;
+
+            // ⚠️ Open ground is skipped rather than walked, and the result is
+            // IDENTICAL rather than approximate — IMask.SafeSkipPixels carries
+            // the argument. This is the difference between a soldier's arc test
+            // costing a few hundred mask probes and costing a few dozen: the
+            // walk is one sample per pixel of the segment, and a rocket's flight
+            // is hundreds of pixels of mostly empty air.
+            var skip = mask.SafeSkipPixels(mx, my);
+
+            if (skip > 1)
+                i += skip - 1;
         }
 
         return false;

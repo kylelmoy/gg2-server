@@ -296,6 +296,33 @@ public sealed class Walkmask
     public ReadOnlySpan<byte> Clearance => _clearance;
 
     /// <summary>
+    /// How many world pixels a marcher standing on a cell of this
+    /// <see cref="Clearance"/> may advance without being able to step over
+    /// anything solid.
+    /// </summary>
+    /// <remarks>
+    /// <b>The one copy of the bound, and it has to stay the one copy.</b> Two
+    /// readers march the mask — <c>ObservationWriter</c>'s geometry fan and
+    /// <c>CollisionLine.Walk</c> — and a bound that drifted between them would
+    /// make one of them step over a wall, which is a wrong answer that looks like
+    /// nothing.
+    /// <para>
+    /// The algebra: a clearance of <c>c</c> says every cell within Chebyshev
+    /// distance <c>c - 1</c> is open. A pixel <c>d</c> away from a probe is at
+    /// most <c>floor((d + 5) / 6)</c> cells away — the 5 is the probe's own
+    /// position inside its 6-pixel cell — so <c>d</c> is safe while
+    /// <c>floor((d + 5) / 6) &lt;= c - 1</c>, which holds up to <c>d = 6c - 6</c>.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>One pixel is given back deliberately.</b> <c>6c - 6</c> is the tight
+    /// value; the extra pixel leaves the bound with margin rather than sitting
+    /// exactly on the boundary of an argument about rounding. It is not a slip to
+    /// be tidied up.
+    /// </para>
+    /// </remarks>
+    public static int SafeSkipPixels(int clearance) => (6 * clearance) - 7;
+
+    /// <summary>
     /// The value <see cref="Clearance"/> saturates at. ⚠️ <b>A cap, so a reader
     /// must treat it as "at least this", never "exactly this"</b> — which is all
     /// a marcher needs, since it only ever skips forward by what the value
