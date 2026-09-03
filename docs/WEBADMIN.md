@@ -207,6 +207,7 @@ All JSON, all under the session cookie except the first four.
 | `GET /api/map.png?name=` | — | a map's PNG, for the live map |
 | `GET /api/log?after=` | — | the scrollback, by sequence number |
 | `GET /api/perf?after=` | — | the performance history, by sequence number |
+| `GET /api/system` | — | the host: OS, CPU, memory, runtime, paths |
 
 ⚠️ **`/api/command` takes the control port's own commands, unchanged.** Both
 transports go through `ControlCommands`, which is the one place any of them is
@@ -426,6 +427,79 @@ it.
 whatever the server happened to be doing, map loads and GC included, on a machine
 that is also running a browser. `tools/bench/` is where a per-tick cost comes
 from, and it says which build it was measured in.
+
+## The system section
+
+A collapsed `<details>` under the graphs: OS, CPU model and clock, logical cores,
+memory, runtime, GC mode, thread count, and the paths the server is loading from.
+Collapsed because it is reference rather than telemetry; its summary line still
+reads `Linux 6.8 · 4 cores · 7.8 GB` so the common question is answered without
+opening it. `<details>` rather than a JS toggle — it works with no script and
+keeps the disclosure semantics a screen reader expects.
+
+⚠️ **Re-read on every open, not just the first.** Half of it is live: memory,
+both uptimes, the thread count, the GC counters.
+
+⛔ **The command line and the environment are never in it.** `--web-password` is
+in one and may be in the other, and this endpoint is read by a browser.
+`SystemNeverLeaksTheCommandLineOrTheEnvironment` looks for the actual password in
+the reply, so it fails on any future field that starts including either — which
+is a thing somebody would add meaning well.
+
+### Where each number comes from, per platform
+
+| | Linux | Windows |
+|---|---|---|
+| CPU model, clock | `/proc/cpuinfo` — ⚠️ the **current** clock of core 0 | registry `CentralProcessor ` — ⚠️ the **nominal** clock at boot |
+| Memory | cgroup v2 `memory.max`/`memory.current` where limited, else `/proc/meminfo` | `GlobalMemoryStatusEx` |
+| OS uptime | `/proc/uptime` | `Environment.TickCount64` |
+
+⚠️ **The two clocks mean different things and the panel says which** — `(now)` or
+`(nominal)`. On a shared VPS the Linux figure moves between requests.
+
+⛔ **`GC.GetGCMemoryInfo()` is NOT the source for system memory, and that is
+measured.** Its fields describe *the last garbage collection*: on a freshly
+started server this build reported `MemoryLoadBytes = 0` on a machine with 64 GB
+in it. A panel showing "0 bytes in use" is worse than one showing nothing.
+
+⚠️ **The cgroup is preferred over `/proc/meminfo` where one exists**, because that
+is the whole point on a VPS: a container sees the host's `/proc/meminfo` and is
+killed at its own limit. The panel reports which of the two it read.
+
+⚠️ **A Debug build is called out with a badge**, not just reported. The tick
+graphs directly above it are twice as slow in Debug — 0.307ms against 0.151ms at
+twelve bots — and an operator comparing them against a number from somewhere else
+needs to know which they are looking at.
+
+## Running it on Linux
+
+⚠️ **Audited, cross-compiled, and NOT run.** There is no Linux machine in this
+project's development environment (no WSL, no Docker), so what follows is a
+source audit plus a `dotnet publish -c Release -r linux-x64` that builds clean
+with warnings-as-errors and the platform-compatibility analyser on — which is
+what catches an unguarded Windows API, and is how the `SystemInfo` guards were
+verified. **It is not the same as having run it.** The first real Linux run is
+the test, and this section is what to check against.
+
+- ✅ **One file in `src/` is Windows-only**: `TimerResolution` (a `winmm.dll`
+  P/Invoke), already guarded by `OperatingSystem.IsWindows()` and a no-op
+  elsewhere. `SystemInfo` adds two more guarded branches and no others.
+- ⚠️ **No timer raise on Linux, and that changes the late-tick numbers.** On
+  Windows the loop raises the timer to 1 ms because a wait rounds up to the
+  15.6 ms quantum. Linux has no equivalent knob and its wait granularity is the
+  kernel's; the late-tick graph is likely *better* there, and is untested.
+- ⛔ **`nav/` does not travel with a publish and `maps/` does.** The host csproj
+  copies `maps/*.png` (458 KB) and nothing copies the 35 MB of nav graphs, so a
+  published server on a VPS serves rounds and runs bots that **fight but do not
+  walk**. Copy `nav/` beside the binary or set `GG2_NAVCACHE`.
+- ⚠️ **The filesystem is case-sensitive.** The panel's map list passes back
+  exactly what it read off disk, so that path is safe; a hand-typed
+  `CTF_Truefort` in the map box works on Windows and fails on Linux.
+- ⚠️ **`--web 80` or `--web 443` needs `CAP_NET_BIND_SERVICE`** or a proxy in
+  front. Ports below 1024 are privileged.
+- ⚠️ **`--web-tls` with a legacy `.pfx`**: OpenSSL 3, which current distros ship,
+  refuses the old RC2-encrypted PKCS#12 files Windows tooling still produces.
+  Re-export with `-keypbe AES-256-CBC -certpbe AES-256-CBC` if it will not load.
 
 ## What it deliberately does not do
 

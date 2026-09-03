@@ -1174,6 +1174,35 @@ CLAUDE.md's "three places" rule, honoured by not adding a fourth. What is
 control-port-only is the operator actions no client can ask for: freeze, step,
 teleport, map change, bot count, speed.
 
+### Linux and containers — audited 2026-09-03, not yet run
+
+⚠️ **This project has only ever been run on Windows.** The audit below is a
+source review plus a clean `dotnet publish -c Release -r linux-x64` — which,
+with warnings-as-errors and the platform-compatibility analyser, is what catches
+an unguarded Windows API. ⛔ **Compiling for a RID is not running on it.** Say so
+before quoting any of this as "Linux support".
+
+- ✅ **Exactly one file in `src/` is Windows-only**: `TimerResolution`, a
+  `winmm.dll` P/Invoke, already guarded by `OperatingSystem.IsWindows()` and a
+  no-op elsewhere. `Web/SystemInfo.cs` adds two guarded branches (the CPU
+  registry read and `GlobalMemoryStatusEx`) and nothing else in the tree
+  P/Invokes at all.
+- ⚠️ **The pacing loop's behaviour is genuinely different and untested.** On
+  Windows it raises the timer to 1 ms because a wait rounds up to the 15.6 ms
+  quantum — measured: 15% of ticks arrived ~14 ms late without it. Linux has no
+  such knob; its granularity is the kernel's. The late-tick rate on Linux is
+  unknown and is the first thing to look at on a real run.
+- ⛔ **`nav/` does not travel with a publish.** `Gg2.Host.csproj` copies
+  `maps/*.png`; nothing copies the 35 MB of nav graphs. A published server runs
+  bots that **fight but do not walk** until `nav/` is beside the binary or
+  `GG2_NAVCACHE` points at it. `maps/` was checked in so a clone needs no
+  reference checkout; the nav graphs never got the same treatment.
+- ⚠️ **Case-sensitive filesystems** make `MapExists` stricter than it is on
+  Windows: a map name typed with the wrong case resolves there and not here.
+- ⚠️ **`Environment.TickCount64` is a monotonic clock, not the OS uptime.** On
+  Linux it is `CLOCK_MONOTONIC` and does not count time suspended, which is why
+  `SystemInfo` reads `/proc/uptime` where it exists.
+
 ### And a second transport for it — built, 2026-09-03
 
 ✅ **`gg2-server --web <port>` hosts an admin panel in a browser**, and it is the

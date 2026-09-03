@@ -745,6 +745,105 @@ kbd {
 .kpi b { font: 500 var(--text-small) var(--font-mono); font-variant-numeric: tabular-nums; }
 .kpi b.warn { color: var(--warning); }
 
+/* ---------- system ------------------------------------------------------- */
+
+.sys > summary {
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  transition: background 0.12s var(--ease);
+}
+
+/* Both spellings: WebKit still wants the pseudo-element, everyone else takes
+   list-style. */
+.sys > summary::-webkit-details-marker { display: none; }
+.sys > summary:hover { background: var(--default-soft); }
+.sys:not([open]) > summary { border-bottom: 0; }
+
+/* The disclosure chevron, drawn rather than a glyph so it rotates cleanly and
+   needs no font that has one. */
+.sys > summary::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  margin-left: 4px;
+  border-right: 1.5px solid var(--muted);
+  border-bottom: 1.5px solid var(--muted);
+  transform: rotate(45deg) translate(-2px, -2px);
+  transition: transform 0.18s var(--ease);
+  flex: none;
+}
+
+.sys[open] > summary::after { transform: rotate(225deg) translate(-1px, -1px); }
+
+.sys-peek {
+  margin-left: auto;
+  font: 500 var(--text-tiny) var(--font-mono);
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.sys-body {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  align-items: start;
+  gap: 20px 28px;
+  padding: 18px 16px;
+}
+
+.sys-group { min-width: 0; }
+
+/* ⚠️ Storage spans the row rather than taking a column. Its values are
+   filesystem paths — long, unbreakable and read left to right — and in a 230px
+   column they wrapped mid-word while the four short groups above left a third
+   of the card empty. */
+.sys-group.wide { grid-column: 1 / -1; border-top: var(--border-width) solid var(--separator); padding-top: 16px; }
+.sys-group.wide dl { grid-template-columns: auto minmax(0, 1fr); }
+
+.sys-group h3 {
+  font: var(--label);
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 10px;
+}
+
+.sys-group dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 5px 14px; }
+.sys-group dt { font-size: var(--text-tiny); color: var(--muted); white-space: nowrap; }
+
+.sys-group dd {
+  margin: 0;
+  font: 500 var(--text-tiny) var(--font-mono);
+  text-align: right;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.sys-group dd.dim { color: var(--muted); font-style: italic; }
+
+/* A path is the one value here that is long, unbreakable and read left to
+   right, so it gets its own row rather than being squeezed into a column. */
+.sys-group dd.path { text-align: left; color: var(--muted); }
+
+.sys-badge {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--success-soft);
+  color: var(--success);
+  font: 600 0.625rem var(--font-sans);
+  letter-spacing: 0.04em;
+}
+
+/* ⚠️ A Debug build is called out, not just reported. The tick graphs above are
+   twice as slow in Debug (0.307ms against 0.151ms at twelve bots), and an
+   operator comparing them against a number from somewhere else needs to know
+   which they are looking at. */
+.sys-badge.debug { background: var(--warning-soft); color: var(--warning); }
+
 /* ---------- roster ------------------------------------------------------- */
 
 .table-wrap { max-height: 460px; overflow: auto; }

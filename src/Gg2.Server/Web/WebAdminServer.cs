@@ -419,6 +419,11 @@ public sealed class WebAdminServer : IDisposable
             case ("GET", "/api/log"):
                 return await JsonAsync(stream, 200, LogSince(request.Q("after")), token);
 
+            // ⚠️ Answered on THIS thread, not through the queue: it touches the
+            // OS and the runtime, never the game. It is the one route that does.
+            case ("GET", "/api/system"):
+                return await JsonAsync(stream, 200, SystemInfo.ToJson(_server.Options), token);
+
             case ("GET", "/api/perf"):
                 return await JsonAsync(
                     stream,

@@ -157,6 +157,20 @@
         </footer>
       </article>
 
+      <!--
+        Collapsed by default: this is reference, not telemetry. <details> rather
+        than a JS toggle so it opens with no script, keeps the disclosure
+        semantics a screen reader expects, and is in the DOM for ctrl-F either
+        way.
+      -->
+      <details class="card sys" id="system">
+        <summary class="card-head">
+          <h2>System</h2>
+          <span class="sys-peek" id="sys-peek">—</span>
+        </summary>
+        <div class="sys-body" id="sys-body"></div>
+      </details>
+
       <article class="card">
         <header class="card-head">
           <h2>Players</h2>

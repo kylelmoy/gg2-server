@@ -111,6 +111,7 @@ public sealed class WebAdminTests : IDisposable
     [InlineData("/api/log")]
     [InlineData("/api/map.png?name=ctf_truefort")]
     [InlineData("/api/perf")]
+    [InlineData("/api/system")]
     public async Task EveryApiRouteRefusesAnUnauthenticatedRequest(string path)
     {
         var reply = await _http.GetAsync(path);
@@ -362,6 +363,79 @@ public sealed class WebAdminTests : IDisposable
 
         Assert.False(reply.GetProperty("ok").GetBoolean());
         Assert.Equal(KickOutcome.NoSuchSlot, _harness.Server.KickPlayer(0));
+    }
+
+    /// <summary>
+    /// The system section describes the box, on whichever OS it is running.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Asserts the SHAPE, not the values.</b> The suite runs on Windows
+    /// today and the server is meant for a Linux VPS, so pinning a CPU model or a
+    /// memory figure would only pin this machine. What must hold on both is that
+    /// every group is present, that the counts are sane, and that a platform
+    /// lookup which cannot answer says <c>null</c> rather than throwing — which
+    /// is the whole failure mode of a file that is not where the code expected.
+    /// </remarks>
+    [Fact]
+    public async Task SystemDescribesTheHost()
+    {
+        await SignedInAsync();
+
+        var info = await ReadAsync("/api/system");
+
+        Assert.True(info.GetProperty("ok").GetBoolean());
+
+        var os = info.GetProperty("os");
+        Assert.NotEmpty(os.GetProperty("description").GetString()!);
+        Assert.NotEmpty(os.GetProperty("architecture").GetString()!);
+        Assert.True(os.GetProperty("uptimeSeconds").GetDouble() > 0);
+
+        var cpu = info.GetProperty("cpu");
+        Assert.Equal(Environment.ProcessorCount, cpu.GetProperty("logicalCores").GetInt32());
+
+        // ⚠️ Nullable by design on a platform that will not say, so the assertion
+        // is that the property EXISTS and is one of the two — not that it is set.
+        Assert.Contains(
+            cpu.GetProperty("model").ValueKind,
+            new[] { JsonValueKind.String, JsonValueKind.Null });
+
+        var memory = info.GetProperty("memory");
+        Assert.True(memory.GetProperty("processBytes").GetInt64() > 0);
+        Assert.True(memory.GetProperty("managedBytes").GetInt64() > 0);
+
+        var runtime = info.GetProperty("runtime");
+        Assert.Contains(".NET", runtime.GetProperty("framework").GetString()!, StringComparison.Ordinal);
+        Assert.Contains(runtime.GetProperty("build").GetString(), new[] { "Debug", "Release" });
+        Assert.Equal(3, runtime.GetProperty("collections").GetArrayLength());
+        Assert.Equal(Environment.ProcessId, runtime.GetProperty("processId").GetInt32());
+
+        // The one an operator on a box they did not set up asks first.
+        Assert.Equal(_harness.Options.MapDirectory, info.GetProperty("paths").GetProperty("maps").GetString());
+    }
+
+    /// <summary>
+    /// ⛔ The command line and the environment are never in it.
+    /// </summary>
+    /// <remarks>
+    /// <c>--web-password</c> is in the command line and may be in the
+    /// environment, and this endpoint is read by a browser. The test looks for
+    /// the actual password in the reply, so it fails on any future field that
+    /// starts including either — which is a thing somebody would add meaning
+    /// well.
+    /// </remarks>
+    [Fact]
+    public async Task SystemNeverLeaksTheCommandLineOrTheEnvironment()
+    {
+        await SignedInAsync();
+
+        var reply = await _http.GetAsync("/api/system");
+        var body = await reply.Content.ReadAsStringAsync();
+
+        Assert.DoesNotContain(Password, body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("--web", body, StringComparison.OrdinalIgnoreCase);
+
+        // A canary in the environment, so this covers the variables too.
+        Assert.DoesNotContain("PATH=", body, StringComparison.Ordinal);
     }
 
     // --- the page ------------------------------------------------------------

@@ -150,7 +150,7 @@ function render(next) {
   if (mapChanged) loadMapImage(next.map);
   drawMap();
 
-  if (first) loadMaps();
+  if (first) { loadMaps(); loadSystem(); }
 }
 
 /**
@@ -1091,6 +1091,148 @@ function appendLog(lines) {
   if (follow && atEnd) box.scrollTop = box.scrollHeight;
 }
 
+/* ---------- system info -----------------------------------------------------
+ *
+ * Static-ish reference: what the server is running ON, as against the graphs
+ * above, which are how it is doing. Fetched once at sign-in so the collapsed
+ * summary can say something useful, and again whenever the section is opened,
+ * because half of it (memory, uptimes, threads, GC counts) moves.
+ */
+
+async function loadSystem(force) {
+  try {
+    const info = await (await fetch('/api/system')).json();
+    if (!info.ok) return;
+
+    renderSystem(info);
+  } catch {
+    if (force) $('sys-body').replaceChildren(hint('the server did not answer'));
+  }
+}
+
+function hint(text) {
+  const p = document.createElement('p');
+  p.className = 'hint';
+  p.textContent = text;
+  return p;
+}
+
+/** One `<dt>`/`<dd>` pair. A null value reads "unknown" rather than vanishing. */
+function fact(list, name, value, className) {
+  const dt = document.createElement('dt');
+  dt.textContent = name;
+
+  const dd = document.createElement('dd');
+
+  if (value === null || value === undefined || value === '') {
+    dd.textContent = 'unknown';
+    dd.className = 'dim';
+  } else if (value instanceof Node) {
+    dd.appendChild(value);
+  } else {
+    dd.textContent = value;
+  }
+
+  if (className) dd.classList.add(className);
+
+  list.append(dt, dd);
+}
+
+function group(title, build, wide) {
+  const box = document.createElement('div');
+  box.className = 'sys-group' + (wide ? ' wide' : '');
+
+  const heading = document.createElement('h3');
+  heading.textContent = title;
+
+  const list = document.createElement('dl');
+  build(list);
+
+  box.append(heading, list);
+  return box;
+}
+
+function badge(text, kind) {
+  const span = document.createElement('span');
+  span.className = 'sys-badge' + (kind ? ` ${kind}` : '');
+  span.textContent = text;
+  return span;
+}
+
+function hertz(mhz, nominal) {
+  if (mhz === null || mhz === undefined) return null;
+
+  const value = mhz >= 1000 ? `${(mhz / 1000).toFixed(2)} GHz` : `${mhz} MHz`;
+
+  // ⚠️ The two platforms mean different things by this and the panel says so:
+  // Windows records the clock at boot, Linux reports what core 0 is doing right
+  // now — which on a shared VPS moves between requests.
+  return `${value} ${nominal ? '(nominal)' : '(now)'}`;
+}
+
+function renderSystem(info) {
+  const { os, cpu, memory, runtime, paths, disk } = info;
+
+  // The collapsed one-liner. Enough to answer "what am I on" without opening it.
+  $('sys-peek').textContent = [
+    os.description.split(' ').slice(0, 2).join(' '),
+    `${cpu.logicalCores} core${cpu.logicalCores === 1 ? '' : 's'}`,
+    memory.totalBytes ? bytes(memory.totalBytes) : null,
+    runtime.build === 'Debug' ? 'DEBUG BUILD' : null,
+  ].filter(Boolean).join(' · ');
+
+  $('sys-body').replaceChildren(
+    group('Operating system', (l) => {
+      fact(l, 'os', os.description);
+      fact(l, 'architecture', os.architecture);
+      fact(l, 'host', os.machine);
+      fact(l, 'uptime', duration(os.uptimeSeconds));
+    }),
+
+    group('Processor', (l) => {
+      fact(l, 'model', cpu.model);
+      fact(l, 'clock', hertz(cpu.megahertz, cpu.clockIsNominal));
+
+      // ⚠️ Logical, and what the RUNTIME sees — on a VPS with a CPU quota that
+      // is not the host's core count, and it is the one that explains the tick.
+      fact(l, 'logical cores', cpu.logicalCores);
+    }),
+
+    group('Memory', (l) => {
+      fact(l, 'total', memory.totalBytes === null ? null : bytes(memory.totalBytes));
+      fact(l, 'available', memory.availableBytes === null ? null : bytes(memory.availableBytes));
+
+      // Says whether the two figures above are the container's or the host's.
+      fact(l, 'reported by', memory.source);
+      fact(l, 'this process', bytes(memory.processBytes));
+      fact(l, 'managed heap', bytes(memory.managedBytes));
+    }),
+
+    group('Runtime', (l) => {
+      fact(l, 'framework', runtime.framework);
+      fact(l, 'identifier', runtime.identifier);
+      fact(l, 'build', badge(runtime.build, runtime.build === 'Debug' ? 'debug' : null));
+      fact(l, 'gc', `${runtime.serverGc ? 'server' : 'workstation'}, `
+        + `${runtime.concurrentGc ? 'concurrent' : 'non-concurrent'}`);
+      fact(l, 'collections', runtime.collections.join(' / '));
+      fact(l, 'threads', runtime.threads);
+      fact(l, 'process', `pid ${runtime.processId}, up ${duration(runtime.processUptimeSeconds)}`);
+      fact(l, 'timer', runtime.timerResolution);
+    }),
+
+    group('Storage', (l) => {
+      if (disk) {
+        fact(l, 'mount', disk.mount, 'path');
+        fact(l, 'free', `${bytes(disk.freeBytes)} of ${bytes(disk.totalBytes)}`, 'path');
+      }
+
+      fact(l, 'maps', paths.maps, 'path');
+      fact(l, 'nav', paths.nav, 'path');
+      fact(l, 'recordings', paths.recordings, 'path');
+    }, true),
+  );
+}
+
 /* ---------- maps ----------------------------------------------------------- */
 
 async function loadMaps() {
@@ -1275,6 +1417,14 @@ $('map-go').addEventListener('click', async () => {
 
 $('map-pick').addEventListener('keydown', (event) => {
   if (event.key === 'Enter') $('map-go').click();
+});
+
+// ⚠️ Re-read on every open, not just the first: the memory, the uptimes, the
+// thread count and the GC counters are all live, and a section that showed what
+// the box looked like an hour ago would be quietly wrong in the one place an
+// operator goes to check a number.
+$('system').addEventListener('toggle', (event) => {
+  if (event.target.open) loadSystem(true);
 });
 
 $('filter').addEventListener('input', () => { if (state) roster(state); });
