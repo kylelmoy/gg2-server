@@ -3,6 +3,14 @@
 **Status: implemented 2026-09-03.** Off by default — a server with no
 `--plugins` advertises an empty list and behaves exactly as it did before.
 
+✅ **Verified against two real GM8 clients on 2026-09-03**, not only against the
+test harness. Both downloaded `chat_v2_pr` from ganggarrison.com, ran it, chatted
+through this server, and saw each other's messages; team chat did not cross
+teams; the second client — which had the same `PlayerName` — was renamed
+`Player2` by the server and every client saw it. How to repeat it is at the
+bottom of this file, because the harness cannot prove the client half loaded at
+all.
+
 This document is the whole subject: what the reference does, what half of it a
 C# server can do, the seam an implementation plugs into, and how a plugin gets
 ported. `docs/PROTOCOL.md` carries the two wire fields; everything else is here.
@@ -314,3 +322,44 @@ key bindings, the colour rendering, the wrapping, the options menu, and the
 `cheatycheat` object that stops you moving while typing. Also the host's own
 chat window: a headless server has no window, so `event4` becomes a line in the
 server log.
+
+---
+
+## Verifying against a real client
+
+⛔ **The test suite cannot do this and it is the half that matters.** Everything
+in `PluginWireTests` is this port talking to itself: it proves the framing is
+self-consistent, not that a GM8 client accepts it, that the zip downloads, that
+7-Zip extracts it, or that `execute_file` runs the GML without a dialog. Run this
+after any change to the wire fields or to a plugin implementation.
+
+`docs/TRAPS-LIVEGAME.md` and the `gg2-playtest` skill are the general rules —
+**exactly one session holds the live game**, and the bridge serves one TCP client.
+
+1. **Two ini keys, or every launch stops on a modal.** In
+   `D:/code/Gang-Garrison-2/Source/build/gg2.ini`, under `[Settings]`:
+   `ServerPluginsPrompt=0` (else the client raises the "download these plugins?"
+   dialog and the bridge stops answering) and `RestartPrompt=0` (else
+   `pluginscleanup` raises one on disconnect). ⚠️ **Back the file up and restore
+   it** — it is the live game's own config, not this repo's.
+2. `gg2-server --port 8190 --plugins chat_v2_pr --bots 2`
+3. Point a client at it, rather than at a GG2 server:
+   `cd D:/Code/gg2-agent && node run-agent.js --port 17778 --name client1 --role client --keep -- -server 127.0.0.1 -port 8190`
+4. `tail agent_launcher_17778.log` — a clean run has no `E|` or `M|` lines after
+   the launch. A plugin that failed to load shows up there and nowhere else.
+5. `gg2_evalx` on the client: `global.serverPluginsInUse` is 1,
+   `global.chatPacketID` is 0, and `global.chatLog` holds the server's reply.
+   ⚠️ **`chatLog` is the assertion, not a screenshot** — the window fades after
+   four seconds (`alarm[0]`), so a screenshot taken a moment late shows nothing
+   and looks like a failure.
+6. Send as the client would, without needing keyboard focus:
+   `with(global.chatWindow) { _message = "..."; _team = 0; event_user(3); }`
+   — `_team` here is the client's *boolean*, 0 global and 1 team. See the
+   off-by-one warning above.
+7. A second client with the same `PlayerName` exercises the de-duplication, and
+   two clients on different teams exercise the routing.
+
+⚠️ **`--bots N` is worth having on**, because the roster then compacts under you:
+the population manager drops a bot to make room for each human, so the first
+client's slot moves between its join and its first message. That is exactly the
+path `PluginPlayerTable` exists for, and it is free to exercise here.
