@@ -10,6 +10,22 @@ namespace Gg2.Server;
 /// <param name="Bots">Bots on the roster.</param>
 /// <param name="Characters">Live characters — the cost driver for the search controller.</param>
 /// <param name="Map">The map being served.</param>
+/// <param name="WorkMilliseconds">
+/// How long this tick's own work took — <c>Tick()</c>, measured directly.
+/// ⛔ <b>THE FIRST NUMBER TO READ, and the reason is that everything else on this
+/// line is pacing.</b> A tick is late when the loop reaches the next deadline
+/// after it has passed, which happens either because the tick was slow or
+/// because the process did not get scheduled. Those need opposite responses and
+/// look identical without this.
+/// <para>
+/// ⚠️ <b>Measured against the machine, 2026-09-03.</b> A twelve-bot server used
+/// <b>0.104 ms of CPU per tick</b> — 0.3% of one core — and still showed p99
+/// 100 ms and a 262 ms worst case, because a neighbouring lane was running 70
+/// training processes on the same box. Work near zero with lateness in the tens
+/// or hundreds of milliseconds is that, and no amount of optimising this server
+/// would have moved it.
+/// </para>
+/// </param>
 /// <param name="ArbiterSpentMicroseconds">
 /// Controller microseconds the arbiter granted on this tick, or null when there
 /// is no arbiter. ⚠️ <b>The single most useful number here when it exists</b>: a
@@ -21,6 +37,7 @@ public readonly record struct LateTickContext(
     int Bots,
     int Characters,
     string Map,
+    double WorkMilliseconds,
     int? ArbiterSpentMicroseconds);
 
 /// <summary>
@@ -143,7 +160,7 @@ public sealed class LateTickMonitor
         _worstTick = tick;
 
         return $"WARNING late tick {tick}: took {intervalMs + overrunMs:0.0}ms against a "
-            + $"{intervalMs:0.0}ms budget ({overrunMs:0.0}ms over) — {Describe(context)}";
+            + $"{intervalMs:0.0}ms budget ({overrunMs:0.0}ms over) — {Describe(context, intervalMs)}";
     }
 
     /// <summary>
@@ -184,13 +201,26 @@ public sealed class LateTickMonitor
             + $"worst was tick {_worstTick} at {_worstOverrunMs:0.0}ms over";
     }
 
-    private static string Describe(in LateTickContext context)
+    private static string Describe(in LateTickContext context, double intervalMs)
     {
         var arbiter = context.ArbiterSpentMicroseconds is { } spent
             ? $", controllers {spent.ToString(CultureInfo.InvariantCulture)}us"
             : string.Empty;
 
+        // ⛔ The verdict, not decoration. A late tick whose own work was a
+        // fraction of a millisecond was not this server's fault, and saying so on
+        // the line is the difference between an operator profiling the bot layer
+        // for an afternoon and an operator looking at what else is running.
+        var work = context.WorkMilliseconds.ToString("0.00", CultureInfo.InvariantCulture);
+
+        // The same threshold lateness itself uses, so the two answers cannot
+        // disagree: work that would have blown the budget on its own is the
+        // tick's fault, and work far under it is not.
+        var verdict = IsLate(context.WorkMilliseconds - intervalMs, intervalMs)
+            ? "the tick itself"
+            : "NOT this tick — the process was not scheduled";
+
         return $"{context.Map}, {context.Clients} client(s), {context.Bots} bot(s), "
-            + $"{context.Characters} character(s){arbiter}";
+            + $"{context.Characters} character(s){arbiter}; work {work}ms, so: {verdict}";
     }
 }

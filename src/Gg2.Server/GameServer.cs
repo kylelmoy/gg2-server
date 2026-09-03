@@ -911,7 +911,13 @@ public sealed class GameServer : IDisposable
                     _log.Info(stats.Report());
             }
 
+            // ⚠️ The tick's OWN work, and it is what makes the late warning
+            // below actionable. Two timestamp reads a tick, tens of nanoseconds,
+            // against a diagnostic that otherwise cannot tell "this server is
+            // too slow" from "this machine is busy" — see LateTickContext.
+            var workStart = Stopwatch.GetTimestamp();
             Tick();
+            var workMs = Stopwatch.GetElapsedTime(workStart).TotalMilliseconds;
 
             // ⚠️ Re-read every tick rather than captured before the loop: the
             // control port can change the speed on a running server, and a
@@ -957,7 +963,7 @@ public sealed class GameServer : IDisposable
             // a second clock.
             if (LateTickMonitor.IsLate(-wait.TotalMilliseconds, tickLength.TotalMilliseconds)
                 && late.Record(
-                    _frame, -wait.TotalMilliseconds, tickLength.TotalMilliseconds, LateContext())
+                    _frame, -wait.TotalMilliseconds, tickLength.TotalMilliseconds, LateContext(workMs))
                     is { } warning)
             {
                 _log.Info(warning);
@@ -1012,7 +1018,7 @@ public sealed class GameServer : IDisposable
     /// and doing that every tick to feed a line that is almost never printed
     /// would be paying the diagnostic's cost on the healthy path.
     /// </remarks>
-    private LateTickContext LateContext()
+    private LateTickContext LateContext(double workMilliseconds)
     {
         var bots = 0;
         var characters = 0;
@@ -1031,6 +1037,7 @@ public sealed class GameServer : IDisposable
             Bots: bots,
             Characters: characters,
             Map: _currentMap,
+            WorkMilliseconds: workMilliseconds,
 
             // Only DecisionQuotaArbiter can say what it spent, and only a tiered
             // server has one. Null means "nothing to report", never "zero".

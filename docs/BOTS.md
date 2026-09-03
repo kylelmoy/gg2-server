@@ -862,3 +862,36 @@ was wrong. **Send a claim across a seam early; do not review it harder.** Cheap
 contradicting actions for questions of meaning — grep the definition, keep the
 control arm, run the one command that could disagree — and review for questions
 of mechanism.
+
+## ⚠️ Late ticks are a PACING measurement, and pacing measures the machine
+
+**Measured 2026-09-03, and it is the second time a session has chased this.**
+
+| what | number |
+|---|---|
+| server CPU per tick, 12 bots, Release, no client | **0.104 ms** (0.3% of one core) |
+| the same run's pacing | p50 33 ms, mean 33.31, **p99 100 ms, max 262 ms** |
+| what else was running | another lane's training: **70 python processes**, ~7.7 cores |
+
+⛔ **A tick that did 0.1 ms of work and was 94 ms late is not a bot problem, and
+no amount of optimising this server would move it.** The late-tick warning is
+computed from a scheduled deadline (`nextTick += tickLength`), so it folds in
+every millisecond the process spent not running — which on a shared machine is
+the dominant term by orders of magnitude.
+
+✅ **The warning now carries the verdict**: the tick's own work and
+`so: NOT this tick — the process was not scheduled` versus `so: the tick itself`.
+`LateTickMonitorTests` gates both directions and pins them to the same threshold
+lateness uses, so the two answers cannot disagree.
+
+⚠️ **The histogram's shape says it too, before you read any code.** Contention is
+bimodal — a correct median with a long tail, plus a cluster of near-zero
+intervals where the loop catches up after a stall. Real overload moves the
+*median*. In the run above: `p50 33`, `mean 33.31`, and `0:131` near-zero ticks
+in 1,800.
+
+⚠️ **Before quoting any pacing number, check what else is on the box.**
+`Get-Process python | Measure-Object CPU -Sum` twice, ten seconds apart, over
+`(Get-CimInstance Win32_ComputerSystem).NumberOfLogicalProcessors`. And ⚠️ an
+empty server idles at 2 Hz, so a bots-only measurement needs
+`--no-idle-when-empty` or it measures nothing at all.

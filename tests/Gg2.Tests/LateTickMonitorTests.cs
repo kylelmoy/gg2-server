@@ -16,8 +16,102 @@ public sealed class LateTickMonitorTests
 {
     private const double Interval = 1000.0 / 30.0;
 
-    private static LateTickContext Context =>
-        new(Clients: 2, Bots: 4, Characters: 6, Map: "ctf_truefort", ArbiterSpentMicroseconds: null);
+    private static LateTickContext Context => ContextWithWork(0.2);
+
+    /// <summary>
+    /// A context whose tick did <paramref name="workMs"/> of work.
+    /// </summary>
+    /// <remarks>
+    /// The default is deliberately a fraction of a millisecond, because that is
+    /// the case the warning has to get right: a tick that did almost nothing and
+    /// was still late is the machine's fault, not the server's.
+    /// </remarks>
+    private static LateTickContext ContextWithWork(double workMs) =>
+        new(
+            Clients: 2,
+            Bots: 4,
+            Characters: 6,
+            Map: "ctf_truefort",
+            WorkMilliseconds: workMs,
+            ArbiterSpentMicroseconds: null);
+
+    // ------------------------------------------------------------------
+    // Whose fault the late tick was
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// A late tick that did almost no work blames the machine, not the server.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>The line has to answer this or it is not actionable.</b> Measured
+    /// 2026-09-03: a twelve-bot server used <b>0.104 ms of CPU per tick</b>, 0.3%
+    /// of one core, and still showed p99 100 ms and a 262 ms worst case — because
+    /// a neighbouring lane was running seventy training processes on the same
+    /// machine. Without the work figure on the line, that reads exactly like a bot
+    /// layer that has become too expensive, and the response to the two is
+    /// opposite.
+    /// </remarks>
+    [Fact]
+    public void ALateTickThatDidNoWorkBlamesTheMachine()
+    {
+        var monitor = new LateTickMonitor();
+
+        var line = monitor.Record(tick: 1, overrunMs: 60, intervalMs: Interval, ContextWithWork(0.10));
+
+        Assert.NotNull(line);
+        Assert.Contains("work 0.10ms", line);
+        Assert.Contains("NOT this tick", line);
+    }
+
+    /// <summary>
+    /// A late tick whose own work blew the budget blames the tick.
+    /// </summary>
+    /// <remarks>
+    /// The other side, and it must exist: a verdict that always said "the machine"
+    /// would be worse than no verdict, because it would talk an operator out of
+    /// looking at a server that really had got slow.
+    /// </remarks>
+    [Fact]
+    public void ALateTickThatOverranOnItsOwnBlamesTheTick()
+    {
+        var monitor = new LateTickMonitor();
+
+        // Work well past the interval: this tick could not have met its deadline
+        // on an idle machine either.
+        var line = monitor.Record(tick: 1, overrunMs: 60, intervalMs: Interval, ContextWithWork(90));
+
+        Assert.NotNull(line);
+        Assert.Contains("work 90.00ms", line);
+        Assert.Contains("the tick itself", line);
+        Assert.DoesNotContain("NOT this tick", line);
+    }
+
+    /// <summary>
+    /// The verdict uses the same threshold lateness itself does.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ Otherwise the two can disagree — a tick could be reported late while the
+    /// verdict said its work was fine, at a work figure that would itself have
+    /// been reported late. One constant, both answers.
+    /// </remarks>
+    [Fact]
+    public void TheVerdictAndLatenessShareAThreshold()
+    {
+        var monitor = new LateTickMonitor();
+
+        // Just past 1.2x the interval, which is exactly where IsLate flips.
+        var justOver = Interval * (1 + LateTickMonitor.LateFraction) + 0.5;
+        var justUnder = Interval * (1 + LateTickMonitor.LateFraction) - 0.5;
+
+        Assert.Contains(
+            "the tick itself",
+            monitor.Record(1, overrunMs: 60, intervalMs: Interval, ContextWithWork(justOver))!);
+
+        Assert.Contains(
+            "NOT this tick",
+            new LateTickMonitor()
+                .Record(1, overrunMs: 60, intervalMs: Interval, ContextWithWork(justUnder))!);
+    }
 
     // ------------------------------------------------------------------
     // What counts as late
