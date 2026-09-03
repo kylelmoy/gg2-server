@@ -2598,8 +2598,9 @@ scoreboard instead of the stream, and nothing had noticed.
   those tests run, and the broken layout was never written.
   ⛔ **A layout test has to make the layout actually get written.**
   `TheHudBlockAfterAGamemodeChangeIsTheNewGamemodes` runs to the two-minute
-  scoreboard heartbeat for exactly that reason, and asserts a `CAPS_UPDATE`
-  arrived before asserting anything about it.
+  scoreboard heartbeat for exactly that reason, asserts a `CAPS_UPDATE` arrived
+  before asserting anything about it, and does it in **both** directions —
+  CTF → KotH and KotH → CTF are different stale pairings.
 - **The trace fixtures could not have caught it either.** No recording in this
   project contains a map rotation, so the one comparison against the reference's
   own bytes never crosses a gamemode change.

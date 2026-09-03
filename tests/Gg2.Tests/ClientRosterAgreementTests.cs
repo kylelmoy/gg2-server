@@ -256,14 +256,43 @@ public sealed class ClientRosterAgreementTests
         using var mirror = new MirrorClient(client, Load, First);
 
         harness.Tick(30);
+
+        // ⚠️ BOTH directions. CTF → KotH and KotH → CTF are different stale
+        // pairings, and a fix that only reached one of them would leave half the
+        // rotation broken.
         Rotate(harness, mirror);
-
         Assert.Equal(Second, mirror.CurrentMap);
+        AssertHudArrivesAndParses(harness, mirror, "after ctf → koth");
 
+        harness.Server.RequestMapChange(First);
+        harness.TickUntil(
+            () =>
+            {
+                mirror.Pump();
+                return mirror.CurrentMap == First;
+            },
+            "the client to be told about the second map",
+            maxTicks: 600);
+
+        AssertHudArrivesAndParses(harness, mirror, "after koth → ctf");
+    }
+
+    /// <summary>
+    /// Runs on until a <c>CAPS_UPDATE</c> arrives, then checks it read back.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The waiting is the point.</b> The HUD block rides on
+    /// <c>FULL_UPDATE</c> and <c>CAPS_UPDATE</c> only
+    /// (<c>serializeState.gml</c>), so a test that rotates and then ticks a few
+    /// hundred times never makes the server write the layout it is trying to
+    /// check. That is exactly how the rest of this file watched this rotation and
+    /// missed the bug. `_frame % 3600` is the two-minute scoreboard heartbeat and
+    /// is the one trigger that needs nothing to happen in the match.
+    /// </remarks>
+    private static void AssertHudArrivesAndParses(ServerHarness harness, MirrorClient mirror, string when)
+    {
         var before = mirror.Of(MessageType.CapsUpdate).Count;
 
-        // ⚠️ Run to the two-minute scoreboard heartbeat, which is what actually
-        // puts a HUD block on the wire. `_frame % 3600` — see WriteStateUpdate.
         for (var i = 0; i < 3700 && mirror.Of(MessageType.CapsUpdate).Count == before; i++)
         {
             harness.Tick(1);
@@ -272,17 +301,16 @@ public sealed class ClientRosterAgreementTests
 
         var caps = mirror.Of(MessageType.CapsUpdate);
 
-        // Not vacuous: without a CAPS_UPDATE this test asserts nothing at all.
-        Assert.True(caps.Count > before, "no CAPS_UPDATE was emitted after the rotation");
+        // Not vacuous: with no CAPS_UPDATE this asserts nothing at all.
+        Assert.True(caps.Count > before, $"{when}: no CAPS_UPDATE was emitted");
 
-        // The reader was given the NEW map's shape, so a stale CTF HUD block
-        // makes the state come back the wrong length or the stream unreadable.
-        // KotH's HUD is cpUnlock, redTimer, blueTimer and one point; CTF's is a
-        // different size, so the two cannot be confused silently.
-        var update = caps[^1];
-        Assert.NotNull(update.State);
+        // The reader was given the NEW map's shape. A stale HUD block from the
+        // previous gamemode is a different length, so the update either fails to
+        // frame or leaves the stream misaligned for everything after it — which
+        // AssertAgrees then catches as a roster that has stopped adding up.
+        Assert.NotNull(caps[^1].State);
 
-        AssertAgrees(harness, mirror, "after a gamemode-changing rotation");
+        AssertAgrees(harness, mirror, when);
     }
 
     /// <summary>
