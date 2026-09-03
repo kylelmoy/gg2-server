@@ -207,11 +207,48 @@ change. Do not re-propose it without a reason that is not size.
 `BotPopulationService.MapChanged` does — re-measure before reusing it if nav ever
 loads per-round or eagerly for a rotation.
 
-⚠️ **Both containers are accepted, and `.txt.gz` wins when both are present.**
-`gg2-nav-gen` writes `.txt`, so an operator regenerating a graph gets a plain
-file sitting next to a shipped compressed one; preferring the compressed one
-means what shipped is what runs, and deleting the `.gz` is how you say otherwise.
-`NavCache.FindFile`.
+#### Regenerating them — `gg2-nav-gen` needs no changes
+
+✅ **The generator writes `.txt` and that is fine; nothing about it had to
+change.** `NavCache` reads both containers.
+
+⛔ **But a plain `.txt` WINS over a shipped `.txt.gz`, and the reason matters.**
+`gg2-nav-gen` writes `<map>_a<area>.txt` into `../gg2-server/nav` by default —
+the same directory that holds the checked-in `.txt.gz`. So the only way a plain
+file appears beside a compressed one is that somebody just ran the generator, and
+the rule is **what somebody just wrote beats what shipped**. The first version of
+this preferred the compressed file, on the reasonable-sounding grounds that it is
+what shipped; that made a regeneration *silently do nothing*, and nothing caught
+it, because `NavManifestTests` hashes the **maps** — which a regeneration does not
+touch. `NavCache.FindFile`.
+
+⚠️ The server logs when it finds both, naming the one it used. One of the two is
+always being ignored, and which is not visible from outside.
+
+The full cycle:
+
+```bash
+npx gg2navgen build --all      # writes .txt into gg2-server/nav
+tools/compress-nav.sh          # gzip -9 -n, verify the roundtrip, delete the .txt
+GG2_UPDATE_NAV_MANIFEST=1 dotnet test Gg2.sln --filter NavManifestTests
+dotnet test Gg2.sln
+```
+
+⚠️ **The suite catches a half-finished cycle**:
+`NavContainerTests.TheCheckedInGraphsAreCompressed` fails with the loose files
+named and these commands in the message. **The manifest step is not optional if
+the maps moved** — skipping it leaves the old pairing recorded and the new graphs
+refused at runtime.
+
+✅ **`gzip -9 -n` is deterministic**, so decompressing and recompressing a
+checked-in graph reproduces it byte for byte (verified 2026-09-03). A
+regeneration that changed nothing produces no git diff; without `-n` the
+timestamp field would rewrite all 25 files every time.
+
+⚠️ **The alternative — teaching `gg2-nav-gen` to write `.txt.gz` — was not
+taken.** It is another repository and another lane (`docs/PARALLEL.md`), the
+reader has to accept `.txt` regardless for anyone running an older generator, and
+a two-line script here buys the same thing without a cross-repo version skew.
 
 #### It can still fail, and it still says so
 

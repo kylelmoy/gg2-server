@@ -114,6 +114,20 @@ public sealed class BotPopulationService
             else
             {
                 Nav = graph;
+
+                // ⚠️ Both containers for one map means one of them is being
+                // ignored, and the loser is invisible from the outside. The
+                // usual cause is a gg2-nav-gen run into a directory that ships
+                // .txt.gz: the fresh .txt wins, which is what was wanted, but
+                // saying so is the difference between a regeneration that
+                // worked and one that only appeared to. NavCache.FindFile.
+                if (NavCache.HasBothContainers(navCacheDirectory, map.Name, area))
+                {
+                    _log.Info(
+                        $"{map.Name} area {area} has both a .txt and a .txt.gz nav graph; "
+                        + "using the .txt. Delete one — tools/compress-nav.sh does it "
+                        + "the way the repository expects");
+                }
             }
         }
 

@@ -62,27 +62,89 @@ public sealed class NavContainerTests : IDisposable
     }
 
     /// <summary>
-    /// ⚠️ With both present the compressed one wins, and it is not a coin toss.
+    /// ⛔ With both present the PLAIN one wins — a regenerated graph takes
+    /// effect.
     /// </summary>
     /// <remarks>
-    /// The plain file here is a VALID graph for a different map, so a reader
-    /// that picked it would load happily and be wrong — the failure this
-    /// ordering exists to avoid, rather than a crash that would announce itself.
+    /// ⛔ <b>This asserted the opposite for about an hour, and the opposite was
+    /// a bug.</b> "Compressed wins, because it is what shipped" sounds right
+    /// until you ask where the plain file came from: <c>gg2-nav-gen</c> writes
+    /// <c>&lt;key&gt;.txt</c> into <c>../gg2-server/nav</c> by default, which is
+    /// the directory holding the shipped <c>.txt.gz</c>. So preferring the
+    /// compressed file meant a regeneration was silently ignored — and nothing
+    /// caught it, because <c>NavManifestTests</c> hashes the MAPS, which a
+    /// regeneration does not touch.
+    /// <para>
+    /// The graphs here are deliberately different sizes so the assertion can
+    /// tell which file was actually read, rather than only that something
+    /// loaded.
+    /// </para>
     /// </remarks>
     [Fact]
-    public void CompressedWinsWhenBothArePresent()
+    public void PlainWinsWhenBothArePresent()
     {
         ReferenceTree.RequireNavCache();
 
+        // The shipped container holds ctf_truefort (687 nodes); the "freshly
+        // generated" plain file holds gg_debug (52).
         WriteCompressed("ctf_truefort_a1.txt.gz", RealGraphText());
         File.WriteAllText(
             Path.Combine(_directory, "ctf_truefort_a1.txt"),
             NavCache.ReadFile(NavCache.FindFile(ReferenceTree.NavCacheDirectory, "gg_debug", 1)));
 
         Assert.True(NavCache.TryLoad(_directory, "ctf_truefort", 1, out var graph));
+        Assert.Equal(52, graph!.Nodes.Length);
 
-        // gg_debug's graph is 52 nodes; ctf_truefort's is 687.
-        Assert.Equal(687, graph!.Nodes.Length);
+        Assert.True(NavCache.HasBothContainers(_directory, "ctf_truefort", 1));
+
+        // ⚠️ And with only the shipped one there, it is used and nothing is
+        // reported as ambiguous — otherwise the warning would fire on every
+        // normal server.
+        File.Delete(Path.Combine(_directory, "ctf_truefort_a1.txt"));
+
+        Assert.False(NavCache.HasBothContainers(_directory, "ctf_truefort", 1));
+        Assert.True(NavCache.TryLoad(_directory, "ctf_truefort", 1, out var shipped));
+        Assert.Equal(687, shipped!.Nodes.Length);
+    }
+
+    /// <summary>
+    /// ⛔ The regeneration cycle end to end: generate, compress, still the same
+    /// graph.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>This is the workflow, and every step of it is a place to lose
+    /// data.</b> <c>gg2-nav-gen</c> writes <c>.txt</c>;
+    /// <c>tools/compress-nav.sh</c> gzips and deletes the original; the loader
+    /// has to read the result as the same graph. Asserting the round trip here
+    /// means the script's contract is pinned by something other than the
+    /// script's own comments — it is not run by the suite, but what it is
+    /// required to produce is.
+    /// </remarks>
+    [Fact]
+    public void TheRegenerationCycleRoundTrips()
+    {
+        ReferenceTree.RequireNavCache();
+
+        var generated = Path.Combine(_directory, "ctf_truefort_a1.txt");
+        File.WriteAllText(generated, RealGraphText());
+
+        Assert.True(NavCache.TryLoad(_directory, "ctf_truefort", 1, out var fromPlain));
+
+        // What compress-nav.sh does: gzip -9 -n, verify, delete the original.
+        WriteCompressed("ctf_truefort_a1.txt.gz", File.ReadAllText(generated));
+        File.Delete(generated);
+
+        Assert.True(NavCache.TryLoad(_directory, "ctf_truefort", 1, out var fromCompressed));
+
+        Assert.Equal(fromPlain!.Nodes.Length, fromCompressed!.Nodes.Length);
+        Assert.Equal(fromPlain.Edges.Length, fromCompressed.Edges.Length);
+
+        // ⚠️ Node-for-node, not just the counts. A container change that lost
+        // the fractional NAV_EDGE_BUCKET would keep every count identical and
+        // cost five of fourteen scenarios — NavCache.Parse's remarks on the cast
+        // that already did exactly that once.
+        for (var i = 0; i < fromPlain.Edges.Length; i++)
+            Assert.Equal(fromPlain.Edges[i].Bucket, fromCompressed.Edges[i].Bucket);
     }
 
     /// <summary>One map with two containers is one entry, not two.</summary>
@@ -210,8 +272,17 @@ public sealed class NavContainerTests : IDisposable
 
         Assert.True(
             plain.Length == 0,
-            $"uncompressed nav graphs are checked in: {string.Join(", ", plain.Select(Path.GetFileName))}. "
-            + "They are 32x larger and gzip costs about a millisecond a map change (docs/DEPLOY.md).");
+            $"""
+             Uncompressed nav graphs in {directory}: {string.Join(", ", plain.Select(Path.GetFileName))}
+
+             This is what a gg2-nav-gen run leaves behind — it writes .txt into this
+             directory by default. The graphs are live (a .txt beats a .txt.gz), so the
+             server is using them; they are just 32x larger than the shipped form. Finish
+             the cycle:
+                 tools/compress-nav.sh
+                 GG2_UPDATE_NAV_MANIFEST=1 dotnet test Gg2.sln --filter NavManifestTests
+             docs/DEPLOY.md, "the nav graphs".
+             """);
 
         Assert.NotEmpty(Directory.EnumerateFiles(directory, "*.txt.gz"));
     }

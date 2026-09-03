@@ -113,32 +113,56 @@ public static class NavCache
     }
 
     /// <summary>
-    /// The file holding a map and area's graph, preferring the compressed one,
-    /// or empty when neither is there.
+    /// The file holding a map and area's graph, preferring a freshly generated
+    /// plain one, or empty when neither is there.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Compressed wins when both exist</b>, and that ordering is the
-    /// answer to the case an operator actually hits: <c>gg2-nav-gen</c> writes
-    /// <c>.txt</c> into a directory this repository ships <c>.txt.gz</c> in, so
-    /// the two sit side by side and one of them is stale. Preferring the plain
-    /// file would mean a checkout silently reverting to whatever was generated
-    /// last; preferring the compressed one means what shipped is what runs, and
-    /// an operator replacing a graph deletes the <c>.gz</c> to say so.
-    /// <see cref="NavManifest"/> catches the mistake either way when the
-    /// geometry actually moved.
+    /// ⛔ <b>PLAIN WINS, and the first version of this had it the other way
+    /// round.</b> The reasoning for preferring the compressed file was that it
+    /// is what shipped — which sounds right and is backwards, because of where
+    /// the plain file comes from. <c>gg2-nav-gen</c> writes
+    /// <c>&lt;key&gt;.txt</c> into <c>../gg2-server/nav</c> by default, the very
+    /// directory this repository ships <c>.txt.gz</c> in. So the only way a
+    /// <c>.txt</c> appears beside a <c>.gz</c> is that somebody just ran the
+    /// generator, and "compressed wins" meant their regenerated graphs were
+    /// silently ignored while everything stayed green — <c>NavManifestTests</c>
+    /// hashes the MAPS, which a regeneration does not touch.
+    /// <para>
+    /// ⚠️ <b>That is the exact failure this whole area was changed to end</b>, so
+    /// it is worth stating as a rule: <b>the file somebody just wrote wins over
+    /// the file that shipped</b>. The shipped one is the default; a plain file
+    /// next to it is a deliberate act.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Neither answer is silent.</b> <see cref="HasBothContainers"/> says
+    /// when a graph exists twice, and <c>BotPopulationService</c> logs it on the
+    /// map change — because whichever way the tie breaks, one of the two files
+    /// is being ignored and the operator should know which.
+    /// </para>
     /// </remarks>
     public static string FindFile(string directory, string map, int area)
     {
         ArgumentNullException.ThrowIfNull(directory);
 
         var stem = Path.Combine(directory, Key(map, area));
-        var compressed = stem + CompressedExtension;
-
-        if (File.Exists(compressed))
-            return compressed;
-
         var plain = stem + Extension;
-        return File.Exists(plain) ? plain : string.Empty;
+
+        if (File.Exists(plain))
+            return plain;
+
+        var compressed = stem + CompressedExtension;
+        return File.Exists(compressed) ? compressed : string.Empty;
+    }
+
+    /// <summary>
+    /// Whether both containers hold this graph, so one of them is being ignored.
+    /// </summary>
+    public static bool HasBothContainers(string directory, string map, int area)
+    {
+        ArgumentNullException.ThrowIfNull(directory);
+
+        var stem = Path.Combine(directory, Key(map, area));
+        return File.Exists(stem + Extension) && File.Exists(stem + CompressedExtension);
     }
 
     /// <summary>
