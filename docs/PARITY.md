@@ -2521,6 +2521,10 @@ and neither was found by a test.**
   own roster has as a spectator). Found by `gg2-plugins` driving a real GM8
   client. `MapRotationTests` and `MatchActuallyHappensTests` both pass, because
   the server's own state stays perfectly consistent across a rotation.
+  ⚠️ **The symptom, the three narrowing runs, the reproduction and what is
+  explicitly NOT diagnosed are in `docs/PLUGINS.md`** — one write-up, and this is
+  not it. Do not restate them here; go and read that one before touching the bug,
+  because two of its four sections are things already ruled out.
 
 **Two of one shape in one day is a category, not a coincidence.** The shape:
 *the server is self-consistent and correct, and what it emitted does not add up
