@@ -424,7 +424,7 @@ function objective(s) {
       bar.className = 'pbar';
       const fill = document.createElement('span');
       fill.style.width = `${Math.min(100, point.progress * 100)}%`;
-      fill.style.background = point.capping === 'Red' ? 'var(--red)' : 'var(--blue)';
+      fill.style.background = point.capping === 'Red' ? 'var(--team-red)' : 'var(--team-blue)';
       bar.appendChild(fill);
       node.appendChild(bar);
     }
@@ -507,7 +507,10 @@ function drawMap() {
     $('map-empty').hidden = false;
   }
 
-  for (const [intel, colour] of [[state.redIntel, '#e2564f'], [state.blueIntel, '#4f92dc']]) {
+  for (const [intel, colour] of [
+    [state.redIntel, token('--team-red', '#e2564f')],
+    [state.blueIntel, token('--team-blue', '#4f92dc')],
+  ]) {
     if (!intel.present || intel.carrier >= 0) continue;
     const home = intel.x === intel.homeX && intel.y === intel.homeY;
     briefcase(g, intel.x, intel.y, colour, home, unit);
@@ -528,15 +531,16 @@ function briefcase(g, x, y, colour, home, unit) {
   g.fillStyle = colour;
   g.globalAlpha = home ? 0.55 : 1;
   g.fillRect(-w, -h, w * 2, h * 2);
-  g.strokeStyle = '#0a0e13';
+  g.strokeStyle = EDGE();
   g.lineWidth = 1.5 * unit;
   g.strokeRect(-w, -h, w * 2, h * 2);
   g.restore();
 }
 
 function dot(g, player, unit) {
-  const red = player.team === 'Red';
-  const colour = red ? '#e2564f' : player.team === 'Blue' ? '#4f92dc' : '#8b97a8';
+  const colour = player.team === 'Red' ? token('--team-red', '#e2564f')
+    : player.team === 'Blue' ? token('--team-blue', '#4f92dc')
+    : INK_3();
 
   g.save();
   g.translate(player.x, player.y);
@@ -544,7 +548,7 @@ function dot(g, player, unit) {
   if (player.slot === selected) {
     g.beginPath();
     g.arc(0, 0, 11 * unit, 0, Math.PI * 2);
-    g.strokeStyle = '#6da2e8';
+    g.strokeStyle = token('--accent', '#c49ff9');
     g.lineWidth = 2 * unit;
     g.stroke();
   }
@@ -553,19 +557,19 @@ function dot(g, player, unit) {
   g.arc(0, 0, 5.5 * unit, 0, Math.PI * 2);
   g.fillStyle = colour;
   g.fill();
-  g.strokeStyle = '#0a0e13';
+  g.strokeStyle = EDGE();
   g.lineWidth = 1.75 * unit;
   g.stroke();
 
   if (player.bot) {
     g.beginPath();
     g.arc(0, 0, 2 * unit, 0, Math.PI * 2);
-    g.fillStyle = '#0a0e13';
+    g.fillStyle = EDGE();
     g.fill();
   }
 
   if (player.intel) {
-    g.fillStyle = '#e0a44a';
+    g.fillStyle = token('--warning', '#f7b750');
     g.fillRect(4 * unit, -10 * unit, 6 * unit, 5 * unit);
   }
 
@@ -607,7 +611,13 @@ const SERIES = {
   aqua: '#199e70',
   orange: '#d95926',
   violet: '#9085e9',
-  warning: '#fab219',
+
+  // ⚠️ The THEME's warning, not the viz palette's near-identical amber. Late
+  // ticks are the one series that means "something is wrong", and the panel
+  // says that in one colour — the live pill, the map-change banner, the tile
+  // notes, the log. Legal here because that chart is a single series, so no
+  // adjacent-pair check applies; only contrast, which is 9.98:1 on --surface.
+  warning: () => token('--warning', '#f7b750'),
 };
 
 /**
@@ -656,6 +666,7 @@ const CHARTS = [
     floor: 2,
     digits: 0,
     series: [{ field: 'late', label: 'late', color: SERIES.warning, fill: true }],
+    // (SERIES.warning is a function; resolve() below calls it.)
   },
   {
     key: 'net',
@@ -679,9 +690,31 @@ const CHARTS = [
   },
 ];
 
-const INK_3 = '#6b788b';
-const GRID = '#232c39';
-const SURFACE = '#151b24';
+/**
+ * A theme token, read once out of the stylesheet.
+ *
+ * ⚠️ <canvas> cannot use a CSS custom property, so every colour drawn on one has
+ * to be resolved to a string first. Reading them from :root rather than
+ * repeating the hex keeps ONE source of truth — the theme block in app.css —
+ * and means the map and the charts re-theme with everything else. Canvas
+ * accepts oklch() directly in every browser that supports the property at all,
+ * which is the same browsers this stylesheet already requires.
+ */
+const THEME = {};
+
+function token(name, fallback) {
+  if (THEME[name] === undefined) {
+    const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    THEME[name] = value || fallback;
+  }
+
+  return THEME[name];
+}
+
+const INK_3 = () => token('--muted', '#a29ea8');
+const GRID = () => token('--separator', '#222123');
+const SURFACE = () => token('--surface', '#19181a');
+const EDGE = () => token('--background', '#060507');
 
 let perf = [];
 let perfSeen = -1;
@@ -720,7 +753,7 @@ function buildCharts() {
       for (const series of chart.series) {
         const item = document.createElement('span');
         const key = document.createElement('i');
-        key.style.background = series.color;
+        key.style.background = typeof series.color === 'function' ? series.color() : series.color;
         item.append(key, series.label);
         legend.appendChild(item);
       }
@@ -838,6 +871,10 @@ function drawChart(chart, data) {
 
   const value = (sample, series) => (sample[series.field] || 0) * (series.scale || 1);
 
+  // A series colour may be a literal or a token lookup deferred until the
+  // stylesheet has applied. One place unwraps it.
+  const colour = (series) => (typeof series.color === 'function' ? series.color() : series.color);
+
   let peak = chart.floor;
 
   for (const sample of data) {
@@ -862,7 +899,7 @@ function drawChart(chart, data) {
 
   // Grid: hairline, solid, one step off the surface, and recessive. Two lines —
   // the top and the middle — because the baseline is the plot's own floor.
-  g.strokeStyle = GRID;
+  g.strokeStyle = GRID();
   g.lineWidth = 1;
 
   for (const fraction of [0, 0.5, 1]) {
@@ -873,7 +910,7 @@ function drawChart(chart, data) {
     g.stroke();
   }
 
-  g.fillStyle = INK_3;
+  g.fillStyle = INK_3();
   g.font = '10px ui-monospace, Consolas, monospace';
   g.textBaseline = 'alphabetic';
   // ⚠️ The axis label rounds harder than the readout. `niceCeil` only ever
@@ -892,14 +929,14 @@ function drawChart(chart, data) {
     const line = Math.round(y(rule)) + 0.5;
 
     if (line > pad.top && line < pad.top + plotH) {
-      g.strokeStyle = '#3a4655';
+      g.strokeStyle = token('--segment', '#48454b');
       g.beginPath();
       g.moveTo(pad.left, line);
       g.lineTo(pad.left + plotW, line);
       g.stroke();
 
       const label = chart.ruleLabel(rule);
-      g.fillStyle = INK_3;
+      g.fillStyle = INK_3();
       g.fillText(label, pad.left + plotW - g.measureText(label).width - 1, line - 3);
     }
   }
@@ -913,7 +950,7 @@ function drawChart(chart, data) {
 
       g.lineTo(x(data.length - 1), pad.top + plotH);
       g.closePath();
-      g.fillStyle = series.color;
+      g.fillStyle = colour(series);
 
       // A wash, never a saturated block: the area says "this is the one to read
       // first", the line carries the shape.
@@ -928,7 +965,7 @@ function drawChart(chart, data) {
       if (i === 0) g.moveTo(x(i), at); else g.lineTo(x(i), at);
     });
 
-    g.strokeStyle = series.color;
+    g.strokeStyle = colour(series);
     g.lineWidth = 2;
     g.lineJoin = 'round';
     g.lineCap = 'round';
@@ -939,9 +976,9 @@ function drawChart(chart, data) {
     const last = data.length - 1;
     g.beginPath();
     g.arc(x(last), y(value(data[last], series)), 3, 0, Math.PI * 2);
-    g.fillStyle = series.color;
+    g.fillStyle = colour(series);
     g.fill();
-    g.strokeStyle = SURFACE;
+    g.strokeStyle = SURFACE();
     g.lineWidth = 2;
     g.stroke();
   }
@@ -949,7 +986,7 @@ function drawChart(chart, data) {
   if (hover >= 0 && hover < data.length) {
     const line = Math.round(x(hover)) + 0.5;
 
-    g.strokeStyle = '#4a5666';
+    g.strokeStyle = token('--segment', '#48454b');
     g.lineWidth = 1;
     g.beginPath();
     g.moveTo(line, pad.top);
@@ -959,9 +996,9 @@ function drawChart(chart, data) {
     for (const series of chart.series) {
       g.beginPath();
       g.arc(line, y(value(data[hover], series)), 3.5, 0, Math.PI * 2);
-      g.fillStyle = series.color;
+      g.fillStyle = colour(series);
       g.fill();
-      g.strokeStyle = SURFACE;
+      g.strokeStyle = SURFACE();
       g.lineWidth = 2;
       g.stroke();
     }

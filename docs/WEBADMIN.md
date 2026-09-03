@@ -257,6 +257,60 @@ panel can never show two halves of two different ticks — and **everything that
 changes the server goes through `send()`**, which posts one control command and
 shows what came back.
 
+### The look: HeroUI, imitated rather than imported
+
+The panel wears **HeroUI v3's design language with none of HeroUI's code.** The
+token names, the OKLCH surface ladder, the `color-mix()` derivations and the
+radius scale in `app.css` are HeroUI's own, read out of `@heroui/styles@3.2.4`
+(`dist/themes/default/variables.css` and `dist/themes/shared/theme.css`) and
+re-hued to the theme the operator picked in HeroUI's builder:
+
+```
+lightness 0.77   chroma 0.13   hue 302.636371990466   radius small   base 0.0043
+```
+
+⚠️ **Why tokens and not a vendored stylesheet.** HeroUI ships ~403 KB of CSS for
+a component set this page does not have, needs a directory route so its chunks
+can lazy-load — which puts back the path-traversal surface `WebAssets`
+deliberately removed — and would be this repo's first runtime dependency. What
+actually makes it *look* like HeroUI is the token system: the surface ladder,
+the hairline borders, the soft-variant fills, the flat dark cards, the focus
+ring. That is about ninety declarations.
+
+⚠️ **`oklch()` and `color-mix()` are used directly, as HeroUI does**, with no hex
+fallbacks — both have been baseline since 2023, and a browser without them would
+render the page unstyled rather than wrongly. The panel is an operator console;
+that is an acceptable floor.
+
+Three things that had to be derived rather than copied:
+
+- ⚠️ **`base` is the neutral CHROMA, not a lightness.** Stock HeroUI dark builds
+  its greys at chroma 0.004-0.006 around hue 286, and the builder's hue slider
+  moves the whole theme — so the greys here are the same lightness ladder at
+  chroma 0.0043, hue 302.64. A grey that is faintly the accent's colour.
+- ⛔ **A light accent needs DARK text on it.** This accent is L 0.77, so `--snow`
+  over it is **2.13:1** and `--eclipse` is **8.16:1** — measured, and the one
+  thing a light-accent theme gets wrong. `--accent-foreground` is the dark one.
+- ⚠️ **`--radius: 0.375rem` is an inference.** The builder is a client-side app
+  and could not be read; HeroUI's default is `0.5rem` and "small" is a step
+  below. Every other radius is a `calc()` off that one line, so it is one line to
+  correct.
+
+⚠️ **The chart series are NOT theme tokens and do not move with the accent.**
+They are the data-viz palette's dark steps, re-validated against the new, much
+darker `--surface` (`#19181a`): worst all-pairs CVD ΔE 9.4, worst normal-vision
+ΔE 24.6, all ≥ 3:1. Swapping violet for blue — to put daylight between the
+series and a purple accent — was tried and measured **worse** (tritan ΔE 4.0
+against 9.4), so violet stays; the two never appear as peers and every series is
+keyed in a legend. The one exception is **late ticks**, which uses the theme's
+`--warning`: that series means "something is wrong", the panel says that in one
+colour everywhere, and a single-series chart has no pair check to fail.
+
+⚠️ **`<canvas>` cannot read a custom property**, so `app.js` resolves the ones it
+draws with through `token()` and caches them. That is what keeps the live map and
+the charts on the same palette as everything else; the alternative — hex repeated
+in the JS — is exactly how a theme drifts.
+
 ### Things the page had to be told, that are not obvious
 
 - ⚠️ **World pixels are art pixels × 6** (`GameConstants.CellSize`, and what
