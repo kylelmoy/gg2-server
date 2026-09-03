@@ -147,6 +147,25 @@ internal static class Program
     }
 
     /// <summary>
+    /// <c>--bot-mode</c>: a name or the enum's number.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Numbers are part of the contract</b> — a sweep over 0..3 is how a
+    /// bench harness asks for each arm in turn, so <see cref="BotMode"/>'s values
+    /// must not be renumbered. Names are the readable form and both are accepted.
+    /// </remarks>
+    private static BotMode ParseBotMode(string flag, string text) => text.ToLowerInvariant() switch
+    {
+        "scripted" or "0" => BotMode.Scripted,
+        "search" or "hybrid-search" or "1" => BotMode.Search,
+        "policy" or "hybrid-policy" or "2" => BotMode.Policy,
+        "tiered" or "3" => BotMode.Tiered,
+        _ => throw new ArgumentException(
+            $"{flag}: '{text}' is not a bot mode. scripted (0), search (1), policy (2) "
+            + "or tiered (3) — see --help for what each one costs."),
+    };
+
+    /// <summary>
     /// <c>--shuffle</c>: the ini's 0/1/2, or the names this port gives them.
     /// </summary>
     private static ShuffleMode ParseShuffle(string flag, string text) => text.ToLowerInvariant() switch
@@ -269,7 +288,7 @@ internal static class Program
 
         string? policyPath = null;
         var ignoreStamp = false;
-        var searchBots = false;
+        BotMode? botMode = null;
         int? arbiterUnits = null;
 
         // ⛔ --config is applied BEFORE the loop, in its own pass, so a flag
@@ -450,21 +469,17 @@ internal static class Program
                     break;
                 }
 
-                // docs/BOTS.md's arm 3: a RolloutSearch micro-controller inside
-                // each bot's engagement window, the scripted layer still owning
-                // movement, routing and objectives.
+                // Which of the four shipped brains this server runs -- see BotMode,
+                // which carries the per-arm warnings. Replaced --search-bots, a
+                // boolean: with one flag per controller the four combinations were
+                // reachable only by knowing which pairs to give together.
                 //
-                // ⚠️ IT IS THE BETTER BOT AND THE EXPENSIVE ONE. Better on death
-                // share than both the all-scripted control and the policy hybrid,
-                // pooled over ~34,000 deaths and over 840 matches an arm. Its cost
-                // is why --search-threads exists.
-                //
-                // ⛔ NOT MEASURED WITH HUMANS IN THE SERVER. A rollout re-simulates
-                // every live character for every tick of every candidate, so cost
-                // rises with the population, and every number quoted for it comes
-                // from 8-bot headless matches. Watch --tick-stats while playing.
-                case "--search-bots":
-                    searchBots = true;
+                // ⚠️ The mode ALONE decides; nothing below infers a controller from
+                // another flag being present, except the one documented fallback
+                // where --policy is given and no mode is (see the reconcile below).
+                case "--bot-mode":
+                    botMode = ParseBotMode(name, Require(name, value));
+                    i++;
                     break;
 
                 // ⚠️ Threads change NO decision -- RolloutThreadingTests gates that
@@ -615,21 +630,55 @@ internal static class Program
         // --search-bots it was picked up, given after it had to re-write the
         // option it had just found. Collecting first and building once removes
         // the ordering entirely.
+        //
+        // ⚠️ THE ONE INFERENCE, and it exists to keep `--policy <path>` working on
+        // its own the way docs/BOTS.md documents it: a --policy with no --bot-mode
+        // means policy mode. It is order-independent because both were collected
+        // before this line, and it applies ONLY when no mode was given -- an
+        // explicit --bot-mode always wins, and a --policy it cannot use is refused
+        // below rather than quietly ignored.
+        var mode = botMode ?? (policyPath is not null ? BotMode.Policy : BotMode.Scripted);
+
+        if (mode.UsesPolicy() && policyPath is null)
+        {
+            throw new ArgumentException(
+                $"--bot-mode {mode.ToString().ToLowerInvariant()} drives bots with a trained "
+                + "checkpoint and none was given; add --policy <path>, or use "
+                + "--bot-mode scripted or search.");
+        }
+
+        if (!mode.UsesPolicy() && policyPath is not null)
+        {
+            // ⛔ Refused rather than ignored, the same rule the multi-tier case
+            // has always applied: a checkpoint loaded, printed and never consulted
+            // is a server saying it is doing something it is not.
+            throw new ArgumentException(
+                $"--policy was given but --bot-mode {mode.ToString().ToLowerInvariant()} never "
+                + "consults a checkpoint; use --bot-mode policy or tiered, or drop --policy.");
+        }
+
+        // ⚠️ Tiered DEFAULTS its budget rather than refusing without one. Refusing
+        // made the mode unreachable without a number nobody has tuned, which is a
+        // worse default than a stated guess -- see the constant, which says what
+        // would show it is wrong.
+        if (mode.NeedsArbiter())
+            arbiterUnits ??= DecisionQuotaArbiter.DefaultTieredBudgetMicroseconds;
+
         var tiers = new List<MicroControllerSpec>();
 
-        if (searchBots)
+        if (mode.UsesSearch())
             tiers.Add(new SearchMicroSpec(new RolloutOptions(Threads: searchThreads)));
 
-        if (policyPath is not null)
+        if (mode.UsesPolicy())
         {
-            var policy = PolicyNetwork.Load(policyPath, ignoreStamp);
+            var policy = PolicyNetwork.Load(policyPath!, ignoreStamp);
 
             // ⛔ ALWAYS printed, not only when overridden. A run whose stamps agree
             // says so; a run that bypassed the guard says THAT, loudly, on the same
             // line. A bypassed guard that leaves no trace in the output is worse
             // than no guard, because the next reader cannot tell it happened.
             Console.WriteLine(
-                $"policy {Path.GetFileName(policyPath)}: trained against {policy.SimulationUuid}, "
+                $"policy {Path.GetFileName(policyPath!)}: trained against {policy.SimulationUuid}, "
                 + $"this build is {SimulationStamp.Uuid}"
                 + (policy.SimulationUuid == SimulationStamp.Uuid
                     ? " (match)"
@@ -642,12 +691,12 @@ internal static class Program
             tiers.Add(new PolicyMicroSpec(policy));
         }
 
+        // ⛔ Unreachable from the flags now -- NeedsArbiter defaults the budget for
+        // the only multi-tier mode -- and kept as the invariant it always was. If a
+        // fifth mode arrives with two tiers and no default, this is what stops it
+        // shipping a controller that is configured, reported and never consulted.
         if (tiers.Count > 1 && arbiterUnits is null)
         {
-            // ⛔ Refused rather than defaulted. With no arbiter tier 0 always
-            // drives, so a second controller would be configured, reported, and
-            // never once consulted — which is exactly the shape of claim this repo
-            // keeps catching: something the server says it is doing and is not.
             throw new ArgumentException(
                 $"{tiers.Count} bot controllers were configured but no --bot-arbiter <units>; "
                 + "without one the first tier always drives and the rest are dead weight");
@@ -742,24 +791,37 @@ internal static class Program
                             lower tiers are a handicap ladder - aim error, an
                             acquire delay, a hold-fire roll - so pass a lower
                             one for beatable bots.
-          --search-bots     give every bot a rollout-search micro-controller inside
-                            its engagement window (default: off). Better on death
-                            share than the scripted bot and much more expensive;
-                            never yet measured with humans in the server.
+          --bot-mode <mode> which brain the bots run (default: scripted):
+                              scripted (0)  the scripted layer alone. A complete
+                                            bot, and the control every comparison
+                                            is made against.
+                              search   (1)  + a rollout search inside the
+                                            engagement window. Better on death
+                                            share and MUCH more expensive; never
+                                            yet measured with humans in the
+                                            server.
+                              policy   (2)  + a trained checkpoint. Needs --policy.
+                              tiered   (3)  both, most expensive first, with an
+                                            arbiter choosing between them. Needs
+                                            --policy; defaults --bot-arbiter to
+                                            10000.
+                            Replaces --search-bots. --policy on its own still
+                            means policy mode.
           --search-threads <n>
                             threads the search splits its candidates across
                             (default: cores/3, capped at 8). Changes cost only,
                             never a decision.
-          --policy <path>   drive bots with a trained policy checkpoint (.npz)
-                            inside their engagement window - docs/BOTS.md arm 2.
-                            Combine with --search-bots to give bots both, most
-                            expensive first; that needs --bot-arbiter.
+          --policy <path>   the trained checkpoint (.npz) --bot-mode policy and
+                            --bot-mode tiered run - docs/BOTS.md arm 2. Given on
+                            its own it selects policy mode. Given to a mode that
+                            cannot consult it, it is REFUSED rather than ignored.
           --bot-arbiter <us>
                             per-tick budget in MICROSECONDS of controller work,
                             shared by every bot, deciding which controller may
                             spend a decision when several bots engage on the same
                             tick. Cheaper tiers, then the scripted layer, once it
-                            runs out. REQUIRED with more than one controller.
+                            runs out. Defaults to 10000 under --bot-mode tiered,
+                            which is the only mode with more than one tier.
                             A tick is 33300us; a search decision measures ~4800 at
                             12 live characters and a policy decision ~7.
           --policy-ignore-stamp
@@ -770,9 +832,9 @@ internal static class Program
           --bot-classes <list|trained>
                             restrict the bot class draw (default: the reference's
                             own draw of eight). 'trained' is Scout, Soldier,
-                            Sniper and Heavy - the only classes --search-bots
-                            engages on, so pass it to make EVERY bot the
-                            configuration the bench measured.
+                            Sniper and Heavy - the only classes the search and
+                            policy controllers engage on, so pass it to make EVERY
+                            bot the configuration the bench measured.
           --botnav <path>   override the bot nav graphs (default: nav/)
           --speed <n|max>   run at n times real time, or 'max' for unpaced
                             (default 1)

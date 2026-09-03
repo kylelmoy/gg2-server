@@ -21,7 +21,8 @@ namespace Gg2.Tests;
 /// <para>
 /// ⚠️ <b>It asserts the property MOVES, not that the flag parses.</b> A flag
 /// that is accepted and then dropped on the floor — which is what
-/// <c>--search-threads</c> used to be when it came before <c>--search-bots</c> —
+/// <c>--search-threads</c> used to be when it came before <c>--search-bots</c>, the
+/// flag <c>--bot-mode</c> replaced —
 /// looks identical from outside to one that works. Comparing the parsed value
 /// against the default is the cheap contradicting action; reading the switch
 /// statement is not.

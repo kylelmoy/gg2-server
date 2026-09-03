@@ -552,7 +552,7 @@ new branch in `HeadlessMatch` or `BotPopulationService`, no new wrapper.
 |---|---|
 | a new way to fight | `class MyThing : IMicroController` — six members |
 | to run it in a match | `Brain = BotBrainSpec.Of(new MyThingSpec())` |
-| to run it on a live server | a `--flag` that appends a `MicroControllerSpec` to the host's `tiers` list |
+| to run it on a live server | a `BotMode` value, and the arm that builds its `MicroControllerSpec` in the host's `tiers` list |
 | to compare it against another | two `BotBrainSpec`s, same gate — see "Measuring a bot change" below |
 
 **The shape.** `HybridBot` owns the handover architecture — the gate, the intel

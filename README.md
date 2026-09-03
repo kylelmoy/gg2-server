@@ -104,11 +104,21 @@ stock dedicated server does — that plays the twenty-map `[Maps]` rotation.
 
 ### Advanced bot controllers
 
-Beyond the scripted layer, bots can be given a rollout-search micro-controller
-(`--search-bots`) or a trained policy checkpoint (`--policy <path>`), each active
-only inside the bot's engagement window. Running more than one requires
-`--bot-arbiter <microseconds>`, a per-tick budget shared by every bot that
-decides who gets to spend a decision when several engage at once.
+`--bot-mode` picks which of the four shipped brains the bots run. Each of the
+three non-scripted ones replaces only the bot's keys and aim, and only inside its
+engagement window — the scripted layer still owns movement, routing and
+objectives.
+
+| `--bot-mode` | | What |
+|---|---|---|
+| `scripted` | `0` | The scripted layer alone. A complete bot, and the control every comparison is made against. |
+| `search` | `1` | + a rollout search. Better on death share, and much more expensive. ⚠️ Never yet measured with humans in the server. |
+| `policy` | `2` | + a trained checkpoint. Needs `--policy <path>`. |
+| `tiered` | `3` | Both, most expensive first, with an arbiter choosing between them when several bots engage on the same tick. Needs `--policy`; defaults `--bot-arbiter` to 10000. |
+
+`--bot-arbiter <microseconds>` is a per-tick budget shared by every bot. ⚠️ Its
+default is derived from measured per-decision costs but has never itself been
+tuned — a stated guess, and the constant records what would show it wrong.
 [`docs/BOTS.md`](docs/BOTS.md) is the front door for all of it.
 
 ⚠️ The only checkpoint that exists was trained against a simulation this build no

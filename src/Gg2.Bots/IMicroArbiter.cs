@@ -136,6 +136,29 @@ public sealed class DecisionQuotaArbiter : IMicroArbiter
     /// </summary>
     public int UnitsPerTick { get; set; }
 
+    /// <summary>
+    /// What <c>--bot-mode tiered</c> uses when <c>--bot-arbiter</c> is not given:
+    /// <b>10,000 µs of controller work per tick</b>.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Derived from measured COSTS, but the budget itself has never been
+    /// tuned — this is a stated guess, not a result.</b> The tick is 33,300 µs; a
+    /// search decision measures ~4,800 µs at twelve live characters and a policy
+    /// decision ~7 µs, so 10,000 caps concurrent search decisions at two and
+    /// leaves the rest of the tick to the simulation. Nothing has measured
+    /// whether two is the right number of bots to let search on a tick, or what
+    /// the play is like on either side of it.
+    /// <para>
+    /// ⛔ <b>What would show this is wrong:</b> <c>--tick-stats</c> reporting a
+    /// tail near 33.3 ms on a tiered server (too generous), or the arbiter
+    /// starving the search tier so often that tiered plays like
+    /// <see cref="BotMode.Policy"/> (too mean —
+    /// <see cref="DecisionQuotaArbiter.SpentThisTick"/> against the tick count is
+    /// the way to see it). Re-measure before quoting this number as a finding.
+    /// </para>
+    /// </remarks>
+    public const int DefaultTieredBudgetMicroseconds = 10_000;
+
     /// <summary>Units spent on the tick most recently seen. For a test and a diagnostic.</summary>
     public int SpentThisTick => _spent;
 

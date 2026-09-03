@@ -73,7 +73,7 @@ public sealed class WrappedBotVisibilityTests
     }
 
     /// <summary>
-    /// ⚠️ <c>--search-bots</c> reaches the population service, and the bots it makes
+    /// ⚠️ <c>--bot-mode search</c> reaches the population service, and the bots it makes
     /// are still countable, retargetable and removable.
     /// </summary>
     [Fact]
