@@ -175,11 +175,20 @@ public sealed class PerfHistory
         server.TakeTickWork(out var meanMs, out var peakMs, out var ticks);
 
         var seconds = elapsedMs / 1000.0;
-        var bots = server.BotSlots.Count;
+
+        // ⚠️ Bots counted in the SAME pass, not from GameServer.BotSlots — that
+        // property builds a List<int> on every access, and this runs inside
+        // GameServer.Tick. Once a second is not the tick loop's hot path, but an
+        // allocation in there is the kind of thing that gets copied to somewhere
+        // it does matter. One walk, no garbage.
+        var bots = 0;
         var characters = 0;
 
-        for (var slot = 0; slot < server.RosterCount; slot++)
+        for (var slot = 1; slot < server.RosterCount; slot++)
         {
+            if (server.IsBot(slot))
+                bots++;
+
             if (server.IsAlive(slot))
                 characters++;
         }

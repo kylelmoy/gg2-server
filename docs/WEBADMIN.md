@@ -71,17 +71,67 @@ promise, so it does not run there.
 ⚠️ **A queued command times out after 5 seconds** and says the server may have
 stopped ticking, rather than hanging the browser.
 
-### What it costs a server nobody is looking at
+### What it costs — measured, 2026-09-03
 
-**Nothing per tick beyond one comparison.** The snapshot is built only while at
-least one browser holds the event stream open, and then only every 6th tick
-(5 Hz on a 30 Hz server). `WebAdminTests.NobodyWatchingMeansNoSnapshots` gates
-that, because "costs nothing when idle" is precisely the kind of claim CLAUDE.md
-records this project having been wrong about before.
+⚠️ **Release, 24 cores, `ctf_truefort`, against a 33,333 us budget.** Re-measure
+before repeating any of these; a number quoted without its build is how a stale
+0.20ms sat in four documents (CLAUDE.md, "the headroom number").
+
+| | Cost | Of a 33.3ms tick |
+|---|---|---|
+| **`--web` off** | one `null` check per tick | — |
+| Tick timing in `Run()` — ⚠️ **NOT gated by `--web`** | 46 ns/tick | 0.00014% |
+| `--web` on, nobody watching: the sampler's early-out | 3.5 ns/tick | 0.00001% |
+| `--web` on, nobody watching: the 1 Hz sample | 661 ns/**second** | 0.0020% of one tick |
+| **A browser watching**: one snapshot, 13 on the roster | 10.6 us (p95 24) | 0.032% |
+| **A browser watching**: one snapshot, 48 on the roster | 33.5 us (p95 67) | 0.101% |
+
+⛔ **The tick-timing accumulators are the one part that is NOT behind `--web`.**
+Two `Stopwatch.Elapsed` reads and some field arithmetic run in `GameServer.Run`
+on every tick of every server, panel or no panel: 46 ns, which is 0.03% of the
+0.151ms twelve-bot tick and 0.00014% of its budget. It is left ungated because a
+branch would make the paced loop two loops for a saving smaller than the branch,
+but it is a real unconditional cost and this table is where it is written down
+rather than implied away.
+
+⚠️ **Snapshot cost is per SNAPSHOT, not per watcher.** The string is built once by
+the tick thread and published; every stream then writes that same string from its
+own thread. Ten people with the panel open cost the tick thread exactly what one
+does. What does scale it is the roster — it is a linear walk — so the 48-player
+figure is the one to plan against, and at 5 Hz that is **0.17 ms of tick thread
+per second**, or one tick in six costing 34 us more than the other five.
+
+⚠️ **`GET /api/state` is the exception**: a one-shot read is executed on the tick
+thread through the command queue, so a script polling it at 30 Hz would cost what
+30 snapshots a second cost. The panel does not — it reads the stream.
+
+**Memory**: about 100 KB in total — 300 perf samples (~31 KB), 500 log lines
+(~50 KB) and the current snapshot string (3.5 KB at 13 players, 11 KB at 48).
+
+**End-to-end, as a check on the above**: `--web` on versus off, both unpaced with
+12 bots, run *simultaneously* on one machine and alternated between slots, came
+out at **-0.19% +/- 2.79%** — no effect resolvable, with the interval about a
+hundred times looser than the 20 ns/tick the table predicts. ⚠️ **The first
+attempt ran the arms sequentially and produced a confident-looking "5.1% cost"
+that was smaller than the 9.6% spread within a single arm** — the machine's load
+moving between runs, not a cost. A number that is not larger than the noise in
+one arm is not a number.
+
+The same instrument *can* see a watcher: 16.1% of unpaced throughput, arms not
+overlapping. ⚠️ That works out at 17 us a snapshot against the 10.6 us measured
+directly, because at 65,000 ticks/s the panel is also serialising ten thousand
+events a second and allocating 40 MB/s — neither of which happens at 30 Hz. Take
+the direct number; the unpaced one is an upper bound.
 
 ⚠️ **An idle server ticks at 2 Hz** (`--no-idle-when-empty` turns that off), so
 with nobody connected the panel updates twice a second. It says `idle` in the
 speed tile rather than looking stuck.
+
+`WebAdminTests.NobodyWatchingMeansNoSnapshots` gates the structural half of this,
+because "costs nothing when idle" is precisely the kind of claim CLAUDE.md records
+this project having been wrong about before. ⚠️ **What would show the table has
+gone stale**: a snapshot that stops being O(roster), a sampler moved off the 1 Hz
+cadence, or anything new added to `PerfHistory.Sample`'s once-a-second body.
 
 ## Authentication
 
@@ -248,9 +298,17 @@ readouts are not.
 or not anybody is watching, which is the opposite of the state snapshot and is
 deliberate**: an operator opens the panel *because* something already happened,
 so a history that started when they arrived would answer a question nobody has.
-The per-tick cost of that is one `Environment.TickCount64` comparison; the
-syscalls are at 1 Hz. Both halves are gated —
-`NobodyWatchingMeansNoSnapshots` and `ThePerformanceHistoryIsCollectedWithNobodyWatching`.
+The per-tick cost of that is one `Environment.TickCount64` comparison — 3.5 ns,
+measured — and the syscalls are at 1 Hz and total 661 ns. Both halves of the
+asymmetry are gated: `NobodyWatchingMeansNoSnapshots` and
+`ThePerformanceHistoryIsCollectedWithNobodyWatching`. The full table is above.
+
+⚠️ **The once-a-second body allocates nothing.** The sample is a struct written
+into a preallocated ring, and the bot count is taken from the same roster walk as
+the character count rather than from `GameServer.BotSlots`, which builds a
+`List<int>` on every access. Once a second is not the tick loop's hot path, but
+an allocation in there is the kind of thing that gets copied to somewhere it
+matters.
 
 ⚠️ **The samples go over the wire as arrays of bare numbers** against a `fields`
 list, because 300 samples × 15 named fields is 60 KB of repeated key names for

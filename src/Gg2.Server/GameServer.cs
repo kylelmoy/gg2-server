@@ -1532,6 +1532,17 @@ public sealed class GameServer : IDisposable
     /// <summary>A roster entry's name.</summary>
     public string NameOf(int slot) => _roster[slot].Name;
 
+    /// <summary>
+    /// Whether this slot is a bot.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The allocation-free way to ask.</b> <see cref="BotSlots"/> builds a
+    /// <c>List&lt;int&gt;</c> on every access, which is fine for the population
+    /// manager and is not fine for anything called from inside
+    /// <see cref="Tick"/>.
+    /// </remarks>
+    public bool IsBot(int slot) => _roster[slot].IsBot;
+
     /// <summary>Whether this slot is a network client rather than a bot or slot 0.</summary>
     public bool IsConnected(int slot) => _roster[slot].Connection is { IsClosed: false };
 
