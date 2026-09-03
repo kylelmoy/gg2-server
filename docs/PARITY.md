@@ -2581,7 +2581,16 @@ with empty names — 13 against the server's 5 — and a fatal error 25 to 30
 seconds later. The server saw only a `ConnectionReset`.
 
 **Fixed** by making the writer take a `Func<MatchState>` rather than a
-`MatchState`, so it cannot hold a stale one. `CapLimit`, `ClassLimits`,
+`MatchState`, so it cannot hold a stale one.
+
+✅ **Verified live, and this is what phase 6's "round after round" now rests
+on.** A stock GM8 client, four bots, four gamemode changes driven through the
+control port in one session — `ctf_truefort` → `koth_valley` → `tdm_mantic` →
+`cp_egypt` → `ctf_truefort`, so CTF, KotH, TDM and CP each appear as both a
+source and a destination, and `cp_egypt`'s **five** control points make the
+largest HUD block one of them. **Zero client errors, zero dialogs, no
+disconnect**, roster correct throughout. Before the fix the same client died
+28 seconds after the first change. `CapLimit`, `ClassLimits`,
 `RespawnTimeSeconds` and `CurrentMapArea` were stale by the same mechanism —
 those are values rather than lengths, so they corrupted a joining client's
 scoreboard instead of the stream, and nothing had noticed.

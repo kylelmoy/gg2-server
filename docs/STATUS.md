@@ -16,7 +16,7 @@ policy — is in progress.**
 |---|---|---|
 | 0–4 | protocol, maps, a joinable server, the parity harness, collision, character physics | exact against the running game |
 | 5 | every weapon, projectile, the sentry, the airblast | nine oracles measured; an 898-tick trace replays closed-loop with zero error |
-| 6 | all eight gamemodes, round after round, every `FULL_UPDATE` field real | closed — a stock client has played a round start to finish. ⚠️ ONE round; see below |
+| 6 | all eight gamemodes, round after round, every `FULL_UPDATE` field real | closed — a stock client has survived four gamemode changes in one session (2026-09-03). ⚠️ It was ONE round until then; see below |
 | 7 | bots: the input seam, nav, A\*, the follower, combat, the objective layer, the population manager | closed, with a number |
 | 8 | unpaced ticking, the human-play recorder, the headless match runner, the control port | closed — 44 matches across all 22 maps in 3.3s, 3,548x real time |
 | 9 | a learned policy: `NpyFile`, `PolicyNetwork`, `HybridBot`, the `Gg2.Env` seam, `tools/bench/` | in progress — see below |
