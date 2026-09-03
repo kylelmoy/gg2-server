@@ -1200,11 +1200,13 @@ before quoting any of this as "Linux support".
   quantum — measured: 15% of ticks arrived ~14 ms late without it. Linux has no
   such knob; its granularity is the kernel's. The late-tick rate on Linux is
   unknown and is the first thing to look at on a real run.
-- ⛔ **`nav/` does not travel with a publish.** `Gg2.Host.csproj` copies
-  `maps/*.png`; nothing copies the 35 MB of nav graphs. A published server runs
-  bots that **fight but do not walk** until `nav/` is beside the binary or
-  `GG2_NAVCACHE` points at it. `maps/` was checked in so a clone needs no
-  reference checkout; the nav graphs never got the same treatment.
+- ✅ **`nav/` travels with a publish, since 2026-09-03.** `Gg2.Host.csproj`
+  copies `maps/*.png` and `nav/*` alike, and a published directory is 2.9 MB.
+  ⛔ **It did not until then**, behind a `-p:PublishNav=true` that a deployment
+  had to know to pass, so the default publish produced a server whose bots
+  **fight but do not walk**. The 35 MB that justified the flag was the working
+  tree's figure; git had been storing ~1.1 MB, and gzipping the container made
+  the two agree. docs/DEPLOY.md, "the nav graphs".
 - ⚠️ **Case-sensitive filesystems** make `MapExists` stricter than it is on
   Windows: a map name typed with the wrong case resolves there and not here.
 - ⚠️ **`Environment.TickCount64` is a monotonic clock, not the OS uptime.** On

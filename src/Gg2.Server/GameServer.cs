@@ -579,9 +579,10 @@ public sealed class GameServer : IDisposable, IPluginHost
         // when a directory is configured and that map misses, but an EMPTY
         // NavCacheDirectory skips that branch entirely — so a deployment that
         // forgot to copy nav/ ran bots that stood still and logged nothing.
-        // nav/ is deliberately not in the publish output (MapDirectory.ResolveNav,
-        // 34 MB), which makes this the expected way to get it wrong on a server
-        // that was deployed rather than run from a checkout. docs/DEPLOY.md.
+        // ⚠️ This is no longer the DEFAULT outcome of deploying — nav/ ships with
+        // every publish since 2026-09-03 — but it is still reachable, by pointing
+        // GG2_NAVCACHE somewhere empty or by copying the binary without its
+        // directory, and the warning is what makes either legible. docs/DEPLOY.md.
         if (_options.Bots.Enabled && _options.NavCacheDirectory.Length == 0)
         {
             _log.Info(

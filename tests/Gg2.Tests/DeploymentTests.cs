@@ -68,9 +68,15 @@ public class DeploymentTests
     /// <c>BotPopulationService.MapChanged</c> already logs "no nav cache for
     /// &lt;map&gt;" when a directory is configured and one map misses — but an
     /// EMPTY <c>NavCacheDirectory</c> never enters that branch, so the whole
-    /// feature failing was quieter than one map failing. <c>nav/</c> is
-    /// deliberately not copied into the publish output (34 MB), which makes this
-    /// the default outcome of deploying rather than an unusual one.
+    /// feature failing was quieter than one map failing.
+    /// <para>
+    /// ⚠️ <b>When this was written it was the DEFAULT outcome of deploying</b>,
+    /// because <c>nav/</c> was 34 MB and shipped only behind
+    /// <c>-p:PublishNav=true</c>. Gzipping the graphs to 1.2 MB removed the flag
+    /// and with it the default; the warning stays because the state is still
+    /// reachable — an empty <c>GG2_NAVCACHE</c>, or a binary copied without its
+    /// directory. docs/DEPLOY.md, "the nav graphs".
+    /// </para>
     /// </remarks>
     [Fact]
     public void BotsWithNoNavDirectoryWarnAtStartup()

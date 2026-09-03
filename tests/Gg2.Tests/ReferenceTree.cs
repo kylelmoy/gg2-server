@@ -1,3 +1,5 @@
+using Gg2.Bots;
+
 namespace Gg2.Tests;
 
 /// <summary>
@@ -67,11 +69,17 @@ public static class ReferenceTree
     /// nothing about it, so it does not belong in a tree CLAUDE.md calls
     /// read-only.
     /// <para>
-    /// ⚠️ <b>They are CHECKED IN as of 2026-09-01</b> (34 MB on disk, ~1.2 MB
-    /// packed — hex compresses about 28:1), so a fresh clone has them and can run
-    /// a bot. They were gitignored until then, which meant regenerating them
-    /// needed a Game Maker 8 build of a fork. <see cref="RequireNavCache"/> still
-    /// guards, because a clone can still delete them.
+    /// ⚠️ <b>They are CHECKED IN as of 2026-09-01</b>, so a fresh clone has them
+    /// and can run a bot. They were gitignored until then, which meant
+    /// regenerating them needed a Game Maker 8 build of a fork.
+    /// <see cref="RequireNavCache"/> still guards, because a clone can still
+    /// delete them.
+    /// <para>
+    /// ✅ <b>Stored gzipped since 2026-09-03</b> — 1.11 MB rather than 35.68 MB
+    /// on disk, and the same ~1.1 MB in the pack either way, since that is what
+    /// git was storing before. <see cref="NavCache.List"/> accepts both
+    /// containers, which is why this probe goes through it rather than globbing.
+    /// </para>
     /// </para>
     /// </remarks>
     public static string NavCacheDirectory =>
@@ -82,7 +90,7 @@ public static class ReferenceTree
     public static bool IsAvailable => Directory.Exists(IncludedFiles);
 
     public static bool HasNavCache =>
-        Directory.Exists(NavCacheDirectory) && Directory.EnumerateFiles(NavCacheDirectory, "*.txt").Any();
+        Directory.Exists(NavCacheDirectory) && NavCache.List(NavCacheDirectory).Count > 0;
 
     public static void RequireNavCache() =>
         Assert.True(
@@ -90,9 +98,10 @@ public static class ReferenceTree
             $"""
              No bot nav caches at {NavCacheDirectory}.
 
-             These are written by gg2-nav-gen and gitignored here, so a fresh clone
-             has none. Run the generator over the built-in maps, then either copy
-             its output to that directory or point {NavCacheEnvironmentVariable} at it.
+             These are checked in, so a clone should have them — a missing nav/ means
+             they were deleted, or {NavCacheEnvironmentVariable} points somewhere else.
+             Otherwise run gg2-nav-gen over the built-in maps and either copy its
+             output to that directory or point {NavCacheEnvironmentVariable} at it.
              """);
 
     /// <summary>

@@ -1,3 +1,5 @@
+using Gg2.Bots;
+
 namespace Gg2.Server;
 
 /// <summary>
@@ -92,12 +94,20 @@ public static class MapDirectory
     /// the executable or above it. Empty when there are none.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Deliberately NOT copied into build output, unlike the maps.</b> They
-    /// are 34 MB, and copying them would put that through every build twice over
-    /// for Debug and Release — the reason <c>ReferenceTree.NavCacheDirectory</c>
-    /// gives for walking to the repository root instead, and it applies here for
-    /// the same reason. A <em>published</em> server that wants bots to navigate
-    /// carries a nav directory of its own and names it with <c>--botnav</c>.
+    /// ✅ <b>Copied into build and publish output alongside the maps, since
+    /// 2026-09-03.</b> They used to be opt-in behind <c>-p:PublishNav=true</c>
+    /// because they were 34 MB; gzipping the container made them 1.11 MB, which
+    /// is less than the maps beside them, and the flag was deleted rather than
+    /// kept for a cost that no longer exists.
+    /// <para>
+    /// ⛔ <b>That 34 MB was a working-tree number doing duty as a shipping
+    /// cost.</b> Git had been storing ~1.1 MB of it the whole time, because hex
+    /// of <c>ds_grid_write</c> doubles compresses about 32:1. The flag it
+    /// justified made the DEFAULT deployment one where bots do not navigate —
+    /// a much worse property than a large build directory, and it went
+    /// unnoticed because nothing goes red when a server's bots merely walk into
+    /// walls. <c>NavCache.CompressedExtension</c> has the measurements.
+    /// </para>
     /// <para>
     /// ⚠️ <b>Empty is not an error.</b> <c>NavCache.TryLoad</c> degrades to bots
     /// that fight whatever reaches them and walk nowhere, which is what a server
@@ -123,7 +133,7 @@ public static class MapDirectory
              directory = directory.Parent)
         {
             var candidate = Path.Combine(directory.FullName, "nav");
-            if (Directory.Exists(candidate) && Directory.EnumerateFiles(candidate, "*.txt").Any())
+            if (HoldsNav(candidate))
                 return candidate;
         }
 
@@ -132,4 +142,18 @@ public static class MapDirectory
 
     private static bool Holds(string directory) =>
         File.Exists(Path.Combine(directory, Sentinel));
+
+    /// <summary>
+    /// Whether a directory actually holds nav graphs, in either container.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>An empty <c>nav/</c> must not satisfy the probe</b>, for the reason
+    /// <see cref="Sentinel"/> exists on the map side: a directory that is there
+    /// and empty resolves, and then every map misses one at a time, which reads
+    /// as twenty-five separate faults instead of one missing directory.
+    /// <see cref="NavCache.List"/> is the shared definition of "a nav file", so
+    /// this cannot drift from what the loader will actually accept.
+    /// </remarks>
+    private static bool HoldsNav(string directory) =>
+        Directory.Exists(directory) && NavCache.List(directory).Count > 0;
 }

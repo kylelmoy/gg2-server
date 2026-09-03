@@ -1,0 +1,22 @@
+# Nav graphs are gzipped ds_grid_write blobs. Even uncompressed they are a
+# single multi-megabyte line of hex, so there has never been anything here for
+# git to diff or three-way merge — a conflict in one is not resolvable by hand
+# and must not look as though it is. gg2-nav-gen regenerates them wholesale;
+# that is the merge strategy. See NavCache and docs/DEPLOY.md.
+nav/*.txt      binary
+nav/*.txt.gz   binary
+
+# ...but the manifest beside them is the human-readable half and stays diffable:
+# its diff is how you see WHICH map's geometry moved. NavManifestTests.
+nav/manifest.tsv   text eol=lf
+
+# Map PNGs carry their level data in a zTXt chunk. Git detects them as binary
+# anyway; saying so keeps a mis-set core.autocrlf from corrupting one.
+maps/*.png     binary
+
+# The recorded traces and fixture blobs are compared byte-for-byte against the
+# running game and against numpy oracles, so a line-ending rewrite is a silent
+# fixture change. docs/PARITY.md.
+*.trace        binary
+*.bin          binary
+*.npz          binary

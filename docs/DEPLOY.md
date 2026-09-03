@@ -1,8 +1,8 @@
 # Deploying gg2-server
 
 Running the server somewhere that is not a developer's checkout — a Linux VPS,
-in practice. What is portable, what is measured, what to rent, and the four ways
-a deployment differs from a `dotnet run` out of the repository.
+in practice. What is portable, what is measured, what to rent, and the ways a
+deployment differs from a `dotnet run` out of the repository.
 
 ---
 
@@ -19,6 +19,8 @@ applies to this file more than to most.
 | No hard-coded Windows path | `PortabilityTests.NoShippedAssemblyHardCodesAWindowsPath`, over the metadata #US heap |
 | SIGTERM stops gracefully | `DeploymentTests.SigtermRequestsAGracefulStop` |
 | A nav-less deployment says so | `DeploymentTests.BotsWithNoNavDirectoryWarnAtStartup`, with both control arms |
+| Nav ships with a publish | Nothing mechanical. `dotnet publish` was run 2026-09-03 and the output carries `nav/`; **no test asserts it** — see "the nav graphs" |
+| A nav graph matches its map | `NavManifestTests`, with a mutated-walkmask arm and an entities-only arm |
 | CPU and memory cost | Measured 2026-09-03, table below, **on Windows** |
 
 ⛔ **NOBODY HAS RUN THE BINARY ON LINUX.** Every row above is a static check, a
@@ -75,7 +77,9 @@ credit exhaustion looks identical to a server bug and will be diagnosed as one.
 core also keeps GC and socket work off the tick loop.
 
 **Disk**: ~7 MB of application, ~70 MB for a framework-dependent .NET 10 runtime
-(or ~75 MB self-contained), ~34 MB of nav graphs. Under 150 MB all in.
+(or ~75 MB self-contained), 1.2 MB of nav graphs. Under 100 MB all in — the
+published directory itself is **2.9 MB** (measured 2026-09-03), against 36 MB
+before the nav graphs were gzipped.
 
 **Network**: not measured. Size it after watching a real game rather than from a
 number in this file.
@@ -106,13 +110,14 @@ commands against a live game.
 ```bash
 dotnet publish src/Gg2.Host/Gg2.Host.csproj \
   -c Release -r linux-x64 --self-contained false \
-  -p:PublishNav=true \
   -o out/
 ```
 
-`-p:PublishNav=true` is the flag you want and is **not** the default —
-see "the nav graphs" below. The output is 36 MB: the assemblies, `maps/` (23
-PNGs, always included) and `nav/` (25 graphs).
+**No flags.** The output is 2.9 MB: the assemblies, `maps/` (23 PNGs) and `nav/`
+(25 graphs plus `manifest.tsv`). ⛔ **`-p:PublishNav=true` is gone** — it was
+required until 2026-09-03 and a build that still passes it will fail with an
+unknown-property warning at worst and be ignored at best. See "the nav graphs"
+below for why it existed and why it does not.
 
 Drop `-r linux-x64 --self-contained false` for a portable build that needs a
 .NET 10 runtime installed; add `--self-contained true` to carry one.
@@ -154,37 +159,122 @@ it now.
 
 ---
 
-## The four ways a deployment differs from a checkout
+## How a deployment differs from a checkout
 
-### 1. The nav graphs do not ship unless you ask
+⚠️ **This was "the four ways" until 2026-09-03, when the first stopped being a
+difference at all** — nav now ships. The section keeps it as item 1 because the
+mistake is more instructive than the fix, and because a build script somewhere
+still passes the flag that used to be required.
 
-⚠️ **This is the one that fails silently, and it is the default outcome.**
+### 1. The nav graphs — they ship now, and the story is worth keeping
 
-`nav/` is 34 MB, so it is deliberately excluded from ordinary build output —
-`MapDirectory.ResolveNav`'s remarks have the cost argument, and it is paid twice
-over for Debug and Release on every build. A published directory therefore has no
-nav graphs unless `-p:PublishNav=true` was passed.
+✅ **`nav/` is in every build and every publish since 2026-09-03, with no flag.**
+25 graphs and `manifest.tsv`, 1.2 MB, beside `maps/`.
 
-Without them the server still runs, still serves rounds, and still fills with
-bots — **bots that fight whatever reaches them and never walk anywhere**. That
+⛔ **It used to be opt-in behind `-p:PublishNav=true`, and that was a mistake
+worth naming, because nothing in the repository could have caught it.** The
+justification was a real number — `nav/` was 34 MB — but it was the **working
+tree's** number being used as a shipping cost. The files are hex-encoded
+`ds_grid_write` blobs: **32 bytes of file per numeric value**, for values that
+are mostly small integers. Git had been storing about **1.1 MB** of them all
+along. Gzipping the container brought the disk figure to match what was already
+being stored, and the flag's entire reason evaporated.
+
+What the flag bought in the meantime was a **default deployment whose bots fight
+and never walk**. That is a far worse property than a large build directory, and
+it survived because nothing goes red when bots merely path badly — CLAUDE.md's
+"a claim the repo makes about itself", in its most expensive form: the trade-off
+was stated accurately and was measuring the wrong thing.
+
+**Measured 2026-09-03, Release, on all 25 graphs:**
+
+| | working tree | compressed |
+|---|---|---|
+| hex text, as `gg2-nav-gen` writes it | 35.68 MB | 1.112 MB |
+| **gzipped, as shipped** | **1.11 MB** | 1.11 MB |
+| a hand-rolled packed binary, *rejected* | 4.06 MB | 1.111 MB |
+
+⚠️ **The third row is why there is no custom nav format.** A binary encoding
+shrinks the tree 8.8x and what actually ships by **0.1%** — everything it removes
+is redundancy deflate was already removing. It would cost a `NAV_CACHE_VERSION`
+bump coordinated with `gg2-nav-gen`, a new writer, a new reader and a new way for
+header and payload to disagree, to save 3 MB of disk and about 8 ms per map
+change. Do not re-propose it without a reason that is not size.
+
+**Decompression costs about a millisecond**, once per map change, against a
+33.3 ms tick: the largest map (`ctf_conflict`) loads in 9.14 ms plain and
+10.29 ms gzipped. ⚠️ **That assumes one graph per map change**, which is what
+`BotPopulationService.MapChanged` does — re-measure before reusing it if nav ever
+loads per-round or eagerly for a rotation.
+
+⚠️ **Both containers are accepted, and `.txt.gz` wins when both are present.**
+`gg2-nav-gen` writes `.txt`, so an operator regenerating a graph gets a plain
+file sitting next to a shipped compressed one; preferring the compressed one
+means what shipped is what runs, and deleting the `.gz` is how you say otherwise.
+`NavCache.FindFile`.
+
+#### It can still fail, and it still says so
+
+Without a nav directory the server runs, serves rounds and fills with bots —
+**bots that fight whatever reaches them and never walk anywhere**. That
 degradation is intentional (`NavCache.TryLoad`'s contract, inherited from
-`navCacheLoad.gml`: a missing graph is not an error), which is exactly what made
-it quiet.
-
-✅ **The server now warns at startup** when bots are enabled and no nav directory
-resolved at all:
+`navCacheLoad.gml`: a missing graph is not an error), which is what made it
+quiet. The startup warning:
 
 ```
 no nav directory: bots will fight but not navigate. Pass --botnav <path> or set GG2_NAVCACHE
 ```
 
 Three ways to satisfy it, in the order `ResolveNav` probes: `GG2_NAVCACHE`, a
-`nav/` directory beside the executable (what `-p:PublishNav=true` produces), or
-one found by walking up from it. `--botnav <path>` sets it explicitly.
+`nav/` directory beside the executable (what a publish produces), or one found by
+walking up from it. `--botnav <path>` sets it explicitly.
 
 ⚠️ A **per-map** miss is a different and much older message — `no nav cache for
 <map> area <n>` — and means the directory was found but that one map has no
 graph generated. Both can appear in the same run.
+
+⚠️ **And a third, new one**, when a graph and its map have drifted apart:
+
+```
+nav graph for <map> area <n> was built against different geometry and has been
+refused; bots on it will not navigate. Regenerate it with gg2-nav-gen, or delete
+nav/manifest.tsv's line for it to load it anyway
+```
+
+#### `manifest.tsv` — which map each graph was built from
+
+⚠️ **A nav graph is keyed on the map's NAME**, deliberately (`NavCache.Key`
+explains why the MD5 cannot be the key), so before this a graph built against an
+older version of a map loaded perfectly and handed bots terrain that was not
+there. The header's mask dimensions catch a resize and nothing else. The symptom
+is bots walking into walls, which reads as a bot bug and gets debugged as one.
+
+`manifest.tsv` records, per graph, a hash of **the area's walkmask and its
+entities** — the inputs a graph is built from, so art edits and PNG re-encodings
+do not cry wolf. A mismatch refuses the graph; **a graph with no line is not
+checked**, which is what keeps an operator's own maps working.
+
+⚠️ **The entities are in the hash because the walkmask alone was measurably not
+enough**: `cp_dirtbowl`'s three areas share one mask and carry different graphs
+(835, 837 and 837 nodes), so a mask-only hash gave all three the same answer and
+could not see a door or a gate move. `NavManifestTests.EntitiesAreInTheHash`.
+
+Regenerating nav means regenerating this:
+
+```bash
+GG2_UPDATE_NAV_MANIFEST=1 dotnet test Gg2.sln --filter NavManifestTests
+```
+
+⚠️ **That run fails on purpose** after rewriting the file, so a manifest cannot
+be regenerated by a CI job that happened to have the variable set and be reported
+as green. Re-run without it, check the diff is the change you meant, and say so
+in the commit.
+
+⛔ **What is NOT gated: that a publish actually carries `nav/`.** It was checked
+by hand on 2026-09-03 and there is no test. The csproj glob is
+`..\..\nav\*` rather than a per-extension one for that reason — a glob per
+container is how one of them silently stops shipping — but a reader who needs
+this to be true should run `dotnet publish` and look.
 
 ### 2. SIGTERM, not Ctrl+C
 

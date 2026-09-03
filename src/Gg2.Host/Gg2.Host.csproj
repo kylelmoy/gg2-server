@@ -38,21 +38,26 @@
   </ItemGroup>
 
   <!--
-    The bot nav graphs, OPT IN: `dotnet publish -p:PublishNav=true`.
-    ⚠️ They are 34 MB, which is why they are not unconditional the way the maps
-    are — MapDirectory.ResolveNav's remarks explain the cost, and it is paid
-    twice over for Debug and Release on every build.
-    ⚠️ CopyToPublishDirectory, NOT CopyToOutputDirectory: publish gets them,
-    ordinary builds do not. A `dotnet run` out of a checkout already finds
-    ../../nav by ResolveNav's walk to the repository root, so the flag is only
-    ever wanted for a deployment.
-    Without it a deployed server runs bots that fight and never walk; GameServer
-    warns at startup when that is what has happened. docs/DEPLOY.md.
+    The bot nav graphs and the manifest that says which map each was built from.
+    They travel with the server exactly as the maps above do.
+
+    ⛔ These used to be OPT IN behind `-p:PublishNav=true`, on the grounds that
+    they were 34 MB. That was a working-tree number: gzipping the container made
+    the same graphs 1.11 MB — less than the maps beside them — and git had been
+    storing ~1.1 MB of them all along, because hex of ds_grid_write doubles
+    compresses about 32:1. The flag was deleted rather than kept, because what it
+    bought was a DEFAULT deployment whose bots fight and never walk, and nothing
+    goes red when that happens. NavCache.CompressedExtension has the
+    measurements; docs/DEPLOY.md has the history.
+
+    ⚠️ Include the whole directory, not "*.txt.gz". An operator's own graphs land
+    here as .txt, and manifest.tsv is neither — a glob per container is how one
+    of them silently stops shipping.
   -->
-  <ItemGroup Condition="'$(PublishNav)' == 'true'">
-    <Content Include="..\..\nav\*.txt"
+  <ItemGroup>
+    <Content Include="..\..\nav\*"
              Link="nav\%(Filename)%(Extension)"
-             CopyToOutputDirectory="Never"
+             CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 

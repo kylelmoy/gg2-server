@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Globalization;
+using System.IO.Compression;
 using Gg2.Protocol;
 
 namespace Gg2.Bots;
@@ -35,6 +36,37 @@ public static class NavCache
 {
     /// <summary>Where the caches live, relative to the reference build directory.</summary>
     public const string DirectoryName = "botnav";
+
+    /// <summary>What <c>gg2-nav-gen</c> writes.</summary>
+    public const string Extension = ".txt";
+
+    /// <summary>
+    /// The same bytes deflated, which is what this repository checks in.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The compression is the container, not the format.</b> Decompressing
+    /// one of these gives back exactly the file <c>gg2-nav-gen</c> wrote, byte
+    /// for byte, and <see cref="Parse"/> never learns which it came from — so a
+    /// generator that knows nothing about gzip stays a working generator and
+    /// <c>NAV_CACHE_VERSION</c> does not move.
+    /// <para>
+    /// ⚠️ <b>It is a 32x saving and it costs about a millisecond.</b> Measured
+    /// 2026-09-03, Release, on all 25 checked-in graphs: 35.68 MB of hex becomes
+    /// 1.11 MB, and the largest map's load goes 9.14 ms → 10.29 ms against a
+    /// 33.3 ms tick, once per map change. A hand-rolled binary format was
+    /// measured against this and rejected: it takes the working tree to 4.06 MB
+    /// but the <em>compressed</em> size to 1.111 MB — 0.1% — because everything
+    /// it removes is redundancy deflate was already removing for free.
+    /// docs/DEPLOY.md, "the nav graphs".
+    /// </para>
+    /// <para>
+    /// ⚠️ These numbers assume <b>one graph per map change</b>, which is what
+    /// <c>BotPopulationService.MapChanged</c> does. Re-measure before reusing
+    /// them if nav ever loads per-round, per-area-transition, or eagerly for a
+    /// whole rotation: 10 ms once a round is free, 10 ms x 25 at startup is not.
+    /// </para>
+    /// </remarks>
+    public const string CompressedExtension = ".txt.gz";
 
     // ds_grid_write's serialisation, and it is NOT the obvious one: a 12-byte
     // header (uint32 601, uint32 width, uint32 height) followed by COLUMN-MAJOR
@@ -81,22 +113,85 @@ public static class NavCache
     }
 
     /// <summary>
+    /// The file holding a map and area's graph, preferring the compressed one,
+    /// or empty when neither is there.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Compressed wins when both exist</b>, and that ordering is the
+    /// answer to the case an operator actually hits: <c>gg2-nav-gen</c> writes
+    /// <c>.txt</c> into a directory this repository ships <c>.txt.gz</c> in, so
+    /// the two sit side by side and one of them is stale. Preferring the plain
+    /// file would mean a checkout silently reverting to whatever was generated
+    /// last; preferring the compressed one means what shipped is what runs, and
+    /// an operator replacing a graph deletes the <c>.gz</c> to say so.
+    /// <see cref="NavManifest"/> catches the mistake either way when the
+    /// geometry actually moved.
+    /// </remarks>
+    public static string FindFile(string directory, string map, int area)
+    {
+        ArgumentNullException.ThrowIfNull(directory);
+
+        var stem = Path.Combine(directory, Key(map, area));
+        var compressed = stem + CompressedExtension;
+
+        if (File.Exists(compressed))
+            return compressed;
+
+        var plain = stem + Extension;
+        return File.Exists(plain) ? plain : string.Empty;
+    }
+
+    /// <summary>
+    /// Reads a cache file, transparently decompressing a <c>.txt.gz</c>.
+    /// </summary>
+    public static string ReadFile(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+
+        if (!path.EndsWith(CompressedExtension, StringComparison.OrdinalIgnoreCase))
+            return File.ReadAllText(path);
+
+        using var file = File.OpenRead(path);
+        using var gzip = new GZipStream(file, CompressionMode.Decompress);
+        using var reader = new StreamReader(gzip);
+        return reader.ReadToEnd();
+    }
+
+    /// <summary>
     /// Loads the graph for a map and area out of <paramref name="directory"/>,
     /// or returns false the way <c>navCacheLoad.gml</c> does.
     /// </summary>
-    public static bool TryLoad(string directory, string map, int area, out NavGraph? graph)
+    /// <param name="walkmaskHash">
+    /// The hash of the walkmask the graph is about to be used against, from
+    /// <see cref="NavManifest.HashOf(Gg2.Maps.Walkmask)"/>. When supplied, and
+    /// the directory carries a manifest naming this graph, a disagreement makes
+    /// the load fail rather than hand back a graph describing geometry that is
+    /// not there. Null skips the check, which is what a fixture and a tool want.
+    /// </param>
+    public static bool TryLoad(
+        string directory,
+        string map,
+        int area,
+        out NavGraph? graph,
+        string? walkmaskHash = null)
     {
         ArgumentNullException.ThrowIfNull(directory);
 
         graph = null;
-        var path = Path.Combine(directory, Key(map, area) + ".txt");
+        var path = FindFile(directory, map, area);
 
-        if (!File.Exists(path))
+        if (path.Length == 0)
             return false;
+
+        if (walkmaskHash is not null
+            && NavManifest.Load(directory).Check(Key(map, area), walkmaskHash) == NavMatch.Mismatch)
+        {
+            return false;
+        }
 
         try
         {
-            graph = Parse(File.ReadAllText(path), map, area);
+            graph = Parse(ReadFile(path), map, area);
             return true;
         }
         catch (FormatException)
@@ -104,6 +199,13 @@ public static class NavCache
             // A version mismatch or a shape the header did not promise. Quiet,
             // per the reference — and narrow: an IOException is a real problem
             // and is not swallowed.
+            return false;
+        }
+        catch (InvalidDataException)
+        {
+            // A .txt.gz that is not gzip. Same class of "this file is not what
+            // its name promises" as a bad header, so it gets the same quiet
+            // answer; GZipStream throws this rather than FormatException.
             return false;
         }
     }
@@ -116,8 +218,16 @@ public static class NavCache
     {
         ArgumentNullException.ThrowIfNull(directory);
 
-        var path = Path.Combine(directory, Key(map, area) + ".txt");
-        return Parse(File.ReadAllText(path), map, area);
+        var path = FindFile(directory, map, area);
+
+        if (path.Length == 0)
+        {
+            throw new FileNotFoundException(
+                $"no nav graph for {map} area {area} in {directory} (looked for "
+                + $"{Key(map, area)}{CompressedExtension} and {Key(map, area)}{Extension})");
+        }
+
+        return Parse(ReadFile(path), map, area);
     }
 
     /// <summary>Every map/area pair with a cache file in <paramref name="directory"/>.</summary>
@@ -128,11 +238,27 @@ public static class NavCache
         if (!Directory.Exists(directory))
             return [];
 
-        var found = new List<(string, int)>();
+        // ⚠️ A set, not a list: a directory holding both containers for one map
+        // names that map once, the way it holds one graph.
+        var found = new SortedSet<(string, int)>();
 
-        foreach (var file in Directory.EnumerateFiles(directory, "*.txt"))
+        foreach (var file in Directory.EnumerateFiles(directory))
         {
-            var stem = Path.GetFileNameWithoutExtension(file);
+            // ⚠️ Matched by suffix rather than with a "*.txt" glob. Windows
+            // matches a search pattern against 8.3 short names as well as real
+            // ones, so a three-character extension can pick up longer ones;
+            // doing it here also keeps both containers in one place rather than
+            // in two globs that can drift apart.
+            var name = Path.GetFileName(file);
+            string stem;
+
+            if (name.EndsWith(CompressedExtension, StringComparison.OrdinalIgnoreCase))
+                stem = name[..^CompressedExtension.Length];
+            else if (name.EndsWith(Extension, StringComparison.OrdinalIgnoreCase))
+                stem = name[..^Extension.Length];
+            else
+                continue;
+
             var split = stem.LastIndexOf("_a", StringComparison.Ordinal);
 
             if (split <= 0
@@ -144,8 +270,7 @@ public static class NavCache
             found.Add((stem[..split], area));
         }
 
-        found.Sort();
-        return found;
+        return [.. found];
     }
 
     /// <summary>

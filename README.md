@@ -167,7 +167,7 @@ desynchronises every one of them at once.
 | Directory | What |
 |---|---|
 | `maps/` | The 22 shipped maps plus `gg_debug2`, a port-authored debug range. A byte-identical copy of the reference's, gated by `MapCopyTests`. |
-| `nav/` | The 25 bot nav graphs (34 MB on disk, ~1.2 MB packed). 188 tests need them. |
+| `nav/` | The 25 bot nav graphs, gzipped, plus `manifest.tsv` (1.2 MB). 188 tests need them. |
 | `tests/Gg2.Tests` | xunit. Parity fixtures live here and run in CI. |
 | `tools/` | Engine samplers, fixture generators and the benchmark harness. |
 | `docs/` | Everything below. |
@@ -214,7 +214,7 @@ here, and it is worth reading first.
 | [`docs/ENV.md`](docs/ENV.md) | The `Gg2.Env` seam, the policy checkpoint format and what the phase-9 numbers do and do not license. |
 | [`docs/SOURCEMAP.md`](docs/SOURCEMAP.md) | Where everything lives in the reference tree. |
 | [`docs/DEBUG-MAPS.md`](docs/DEBUG-MAPS.md) | `gg_debug2`, the port-authored debug range. |
-| [`docs/DEPLOY.md`](docs/DEPLOY.md) | **Running it on a server**: Linux portability and what actually backs that claim, measured hardware requirements, and the four ways a deployment differs from a checkout. |
+| [`docs/DEPLOY.md`](docs/DEPLOY.md) | **Running it on a server**: Linux portability and what actually backs that claim, measured hardware requirements, and the ways a deployment differs from a checkout. |
 | [`docs/PARALLEL.md`](docs/PARALLEL.md) | Lane ownership, if more than one session is working at once. |
 | `docs/TRAPS-*.md` | The expensive part: facts measured once against the running game, one section per port stage, for [simulation](docs/TRAPS-SIMULATION.md), [bots](docs/TRAPS-BOTS.md) and [the live game](docs/TRAPS-LIVEGAME.md). **Grep these before writing.** |
 

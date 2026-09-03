@@ -90,10 +90,31 @@ public sealed class BotPopulationService
 
         if (navCacheDirectory is { Length: > 0 })
         {
-            if (!NavCache.TryLoad(navCacheDirectory, map.Name, area, out var graph))
-                _log.Info($"no nav cache for {map.Name} area {area}; bots on it will not navigate");
+            // ⚠️ The hash goes INTO TryLoad, which is what actually refuses a
+            // stale graph, and the manifest is consulted again here only to say
+            // which of the two failures happened. The duplicated read is a
+            // manifest-sized file against a 9 ms parse, and it buys a message an
+            // operator can act on: "no graph" and "the graph is for a different
+            // map" have completely different fixes, and before this they were
+            // the same silent shrug. NavManifest.
+            var fingerprint = NavManifest.HashOf(map);
 
-            Nav = graph;
+            if (NavManifest.Load(navCacheDirectory).Check(NavCache.Key(map.Name, area), fingerprint)
+                == NavMatch.Mismatch)
+            {
+                _log.Info(
+                    $"nav graph for {map.Name} area {area} was built against different geometry "
+                    + "and has been refused; bots on it will not navigate. Regenerate it with "
+                    + "gg2-nav-gen, or delete nav/manifest.tsv's line for it to load it anyway");
+            }
+            else if (!NavCache.TryLoad(navCacheDirectory, map.Name, area, out var graph, fingerprint))
+            {
+                _log.Info($"no nav cache for {map.Name} area {area}; bots on it will not navigate");
+            }
+            else
+            {
+                Nav = graph;
+            }
         }
 
         // ⚠️ Hand every surviving bot the new graph BEFORE re-roling them. A

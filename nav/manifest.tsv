@@ -1,0 +1,30 @@
+# Which map each nav graph in this directory was built against.
+# <map>_a<area><TAB><first 16 bytes of SHA-256 over the area's walkmask and entities>
+#
+# Regenerate with: GG2_UPDATE_NAV_MANIFEST=1 dotnet test --filter NavManifestTests
+# A graph with no line here is not checked. See NavManifest.
+arena_lumberyard_a1	114cd3323b25b2b7fd4733152d86beff
+arena_montane_a1	f48e29432f329d73848b7bfb0c248d0f
+cp_dirtbowl_a1	dc33998f5e3a52cd79b1358d04285503
+cp_dirtbowl_a2	a6dfdd2332568bf8920b0838253eca6c
+cp_dirtbowl_a3	ee3e553effaa289d549d79041db077a1
+cp_egypt_a1	104dedeb326ff492d01f21d62a48b475
+ctf_2dfort_a1	11a3bd8af5716c536a89c588fb4baca9
+ctf_avanti_a1	958a32ec1df14d10824e72a320395b56
+ctf_classicwell_a1	8a8782228d4c596115a3249690b45f09
+ctf_conflict_a1	739fc85aa2c7d90da8781d98e5fc45bb
+ctf_eiger_a1	58827e5a38f45bb06e51b63d2e3b55e7
+ctf_oldfort_a1	3d9393d925c10842aae1076d36e97771
+ctf_orange_a1	caab484fd922820f93a49d67d7bbf829
+ctf_truefort_a1	b1d5e8804816ccfcf35d7320d938eede
+ctf_waterway_a1	7cf05760085e78b8c0423bb2c64400c8
+dkoth_atalia_a1	6f4c4a37b3e3a3b530d4011b96694fe7
+dkoth_sixties_a1	a3ba602954cd65f7b5abdb0b43dfcf8b
+gen_destroy_a1	4cbf212c60501401209a98e74dca9888
+gg_debug2_a1	b1a5c4c72575e76244eb7108afaf13ec
+gg_debug_a1	d8ba8979ecb0452f51831115ed03fe5b
+koth_corinth_a1	456d0eb29b6df4baa0fe5c45e6f8757a
+koth_gallery_a1	1f843ff3ff08afc7c21d5fca9223a206
+koth_harvest_a1	1235649938a8d6314f5d56b754ee5acb
+koth_valley_a1	51a5ba20fb1f5f5b417fada1e6f07fe8
+tdm_mantic_a1	ef21854a24f3fc39af4c76fb14bdc1c4
