@@ -307,6 +307,13 @@ internal static class Program
         // survive a config file that set one.
         var mapPinnedOnCommandLine = ValueOf(args, "--map") is not null;
 
+        // ⚠️ COLLECTED, not applied in the switch. `--bots` rewrites MinHumans to
+        // 0, so applying this where it is parsed would make
+        // `--bots-min-humans 1 --bots 8` and `--bots 8 --bots-min-humans 1` two
+        // different servers -- the same order-dependence --search-threads once
+        // had, and the reason the brain is built in one place at the end.
+        int? botsMinHumans = null;
+
         for (var i = 0; i < args.Length; i++)
         {
             var name = args[i];
@@ -493,6 +500,24 @@ internal static class Program
                     options.BotEngagesBotsToo = true;
                     break;
 
+                // How many HUMANS must be connected before any bot is spawned.
+                // ⚠️ Below it the target is ZERO rather than the fill, so 1 is
+                // "only ever run bots when somebody is actually playing" -- which
+                // is what an empty public server wants, since a server full of
+                // bots looks full in the lobby list and is not.
+                case "--bots-min-humans":
+                    botsMinHumans = RequireInt(name, value);
+                    i++;
+                    break;
+
+                // ⚠️ ON by default. An empty server has no characters, no clients
+                // and nobody to notice, so 30 wakeups a second buys nothing; this
+                // turns that off. The round clock slows with the tick rate, which
+                // is deliberate -- see ServerOptions.IdleWhenEmpty.
+                case "--no-idle-when-empty":
+                    options.IdleWhenEmpty = false;
+                    break;
+
                 // ⚠️ Threads change NO decision -- RolloutThreadingTests gates that
                 // at 2, 4 and 8 -- so this is a pure cost knob. It is also the one
                 // place this server is not single-threaded, and the pool it uses is
@@ -634,6 +659,11 @@ internal static class Program
         // has ONE answer in one place — see ServerOptions.Map and OpeningMap.
         if (!mapPinnedOnCommandLine && options.MapRotation.Count != 0)
             options.Map = string.Empty;
+
+        // ⚠️ AFTER the loop, so it beats --bots's own MinHumans = 0 wherever the
+        // two appear relative to each other.
+        if (botsMinHumans is { } minHumans)
+            options.Bots = options.Bots with { MinHumans = minHumans };
 
         // ⛔ ONE PLACE BUILDS THE BRAIN, at the end, from flags collected above.
         // The flag handlers used to write BotPopulationOptions.SearchMicro
@@ -846,6 +876,17 @@ internal static class Program
                             match this build. Only honest when the simulation
                             difference cannot reach the maps being played, which
                             is a claim to check. Both stamps are always printed.
+          --bots-min-humans <n>
+                            humans who must be connected before any bot spawns
+                            (default 0 with --bots). Below it the target is ZERO
+                            rather than the fill, so 1 means "only run bots when
+                            somebody is actually playing".
+          --no-idle-when-empty
+                            keep ticking at full rate with nobody connected.
+                            By default a server with no clients, no joiners and
+                            no bots drops to 2Hz until someone arrives, which
+                            also slows its round clock. An explicit --speed
+                            always wins over idling.
           --bot-engages-bots
                             let bots run their expensive micro-controller against
                             each other too. Without this a bot only hands the

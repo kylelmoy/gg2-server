@@ -75,6 +75,7 @@ public sealed class CliCoverageTests
         ("ShuffleRotation", ["--shuffle", "any"], o => o.ShuffleRotation),
         ("Autobalance", ["--no-autobalance"], o => o.Autobalance),
         ("BotEngagesBotsToo", ["--bot-engages-bots"], o => o.BotEngagesBotsToo),
+        ("IdleWhenEmpty", ["--no-idle-when-empty"], o => o.IdleWhenEmpty),
         ("AnnounceToLobby", ["--lobby"], o => o.AnnounceToLobby),
         ("MapDownloadBytesPerSecond", ["--map-download-limit", "12345"], o => o.MapDownloadBytesPerSecond),
         ("MapDirectory", ["--maps", "some/other/maps"], o => o.MapDirectory),

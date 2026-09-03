@@ -333,6 +333,49 @@ public sealed class ServerOptions
     /// </remarks>
     public bool BotEngagesBotsToo { get; set; }
 
+    /// <summary>
+    /// Drop to a slow tick when nobody is connected and no bots are running.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// An empty server has no characters, no clients to broadcast to and nobody
+    /// to notice the difference, so 30 wakeups a second buys nothing. On
+    /// <see cref="IdleTickRate"/> it costs a fifteenth of that. The moment a
+    /// connection arrives — or a bot is added over the control port — it returns
+    /// to full rate, and <c>GameServer.Run</c>'s existing speed-change rebase
+    /// handles the transition in both directions.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>The round clock slows with it.</b> Every duration in the game is
+    /// counted in ticks, so an idle server's round advances at a fifteenth of
+    /// real time. That is a feature rather than a cost — a server left up
+    /// overnight should not greet its first player with twelve seconds left —
+    /// but it does mean an empty server's wall-clock round length is not
+    /// <c>--time-limit</c>.
+    /// </para>
+    /// <para>
+    /// ⛔ <b>An explicit <c>--speed</c> wins.</b> Idling is skipped entirely when
+    /// the server is unpaced, because <c>--speed max</c> is a direct instruction
+    /// about the tick rate and this must not quietly override it.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Run() only — <c>GameServer.Tick</c> is untouched.</b> Every test and
+    /// the control port drive ticks themselves, and a Tick that no-opped on an
+    /// empty server would break all of them for no saving: the cost this removes
+    /// is the wakeup, and a caller driving ticks by hand has already paid it.
+    /// </para>
+    /// </remarks>
+    public bool IdleWhenEmpty { get; set; } = true;
+
+    /// <summary>Ticks per second while idle. A fifteenth of the live rate.</summary>
+    /// <remarks>
+    /// ⚠️ <b>Two rather than one, so a joiner is noticed within half a second.</b>
+    /// The listener is only polled on a tick, so this is also the worst-case
+    /// delay before a connecting client's handshake starts — after which the
+    /// server is no longer idle and runs at full rate for the rest of it.
+    /// </remarks>
+    public const int IdleTickRate = 2;
+
     /// <summary>The <c>[Bots]</c> section. Off by default, as in the reference.</summary>
     /// <remarks>
     /// ⚠️ <see cref="BotPopulationOptions.Default"/>, never <c>new()</c> — see the

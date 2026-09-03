@@ -26,4 +26,10 @@
     <ProjectReference Include="..\Gg2.Bots\Gg2.Bots.csproj" />
   </ItemGroup>
 
+
+  <!-- So IdleServerTests can read PacingInterval without timing Run(). -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Gg2.Tests" />
+  </ItemGroup>
+
 </Project>
