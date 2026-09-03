@@ -1316,6 +1316,33 @@ public sealed class GameServer : IDisposable
         return true;
     }
 
+    /// <summary>
+    /// Puts a bot back on a team, the way a client asks to join one.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>Goes through <c>ExecuteChangeTeam</c> — the same body the socket
+    /// switch and <see cref="Execute"/> reach.</b> CLAUDE.md's rule: a bot is an
+    /// <see cref="IInputSource"/> like a socket, and a second copy here would let
+    /// a bot take a team a client could not. That matters concretely — the
+    /// reference's balance guard refuses a request for the bigger team, and this
+    /// has to be refused by it too.
+    /// <para>
+    /// ⚠️ <b>It exists because a MAP CHANGE makes every player a spectator.</b>
+    /// <c>Rounds.ResetForNewMap</c> does that on the first area, matching the
+    /// reference's <c>with(Player) team = TEAM_SPECTATOR</c>, and a human re-picks
+    /// from the team-select screen. A bot has nobody to pick for it, so
+    /// <see cref="BotPopulationService"/> does — see the bug in its
+    /// <c>Reteam</c>.
+    /// </para>
+    /// </remarks>
+    public void RequestBotTeam(int slot, Team team)
+    {
+        if (slot <= 0 || slot >= _roster.Count || !_roster[slot].IsBot)
+            throw new ArgumentOutOfRangeException(nameof(slot), slot, "not a bot slot");
+
+        ExecuteChangeTeam(_roster[slot], team);
+    }
+
     /// <summary>Changes the bot fill target; the population manager converges on it.</summary>
     /// <remarks>
     /// ⚠️ A fill TARGET including humans, not a bot count — the reference's

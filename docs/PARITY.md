@@ -2531,13 +2531,76 @@ and neither was found by a test.**
 to the same world.* Phase 6's "a stock client has played a round start to finish"
 is true — and it was one round, and nobody had watched a second one.
 
-⛔ **What would close it: a harness client that maintains its own roster from the
-broadcast — teams, classes, names, settings — and asserts it matches the
-server's.** `LoopbackClient` already parses the stream and keeps none of it.
-That is a tier-2½ gate, cheap, in-process, and it is the only kind of test that
-could have caught either bug above. ⚠️ **Until it exists, treat "the suite is
-green" as saying nothing whatever about client agreement**, and do not let a
-green run stand in for driving a real client through a rotation.
+✅ **CLOSED 2026-09-03 for the roster half: `MirrorClient` and
+`ClientRosterAgreementTests`.** The mirror keeps its own roster out of
+`ServerStream` — teams included, which that reader had been skipping — applies
+the client's own rules (including `CHANGE_MAP` spectating everybody on area 1),
+and asserts both that the two rosters agree and that no character was ever sent
+for a slot the client holds as a spectator. It found a real bug the hour it was
+written: **every bot stopped playing after the first rotation**, 0 of 4 on a
+team.
+
+⛔ **AND IT HAS A BLIND SPOT WORTH MORE THAN THE GATE — it shares the port's own
+reader.** `MirrorClient` frames with `ServerStream` and shapes with
+`GameModes.ShapeOf`, so it can only catch the port disagreeing with *itself* or
+failing to *send* something. A disagreement between the port's writer and the
+**reference client's** reader is invisible to it by construction, because both
+ends of the comparison are ours.
+
+⚠️ **That is not hypothetical: a live bug sits in exactly that blind spot right
+now** — a gamemode-changing rotation desynchronises a real stock client. It
+reproduces every time against a GM8 client and **does not reproduce in-process at
+all**, which is the signature of a writer-vs-reference-reader disagreement. See
+"A gamemode change desynchronises a stock client" below.
+
+**So the tiers now stand as:** the mirror covers "did the server say it", the
+fixtures cover "does the port match a recording of the reference", and **nothing
+covers "does a stock client read what the port writes"** except driving one by
+hand. ⚠️ **Do not let a green suite, this gate included, stand in for driving a
+real client through a rotation.**
+
+### ⛔ A gamemode change desynchronises a stock client — OPEN
+
+**Reproduced against a real GM8 client twice on 2026-09-03, not fixed.** The
+symptom and the original three narrowing runs are `docs/PLUGINS.md`, "A rotation
+kills every connected client, and it needs bots"; this is only what the live runs
+here added.
+
+**What is now known:**
+
+- ⚠️ **It needs a GAMEMODE change, not a rotation.** `koth_valley` →
+  `koth_valley` with four bots ran a full round, a win and a rotation with
+  **zero** client errors; the client left only on the documented five-minute
+  spectator timeout. `ctf_truefort` → `koth_valley` killed a client both times.
+- **The first symptom is `drawControlPointStatus: Unknown variable teamoffset`**,
+  about a second after `CHANGE_MAP`. That is the client holding a control-point
+  team outside `{-1, 0, 1}` — i.e. reading the block at the wrong offset.
+- **Then the roster grows phantoms**: 13 entries, eight with empty names, against
+  the server's 5. The client dies ~25-30s later; the server sees only a
+  `ConnectionReset` and refills the slot with a bot.
+- **Starting fresh on `koth_valley` is clean**, so the KOTH layout is not simply
+  wrong.
+
+**Eliminated, so nobody re-derives them:**
+
+- The client parsing a post-`CHANGE_MAP` update with the old shape.
+  `ClientBeginStep.gml`'s read loop is `do { … } until(roomchange)` and
+  `CHANGE_MAP` sets `roomchange`, so it stops reading at exactly that message.
+- Ordering on the server. `WriteStateUpdate` runs above `ServeRoundEnd`, so the
+  tick's packet is `[update, old shape][CHANGE_MAP]` — the reference's order.
+- The KOTH HUD block. It matches `KothHUD`'s User Event 12 field for field:
+  `cpUnlock`, `redTimer`, `blueTimer`, then per point `team`, `cappingTeam`,
+  `capping`. ⚠️ **Checked twice** — the first check said the reference wrote only
+  two fields, which was an artefact of an XML-stripping grep dropping the first
+  line of each code block. Do not read GML through `grep -v '^\s*<'`.
+- Moving platforms. Neither map places one.
+- Team desync as the mechanism: the two rosters **agree** across the rotation
+  in-process, and `MirrorClient` reports no impossible character.
+
+**The one unverified suspicion, and it is only that:** `Rounds.ResetForNewMap`
+does not clear `WorldState.MovingPlatforms`. Irrelevant to these two maps, which
+place none, but a rotation between maps with different platform counts would
+leave the block the wrong length. Untested.
 
 ## Which flush a message rides, and how to test it
 

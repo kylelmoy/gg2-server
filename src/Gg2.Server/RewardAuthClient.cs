@@ -84,7 +84,18 @@ public sealed class RewardAuthClient : IDisposable
         _host = host;
         _port = port;
 
-        _pump = Task.Run(PumpAsync);
+        // ⚠️ LongRunning, so this gets a dedicated thread rather than a pool
+        // slot. The pump spends its life parked on a blocking queue take and
+        // then on network I/O, which is exactly what starves on a busy pool —
+        // observed as an intermittent failure of the end-to-end test under the
+        // full suite, where hundreds of other tests were saturating it. A relay
+        // whose latency depends on unrelated CPU load is a real defect, not
+        // only a flaky test.
+        _pump = Task.Factory.StartNew(
+            PumpAsync,
+            CancellationToken.None,
+            TaskCreationOptions.LongRunning,
+            TaskScheduler.Default).Unwrap();
     }
 
     /// <summary>

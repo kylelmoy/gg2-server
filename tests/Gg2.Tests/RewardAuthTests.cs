@@ -282,7 +282,7 @@ public sealed class RewardAuthTests
     /// </remarks>
     private static void WaitFor(ServerHarness harness, Func<bool> condition, string what)
     {
-        for (var i = 0; i < 500; i++)
+        for (var i = 0; i < 1500; i++)
         {
             harness.Tick(1);
 
@@ -292,7 +292,7 @@ public sealed class RewardAuthTests
             Thread.Sleep(10);
         }
 
-        Assert.Fail($"gave up after five seconds waiting for {what}");
+        Assert.Fail($"gave up after fifteen seconds waiting for {what}");
     }
 
     private static void SendRewardRequest(LoopbackClient client, string id) =>
