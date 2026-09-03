@@ -210,6 +210,7 @@ here, and it is worth reading first.
 | [`docs/ENV.md`](docs/ENV.md) | The `Gg2.Env` seam, the policy checkpoint format and what the phase-9 numbers do and do not license. |
 | [`docs/SOURCEMAP.md`](docs/SOURCEMAP.md) | Where everything lives in the reference tree. |
 | [`docs/DEBUG-MAPS.md`](docs/DEBUG-MAPS.md) | `gg_debug2`, the port-authored debug range. |
+| [`docs/DEPLOY.md`](docs/DEPLOY.md) | **Running it on a server**: Linux portability and what actually backs that claim, measured hardware requirements, and the four ways a deployment differs from a checkout. |
 | [`docs/PARALLEL.md`](docs/PARALLEL.md) | Lane ownership, if more than one session is working at once. |
 | `docs/TRAPS-*.md` | The expensive part: facts measured once against the running game, one section per port stage, for [simulation](docs/TRAPS-SIMULATION.md), [bots](docs/TRAPS-BOTS.md) and [the live game](docs/TRAPS-LIVEGAME.md). **Grep these before writing.** |
 

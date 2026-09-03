@@ -37,4 +37,23 @@
     <Content Include="..\..\maps\*.png" Link="maps\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <!--
+    The bot nav graphs, OPT IN: `dotnet publish -p:PublishNav=true`.
+    ⚠️ They are 34 MB, which is why they are not unconditional the way the maps
+    are — MapDirectory.ResolveNav's remarks explain the cost, and it is paid
+    twice over for Debug and Release on every build.
+    ⚠️ CopyToPublishDirectory, NOT CopyToOutputDirectory: publish gets them,
+    ordinary builds do not. A `dotnet run` out of a checkout already finds
+    ../../nav by ResolveNav's walk to the repository root, so the flag is only
+    ever wanted for a deployment.
+    Without it a deployed server runs bots that fight and never walk; GameServer
+    warns at startup when that is what has happened. docs/DEPLOY.md.
+  -->
+  <ItemGroup Condition="'$(PublishNav)' == 'true'">
+    <Content Include="..\..\nav\*.txt"
+             Link="nav\%(Filename)%(Extension)"
+             CopyToOutputDirectory="Never"
+             CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

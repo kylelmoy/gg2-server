@@ -1099,6 +1099,14 @@ Two things to carry over rather than reinvent:
 <InvariantGlobalization>true</InvariantGlobalization>
 ```
 
+⚠️ **`ServerGarbageCollection` is the wrong shape for a small VPS and is left on
+anyway.** Server GC sizes heaps per core for throughput; the tick loop is
+single-threaded and latency-sensitive, so `DOTNET_gcServer=0` is the plausible
+setting there. It stays on here because the difference was **measured and was
+not there** — under 3 MB of working set, no pause-time difference looked for or
+found. `docs/DEPLOY.md`, "Garbage collection", has the numbers and says what
+would settle it.
+
 Native AOT is attractive for startup and memory but not required; revisit once
 the thing runs. Do not enable any fast-math-equivalent switch — there isn't one
 in .NET, which is part of why C# is a reasonable choice here.

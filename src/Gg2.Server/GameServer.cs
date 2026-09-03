@@ -424,6 +424,21 @@ public sealed class GameServer : IDisposable
         // stream is observable simulation and a bot joining must not move it.
         _population = new BotPopulationService(this, _log, (uint)_options.Port);
 
+        // ⚠️ Bots with NO nav directory at all is the one degradation that
+        // used to be completely silent. MapChanged says "no nav cache for <map>"
+        // when a directory is configured and that map misses, but an EMPTY
+        // NavCacheDirectory skips that branch entirely — so a deployment that
+        // forgot to copy nav/ ran bots that stood still and logged nothing.
+        // nav/ is deliberately not in the publish output (MapDirectory.ResolveNav,
+        // 34 MB), which makes this the expected way to get it wrong on a server
+        // that was deployed rather than run from a checkout. docs/DEPLOY.md.
+        if (_options.Bots.Enabled && _options.NavCacheDirectory.Length == 0)
+        {
+            _log.Info(
+                "no nav directory: bots will fight but not navigate. "
+                + "Pass --botnav <path> or set GG2_NAVCACHE (docs/DEPLOY.md)");
+        }
+
         var map = OpenMap(OpeningMap(), area: 1);
 
         // ⚠️ `() => _match`, not `_match`. OpenMap replaces the MatchState on

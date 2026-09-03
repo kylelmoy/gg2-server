@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Runtime.InteropServices;
 using Gg2.Bots;
 using Gg2.Protocol;
 using Gg2.Server;
@@ -98,6 +99,16 @@ internal static class Program
             log.Info("stopping");
             stopping.Cancel();
         };
+
+        // ⚠️ SIGTERM is how a SERVICE is stopped — systemd's default KillSignal
+        // and `docker stop` both send it, and CancelKeyPress does not see it.
+        // Without this the runtime terminates the process where it stands: the
+        // lobby listing is never taken down (it then advertises a dead server
+        // until the lobby's own timeout), an in-flight --record segment stays a
+        // .part file that never becomes a readable trace, and no client gets a
+        // clean socket shutdown. Dispose does all three, and only the graceful
+        // path reaches it. docs/DEPLOY.md.
+        using var sigterm = ShutdownSignals.Handle(PosixSignal.SIGTERM, stopping, log);
 
         server.Run(stopping.Token);
         return 0;
