@@ -610,3 +610,13 @@ maintains its own roster from the broadcast — teams included — and asserts i
 matches the server's after a rotation. `LoopbackClient` already parses the stream;
 it does not model a roster. That is the gate this project is missing, and it is
 worth more than a fix for this one symptom.
+
+⛔ **A SECOND bug of the same shape was found independently on 2026-09-03**, by
+the gg2-server lane's audit and by a different route: **the server was not
+rebroadcasting `CLIENT_SETTINGS`**, so a client's queue-jump preference reached
+the server and never reached anybody else. Two sides holding different views of a
+player, with the server's own state looking perfectly correct throughout.
+<br>That is not a coincidence, it is the category: **this port has no test that
+compares what a client was TOLD against what the server BELIEVES.** Every gate it
+does have reads the server. Two independent bugs of the shape in one day is the
+argument for building the harness-side roster rather than fixing either symptom.

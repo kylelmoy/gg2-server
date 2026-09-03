@@ -58,13 +58,29 @@ public interface IPluginHost
     bool IsClient(int slot);
 
     /// <summary>
-    /// GML's <c>current_time</c>, in milliseconds.
+    /// GML's <c>current_time</c>: milliseconds since the process started.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Sampled once per tick and constant within it. GM8 re-reads the clock
-    /// on every call, but nothing a plugin does inside one tick takes long
-    /// enough to see the difference — and a per-tick value is the one a test can
-    /// drive.
+    /// ⛔ <b>MONOTONIC, and that is not a preference.</b> Everything a plugin
+    /// measures with this is an elapsed duration — a spam window, a vote clock, a
+    /// rename throttle — and every one of them is written as
+    /// <c>now - then &gt; limit</c>. Back it with a wall clock and a DST shift or
+    /// an NTP correction backwards stalls all of them until real time catches up,
+    /// silently, on a machine nobody is looking at.
+    /// <para>
+    /// ⚠️ <b>The gg2-server lane hit exactly this on 2026-09-03</b>, in the
+    /// reference's own name throttle: the constant was transcribed and the clock
+    /// was not, so <c>current_time</c> became <c>DateTime.UtcNow</c>. Nothing in
+    /// a test suite can show it. There are THREE clocks in this server and they
+    /// are three different needs — a local calendar date for
+    /// <c>calculateAprilFools</c>, wall-clock instants for connection timeouts,
+    /// and this. <b>Do not collapse them into one field.</b>
+    /// </para>
+    /// <para>
+    /// ⚠️ Sampled once per tick and constant within it. GM8 re-reads the clock on
+    /// every call, but nothing a plugin does inside one tick takes long enough to
+    /// see the difference — and a per-tick value is the one a test can drive.
+    /// </para>
     /// </remarks>
     long CurrentTimeMilliseconds { get; }
 
