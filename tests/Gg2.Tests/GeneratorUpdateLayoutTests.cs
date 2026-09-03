@@ -66,7 +66,8 @@ public sealed class GeneratorUpdateLayoutTests
         }
 
         var writer = new NetWriter();
-        new StateUpdateWriter(match, NoCharacters, null, Objective).Write(writer, tier);
+        new StateUpdateWriter(
+() => match, NoCharacters, null, Objective).Write(writer, tier);
 
         var shape = GameModes.ShapeOf(map) with { GeneratorCount = generatorCount };
 
@@ -157,7 +158,8 @@ public sealed class GeneratorUpdateLayoutTests
         }
 
         var writer = new NetWriter();
-        var stateWriter = new StateUpdateWriter(match, NoCharacters, null, Objective);
+        var stateWriter = new StateUpdateWriter(
+() => match, NoCharacters, null, Objective);
         stateWriter.Write(writer, MessageType.CapsUpdate);
 
         // A message whose own framing is unambiguous, so that reading it back

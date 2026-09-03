@@ -203,12 +203,80 @@ public sealed class GameServer : IDisposable
     /// </remarks>
     private LobbyAnnouncer? _lobby;
 
+    /// <summary>
+    /// The reward auth relay, or null when <c>--rewards</c> was not passed.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Null is the default and means "answer nothing".</b> Every call site
+    /// is null-guarded rather than wrapped in an option check, so a forgotten
+    /// check cannot accidentally send a player's user id to a third party.
+    /// </remarks>
+    private RewardAuthClient? _rewards;
+
+    /// <summary>
+    /// Whether today is April 1st, refreshed on the reference's cadence.
+    /// </summary>
+    /// <remarks>
+    /// <c>global.aFirst</c>. <c>GameServerBeginStep.gml:5-8</c> recomputes it in
+    /// the same 30-second block as the lobby re-announcement, which is what lets
+    /// a server that has been up for a week notice the date changing under it.
+    /// Read by <see cref="ChatBubbles.Rewrite"/> and nothing else.
+    /// </remarks>
+    private bool _aprilFools;
+
+    /// <summary>
+    /// <c>current_time</c>: milliseconds since this process started, held still
+    /// for the tick.
+    /// </summary>
+    /// <remarks>
+    /// Sampled once per <see cref="Tick"/> and shared, so two things that happen
+    /// in one tick cannot disagree about when it was — which is also GM8's
+    /// behaviour, where <c>current_time</c> is read many times inside one step.
+    /// <para>
+    /// ⚠️ <b>Monotonic, deliberately.</b> Everything that reads this is measuring
+    /// an elapsed duration, and a wall clock is the wrong instrument for that: an
+    /// NTP correction or a DST step going backwards would stall the name throttle
+    /// for as long as the jump. <see cref="LocalClock"/> is the wall clock, is
+    /// separate, and is only ever asked what day it is.
+    /// </para>
+    /// </remarks>
+    private long _nowMs;
+
+    /// <summary>
+    /// The minimum gap between one player's accepted <c>PLAYER_CHANGENAME</c>
+    /// commands.
+    /// </summary>
+    /// <remarks>
+    /// <c>processClientCommands.gml:293-296</c>, <c>current_time -
+    /// lastNamechange &lt; 1000</c>.
+    /// </remarks>
+    private const long NameChangeIntervalMs = 1000;
+
     public GameServer(ServerOptions options, IServerLog log)
     {
         options.Validate();
         _options = options;
         _log = log;
+
+        // Once up front as well as on the cadence, so the first thirty seconds
+        // of a server started on April 1st are not the odd ones out.
+        _aprilFools = ChatBubbles.IsAprilFools(LocalClock());
     }
+
+    /// <summary>
+    /// The host's <b>local</b> calendar clock. Test hook; not part of the
+    /// protocol.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Separate from the UTC instant <see cref="Tick"/> takes, and
+    /// deliberately.</b> That one measures durations — join timeouts, the
+    /// name-change throttle — where UTC is right and a DST step would be a bug.
+    /// This one answers "what is today's date here", which is a calendar
+    /// question the reference asks of the host's local clock
+    /// (<c>date_current_date()</c>). One <c>Func</c> serving both would have to
+    /// pick a wrong answer for one of them.
+    /// </remarks>
+    public Func<DateTime> LocalClock { get; set; } = static () => DateTime.Now;
 
     /// <summary>Ticks elapsed. Test hook; not part of the protocol.</summary>
     public long Frame => _frame;
@@ -270,6 +338,22 @@ public sealed class GameServer : IDisposable
     public PlayerClass ClassOf(int slot) => _roster[slot].Class;
 
     public IInputSource SourceOf(int slot) => _roster[slot].Source;
+
+    /// <summary>The roster entry at <paramref name="slot"/>. Test hook.</summary>
+    public RosterEntry EntryOf(int slot) => _roster[slot];
+
+    /// <summary>
+    /// Whether the simulation believes this slot has queued jumping on. Test
+    /// hook.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Deliberately reads the WORLD rather than the roster.</b> The two are
+    /// written together by <c>ExecuteClientSettings</c> and a test that read the
+    /// roster copy would pass while the physics saw nothing — which is the exact
+    /// shape of the gap this accessor exists to gate.
+    /// </remarks>
+    public bool SimulatedQueueJump(int slot) => _world.Players[slot].QueueJump;
+
 
     public bool IsAlive(int slot) => _world.IsAlive(slot);
 
@@ -342,8 +426,11 @@ public sealed class GameServer : IDisposable
 
         var map = OpenMap(OpeningMap(), area: 1);
 
+        // ⚠️ `() => _match`, not `_match`. OpenMap replaces the MatchState on
+        // every rotation, and a writer that captured the object once wrote the
+        // PREVIOUS map's gamemode for ever — see StateUpdateWriter.Match.
         _stateWriter = new StateUpdateWriter(
-            _match, TryGetCharacter, TryGetSentry, Objective, Statistics, Dominating,
+            () => _match, TryGetCharacter, TryGetSentry, Objective, Statistics, Dominating,
             MovingPlatformBlocks);
 
         _listener = new TcpListener(IPAddress.Any, _options.Port);
@@ -363,6 +450,17 @@ public sealed class GameServer : IDisposable
             _lobby = new LobbyAnnouncer(_log);
             _log.Info($"announcing to lobby {GameConstants.LobbyServerHost}:{GameConstants.LobbyServerPort}");
             AnnounceToLobby();
+        }
+
+        // ⚠️ Off unless asked for, and for a sharper reason than the lobby's:
+        // this makes the server relay its players' user ids to a third party.
+        // The reference answers every REWARD_REQUEST unconditionally, so this
+        // gate is a deliberate departure and not a transcription — see
+        // ExecuteRewardRequest.
+        if (_options.Rewards)
+        {
+            _rewards = new RewardAuthClient(_log, _options.AuthServerHost, _options.AuthServerPort);
+            _log.Info($"reward auth via {_options.AuthServerHost}:{_options.AuthServerPort}");
         }
 
         // ⚠️ Loopback only and off unless configured — it executes commands
@@ -947,17 +1045,31 @@ public sealed class GameServer : IDisposable
     public void Tick()
     {
         var now = DateTime.UtcNow;
+        _nowMs = Environment.TickCount64;
 
         _frame++;
 
-        // GameServerBeginStep.gml:5-8, `frame mod 900`: the 30-second lobby
-        // re-announcement, at the very top of the server's own Begin Step.
-        // ⚠️ Cheap to leave unguarded because _lobby is null unless --lobby was
-        // passed, and the modulo runs either way.
-        if (_lobby is not null && _frame % LobbyRegistration.ReRegisterIntervalTicks == 0)
-            AnnounceToLobby();
+        // GameServerBeginStep.gml:5-8, `frame mod 900`: the 30-second block at
+        // the very top of the server's own Begin Step. Two things live in it,
+        // and the second is not optional the way the first is.
+        if (_frame % LobbyRegistration.ReRegisterIntervalTicks == 0)
+        {
+            // ⚠️ Cheap to leave unguarded because _lobby is null unless --lobby
+            // was passed, and the modulo runs either way.
+            if (_lobby is not null)
+                AnnounceToLobby();
+
+            _aprilFools = ChatBubbles.IsAprilFools(LocalClock());
+        }
 
         ServiceClients();
+
+        // Immediately after the client commands, because that is where the
+        // reference's equivalent sits: RewardAuthChecker is an object created by
+        // processClientCommands and its Step runs in the same frame's object
+        // pass. It only ever appends to the broadcast, so it must be above the
+        // flush at the end of this method.
+        ServiceRewardAuth();
 
         // ⚠️ Before ServiceBots, so a bot added this tick is polled this tick
         // rather than pressing nothing for one frame. GameServerBeginStep.gml
@@ -1206,6 +1318,33 @@ public sealed class GameServer : IDisposable
         _log.Info($"control: {_nextMap} area {_nextArea} in ten seconds");
 
         return true;
+    }
+
+    /// <summary>
+    /// Puts a bot back on a team, the way a client asks to join one.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>Goes through <c>ExecuteChangeTeam</c> — the same body the socket
+    /// switch and <see cref="Execute"/> reach.</b> CLAUDE.md's rule: a bot is an
+    /// <see cref="IInputSource"/> like a socket, and a second copy here would let
+    /// a bot take a team a client could not. That matters concretely — the
+    /// reference's balance guard refuses a request for the bigger team, and this
+    /// has to be refused by it too.
+    /// <para>
+    /// ⚠️ <b>It exists because a MAP CHANGE makes every player a spectator.</b>
+    /// <c>Rounds.ResetForNewMap</c> does that on the first area, matching the
+    /// reference's <c>with(Player) team = TEAM_SPECTATOR</c>, and a human re-picks
+    /// from the team-select screen. A bot has nobody to pick for it, so
+    /// <see cref="BotPopulationService"/> does — see the bug in its
+    /// <c>Reteam</c>.
+    /// </para>
+    /// </remarks>
+    public void RequestBotTeam(int slot, Team team)
+    {
+        if (slot <= 0 || slot >= _roster.Count || !_roster[slot].IsBot)
+            throw new ArgumentOutOfRangeException(nameof(slot), slot, "not a bot slot");
+
+        ExecuteChangeTeam(_roster[slot], team);
     }
 
     /// <summary>Changes the bot fill target; the population manager converges on it.</summary>
@@ -2204,23 +2343,20 @@ public sealed class GameServer : IDisposable
             }
 
             case MessageType.ChatBubble:
-                ServerMessages.ChatBubble(_broadcast, IdOf(entry), reader.ReadUByte());
+            {
+                if (ChatBubbles.Rewrite(reader.ReadUByte(), _aprilFools, out var image))
+                    ServerMessages.ChatBubble(_broadcast, IdOf(entry), image);
+
                 break;
+            }
 
             case MessageType.ClientSettings:
-                entry.QueueJump = reader.ReadUByte() != 0;
+                ExecuteClientSettings(entry, reader.ReadUByte() != 0);
                 break;
 
             case MessageType.PlayerChangeName:
-            {
-                var name = Gg2Text.Decode(command.Payload);
-                if (name.Length > GameConstants.MaxPlayerNameLength)
-                    name = name[..GameConstants.MaxPlayerNameLength];
-
-                entry.Name = name;
-                ServerMessages.PlayerChangeName(_broadcast, IdOf(entry), name);
+                ExecuteChangeName(client, entry, command.Payload);
                 break;
-            }
 
             case MessageType.BuildSentry:
                 ExecuteBuildSentry(IdOf(entry));
@@ -2234,10 +2370,6 @@ public sealed class GameServer : IDisposable
                 ExecuteDropIntel(IdOf(entry));
                 break;
 
-            // Everything below is either simulation the port does not have yet
-            // or a subsystem a headless server deliberately does not implement.
-            // The reference's own answer to REWARD_REQUEST from a server with no
-            // auth is silence, and silence is a valid answer to all of these.
             case MessageType.ToggleZoom:
                 ExecuteToggleZoom(IdOf(entry));
                 break;
@@ -2279,10 +2411,17 @@ public sealed class GameServer : IDisposable
                 break;
             }
 
-            // The reference's own answer to a reward request from a server with
-            // no auth configured is silence, and silence is a valid answer here.
+            // ⚠️ The client is not told that rewards are off, because the
+            // reference has no way to say so — there is no "rewards disabled"
+            // message and no flag in the greeting. A client whose REWARD_REQUEST
+            // goes unanswered simply never gets its hats, and it neither retries
+            // nor blocks (ClientBeginStep.gml:163-170 sends it once, on join).
             case MessageType.RewardRequest:
+                ExecuteRewardRequest(client, entry, command.Payload);
+                break;
+
             case MessageType.RewardChallengeResponse:
+                ExecuteRewardChallengeResponse(entry, command.Payload);
                 break;
 
             default:
@@ -2413,6 +2552,187 @@ public sealed class GameServer : IDisposable
 
         entry.Class = requested;
         ServerMessages.PlayerChangeClass(_broadcast, (byte)slot, requested);
+    }
+
+    /// <summary>
+    /// <c>CLIENT_SETTINGS</c>: one client's queued-jumping preference.
+    /// </summary>
+    /// <remarks>
+    /// <c>processClientCommands.gml:364-371</c>. Three writes, and none of them
+    /// is redundant: the roster copy is what a joiner's <c>FULL_UPDATE</c>
+    /// carries, the <see cref="WorldState"/> copy is what the physics reads, and
+    /// the broadcast is what already-connected clients dead-reckon with. Missing
+    /// any one of them puts somebody's jump on a different rule from everybody
+    /// else's.
+    /// </remarks>
+    private void ExecuteClientSettings(RosterEntry entry, bool queueJump)
+    {
+        var slot = IdOf(entry);
+
+        entry.QueueJump = queueJump;
+        _world.Players[slot].QueueJump = queueJump;
+
+        ServerMessages.ClientSettings(_broadcast, (byte)slot, queueJump);
+    }
+
+    /// <summary>
+    /// <c>PLAYER_CHANGENAME</c>: rename, throttle, or kick.
+    /// </summary>
+    /// <remarks>
+    /// <c>processClientCommands.gml:279-317</c>, and ⚠️ <b>an over-long name is
+    /// a KICK here, not a truncation.</b> The join path truncates
+    /// (<c>serviceJoiningPlayer.gml:176</c>) and this one does not, which looks
+    /// like an inconsistency in the reference and is not ours to tidy: a client
+    /// that renames past the limit is one that did not write the message its own
+    /// UI can produce.
+    /// <para>
+    /// ⚠️ <b>The throttle is one change per second, and it is the flood
+    /// control.</b> Every accepted rename is an unbounded broadcast to every
+    /// connected client; without it one socket can make the server send as fast
+    /// as it can read. The reference keys it on <c>current_time</c> per player.
+    /// </para>
+    /// </remarks>
+    private void ExecuteChangeName(ClientPlayer client, RosterEntry entry, ReadOnlySpan<byte> payload)
+    {
+        // ⚠️ The reference tests the PAYLOAD length in bytes, before decoding —
+        // `socket_receivebuffer_size(socket)`, which is the count the length
+        // prefix declared. Testing the decoded string instead would let a name
+        // of 30 bytes that decodes to 20 characters through.
+        if (payload.Length > GameConstants.MaxPlayerNameLength)
+        {
+            var kick = new NetWriter(2);
+            ServerMessages.Kick(kick, KickReason.Name);
+            client.Connection.Send(kick.WrittenSpan);
+
+            // Flush before closing, or the reason is buffered and discarded and
+            // the client sees only a dropped connection — the same requirement
+            // the plugin-packet and multi-client kicks have.
+            client.Connection.Flush();
+            client.Connection.Close("name longer than the protocol allows");
+
+            _log.Info($"kicked {entry.Name}: PLAYER_CHANGENAME of {payload.Length} bytes");
+            return;
+        }
+
+        // ⚠️ The throttled command is DROPPED, not deferred. The reference's
+        // `break` leaves the socket's other commands to carry on, so a client
+        // spamming renames simply has most of them ignored.
+        if (entry.LastNameChangeMs is { } last && _nowMs - last < NameChangeIntervalMs)
+            return;
+
+        entry.LastNameChangeMs = _nowMs;
+        entry.Name = Gg2Text.Decode(payload);
+
+        ServerMessages.PlayerChangeName(_broadcast, IdOf(entry), entry.Name);
+    }
+
+    /// <summary>
+    /// <c>REWARD_REQUEST</c>: mint a nonce and challenge the client.
+    /// </summary>
+    /// <remarks>
+    /// <c>processClientCommands.gml:320-326</c>, which answers <b>every</b>
+    /// request unconditionally — there is no server-side auth configuration in
+    /// the reference at all, and the <c>RewardKey</c>/<c>RewardId</c> pair a host
+    /// can set controls only its <em>own</em> self-auth. This port gates the
+    /// reply on <c>--rewards</c> instead, because answering commits it to an
+    /// outbound connection to a third party later in the handshake.
+    /// <para>
+    /// ⚠️ <b>A second request overwrites the first.</b> The reference stores the
+    /// id and challenge in plain player variables and does the same. It costs
+    /// nothing, because <see cref="RosterEntry.RewardAuthStarted"/> is what
+    /// actually bounds the work a client can cause.
+    /// </para>
+    /// </remarks>
+    private void ExecuteRewardRequest(ClientPlayer client, RosterEntry entry, ReadOnlySpan<byte> payload)
+    {
+        if (_rewards is null)
+            return;
+
+        entry.RewardId = Gg2Text.Decode(payload);
+        entry.RewardChallenge = RewardAuth.NewChallenge();
+
+        // ⚠️ To this socket, not to _broadcast. A challenge addressed to
+        // everybody would leak it and hand every other client a message its
+        // stream cannot parse.
+        var writer = new NetWriter(1 + RewardAuth.ChallengeBytes);
+        ServerMessages.RewardChallengeCode(writer, entry.RewardChallenge);
+        client.Connection.Send(writer.WrittenSpan);
+    }
+
+    /// <summary>
+    /// <c>REWARD_CHALLENGE_RESPONSE</c>: forward the client's answer to the auth
+    /// server.
+    /// </summary>
+    /// <remarks>
+    /// <c>processClientCommands.gml:328-336</c>. ⛔ <b>This server verifies
+    /// nothing</b> — it does not have the client's key and is not meant to. It
+    /// relays, and the auth server is the only party that can tell a real answer
+    /// from a made-up one.
+    /// <para>
+    /// The reference's two guards are both here: <c>variable_local_exists</c> on
+    /// the id and challenge, which drops a response to a challenge that was
+    /// never issued, and <c>rewardAuthAlreadyStarted</c>, which bounds a client
+    /// to one outbound connection for the life of its session.
+    /// </para>
+    /// </remarks>
+    private void ExecuteRewardChallengeResponse(RosterEntry entry, ReadOnlySpan<byte> payload)
+    {
+        if (_rewards is null)
+            return;
+
+        if (entry.RewardId is null || entry.RewardChallenge is null)
+            return;
+
+        if (entry.RewardAuthStarted)
+            return;
+
+        entry.RewardAuthStarted = true;
+
+        // ipCheck: true. The auth server folds the address this request arrives
+        // from into the HMAC it recomputes, which is what stops this server
+        // replaying the client's answer at a different one. Only the reference's
+        // self-auth path passes false, and this port has no local player to
+        // decorate — docs/PROTOCOL.md, "What a headless server can skip".
+        _rewards.Enqueue(
+            entry,
+            RewardAuth.BuildAuthRequest(payload, entry.RewardChallenge, ipCheck: true, entry.RewardId));
+    }
+
+    /// <summary>
+    /// Applies whatever auth checks finished since the last tick.
+    /// </summary>
+    /// <remarks>
+    /// <c>rewardAuthSuccess.gml</c> → <c>sendEventUpdateRewards</c>. ⛔ <b>The
+    /// roster index is resolved HERE, not when the check was queued.</b> Several
+    /// seconds pass over an auth round trip, and any <c>PLAYER_LEAVE</c> in that
+    /// window compacts every index above the hole — so the slot that asked is
+    /// not necessarily the slot that answers to that number now.
+    /// <see cref="Roster.IndexOf"/> on the entry object is the reference's
+    /// <c>instance_exists(currentPlayer)</c>: -1 means they left, and the result
+    /// is dropped.
+    /// </remarks>
+    private void ServiceRewardAuth()
+    {
+        if (_rewards is null)
+            return;
+
+        while (_rewards.TryTakeResult(out var result))
+        {
+            if (result.Rewards is null)
+                continue;
+
+            var slot = _roster.IndexOf(result.Player);
+            if (slot < 0)
+                continue;
+
+            // Remembered as well as broadcast: the broadcast reaches whoever is
+            // connected now, and this is what a later joiner's FULL_UPDATE
+            // carries.
+            result.Player.Rewards = result.Rewards;
+
+            ServerMessages.RewardUpdate(_broadcast, (byte)slot, result.Rewards);
+            _log.Info($"rewards for {result.Player.Name} authenticated");
+        }
     }
 
     private void ExecuteBuildSentry(int slot)
@@ -2939,6 +3259,12 @@ public sealed class GameServer : IDisposable
         _lobby?.Unregister();
         _lobby?.Dispose();
         _lobby = null;
+
+        // Any auth check still in flight is abandoned. Nothing is lost that
+        // matters: the result would have been a hat on a player who is about to
+        // be disconnected anyway.
+        _rewards?.Dispose();
+        _rewards = null;
 
         _control?.Dispose();
         _control = null;

@@ -16,7 +16,7 @@ policy — is in progress.**
 |---|---|---|
 | 0–4 | protocol, maps, a joinable server, the parity harness, collision, character physics | exact against the running game |
 | 5 | every weapon, projectile, the sentry, the airblast | nine oracles measured; an 898-tick trace replays closed-loop with zero error |
-| 6 | all eight gamemodes, round after round, every `FULL_UPDATE` field real | closed — a stock client has played a round start to finish |
+| 6 | all eight gamemodes, round after round, every `FULL_UPDATE` field real | closed — a stock client has survived four gamemode changes in one session (2026-09-03). ⚠️ It was ONE round until then; see below |
 | 7 | bots: the input seam, nav, A\*, the follower, combat, the objective layer, the population manager | closed, with a number |
 | 8 | unpaced ticking, the human-play recorder, the headless match runner, the control port | closed — 44 matches across all 22 maps in 3.3s, 3,548x real time |
 | 9 | a learned policy: `NpyFile`, `PolicyNetwork`, `HybridBot`, the `Gg2.Env` seam, `tools/bench/` | in progress — see below |
@@ -24,6 +24,41 @@ policy — is in progress.**
 ✅ **Every class is implemented.** All ten are armed: rockets, mines, healing
 beams, ubercharge, afterburn, the airblast, the sentry gun, the sniper's scope,
 Quote's bubble screen, the spy's cloak and backstab, the sandvich, and taunting.
+
+## The 2026-09-03 audit against stock upstream
+
+Mechanical, not a reading: the 61 message ids, the 15-entry client-command table,
+the 55 entity types `builder_init.gml` registers, the eight gamemodes, the
+weapons and projectiles, and each server-side script group in turn. **Five gaps,
+all now closed**, and what makes them worth recording is the shape they shared —
+*the port received the data and did not act on it*, which reads as done from
+every angle except the one that matters.
+
+| Gap | What it cost | Gate |
+|---|---|---|
+| **Queued jumping** was never simulated | a client with the setting on desynced on every landing — observable simulation | `QueueJumpTests`, and `SimulationBehaviourVersion` 2 → 3 |
+| `CLIENT_SETTINGS` was stored, never rebroadcast | other clients dead-reckoned that player on the wrong jump rule | `QueueJumpTests` |
+| `PLAYER_CHANGENAME` truncated instead of kicking, and had no throttle | an unbounded broadcast amplifier on one socket | `NameAndBubbleTests` |
+| The April Fools chat-bubble substitution was missing | wrong bubble on one day, a relayed bubble the reference drops on the other 364 | `NameAndBubbleTests` |
+| Rewards were answered with silence | nobody's badges, hats or capes rendered | `RewardAuthTests`, behind `--rewards` |
+
+⛔ **And a sixth, found the same day by driving a real client: every connected
+stock client died on any gamemode-changing rotation.** `StateUpdateWriter`
+captured its `MatchState` once at `Start`, so after a rotation it wrote the
+*previous* map's HUD block. `docs/PARITY.md` has the whole thing.
+⚠️ **It is why phase 6's row above now says ONE round.** "A stock client has
+played a round start to finish" was true and had been read as more than it said:
+nobody had watched a second round, and the rotation between them was broken from
+phase 6 until 2026-09-03. **A claim is only as strong as the thing that was
+actually done** — this one was exactly one round long.
+
+⚠️ **Four of the first five were "not modelled" or "silence" sentences in code
+comments, and two had a `docs/` claim contradicting them.** `docs/PLAN.md` said
+queued jumping had landed on the strength of the plumbing; `docs/PROTOCOL.md`
+justified the reward silence as the reference's own behaviour, which it is not.
+**The falsification condition for this table: re-run the audit against upstream
+after any reference bump.** It found five in an afternoon and the previous
+completeness claim had stood for two days.
 
 ---
 

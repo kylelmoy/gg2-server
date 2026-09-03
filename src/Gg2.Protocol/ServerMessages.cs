@@ -510,6 +510,60 @@ public static class ServerMessages
         writer.WriteUByte(image);
     }
 
+    /// <summary>
+    /// The 16-byte nonce a client signs to prove who it is.
+    /// </summary>
+    /// <remarks>
+    /// <c>processClientCommands.gml:320-325</c>. ⚠️ <b>Raw bytes with no length
+    /// prefix</b> — <c>write_binstring</c>, and the client reads exactly 16
+    /// (<c>ClientBeginStep.gml:553-556</c>). Prefixing it would desynchronise
+    /// that socket's stream permanently rather than fail visibly.
+    /// <para>
+    /// ⚠️ <b>To the one socket, never the broadcast buffer.</b> A challenge is
+    /// addressed to one client, and putting it on the shared stream would both
+    /// leak it and hand every other client a message it cannot parse.
+    /// </para>
+    /// </remarks>
+    public static void RewardChallengeCode(NetWriter writer, ReadOnlySpan<byte> challenge)
+    {
+        writer.WriteMessageType(MessageType.RewardChallengeCode);
+        writer.WriteBytes(challenge);
+    }
+
+    /// <summary>
+    /// Tells everybody which rewards a player has authenticated for.
+    /// </summary>
+    /// <remarks>
+    /// <c>sendEventUpdateRewards.gml</c>: the player id, then a
+    /// <c>ushort</c>-prefixed string of <c>:</c>-separated reward names. Clients
+    /// parse it into a set and a badge list and draw from those; the server
+    /// keeps nothing.
+    /// </remarks>
+    public static void RewardUpdate(NetWriter writer, byte playerId, string rewards)
+    {
+        writer.WriteMessageType(MessageType.RewardUpdate);
+        writer.WriteUByte(playerId);
+        writer.WriteString2(rewards);
+    }
+
+    /// <summary>
+    /// Echoes one player's <c>CLIENT_SETTINGS</c> to everybody.
+    /// </summary>
+    /// <remarks>
+    /// <c>processClientCommands.gml:364-371</c>. ⚠️ <b>This has to be a
+    /// broadcast rather than an acknowledgement to the one socket</b>: queued
+    /// jumping changes when that character jumps, and every client re-simulates
+    /// every character between position updates. A client that never hears
+    /// about it dead-reckons the wrong jump on every landing until the next
+    /// <c>FULL_UPDATE</c> — which only a joiner ever gets.
+    /// </remarks>
+    public static void ClientSettings(NetWriter writer, byte playerId, bool queueJump)
+    {
+        writer.WriteMessageType(MessageType.ClientSettings);
+        writer.WriteUByte(playerId);
+        writer.WriteUByte(queueJump ? (byte)1 : (byte)0);
+    }
+
     /// <summary>A server notice shown in the client's chat area.</summary>
     public static void MessageString(NetWriter writer, string text)
     {

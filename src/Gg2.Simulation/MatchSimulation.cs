@@ -118,9 +118,11 @@ public static class MatchSimulation
             state.Characters[slot].SetupGatesClosed = state.SetupTimer > 0;
             state.Characters[slot].ArenaRoundEnded = Arena.RoundEnded(state);
 
-            // The third mirrored flag, and the only one that comes off the
-            // PLAYER rather than off a global: Arena's humiliation round.
+            // The third and fourth mirrored flags, and the only ones that come
+            // off the PLAYER rather than off a global: Arena's humiliation
+            // round, and the client's queued-jumping preference.
             state.Characters[slot].Humiliated = state.Players[slot].Humiliated;
+            state.Characters[slot].QueueJump = state.Players[slot].QueueJump;
         }
 
         for (var slot = 0; slot < WorldState.MaxSlots; slot++)

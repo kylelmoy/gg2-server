@@ -866,10 +866,13 @@ public static class Rounds
     /// </item>
     /// </list>
     /// <para>
-    /// <b>Not modelled</b>: <c>player.humiliated</c>, which the reference sets
-    /// on the losing team and which suppresses the ammo refill and drops a spy's
-    /// cloak. It is set by <c>ScoreTableController</c>, a drawing object, and
-    /// nothing else in the simulation reads it.
+    /// ✅ <b><c>player.humiliated</c> IS modelled</b> —
+    /// <see cref="PlayerState.Humiliated"/>, set by <see cref="Arena"/> and read
+    /// by <see cref="CharacterPhysics"/> for the control penalty, the suppressed
+    /// attack, taunt, cloak and sandvich, and the withheld ammo refill. ⚠️ <b>This
+    /// paragraph said "not modelled" until 2026-09-03</b>, three phases after it
+    /// landed. Its reasoning — that only a drawing object sets it — was true of
+    /// the reference and never the whole story here.
     /// </para>
     /// </remarks>
     public static void BeginMapChange(ref WorldState state) => state.MapChanging = true;

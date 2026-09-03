@@ -142,7 +142,24 @@ public sealed class BotPopulationService
             return;
 
         var target = BotPopulation.Target(_server.HumanCount, in options);
-        var bots = _server.BotSlots.Count;
+        var slots = _server.BotSlots;
+        var bots = slots.Count;
+
+        // ⛔ ABOVE the count check, and that is the whole bug this fixes. A
+        // spectating bot is still a bot, so `bots == target` holds and the early
+        // return below leaves it spectating FOR EVER.
+        //
+        // `Rounds.ResetForNewMap` makes every player a spectator on a map change
+        // — the reference's `with(Player) team = TEAM_SPECTATOR`, correct and not
+        // the bug. A human then re-picks from the team-select screen. Nothing
+        // re-picked for a bot, so **every bot stopped playing after the first
+        // rotation** and the server carried on ticking, rotating and reporting
+        // matches as completed with nobody in them.
+        //
+        // ⚠️ Found 2026-09-03 by ClientRosterAgreementTests, which asked the
+        // question no existing test did. It had been reachable since the
+        // population manager landed in phase 7.
+        Reteam(slots);
 
         if (bots == target)
             return;
@@ -162,6 +179,39 @@ public sealed class BotPopulationService
         }
 
         Retarget();
+    }
+
+    /// <summary>
+    /// Puts any spectating bot back on a team.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Normally a no-op, and it has to be cheap for that reason</b> — it
+    /// runs every tick. The scan is over <see cref="IGameServer.BotSlots"/>,
+    /// which the caller has already materialised, and the team counts are taken
+    /// only when there is actually somebody to place.
+    /// <para>
+    /// ⚠️ <b>Counted afresh for each bot</b>, not once for the batch: placing the
+    /// first bot changes what the second should be given, and a batch that read
+    /// one count would put every spectator on the same team after a rotation.
+    /// </para>
+    /// <para>
+    /// ⛔ <b>The request can be REFUSED and that is correct.</b>
+    /// <c>RequestBotTeam</c> runs the reference's balance guard, which turns down
+    /// a request for the bigger team — so a bot that cannot be placed this tick
+    /// is simply tried again on the next one, and the loop must not assume it
+    /// succeeded. Re-reading the team on the next call is what makes that safe.
+    /// </para>
+    /// </remarks>
+    private void Reteam(IReadOnlyList<int> slots)
+    {
+        foreach (var slot in slots)
+        {
+            if (_server.TeamOf(slot) is Team.Red or Team.Blue)
+                continue;
+
+            _server.CountTeams(out var red, out var blue);
+            _server.RequestBotTeam(slot, BotPopulation.PickTeam(red, blue, ref _random));
+        }
     }
 
     private bool TryAdd(in BotPopulationOptions options)

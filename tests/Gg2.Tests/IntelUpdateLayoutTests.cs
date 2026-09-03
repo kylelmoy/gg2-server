@@ -53,7 +53,8 @@ public sealed class IntelUpdateLayoutTests
         }
 
         var writer = new NetWriter();
-        new StateUpdateWriter(match, NoCharacters, null, Objective).Write(writer, tier);
+        new StateUpdateWriter(
+() => match, NoCharacters, null, Objective).Write(writer, tier);
 
         // The writer emits the message-type byte and the reader starts at the
         // payload, so the first byte is skipped — see MineUpdateLayoutTests.

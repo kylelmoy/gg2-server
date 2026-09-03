@@ -2500,6 +2500,183 @@ That last one is the sharpest tool in the box: `syncWrongness` already exists as
 a variable on `Character`, and reading the client-side character's `x`/`y` while
 the ported server runs turns "feels rubbery" into a number.
 
+### ⛔ The gap in every tier above: nothing compares what a client was TOLD
+
+**Every automated gate this project has reads the SERVER.** The replayer compares
+the port's state against a recording; the scenario suite reads `WorldState`; the
+server tests tick a `GameServer` and assert on its own roster and world. Tier 3
+is the only thing that watches a client and it is manual, so **a bug that lives
+entirely in the divergence between the server's belief and the client's cannot go
+red**, however green the suite is.
+
+⚠️ **Two instances were found on 2026-09-03, independently, by different routes,
+and neither was found by a test.**
+
+- **`CLIENT_SETTINGS` was never rebroadcast.** The server stored a player's
+  queue-jump preference and told nobody, so every other client dead-reckoned that
+  character on the wrong jump rule. Found by reading the reference's command
+  switch against ours, not by anything failing.
+- **A map rotation kills every connected stock client** ~25 seconds later
+  (`unknown team ID: 2` — the client is building a `Character` for somebody its
+  own roster has as a spectator). Found by `gg2-plugins` driving a real GM8
+  client. `MapRotationTests` and `MatchActuallyHappensTests` both pass, because
+  the server's own state stays perfectly consistent across a rotation.
+  ⚠️ **The symptom, the three narrowing runs, the reproduction and what is
+  explicitly NOT diagnosed are in `docs/PLUGINS.md`** — one write-up, and this is
+  not it. Do not restate them here; go and read that one before touching the bug,
+  because two of its four sections are things already ruled out.
+
+**Two of one shape in one day is a category, not a coincidence.** The shape:
+*the server is self-consistent and correct, and what it emitted does not add up
+to the same world.* Phase 6's "a stock client has played a round start to finish"
+is true — and it was one round, and nobody had watched a second one.
+
+✅ **CLOSED 2026-09-03 for the roster half: `MirrorClient` and
+`ClientRosterAgreementTests`.** The mirror keeps its own roster out of
+`ServerStream` — teams included, which that reader had been skipping — applies
+the client's own rules (including `CHANGE_MAP` spectating everybody on area 1),
+and asserts both that the two rosters agree and that no character was ever sent
+for a slot the client holds as a spectator. It found a real bug the hour it was
+written: **every bot stopped playing after the first rotation**, 0 of 4 on a
+team.
+
+⛔ **AND IT HAS A BLIND SPOT WORTH MORE THAN THE GATE — it shares the port's own
+reader.** `MirrorClient` frames with `ServerStream` and shapes with
+`GameModes.ShapeOf`, so it can only catch the port disagreeing with *itself* or
+failing to *send* something. A disagreement between the port's writer and the
+**reference client's** reader is invisible to it by construction, because both
+ends of the comparison are ours.
+
+⚠️ **That is not hypothetical.** The gamemode-change desync below sat in exactly
+this blind spot: it killed every stock client and **did not reproduce in-process
+at all**, because the port's reader and writer agreed with each other about a
+layout the reference client read differently. ✅ It is fixed, and the gate now
+covers it — but only because the test was made to run long enough to emit the
+message that carries the layout.
+
+**So the tiers now stand as:** the mirror covers "did the server say it", the
+fixtures cover "does the port match a recording of the reference", and **nothing
+covers "does a stock client read what the port writes"** except driving one by
+hand. ⚠️ **Do not let a green suite, this gate included, stand in for driving a
+real client through a rotation.**
+
+### ✅ A gamemode change desynchronised every stock client — FOUND AND FIXED
+
+**Found 2026-09-03 by `gg2-plugins` against a real client, diagnosed and fixed
+here the same day.** The symptom and the original narrowing runs are
+`docs/PLUGINS.md`; this is the cause.
+
+⛔ **`StateUpdateWriter` captured its `MatchState` once, in `Start`, and
+`GameServer.OpenMap` replaces `_match` with a NEW object on every rotation.** So
+after any map change the writer still held the *previous* map's match — and
+`WriteHud` switches on `match.GameMode`. A CTF → KotH rotation therefore kept
+emitting a **CTF** HUD block while every client read a **KotH** one.
+
+The HUD block rides on `FULL_UPDATE` and `CAPS_UPDATE` only, so nothing broke
+until the first scoreboard update after the change. Then the stream
+desynchronised permanently: `show_message("Wrong number of players while
+deserializing state")`, a control-point team read out of range
+(`drawControlPointStatus: Unknown variable teamoffset`), phantom roster entries
+with empty names — 13 against the server's 5 — and a fatal error 25 to 30
+seconds later. The server saw only a `ConnectionReset`.
+
+**Fixed** by making the writer take a `Func<MatchState>` rather than a
+`MatchState`, so it cannot hold a stale one.
+
+✅ **Verified live, and this is what phase 6's "round after round" now rests
+on.** A stock GM8 client, four bots, four gamemode changes driven through the
+control port in one session — `ctf_truefort` → `koth_valley` → `tdm_mantic` →
+`cp_egypt` → `ctf_truefort`, so CTF, KotH, TDM and CP each appear as both a
+source and a destination, and `cp_egypt`'s **five** control points make the
+largest HUD block one of them. **Zero client errors, zero dialogs, no
+disconnect**, roster correct throughout. Before the fix the same client died
+28 seconds after the first change. `CapLimit`, `ClassLimits`,
+`RespawnTimeSeconds` and `CurrentMapArea` were stale by the same mechanism —
+those are values rather than lengths, so they corrupted a joining client's
+scoreboard instead of the stream, and nothing had noticed.
+
+⚠️ **Why every existing test missed it, which is worth more than the fix.**
+
+- **Same-gamemode rotations are harmless**, because the stale gamemode equals the
+  live one. A `koth_valley` → `koth_valley` rotation with four bots ran clean
+  against a real client. So "rotation" was never the variable; **gamemode change**
+  was, and a same-mode rotation is not a control for it.
+- **`ClientRosterAgreementTests` was already watching and still missed it.** The
+  gate was right; the *exercise* was too short. Nothing was capturing anything
+  after the rotation, so no `CAPS_UPDATE` was emitted in the few hundred ticks
+  those tests run, and the broken layout was never written.
+  ⛔ **A layout test has to make the layout actually get written.**
+  `TheHudBlockAfterAGamemodeChangeIsTheNewGamemodes` runs to the two-minute
+  scoreboard heartbeat for exactly that reason, asserts a `CAPS_UPDATE` arrived
+  before asserting anything about it, and does it in **both** directions —
+  CTF → KotH and KotH → CTF are different stale pairings.
+- **The trace fixtures could not have caught it either.** No recording in this
+  project contains a map rotation, so the one comparison against the reference's
+  own bytes never crosses a gamemode change.
+
+⚠️ **Two dead ends recorded so the next reader does not repeat them:** the
+control-point *values* are correct across a rotation (`team=-1`, verified
+in-process), and the client's read loop is `do { … } until(roomchange)`, so it
+cannot parse a post-`CHANGE_MAP` update with the old shape. Both were plausible
+and both were wrong.
+
+### ⚠️ Multi-area maps: one bug fixed, and one intermittent client fatal OPEN
+
+**Checked 2026-09-03 because nobody could say whether multi-stage maps had ever
+been exercised. They had not.** `cp_dirtbowl` is the only shipped map with more
+than one area — three, sharing one 800x700 walkmask and differing only in
+entities, stacked vertically (area 2 sits at y≈2200).
+
+✅ **A real bug, fixed:** `ServerStream` skipped the area byte in `MAP_END`, the
+only place the wire states the area after a join. Any reader on it sat on area 1
+for ever — wrong `ForArea` narrowing, and it wiped teams on an advance that
+**keeps** them. `MultiAreaMapTests` gates it, mutation-checked.
+
+✅ **Verified live** with a real GM8 client: area 1 → 2 → 3 with two and with six
+bots, area 1 → 3 directly, and natural rotations, all with **zero client errors**.
+Teams survive an advance on both sides, and the geometry narrows correctly.
+✅ **Both branches of the advance decision were seen live**: the defenders holding
+rotates away, and red winning on the *last* area rotates rather than advancing
+(`3 < 3` is false).
+
+⛔ **STILL OPEN — an intermittent client fatal, seen ONCE and not reproduced.**
+One run (six bots, driven 1 → 2 → 3) killed the client one second after reaching
+area 3 with the same GM8 error as the stale-`MatchState` bug:
+`Attempted to get a sprite for unknown team ID: 2`, preceded by a `show_message`
+with no readable text — almost certainly "Wrong number of players while
+deserializing state". A second run with the same bot count and the same path was
+clean, as were four other multi-area runs.
+
+⚠️ **What that rules in and out.** The server binary was functionally identical
+across both runs — the `MAP_END` fix is to a *reader* the server does not use —
+so this is not a regression between them and not the fix failing. It is
+intermittent, which means timing or a state only some runs reach. ⚠️ **Do not
+assume it is the same bug as the stale `MatchState`**: that one was deterministic
+and is gated; this one is not, and sharing a symptom is not sharing a cause. The
+symptom is generic — it is what *any* framing slip looks like once the client
+reads a subobject bit for a spectator.
+
+**Where to start:** run `cp_dirtbowl` with six or more bots and drive
+1 → 2 → 3 repeatedly with `--record` on, until it fires; the recorded segment
+either shows the slip or proves the stream was clean and the client's own state
+was not.
+
+✅ **Generalised, since the class outlives the instance.**
+`GamemodeRotationTests` rotates a client through one shipped map of **every**
+gamemode — seven of the eight have one — waiting for a `CAPS_UPDATE` after each
+so the HUD block is actually written, and checks the roster still adds up. The
+bug was found against exactly one pair of modes because that is the pair somebody
+happened to put in a rotation; the sweep is what makes the other twenty a
+property of the suite. Mutation-checked: against a writer that captures once it
+fails so hard the client never sees the next `CHANGE_MAP` at all.
+
+⚠️ **A third suspicion was raised and then CHECKED, and it was wrong:**
+`Rounds.ResetForNewMap` does not clear `WorldState.MovingPlatformCount`, which
+looked like the same class of bug. It is not — `MovingPlatforms.Reset` assigns
+the count unconditionally and `OpenMap` calls it on every rotation, so the block
+is always the new map's length. Recorded because an unverified "possible bug"
+left lying around costs a later reader the same afternoon it cost this one.
+
 ## Which flush a message rides, and how to test it
 
 ⛔ **The bug class this exists for: a value or message on the wrong side of the

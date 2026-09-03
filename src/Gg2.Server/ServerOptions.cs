@@ -194,6 +194,38 @@ public sealed class ServerOptions
     public bool AnnounceToLobby { get; set; }
 
     /// <summary>
+    /// Whether to answer <c>REWARD_REQUEST</c> and relay reward auth.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>OFF by default, and this one is a deliberate departure from the
+    /// reference rather than a transcription of it.</b>
+    /// <c>processClientCommands.gml:320-325</c> answers every request
+    /// unconditionally; there is no server-side switch in GG2 at all. The switch
+    /// exists here because the handshake commits the server to opening outbound
+    /// TCP connections to a third party <em>carrying its players' user ids</em>,
+    /// and a headless binary has no hosting menu in which somebody agreed to
+    /// that.
+    /// <para>
+    /// The cost of leaving it off is exactly that nobody's badges, hats or capes
+    /// render. Nothing else: rewards are not observable simulation, and the
+    /// client neither retries nor blocks when a request goes unanswered.
+    /// </para>
+    /// </remarks>
+    public bool Rewards { get; set; }
+
+    /// <summary>The auth server's host. <c>AUTH_SERVER_HOST</c>.</summary>
+    /// <remarks>
+    /// Overridable so an operator can point this at their own auth service
+    /// rather than at ganggarrison.com — which is also the only way the flow can
+    /// be exercised end to end, since the real service must not be contacted
+    /// from this repo's tests.
+    /// </remarks>
+    public string AuthServerHost { get; set; } = GameConstants.AuthServerHost;
+
+    /// <summary>The auth server's port. <c>AUTH_SERVER_PORT</c>.</summary>
+    public int AuthServerPort { get; set; } = GameConstants.AuthServerPort;
+
+    /// <summary>
     /// Total bandwidth across all in-flight custom-map downloads, bytes/second.
     /// </summary>
     /// <remarks>

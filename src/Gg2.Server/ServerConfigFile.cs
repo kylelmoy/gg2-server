@@ -114,6 +114,15 @@ public static class ServerConfigFile
         // is not, and leaves this off.
         options.AnnounceToLobby = Bool(ini, "Settings", "UseLobby", options.AnnounceToLobby);
 
+        // ⚠️ No reference key to read: GG2 has no server-side rewards switch,
+        // because its server answers every request. `Rewards=1` is this port's
+        // own, for the same reason UseLobby's default is not the reference's —
+        // relaying player identities to a third party is a decision somebody has
+        // to make explicitly. `RewardKey`/`RewardId` under [Haxxy] are NOT read:
+        // those are the reference's HOST self-auth, and a headless server has no
+        // local player to decorate.
+        options.Rewards = Bool(ini, "Settings", "Rewards", options.Rewards);
+
         // --- [Server] --------------------------------------------------------
         options.ServerName = Text(ini, "Server", "ServerName", options.ServerName);
         options.WelcomeMessage = Text(ini, "Server", "WelcomeMessage", options.WelcomeMessage);

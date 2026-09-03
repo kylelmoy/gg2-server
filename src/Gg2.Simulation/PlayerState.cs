@@ -49,6 +49,27 @@ public struct PlayerState
     public bool Humiliated;
 
     /// <summary>
+    /// <c>player.queueJump</c>: this client asked for queued jumping, so holding
+    /// the jump key re-fires the moment it lands instead of needing a fresh
+    /// press.
+    /// </summary>
+    /// <remarks>
+    /// A client preference that reaches the server as <c>CLIENT_SETTINGS</c>
+    /// (<c>processClientCommands.gml:364-371</c>) and is <b>observable
+    /// simulation</b>, not decoration: <c>Character.events/Begin Step</c> reads
+    /// <c>player.queueJump</c> when it decides whether to jump, so every client
+    /// re-simulating this character needs the same value or its dead reckoning
+    /// diverges on every landing. That is why the reference broadcasts the
+    /// setting to everybody rather than keeping it on the one connection, and
+    /// why it rides in <c>FULL_UPDATE</c> as well.
+    /// <para>
+    /// <see cref="CharacterState.QueueJump"/> is the per-tick copy the physics
+    /// reads, mirrored the same way <see cref="Humiliated"/> is.
+    /// </para>
+    /// </remarks>
+    public bool QueueJump;
+
+    /// <summary>
     /// Whether this roster slot is driven by a bot rather than by a socket.
     /// </summary>
     /// <remarks>

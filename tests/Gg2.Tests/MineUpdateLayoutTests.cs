@@ -106,7 +106,8 @@ public sealed class MineUpdateLayoutTests
         }
 
         var writer = new NetWriter();
-        new StateUpdateWriter(match, Lookup).Write(writer, MessageType.FullUpdate);
+        new StateUpdateWriter(
+() => match, Lookup).Write(writer, MessageType.FullUpdate);
 
         // StateUpdateWriter.Write emits the message-type byte and
         // StateUpdateReader.Read starts at the payload — the tier is already a

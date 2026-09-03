@@ -47,6 +47,7 @@ public sealed class ServerStream
 {
     private readonly List<PlayerClass> _classes = [];
     private readonly List<string> _names = [];
+    private readonly List<Team> _teams = [];
 
     /// <summary>
     /// The <c>BALANCE</c> id that means "no player": the message is the notice
@@ -66,6 +67,27 @@ public sealed class ServerStream
 
     /// <summary>Roster names, in order.</summary>
     public IReadOnlyList<string> Names => _names;
+
+    /// <summary>
+    /// Roster teams, in order, as a CLIENT would believe them.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>This is the field that makes a client-disagreement bug visible, and
+    /// it was skipped for nine phases</b> — <c>PLAYER_CHANGETEAM</c> read the id
+    /// and did <c>Skip(1)</c> over the team. Nothing in the project asked what a
+    /// client thought anybody's team was, so nothing could notice the server
+    /// failing to tell it. <c>docs/PARITY.md</c>, "nothing compares what a client
+    /// was TOLD".
+    /// <para>
+    /// ⚠️ <b>Maintained by the reference's rules, not by mirroring the server</b>
+    /// — including the one that makes rotations dangerous: <c>CHANGE_MAP</c> on
+    /// area 1 sets <em>every</em> player to <see cref="Team.Spectator"/>
+    /// (<c>ClientBeginStep.gml:514-544</c>), so a server that re-teams anybody
+    /// afterwards and does not say so leaves this reader — and every real client
+    /// — believing they are a spectator.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyList<Team> Teams => _teams;
 
     /// <summary>The map named by the most recent <c>CHANGE_MAP</c>.</summary>
     public string? CurrentMap { get; private set; }
@@ -154,6 +176,16 @@ public sealed class ServerStream
             {
                 CurrentMap = reader.ReadString1();
                 reader.ReadString1(); // md5; empty means built-in
+
+                // ⚠️ ClientBeginStep.gml:514-544 — on area 1 the client wipes
+                // every player's stats and sets every team to TEAM_SPECTATOR,
+                // itself, without being told to. Reproduced here because a
+                // reader that did not would disagree with every real client
+                // about the one moment this is hardest to get right.
+                if (CurrentMapArea == 1)
+                    for (var i = 0; i < _teams.Count; i++)
+                        _teams[i] = Team.Spectator;
+
                 return Done(type, ref reader, start, text: CurrentMap);
             }
 
@@ -163,6 +195,12 @@ public sealed class ServerStream
                 var name = reader.ReadString1();
                 _names.Add(name);
                 _classes.Add(PlayerClass.Scout);
+
+                // ServerPlayerJoin carries only the name. A joining player is a
+                // spectator until a PLAYER_CHANGETEAM says otherwise, which is
+                // what Player.events/Create leaves them as.
+                _teams.Add(Team.Spectator);
+
                 return Done(type, ref reader, start, text: name);
             }
 
@@ -177,6 +215,7 @@ public sealed class ServerStream
                 {
                     _names.RemoveAt(id);
                     _classes.RemoveAt(id);
+                    _teams.RemoveAt(id);
                 }
 
                 return Done(type, ref reader, start, playerId: id);
@@ -194,6 +233,16 @@ public sealed class ServerStream
             }
 
             case MessageType.PlayerChangeTeam:
+            {
+                var id = reader.ReadUByte();
+                var team = (Team)reader.ReadUByte();
+
+                if (id < _teams.Count)
+                    _teams[id] = team;
+
+                return Done(type, ref reader, start, playerId: id);
+            }
+
             case MessageType.ChatBubble:
             case MessageType.ClientSettings:
             {
@@ -338,7 +387,24 @@ public sealed class ServerStream
             case MessageType.MapEnd:
             {
                 var next = reader.ReadString1();
-                reader.Skip(2); // winners, currentMapArea
+                reader.Skip(1); // winners
+
+                // ⛔ THE AREA COMES FROM HERE, and this reader used to skip it.
+                // <c>ClientBeginStep.gml:461-469</c> assigns
+                // <c>global.currentMapArea</c> out of MAP_END, ten seconds before
+                // the CHANGE_MAP that acts on it — and CHANGE_MAP carries only
+                // the map NAME, so this is the only place on the wire the area is
+                // ever stated after a join.
+                //
+                // ⚠️ Two things below depend on it and both were wrong on a
+                // multi-area map: the entity narrowing a reader does with
+                // ForArea, and the rule that a CHANGE_MAP wipes every team —
+                // which the client applies on area 1 ONLY. Pushing through
+                // cp_dirtbowl's three areas keeps everybody's team, and a reader
+                // stuck on area 1 would have cleared them and then disagreed with
+                // every real client about who was on which side.
+                CurrentMapArea = reader.ReadUByte();
+
                 return Done(type, ref reader, start, text: next);
             }
 

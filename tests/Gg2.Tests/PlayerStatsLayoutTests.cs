@@ -62,7 +62,8 @@ public sealed class PlayerStatsLayoutTests
             Scoring.Get(captured, slot, StatIndex.Points));
 
         var writer = new NetWriter();
-        new StateUpdateWriter(match, NoCharacters, null, null, Statistics)
+        new StateUpdateWriter(
+() => match, NoCharacters, null, null, Statistics)
             .Write(writer, MessageType.FullUpdate);
 
         // The writer emits the message-type byte and the reader starts at the
@@ -191,7 +192,8 @@ public sealed class PlayerStatsLayoutTests
         }
 
         var writer = new NetWriter();
-        new StateUpdateWriter(match, NoCharacters).Write(writer, MessageType.FullUpdate);
+        new StateUpdateWriter(
+() => match, NoCharacters).Write(writer, MessageType.FullUpdate);
 
         var reader = new NetReader(writer.WrittenSpan[1..]);
         PlayerClass[] classes = [PlayerClass.Scout, PlayerClass.Soldier];
