@@ -1,11 +1,7 @@
 using System.Buffers;
-using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using System.Text.Json;
-using Gg2.Protocol;
-using Gg2.Simulation;
 
 namespace Gg2.Server;
 
@@ -175,202 +171,16 @@ public sealed class ControlPort : IDisposable
         }
     }
 
-    private string Handle(string line)
-    {
-        JsonElement request;
-
-        try
-        {
-            request = JsonDocument.Parse(line).RootElement;
-        }
-        catch (JsonException e)
-        {
-            return Error($"not JSON: {e.Message}");
-        }
-
-        if (!request.TryGetProperty("cmd", out var cmd) || cmd.ValueKind != JsonValueKind.String)
-            return Error("no \"cmd\"");
-
-        try
-        {
-            return Dispatch(cmd.GetString()!, request);
-        }
-        catch (Exception e) when (e is ArgumentException or FormatException or InvalidOperationException)
-        {
-            return Error(e.Message);
-        }
-    }
-
-    private string Dispatch(string cmd, JsonElement request) => cmd switch
-    {
-        "ping" => Ok($"\"frame\":{_server.Frame}"),
-
-        "state" => State(),
-
-        "freeze" => Do(() => _server.Freeze()),
-
-        "resume" => Do(() => _server.Resume()),
-
-        "step" => Do(() => _server.StepSimulation(Int(request, "ticks", 1))),
-
-        "speed" => Do(() => _server.SetSpeed(Speed(request))),
-
-        "bots" => Do(() => _server.SetBotFill(Int(request, "fill", 0))),
-
-        "map" => _server.RequestMapChange(Text(request, "name"), Int(request, "area", 1))
-            ? Ok()
-            : Error("no such map, or a map change is already running"),
-
-        "teleport" => _server.Teleport(
-            Int(request, "slot", -1),
-            Double(request, "x"),
-            Double(request, "y"))
-            ? Ok()
-            : Error("no live character in that slot"),
-
-        "command" => Command(request),
-
-        _ => Error($"unknown cmd \"{cmd}\""),
-    };
-
-    private string Do(Action action)
-    {
-        action();
-        return Ok();
-    }
-
     /// <summary>
-    /// Submits a <see cref="PlayerCommand"/> on a slot's behalf.
+    /// Answers one line.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The whole point of this command: everything a client can do reaches
-    /// the server through one dispatch, and the control port uses that dispatch
-    /// rather than growing its own copy of each action.
+    /// ⛔ <b>Transport only.</b> Every verb, every reply and every error message
+    /// lives in <see cref="ControlCommands"/>, so that this port and the web
+    /// admin panel cannot drift into two slightly different control surfaces.
+    /// Do not add a <c>cmd</c> here.
     /// </remarks>
-    private string Command(JsonElement request)
-    {
-        var kindText = Text(request, "kind");
-
-        if (!Enum.TryParse<PlayerCommandKind>(kindText, ignoreCase: true, out var kind)
-            || kind == PlayerCommandKind.None)
-        {
-            return Error($"unknown command kind \"{kindText}\"");
-        }
-
-        var command = new PlayerCommand
-        {
-            Kind = kind,
-            Argument = (byte)Int(request, "argument", 0),
-        };
-
-        return _server.ExecuteFor(Int(request, "slot", -1), command)
-            ? Ok()
-            : Error("no such slot");
-    }
-
-    private string State()
-    {
-        var json = new StringBuilder();
-
-        json.Append("{\"ok\":true");
-        json.Append(",\"frame\":").Append(_server.Frame);
-        json.Append(",\"map\":\"").Append(Escape(_server.CurrentMap)).Append('"');
-        json.Append(",\"frozen\":").Append(_server.IsFrozen ? "true" : "false");
-        json.Append(",\"speed\":").Append(Number(_server.Options.SpeedMultiplier));
-        json.Append(",\"round\":{\"timer\":").Append(_server.RoundTimer);
-        json.Append(",\"decided\":").Append(_server.RoundDecided ? "true" : "false");
-        json.Append(",\"winner\":\"").Append(_server.RoundWinner).Append("\"}");
-        json.Append(",\"players\":[");
-
-        for (var slot = 0; slot < _server.RosterCount; slot++)
-        {
-            if (slot > 0)
-                json.Append(',');
-
-            json.Append("{\"slot\":").Append(slot);
-            json.Append(",\"team\":\"").Append(_server.TeamOf(slot)).Append('"');
-            json.Append(",\"class\":\"").Append(_server.ClassOf(slot)).Append('"');
-            json.Append(",\"bot\":").Append(
-                Gg2.Bots.ScriptedBot.Of(_server.SourceOf(slot)) is not null ? "true" : "false");
-            json.Append(",\"alive\":").Append(_server.IsAlive(slot) ? "true" : "false");
-
-            if (_server.TryGetExactPosition(slot, out var x, out var y, out var hp))
-            {
-                json.Append(",\"x\":").Append(Number(x));
-                json.Append(",\"y\":").Append(Number(y));
-                json.Append(",\"hp\":").Append(Number(hp));
-            }
-
-            json.Append('}');
-        }
-
-        json.Append("]}");
-        return json.ToString();
-    }
-
-    private static string Ok(string? extra = null) =>
-        extra is null ? "{\"ok\":true}" : "{\"ok\":true," + extra + "}";
-
-    private static string Error(string message) =>
-        "{\"ok\":false,\"error\":\"" + Escape(message) + "\"}";
-
-    /// <summary>
-    /// Escapes a string for a JSON literal.
-    /// </summary>
-    /// <remarks>
-    /// ⚠️ <b><see cref="JsonEncodedText"/> rather than three <c>Replace</c>
-    /// calls, and the difference is a reply that does not parse.</b> The
-    /// hand-rolled version handled backslash, quote and newline — and
-    /// <c>ArgumentOutOfRangeException.Message</c> is multi-line with a
-    /// <em>carriage return</em> in it, which is a raw control character inside a
-    /// JSON string and therefore invalid. So the port answered an invalid speed
-    /// with an unparseable error: the one reply a caller most needs to read.
-    /// Measured — it failed the test that sends <c>"value":0</c>.
-    /// </remarks>
-    private static string Escape(string value) => JsonEncodedText.Encode(value).ToString();
-
-    /// <remarks>
-    /// ⚠️ Invariant culture and "R", because a machine reads this. A decimal
-    /// comma would make the reply un-parseable on exactly the machines whose
-    /// locale uses one, and nowhere else — the worst kind of bug to be handed.
-    /// Infinity is not JSON, so an unpaced server reports its speed as the
-    /// string it is set with.
-    /// </remarks>
-    private static string Number(double value) =>
-        double.IsPositiveInfinity(value)
-            ? "\"max\""
-            : value.ToString("R", CultureInfo.InvariantCulture);
-
-    private static string Text(JsonElement request, string name) =>
-        request.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
-            ? value.GetString()!
-            : throw new ArgumentException($"\"{name}\" must be a string");
-
-    private static int Int(JsonElement request, string name, int fallback) =>
-        request.TryGetProperty(name, out var value) && value.TryGetInt32(out var number)
-            ? number
-            : fallback;
-
-    private static double Double(JsonElement request, string name) =>
-        request.TryGetProperty(name, out var value) && value.TryGetDouble(out var number)
-            ? number
-            : throw new ArgumentException($"\"{name}\" must be a number");
-
-    /// <summary>Accepts a number or the string <c>"max"</c>, as <c>--speed</c> does.</summary>
-    private static double Speed(JsonElement request)
-    {
-        if (!request.TryGetProperty("value", out var value))
-            throw new ArgumentException("\"value\" must be a number or \"max\"");
-
-        if (value.ValueKind == JsonValueKind.String)
-        {
-            return value.GetString()!.Equals("max", StringComparison.OrdinalIgnoreCase)
-                ? double.PositiveInfinity
-                : throw new ArgumentException("the only speed word is \"max\"");
-        }
-
-        return value.GetDouble();
-    }
+    private string Handle(string line) => ControlCommands.Dispatch(_server, line);
 
     public void Dispose()
     {

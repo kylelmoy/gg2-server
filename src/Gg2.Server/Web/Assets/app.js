@@ -1,0 +1,1546 @@
+/*
+ * gg2-server web admin.
+ *
+ * No framework and no build step — see WebAssets.cs for why. The page is small
+ * enough that a hundred lines of DOM plumbing beats a dependency that has to be
+ * vendored, pinned and served from the same assembly.
+ *
+ * Two rules hold the whole file together:
+ *
+ *   1. State comes in over ONE server-sent-events stream and is applied by
+ *      render(). Nothing else writes to the DOM from a timer, so the panel can
+ *      never show two halves of two different ticks.
+ *
+ *   2. Everything that CHANGES the server goes through send(), which posts one
+ *      command to /api/command and shows what came back. The command names and
+ *      their arguments are the control port's, unchanged — the browser is not a
+ *      second control surface, it is a client of the first one.
+ */
+'use strict';
+
+const $ = (id) => document.getElementById(id);
+
+/* ---------- transport ----------------------------------------------------- */
+
+let csrf = '';
+let stream = null;
+let retry = 1000;
+let state = null;
+let selected = -1;
+let logSeen = -1;
+
+/** One command to the server. Returns the parsed reply; never throws. */
+async function send(body, quiet) {
+  try {
+    const reply = await fetch('/api/command', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
+      body: JSON.stringify(body),
+    });
+
+    if (reply.status === 401) { showLogin(); return { ok: false, error: 'signed out' }; }
+
+    const json = await reply.json();
+
+    // A refusal is the interesting case and the server always explains itself,
+    // so it is shown whether or not the caller asked to be quiet.
+    if (!json.ok) toast(json.error || 'refused', 'bad');
+    else if (!quiet) toast(describe(body), 'good');
+
+    return json;
+  } catch (e) {
+    toast('the server did not answer', 'bad');
+    return { ok: false, error: String(e) };
+  }
+}
+
+function describe(body) {
+  switch (body.cmd) {
+    case 'freeze': return 'Frozen';
+    case 'resume': return 'Resumed';
+    case 'step': return `Stepped ${body.ticks} tick${body.ticks === 1 ? '' : 's'}`;
+    case 'speed': return `Speed ${body.value}×`;
+    case 'bots': return `Bot fill set to ${body.fill}`;
+    case 'map': return `Changing map to ${body.name}`;
+    case 'kick': return 'Kicked';
+    case 'teleport': return 'Teleported';
+    default: return 'Done';
+  }
+}
+
+/**
+ * Opens the event stream, and keeps it open.
+ *
+ * EventSource reconnects itself, but only while the server is answering; a
+ * server that has stopped needs the backoff below, and a session that has
+ * expired needs the page to go back to the login card rather than retry for
+ * ever.
+ */
+function connect() {
+  if (stream) stream.close();
+
+  live('connecting');
+  stream = new EventSource('/api/events');
+
+  stream.addEventListener('open', () => { retry = 1000; live('live'); });
+
+  stream.addEventListener('state', (event) => {
+    live('live');
+    render(JSON.parse(event.data));
+  });
+
+  stream.addEventListener('log', (event) => appendLog(JSON.parse(event.data)));
+  stream.addEventListener('perf', (event) => appendPerf(JSON.parse(event.data)));
+
+  stream.addEventListener('error', () => {
+    live('lost');
+    stream.close();
+
+    // ⚠️ Check the session before reconnecting. Without this a panel whose
+    // session expired hammers /api/events for ever and never tells the operator
+    // why nothing is updating.
+    fetch('/api/session')
+      .then((r) => r.json())
+      .then((s) => { if (!s.authenticated) showLogin(); else schedule(); })
+      .catch(schedule);
+  });
+}
+
+function schedule() {
+  setTimeout(connect, retry);
+  retry = Math.min(retry * 2, 15000);
+}
+
+function live(kind) {
+  $('live').dataset.state = kind;
+  $('live-text').textContent = kind === 'live' ? 'live' : kind === 'lost' ? 'reconnecting' : 'connecting';
+}
+
+/* ---------- rendering ------------------------------------------------------ */
+
+let lastRed = null;
+let lastBlue = null;
+let mapImage = null;
+let mapImageName = '';
+
+function render(next) {
+  // ⚠️ The panel must never white-screen on an unexpected payload. The server
+  // will not send a state event before it has a snapshot, and this is the second
+  // net for the same failure — a thrown exception here stops every later event
+  // from being applied and leaves a page that looks merely stale.
+  if (!next || !next.server) return;
+
+  const first = state === null;
+  const mapChanged = !state || state.map !== next.map;
+  state = next;
+
+  $('server-name').textContent = next.server.name;
+  $('server-port').textContent = `:${next.server.port}`;
+  chip('chip-map', next.map || '—');
+  chip('chip-mode', spaced(next.match.mode));
+  chip('chip-uptime', duration(next.server.uptimeSeconds));
+
+  banner(next);
+  scores(next);
+  tiles(next);
+  kpis();
+  roster(next);
+  objective(next);
+
+  if (mapChanged) loadMapImage(next.map);
+  drawMap();
+
+  if (first) { loadMaps(); loadSystem(); }
+}
+
+/**
+ * The pending map change.
+ *
+ * ⚠️ A map change is a ten-second countdown rather than an event — the server
+ * broadcasts MAP_END and loads the map afterwards — so the panel counts it down
+ * instead of showing a toast and then appearing to have done nothing.
+ */
+function banner(s) {
+  const node = $('banner');
+
+  if (!s.match.nextMap) { node.hidden = true; return; }
+
+  node.hidden = false;
+  node.replaceChildren('Changing map to ');
+
+  const name = document.createElement('b');
+  name.textContent = s.match.nextMap;
+  node.append(name, ` in ${Math.max(0, Math.ceil(s.match.changeIn / 30))}s`);
+}
+
+function chip(id, text) { $(id).querySelector('b').textContent = text; }
+
+function spaced(text) { return String(text).replace(/([a-z])([A-Z])/g, '$1 $2'); }
+
+function scores(s) {
+  const red = $('score-red');
+  const blue = $('score-blue');
+
+  red.textContent = s.match.redCaps;
+  blue.textContent = s.match.blueCaps;
+
+  if (lastRed !== null && s.match.redCaps > lastRed) bump(red);
+  if (lastBlue !== null && s.match.blueCaps > lastBlue) bump(blue);
+
+  lastRed = s.match.redCaps;
+  lastBlue = s.match.blueCaps;
+
+  const clock = $('clock');
+  clock.textContent = mmss(s.round.timer);
+  clock.classList.toggle('low', s.round.timer > 0 && s.round.timer < 30 * 60);
+
+  $('clock-sub').textContent = s.round.decided
+    ? (s.round.winner === 'Spectator' ? 'stalemate' : `${s.round.winner.toUpperCase()} wins`)
+    : `first to ${s.match.capLimit}`;
+
+  $('setup').hidden = s.match.setupTimer <= 0;
+  $('setup-time').textContent = mmss(s.match.setupTimer);
+}
+
+function bump(node) {
+  node.classList.remove('bump');
+  void node.offsetWidth;
+  node.classList.add('bump');
+}
+
+function tiles(s) {
+  const budget = s.server.tickBudgetMs || 33.3;
+  const share = Math.min(100, (s.server.tickMs / budget) * 100);
+
+  $('tile-tick').textContent = s.server.tickMs.toFixed(2);
+
+  const bar = $('tile-tick-bar');
+  bar.style.width = `${share}%`;
+  bar.className = share > 80 ? 'high' : share > 45 ? 'mid' : '';
+  $('tile-tick-note').textContent = `${share.toFixed(1)}% of ${budget.toFixed(1)}ms`;
+
+  const bots = s.players.filter((p) => p.bot).length;
+  const humans = s.players.filter((p) => p.connected).length;
+
+  $('tile-players').textContent = humans + bots;
+  $('tile-slots').textContent = `/ ${s.server.slots}`;
+  $('tile-bots').textContent = `${humans} human${humans === 1 ? '' : 's'}, ${bots} bot${bots === 1 ? '' : 's'}`;
+
+  $('tile-speed').textContent = s.speed === 'max' ? '∞' : s.speed;
+  $('tile-state').textContent = s.frozen ? 'frozen' : s.server.idle ? 'idle (2 Hz, nobody on)' : 'running';
+  $('tile-state').classList.toggle('warn', s.frozen);
+
+  $('tile-frame').textContent = s.frame.toLocaleString();
+  $('tile-area').textContent = s.match.areas > 1 ? `area ${s.match.area} of ${s.match.areas}` : '';
+
+  $('freeze').textContent = s.frozen ? 'Resume' : 'Freeze';
+  $('freeze').classList.toggle('btn-primary', !s.frozen);
+  $('step-1').disabled = !s.frozen;
+  $('step-30').disabled = !s.frozen;
+
+  // ⚠️ Scoped to #speed-seg. `.seg-btn` alone also matches the charts' range
+  // buttons, which have no data-speed — so this cleared their selection on every
+  // snapshot, and the click handler below made each of them ask "change the tick
+  // rate?".
+  for (const button of document.querySelectorAll('#speed-seg .seg-btn')) {
+    button.classList.toggle('is-on', String(s.speed) === button.dataset.speed);
+  }
+
+  $('speed-warn').hidden = String(s.speed) === '1';
+
+  const fill = $('bots');
+  if (document.activeElement !== fill) fill.value = s.server.botFill;
+
+  // ⚠️ Below --bots-min-humans the population manager's target is zero rather
+  // than the fill, so setting a bot count on an empty server can look like a
+  // button that does nothing. Say which it is.
+  const blocked = s.server.botFill > 0 && humans < s.server.botMinHumans;
+  const warn = $('bots-warn');
+
+  warn.hidden = !blocked;
+  warn.textContent = blocked
+    ? `No bots will spawn until ${s.server.botMinHumans} human`
+      + `${s.server.botMinHumans === 1 ? '' : 's'} are connected `
+      + '(--bots-min-humans). There are ' + humans + '.'
+    : '';
+}
+
+/**
+ * The roster table.
+ *
+ * ⚠️ Rebuilt wholesale five times a second, and that is fine: it is at most 48
+ * rows and the alternative — diffing by slot — gets the roster's own compaction
+ * wrong the moment somebody leaves, which is exactly the bug the server side of
+ * this project has a rule about.
+ */
+function roster(s) {
+  const filter = $('filter').value.trim().toLowerCase();
+  const body = $('roster');
+  const rows = document.createDocumentFragment();
+  let shown = 0;
+
+  for (const player of s.players) {
+    // Slot 0 is the reserved server player: it is never on a team, never alive,
+    // and showing it as a row of dashes only ever confuses.
+    if (player.slot === 0) continue;
+
+    if (filter && !player.name.toLowerCase().includes(filter)) continue;
+
+    shown++;
+    rows.appendChild(row(player));
+  }
+
+  body.replaceChildren(rows);
+  $('roster-empty').hidden = shown > 0;
+  $('roster-empty').textContent = filter ? 'No player matches that filter.' : 'Nobody is connected.';
+}
+
+function row(player) {
+  const tr = document.createElement('tr');
+  const team = player.team === 'Red' ? 'red' : player.team === 'Blue' ? 'blue' : 'spec';
+
+  tr.className = (player.alive ? '' : 'dead ') + (player.slot === selected ? 'is-selected' : '');
+  tr.dataset.slot = player.slot;
+
+  tr.appendChild(cell(String(player.slot), 'c-slot'));
+
+  const who = document.createElement('td');
+  who.className = 'c-name';
+  const wrap = document.createElement('div');
+  wrap.className = 'who';
+
+  const avatar = document.createElement('span');
+  avatar.className = `avatar ${team}`;
+  // ⚠️ The first LETTER OR DIGIT, not the first character: the bot names are
+  // "[BOT] 3" and a straight slice(0, 1) puts a bracket in every avatar.
+  avatar.textContent = ((player.name || '').match(/[a-z0-9]/i) || ['?'])[0].toUpperCase();
+  wrap.appendChild(avatar);
+
+  const name = document.createElement('span');
+  name.className = 'who-name';
+  // ⚠️ textContent, never innerHTML. A player's name is whatever they typed into
+  // their own client, and it reaches this page unfiltered.
+  name.textContent = player.name;
+
+  if (player.bot) name.appendChild(tag('BOT', 'bot'));
+  if (player.intel) name.appendChild(tag('INTEL', 'intel'));
+
+  wrap.appendChild(name);
+  who.appendChild(wrap);
+  if (player.address) who.title = player.address;
+  tr.appendChild(who);
+
+  tr.appendChild(cell(player.alive || player.team !== 'Spectator' ? player.class : '—', 'c-class'));
+  tr.appendChild(health(player));
+  tr.appendChild(cell(String(player.kills), 'c-num'));
+  tr.appendChild(cell(String(player.deaths), 'c-num'));
+  tr.appendChild(cell(String(player.caps), 'c-num'));
+  tr.appendChild(cell(String(player.points), 'c-num'));
+
+  const actions = document.createElement('td');
+  actions.className = 'c-act';
+
+  if (player.connected) {
+    const kick = document.createElement('button');
+    kick.className = 'mini';
+    kick.type = 'button';
+    kick.textContent = 'Kick';
+    kick.dataset.kick = player.slot;
+    actions.appendChild(kick);
+  }
+
+  tr.appendChild(actions);
+  return tr;
+}
+
+function tag(text, kind) {
+  const span = document.createElement('span');
+  span.className = `tag ${kind}`;
+  span.textContent = text;
+  return span;
+}
+
+function cell(text, className) {
+  const td = document.createElement('td');
+  td.className = className;
+  td.textContent = text;
+  return td;
+}
+
+function health(player) {
+  const td = document.createElement('td');
+  td.className = 'c-hp';
+
+  if (!player.alive) {
+    td.textContent = '—';
+    return td;
+  }
+
+  const hp = Math.max(0, Math.round(player.hp));
+  const wrap = document.createElement('div');
+  wrap.className = 'hp';
+
+  const bar = document.createElement('div');
+  bar.className = 'hp-bar';
+  const fill = document.createElement('span');
+
+  // The scale is the class's own maximum, which the state does not carry —
+  // 200 is the largest in the game (heavy), so the bar reads as "how much of the
+  // biggest health pool in GG2", which is the honest thing to show without
+  // inventing a per-class table the server has not sent.
+  fill.style.width = `${Math.min(100, (hp / 200) * 100)}%`;
+  fill.className = hp < 40 ? 'low' : hp < 90 ? 'hurt' : '';
+  bar.appendChild(fill);
+
+  const number = document.createElement('span');
+  number.className = 'hp-num';
+  number.textContent = hp;
+
+  wrap.append(bar, number);
+  td.appendChild(wrap);
+  return td;
+}
+
+function objective(s) {
+  const foot = $('objective');
+  const parts = [];
+
+  for (const [name, intel] of [['RED', s.redIntel], ['BLU', s.blueIntel]]) {
+    if (!intel.present) continue;
+
+    const carrier = intel.carrier >= 0 ? s.players[intel.carrier] : null;
+    const home = intel.x === intel.homeX && intel.y === intel.homeY;
+    const status = carrier ? `taken by ${carrier.name}` : home ? 'at base' : 'dropped';
+
+    parts.push(pill(`${name} intel`, status, name === 'RED' ? 'red' : 'blue'));
+  }
+
+  s.points.forEach((point, i) => {
+    const owner = point.owner === 'None' ? 'neutral' : point.owner.toUpperCase();
+    const node = pill(`point ${i + 1}`, owner, point.owner === 'Red' ? 'red' : point.owner === 'Blue' ? 'blue' : '');
+
+    if (point.capping !== 'None') {
+      const bar = document.createElement('span');
+      bar.className = 'pbar';
+      const fill = document.createElement('span');
+      fill.style.width = `${Math.min(100, point.progress * 100)}%`;
+      fill.style.background = point.capping === 'Red' ? 'var(--team-red)' : 'var(--team-blue)';
+      bar.appendChild(fill);
+      node.appendChild(bar);
+    }
+
+    parts.push(node);
+  });
+
+  foot.replaceChildren(...parts);
+}
+
+function pill(key, value, kind) {
+  const span = document.createElement('span');
+  span.className = `pill ${kind || ''}`;
+  span.append(key + ' ');
+  const b = document.createElement('b');
+  b.textContent = value;
+  span.appendChild(b);
+  return span;
+}
+
+/* ---------- the live map --------------------------------------------------- */
+
+function loadMapImage(name) {
+  if (!name || name === mapImageName) return;
+
+  mapImageName = name;
+  mapImage = null;
+
+  const image = new Image();
+  image.onload = () => { if (mapImageName === name) { mapImage = image; drawMap(); } };
+  image.onerror = () => { $('map-empty').textContent = `no image for ${name}`; };
+  image.src = `/api/map.png?name=${encodeURIComponent(name)}`;
+}
+
+/**
+ * Draws the map and everyone on it.
+ *
+ * ⚠️ World pixels are art pixels × 6 — GameConstants.CellSize, and the same
+ * factor LevelMap.Width applies — so the map PNG scaled to the world's width IS
+ * the coordinate system, with no fudge factor. If a dot is ever off by a
+ * constant, that is the number to look at.
+ */
+function drawMap() {
+  const canvas = $('map');
+  const world = state && state.match;
+
+  if (!world || !world.width || !world.height) return;
+
+  const scale = Math.min(2, 1200 / world.width);
+  const pixels = Math.min(2, window.devicePixelRatio || 1);
+
+  canvas.width = Math.round(world.width * scale * pixels);
+  canvas.height = Math.round(world.height * scale * pixels);
+  canvas.style.aspectRatio = `${world.width} / ${world.height}`;
+
+  // ⚠️ Bound the card by capping the WIDTH at whatever gives the wanted height,
+  // never by capping the height: a canvas stretches its bitmap to fill the box
+  // CSS gives it, so a max-height would distort the map and put every dot in the
+  // wrong place. cp_dirtbowl is three areas stacked and is the case that needs
+  // it.
+  canvas.style.maxWidth = `min(100%, ${(62 * world.width / world.height).toFixed(2)}vh)`;
+
+  const g = canvas.getContext('2d');
+  g.setTransform(scale * pixels, 0, 0, scale * pixels, 0, 0);
+  g.clearRect(0, 0, world.width, world.height);
+
+  // ⚠️ Markers are sized in CSS pixels and converted back into world units, not
+  // drawn at their world size. ctf_truefort is 5346 world pixels wide, so a
+  // 9-unit dot on a canvas scaled to fit is ONE screen pixel — which is what
+  // this looked like before, and reads as "the panel cannot see the players".
+  const unit = 1 / scale;
+
+  if (mapImage) {
+    g.imageSmoothingEnabled = false;
+    g.globalAlpha = 0.85;
+    g.drawImage(mapImage, 0, 0, world.width, world.height);
+    g.globalAlpha = 1;
+    $('map-empty').hidden = true;
+  } else {
+    $('map-empty').hidden = false;
+  }
+
+  for (const [intel, colour] of [
+    [state.redIntel, token('--team-red', '#e2564f')],
+    [state.blueIntel, token('--team-blue', '#4f92dc')],
+  ]) {
+    if (!intel.present || intel.carrier >= 0) continue;
+    const home = intel.x === intel.homeX && intel.y === intel.homeY;
+    briefcase(g, intel.x, intel.y, colour, home, unit);
+  }
+
+  for (const player of state.players) {
+    if (!player.alive || player.x === undefined) continue;
+    dot(g, player, unit);
+  }
+}
+
+function briefcase(g, x, y, colour, home, unit) {
+  const w = 6 * unit;
+  const h = 5 * unit;
+
+  g.save();
+  g.translate(x, y);
+  g.fillStyle = colour;
+  g.globalAlpha = home ? 0.55 : 1;
+  g.fillRect(-w, -h, w * 2, h * 2);
+  g.strokeStyle = EDGE();
+  g.lineWidth = 1.5 * unit;
+  g.strokeRect(-w, -h, w * 2, h * 2);
+  g.restore();
+}
+
+function dot(g, player, unit) {
+  const colour = player.team === 'Red' ? token('--team-red', '#e2564f')
+    : player.team === 'Blue' ? token('--team-blue', '#4f92dc')
+    : INK_3();
+
+  g.save();
+  g.translate(player.x, player.y);
+
+  if (player.slot === selected) {
+    g.beginPath();
+    g.arc(0, 0, 11 * unit, 0, Math.PI * 2);
+    g.strokeStyle = token('--accent', '#c49ff9');
+    g.lineWidth = 2 * unit;
+    g.stroke();
+  }
+
+  g.beginPath();
+  g.arc(0, 0, 5.5 * unit, 0, Math.PI * 2);
+  g.fillStyle = colour;
+  g.fill();
+  g.strokeStyle = EDGE();
+  g.lineWidth = 1.75 * unit;
+  g.stroke();
+
+  if (player.bot) {
+    g.beginPath();
+    g.arc(0, 0, 2 * unit, 0, Math.PI * 2);
+    g.fillStyle = EDGE();
+    g.fill();
+  }
+
+  if (player.intel) {
+    g.fillStyle = token('--warning', '#f7b750');
+    g.fillRect(4 * unit, -10 * unit, 6 * unit, 5 * unit);
+  }
+
+  g.restore();
+}
+
+/** Canvas pixel → world pixel, for the tooltip and for click-to-teleport. */
+function toWorld(event) {
+  const canvas = $('map');
+  const box = canvas.getBoundingClientRect();
+
+  return {
+    x: ((event.clientX - box.left) / box.width) * state.match.width,
+    y: ((event.clientY - box.top) / box.height) * state.match.height,
+  };
+}
+
+/* ---------- performance charts ---------------------------------------------
+ *
+ * Six small multiples on one time axis, fed by the `perf` event. The reasons
+ * behind the shape of this section, in the order somebody would question them:
+ *
+ *   - **One axis per chart, never two.** Working set and managed heap share a
+ *     chart because they share a unit; tick time and CPU do not and never will.
+ *     A second y-scale invents a correlation that is not in the data.
+ *   - **Small multiples rather than one crowded plot**, because the question is
+ *     "which of these moved at the same instant" and a shared time axis with a
+ *     shared crosshair answers it better than six series in one frame.
+ *   - **The colors are the data-viz palette's dark steps, validated against this
+ *     card's surface** (aqua/orange/violet: worst CVD ΔE 9.4, worst
+ *     normal-vision ΔE 24.6, all ≥ 3:1). ⚠️ Deliberately NOT the team colors —
+ *     red and blue mean RED and BLU everywhere else on this page.
+ *   - **Late ticks wear the status warning color**, because that series means
+ *     "something is wrong" rather than "series four". Its title carries the
+ *     label, so the color is never alone.
+ */
+
+const SERIES = {
+  aqua: '#199e70',
+  orange: '#d95926',
+  violet: '#9085e9',
+
+  // ⚠️ The THEME's warning, not the viz palette's near-identical amber. Late
+  // ticks are the one series that means "something is wrong", and the panel
+  // says that in one colour — the live pill, the map-change banner, the tile
+  // notes, the log. Legal here because that chart is a single series, so no
+  // adjacent-pair check applies; only contrast, which is 9.98:1 on --surface.
+  warning: () => token('--warning', '#f7b750'),
+};
+
+/**
+ * One entry per chart: what it plots, in what unit, and how it is scaled.
+ *
+ * `floor` stops an idle server's noise being drawn as mountains — without it a
+ * tick graph that never leaves 0.1ms fills the frame and looks alarming.
+ */
+const CHARTS = [
+  {
+    key: 'tick',
+    title: 'Tick time',
+    unit: 'ms',
+    floor: 5,
+    digits: 2,
+    rule: (s) => s.tickBudget,
+    ruleLabel: (ms) => `${ms.toFixed(1)}ms budget`,
+    series: [
+      { field: 'tickMean', label: 'mean', color: SERIES.aqua, fill: true },
+      { field: 'tickPeak', label: 'worst', color: SERIES.orange },
+    ],
+  },
+  {
+    key: 'cpu',
+    title: 'CPU',
+    unit: '% of one core, 5s',
+    floor: 10,
+    digits: 1,
+    series: [{ field: 'cpu', label: 'cpu', color: SERIES.aqua, fill: true }],
+  },
+  {
+    key: 'mem',
+    title: 'Memory',
+    unit: 'MB',
+    floor: 64,
+    digits: 0,
+    series: [
+      { field: 'rss', label: 'resident', color: SERIES.aqua, fill: true },
+      { field: 'heap', label: 'managed heap', color: SERIES.violet },
+    ],
+  },
+  {
+    key: 'late',
+    title: 'Late ticks',
+    unit: 'per second',
+    floor: 2,
+    digits: 0,
+    series: [{ field: 'late', label: 'late', color: SERIES.warning, fill: true }],
+    // (SERIES.warning is a function; resolve() below calls it.)
+  },
+  {
+    key: 'net',
+    title: 'Sent',
+    unit: 'KB/s',
+    floor: 8,
+    digits: 1,
+    series: [{ field: 'bytes', label: 'out', color: SERIES.aqua, fill: true, scale: 1 / 1024 }],
+  },
+  {
+    key: 'load',
+    title: 'Load',
+    unit: 'count',
+    floor: 4,
+    digits: 0,
+    series: [
+      { field: 'characters', label: 'alive', color: SERIES.aqua, fill: true },
+      { field: 'bots', label: 'bots', color: SERIES.orange },
+      { field: 'humans', label: 'humans', color: SERIES.violet },
+    ],
+  },
+];
+
+/**
+ * A theme token, read once out of the stylesheet.
+ *
+ * ⚠️ <canvas> cannot use a CSS custom property, so every colour drawn on one has
+ * to be resolved to a string first. Reading them from :root rather than
+ * repeating the hex keeps ONE source of truth — the theme block in app.css —
+ * and means the map and the charts re-theme with everything else. Canvas
+ * accepts oklch() directly in every browser that supports the property at all,
+ * which is the same browsers this stylesheet already requires.
+ */
+const THEME = {};
+
+function token(name, fallback) {
+  if (THEME[name] === undefined) {
+    const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    THEME[name] = value || fallback;
+  }
+
+  return THEME[name];
+}
+
+const INK_3 = () => token('--muted', '#a29ea8');
+const GRID = () => token('--separator', '#222123');
+const SURFACE = () => token('--surface', '#19181a');
+const EDGE = () => token('--background', '#060507');
+
+let perf = [];
+let perfSeen = -1;
+let range = 300;
+let hover = -1;
+
+/** Builds the perf card once, then only redraws. */
+function buildCharts() {
+  const host = $('charts');
+
+  if (host.childElementCount > 0) return;
+
+  for (const chart of CHARTS) {
+    const figure = document.createElement('figure');
+    figure.className = 'chart';
+
+    const caption = document.createElement('figcaption');
+    const title = document.createElement('span');
+    title.className = 'chart-title';
+    title.textContent = `${chart.title} · ${chart.unit}`;
+
+    const value = document.createElement('span');
+    value.className = 'chart-value';
+    value.id = `v-${chart.key}`;
+    value.textContent = '—';
+
+    caption.append(title, value);
+    figure.appendChild(caption);
+
+    // ⚠️ A legend only for two or more series. One series has one color, and the
+    // caption already names it; a box with a single swatch restates the title.
+    if (chart.series.length > 1) {
+      const legend = document.createElement('div');
+      legend.className = 'chart-legend';
+
+      for (const series of chart.series) {
+        const item = document.createElement('span');
+        const key = document.createElement('i');
+        key.style.background = typeof series.color === 'function' ? series.color() : series.color;
+        item.append(key, series.label);
+        legend.appendChild(item);
+      }
+
+      figure.appendChild(legend);
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.className = 'chart-canvas';
+    canvas.dataset.chart = chart.key;
+    canvas.setAttribute('role', 'img');
+    canvas.setAttribute('aria-label',
+      `${chart.title} in ${chart.unit} over the last five minutes`);
+
+    figure.appendChild(canvas);
+    host.appendChild(figure);
+  }
+
+  host.addEventListener('mousemove', onChartHover);
+  host.addEventListener('mouseleave', () => { hover = -1; drawCharts(); });
+
+  for (const button of $('range-seg').querySelectorAll('.seg-btn')) {
+    button.addEventListener('click', () => {
+      range = Number(button.dataset.range);
+
+      for (const other of $('range-seg').querySelectorAll('.seg-btn'))
+        other.classList.toggle('is-on', other === button);
+
+      $('axis-from').textContent = `${range / 60} minute${range === 60 ? '' : 's'} ago`;
+      drawCharts();
+    });
+  }
+}
+
+/**
+ * Folds a `perf` event's rows into the history.
+ *
+ * ⚠️ Keyed on `seq` and never on arrival order: the stream can re-send a sample
+ * that landed while it was serialising the last batch, and the server says so
+ * rather than taking a lock on the tick thread's writer.
+ */
+function appendPerf(payload) {
+  const index = {};
+  payload.fields.forEach((name, i) => { index[name] = i; });
+
+  for (const row of payload.samples) {
+    const seq = row[index.seq];
+
+    if (seq <= perfSeen) continue;
+    perfSeen = seq;
+
+    const sample = {};
+    for (const name of payload.fields) sample[name] = row[index[name]];
+    perf.push(sample);
+  }
+
+  // The server keeps five minutes; so does this, so a tab left open for a day
+  // does not grow without bound.
+  if (perf.length > 300) perf = perf.slice(-300);
+
+  drawCharts();
+  kpis();
+}
+
+function windowed() {
+  return perf.slice(-range);
+}
+
+function drawCharts() {
+  const data = windowed();
+
+  for (const chart of CHARTS)
+    drawChart(chart, data);
+
+  const at = $('chart-at');
+
+  if (hover >= 0 && data[hover]) {
+    at.hidden = false;
+    at.textContent = new Date(data[hover].at).toLocaleTimeString();
+  } else {
+    at.hidden = true;
+  }
+}
+
+/** 1, 2 or 5 × 10ⁿ at or above `value` — so the top gridline is a round number. */
+function niceCeil(value) {
+  if (!(value > 0)) return 1;
+
+  const power = 10 ** Math.floor(Math.log10(value));
+  const step = value / power;
+
+  return (step <= 1 ? 1 : step <= 2 ? 2 : step <= 5 ? 5 : 10) * power;
+}
+
+function drawChart(chart, data) {
+  const canvas = document.querySelector(`canvas[data-chart="${chart.key}"]`);
+  if (!canvas) return;
+
+  const pixels = Math.min(2, window.devicePixelRatio || 1);
+  const width = canvas.clientWidth;
+  const height = canvas.clientHeight;
+
+  if (width === 0) return;
+
+  canvas.width = Math.round(width * pixels);
+  canvas.height = Math.round(height * pixels);
+
+  const g = canvas.getContext('2d');
+  g.setTransform(pixels, 0, 0, pixels, 0, 0);
+  g.clearRect(0, 0, width, height);
+
+  const pad = { top: 10, right: 4, bottom: 4, left: 4 };
+  const plotW = width - pad.left - pad.right;
+  const plotH = height - pad.top - pad.bottom;
+
+  const value = (sample, series) => (sample[series.field] || 0) * (series.scale || 1);
+
+  // A series colour may be a literal or a token lookup deferred until the
+  // stylesheet has applied. One place unwraps it.
+  const colour = (series) => (typeof series.color === 'function' ? series.color() : series.color);
+
+  let peak = chart.floor;
+
+  for (const sample of data) {
+    for (const series of chart.series)
+      peak = Math.max(peak, value(sample, series));
+  }
+
+  // ⚠️ The budget joins the SCALE only once the data is within a quarter of it,
+  // and this is not cosmetic. Forcing 33.3ms into a chart whose real values are
+  // 0.1-0.5ms flattens every one of them onto the baseline: the reference line
+  // destroys the resolution of the thing it is a reference for. So a healthy
+  // server's chart zooms into its own range, and the budget line appears — with
+  // its label — exactly when a tick starts getting near it, which is when it is
+  // worth looking at.
+  const rule = chart.rule && data.length > 0 ? chart.rule(data[data.length - 1]) : 0;
+
+  if (rule > 0 && peak > rule * 0.25) peak = Math.max(peak, rule);
+
+  const top = niceCeil(peak);
+  const x = (i) => pad.left + (data.length < 2 ? plotW : (i / (data.length - 1)) * plotW);
+  const y = (v) => pad.top + plotH - Math.min(1, v / top) * plotH;
+
+  // Grid: hairline, solid, one step off the surface, and recessive. Two lines —
+  // the top and the middle — because the baseline is the plot's own floor.
+  g.strokeStyle = GRID();
+  g.lineWidth = 1;
+
+  for (const fraction of [0, 0.5, 1]) {
+    const line = Math.round(pad.top + plotH * fraction) + 0.5;
+    g.beginPath();
+    g.moveTo(pad.left, line);
+    g.lineTo(pad.left + plotW, line);
+    g.stroke();
+  }
+
+  g.fillStyle = INK_3();
+  g.font = '10px ui-monospace, Consolas, monospace';
+  g.textBaseline = 'alphabetic';
+  // ⚠️ The axis label rounds harder than the readout. `niceCeil` only ever
+  // returns 1, 2 or 5 × 10ⁿ, so "50.00" was two decimal places of nothing.
+  g.fillText(top >= 10 ? String(top) : top.toFixed(chart.digits), pad.left + 1, pad.top - 2);
+
+  if (data.length === 0) {
+    g.fillText('waiting for the first sample', pad.left + 1, pad.top + plotH / 2);
+    return;
+  }
+
+  // The reference line — the tick budget — is solid and in text ink, not a
+  // series color and not dashed: it is chrome that happens to be horizontal, and
+  // a dashed rule reads as noise.
+  if (rule > 0) {
+    const line = Math.round(y(rule)) + 0.5;
+
+    if (line > pad.top && line < pad.top + plotH) {
+      g.strokeStyle = token('--segment', '#48454b');
+      g.beginPath();
+      g.moveTo(pad.left, line);
+      g.lineTo(pad.left + plotW, line);
+      g.stroke();
+
+      const label = chart.ruleLabel(rule);
+      g.fillStyle = INK_3();
+      g.fillText(label, pad.left + plotW - g.measureText(label).width - 1, line - 3);
+    }
+  }
+
+  for (const series of chart.series) {
+    if (series.fill) {
+      g.beginPath();
+      g.moveTo(x(0), pad.top + plotH);
+
+      data.forEach((sample, i) => g.lineTo(x(i), y(value(sample, series))));
+
+      g.lineTo(x(data.length - 1), pad.top + plotH);
+      g.closePath();
+      g.fillStyle = colour(series);
+
+      // A wash, never a saturated block: the area says "this is the one to read
+      // first", the line carries the shape.
+      g.globalAlpha = 0.12;
+      g.fill();
+      g.globalAlpha = 1;
+    }
+
+    g.beginPath();
+    data.forEach((sample, i) => {
+      const at = y(value(sample, series));
+      if (i === 0) g.moveTo(x(i), at); else g.lineTo(x(i), at);
+    });
+
+    g.strokeStyle = colour(series);
+    g.lineWidth = 2;
+    g.lineJoin = 'round';
+    g.lineCap = 'round';
+    g.stroke();
+
+    // The end marker, with a 2px ring in the surface color so it stays legible
+    // where two series cross.
+    const last = data.length - 1;
+    g.beginPath();
+    g.arc(x(last), y(value(data[last], series)), 3, 0, Math.PI * 2);
+    g.fillStyle = colour(series);
+    g.fill();
+    g.strokeStyle = SURFACE();
+    g.lineWidth = 2;
+    g.stroke();
+  }
+
+  if (hover >= 0 && hover < data.length) {
+    const line = Math.round(x(hover)) + 0.5;
+
+    g.strokeStyle = token('--segment', '#48454b');
+    g.lineWidth = 1;
+    g.beginPath();
+    g.moveTo(line, pad.top);
+    g.lineTo(line, pad.top + plotH);
+    g.stroke();
+
+    for (const series of chart.series) {
+      g.beginPath();
+      g.arc(line, y(value(data[hover], series)), 3.5, 0, Math.PI * 2);
+      g.fillStyle = colour(series);
+      g.fill();
+      g.strokeStyle = SURFACE();
+      g.lineWidth = 2;
+      g.stroke();
+    }
+  }
+
+  // The headline number: the hovered sample if there is one, otherwise the
+  // newest. Direct labels on a 300-point line would be chaos, so the caption is
+  // where every value in this chart gets read.
+  const shown = data[hover >= 0 && hover < data.length ? hover : data.length - 1];
+  const readout = chart.series
+    .map((series) => format(value(shown, series), chart.digits))
+    .join(' / ');
+
+  $(`v-${chart.key}`).textContent = readout;
+}
+
+function format(value, digits) {
+  return value >= 1000
+    ? Math.round(value).toLocaleString()
+    : value.toFixed(digits);
+}
+
+function onChartHover(event) {
+  const canvas = event.target.closest('.chart-canvas');
+  if (!canvas) return;
+
+  const data = windowed();
+  if (data.length === 0) return;
+
+  const box = canvas.getBoundingClientRect();
+  const fraction = (event.clientX - box.left - 4) / Math.max(1, box.width - 8);
+
+  hover = Math.max(0, Math.min(data.length - 1, Math.round(fraction * (data.length - 1))));
+  drawCharts();
+}
+
+/** The running totals beside the graphs. */
+function kpis() {
+  const last = perf[perf.length - 1];
+  if (!last || !state) return;
+
+  $('kpi-rate').textContent = last.ticks;
+  $('kpi-gc').textContent = last.gc;
+
+  const late = $('kpi-late');
+  late.textContent = state.server.lateTicks.toLocaleString();
+  late.classList.toggle('warn', state.server.lateTicks > 0);
+
+  $('kpi-worst').textContent = state.server.worstOverrunMs > 0
+    ? `+${state.server.worstOverrunMs.toFixed(1)}ms`
+    : 'none';
+
+  $('kpi-sent').textContent = bytes(state.server.bytesSent);
+}
+
+function bytes(value) {
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+  if (value < 1024 * 1024 * 1024) return `${(value / 1024 / 1024).toFixed(1)} MB`;
+  return `${(value / 1024 / 1024 / 1024).toFixed(2)} GB`;
+}
+
+/* ---------- log ------------------------------------------------------------ */
+
+function appendLog(lines) {
+  const box = $('log');
+  const follow = $('log-follow').checked;
+  const atEnd = box.scrollTop + box.clientHeight >= box.scrollHeight - 30;
+
+  for (const line of lines) {
+    if (line.seq <= logSeen) continue;
+    logSeen = line.seq;
+
+    const node = document.createElement('div');
+    node.className = 'log-line new' + (/warn|error|fail|late|drop/i.test(line.text) ? ' warn' : '');
+
+    const time = document.createElement('span');
+    time.className = 'log-time';
+    time.textContent = new Date(line.at).toLocaleTimeString();
+
+    const text = document.createElement('span');
+    text.className = 'log-text';
+    text.textContent = line.text;
+
+    node.append(time, text);
+    box.appendChild(node);
+  }
+
+  while (box.childElementCount > 600) box.removeChild(box.firstChild);
+  if (follow && atEnd) box.scrollTop = box.scrollHeight;
+}
+
+/* ---------- system info -----------------------------------------------------
+ *
+ * Static-ish reference: what the server is running ON, as against the graphs
+ * above, which are how it is doing. Fetched once at sign-in so the collapsed
+ * summary can say something useful, and again whenever the section is opened,
+ * because half of it (memory, uptimes, threads, GC counts) moves.
+ */
+
+async function loadSystem(force) {
+  try {
+    const info = await (await fetch('/api/system')).json();
+    if (!info.ok) return;
+
+    renderSystem(info);
+  } catch {
+    if (force) $('sys-body').replaceChildren(hint('the server did not answer'));
+  }
+}
+
+function hint(text) {
+  const p = document.createElement('p');
+  p.className = 'hint';
+  p.textContent = text;
+  return p;
+}
+
+/** One `<dt>`/`<dd>` pair. A null value reads "unknown" rather than vanishing. */
+function fact(list, name, value, className) {
+  const dt = document.createElement('dt');
+  dt.textContent = name;
+
+  const dd = document.createElement('dd');
+
+  if (value === null || value === undefined || value === '') {
+    dd.textContent = 'unknown';
+    dd.className = 'dim';
+  } else if (value instanceof Node) {
+    dd.appendChild(value);
+  } else {
+    dd.textContent = value;
+  }
+
+  if (className) dd.classList.add(className);
+
+  list.append(dt, dd);
+}
+
+function group(title, build, wide) {
+  const box = document.createElement('div');
+  box.className = 'sys-group' + (wide ? ' wide' : '');
+
+  const heading = document.createElement('h3');
+  heading.textContent = title;
+
+  const list = document.createElement('dl');
+  build(list);
+
+  box.append(heading, list);
+  return box;
+}
+
+function badge(text, kind) {
+  const span = document.createElement('span');
+  span.className = 'sys-badge' + (kind ? ` ${kind}` : '');
+  span.textContent = text;
+  return span;
+}
+
+function hertz(mhz, nominal) {
+  if (mhz === null || mhz === undefined) return null;
+
+  const value = mhz >= 1000 ? `${(mhz / 1000).toFixed(2)} GHz` : `${mhz} MHz`;
+
+  // ⚠️ The two platforms mean different things by this and the panel says so:
+  // Windows records the clock at boot, Linux reports what core 0 is doing right
+  // now — which on a shared VPS moves between requests.
+  return `${value} ${nominal ? '(nominal)' : '(now)'}`;
+}
+
+function renderSystem(info) {
+  const { os, cpu, memory, runtime, paths, disk } = info;
+
+  // The collapsed one-liner. Enough to answer "what am I on" without opening it.
+  $('sys-peek').textContent = [
+    os.description.split(' ').slice(0, 2).join(' '),
+    `${cpu.logicalCores} core${cpu.logicalCores === 1 ? '' : 's'}`,
+    memory.totalBytes ? bytes(memory.totalBytes) : null,
+    runtime.build === 'Debug' ? 'DEBUG BUILD' : null,
+  ].filter(Boolean).join(' · ');
+
+  $('sys-body').replaceChildren(
+    group('Operating system', (l) => {
+      fact(l, 'os', os.description);
+      fact(l, 'architecture', os.architecture);
+      fact(l, 'host', os.machine);
+      fact(l, 'uptime', duration(os.uptimeSeconds));
+    }),
+
+    group('Processor', (l) => {
+      fact(l, 'model', cpu.model);
+      fact(l, 'clock', hertz(cpu.megahertz, cpu.clockIsNominal));
+
+      // ⚠️ Logical, and what the RUNTIME sees — on a VPS with a CPU quota that
+      // is not the host's core count, and it is the one that explains the tick.
+      fact(l, 'logical cores', cpu.logicalCores);
+    }),
+
+    group('Memory', (l) => {
+      fact(l, 'total', memory.totalBytes === null ? null : bytes(memory.totalBytes));
+      fact(l, 'available', memory.availableBytes === null ? null : bytes(memory.availableBytes));
+
+      // Says whether the two figures above are the container's or the host's.
+      fact(l, 'reported by', memory.source);
+      fact(l, 'this process', bytes(memory.processBytes));
+      fact(l, 'managed heap', bytes(memory.managedBytes));
+    }),
+
+    group('Runtime', (l) => {
+      fact(l, 'framework', runtime.framework);
+      fact(l, 'identifier', runtime.identifier);
+      fact(l, 'build', badge(runtime.build, runtime.build === 'Debug' ? 'debug' : null));
+      fact(l, 'gc', `${runtime.serverGc ? 'server' : 'workstation'}, `
+        + `${runtime.concurrentGc ? 'concurrent' : 'non-concurrent'}`);
+      fact(l, 'collections', runtime.collections.join(' / '));
+      fact(l, 'threads', runtime.threads);
+      fact(l, 'process', `pid ${runtime.processId}, up ${duration(runtime.processUptimeSeconds)}`);
+      fact(l, 'timer', runtime.timerResolution);
+    }),
+
+    group('Storage', (l) => {
+      if (disk) {
+        fact(l, 'mount', disk.mount, 'path');
+        fact(l, 'free', `${bytes(disk.freeBytes)} of ${bytes(disk.totalBytes)}`, 'path');
+      }
+
+      fact(l, 'maps', paths.maps, 'path');
+      fact(l, 'nav', paths.nav, 'path');
+      fact(l, 'recordings', paths.recordings, 'path');
+    }, true),
+  );
+}
+
+/* ---------- maps ----------------------------------------------------------- */
+
+async function loadMaps() {
+  try {
+    const list = await (await fetch('/api/maps')).json();
+    if (!list.ok) return;
+
+    $('map-list').replaceChildren(...list.maps.map((name) => {
+      const option = document.createElement('option');
+      option.value = name;
+      return option;
+    }));
+
+    $('rotation').hidden = list.rotation.length === 0;
+    $('rotation-list').replaceChildren(...list.rotation.map((name) => {
+      const node = document.createElement('span');
+      node.className = 'rot' + (state && name === state.map ? ' is-now' : '');
+      node.textContent = name;
+      return node;
+    }));
+  } catch { /* the panel is still usable without the map list */ }
+}
+
+/* ---------- toasts + confirm ----------------------------------------------- */
+
+function toast(text, kind) {
+  const node = document.createElement('div');
+  node.className = `toast ${kind || ''}`;
+  node.textContent = text;
+  $('toasts').appendChild(node);
+
+  setTimeout(() => {
+    node.classList.add('out');
+    setTimeout(() => node.remove(), 220);
+  }, 3400);
+}
+
+function ask(title, body) {
+  return new Promise((resolve) => {
+    const dialog = $('confirm');
+    $('confirm-title').textContent = title;
+    $('confirm-body').textContent = body;
+
+    const finish = (answer) => {
+      dialog.close();
+      $('confirm-yes').onclick = null;
+      $('confirm-no').onclick = null;
+      resolve(answer);
+    };
+
+    $('confirm-yes').onclick = () => finish(true);
+    $('confirm-no').onclick = () => finish(false);
+    dialog.oncancel = () => finish(false);
+    dialog.showModal();
+  });
+}
+
+/* ---------- formatting ------------------------------------------------------ */
+
+function mmss(ticks) {
+  if (ticks <= 0) return '--:--';
+  const seconds = Math.floor(ticks / 30);
+  return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
+function duration(seconds) {
+  const s = Math.floor(seconds);
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
+  return `${Math.floor(s / 86400)}d ${Math.floor((s % 86400) / 3600)}h`;
+}
+
+/* ---------- wiring ---------------------------------------------------------- */
+
+function showLogin() {
+  if (stream) { stream.close(); stream = null; }
+  $('boot').hidden = true;
+  $('app').hidden = true;
+  $('login').hidden = false;
+  $('password').focus();
+}
+
+function showApp() {
+  $('boot').hidden = true;
+  $('login').hidden = true;
+  $('app').hidden = false;
+  buildCharts();
+  connect();
+  refreshLog();
+}
+
+async function refreshLog() {
+  try {
+    const log = await (await fetch('/api/log')).json();
+    if (log.ok) appendLog(log.lines);
+  } catch { /* the stream will carry the rest */ }
+}
+
+$('login-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+
+  const button = $('login-button');
+  const error = $('login-error');
+
+  button.disabled = true;
+  error.hidden = true;
+
+  try {
+    const reply = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: $('password').value }),
+    });
+
+    const json = await reply.json();
+
+    if (json.ok) {
+      csrf = json.csrf;
+      $('password').value = '';
+      showApp();
+      return;
+    }
+
+    error.textContent = json.error || 'wrong password';
+    error.hidden = false;
+    $('login-form').classList.remove('shake');
+    void $('login-form').offsetWidth;
+    $('login-form').classList.add('shake');
+    $('password').select();
+  } catch {
+    error.textContent = 'the server did not answer';
+    error.hidden = false;
+  } finally {
+    button.disabled = false;
+  }
+});
+
+$('logout').addEventListener('click', async () => {
+  await fetch('/api/logout', { method: 'POST', headers: { 'X-CSRF-Token': csrf } });
+  csrf = '';
+  showLogin();
+});
+
+$('freeze').addEventListener('click', () => send({ cmd: state && state.frozen ? 'resume' : 'freeze' }));
+$('step-1').addEventListener('click', () => send({ cmd: 'step', ticks: 1 }, true));
+$('step-30').addEventListener('click', () => send({ cmd: 'step', ticks: 30 }));
+
+for (const button of document.querySelectorAll('#speed-seg .seg-btn')) {
+  button.addEventListener('click', async () => {
+    const value = button.dataset.speed;
+
+    if (value !== '1' && !await ask(
+      'Change the tick rate?',
+      'Clients pace themselves at 30 Hz and re-simulate between updates, so any '
+      + 'speed but 1× desynchronises every player currently connected. This is a '
+      + 'debugging control.')) {
+      return;
+    }
+
+    send({ cmd: 'speed', value: value === 'max' ? 'max' : Number(value) });
+  });
+}
+
+$('bots-up').addEventListener('click', () => step($('bots'), 1));
+$('bots-down').addEventListener('click', () => step($('bots'), -1));
+$('bots-apply').addEventListener('click', () => send({ cmd: 'bots', fill: Number($('bots').value) || 0 }));
+
+function step(input, by) {
+  input.value = Math.max(0, Math.min(48, (Number(input.value) || 0) + by));
+}
+
+$('map-go').addEventListener('click', async () => {
+  const name = $('map-pick').value.trim();
+  if (!name) return;
+
+  if (await ask('Change the map?', `Everyone on the server is moved to ${name} and the round ends now.`)) {
+    send({ cmd: 'map', name });
+    $('map-pick').value = '';
+  }
+});
+
+$('map-pick').addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') $('map-go').click();
+});
+
+// ⚠️ Re-read on every open, not just the first: the memory, the uptimes, the
+// thread count and the GC counters are all live, and a section that showed what
+// the box looked like an hour ago would be quietly wrong in the one place an
+// operator goes to check a number.
+$('system').addEventListener('toggle', (event) => {
+  if (event.target.open) loadSystem(true);
+});
+
+$('filter').addEventListener('input', () => { if (state) roster(state); });
+
+$('roster').addEventListener('click', async (event) => {
+  const kick = event.target.closest('[data-kick]');
+
+  if (kick) {
+    const slot = Number(kick.dataset.kick);
+    const player = state.players[slot];
+
+    if (await ask('Kick this player?', `${player ? player.name : `Slot ${slot}`} is disconnected immediately.`)) {
+      send({ cmd: 'kick', slot });
+    }
+
+    return;
+  }
+
+  const row = event.target.closest('tr[data-slot]');
+  if (!row) return;
+
+  const slot = Number(row.dataset.slot);
+  selected = selected === slot ? -1 : slot;
+
+  if (state) { roster(state); drawMap(); }
+});
+
+const canvas = $('map');
+
+canvas.addEventListener('mousemove', (event) => {
+  if (!state) return;
+
+  const at = toWorld(event);
+  const near = state.players
+    .filter((p) => p.alive && p.x !== undefined)
+    .map((p) => ({ p, d: Math.hypot(p.x - at.x, p.y - at.y) }))
+    .sort((a, b) => a.d - b.d)[0];
+
+  const tip = $('map-tip');
+
+  const reach = state.match.width / canvas.getBoundingClientRect().width * 12;
+
+  if (near && near.d < reach) {
+    const box = canvas.getBoundingClientRect();
+    tip.hidden = false;
+    tip.textContent = `${near.p.name} · ${near.p.class} · ${Math.round(near.p.hp)} hp`;
+    tip.style.left = `${(near.p.x / state.match.width) * box.width}px`;
+    tip.style.top = `${(near.p.y / state.match.height) * box.height}px`;
+  } else {
+    tip.hidden = true;
+  }
+});
+
+canvas.addEventListener('mouseleave', () => { $('map-tip').hidden = true; });
+
+canvas.addEventListener('click', (event) => {
+  if (!$('teleport-mode').checked || !state) return;
+
+  if (selected < 0) { toast('select a player in the table first', 'bad'); return; }
+
+  const at = toWorld(event);
+  send({ cmd: 'teleport', slot: selected, x: Math.round(at.x), y: Math.round(at.y) });
+});
+
+$('teleport-mode').addEventListener('change', (event) => {
+  canvas.classList.toggle('clickable', event.target.checked);
+});
+
+// ⚠️ Ignored while a text field has focus, or typing a map name would freeze the
+// server on every space bar.
+document.addEventListener('keydown', (event) => {
+  if ($('app').hidden) return;
+
+  const tag = document.activeElement && document.activeElement.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || $('confirm').open) return;
+
+  if (event.code === 'Space') {
+    event.preventDefault();
+    $('freeze').click();
+  } else if (event.key === '.') {
+    event.preventDefault();
+    if (state && state.frozen) send({ cmd: 'step', ticks: 1 }, true);
+  }
+});
+
+window.addEventListener('resize', () => {
+  if (state) drawMap();
+  if (perf.length > 0) drawCharts();
+});
+
+/* ---------- start ----------------------------------------------------------- */
+
+(async () => {
+  try {
+    const session = await (await fetch('/api/session')).json();
+
+    $('login-server').textContent = session.name || '';
+    $('login-insecure').hidden = session.secure || location.hostname === 'localhost'
+      || location.hostname === '127.0.0.1';
+
+    // ⚠️ /api/session re-issues the CSRF token to a browser that already holds a
+    // valid cookie, so a reload does not mean signing in again. It is safe to
+    // hand back here and nowhere else: the reply is readable only by a page on
+    // this origin — no CORS headers are sent — and the SameSite=Strict cookie
+    // that authorised it is not attached to a cross-site request in the first
+    // place.
+    if (session.authenticated && session.csrf) {
+      csrf = session.csrf;
+      showApp();
+      return;
+    }
+
+    showLogin();
+  } catch {
+    showLogin();
+    $('login-error').textContent = 'the server did not answer';
+    $('login-error').hidden = false;
+  }
+})();

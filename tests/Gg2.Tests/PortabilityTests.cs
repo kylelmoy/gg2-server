@@ -111,7 +111,19 @@ public class PortabilityTests
             .OrderBy(name => name, StringComparer.Ordinal)
             .ToArray();
 
-        Assert.Equal(["TimerResolution.BeginPeriod", "TimerResolution.EndPeriod"], found);
+        Assert.Equal(
+            [
+                // The web panel's "total / available RAM" tile. Guarded the way
+                // TimerResolution is: the extern is annotated, ReadMemoryWindows
+                // carries the same attribute, and its only call sits under an
+                // OperatingSystem.IsWindows() branch that falls back to
+                // /proc/meminfo. Added when web-admin merged: this gate and the
+                // P/Invoke came from different branches and neither was red alone.
+                "SystemInfo.GlobalMemoryStatusEx",
+                "TimerResolution.BeginPeriod",
+                "TimerResolution.EndPeriod",
+            ],
+            found);
     }
 
     /// <summary>

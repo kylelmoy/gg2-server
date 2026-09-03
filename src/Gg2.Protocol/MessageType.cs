@@ -88,4 +88,23 @@ public enum KickReason : byte
     Name = 39,
     BadPluginPacket = 56,
     MultiClient = 59,
+
+    /// <summary>
+    /// An operator kick, from the control port or the web panel.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Not a reason the reference sends</b> — stock GG2 has no way for an
+    /// operator to kick anybody, so there is no byte to match. It is still
+    /// handled correctly by a stock client, and that is measured rather than
+    /// hoped: <c>ClientBeginStep.gml:433-437</c> compares the byte against its
+    /// three known reasons and falls into <c>else kickReason = ""</c> for
+    /// anything else, showing "You have been kicked from the server." with no
+    /// cause — which is exactly what an operator kick means.
+    /// <para>
+    /// 255 rather than a free low number because these share the message-id
+    /// space, whose highest member is 60: a value that can never be a message id
+    /// cannot one day collide with one.
+    /// </para>
+    /// </remarks>
+    Operator = 255,
 }
