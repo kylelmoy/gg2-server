@@ -85,8 +85,15 @@ internal static class Program
         {
             server.Start();
         }
-        catch (Exception e) when (e is IOException or FileNotFoundException or ArgumentException)
+        catch (Exception e) when (
+            e is IOException or FileNotFoundException or ArgumentException or InvalidOperationException)
         {
+            // ⚠️ InvalidOperationException is here for the plugin loader, whose
+            // failures are all operator errors — a name the site does not have, a
+            // hash it will not serve, a list too long for the greeting. Without
+            // it, mistyping --plugins printed a stack trace where the message
+            // belongs, and the message is the useful half (it names the URL and
+            // says plugin names are lowercase).
             Console.Error.WriteLine($"unable to start: {e.Message}");
             return 1;
         }
@@ -348,6 +355,13 @@ internal static class Program
                 case "--welcome":
                     options.WelcomeMessage = Require(name, value);
                     i++;
+                    break;
+                case "--plugins":
+                    options.ServerPluginList = Require(name, value);
+                    i++;
+                    break;
+                case "--plugins-required":
+                    options.ServerPluginsRequired = true;
                     break;
                 case "--maps":
                     options.MapDirectory = Require(name, value);
@@ -822,6 +836,10 @@ internal static class Program
           --password <text> require a password
           --players <n>     seats for clients, 1..48 (default 10)
           --welcome <text>  message sent to each joiner
+          --plugins <list>  server-sent plugins to ask clients to load,
+                            comma-separated (e.g. chat_v2_pr)
+          --plugins-required
+                            clients must load them to join
           --multi-client-limit <n>
                             connections allowed from one address (default 3);
                             loopback is exempt

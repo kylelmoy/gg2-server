@@ -532,6 +532,38 @@ public static class ServerMessages
         writer.WriteUByte(currentMapArea);
     }
 
+    /// <summary>
+    /// A server-sent plugin's packet: the container
+    /// <c>Scripts/Plugins/API/PluginPacketSend.gml:33-45</c> builds, and the one
+    /// <c>PluginPacketSendTo</c> builds identically.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The length covers the id byte as well as the data</b> —
+    /// <c>write_ushort(buffer_size(dataBuffer) + 1)</c> — and the client reads
+    /// exactly that many bytes before parsing anything else
+    /// (<c>ClientBeginStep.gml:614-626</c>). One off here desynchronises the
+    /// whole stream from that point on, and the client's own report of it is
+    /// "The Server sent unexpected data" some messages later.
+    /// <para>
+    /// Same shape in both directions: the client-to-server command table gives
+    /// <c>PLUGIN_PACKET</c> a two-byte length prefix for exactly this field.
+    /// </para>
+    /// </remarks>
+    public static void PluginPacket(NetWriter writer, byte packetId, ReadOnlySpan<byte> data)
+    {
+        // The reference's own ceiling, from the same ushort:
+        // PluginPacketSend.gml:21-22 refuses anything larger rather than
+        // truncating it.
+        if (data.Length > 65534)
+            throw new ProtocolException(
+                $"plugin packet of {data.Length} bytes does not fit a 2-byte length prefix");
+
+        writer.WriteMessageType(MessageType.PluginPacket);
+        writer.WriteUShort((ushort)(data.Length + 1));
+        writer.WriteUByte(packetId);
+        writer.WriteBytes(data);
+    }
+
     public static void Kick(NetWriter writer, KickReason reason)
     {
         writer.WriteMessageType(MessageType.Kick);

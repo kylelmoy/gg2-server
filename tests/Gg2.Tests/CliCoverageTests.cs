@@ -62,6 +62,8 @@ public sealed class CliCoverageTests
         ("Port", ["--port", "8191"], o => o.Port),
         ("Password", ["--password", "hunter2"], o => o.Password),
         ("WelcomeMessage", ["--welcome", "hello"], o => o.WelcomeMessage),
+        ("ServerPluginList", ["--plugins", "chat_v2_pr"], o => o.ServerPluginList),
+        ("ServerPluginsRequired", ["--plugins-required"], o => o.ServerPluginsRequired),
         ("PlayerLimit", ["--players", "24"], o => o.PlayerLimit),
         ("MultiClientLimit", ["--multi-client-limit", "1"], o => o.MultiClientLimit),
         ("Map", ["--map", "koth_valley"], o => o.Map),

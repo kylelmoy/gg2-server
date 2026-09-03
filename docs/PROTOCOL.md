@@ -107,6 +107,13 @@ downloaded; a non-empty MD5 means a custom map the client may need to fetch. A
 headless server serving only built-in maps should always send `""` here, which
 removes the entire map-download path from scope.
 
+`pluginList` is `name@md5` per plugin, joined by **bare commas**, and empty when
+the server asks for none — which is the default. ⚠️ **The client derives each
+plugin's packet id from this string's ORDER** and nothing on the wire names a
+plugin again, so it is never re-sorted and never spaced. `pluginsRequired` picks
+which dialog the client shows and is not enforced by either side. Both fields,
+and the `PLUGIN_PACKET` they enable, are `docs/PLUGINS.md`.
+
 The client then enters a command loop. The server sits in `STATE_EXPECT_COMMAND`
 reading one byte at a time:
 
@@ -194,7 +201,7 @@ fixed number of payload bytes from that table — with two escape values meaning
 | `INPUTSTATE` (6) | 4 | see below |
 | `REWARD_REQUEST` (50) | 1-byte length prefix | |
 | `REWARD_CHALLENGE_RESPONSE` (52) | 16 | |
-| `PLUGIN_PACKET` (55) | 2-byte length prefix | |
+| `PLUGIN_PACKET` (55) | 2-byte length prefix | `ubyte packetId` then the plugin's data; the prefix **covers the id byte**. An id outside the advertised list is a `KICK` / `KICK_BAD_PLUGIN_PACKET`. `docs/PLUGINS.md` |
 | `CLIENT_SETTINGS` (58) | 1 | `ubyte queueJump` |
 
 Any other byte is **invalid and silently ignored** — the server does not
@@ -723,24 +730,33 @@ Not everything in the reference is load-bearing for a private headless server:
   What stays true meanwhile: `REWARD_REQUEST` and `REWARD_CHALLENGE_RESPONSE` are
   answered with silence, which is the reference's own behaviour on a server with
   no auth configured.
-- **Plugins** (`PLUGIN_PACKET`, `pluginList`). Advertise an empty plugin list and
-  `pluginsRequired = 0`; the client's plugin path is then never entered. ✅ Done,
-  and it is the only part that can be.
-  ⛔ **Plugin support proper is NOT portable, and this is the reason rather than
-  a preference.** A GG2 plugin is a zip of GML fetched from ganggarrison.com and
-  executed inside Game Maker 8 (`loadserverplugins.gml`, `extractzip.gml`). A C#
-  server cannot run one, so `PluginPacketSend`, the packet queues and the whole
-  `Scripts/Plugins/API` surface have no meaning here. **Do not open this as a
-  task**; the only way it becomes possible is a GML interpreter, which is a
-  bigger project than this server.
-  ⚠️ **What WAS wrong, and was fixed on 2026-09-01: a plugin packet is KICKED,
-  not ignored.** `processClientCommands.gml:338-362` calls `_PluginPacketPush`,
-  which returns false for an id absent from `global.pluginPacketBuffers` — a map
-  filled only by `loadserverplugins`. With no plugins loaded the map is empty,
-  **every** id is unrecognised, and the sender gets `KICK_BAD_PLUGIN_PACKET`.
-  Unreachable from a stock client (it only sends packets for plugins the greeting
-  advertised, and this server advertises none), so it is a correctness fix rather
-  than a working feature. `PluginPacketTests`.
+- ~~**Plugins** (`PLUGIN_PACKET`, `pluginList`).~~ ✅ **Implemented 2026-09-03.
+  See `docs/PLUGINS.md`**, which is the whole subject: the greeting fields, the
+  container framing, the seam a server-half implementation plugs into, and how a
+  plugin is ported. The default is still an empty list, so nothing changes for a
+  server that does not ask for one.
+  ⛔ **This document said the opposite until 2026-09-03 — "NOT portable … do not
+  open this as a task" — and the argument for it was half right.** A GG2 plugin
+  is indeed a zip of GML the *client* downloads and runs inside Game Maker 8
+  (`loadserverplugins.gml`), and this port still cannot execute one. What the
+  argument missed is that **a plugin has two halves and only the client's half
+  has to be GML**: the host runs the same script's `global.isHost` branches, and
+  those can be re-written in C# that speaks the same packets. The client is
+  unchanged and cannot tell. `ChatV2Plugin` is that, for `chat_v2_pr`.
+  ⚠️ **The cost is that an implementation is pinned to one version of the
+  plugin.** The packets carry no version field, so if the site re-releases the
+  zip the client half moves and the C# half does not.
+  `ServerPluginCatalogue` pins the md5 each implementation was read from and
+  advertises it by default; `PluginHashes.Resolve` logs loudly when anything
+  overrides it. **Re-read the plugin's GML before changing an implementation, and
+  move the pin in the same commit.**
+  ⚠️ **A plugin packet is KICKED, not ignored — for an id outside the advertised
+  list.** `processClientCommands.gml:338-362` calls `_PluginPacketPush`, which
+  returns false for an id absent from `global.pluginPacketBuffers` — a map filled
+  by `loadserverplugins` and keyed by each plugin's *position*. So a server with
+  no plugins kicks every sender and a server with two kicks any id above 1.
+  Unreachable from a stock client whose list matches the greeting's.
+  `PluginPacketTests`, `PluginWireTests`.
 - ~~**Map download.**~~ ✅ **Implemented 2026-09-01.** A map that is not in
   `Gg2.Maps.InternalMaps` is advertised with its MD5 and served on
   `DOWNLOAD_MAP` as a `uint` length followed by the raw file, rate-limited across
@@ -768,8 +784,7 @@ Not everything in the reference is load-bearing for a private headless server:
   the host's local player is "just another client". A headless port has no local
   player: keep the roster slot, drop the socket.
 
-None of that is visible to a stock client beyond a server that has no plugins,
-no rewards, and only built-in maps.
+None of that is visible to a stock client beyond a server that has no rewards.
 
 ### The census behind that list, 2026-09-01
 
@@ -781,9 +796,11 @@ plausible one.
 **Fully covered, checked rather than assumed:**
 
 - **All 15 client commands** in `processClientCommands.gml` reach
-  `GameServer.cs`'s switch. `REWARD_REQUEST`, `REWARD_CHALLENGE_RESPONSE` and
-  `PLUGIN_PACKET` are answered with silence, which is the reference's own answer
-  from a server with no auth.
+  `GameServer.cs`'s switch. `REWARD_REQUEST` and `REWARD_CHALLENGE_RESPONSE` are
+  answered with silence, which is the reference's own answer from a server with
+  no auth. ⚠️ `PLUGIN_PACKET` was on that list until 2026-09-03 and never
+  belonged on it — silence is what a *client* does with an unknown id; the
+  server kicks. It is now dispatched or kicked (`docs/PLUGINS.md`).
 - **Every map entity type** registered by `builder_init.gml`'s `addEntity` block
   is in `EntityTypes.cs`; every simulation-bearing object in `InGameElements`
   and `GameElements` has a home in `Gg2.Simulation`.

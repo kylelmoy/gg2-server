@@ -5,6 +5,7 @@ using Gg2.Maps;
 using Gg2.Protocol;
 using Gg2.Simulation;
 using Gg2.Bots;
+using Gg2.Server.Plugins;
 
 namespace Gg2.Server;
 
@@ -28,7 +29,7 @@ public interface IServerLog
 /// goes) and lobby registration. Neither is visible to a stock client.
 /// </para>
 /// </remarks>
-public sealed class GameServer : IDisposable
+public sealed class GameServer : IDisposable, IPluginHost
 {
     private readonly ServerOptions _options;
     private readonly IServerLog _log;
@@ -51,6 +52,26 @@ public sealed class GameServer : IDisposable
     /// <summary>Simulation steps still owed to a <c>step</c> while frozen.</summary>
     private int _stepsOwed;
     private readonly NetWriter _broadcast = new(8192);
+
+    /// <summary>
+    /// The server-sent plugins this server advertises and runs the host half of.
+    /// <see cref="ServerPlugins.None"/> unless <c>--plugins</c> was passed.
+    /// </summary>
+    private ServerPlugins _plugins = ServerPlugins.None;
+
+    /// <summary>
+    /// Where a plugin's zip hash comes from when neither the operator nor
+    /// <c>ServerPluginCatalogue</c> pinned one. Settable so a test never reaches
+    /// ganggarrison.com; a null one is built on demand in <see cref="Start"/>
+    /// and disposed there, so a server with no plugins opens no HTTP client.
+    /// </summary>
+    public IPluginHashSource? PluginHashSource { get; set; }
+
+    /// <summary>
+    /// GML's <c>current_time</c> for the plugins, sampled once at the top of
+    /// each tick.
+    /// </summary>
+    private long _pluginClock = Environment.TickCount64;
 
     private TcpListener? _listener;
     private Roster _roster = null!;
@@ -222,6 +243,16 @@ public sealed class GameServer : IDisposable
     public int RosterCount => _roster.Count;
 
     /// <summary>
+    /// The name at <paramref name="slot"/>, as clients know it.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ Not necessarily the name that slot's client asked for: a plugin may
+    /// have renamed it (<c>chat_v2_pr</c> de-duplicates), and a
+    /// <c>PLAYER_CHANGENAME</c> went out when it did.
+    /// </remarks>
+    public string NameOf(int slot) => _roster[slot].Name;
+
+    /// <summary>
     /// The map that is loaded right now.
     /// </summary>
     /// <remarks>
@@ -331,6 +362,14 @@ public sealed class GameServer : IDisposable
         // Slot 0, the server's own reserved player: a spectator that always
         // exists, now in the world as well as the roster.
         _world.AddPlayer(0);
+
+        // ⛔ AFTER the roster and its slot 0, and BEFORE anything can connect.
+        // GameServerCreate.gml:126-152 loads plugins at exactly this point for
+        // the same two reasons: the greeting has to be able to name them, and a
+        // plugin's per-player table has to see slot 0 appear like any other.
+        // ⚠️ It can block on the network. Nothing is listening yet, so nothing
+        // is being starved — do not move it onto the tick path.
+        LoadPlugins();
 
         // ⚠️ Before OpenMap, because OpenMap is what points it at a map — and
         // after AddPlayer(0), because its first Retarget walks the roster.
@@ -957,7 +996,17 @@ public sealed class GameServer : IDisposable
         if (_lobby is not null && _frame % LobbyRegistration.ReRegisterIntervalTicks == 0)
             AnnounceToLobby();
 
+        // GML's current_time, held still for the tick so two plugins asked in
+        // the same tick agree.
+        _pluginClock = Environment.TickCount64;
+
         ServiceClients();
+
+        // ⚠️ AFTER the tick's client commands, so a PLAYER_CHANGENAME that
+        // arrived this tick is seen this tick. The reference runs plugin code in
+        // Player Begin Step events, whose order against the server's own is a
+        // GM8 detail nothing observable turns on.
+        _plugins.Tick();
 
         // ⚠️ Before ServiceBots, so a bot added this tick is polled this tick
         // rather than pressing nothing for one frame. GameServerBeginStep.gml
@@ -2090,6 +2139,7 @@ public sealed class GameServer : IDisposable
 
         var entry = new RosterEntry { Name = name, IsBot = true, Source = source };
         var slot = _roster.Add(entry);
+        _plugins.PlayerAdded(slot);
         _world.AddPlayer(slot);
 
         // ⚠️ Mirrored into the world so BOT CODE can tell a person from a bot —
@@ -2140,6 +2190,11 @@ public sealed class GameServer : IDisposable
             throw new ArgumentOutOfRangeException(nameof(slot), slot, "not a bot slot");
 
         var name = _roster[slot].Name;
+
+        // ⛔ BEFORE the removal, so a plugin's per-player table compacts with the
+        // roster rather than after it. PluginPlayerTable says what goes wrong
+        // otherwise, and it is the same shape as the WorldState.RemoveSlot trap.
+        _plugins.PlayerRemoving(slot);
 
         _roster.RemoveAt(slot);
         _world.RemoveSlot(slot);
@@ -2246,23 +2301,30 @@ public sealed class GameServer : IDisposable
                 ExecuteEatSandvich(IdOf(entry));
                 break;
 
-            // ⚠️ A plugin packet is KICKED, not ignored, and that IS the
-            // reference's behaviour rather than a policy of ours.
+            // ⚠️ An UNRECOGNISED plugin packet is KICKED, not ignored, and that
+            // IS the reference's behaviour rather than a policy of ours.
             // processClientCommands.gml:338-362 hands the packet to
             // _PluginPacketPush, which returns false when the id is not in
             // global.pluginPacketBuffers — a map populated only by
-            // loadserverplugins. A server with no plugins loaded has an empty
-            // map, so EVERY id is unrecognised and every sender is kicked with
-            // KICK_BAD_PLUGIN_PACKET. This server never loads plugins (it
-            // cannot: they are GML), so that branch is the only reachable one.
+            // loadserverplugins, and keyed by each plugin's position in the
+            // advertised list. So a server with no plugins kicks EVERY sender,
+            // and a server with two plugins kicks any id above 1.
             //
-            // ⚠️ Unreachable from a stock client, deliberately. It only sends
-            // plugin packets after loading the plugin list the HELLO advertised,
-            // and JoiningConnection advertises none — so reaching this means a
-            // client that made something up, which is exactly who the reference
-            // kicks.
+            // ⚠️ Unreachable from a stock client whose plugin list matches the
+            // greeting's, which is the whole point: the client derives the id
+            // from the same list in the same order. Reaching the kick means a
+            // client that made an id up.
             case MessageType.PluginPacket:
             {
+                // The container's own layout: one id byte, then the plugin's
+                // data. The two-byte length prefix has already been consumed by
+                // the command stream, so Payload starts at the id.
+                if (command.Payload.Length >= 1
+                    && _plugins.Dispatch(command.Payload[0], IdOf(entry), command.Payload[1..]))
+                {
+                    break;
+                }
+
                 var kick = new NetWriter(2);
                 ServerMessages.Kick(kick, KickReason.BadPluginPacket);
                 client.Connection.Send(kick.WrittenSpan);
@@ -2275,7 +2337,10 @@ public sealed class GameServer : IDisposable
                 client.Connection.Flush();
                 client.Connection.Close("unrecognised plugin packet id");
 
-                _log.Info($"kicked {entry.Name}: plugin packet on a server with no plugins");
+                _log.Info(
+                    $"kicked {entry.Name}: plugin packet id "
+                    + (command.Payload.Length >= 1 ? command.Payload[0].ToString() : "(empty)")
+                    + $", but this server advertises {_plugins.Count} plugin(s)");
                 break;
             }
 
@@ -2505,6 +2570,9 @@ public sealed class GameServer : IDisposable
 
         if (rosterIndex > 0)
         {
+            // ⛔ BEFORE the removal — see RemoveBot.
+            _plugins.PlayerRemoving(rosterIndex);
+
             _roster.RemoveAt(rosterIndex);
 
             // Both sides compact the list, so every index above this one shifts
@@ -2728,6 +2796,8 @@ public sealed class GameServer : IDisposable
             MapFile = _currentMapFile,
             MapDownloadShare = share,
             MapDownloadBudget = _options.MapDownloadBytesPerSecond / (double)GameConstants.TickRate,
+            PluginList = _plugins.Advertised,
+            PluginsRequired = _options.ServerPluginsRequired,
         };
 
         for (var i = _joining.Count - 1; i >= 0; i--)
@@ -2858,6 +2928,7 @@ public sealed class GameServer : IDisposable
         _roster.Add(entry);
         _world.AddPlayer(_roster.Count - 1);
         _clients.Add(new ClientPlayer { Connection = connection, Entry = entry });
+        _plugins.PlayerAdded(_roster.Count - 1);
 
         // 3. Broadcast to everyone *including* the joiner, which is how the
         //    joiner learns about itself — after the replay of everyone else.
@@ -2881,6 +2952,116 @@ public sealed class GameServer : IDisposable
         // serviceJoiningPlayer.gml:171 — tell the lobby the player count moved,
         // rather than letting the list show a stale one for up to 30 seconds.
         AnnounceToLobby();
+    }
+
+    // --- server-sent plugins -------------------------------------------------
+
+    /// <summary>The greeting's <c>pluginList</c> field: <c>name@md5</c>, comma-separated.</summary>
+    public string AdvertisedPlugins => _plugins.Advertised;
+
+    /// <summary>
+    /// Resolves the configured plugin list to hashes and instantiates the server
+    /// halves this port has.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ Throwing here fails <see cref="Start"/>, which is the reference's
+    /// <c>game_end()</c> on the same failure. A server that came up anyway would
+    /// advertise a list every client then failed to download, and the client's
+    /// report of that is a dialog on the player's screen and nothing on the
+    /// server's.
+    /// </remarks>
+    private void LoadPlugins()
+    {
+        var specs = PluginNames.ParseList(_options.ServerPluginList);
+        if (specs.Count == 0)
+        {
+            _plugins = ServerPlugins.None;
+            return;
+        }
+
+        var owned = PluginHashSource is null ? new GanggarrisonPluginHashes() : null;
+        try
+        {
+            _plugins = ServerPlugins.Load(specs, this, PluginHashSource ?? owned!, _log);
+        }
+        finally
+        {
+            owned?.Dispose();
+        }
+
+        _plugins.PlayerAdded(0);
+
+        _log.Info(
+            $"server-sent plugins ({(_options.ServerPluginsRequired ? "required" : "optional")}): "
+            + _plugins.Advertised);
+    }
+
+    // --- IPluginHost ---------------------------------------------------------
+    //
+    // The whole surface a plugin gets. Everything here is something the
+    // reference's plugins could reach through global.players, socket_remote_ip,
+    // current_time and Scripts/Plugins/API; nothing here reaches the simulation.
+
+    Team IPluginHost.TeamOf(int slot) => _roster[slot].Team;
+
+    string IPluginHost.RemoteAddressOf(int slot) =>
+        _roster[slot].Connection?.RemoteAddress.ToString() ?? string.Empty;
+
+    bool IPluginHost.IsClient(int slot) => _roster[slot].Connection is not null;
+
+    long IPluginHost.CurrentTimeMilliseconds => _pluginClock;
+
+    void IPluginHost.Log(string message) => _log.Info(message);
+
+    /// <summary>
+    /// A plugin renaming a player, which is the one game-visible thing the
+    /// plugin API can do.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ The same truncation the client command gets, for the same reason: a
+    /// name over <c>MAX_PLAYERNAME_LENGTH</c> is what <c>KICK_NAME</c> exists
+    /// for, and a plugin must not be able to produce one the server would kick a
+    /// client over.
+    /// </remarks>
+    void IPluginHost.Rename(int slot, string name)
+    {
+        if (name.Length > GameConstants.MaxPlayerNameLength)
+            name = name[..GameConstants.MaxPlayerNameLength];
+
+        _roster[slot].Name = name;
+        ServerMessages.PlayerChangeName(_broadcast, checked((byte)slot), name);
+    }
+
+    /// <summary>
+    /// <c>PluginPacketSend</c>: into the broadcast buffer, so it leaves with
+    /// this tick's flush and in order with everything else appended this tick.
+    /// </summary>
+    void IPluginHost.SendPluginPacketToAll(int packetId, ReadOnlySpan<byte> data) =>
+        ServerMessages.PluginPacket(_broadcast, checked((byte)packetId), data);
+
+    /// <summary>
+    /// <c>PluginPacketSendTo</c>: onto one client's own queue.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ Queued rather than written to the socket, unlike the reference's
+    /// <c>socket_send</c>. The ordering a client sees is the same either way —
+    /// this tick's broadcast is appended to the same queue afterwards — and
+    /// queueing keeps every send on the tick's one flush.
+    /// <para>
+    /// A slot with no socket is skipped: a bot, or the server's own slot 0.
+    /// The reference short-circuits <c>global.myself</c> into its local packet
+    /// queue instead, which a headless server has no use for.
+    /// </para>
+    /// </remarks>
+    void IPluginHost.SendPluginPacketTo(int slot, int packetId, ReadOnlySpan<byte> data)
+    {
+        var connection = _roster[slot].Connection;
+        if (connection is null || connection.IsClosed)
+            return;
+
+        var writer = new NetWriter(data.Length + 4);
+        ServerMessages.PluginPacket(writer, checked((byte)packetId), data);
+        connection.Send(writer.WrittenSpan);
     }
 
     // --- map loading ---------------------------------------------------------

@@ -82,6 +82,8 @@ you are most likely to want:
 | `--config <path>` | | Read a reference-format `gg2.ini`. Applied **before** every flag, so a flag always wins. Never written back. |
 | `--name <text>` | | Server name shown to clients. |
 | `--welcome <text>` | | Message sent to each joiner. |
+| `--plugins <list>` | | Server-sent plugins clients are asked to load, comma-separated (e.g. `chat_v2_pr`). An entry may be pinned as `name@md5`. See [`docs/PLUGINS.md`](docs/PLUGINS.md). |
+| `--plugins-required` | off | Tell clients they must load them to join. **Advisory** — the reference does not enforce it and neither does this. |
 | `--players <n>` | `10` | Seats for clients, 1–48. |
 | `--password <text>` | | Require a password to join. |
 | `--time-limit <n>` | `15` | Round clock in minutes. |
@@ -205,6 +207,7 @@ here, and it is worth reading first.
 | [`docs/PARITY.md`](docs/PARITY.md) | How the port is proven to match the reference. |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | The C# structure, shaped for performance and testability, and where a tick actually goes. |
 | [`docs/PLAN.md`](docs/PLAN.md) | The phased implementation plan and its exit criteria. |
+| [`docs/PLUGINS.md`](docs/PLUGINS.md) | **Server-sent plugins**: the wire fields, the seam a C# server half plugs into, how a plugin is ported, and `chat_v2_pr`. |
 | [`docs/BOTS.md`](docs/BOTS.md) | **Start here for bots**: the rules, what exists, and how to measure a bot change. |
 | [`docs/BOTAI.md`](docs/BOTAI.md) | Structural constraints that are cheap now and impossible to retrofit. |
 | [`docs/ENV.md`](docs/ENV.md) | The `Gg2.Env` seam, the policy checkpoint format and what the phase-9 numbers do and do not license. |

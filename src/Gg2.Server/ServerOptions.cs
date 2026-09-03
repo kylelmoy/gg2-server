@@ -35,6 +35,43 @@ public sealed class ServerOptions
     public int PlayerLimit { get; set; } = 10;
 
     /// <summary>
+    /// <c>ServerPluginList</c>: the server-sent plugins clients are asked to
+    /// load, comma-separated. Empty means none, and the greeting then advertises
+    /// an empty list.
+    /// </summary>
+    /// <remarks>
+    /// Names are <c>[a-z0-9_]+</c> and the reference refuses a list over 254
+    /// characters (<c>game_init.gml:99</c>); both are enforced when the list is
+    /// parsed. An entry may be written <c>name@md5</c> to pin an exact zip —
+    /// ⚠️ a port extension, not the reference's syntax, and
+    /// <c>PluginHashes.Resolve</c> says when each source is used.
+    /// <para>
+    /// ⛔ <b>A plugin this port has no C# implementation for is still
+    /// advertised</b>, so its client half loads and its packets are discarded.
+    /// See <c>ServerPluginCatalogue</c> for what is implemented; the loader logs
+    /// a warning naming any plugin that is not.
+    /// </para>
+    /// </remarks>
+    public string ServerPluginList { get; set; } = string.Empty;
+
+    /// <summary>
+    /// <c>ServerPluginsRequired</c>: whether a client must load the plugins to
+    /// play here.
+    /// </summary>
+    /// <remarks>
+    /// One byte of the greeting, and the client's whole use of it is which
+    /// dialog it shows (<c>ClientBeginStep.gml:62-121</c>): required offers
+    /// "Download and join" or "Disconnect", optional offers "Download" or
+    /// "Skip". ⚠️ <b>The server does not enforce it</b> — a client that skipped
+    /// an optional plugin is indistinguishable from one that has no plugin
+    /// support at all, and the reference does not check either. Requiring a
+    /// plugin whose server half sends unprompted packets is therefore the only
+    /// way to be sure everyone can read them.
+    /// </remarks>
+    public bool ServerPluginsRequired { get; set; }
+
+
+    /// <summary>
     /// Connections allowed from one address. Not enforced for loopback, which is
     /// how the reference lets a host run clients beside its own server.
     /// </summary>
@@ -416,6 +453,12 @@ public sealed class ServerOptions
     {
         if (Port is < 0 or > 65535)
             throw new ArgumentOutOfRangeException(nameof(Port), Port, "port must be 0..65535");
+
+        // Parsed here and thrown away: the point is that an unusable list fails
+        // the server's start, not a client's join. GameServerCreate.gml:131-142
+        // reaches game_end() for the same reason — a server advertising a list
+        // it cannot serve strands every client that believes it.
+        Plugins.PluginNames.ParseList(ServerPluginList);
 
         // The reference clamps at 48 (game_init.gml:152). Beyond 255 the roster
         // index stops fitting in the ubyte every message uses to name a player.
