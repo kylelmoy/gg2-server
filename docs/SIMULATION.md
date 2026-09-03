@@ -1874,26 +1874,37 @@ branch of the tail this port transcribes so far. ⚠️ Its
 magazine, so every reload body in the game (`if ammoCount < maxAmmo`) does
 nothing and all that survives is the `alarm[5] = -1` after it.
 
-**Not implemented: the `setup` clause in the charge rate.** A map with a setup
-gate, during its setup timer, charges at the hurt rate (2.5) off a full-health
-patient rather than the healthy rate (1.75) — `Medigun.events/User Event
-1.xml:92-98`, where `setup` is `instance_exists(ControlPointSetupGate) &&
-areSetupGatesClosed()`.
+✅ **The `setup` clause LANDED 2026-09-03.** A map with a setup gate, during its
+setup timer, charges at the hurt rate (2.5) off a full-health patient rather than
+the healthy rate (1.75) — `Medigun.events/User Event 1.xml:92-101`, where `setup`
+is `instance_exists(ControlPointSetupGate) && areSetupGatesClosed()`. Here that is
+`state.AttackDefend && state.SetupTimer > 0`: the map entity is named `SetupGate`
+and `builder_init.gml:301` builds a `ControlPointSetupGate` from it, and
+`areSetupGatesClosed.gml` is nothing but `global.setupTimer > 0`.
 
-⚠️ **This entry used to add "no mode this port runs has a
-`ControlPointSetupGate`", and that was false from phase 6 onwards.** The map
-entity is `SetupGate` and `builder_init.gml:301` builds a
-`ControlPointSetupGate` from it, so the first half is `state.AttackDefend`; the
-second is `state.SetupTimer > 0`, which `MatchSimulation` already mirrors onto
-every character as `SetupGatesClosed`. `Rounds.Start` arms the timer for Invasion
-(`ctf_avanti`) and for attack/defend control points, so the branch is reachable
-on shipped maps and a medic's charge rate is wrong there for the length of a
-setup timer. The fix is one condition; it is **observable simulation**, so it
-lands with the parity fixtures re-run, the three pinned bot measurements
-re-recorded, and a **hand bump of `SimulationStamp.SimulationBehaviourVersion`**
-— not on its own. ⛔ **The stamp does not catch this one by itself**: its surface
-is chosen rather than swept, so a changed branch condition moves no hash and
-invalidates no checkpoint until somebody bumps that version deliberately.
+⚠️ **It was missing for three phases behind a comment claiming no mode here had a
+`ControlPointSetupGate`.** That was false from phase 6: `Rounds.Start` arms the
+timer for Invasion (`ctf_avanti`) and for attack/defend control points. The
+clause is the only way to build charge before the gates open — during setup
+nobody has been shot yet, so every patient is at full health and the healthy rate
+means arriving at the first fight with 30% less meter than the reference gives.
+
+⛔ **Landed WITHOUT a `SimulationBehaviourVersion` bump, deliberately, and the
+reasoning has an expiry.** The stamp would not have caught it either way — its
+surface is chosen rather than swept, constants and tables rather than branch
+conditions — so the bump would have been a hand-made claim that every existing
+checkpoint is now dated. It was skipped because **the change cannot reach
+training**: nothing in `src/Gg2.Env` sets `SetupTimer` or `AttackDefend`, so both
+sit at their `default(WorldState)` values and the branch is unreachable there, and
+`PolicyController.TrainedClasses` (Scout, Soldier, Sniper, Heavy) contains no
+Medic. ⚠️ **If an env or a duel ever arms a setup timer, or the policy is trained
+on Medic, that reasoning expires and the bump is owed.**
+
+✅ **No parity fixture moved and none of the three pinned bot measurements
+shifted** when it landed, which says no checked-in trace covers a medic healing a
+full-health patient during setup — a green fixture is not confirmation of a
+behaviour. `MedigunTests.SetupChargesAFullHealthPatientAtTheHurtRate` is the
+gate, with a control on each half of the conjunction.
 
 ✅ **The stat counters landed and this entry did not say so.** `HEALING` is
 `Healing.cs:308`, `INVULNS` is `Weapons.cs:2410`, and `POINTS` is awarded from

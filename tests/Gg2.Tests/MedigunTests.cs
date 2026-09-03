@@ -619,6 +619,67 @@ public sealed class MedigunTests
     }
 
     /// <summary>
+    /// During a setup timer a FULL-HEALTH patient still charges at the hurt rate.
+    /// </summary>
+    /// <remarks>
+    /// <c>Medigun.events/User Event 1.xml:92-101</c>. <c>setup</c> is
+    /// <c>instance_exists(ControlPointSetupGate) &amp;&amp; areSetupGatesClosed()</c>,
+    /// which here is <c>state.AttackDefend &amp;&amp; state.SetupTimer &gt; 0</c> —
+    /// the map entity is called <c>SetupGate</c> and
+    /// <c>builder_init.gml:301</c> builds a <c>ControlPointSetupGate</c> from it.
+    /// <para>
+    /// ⚠️ <b>The clause is the only way to build charge before the gates open.</b>
+    /// During setup nobody has been shot yet, so every patient is at full health
+    /// and the healthy rate would mean a medic arrives at the first fight with
+    /// 30% less meter than the reference gives them.
+    /// </para>
+    /// <para>
+    /// ⛔ <b>Both halves are required, and each has its own control below.</b> A
+    /// fix that keyed on the timer alone would hand the hurt rate to every
+    /// gamemode with a setup timer and no gate; one that keyed on the map alone
+    /// would never stop giving it. Reachable on <c>ctf_avanti</c> (Invasion) and
+    /// on attack/defend control points, both of which <c>Rounds.Start</c> arms.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void SetupChargesAFullHealthPatientAtTheHurtRate()
+    {
+        // The control first: the SAME full-health patient outside setup charges
+        // at 1.75, so the 2.5 below is the clause and not the geometry.
+        Assert.Equal(1.75, ChargeOffAFullHealthPatient(attackDefend: false, setupTimer: 0));
+
+        Assert.Equal(2.5, ChargeOffAFullHealthPatient(attackDefend: true, setupTimer: 90));
+
+        // ⚠️ Each half on its own is NOT enough — the reference's `setup` is a
+        // conjunction, and either of these passing at 2.5 would mean a mode with
+        // a setup timer and no gate, or a gate map after setup ended, kept the
+        // hurt rate for ever.
+        Assert.Equal(1.75, ChargeOffAFullHealthPatient(attackDefend: false, setupTimer: 90));
+        Assert.Equal(1.75, ChargeOffAFullHealthPatient(attackDefend: true, setupTimer: 0));
+    }
+
+    /// <summary>
+    /// One tick of beam onto an undamaged patient; returns the charge gained.
+    /// </summary>
+    private static double ChargeOffAFullHealthPatient(bool attackDefend, int setupTimer)
+    {
+        var state = default(WorldState);
+        var events = default(TickEvents);
+
+        state.AttackDefend = attackDefend;
+        state.SetupTimer = setupTimer;
+
+        Put(ref state, 1, PlayerClass.Medic, Team.Red, OpenX, OpenY, PlayerKeys.Attack, aimDistance: 40);
+        Put(ref state, 2, PlayerClass.Soldier, Team.Red, OpenX + 40, OpenY);
+
+        // Untouched: Put spawns at full health, and the point of the clause is
+        // that there is nothing to heal yet.
+        Weapons.FireStep(World, ref state, 1, ref events);
+
+        return state.Weapons[1].UberCharge;
+    }
+
+    /// <summary>
     /// The meter fills, announces itself once, and then stops accumulating.
     /// </summary>
     /// <remarks>

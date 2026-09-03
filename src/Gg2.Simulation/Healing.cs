@@ -309,36 +309,52 @@ public static class Healing
 
         if (!weapon.Ubering && Gml.Less(weapon.UberCharge, WeaponState.MaxUberCharge))
         {
-            // `if(healTarget.object.hp < healTarget.object.maxHp or setup)`.
+            // `if(healTarget.object.hp < healTarget.object.maxHp or setup)`,
+            // Medigun.events/User Event 1.xml:92-101.
             //
-            // ⛔ KNOWN GAP: the `setup` clause is NOT implemented, so during a
-            // setup timer a medic beaming a full-health patient charges at 1.75
-            // where the reference charges at 2.5.
+            // ⚠️ `setup` is the reference's own conjunction,
+            // `instance_exists(ControlPointSetupGate) && areSetupGatesClosed()`:
             //
-            // ⚠️ The comment here used to say "No mode this port runs has a
-            // ControlPointSetupGate", and that has been FALSE since phase 6.
-            // Medigun User Event 1.xml:92-98 computes `setup` as
-            // `instance_exists(ControlPointSetupGate) && areSetupGatesClosed()`,
-            // and both halves exist here: the map entity is `SetupGate`
-            // (builder_init.gml:301 creates a ControlPointSetupGate from it), so
-            // the first half is `state.AttackDefend`, and the second is
-            // `state.SetupTimer > 0` — already mirrored onto every character as
-            // `SetupGatesClosed` by MatchSimulation. It is reachable on shipped
-            // maps: Rounds.Start arms the timer for Invasion (ctf_avanti) and
-            // for attack/defend control points.
+            //   - the first half is `state.AttackDefend`, because the map entity
+            //     is named `SetupGate` and builder_init.gml:301 builds a
+            //     ControlPointSetupGate from it — so "the map placed one" and
+            //     "this map has a setup gate" are the same predicate;
+            //   - the second is `areSetupGatesClosed.gml`, which is nothing but
+            //     `global.setupTimer > 0`.
             //
-            // Closing it is one condition — `|| (state.AttackDefend &&
-            // character.SetupGatesClosed)` — and it is left open deliberately
-            // rather than for want of state: it is OBSERVABLE simulation, so it
-            // lands with the parity fixtures re-run, the three pinned bot
-            // measurements re-recorded, and a HAND bump of
-            // SimulationStamp.SimulationBehaviourVersion.
+            // ⚠️ Read LIVE here rather than through CharacterState.SetupGatesClosed,
+            // which mirrors the same value. The two agree at this point in the
+            // tick — the mirror is written before this stage and Rounds.Step
+            // decrements the timer after it — so this is the more direct
+            // transcription rather than a different answer.
             //
-            // ⛔ The stamp will NOT catch this one by itself. Its surface is
-            // "chosen, not swept" — constants and tables, not branch conditions
-            // — so a changed charge rate here moves no hash and invalidates no
-            // checkpoint unless somebody bumps that version deliberately.
-            weapon.UberCharge += Gml.Less(patient.Hp, maxHp) ? UberChargeHurt : UberChargeHealthy;
+            // Without it a medic beaming a FULL-HEALTH patient during setup
+            // charged at 1.75 instead of 2.5, which is the whole point of the
+            // clause: during setup nobody is damaged yet, so the hurt rate is the
+            // only way to build any charge before the gates open.
+            //
+            // ⚠️ Reachable on shipped maps — Rounds.Start arms the timer for
+            // Invasion (ctf_avanti) and for attack/defend control points — and it
+            // was missing for three phases behind a comment claiming no mode here
+            // had a ControlPointSetupGate.
+            //
+            // ⛔ LANDED WITHOUT A SimulationBehaviourVersion BUMP, deliberately,
+            // 2026-09-03. The stamp would not have caught this by itself — its
+            // surface is "chosen, not swept", constants and tables rather than
+            // branch conditions — so the bump would have been a hand-made claim
+            // that every existing checkpoint is now dated. It was skipped because
+            // the change CANNOT REACH TRAINING: nothing in src/Gg2.Env sets
+            // SetupTimer or AttackDefend, so both sit at their default(WorldState)
+            // values and this branch is unreachable there, and PolicyController's
+            // TrainedClasses (Scout, Soldier, Sniper, Heavy) contains no Medic.
+            // ⚠️ THAT IS THE FALSIFICATION CONDITION: if an env or a duel ever
+            // arms a setup timer, or the policy is trained on Medic, this
+            // reasoning expires and the bump is owed.
+            var setup = state.AttackDefend && state.SetupTimer > 0;
+
+            weapon.UberCharge += Gml.Less(patient.Hp, maxHp) || setup
+                ? UberChargeHurt
+                : UberChargeHealthy;
 
             if (Gml.GreaterOrEqual(weapon.UberCharge, WeaponState.MaxUberCharge))
             {
