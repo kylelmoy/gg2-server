@@ -181,7 +181,7 @@ and the two layers of censoring that made every earlier version of these numbers
 wrong.
 
 ⛔ **All of that describes `SIM_UUID 7ff5940d97aa7bed`, and this build is
-`5dac8a5e7c37ce3a`** — the 2026-09-02 carry invalidated the only checkpoint that
+`9e0d931e1106a1bf`** — the 2026-09-02 carry invalidated the only checkpoint that
 exists. **Treat every phase-4 behavioural number above as history**; re-measuring
 one needs a checkpoint trained against this head. The suite does not wait for
 that: the checkpoint is a test **fixture** now (real weights, a numpy oracle for

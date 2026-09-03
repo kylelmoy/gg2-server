@@ -134,6 +134,12 @@ if (Environment.GetEnvironmentVariable("BENCH_CONST") == "1")
     Console.WriteLine($"ObservationWriter.Length = {ObservationWriter.Length}");
     Console.WriteLine($"ActionDecoder.AimBins   = {ActionDecoder.AimBins}");
     Console.WriteLine($"SimulationStamp.Uuid    = {Gg2.Simulation.SimulationStamp.Uuid}");
+
+    // ⚠️ The un-gated half. NavConstants left the gating surface 2026-09-03, so
+    // gg2-rl reads BOTH here: the first says whether a checkpoint is refused, the
+    // second says whether the world it was fitted to has moved underneath it.
+    Console.WriteLine(
+        $"SimulationStamp.Routing = {Gg2.Simulation.SimulationStamp.RoutingUuid} (reported, not gated)");
     Console.WriteLine($"ActionEncodingVersion   = {Gg2.Simulation.SimulationStamp.ActionEncodingVersion}");
     Console.WriteLine($"ObservationLayoutVersion= {Gg2.Simulation.SimulationStamp.ObservationLayoutVersion}");
     return;

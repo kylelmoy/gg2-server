@@ -475,7 +475,7 @@ reference is `botPathKeys.gml:408-1014`, `botJumpReach.gml` and
 
 ✅ **A bot now crosses `ctf_truefort` end to end.** Re-measured after item 4f:
 the longest steerable leg on the map is **137 nodes**, and the bot arrives at
-tick **1,572** with 33 re-plans, **0 stuck fires**, 4 off-route events and **0
+tick **1,786** with 39 re-plans, **0 stuck fires**, 10 off-route events and **0
 blacklists**. The reference quotes 2,200-2,500 ticks "with no blacklists now" for
 its own *shorter* `truefort-spawn-to-intel` leg, so this port is comfortably
 ahead of it on a longer route.
@@ -922,7 +922,10 @@ pass, on any approach, for ever**.
 
 ⚠️ **The long `ctf_truefort` leg in `PathFollowerFixtureTests` went 2,655 → 1,572
 ticks, 76 → 33 re-plans, 34 → 4 off-route and 9 → 0 blacklists**, on a 137-node
-route where the reference quotes 2,200-2,500 for its own shorter one. So **"this
+route where the reference quotes 2,200-2,500 for its own shorter one.
+⚠️ **It has since gone 1,572 → 1,786 / 39 / 0 / 10 / 0** under the A\* weight
+1.0 → 1.3, and is PINNED there — the numbers in this paragraph are the phase-7
+comparison, not the current reading. So **"this
 port misses more marginal arcs" is no longer true** — that note stood in item
 4b-ii and in the fixture, and it was the truncation the whole time.
 
@@ -2093,7 +2096,7 @@ often "nothing".
 
 ✅ **The rule was then swept across the whole lane**, which is the third and last
 of its end-to-end measurements: `PathFollowerFixtureTests`' longest steerable leg
-on `ctf_truefort`. **It had NOT drifted** — 137 nodes, 1,572 ticks, 33 re-plans,
+on `ctf_truefort`. **It had NOT drifted at the time** — 137 nodes, 1,572 ticks, 33 re-plans,
 0 stuck, 4 off-route, 0 blacklists, exactly as recorded — which is worth knowing
 only because it was checked. But its bound was `ArrivedAt < 2400` (already the
 *tightened* version, "half again on the measurement") and **three of its five
@@ -3212,7 +3215,7 @@ which arc is being flown halfway along it.
 | `truefort-spawn-to-intel` | 1,717 | **1,667** — re-plans 57→48, **blacklist 1→0** |
 | `avanti-ramp-pocket-to-intel` | 175 | **217** |
 | the suite's rocket-jump total | 6 | **6** |
-| `PathFollowerFixtureTests`' longest leg | 137/1,572/33/0/4/0 | unchanged |
+| `PathFollowerFixtureTests`' longest leg | 1,786/39/0/10/0 (was 1,572/33/0/4/0) | moved by the A\* weight 1.0 → 1.3, and PINNED since 2026-09-02 |
 
 ⚠️ **`avanti` got 42 ticks slower on purpose, and the trade is worth stating.**
 Its node pair 231→168 carries a double jump beside a rocket jump; the bot used to

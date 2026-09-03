@@ -737,6 +737,15 @@ internal static class Program
             Console.WriteLine(
                 $"policy {Path.GetFileName(policyPath!)}: trained against {policy.SimulationUuid}, "
                 + $"this build is {SimulationStamp.Uuid}"
+
+                // ⚠️ Reported, never compared. NavConstants left the gating
+                // surface on 2026-09-03 so a nav edit stops stranding
+                // checkpoints — but removing it from the GATE must not remove it
+                // from the RECORD, or "the bots play differently and the stamp
+                // matches" becomes unattributable. No checkpoint carries one to
+                // compare against yet; SimulationStamp.RoutingUuid says what to
+                // do when one does.
+                + $", routing {SimulationStamp.RoutingUuid}"
                 + (policy.SimulationUuid == SimulationStamp.Uuid
                     ? " (match)"
                     : "  <-- STAMP MISMATCH, BYPASSED by --policy-ignore-stamp. Everything this "

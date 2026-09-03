@@ -98,8 +98,18 @@ public sealed class SimulationStampTests(ITestOutputHelper output)
     /// numbers identical to the digit over 1.66M agent-steps — rather than argued
     /// to be. The distinction is the whole rule: see the constant's remarks.
     /// </para>
+    /// <para>
+    /// ⚠️ <b>Moved 2026-09-03, <c>9de9dc341dd95af9</c> → <c>9e0d931e1106a1bf</c>,
+    /// and NOT because behaviour changed.</b> <c>NavConstants</c> left the gating
+    /// surface for <c>SimulationStamp.RoutingUuid</c>, on the user's
+    /// authorisation, after <c>gg2-rl</c> was stranded twice in two days by nav
+    /// edits their own world fingerprint said had changed nothing. ⛔ <b>Done at
+    /// this moment on purpose</b>: the only checkpoint that exists is already
+    /// stamp-invalid and is a test fixture, so a one-off surface change costs
+    /// nothing today and would cost a training run after their next one.
+    /// </para>
     /// </remarks>
-    private const string Pinned = "9de9dc341dd95af9";
+    private const string Pinned = "9e0d931e1106a1bf";
 
     /// <summary>
     /// The stamp is stable, and not a per-process hash.
@@ -142,6 +152,57 @@ public sealed class SimulationStampTests(ITestOutputHelper output)
     /// changed gravity would have been invisible to the stamp.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// ⛔ The routing constants are on exactly ONE side of the split.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <c>NavConstants</c> moved out of the gating surface 2026-09-03 because it
+    /// changes <em>which states a policy is asked about</em>, not <em>what any
+    /// action does</em> — a distribution shift is a reason to re-measure, not a
+    /// reason to refuse to run, and <c>gg2-rl</c> was stranded twice in two days
+    /// by nav edits their own world fingerprint said had changed nothing.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Both directions, because each failure is silent in its own way.</b>
+    /// Nav creeping back into the gating surface strands checkpoints again for
+    /// nothing. Nav falling out of the routing surface loses the record entirely,
+    /// and "the bots play differently and both digests match" is a completely
+    /// different investigation from "the bots play differently and the routing
+    /// digest moved".
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void TheRoutingSurfaceIsSeparateAndNotGated()
+    {
+        var gating = SimulationStamp.Surface();
+        var routing = SimulationStamp.RoutingSurface();
+
+        Assert.Contains($"NavConstants.CellSize={NavConstants.CellSize}", routing);
+        Assert.DoesNotContain($"NavConstants.CellSize={NavConstants.CellSize}", gating);
+
+        // ⚠️ And the physics is NOT in the routing surface. A split that quietly
+        // moved gravity to the un-gated side would look exactly like this one.
+        Assert.DoesNotContain($"ClassStats.Gravity={ClassStats.Gravity:R}", routing);
+
+        // Two different digests over two different surfaces. Equal ones would mean
+        // the split exists in the source and not in the arithmetic.
+        Assert.NotEqual(SimulationStamp.Uuid, SimulationStamp.RoutingUuid);
+    }
+
+    /// <summary>The routing digest is stable across processes, like the stamp.</summary>
+    /// <remarks>
+    /// ⚠️ It is reported rather than gated, but a digest that changed per process
+    /// would make every report of it useless — and useless in the quiet way, since
+    /// nothing compares it and nothing would fail.
+    /// </remarks>
+    [Fact]
+    public void TheRoutingDigestIsStable()
+    {
+        Assert.Equal(SimulationStamp.RoutingUuid, SimulationStamp.RoutingUuid);
+        Assert.Matches("^[0-9a-f]{16}$", SimulationStamp.RoutingUuid);
+    }
+
     [Fact]
     public void TheSurfaceCoversThePhysicsTheBotConstantsAndTheTables()
     {
@@ -159,9 +220,9 @@ public sealed class SimulationStampTests(ITestOutputHelper output)
             $"Gml.Epsilon={Gml.Epsilon:R}",
             $"Gml.PointSix={Gml.PointSix:R}",
 
-            // The BOT_* and NAV_* blocks.
+            // The BOT_* block. ⚠️ NAV_* is NOT here any more — see
+            // TheRoutingSurfaceIsSeparateAndNotGated below.
             $"BotConstants.EngageTicks={BotConstants.EngageTicks}",
-            $"NavConstants.CellSize={NavConstants.CellSize}",
 
             // The action encoding and the (undesigned) observation layout.
             $"action={SimulationStamp.ActionEncodingVersion}",

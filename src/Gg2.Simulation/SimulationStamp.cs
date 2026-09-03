@@ -235,13 +235,73 @@ public static class SimulationStamp
         typeof(ClassStats),
         typeof(Gml),
         typeof(BotConstants),
+    ];
+
+    /// <summary>
+    /// Constants that move where a bot ENDS UP without changing what any action
+    /// DOES. Reported, never gated.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ⛔ <b>Split out of the gating surface 2026-09-03</b>, on the user's
+    /// authorisation, after <c>gg2-rl</c> reported being stranded twice in two
+    /// days by nav edits their own world fingerprint said had changed nothing.
+    /// </para>
+    /// <para>
+    /// <b>The line, so the next addition knows which side it is on:</b> the
+    /// gating surface is things that change what the <em>same action does</em> —
+    /// the physics, the class tables, the action encoding, the observation
+    /// layout. A checkpoint's learned mapping is WRONG if those move, so a
+    /// mismatch must refuse. This surface is things that change <em>which states
+    /// the policy is asked about</em>. The mapping is still valid; the input
+    /// distribution shifted, and a distribution shift is a reason to re-measure
+    /// rather than a reason to refuse to run.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Nothing here is read at inference.</b> A policy drives keys and aim
+    /// inside an engagement window; routing is the scripted layer's, and the
+    /// observation's geometry rays come from <c>Walkmask</c>, not from these.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b><c>BotConstants</c> is arguably the same question and was NOT moved.</b>
+    /// It changes when the policy is handed the wheel rather than what an action
+    /// does, which is this surface's own description — but no measurement has been
+    /// taken across a <c>BotConstants</c> edit the way <c>gg2-rl</c> took one
+    /// across the nav edits, and moving it on the strength of the argument alone
+    /// would be widening an authorisation past its evidence. Open.
+    /// </para>
+    /// </remarks>
+    private static readonly Type[] RoutingSources =
+    [
         typeof(NavConstants),
     ];
 
     private static readonly string Digest = Compute();
 
-    /// <summary>The stamp: sixteen hex characters over the whole surface.</summary>
+    private static readonly string RoutingDigest = ComputeRouting();
+
+    /// <summary>
+    /// The stamp: sixteen hex characters over the surface a mismatch REFUSES on.
+    /// </summary>
     public static string Uuid => Digest;
+
+    /// <summary>
+    /// A second digest over <see cref="RoutingSources"/> — reported, never gated.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Printed beside <see cref="Uuid"/> so a puzzling behaviour change can
+    /// still be attributed.</b> Removing nav from the gate must not mean removing
+    /// it from the record: "the bots play differently and both stamps match" and
+    /// "the bots play differently and the routing digest moved" are completely
+    /// different investigations.
+    /// <para>
+    /// ⚠️ <b>Nothing compares it yet</b>, because no checkpoint records one. If
+    /// <c>gg2-rl</c> starts writing it into their metadata, comparing and WARNING
+    /// on a mismatch is the natural next step — and a warning is the right verb
+    /// here, where <see cref="Require"/>'s throw is right for the other surface.
+    /// </para>
+    /// </remarks>
+    public static string RoutingUuid => RoutingDigest;
 
     /// <summary>
     /// Refuses a policy whose stamp is not this build's.
@@ -269,6 +329,31 @@ public static class SimulationStamp
     /// exactly like one that covered it and never changed.
     /// </remarks>
     public static IReadOnlyList<string> Surface() => Lines();
+
+    /// <summary>The routing surface, for the same reason.</summary>
+    public static IReadOnlyList<string> RoutingSurface() => RoutingLines();
+
+    private static string ComputeRouting() => Hash(RoutingLines());
+
+    private static List<string> RoutingLines()
+    {
+        var lines = new List<string>();
+
+        // ⚠️ Sorted by name for the same reason the gating surface is: reflection
+        // field order is unspecified.
+        foreach (var source in RoutingSources)
+        {
+            var constants = source
+                .GetFields(BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy)
+                .Where(f => f.IsLiteral && !f.IsInitOnly)
+                .OrderBy(f => f.Name, StringComparer.Ordinal);
+
+            foreach (var field in constants)
+                lines.Add($"{source.Name}.{field.Name}={Format(field.GetRawConstantValue())}");
+        }
+
+        return lines;
+    }
 
     private static List<string> Lines()
     {
@@ -348,14 +433,21 @@ public static class SimulationStamp
     /// boundary, so a non-cryptographic hash is the right tool and pulling in
     /// <c>System.Security.Cryptography</c> for it would not be.
     /// </remarks>
-    private static string Compute()
+    private static string Compute() => Hash(Lines());
+
+    /// <summary>
+    /// FNV-1a over the lines, newline-terminated. ⚠️ <b>Shared by both digests on
+    /// purpose</b>: two hashes computed different ways would be two things to keep
+    /// in step, and the surfaces are already separate enough.
+    /// </summary>
+    private static string Hash(List<string> surface)
     {
         const ulong Offset = 14695981039346656037;
         const ulong Prime = 1099511628211;
 
         var hash = Offset;
 
-        foreach (var line in Lines())
+        foreach (var line in surface)
         {
             foreach (var b in Encoding.UTF8.GetBytes(line))
             {

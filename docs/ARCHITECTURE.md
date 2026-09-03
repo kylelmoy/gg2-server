@@ -905,9 +905,19 @@ more than the choice:**
   CLAUDE.md warns about, and it is why 2.0 was rejected on route inflation
   (**+18.8%** mean, worst 4.5×) rather than on anything `eval` said.
 
-⚠️ **`SIM_UUID` moved, `5dac8a5e7c37ce3a` → `9de9dc341dd95af9`, and that is
-correct.** `NavConstants` is deliberately inside the stamp: a policy trained
-against the old nav layer *is* dated by this. The only checkpoint that exists was
+⚠️ **`SIM_UUID` moved, `5dac8a5e7c37ce3a` → `9de9dc341dd95af9`, and that was
+correct at the time.** `NavConstants` was inside the stamp, so a policy trained
+against the old nav layer was dated by this.
+
+⛔ **That reasoning was REVERSED on 2026-09-03 and the stamp is now
+`9e0d931e1106a1bf`.** `gg2-rl` reported being stranded twice in two days by nav
+edits their own world fingerprint said had changed nothing, and they were right:
+nav constants change *which states a policy is asked about*, not *what any action
+does*. `NavConstants` moved to `SimulationStamp.RoutingUuid` — reported on every
+policy load and by `BENCH_CONST`, never gated. A distribution shift is a reason
+to re-measure, not a reason to refuse to run. `SimulationStamp`'s remarks carry
+the line, and `BotConstants` is arguably the same question and deliberately not
+moved. The only checkpoint that exists was
 already stamp-invalid and is a test fixture, so it costs nothing today.
 
 ⚠️ **`NavSearchTests`' re-open fixture is kept and INVERTED** rather than deleted.

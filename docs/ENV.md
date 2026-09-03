@@ -2480,7 +2480,12 @@ is overloaded does not stop you reading it.**
 v1, encoding v2, `SIM_UUID 7ff5940d97aa7bed` — **this head, no migration**.
 
 ⚠️ **"This head" expired on 2026-09-02.** The moving-platform carry took
-`SIM_UUID` to `5dac8a5e7c37ce3a` and the checkpoint has not moved with it. See
+`SIM_UUID` to `5dac8a5e7c37ce3a` and the checkpoint has not moved with it. ⚠️ **It
+has moved twice more since** — to `9de9dc341dd95af9` with the A\* weight, and to
+`9e0d931e1106a1bf` on 2026-09-03 when `NavConstants` LEFT the gating surface for
+`SimulationStamp.RoutingUuid`. ⛔ **Read the current pair from `BENCH_CONST=1`
+rather than from any number written down here**; the second one is reported and
+never gated, and a nav edit no longer strands a checkpoint. See
 "The checkpoint is a FIXTURE now" below for what this repo does about that; the
 short version is **nothing here waits on `gg2-rl` any more**.
 
