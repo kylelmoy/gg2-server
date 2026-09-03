@@ -103,24 +103,14 @@ public static class CollisionLine
     public static bool Hits<TMask>(in LineCollider collider, TMask mask, double x1, double y1, double x2, double y2)
         where TMask : struct, IMask
     {
+        if (!MightMeet(collider.Bbox, x1, y1, x2, y2))
+            return false;
+
+        // The instance's span, on the half-open convention MightMeet explains.
         double left = collider.Bbox.Left;
         double top = collider.Bbox.Top;
-
-        // The instance covers [bbox_left, bbox_right + 1) horizontally and
-        // [bbox_top, bbox_bottom + 1) vertically: GM8's bbox_right is the last
-        // covered pixel, and a pixel is a unit square. Inclusive at the low
-        // end, exclusive at the high end, and that asymmetry is load-bearing —
-        // see the measurements in docs/SIMULATION.md.
         double right = collider.Bbox.Right + 1.0;
         double bottom = collider.Bbox.Bottom + 1.0;
-
-        var rectLeft = Math.Min(x1, x2);
-        var rectRight = Math.Max(x1, x2);
-        var rectTop = Math.Min(y1, y2);
-        var rectBottom = Math.Max(y1, y2);
-
-        if (right <= rectLeft || rectRight < left || bottom <= rectTop || rectBottom < top)
-            return false;
 
         // Order the endpoints by x, then trim the segment to the instance's
         // horizontal span. Only horizontally: GM8 does not clip vertically, and
@@ -154,6 +144,39 @@ public static class CollisionLine
             return false;
 
         return Walk(collider, mask, x1, y1, x2, y2);
+    }
+
+    /// <summary>
+    /// Whether a segment's bounding box overlaps an instance's at all — the broad
+    /// phase, and the first thing <see cref="Hits{TMask}"/> asks.
+    /// </summary>
+    /// <remarks>
+    /// The instance covers <c>[bbox_left, bbox_right + 1)</c> horizontally and
+    /// <c>[bbox_top, bbox_bottom + 1)</c> vertically: GM8's <c>bbox_right</c> is
+    /// the last covered pixel, and a pixel is a unit square. Inclusive at the low
+    /// end, exclusive at the high end, and that asymmetry is load-bearing — see
+    /// the measurements in docs/SIMULATION.md.
+    /// <para>
+    /// ⛔ <b>Public because a caller with many colliders wants it BEFORE building
+    /// them, and it has to be the same body.</b> A copy of this interval with
+    /// <c>bbox_right</c> in place of <c>bbox_right + 1</c> was mutated into
+    /// <c>CollisionWorld</c> on 2026-09-02 and <b>all 2,643 tests stayed
+    /// green</b> — a collision quietly refused at the edge of a gate is invisible
+    /// to this suite. Shared, the same mutation reddens four, because this body
+    /// is under <c>CollisionLineTests</c>' 9,014-segment oracle.
+    /// </para>
+    /// </remarks>
+    public static bool MightMeet(Aabb bbox, double x1, double y1, double x2, double y2)
+    {
+        var right = bbox.Right + 1.0;
+        var bottom = bbox.Bottom + 1.0;
+
+        var segLeft = Math.Min(x1, x2);
+        var segRight = Math.Max(x1, x2);
+        var segTop = Math.Min(y1, y2);
+        var segBottom = Math.Max(y1, y2);
+
+        return right > segLeft && segRight >= bbox.Left && bottom > segTop && segBottom >= bbox.Top;
     }
 
     private static bool Walk<TMask>(in LineCollider collider, TMask mask, double x1, double y1, double x2, double y2)

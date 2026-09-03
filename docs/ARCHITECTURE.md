@@ -641,46 +641,54 @@ it: expanding a node's edges in reverse order reddens exactly ONE test — this
 one.** The other 2,642 pass. **A failure here is a re-record, and a digest that
 does *not* move when the search was deliberately changed is the alarm.**
 
-### ⛔ Hoisting the solid-rect broad phase: 24% off the rect loop, and REJECTED
+### ✅ The solid rects are filtered once per ARC, not once per segment
 
 `CollisionLineBlocksBullets` walks every solid rect on the map and calls
 `CollisionLine.Hits`, which opens with a bounding-box rejection — **but only
 after a `LineCollider` has been built for the rect**, eight fields including two
-`Aabb`s, for a gate on the far side of the map. A soldier's arc test runs that
-loop ten times a shot. Extracting the rejection as `CollisionLine.MightMeet` and
-calling it before the collider is built:
+`Aabb`s, for a gate on the far side of the map. `BotArc.Clear` runs that loop
+**ten times a shot**, once per segment of the parabola, over the same rect set.
 
-| | before | after | |
-|---|---|---|---|
-| the rect loop | 0.603 µs a tick | 0.456 | **−24%** |
-| the whole tick | — | — | **could not be resolved** |
+⛔ **Two versions were built and only the second is worth having**, which is the
+part to remember:
 
-⛔ **Rejected on the same rule as `Projectiles.Collide`'s `stackalloc`: a change
-the end-to-end A/B cannot see does not ship.** Six alternations put the two arms
-on top of each other, and the mask half of the same call moved *up* by 0.05 µs
-for no reason anybody established — so the net is under 1% of a tick against a
-noise floor of about 2%.
+| | rect loop, µs a tick | the whole tick |
+|---|---|---|
+| before | 0.603 | — |
+| **hoist only** — reject before building the collider | 0.456 (**−24%**) | **could not be resolved** |
+| **filter once per arc** — `CollisionWorld.BulletRectsIn` | — | **poll −3.8%, tick −2.4%** |
 
-⚠️ **The measurement is kept because the next idea depends on it.** Doing the
-rejection **once per arc instead of once per segment** — thirteen rect tests a
-shot rather than a hundred and thirty — would take most of the remaining
-0.456 µs, about 2.8% of a tick. It needs `CollisionWorld` to expose the solid
-rects overlapping a box, which is a simulation API for a bot-only saving; that is
-the trade, and it has not been made.
+⚠️ **The hoist alone was rejected on the rule that a change the end-to-end A/B
+cannot see does not ship** — six alternations put the arms on top of each other.
+**The arc-level version measures, on the same probe and the same rule: six
+readings an arm, completely non-overlapping on the bot poll** (8.14-8.35 µs
+before, 7.78-7.94 after). The difference is that it removes nine tenths of the
+iterations rather than making each one cheaper.
 
-### ⛔ What the rejected attempt taught about test coverage
+⛔ **One body throughout.** `CollisionWorld.RectBlocks` decides a rect against a
+segment for both overloads, and `CollisionLine.MightMeet` is the same overlap
+test `Hits` opens with. **The filter is exact because it is conservative**: a
+rect that can meet a segment must overlap any box the segment lies inside, so
+filtering on the box round the whole arc cannot drop a rect that would have
+blocked.
 
-⚠️ **The first version of the hoist was a private copy of the interval inside
-`CollisionWorld`, and mutating it to `bbox_right` instead of `bbox_right + 1`
-left all 2,643 tests GREEN.** A collision quietly refused at the edge of a gate
-is invisible to this suite. Making it call `CollisionLine`'s own body instead
-took the same mutation to **4 red**, because that body is under
-`CollisionLineTests`' 9,014-segment oracle.
+### ⛔ Both of those needed a gate, and neither had one
 
-⛔ **That is the whole argument for "one body" stated as a measurement rather
-than as taste**: the duplicate was not merely a drift risk, it was a drift risk
-*with no test behind it*, and the shared version inherits a gate that already
-exists.
+⚠️ **Mutating the hoist's private copy of the box interval to `bbox_right`
+instead of `bbox_right + 1` left all 2,643 tests GREEN.** A collision quietly
+refused at the edge of a gate is invisible to this suite. Calling
+`CollisionLine`'s own body took the same mutation to **4 red**, under
+`CollisionLineTests`' 9,014-segment oracle. **"One body" is not taste here: the
+duplicate was a drift risk with no test behind it.**
+
+⚠️ **And making `BulletRectsIn` keep only its first rect ALSO left all 2,643
+green.** A bot would shoot happily through a spawn gate, and no fixture covers
+it — the parity traces are recorded firefights, not arcs across a doorway.
+`BulletRectFilterTests` is the gate: 4,000 sampled parabolas a map over three
+maps, each segment asked both ways, with the production no-candidates overload as
+the control. Both mutations now redden it, and it asserts the sweep is not
+degenerate — some segment must be blocked by a **rect alone**, and the filter
+must actually be narrowing the set.
 
 ### Still on the table, measured and not taken
 

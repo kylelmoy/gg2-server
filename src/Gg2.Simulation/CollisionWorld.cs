@@ -618,16 +618,106 @@ public sealed class CollisionWorld
         if (CollisionLineHitsMask(x1, y1, x2, y2))
             return true;
 
-        foreach (var rect in _rects)
+        for (var i = 0; i < _rects.Length; i++)
         {
-            if (!rect.IsSolidTo(filter))
-                continue;
-
-            if (CollisionLine.Hits(LineCollider.ForSolidRect(rect), default(CollisionLine.FilledMask), x1, y1, x2, y2))
+            if (RectBlocks(i, x1, y1, x2, y2, in filter))
                 return true;
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// The same question against a <em>pre-filtered</em> set of rect indices, for
+    /// a caller asking about many segments that share a bounding box.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>The body is the same one</b> — <see cref="RectBlocks"/> — so this
+    /// cannot answer differently from the overload above; it only asks fewer
+    /// rects. Fill <paramref name="candidates"/> with
+    /// <see cref="BulletRectsIn"/> over a box that contains every segment, and
+    /// the answer is identical: a rect that can meet a segment must overlap any
+    /// box the segment sits inside.
+    /// <para>
+    /// ⚠️ <b>Worth it only for many segments.</b> <c>BotArc.Clear</c> asks about
+    /// ten segments of one parabola, so the rect set was being walked ten times
+    /// over — and building a <see cref="LineCollider"/> per rect per segment to
+    /// throw it away. Measured 2026-09-02: the rect half of a twelve-bot tick,
+    /// 0.60 µs, is almost all of it that.
+    /// </para>
+    /// </remarks>
+    public bool CollisionLineBlocksBullets(
+        double x1, double y1, double x2, double y2, in CollisionFilter filter, ReadOnlySpan<int> candidates)
+    {
+        if (CollisionLineHitsMask(x1, y1, x2, y2))
+            return true;
+
+        foreach (var i in candidates)
+        {
+            if (RectBlocks(i, x1, y1, x2, y2, in filter))
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>One solid rect against one segment. The one body.</summary>
+    /// <remarks>
+    /// ⚠️ The <see cref="CollisionLine.MightMeet"/> call is not redundant with
+    /// the one inside <see cref="CollisionLine.Hits"/>: it is the same test, made
+    /// before a <see cref="LineCollider"/> is built for a rect on the far side of
+    /// the map rather than after.
+    /// </remarks>
+    private bool RectBlocks(int index, double x1, double y1, double x2, double y2, in CollisionFilter filter)
+    {
+        ref readonly var rect = ref _rects[index];
+
+        if (!rect.IsSolidTo(filter))
+            return false;
+
+        if (!CollisionLine.MightMeet(new Aabb(rect.Left, rect.Top, rect.Right, rect.Bottom), x1, y1, x2, y2))
+            return false;
+
+        return CollisionLine.Hits(
+            LineCollider.ForSolidRect(rect), default(CollisionLine.FilledMask), x1, y1, x2, y2);
+    }
+
+    /// <summary>How many solid rects the map has, for sizing a candidate span.</summary>
+    public int RectCount => _rects.Length;
+
+    /// <summary>
+    /// The indices of every rect that could block a bullet anywhere inside the
+    /// given bounds.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Conservative by construction and therefore exact</b>: a rect that can
+    /// meet a segment must overlap any box that segment lies inside, so filtering
+    /// on the enclosing box cannot drop a rect that would have blocked. The same
+    /// <see cref="CollisionLine.MightMeet"/> body decides both.
+    /// </remarks>
+    public int BulletRectsIn(
+        double left, double top, double right, double bottom, in CollisionFilter filter, Span<int> into)
+    {
+        var count = 0;
+
+        for (var i = 0; i < _rects.Length && count < into.Length; i++)
+        {
+            ref readonly var rect = ref _rects[i];
+
+            if (!rect.IsSolidTo(filter))
+                continue;
+
+            if (!CollisionLine.MightMeet(
+                    new Aabb(rect.Left, rect.Top, rect.Right, rect.Bottom),
+                    left, top, right, bottom))
+            {
+                continue;
+            }
+
+            into[count++] = i;
+        }
+
+        return count;
     }
 
     /// <summary>

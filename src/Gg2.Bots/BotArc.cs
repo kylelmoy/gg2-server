@@ -73,9 +73,20 @@ public static class BotArc
         // blocked with or without it. Checked by mutation.
         flight = Math.Clamp(flight, 1, BotConstants.AimMaxTicks);
 
-        var bx = sx;
-        var by = sy;
         var filter = CollisionFilter.ForBullet();
+
+        // ⚠️ The samples are laid out FIRST, so the rects can be filtered once
+        // for the whole parabola rather than once per segment. Measured
+        // 2026-09-02: this test is ten segments of a rocket's whole flight, and
+        // walking the map's solid rects ten times over — building a
+        // LineCollider for each, to throw it away — was the larger half of what
+        // the test cost. The samples themselves are unchanged, which is what
+        // keeps the answer identical.
+        Span<double> px = stackalloc double[BotConstants.ArcSamples + 1];
+        Span<double> py = stackalloc double[BotConstants.ArcSamples + 1];
+
+        px[0] = sx;
+        py[0] = sy;
 
         for (var i = 1; i <= BotConstants.ArcSamples; i++)
         {
@@ -108,11 +119,39 @@ public static class BotArc
                 ay = sy + (vy * t) + (gravity * t * (t + 1) / 2);
             }
 
-            if (collision.CollisionLineBlocksBullets(bx, by, ax, ay, filter))
-                return false;
+            px[i] = ax;
+            py[i] = ay;
+        }
 
-            bx = ax;
-            by = ay;
+        var left = double.MaxValue;
+        var top = double.MaxValue;
+        var right = double.MinValue;
+        var bottom = double.MinValue;
+
+        for (var i = 0; i < px.Length; i++)
+        {
+            left = Math.Min(left, px[i]);
+            right = Math.Max(right, px[i]);
+            top = Math.Min(top, py[i]);
+            bottom = Math.Max(bottom, py[i]);
+        }
+
+        // ⛔ Every rect that could block ANY of the segments, filtered once. The
+        // box encloses every sample, so a rect this drops cannot meet a segment
+        // — CollisionWorld.BulletRectsIn carries the argument, and both ends use
+        // the same overlap body.
+        Span<int> candidates = stackalloc int[collision.RectCount];
+        var candidateCount = collision.BulletRectsIn(left, top, right, bottom, in filter, candidates);
+
+        candidates = candidates[..candidateCount];
+
+        for (var i = 1; i < px.Length; i++)
+        {
+            if (collision.CollisionLineBlocksBullets(
+                    px[i - 1], py[i - 1], px[i], py[i], filter, candidates))
+            {
+                return false;
+            }
         }
 
         return true;
