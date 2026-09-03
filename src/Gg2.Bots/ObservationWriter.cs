@@ -172,13 +172,46 @@ public static class ObservationWriter
             ? (float)(weapon.ReloadTimer / (double)stats.ReloadTime)
             : 0f;
 
-        // ⚠️ One column for three different resources, because they are the same
-        // thing to a policy: "the special I am holding is this full". A medic's
-        // uber, an engineer's nuts and bolts and a sniper's charge never coexist
-        // on one character, so a column each would be two columns of zeros.
+        // ⚠️ One column for several resources, because they are the same thing to
+        // a policy: "the special I am holding is this full". They never coexist on
+        // one character, so a column each would be columns of zeros.
+        //
+        // ⚠️ This comment used to claim the column also carried a SNIPER's charge.
+        // It never has — a sniper falls to the `_` arm — and the sniper is a
+        // TRAINED class, so that was a claim about what a policy could see that
+        // was false for every run ever done.
+        //
+        // ⛔ THE MEDIC'S UBER IS DELIBERATELY NOT HERE, removed 2026-09-03 at
+        // gg2-rl's request and on this side's call. Three facts make it the right
+        // way round:
+        //
+        //   1. The column has been identically 0.0 in every training row of every
+        //      run, because no trained class has ever hit a non-`_` arm. Its
+        //      first-layer weights are still the random draw.
+        //   2. Uber cannot accrue in a 1v1 duel at all — Healing's only accrual
+        //      path needs a patient — so adding Medic to the trained set does NOT
+        //      populate it. Training would still see 0.0.
+        //   3. A medic on the beam is never handed to the policy
+        //      (Handover.ShouldEngage's medic term), and the uber press requires a
+        //      beam target (BotClassKeys' medic case: UberReady AND an ally on the
+        //      beam AND an enemy within UberRange). So in EVERY state where a
+        //      policy drives a medic, the charge is unspendable by it.
+        //
+        // Leaving it in would feed an off-distribution non-zero value into an
+        // untrained weight at deployment and nowhere else — the worst of both, and
+        // for a number the policy is not allowed to act on.
+        //
+        // ⚠️ NO ObservationLayoutVersion BUMP, and the reason is checkable: the
+        // layout is unchanged, and no checkpoint that exists was ever driven as a
+        // medic, so no checkpoint's inputs move. ⛔ That expires the moment a
+        // medic-trained checkpoint predates this line.
+        //
+        // ⚠️ The engineer's arm is left alone and carries the same latent trap:
+        // Engineer is not in PolicyController.TrainedClasses, so a policy never
+        // drives one and never reads it. Training engineer without checking this
+        // walks into the identical problem.
         o[at++] = self.Class switch
         {
-            PlayerClass.Medic => (float)(weapon.UberCharge / WeaponState.MaxUberCharge),
             PlayerClass.Engineer => (float)(self.NutsNBolts / CharacterState.MaxNutsNBolts),
             _ => 0f,
         };

@@ -360,7 +360,10 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
         if (_driving >= 0 && !_tiers[_driving].AtDecisionBoundary(slot))
             return MicroInput(_driving, in world, slot, tick);
 
-        if (!Handover.ShouldEngage(in world, slot, Range, Rule, _scripted.WantsToEngage, Engage))
+        // ⚠️ Combat.Ally, not a bool: the predicate is Handover's and the fact is
+        // the scripted layer's, the same split WantsToEngage already uses.
+        if (!Handover.ShouldEngage(
+                in world, slot, Range, Rule, _scripted.WantsToEngage, Engage, _scripted.Combat.Ally))
             return Scripted(scripted);
 
         var chosen = Choose(in world, tick, slot, eligible);

@@ -97,14 +97,43 @@ internal static class Handover
     /// more than doubled.
     /// </para>
     /// </remarks>
+    /// <param name="healTarget">
+    /// The slot this bot is beaming, or <see cref="BotAlly.None"/>. ⚠️ The raw
+    /// slot rather than a bool, so the PREDICATE stays here — the caller supplies
+    /// the fact and this file decides what it means, exactly as
+    /// <paramref name="wantsToEngage"/> already works.
+    /// </param>
     internal static bool ShouldEngage(
         in WorldView world,
         int slot,
         double range,
         HandoverRule rule,
         bool wantsToEngage,
-        EngageOpponents engage = EngageOpponents.Anyone)
+        EngageOpponents engage = EngageOpponents.Anyone,
+        int healTarget = BotAlly.None)
     {
+        // ⛔ A medic on the beam is NOT handed over, whatever the range says.
+        // Requested by gg2-rl 2026-09-03, who are adding Medic to the trained set
+        // with uber deliberately out of the policy's scope: the policy owns needle
+        // combat and only when the medic is alone with an enemy.
+        //
+        // ⚠️ It is a THIRD term and belongs in neither of the two above. It is not
+        // about who is nearby (that is `engage`) and not about whether to fight at
+        // all (that is `wantsToEngage`) — it is whether this bot, in this state, is
+        // the right one to hand over. A medic beaming a patient has a job this
+        // tick, and a controller that has never been trained to heal would drive
+        // the body away from it.
+        //
+        // ⚠️ Mirrors BotCombat's `subjectIsAlly` rather than re-deciding it: the
+        // ally REPLACES the subject there, which is what makes BotClassKeys press
+        // ATTACK (the beam) instead of SPECIAL (the needles). Two places that
+        // should agree about one decision must not disagree.
+        if (BotClassProfile.Heals(world.Character(slot).Class)
+            && BotAlly.StillValid(in world, slot, healTarget))
+        {
+            return false;
+        }
+
         // ⚠️ Only the RANGE half is filtered by `engage`. `wantsToEngage` is the
         // scripted layer's own engage hold and is deliberately left alone: it
         // decides whether the bot stops to fight at all, which must not change
