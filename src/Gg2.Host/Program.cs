@@ -186,6 +186,33 @@ internal static class Program
     /// encoding and is the wrong way round from every intuition. It is stated in
     /// the usage text for exactly that reason.
     /// </remarks>
+    /// <summary>
+    /// Splits a <c>host:port</c> argument, defaulting the port when it is
+    /// omitted.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Rightmost colon</b>, so a bare IPv6 literal is not silently cut in
+    /// half. A host with no colon keeps the reference's port.
+    /// </remarks>
+    private static (string Host, int Port) ParseHostPort(string flag, string text)
+    {
+        var separator = text.LastIndexOf(':');
+
+        if (separator < 0)
+            return (text, GameConstants.AuthServerPort);
+
+        var host = text[..separator];
+        var port = text[(separator + 1)..];
+
+        if (!int.TryParse(port, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            || parsed is < 1 or > 65535)
+        {
+            throw new ArgumentException($"{flag}: '{port}' is not a port number");
+        }
+
+        return (host, parsed);
+    }
+
     private static byte[] ParseClassLimits(string flag, string text)
     {
         if (byte.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var everyClass))
@@ -632,6 +659,22 @@ internal static class Program
                     options.AnnounceToLobby = true;
                     break;
 
+                // ⚠️ The other switch that reaches outside this machine, and the
+                // one that sends something ABOUT A PLAYER rather than about the
+                // server: it relays each client's reward id to the auth server.
+                case "--rewards":
+                    options.Rewards = true;
+                    break;
+
+                case "--auth-server":
+                {
+                    var (host, port) = ParseHostPort(name, Require(name, value));
+                    options.AuthServerHost = host;
+                    options.AuthServerPort = port;
+                    i++;
+                    break;
+                }
+
                 case "--control-port":
                     options.ControlPort = RequireInt(name, value);
                     options.ControlPortEnabled = true;
@@ -946,6 +989,14 @@ internal static class Program
                             appears in the client's server browser (default: off).
                             Sends this server's address, name, map and player
                             count there every 30 seconds until it shuts down.
+          --rewards         let players authenticate their Haxxy badges, hats and
+                            capes so everyone sees them (default: off). Relays
+                            each player's reward id to the auth server, which is
+                            a third party; with it off nobody's cosmetics show
+                            and nothing else changes.
+          --auth-server <host[:port]>
+                            where --rewards authenticates
+                            (default: ganggarrison.com:45022)
 
         The built-in maps — 22 shipped plus the gg_debug2 debug range — are
         checked in at maps/ and are found automatically, so a clone serves a

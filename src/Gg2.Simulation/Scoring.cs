@@ -56,11 +56,12 @@ public struct StatBuffer
 /// reads the second one — but everything writes it.
 /// </para>
 /// <para>
-/// <b>Not modelled</b>: the domination kill table, which is a
-/// player-by-player matrix rather than a counter and rides in its own part of
-/// the <c>FULL_UPDATE</c> (one byte per <em>other</em> player). The port writes
-/// that block as zeroes; its framing is already right, because the count comes
-/// from the roster. <see cref="StatIndex.Dominations"/> and
+/// ✅ <b>The domination kill table IS modelled</b> — <see cref="Dominations"/>,
+/// reached from <c>GameServer</c> and written into the <c>FULL_UPDATE</c> block
+/// that carries one byte per <em>other</em> player. ⚠️ <b>This paragraph said
+/// "not modelled, written as zeroes" until 2026-09-03, long after it landed</b>,
+/// and nothing could go red for it: a stale "not done" reads as a gap somebody
+/// might go and close twice. <see cref="StatIndex.Dominations"/> and
 /// <see cref="StatIndex.Revenge"/> are vestigial in the reference too — reset in
 /// four places and incremented nowhere.
 /// </para>

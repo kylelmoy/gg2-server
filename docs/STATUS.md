@@ -25,6 +25,31 @@ policy — is in progress.**
 beams, ubercharge, afterburn, the airblast, the sentry gun, the sniper's scope,
 Quote's bubble screen, the spy's cloak and backstab, the sandvich, and taunting.
 
+## The 2026-09-03 audit against stock upstream
+
+Mechanical, not a reading: the 61 message ids, the 15-entry client-command table,
+the 55 entity types `builder_init.gml` registers, the eight gamemodes, the
+weapons and projectiles, and each server-side script group in turn. **Five gaps,
+all now closed**, and what makes them worth recording is the shape they shared —
+*the port received the data and did not act on it*, which reads as done from
+every angle except the one that matters.
+
+| Gap | What it cost | Gate |
+|---|---|---|
+| **Queued jumping** was never simulated | a client with the setting on desynced on every landing — observable simulation | `QueueJumpTests`, and `SimulationBehaviourVersion` 2 → 3 |
+| `CLIENT_SETTINGS` was stored, never rebroadcast | other clients dead-reckoned that player on the wrong jump rule | `QueueJumpTests` |
+| `PLAYER_CHANGENAME` truncated instead of kicking, and had no throttle | an unbounded broadcast amplifier on one socket | `NameAndBubbleTests` |
+| The April Fools chat-bubble substitution was missing | wrong bubble on one day, a relayed bubble the reference drops on the other 364 | `NameAndBubbleTests` |
+| Rewards were answered with silence | nobody's badges, hats or capes rendered | `RewardAuthTests`, behind `--rewards` |
+
+⚠️ **Four of the five were "not modelled" or "silence" sentences in code
+comments, and two had a `docs/` claim contradicting them.** `docs/PLAN.md` said
+queued jumping had landed on the strength of the plumbing; `docs/PROTOCOL.md`
+justified the reward silence as the reference's own behaviour, which it is not.
+**The falsification condition for this table: re-run the audit against upstream
+after any reference bump.** It found five in an afternoon and the previous
+completeness claim had stood for two days.
+
 ---
 
 ## Phase 0 — foundations

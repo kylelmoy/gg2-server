@@ -145,6 +145,25 @@ public static class CharacterPhysics
         if (character.OnGround)
             character.DoubleJumpUsed = false;
 
+        // Begin Step's "Handle input", and ⚠️ it sits OUTSIDE the
+        // `if(!taunting and !omnomnomnom)` block that opens below — so a
+        // character presses jump during a taunt, queues it, and launches on the
+        // tick the taunt ends. Transcribed in that order rather than folded into
+        // the jump test.
+        //
+        // ⚠️ `else if` in the reference, not two independent tests. A tick that
+        // carries both a press and a release of the jump key — which
+        // ApplyInput's `|=` accumulation makes reachable whenever more than one
+        // input arrives between two ticks — queues the jump rather than
+        // cancelling it.
+        if (character.QueueJump)
+        {
+            if ((character.PressedKeys & PlayerKeys.Jump) != 0)
+                character.WantToJump = true;
+            else if ((character.ReleasedKeys & PlayerKeys.Jump) != 0)
+                character.WantToJump = false;
+        }
+
         // ⚠️ Begin Step.xml:95's `if(!taunting and !omnomnomnom)` opens here and
         // closes after the jump, and GML evaluates it ONCE. So a character
         // already taunting cannot start another taunt and cannot jump — but one
@@ -170,16 +189,17 @@ public static class CharacterPhysics
         }
 
         // Jump fires on a fresh press, not on the key being held — so holding
-        // jump does not bunny-hop. The reference also accepts a queued jump
-        // (the client's queueJump setting), which is not modelled; a queue-jump
-        // client would jump a tick later here than it should.
+        // jump does not bunny-hop, unless the client asked for queued jumping,
+        // in which case the queue set above is the second way in and holding it
+        // does exactly that.
         //
         // The vspeed guard stops a jump re-launching a character already rising
         // faster than a jump would.
         // The character's own jumpStrength, not the class constant: a scoped
         // sniper's is two units lower. It is the same value for everybody else.
         if (!blocked
-            && (character.PressedKeys & PlayerKeys.Jump) != 0
+            && ((character.PressedKeys & PlayerKeys.Jump) != 0
+                || (character.QueueJump && character.WantToJump))
             && Gml.Greater(character.VSpeed, -character.JumpStrength))
         {
             if (character.OnGround && !stuckInWall)

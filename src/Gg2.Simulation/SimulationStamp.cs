@@ -219,7 +219,23 @@ public static class SimulationStamp
     /// a custom map; a match on one is outside the stamp's claim either way.
     /// </para>
     /// </remarks>
-    public const int SimulationBehaviourVersion = 2;
+    /// <para>
+    /// ⛔ <b>3, 2026-09-03: QUEUED JUMPING.</b> <c>CharacterPhysics</c> now reads
+    /// <c>player.queueJump</c> and the <c>wantToJump</c> queue it drives, so a
+    /// client with the setting on jumps the tick it lands instead of waiting for
+    /// a fresh press. That moves trajectories, which is the unconditional bump.
+    /// <para>
+    /// ⚠️ <b>Reachability was considered and does NOT buy an exemption, for the
+    /// same reason the carry's did not.</b> The flag defaults false and no bot
+    /// or fixture sets it today — but <see cref="PlayerState.QueueJump"/> is
+    /// ordinary <c>WorldState</c>, so anything that builds a state can set it,
+    /// and "nothing sets it yet" is an argument that expires the first time
+    /// something does. The stamp is about what a checkpoint was trained against;
+    /// a build where the jump rule depends on a state field is a different
+    /// build from one where it cannot.
+    /// </para>
+    /// </para>
+    public const int SimulationBehaviourVersion = 3;
 
     /// <summary>The types whose public constants are part of the contract.</summary>
     /// <remarks>

@@ -46,6 +46,70 @@ public sealed class RosterEntry
     /// </summary>
     public bool QueueJump { get; set; }
 
+    /// <summary>
+    /// When this player's last accepted <c>PLAYER_CHANGENAME</c> was processed.
+    /// </summary>
+    /// <remarks>
+    /// <c>player.lastNamechange</c>. ⚠️ <b><see cref="DateTime.MinValue"/> is the
+    /// right default</b>, not "now": the reference's field does not exist until
+    /// the first rename, and <c>variable_local_exists</c> makes that first one
+    /// unconditional. Defaulting to the join instant would silently swallow a
+    /// rename sent in the first second after connecting, which is exactly when
+    /// a client sends one.
+    /// </remarks>
+    public DateTime LastNameChange { get; set; } = DateTime.MinValue;
+
+    /// <summary>
+    /// The user id this client asked to authenticate as, or null if it never
+    /// sent a <c>REWARD_REQUEST</c>.
+    /// </summary>
+    /// <remarks>
+    /// <c>player.rewardId</c>. Untrusted: it is whatever the client typed into
+    /// its own ini, and it is not this server's job to check it — the auth
+    /// server is the only party that can.
+    /// </remarks>
+    public string? RewardId { get; set; }
+
+    /// <summary>
+    /// The 16-byte challenge sent to this client, or null if none is
+    /// outstanding.
+    /// </summary>
+    /// <remarks>
+    /// <c>player.challenge</c>. Per connection rather than per server: two
+    /// clients must not be handed the same nonce, or one could replay the
+    /// other's answer.
+    /// </remarks>
+    public byte[]? RewardChallenge { get; set; }
+
+    /// <summary>
+    /// Whether this player has already had an auth check started for them.
+    /// </summary>
+    /// <remarks>
+    /// <c>player.rewardAuthAlreadyStarted</c>, and it is one-way for the life of
+    /// the connection: without it a client could make the server open an
+    /// outbound connection per packet it feels like sending, which is the whole
+    /// point of the reference's guard.
+    /// </remarks>
+    public bool RewardAuthStarted { get; set; }
+
+    /// <summary>
+    /// The reward string this player authenticated for, or empty.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Kept because <c>FULL_UPDATE</c> carries it</b> —
+    /// <c>Player.events/User Event 12</c> writes <c>unparseRewards(rewards)</c>
+    /// per player — so a client joining after somebody authenticated still draws
+    /// their badges. Without it the <c>REWARD_UPDATE</c> broadcast would reach
+    /// only whoever was already connected, and cosmetics would depend on join
+    /// order.
+    /// <para>
+    /// Held as the string the auth server sent rather than as a parsed set. The
+    /// reference round-trips it through a <c>ds_map</c>, so its re-emitted order
+    /// need not match what it received; the value is a set either way and this
+    /// server has no use for the members.
+    /// </para>
+    /// </remarks>
+    public string Rewards { get; set; } = string.Empty;
 }
 
 /// <summary>

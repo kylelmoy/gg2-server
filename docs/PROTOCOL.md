@@ -691,13 +691,32 @@ Not everything in the reference is load-bearing for a private headless server:
   `getNumberOfOccupiedSlots`, which is humans, and the packet's own bot field is a
   hard zero in the reference. Transcribed rather than corrected — that field's
   meaning belongs to the lobby, not to us.
-- **Reward/auth** (`REWARD_*`, `Documentation/Authentication.txt`) talks to an
-  external auth server. Answer `REWARD_REQUEST` with nothing and never grant
-  rewards.
-  ⛔ **Assessed 2026-09-01 and the answer is still "skip" — deliberately, not by
+- ~~**Reward/auth**~~ ✅ **Implemented 2026-09-03, behind `--rewards`, which
+  defaults off.** `RewardAuth` builds the packets, `RewardAuthClient` is the
+  socket, and `GameServer` answers `REWARD_REQUEST` with a challenge, relays the
+  response and broadcasts the `REWARD_UPDATE`. The string is kept on the roster
+  so a later joiner's `FULL_UPDATE` carries it too.
+  ⚠️ **The default is off and that is a DEPARTURE from the reference, not a
+  transcription of it** — see the corrected reason below. Turning it on makes
+  this server open outbound TCP to a third party carrying its players' user ids,
+  and a headless binary has no hosting menu in which somebody agreed to that.
+  ⚠️ **`--auth-server host[:port]` overrides where it authenticates**, which is
+  the only way the flow can be exercised: `ganggarrison.com:45022` is a third
+  party and is not contacted from this repo. `RewardAuthTests` stands up a
+  loopback listener instead.
+  ⛔ **The HOST self-auth is deliberately NOT ported.**
+  `GameServerCreate.gml:79-83` authenticates the host's own player with
+  `ipCheck = false` and `hmac_md5(key, challenge)`. This port has no local player
+  — slot 0 is a reserved spectator nobody plays — so there is nothing to
+  decorate, and reading `[Haxxy] RewardKey`/`RewardId` would send an operator's
+  own secret nowhere useful. **What being wrong costs:** a scoreboard entry for
+  slot 0 with no badges on it.
+  ⛔ **Assessed 2026-09-01 and the answer was "skip" — deliberately, not by
   default.** The protocol is fully specified in the tree and would be
-  straightforward to write, so this is a decision rather than a blocker. Three
-  reasons, in order of weight:
+  straightforward to write, so it was a decision rather than a blocker. Three
+  reasons were given, in order of weight; the first two are now addressed by the
+  flag and the override respectively, and the third is why it was safe to leave
+  so long:
   1. **The game server would have to make outbound HTTP requests to
      `ganggarrison.com` carrying player identities.** The flow is
      `REWARD_REQUEST <user_id>` → server challenge → `hmac_md5(key, challenge +
@@ -720,9 +739,15 @@ Not everything in the reference is load-bearing for a private headless server:
      `docs/SIMULATION.md` already exclude from the seeded one. So a player with
      rewards does not simulate differently.
 
-  What stays true meanwhile: `REWARD_REQUEST` and `REWARD_CHALLENGE_RESPONSE` are
-  answered with silence, which is the reference's own behaviour on a server with
-  no auth configured.
+  ⛔ **That claim was FALSE and stood for two days: "silence is the reference's
+  own behaviour on a server with no auth configured".** There is no such
+  configuration. `processClientCommands.gml:320-325` mints a challenge and
+  replies to **every** `REWARD_REQUEST` unconditionally; the only server-side
+  reward setting in GG2 (`[Haxxy] RewardKey`/`RewardId`) governs the host's own
+  self-auth and nothing else. The *decision* to skip was sound and is unchanged
+  above — what was wrong was dressing it up as parity. ⚠️ **A deliberate
+  departure described as a transcription is the worst of both**: nobody
+  re-examines it, because it reads as already checked.
 - **Plugins** (`PLUGIN_PACKET`, `pluginList`). Advertise an empty plugin list and
   `pluginsRequired = 0`; the client's plugin path is then never entered. ✅ Done,
   and it is the only part that can be.
@@ -781,9 +806,14 @@ plausible one.
 **Fully covered, checked rather than assumed:**
 
 - **All 15 client commands** in `processClientCommands.gml` reach
-  `GameServer.cs`'s switch. `REWARD_REQUEST`, `REWARD_CHALLENGE_RESPONSE` and
-  `PLUGIN_PACKET` are answered with silence, which is the reference's own answer
-  from a server with no auth.
+  `GameServer.cs`'s switch. ⚠️ **Reaching the switch is not the same as being
+  handled, and this line implied it was.** Three of the fifteen were relays that
+  dropped the reference's own policy on the floor, all found on 2026-09-03 and
+  all now closed: `CLIENT_SETTINGS` was stored and never broadcast or simulated
+  (see `QueueJumpTests`), `PLAYER_CHANGENAME` truncated where the reference kicks
+  and had no throttle (`NameAndBubbleTests`), and `CHAT_BUBBLE` skipped the April
+  Fools substitution (same file). `PLUGIN_PACKET` alone is still answered without
+  running the reference's logic, and that is the kick documented above.
 - **Every map entity type** registered by `builder_init.gml`'s `addEntity` block
   is in `EntityTypes.cs`; every simulation-bearing object in `InGameElements`
   and `GameElements` has a home in `Gg2.Simulation`.
@@ -797,8 +827,16 @@ not, each settled by grep rather than by reading:
   `Scripts/Events`: **gear never touches the wire.** It is a client draw derived
   from reward state, which is why `ConstantsTests.NotCarried` can list the
   constants as "rewards, out of scope" without a gap behind it.
-- **Holidays** (81 lines). `xmasTime.gml` is nothing but `sprite_assign` calls
-  and `calculateAprilFools` sets a global that only drawing code reads.
+- **Holidays** (81 lines). `xmasTime.gml` is nothing but `sprite_assign` calls.
+  ⛔ **The other half of this line was WRONG**: `calculateAprilFools` does not set
+  "a global that only drawing code reads" — `processClientCommands.gml:194-206`
+  reads `global.aFirst` on the `CHAT_BUBBLE` command path, rewriting every bubble
+  but 45 on April 1st and dropping bubble 61 on every other day. That is server
+  behaviour deciding what goes on the wire, and it is ported as of 2026-09-03
+  (`ChatBubbles`). ⚠️ **The census settled this one "by grep" and the grep was of
+  `Scripts/GameServer` for the word `gear`** — the right method aimed at the
+  wrong symbol. A claim of the form "only X reads this" is a claim about every
+  reader, so it has to be checked from the *definition* outward.
 - **Kill Log** (302 lines). Called from the `doEvent*` scripts, which run
   server-side too — but it builds a `ds_map` for `Objects/Overlays/KillLog`'s
   **Draw** event. A HUD list, not state.

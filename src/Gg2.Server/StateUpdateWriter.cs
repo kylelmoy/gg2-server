@@ -320,8 +320,11 @@ public sealed class StateUpdateWriter(
             writer.WriteUByteFromReal(stats.Points);
             writer.WriteUByte(player.QueueJump ? (byte)1 : (byte)0);
 
-            // Rewards come from an auth server this port never talks to.
-            writer.WriteString2(string.Empty);
+            // Player.events/User Event 12: this player's authenticated rewards,
+            // so a client that joins later draws the same badges as one that was
+            // already here. Empty unless --rewards is on and this player
+            // authenticated.
+            writer.WriteString2(player.Rewards);
 
             // One domination count per *other* player, in roster order — no
             // count prefix, because the length is the roster size the message

@@ -177,6 +177,13 @@ public struct CharacterState
     public bool CarryingIntel;
 
     /// <summary>Set while a jump is queued by the queue-jump client setting.</summary>
+    /// <remarks>
+    /// Written only under <see cref="QueueJump"/>, and read only by the arm of
+    /// the jump test that same flag guards — so it is inert for a client that
+    /// has not turned the setting on. It is cleared by every jump that actually
+    /// fires, which is what stops one held press launching a second jump off the
+    /// next landing.
+    /// </remarks>
     public bool WantToJump;
 
     // --- damage bookkeeping --------------------------------------------------
@@ -785,6 +792,20 @@ public struct CharacterState
     /// </para>
     /// </remarks>
     public bool Humiliated;
+
+    /// <summary>
+    /// <c>player.queueJump</c>, mirrored beside <see cref="MapChanging"/> and
+    /// written by the same line.
+    /// </summary>
+    /// <remarks>
+    /// The client's queued-jumping preference. It gates both halves of the
+    /// feature in <c>Character.events/Begin Step</c>: the block that records
+    /// <see cref="WantToJump"/> from the jump key's press and release, and the
+    /// <c>or (player.queueJump and wantToJump)</c> arm of the jump test itself.
+    /// The state lives on <see cref="PlayerState.QueueJump"/>; this is the
+    /// per-tick copy the physics reads.
+    /// </remarks>
+    public bool QueueJump;
 
     /// <summary>
     /// <c>areSetupGatesClosed()</c>, mirrored beside <see cref="MapChanging"/>

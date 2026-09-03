@@ -24,13 +24,13 @@ namespace Gg2.Simulation;
 /// collapse because nothing can cloak yet; they arrive with the spy.
 /// </para>
 /// <para>
-/// ⚠️ <b>Two of <c>serverBuildSentry</c>'s preconditions are not modelled</b>:
-/// <c>collision_point(x, y, SpawnRoom, 0, 0)</c> — the port's
-/// <see cref="CollisionWorld"/> carries no spawn-room rectangles — and
-/// <c>player.object.onCabinet</c>, which needs the <c>HealingCabinet</c>. An
-/// engineer standing in a spawn room or on a cabinet can therefore build where
-/// the reference refuses. Both belong to the phases that own those map objects;
-/// <see cref="CanBuild"/> documents the gap at the call site.
+/// ✅ <b>All of <c>serverBuildSentry</c>'s preconditions are modelled</b>,
+/// including the two that arrived with the map objects they need — the spawn-room
+/// test and <c>onCabinet</c>. See <see cref="CanBuild"/>, which checks both.
+/// ⚠️ <b>This paragraph described them as missing until 2026-09-03</b>, well
+/// after they landed, while the call site it pointed at had already been
+/// corrected: a pointer and its target drifted apart and only the pointer was
+/// read.
 /// </para>
 /// </remarks>
 public static class Sentries

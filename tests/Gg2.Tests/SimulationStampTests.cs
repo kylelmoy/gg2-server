@@ -108,8 +108,18 @@ public sealed class SimulationStampTests(ITestOutputHelper output)
     /// stamp-invalid and is a test fixture, so a one-off surface change costs
     /// nothing today and would cost a training run after their next one.
     /// </para>
+    /// <para>
+    /// ⛔ <b>Moved 2026-09-03, <c>9e0d931e1106a1bf</c> → <c>fbd4afc7d90bb490</c>,
+    /// and this one IS a behaviour change.</b> <c>SimulationBehaviourVersion</c>
+    /// 2 → 3: queued jumping. <c>CharacterPhysics</c> reads
+    /// <c>PlayerState.QueueJump</c> and the <c>WantToJump</c> queue it drives, so
+    /// a client with the setting on jumps on landing instead of on a fresh
+    /// press. Trajectories move, which is the unconditional bump — the
+    /// constant's own remarks say why "no fixture sets the flag yet" buys no
+    /// exemption.
+    /// </para>
     /// </remarks>
-    private const string Pinned = "9e0d931e1106a1bf";
+    private const string Pinned = "fbd4afc7d90bb490";
 
     /// <summary>
     /// The stamp is stable, and not a per-process hash.
