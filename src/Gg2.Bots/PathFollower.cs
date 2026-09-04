@@ -147,6 +147,32 @@ public sealed partial class PathFollower
     }
 
     /// <summary>
+    /// This bot's lane — one cost per graph edge, or empty for the graph's own
+    /// costs.
+    /// </summary>
+    /// <remarks>
+    /// <b>A property rather than a parameter on <see cref="Step"/>, because a
+    /// lane belongs to the bot and not to the tick.</b> Each bot owns its own
+    /// follower (<c>MatchRunner</c> says so explicitly), a lane is assigned once
+    /// when the bot joins — <see cref="BotRoles.Lane"/> — and it must not change
+    /// while the bot is walking: a bot that re-lanes mid-route is
+    /// indistinguishable from one that cannot make up its mind, which is the same
+    /// argument <see cref="BotRoles.Assign"/> makes about roles.
+    /// <para>
+    /// ⚠️ <b>Cleared by whoever changes the graph.</b> The costs are indexed by
+    /// edge position and an edge index only means anything to one build of a
+    /// graph, so a lane held across a map change prices the new map's edges with
+    /// the old map's field. <see cref="ScriptedBot.SetMap"/> is where that is
+    /// handled, the same place the route and the occupancy flag are dropped.
+    /// </para>
+    /// <para>
+    /// <see cref="ReadOnlyMemory{T}"/> rather than a span because it is a field;
+    /// the search takes the span.
+    /// </para>
+    /// </remarks>
+    public ReadOnlyMemory<double> Lane { get; set; }
+
+    /// <summary>
     /// Advances one bot's route by a tick and returns the movement keys.
     /// </summary>
     /// <param name="state">The bot's navigation state, updated in place.</param>

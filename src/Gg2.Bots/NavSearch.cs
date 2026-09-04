@@ -145,6 +145,17 @@ public sealed class NavSearch
     /// same for every bot asking at the same moment, and coarse.
     /// </para>
     /// </param>
+    /// <param name="laneCost">
+    /// One cost per edge, indexed as <see cref="NavGraph.Edges"/> is, or null to
+    /// use the graph's own. <b><see cref="BotLanes"/>' half of route variety</b>:
+    /// where <paramref name="occupancy"/> disperses a team by reacting to what
+    /// its members are walking this tick, a lane disperses it with a field fixed
+    /// for the graph's lifetime — the same dispersion, computable in advance.
+    /// <para>
+    /// A lane never removes an edge, so it cannot change what is reachable; the
+    /// route it returns is the cheapest one <em>under that lane's costs</em>.
+    /// </para>
+    /// </param>
     /// <returns>Whether a route was found.</returns>
     public bool Find(
         int start,
@@ -152,7 +163,8 @@ public sealed class NavSearch
         in NavQuery query,
         List<int> path,
         IReadOnlySet<long>? blocked = null,
-        IReadOnlyDictionary<long, int>? occupancy = null)
+        IReadOnlyDictionary<long, int>? occupancy = null,
+        ReadOnlySpan<double> laneCost = default)
     {
         ArgumentNullException.ThrowIfNull(path);
 
@@ -191,6 +203,11 @@ public sealed class NavSearch
         var hasBlocked = blocked is { Count: > 0 };
         var hasOccupancy = occupancy is { Count: > 0 };
 
+        // Hoisted for the same reason as the two above: an empty lane field is
+        // the common case (a bot with no lane, every scenario, every rollout) and
+        // the test would otherwise run on every edge the frontier touches.
+        var hasLanes = !laneCost.IsEmpty;
+
         _gScore[start] = 0;
         _open.Enqueue(start, 0);
 
@@ -225,8 +242,15 @@ public sealed class NavSearch
 
             _closed[current] = true;
 
-            foreach (var edge in _graph.EdgesFrom(current))
+            // Indexed rather than a foreach because a lane's cost field is keyed
+            // by the edge's position in the flat array, which a slice cannot say.
+            var edgeStart = _graph.EdgeStart(current);
+            var edges = _graph.EdgesFrom(current);
+
+            for (var i = 0; i < edges.Length; i++)
             {
+                ref readonly var edge = ref edges[i];
+
                 var next = edge.To;
 
                 if ((uint)next >= (uint)_graph.NodeCount)
@@ -274,7 +298,7 @@ public sealed class NavSearch
                 if (!NavGraph.EdgeRoutable(in edge, in query))
                     continue;
 
-                var cost = edge.Cost;
+                var cost = hasLanes ? laneCost[edgeStart + i] : edge.Cost;
 
                 // The key is only built when somebody is going to look it up.
                 if (hasBlocked || hasOccupancy)

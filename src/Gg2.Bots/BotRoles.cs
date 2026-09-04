@@ -121,4 +121,31 @@ public static class BotRoles
     /// </remarks>
     public static double SpreadX(int slot) =>
         (((slot % 2) * 2) - 1) * BotConstants.SpreadMax * ((slot * 7 % 11) / 10.0);
+
+    /// <summary>
+    /// Which of <paramref name="lanes"/> corridors this bot routes down —
+    /// <see cref="BotLanes"/>.
+    /// </summary>
+    /// <param name="placeInTeam">
+    /// <b>This bot's position among its OWN TEAM's bots</b>, in roster order —
+    /// not its slot. ⚠️ A slot would be a bug that hides: teams alternate down
+    /// the roster, so <c>slot % 4</c> hands red the even lanes and blue the odd
+    /// ones, and a team of six would use two of the four corridors while every
+    /// count and bound still looked right.
+    /// </param>
+    /// <param name="lanes">How many the graph was given. At least 1.</param>
+    /// <remarks>
+    /// <b>Counting rather than rolling, the same as <see cref="Assign"/>, and for
+    /// the same reason.</b> A die gives a team of four all-one-lane often enough
+    /// to matter, and "the split sometimes just does not happen" is not
+    /// debuggable from a screenshot. Straight modulo also guarantees the team is
+    /// divided as evenly as its size allows.
+    /// <para>
+    /// <b>Constant for the bot's life</b>, like the role and the spread: a bot
+    /// that re-lanes mid-route reads as one that cannot make up its mind, and the
+    /// value of the split is that it looks like team composition from outside.
+    /// </para>
+    /// </remarks>
+    public static int Lane(int placeInTeam, int lanes) =>
+        lanes <= 1 ? 0 : ((placeInTeam % lanes) + lanes) % lanes;
 }

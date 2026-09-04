@@ -67,6 +67,10 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
     private PathFollower _follower;
     private NavGraph? _graph;
 
+    private BotLanes? _lanes;
+
+    private int _lane;
+
     private bool _goalIsSpot;
 
     /// <summary>
@@ -192,6 +196,46 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
     /// per tick</b> — see <see cref="BotRoles"/>.
     /// </summary>
     public BotRole Role { get; set; }
+
+    /// <summary>
+    /// The corridors this bot may be assigned to, for the graph it is on now.
+    /// </summary>
+    /// <remarks>
+    /// <b>Shared between every bot on the server, like <see cref="Occupancy"/>,
+    /// and for the opposite reason.</b> Occupancy is shared because it has to
+    /// aggregate what the team is doing; this is shared because it is derived
+    /// from the graph and there is no per-bot part of it to compute — one
+    /// derivation serves everyone, and each bot picks a lane out of it.
+    /// <para>
+    /// ⚠️ <b>Dropped by <see cref="SetMap"/>, exactly like the route and the
+    /// occupancy counts, and for the same reason</b>: a lane's costs are indexed
+    /// by edge position, and an edge index only means anything to one build of a
+    /// graph. Whoever changes the map owes the bots a fresh derivation.
+    /// </para>
+    /// </remarks>
+    public BotLanes? Lanes
+    {
+        get => _lanes;
+        set
+        {
+            _lanes = value;
+            ApplyLane();
+        }
+    }
+
+    /// <summary>
+    /// Which of <see cref="Lanes"/> this bot routes down. <b>Assigned once at
+    /// join, never per tick</b> — <see cref="BotRoles.Lane"/>.
+    /// </summary>
+    public int Lane
+    {
+        get => _lane;
+        set
+        {
+            _lane = value;
+            ApplyLane();
+        }
+    }
 
     /// <summary>
     /// Whether this bot decided, on its most recent poll, to stop walking and
@@ -327,6 +371,20 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
         Objective = null;
         _goalIsSpot = false;
         SpotBanUntil = 0;
+
+        // The lane goes with the graph it was derived for. Dropping it rather
+        // than carrying it is what makes the failure safe: a bot with no lane
+        // routes on the graph's own costs, where a bot holding the old map's
+        // field prices the new map's edges with numbers that mean nothing.
+        _lanes = null;
+        ApplyLane();
+    }
+
+    /// <summary>Hands the follower this bot's lane, or nothing.</summary>
+    private void ApplyLane()
+    {
+        if (_follower is not null)
+            _follower.Lane = _lanes is null ? default : _lanes.Costs(_lane);
     }
 
     /// <summary>Sends the bot somewhere. Null graph means it cannot go.</summary>
