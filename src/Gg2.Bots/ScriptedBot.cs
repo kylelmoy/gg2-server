@@ -71,6 +71,8 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
 
     private int _lane;
 
+    private NavDistanceSet? _distances;
+
     private bool _goalIsSpot;
 
     /// <summary>
@@ -238,6 +240,30 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
     }
 
     /// <summary>
+    /// The precomputed A\* distance tables, or null for the straight-line
+    /// heuristic. <c>--nav-distances</c>; off unless asked for.
+    /// </summary>
+    /// <remarks>
+    /// <b>Shared between every bot on the server</b>, like <see cref="Lanes"/>
+    /// and for the same reason: it is derived from the graph and has no per-bot
+    /// part. Unlike a lane it is not even indexed per bot — every asker reads
+    /// the table matching its own class arcs out of the one set.
+    /// <para>
+    /// ⚠️ <b>Dropped by <see cref="SetMap"/></b>: the tables are indexed by node
+    /// and a node index only means anything to one build of a graph.
+    /// </para>
+    /// </remarks>
+    public NavDistanceSet? Distances
+    {
+        get => _distances;
+        set
+        {
+            _distances = value;
+            ApplyDistances();
+        }
+    }
+
+    /// <summary>
     /// Whether this bot decided, on its most recent poll, to stop walking and
     /// fight — its engage hold.
     /// </summary>
@@ -378,6 +404,13 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
         // field prices the new map's edges with numbers that mean nothing.
         _lanes = null;
         ApplyLane();
+
+        // Same rule, same reason: the tables are indexed by NODE, so a set held
+        // across a map change would hand the search a bound derived from a graph
+        // the bot is no longer standing on — and an over-estimate is not a slow
+        // route, it is the wrong one.
+        _distances = null;
+        ApplyDistances();
     }
 
     /// <summary>Hands the follower this bot's lane, or nothing.</summary>
@@ -385,6 +418,13 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
     {
         if (_follower is not null)
             _follower.Lane = _lanes is null ? default : _lanes.Costs(_lane);
+    }
+
+    /// <summary>Hands the follower the distance tables, or nothing.</summary>
+    private void ApplyDistances()
+    {
+        if (_follower is not null)
+            _follower.Distances = _distances;
     }
 
     /// <summary>Sends the bot somewhere. Null graph means it cannot go.</summary>

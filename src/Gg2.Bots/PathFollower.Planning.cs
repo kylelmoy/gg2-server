@@ -199,7 +199,8 @@ public sealed partial class PathFollower
         state.Replans++;
 
         if (!_search.Find(
-            start, goal, query, _scratch, state.Blacklist, occupancy?.Counts(query.Team), Lane.Span))
+            start, goal, query, _scratch, state.Blacklist, occupancy?.Counts(query.Team), Lane.Span,
+            Distances?.For(in query)))
         {
             state.PlanFailUntil = tick + BotConstants.ReplanTicks;
             return false;

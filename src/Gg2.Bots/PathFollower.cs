@@ -173,6 +173,31 @@ public sealed partial class PathFollower
     public ReadOnlyMemory<double> Lane { get; set; }
 
     /// <summary>
+    /// The precomputed distance tables feeding A\*'s heuristic, or null for the
+    /// straight-line estimate the search has always used.
+    /// </summary>
+    /// <remarks>
+    /// <b>A property for the same reason <see cref="Lane"/> is one</b>: it
+    /// belongs to the graph the bot is on and not to the tick. Unlike a lane it
+    /// is not per bot at all — one set serves every bot on the server, and it is
+    /// read-only once derived, so sharing it across threaded workers is safe.
+    /// <para>
+    /// ⚠️ <b>Turning this on CHANGES ROUTES, and that is not a bug.</b>
+    /// <see cref="NavConstants.SearchWeight"/> makes this a <em>weighted</em>
+    /// A\*, so the heuristic decides which route comes back and not merely how
+    /// fast it comes back. See <c>docs/TRAPS-BOTS.md</c>, "Shipping the
+    /// precomputed distances", for what that costs and why the flag is off by
+    /// default.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Cleared by whoever changes the graph</b>, exactly as the lane is:
+    /// the tables are indexed by node and a node index only means anything to
+    /// one build of a graph.
+    /// </para>
+    /// </remarks>
+    public NavDistanceSet? Distances { get; set; }
+
+    /// <summary>
     /// Advances one bot's route by a tick and returns the movement keys.
     /// </summary>
     /// <param name="state">The bot's navigation state, updated in place.</param>

@@ -40,16 +40,27 @@ public sealed class HeadlessMatch : DrivenWorld
 {
     private readonly List<PlayerClass> _earlier = [];
 
+    private readonly NavDistanceSet? _distances;
+
     private HeadlessMatch(
         HeadlessMatchOptions options,
         LevelMap map,
         CollisionWorld collision,
         SpawnPoints spawns,
-        NavGraph? nav)
+        NavGraph? nav,
+        NavDistanceSet? distances)
         : base(map, collision, nav)
     {
         Options = options;
         Spawns = spawns;
+
+        // ⚠️ Derived here only when the caller did not, so a LONE match still
+        // works — but a batch must pass one in. All matches on a map share its
+        // graph, so a per-match derivation is the same table computed `count`
+        // times, and at a few hundred ms against a match's own ~0.6 s it would
+        // cost more than the heuristic saves. MatchRunner.Run hoists it.
+        _distances = distances
+            ?? (options.NavDistances && nav is not null ? NavDistanceSet.Derive(nav) : null);
 
         Reset();
     }
@@ -120,8 +131,16 @@ public sealed class HeadlessMatch : DrivenWorld
     /// two matches sharing one would overwrite each other's control points,
     /// which is a wrong answer rather than a crash.
     /// </remarks>
-    public static HeadlessMatch On(HeadlessMatchOptions options, LevelMap map, NavGraph? nav) =>
-        new(options, map, new CollisionWorld(map), new SpawnPoints(map), nav);
+    /// <param name="distances">
+    /// A <see cref="NavDistanceSet"/> already derived for <paramref name="nav"/>,
+    /// or null to derive one here when
+    /// <see cref="HeadlessMatchOptions.NavDistances"/> asks for it. <b>It is
+    /// read-only once built, so a batch shares one across every thread</b> — the
+    /// same sharing rule the map and the graph follow, and for the same reason.
+    /// </param>
+    public static HeadlessMatch On(
+        HeadlessMatchOptions options, LevelMap map, NavGraph? nav, NavDistanceSet? distances = null) =>
+        new(options, map, new CollisionWorld(map), new SpawnPoints(map), nav, distances);
 
     /// <summary>
     /// Puts the match back to its first tick: a fresh world, a fresh roster of
@@ -315,6 +334,13 @@ public sealed class HeadlessMatch : DrivenWorld
     {
         var skill = BotSkill.ForTier(Options.Difficulty);
 
+        // ONE set for the whole match, not one per bot: it is derived from the
+        // graph and every bot reads the table matching its own class arcs out of
+        // it, so a per-bot derivation would be twelve times the cost and the same
+        // answer. Null unless asked for, which is what keeps every recorded route
+        // identical by default.
+        var distances = _distances;
+
         // A stream of its own, not the world's. Which team and class a bot
         // takes must not move the weapon-seed stream — see Reset's remark.
         var picker = new GmlRandom(Options.Seed ^ 0x9E3779B9);
@@ -379,7 +405,10 @@ public sealed class HeadlessMatch : DrivenWorld
             // tick's alarm stage, which is what the reference does.
             State.Players[slot].RespawnTimer = 1;
 
-            Drive(slot, new ScriptedBot(Nav, new NavQuery(team), skill, slot));
+            Drive(slot, new ScriptedBot(Nav, new NavQuery(team), skill, slot)
+            {
+                Distances = distances,
+            });
         }
 
         AssignRoles();

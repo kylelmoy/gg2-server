@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Gg2.Bots;
 using Gg2.Maps;
@@ -69,6 +70,27 @@ public sealed class BotPopulationService
     /// same for every bot asking at the same moment.
     /// </remarks>
     public BotOccupancy Occupancy { get; } = new();
+
+    /// <summary>
+    /// The precomputed A\* distance tables for <see cref="Nav"/>, or null when
+    /// <see cref="ServerOptions.NavDistances"/> is off — which is the default.
+    /// </summary>
+    /// <remarks>
+    /// Held here beside <see cref="Nav"/> and <see cref="Occupancy"/> because it
+    /// has exactly their lifetime: derived at a map change, handed to every bot,
+    /// and meaningless the moment the graph is replaced.
+    /// </remarks>
+    public NavDistanceSet? Distances { get; private set; }
+
+    // What Distances was built for. A graph is re-parsed at every round, so the
+    // object is never the same twice and reference equality cannot answer this;
+    // the map, area and graph size can. ⚠️ The assumption is that one map+area
+    // yields one graph, which holds because a graph is either a file that is not
+    // changing under the running server or a deterministic build of that map —
+    // and the sizes are carried so a regenerated graph of a different shape
+    // still misses. A regenerated graph of the SAME shape but different edges
+    // would go stale here; nothing observed can produce one.
+    private string? _distancesKey;
 
     /// <summary>The spawn points the objective layer measures a push against.</summary>
     public SpawnPoints? Spawns { get; private set; }
@@ -172,13 +194,88 @@ public sealed class BotPopulationService
         // is counted declines the next removal and is then added twice.
         Occupancy.Reset();
 
+        // Derived here for the same reason the graph is generated here: a map
+        // change is the one moment nothing is being simulated, and this costs
+        // tens of milliseconds. It must also come BEFORE SetMap hands the bots
+        // the new graph, so no bot can plan a route against the old set.
+        Distances = DeriveDistances(map, area);
+
         foreach (var slot in _server.BotSlots)
         {
             if (ScriptedBot.Of(_server.SourceOf(slot)) is { } bot)
+            {
                 bot.SetMap(Nav);
+                bot.Distances = Distances;
+            }
         }
 
         Retarget();
+    }
+
+    /// <summary>
+    /// Builds the distance tables for the new graph, when asked for.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>On the tick thread at the map change, like the nav generator, and
+    /// logged for the same reason</b> — an operator who turned this on should be
+    /// able to read what it cost rather than infer it from a hitch. The table
+    /// count is worth printing beside the size: it is not eight, and how far
+    /// below eight it is depends on which class arcs the graph actually has.
+    /// </remarks>
+    private NavDistanceSet? DeriveDistances(LevelMap map, int area)
+    {
+        if (!_server.Options.NavDistances || Nav is null)
+        {
+            _distancesKey = null;
+            return null;
+        }
+
+        // ⚠️ MapChanged runs at every ROUND, not only at every map change — a
+        // rotation that stays on one map reloads its graph each time — so
+        // without this the server pays a full derivation every round end. Found
+        // by running the server and reading its log, not by a test: every gate
+        // here builds a set once and could not see a rebuild.
+        var key = $"{map.Name}/{area}/{Nav.NodeCount}/{Nav.EdgeCount}";
+
+        // ⚠️ No "and Distances is not null" here: a graph this REFUSED must stay
+        // refused for that graph, or the failing case retries a several-hundred-
+        // millisecond derivation at every round end — the same bug the key was
+        // added to fix, wearing the failure path as a disguise.
+        if (_distancesKey == key)
+            return Distances;
+
+        var started = Stopwatch.GetTimestamp();
+        NavDistanceSet set;
+
+        try
+        {
+            set = NavDistanceSet.Derive(Nav);
+        }
+        catch (ArgumentException e)
+        {
+            // A table is N**2 floats, so a large enough CUSTOM map overflows the
+            // index and NavDistances.Derive refuses. Degrade to the straight-line
+            // heuristic rather than refusing to serve the map — that is the same
+            // answer NavCache.TryLoad and Generate give, and it is the DEFAULT
+            // behaviour, so nothing is lost but the speed-up.
+            _distancesKey = key;
+            _log.Info(
+                $"could not precompute nav distances for {map.Name} area {area}: {e.Message}. "
+                + "Bots on it use the straight-line heuristic, as they do without --nav-distances");
+
+            return null;
+        }
+
+        var ms = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+
+        _distancesKey = key;
+
+        _log.Info(
+            $"precomputed nav distances for {map.Name} area {area}: "
+            + $"{set.TableCount} table(s), {set.Bytes / 1024.0 / 1024.0:0.1} MB, {ms:0} ms "
+            + "— routes on this map will differ from a run without --nav-distances");
+
+        return set;
     }
 
     /// <summary>
@@ -421,6 +518,13 @@ public sealed class BotPopulationService
         {
             SpreadX = BotRoles.SpreadX(stagger),
             Occupancy = Occupancy,
+
+            // ⚠️ Here as well as in MapChanged, and both are needed: that hands
+            // the set to the bots that SURVIVED a rotation, this to the ones
+            // that join afterwards. A bot filled in mid-round without it would
+            // silently route on the straight-line heuristic while its team-mates
+            // used the exact one — a mixed configuration nothing would report.
+            Distances = Distances,
         };
 
         // Null where the map has no cache, which leaves the bot fighting whatever

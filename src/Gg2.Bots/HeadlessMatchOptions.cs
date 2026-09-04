@@ -15,6 +15,18 @@ namespace Gg2.Bots;
 /// <c>PlayerState.Fresh</c>: <b>in this codebase a zeroed value type is
 /// routinely not a valid one.</b>
 /// </remarks>
+/// <param name="NavDistances">
+/// Give A\* an exact precomputed heuristic instead of the straight-line guess —
+/// <see cref="NavDistanceSet"/>, <c>--nav-distances</c>. Worth about 8% of a
+/// twelve-bot tick, and this is the path where that matters: <c>eval</c> and
+/// every rollout leave <c>Occupancy</c> null, so A\* is the largest single cost
+/// in the tick here.
+/// <para>
+/// ⛔ <b>Default false, and a run with it on is NOT comparable to one with it
+/// off.</b> The search is weighted, so the heuristic chooses the route as well
+/// as the speed. Record it beside any number taken with it.
+/// </para>
+/// </param>
 public readonly record struct HeadlessMatchOptions(
     string Map,
     int Area,
@@ -30,7 +42,8 @@ public readonly record struct HeadlessMatchOptions(
     int? BlueBots = null,
     PlayerClass[]? AllowedClasses = null,
     BotBrainSpec? Brain = null,
-    Team? HybridTeam = null)
+    Team? HybridTeam = null,
+    bool NavDistances = false)
 {
     /// <summary>
     /// A short match on <c>ctf_truefort</c> with twelve bots. ⚠️ The values are

@@ -85,10 +85,20 @@ public static class MatchRunner
 
         var results = new MatchResult[count];
 
+        // ⛔ Derived ONCE for the batch, not once a match. Every match here plays
+        // the same graph, so a per-match derivation is the identical table
+        // computed `count` times — a few hundred ms each against a match that
+        // costs about 0.6 s, which would spend more than the heuristic saves and
+        // make --nav-distances look like a regression. It is read-only once
+        // built, so the Parallel.For below shares it safely.
+        var distances = options.NavDistances && nav is not null
+            ? NavDistanceSet.Derive(nav)
+            : null;
+
         if (threads == 1)
         {
             for (var i = 0; i < count; i++)
-                results[i] = RunOne(options, i, map, nav);
+                results[i] = RunOne(options, i, map, nav, distances);
 
             return results;
         }
@@ -101,7 +111,7 @@ public static class MatchRunner
             0,
             count,
             new ParallelOptions { MaxDegreeOfParallelism = threads },
-            i => results[i] = RunOne(options, i, map, nav));
+            i => results[i] = RunOne(options, i, map, nav, distances));
 
         return results;
     }
@@ -120,10 +130,11 @@ public static class MatchRunner
         HeadlessMatchOptions options,
         int index,
         Gg2.Maps.LevelMap map,
-        NavGraph? nav)
+        NavGraph? nav,
+        NavDistanceSet? distances = null)
     {
         var seeded = options with { Seed = unchecked(options.Seed + ((uint)index * 2654435761u)) };
-        return HeadlessMatch.On(seeded, map, nav).Run();
+        return HeadlessMatch.On(seeded, map, nav, distances).Run();
     }
 
     /// <summary>

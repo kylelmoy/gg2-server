@@ -466,6 +466,14 @@ public sealed class RouteDiversityMatchTests(ITestOutputHelper output)
         None,
         Occupancy,
         Lanes,
+
+        /// <summary>
+        /// A\* given the exact precomputed heuristic — <c>--nav-distances</c>.
+        /// <b>Not a route-variety mechanism at all</b>, and it lives in this
+        /// enum because this file owns the only instrument that prices a route
+        /// against the cheapest route between its own endpoints.
+        /// </summary>
+        Distances,
     }
 
     /// <summary>One match under one mechanism, scored.</summary>
@@ -478,6 +486,7 @@ public sealed class RouteDiversityMatchTests(ITestOutputHelper output)
             Bots = Bots,
             MaxTicks = Ticks,
             Seed = seed,
+            NavDistances = arm == Arm.Distances,
         };
 
         var match = HeadlessMatch.Load(options, ReferenceTree.MapsDirectory, ReferenceTree.NavCacheDirectory);
@@ -511,6 +520,71 @@ public sealed class RouteDiversityMatchTests(ITestOutputHelper output)
         }
 
         return Sample(match);
+    }
+
+    /// <summary>
+    /// What the precomputed heuristic does to route cost and to dispersion.
+    /// </summary>
+    /// <remarks>
+    /// <b>The question <c>--nav-distances</c> could not be shipped without.</b>
+    /// <c>NavConstants.SearchWeight</c> makes this a WEIGHTED A\*, so the
+    /// heuristic decides which route comes back and not only how fast it comes
+    /// back: with the straight-line estimate the inflated heuristic still sits at
+    /// about 0.914 of the true remaining cost, and with an exact one it sits at
+    /// the weight itself. Every route therefore moves, and whether they move for
+    /// better or worse is not derivable from the speed-up.
+    /// <para>
+    /// ⚠️ <b>The "ideal" this prices against is itself produced by the same
+    /// deliberately-suboptimal A\* on the straight-line heuristic</b>, so it is an
+    /// upper bound and not the true optimum. An arm reading BELOW 100% is
+    /// therefore meaningful rather than impossible: it is routing better than the
+    /// incumbent search does.
+    /// </para>
+    /// </remarks>
+    [Fact(Skip = Measurement)]
+    public void WhatThePrecomputedHeuristicCostsInRouteCost()
+    {
+        ReferenceTree.RequireNavCache();
+
+        var maps = NavCache.List(ReferenceTree.NavCacheDirectory)
+            .Where(g => g.Area == 1 && !g.Map.StartsWith("gg_debug", StringComparison.Ordinal))
+            .Select(g => g.Map)
+            .ToArray();
+
+        output.WriteLine($"{"map",-22} {"none",7} {"dist",7} | {"none infl",10} {"dist infl",10}");
+
+        double noneAll = 0, distAll = 0, noneInf = 0, distInf = 0;
+
+        foreach (var map in maps)
+        {
+            double none = 0, dist = 0, ni = 0, di = 0;
+
+            for (var seed = 1u; seed <= Seeds; seed++)
+            {
+                var a = PlayArm(map, seed, Arm.None);
+                var b = PlayArm(map, seed, Arm.Distances);
+
+                none += a.Spread;
+                ni += a.Inflation;
+                dist += b.Spread;
+                di += b.Inflation;
+            }
+
+            noneAll += none / Seeds;
+            noneInf += ni / Seeds;
+            distAll += dist / Seeds;
+            distInf += di / Seeds;
+
+            output.WriteLine(
+                $"{map,-22} {none / Seeds,7:F3} {dist / Seeds,7:F3} | "
+                + $"{ni / Seeds,10:P1} {di / Seeds,10:P1}");
+        }
+
+        var n = maps.Length;
+
+        output.WriteLine(string.Empty);
+        output.WriteLine($"MEAN over {n} maps  spread: none {noneAll / n:F3}, distances {distAll / n:F3}");
+        output.WriteLine($"                inflation: none {noneInf / n:P1}, distances {distInf / n:P1}");
     }
 
     /// <summary>Steps a prepared match, scoring each team's routes as it goes.</summary>

@@ -62,6 +62,13 @@ internal static class Evaluate
             Difficulty = Int(args, "--bot-difficulty", HeadlessMatchOptions.Default.Difficulty),
             MaxTicks = Int(args, "--max-ticks", HeadlessMatchOptions.Default.MaxTicks),
             Seed = (uint)Int(args, "--seed", 1),
+
+            // ⛔ Changes every route, so it is a property of the ARM and not a
+            // free speed-up — a table taken with it is not comparable to one
+            // taken without. It is offered here because this is the path where
+            // it pays: eval leaves Occupancy null, so A* is the largest single
+            // cost in the tick.
+            NavDistances = args.Contains("--nav-distances"),
         };
 
         string[] maps = Flag(args, "--map") is { Length: > 0 } one
@@ -186,6 +193,10 @@ internal static class Evaluate
           --maps <path>     where the built-in map PNGs live
           --botnav <path>   where the bot nav caches live
           --no-navgen       do not build a graph for a map that has none
+          --nav-distances   exact precomputed A* heuristic (~8% of the tick).
+                            ⛔ CHANGES EVERY ROUTE - the search is weighted, so
+                            this is an arm, not a speed-up. Not comparable to a
+                            table taken without it.
 
         Results do not depend on --threads: match i is seeded from its index, so
         it is the same match whether it ran first, last or concurrently. That is

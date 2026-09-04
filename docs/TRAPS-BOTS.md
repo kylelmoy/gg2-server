@@ -1815,6 +1815,139 @@ pinned bot measurements would all need re-recording. **The argument is a
 judgement call and has not been made.** `distances` defaults to null, nothing
 in the shipped path passes it, and the route digests are untouched.
 
+### Shipping the precomputed distances: `--nav-distances`
+
+`Gg2.Bots.NavDistanceSet`, `PathFollower.Distances`, `ScriptedBot.Distances`,
+`ServerOptions.NavDistances`, `HeadlessMatchOptions.NavDistances`. Gated by
+`NavDistanceSetTests`; measured by
+`RouteDiversityMatchTests.WhatThePrecomputedHeuristicCostsInRouteCost` and by
+`BENCH_COMBAT` with `BENCH_NAVDIST=1`. Measured 2026-09-04, Release.
+
+⛔ **This is an ARM, not a speed-up, and every number taken with it on has to say
+so.** `NavConstants.SearchWeight` makes the search a *weighted* A\*: the
+heuristic is inflated on purpose, so it chooses which route comes back and not
+merely how fast. With the straight-line estimate the inflated heuristic still
+sits at about 0.914 of the true remaining cost; with an exact one it sits at the
+weight itself. **Every route moves.** A table taken with the flag on is not
+comparable to a baseline taken without it.
+
+✅ **And the routes move the RIGHT way, which was not derivable from the
+speed-up.** 21 maps × 3 seeds × 12 bots × 3,000 ticks, each installed route
+priced against the cheapest route between its own endpoints:
+
+| | route inflation | dispersion |
+|---|---|---|
+| straight line (shipped default) | 103.6% | 0.634 |
+| `--nav-distances` | **99.1%** | **0.613** |
+
+⚠️ **Below 100% is meaningful here rather than impossible.** The "ideal" is
+produced by the same deliberately-suboptimal A\* on the straight-line heuristic,
+so it is an upper bound and not the true optimum — 99.1% means the exact
+heuristic routes *better than the incumbent search does*, not better than
+optimal.
+
+- ⛔ **It is not uniformly better: 3 of 21 maps regress**, and the worst is the
+  one that was already unexplained. `ctf_avanti` **147.4% → 158.5%**,
+  `tdm_mantic` 102.5% → 108.1%, `koth_corinth` 101.6% → 102.2%. Whatever is
+  wrong with `ctf_avanti` gets *worse* under an exact heuristic, which is a live
+  clue and the first thing to look at when that anomaly is next picked up.
+- ⚠️ **What is lost is a little route variety, and only a little: 0.634 →
+  0.613.** Better routing converges bots onto the same best corridors. It stays
+  small because **the goal layer is untouched** — `BotRoles.Assign`,
+  `BotRoles.SpreadX` and `BotGoalSpot` disperse a team by GOAL before the search
+  is ever consulted, and that is where most of the match-level dispersion comes
+  from. Per map it goes both ways (`koth_valley` 0.782 → 0.651, but
+  `dkoth_sixties` 0.629 → 0.708).
+- ✅ **The search count falls too, and that half is deterministic.**
+  `ctf_truefort`, twelve bots: **320.0 → 271.7 searches per 1000 ticks**, goals
+  175.7 → 155.5. Better routes are lost and re-planned less often, so part of
+  the tick saving is *fewer* searches rather than *cheaper* ones.
+- ⚠️ **The tick figure is noisy and should be re-taken on a quiet machine.**
+  Paired runs on `ctf_truefort` read 21.87/20.97 µs a tick without and
+  16.90/18.69 with — **roughly 1.12-1.29x**, against a 1.36x expectation for the
+  search alone at ~30% of the tick plus the search-count drop. The `settled=True`
+  and search-count columns agreed across every run; only the wall clock moved.
+  **Quote the range, not a point.**
+
+⛔ **End to end on `eval`, the flag is a WASH at the default match count**, and
+this is the number that decides whether it is worth turning on. The table is
+built once per map and the saving accrues per match, so the trade depends
+entirely on matches-per-map. `ctf_truefort`, one thread, wall clock:
+
+| matches on the map | without | with | |
+|---|---|---|---|
+| 4 (the `eval` default) | 5,075 / 4,526 ms | 4,318 / 4,518 ms | **no effect** |
+| 24 | 17,731 ms | 16,036 ms | **1.11x** |
+
+⚠️ **The first pair of 4-match runs looked like 1.18x and the repeat came back
+5,075→4,526 against 4,318→4,518 — noise.** Two runs an arm is the minimum here.
+A default `eval` (4 matches × 22 maps) pays a fresh derivation per map for a
+saving that has four matches to earn it back in, and does not.
+
+**What it costs at the map change:** `ctf_truefort` builds **4 tables, 7.20 MB**.
+One reverse Dijkstra per node per distinct profile, on the tick thread, logged
+with the elapsed time — the same placement and the same reasoning as the nav
+generator's own build.
+
+⛔ **Build a table per ability profile or do not build one at all.** The
+permissive table measured **1.06x** where the class-matched one measured
+**1.36x**. `NavDistanceSet` is the whole reason this is shippable: it splits on
+the three class-arc flags and on nothing else. On `ctf_truefort`, **323,969 of
+471,969 node pairs are strictly tighter for a walker than for a rocket-jumper**
+— that is how much a permissive table gives away.
+
+- ✅ **Only the class arcs split the set.** Team, the intel flag and the setup
+  gates all only ever *remove* edges from an asker, so a table built with every
+  gate open is a superset of any gated asker's graph and still a lower bound.
+- ✅ **Profiles the graph cannot distinguish share one table.** A graph with no
+  sticky arcs answers the same whether or not the asker may take one, so eight
+  profile keys collapse to the two to four a real graph needs.
+- ⚠️ **A set is indexed by NODE, so `ScriptedBot.SetMap` drops it** — exactly as
+  it drops the route, the lane and the occupancy flag. A set held across a map
+  change would hand the search a bound derived from a graph the bot is no longer
+  standing on, and an over-estimate is not a slow route, it is the wrong one.
+- ✅ **Read-only once built, so one set serves a threaded `eval`.** Every bot
+  owns its own `NavSearch`; nothing writes to the set after `Derive` returns.
+
+✅ **Off by default, and the default path is untouched.** `distances` is null
+everywhere unless the flag is passed, `NavRouteIdentityTests`' 25 route digests
+are unchanged, and the three pinned bot measurements are unchanged. **That is
+the falsification condition for this whole section**: if those digests ever move
+without the flag, the wiring has leaked into the default path.
+
+⛔ **Two bugs here were found by RUNNING the thing, and neither was visible to a
+test.** Both are the same shape — a derivation in the wrong scope — and both
+would have shown up as "the flag makes it slower", not as a failure:
+
+- **The server rebuilt at every ROUND, not every map change.** `MapChanged` runs
+  per round and re-parses the graph, so the object is never the same twice and
+  reference equality cannot detect the repeat. 334-467 ms *every round end*,
+  found by reading the server's own log across 70 rounds. Fixed with a
+  `map/area/nodes/edges` key. ⚠️ The residual assumption is that one map+area
+  yields one graph; a regenerated graph of the *same* shape but different edges
+  would go stale, and nothing observed can produce one.
+- **`MatchRunner` derived one set per MATCH.** Every match in a batch plays the
+  same graph, so a batch of `n` computed the identical tables `n` times — a few
+  hundred ms each against a match that costs about 0.6 s. `MatchRunner.Run`
+  hoists it and passes it down; `HeadlessMatch` still derives its own when a lone
+  caller passes none.
+
+⚠️ **A bot that joins mid-round needs the set too, and that is a SECOND call
+site.** `MapChanged` reaches the bots that survived a rotation; the creation site
+in `BotPopulationService` reaches the ones that fill in afterwards. Missing the
+second gives a **mixed** configuration — some bots on the exact heuristic and
+some on the straight-line one — which every count, every log line and every
+other gate would report as healthy. Gated by
+`NavDistanceSetTests.EveryBotOnTheServerGetsTheTablesWhenAsked`, both directions,
+and confirmed by mutation: removing the line fails it.
+
+⚠️ **`NavDistanceSetTests.TheSelectedTableNeverOverestimates` was deliberately
+made coarser.** At the 7/11 stride over sixteen query classes it cost **37 s** —
+enough CPU to risk the wall-clock pacing flake this branch already paid for
+once. At 13/17 over four profiles it costs **5 s** and still checks **82,114
+pairs across every shipped graph**. Do not "restore" the finer sweep without
+re-reading "Route variety, scored" above.
+
 ### Phase 7 item 4s: the stab window, and the last unported script
 
 `Gg2.Bots.BotStab`, the stab branch in `BotClassKeys.SpyKeys`. Gated by

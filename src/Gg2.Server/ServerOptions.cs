@@ -353,6 +353,36 @@ public sealed class ServerOptions
     public bool NavGenerateWrite { get; set; }
 
     /// <summary>
+    /// Precompute exact node-to-node distances at each map change and feed them
+    /// to A\* in place of its straight-line estimate — <c>--nav-distances</c>.
+    /// </summary>
+    /// <remarks>
+    /// <b>A\* is the most expensive thing this server does</b> — about 30% of a
+    /// twelve-bot tick, at 320 searches per 1000 ticks — and an exact heuristic
+    /// measured <b>1.36x</b> on it, which is roughly 8% of the tick. That is the
+    /// whole of the upside.
+    /// <para>
+    /// ⛔ <b>OFF by default because turning it on CHANGES EVERY ROUTE.</b>
+    /// <see cref="NavConstants.SearchWeight"/> makes this a <em>weighted</em>
+    /// A\*: the heuristic is inflated on purpose, so it decides which route is
+    /// returned and not merely how quickly. With the straight-line estimate the
+    /// inflated heuristic still sits at about 0.914 of the true remaining cost;
+    /// with an exact one it sits at the weight itself. Routes therefore move,
+    /// and a run with this on is <b>not comparable</b> to a baseline with it off
+    /// — it is a property of the arm and has to be recorded beside the numbers.
+    /// <c>docs/TRAPS-BOTS.md</c>, "Shipping the precomputed distances".
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>It is not free at the map change either</b>: one reverse Dijkstra
+    /// per node per distinct ability profile — see <see cref="NavDistanceSet"/>
+    /// — which is tens of milliseconds and a few megabytes on the larger graphs.
+    /// The elapsed time and the size are logged for the same reason the nav
+    /// generator's are.
+    /// </para>
+    /// </remarks>
+    public bool NavDistances { get; set; }
+
+    /// <summary>
     /// How fast <see cref="GameServer.Run"/> paces the tick loop, relative to
     /// real time. 1.0 is the reference's 30 Hz; 4.0 runs four minutes of match
     /// per minute; <see cref="double.PositiveInfinity"/> is <b>unpaced</b> — the

@@ -406,6 +406,14 @@ internal static class CommandLine
                     options.NavGenerateWrite = true;
                     break;
 
+                // ⛔ Buys about 8% of a twelve-bot tick and CHANGES EVERY ROUTE
+                // in return — the search is weighted, so its heuristic picks the
+                // route as well as the speed. Off by default for that reason, not
+                // for the map-change cost. ServerOptions.NavDistances.
+                case "--nav-distances":
+                    options.NavDistances = true;
+                    break;
+
                 // The [Bots] section. `--bots N` is the fill target, which is what
                 // the reference calls FillToPlayers — ⚠️ a total including humans,
                 // not a bot count, so a server filling to 8 drops a bot every time
@@ -947,6 +955,13 @@ internal static class CommandLine
                             map change rather than a round of motionless bots.
           --navgen-save     save a graph built that way into --botnav, so the
                             next map change reads it (default: memory only)
+          --nav-distances   precompute exact node-to-node distances and give A*
+                            an exact heuristic instead of a straight-line guess.
+                            Worth about 8% of a twelve-bot tick. OFF by default
+                            because the search is WEIGHTED, so an exact heuristic
+                            changes which route comes back as well as how fast -
+                            a server run with this is not route-comparable to one
+                            without. Costs tens of ms and a few MB per map change.
           --speed <n|max>   run at n times real time, or 'max' for unpaced
                             (default 1)
           --record <path>   write replayable .trace recordings of this server's

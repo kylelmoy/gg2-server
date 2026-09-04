@@ -222,6 +222,32 @@ built a nav graph for mymap area 1 in 86ms - 687 nodes, 6747 edges
 `--no-navgen` turns it off, and `--navgen-save` writes the result into `--botnav`
 so the next map change reads it instead of rebuilding. `docs/NAVGEN.md`.
 
+### `--nav-distances`: faster A\*, different routes
+
+⛔ **Off by default, and turning it on is a behaviour change rather than a
+tuning knob.** It precomputes exact node-to-node distances at each map change and
+gives A\* an exact heuristic instead of a straight-line guess. A\* is about 30%
+of a twelve-bot tick, so this is real — but the search is *weighted*, so an exact
+heuristic changes **which** route comes back as well as how fast, and a server
+run with it is not route-comparable to one without.
+
+Measured over 21 maps: route cost 103.6% → 99.1% of the cheapest route (better,
+because the incumbent A\* is deliberately suboptimal), dispersion 0.634 → 0.613,
+and 3 of 21 maps regress.
+
+⛔ **On `eval` it is a wash at the default match count.** The tables are built
+once per map and the saving accrues per match, so it only pays where
+matches-per-map is high: 4 matches on one map showed no effect, 24 showed 1.11x.
+`docs/TRAPS-BOTS.md`, "Shipping the precomputed distances", before turning it
+on.
+
+It logs what it cost, **once per map+area and not once per round** — a rotation that stays on one map re-parses its graph every round, and the tables are cached past that:
+
+```
+precomputed nav distances for ctf_truefort area 1: 4 table(s), 7.2 MB, 442 ms
+- routes on this map will differ from a run without --nav-distances
+```
+
 With generation off and no nav directory, the server runs, serves rounds and
 fills with bots — **bots that fight whatever reaches them and never walk
 anywhere**. That degradation is intentional (`NavCache.TryLoad`'s contract,

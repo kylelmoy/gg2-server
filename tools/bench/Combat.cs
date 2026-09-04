@@ -65,7 +65,12 @@ public static class CombatBench
 
     public static void Run(string maps, string? nav, string map, int matches)
     {
-        var options = HeadlessMatchOptions.Default with { Map = map };
+        // BENCH_NAVDIST=1: the same match with A*'s heuristic replaced by the
+        // exact precomputed one. ⚠️ It is a different ARM, not a faster run of
+        // the same one — the search is weighted, so the routes differ — so the
+        // two columns are comparable in TICK COST and in nothing else.
+        var navDistances = Environment.GetEnvironmentVariable("BENCH_NAVDIST") == "1";
+        var options = HeadlessMatchOptions.Default with { Map = map, NavDistances = navDistances };
         var match = HeadlessMatch.Load(options, maps, nav);
 
         // Whole matches, not ticks: a match is the unit whose cost is stable,
@@ -102,6 +107,7 @@ public static class CombatBench
 
         Console.WriteLine(
             $"map={map} bots={options.Bots} matches={matches} settled={settled}"
+            + $" navdist={navDistances}"
             + $"  replan={BotConstants.ReplanTicks} retarget={BotConstants.GoalRetargetDist}");
         Console.WriteLine(
             $"  us/tick  min {us[0]:F2}  med {us[us.Count / 2]:F2}  max {us[^1]:F2}"
