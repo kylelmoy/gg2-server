@@ -88,6 +88,61 @@ public readonly record struct NavQuery(
 /// are wrong rather than slow.
 /// </para>
 /// </remarks>
+/// <summary>
+/// How a search spends a <see cref="NavDistances"/> table, when it has one.
+/// </summary>
+/// <remarks>
+/// <b>Both plans return the SAME route</b> — the optimal one under live costs —
+/// so what separates them is only what they spend proving it, and which is
+/// cheaper depends on how the costs have been perturbed. Measured over 22
+/// graphs, 500 pairs each, three repeats:
+/// <list type="table">
+/// <item><description>a crowd on the chains: <b>verify-then-search 0.85-0.93x
+/// the incumbent's cost</b> — a ×1.25 hop barely moves the bound, so it prunes
+/// almost nothing and the per-expansion chain walk is close to pure
+/// overhead;</description></item>
+/// <item><description>no crowd: <b>the incumbent wins 1.12-1.24x</b> — what is
+/// left is gate and class perturbation, which is a +∞ on a hop, and there the
+/// bound really does prune (<c>cp_egypt</c> 69 expansions against
+/// 91).</description></item>
+/// </list>
+/// <c>docs/TRAPS-BOTS.md</c>, "Two ways to spend a next-hop table".
+/// </remarks>
+public enum NavPlan
+{
+    /// <summary>
+    /// Pick per query from whether anything is actually crowded — the shipped
+    /// behaviour, and the reason neither plan needs a flag.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Keyed on a crowd being PRESENT, not on the server having enabled
+    /// occupancy.</b> The two differ at the start of a round and after a
+    /// respawn wave, when the map is empty and the incumbent is the better plan
+    /// on a server that has occupancy switched on. It also means
+    /// <c>--no-bot-occupancy</c>, <c>eval</c> and every training rollout reach
+    /// <see cref="Incumbent"/> without anything being plumbed to them.
+    /// </remarks>
+    Auto,
+
+    /// <summary>
+    /// CPD-Search. The chain priced at live cost is an incumbent and an upper
+    /// bound; the search stops as soon as the frontier's lower bound reaches it,
+    /// so a perturbed chain still bounds the work instead of being thrown away.
+    /// </summary>
+    Incumbent,
+
+    /// <summary>
+    /// Verify the chain, and on any perturbation discard it and search
+    /// unbounded — <c>docs/PROPOSAL-ROUTE-TABLE.md</c>'s original design.
+    /// </summary>
+    /// <remarks>
+    /// <b>Cheaper exactly where the incumbent's bound cannot pay for itself</b>:
+    /// under a uniform mild crowd it skips a chain walk at every expansion and
+    /// spends a few more expansions instead.
+    /// </remarks>
+    VerifyThenSearch,
+}
+
 public sealed class NavSearch
 {
     /// <summary>
@@ -196,7 +251,8 @@ public sealed class NavSearch
         IReadOnlySet<long>? blocked = null,
         IReadOnlyDictionary<long, int>? occupancy = null,
         ReadOnlySpan<double> laneCost = default,
-        NavDistances? distances = null)
+        NavDistances? distances = null,
+        NavPlan plan = NavPlan.Auto)
     {
         ArgumentNullException.ThrowIfNull(path);
 
@@ -261,8 +317,34 @@ public sealed class NavSearch
         {
             Array.Fill(_liveCost, -1);
 
-            bound = LiveChainCost(start, goal, in query, blocked, occupancy, laneCost, distances);
-            incumbent = start;
+            var chain = LiveChainCost(start, goal, in query, blocked, occupancy, laneCost, distances);
+
+            if (plan == NavPlan.Auto)
+                plan = hasOccupancy ? NavPlan.VerifyThenSearch : NavPlan.Incumbent;
+
+            if (plan == NavPlan.VerifyThenSearch)
+            {
+                // ⛔ The whole verification, in one comparison. Every hop is
+                // priced at or above the static edge the table's Dijkstra used,
+                // so the chain's live cost can only EQUAL its static cost when no
+                // hop was gated, blacklisted, out of class, laned or crowded. And
+                // when it does, the chain is optimal under live costs: any rival
+                // is a path in the permissive graph, so costs at least the static
+                // optimum, which is exactly what this chain costs. Checking the
+                // hops one at a time would be the same test done longhand.
+                if (chain <= distances.Between(start, goal) * (1 + IncumbentTolerance))
+                    return ReconstructIncumbent(start, start, goal, path, distances);
+
+                // Perturbed, so this plan throws the chain away: `bound` stays
+                // infinite and `incumbent` stays -1, the pop test below can never
+                // fire, and what is left is a plain unweighted A* on the exact
+                // heuristic.
+            }
+            else
+            {
+                bound = chain;
+                incumbent = start;
+            }
 
             // Priced at g + h so the incumbent test can fire on the first pop.
             // Without a table the sole first entry's priority is irrelevant and
@@ -435,14 +517,20 @@ public sealed class NavSearch
                     // The table's chain from here, priced at what this asker
                     // would pay now, is a real route: the cheapest such is the
                     // incumbent, and its cost is what the pop test proves
-                    // against.
-                    var live = tentative
-                        + LiveChainCost(next, goal, in query, blocked, occupancy, laneCost, distances);
-
-                    if (live < bound)
+                    // against. ⚠️ Skipped entirely under VerifyThenSearch: the
+                    // chain walk is most of what maintaining the incumbent COSTS,
+                    // and that plan is chosen precisely when the bound does not
+                    // repay it.
+                    if (plan == NavPlan.Incumbent)
                     {
-                        bound = live;
-                        incumbent = next;
+                        var live = tentative
+                            + LiveChainCost(next, goal, in query, blocked, occupancy, laneCost, distances);
+
+                        if (live < bound)
+                        {
+                            bound = live;
+                            incumbent = next;
+                        }
                     }
                 }
             }

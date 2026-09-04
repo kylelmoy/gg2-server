@@ -2175,13 +2175,23 @@ O(N) storage at 20% mean suboptimality — a trade this graph does not need at
 N=687. CRP / contraction hierarchies solve the million-node case where all-pairs
 is impossible; here it is 0.9 MB.
 
-### Two ways to spend a next-hop table, and why only one survives
+### Two ways to spend a next-hop table, and why BOTH ship
 
-⛔ **`NavPlan.VerifyThenSearch` was built, measured against CPD-Search, and then
-DELETED. This section is the record; the code is in git and nowhere else.**
-CPD-Search is now the only way `NavSearch` uses a table — no enum, no parameter,
-no flag. What remains is `NavDistancesTests.WhatTheTableCostsAgainstMaster`,
-which measures CPD-Search against master. Measured 2026-09-04, Release.
+`NavPlan.Auto` picks between `Incumbent` (CPD-Search) and `VerifyThenSearch` per
+query, on whether anything is actually crowded. Gated by
+`NavDistancesTests.BothPlansAgreeOnCost` and
+`NavDistancesTests.AutoPicksThePlanThatMatchesTheCrowd`; measured by
+`WhatTheTableCostsAgainstMaster`. Measured 2026-09-04, Release.
+
+⚠️ **This was consolidated to CPD-Search alone and then REVERSED, and the
+reversal is the instructive part.** The consolidation argued that a 10-16%
+situational gap on a search that is ~26-30% of a 0.151 ms tick was not worth a
+second implementation. But the maintenance cost was never measured, only
+assumed: deleting it removed **18 lines of logic** and about 42 lines of XML
+documentation. **18 lines for a situational 10-16% is a good trade in a project
+whose stated purpose is a high-performance headless server** — and `Auto` means
+it costs no configuration surface at all. ⛔ **Measure the cost side of a
+"not worth the complexity" argument before making it.**
 
 The two differ by **exactly one idea**. Both walk the table's chain once up
 front, both then run the same unweighted A\* on the same exact heuristic, and
@@ -2240,19 +2250,31 @@ winning a race it is running downhill.**
 | crowded | 12.40 / 13.40 / 11.92 µs | 11.04 / 11.35 / 11.12 µs | **0.85-0.93x — discarding WINS** |
 | no occupancy | 1.08 / 1.13 / 1.09 µs | 1.29 / 1.26 / 1.35 µs | **1.12-1.24x — the incumbent wins** |
 
-⛔ **Each plan wins one regime, and keeping both was still refused.** Once
-`--no-bot-occupancy` made the regime a runtime choice there was a real argument
-for selecting the plan to match it. It was rejected on magnitude: the gap is
-10-16% of a search that is ~26-30% of a twelve-bot tick, and that whole tick is
-0.151 ms against a 33.3 ms budget. **Selecting on that would be tuning noise
-while doubling the configuration surface** — occupancy × plan — and every
-combination would need gating and re-recording. CPD-Search was kept because it
-wins the regime that matters more: `eval` and every training rollout are
-occupancy-free by construction, and that is where throughput is actually spent.
+✅ **Each plan wins one regime, so `Auto` takes both.** Four arms, one
+interleaved harness, two repeats of the whole measurement:
 
-⚠️ **If occupancy is ever made unconditional again, this is the measurement to
-re-read before assuming CPD-Search is still the right choice** — under a
-permanent crowd the deleted plan was the faster one.
+| | master | CPD | verify | **Auto** |
+|---|---|---|---|---|
+| crowded | 12.17 / 12.58 µs | 11.97 / 13.24 | 10.37 / 11.70 | **10.76 / 10.93 — 1.13-1.15x master** |
+| no crowd | 8.15 / 8.00 µs | 1.13 / 1.05 | 1.33 / 1.25 | **1.13 / 1.07 — 7.19-7.50x master** |
+
+**`Auto` tracks whichever plan is ahead in each regime**, which is the whole
+point of it. It costs no configuration: nothing is plumbed from `ServerOptions`,
+and `--no-bot-occupancy`, `eval` and every training rollout reach `Incumbent`
+simply by never having a crowd.
+
+⚠️ **Keyed on a crowd being PRESENT, not on occupancy being enabled.** The two
+differ at the start of a round and after a respawn wave, when the map is empty
+and `Incumbent` is the better plan even on a server with occupancy switched on.
+
+⛔ **Both gates earn their place only because both plans now ship.**
+`BothPlansAgreeOnCost` stops a bot's route changing with the crowd for reasons
+that have nothing to do with the crowd — either plan alone looks optimal in
+isolation, so only a differential test can see a disagreement.
+`AutoPicksThePlanThatMatchesTheCrowd` stops the selection being decorative: an
+`Auto` that always chose one plan would pass the first gate perfectly and lose
+the situational win silently, and nothing else in the repo could see that.
+**Confirmed by mutation** — pinning `Auto` to `Incumbent` fails it.
 
 ⚠️ **The mechanism, and it is the part worth keeping.** Maintaining the
 incumbent costs a chain walk at *every expansion*; it repays that only when the
@@ -2278,12 +2300,10 @@ verify-then-search's ~1.2 µs saving under crowd is larger in absolute terms tha
 the incumbent's ~0.2 µs saving without it. **A ratio quoted without the base is
 misleading in both directions.**
 
-✅ **So neither is simply better, and CPD-Search was kept anyway.** The paths
-that most want raw throughput — `eval` and the training rollouts — are the
-occupancy-free ones where it wins, and a live server is the only place the other
-would have been ahead. The gap is under 20% either way on a search that is
-~26-30% of a twelve-bot tick, so the tick moves by a few percent at most: not
-enough to carry a second implementation for.
+✅ **So neither is simply better, and neither had to be chosen.** `eval` and the
+training rollouts are occupancy-free and get `Incumbent`; a live server with
+occupancy on gets `VerifyThenSearch` whenever a crowd exists. The selection is
+per query and free.
 
 ⛔ **Do not read this as a refutation of CPD-Search.** It is one workload, and
 the workload is unusual in exactly the way that hurts an incumbent bound:
@@ -2291,10 +2311,10 @@ perturbations here are *many, small and uniform* (a whole team's routes each
 ×1.25) rather than *few and large*, which is the shape the technique is built
 for. The finding is about this cost model, not about the algorithm.
 
-✅ **The cross-plan agreement gate went with the code, and nothing was lost by
-it.** It asserted that both plans priced their routes identically;
-`CpdSearchIsOptimalUnderLiveCosts` already checks the same answers against a real
-Dijkstra reference, which is the stronger claim of the two.
+✅ **`CpdSearchIsOptimalUnderLiveCosts` still checks the answers against a real
+Dijkstra reference**, which is a stronger claim than cross-plan agreement — but
+it exercises one plan, and both ship, so the differential gate is not redundant
+with it.
 
 ### Phase 7 item 4s: the stab window, and the last unported script
 

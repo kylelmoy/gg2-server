@@ -282,6 +282,177 @@ public sealed class NavDistancesTests(ITestOutputHelper output)
     }
 
     /// <summary>
+    /// Both plans return a route of the same optimal cost, on the same perturbed
+    /// legs.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>Now a production gate rather than scaffolding, because BOTH plans
+    /// ship.</b> <see cref="NavPlan.Auto"/> routes a crowded query through
+    /// <see cref="NavPlan.VerifyThenSearch"/> and an uncrowded one through
+    /// <see cref="NavPlan.Incumbent"/>, so a bot's route can come from either
+    /// depending on what its team-mates are doing that tick. If the two ever
+    /// disagreed, a bot's path would change with the crowd for reasons that have
+    /// nothing to do with the crowd — and both would still look optimal in
+    /// isolation.
+    /// <para>
+    /// ⚠️ Compared on COST, not on node sequence. Two distinct routes can price
+    /// identically — a walk and a jump joining the same pair, ties broken by heap
+    /// order — and demanding the same nodes would fail on a difference that costs
+    /// the bot nothing.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void BothPlansAgreeOnCost()
+    {
+        ReferenceTree.RequireNavCache();
+
+        var rng = new Random(20260904);
+        var legs = 0;
+        var perturbed = 0;
+
+        foreach (var (map, area) in NavCache.List(ReferenceTree.NavCacheDirectory))
+        {
+            var graph = NavCache.Load(ReferenceTree.NavCacheDirectory, map, area);
+            var n = graph.NodeCount;
+            var set = NavDistanceSet.Derive(graph);
+            var search = new NavSearch(graph);
+            var a = new List<int>();
+            var b = new List<int>();
+
+            foreach (var query in Queries())
+            {
+                var table = set.For(in query);
+
+                for (var leg = 0; leg < 12; leg++)
+                {
+                    var start = rng.Next(n);
+                    var goal = rng.Next(n);
+
+                    if (start == goal || float.IsPositiveInfinity(table.Between(start, goal)))
+                        continue;
+
+                    var chain = Chain(table, start, goal);
+                    var blocked = new HashSet<long>();
+                    var occupancy = new Dictionary<long, int>();
+
+                    if (chain.Count > 2 && leg % 3 != 0)
+                    {
+                        var i = rng.Next(chain.Count - 1);
+                        blocked.Add(NavGraph.EdgeKey(chain[i], chain[i + 1]));
+                    }
+
+                    if (chain.Count > 2 && leg % 3 != 1)
+                    {
+                        for (var k = 0; k < 2; k++)
+                        {
+                            var i = rng.Next(chain.Count - 1);
+                            occupancy[NavGraph.EdgeKey(chain[i], chain[i + 1])] = 1 + rng.Next(3);
+                        }
+                    }
+
+                    if (blocked.Count > 0 || occupancy.Count > 0)
+                        perturbed++;
+
+                    var okA = search.Find(
+                        start, goal, query, a, blocked, occupancy, default, table, NavPlan.Incumbent);
+                    var okB = search.Find(
+                        start, goal, query, b, blocked, occupancy, default, table, NavPlan.VerifyThenSearch);
+
+                    Assert.Equal(okA, okB);
+
+                    if (!okA)
+                        continue;
+
+                    var costA = LivePrice(graph, a, query, blocked, occupancy);
+                    var costB = LivePrice(graph, b, query, blocked, occupancy);
+
+                    Assert.True(
+                        Math.Abs(costA - costB) <= costA * 2e-6,
+                        $"{map}_a{area} {start}->{goal} {query}: incumbent {costA}, verify {costB}");
+
+                    legs++;
+                }
+            }
+        }
+
+        output.WriteLine($"{legs} legs agreed, {perturbed} of them perturbed");
+        Assert.True(legs > 1000, $"only {legs} legs; the sweep proved little");
+    }
+
+    /// <summary>
+    /// <see cref="NavPlan.Auto"/> really does pick the plan that matches the
+    /// crowd.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>The gate that stops the whole selection being decorative.</b> An
+    /// <c>Auto</c> that always chose one plan would satisfy
+    /// <see cref="BothPlansAgreeOnCost"/> perfectly — the routes would be right,
+    /// the situational win would just be silently gone, and no other test in this
+    /// repo could see it. Expansions are the discriminator because the two plans
+    /// differ in exactly that.
+    /// </remarks>
+    [Fact]
+    public void AutoPicksThePlanThatMatchesTheCrowd()
+    {
+        ReferenceTree.RequireNavCache();
+
+        var graph = NavCache.Load(ReferenceTree.NavCacheDirectory, "ctf_truefort", 1);
+        var set = NavDistanceSet.Derive(graph);
+        var search = new NavSearch(graph);
+        var query = new NavQuery(Team.Red);
+        var table = set.For(in query);
+        var route = new List<int>();
+        var rng = new Random(20260904);
+
+        var crowdedLegs = 0;
+        var cleanLegs = 0;
+
+        for (var leg = 0; leg < 400; leg++)
+        {
+            var start = rng.Next(graph.NodeCount);
+            var goal = rng.Next(graph.NodeCount);
+
+            if (start == goal || float.IsPositiveInfinity(table.Between(start, goal)))
+                continue;
+
+            var chain = Chain(table, start, goal);
+
+            if (chain.Count < 3)
+                continue;
+
+            var occupancy = new Dictionary<long, int>();
+
+            for (var k = 0; k < 2; k++)
+            {
+                var i = rng.Next(chain.Count - 1);
+                occupancy[NavGraph.EdgeKey(chain[i], chain[i + 1])] = 1 + rng.Next(3);
+            }
+
+            // Crowded: Auto must behave as VerifyThenSearch.
+            if (search.Find(start, goal, query, route, null, occupancy, default, table, NavPlan.Auto))
+            {
+                var auto = search.Pops;
+                search.Find(start, goal, query, route, null, occupancy, default, table, NavPlan.VerifyThenSearch);
+                Assert.Equal(search.Pops, auto);
+                crowdedLegs++;
+            }
+
+            // Uncrowded: Auto must behave as Incumbent. An EMPTY map counts as
+            // uncrowded — NavSearch hoists `Count: > 0`, not `is not null`.
+            if (search.Find(start, goal, query, route, null, new Dictionary<long, int>(), default, table, NavPlan.Auto))
+            {
+                var auto = search.Pops;
+                search.Find(start, goal, query, route, null, null, default, table, NavPlan.Incumbent);
+                Assert.Equal(search.Pops, auto);
+                cleanLegs++;
+            }
+        }
+
+        output.WriteLine($"{crowdedLegs} crowded legs and {cleanLegs} clean legs matched their plan");
+        Assert.True(crowdedLegs > 50 && cleanLegs > 50, "the sweep found too few legs to prove anything");
+    }
+
+    /// <summary>
     /// CPD-Search against MASTER — the shipped weighted straight-line A\* — in
     /// time, in expansions, and in what the routes cost.
     /// </summary>
@@ -310,10 +481,10 @@ public sealed class NavDistancesTests(ITestOutputHelper output)
         ReferenceTree.RequireNavCache();
 
         output.WriteLine(
-            $"{"graph / arm",-26} {"master",9} {"cpd",9} | "
-            + $"{"pops m/c",12} | {"master cost",11}");
+            $"{"graph / arm",-26} {"master",8} {"cpd",8} {"verify",8} {"auto",8} | "
+            + $"{"master cost",11}");
 
-        double[] incAll = [0, 0], mastAll = [0, 0];
+        double[] incAll = [0, 0], mastAll = [0, 0], verAll = [0, 0], autoAll = [0, 0];
         double[] costAll = [0, 0];
         var maps = 0;
 
@@ -372,12 +543,12 @@ public sealed class NavDistancesTests(ITestOutputHelper output)
             // ⚠️ That arm answers a DIFFERENT question — it is allowed to return
             // a suboptimal route — which is why `cost` is measured beside the
             // clock and not left for the reader to assume away.
-            double Bench(NavDistances? with, IReadOnlyDictionary<long, int>? crowd,
+            double Bench(NavDistances? with, NavPlan plan, IReadOnlyDictionary<long, int>? crowd,
                 out double pops, out double cost)
             {
                 for (var w = 0; w < 4; w++)
                     foreach (var (from, to) in pairs)
-                        search.Find(from, to, query, route, null, crowd, default, with);
+                        search.Find(from, to, query, route, null, crowd, default, with, plan);
 
                 var clock = Stopwatch.StartNew();
                 long popped = 0;
@@ -386,7 +557,7 @@ public sealed class NavDistancesTests(ITestOutputHelper output)
                 {
                     foreach (var (from, to) in pairs)
                     {
-                        search.Find(from, to, query, route, null, crowd, default, with);
+                        search.Find(from, to, query, route, null, crowd, default, with, plan);
                         popped += search.Pops;
                     }
                 }
@@ -401,7 +572,7 @@ public sealed class NavDistancesTests(ITestOutputHelper output)
 
                 foreach (var (from, to) in pairs)
                 {
-                    if (!search.Find(from, to, query, route, null, crowd, default, with))
+                    if (!search.Find(from, to, query, route, null, crowd, default, with, plan))
                         continue;
 
                     var c = LivePrice(graph, route, query, none, empty);
@@ -421,19 +592,24 @@ public sealed class NavDistancesTests(ITestOutputHelper output)
             foreach (var (arm, crowd) in ((string, IReadOnlyDictionary<long, int>?)[])
                 [("crowd", occupancy), ("clean", null)])
             {
-                var mast = Bench(null, crowd, out var mastPops, out var mastCost);
-                var inc = Bench(table, crowd, out var incPops, out var optCost);
-                mast = (mast + Bench(null, crowd, out _, out _)) / 2;
-                inc = (inc + Bench(table, crowd, out _, out _)) / 2;
+                var mast = Bench(null, NavPlan.Auto, crowd, out _, out var mastCost);
+                var inc = Bench(table, NavPlan.Incumbent, crowd, out _, out var optCost);
+                var ver = Bench(table, NavPlan.VerifyThenSearch, crowd, out _, out _);
+                var auto = Bench(table, NavPlan.Auto, crowd, out _, out _);
+                mast = (mast + Bench(null, NavPlan.Auto, crowd, out _, out _)) / 2;
+                inc = (inc + Bench(table, NavPlan.Incumbent, crowd, out _, out _)) / 2;
+                ver = (ver + Bench(table, NavPlan.VerifyThenSearch, crowd, out _, out _)) / 2;
+                auto = (auto + Bench(table, NavPlan.Auto, crowd, out _, out _)) / 2;
 
                 var a = arm == "crowd" ? 0 : 1;
                 mastAll[a] += mast;
                 incAll[a] += inc;
+                verAll[a] += ver;
+                autoAll[a] += auto;
                 costAll[a] += optCost == 0 ? 1 : mastCost / optCost;
 
                 output.WriteLine(
-                    $"{map + "_a" + area + " " + arm,-26} {mast,9:F2} {inc,9:F2} | "
-                    + $"{mastPops,5:F0}/{incPops,-5:F0} | "
+                    $"{map + "_a" + area + " " + arm,-26} {mast,8:F2} {inc,8:F2} {ver,8:F2} {auto,8:F2} | "
                     + $"{(optCost == 0 ? 1 : mastCost / optCost),10:P1}");
             }
 
@@ -446,8 +622,9 @@ public sealed class NavDistancesTests(ITestOutputHelper output)
         {
             output.WriteLine(
                 $"MEAN {(a == 0 ? "crowd" : "clean")} over {maps} graphs: "
-                + $"master {mastAll[a] / maps:F2}us, "
-                + $"CPD-Search {incAll[a] / maps:F2}us ({mastAll[a] / incAll[a]:F2}x master) "
+                + $"master {mastAll[a] / maps:F2}us, CPD {incAll[a] / maps:F2}us, "
+                + $"verify {verAll[a] / maps:F2}us, AUTO {autoAll[a] / maps:F2}us "
+                + $"({mastAll[a] / autoAll[a]:F2}x master) "
                 + $"| master's routes cost {costAll[a] / maps:P1} of optimal");
         }
     }
