@@ -97,14 +97,14 @@ public readonly record struct NavQuery(
 /// cheaper depends on how the costs have been perturbed. Measured over 22
 /// graphs, 500 pairs each, three repeats:
 /// <list type="table">
-/// <item><description>a crowd on the chains: <b>verify-then-search 0.85-0.93x
-/// the incumbent's cost</b> — a ×1.25 hop barely moves the bound, so it prunes
-/// almost nothing and the per-expansion chain walk is close to pure
-/// overhead;</description></item>
-/// <item><description>no crowd: <b>the incumbent wins 1.12-1.24x</b> — what is
-/// left is gate and class perturbation, which is a +∞ on a hop, and there the
-/// bound really does prune (<c>cp_egypt</c> 69 expansions against
-/// 91).</description></item>
+/// <item><description>a crowd on the chains: <b><see cref="ChainOrSearch"/>
+/// costs 0.85-0.93x what <see cref="ChainBoundsSearch"/> does</b> — a ×1.25 hop
+/// barely moves the bound, so it prunes almost nothing and the per-expansion
+/// chain walk is close to pure overhead;</description></item>
+/// <item><description>no crowd: <b><see cref="ChainBoundsSearch"/> wins
+/// 1.12-1.24x</b> — what is left is gate and class perturbation, which is a +∞
+/// on a hop, and there the bound really does prune (<c>cp_egypt</c> 69
+/// expansions against 91).</description></item>
 /// </list>
 /// <c>docs/TRAPS-BOTS.md</c>, "Two ways to spend a next-hop table".
 /// </remarks>
@@ -117,30 +117,40 @@ public enum NavPlan
     /// <remarks>
     /// ⚠️ <b>Keyed on a crowd being PRESENT, not on the server having enabled
     /// occupancy.</b> The two differ at the start of a round and after a
-    /// respawn wave, when the map is empty and the incumbent is the better plan
-    /// on a server that has occupancy switched on. It also means
+    /// respawn wave, when the map is empty and <see cref="ChainBoundsSearch"/>
+    /// is the better plan on a server that has occupancy on. It also means
     /// <c>--no-bot-occupancy</c>, <c>eval</c> and every training rollout reach
-    /// <see cref="Incumbent"/> without anything being plumbed to them.
+    /// <see cref="ChainBoundsSearch"/> without anything being plumbed to them.
     /// </remarks>
-    Auto,
+    DecideByCrowd,
 
     /// <summary>
-    /// CPD-Search. The chain priced at live cost is an incumbent and an upper
-    /// bound; the search stops as soon as the frontier's lower bound reaches it,
-    /// so a perturbed chain still bounds the work instead of being thrown away.
-    /// </summary>
-    Incumbent,
-
-    /// <summary>
-    /// Verify the chain, and on any perturbation discard it and search
-    /// unbounded — <c>docs/PROPOSAL-ROUTE-TABLE.md</c>'s original design.
+    /// <b>A perturbed chain still BOUNDS the search.</b> The chain priced at
+    /// live cost is an incumbent and an upper bound, and the search stops as
+    /// soon as the frontier's lower bound reaches it — so nothing the walk
+    /// learned is thrown away.
     /// </summary>
     /// <remarks>
-    /// <b>Cheaper exactly where the incumbent's bound cannot pay for itself</b>:
-    /// under a uniform mild crowd it skips a chain walk at every expansion and
-    /// spends a few more expansions instead.
+    /// This is <b>CPD-Search</b> as published: Bono, Gerevini, Harabor and
+    /// Stuckey, <em>Path Planning with CPD Heuristics</em>, IJCAI 2019. Named
+    /// for what it does rather than for the paper so the contrast with
+    /// <see cref="ChainOrSearch"/> is legible at the call site; the citation
+    /// lives here.
     /// </remarks>
-    VerifyThenSearch,
+    ChainBoundsSearch,
+
+    /// <summary>
+    /// <b>A pristine chain IS the answer; anything else is searched from
+    /// scratch.</b> The chain is verified once and, on any perturbation at all,
+    /// discarded — the search that follows is unbounded.
+    /// </summary>
+    /// <remarks>
+    /// <c>docs/PROPOSAL-ROUTE-TABLE.md</c>'s original design, and cheaper than
+    /// <see cref="ChainBoundsSearch"/> exactly where that plan's bound cannot
+    /// pay for itself: under a uniform mild crowd it skips a chain walk at every
+    /// expansion and spends a few more expansions instead.
+    /// </remarks>
+    ChainOrSearch,
 }
 
 public sealed class NavSearch
@@ -252,7 +262,7 @@ public sealed class NavSearch
         IReadOnlyDictionary<long, int>? occupancy = null,
         ReadOnlySpan<double> laneCost = default,
         NavDistances? distances = null,
-        NavPlan plan = NavPlan.Auto)
+        NavPlan plan = NavPlan.DecideByCrowd)
     {
         ArgumentNullException.ThrowIfNull(path);
 
@@ -319,10 +329,10 @@ public sealed class NavSearch
 
             var chain = LiveChainCost(start, goal, in query, blocked, occupancy, laneCost, distances);
 
-            if (plan == NavPlan.Auto)
-                plan = hasOccupancy ? NavPlan.VerifyThenSearch : NavPlan.Incumbent;
+            if (plan == NavPlan.DecideByCrowd)
+                plan = hasOccupancy ? NavPlan.ChainOrSearch : NavPlan.ChainBoundsSearch;
 
-            if (plan == NavPlan.VerifyThenSearch)
+            if (plan == NavPlan.ChainOrSearch)
             {
                 // ⛔ The whole verification, in one comparison. Every hop is
                 // priced at or above the static edge the table's Dijkstra used,
@@ -517,11 +527,11 @@ public sealed class NavSearch
                     // The table's chain from here, priced at what this asker
                     // would pay now, is a real route: the cheapest such is the
                     // incumbent, and its cost is what the pop test proves
-                    // against. ⚠️ Skipped entirely under VerifyThenSearch: the
+                    // against. ⚠️ Skipped entirely under ChainOrSearch: the
                     // chain walk is most of what maintaining the incumbent COSTS,
                     // and that plan is chosen precisely when the bound does not
                     // repay it.
-                    if (plan == NavPlan.Incumbent)
+                    if (plan == NavPlan.ChainBoundsSearch)
                     {
                         var live = tentative
                             + LiveChainCost(next, goal, in query, blocked, occupancy, laneCost, distances);

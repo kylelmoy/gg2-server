@@ -287,9 +287,9 @@ public sealed class NavDistancesTests(ITestOutputHelper output)
     /// </summary>
     /// <remarks>
     /// ⛔ <b>Now a production gate rather than scaffolding, because BOTH plans
-    /// ship.</b> <see cref="NavPlan.Auto"/> routes a crowded query through
-    /// <see cref="NavPlan.VerifyThenSearch"/> and an uncrowded one through
-    /// <see cref="NavPlan.Incumbent"/>, so a bot's route can come from either
+    /// ship.</b> <see cref="NavPlan.DecideByCrowd"/> routes a crowded query through
+    /// <see cref="NavPlan.ChainOrSearch"/> and an uncrowded one through
+    /// <see cref="NavPlan.ChainBoundsSearch"/>, so a bot's route can come from either
     /// depending on what its team-mates are doing that tick. If the two ever
     /// disagreed, a bot's path would change with the crowd for reasons that have
     /// nothing to do with the crowd — and both would still look optimal in
@@ -354,9 +354,9 @@ public sealed class NavDistancesTests(ITestOutputHelper output)
                         perturbed++;
 
                     var okA = search.Find(
-                        start, goal, query, a, blocked, occupancy, default, table, NavPlan.Incumbent);
+                        start, goal, query, a, blocked, occupancy, default, table, NavPlan.ChainBoundsSearch);
                     var okB = search.Find(
-                        start, goal, query, b, blocked, occupancy, default, table, NavPlan.VerifyThenSearch);
+                        start, goal, query, b, blocked, occupancy, default, table, NavPlan.ChainOrSearch);
 
                     Assert.Equal(okA, okB);
 
@@ -380,12 +380,12 @@ public sealed class NavDistancesTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// <see cref="NavPlan.Auto"/> really does pick the plan that matches the
+    /// <see cref="NavPlan.DecideByCrowd"/> really does pick the plan that matches the
     /// crowd.
     /// </summary>
     /// <remarks>
     /// ⛔ <b>The gate that stops the whole selection being decorative.</b> An
-    /// <c>Auto</c> that always chose one plan would satisfy
+    /// <c>DecideByCrowd</c> that always chose one plan would satisfy
     /// <see cref="BothPlansAgreeOnCost"/> perfectly — the routes would be right,
     /// the situational win would just be silently gone, and no other test in this
     /// repo could see it. Expansions are the discriminator because the two plans
@@ -428,21 +428,21 @@ public sealed class NavDistancesTests(ITestOutputHelper output)
                 occupancy[NavGraph.EdgeKey(chain[i], chain[i + 1])] = 1 + rng.Next(3);
             }
 
-            // Crowded: Auto must behave as VerifyThenSearch.
-            if (search.Find(start, goal, query, route, null, occupancy, default, table, NavPlan.Auto))
+            // Crowded: DecideByCrowd must behave as ChainOrSearch.
+            if (search.Find(start, goal, query, route, null, occupancy, default, table, NavPlan.DecideByCrowd))
             {
                 var auto = search.Pops;
-                search.Find(start, goal, query, route, null, occupancy, default, table, NavPlan.VerifyThenSearch);
+                search.Find(start, goal, query, route, null, occupancy, default, table, NavPlan.ChainOrSearch);
                 Assert.Equal(search.Pops, auto);
                 crowdedLegs++;
             }
 
-            // Uncrowded: Auto must behave as Incumbent. An EMPTY map counts as
+            // Uncrowded: DecideByCrowd must behave as ChainBoundsSearch. An EMPTY map counts as
             // uncrowded — NavSearch hoists `Count: > 0`, not `is not null`.
-            if (search.Find(start, goal, query, route, null, new Dictionary<long, int>(), default, table, NavPlan.Auto))
+            if (search.Find(start, goal, query, route, null, new Dictionary<long, int>(), default, table, NavPlan.DecideByCrowd))
             {
                 var auto = search.Pops;
-                search.Find(start, goal, query, route, null, null, default, table, NavPlan.Incumbent);
+                search.Find(start, goal, query, route, null, null, default, table, NavPlan.ChainBoundsSearch);
                 Assert.Equal(search.Pops, auto);
                 cleanLegs++;
             }
@@ -592,14 +592,14 @@ public sealed class NavDistancesTests(ITestOutputHelper output)
             foreach (var (arm, crowd) in ((string, IReadOnlyDictionary<long, int>?)[])
                 [("crowd", occupancy), ("clean", null)])
             {
-                var mast = Bench(null, NavPlan.Auto, crowd, out _, out var mastCost);
-                var inc = Bench(table, NavPlan.Incumbent, crowd, out _, out var optCost);
-                var ver = Bench(table, NavPlan.VerifyThenSearch, crowd, out _, out _);
-                var auto = Bench(table, NavPlan.Auto, crowd, out _, out _);
-                mast = (mast + Bench(null, NavPlan.Auto, crowd, out _, out _)) / 2;
-                inc = (inc + Bench(table, NavPlan.Incumbent, crowd, out _, out _)) / 2;
-                ver = (ver + Bench(table, NavPlan.VerifyThenSearch, crowd, out _, out _)) / 2;
-                auto = (auto + Bench(table, NavPlan.Auto, crowd, out _, out _)) / 2;
+                var mast = Bench(null, NavPlan.DecideByCrowd, crowd, out _, out var mastCost);
+                var inc = Bench(table, NavPlan.ChainBoundsSearch, crowd, out _, out var optCost);
+                var ver = Bench(table, NavPlan.ChainOrSearch, crowd, out _, out _);
+                var auto = Bench(table, NavPlan.DecideByCrowd, crowd, out _, out _);
+                mast = (mast + Bench(null, NavPlan.DecideByCrowd, crowd, out _, out _)) / 2;
+                inc = (inc + Bench(table, NavPlan.ChainBoundsSearch, crowd, out _, out _)) / 2;
+                ver = (ver + Bench(table, NavPlan.ChainOrSearch, crowd, out _, out _)) / 2;
+                auto = (auto + Bench(table, NavPlan.DecideByCrowd, crowd, out _, out _)) / 2;
 
                 var a = arm == "crowd" ? 0 : 1;
                 mastAll[a] += mast;

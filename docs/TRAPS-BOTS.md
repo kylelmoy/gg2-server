@@ -2177,8 +2177,8 @@ is impossible; here it is 0.9 MB.
 
 ### Two ways to spend a next-hop table, and why BOTH ship
 
-`NavPlan.Auto` picks between `Incumbent` (CPD-Search) and `VerifyThenSearch` per
-query, on whether anything is actually crowded. Gated by
+`NavPlan.DecideByCrowd` picks between `ChainBoundsSearch` (CPD-Search as
+published) and `ChainOrSearch` per query, on whether anything is actually crowded. Gated by
 `NavDistancesTests.BothPlansAgreeOnCost` and
 `NavDistancesTests.AutoPicksThePlanThatMatchesTheCrowd`; measured by
 `WhatTheTableCostsAgainstMaster`. Measured 2026-09-04, Release.
@@ -2189,7 +2189,7 @@ situational gap on a search that is ~26-30% of a 0.151 ms tick was not worth a
 second implementation. But the maintenance cost was never measured, only
 assumed: deleting it removed **18 lines of logic** and about 42 lines of XML
 documentation. **18 lines for a situational 10-16% is a good trade in a project
-whose stated purpose is a high-performance headless server** — and `Auto` means
+whose stated purpose is a high-performance headless server** — and `DecideByCrowd` means
 it costs no configuration surface at all. ⛔ **Measure the cost side of a
 "not worth the complexity" argument before making it.**
 
@@ -2250,31 +2250,31 @@ winning a race it is running downhill.**
 | crowded | 12.40 / 13.40 / 11.92 µs | 11.04 / 11.35 / 11.12 µs | **0.85-0.93x — discarding WINS** |
 | no occupancy | 1.08 / 1.13 / 1.09 µs | 1.29 / 1.26 / 1.35 µs | **1.12-1.24x — the incumbent wins** |
 
-✅ **Each plan wins one regime, so `Auto` takes both.** Four arms, one
+✅ **Each plan wins one regime, so `DecideByCrowd` takes both.** Four arms, one
 interleaved harness, two repeats of the whole measurement:
 
-| | master | CPD | verify | **Auto** |
+| | master | CPD | verify | **DecideByCrowd** |
 |---|---|---|---|---|
 | crowded | 12.17 / 12.58 µs | 11.97 / 13.24 | 10.37 / 11.70 | **10.76 / 10.93 — 1.13-1.15x master** |
 | no crowd | 8.15 / 8.00 µs | 1.13 / 1.05 | 1.33 / 1.25 | **1.13 / 1.07 — 7.19-7.50x master** |
 
-**`Auto` tracks whichever plan is ahead in each regime**, which is the whole
+**`DecideByCrowd` tracks whichever plan is ahead in each regime**, which is the whole
 point of it. It costs no configuration: nothing is plumbed from `ServerOptions`,
-and `--no-bot-occupancy`, `eval` and every training rollout reach `Incumbent`
+and `--no-bot-occupancy`, `eval` and every training rollout reach `ChainBoundsSearch`
 simply by never having a crowd.
 
 ⚠️ **Keyed on a crowd being PRESENT, not on occupancy being enabled.** The two
 differ at the start of a round and after a respawn wave, when the map is empty
-and `Incumbent` is the better plan even on a server with occupancy switched on.
+and `ChainBoundsSearch` is the better plan even on a server with occupancy on.
 
 ⛔ **Both gates earn their place only because both plans now ship.**
 `BothPlansAgreeOnCost` stops a bot's route changing with the crowd for reasons
 that have nothing to do with the crowd — either plan alone looks optimal in
 isolation, so only a differential test can see a disagreement.
-`AutoPicksThePlanThatMatchesTheCrowd` stops the selection being decorative: an
-`Auto` that always chose one plan would pass the first gate perfectly and lose
+`AutoPicksThePlanThatMatchesTheCrowd` stops the selection being decorative: a
+`DecideByCrowd` that always chose one plan would pass the first gate perfectly and lose
 the situational win silently, and nothing else in the repo could see that.
-**Confirmed by mutation** — pinning `Auto` to `Incumbent` fails it.
+**Confirmed by mutation** — pinning `DecideByCrowd` to `ChainBoundsSearch` fails it.
 
 ⚠️ **The mechanism, and it is the part worth keeping.** Maintaining the
 incumbent costs a chain walk at *every expansion*; it repays that only when the
