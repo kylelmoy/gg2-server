@@ -2161,14 +2161,47 @@ distinct routes can price identically when a walk and a jump join the same
 pair). Without that gate the timing column below would be measuring which arm
 does less work, not which arm is faster.
 
-⛔ **The result is a split, and it went the opposite way to the prediction.**
-Mean over 22 graphs, 500 pairs each, interleaved and run twice an arm, three
+⛔ **Against MASTER — the shipped weighted straight-line A\* — the answer
+depends entirely on whether occupancy is running, and it is not close.** Three
+arms measured in one interleaved run, mean over 22 graphs, 500 pairs each, three
 repeats of the whole measurement:
+
+| | master | CPD-Search | verify-then-search |
+|---|---|---|---|
+| **no occupancy** (`eval`, every rollout) | 8.47 / 8.36 / 8.83 µs | 1.20 / 1.11 / 1.29 µs — **6.8-7.5x master** | 1.31 / 1.44 / 1.41 µs — **5.8-6.5x master** |
+| **crowded** (the live `--bots` server) | 12.65 / 11.99 / 13.75 µs | 14.00 / 12.31 / 13.36 µs — **0.90-1.03x, a wash** | 11.61 / 10.73 / 11.94 µs — **1.09-1.15x** |
+| routes returned | **108.5% of optimal** | optimal | optimal |
+
+⛔ **Master is fast because it is allowed to be WRONG, and that is the whole
+explanation.** It is a *weighted* search — `NavConstants.SearchWeight` inflates
+its heuristic by 1.3 and the closed-set skip goes with it — so it commits early,
+expands few nodes and returns a route **8.5% dearer than optimal**, stable to a
+tenth of a point across every repeat. Both table plans are unweighted and must
+*prove* optimality. Under crowding that proof costs more expansions than the
+exact heuristic saves: on `cp_egypt` master pops **106** nodes where CPD-Search
+pops **255**. **A speed comparison that does not price the routes has master
+winning a race it is running downhill.**
+
+- ✅ **Where occupancy is off, the table wins on both axes at once** — about
+  **7x** the speed *and* 8.5% cheaper routes. That is `eval` and every training
+  rollout, and it is not a marginal call.
+- ⚠️ **Where occupancy is on, all three sit within about 15% of each other** and
+  the table buys route quality rather than speed. ⚠️ The other lane recorded
+  1.06x for the same crowded comparison and this measurement reads 0.90-1.03x;
+  **both are inside this machine's noise and both say the same thing — a wash.**
+  Do not quote either as a direction.
+- ⛔ **The unweighted choice is what costs the table its crowded speed, and it is
+  not removable.** Carrying `SearchWeight` across would let the incumbent test
+  accept any chain within 30%, which every crowded chain is, and erase the
+  dispersion occupancy exists to buy. The slower crowded search is the price of
+  keeping that.
+
+**Between the two table plans**, mean over the same runs:
 
 | arm | CPD-Search | verify-then-search | |
 |---|---|---|---|
-| crowded (the live `--bots` server) | 12.40 / 13.40 / 11.92 µs | 11.04 / 11.35 / 11.12 µs | **0.85-0.93x — discarding WINS** |
-| no occupancy (`eval`, every rollout) | 1.08 / 1.13 / 1.09 µs | 1.29 / 1.26 / 1.35 µs | **1.12-1.24x — the incumbent wins** |
+| crowded | 12.40 / 13.40 / 11.92 µs | 11.04 / 11.35 / 11.12 µs | **0.85-0.93x — discarding WINS** |
+| no occupancy | 1.08 / 1.13 / 1.09 µs | 1.29 / 1.26 / 1.35 µs | **1.12-1.24x — the incumbent wins** |
 
 ⚠️ **The mechanism, and it is the part worth keeping.** Maintaining the
 incumbent costs a chain walk at *every expansion*; it repays that only when the

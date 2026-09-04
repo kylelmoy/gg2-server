@@ -401,9 +401,11 @@ public sealed class NavDistancesTests(ITestOutputHelper output)
         ReferenceTree.RequireNavCache();
 
         output.WriteLine(
-            $"{"graph / arm",-26} {"incumbent",10} {"verify",10} | {"ratio",6} | {"pops i/v",12}");
+            $"{"graph / arm",-26} {"master",9} {"incumb",9} {"verify",9} | "
+            + $"{"pops m/i/v",16} | {"master cost",11}");
 
-        double[] incAll = [0, 0], verAll = [0, 0];
+        double[] incAll = [0, 0], verAll = [0, 0], mastAll = [0, 0];
+        double[] costAll = [0, 0];
         var maps = 0;
 
         foreach (var (map, area) in NavCache.List(ReferenceTree.NavCacheDirectory))
@@ -456,11 +458,17 @@ public sealed class NavDistancesTests(ITestOutputHelper output)
             if (pairs.Count < 50)
                 continue;
 
-            double Bench(NavPlan plan, IReadOnlyDictionary<long, int>? crowd, out double pops)
+            // `with` null is MASTER: no table, so Find falls to the shipped
+            // straight-line heuristic inflated by NavConstants.SearchWeight.
+            // ⚠️ That arm answers a DIFFERENT question — it is allowed to return
+            // a suboptimal route — which is why `cost` is measured beside the
+            // clock and not left for the reader to assume away.
+            double Bench(NavDistances? with, NavPlan plan, IReadOnlyDictionary<long, int>? crowd,
+                out double pops, out double cost)
             {
                 for (var w = 0; w < 4; w++)
                     foreach (var (from, to) in pairs)
-                        search.Find(from, to, query, route, null, crowd, default, table, plan);
+                        search.Find(from, to, query, route, null, crowd, default, with, plan);
 
                 var clock = Stopwatch.StartNew();
                 long popped = 0;
@@ -469,12 +477,34 @@ public sealed class NavDistancesTests(ITestOutputHelper output)
                 {
                     foreach (var (from, to) in pairs)
                     {
-                        search.Find(from, to, query, route, null, crowd, default, table, plan);
+                        search.Find(from, to, query, route, null, crowd, default, with, plan);
                         popped += search.Pops;
                     }
                 }
 
                 clock.Stop();
+
+                // Priced once, outside the clock, on the last repetition's routes.
+                var none = new HashSet<long>();
+                var empty = crowd ?? new Dictionary<long, int>();
+                var total = 0.0;
+                var priced = 0;
+
+                foreach (var (from, to) in pairs)
+                {
+                    if (!search.Find(from, to, query, route, null, crowd, default, with, plan))
+                        continue;
+
+                    var c = LivePrice(graph, route, query, none, empty);
+
+                    if (!double.IsPositiveInfinity(c))
+                    {
+                        total += c;
+                        priced++;
+                    }
+                }
+
+                cost = priced == 0 ? 0 : total / priced;
                 pops = popped / (double)(5 * pairs.Count);
                 return clock.Elapsed.TotalMicroseconds / (5.0 * pairs.Count);
             }
@@ -482,18 +512,23 @@ public sealed class NavDistancesTests(ITestOutputHelper output)
             foreach (var (arm, crowd) in ((string, IReadOnlyDictionary<long, int>?)[])
                 [("crowd", occupancy), ("clean", null)])
             {
-                var inc = Bench(NavPlan.Incumbent, crowd, out var incPops);
-                var ver = Bench(NavPlan.VerifyThenSearch, crowd, out var verPops);
-                inc = (inc + Bench(NavPlan.Incumbent, crowd, out _)) / 2;
-                ver = (ver + Bench(NavPlan.VerifyThenSearch, crowd, out _)) / 2;
+                var mast = Bench(null, NavPlan.Incumbent, crowd, out var mastPops, out var mastCost);
+                var inc = Bench(table, NavPlan.Incumbent, crowd, out var incPops, out var optCost);
+                var ver = Bench(table, NavPlan.VerifyThenSearch, crowd, out var verPops, out _);
+                mast = (mast + Bench(null, NavPlan.Incumbent, crowd, out _, out _)) / 2;
+                inc = (inc + Bench(table, NavPlan.Incumbent, crowd, out _, out _)) / 2;
+                ver = (ver + Bench(table, NavPlan.VerifyThenSearch, crowd, out _, out _)) / 2;
 
                 var a = arm == "crowd" ? 0 : 1;
+                mastAll[a] += mast;
                 incAll[a] += inc;
                 verAll[a] += ver;
+                costAll[a] += optCost == 0 ? 1 : mastCost / optCost;
 
                 output.WriteLine(
-                    $"{map + "_a" + area + " " + arm,-26} {inc,10:F2} {ver,10:F2} | {ver / inc,5:F2}x | "
-                    + $"{incPops,5:F0}/{verPops,-5:F0}");
+                    $"{map + "_a" + area + " " + arm,-26} {mast,9:F2} {inc,9:F2} {ver,9:F2} | "
+                    + $"{mastPops,5:F0}/{incPops,4:F0}/{verPops,-5:F0} | "
+                    + $"{(optCost == 0 ? 1 : mastCost / optCost),10:P1}");
             }
 
             maps++;
@@ -505,8 +540,10 @@ public sealed class NavDistancesTests(ITestOutputHelper output)
         {
             output.WriteLine(
                 $"MEAN {(a == 0 ? "crowd" : "clean")} over {maps} graphs: "
-                + $"incumbent {incAll[a] / maps:F2}us, verify-then-search {verAll[a] / maps:F2}us "
-                + $"({verAll[a] / incAll[a]:F2}x the incumbent's cost)");
+                + $"master {mastAll[a] / maps:F2}us, "
+                + $"incumbent {incAll[a] / maps:F2}us ({mastAll[a] / incAll[a]:F2}x master), "
+                + $"verify {verAll[a] / maps:F2}us ({mastAll[a] / verAll[a]:F2}x master) "
+                + $"| master's routes cost {costAll[a] / maps:P1} of optimal");
         }
     }
 
