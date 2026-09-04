@@ -146,7 +146,7 @@ public sealed class NavDistancesTests(ITestOutputHelper output)
             $"{"graph",-22} {"euclid",7} {"loose",7} {"matched",7} | {"gain",6} | "
             + $"{"pops e/l/m",14} {"MB",5} {"ms",6}");
 
-        double euclidAll = 0, looseAll = 0, tableAll = 0;
+        double[] euclidAll = [0, 0], looseAll = [0, 0], tableAll = [0, 0];
         var maps = 0;
 
         foreach (var (map, area) in NavCache.List(ReferenceTree.NavCacheDirectory))
@@ -190,7 +190,13 @@ public sealed class NavDistancesTests(ITestOutputHelper output)
                 }
             }
 
+            // Pairs THIS asker can route, not merely pairs the gates-open table
+            // can. A goal behind the other team's gate is finite in every table
+            // and unreachable for the asker, and such a query expands the whole
+            // component with or without a table — a real cost, the same in every
+            // arm, and not what this measures. Counted and printed instead.
             var pairs = new List<(int From, int To)>();
+            var gated = 0;
             var spins = 0;
 
             while (pairs.Count < 500 && spins++ < 100_000)
@@ -198,20 +204,27 @@ public sealed class NavDistancesTests(ITestOutputHelper output)
                 var from = rng.Next(n);
                 var to = objectives[rng.Next(4)];
 
-                if (from != to && !float.IsPositiveInfinity(table.Between(from, to)))
+                if (from == to || float.IsPositiveInfinity(table.Between(from, to)))
+                    continue;
+
+                if (search.Find(from, to, query, route))
                     pairs.Add((from, to));
+                else
+                    gated++;
             }
 
             if (pairs.Count < 50)
                 continue;
 
-            double Bench(NavDistances? with, out double pops)
+            output.WriteLine($"{map}_a{area}: {gated} of {pairs.Count + gated} finite pairs are behind a gate for this asker");
+
+            double Bench(NavDistances? with, IReadOnlyDictionary<long, int>? crowd, out double pops)
             {
                 // Warm past tier-1: promotion is at 30 calls and the rejit is
                 // asynchronous, so a short warm-up measures tier-0 code.
                 for (var w = 0; w < 4; w++)
                     foreach (var (from, to) in pairs)
-                        search.Find(from, to, query, route, null, occupancy, default, with);
+                        search.Find(from, to, query, route, null, crowd, default, with);
 
                 var clock = Stopwatch.StartNew();
                 long popped = 0;
@@ -220,7 +233,7 @@ public sealed class NavDistancesTests(ITestOutputHelper output)
                 {
                     foreach (var (from, to) in pairs)
                     {
-                        search.Find(from, to, query, route, null, occupancy, default, with);
+                        search.Find(from, to, query, route, null, crowd, default, with);
                         popped += search.Pops;
                     }
                 }
@@ -230,30 +243,348 @@ public sealed class NavDistancesTests(ITestOutputHelper output)
                 return clock.Elapsed.TotalMicroseconds / (5.0 * pairs.Count);
             }
 
-            // Interleaved, every arm twice, alternating.
-            var euclid = Bench(null, out var euclidPops);
-            var loose = Bench(permissive, out var loosePops);
-            var withTable = Bench(table, out var tablePops);
-            euclid = (euclid + Bench(null, out _)) / 2;
-            loose = (loose + Bench(permissive, out _)) / 2;
-            withTable = (withTable + Bench(table, out _)) / 2;
+            // Two arms: the live server's crowd on the chains, and the crowd-free
+            // graph `eval` and every rollout search — where the table's chain is
+            // the answer at the first pop whenever the blacklist is empty.
+            foreach (var (arm, crowd) in (( string, IReadOnlyDictionary<long, int>?)[])[("crowd", occupancy), ("clean", null)])
+            {
+                // Interleaved, every arm twice, alternating.
+                var euclid = Bench(null, crowd, out var euclidPops);
+                var loose = Bench(permissive, crowd, out var loosePops);
+                var withTable = Bench(table, crowd, out var tablePops);
+                euclid = (euclid + Bench(null, crowd, out _)) / 2;
+                loose = (loose + Bench(permissive, crowd, out _)) / 2;
+                withTable = (withTable + Bench(table, crowd, out _)) / 2;
 
-            euclidAll += euclid;
-            looseAll += loose;
-            tableAll += withTable;
+                var a = arm == "crowd" ? 0 : 1;
+                euclidAll[a] += euclid;
+                looseAll[a] += loose;
+                tableAll[a] += withTable;
+
+                output.WriteLine(
+                    $"{map + "_a" + area + " " + arm,-22} {euclid,7:F1} {loose,7:F1} {withTable,7:F1} | "
+                    + $"{euclid / withTable,5:F2}x | {euclidPops,4:F0}/{loosePops,4:F0}/{tablePops,-4:F0} "
+                    + $"{table.Bytes / 1048576.0,5:F2} {sw.ElapsedMilliseconds,6}");
+            }
+
             maps++;
-
-            output.WriteLine(
-                $"{map + "_a" + area,-22} {euclid,7:F1} {loose,7:F1} {withTable,7:F1} | "
-                + $"{euclid / withTable,5:F2}x | {euclidPops,4:F0}/{loosePops,4:F0}/{tablePops,-4:F0} "
-                + $"{table.Bytes / 1048576.0,5:F2} {sw.ElapsedMilliseconds,6}");
         }
 
         output.WriteLine(string.Empty);
-        output.WriteLine(
-            $"MEAN over {maps} graphs: euclid {euclidAll / maps:F2}us, permissive table "
-            + $"{looseAll / maps:F2}us ({euclidAll / looseAll:F2}x), class-matched table "
-            + $"{tableAll / maps:F2}us ({euclidAll / tableAll:F2}x)");
+
+        foreach (var a in (int[])[0, 1])
+        {
+            output.WriteLine(
+                $"MEAN {(a == 0 ? "crowd" : "clean")} over {maps} graphs: euclid {euclidAll[a] / maps:F2}us, "
+                + $"permissive table {looseAll[a] / maps:F2}us ({euclidAll[a] / looseAll[a]:F2}x), "
+                + $"class-matched table {tableAll[a] / maps:F2}us ({euclidAll[a] / tableAll[a]:F2}x)");
+        }
+    }
+
+    /// <summary>
+    /// Following the next hops reaches the goal, and pricing each hop at the
+    /// graph's own cost reproduces the distance.
+    /// </summary>
+    /// <remarks>
+    /// The two halves of the table come out of one Dijkstra and this is what
+    /// ties them together: a chain that priced above its distance would be a
+    /// route the table promised and does not have, and a chain that priced
+    /// below it would be a distance that is not a lower bound. Both tables —
+    /// permissive and walker — because the hop has to be an edge the table was
+    /// built with, not merely an edge.
+    /// </remarks>
+    [Fact]
+    public void TheNextHopChainPricesToTheDistance()
+    {
+        ReferenceTree.RequireNavCache();
+
+        var chains = 0;
+
+        foreach (var (map, area) in NavCache.List(ReferenceTree.NavCacheDirectory))
+        {
+            var graph = NavCache.Load(ReferenceTree.NavCacheDirectory, map, area);
+            var n = graph.NodeCount;
+
+            foreach (var walker in (bool[])[false, true])
+            {
+                var table = walker
+                    ? NavDistances.Derive(graph, false, false, false)
+                    : NavDistances.Derive(graph);
+
+                for (var from = 0; from < n; from += 7)
+                {
+                    for (var goal = 0; goal < n; goal += 11)
+                    {
+                        var expected = table.Between(from, goal);
+
+                        if (from == goal)
+                        {
+                            Assert.Equal(0f, expected);
+                            Assert.Equal(NavDistances.None, table.NextHop(from, goal));
+                            continue;
+                        }
+
+                        if (float.IsPositiveInfinity(expected))
+                        {
+                            Assert.Equal(NavDistances.None, table.NextHop(from, goal));
+                            continue;
+                        }
+
+                        var at = from;
+                        var total = 0.0;
+                        var hops = 0;
+
+                        while (at != goal)
+                        {
+                            var next = table.NextHop(at, goal);
+
+                            Assert.True(next >= 0, $"{map}_a{area} {from}->{goal}: the chain ends at {at}");
+                            Assert.True(++hops <= n, $"{map}_a{area} {from}->{goal}: the chain cycles");
+
+                            total += CheapestStatic(graph, at, next, walker);
+                            at = next;
+                        }
+
+                        Assert.True(
+                            expected <= total && total <= expected * (1 + 1e-6),
+                            $"{map}_a{area} {from}->{goal} walker={walker}: table {expected}, chain {total}");
+
+                        chains++;
+                    }
+                }
+            }
+        }
+
+        output.WriteLine($"{chains} chains walked across every shipped graph, both tables");
+        Assert.True(chains > 10_000);
+    }
+
+    /// <summary>
+    /// CPD-Search returns the cheapest route under LIVE costs — a ban and a
+    /// crowd on the stored chain included — and never a hop the asker cannot
+    /// take.
+    /// </summary>
+    /// <remarks>
+    /// <b>The optimality claim, checked against an oracle that has nothing in
+    /// common with the search.</b> A plain forward Dijkstra over the routable
+    /// edges at live cost, written here, prices the true optimum; the search's
+    /// route is re-priced hop by hop the same way. The perturbations are put ON
+    /// the chain deliberately, so most legs are dirty and the bound has to do
+    /// its work rather than the first pop; the count of first-pop answers is
+    /// printed, not asserted.
+    /// <para>
+    /// Tolerance is the search's own: an incumbent is accepted within 1e-6 of
+    /// the proven bound, so the route may price up to that above the optimum
+    /// and no more.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void CpdSearchIsOptimalUnderLiveCosts()
+    {
+        ReferenceTree.RequireNavCache();
+
+        var rng = new Random(20260904);
+        var legs = 0;
+        var firstPop = 0;
+
+        foreach (var (map, area) in NavCache.List(ReferenceTree.NavCacheDirectory))
+        {
+            var graph = NavCache.Load(ReferenceTree.NavCacheDirectory, map, area);
+            var n = graph.NodeCount;
+            var set = NavDistanceSet.Derive(graph);
+            var search = new NavSearch(graph);
+            var path = new List<int>();
+
+            foreach (var query in Queries())
+            {
+                var table = set.For(in query);
+
+                for (var leg = 0; leg < 12; leg++)
+                {
+                    var start = rng.Next(n);
+                    var goal = rng.Next(n);
+
+                    if (start == goal || float.IsPositiveInfinity(table.Between(start, goal)))
+                        continue;
+
+                    var chain = Chain(table, start, goal);
+                    var blocked = new HashSet<long>();
+                    var occupancy = new Dictionary<long, int>();
+
+                    // Ban a hop on two legs in three, crowd two hops on two in
+                    // three: one leg in three of each kind is left alone.
+                    if (chain.Count > 2 && leg % 3 != 0)
+                    {
+                        var i = rng.Next(chain.Count - 1);
+                        blocked.Add(NavGraph.EdgeKey(chain[i], chain[i + 1]));
+                    }
+
+                    if (chain.Count > 2 && leg % 3 != 1)
+                    {
+                        for (var k = 0; k < 2; k++)
+                        {
+                            var i = rng.Next(chain.Count - 1);
+                            occupancy[NavGraph.EdgeKey(chain[i], chain[i + 1])] = 1 + rng.Next(3);
+                        }
+                    }
+
+                    var best = ReferenceCost(graph, start, goal, query, blocked, occupancy);
+
+                    if (!search.Find(start, goal, query, path, blocked, occupancy, default, table))
+                    {
+                        Assert.True(
+                            double.IsPositiveInfinity(best),
+                            $"{map}_a{area} {start}->{goal} {query}: no route found, but one costs {best}");
+                        continue;
+                    }
+
+                    if (search.Pops == 1)
+                        firstPop++;
+
+                    var priced = LivePrice(graph, path, query, blocked, occupancy);
+
+                    Assert.True(
+                        !double.IsPositiveInfinity(priced),
+                        $"{map}_a{area} {start}->{goal} {query}: the route carries a hop the asker cannot take");
+
+                    Assert.True(
+                        priced <= best * (1 + 2e-6),
+                        $"{map}_a{area} {start}->{goal} {query}: route {priced} against optimum {best}");
+
+                    legs++;
+                }
+            }
+        }
+
+        output.WriteLine($"{legs} legs, {firstPop} answered at the first pop");
+        Assert.True(legs > 1000, $"only {legs} legs; the sweep proved little");
+    }
+
+    /// <summary>The table's chain from <paramref name="start"/> to <paramref name="goal"/>, as nodes.</summary>
+    private static List<int> Chain(NavDistances table, int start, int goal)
+    {
+        var chain = new List<int> { start };
+        var at = start;
+
+        while (at != goal && chain.Count <= table.NodeCount)
+        {
+            at = table.NextHop(at, goal);
+            if (at < 0)
+                break;
+
+            chain.Add(at);
+        }
+
+        return chain;
+    }
+
+    /// <summary>
+    /// The cheapest edge from <paramref name="from"/> to <paramref name="to"/> a
+    /// table built for a walker (or for everybody) would have used.
+    /// </summary>
+    private static double CheapestStatic(NavGraph graph, int from, int to, bool walker)
+    {
+        var best = double.PositiveInfinity;
+
+        foreach (var edge in graph.EdgesFrom(from))
+        {
+            if (edge.To != to)
+                continue;
+
+            if (walker && edge.Type is NavEdgeType.DoubleJump or NavEdgeType.RocketJump or NavEdgeType.StickyJump)
+                continue;
+
+            if (edge.Cost < best)
+                best = edge.Cost;
+        }
+
+        return best;
+    }
+
+    /// <summary>What this asker pays now for the cheapest routable edge between two nodes.</summary>
+    private static double LiveEdge(
+        NavGraph graph, int from, int to, in NavQuery query,
+        IReadOnlySet<long> blocked, IReadOnlyDictionary<long, int> occupancy)
+    {
+        var key = NavGraph.EdgeKey(from, to);
+
+        if (blocked.Contains(key))
+            return double.PositiveInfinity;
+
+        var crowd = occupancy.GetValueOrDefault(key);
+        var best = double.PositiveInfinity;
+
+        foreach (var edge in graph.EdgesFrom(from))
+        {
+            if (edge.To != to || !NavGraph.EdgeRoutable(in edge, in query))
+                continue;
+
+            var cost = edge.Cost * (1 + (BotConstants.OccupancyCost * crowd));
+            if (cost < best)
+                best = cost;
+        }
+
+        return best;
+    }
+
+    /// <summary>A route priced at live cost, infinite if any hop is not routable.</summary>
+    private static double LivePrice(
+        NavGraph graph, IReadOnlyList<int> route, in NavQuery query,
+        IReadOnlySet<long> blocked, IReadOnlyDictionary<long, int> occupancy)
+    {
+        var total = 0.0;
+
+        for (var i = 1; i < route.Count; i++)
+            total += LiveEdge(graph, route[i - 1], route[i], in query, blocked, occupancy);
+
+        return total;
+    }
+
+    /// <summary>
+    /// The true cheapest cost under live pricing — a forward Dijkstra with no
+    /// heuristic, no table and no closed-set shortcut.
+    /// </summary>
+    private static double ReferenceCost(
+        NavGraph graph, int start, int goal, in NavQuery query,
+        IReadOnlySet<long> blocked, IReadOnlyDictionary<long, int> occupancy)
+    {
+        var dist = new double[graph.NodeCount];
+        Array.Fill(dist, double.PositiveInfinity);
+        dist[start] = 0;
+
+        var open = new PriorityQueue<int, double>();
+        open.Enqueue(start, 0);
+
+        while (open.TryDequeue(out var u, out var du))
+        {
+            if (du > dist[u])
+                continue;
+
+            if (u == goal)
+                return du;
+
+            foreach (var edge in graph.EdgesFrom(u))
+            {
+                if (!NavGraph.EdgeRoutable(in edge, in query))
+                    continue;
+
+                var key = NavGraph.EdgeKey(u, edge.To);
+
+                if (blocked.Contains(key))
+                    continue;
+
+                var cost = edge.Cost * (1 + (BotConstants.OccupancyCost * occupancy.GetValueOrDefault(key)));
+                var via = du + cost;
+
+                if (via < dist[edge.To])
+                {
+                    dist[edge.To] = via;
+                    open.Enqueue(edge.To, via);
+                }
+            }
+        }
+
+        return dist[goal];
     }
 
     /// <summary>Every query class the shipped bots produce.</summary>

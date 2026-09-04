@@ -88,10 +88,11 @@ public sealed class NavSearchTests
     private static List<int> Route(
         NavGraph graph, int start, int goal, NavQuery query,
         IReadOnlySet<long>? blocked = null,
-        IReadOnlyDictionary<long, int>? occupancy = null)
+        IReadOnlyDictionary<long, int>? occupancy = null,
+        NavDistances? distances = null)
     {
         var path = new List<int>();
-        new NavSearch(graph).Find(start, goal, query, path, blocked, occupancy);
+        new NavSearch(graph).Find(start, goal, query, path, blocked, occupancy, default, distances);
         return path;
     }
 
@@ -359,6 +360,162 @@ public sealed class NavSearchTests
         // Two takes it to 15, and the crowd finally moves the route.
         var two = new Dictionary<long, int> { [NavGraph.EdgeKey(0, 1)] = 2 };
         Assert.Equal([0, 2, 1], Route(graph, 0, 1, query, occupancy: two));
+    }
+
+    // --- CPD-Search: the table's chain as the answer, verified ---------------
+    //
+    // The same fixtures as above, asked with a table. Each one perturbs the
+    // stored chain a different way — nothing, a ban, a crowd, a gate, a class
+    // arc — and asserts the search still answers what it answered without the
+    // table, which is the claim: the table changes the cost of the search, not
+    // what comes back. docs/TRAPS-BOTS.md, "CPD-Search".
+
+    /// <summary>
+    /// A chain nothing has perturbed comes back at the first pop.
+    /// </summary>
+    /// <remarks>
+    /// <c>Pops == 1</c> is the whole point: the start node is popped, its
+    /// lower bound meets the incumbent's live price, and the chain is returned
+    /// with no node expanded. A search that expanded the chain to "verify" it
+    /// would answer the same route at four pops and would have missed the idea.
+    /// </remarks>
+    [Fact]
+    public void CpdACleanChainIsReturnedWithoutExpandingANode()
+    {
+        var graph = Build(
+            [Node(10, 0, 4), Node(10, 6, 10), Node(10, 12, 16), Node(10, 18, 22)],
+            [Edge(0, 3, 50), Edge(0, 1, 10), Edge(1, 2, 10), Edge(2, 3, 10)]);
+
+        var table = NavDistances.Derive(graph);
+        var search = new NavSearch(graph);
+        var path = new List<int>();
+
+        Assert.True(search.Find(0, 3, new NavQuery(Team.Red), path, distances: table));
+        Assert.Equal([0, 1, 2, 3], path);
+        Assert.Equal(1, search.Pops);
+    }
+
+    /// <summary>
+    /// A blacklisted hop on the chain prices it at infinity, the search runs,
+    /// and it routes round.
+    /// </summary>
+    [Fact]
+    public void CpdABlacklistedHopOnTheChainForcesTheSearchRoundIt()
+    {
+        var graph = Build(
+            [Node(10, 0, 0), Node(10, 5, 5), Node(40, 0, 0)],
+            [Edge(0, 1, 5), Edge(0, 2, 30), Edge(2, 1, 40)]);
+
+        var table = NavDistances.Derive(graph);
+        var search = new NavSearch(graph);
+        var path = new List<int>();
+        var blocked = new HashSet<long> { NavGraph.EdgeKey(0, 1) };
+
+        Assert.True(search.Find(0, 1, new NavQuery(Team.Red), path, blocked, distances: table));
+        Assert.Equal([0, 2, 1], path);
+        Assert.True(search.Pops > 1, "a dirty chain has to be searched past");
+    }
+
+    /// <summary>
+    /// A crowded hop on the chain is priced, not waved through on the
+    /// incumbent — the answer is the same one the table-less search gives.
+    /// </summary>
+    /// <remarks>
+    /// <b>This is the test a WEIGHTED incumbent test fails.</b> With three on
+    /// the direct hop the chain prices at 17.5 against a 13 detour, and the
+    /// lower bound at the start is 10: a search that accepted the incumbent once
+    /// it was within <c>SearchWeight</c> (1.3 × 10 = 13 &lt; 17.5 — not quite;
+    /// at 1.75 it would) of the bound would hand back the crowded route, and
+    /// occupancy would stop dispersing anybody at whatever weight was chosen.
+    /// One search instance for every call, so the memo's reset is exercised.
+    /// </remarks>
+    [Fact]
+    public void CpdACrowdedHopOnTheChainStillMovesTheRoute()
+    {
+        var graph = Build(
+            [Node(10, 0, 0), Node(10, 10, 10), Node(10, 5, 5)],
+            [Edge(0, 1, 10), Edge(0, 2, 6.5), Edge(2, 1, 6.5)]);
+
+        var table = NavDistances.Derive(graph);
+        var search = new NavSearch(graph);
+        var query = new NavQuery(Team.Red);
+        var path = new List<int>();
+
+        var one = new Dictionary<long, int> { [NavGraph.EdgeKey(0, 1)] = 1 };
+        Assert.True(search.Find(0, 1, query, path, null, one, default, table));
+        Assert.Equal([0, 1], path);
+
+        var three = new Dictionary<long, int> { [NavGraph.EdgeKey(0, 1)] = 3 };
+        Assert.True(search.Find(0, 1, query, path, null, three, default, table));
+        Assert.Equal([0, 2, 1], path);
+
+        // And back again: the memo from the crowded search must not linger.
+        Assert.True(search.Find(0, 1, query, path, null, one, default, table));
+        Assert.Equal([0, 1], path);
+    }
+
+    /// <summary>
+    /// One table built with every gate open serves both teams: the asker the
+    /// gate refuses gets the detour, not the chain.
+    /// </summary>
+    [Fact]
+    public void CpdAGateOnTheChainIsRefusedPerAskerFromOneTable()
+    {
+        var graph = Build(
+            [Node(10, 0, 0), Node(10, 5, 5), Node(10, 10, 10), Node(40, 5, 5)],
+            [
+                Edge(0, 1, 5, gate: NavGate.TeamRed),
+                Edge(1, 2, 5),
+                Edge(0, 3, 40),
+                Edge(3, 2, 40),
+            ]);
+
+        var table = NavDistances.Derive(graph);
+
+        Assert.Equal([0, 1, 2], Route(graph, 0, 2, new NavQuery(Team.Red), distances: table));
+        Assert.Equal([0, 3, 2], Route(graph, 0, 2, new NavQuery(Team.Blue), distances: table));
+        Assert.Equal([0, 3, 2], Route(graph, 0, 2, new NavQuery(Team.Red, HasIntel: true), distances: table));
+    }
+
+    /// <summary>
+    /// A class arc on the chain is refused to an asker that cannot fly it, from
+    /// the permissive table and from the matched one alike.
+    /// </summary>
+    /// <remarks>
+    /// The permissive table is SAFE for a walker — the chain prices at infinity
+    /// and the search goes round — it is only loose. The matched table's chain
+    /// is the detour itself, so the walker gets it at the first pop. Both
+    /// answers are the same route; what differs is the work.
+    /// </remarks>
+    [Theory]
+    [InlineData(NavEdgeType.DoubleJump)]
+    [InlineData(NavEdgeType.RocketJump)]
+    public void CpdAClassArcOnTheChainIsRefusedToAWalkerFromEitherTable(NavEdgeType type)
+    {
+        var graph = Build(
+            [Node(10, 0, 0), Node(10, 5, 5), Node(40, 0, 0)],
+            [Edge(0, 1, 5, type), Edge(0, 2, 30), Edge(2, 1, 40)]);
+
+        var permissive = NavDistances.Derive(graph);
+        var walker = NavDistances.Derive(graph, false, false, false);
+        var search = new NavSearch(graph);
+        var path = new List<int>();
+
+        Assert.True(search.Find(0, 1, new NavQuery(Team.Red), path, distances: permissive));
+        Assert.Equal([0, 2, 1], path);
+        Assert.True(search.Pops > 1);
+
+        Assert.True(search.Find(0, 1, new NavQuery(Team.Red), path, distances: walker));
+        Assert.Equal([0, 2, 1], path);
+        Assert.Equal(1, search.Pops);
+
+        var able = type == NavEdgeType.DoubleJump
+            ? new NavQuery(Team.Red, CanDoubleJump: true)
+            : new NavQuery(Team.Red, CanRocketJump: true);
+
+        Assert.True(search.Find(0, 1, able, path, distances: permissive));
+        Assert.Equal([0, 1], path);
+        Assert.Equal(1, search.Pops);
     }
 
     /// <summary>

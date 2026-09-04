@@ -1,9 +1,52 @@
 # Proposal: verified precomputed routes
 
-⚠️ **This is a PROPOSAL, not a description of anything that exists.** Nothing in
-this document is implemented. It is written to be handed to a prior-art search:
-the question it exists to answer is whether this is a known technique, a known
-technique under another name, or a known dead end.
+⚠️ **The prior-art search this document asked for has been run, and the answer
+is below under "Decision".** Sections 1-7 are kept as written — the record of
+what was known and what was guessed before the search — and are not updated to
+match the decision. The implementation is `NavSearch.Find`'s CPD branch and
+`NavDistances.NextHop`; its rules and measurements live in `docs/TRAPS-BOTS.md`,
+"CPD-Search: the next-hop table as the ANSWER, verified per query".
+
+## Decision (2026-09-04): implement CPD-Search, not the two-stage design
+
+**It is a known technique**: Bono, Gerevini, Harabor, Stuckey, *Path Planning
+with CPD Heuristics*, IJCAI 2019 — "CPD-Search". Same object (an all-pairs
+first-move table), same assumption (costs perturbed **upward only** between
+planning episodes), same lower bound (the static CPD path cost — already shipped
+here as `NavDistances`), plus one thing the proposal did not have: the CPD path
+priced at **current** costs is an **upper bound** and an incumbent solution.
+Search terminates when the frontier's `g + h` reaches the incumbent's cost.
+
+What that changes against sections 3-5:
+
+| proposal | decision |
+|---|---|
+| walk the chain; if dirty, discard it and run A* from scratch | the walk is an incumbent that bounds the search; walks from expanded nodes share a memo. **A miss does not pay twice.** |
+| U1, "is the walk cheaper than the search? decides everything" | the first hop falls out of the reverse Dijkstra already run; the table is laid out `[goal][from]` so a walk reads one contiguous row. Measured: **7.16x on a clean graph** (one pop, ~1 µs, 19 of 22 graphs) and **1.06x under a heavy crowd** — the walk was never the cost; proving optimality against a crowd is. Numbers in TRAPS-BOTS |
+| A1, per-ability tables "argued" | settled by an existing measurement — 323,969 of 471,969 `ctf_truefort` pairs are strictly tighter for a walker — and `NavDistanceSet` already builds the 2-4 profile tables |
+| A2, gates and teams need no table | confirmed: a shut gate is a +∞ perturbation the search absorbs |
+| "scope collapse": only where occupancy is off | **in scope**: a ×1.25 hop is a <1% perturbation; exact search explores a corridor round it |
+| optimal answers are "a change" | yes, and deliberately: with the table the search runs **unweighted**. A weighted (`ε = 1.3`) termination would accept the unperturbed chain and erase occupancy's dispersion — see TRAPS-BOTS |
+
+**What stays true from the proposal**: the amortisation problem (`eval` at four
+matches a map was a wash for `--nav-distances`, and the next-hop table costs
+nothing extra to build, so the wash is unchanged until rows are derived lazily
+per goal); the ceiling (search is ~26-30% of a twelve-bot tick, so the tick
+cannot gain more than ~1.4x whatever the search does); and that every route
+digest and the three pinned bot measurements move.
+
+**Leads from section 6, resolved**: CPD — the match, above. ALT / true-distance
+heuristics — what `--nav-distances` already is; the baseline. HAA\* (Harabor &
+Botea 2008) — the named precedent for one shared graph validated per agent
+capability; supports A1/A2, not something to build. D\*/LPA\* — the competing
+design; loses here because costs are per-team and per-bot and goals change
+155-175 times per 1000 ticks. CPD repair (Verzeletti, Botea, Zanella 2019) —
+repairs a shared table after obstacle changes; wrong shape for per-bot bans.
+CRP/CH — the million-node problem; not this one. Tree Cache / JSTS (SoCS 2025)
+— O(N) storage at 20% suboptimality; not needed at N=687.
+
+---
+
 
 Every claim below carries its evidence status. **Do not quote a claim without
 its status marker** — the difference between the measured group and the rest is

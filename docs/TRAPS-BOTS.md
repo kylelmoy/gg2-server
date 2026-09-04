@@ -1992,6 +1992,153 @@ once. At 13/17 over four profiles it costs **5 s** and still checks **82,114
 pairs across every shipped graph**. Do not "restore" the finer sweep without
 re-reading "Route variety, scored" above.
 
+### CPD-Search: the next-hop table as the ANSWER, verified per query
+
+`Gg2.Bots.NavDistances.NextHop`, the CPD branch of `NavSearch.Find`. Gated by
+`NavDistancesTests.TheNextHopChainPricesToTheDistance` and the `Cpd*` tests in
+`NavSearchTests`. Decided 2026-09-04 after a prior-art search; the search and
+the design reasoning are in `docs/PROPOSAL-ROUTE-TABLE.md`, "Decision".
+
+✅ **This is a KNOWN technique, and it is not the two-stage design the proposal
+sketched.** Bono, Gerevini, Harabor and Stuckey, *Path Planning with CPD
+Heuristics*, IJCAI 2019 (`https://www.ijcai.org/proceedings/2019/0167.pdf`),
+"CPD-Search": an all-pairs first-move table (a Compressed Path Database) built
+offline on static costs and queried after edge costs have been **perturbed
+upward only** between planning episodes — which is this layer's situation
+verbatim. Occupancy is ×1.25, a blacklisted edge is +∞, a shut gate is +∞, a
+class that cannot fly an arc is a subset. `NavDistances` was already that CPD's
+static cost; the first hop falls out of the same reverse Dijkstra for nothing.
+
+**The algorithm, as shipped here.** A* with `h(n) = Between(n, goal)` exactly
+as before, plus: for every node the frontier reaches, walk its stored next-hop
+chain to the goal pricing each hop at its LIVE cost — gate, class arc,
+blacklist, occupancy, lane — memoised per search so suffixes are shared. That
+walk's cost is a real route's cost, so the cheapest one seen is an **incumbent**
+with an upper bound `u`. When the frontier's cheapest `g + h` reaches `u` the
+incumbent is provably optimal and is returned: the search prefix to the
+incumbent's node, then its chain.
+
+- ✅ **A clean query costs one walk and zero expansions.** With nothing on the
+  chain perturbed, `h′(start) = h(start)`, so `u = f(start)` and the very first
+  pop returns. That is the proposal's "hit" case.
+- ✅ **A dirty query is NOT "walk, discard, then search from scratch".** The
+  walk becomes the bound that prunes the search, and the memo means a chain
+  walked from one expanded node is not walked again from the next. The
+  proposal's "a miss pays for the walk AND the search" was a property of its
+  own two-stage shape, not of the idea.
+- ✅ **The congested live server is IN scope.** One ×1.25 hop on a 60-hop chain
+  is a perturbation under 1%; an exact search then expands only nodes whose
+  `g + h` lies inside that slack — a corridor round the crowded edge, not the
+  541 pops `ctf_truefort` paid before. The 23.5% "still valid" figure above
+  bounds the zero-expansion case, not the cost of the rest.
+
+✅ **Measured** — `NavDistancesTests.WhatTheTableBuys` (a `Skip`ped
+measurement; toggle the attribute to re-take it), 22 graphs, 500 pairs each
+from a random node to one of four random objectives, **pairs the asker can
+actually route**, class-matched table, µs per query, Release, 2026-09-04:
+
+| arm | straight line | CPD-Search, matched table | |
+|---|---|---|---|
+| clean — no crowd: `eval`, every rollout | 7.98 | **1.11** | **7.16x**; one pop on 19 of 22 graphs |
+| crowd — six team-mates' routes on the same four objectives | 11.84 | 11.19 | **1.06x** — a wash |
+
+- ✅ **The clean arm is the proposal's U1 answered.** A verified walk is
+  0.4-0.9 µs on most graphs, a tenth of the search it replaces, and the three
+  graphs above 1 µs (`ctf_truefort` 12 pops, `ctf_conflict` 9, `cp_egypt` 69)
+  are the gate case below, not the walk.
+- ⛔ **The crowd arm is NOT a speed-up, and the weighted-table 1.36x two
+  sections up was.** Proving optimality against a heavy crowd expands the whole
+  perturbation slack — `cp_egypt` 255 pops against the straight line's 106,
+  `ctf_2dfort` 0.61x — where the weighted search bought its 1.36x by proving
+  nothing. Running unweighted stands on the occupancy argument below; its
+  price is written here so it is not re-measured. **Not yet measured**: what it
+  does to a tick, where better routes are re-planned less often (the exact
+  heuristic alone took `ctf_truefort` from 320.0 to 271.7 searches per 1000
+  ticks), and whether a live server's crowd is as heavy as this harness's.
+- ⛔ **The residual pops on a CLEAN graph are gates, and they were hiding
+  inside every earlier number.** The table is built gates-open, so a chain
+  through the other team's gate prices at infinity and the search runs. Worse,
+  a goal BEHIND such a gate is finite in every table and unreachable for the
+  asker, and the search expands the whole component to say so: **529 of 1,029
+  random node→objective pairs on `ctf_truefort`, 234 of 734 on
+  `ctf_classicwell`, 167 of 667 on `cp_dirtbowl`**. "564 → 541 pops for 1.00x"
+  on truefort in the section above was mostly that population, not the
+  heuristic. The harness now excludes them and prints the count; every arm
+  pays the same for them. A per-team table, or a per-team reachability bit
+  beside the distance, is the lever — unbuilt, because how often the objective
+  layer actually sends a bot behind the other team's gate is not known.
+
+✅ **And in matches, the routes are BETTER than the weighted exact heuristic's
+were** — `RouteDiversityMatchTests.WhatThePrecomputedHeuristicCostsInRouteCost`
+(same `Skip`, same 21 maps × 3 seeds × 12 bots × 3,000 ticks, same
+straight-line "ideal" that is an upper bound, not the optimum), 2026-09-04:
+
+| | route inflation | dispersion |
+|---|---|---|
+| straight line (shipped default) | 103.6% | 0.634 |
+| weighted A\*, exact heuristic (the section above) | 99.1% | 0.613 |
+| **CPD-Search, unweighted** | **97.2%** | 0.616 |
+
+`ctf_avanti` — the map the exact heuristic made WORSE, 147.4% → 158.5%, and
+the largest unexplained number in this layer — goes the other way under an
+optimal search, **147.4% → 132.3%**. So whatever is wrong there is not made
+worse by a better heuristic after all; it was made worse by the WEIGHT on one.
+That narrows the anomaly rather than closing it. `tdm_mantic`'s regression
+(102.5% → 108.1%) is gone too (101.8%); `koth_corinth` still ticks up
+(101.6% → 103.5%). Dispersion is unchanged to the third decimal: better routing
+converges bots, the goal layer disperses them, and neither moved.
+
+⛔ **With the table, the search runs UNWEIGHTED, and that is a decision, not an
+omission.** `NavConstants.SearchWeight` inflates the STRAIGHT-LINE heuristic,
+which is loose; an exact relaxed distance is consistent, so plain A* on it
+expands only nodes on or within the perturbation of the optimal route and the
+closed-set skip is sound rather than a licensed shortcut. Two reasons the weight
+must not be carried across:
+
+- A weighted termination test (`ε·f ≥ u`, the paper's bounded-suboptimal form)
+  would accept the UNPERTURBED chain the moment it is within 30% — which every
+  occupancy-perturbed chain is — and silently erase the dispersion occupancy
+  exists to buy (0.634 → 0.785). `ε = 1` is the only setting under which the
+  crowd-pricing feature survives.
+- The weight was tuned against the suite's walking time with the straight-line
+  heuristic (`NavConstants.cs`, `SearchWeight`); nothing there measured it with
+  an exact one, and `--nav-distances` already showed an exact heuristic routes
+  better than the weighted incumbent (99.1%).
+
+⚠️ **`h′ ≥ h` has to be TRUE and it is not automatic.** The walk prices a hop
+`a → b` at the cheapest ROUTABLE edge between them under live costs. That is at
+or above the cheapest in-profile static edge the table's Dijkstra used, because
+routable-for-this-asker ⊆ in-profile (gates only remove) and live ≥ static
+(everything only raises). Parallel edges between one pair — a walk arc and a
+jump arc — are why "cheapest" has to be said. `NavSearchTests` asserts the
+incumbent's returned cost equals its live-priced cost, hop by hop.
+
+⚠️ **The table is laid out `[goal][from]`, and `Between` reads it that way.**
+The heuristic asks `Between(n, goal)` for many `n` and one `goal`, and the walk
+follows `NextHop(n, goal)` for a chain of `n` and one `goal`: both are one
+contiguous row now, where the `[from][goal]` layout the distances shipped with
+made every read a stride-N cache miss — the "pops fall further than time does"
+observation two sections up was that layout, not the idea.
+
+⛔ **The build-cost amortisation problem is INHERITED unchanged.** The next-hop
+table comes from the Dijkstra the distances already run, so the 334-467 ms per
+map that made `--nav-distances` a wash at four matches a map is still there.
+The fix, not built: derive a ROW lazily per (goal, profile) on first use — one
+reverse Dijkstra, ~5-140 µs — since bots route to a handful of goal nodes. That
+needs the threaded `eval` revisited (`NavDistanceSet` is read-only after
+`Derive` by design).
+
+**Prior art checked and rejected**, so nobody re-searches it: CPD repair
+(Verzeletti, Botea, Zanella, SoCS 2019) fixes a SHARED table after an obstacle
+change — wrong shape for a per-bot 150-tick ban. D\* Lite / LPA\* keep a search
+tree per (agent, goal) and repair it; goals change 155-175 times per 1000 ticks
+and costs differ per team and per bot, so the trees are torn down constantly,
+and the known result is that they lose to from-scratch A* exactly when search
+is already cheap. Tree Cache / JSTS (Carlson, Harabor, Stuckey, SoCS 2025) is
+O(N) storage at 20% mean suboptimality — a trade this graph does not need at
+N=687. CRP / contraction hierarchies solve the million-node case where all-pairs
+is impossible; here it is 0.9 MB.
+
 ### Phase 7 item 4s: the stab window, and the last unported script
 
 `Gg2.Bots.BotStab`, the stab branch in `BotClassKeys.SpyKeys`. Gated by
