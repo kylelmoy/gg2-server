@@ -47,17 +47,21 @@ public sealed class PolicyNetworkTests
     private static PolicyNetwork Load() => PolicyFixture.Load();
 
     /// <summary>
-    /// The checkpoint describes itself, and it describes a simulation that is not
-    /// this one.
+    /// The checkpoint describes itself, and it describes THIS simulation.
     /// </summary>
     /// <remarks>
     /// <b>The stamp assertion is the falsification condition for
-    /// <see cref="PolicyFixture"/>.</b> Everything that type says rests on this
-    /// file being the one `gg2-rl` handed over, trained against
-    /// <c>7ff5940d97aa7bed</c>. If a retrained checkpoint is ever dropped in, this
-    /// goes red rather than absorbing it — at which point the overrides
-    /// <c>PolicyFixture.Load</c> and <c>MintedForThisBuild</c> exist for should
-    /// come out, not be updated.
+    /// <see cref="PolicyFixture"/>.</b> Everything that type says rests on the
+    /// shipped file being stamped for this build. If a fixture from another
+    /// simulation is dropped in, this goes red rather than absorbing it.
+    /// <para>
+    /// ⚠️ <b>It asserts equality with <see cref="SimulationStamp.Uuid"/> rather
+    /// than a hard-coded string, and that is deliberate.</b> A literal here would
+    /// have to be edited on every bump, and the edit that keeps the test green is
+    /// the same edit that makes it stop checking anything. The invariant worth
+    /// holding is "the fixture belongs to the build that is testing it", which is
+    /// exactly what this spells.
+    /// </para>
     /// </remarks>
     [Fact]
     public void TheCheckpointDescribesItselfAndItsOwnSimulation()
@@ -65,42 +69,33 @@ public sealed class PolicyNetworkTests
         var policy = Load();
 
         Assert.Equal(ObservationWriter.Length, policy.ObservationLength);
-        Assert.Equal(PolicyFixture.TrainedStamp, policy.SimulationUuid);
+        Assert.Equal(SimulationStamp.Uuid, policy.SimulationUuid);
         Assert.Equal(4, policy.ActionRepeat);
         Assert.True(policy.HeadShape.SequenceEqual(ActionDecoder.HeadShape));
-
-        Assert.NotEqual(SimulationStamp.Uuid, policy.SimulationUuid);
     }
 
     /// <summary>
-    /// Loading the checked-in checkpoint without the override is a refusal.
+    /// The checked-in checkpoint loads with no override of any kind.
     /// </summary>
     /// <remarks>
-    /// <b>The shipped checkpoint does not belong to this build</b>, and
-    /// <c>Load</c> says so rather than playing it.
+    /// <b>The accept path, and the control for
+    /// <see cref="AForeignStampIsRefused"/>.</b> Without it a <c>Load</c> that
+    /// refused <em>every</em> checkpoint would pass the refusal test and the whole
+    /// suite would still be green.
+    /// <para>
+    /// ⚠️ <b>This replaced a test asserting the shipped file was REFUSED.</b>
+    /// That was true while the fixture belonged to a superseded simulation and
+    /// stopped being true when `gg2-rl` minted one against this build; the old
+    /// test was retired rather than adjusted, because its premise had gone rather
+    /// than merely changed. Refusal coverage did not go with it — it lives in
+    /// <see cref="AForeignStampIsRefused"/>, which synthesises a foreign stamp
+    /// instead of relying on the shipped file happening to be stale.
+    /// </para>
     /// </remarks>
     [Fact]
-    public void TheCheckedInCheckpointIsRefusedWithoutTheOverride()
+    public void TheCheckedInCheckpointIsAcceptedWithNoOverride()
     {
-        var refusal = Assert.Throws<InvalidOperationException>(() => PolicyNetwork.Load(Checkpoint));
-
-        Assert.Contains(PolicyFixture.TrainedStamp, refusal.Message, StringComparison.Ordinal);
-        Assert.Contains(SimulationStamp.Uuid, refusal.Message, StringComparison.Ordinal);
-    }
-
-    /// <summary>
-    /// A checkpoint carrying this build's stamp loads with no override at all.
-    /// </summary>
-    /// <remarks>
-    /// <b>The accept path, which the test above cannot cover.</b> Without it a
-    /// <c>Load</c> that refused <em>every</em> checkpoint would pass everything
-    /// here — and the whole suite would still be green, because every other caller
-    /// passes the override.
-    /// </remarks>
-    [Fact]
-    public void ACheckpointStampedForThisBuildIsAccepted()
-    {
-        var policy = PolicyNetwork.Load(PolicyFixture.MintedForThisBuild);
+        var policy = PolicyNetwork.Load(Checkpoint);
 
         Assert.Equal(SimulationStamp.Uuid, policy.SimulationUuid);
         Assert.Equal(ObservationWriter.Length, policy.ObservationLength);
@@ -238,14 +233,19 @@ public sealed class PolicyNetworkTests
     [Fact]
     public void AForeignStampIsRefused()
     {
-        // The MINTED copy, because this has to start from a checkpoint this
-        // build accepts. Corrupting the checked-in one proves nothing — it is
-        // already refused, and the test would pass on a Load that never looked.
-        var bytes = File.ReadAllBytes(PolicyFixture.MintedForThisBuild);
+        // The shipped fixture, which this build accepts — so the ONLY difference
+        // between passing and failing here is the character flipped below.
+        //
+        // This used to read a temporarily re-stamped copy, because the shipped
+        // file was itself foreign and corrupting it would have proved nothing: it
+        // was already refused, and the test would have passed on a Load that never
+        // looked at the stamp at all. The fixture carrying this build's stamp is
+        // what let that scaffolding go.
+        var bytes = File.ReadAllBytes(PolicyFixture.Checkpoint);
         var text = System.Text.Encoding.ASCII.GetString(bytes);
         var at = text.IndexOf(SimulationStamp.Uuid, StringComparison.Ordinal);
 
-        Assert.True(at > 0, "the stamp should be findable in the minted checkpoint");
+        Assert.True(at > 0, "the stamp should be findable in the checked-in checkpoint");
 
         // Flip one character of the stamp in place: same length, different value.
         bytes[at] = bytes[at] == (byte)'0' ? (byte)'1' : (byte)'0';

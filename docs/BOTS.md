@@ -157,13 +157,18 @@ world state and has no equivalent blind spot.
 `SimulationStamp.Require` refuses a checkpoint whose stamp does not match the
 current build. `RolloutSearch` carries no weights and re-derives from the
 simulation every decision, so it absorbs a physics change for free. **Current
-state: the only trained checkpoint is stamp-invalid for this build's
-`SIM_UUID` and is kept only as a test fixture for `PolicyNetwork`'s
-forward-pass arithmetic** (`tests/Gg2.Tests/PolicyFixture.cs`; `docs/ENV.md`,
-"The checkpoint is a FIXTURE now"). Nothing in the suite depends on `gg2-rl`
-producing anything, and every phase-4 behavioural number — including the
-21-of-21 death-share result — describes a superseded simulation. Re-measuring
-it needs a checkpoint trained against the current head; none exists.
+state: NO trained checkpoint exists for this build.** The layout v2 bump on
+2026-09-03 retired the last one, and what ships in
+`tests/Gg2.Tests/Fixtures/policy/` is an **untrained** fixture minted against
+this build — it loads with no override, and its weights are a He-normal draw
+kept for `PolicyNetwork`'s forward-pass arithmetic and nothing else
+(`tests/Gg2.Tests/PolicyFixture.cs`; `docs/ENV.md`, "The checkpoint is a
+FIXTURE, not a policy"). ⛔ **A checkpoint loading cleanly is therefore not
+evidence that it plays**, which is the opposite of the reassurance a green
+stamp usually gives. Nothing in the suite depends on `gg2-rl` producing
+anything, and every phase-4 behavioural number — including the 21-of-21
+death-share result — describes a superseded simulation. Re-measuring it needs
+a checkpoint trained against the current head; none exists.
 
 ### ⚠️ A duel does not contain what a match contains
 

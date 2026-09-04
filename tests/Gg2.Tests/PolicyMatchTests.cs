@@ -254,12 +254,33 @@ public sealed class PolicyMatchTests
     /// <b>Their class columns never received a gradient</b>, so their
     /// first-layer weights are still the random draw. Driving one is not playing
     /// badly, it is acting on noise.
+    /// <para>
+    /// ⚠️ <b>The premise is asserted, not assumed, because this test went stale
+    /// once already.</b> It drove <c>Demoman</c> until 2026-09-03, when demoman
+    /// joined the trained set and sniper left it — at which point the test was
+    /// asserting that a <em>trained</em> class is never driven by the policy, and
+    /// failed. It could not report that at the time because the fixture
+    /// checkpoint was unloadable and this test was red for that unrelated reason.
+    /// A hard-coded class list is a copy of <c>TrainedClasses</c> that nothing
+    /// keeps in step, so the guard below fails loudly on the next change instead
+    /// of quietly testing the wrong thing.
+    /// </para>
     /// </remarks>
     [Fact]
     public void AnUntrainedClassIsNeverDrivenByThePolicy()
     {
+        PlayerClass[] untrained = [PlayerClass.Sniper, PlayerClass.Medic];
+
+        foreach (var playerClass in untrained)
+        {
+            Assert.False(
+                PolicyController.IsTrained(playerClass),
+                $"{playerClass} is in TrainedClasses now, so this test's premise is gone — "
+                + "pick classes that are actually untrained rather than deleting the assertion");
+        }
+
         var match = HeadlessMatch.Load(
-            Options("ctf_truefort", 51u, [PlayerClass.Demoman, PlayerClass.Medic], Policy()),
+            Options("ctf_truefort", 51u, untrained, Policy()),
             ReferenceTree.IncludedFiles,
             ReferenceTree.NavCacheDirectory);
 

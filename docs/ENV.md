@@ -368,36 +368,50 @@ relocation from a redefinition.
   tolerating it; a length-check failure inside a later message is a symptom
   of a missed bump, not a substitute for one.
 
-## The checkpoint is a FIXTURE now, not a policy
+## The checkpoint is a FIXTURE, not a policy
 
-The one checkpoint that has ever existed (`checkpoints/vlong_s0/ppo_final.npz`,
-19,355 parameters, action repeat 4, layout v1, encoding v2) is stamped
-`SIM_UUID 7ff5940d97aa7bed`. **The current build's `SIM_UUID` has moved
-repeatedly since** (a moving-platform carry, an A\* weight change, and
-`NavConstants` leaving the gating surface) and the checkpoint has not moved
-with it. ⚠️ **Read the current pair from `BENCH_CONST=1` rather than from any
-number written down in this document** — nobody is training a replacement,
-so restating a specific `SIM_UUID` here would just be one more stale number.
+⚠️ **This section described the exact opposite until 2026-09-03, and the
+inversion is the point.** For most of phase 9 the shipped checkpoint was the one
+trained artefact that had ever existed, stamped for a *superseded* simulation,
+refused by `PolicyNetwork.Load`, and reconciled with a green suite by two
+non-interchangeable accessors on `PolicyFixture`. The layout v2 bump retired that
+checkpoint for good, and `gg2-rl` minted a replacement **against this build**.
 
-`PolicyNetwork.Load` refuses a foreign stamp by design — that refusal is the
-trainer's protection. `tests/Gg2.Tests/PolicyFixture.cs` is the one place
-that reconciles this with a green suite, offering exactly two accessors that
-are **not interchangeable**:
+The shipped file (`tests/Gg2.Tests/Fixtures/policy/ppo_final.npz`, 19,483
+parameters, action repeat 4, **layout v2, encoding v2, 211 floats**) now carries
+**this build's** `SIM_UUID` and takes `Load`'s ordinary accept path with **no
+override of any kind**. ⚠️ **Read the current stamp from `BENCH_CONST=1` rather
+than from any number written down here** — restating one would just be another
+stale number.
 
-| | What it is | Who uses it |
-|---|---|---|
-| `PolicyFixture.Load()` | the file as it is, with `ignoreSimulationStamp` | everything that just needs *a network* — `PolicyMatchTests`, `ContinuationTests`, `SearchBotTests`, `RolloutThreadingTests`, `NpyMemoTests`, the numpy oracle in `PolicyNetworkTests` |
-| `PolicyFixture.MintedForThisBuild` | a temp copy of the same weights carrying **this build's** stamp | `EnvProtocolTests` only — it tests the accept path (`EnvServer.LoadPolicy`) without weakening the refusal itself |
+**Its weights are an untrained He-normal draw.** That is deliberate and it is
+adequate: `TheForwardPassAgreesWithTheTrainer` compares C# against an independent
+numpy oracle, and the arithmetic is the arithmetic — random weights exercise it
+at least as well as trained ones, since smooth trained weights can mask an
+indexing bug.
 
-`PolicyFixture.TrainedStamp` is hard-coded rather than read out of the file,
-so a retrained checkpoint that this build would actually accept is caught by
-`TheCheckpointDescribesItselfAndItsOwnSimulation` going red — the fix in that
-case is to delete the two overrides, not to update the constant.
+⛔ **Nothing here may read a behavioural result off it.** An untrained network
+emits near-uniform noise, so any test asserting a pinned action, a pinned duel
+outcome or a quality threshold against this fixture would be measuring the draw.
+The behavioural tests that *do* load it (`PolicyMatchTests`, `ContinuationTests`)
+survive only because `HybridBot`'s scripted layer owns movement and routing — the
+policy holds keys and aim inside a bounded engagement window, so noise cannot pin
+a team. **That is a property of the bot layer, not a licence to assert quality.**
 
-**What the fixture is good for**: 19,355 measured parameters and a numpy
-oracle, gated logit-for-logit by `TheForwardPassAgreesWithTheTrainer`.
-**What it is not good for**: any statement about how well a bot plays — every
-behavioural number below predates the physics changes that stranded it.
+`PolicyFixture` is now one accessor rather than two. `Load()` passes **no**
+`ignoreSimulationStamp`, so every caller goes through the same refusal
+`EnvServer.LoadPolicy` performs, and the suite exercises the guard instead of
+routinely bypassing it. The minted-copy machinery, the hard-coded `TrainedStamp`
+and the test asserting the shipped file was *refused* were **deleted rather than
+updated**: their premise had gone, not merely changed. Refusal coverage lives in
+`PolicyNetworkTests.AForeignStampIsRefused`, which corrupts one character of a
+valid checkpoint's stamp instead of relying on the shipped file happening to be
+stale.
+
+⚠️ **A stale fixture is loud on its own now.** The hard-coded stamp existed so
+that swapping the file re-opened the question; `Load` refusing it in
+`PolicyNetwork` itself, naming both stamps, is a better signal and cannot drift
+out of date.
 
 ## Phase 4 re-measured: the hybrid result (historical, one checkpoint)
 

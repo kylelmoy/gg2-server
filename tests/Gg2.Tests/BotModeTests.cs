@@ -17,16 +17,19 @@ public sealed class BotModeTests
 {
     /// <summary>A checkpoint that loads in THIS build.</summary>
     /// <remarks>
-    /// <c>MintedForThisBuild</c>, not <c>Checkpoint</c>. The checked-in
-    /// fixture is stamp-invalid against this build (<c>docs/ENV.md</c>, "The
-    /// checkpoint is a FIXTURE now"), so using it here would mean passing
-    /// <c>--policy-ignore-stamp</c> in every case — and a test suite that
-    /// routinely bypasses a guard is how the guard stops being one. The minted
-    /// copy carries this build's stamp and takes the accept path, which is what
-    /// these tests are actually about: the flag wiring, not the checkpoint.
+    /// The checked-in fixture, which carries this build's stamp and takes the
+    /// accept path — which is what these tests are actually about: the flag
+    /// wiring, not the checkpoint.
+    /// <para>
+    /// This used to be a temporarily re-stamped copy, because the shipped fixture
+    /// was stamp-invalid and using it would have meant passing
+    /// <c>--policy-ignore-stamp</c> in every case — and a suite that routinely
+    /// bypasses a guard is how the guard stops being one. That reasoning still
+    /// holds; it simply no longer needs the scaffolding.
+    /// </para>
     /// </remarks>
     private static string[] WithPolicy(params string[] args) =>
-        [.. args, "--policy", PolicyFixture.MintedForThisBuild];
+        [.. args, "--policy", PolicyFixture.Checkpoint];
 
     private static BotBrainSpec? BrainOf(params string[] args) =>
         CommandLine.Parse(args).Bots.Brain;
@@ -231,10 +234,10 @@ public sealed class BotModeTests
     public void ModeAndPolicyDoNotDependOnFlagOrder()
     {
         var before = BrainOf(
-            "--bot-mode", "tiered", "--policy", PolicyFixture.MintedForThisBuild);
+            "--bot-mode", "tiered", "--policy", PolicyFixture.Checkpoint);
 
         var after = BrainOf(
-            "--policy", PolicyFixture.MintedForThisBuild, "--bot-mode", "tiered");
+            "--policy", PolicyFixture.Checkpoint, "--bot-mode", "tiered");
 
         Assert.Equal(Shape(before), Shape(after));
     }

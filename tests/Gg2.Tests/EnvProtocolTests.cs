@@ -734,7 +734,7 @@ public sealed class EnvProtocolTests : IDisposable
     /// fixture's is foreign — see <see cref="PolicyFixture"/>. Testing this path
     /// with the override would delete the guard it exists to exercise.
     /// </summary>
-    private static string PolicyPath => PolicyFixture.MintedForThisBuild;
+    private static string PolicyPath => PolicyFixture.Checkpoint;
 
     /// <summary>
     /// A checkpoint loads, returns handle 1, and reports the stamp it was checked

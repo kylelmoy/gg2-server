@@ -3146,3 +3146,52 @@ classes you are about to drive with it.**
 they were **red for an unrelated reason when the change landed** and did not
 validate it. Re-check them deliberately once a v2 fixture exists rather than
 assuming a green suite covered it.
+
+### ⚠️ The fixture became VALID, and that broke tests built on it being stale
+
+2026-09-03, immediately after the layout v2 bump. `gg2-rl` minted a fixture
+against this build, and it was **the first checkpoint ever genuinely valid
+here**. Three tests went red, all correctly, because they were quietly built on
+the shipped file being refused:
+
+- `TheCheckedInCheckpointIsRefusedWithoutTheOverride` asserted the shipped file
+  **is** refused. ⛔ **Premise gone, not merely changed** — retired rather than
+  adjusted, and replaced by `TheCheckedInCheckpointIsAcceptedWithNoOverride`.
+  **Retiring a refusal test whose premise has ceased to exist is not weakening
+  coverage**; leaving it green by re-staling the fixture would have been.
+- `AForeignStampIsRefused` and `ACheckpointGivenToAModeThatCannotUseItIsRefused`
+  needed a *valid* checkpoint to corrupt, which they now have honestly instead
+  of by minting one.
+
+✅ **`PolicyFixture`'s guard fired on the one event it was written for.** It
+hard-coded the trained stamp "so that swapping the file re-opens the question"
+and threw *"the checkpoint has been replaced, so `PolicyFixture.TrainedStamp`
+needs updating along with whatever else that replacement implies"* — months
+later, in a session that had never read it. That is what a guard written for a
+future reader looks like when it works.
+
+The minted-copy machinery, `TrainedStamp`, and `Load`'s `ignoreSimulationStamp`
+were **deleted**. Every caller now goes through the real gate, so the suite
+exercises the refusal instead of routinely bypassing it.
+
+### ⛔ A test's hard-coded class list is a copy of `TrainedClasses`
+
+`PolicyMatchTests.AnUntrainedClassIsNeverDrivenByThePolicy` drove
+`[Demoman, Medic]` and asserted no bot ever gets a policy tick. When demoman
+joined the trained set it was asserting that a **trained** class is never driven
+by the policy — and a demoman correctly took 36 policy micro-ticks.
+
+⚠️ **It could not report that at the time.** The fixture checkpoint was
+unloadable, so this test was red for an unrelated reason across the whole window
+in which the class set changed. **A test that is already red gates nothing**, and
+a change landing behind one is unreviewed however green the suite looks
+afterwards — the same shape as a filter that passes by discarding everything.
+
+✅ The test now asserts its own premise (`PolicyController.IsTrained` is false
+for each class it drives) and says what to do if it fails: pick classes that are
+actually untrained rather than deleting the assertion. **A hard-coded list
+duplicating a constant elsewhere needs something keeping the two in step, or it
+is a stale copy waiting to happen.**
+
+✅ The 36 micro-ticks were also the only positive evidence the class switch took
+effect at all — every other check was a negative.
