@@ -544,6 +544,16 @@ public sealed class RouteDiversityMatchTests(ITestOutputHelper output)
             {
                 var routes = new List<IReadOnlyList<int>>();
 
+                // ⚠️ The query each route was PLANNED under, not a fresh one for
+                // the team. `BotPathState.PlanQuery` is recorded with the route
+                // for exactly this reason, and pricing a route against a
+                // cheapest-route computed under a DIFFERENT query is not a
+                // comparison at all: on the setup-gate maps a bot routes with the
+                // gates shut and the ideal would be computed with them open, so
+                // the detour the gates forced is charged to whatever mechanism
+                // happens to be running.
+                var queries = new List<NavQuery>();
+
                 for (var slot = 1; slot < match.SlotCount; slot++)
                 {
                     if (match.State.Players[slot].Team != team)
@@ -553,6 +563,7 @@ public sealed class RouteDiversityMatchTests(ITestOutputHelper output)
                         continue;
 
                     routes.Add(bot.Path.Path.ToArray());
+                    queries.Add(bot.Path.PlanQuery);
                 }
 
                 if (routes.Count < 3)
@@ -564,14 +575,16 @@ public sealed class RouteDiversityMatchTests(ITestOutputHelper output)
                 if (search is null || match.Nav is not { } nav)
                     continue;
 
-                foreach (var route in routes)
+                for (var i = 0; i < routes.Count; i++)
                 {
+                    var route = routes[i];
+
                     if (route.Count < 2)
                         continue;
 
-                    // The honest cheapest route between the same two nodes: no
-                    // lane, no occupancy, no blacklist.
-                    if (!search.Find(route[0], route[^1], new NavQuery(team), ideal))
+                    // The honest cheapest route between the same two nodes for
+                    // the same asker: no lane, no occupancy, no blacklist.
+                    if (!search.Find(route[0], route[^1], queries[i], ideal))
                         continue;
 
                     var best = Priced(nav, ideal);

@@ -1712,10 +1712,18 @@ against the cheapest route between its **own** endpoints on the untouched graph.
   points** — 102.2% proxy against 106.0% walking time at 4 lanes @ 1.20. The sum
   misses what the follower spends steering, jumping and recovering off-route.
   **Price a routing change in walking time, not in cost.**
-- ⚠️ **`ctf_avanti` runs at 146.9% inflation with no mechanism at all**, against
-  ~101% everywhere else. Not a lane effect and not explained. Its installed
-  routes are half again the cheapest route between their own endpoints whatever
-  is running.
+- ⚠️ **`ctf_avanti` runs at ~147% inflation with no mechanism at all**, against
+  ~101% everywhere else, and it is **not the setup gates** — the obvious
+  hypothesis, tested and rejected. Each route is now priced under the
+  `BotPathState.PlanQuery` it was actually planned with, so a bot that routed
+  with the gates shut is compared against the cheapest route *with the gates
+  shut*; `ctf_avanti` moved 146.9% → 147.4%. Unexplained, and the largest
+  unexplained number this work produced.
+- ⚠️ **Price a route against the query it was PLANNED under, never a fresh one
+  for its team.** Before that fix several maps read *below* 100% — a route
+  cheaper than the cheapest, which is impossible and was the tell. ⚠️ A residual
+  99.1% remains on two maps and is expected: the "ideal" comes from the same
+  deliberately-suboptimal A\*, so it is an upper bound too, not the true optimum.
 
 ✅ **The lane plumbing is inert in the shipped configuration** and
 `NavRouteIdentityTests` is untouched: `NavSearch`'s `laneCost` is empty
