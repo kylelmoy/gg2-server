@@ -414,6 +414,15 @@ internal static class CommandLine
                     options.NavDistances = true;
                     break;
 
+                // ⛔ A BEHAVIOUR switch, not a performance one. Off, a team's
+                // routes stop being pushed apart and match dispersion falls
+                // 0.785 -> 0.634 with nothing replacing it. What it buys is a
+                // live server that routes the way `eval` and every training
+                // rollout already do. ServerOptions.BotOccupancy.
+                case "--no-bot-occupancy":
+                    options.BotOccupancy = false;
+                    break;
+
                 // The [Bots] section. `--bots N` is the fill target, which is what
                 // the reference calls FillToPlayers — ⚠️ a total including humans,
                 // not a bot count, so a server filling to 8 drops a bot every time
@@ -955,6 +964,13 @@ internal static class CommandLine
                             map change rather than a round of motionless bots.
           --navgen-save     save a graph built that way into --botnav, so the
                             next map change reads it (default: memory only)
+          --no-bot-occupancy
+                            stop bots pricing edges their team-mates are walking
+                            above cost. ON by default and it is the biggest
+                            source of route variety there is - without it a team
+                            bunches up (dispersion 0.785 -> 0.634) and nothing
+                            replaces it. What it buys is a live server that
+                            routes exactly as eval and the training rollouts do.
           --nav-distances   precompute exact node-to-node distances and give A*
                             an exact heuristic instead of a straight-line guess.
                             Worth about 8% of a twelve-bot tick. OFF by default

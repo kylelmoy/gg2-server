@@ -222,6 +222,18 @@ built a nav graph for mymap area 1 in 86ms - 687 nodes, 6747 edges
 `--no-navgen` turns it off, and `--navgen-save` writes the result into `--botnav`
 so the next map change reads it instead of rebuilding. `docs/NAVGEN.md`.
 
+### `--no-bot-occupancy`: let the team bunch up
+
+Bots normally price an edge a team-mate is already walking 25% above its honest
+cost, so a squad fans out instead of filing down one corridor. This turns that
+off.
+
+⛔ **It is a behaviour switch, not a performance one.** Without it match
+dispersion falls from 0.785 to 0.634 and nothing replaces it. What it buys is a
+live server that routes exactly the way `eval` and every training rollout
+already do — those have never had occupancy — which is worth something if you
+are comparing live play against measured runs.
+
 ### `--nav-distances`: faster A\*, different routes
 
 ⛔ **Off by default, and turning it on is a behaviour change rather than a

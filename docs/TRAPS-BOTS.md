@@ -1757,6 +1757,42 @@ penalty falls where it changes a decision — addresses the identified mechanism
 Not attempted, deliberately: chasing variants until one wins is how a post-hoc
 result gets mistaken for a pre-registered one.
 
+### `--no-bot-occupancy`: the dispersion mechanism is now a switch
+
+`ServerOptions.BotOccupancy`, `BotPopulationService`'s bot creation site. Gated
+by `BotOccupancyFlagTests`. Added 2026-09-04.
+
+⚠️ **ON by default, because turning it off is a BEHAVIOUR change and not a
+tuning knob.** Occupancy is the largest single source of route variety in the
+bot layer: match dispersion falls **0.785 → 0.634** without it, and nothing
+replaces it — static lane fields buy 0.019 of spread per point of route
+inflation against occupancy's 0.066, and widening `BotRoles.SpreadX` saturates
+almost immediately (0.634 → 0.657). "Route variety, scored" above has all three.
+
+✅ **What turning it off buys is CONSISTENCY, not speed.** Before this flag,
+`ScriptedBot.Occupancy` was set in exactly one place — the live `--bots` server —
+so the live game was the only configuration in the project that routed with it.
+`eval`, `HeadlessMatch`, `MatchRunner` and every training rollout have never had
+it. `--no-bot-occupancy` makes all four agree, which is worth something for
+training transfer.
+
+⛔ **It is NOT a performance switch, whatever the search numbers suggest.** A\*
+is ~26-30% of a twelve-bot tick and that tick is 0.151 ms against a 33.3 ms
+budget, so what this changes about search cost is a fraction of a percent of the
+frame. Choose it on how the bots should play.
+
+- ⚠️ **Null, not an empty store.** `NavSearch` hoists `occupancy is { Count: > 0 }`
+  once per search, so a null store costs nothing per edge where an empty one
+  still costs the key arithmetic and an interface-dispatched lookup on every edge
+  the frontier touches. An empty store would also make the two configurations
+  indistinguishable from outside, which is how a flag that does nothing survives.
+- ⛔ **Both directions are gated, and so is the mechanism itself.** "No bot has a
+  store when asked" passes on a server that never wired occupancy up at all;
+  "every bot has one by default" passes on a server that ignores the flag. Only
+  the pair says the switch decides it — and a third test waits for real counts to
+  appear, because a store that stayed empty for a whole round would satisfy both
+  and disperse nothing.
+
 ### Precomputing Dijkstra: the routes cannot be stored, the distances can
 
 `Gg2.Bots.NavDistances`, `NavSearch.Find`'s `distances` argument, gated by
@@ -2139,12 +2175,13 @@ O(N) storage at 20% mean suboptimality — a trade this graph does not need at
 N=687. CRP / contraction hierarchies solve the million-node case where all-pairs
 is impossible; here it is 0.9 MB.
 
-### Two ways to spend a next-hop table, measured head to head
+### Two ways to spend a next-hop table, and why only one survives
 
-`NavPlan.Incumbent` (CPD-Search) against `NavPlan.VerifyThenSearch` (the design
-`docs/PROPOSAL-ROUTE-TABLE.md` proposed before the prior-art search). Gated by
-`NavDistancesTests.BothPlansAgreeOnCost`; measured by
-`NavDistancesTests.TwoWaysToSpendTheTable`. Measured 2026-09-04, Release.
+⛔ **`NavPlan.VerifyThenSearch` was built, measured against CPD-Search, and then
+DELETED. This section is the record; the code is in git and nowhere else.**
+CPD-Search is now the only way `NavSearch` uses a table — no enum, no parameter,
+no flag. What remains is `NavDistancesTests.WhatTheTableCostsAgainstMaster`,
+which measures CPD-Search against master. Measured 2026-09-04, Release.
 
 The two differ by **exactly one idea**. Both walk the table's chain once up
 front, both then run the same unweighted A\* on the same exact heuristic, and
@@ -2203,6 +2240,20 @@ winning a race it is running downhill.**
 | crowded | 12.40 / 13.40 / 11.92 µs | 11.04 / 11.35 / 11.12 µs | **0.85-0.93x — discarding WINS** |
 | no occupancy | 1.08 / 1.13 / 1.09 µs | 1.29 / 1.26 / 1.35 µs | **1.12-1.24x — the incumbent wins** |
 
+⛔ **Each plan wins one regime, and keeping both was still refused.** Once
+`--no-bot-occupancy` made the regime a runtime choice there was a real argument
+for selecting the plan to match it. It was rejected on magnitude: the gap is
+10-16% of a search that is ~26-30% of a twelve-bot tick, and that whole tick is
+0.151 ms against a 33.3 ms budget. **Selecting on that would be tuning noise
+while doubling the configuration surface** — occupancy × plan — and every
+combination would need gating and re-recording. CPD-Search was kept because it
+wins the regime that matters more: `eval` and every training rollout are
+occupancy-free by construction, and that is where throughput is actually spent.
+
+⚠️ **If occupancy is ever made unconditional again, this is the measurement to
+re-read before assuming CPD-Search is still the right choice** — under a
+permanent crowd the deleted plan was the faster one.
+
 ⚠️ **The mechanism, and it is the part worth keeping.** Maintaining the
 incumbent costs a chain walk at *every expansion*; it repays that only when the
 bound actually prunes. Under crowding it does not prune — pops are near-identical
@@ -2227,13 +2278,12 @@ verify-then-search's ~1.2 µs saving under crowd is larger in absolute terms tha
 the incumbent's ~0.2 µs saving without it. **A ratio quoted without the base is
 misleading in both directions.**
 
-✅ **So neither is simply better, and the shipped default is unchanged.**
-`NavPlan.Incumbent` remains the default because the paths that most want raw
-throughput — `eval` and the training rollouts — are the occupancy-free ones where
-it wins. A live server, which is the crowded arm, would be marginally better
-served by the other. **Nothing is switched on this: the gap is under 20% either
-way, and search is ~26-30% of a twelve-bot tick, so the tick moves by a few
-percent at most.**
+✅ **So neither is simply better, and CPD-Search was kept anyway.** The paths
+that most want raw throughput — `eval` and the training rollouts — are the
+occupancy-free ones where it wins, and a live server is the only place the other
+would have been ahead. The gap is under 20% either way on a search that is
+~26-30% of a twelve-bot tick, so the tick moves by a few percent at most: not
+enough to carry a second implementation for.
 
 ⛔ **Do not read this as a refutation of CPD-Search.** It is one workload, and
 the workload is unusual in exactly the way that hurts an incumbent bound:
@@ -2241,12 +2291,10 @@ perturbations here are *many, small and uniform* (a whole team's routes each
 ×1.25) rather than *few and large*, which is the shape the technique is built
 for. The finding is about this cost model, not about the algorithm.
 
-⚠️ **`VerifyThenSearch` is measurement scaffolding and nothing routes through
-it.** `NavSearch.Find`'s `plan` parameter defaults to `Incumbent`, no caller
-passes anything else outside the two tests above, and `NavRouteIdentityTests`'
-digests and the three pinned bot measurements did not move. **If it ever becomes
-a shipped option it needs a flag and a re-record**, exactly as
-`--nav-distances` did.
+✅ **The cross-plan agreement gate went with the code, and nothing was lost by
+it.** It asserted that both plans priced their routes identically;
+`CpdSearchIsOptimalUnderLiveCosts` already checks the same answers against a real
+Dijkstra reference, which is the stronger claim of the two.
 
 ### Phase 7 item 4s: the stab window, and the last unported script
 

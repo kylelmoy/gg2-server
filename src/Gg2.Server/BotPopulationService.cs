@@ -517,7 +517,13 @@ public sealed class BotPopulationService
         var bot = new ScriptedBot(Nav, new NavQuery(team), BotSkill.ForTier(options.Difficulty), stagger)
         {
             SpreadX = BotRoles.SpreadX(stagger),
-            Occupancy = Occupancy,
+
+            // ⚠️ Null rather than an empty store when the flag is off, and the
+            // difference is not cosmetic: NavSearch hoists `occupancy is { Count:
+            // > 0 }` once per search, so a null store costs nothing per edge,
+            // where an empty one still costs the key arithmetic and an
+            // interface-dispatched lookup on every edge the frontier touches.
+            Occupancy = _server.Options.BotOccupancy ? Occupancy : null,
 
             // ⚠️ Here as well as in MapChanged, and both are needed: that hands
             // the set to the bots that SURVIVED a rotation, this to the ones

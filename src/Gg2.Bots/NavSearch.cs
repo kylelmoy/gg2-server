@@ -88,39 +88,6 @@ public readonly record struct NavQuery(
 /// are wrong rather than slow.
 /// </para>
 /// </remarks>
-/// <summary>
-/// How a search uses a <see cref="NavDistances"/> table, when it has one.
-/// </summary>
-/// <remarks>
-/// <b>Both plans return the SAME route</b> — the optimal one under live costs —
-/// so the only thing that separates them is what they spend proving it. That is
-/// deliberate: it makes the two directly comparable in search cost and in
-/// nothing else. <c>docs/TRAPS-BOTS.md</c>, "Two ways to spend a next-hop
-/// table".
-/// </remarks>
-public enum NavPlan
-{
-    /// <summary>
-    /// CPD-Search. The chain priced at live cost is an incumbent and an upper
-    /// bound; the search stops as soon as the frontier's lower bound reaches it,
-    /// so a perturbed chain still bounds the work instead of being thrown away.
-    /// </summary>
-    Incumbent,
-
-    /// <summary>
-    /// The two-stage design `docs/PROPOSAL-ROUTE-TABLE.md` proposed before the
-    /// prior-art search: verify the chain, and on any perturbation discard it and
-    /// search from scratch.
-    /// </summary>
-    /// <remarks>
-    /// <b>Kept so the incumbent's contribution can be measured rather than
-    /// asserted.</b> It is the same algorithm as <see cref="Incumbent"/> minus
-    /// exactly one idea, which is what makes the difference between them
-    /// attributable.
-    /// </remarks>
-    VerifyThenSearch,
-}
-
 public sealed class NavSearch
 {
     /// <summary>
@@ -229,8 +196,7 @@ public sealed class NavSearch
         IReadOnlySet<long>? blocked = null,
         IReadOnlyDictionary<long, int>? occupancy = null,
         ReadOnlySpan<double> laneCost = default,
-        NavDistances? distances = null,
-        NavPlan plan = NavPlan.Incumbent)
+        NavDistances? distances = null)
     {
         ArgumentNullException.ThrowIfNull(path);
 
@@ -295,32 +261,8 @@ public sealed class NavSearch
         {
             Array.Fill(_liveCost, -1);
 
-            var chain = LiveChainCost(start, goal, in query, blocked, occupancy, laneCost, distances);
-
-            if (plan == NavPlan.VerifyThenSearch)
-            {
-                // ⛔ The whole verification, in one comparison. Each hop is priced
-                // at or above the static edge the table's Dijkstra used, so the
-                // chain's live cost can only EQUAL its static cost when no hop was
-                // gated, blacklisted, out of class, laned or crowded. And when it
-                // does, the chain is optimal under live costs: any rival is a path
-                // in the permissive graph, so costs at least the static optimum,
-                // which is what this chain costs. Walking the hops to check them
-                // one at a time would be the same test done longhand.
-                if (chain <= distances.Between(start, goal) * (1 + IncumbentTolerance))
-                    return ReconstructIncumbent(start, start, goal, path, distances);
-
-                // Perturbed: this plan throws the chain away. `bound` stays
-                // infinite and `incumbent` stays -1, so the pop test below can
-                // never fire and the expansion loop is a plain unweighted A* on
-                // the exact heuristic — which is precisely the arm the incumbent
-                // has to beat.
-            }
-            else
-            {
-                bound = chain;
-                incumbent = start;
-            }
+            bound = LiveChainCost(start, goal, in query, blocked, occupancy, laneCost, distances);
+            incumbent = start;
 
             // Priced at g + h so the incumbent test can fire on the first pop.
             // Without a table the sole first entry's priority is irrelevant and
@@ -493,20 +435,14 @@ public sealed class NavSearch
                     // The table's chain from here, priced at what this asker
                     // would pay now, is a real route: the cheapest such is the
                     // incumbent, and its cost is what the pop test proves
-                    // against. ⚠️ Skipped entirely under VerifyThenSearch — the
-                    // chain walk is most of what the incumbent COSTS, so leaving
-                    // it in would charge that arm for a bound it never uses and
-                    // flatter the comparison.
-                    if (plan == NavPlan.Incumbent)
-                    {
-                        var live = tentative
-                            + LiveChainCost(next, goal, in query, blocked, occupancy, laneCost, distances);
+                    // against.
+                    var live = tentative
+                        + LiveChainCost(next, goal, in query, blocked, occupancy, laneCost, distances);
 
-                        if (live < bound)
-                        {
-                            bound = live;
-                            incumbent = next;
-                        }
+                    if (live < bound)
+                    {
+                        bound = live;
+                        incumbent = next;
                     }
                 }
             }

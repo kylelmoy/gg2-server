@@ -383,6 +383,36 @@ public sealed class ServerOptions
     public bool NavDistances { get; set; }
 
     /// <summary>
+    /// Whether bots price an edge their team-mates are already walking above its
+    /// honest cost, so a squad fans out instead of filing down one corridor —
+    /// <c>--no-bot-occupancy</c> turns it off.
+    /// </summary>
+    /// <remarks>
+    /// <b>ON by default, because it is the largest single source of route
+    /// variety the bot layer has</b> and turning it off is a visible behaviour
+    /// change rather than a tuning knob: measured over 21 maps, match dispersion
+    /// falls from <b>0.785 to 0.634</b> without it, and nothing replaces it —
+    /// static lane fields buy 0.019 of spread per point of route inflation
+    /// against occupancy's 0.066, and widening <c>BotRoles.SpreadX</c> saturates
+    /// almost immediately. <c>docs/TRAPS-BOTS.md</c>, "Route variety, scored".
+    /// <para>
+    /// ⚠️ <b>It is also the one thing that makes the live server's routing differ
+    /// from <c>eval</c>'s and from every training rollout</b>, which have never
+    /// had it — <c>ScriptedBot.Occupancy</c> was set in exactly one place before
+    /// this flag existed. Turning it off makes the three agree, which is worth
+    /// something for training transfer and costs the dispersion above.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>It is not a performance knob</b>, whatever the search numbers
+    /// suggest. A\* is ~26-30% of a twelve-bot tick and that whole tick is
+    /// 0.151 ms against a 33.3 ms budget, so what this changes about search cost
+    /// is a fraction of a percent of the frame. Choose it on how the bots should
+    /// play, not on the clock.
+    /// </para>
+    /// </remarks>
+    public bool BotOccupancy { get; set; } = true;
+
+    /// <summary>
     /// How fast <see cref="GameServer.Run"/> paces the tick loop, relative to
     /// real time. 1.0 is the reference's 30 Hz; 4.0 runs four minutes of match
     /// per minute; <see cref="double.PositiveInfinity"/> is <b>unpaced</b> — the
