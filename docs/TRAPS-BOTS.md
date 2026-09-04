@@ -2139,6 +2139,82 @@ O(N) storage at 20% mean suboptimality — a trade this graph does not need at
 N=687. CRP / contraction hierarchies solve the million-node case where all-pairs
 is impossible; here it is 0.9 MB.
 
+### Two ways to spend a next-hop table, measured head to head
+
+`NavPlan.Incumbent` (CPD-Search) against `NavPlan.VerifyThenSearch` (the design
+`docs/PROPOSAL-ROUTE-TABLE.md` proposed before the prior-art search). Gated by
+`NavDistancesTests.BothPlansAgreeOnCost`; measured by
+`NavDistancesTests.TwoWaysToSpendTheTable`. Measured 2026-09-04, Release.
+
+The two differ by **exactly one idea**. Both walk the table's chain once up
+front, both then run the same unweighted A\* on the same exact heuristic, and
+both return the same optimal route. The only difference is what happens to a
+chain that has been perturbed: CPD-Search prices it at live cost and keeps it as
+an **incumbent upper bound**, re-walking from each expanded node (memoised) and
+terminating when the frontier's lower bound reaches it; the proposal's design
+**throws it away** and searches unbounded.
+
+✅ **They return the same answer, and that is asserted rather than assumed** —
+3,427 legs across every shipped graph and query class, 3,663 of them with a hop
+banned or crowded, compared on **priced cost** rather than node sequence (two
+distinct routes can price identically when a walk and a jump join the same
+pair). Without that gate the timing column below would be measuring which arm
+does less work, not which arm is faster.
+
+⛔ **The result is a split, and it went the opposite way to the prediction.**
+Mean over 22 graphs, 500 pairs each, interleaved and run twice an arm, three
+repeats of the whole measurement:
+
+| arm | CPD-Search | verify-then-search | |
+|---|---|---|---|
+| crowded (the live `--bots` server) | 12.40 / 13.40 / 11.92 µs | 11.04 / 11.35 / 11.12 µs | **0.85-0.93x — discarding WINS** |
+| no occupancy (`eval`, every rollout) | 1.08 / 1.13 / 1.09 µs | 1.29 / 1.26 / 1.35 µs | **1.12-1.24x — the incumbent wins** |
+
+⚠️ **The mechanism, and it is the part worth keeping.** Maintaining the
+incumbent costs a chain walk at *every expansion*; it repays that only when the
+bound actually prunes. Under crowding it does not prune — pops are near-identical
+between the arms (`ctf_waterway` 228 against 233, `ctf_truefort` 103 against
+103) — because a ×1.25 hop perturbs the chain by so little that the bound sits
+barely above the optimum. So the bookkeeping is close to pure overhead there.
+Where the chain is **illegal** rather than merely dearer, the bound does prune
+and the incumbent wins outright: `cp_egypt` 69 pops against 91, `ctf_truefort`
+12 against 18.
+
+⚠️ **The "clean" arm is occupancy-free, NOT chain-clean, and the difference is
+what that column is really measuring.** The tables are built gates-open, so a
+red asker's chain frequently crosses a gate only blue may pass; that is a +∞
+perturbation, and it is why `cp_egypt` expands 69 nodes with no crowd at all.
+On the graphs where the chain really is valid the pops are 1 against 0 — the
+proposal's design returns without touching the heap — and it is level or
+slightly ahead (`dkoth_atalia` 0.73x, `ctf_oldfort` 0.80x).
+
+⚠️ **Absolute scale matters more than the ratios here.** The crowded case is
+about **ten times** dearer than the clean one (≈12 µs against ≈1.1 µs), so
+verify-then-search's ~1.2 µs saving under crowd is larger in absolute terms than
+the incumbent's ~0.2 µs saving without it. **A ratio quoted without the base is
+misleading in both directions.**
+
+✅ **So neither is simply better, and the shipped default is unchanged.**
+`NavPlan.Incumbent` remains the default because the paths that most want raw
+throughput — `eval` and the training rollouts — are the occupancy-free ones where
+it wins. A live server, which is the crowded arm, would be marginally better
+served by the other. **Nothing is switched on this: the gap is under 20% either
+way, and search is ~26-30% of a twelve-bot tick, so the tick moves by a few
+percent at most.**
+
+⛔ **Do not read this as a refutation of CPD-Search.** It is one workload, and
+the workload is unusual in exactly the way that hurts an incumbent bound:
+perturbations here are *many, small and uniform* (a whole team's routes each
+×1.25) rather than *few and large*, which is the shape the technique is built
+for. The finding is about this cost model, not about the algorithm.
+
+⚠️ **`VerifyThenSearch` is measurement scaffolding and nothing routes through
+it.** `NavSearch.Find`'s `plan` parameter defaults to `Incumbent`, no caller
+passes anything else outside the two tests above, and `NavRouteIdentityTests`'
+digests and the three pinned bot measurements did not move. **If it ever becomes
+a shipped option it needs a flag and a re-record**, exactly as
+`--nav-distances` did.
+
 ### Phase 7 item 4s: the stab window, and the last unported script
 
 `Gg2.Bots.BotStab`, the stab branch in `BotClassKeys.SpyKeys`. Gated by

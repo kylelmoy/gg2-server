@@ -282,6 +282,235 @@ public sealed class NavDistancesTests(ITestOutputHelper output)
     }
 
     /// <summary>
+    /// Both plans return a route of the same optimal cost, on the same
+    /// perturbed legs.
+    /// </summary>
+    /// <remarks>
+    /// <b>The gate that makes the head-to-head measurement mean anything.</b>
+    /// <see cref="NavPlan.VerifyThenSearch"/> is only a fair comparison for
+    /// <see cref="NavPlan.Incumbent"/> if the two are buying the identical
+    /// answer — otherwise the cheaper one is cheaper because it is doing less,
+    /// and the timing column is measuring nothing. Both are unweighted A\* on
+    /// the same exact heuristic, so both are optimal; this asserts it rather
+    /// than trusting it.
+    /// <para>
+    /// ⚠️ Costs, not node sequences. Two distinct routes can price identically
+    /// — a walk and a jump joining the same pair, ties broken by heap order —
+    /// and demanding the same nodes would fail on a difference that costs the
+    /// bot nothing.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void BothPlansAgreeOnCost()
+    {
+        ReferenceTree.RequireNavCache();
+
+        var rng = new Random(20260904);
+        var legs = 0;
+        var perturbed = 0;
+
+        foreach (var (map, area) in NavCache.List(ReferenceTree.NavCacheDirectory))
+        {
+            var graph = NavCache.Load(ReferenceTree.NavCacheDirectory, map, area);
+            var n = graph.NodeCount;
+            var set = NavDistanceSet.Derive(graph);
+            var search = new NavSearch(graph);
+            var a = new List<int>();
+            var b = new List<int>();
+
+            foreach (var query in Queries())
+            {
+                var table = set.For(in query);
+
+                for (var leg = 0; leg < 12; leg++)
+                {
+                    var start = rng.Next(n);
+                    var goal = rng.Next(n);
+
+                    if (start == goal || float.IsPositiveInfinity(table.Between(start, goal)))
+                        continue;
+
+                    var chain = Chain(table, start, goal);
+                    var blocked = new HashSet<long>();
+                    var occupancy = new Dictionary<long, int>();
+
+                    if (chain.Count > 2 && leg % 3 != 0)
+                    {
+                        var i = rng.Next(chain.Count - 1);
+                        blocked.Add(NavGraph.EdgeKey(chain[i], chain[i + 1]));
+                    }
+
+                    if (chain.Count > 2 && leg % 3 != 1)
+                    {
+                        for (var k = 0; k < 2; k++)
+                        {
+                            var i = rng.Next(chain.Count - 1);
+                            occupancy[NavGraph.EdgeKey(chain[i], chain[i + 1])] = 1 + rng.Next(3);
+                        }
+                    }
+
+                    if (blocked.Count > 0 || occupancy.Count > 0)
+                        perturbed++;
+
+                    var okA = search.Find(
+                        start, goal, query, a, blocked, occupancy, default, table, NavPlan.Incumbent);
+                    var okB = search.Find(
+                        start, goal, query, b, blocked, occupancy, default, table, NavPlan.VerifyThenSearch);
+
+                    Assert.Equal(okA, okB);
+
+                    if (!okA)
+                        continue;
+
+                    var costA = LivePrice(graph, a, query, blocked, occupancy);
+                    var costB = LivePrice(graph, b, query, blocked, occupancy);
+
+                    Assert.True(
+                        Math.Abs(costA - costB) <= costA * 2e-6,
+                        $"{map}_a{area} {start}->{goal} {query}: incumbent {costA}, verify-then-search {costB}");
+
+                    legs++;
+                }
+            }
+        }
+
+        output.WriteLine($"{legs} legs agreed, {perturbed} of them perturbed");
+        Assert.True(legs > 1000, $"only {legs} legs; the sweep proved little");
+    }
+
+    /// <summary>
+    /// What the incumbent is worth against simply discarding a perturbed chain.
+    /// </summary>
+    /// <remarks>
+    /// <b>The head-to-head <c>docs/PROPOSAL-ROUTE-TABLE.md</c> was written to
+    /// settle.</b> The proposal's design verifies the chain and, on any
+    /// perturbation, throws it away and searches from scratch; CPD-Search prices
+    /// the same chain at live cost and uses it as an upper bound, so the search
+    /// stops as soon as the frontier reaches it. Same table, same heuristic,
+    /// same unweighted search, same optimal answer — the only difference is what
+    /// happens to a chain that has been perturbed.
+    /// <para>
+    /// ⚠️ Interleaved and run twice an arm, alternating, because the machine is
+    /// noisy enough that two sequential blocks would measure the machine.
+    /// <c>tools/bench/README.md</c> trap 5 is the same rule.
+    /// </para>
+    /// </remarks>
+    [Fact(Skip = "Measurement, not a gate. Numbers in docs/TRAPS-BOTS.md.")]
+    public void TwoWaysToSpendTheTable()
+    {
+        ReferenceTree.RequireNavCache();
+
+        output.WriteLine(
+            $"{"graph / arm",-26} {"incumbent",10} {"verify",10} | {"ratio",6} | {"pops i/v",12}");
+
+        double[] incAll = [0, 0], verAll = [0, 0];
+        var maps = 0;
+
+        foreach (var (map, area) in NavCache.List(ReferenceTree.NavCacheDirectory))
+        {
+            var graph = NavCache.Load(ReferenceTree.NavCacheDirectory, map, area);
+
+            if (graph.NodeCount < 200)
+                continue;
+
+            var table = NavDistances.Derive(graph, false, false, false);
+            var search = new NavSearch(graph);
+            var query = new NavQuery(Team.Red);
+            var route = new List<int>();
+            var rng = new Random(20260904);
+            var n = graph.NodeCount;
+
+            var objectives = new int[4];
+            for (var i = 0; i < 4; i++)
+                objectives[i] = rng.Next(n);
+
+            var occupancy = new Dictionary<long, int>();
+
+            for (var bot = 0; bot < 6; bot++)
+            {
+                if (!search.Find(rng.Next(n), objectives[rng.Next(4)], query, route))
+                    continue;
+
+                for (var i = 1; i < route.Count; i++)
+                {
+                    var key = NavGraph.EdgeKey(route[i - 1], route[i]);
+                    occupancy[key] = occupancy.GetValueOrDefault(key) + 1;
+                }
+            }
+
+            var pairs = new List<(int From, int To)>();
+            var spins = 0;
+
+            while (pairs.Count < 500 && spins++ < 100_000)
+            {
+                var from = rng.Next(n);
+                var to = objectives[rng.Next(4)];
+
+                if (from == to || float.IsPositiveInfinity(table.Between(from, to)))
+                    continue;
+
+                if (search.Find(from, to, query, route))
+                    pairs.Add((from, to));
+            }
+
+            if (pairs.Count < 50)
+                continue;
+
+            double Bench(NavPlan plan, IReadOnlyDictionary<long, int>? crowd, out double pops)
+            {
+                for (var w = 0; w < 4; w++)
+                    foreach (var (from, to) in pairs)
+                        search.Find(from, to, query, route, null, crowd, default, table, plan);
+
+                var clock = Stopwatch.StartNew();
+                long popped = 0;
+
+                for (var rep = 0; rep < 5; rep++)
+                {
+                    foreach (var (from, to) in pairs)
+                    {
+                        search.Find(from, to, query, route, null, crowd, default, table, plan);
+                        popped += search.Pops;
+                    }
+                }
+
+                clock.Stop();
+                pops = popped / (double)(5 * pairs.Count);
+                return clock.Elapsed.TotalMicroseconds / (5.0 * pairs.Count);
+            }
+
+            foreach (var (arm, crowd) in ((string, IReadOnlyDictionary<long, int>?)[])
+                [("crowd", occupancy), ("clean", null)])
+            {
+                var inc = Bench(NavPlan.Incumbent, crowd, out var incPops);
+                var ver = Bench(NavPlan.VerifyThenSearch, crowd, out var verPops);
+                inc = (inc + Bench(NavPlan.Incumbent, crowd, out _)) / 2;
+                ver = (ver + Bench(NavPlan.VerifyThenSearch, crowd, out _)) / 2;
+
+                var a = arm == "crowd" ? 0 : 1;
+                incAll[a] += inc;
+                verAll[a] += ver;
+
+                output.WriteLine(
+                    $"{map + "_a" + area + " " + arm,-26} {inc,10:F2} {ver,10:F2} | {ver / inc,5:F2}x | "
+                    + $"{incPops,5:F0}/{verPops,-5:F0}");
+            }
+
+            maps++;
+        }
+
+        output.WriteLine(string.Empty);
+
+        foreach (var a in (int[])[0, 1])
+        {
+            output.WriteLine(
+                $"MEAN {(a == 0 ? "crowd" : "clean")} over {maps} graphs: "
+                + $"incumbent {incAll[a] / maps:F2}us, verify-then-search {verAll[a] / maps:F2}us "
+                + $"({verAll[a] / incAll[a]:F2}x the incumbent's cost)");
+        }
+    }
+
+    /// <summary>
     /// Following the next hops reaches the goal, and pricing each hop at the
     /// graph's own cost reproduces the distance.
     /// </summary>
