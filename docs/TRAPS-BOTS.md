@@ -1800,6 +1800,13 @@ is N² like the distance table: on `ctf_truefort`'s 687 nodes that is 0.9 MB as
 would be tens of MB a profile, but nobody would. **The objection is validity,
 not memory.**
 
+✅ **The narrowed version of the idea is written up as a PROPOSAL** —
+`docs/PROPOSAL-ROUTE-TABLE.md`: an all-pairs next-hop table walked and
+*verified* per query, falling back to A\* on a dirty walk. It is not
+implemented, every claim in it carries an evidence status, and the number that
+decides it (is the walk cheaper than the search?) is not measured. Read it
+before re-deriving any of this.
+
 ⚠️ **A route table also needs dimensions the distance table does not.**
 Distances split on the three class arcs alone, because a team, an intel flag and
 a shut gate only ever REMOVE edges and gates-open stays a lower bound for
