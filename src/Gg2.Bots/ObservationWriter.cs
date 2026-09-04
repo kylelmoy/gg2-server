@@ -33,7 +33,7 @@ public static class ObservationWriter
     /// the simulation stamp so a trainer cannot silently load a checkpoint trained
     /// on a different vector.
     /// </summary>
-    public const int LayoutVersion = 1;
+    public const int LayoutVersion = 2;
 
     /// <summary>
     /// Nine, not ten: the Quote has no slot. It is a joke class that a
@@ -44,13 +44,36 @@ public static class ObservationWriter
     /// </summary>
     public const int ClassCount = 9;
 
-    /// <summary>Projectile kinds, one-hot. All nine of <see cref="ProjectileKind"/>.</summary>
+    /// <summary>
+    /// Projectile kinds, one-hot: the nine <em>spawnable</em> members of
+    /// <see cref="ProjectileKind"/>, which is <c>Shot</c> through <c>Stab</c>.
+    /// </summary>
+    /// <remarks>
+    /// <b>Nine, but not the first nine.</b> <see cref="ProjectileKind"/> has ten
+    /// members and <c>None = 0</c> is one of them, so encoding the enum's raw
+    /// value in nine columns spent a column on a kind that never occurs and left
+    /// <c>Stab = 9</c> — a real projectile, spawned at
+    /// <c>Weapons.Melee.cs</c>'s stab — off the end of the vector. It reached a
+    /// policy as presence <c>1.0</c> with an all-zero one-hot, which is what an
+    /// encoder failure looks like and is unrecoverable downstream. <c>None</c>
+    /// has no column and <see cref="Write"/> subtracts one, so every kind that
+    /// can be observed has a slot of its own.
+    /// <para>
+    /// Fixed 2026-09-03; <see cref="LayoutVersion"/> 1 to 2. The vector is still
+    /// 209 wide, so the length could not catch this — the version is the only
+    /// thing that stops a v1 checkpoint loading against these columns.
+    /// </para>
+    /// </remarks>
     public const int ProjectileKindCount = 9;
 
     /// <summary>Enemies observed, nearest first.</summary>
     public const int Enemies = 2;
 
-    /// <summary>Projectiles observed, nearest first.</summary>
+    /// <summary>
+    /// Projectiles observed, nearest first — genuinely nearest, picked rather
+    /// than truncated, which <see cref="WorldView.ProjectilesWithin"/> is what
+    /// makes true.
+    /// </summary>
     public const int Projectiles = 4;
 
     /// <summary>Rays in the geometry fan.</summary>
@@ -91,9 +114,22 @@ public static class ObservationWriter
         + (PatchSide * PatchSide)
         + GoalBlock;
 
-    private const int SelfBlock = ClassCount + 1 + 2 + 1 + 2 + 1 + 1 + 1;
+    /// <summary>
+    /// Floats in the self block: class, hp, velocity, grounded, aim, ammo,
+    /// reload, ready-to-shoot, refire, special resource.
+    /// </summary>
+    /// <remarks>
+    /// <b>Public because tests kept re-deriving it and going stale.</b> Two
+    /// asserted against a copy of this sum and both silently pointed at the wrong
+    /// column the moment the block grew — which is the failure this layout is
+    /// least able to notice, since every index still reads a real float. Not on
+    /// the stamp surface: <see cref="LayoutVersion"/> is what a checkpoint is
+    /// gated by, and the surface is <c>SimulationStamp</c>'s chosen list.
+    /// </remarks>
+    public const int SelfBlock = ClassCount + 1 + 2 + 1 + 2 + 1 + 1 + 1 + 1 + 1;
 
-    private const int EnemyBlock = 1 + 2 + 2 + ClassCount + 1 + 2 + 1;
+    /// <summary>Floats in one enemy block.</summary>
+    public const int EnemyBlock = 1 + 2 + 2 + ClassCount + 1 + 2 + 1;
 
     private const int ProjectileBlock = 1 + 2 + 2 + ProjectileKindCount + 1;
 
@@ -172,6 +208,31 @@ public static class ObservationWriter
             ? (float)(weapon.ReloadTimer / (double)stats.ReloadTime)
             : 0f;
 
+        // THE WEAPON'S OWN READINESS, added 2026-09-03 at gg2-rl's request.
+        //
+        // Ammo and reload were observed and refire was not, so the policy could
+        // not tell whether the trigger it was pulling would do anything. It is a
+        // stateless MLP with no recurrence, so it cannot infer readiness from its
+        // own firing history either: it presses, the simulation honours or drops
+        // the press, and nothing in the vector distinguished the two.
+        //
+        // BOTH, because neither implies the other. `Weapon.events/Create.xml`
+        // starts ReadyToShoot false with RefireTimer already running, so a zero
+        // timer is not the same as a weapon that can fire, and the fraction alone
+        // would be ambiguous at 0. The fraction carries "how soon", which a flag
+        // alone throws away.
+        //
+        // ⚠️ NO MEASUREMENT SAYS THIS HELPS. It was added because a full
+        // invalidation was already being paid for the Stab fix and this closes a
+        // known gap at the cheapest possible moment — the same
+        // mechanism-without-a-direction argument that the sniper's charge was
+        // DECLINED on. If a later measurement shows it buys nothing, that is not
+        // a surprise and not a reason to keep it.
+        o[at++] = weapon.ReadyToShoot ? 1f : 0f;
+        o[at++] = stats.RefireTime > 0 && weapon.RefireTimer > 0
+            ? (float)(weapon.RefireTimer / (double)stats.RefireTime)
+            : 0f;
+
         // One column for several resources, because they are the same thing to a
         // policy: "the special I am holding is this full". They never coexist on
         // one character, so a column each would be columns of zeros.
@@ -206,10 +267,24 @@ public static class ObservationWriter
         // untrained weight at deployment and nowhere else — the worst of both, and
         // for a number the policy is not allowed to act on.
         //
-        // NO ObservationLayoutVersion BUMP: the layout is unchanged and no
-        // checkpoint that exists was ever driven as a medic, so no checkpoint's
-        // inputs move. That reasoning expires the moment a medic-trained
-        // checkpoint exists.
+        // THE ORIGINAL JUSTIFICATION HAS EXPIRED; the column stays out anyway.
+        // As written on 2026-09-03 this also argued "no checkpoint that exists
+        // was ever driven as a medic, so no checkpoint's inputs move". That is
+        // no longer true: gg2-rl drove existing checkpoints as medic the same
+        // day, in a 32,400-duel nine-class matrix. Nothing broke — the medic row
+        // scored 0.0% for reasons unrelated to this column — but the argument is
+        // dead and is not what holds the decision up.
+        //
+        // What holds it up is 2 and 3 above, which are about whether the charge
+        // is SPENDABLE, not about who has been driven: uber cannot accrue in a
+        // duel, and a policy-driven medic can never press it. Those are
+        // properties of Handover.ShouldEngage and BotClassKeys, and are
+        // unaffected by a checkpoint being pointed at a medic.
+        //
+        // WHAT WOULD RETIRE THIS: either of those two changing — a duel that can
+        // accrue uber (a second ally, a non-duel training scenario), or a
+        // handover that gives the policy a medic holding a beam. Re-read them
+        // before assuming this column is still safely dead.
         //
         // The engineer's arm is left alone and carries the same latent trap:
         // Engineer is not in PolicyController.TrainedClasses, so a policy never
@@ -279,7 +354,11 @@ public static class ObservationWriter
             o[at++] = (float)(shot.Motion.HSpeed / VelocityScale);
             o[at++] = (float)(shot.Motion.VSpeed / VelocityScale);
 
-            OneHot(o, ref at, (int)shot.Kind, ProjectileKindCount);
+            // Minus one because `None = 0` has no column: see ProjectileKindCount.
+            // A live projectile is never `None`, so the -1 cannot underflow in
+            // practice — and if it ever did, OneHot's unsigned bound check makes
+            // it a row of zeros rather than a corrupted neighbour column.
+            OneHot(o, ref at, (int)shot.Kind - 1, ProjectileKindCount);
 
             // Mine or theirs. By TEAM, not by owner slot: a team-mate's rocket
             // is as harmless to this agent as its own, and in a duel the

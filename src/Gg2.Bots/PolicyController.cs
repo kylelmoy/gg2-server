@@ -70,17 +70,27 @@ public sealed class PolicyController : IMicroController
     /// <remarks>
     /// <b>Five of the nine class columns are constant zero for every decision of
     /// every training run</b>, self block and enemy block, so their first-layer
-    /// weights are still the random draw. Driving a demoman, medic, engineer, spy
+    /// weights are still the random draw. Driving a sniper, medic, engineer, spy
     /// or pyro does not tell the policy which class it is; it injects untrained
     /// noise.
     /// <para>
-    /// <b>The trained set is not a prefix.</b> Heavy is <c>PlayerClass</c> index
-    /// 6, so the untrained columns are 3, 4, 5, 7 and 8 — interleaved. Anything
-    /// that assumes "the first four" is wrong.
+    /// <b>The trained set is not a prefix.</b> Demoman is <c>PlayerClass</c>
+    /// index 3 and Heavy is 6, so the untrained columns are 2, 4, 5, 7 and 8 —
+    /// interleaved. Anything that assumes "the first four" is wrong.
+    /// </para>
+    /// <para>
+    /// <b>Sniper was DROPPED from the set on 2026-09-03</b> and demoman added, at
+    /// the <c>gg2-rl</c> lane's request. The mirror evidence is why: the policy's
+    /// sniper already beat the charge-seeing scripted sniper 65.5% at the
+    /// <c>(0, 300)</c> band, so the charge column that
+    /// <see cref="ObservationWriter"/> still declines to encode was never what
+    /// held that class back. ⚠️ <b>A checkpoint trained before this date learned
+    /// a sniper and did not learn a demoman</b>, which no stamp can express —
+    /// the class set is not on the stamp surface.
     /// </para>
     /// </remarks>
     public static ReadOnlySpan<PlayerClass> TrainedClasses =>
-        [PlayerClass.Scout, PlayerClass.Soldier, PlayerClass.Sniper, PlayerClass.Heavy];
+        [PlayerClass.Scout, PlayerClass.Soldier, PlayerClass.Demoman, PlayerClass.Heavy];
 
     /// <summary>Whether this class is one the policy was trained on.</summary>
     public static bool IsTrained(PlayerClass playerClass)

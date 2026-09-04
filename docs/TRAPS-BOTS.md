@@ -3034,3 +3034,115 @@ nothing ever asked. ✅ **It was found because `gg2-rl` insisted the exit criter
 be evaluated per map on every shipped map** rather than on the six that were
 screened.
 
+
+## ⚠️ The observation encoder lied twice, and neither lie could go red
+
+Found 2026-09-03 by the `gg2-rl` lane auditing what the policy actually sees,
+against `src/Gg2.Bots/ObservationWriter.cs`. Both bugs were silent by
+construction, both had been shipping for the whole of phase 9, and **no test in
+either repo could have caught either one** — which is the reason they are written
+down here rather than left to the fixtures.
+
+### `Stab` was encoded off the end of the vector
+
+`ProjectileKindCount` was 9 and `ProjectileKind` has **ten** members, because
+`None = 0` is one of them. Encoding the raw enum value therefore spent a column on
+a kind that never occurs and put `Stab = 9` past the end of the field.
+
+⚠️ **`OneHot` bound-checks, so the failure was a well-formed row of zeros.** A
+spy's stab — genuinely spawned, `Weapons.Melee.cs:75` — reached the policy as
+presence `1.0` with an all-zero kind one-hot. That is indistinguishable from an
+encoder failure and unrecoverable downstream: nothing later in the network can
+tell "a projectile of no kind" from "a kind whose column is missing".
+
+✅ Fixed by dropping `None` from the one-hot and shifting the rest up
+(`(int)shot.Kind - 1`), so all nine spawnable kinds own a column.
+`ObservationWriterTests.EverySpawnableProjectileKindGetsExactlyOneColumn` pins it
+as a **theory over every kind**, asserting exactly one set column — presence
+without a kind is the shape worth asserting on.
+
+⚠️ **The `Stab` fix by itself left the vector 209 wide, and that is the trap.**
+(The commit that carried it also added the two refire columns below, taking the
+vector to **211** — but that was a *separate* decision, and had it not been made
+this fix would have shipped at an unchanged length.) A
+same-length change to what columns *mean* is invisible to every length check and
+to the observation length recorded in a checkpoint's own metadata. Only
+`ObservationLayoutVersion` separates a v1 checkpoint from these columns, which is
+why the bump was taken even though nothing about the size moved. **Ask of any
+future encoder edit: would this be caught if the length did not change?**
+
+### "nearest first" was creation order, and truncating
+
+`ObservationWriter`'s comment said the four projectile slots were "nearest
+first". `WorldView.ProjectilesWithin` walked the live list in creation order and
+**stopped when the caller's span filled**, so with five or more in radius the
+agent saw the four *oldest* live projectiles.
+
+⚠️ **Truncation was the larger half, not the ordering.** A rocket fired a tick
+ago could be absent from the answer entirely, and absence reads downstream as a
+quiet situation — the encoder cannot say "and four more". The 400 px radius with a
+four-wide span made that the common case in a firefight rather than a corner.
+
+✅ Fixed in `ProjectilesWithin` itself: it now **picks** the nearest, ties keeping
+creation order. `WorldViewTests` pins the ordering, the tie-break, and the
+short-span case separately, because a test that only checks ordering passes on an
+implementation that still truncates.
+
+⚠️ **`SimulationBehaviourVersion` was bumped for this even though the pins did not
+move.** Both `BotReflex` uses are *existential* — the first projectile satisfying
+the predicate returns `true` — so their answers cannot depend on walk order, and
+the set is identical while the span (32) is at least the number in radius. But
+`MaxProjectiles` is 512, above 32 the set genuinely differs, and **nobody has
+measured how often a firefight passes 32.** The stamp's rule is demonstration, not
+argument, so it bumped. The 26 pinned bot tests passing is *consistent with* the
+argument and is not the same as establishing it.
+
+### What the pair have in common
+
+Both were **claims in comments that no test could contradict** — the file said
+"all nine of `ProjectileKind`" and "nearest first", and both sentences were false
+where they sat. The encoder is exactly the seam CLAUDE.md's "a claim the repo
+makes about itself" warns about: it is consumed by a *different repo*, so the only
+reader positioned to notice was the one that acted on the description. It took an
+audit from the `gg2-rl` lane, not a test run here.
+
+### The two columns added in the same breath, and why that is on the record
+
+The same 2026-09-03 change added **`ReadyToShoot` and a `RefireTimer` fraction**
+to the self block, taking the observation from 209 to **211**. Ammo and reload
+were already observed and refire was not, so a policy could not tell whether the
+trigger it was pulling would do anything — and it is a stateless MLP, so it
+cannot infer readiness from its own firing history either.
+
+⚠️ **This was NOT measured, and it is written down that way on purpose.** No
+result says refire visibility helps. It was added because the `Stab` fix was
+already paying a full invalidation that week, which made it the cheapest possible
+moment to close a known gap — a *cost* argument, not an evidence one. It is the
+same mechanism-without-a-direction shape that the **sniper's charge was declined
+on**, and the asymmetry is only that this touches every class in the trained set
+rather than one. If a later measurement shows it buys nothing, that is not a
+surprise and not a reason to keep it.
+
+⚠️ **Both, because neither implies the other.** `Weapon.events/Create.xml` starts
+`ReadyToShoot` false with `RefireTimer` already running, so a zero timer is not a
+weapon that can fire; and a flag alone throws away "how soon".
+
+### ⚠️ The trained class set moved and no stamp can say so
+
+Sniper was dropped and demoman added the same day:
+`PolicyController.TrainedClasses` is now `[Scout, Soldier, Demoman, Heavy]`, so
+the untrained class columns are **2, 4, 5, 7 and 8** — still interleaved, and
+still not a prefix.
+
+⛔ **The class set is not on the stamp surface, so a checkpoint cannot tell you
+which classes it learned.** A checkpoint from before this date learned a sniper
+and never saw a demoman; `SimulationStamp.Require` will happily accept it once
+the stamps line up. **A stamp match is not evidence that a checkpoint knows the
+classes you are about to drive with it.**
+
+⚠️ The two tests that would confirm the switch end to end —
+`PolicyMatchTests.ARestrictedMatchContainsOnlyTrainedClasses` and
+`AnUntrainedClassIsNeverDrivenByThePolicy` — both load the fixture checkpoint, so
+they were **red for an unrelated reason when the change landed** and did not
+validate it. Re-check them deliberately once a v2 fixture exists rather than
+assuming a green suite covered it.

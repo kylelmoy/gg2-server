@@ -70,7 +70,7 @@ public static class SimulationStamp
     /// is <em>updated as the bump</em>, not fixed as a broken test.
     /// </para>
     /// </remarks>
-    public const int ObservationLayoutVersion = 1;
+    public const int ObservationLayoutVersion = 2;
 
     /// <summary>
     /// What the simulation <em>does</em>, as opposed to the constants it does it
@@ -150,8 +150,27 @@ public static class SimulationStamp
     /// different build from one where it cannot, whether or not the field is
     /// exercised yet.
     /// </para>
+    /// <para>
+    /// <b>4: nearest-first projectile queries.</b>
+    /// <see cref="WorldView.ProjectilesWithin"/> filled a caller's span in
+    /// creation order and stopped; it now picks the nearest. Both
+    /// <c>BotReflex</c> uses are existential — the first projectile satisfying
+    /// the predicate returns <c>true</c> — so an answer cannot depend on the
+    /// order the set is walked, and the set itself is identical whenever the
+    /// caller's span is at least as long as the number in radius.
+    /// <c>BotReflex</c> asks for 32.
+    /// <para>
+    /// <b>Bumped anyway, because that is not a demonstration.</b>
+    /// <see cref="WorldState.MaxProjectiles"/> is 512, so above 32 in radius the
+    /// set genuinely differs (nearest 32 rather than first 32) and an airblast or
+    /// a dodge can flip. Nobody has measured how often a firefight passes 32, and
+    /// the exemption above is for changes <em>demonstrated</em> unobservable
+    /// rather than argued so. The 26 pinned bot tests did not move, which is
+    /// consistent with the argument and is not the same as establishing it.
+    /// </para>
+    /// </para>
     /// </remarks>
-    public const int SimulationBehaviourVersion = 3;
+    public const int SimulationBehaviourVersion = 4;
 
     /// <summary>The types whose public constants are part of the contract.</summary>
     /// <remarks>

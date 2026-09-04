@@ -7,7 +7,7 @@ namespace Gg2.Bots;
 /// A trained policy: three dense layers, one categorical head per action head.
 /// </summary>
 /// <remarks>
-/// <b><c>gg2-rl</c>'s phase 4 artefact, run in this process.</b> 209 observation
+/// <b><c>gg2-rl</c>'s phase 4 artefact, run in this process.</b> 211 observation
 /// floats in, 27 logits out, split into six heads — horizontal, jump, down, fire,
 /// aim, zoom — with an argmax per head. ReLU on the hidden layers, raw logits on
 /// the output block; **no input normalisation**, the observation goes in as

@@ -178,29 +178,89 @@ public sealed class WorldViewTests
     /// </para>
     /// </remarks>
     [Fact]
-    public void ProjectilesComeBackByRadiusInCreationOrder()
+    public void ProjectilesComeBackByRadiusNearestFirst()
     {
         var state = default(WorldState);
         state.AddPlayer(0);
 
+        // Created far, then near, then middling: creation order and distance
+        // order disagree on every pair, so an answer that matched creation order
+        // could not do so by accident.
         var far = state.SpawnProjectile(new ProjectileState { Kind = ProjectileKind.Shot, X = 500, Y = 0 });
-        var near = state.SpawnProjectile(new ProjectileState { Kind = ProjectileKind.Shot, X = 30, Y = 40 });
         var edge = state.SpawnProjectile(new ProjectileState { Kind = ProjectileKind.Shot, X = 0, Y = 100 });
+        var near = state.SpawnProjectile(new ProjectileState { Kind = ProjectileKind.Shot, X = 30, Y = 40 });
 
         var view = new WorldView(in state, Collision());
         Span<ProjectileHandle> found = stackalloc ProjectileHandle[8];
 
         Assert.Equal(2, view.ProjectilesWithin(0, 0, 100, found));
 
-        // `near` was created second and `edge` third; the answer keeps that
-        // order rather than sorting by distance.
+        // `near` is 50 away and `edge` is 100, so `near` leads despite being
+        // created last. Out of radius stays out.
         Assert.Equal([near, edge], found[..2].ToArray());
         Assert.DoesNotContain(far, found[..2].ToArray());
+    }
 
-        // A span of one truncates rather than picking.
+    /// <summary>
+    /// A span shorter than the number in radius gets the NEAREST that many, not
+    /// the first that many.
+    /// </summary>
+    /// <remarks>
+    /// <b>This is the regression that mattered.</b> The observation writer asks
+    /// for four and a firefight holds more than four, so a query that filled the
+    /// span in creation order and stopped reported the four oldest live
+    /// projectiles and omitted the one just fired — reaching a policy as a quiet
+    /// situation. Truncating instead of picking is the bug; ordering the answer
+    /// is only half of the fix.
+    /// </remarks>
+    [Fact]
+    public void AShortSpanPicksTheNearestRatherThanTruncating()
+    {
+        var state = default(WorldState);
+        state.AddPlayer(0);
+
+        // Four decoys created first, all in radius and all further away than the
+        // straggler created last — exactly the shape that used to lose it.
+        for (var i = 0; i < 4; i++)
+            state.SpawnProjectile(new ProjectileState { Kind = ProjectileKind.Shot, X = 90 + i, Y = 0 });
+
+        var latest = state.SpawnProjectile(new ProjectileState { Kind = ProjectileKind.Shot, X = 10, Y = 0 });
+
+        var view = new WorldView(in state, Collision());
+
         Span<ProjectileHandle> one = stackalloc ProjectileHandle[1];
-        Assert.Equal(1, view.ProjectilesWithin(0, 0, 100, one));
-        Assert.Equal(near, one[0]);
+        Assert.Equal(1, view.ProjectilesWithin(0, 0, 200, one));
+        Assert.Equal(latest, one[0]);
+
+        // And it is not merely first: asking for four of the five still keeps it.
+        Span<ProjectileHandle> four = stackalloc ProjectileHandle[4];
+        Assert.Equal(4, view.ProjectilesWithin(0, 0, 200, four));
+        Assert.Contains(latest, four.ToArray());
+        Assert.Equal(latest, four[0]);
+    }
+
+    /// <summary>Equal distances keep creation order, so the answer is total.</summary>
+    /// <remarks>
+    /// The insertion in <c>ProjectilesWithin</c> compares strictly, which is what
+    /// makes this hold. Without it the answer would depend on how the sort was
+    /// written — the same reason <c>Nearest</c> breaks ties by slot.
+    /// </remarks>
+    [Fact]
+    public void EqualDistancesKeepCreationOrder()
+    {
+        var state = default(WorldState);
+        state.AddPlayer(0);
+
+        // Same distance from the origin, three different directions.
+        var first = state.SpawnProjectile(new ProjectileState { Kind = ProjectileKind.Shot, X = 50, Y = 0 });
+        var second = state.SpawnProjectile(new ProjectileState { Kind = ProjectileKind.Shot, X = 0, Y = 50 });
+        var third = state.SpawnProjectile(new ProjectileState { Kind = ProjectileKind.Shot, X = -50, Y = 0 });
+
+        var view = new WorldView(in state, Collision());
+        Span<ProjectileHandle> found = stackalloc ProjectileHandle[8];
+
+        Assert.Equal(3, view.ProjectilesWithin(0, 0, 100, found));
+        Assert.Equal([first, second, third], found[..3].ToArray());
     }
 
     /// <summary>

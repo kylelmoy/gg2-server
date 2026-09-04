@@ -290,9 +290,9 @@ is `ObservationWriter`; this is the shape:
 
 | Block | Contents |
 |---|---|
-| Self | class one-hot (9), hp fraction, velocity, grounded, aim sin/cos, ammo fraction, reload fraction, special-resource fraction |
+| Self | class one-hot (9), hp fraction, velocity, grounded, aim sin/cos, ammo fraction, reload fraction, **ready-to-shoot flag, refire fraction**, special-resource fraction |
 | Enemies, nearest 2 | presence, relative position and velocity, class one-hot, hp fraction, aim sin/cos, time-since-seen (fixed 0 in v0 — the reaction-delay ring buffer is `gg2-rl` phase 5; the field exists now so the layout does not churn then) |
-| Projectiles, nearest 4 | presence, relative position and velocity, kind one-hot, mine/enemy flag — creation-order tie-break via `ProjectilesWithin` |
+| Projectiles, nearest 4 | presence, relative position and velocity, kind one-hot (9 — the *spawnable* kinds, `Shot` through `Stab`; `None` has no column), mine/enemy flag — genuinely nearest via `ProjectilesWithin`, which picks rather than truncates, with equal distances breaking to creation order |
 | Geometry | 24-ray fan of normalised distances (marched, not asked of `CollisionLine` — a policy needs *how far*, not just whether something is in the way) plus an 8×8 downsampled walkmask patch centred on self |
 | Macro goal | direction sin/cos, distance, goal kind one-hot — settable per slot (`AgentGoal`, `EnvMessage.SetGoal`); default is "engage the nearest enemy" |
 

@@ -54,14 +54,25 @@ public sealed class SimulationStampTests(ITestOutputHelper output)
     /// existing checkpoints.
     /// </para>
     /// <para>
-    /// The current behaviour version covers queued jumping: <c>CharacterPhysics</c>
-    /// reads <c>PlayerState.QueueJump</c> and the <c>WantToJump</c> queue it
-    /// drives, so a client with the setting on jumps on landing instead of on a
-    /// fresh press. That moves trajectories, which is why it is an unconditional
-    /// bump regardless of whether any checked-in fixture exercises the flag.
+    /// The current behaviour version covers nearest-first projectile queries:
+    /// <c>WorldView.ProjectilesWithin</c> picks the nearest rather than filling a
+    /// caller's span in creation order and stopping. <c>BotReflex</c>'s two uses
+    /// are existential and ask for 32, so their answers cannot move below 32
+    /// projectiles in radius — but <c>MaxProjectiles</c> is 512, nobody has
+    /// measured how often a firefight passes 32, and this number is bumped on
+    /// demonstration rather than on argument. The version before it covered
+    /// queued jumping.
+    /// </para>
+    /// <para>
+    /// <b>This moved on 2026-09-03 as a deliberate double bump</b> —
+    /// <c>ObservationLayoutVersion</c> 1 to 2 (the <c>Stab</c> one-hot, which was
+    /// encoded off the end of a 9-wide field) and
+    /// <c>SimulationBehaviourVersion</c> 3 to 4 (the query above). Both were
+    /// updated <em>as</em> the bump, per this type's own rule, not repaired as a
+    /// broken test.
     /// </para>
     /// </remarks>
-    private const string Pinned = "fbd4afc7d90bb490";
+    private const string Pinned = "698913b5ea547d60";
 
     /// <summary>
     /// The stamp is stable, and not a per-process hash.

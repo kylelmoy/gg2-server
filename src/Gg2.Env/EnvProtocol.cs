@@ -322,7 +322,7 @@ public static class EnvProtocol
     /// action heads are 0-14 and would fit in a byte each, but <c>gg2-rl</c>'s
     /// <c>CONTRACT.md</c> maps this block straight into a tensor, and a block that
     /// is 4-byte typed throughout can be viewed as one dtype. Six bytes saved per
-    /// agent against a 209-float observation is not a trade worth making.
+    /// agent against a 211-float observation is not a trade worth making.
     /// </para>
     /// </para>
     /// </remarks>

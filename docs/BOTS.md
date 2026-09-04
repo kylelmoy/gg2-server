@@ -50,7 +50,7 @@ near them", has the state rules that apply to everyone, bot work included.
 | | where | gated by |
 |---|---|---|
 | the scripted bot — nav, A\*, path following, targeting, combat, objectives, population | `src/Gg2.Bots/` | `ScenarioSuiteTests`, `BotObjectiveTests`, `PathFollowerFixtureTests` |
-| the learned policy — loads a `gg2-rl` `.npz`, 209→64→64→27, argmax per head | `PolicyNetwork.cs` | `PolicyNetworkTests` — logit-for-logit against their numpy |
+| the learned policy — loads a `gg2-rl` `.npz`, 211→64→64→27, argmax per head | `PolicyNetwork.cs` | `PolicyNetworkTests` — logit-for-logit against their numpy |
 | the hybrid — a controller takes keys and aim inside an engagement window, scripted layer keeps movement, routing, objectives, class | `HybridBot.cs` | `PolicyMatchTests`, `SearchBotTests`, `HybridBotSeamTests` |
 | **the controller seam** — how a new bot implementation drops in | `IMicroController.cs`, `BotBrainSpec.cs` | `HybridBotSeamTests` |
 | the per-tick controller budget across bots | `IMicroArbiter.cs` | `HybridBotSeamTests` |
@@ -141,7 +141,9 @@ bystanders for the rollout to re-simulate.
 
 **The policy's untrained block.** `ObservationWriter.Enemies` is 2, and every
 training observation produced so far comes from a duel (1 enemy), so the
-second-enemy block — indices `[38, 57)` of the 209-wide observation — is
+second-enemy block — indices `[38, 57)` of the then-209-wide observation, ⚠️
+**measured against layout v1 and NOT re-derived for v2**, where the vector is 211
+wide and those indices no longer name that block — is
 constant zero in training; its first-layer weights are the random
 initialisation (`max|delta| = 0.0` from iteration 100 to final). Feeding a real
 second-enemy encoding changes 45.2% of the policy's decisions. This does not

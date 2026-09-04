@@ -20,7 +20,7 @@ namespace Gg2.Tests;
 /// <b>"Identical" and "close enough" are different claims and only the first
 /// one was made.</b> A ray value is a distance to the first solid probe; an
 /// optimisation that skipped one thin ledge would shift a single float in a
-/// 209-float vector, train perfectly happily, and be invisible to every other
+/// 211-float vector, train perfectly happily, and be invisible to every other
 /// test in this repo — the exact shape <c>CLAUDE.md</c> warns about. So the naive
 /// loop is transcribed here and the two are compared bit for bit.
 /// </para>

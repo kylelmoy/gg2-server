@@ -167,32 +167,89 @@ public readonly ref struct WorldView
     }
 
     /// <summary>
-    /// Every live projectile whose origin is within <paramref name="radius"/> of
-    /// a point, in creation order.
+    /// The live projectiles whose origins are within <paramref name="radius"/>
+    /// of a point, <b>nearest first</b>.
     /// </summary>
     /// <remarks>
-    /// Creation order rather than nearest-first, because that is the order the
-    /// rest of the project already makes observable
-    /// (<see cref="WorldState.LiveProjectileHandle"/>) and a dodge wants the
-    /// whole set anyway. Handles rather than states, so a caller cannot end up
-    /// holding a stale copy of one.
+    /// <b>Nearest first, and it PICKS rather than truncates — those are the
+    /// same requirement.</b> A caller's span is a budget for how many it can
+    /// look at, not a request for a prefix of the live list. Filling it in
+    /// creation order and stopping meant a caller asking for four got the four
+    /// <em>oldest</em> live projectiles in radius, so a rocket fired a tick ago
+    /// — the one actually worth reacting to — was absent from the answer
+    /// entirely, and indistinguishably from a quiet situation. The observation
+    /// writer in <c>Gg2.Bots</c> asks for four and a firefight holds more than
+    /// four, so that was the common case rather than a corner.
+    /// <para>
+    /// Distance is between origins and compared <em>squared</em>, exactly as in
+    /// <see cref="NearestEnemies"/> — no <c>sqrt</c>, because nothing here
+    /// reaches the wire. Ties keep creation order, so the answer does not depend
+    /// on how the sort was written.
+    /// </para>
+    /// <para>
+    /// <b>This does not reorder <see cref="WorldState.ProjectileOrder"/>.</b>
+    /// Creation order among live projectiles is observable simulation, and
+    /// <see cref="WorldState.FreeProjectile"/> keeps it with an order-preserving
+    /// shift for that reason. This is a read-only query over that list, and
+    /// sorting an answer changes nothing a client can see.
+    /// </para>
+    /// <para>
+    /// Handles rather than states, so a caller cannot end up holding a stale
+    /// copy of one.
+    /// </para>
     /// </remarks>
     /// <returns>How many entries of <paramref name="results"/> were filled.</returns>
     public int ProjectilesWithin(double x, double y, double radius, Span<ProjectileHandle> results)
     {
+        if (results.Length == 0)
+            return 0;
+
+        if (results.Length > WorldState.MaxProjectiles)
+            throw new ArgumentException($"at most {WorldState.MaxProjectiles} results", nameof(results));
+
+        // Bounded by the pool, so a stack buffer rather than an allocation:
+        // docs/BOTAI.md item 1 rules out garbage on this path just as firmly as
+        // it does inside the tick.
+        Span<double> keys = stackalloc double[results.Length];
+
         var found = 0;
         var limit = radius * radius;
 
-        for (var i = 0; i < _state.LiveProjectileCount && found < results.Length; i++)
+        // No early exit: knowing WHICH are nearest means looking at all of them.
+        // The per-candidate work is the same squared-distance arithmetic it
+        // always was, and the live list is short outside a firefight.
+        for (var i = 0; i < _state.LiveProjectileCount; i++)
         {
             var handle = _state.LiveProjectileHandle(i);
             ref readonly var projectile = ref _state.Projectiles[handle.Index];
 
             var dx = projectile.X - x;
             var dy = projectile.Y - y;
+            var key = (dx * dx) + (dy * dy);
 
-            if ((dx * dx) + (dy * dy) <= limit)
-                results[found++] = handle;
+            if (key > limit)
+                continue;
+
+            // Insertion into the sorted prefix, as in Nearest. Strictly `<` so an
+            // equal distance leaves the earlier-created projectile in front.
+            var at = found < results.Length ? found : results.Length;
+            while (at > 0 && key < keys[at - 1])
+                at--;
+
+            if (at >= results.Length)
+                continue;
+
+            for (var shift = Math.Min(found, results.Length - 1); shift > at; shift--)
+            {
+                keys[shift] = keys[shift - 1];
+                results[shift] = results[shift - 1];
+            }
+
+            keys[at] = key;
+            results[at] = handle;
+
+            if (found < results.Length)
+                found++;
         }
 
         return found;
