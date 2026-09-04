@@ -69,16 +69,21 @@ public static class MatchRunner
             nav = loaded;
         }
 
-        return Run(options, count, map, nav, threads);
+        return Run(options, count, map, nav, threads, navDirectory);
     }
 
     /// <summary>Runs a batch on a map that is already loaded.</summary>
+    /// <param name="navDirectory">
+    /// Where to look for the graph's <c>.dist.gz</c> tables. Null derives them
+    /// instead, which is the same answer at a higher price.
+    /// </param>
     public static MatchResult[] Run(
         HeadlessMatchOptions options,
         int count,
         Gg2.Maps.LevelMap map,
         NavGraph? nav,
-        int threads = 1)
+        int threads = 1,
+        string? navDirectory = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(count);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(threads);
@@ -89,10 +94,13 @@ public static class MatchRunner
         // the same graph, so a per-match derivation is the identical table
         // computed `count` times — a few hundred ms each against a match that
         // costs about 0.6 s, which would spend more than the heuristic saves and
-        // make --nav-distances look like a regression. It is read-only once
+        // make the exact heuristic look like a regression. It is read-only once
         // built, so the Parallel.For below shares it safely.
+        //
+        // ⚠️ LOADED from <key>.dist.gz when there is one — an `eval` over 22 maps
+        // derived 100 tables and paid ~2.2 s of pure setup for it.
         var distances = options.NavDistances && nav is not null
-            ? NavDistanceSet.Derive(nav)
+            ? NavDistanceSet.LoadOrDerive(navDirectory, options.Map, options.Area, nav, out _)
             : null;
 
         if (threads == 1)

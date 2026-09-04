@@ -68,7 +68,7 @@ internal static class Evaluate
             // taken without. It is offered here because this is the path where
             // it pays: eval leaves Occupancy null, so A* is the largest single
             // cost in the tick.
-            NavDistances = args.Contains("--nav-distances"),
+            NavDistances = !args.Contains("--no-nav-distances"),
         };
 
         string[] maps = Flag(args, "--map") is { Length: > 0 } one
@@ -147,7 +147,8 @@ internal static class Evaluate
                 }
             }
 
-            var results = MatchRunner.Run(options with { Map = name }, matches, map, nav, threads);
+            var results = MatchRunner.Run(
+                options with { Map = name }, matches, map, nav, threads, navDirectory);
             var summary = MatchRunner.Summarise(results);
             totalTicks += summary.TotalTicks;
 
@@ -193,7 +194,9 @@ internal static class Evaluate
           --maps <path>     where the built-in map PNGs live
           --botnav <path>   where the bot nav caches live
           --no-navgen       do not build a graph for a map that has none
-          --nav-distances   exact precomputed A* heuristic (~8% of the tick).
+          --no-nav-distances
+                            turn OFF the exact precomputed A* heuristic, which
+                            is on by default. Slower AND different routes.
                             ⛔ CHANGES EVERY ROUTE - the search is weighted, so
                             this is an arm, not a speed-up. Not comparable to a
                             table taken without it.

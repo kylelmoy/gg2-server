@@ -43,7 +43,7 @@ public readonly record struct HeadlessMatchOptions(
     PlayerClass[]? AllowedClasses = null,
     BotBrainSpec? Brain = null,
     Team? HybridTeam = null,
-    bool NavDistances = false)
+    bool NavDistances = true)
 {
     /// <summary>
     /// A short match on <c>ctf_truefort</c> with twelve bots. ⚠️ The values are

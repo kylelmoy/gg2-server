@@ -28,8 +28,13 @@ namespace Gg2.Bots;
 /// graph with no <see cref="NavEdgeType.StickyJump"/> arcs in it gives the same
 /// answer whether or not the asker may take one, so the profile key is first
 /// masked down to the arc types the graph actually contains and one table is
-/// built per <em>distinct</em> masked key. On the shipped graphs that is
-/// typically two — a walker's and a rocket-jumper's — rather than eight.
+/// built per <em>distinct</em> masked key.
+/// <b>Measured 2026-09-04: that is FOUR on every one of the 25 shipped graphs,
+/// not two.</b> All 25 carry double-jump and rocket-jump arcs and none carries a
+/// sticky-jump arc, so <c>present</c> is 3 and the eight profiles collapse to
+/// four rather than to two. The count matters because it multiplies both the
+/// memory and the file: 149.8 MB in memory across the shipped graphs, and 100
+/// tables rather than 50.
 /// </para>
 /// <para>
 /// ⚠️ <b>Read-only once built, and deliberately so.</b> Every bot owns its own
@@ -46,9 +51,9 @@ namespace Gg2.Bots;
 /// </remarks>
 public sealed class NavDistanceSet
 {
-    private const int DoubleJumpBit = 1;
-    private const int RocketJumpBit = 2;
-    private const int StickyJumpBit = 4;
+    internal const int DoubleJumpBit = 1;
+    internal const int RocketJumpBit = 2;
+    internal const int StickyJumpBit = 4;
 
     private const int Profiles = 8;
 
@@ -56,8 +61,20 @@ public sealed class NavDistanceSet
     // cannot tell two profiles apart.
     private readonly NavDistances[] _byProfile;
 
-    private NavDistanceSet(NavDistances[] byProfile, int tableCount, long bytes)
+    // The distinct tables by their masked profile key — the same objects
+    // byProfile points at, addressed the way a file stores them.
+    private readonly Dictionary<int, NavDistances> _distinct;
+    private readonly int _present;
+
+    private NavDistanceSet(
+        NavDistances[] byProfile,
+        int tableCount,
+        long bytes,
+        Dictionary<int, NavDistances> distinct,
+        int present)
     {
+        _distinct = distinct;
+        _present = present;
         _byProfile = byProfile;
         TableCount = tableCount;
         Bytes = bytes;
@@ -72,6 +89,18 @@ public sealed class NavDistanceSet
 
     /// <summary>Bytes the distinct tables occupy in total.</summary>
     public long Bytes { get; }
+
+    /// <summary>
+    /// The arc-type bits the graph actually contains, which is what collapsed
+    /// eight profiles into <see cref="TableCount"/>.
+    /// </summary>
+    public int PresentArcs => _present;
+
+    /// <summary>The masked profile keys that have a table of their own.</summary>
+    internal IReadOnlyCollection<int> DistinctKeys => _distinct.Keys;
+
+    /// <summary>The table stored under a masked profile key.</summary>
+    internal NavDistances TableFor(int key) => _distinct[key];
 
     /// <summary>
     /// The tightest table that is still a lower bound for this asker.
@@ -116,6 +145,7 @@ public sealed class NavDistanceSet
 
         var byProfile = new NavDistances[Profiles];
         var built = new NavDistances?[Profiles];
+        var distinct = new Dictionary<int, NavDistances>();
         var tables = 0;
         var bytes = 0L;
 
@@ -131,6 +161,7 @@ public sealed class NavDistanceSet
                     (masked & RocketJumpBit) != 0,
                     (masked & StickyJumpBit) != 0);
 
+                distinct[masked] = built[masked]!;
                 tables++;
                 bytes += built[masked]!.Bytes;
             }
@@ -138,7 +169,77 @@ public sealed class NavDistanceSet
             byProfile[key] = built[masked]!;
         }
 
-        return new NavDistanceSet(byProfile, tables, bytes);
+        return new NavDistanceSet(byProfile, tables, bytes, distinct, present);
+    }
+
+    /// <summary>
+    /// Rebuilds a set from tables read out of a file, expanding the distinct
+    /// tables back over all eight profile keys.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The expansion is the whole point and a file cannot carry it.</b> A
+    /// file stores one table per DISTINCT masked key; an asker arrives with a
+    /// raw three-bit key. Masking here with the same <c>present</c> the writer
+    /// recorded is what makes a sticky-jumper read the walker's table on a graph
+    /// with no sticky arcs, exactly as <see cref="Derive"/> would have.
+    /// </remarks>
+    internal static NavDistanceSet FromTables(Dictionary<int, NavDistances> distinct, int present)
+    {
+        ArgumentNullException.ThrowIfNull(distinct);
+
+        var byProfile = new NavDistances[Profiles];
+        var bytes = 0L;
+
+        foreach (var table in distinct.Values)
+            bytes += table.Bytes;
+
+        for (var key = 0; key < Profiles; key++)
+        {
+            var masked = key & present;
+
+            if (!distinct.TryGetValue(masked, out var table))
+                throw new InvalidDataException(
+                    $"the file has no table for profile {masked}, which profile {key} needs");
+
+            byProfile[key] = table;
+        }
+
+        return new NavDistanceSet(byProfile, distinct.Count, bytes, distinct, present);
+    }
+
+    /// <summary>
+    /// The shipped path: read the tables beside the graph, and derive them only
+    /// if there is no usable file.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>A missing or stale file is not an error.</b> A custom map whose
+    /// graph was built at the map change has no file, and deriving is what makes
+    /// it navigable anyway — one is 3-251 ms, which is a hitch at a map change
+    /// and not a failure. <paramref name="reason"/> reports which happened so a
+    /// server can log it and a test can tell the two apart.
+    /// </remarks>
+    public static NavDistanceSet LoadOrDerive(
+        string? directory, string map, int area, NavGraph graph, out string reason)
+    {
+        ArgumentNullException.ThrowIfNull(graph);
+
+        if (!string.IsNullOrEmpty(directory))
+        {
+            var path = NavDistanceFile.PathFor(directory, map, area);
+            var loaded = NavDistanceFile.TryRead(path, graph, out var why);
+
+            if (loaded is not null)
+            {
+                reason = why;
+                return loaded;
+            }
+
+            reason = $"derived ({why})";
+            return Derive(graph);
+        }
+
+        reason = "derived (no directory)";
+        return Derive(graph);
     }
 
     private static int KeyOf(in NavQuery query) =>

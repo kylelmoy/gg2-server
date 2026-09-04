@@ -159,9 +159,17 @@ dotnet run --project src/Gg2.Host -- navgen --check        # did anything I chan
 ```
 
 ✅ **One command does the whole cycle**: it writes the shipped `.txt.gz`
-container, deletes the plain `.txt` if one is there, and rewrites
-`nav/manifest.tsv`. The previous workflow needed three steps and skipping the
-last left the old pairing recorded and the new graphs refused at run time.
+container, deletes the plain `.txt` if one is there, writes the `<key>.dist.gz`
+next-hop tables the exact A\* heuristic reads, and rewrites `nav/manifest.tsv`.
+The previous workflow needed three steps and skipping the last left the old
+pairing recorded and the new graphs refused at run time.
+
+⚠️ **The tables are written by default and a graph change invalidates them.**
+They are keyed to a hash of the graph's own nodes and edges, so regenerating a
+graph without its table leaves a file the server refuses at load — it then
+derives instead, which costs 377 ms rather than 62 ms at the map change and is
+logged. `--no-distances` skips them deliberately; `--check` reports
+`tables STALE` per map. `docs/TRAPS-BOTS.md`, "Shipping the tables".
 
 ✅ **A graph identical to the one already on disk is not rewritten**, so
 `git status` after a run names the graphs a source edit actually moved — which is

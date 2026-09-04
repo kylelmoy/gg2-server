@@ -1,7 +1,8 @@
 # Which map each nav graph in this directory was built against.
 # <map>_a<area><TAB><first 16 bytes of SHA-256 over the area's walkmask and entities>
 #
-# Regenerate with: GG2_UPDATE_NAV_MANIFEST=1 dotnet test --filter NavManifestTests
+# Written by: dotnet run --project src/Gg2.Host -- navgen
+# Re-recorded by: GG2_UPDATE_NAV_MANIFEST=1 dotnet test --filter NavManifestTests
 # A graph with no line here is not checked. See NavManifest.
 arena_lumberyard_a1	114cd3323b25b2b7fd4733152d86beff
 arena_montane_a1	f48e29432f329d73848b7bfb0c248d0f

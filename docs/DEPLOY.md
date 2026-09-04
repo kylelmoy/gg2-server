@@ -69,9 +69,10 @@ credit exhaustion looks identical to a server bug and will be diagnosed as one.
 core also keeps GC and socket work off the tick loop.
 
 **Disk**: ~7 MB of application, ~70 MB for a framework-dependent .NET 10 runtime
-(or ~75 MB self-contained), 1.2 MB of nav graphs. Under 100 MB all in — the
-published directory itself is **2.9 MB**, against 36 MB before the nav graphs
-were gzipped.
+(or ~75 MB self-contained), 1.2 MB of nav graphs and 1.62 MB of their next-hop
+tables. Under 100 MB all in — the published directory itself is **~4.5 MB** (the 2.9 MB measured by hand before
+the tables, plus their 1.62 MB — arithmetic, not a fresh publish),
+against 36 MB before the nav graphs were gzipped.
 
 **Network**: not measured. Size it after watching a real game rather than from a
 number in this file.
@@ -153,7 +154,11 @@ it.
 ### 1. The nav graphs
 
 ✅ **`nav/` ships in every build and every publish, with no flag.** 25 graphs
-and `manifest.tsv`, 1.2 MB, beside `maps/`.
+and `manifest.tsv`, 1.2 MB, beside `maps/` — plus one `<key>.dist.gz` per graph,
+**1.62 MB together**, holding the next-hop tables A\*'s exact heuristic reads.
+⚠️ **A publish that carries the graphs and not the tables still works** and is
+slower at every map change (377 ms against 62 ms on `ctf_truefort`); the server
+logs which of the two happened.
 
 **Measured, on all 25 graphs:**
 
@@ -234,11 +239,12 @@ live server that routes exactly the way `eval` and every training rollout
 already do — those have never had occupancy — which is worth something if you
 are comparing live play against measured runs.
 
-### `--nav-distances`: faster A\*, different routes
+### `--no-nav-distances`: the straight-line heuristic back
 
-⛔ **Off by default, and turning it on is a behaviour change rather than a
-tuning knob.** It precomputes exact node-to-node distances at each map change and
-gives A\* an exact heuristic instead of a straight-line guess. A\* is about 30%
+⚠️ **The exact heuristic is ON by default since 2026-09-04**, and this turns it
+off. The tables are read from `nav/<key>.dist.gz` — written by `gg2-server
+navgen`, 1.62 MB for all 25 graphs — and only derived when a map has no file.
+They give A\* an exact heuristic instead of a straight-line guess. A\* is about 30%
 of a twelve-bot tick, so this is real — but the search is *weighted*, so an exact
 heuristic changes **which** route comes back as well as how fast, and a server
 run with it is not route-comparable to one without.
@@ -247,18 +253,32 @@ Measured over 21 maps: route cost 103.6% → 99.1% of the cheapest route (better
 because the incumbent A\* is deliberately suboptimal), dispersion 0.634 → 0.613,
 and 3 of 21 maps regress.
 
-⛔ **On `eval` it is a wash at the default match count.** The tables are built
-once per map and the saving accrues per match, so it only pays where
-matches-per-map is high: 4 matches on one map showed no effect, 24 showed 1.11x.
-`docs/TRAPS-BOTS.md`, "Shipping the precomputed distances", before turning it
-on.
+⛔ **Turning it OFF is a behaviour change, not a slower run**: the search is
+weighted, so the heuristic picks the route as well as the speed, and a server
+without it is not route-comparable to one with it.
+
+The `eval` wash that made this off-by-default is **gone now that the tables
+ship**. It was a wash because the tables were built once per map and the saving
+accrued per match; the build is what the file removes. `docs/TRAPS-BOTS.md`,
+"Shipping the tables".
 
 It logs what it cost, **once per map+area and not once per round** — a rotation that stays on one map re-parses its graph every round, and the tables are cached past that:
 
 ```
-precomputed nav distances for ctf_truefort area 1: 4 table(s), 7.2 MB, 442 ms
-- routes on this map will differ from a run without --nav-distances
+nav distances for ctf_truefort area 1: loaded - 4 table(s), 10.8 MB, 62 ms
 ```
+
+and when a map has no file — a custom one, whose graph was itself built at the
+map change — it says so and what to do:
+
+```
+nav distances for cp_custom area 1: derived (no file) - 4 table(s), 10.8 MB, 377 ms.
+Run `gg2-server navgen` to ship the tables and skip this next time
+```
+
+⚠️ **377 ms against 62 ms is the whole point of shipping them**, and the same
+line reports which happened, so a server that silently went back to deriving
+says so in its log rather than in a profile.
 
 With generation off and no nav directory, the server runs, serves rounds and
 fills with bots — **bots that fight whatever reaches them and never walk

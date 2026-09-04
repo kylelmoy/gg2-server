@@ -2175,6 +2175,100 @@ O(N) storage at 20% mean suboptimality — a trade this graph does not need at
 N=687. CRP / contraction hierarchies solve the million-node case where all-pairs
 is impossible; here it is 0.9 MB.
 
+### Shipping the tables: `.dist.gz`, and the half that is NOT stored
+
+`Gg2.Bots.NavDistanceFile`, `NavDistances.FromNextHops`,
+`NavDistanceSet.LoadOrDerive`, `NavGen`'s `--no-distances`. Gated by
+`NavDistanceFileTests`. Measured 2026-09-04, Release, over all 25 shipped
+graphs.
+
+**The tables are now ON by default and READ from disk.** `--nav-distances` is
+still accepted and is a deliberate no-op; `--no-nav-distances` is the switch
+that moves anything now. `gg2-server navgen` writes `<key>.dist.gz` beside each
+`<key>.txt.gz`.
+
+⛔ **Only the next-hop half is stored. The cost half is rebuilt on load, and
+that is not an optimisation — it is the difference between a feature that can
+ship and one that cannot.**
+
+| stored, gzipped | size |
+|---|---|
+| next-hop halves, one gzip stream per graph (**what ships**) | **1.62 MB** |
+| next-hop halves, gzipped separately per table | 2.47 MB |
+| cost halves | **35.07 MB** |
+| the graphs themselves, for scale | 1.06 MB |
+
+A column of hop indices repeats and a column of floats does not, so the two
+halves of the same table differ by **14x** compressed. Storing both would have
+made `nav/` a 37 MB directory to save a fraction of the load.
+
+**Rebuilding is also FASTER than deriving, not a penalty paid for the space.**
+The hops are the parent pointers of a shortest-path tree, so one memoised walk
+up the tree per node prices every node on the way and no priority queue is
+needed at all: **5.74x** cheaper than the reverse Dijkstras across the 25
+graphs, and end to end at a map change on `ctf_truefort`, **377 ms derived
+against 62 ms loaded — 6.1x**, both logged by the server itself.
+
+⚠️ **The rebuild reproduces `MathF.BitDecrement` and a version that did not
+would be wrong in the UNSAFE direction.** `Derive` rounds every stored cost
+DOWN so the table stays an admissible lower bound. A rebuild that rounded to
+nearest is one ULP high, which lets the search prune the optimal route — and it
+passes any tolerance-based comparison, including the 1e-3 one this work used
+while prototyping. `NavDistanceFileTests.ARebuiltTableIsBitIdenticalToADerivedOne`
+compares `BitConverter.SingleToInt32Bits` over all 471,969 pairs of
+`ctf_truefort` for that reason. The same class of bug hid a second time: the
+first rebuild left unreachable pairs at the array's default 0 rather than
+filling ∞, which claims every unreachable pair is free.
+
+⚠️ **A file is bound to one build of one graph, three ways** — node count, arc
+mask, and a SHA-256 over the graph's own nodes and edges. A mismatch is
+**refused silently and the set derived instead**, because a stale artefact must
+never be what stops a server serving. That is the `nav/manifest.tsv` failure one
+level down: a map edited without regenerating would otherwise path bots through
+a wall.
+
+⚠️ **`navgen --check` compares the tables against the graph it JUST BUILT**, not
+the one on disk, and reports `tables STALE` per map. A check against the
+on-disk graph would call a table current whenever it matched a stale graph —
+which is the exact drift being checked for.
+
+### The table count is FOUR on every shipped graph, not two
+
+`NavDistanceSet.Derive` masks the eight ability profiles down to the arc types a
+graph actually contains. The code comment claimed that collapsed to "typically
+two — a walker's and a rocket-jumper's". **Measured 2026-09-04: it is four on
+all 25 shipped graphs**, because every one carries both double-jump and
+rocket-jump arcs and none carries a sticky-jump arc, so `present` is 3 and eight
+profiles collapse to four. The comment is corrected in place.
+
+It matters twice over: it doubles the memory (**149.8 MB across the shipped
+graphs**, 100 tables rather than 50) and it doubles the file. `ctf_truefort`
+alone is 10.8 MB in memory and 253 KB on disk.
+
+### ⚠️ The gates measure a DIFFERENT ARM from the server, and always did
+
+⛔ **`ScenarioWorld` never sets `Distances`, and `NavRouteIdentityTests` calls
+`NavSearch.Find` without a table.** So the three pinned end-to-end bot
+measurements and all 25 route digests run on the **weighted straight-line**
+heuristic, while a real server and `eval` now run on the exact one.
+
+This is why turning the tables on moved **none** of them, and the prediction
+recorded in "Shipping the precomputed distances" — that enabling it "moves every
+route, so the 25 digests and the three pinned bot measurements would all need
+re-recording" — **did not come true**. The prediction was right about routes and
+wrong about the gates, because it assumed the gates exercised the feature.
+
+**Nothing here is broken, and that is the problem**: a green suite now says
+nothing about the arm production runs. The digests still do their real job —
+catching nav-graph drift — and the pinned measurements still gate the scripted
+layer. Neither covers the routing a server actually does.
+
+⚠️ **Deliberately NOT changed, because it is a decision about what the alarms
+mean, not a bug fix.** Wiring `ScenarioWorld` to the tables would move all three
+pinned numbers and every digest at once, and a pin that moves for a reason
+nobody wrote down is worse than a pin measuring the wrong arm. If it is done, it
+is a re-record with the diff stated in both directions, per `CLAUDE.md`.
+
 ### Two ways to spend a next-hop table, and why BOTH ship
 
 `NavPlan.DecideByCrowd` picks between `ChainBoundsSearch` (CPD-Search as

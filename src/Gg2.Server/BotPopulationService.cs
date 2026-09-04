@@ -198,7 +198,7 @@ public sealed class BotPopulationService
         // change is the one moment nothing is being simulated, and this costs
         // tens of milliseconds. It must also come BEFORE SetMap hands the bots
         // the new graph, so no bot can plan a route against the old set.
-        Distances = DeriveDistances(map, area);
+        Distances = LoadDistances(map, area, navCacheDirectory);
 
         foreach (var slot in _server.BotSlots)
         {
@@ -222,7 +222,7 @@ public sealed class BotPopulationService
     /// count is worth printing beside the size: it is not eight, and how far
     /// below eight it is depends on which class arcs the graph actually has.
     /// </remarks>
-    private NavDistanceSet? DeriveDistances(LevelMap map, int area)
+    private NavDistanceSet? LoadDistances(LevelMap map, int area, string? navCacheDirectory)
     {
         if (!_server.Options.NavDistances || Nav is null)
         {
@@ -246,10 +246,17 @@ public sealed class BotPopulationService
 
         var started = Stopwatch.GetTimestamp();
         NavDistanceSet set;
+        string how;
 
         try
         {
-            set = NavDistanceSet.Derive(Nav);
+            // ⚠️ Reads <key>.dist.gz beside the graph and DERIVES only when there
+            // is not a usable one. The file stores the next-hop half alone and
+            // the cost half is rebuilt from it, which is 5.7x cheaper than the
+            // Dijkstras — so a map that ships tables costs single-digit
+            // milliseconds here and a custom map, whose graph was built moments
+            // ago and has no file, still works at the old price.
+            set = NavDistanceSet.LoadOrDerive(navCacheDirectory, map.Name, area, Nav, out how);
         }
         catch (ArgumentException e)
         {
@@ -261,7 +268,7 @@ public sealed class BotPopulationService
             _distancesKey = key;
             _log.Info(
                 $"could not precompute nav distances for {map.Name} area {area}: {e.Message}. "
-                + "Bots on it use the straight-line heuristic, as they do without --nav-distances");
+                + "Bots on it use the straight-line heuristic, as they do with --no-nav-distances");
 
             return null;
         }
@@ -271,9 +278,11 @@ public sealed class BotPopulationService
         _distancesKey = key;
 
         _log.Info(
-            $"precomputed nav distances for {map.Name} area {area}: "
-            + $"{set.TableCount} table(s), {set.Bytes / 1024.0 / 1024.0:0.1} MB, {ms:0} ms "
-            + "— routes on this map will differ from a run without --nav-distances");
+            $"nav distances for {map.Name} area {area}: {how} — "
+            + $"{set.TableCount} table(s), {set.Bytes / 1048576.0:0.0} MB, {ms:0} ms"
+            + (how == "loaded"
+                ? string.Empty
+                : ". Run `gg2-server navgen` to ship the tables and skip this next time"));
 
         return set;
     }

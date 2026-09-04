@@ -56,7 +56,8 @@ near them", has the state rules that apply to everyone, bot work included.
 | the per-tick controller budget across bots | `IMicroArbiter.cs` | `HybridBotSeamTests` |
 | the policy as a controller | `PolicyController.cs` | `PolicyMatchTests` |
 | the rollout search, and as a controller | `RolloutSearch.cs`, `SearchController.cs` | `RolloutRestrictionTests`, `SearchBotTests` |
-| the next-hop route table (CPD-Search) and the exact A\* heuristic — **both off by default**, `--nav-distances` | `NavDistances.cs`, `NavDistanceSet.cs`, `NavSearch.cs` | `NavDistancesTests`, `NavDistanceSetTests`, `NavSearchTests` |
+| the next-hop route table (CPD-Search) and the exact A\* heuristic — **ON by default**, `--no-nav-distances` | `NavDistances.cs`, `NavDistanceSet.cs`, `NavSearch.cs` | `NavDistancesTests`, `NavDistanceSetTests`, `NavSearchTests` |
+| the tables **on disk** — `nav/<key>.dist.gz`, next-hop only, cost rebuilt on load | `NavDistanceFile.cs`, `NavDistances.FromNextHops` | `NavDistanceFileTests` |
 | route dispersion: occupancy (on) and static lanes (measured, not adopted), `--no-bot-occupancy` | `BotLanes.cs`, `BotRoles.cs`, `ScriptedBot.cs` | `BotLanesTests`, `BotOccupancyFlagTests`, `RouteDiversityTests` |
 | the training environment seam | `src/Gg2.Env/` | `EnvProtocolTests` |
 | the measurement instrument | `tools/bench/` | not in `Gg2.sln`; build explicitly |
@@ -430,7 +431,7 @@ not invalidate a checkpoint, and a change to what an observation *means* does.
 | anything in `src/Gg2.Bots/` | `docs/TRAPS-BOTS.md` — one section per phase-7 item, by name |
 | adding or swapping a bot implementation | "Swapping the bot logic out" above — `IMicroController` and nothing else |
 | the nav format, A\*, the path follower | same, items 2, 4a, 4b-i, 4b-ii |
-| a route table, the A\* heuristic, route dispersion | same — "CPD-Search", "Shipping the precomputed distances", "Two ways to spend a next-hop table", "Route variety, scored". ⚠️ **The table ships OFF and occupancy ships ON**; changing either moves every route digest and all three pinned measurements |
+| a route table, the A\* heuristic, route dispersion | same — "Shipping the tables", "CPD-Search", "Two ways to spend a next-hop table", "Route variety, scored". ⚠️ **Both ship ON now.** ⛔ The pinned measurements and the 25 digests do NOT exercise the tables — `ScenarioWorld` sets no `Distances` — so a green suite says nothing about the arm a server runs; see "The gates measure a DIFFERENT ARM" |
 | targeting, aim, the combat controller | same, items 4c-i, 4c-ii |
 | the objective layer | same, item 4g, plus "Dual King of the Hill is unwinnable by bots" |
 | the env, the observation, the action space | `docs/ENV.md` |

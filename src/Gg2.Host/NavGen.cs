@@ -46,6 +46,14 @@ internal static class NavGen
         var outDirectory = Flag(args, "--out") ?? DefaultOutput();
 
         var check = args.Contains("--check");
+
+        // ⚠️ ON by default, because the SERVER now expects the tables to be
+        // there: NavDistanceSet.LoadOrDerive falls back to deriving, so a run
+        // without them is slower at every map change rather than broken, and a
+        // generator that quietly stopped writing them would look fine here and
+        // cost 3-251 ms a map change in production. --no-distances is for
+        // rebuilding graphs alone when the tables are known to be current.
+        var distances = !args.Contains("--no-distances");
         var sticky = args.Contains("--sticky");
         var plain = args.Contains("--plain");
         var quiet = args.Contains("--quiet");
@@ -94,6 +102,9 @@ internal static class NavGen
         var written = 0;
         var unchanged = 0;
         var failed = 0;
+        var tablesWritten = 0;
+        var tablesUnchanged = 0;
+        var tableBytes = 0L;
 
         foreach (var name in maps)
         {
@@ -144,7 +155,25 @@ internal static class NavGen
                     if (!same)
                         stale.Add(built.Key);
 
-                    Report(quiet, built, existing.Length == 0 ? "MISSING" : same ? "match" : "DIFFERS");
+                    var tableNote = string.Empty;
+
+                    if (distances)
+                    {
+                        // Against the graph JUST BUILT, not the one on disk: a
+                        // table that matches a stale graph is exactly the drift
+                        // this check exists to catch.
+                        var current = NavDistanceFile.IsCurrent(
+                            NavDistanceFile.PathFor(outDirectory, stage.Name, area),
+                            NavCache.Parse(built.Text, stage.Name, area));
+
+                        if (!current)
+                        {
+                            stale.Add(built.Key + NavDistanceFile.Extension);
+                            tableNote = ", tables STALE";
+                        }
+                    }
+
+                    Report(quiet, built, (existing.Length == 0 ? "MISSING" : same ? "match" : "DIFFERS") + tableNote);
                     continue;
                 }
 
@@ -155,7 +184,33 @@ internal static class NavGen
                 else
                     unchanged++;
 
-                Report(quiet, built, result.Changed ? Path.GetFileName(result.Path) : "unchanged");
+                var note = result.Changed ? Path.GetFileName(result.Path) : "unchanged";
+
+                if (distances)
+                {
+                    var graph = NavCache.Parse(built.Text, stage.Name, area);
+                    var path = NavDistanceFile.PathFor(outDirectory, stage.Name, area);
+
+                    // Skipped when the file already names this exact graph —
+                    // deriving 100 tables across the shipped maps is ~2.2 s, and
+                    // a no-op run should not pay it.
+                    if (NavDistanceFile.IsCurrent(path, graph))
+                    {
+                        tablesUnchanged++;
+                        note += ", tables unchanged";
+                    }
+                    else
+                    {
+                        var set = NavDistanceSet.Derive(graph);
+                        NavDistanceFile.Write(path, graph, set);
+                        tablesWritten++;
+                        note += $", {set.TableCount} tables";
+                    }
+
+                    tableBytes += new FileInfo(path).Length;
+                }
+
+                Report(quiet, built, note);
             }
         }
 
@@ -173,6 +228,10 @@ internal static class NavGen
 
         Console.WriteLine(
             $"{written} written, {unchanged} unchanged -> {outDirectory}"
+            + (distances
+                ? $"; tables {tablesWritten} written, {tablesUnchanged} unchanged, "
+                    + $"{tableBytes / 1048576.0:0.00} MB"
+                : "; tables skipped (--no-distances)")
             + (failed > 0 ? $", {failed} failed" : string.Empty));
 
         return failed > 0 ? 1 : 0;
@@ -290,6 +349,9 @@ internal static class NavGen
           --check            compare against what is on disk and write nothing;
                              exit 1 if any graph differs or is missing
           --plain            write <key>.txt instead of the shipped <key>.txt.gz
+          --no-distances     do not write the <key>.dist.gz next-hop tables. The
+                             server derives them at the map change instead, which
+                             costs 3-251 ms a map and changes no routes.
           --sticky           also emit NAV_EDGE_STICKYJUMP (type 7) edges, a
                              Demoman detonating its own mine on the jump tick.
                              This server refuses them by class; the Game Maker

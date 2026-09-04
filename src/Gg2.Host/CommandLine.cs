@@ -406,10 +406,18 @@ internal static class CommandLine
                     options.NavGenerateWrite = true;
                     break;
 
-                // ⛔ Buys about 8% of a twelve-bot tick and CHANGES EVERY ROUTE
-                // in return — the search is weighted, so its heuristic picks the
-                // route as well as the speed. Off by default for that reason, not
-                // for the map-change cost. ServerOptions.NavDistances.
+                // ⚠️ ON by default since 2026-09-04. The tables are read from
+                // <key>.dist.gz beside the graph; a map without one derives them
+                // at the map change instead. Turning them OFF reverts to the
+                // weighted straight-line heuristic and moves every route back —
+                // it is a different arm, not a slower one. ServerOptions.NavDistances.
+                case "--no-nav-distances":
+                    options.NavDistances = false;
+                    break;
+
+                // Accepted and does nothing: it was the opt-IN before the tables
+                // shipped, and a script or a saved command line carrying it must
+                // not fail. Removing it would break those for no gain.
                 case "--nav-distances":
                     options.NavDistances = true;
                     break;
@@ -971,13 +979,13 @@ internal static class CommandLine
                             bunches up (dispersion 0.785 -> 0.634) and nothing
                             replaces it. What it buys is a live server that
                             routes exactly as eval and the training rollouts do.
-          --nav-distances   precompute exact node-to-node distances and give A*
-                            an exact heuristic instead of a straight-line guess.
-                            Worth about 8% of a twelve-bot tick. OFF by default
-                            because the search is WEIGHTED, so an exact heuristic
-                            changes which route comes back as well as how fast -
-                            a server run with this is not route-comparable to one
-                            without. Costs tens of ms and a few MB per map change.
+          --no-nav-distances
+                            do not give A* the exact precomputed distances. Bots
+                            fall back to the weighted straight-line heuristic,
+                            which is ~8% of a twelve-bot tick slower and takes
+                            DIFFERENT routes. --nav-distances is accepted and is
+                            now the default.
+
           --speed <n|max>   run at n times real time, or 'max' for unpaced
                             (default 1)
           --record <path>   write replayable .trace recordings of this server's

@@ -353,8 +353,8 @@ public sealed class ServerOptions
     public bool NavGenerateWrite { get; set; }
 
     /// <summary>
-    /// Precompute exact node-to-node distances at each map change and feed them
-    /// to A\* in place of its straight-line estimate — <c>--nav-distances</c>.
+    /// Give A\* exact node-to-node distances in place of its straight-line
+    /// estimate — <c>--no-nav-distances</c> turns it off.
     /// </summary>
     /// <remarks>
     /// <b>A\* is the most expensive thing this server does</b> — about 30% of a
@@ -362,7 +362,7 @@ public sealed class ServerOptions
     /// measured <b>1.36x</b> on it, which is roughly 8% of the tick. That is the
     /// whole of the upside.
     /// <para>
-    /// ⛔ <b>OFF by default because turning it on CHANGES EVERY ROUTE.</b>
+    /// ⚠️ <b>ON by default since 2026-09-04, and it DECIDES EVERY ROUTE.</b>
     /// <see cref="NavConstants.SearchWeight"/> makes this a <em>weighted</em>
     /// A\*: the heuristic is inflated on purpose, so it decides which route is
     /// returned and not merely how quickly. With the straight-line estimate the
@@ -373,14 +373,16 @@ public sealed class ServerOptions
     /// <c>docs/TRAPS-BOTS.md</c>, "Shipping the precomputed distances".
     /// </para>
     /// <para>
-    /// ⚠️ <b>It is not free at the map change either</b>: one reverse Dijkstra
-    /// per node per distinct ability profile — see <see cref="NavDistanceSet"/>
-    /// — which is tens of milliseconds and a few megabytes on the larger graphs.
-    /// The elapsed time and the size are logged for the same reason the nav
-    /// generator's are.
+    /// ⚠️ <b>The tables are READ from <c>&lt;key&gt;.dist.gz</c> beside the
+    /// graph, not derived</b> — <see cref="NavDistanceFile"/>, written by
+    /// <c>gg2-server navgen</c>. A map with no file (a custom one, whose graph
+    /// was itself built at the map change) still works: the set is derived
+    /// instead, at one reverse Dijkstra per node per distinct ability profile,
+    /// which is 3-251 ms on the shipped graphs. The elapsed time, the size and
+    /// which of the two happened are logged.
     /// </para>
     /// </remarks>
-    public bool NavDistances { get; set; }
+    public bool NavDistances { get; set; } = true;
 
     /// <summary>
     /// Whether bots price an edge their team-mates are already walking above its
