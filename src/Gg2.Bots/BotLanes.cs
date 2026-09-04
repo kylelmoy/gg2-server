@@ -94,10 +94,11 @@ public sealed class BotLanes
     /// and make every lane move the next time the weight is tuned.
     /// </para>
     /// </remarks>
-    public static BotLanes Derive(NavGraph graph, int lanes)
+    public static BotLanes Derive(NavGraph graph, int lanes, double penalty = Penalty)
     {
         ArgumentNullException.ThrowIfNull(graph);
         ArgumentOutOfRangeException.ThrowIfLessThan(lanes, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(penalty, 1.0);
 
         var cost = new double[lanes][];
         var used = new bool[graph.EdgeCount];
@@ -113,7 +114,7 @@ public sealed class BotLanes
 
             cost[lane] = new double[graph.EdgeCount];
             for (var e = 0; e < graph.EdgeCount; e++)
-                cost[lane][e] = used[e] ? cost[lane - 1][e] * Penalty : cost[lane - 1][e];
+                cost[lane][e] = used[e] ? cost[lane - 1][e] * penalty : cost[lane - 1][e];
         }
 
         return new BotLanes(cost);

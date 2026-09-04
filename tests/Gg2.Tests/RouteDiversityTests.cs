@@ -71,20 +71,27 @@ public sealed class RouteDiversityTests(ITestOutputHelper output)
     /// <summary>
     /// Four bots asking in turn, with a shared occupancy map and without.
     /// </summary>
-    private static (double Spread, int Distinct) Ask(
+    private static (double Spread, int Distinct, double Cost) Ask(
         NavGraph graph, NavSearch search, in NavQuery query, int from, int to, bool crowded)
     {
         var shared = crowded ? new BotOccupancy() : null;
         var routes = new List<IReadOnlyList<int>>(Askers);
+        var cost = 0.0;
 
         for (var bot = 0; bot < Askers; bot++)
         {
             var route = new List<int>();
 
             if (!search.Find(from, to, query, route, null, shared?.Counts(query.Team)))
-                return (0, 0);
+                return (0, 0, 0);
 
             routes.Add(route);
+
+            // Priced with the graph's OWN costs, like the lane arm: what a
+            // mechanism charges itself is bookkeeping, what it costs the bot is
+            // walking time. Without this the two arms would be quoted in
+            // different currencies and the comparison would say nothing.
+            cost += TrueCost(graph, route);
 
             if (shared is not null)
             {
@@ -94,7 +101,7 @@ public sealed class RouteDiversityTests(ITestOutputHelper output)
             }
         }
 
-        return (RouteDiversity.Spread(routes), RouteDiversity.DistinctRoutes(routes));
+        return (RouteDiversity.Spread(routes), RouteDiversity.DistinctRoutes(routes), cost);
     }
 
     /// <summary>
@@ -236,11 +243,12 @@ public sealed class RouteDiversityTests(ITestOutputHelper output)
         ReferenceTree.RequireNavCache();
 
         output.WriteLine(
-            $"{"graph",-24} {"legs",5} {"occupancy",10} {"lanes",8} {"lane cost",10}");
+            $"{"graph",-24} {"legs",5} {"occupancy",10} {"lanes",8} {"occ cost",9} {"lane cost",10}");
 
         var occAll = 0.0;
         var laneAll = 0.0;
         var inflationAll = 0.0;
+        var occInflationAll = 0.0;
         var maps = 0;
 
         foreach (var (map, area) in NavCache.List(ReferenceTree.NavCacheDirectory))
@@ -255,6 +263,7 @@ public sealed class RouteDiversityTests(ITestOutputHelper output)
             var laneSum = 0.0;
             var baseCost = 0.0;
             var laneCost = 0.0;
+            var occCost = 0.0;
 
             for (var from = 0; from < graph.NodeCount && legs < LegsPerGraph; from += 7)
             {
@@ -295,6 +304,7 @@ public sealed class RouteDiversityTests(ITestOutputHelper output)
 
                     legs++;
                     occSum += crowded.Spread;
+                    occCost += crowded.Cost;
                     laneSum += RouteDiversity.Spread(routes);
                 }
             }
@@ -307,16 +317,20 @@ public sealed class RouteDiversityTests(ITestOutputHelper output)
             laneAll += laneSum / legs;
 
             var inflation = baseCost == 0 ? 1 : laneCost / baseCost;
+            var occInflation = baseCost == 0 ? 1 : occCost / baseCost;
             inflationAll += inflation;
+            occInflationAll += occInflation;
 
             output.WriteLine(
-                $"{map + "_a" + area,-24} {legs,5} {occSum / legs,10:F3} {laneSum / legs,8:F3} {inflation,9:P1}");
+                $"{map + "_a" + area,-24} {legs,5} {occSum / legs,10:F3} {laneSum / legs,8:F3} "
+                + $"{occInflation,8:P1} {inflation,9:P1}");
         }
 
         output.WriteLine(string.Empty);
         output.WriteLine(
-            $"MEAN over {maps} graphs: occupancy {occAll / maps:F3}, lanes {laneAll / maps:F3}, "
-            + $"lane route cost {inflationAll / maps:P1} of lane 0's");
+            $"MEAN over {maps} graphs: spread occupancy {occAll / maps:F3} vs lanes {laneAll / maps:F3}; "
+            + $"route cost occupancy {occInflationAll / maps:P1} vs lanes {inflationAll / maps:P1} "
+            + "of four uncrowded routes");
     }
 
     /// <summary>A route priced with the graph's own edge costs.</summary>

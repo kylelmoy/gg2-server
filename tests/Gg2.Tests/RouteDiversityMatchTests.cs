@@ -306,6 +306,121 @@ public sealed class RouteDiversityMatchTests(ITestOutputHelper output)
             + $"occupancy {occAll / maps.Length:F3}, lanes {laneAll / maps.Length:F3}");
     }
 
+    /// <summary>
+    /// The lane penalty against what it buys and what it costs.
+    /// </summary>
+    /// <remarks>
+    /// <b>Occupancy is far more EFFICIENT than lanes at the first penalty
+    /// tried, and that is what this sweep is for.</b> Measured over 25 graphs:
+    /// occupancy reaches 0.388 leg-level spread for 102.6% of four uncrowded
+    /// routes' cost; lanes at penalty 1.75 reach 0.472 for <b>113.9%</b>. The
+    /// gap is the price of being static — occupancy only diverts where crowding
+    /// actually is and by as little as will do it, where a lane diverts every
+    /// route through a corridor whether anyone is on it or not.
+    /// <para>
+    /// ⚠️ <b>14% is not a rounding error in this repo.</b>
+    /// <c>NavConstants.SearchWeight</c> was chosen inside a ±2% band on
+    /// <c>ScenarioSuiteTests</c>' summed walking time, and 1.5 was rejected for
+    /// costing about 4%. A mechanism that inflates every route by 14% would be a
+    /// large play regression that this file's dispersion score cannot see.
+    /// </para>
+    /// <para>
+    /// So the question is not "do lanes disperse" — they do — but whether a
+    /// gentler penalty keeps the MATCH-level dispersion, where most of the
+    /// spread comes from the objective layer choosing different goals anyway,
+    /// while giving the route cost back.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void WhatTheLanePenaltyBuysAndWhatItCosts()
+    {
+        ReferenceTree.RequireNavCache();
+
+        var maps = NavCache.List(ReferenceTree.NavCacheDirectory)
+            .Where(g => g.Area == 1 && !g.Map.StartsWith("gg_debug", StringComparison.Ordinal))
+            .Select(g => g.Map)
+            .ToArray();
+
+        double[] penalties = [1.10, 1.20, 1.35, 1.75];
+
+        output.WriteLine($"{"penalty",8} {"match spread",13} {"route cost",11}");
+
+        foreach (var penalty in penalties)
+        {
+            var spread = 0.0;
+            var cost = 0.0;
+
+            foreach (var map in maps)
+            {
+                for (var seed = 1u; seed <= Seeds; seed++)
+                    spread += PlayArm(map, seed, Arm.Lanes, penalty).Spread;
+
+                cost += LaneRouteCost(map, penalty);
+            }
+
+            output.WriteLine(
+                $"{penalty,8:F2} {spread / (maps.Length * Seeds),13:F3} {cost / maps.Length,11:P1}");
+        }
+
+        output.WriteLine(string.Empty);
+        output.WriteLine("reference: match spread none 0.634, occupancy 0.785; route cost occupancy 102.6%");
+    }
+
+    /// <summary>
+    /// What one map's lanes cost, against the same routes on lane 0.
+    /// </summary>
+    private static double LaneRouteCost(string map, double penalty)
+    {
+        var graph = NavCache.Load(ReferenceTree.NavCacheDirectory, map, 1);
+        var lanes = BotLanes.Derive(graph, LaneCount, penalty);
+        var search = new NavSearch(graph);
+        var query = new NavQuery(Team.Red);
+        var route = new List<int>();
+
+        double baseCost = 0, laneCost = 0;
+        var legs = 0;
+
+        for (var from = 0; from < graph.NodeCount && legs < 200; from += 7)
+        {
+            for (var to = 0; to < graph.NodeCount && legs < 200; to += 11)
+            {
+                if (from == to || !search.Find(from, to, query, route, null, null, lanes.Costs(0).Span))
+                    continue;
+
+                legs++;
+                var zero = Priced(graph, route);
+                baseCost += zero * LaneCount;
+                laneCost += zero;
+
+                for (var lane = 1; lane < LaneCount; lane++)
+                    if (search.Find(from, to, query, route, null, null, lanes.Costs(lane).Span))
+                        laneCost += Priced(graph, route);
+            }
+        }
+
+        return baseCost == 0 ? 1 : laneCost / baseCost;
+    }
+
+    /// <summary>A route priced with the graph's own edge costs.</summary>
+    private static double Priced(NavGraph graph, IReadOnlyList<int> route)
+    {
+        var total = 0.0;
+
+        for (var i = 1; i < route.Count; i++)
+        {
+            var best = double.PositiveInfinity;
+
+            foreach (var edge in graph.EdgesFrom(route[i - 1]))
+                if (edge.To == route[i] && edge.Cost < best)
+                    best = edge.Cost;
+
+            if (!double.IsPositiveInfinity(best))
+                total += best;
+        }
+
+        return total;
+    }
+
     /// <summary>Which route-variety mechanism a match runs.</summary>
     private enum Arm
     {
@@ -315,7 +430,8 @@ public sealed class RouteDiversityMatchTests(ITestOutputHelper output)
     }
 
     /// <summary>One match under one mechanism, scored.</summary>
-    private static (double Spread, int Samples) PlayArm(string map, uint seed, Arm arm)
+    private static (double Spread, int Samples) PlayArm(
+        string map, uint seed, Arm arm, double penalty = BotLanes.Penalty)
     {
         var options = HeadlessMatchOptions.Default with
         {
@@ -328,7 +444,9 @@ public sealed class RouteDiversityMatchTests(ITestOutputHelper output)
         var match = HeadlessMatch.Load(options, ReferenceTree.MapsDirectory, ReferenceTree.NavCacheDirectory);
 
         var shared = arm == Arm.Occupancy ? new BotOccupancy() : null;
-        var lanes = arm == Arm.Lanes && match.Nav is { } nav ? BotLanes.Derive(nav, LaneCount) : null;
+        var lanes = arm == Arm.Lanes && match.Nav is { } nav
+            ? BotLanes.Derive(nav, LaneCount, penalty)
+            : null;
 
         // Lane by place among the bot's OWN TEAM, never by slot: teams alternate
         // down the roster, so a slot-keyed lane would hand red the even lanes and
