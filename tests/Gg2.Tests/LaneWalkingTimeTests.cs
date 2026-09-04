@@ -32,16 +32,30 @@ namespace Gg2.Tests;
 /// </remarks>
 public sealed class LaneWalkingTimeTests(ITestOutputHelper output)
 {
-    private const int Lanes = 4;
-
+    /// <summary>
+    /// Lane count and penalty swept together, because they are not independent.
+    /// </summary>
+    /// <remarks>
+    /// <b>The penalty COMPOUNDS down the lanes</b> — lane 3 of four carries it
+    /// three times, so at 1.20 the last lane is charging 1.73 for a corridor
+    /// while the first extra lane charges 1.20. Sweeping the penalty with the
+    /// count held at four therefore measured "four lanes, the worst of which is
+    /// very expensive" and called it the penalty's cost. Two lanes penalised
+    /// once is a different mechanism at the same nominal setting.
+    /// </remarks>
     [Fact]
     public void WhatALaneCostsInWalkingTime()
     {
         ReferenceTree.RequireNavCache();
 
         double[] penalties = [1.20, 1.35, 1.75];
+        int[] counts = [2, 3, 4];
 
+        foreach (var lanes in counts)
         foreach (var penalty in penalties)
+            Report(lanes, penalty);
+
+        void Report(int Lanes, double penalty)
         {
             var ticks = new long[Lanes];
             var arrived = new int[Lanes];
@@ -94,21 +108,18 @@ public sealed class LaneWalkingTimeTests(ITestOutputHelper output)
 
             var baseline = ticks[0] == 0 ? 1 : (double)ticks[0];
 
-            output.WriteLine($"penalty {penalty:F2}, {counted} legs finished by every lane");
-
-            for (var lane = 0; lane < Lanes; lane++)
-            {
-                output.WriteLine(
-                    $"  lane {lane}: {ticks[lane],6} ticks  {ticks[lane] / baseline,7:P1}  "
-                    + $"arrived {arrived[lane]}");
-            }
-
             long total = 0;
+            var worstArrivals = int.MaxValue;
+
             foreach (var t in ticks)
                 total += t;
 
-            output.WriteLine($"  mean over lanes: {total / (Lanes * baseline),7:P1} of lane 0");
-            output.WriteLine(string.Empty);
+            foreach (var a in arrived)
+                worstArrivals = Math.Min(worstArrivals, a);
+
+            output.WriteLine(
+                $"lanes {Lanes}, penalty {penalty:F2}: walking {total / (Lanes * baseline),7:P1} of lane 0, "
+                + $"arrivals {worstArrivals}/{arrived[0]} worst lane, {counted} legs common");
         }
     }
 }

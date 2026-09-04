@@ -271,39 +271,51 @@ public sealed class RouteDiversityMatchTests(ITestOutputHelper output)
             .Select(g => g.Map)
             .ToArray();
 
-        output.WriteLine($"{"map",-22} {"none",8} {"occupancy",10} {"lanes",8} {"lanes-occ",10}");
+        output.WriteLine(
+            $"{"map",-22} {"none",7} {"occ",7} {"lanes",7} | {"none infl",10} {"occ infl",9} {"lane infl",10}");
 
-        var noneAll = 0.0;
-        var occAll = 0.0;
-        var laneAll = 0.0;
+        double noneAll = 0, occAll = 0, laneAll = 0;
+        double noneInf = 0, occInf = 0, laneInf = 0;
 
         foreach (var map in maps)
         {
-            double none = 0, occ = 0, lane = 0;
+            double none = 0, occ = 0, lane = 0, ni = 0, oi = 0, li = 0;
 
             for (var seed = 1u; seed <= Seeds; seed++)
             {
-                none += PlayArm(map, seed, Arm.None).Spread;
-                occ += PlayArm(map, seed, Arm.Occupancy).Spread;
-                lane += PlayArm(map, seed, Arm.Lanes).Spread;
+                var a = PlayArm(map, seed, Arm.None);
+                var b = PlayArm(map, seed, Arm.Occupancy);
+                var c = PlayArm(map, seed, Arm.Lanes);
+
+                none += a.Spread;
+                ni += a.Inflation;
+                occ += b.Spread;
+                oi += b.Inflation;
+                lane += c.Spread;
+                li += c.Inflation;
             }
 
-            none /= Seeds;
-            occ /= Seeds;
-            lane /= Seeds;
-
-            noneAll += none;
-            occAll += occ;
-            laneAll += lane;
+            noneAll += none / Seeds;
+            noneInf += ni / Seeds;
+            occAll += occ / Seeds;
+            occInf += oi / Seeds;
+            laneAll += lane / Seeds;
+            laneInf += li / Seeds;
 
             output.WriteLine(
-                $"{map,-22} {none,8:F3} {occ,10:F3} {lane,8:F3} {lane - occ,10:+0.000;-0.000}");
+                $"{map,-22} {none / Seeds,7:F3} {occ / Seeds,7:F3} {lane / Seeds,7:F3} | "
+                + $"{ni / Seeds,10:P1} {oi / Seeds,9:P1} {li / Seeds,10:P1}");
         }
+
+        var n = maps.Length;
 
         output.WriteLine(string.Empty);
         output.WriteLine(
-            $"MEAN over {maps.Length} maps: none {noneAll / maps.Length:F3}, "
-            + $"occupancy {occAll / maps.Length:F3}, lanes {laneAll / maps.Length:F3}");
+            $"MEAN over {n} maps  spread: none {noneAll / n:F3}, occupancy {occAll / n:F3}, "
+            + $"lanes {laneAll / n:F3}");
+        output.WriteLine(
+            $"                inflation: none {noneInf / n:P1}, occupancy {occInf / n:P1}, "
+            + $"lanes {laneInf / n:P1}");
     }
 
     /// <summary>
@@ -341,25 +353,24 @@ public sealed class RouteDiversityMatchTests(ITestOutputHelper output)
             .Select(g => g.Map)
             .ToArray();
 
-        double[] penalties = [1.10, 1.20, 1.35, 1.75];
+        double[] penalties = [1.20, 1.35, 1.75];
+        int[] counts = [2, 3, 4];
 
-        output.WriteLine($"{"penalty",8} {"match spread",13} {"route cost",11}");
+        output.WriteLine($"{"lanes",6} {"penalty",8} {"match spread",13}");
 
-        foreach (var penalty in penalties)
+        foreach (var lanes in counts)
         {
-            var spread = 0.0;
-            var cost = 0.0;
-
-            foreach (var map in maps)
+            foreach (var penalty in penalties)
             {
-                for (var seed = 1u; seed <= Seeds; seed++)
-                    spread += PlayArm(map, seed, Arm.Lanes, penalty).Spread;
+                var spread = 0.0;
 
-                cost += LaneRouteCost(map, penalty);
+                foreach (var map in maps)
+                    for (var seed = 1u; seed <= Seeds; seed++)
+                        spread += PlayArm(map, seed, Arm.Lanes, penalty, lanes).Spread;
+
+                output.WriteLine(
+                    $"{lanes,6} {penalty,8:F2} {spread / (maps.Length * Seeds),13:F3}");
             }
-
-            output.WriteLine(
-                $"{penalty,8:F2} {spread / (maps.Length * Seeds),13:F3} {cost / maps.Length,11:P1}");
         }
 
         output.WriteLine(string.Empty);
@@ -430,8 +441,8 @@ public sealed class RouteDiversityMatchTests(ITestOutputHelper output)
     }
 
     /// <summary>One match under one mechanism, scored.</summary>
-    private static (double Spread, int Samples) PlayArm(
-        string map, uint seed, Arm arm, double penalty = BotLanes.Penalty)
+    private static (double Spread, int Samples, double Inflation) PlayArm(
+        string map, uint seed, Arm arm, double penalty = BotLanes.Penalty, int laneCount = LaneCount)
     {
         var options = HeadlessMatchOptions.Default with
         {
@@ -445,7 +456,7 @@ public sealed class RouteDiversityMatchTests(ITestOutputHelper output)
 
         var shared = arm == Arm.Occupancy ? new BotOccupancy() : null;
         var lanes = arm == Arm.Lanes && match.Nav is { } nav
-            ? BotLanes.Derive(nav, LaneCount, penalty)
+            ? BotLanes.Derive(nav, laneCount, penalty)
             : null;
 
         // Lane by place among the bot's OWN TEAM, never by slot: teams alternate
@@ -468,17 +479,31 @@ public sealed class RouteDiversityMatchTests(ITestOutputHelper output)
             placed[team] = place + 1;
 
             bot.Lanes = lanes;
-            bot.Lane = BotRoles.Lane(place, LaneCount);
+            bot.Lane = BotRoles.Lane(place, laneCount);
         }
 
         return Sample(match);
     }
 
     /// <summary>Steps a prepared match, scoring each team's routes as it goes.</summary>
-    private static (double Spread, int Samples) Sample(HeadlessMatch match)
+    /// <remarks>
+    /// <b>Inflation is measured here and not on the scenario suite, because the
+    /// scenario suite cannot see occupancy at all.</b> Those legs run ONE bot, so
+    /// an occupancy map has nothing in it and the arm scores exactly 100% — which
+    /// would have let lanes be charged a walking-time cost that occupancy was
+    /// never charged. Each installed route is priced against the cheapest route
+    /// between its OWN endpoints on the untouched graph, so both mechanisms are
+    /// quoted in the same units in the same matches.
+    /// </remarks>
+    private static (double Spread, int Samples, double Inflation) Sample(HeadlessMatch match)
     {
         var total = 0.0;
         var samples = 0;
+        var inflation = 0.0;
+        var priced = 0;
+
+        var search = match.Nav is null ? null : new NavSearch(match.Nav);
+        var ideal = new List<int>();
 
         for (var tick = 0; tick < Ticks; tick++)
         {
@@ -507,10 +532,34 @@ public sealed class RouteDiversityMatchTests(ITestOutputHelper output)
 
                 total += RouteDiversity.Spread(routes);
                 samples++;
+
+                if (search is null || match.Nav is not { } nav)
+                    continue;
+
+                foreach (var route in routes)
+                {
+                    if (route.Count < 2)
+                        continue;
+
+                    // The honest cheapest route between the same two nodes: no
+                    // lane, no occupancy, no blacklist.
+                    if (!search.Find(route[0], route[^1], new NavQuery(team), ideal))
+                        continue;
+
+                    var best = Priced(nav, ideal);
+                    if (best <= 0)
+                        continue;
+
+                    inflation += Priced(nav, route) / best;
+                    priced++;
+                }
             }
         }
 
-        return (samples == 0 ? 0 : total / samples, samples);
+        return (
+            samples == 0 ? 0 : total / samples,
+            samples,
+            priced == 0 ? 1 : inflation / priced);
     }
 
     /// <summary>One match with every bot's lateral goal offset scaled.</summary>
