@@ -3187,6 +3187,18 @@ in which the class set changed. **A test that is already red gates nothing**, an
 a change landing behind one is unreviewed however green the suite looks
 afterwards — the same shape as a filter that passes by discarding everything.
 
+⛔ **A THIRD DIRECTION, and it is the worst of them.** This repo already tracks
+two ways a check stops checking: it can pass for a reason unconnected to its name
+(the vacuous dkoth gate, the Arena rounds), and it can be unsatisfiable by the
+right evidence. **A check can also FAIL for a reason unconnected to its name**,
+and that one hides best — a red test reads as a known problem on its way to being
+fixed, so nobody asks what it stopped covering while it sat there. A green suite
+gets audited; a red test gets a ticket. **When a test is red for an unrelated
+reason, everything it used to gate is unguarded until it is green again** — so on
+fixing one, look at what changed underneath it rather than just at the fix.
+Named by the `gg2-rl` lane, which hit the first shape and this one on the same
+day from opposite ends.
+
 ✅ The test now asserts its own premise (`PolicyController.IsTrained` is false
 for each class it drives) and says what to do if it fails: pick classes that are
 actually untrained rather than deleting the assertion. **A hard-coded list
