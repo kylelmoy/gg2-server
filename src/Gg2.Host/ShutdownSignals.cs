@@ -7,14 +7,14 @@ namespace Gg2.Host;
 /// Turns a process signal into the same graceful stop that Ctrl+C already gets.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>This exists for deployment, not for interactive use.</b>
+/// <b>This exists for deployment, not for interactive use.</b>
 /// <c>Console.CancelKeyPress</c> covers Ctrl+C — SIGINT on Linux, a console
 /// control event on Windows — and that is the only way anybody stops a server
 /// they are watching. It is <em>not</em> how a service is stopped: systemd's
 /// default <c>KillSignal</c> is SIGTERM and <c>docker stop</c> sends SIGTERM
 /// too, and neither reaches <c>CancelKeyPress</c>.
 /// <para>
-/// ⚠️ <b>What an ungraceful stop actually costs</b>, since "the process exits
+/// <b>What an ungraceful stop actually costs</b>, since "the process exits
 /// either way" is the reason this is easy to skip. <c>GameServer.Dispose</c> is
 /// only reached on the graceful path, and it does three things nothing else
 /// does: it takes the lobby listing down (otherwise the server keeps being
@@ -50,7 +50,7 @@ internal static class ShutdownSignals
     /// without raising a real signal at the test host.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b><see cref="PosixSignalContext.Cancel"/> must be set.</b> It
+    /// <b><see cref="PosixSignalContext.Cancel"/> must be set.</b> It
     /// suppresses the runtime's <em>default</em> action for the signal, which
     /// for SIGTERM is to terminate the process — so without it the cancellation
     /// below races the process going away, and the graceful path it exists to

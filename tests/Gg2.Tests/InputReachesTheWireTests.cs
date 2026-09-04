@@ -9,7 +9,7 @@ namespace Gg2.Tests;
 /// The tick's broadcast carries THIS tick's input, as the reference's does.
 /// </summary>
 /// <remarks>
-/// ⛔ <b>Nothing checked this, and a comment claimed it was checked.</b>
+/// <b>Nothing checked this, and a comment claimed it was checked.</b>
 /// <c>GameServer.Tick</c> says the broadcast/simulate order is "the pairing
 /// <c>docs/PARITY.md</c>'s replayer calls <c>UpdatesPrecedeTheirTick</c>" — but
 /// that is a <c>Gg2.Parity.Replayer</c> option for interpreting traces recorded
@@ -17,7 +17,7 @@ namespace Gg2.Tests;
 /// The claim named a real thing that was not the thing claimed, which is the
 /// exact failure shape <c>CLAUDE.md</c> keeps recording.
 /// <para>
-/// ⛔ <b>Why a one-tick slip here is invisible and expensive.</b> Every client
+/// <b>Why a one-tick slip here is invisible and expensive.</b> Every client
 /// dead-reckons each character from the last keys it heard until the next
 /// position update, which is every 7th tick. If the wire carries keys one tick
 /// stale, every client extrapolates from the wrong input for most of every gap.
@@ -26,7 +26,7 @@ namespace Gg2.Tests;
 /// indistinguishable from lag from the client's seat.
 /// </para>
 /// <para>
-/// ⚠️ <b>The reference, for comparison.</b> <c>processClientCommands</c> writes
+/// <b>The reference, for comparison.</b> <c>processClientCommands</c> writes
 /// <c>keyState</c> straight onto the character
 /// (<c>GameServerBeginStep.gml:52</c>), and <c>serializeState(INPUTSTATE)</c>
 /// runs after it at line 66. This port stores client input in
@@ -34,7 +34,7 @@ namespace Gg2.Tests;
 /// <c>CharacterState.KeyState</c> until <c>MatchSimulation.Tick</c>.
 /// </para>
 /// <para>
-/// ⚠️ <b>Read off the WIRE, never off the world.</b> Inspecting
+/// <b>Read off the WIRE, never off the world.</b> Inspecting
 /// <c>KeyState</c> after <c>Tick()</c> returns answers a different question — it
 /// reports the end-of-tick state, and the whole question is what the broadcast
 /// carried part-way through.
@@ -81,7 +81,7 @@ public sealed class InputReachesTheWireTests
     }
 
     /// <summary>
-    /// ⛔ The whole question in one assertion: press a key, tick once, and ask
+    /// The whole question in one assertion: press a key, tick once, and ask
     /// what the wire said on that tick.
     /// </summary>
     [Fact]
@@ -103,7 +103,7 @@ public sealed class InputReachesTheWireTests
         harness.Tick(4);
         client.Take(client.Received.Count);
 
-        // ⚠️ Not vacuous: the quiet baseline has to actually read as "no keys",
+        // Not vacuous: the quiet baseline has to actually read as "no keys",
         // or an assertion that RIGHT appears proves nothing about timing.
         client.SendInputState(new PlayerInput { Keys = PlayerKeys.None });
         harness.Tick(1);
@@ -129,11 +129,11 @@ public sealed class InputReachesTheWireTests
     }
 
     /// <summary>
-    /// ⛔ The same question with the SOCKET REMOVED, which is what makes the
+    /// The same question with the SOCKET REMOVED, which is what makes the
     /// answer about ordering rather than about the network.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The client test above cannot distinguish two explanations</b>: the
+    /// <b>The client test above cannot distinguish two explanations</b>: the
     /// broadcast being built from a stale keystate, or the client's bytes simply
     /// not having arrived before <c>ServiceClients</c> ran on that tick. TCP on
     /// loopback is usually immediate and is not guaranteed to be.

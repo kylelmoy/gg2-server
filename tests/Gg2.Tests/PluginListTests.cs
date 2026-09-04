@@ -8,7 +8,7 @@ namespace Gg2.Tests;
 /// per-player table every plugin keeps its state in.
 /// </summary>
 /// <remarks>
-/// ⚠️ The advertised string is the entire binding between the two halves of a
+/// The advertised string is the entire binding between the two halves of a
 /// plugin: the client splits it on <c>,</c> then on <c>@</c>, downloads each
 /// zip by hash, and gives each plugin the <b>index</b> it appeared at as its
 /// packet id. Nothing on the wire names a plugin afterwards, so a formatting
@@ -67,7 +67,7 @@ public sealed class PluginListTests
     }
 
     /// <summary>
-    /// ⚠️ A duplicate is refused rather than deduplicated, because the ids are
+    /// A duplicate is refused rather than deduplicated, because the ids are
     /// positional: two entries with one name would give one plugin two ids on
     /// the client and one on the server.
     /// </summary>
@@ -120,7 +120,7 @@ public sealed class PluginListTests
     /// commas.
     /// </summary>
     /// <remarks>
-    /// ⚠️ No space after the comma. The client splits on <c>,</c> and uses each
+    /// No space after the comma. The client splits on <c>,</c> and uses each
     /// piece as a name, so " chat_v2_pr" would be downloaded as a plugin called
     /// " chat_v2_pr" and 404.
     /// </remarks>
@@ -139,7 +139,7 @@ public sealed class PluginListTests
     // --- hash resolution -----------------------------------------------------
 
     /// <summary>
-    /// ⛔ The divergence from <c>getpluginhashes.gml</c>, and the reason for it.
+    /// The divergence from <c>getpluginhashes.gml</c>, and the reason for it.
     /// </summary>
     /// <remarks>
     /// The reference always asks the site. This port prefers the hash its C#
@@ -148,7 +148,7 @@ public sealed class PluginListTests
     /// still the site's GML — so fetching "latest" would hand the clients a
     /// plugin the server may no longer agree with.
     /// <para>
-    /// ⚠️ <b>This test is also what stops the pin going stale silently.</b> If
+    /// <b>This test is also what stops the pin going stale silently.</b> If
     /// the catalogue's hash is ever changed, this fails and names it.
     /// </para>
     /// </remarks>
@@ -184,7 +184,7 @@ public sealed class PluginListTests
     /// implementation's own pin is reported rather than swallowed.
     /// </summary>
     /// <remarks>
-    /// ⚠️ This is the one condition under which the two halves of a plugin are
+    /// This is the one condition under which the two halves of a plugin are
     /// running different protocols, and nothing else in the system would notice
     /// — the packets have no version field.
     /// </remarks>
@@ -234,7 +234,7 @@ public sealed class PluginListTests
     // --- the per-player table ------------------------------------------------
 
     /// <summary>
-    /// ⛔ The trap <see cref="PluginPlayerTable{T}"/> exists for: a removal
+    /// The trap <see cref="PluginPlayerTable{T}"/> exists for: a removal
     /// COMPACTS, so state indexed by slot has to move with it.
     /// </summary>
     /// <remarks>
@@ -258,7 +258,7 @@ public sealed class PluginListTests
 
         Assert.Equal(2, table.Count);
         Assert.Equal(0, table[0]);
-        Assert.Equal(2, table[1]);   // ⚠️ slot 2's state, now at slot 1
+        Assert.Equal(2, table[1]);   // slot 2's state, now at slot 1
         Assert.False(table.Has(2));
     }
 

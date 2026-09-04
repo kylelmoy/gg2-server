@@ -8,14 +8,13 @@ namespace Gg2.Bots;
 /// the scripted layer keeps routing, objectives and class behaviour.
 /// </summary>
 /// <remarks>
-/// ⛔ <b>This is the seam a new bot implementation drops into.</b> Before it
-/// existed, "another way to fight" meant a near-copy of <c>PolicyBot</c> — the
-/// gate, the intel carve-out, the "scripted thinks every tick" rule, the aim
-/// resync and five counters, all restated — and <c>SearchBot</c> was exactly that
-/// copy. <b>Everything on that list is <see cref="HybridBot"/>'s now</b>, and a
-/// new controller implements the six members below.
+/// <b>This is the seam a new bot implementation drops into.</b> Everything a
+/// combat controller needs beyond an <c>IInputSource</c> — the handover gate, the
+/// intel carve-out, the "scripted thinks every tick" rule, the aim resync and the
+/// counters — lives on <see cref="HybridBot"/>, and a new controller implements
+/// the six members below.
 /// <para>
-/// ⚠️ <b>The controller owns its own decision CADENCE, and that is not a
+/// <b>The controller owns its own decision CADENCE, and that is not a
 /// convenience.</b> <c>ActionDecoder</c> emits the jump bit only on the first tick
 /// of a decision, so the held ticks are a <em>different decode of the same
 /// action</em> rather than a repeat of one <c>PlayerInput</c>. A gate that counted
@@ -25,13 +24,13 @@ namespace Gg2.Bots;
 /// <see cref="AtDecisionBoundary"/> and never counts.
 /// </para>
 /// <para>
-/// ⛔ <b>An implementation must not draw from <c>WorldState.Random</c></b> — the
+/// <b>An implementation must not draw from <c>WorldState.Random</c></b> — the
 /// match's stream is observable simulation, and a bot drawing from it makes the
 /// stream's position depend on how many bots were thinking. CLAUDE.md's first bot
 /// rule, and it applies here exactly as it does to <c>ScriptedBot</c>.
 /// </para>
 /// <para>
-/// ⚠️ <b>No allocation per poll.</b> Interface dispatch is free; a
+/// <b>No allocation per poll.</b> Interface dispatch is free; a
 /// <c>float[]</c> per decision is not. Allocate in the constructor.
 /// </para>
 /// </remarks>
@@ -42,9 +41,9 @@ public interface IMicroController
     /// a bench column.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>An arm nobody can name in a result table is an arm nobody can
-    /// report.</b> The bench printed "hybrid" for two different controllers until
-    /// this existed.
+    /// <b>An arm nobody can name in a result table is an arm nobody can
+    /// report.</b> Without it, a bench prints "hybrid" for two different
+    /// controllers.
     /// </remarks>
     string Name { get; }
 
@@ -52,48 +51,40 @@ public interface IMicroController
     /// What one DECISION costs, in <b>microseconds</b>.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>Microseconds, and that is a correction.</b> This was "a relative cost
-    /// per DECISION, 1 is the unit", with the two shipped controllers at 4 and 1 —
-    /// <b>a 4:1 ratio where the measured one is about 695:1</b>. A policy decision
-    /// is 6.9 µs (2.2 extracting the observation, 4.7 in the forward pass); a
-    /// search decision at twelve live characters is 4,795 µs. An arbiter budgeting
-    /// in the old units would have admitted four policy decisions as the price of
-    /// one search and been wrong by more than two orders of magnitude.
+    /// <b>Microseconds, not an arbitrary relative unit.</b> A policy decision is
+    /// 6.9 µs (2.2 extracting the observation, 4.7 in the forward pass); a search
+    /// decision at twelve live characters is 4,795 µs — a 695:1 ratio. An arbiter
+    /// budgeting in coarse relative units (say 4 and 1) would admit four policy
+    /// decisions as the price of one search and be wrong by more than two orders
+    /// of magnitude.
     /// <para>
-    /// ⚠️ <b>Found by measuring, on the day after it was written, and it had a
-    /// comment saying it was not a measurement.</b> Saying so is not enough when
-    /// the numbers are also the arbiter's arithmetic —
-    /// <c>tools/bench/README.md</c> trap 7 is this exact shape.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>A microsecond unit makes a budget mean something.</b> The tick is
+    /// <b>A microsecond unit makes a budget mean something.</b> The tick is
     /// 33,300 µs, so <c>--bot-arbiter 10000</c> is "ten milliseconds of controller
-    /// work a tick" and caps concurrent search decisions at two. In the old units
-    /// the number named nothing.
+    /// work a tick" and caps concurrent search decisions at two.
     /// </para>
     /// <para>
-    /// ⛔ <b>A constant cannot be right for the search, and this is the honest
+    /// <b>A constant cannot be right for the search, and this is the honest
     /// approximation rather than a claim.</b> A rollout re-simulates every live
     /// character for every tick of every candidate, so its cost scales with
     /// POPULATION, horizon and candidate count — <c>BENCH_SEARCH</c> shows
-    /// 2.47 ms at two characters against 7.64 ms at twelve on an earlier build.
-    /// The value below names the configuration it was measured at. <b>Re-measure
-    /// with <c>BENCH_SEARCH</c> and <c>BENCH_POLICYCOST</c> before trusting a
-    /// budget derived from it.</b>
+    /// 2.47 ms at two characters against 7.64 ms at twelve. The value below names
+    /// the configuration it was measured at. <b>Re-measure with
+    /// <c>BENCH_SEARCH</c> and <c>BENCH_POLICYCOST</c> before trusting a budget
+    /// derived from it.</b>
     /// </para>
     /// <para>
-    /// ⚠️ The default of 1 belongs to a controller that has not measured itself —
+    /// The default of 1 belongs to a controller that has not measured itself —
     /// a stub or a test double. A real one overrides it.
     /// </para>
     /// <para>
-    /// ⚠️ <b>It takes the live character count because cost is not a constant.</b>
+    /// <b>It takes the live character count because cost is not a constant.</b>
     /// A rollout re-simulates every live character for every tick of every
     /// candidate, so its cost is affine in the population — measured, see
     /// <c>SearchController</c>. A controller whose cost really is flat (a policy
     /// forward pass is a fixed-size network) simply ignores the argument.
     /// </para>
     /// <para>
-    /// ⛔ <b>Only the RATIO between controllers is ever used</b>, by
+    /// <b>Only the RATIO between controllers is ever used</b>, by
     /// <c>DecisionQuotaArbiter</c>: <c>cost &lt;= budget - spent</c>. Nothing reads
     /// the absolute scale, which is why a number measured on one machine is still
     /// useful on another — see <c>MicroBudgetController</c>, which calibrates the
@@ -106,7 +97,7 @@ public interface IMicroController
     /// Whether this controller may drive a character of this class at all.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Asked every tick, not once at construction</b>, because a class can
+    /// <b>Asked every tick, not once at construction</b>, because a class can
     /// change mid-match and the wrapper cannot be rebuilt when it does. A class
     /// this refuses falls back to the scripted layer ENTIRELY rather than being
     /// refused a body — the scripted layer is a complete bot on its own.
@@ -118,7 +109,7 @@ public interface IMicroController
     /// one already taken.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Control changes hands only here.</b> Two controllers with independent
+    /// <b>Control changes hands only here.</b> Two controllers with independent
     /// cadences flap against each other at the gate's threshold, and each holds
     /// state the other does not maintain — the scripted layer's follower, a
     /// decoder's absolute aim.
@@ -130,7 +121,7 @@ public interface IMicroController
     /// engagement.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>This is where absolute aim is resynchronised, and skipping it is
+    /// <b>This is where absolute aim is resynchronised, and skipping it is
     /// silent.</b> The scripted layer writes the character's bearing directly, so
     /// a controller carrying the bearing from the last engagement turns from
     /// somewhere nobody is pointing — in exactly the decisions a handover exists
@@ -142,7 +133,7 @@ public interface IMicroController
     /// Called on every handover OUT, when the scripted layer takes the wheel back.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The two shipped controllers answer this differently and both are
+    /// <b>The two shipped controllers answer this differently and both are
     /// right.</b> <see cref="PolicyController"/> abandons its part-finished
     /// decision, so a re-entry starts a fresh one; <see cref="SearchController"/>
     /// leaves <c>RolloutSearch</c>'s counter alone, so a re-entry waits for the
@@ -160,7 +151,7 @@ public interface IMicroController
     /// decision already taken.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>This is the expensive event and it is not "the controller drove".</b>
+    /// <b>This is the expensive event and it is not "the controller drove".</b>
     /// A controller drives every tick of a decision and decides on one of them, so
     /// counting ticks it drove over-reports the cost by the decision length. A
     /// tick-budget question needs the count of DECISIONS that coincided.

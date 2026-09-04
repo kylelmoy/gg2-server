@@ -10,7 +10,7 @@ namespace Gg2.Server;
 /// <c>uint</c> length and then streams the file; <c>:8-24</c> is the rate-limited
 /// pump that follows.
 /// <para>
-/// ⚠️ <b>Only reachable for a map the client does NOT have built in.</b> The
+/// <b>Only reachable for a map the client does NOT have built in.</b> The
 /// server advertises an empty MD5 for one of <see cref="Gg2.Maps.InternalMaps"/>'
 /// 22, and the reference's own guard (<c>advertisedMapMd5 != ""</c>) then refuses
 /// to serve it. So the whole path turns on that list being right.
@@ -24,7 +24,7 @@ public static class MapDownload
     /// </summary>
     /// <remarks>
     /// <c>game_init.gml:94</c>, "Total bandwidth limit for map downloads in bytes
-    /// per second", default 50000. ⚠️ <b>Total, not per client</b> — the
+    /// per second", default 50000. <b>Total, not per client</b> — the
     /// reference divides it by the number of running downloads.
     /// </remarks>
     public const int DefaultBytesPerSecond = 50000;
@@ -43,7 +43,7 @@ public static class MapDownload
     /// A map file's MD5, in the form the client compares against.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>32 LOWERCASE hex characters, and this is measured rather than
+    /// <b>32 LOWERCASE hex characters, and this is measured rather than
     /// assumed.</b> <c>CustomMapGetMapMD5</c> calls <c>GG2DLL_compute_MD5</c>,
     /// which is a compiled extension — but its source ships in the reference at
     /// <c>Extensions/GG2DLL/GG2DLL/GG2DLL.cpp:485-516</c>, and it formats the
@@ -59,7 +59,7 @@ public static class MapDownload
 /// One client's in-progress map download.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>The budget is a real, not an integer, and it accumulates.</b> The
+/// <b>The budget is a real, not an integer, and it accumulates.</b> The
 /// reference carries <c>cumulativeMapBytes</c> as a fractional per-tick share and
 /// only sends once at least <see cref="MapDownload.MinimumChunk"/> has built up.
 /// Rounding the share to an integer per tick would stall a slow download
@@ -105,7 +105,7 @@ public sealed class MapTransfer
             return default;
 
         // serviceJoiningPlayer.gml:15 — round(min(max(remaining, 400), budget)).
-        // ⚠️ The max() is INSIDE the min(), so the floor of 400 applies to the
+        // The max() is INSIDE the min(), so the floor of 400 applies to the
         // server-wide remainder and not to the result: a nearly exhausted budget
         // still sends 400 rather than dribbling. Transcribed in that order.
         var allowed = Math.Round(Math.Min(Math.Max(remainingThisTick, MapDownload.MinimumChunk), _budget));

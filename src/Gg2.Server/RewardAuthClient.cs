@@ -8,7 +8,7 @@ namespace Gg2.Server;
 /// One completed auth check, waiting to be applied on the tick thread.
 /// </summary>
 /// <param name="Player">
-/// The roster entry that asked. ⛔ <b>The entry object, never its index.</b> A
+/// The roster entry that asked. <b>The entry object, never its index.</b> A
 /// slot index is a roster index and every <c>PLAYER_LEAVE</c> compacts them, so
 /// an index captured before an auth round trip names a different player by the
 /// time it comes back — and the wrong player would be handed somebody else's
@@ -30,7 +30,7 @@ public readonly record struct RewardAuthResult(RosterEntry Player, string? Rewar
 /// network, so it is kept as thin as it can be — the same split
 /// <see cref="LobbyAnnouncer"/> uses, for the same reason.
 /// <para>
-/// ⚠️ <b>Constructed only when <c>--rewards</c> was passed, and that defaults
+/// <b>Constructed only when <c>--rewards</c> was passed, and that defaults
 /// off.</b> Turning it on makes this server open outbound TCP connections to a
 /// third party carrying its players' user ids. That is a decision for whoever
 /// runs the server, not a default a binary should assume on their behalf, and it
@@ -38,7 +38,7 @@ public readonly record struct RewardAuthResult(RosterEntry Player, string? Rewar
 /// phases.
 /// </para>
 /// <para>
-/// ⚠️ <b>Every failure is swallowed and logged.</b> An unreachable auth server,
+/// <b>Every failure is swallowed and logged.</b> An unreachable auth server,
 /// a timeout, a refused connection — none of it is a reason to disturb a match,
 /// and the consequence is exactly that somebody's hat does not appear.
 /// </para>
@@ -55,7 +55,7 @@ public sealed class RewardAuthClient : IDisposable
     /// How long one check may take before it is abandoned.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>No equivalent in the reference, and it is needed here.</b>
+    /// <b>No equivalent in the reference, and it is needed here.</b>
     /// <c>RewardAuthChecker</c> is driven by a Step event that also drives the
     /// game, so a hung connection there stalls in a place somebody notices. A
     /// background task has no such witness: without a deadline one unanswered
@@ -84,7 +84,7 @@ public sealed class RewardAuthClient : IDisposable
         _host = host;
         _port = port;
 
-        // ⚠️ LongRunning, so this gets a dedicated thread rather than a pool
+        // LongRunning, so this gets a dedicated thread rather than a pool
         // slot. The pump spends its life parked on a blocking queue take and
         // then on network I/O, which is exactly what starves on a busy pool —
         // observed as an intermittent failure of the end-to-end test under the
@@ -102,7 +102,7 @@ public sealed class RewardAuthClient : IDisposable
     /// Queues one check.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A full queue drops the request rather than blocking</b>, which is
+    /// <b>A full queue drops the request rather than blocking</b>, which is
     /// <c>rewardAuthStart.gml</c>'s own behaviour and is also the only safe
     /// choice here: this runs on the tick thread, and a blocking add would stall
     /// the whole match behind a slow third party.
@@ -117,7 +117,7 @@ public sealed class RewardAuthClient : IDisposable
     /// Hands back everything that finished since the last call.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>Drained on the tick thread and applied there.</b> The results carry
+    /// <b>Drained on the tick thread and applied there.</b> The results carry
     /// roster entries and produce broadcasts; touching either from the pump task
     /// would be a data race against the whole server.
     /// </remarks>
@@ -152,7 +152,7 @@ public sealed class RewardAuthClient : IDisposable
             var stream = socket.GetStream();
             await stream.WriteAsync(request, deadline.Token).ConfigureAwait(false);
 
-            // ⚠️ The auth server answers by writing a body and CLOSING — there is
+            // The auth server answers by writing a body and CLOSING — there is
             // no length and no status code, so end-of-stream is the only
             // terminator there is. Reading a fixed number of bytes instead would
             // either truncate a long reward list or hang for ever on a short one.

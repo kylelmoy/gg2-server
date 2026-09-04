@@ -13,7 +13,7 @@ namespace Gg2.Server;
 /// aspirational, and it is why the server has one input-gathering path instead
 /// of a branch on <c>isBot</c>.
 /// <para>
-/// ⚠️ <b>It ignores the world and the tick, and holding the last input is the
+/// <b>It ignores the world and the tick, and holding the last input is the
 /// point.</b> <c>processClientCommands.gml:267</c> writes <c>keyState</c> when
 /// the packet arrives and nothing clears it, so a player whose packet was lost
 /// or delayed keeps pressing what they last pressed — the client dead-reckons

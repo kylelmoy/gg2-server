@@ -21,7 +21,7 @@ public class DeploymentTests
     /// SIGTERM stops the server the same way Ctrl+C does, rather than killing it.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>The <c>Cancel</c> assertion is the load-bearing half.</b> Cancelling
+    /// <b>The <c>Cancel</c> assertion is the load-bearing half.</b> Cancelling
     /// the token without it leaves the runtime's default action in place, so the
     /// process is terminated while <c>Run</c> is still unwinding and
     /// <c>GameServer.Dispose</c> — the lobby takedown, the <c>.part</c> recording
@@ -64,18 +64,15 @@ public class DeploymentTests
     /// A server told to run bots with no nav directory at all says so at startup.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The silent case, and the one a deployment hits.</b>
+    /// <b>The silent case, and the one a deployment hits.</b>
     /// <c>BotPopulationService.MapChanged</c> already logs "no nav cache for
     /// &lt;map&gt;" when a directory is configured and one map misses — but an
     /// EMPTY <c>NavCacheDirectory</c> never enters that branch, so the whole
     /// feature failing was quieter than one map failing.
     /// <para>
-    /// ⚠️ <b>When this was written it was the DEFAULT outcome of deploying</b>,
-    /// because <c>nav/</c> was 34 MB and shipped only behind
-    /// <c>-p:PublishNav=true</c>. Gzipping the graphs to 1.2 MB removed the flag
-    /// and with it the default; the warning stays because the state is still
-    /// reachable — an empty <c>GG2_NAVCACHE</c>, or a binary copied without its
-    /// directory. docs/DEPLOY.md, "the nav graphs".
+    /// The state is reachable via an empty <c>GG2_NAVCACHE</c>, or a binary
+    /// copied without its <c>nav/</c> directory. docs/DEPLOY.md, "the nav
+    /// graphs".
     /// </para>
     /// </remarks>
     [Fact]
@@ -93,7 +90,7 @@ public class DeploymentTests
     }
 
     /// <summary>
-    /// ⚠️ The control arm: a configured nav directory must NOT produce it.
+    /// The control arm: a configured nav directory must NOT produce it.
     /// </summary>
     /// <remarks>
     /// Without this the warning could be unconditional and the test above would
@@ -119,7 +116,7 @@ public class DeploymentTests
     }
 
     /// <summary>
-    /// ⚠️ And the other control arm: a server with bots OFF says nothing either,
+    /// And the other control arm: a server with bots OFF says nothing either,
     /// however the nav directory is set.
     /// </summary>
     [Fact]

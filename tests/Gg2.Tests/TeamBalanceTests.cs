@@ -38,7 +38,7 @@ public sealed class TeamBalanceTests
         state.RespawnTime = 5 * 30;
         state.Autobalance = autobalance;
 
-        // ⚠️ Not optional: a zeroed buffer means every class is full and every
+        // Not optional: a zeroed buffer means every class is full and every
         // team change goes through checkClasslimits' random pick.
         for (var i = 0; i < TeamBalance.ClassCount; i++)
             state.ClassLimits[i] = 255;
@@ -79,7 +79,7 @@ public sealed class TeamBalanceTests
     // --- the threshold --------------------------------------------------------
 
     /// <summary>
-    /// ⚠️ Two apart, not one — an odd roster is never "unbalanced".
+    /// Two apart, not one — an odd roster is never "unbalanced".
     /// </summary>
     [Theory]
     [InlineData(1, 1, false)]
@@ -139,7 +139,7 @@ public sealed class TeamBalanceTests
     }
 
     /// <summary>
-    /// ⚠️ Arena is excluded and balances between rounds instead; a decided round
+    /// Arena is excluded and balances between rounds instead; a decided round
     /// is excluded too, so nobody is moved during the victory screen.
     /// </summary>
     [Theory]
@@ -166,7 +166,7 @@ public sealed class TeamBalanceTests
     // --- the two stages -------------------------------------------------------
 
     /// <summary>
-    /// ⚠️ The first call only <em>warns</em>. Nobody moves until the fuse has
+    /// The first call only <em>warns</em>. Nobody moves until the fuse has
     /// burnt for the respawn time plus two seconds.
     /// </summary>
     [Fact]
@@ -212,7 +212,7 @@ public sealed class TeamBalanceTests
     }
 
     /// <summary>
-    /// ⚠️ The fuse burns only while a notice is outstanding — a balanced server
+    /// The fuse burns only while a notice is outstanding — a balanced server
     /// keeps its counter at zero.
     /// </summary>
     [Fact]
@@ -230,7 +230,7 @@ public sealed class TeamBalanceTests
     }
 
     /// <summary>
-    /// ⚠️ Teams that even out on their own cancel the outstanding notice — the
+    /// Teams that even out on their own cancel the outstanding notice — the
     /// counter and the flag both reset.
     /// </summary>
     [Fact]
@@ -284,7 +284,7 @@ public sealed class TeamBalanceTests
         Assert.True(events.Balanced[2]);
         Assert.Equal(Team.Blue, state.Players[2].Team);
 
-        // ⚠️ The respawn is armed only for a player who had a character:
+        // The respawn is armed only for a player who had a character:
         // `alarm[5]` is set *inside* `if(balanceplayer.object != -1)`. A player
         // already waiting to respawn keeps the timer their death started.
         Assert.Equal(Timers.Inactive, state.Players[2].RespawnTimer);
@@ -323,7 +323,7 @@ public sealed class TeamBalanceTests
     }
 
     /// <summary>
-    /// ⚠️ <b>Only dead players are eligible.</b> A living team with nobody to
+    /// <b>Only dead players are eligible.</b> A living team with nobody to
     /// spare waits — and the fuse is deliberately <em>not</em> reset, so the very
     /// next call retries.
     /// </summary>
@@ -358,7 +358,7 @@ public sealed class TeamBalanceTests
     }
 
     /// <summary>
-    /// ⚠️ A character on no hit points counts as dead for this — which is how
+    /// A character on no hit points counts as dead for this — which is how
     /// the balance can move the player who has just been killed.
     /// </summary>
     [Fact]
@@ -383,7 +383,7 @@ public sealed class TeamBalanceTests
     }
 
     /// <summary>
-    /// A living character is destroyed by the move — and ⚠️ it is <b>not</b> a
+    /// A living character is destroyed by the move — and it is <b>not</b> a
     /// death: nothing is credited and no <c>PLAYER_DEATH</c> is produced.
     /// </summary>
     [Fact]
@@ -420,7 +420,7 @@ public sealed class TeamBalanceTests
     /// <c>Character.events/End Step.xml:29-31</c> does.
     /// </summary>
     /// <remarks>
-    /// ⚠️ And the player who just died is the one taken, because
+    /// And the player who just died is the one taken, because
     /// <c>doEventPlayerDeath</c> destroyed their character first.
     /// </remarks>
     [Fact]
@@ -460,7 +460,7 @@ public sealed class TeamBalanceTests
     // --- Arena ----------------------------------------------------------------
 
     /// <summary>
-    /// ⚠️ Arena's balance <b>loops</b> until the gap is under two, takes living
+    /// Arena's balance <b>loops</b> until the gap is under two, takes living
     /// players, and does not arm a respawn.
     /// </summary>
     [Fact]
@@ -495,7 +495,7 @@ public sealed class TeamBalanceTests
     /// all is part of what this gates.
     /// </summary>
     /// <remarks>
-    /// ⚠️ It runs <b>before</b> the round's own state is touched and before
+    /// It runs <b>before</b> the round's own state is touched and before
     /// anybody is respawned, which is where <c>serverArenaRestart</c> has it —
     /// above its <c>sendEventArenaRestart</c>.
     /// </remarks>
@@ -597,7 +597,7 @@ public sealed class TeamBalanceTests
     }
 
     /// <summary>
-    /// ⚠️ The player asking is <b>not counted against their own limit</b>, so a
+    /// The player asking is <b>not counted against their own limit</b>, so a
     /// team change that keeps the class is never refused by the player's own
     /// presence.
     /// </summary>
@@ -617,7 +617,7 @@ public sealed class TeamBalanceTests
     }
 
     /// <summary>
-    /// ⚠️ <b>Quote is excluded from the random pick and then offered as a last
+    /// <b>Quote is excluded from the random pick and then offered as a last
     /// resort</b> — the loop runs to 9, and the line under it hands out the
     /// tenth class anyway.
     /// </summary>
@@ -649,7 +649,7 @@ public sealed class TeamBalanceTests
     }
 
     /// <summary>
-    /// ⚠️ Quote is <b>never</b> the random choice, even when it has room and
+    /// Quote is <b>never</b> the random choice, even when it has room and
     /// is the only alternative besides one other free class.
     /// </summary>
     /// <remarks>
@@ -689,7 +689,7 @@ public sealed class TeamBalanceTests
     }
 
     /// <summary>
-    /// ⚠️ And when even Quote is full it hands back what was asked for, over the
+    /// And when even Quote is full it hands back what was asked for, over the
     /// limit. A full server stops enforcing rather than refusing.
     /// </summary>
     [Fact]
@@ -720,7 +720,7 @@ public sealed class TeamBalanceTests
     }
 
     /// <summary>
-    /// ⚠️ The random pick is a draw from the <b>shared</b> stream, which every
+    /// The random pick is a draw from the <b>shared</b> stream, which every
     /// client re-derives weapon spreads from. Which class comes out is free; the
     /// draw is not.
     /// </summary>
@@ -758,7 +758,7 @@ public sealed class TeamBalanceTests
     // --- the wire -------------------------------------------------------------
 
     /// <summary>
-    /// ⚠️ <b><c>BALANCE</c> is variable-length</b>, and this port framed it as a
+    /// <b><c>BALANCE</c> is variable-length</b>, and this port framed it as a
     /// fixed two body bytes until phase 6's team balance.
     /// </summary>
     /// <remarks>
@@ -803,7 +803,7 @@ public sealed class TeamBalanceTests
     /// lopsided.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>It has to be a departure and not a team change.</b>
+    /// <b>It has to be a departure and not a team change.</b>
     /// <c>ResolveRequestedTeam</c> already refuses a request for the bigger
     /// team, so a roster cannot be talked into being lopsided — which is
     /// exactly why autobalance exists for the case where somebody leaves.

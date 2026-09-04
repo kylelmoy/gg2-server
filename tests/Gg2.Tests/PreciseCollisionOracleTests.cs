@@ -9,39 +9,38 @@ namespace Gg2.Tests;
 /// <see cref="PreciseCollision"/> against the engine, with a REAL character box.
 /// </summary>
 /// <remarks>
-/// Phase C of the probe plan, run 2026-09-01 by
-/// <c>tools/probes/probe-platform-carry.js</c>. Everything verified before it
-/// used a 1x1 probe point, so the character side of the query — the inclusive
-/// bounds, the rounding, and whether GM8 even treats a character as a rectangle —
-/// was still only self-consistent.
+/// Recorded via <c>tools/probes/probe-platform-carry.js</c>. Everything verified
+/// before it used a 1x1 probe point, so the character side of the query — the
+/// inclusive bounds, the rounding, and whether GM8 even treats a character as a
+/// rectangle — was still only self-consistent.
 /// <para>
 /// Three things the sweep settled, all of which <see cref="PreciseCollision"/>
 /// already did:
 /// </para>
 /// <list type="number">
-/// <item>✅ <b>A character is a RECTANGLE to GM8, not a silhouette.</b> For the
+/// <item><b>A character is a RECTANGLE to GM8, not a silhouette.</b> For the
 /// same character at the same position, <c>place_meeting</c> against the platform
 /// and <c>collision_rectangle</c> over that character's own bbox differ
 /// <em>only</em> in the transition band and never in shape. Had the character's
 /// own precise mask been used, they would disagree wherever the person outline is
 /// inside the box, which is most places.</item>
-/// <item>✅ <b>The bounds are inclusive.</b> First contact is where the right
+/// <item><b>The bounds are inclusive.</b> First contact is where the right
 /// edge lands exactly on the sprite's first solid column, not one pixel
 /// past.</item>
-/// <item>✅ <b>The position rounds HALF TO EVEN</b>, and the Heavy discriminates
+/// <item><b>The position rounds HALF TO EVEN</b>, and the Heavy discriminates
 /// it: its first contact is at x = 2990.6, not 2990.5. At exactly 2990.5 half to
 /// even gives 2990 and misses, half away from zero gives 2991 and hits. The
 /// engine misses.</item>
 /// </list>
 /// <para>
-/// ⚠️ <b>The comparison is against <c>place_meeting</c>, not
+/// <b>The comparison is against <c>place_meeting</c>, not
 /// <c>collision_rectangle</c>.</b> The two differ by up to half a pixel at the
 /// boundary because only the first rounds the instance position — and
 /// <c>place_meeting</c> is what the reference's carry calls, so it is the one
 /// this port has to match.
 /// </para>
 /// <para>
-/// ⚠️ <b>The first run of the probe was VACUOUS and looked like a pass.</b> Its
+/// <b>The first run of the probe was VACUOUS and looked like a pass.</b> Its
 /// sweep never reached the platform, so every sample was "no collision" on both
 /// sides, the two agreed perfectly, and it reported zero disagreements. The probe
 /// now refuses to write a fixture unless the sweep actually crosses the edge.
@@ -103,7 +102,7 @@ public sealed class PreciseCollisionOracleTests
     }
 
     /// <summary>
-    /// ⚠️ The sweep is not vacuous: it really does cross the edge.
+    /// The sweep is not vacuous: it really does cross the edge.
     /// </summary>
     /// <remarks>
     /// The probe's own guard, asserted again here so a re-recorded fixture that
@@ -152,7 +151,7 @@ public sealed class PreciseCollisionOracleTests
     }
 
     /// <summary>
-    /// ⚠️ Half to even, discriminated by the Heavy.
+    /// Half to even, discriminated by the Heavy.
     /// </summary>
     /// <remarks>
     /// Its first contact is at 2990.6. At 2990.5 the two rounding rules part

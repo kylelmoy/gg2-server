@@ -11,7 +11,7 @@ namespace Gg2.Tests;
 /// <c>gg2-env</c>'s command line, and the composition root it feeds.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>The gate that was owed for a whole capability.</b> <c>Program.cs</c>
+/// <b>The gate that was owed for a whole capability.</b> <c>Program.cs</c>
 /// parsed <c>--nav</c> and then built <c>new EnvServer(maps)</c> without it, so
 /// every served world had a null nav graph and <see cref="EnvDriver.Scripted"/>
 /// was refused in every batch — while <c>docs/ENV.md</c> documented the driver
@@ -25,7 +25,7 @@ namespace Gg2.Tests;
 /// which passes no nav directory and therefore could never have noticed.
 /// </para>
 /// <para>
-/// ⚠️ <b>So the gate that matters is the second one below, not the first.</b>
+/// <b>So the gate that matters is the second one below, not the first.</b>
 /// Asserting that <c>--nav</c> parses is not the same claim as asserting it
 /// reaches the server, and the parse was never the half that was wrong.
 /// </para>
@@ -54,7 +54,7 @@ public sealed class EnvOptionsTests
         Assert.Equal(7, smoke.Duels);
         Assert.Equal(3, smoke.Threads);
 
-        // ⚠️ Nav is null rather than empty when it is not given, because null is
+        // Nav is null rather than empty when it is not given, because null is
         // what makes Scripted refuse — see EnvOptions.Nav.
         Assert.Null(smoke.Nav);
 
@@ -73,7 +73,7 @@ public sealed class EnvOptionsTests
     }
 
     /// <summary>
-    /// ⚠️ <b>A server built from <c>--nav</c> can actually serve a Scripted
+    /// <b>A server built from <c>--nav</c> can actually serve a Scripted
     /// side.</b> This is the bug, end to end.
     /// </summary>
     /// <remarks>
@@ -81,7 +81,7 @@ public sealed class EnvOptionsTests
     /// that dropped the argument — and then over a real socket, because the
     /// claim being made is about what a caller of the built tool can ask for.
     /// <para>
-    /// ⚠️ <b>The control is the same request without <c>--nav</c></b>, which must
+    /// <b>The control is the same request without <c>--nav</c></b>, which must
     /// be REFUSED rather than served by a bot that cannot walk. Without that
     /// half, an implementation that ignored the driver entirely would pass.
     /// </para>

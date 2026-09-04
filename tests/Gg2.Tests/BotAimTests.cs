@@ -9,7 +9,7 @@ namespace Gg2.Tests;
 /// <c>botWeaponBallistics.gml</c> and <c>botFallPredict.gml</c>.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>This is an exact ballistic intercept solver against an opponent model
+/// <b>This is an exact ballistic intercept solver against an opponent model
 /// of "constant velocity plus gravity"</b>, and docs/BOTAI.md opens by saying
 /// that is the wrong model against a human who reacts to the shot being fired.
 /// It is ported as the <em>baseline</em> the document asks for, and these tests
@@ -34,13 +34,13 @@ public sealed class BotAimTests
     /// weapon.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Deliberately simpler than the simulation's.</b> A scattergun blast is
+    /// <b>Deliberately simpler than the simulation's.</b> A scattergun blast is
     /// six pellets with a spread and a per-pellet lifetime; the aim model calls
     /// it one projectile at 13 px/tick falling at 0.15. Do not "fix" one to match
     /// <c>Gg2.Simulation.Projectiles</c> — a bot that aims with the real numbers
     /// is a different bot, and every one of these was tuned against play.
     /// <para>
-    /// ⚠️ <b>Speed zero means "do not lead"</b>, which is how the hitscan and
+    /// <b>Speed zero means "do not lead"</b>, which is how the hitscan and
     /// stored-target weapons fall out of the model without a special case: the
     /// sniper's Rifle and the medic's Medigun have no projectile to lead.
     /// </para>
@@ -69,7 +69,7 @@ public sealed class BotAimTests
     /// shots inherit it.
     /// </summary>
     /// <remarks>
-    /// The Scattergun, the Shotgun and the Minigun. ⚠️ It is <em>subtracted</em>
+    /// The Scattergun, the Shotgun and the Minigun. It is <em>subtracted</em>
     /// from the target's velocity in the solver, because what matters is the
     /// relative motion of the muzzle and the target — a running scout's pellets
     /// carry its momentum, so it has to aim <em>behind</em> where it otherwise
@@ -116,7 +116,7 @@ public sealed class BotAimTests
     /// Gravity is corrected for even when the target's motion is not.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <see cref="BotLeadMode.None"/> still goes through the solver rather
+    /// <see cref="BotLeadMode.None"/> still goes through the solver rather
     /// than answering a straight line: a rocket at 400px drops several body
     /// heights, and a bot that pointed straight at a stationary target would shoot
     /// its feet. What "no lead" turns off is the <em>target's</em> velocity, not
@@ -133,7 +133,7 @@ public sealed class BotAimTests
 
         Assert.True(aim > 0, $"a falling projectile at 400px was aimed at {aim} degrees, not above level");
 
-        // ⚠️ The control: a soldier's rocket does not fall, so the same shot is
+        // The control: a soldier's rocket does not fall, so the same shot is
         // dead level. Without this the test passes for a solver that always aims
         // high.
         var soldier = Shooter(PlayerClass.Soldier);
@@ -146,7 +146,7 @@ public sealed class BotAimTests
     /// </summary>
     /// <remarks>
     /// The intercept, at its simplest: a target moving right is shot at
-    /// somewhere to its right. ⚠️ Asserted as a <em>monotonic</em> relationship
+    /// somewhere to its right. Asserted as a <em>monotonic</em> relationship
     /// rather than a number, because the number is the fixed point of an
     /// eight-pass iteration and pinning it would be pinning the arithmetic rather
     /// than the behaviour.
@@ -159,13 +159,13 @@ public sealed class BotAimTests
         // A target level and to the right, standing on a floor: aim is dead
         // level, because there is nowhere ahead to aim that is not on the line.
         //
-        // ⚠️ The floor is not decoration here. With BotAim.NoFloor even a
+        // The floor is not decoration here. With BotAim.NoFloor even a
         // STATIONARY target is modelled as falling for ever, so the same shot
         // aims 43 degrees below the horizontal — which is correct, and is why
         // the clamp exists.
         Assert.Equal(0, BotAim.Solve(soldier, 400, 0, 0, 0, BotLeadMode.Full, floorY: 0), 9);
 
-        // ⚠️ The floor has to be well BELOW the target for a rise to be visible
+        // The floor has to be well BELOW the target for a rise to be visible
         // at all. Over a thirty-tick flight even a target thrown upward at 4
         // px/tick is back below where it started, so with the floor at its own
         // feet the prediction clamps there and every rise reads as level. That is
@@ -185,7 +185,7 @@ public sealed class BotAimTests
             BotTargeting.AngleDelta(faster, 0) > BotTargeting.AngleDelta(rising, 0),
             $"a faster riser was aimed lower: {faster} against {rising}");
 
-        // ⚠️ The control: with lead off, the same target is aimed at dead level.
+        // The control: with lead off, the same target is aimed at dead level.
         Assert.Equal(0, BotAim.Solve(soldier, 400, 0, 0, -8, BotLeadMode.None, floorY: 0), 9);
     }
 
@@ -194,7 +194,7 @@ public sealed class BotAimTests
     /// falling target.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The three modes are a <b>difficulty</b> knob, not an optimisation. A bot
+    /// The three modes are a <b>difficulty</b> knob, not an optimisation. A bot
     /// that always solves the full intercept never misses a moving target, which
     /// is neither fun nor human — so the difference between them has to be real,
     /// and this is the test that says it is.
@@ -217,7 +217,7 @@ public sealed class BotAimTests
     /// velocity.
     /// </summary>
     /// <remarks>
-    /// ⚠️ A single quadratic over-predicts a long fall badly, and long falls are
+    /// A single quadratic over-predicts a long fall badly, and long falls are
     /// the aim solver's whole job. A target accelerates at
     /// <c>NAV_JUMP_GRAVITY</c> until it reaches <c>NAV_JUMP_TERM_VY</c> and then
     /// falls at a constant rate.
@@ -239,7 +239,7 @@ public sealed class BotAimTests
 
         Assert.True(late < quadratic / 2, $"a 100-tick fall predicted {late}; a quadratic gives {quadratic}");
 
-        // And the join is continuous. ⚠️ The step has to be tiny relative to the
+        // And the join is continuous. The step has to be tiny relative to the
         // tolerance: past the join the target moves at NAV_JUMP_TERM_VY, so a
         // 1e-6 step is a 1e-5 difference and reads as a discontinuity.
         Assert.Equal(
@@ -252,7 +252,7 @@ public sealed class BotAimTests
     /// A target's predicted fall is clamped at the floor under it.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Without this a target standing still on the ground is predicted to
+    /// <b>Without this a target standing still on the ground is predicted to
     /// keep falling through it, and the bot aims below its feet.</b> The floor is
     /// the nav graph's answer, and <see cref="BotAim.NoFloor"/> — "no map is this
     /// tall" — disables the clamp, which is the right answer over a pit.
@@ -268,7 +268,7 @@ public sealed class BotAimTests
             BotAim.FallPredict(0, 0, 5, floorY: 1000),
             9);
 
-        // ⚠️ And the whole solve changes with it: a stationary target on a floor
+        // And the whole solve changes with it: a stationary target on a floor
         // is aimed at level, and the same target with the clamp switched off is
         // aimed below.
         var soldier = Shooter(PlayerClass.Demoman);
@@ -276,7 +276,7 @@ public sealed class BotAimTests
         var onFloor = BotAim.Solve(soldier, 400, 0, 0, 0, BotLeadMode.Full, floorY: 0);
         var falling = BotAim.Solve(soldier, 400, 0, 0, 0, BotLeadMode.Full, BotAim.NoFloor);
 
-        // ⚠️ Compared as SIGNED angles. GM8 reports a direction in [0, 360), so
+        // Compared as SIGNED angles. GM8 reports a direction in [0, 360), so
         // aiming below the horizontal comes back as 340 rather than -20 and a
         // naive `>` says the clamp lowered the aim. Measured: 17.4 degrees on a
         // floor against 340.5 — which is -19.5 — without one.
@@ -289,7 +289,7 @@ public sealed class BotAimTests
     /// The flight time is clamped to at least one tick.
     /// </summary>
     /// <remarks>
-    /// ⚠️ It matters at point blank: a distance of zero gives a time of zero, and
+    /// It matters at point blank: a distance of zero gives a time of zero, and
     /// the whole prediction collapses to "aim at your own feet". The clamp is
     /// what makes a bot standing on top of somebody still aim at them.
     /// </remarks>
@@ -309,7 +309,7 @@ public sealed class BotAimTests
     /// The projectile's own drop is the triangular number, not the integral.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <c>grav × t × (t + 1) / 2</c>, <b>not</b> <c>grav × t² / 2</c>. A
+    /// <c>grav × t × (t + 1) / 2</c>, <b>not</b> <c>grav × t² / 2</c>. A
     /// projectile falls in discrete ticks, so after <c>t</c> of them it has
     /// fallen the triangular number — and the difference, <c>grav × t / 2</c>, is
     /// two and a half pixels on a thirty-tick scattergun shot. Small, and exactly
@@ -345,7 +345,7 @@ public sealed class BotAimTests
 
         Assert.Equal(expected, aim, 9);
 
-        // ⚠️ And the closed form is a different answer, which is what makes the
+        // And the closed form is a different answer, which is what makes the
         // assertion above a gate rather than a tautology.
         var closedForm = Gml.PointDirection(0, 0, 120, -(1 * t * t / 2));
         Assert.NotEqual(closedForm, aim, 3);
@@ -355,7 +355,7 @@ public sealed class BotAimTests
     /// A shot from inside the target still leads.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The flight time is clamped to at least one tick, and it matters at
+    /// The flight time is clamped to at least one tick, and it matters at
     /// point blank: a distance of zero gives a time of zero, and the whole
     /// prediction collapses to "aim at your own feet" — <c>point_direction</c> of
     /// a point to itself is 0, so the bot aims dead right whatever the target is

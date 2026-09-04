@@ -101,9 +101,9 @@ public sealed class PlayerLifecycleTests
 
         Assert.True(events.Spawned[1]);
         Assert.True(state.Alive[1]);
-        // Spent. ⚠️ Zero, not -1: GM8 leaves a fired alarm at 0 for the rest of
+        // Spent. Zero, not -1: GM8 leaves a fired alarm at 0 for the rest of
         // the frame its event ran on and takes it to -1 on the next frame's
-        // alarm stage. Measured 2026-08-27; see Timers.Advance.
+        // alarm stage. See Timers.Advance.
         Assert.Equal(Timers.JustFired, state.Players[1].RespawnTimer);
 
         var spawn = events.Spawns[1];

@@ -10,25 +10,20 @@ namespace Gg2.Tests;
 /// </summary>
 /// <remarks>
 /// <para>
-/// ⛔ <b>The gate this project did not have.</b> Seven <see cref="ServerOptions"/>
-/// properties — the deathmatch kill limit, TDM invulnerability, class limits,
-/// autobalance, the map rotation, the multi-client limit and the map-download
-/// bandwidth — were fully implemented, wired to real behaviour and gated by
-/// their own tests, and could not be set by anybody running the binary. Nothing
-/// went red, because every test that touched them built a
-/// <see cref="ServerOptions"/> in C#. The option existed; the way in did not.
+/// <b>The gate this project needs.</b> A <see cref="ServerOptions"/> property can
+/// be fully implemented, wired to real behaviour and gated by its own tests, and
+/// still be unreachable from the command line — nothing goes red for that,
+/// because every test that touches it builds a <see cref="ServerOptions"/> in
+/// C#. The option exists; the way in does not.
 /// </para>
 /// <para>
-/// ⚠️ <b>It asserts the property MOVES, not that the flag parses.</b> A flag
-/// that is accepted and then dropped on the floor — which is what
-/// <c>--search-threads</c> used to be when it came before <c>--search-bots</c>, the
-/// flag <c>--bot-mode</c> replaced —
-/// looks identical from outside to one that works. Comparing the parsed value
-/// against the default is the cheap contradicting action; reading the switch
-/// statement is not.
+/// <b>It asserts the property MOVES, not that the flag parses.</b> A flag that
+/// is accepted and then dropped on the floor looks identical from outside to one
+/// that works. Comparing the parsed value against the default is the cheap
+/// contradicting action; reading the switch statement is not.
 /// </para>
 /// <para>
-/// ⚠️ <b>Adding an option means adding a row here.</b> The reflection half fails
+/// <b>Adding an option means adding a row here.</b> The reflection half fails
 /// on an unlisted property, so the failure names the option rather than leaving
 /// a gap. If an option really is not meant to be settable from the command line,
 /// put it in <see cref="NotOnTheCommandLine"/> with the reason — a documented
@@ -94,7 +89,7 @@ public sealed class CliCoverageTests
         ("TickStats", ["--tick-stats"], o => o.TickStats),
         ("Bots", ["--bots", "8"], o => o.Bots),
 
-        // ⚠️ One row per WEB FLAG, not one per property, and they all name the
+        // One row per WEB FLAG, not one per property, and they all name the
         // same property. Web is a record so its structural equality makes the
         // comparison real, but a single row would leave four of the five flags
         // ungated — and --web-password silently doing nothing is the failure
@@ -133,7 +128,7 @@ public sealed class CliCoverageTests
             + "CliCoverageTests.NotOnTheCommandLine. An option nobody running the binary can "
             + "set is the bug this test exists for.");
 
-        // ⚠️ And the other direction: a row naming a property that no longer
+        // And the other direction: a row naming a property that no longer
         // exists is a row that stopped testing anything the day it was renamed.
         var stale = covered.Where(name => !settable.Contains(name, StringComparer.Ordinal)).ToArray();
 
@@ -148,11 +143,11 @@ public sealed class CliCoverageTests
     [Fact]
     public void EveryFlagChangesTheOptionItNames()
     {
-        var defaults = Program.Parse([]);
+        var defaults = CommandLine.Parse([]);
 
         foreach (var (property, args, read) in Table)
         {
-            var parsed = Program.Parse(args);
+            var parsed = CommandLine.Parse(args);
 
             Assert.True(
                 !Equals(read(defaults), read(parsed)),
@@ -162,15 +157,12 @@ public sealed class CliCoverageTests
     }
 
     /// <summary>
-    /// ⛔ An out-of-range value is a usage error, not a crash.
+    /// An out-of-range value is a usage error, not a crash.
     /// </summary>
     /// <remarks>
-    /// <c>ServerOptions.Validate</c> ran in the <c>GameServer</c> constructor,
-    /// which <c>Main</c> called <em>after</em> its parse guard and outside the
-    /// one around <c>Start</c> — so <c>--players 100</c> printed an unhandled
-    /// <see cref="ArgumentOutOfRangeException"/> and a stack trace instead of the
-    /// message <c>Validate</c> had written for exactly this moment. Parse now
-    /// validates, so the throw lands where the usage text is printed.
+    /// Parse validates, so an out-of-range value such as <c>--players 100</c>
+    /// throws where the usage text is printed, rather than surfacing later as an
+    /// unhandled <see cref="ArgumentOutOfRangeException"/> and a stack trace.
     /// </remarks>
     [Theory]
     [InlineData("--players", "100")]   // 1..48
@@ -183,17 +175,17 @@ public sealed class CliCoverageTests
         // ArgumentOutOfRangeException derives from ArgumentException, which is
         // what Main's catch filter names — so this IS the assertion that the
         // error reaches the usage text rather than the console's crash handler.
-        // ⚠️ The type is the whole point; do not relax it to ThrowsAny<Exception>.
-        var thrown = Assert.ThrowsAny<ArgumentException>(() => Program.Parse([flag, value]));
+        // The type is the whole point; do not relax it to ThrowsAny<Exception>.
+        var thrown = Assert.ThrowsAny<ArgumentException>(() => CommandLine.Parse([flag, value]));
 
-        // ⚠️ It names the OPTION, not the flag — "player limit must be 1..48
+        // It names the OPTION, not the flag — "player limit must be 1..48
         // (Parameter 'PlayerLimit')" for `--players 100`. Worth knowing before
         // somebody "fixes" a test that looks like it should match the flag.
         Assert.NotEmpty(thrown.Message);
     }
 
     /// <summary>
-    /// ⛔ A <c>--web-*</c> setting with no <c>--web</c> is refused, not ignored.
+    /// A <c>--web-*</c> setting with no <c>--web</c> is refused, not ignored.
     /// </summary>
     /// <remarks>
     /// The failure it prevents is <c>--web-password</c> on a server with no
@@ -208,21 +200,21 @@ public sealed class CliCoverageTests
     [InlineData("--web-tls-password", "pw")]
     public void AWebSettingWithoutAPanelIsRefused(string flag, string value)
     {
-        var thrown = Assert.Throws<ArgumentException>(() => Program.Parse([flag, value]));
+        var thrown = Assert.Throws<ArgumentException>(() => CommandLine.Parse([flag, value]));
 
         Assert.Contains(flag, thrown.Message, StringComparison.Ordinal);
         Assert.Contains("--web", thrown.Message, StringComparison.Ordinal);
 
         // And the control: with a panel to configure, the same flag is fine.
-        // ⚠️ --web-tls is in the control line for every case, because
+        // --web-tls is in the control line for every case, because
         // --web-tls-password on its own is refused by WebAdminOptions.Validate
         // for a different and equally deliberate reason: a certificate password
         // with no certificate to open.
-        Program.Parse(["--web", "0", "--web-tls", "cert.pfx", flag, value]);
+        CommandLine.Parse(["--web", "0", "--web-tls", "cert.pfx", flag, value]);
     }
 
     /// <summary>
-    /// ⚠️ <c>--web</c> alone binds LOOPBACK. Making it remote is a second,
+    /// <c>--web</c> alone binds LOOPBACK. Making it remote is a second,
     /// explicit decision.
     /// </summary>
     /// <remarks>
@@ -233,23 +225,23 @@ public sealed class CliCoverageTests
     [Fact]
     public void TheWebPanelIsNotRemoteUnlessItIsToldToBe()
     {
-        var web = Program.Parse(["--web", "8191"]).Web;
+        var web = CommandLine.Parse(["--web", "8191"]).Web;
 
         Assert.True(web.Enabled);
         Assert.Equal("127.0.0.1", web.Bind);
         Assert.False(web.IsRemote);
 
-        Assert.True(Program.Parse(["--web", "8191", "--web-bind", "0.0.0.0"]).Web.IsRemote);
+        Assert.True(CommandLine.Parse(["--web", "8191", "--web-bind", "0.0.0.0"]).Web.IsRemote);
 
         // And off entirely without the flag.
-        Assert.False(Program.Parse([]).Web.Enabled);
+        Assert.False(CommandLine.Parse([]).Web.Enabled);
     }
 
     /// <summary>A bad flag name is a usage error too, and names itself.</summary>
     [Fact]
     public void AnUnknownFlagNamesItself()
     {
-        var thrown = Assert.Throws<ArgumentException>(() => Program.Parse(["--no-such-flag"]));
+        var thrown = Assert.Throws<ArgumentException>(() => CommandLine.Parse(["--no-such-flag"]));
         Assert.Contains("--no-such-flag", thrown.Message, StringComparison.Ordinal);
     }
 
@@ -259,11 +251,11 @@ public sealed class CliCoverageTests
     [Fact]
     public void ClassLimitTakesOneNumberOrNamedPairs()
     {
-        var uniform = Program.Parse(["--class-limit", "2"]).ClassLimits;
+        var uniform = CommandLine.Parse(["--class-limit", "2"]).ClassLimits;
         Assert.Equal(10, uniform.Length);
         Assert.All(uniform, limit => Assert.Equal(2, limit));
 
-        var named = Program.Parse(["--class-limit", "medic=1,spy=0"]).ClassLimits;
+        var named = CommandLine.Parse(["--class-limit", "medic=1,spy=0"]).ClassLimits;
         Assert.Equal(1, named[(int)PlayerClass.Medic]);
         Assert.Equal(0, named[(int)PlayerClass.Spy]);
 
@@ -279,12 +271,12 @@ public sealed class CliCoverageTests
     [InlineData("medic=nine")]         // not a number
     public void ABadClassLimitNamesWhatIsWrong(string text)
     {
-        var thrown = Assert.ThrowsAny<Exception>(() => Program.Parse(["--class-limit", text]));
+        var thrown = Assert.ThrowsAny<Exception>(() => CommandLine.Parse(["--class-limit", text]));
         Assert.True(thrown is ArgumentException or FormatException, $"unexpected {thrown.GetType()}");
     }
 
     /// <summary>
-    /// ⚠️ A flag beats <c>--config</c> whichever side of it the flag appears on.
+    /// A flag beats <c>--config</c> whichever side of it the flag appears on.
     /// </summary>
     /// <remarks>
     /// Handling <c>--config</c> in the switch like every other flag would make
@@ -302,8 +294,8 @@ public sealed class CliCoverageTests
             CapLimit=9
             """);
 
-        var before = Program.Parse(["--name", "from the flag", "--config", config]);
-        var after = Program.Parse(["--config", config, "--name", "from the flag"]);
+        var before = CommandLine.Parse(["--name", "from the flag", "--config", config]);
+        var after = CommandLine.Parse(["--config", config, "--name", "from the flag"]);
 
         Assert.Equal("from the flag", before.ServerName);
         Assert.Equal("from the flag", after.ServerName);
@@ -324,15 +316,15 @@ public sealed class CliCoverageTests
     [Fact]
     public void ARotationWithoutAMapFlagOpensOnTheRotation()
     {
-        var rotated = Program.Parse(["--rotation", "koth_valley,ctf_2dfort"]);
+        var rotated = CommandLine.Parse(["--rotation", "koth_valley,ctf_2dfort"]);
         Assert.Equal(string.Empty, rotated.Map);
 
-        var pinned = Program.Parse(["--rotation", "koth_valley,ctf_2dfort", "--map", "ctf_truefort"]);
+        var pinned = CommandLine.Parse(["--rotation", "koth_valley,ctf_2dfort", "--map", "ctf_truefort"]);
         Assert.Equal("ctf_truefort", pinned.Map);
 
         // No rotation at all leaves the default rather than emptying it, or a
         // bare `gg2-server` would have no map to open.
-        Assert.Equal(ServerOptions.DefaultMap, Program.Parse([]).Map);
+        Assert.Equal(ServerOptions.DefaultMap, CommandLine.Parse([]).Map);
     }
 
     /// <summary>A missing config file says which file, without the usage dump.</summary>
@@ -340,7 +332,7 @@ public sealed class CliCoverageTests
     public void AMissingConfigFileIsAnIOException()
     {
         var path = Path.Combine(Path.GetTempPath(), $"gg2-no-such-{Guid.NewGuid():N}.ini");
-        var thrown = Assert.Throws<FileNotFoundException>(() => Program.Parse(["--config", path]));
+        var thrown = Assert.Throws<FileNotFoundException>(() => CommandLine.Parse(["--config", path]));
         Assert.Contains(path, thrown.Message, StringComparison.Ordinal);
     }
 

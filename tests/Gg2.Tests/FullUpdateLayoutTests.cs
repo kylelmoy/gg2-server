@@ -27,7 +27,7 @@ public sealed class FullUpdateLayoutTests
     [MemberData(nameof(Maps))]
     public void FullUpdateTailMatchesTheMapsGameMode(MapFixture fixture)
     {
-        // ⚠️ ForArea(1), like the server. A tall map is several rounds stacked
+        // ForArea(1), like the server. A tall map is several rounds stacked
         // vertically and only one area's entities exist at a time — so the
         // *unnarrowed* cp_dirtbowl has six control points and the round being
         // played has two. Framing an update by the wrong count desynchronises

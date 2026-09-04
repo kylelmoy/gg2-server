@@ -80,18 +80,16 @@ public static class LevelData
             var type = png.Slice(offset + 4, 4);
             var data = png.Slice(offset + 8, (int)length);
 
-            // ⚠️ ALL THREE text chunk types, not just zTXt. The game reads its
+            // ALL THREE text chunk types, not just zTXt. The game reads its
             // level data through libpng's png_get_text
             // (Extensions/GG2DLL/GG2DLL/GG2DLL.cpp:357-368), which hands back
             // tEXt, zTXt and iTXt alike — already decompressed — and the DLL then
             // matches on the keyword alone, ignoring how it was stored.
             //
-            // ⚠️ Reading only zTXt made this port STRICTER THAN THE GAME, and not
-            // in a corner: 510 of the 2,348 maps in the archive failed here and
-            // open fine in GG2. The game WRITES zTXt (:288), so every map saved by
-            // GG2 itself worked — the failures are maps written by other tools,
-            // which is most of an archive. Found 2026-09-01 after `gg2-nav-gen`
-            // hit the identical bug in its own reader.
+            // Reading only zTXt is stricter than the game: the game WRITES zTXt
+            // (:288), so every map saved by GG2 itself works that way, but maps
+            // written by other tools may use tEXt or iTXt and still open fine in
+            // GG2 — so all three must be accepted here too.
             if (TryReadText(type, data, out var text))
                 return text;
 
@@ -118,13 +116,13 @@ public static class LevelData
     /// is compressed only when the flag is 1.</item>
     /// </list>
     /// <para>
-    /// ⚠️ <b><c>iTXt</c> text is UTF-8 by the spec, and GG2 level data is raw
+    /// <b><c>iTXt</c> text is UTF-8 by the spec, and GG2 level data is raw
     /// bytes.</b> A map stored that way would have every byte above 0x7F
     /// re-encoded, and the entity block can carry embedded sprite resources as
     /// arbitrary bytes — so it would round-trip wrong. It is accepted here
-    /// because libpng accepts it and the game therefore does; no archive map was
-    /// found using it, so the decoding below is Latin-1 like the others rather
-    /// than UTF-8. <b>If an iTXt map ever turns up broken, this is the line.</b>
+    /// because libpng accepts it and the game therefore does; the decoding below
+    /// is Latin-1 like the others rather than UTF-8. <b>If an iTXt map ever
+    /// turns up broken, this is the line.</b>
     /// </para>
     /// </remarks>
     private static bool TryReadText(ReadOnlySpan<byte> type, ReadOnlySpan<byte> data, out string text)

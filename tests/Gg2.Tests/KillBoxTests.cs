@@ -74,12 +74,11 @@ public sealed class KillBoxTests
     // --- what the maps actually place -----------------------------------------
 
     /// <summary>
-    /// ⚠️ <b>One shipped map places boxes, and its six are all pit falls.</b>
+    /// <b>One shipped map places boxes, and its six are all pit falls.</b>
     /// </summary>
     /// <remarks>
-    /// The handoff carried this as "six built-in maps place a pitfall" for
-    /// several sessions; it is six <em>boxes</em> on <em>one</em> map. Asserted
-    /// rather than commented so the claim cannot rot again.
+    /// It is six <em>boxes</em> on <em>one</em> map. Asserted rather than
+    /// commented so the claim cannot rot.
     /// </remarks>
     [Fact]
     public void OnlyTeamDeathmatchManticPlacesAnyBoxes()
@@ -120,7 +119,7 @@ public sealed class KillBoxTests
     // --- what a box does to a character ---------------------------------------
 
     /// <summary>
-    /// ⚠️ <b>A box does not kill; it sets <c>hp = 0</c></b> and lets the
+    /// <b>A box does not kill; it sets <c>hp = 0</c></b> and lets the
     /// victim's own End Step do the rest — so the kill log, the scoring and the
     /// respawn all behave exactly as they do for a bullet.
     /// </summary>
@@ -143,7 +142,7 @@ public sealed class KillBoxTests
     }
 
     /// <summary>
-    /// ⚠️ <b>Somebody else's claim survives the box.</b> If anyone but the
+    /// <b>Somebody else's claim survives the box.</b> If anyone but the
     /// victim hurt them recently the kill is handed over — as a <em>gib</em> for
     /// a frag box and a plain finish-off for the other two — and the dealer is
     /// not cleared, so they keep the credit.
@@ -196,7 +195,7 @@ public sealed class KillBoxTests
     // --- what a box does to a sentry ------------------------------------------
 
     /// <summary>
-    /// ⚠️ <b>A pit fall leaves a sentry alone and the other two destroy it.</b>
+    /// <b>A pit fall leaves a sentry alone and the other two destroy it.</b>
     /// <c>Sentry.events/</c> has no <c>Collision with PitFall</c> at all, so an
     /// engineer's gun survives what its owner does not.
     /// </summary>
@@ -236,15 +235,13 @@ public sealed class KillBoxTests
     // --- the flag-return arm the boxes unlock ---------------------------------
 
     /// <summary>
-    /// ⚠️ <b>A carrier killed by a box sends the briefcase home instead of
+    /// <b>A carrier killed by a box sends the briefcase home instead of
     /// leaving it in the pit.</b> The Destroy event drops it first and then
     /// returns it, and the return is <em>broadcast</em> where the drop
     /// deliberately is not.
     /// </summary>
     /// <remarks>
-    /// This arm has been transcribed-and-unreachable since phase 6, because none
-    /// of the three boxes existed. It is reachable now — though not on any
-    /// shipped map, since the only one with boxes has no intel.
+    /// Not reachable on any shipped map — the only map with boxes has no intel.
     /// </remarks>
     [Fact]
     public void ACarrierKilledByABoxSendsTheFlagHome()
@@ -297,7 +294,7 @@ public sealed class KillBoxTests
     }
 
     /// <summary>
-    /// ⚠️ <b>And a box kill that somebody else took the credit for leaves it in
+    /// <b>And a box kill that somebody else took the credit for leaves it in
     /// the pit</b> — the arm reads <c>lastDamageSource</c>, which the box
     /// overwrote with <c>FINISHED_OFF</c>.
     /// </summary>

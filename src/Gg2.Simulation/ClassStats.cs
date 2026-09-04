@@ -73,7 +73,7 @@ public readonly record struct ClassStats
     /// live, because a frame count is a file count and not a number GM8 can get
     /// wrong.
     /// <para>
-    /// ⚠️ <b>The classes differ by nearly a factor of two</b> — a scout's taunt
+    /// <b>The classes differ by nearly a factor of two</b> — a scout's taunt
     /// is 9 frames and Quote's is 17 — so a taunt is 30 ticks for one and 57 for
     /// the other. It is not a shared constant and must not be made into one.
     /// </para>

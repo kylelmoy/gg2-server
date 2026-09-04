@@ -9,14 +9,14 @@ namespace Gg2.Tests;
 /// <c>Objects/Map elements/Colliders/MovingPlatform.events</c>.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>Every entity here is hand-built, and it has to be: no shipped map
+/// <b>Every entity here is hand-built, and it has to be: no shipped map
 /// places a moving platform.</b> A census of the checked-in map fixture found 4
 /// <c>dropdownPlatform</c> and <b>0</b> <c>movingPlatform</c> across all 22 maps,
 /// so there is no fixture to load and nothing in the parity corpus that would
 /// ever exercise this. That also means these tests are the only thing standing
 /// behind the feature — there is no trace replay underneath them.
 /// <para>
-/// ⚠️ <b>What is deliberately NOT tested: the carry.</b> The reference's End Step
+/// <b>What is deliberately NOT tested: the carry.</b> The reference's End Step
 /// also picks up whoever is standing on the platform, and that is not ported —
 /// a <c>MovingPlatform</c> has no sprite of its own, so its collision box comes
 /// from an embedded resource in a custom map and this port cannot know it.
@@ -149,7 +149,7 @@ public sealed class MovingPlatformTests
 
         MovingPlatforms.Step(definition, ref state.MovingPlatforms[0]);
 
-        // ⚠️ EXACTLY the start, not merely close to it. The reference assigns
+        // EXACTLY the start, not merely close to it. The reference assigns
         // startX/startY rather than leaving the step where it landed, so the
         // cycle is exactly 40 ticks for ever instead of drifting.
         Assert.Equal(StartY, state.MovingPlatforms[0].Y);
@@ -179,7 +179,7 @@ public sealed class MovingPlatformTests
     }
 
     /// <summary>
-    /// ⚠️ The reference clamps at the start and not at the far end, and the
+    /// The reference clamps at the start and not at the far end, and the
     /// asymmetry is real.
     /// </summary>
     /// <remarks>
@@ -229,8 +229,7 @@ public sealed class MovingPlatformTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The guard on the degree round-trip — and a correction to what this
-    /// file first claimed about it.</b>
+    /// <b>The guard on the degree round-trip.</b>
     /// </summary>
     /// <remarks>
     /// The reference takes a <c>point_direction</c> and feeds it back through
@@ -239,12 +238,11 @@ public sealed class MovingPlatformTests
     /// Normalising <c>(left, -top)</c> directly would be arithmetically nicer and
     /// would make that step exactly 0.
     /// <para>
-    /// ⚠️ <b>I wrote that this makes <c>x_</c> creep. It does not, and the test
-    /// said so.</b> At a real map coordinate the residue is ~14 orders of
-    /// magnitude below the position's own ULP, so <c>x_ += 1.8e-16</c> at
-    /// <c>x_ = 300</c> is exactly <c>x_</c>. The drift is real per step and
-    /// unobservable once added — which is why the residue has to be shown at
-    /// <c>x = 0</c>, where the addition survives.
+    /// <b>This does not make <c>x_</c> creep.</b> At a real map coordinate the
+    /// residue is ~14 orders of magnitude below the position's own ULP, so
+    /// <c>x_ += 1.8e-16</c> at <c>x_ = 300</c> is exactly <c>x_</c>. The drift is
+    /// real per step and unobservable once added — which is why the residue has
+    /// to be shown at <c>x = 0</c>, where the addition survives.
     /// </para>
     /// <para>
     /// It stays transcribed the reference's way regardless: "unobservable at the
@@ -303,7 +301,7 @@ public sealed class MovingPlatformTests
     /// The buffer's ceiling drops platforms rather than growing, and says so.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The same shape as <c>WorldState.MaxProjectiles</c>: a custom map that
+    /// The same shape as <c>WorldState.MaxProjectiles</c>: a custom map that
     /// placed more would silently lose them, and the fix is to raise the ceiling
     /// rather than to handle the overflow. This pins the behaviour so that
     /// "silently" at least means "deterministically the first N".
@@ -321,14 +319,14 @@ public sealed class MovingPlatformTests
 
     /// <summary>The tick runs the platforms, not just the unit under test.</summary>
     /// <remarks>
-    /// ⚠️ <b>The stage's position is the point.</b> A platform is a map object,
+    /// <b>The stage's position is the point.</b> A platform is a map object,
     /// so GM8 runs its End Step before any character's — the same instance-order
     /// rule that puts <c>Generators.BeginStep</c> ahead of the character loop.
     /// This asserts the platform moved during a real tick; it cannot assert the
     /// ordering, which is why <see cref="MatchSimulation"/> carries the reason in
     /// a comment beside the call.
     /// <para>
-    /// ⚠️ <b>The map has to carry the entity, not just the state.</b> The tick
+    /// <b>The map has to carry the entity, not just the state.</b> The tick
     /// reads the definitions off the <see cref="CollisionWorld"/> and the
     /// positions off the <see cref="WorldState"/>, so a hand-populated state on a
     /// world with no platforms steps nothing — which is exactly what the first
@@ -366,30 +364,28 @@ public sealed class MovingPlatformTests
     /// spawn can reach.
     /// </summary>
     /// <remarks>
-    /// ⚠️ This is the claim the rest of this file rests on — every "hand-built
+    /// This is the claim the rest of this file rests on — every "hand-built
     /// because there is no fixture" remark, and the whole argument that the
     /// missing carry is unreachable in play.
     /// <para>
-    /// ⛔ <b>It is also the gate on a <c>SIM_UUID</c> exemption, which is the
+    /// <b>It is also the gate on a <c>SIM_UUID</c> exemption, which is the
     /// expensive half.</b> <see cref="SimulationStamp"/> did NOT bump for the
     /// moving-platform stage; that type's remarks carry the reasoning and name
     /// this test. <b>If this goes red, bump <c>SimulationBehaviourVersion</c> —
     /// do not reason about whether the new map's platform matters.</b> A
-    /// checkpoint trained before 2026-09-01 would otherwise be playing a
+    /// checkpoint trained before this gate landed would otherwise be playing a
     /// different simulation with nothing to say so.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Narrowed 2026-09-01 from "no platform names a resource at all",
-    /// by agreement between the moving-platforms lane (which wrote the gate)
-    /// and the debug-map lane (which trips it)</b>, when <c>gg_debug2</c>
-    /// gained the raft — a resourced platform inside a sealed chamber that
-    /// exists precisely to give the mask pipeline a real embedded sprite to
-    /// verify against. The narrowing is mechanical, not a name carve-out: the
-    /// platform's whole swept extent (start to far end, plus its decoded
-    /// sprite size) must be unreachable by a flood fill over open cells from
-    /// every spawn. The fill is a superset of what a character can reach, so
-    /// "unreached" soundly means "no character can walk, jump or fall to it".
-    /// ⚠️ <b>Unreachable does NOT mean no character can ever be there</b> —
+    /// <b>Narrowed from "no platform names a resource at all"</b> when
+    /// <c>gg_debug2</c> gained the raft — a resourced platform inside a sealed
+    /// chamber that exists precisely to give the mask pipeline a real embedded
+    /// sprite to verify against. The narrowing is mechanical, not a name
+    /// carve-out: the platform's whole swept extent (start to far end, plus its
+    /// decoded sprite size) must be unreachable by a flood fill over open cells
+    /// from every spawn. The fill is a superset of what a character can reach,
+    /// so "unreached" soundly means "no character can walk, jump or fall to it".
+    /// <b>Unreachable does NOT mean no character can ever be there</b> —
     /// placement paths exist that draw positions from nav nodes rather than
     /// walking anywhere, and nav-gen emits nodes inside sealed regions. That
     /// is why this gate licenses only "a shaped platform may exist while
@@ -437,7 +433,7 @@ public sealed class MovingPlatformTests
                 var left = entity.GetReal("left", 0);
                 var top = entity.GetReal("top", 60);
 
-                // ⚠️ SCALED, and leaving this out made the gate fail OPEN.
+                // SCALED, and leaving this out made the gate fail OPEN.
                 // A map sets the footprint three different ways — the `scale`
                 // property that User Event 1 reads into image_xscale, and the
                 // `xscale`/`yscale` the entity loader applies — and real maps go
@@ -539,7 +535,7 @@ public sealed class MovingPlatformTests
     /// repo's own <c>maps/</c>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Both, and that is the whole point of this helper.</b> The first
+    /// <b>Both, and that is the whole point of this helper.</b> The first
     /// version of the test above scanned only the reference's <c>Included
     /// Files</c>, so a map added to <c>maps/</c> could never trip it — and
     /// <c>gg_debug2</c> places four platforms. A gate that cannot fire reads as

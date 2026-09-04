@@ -12,7 +12,7 @@ namespace Gg2.Tests;
 /// </summary>
 /// <remarks>
 /// <c>botInputUpdate.gml</c>, and the point at which everything phase 7 built
-/// actually runs. ⚠️ The end-to-end test goes through a real
+/// actually runs. The end-to-end test goes through a real
 /// <c>GameServer</c> and reads the result off the <b>broadcast stream</b>,
 /// because "a client cannot tell a bot from a socket" is the claim the whole seam
 /// rests on and a test that reached into the server would not check it.
@@ -25,7 +25,7 @@ public sealed class ScriptedBotTests
     /// A wide floor on ctf_truefort with a clear sightline along it.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Measured by sweeping every node</b>, and it is NOT the open stretch
+    /// <b>Measured by sweeping every node</b>, and it is NOT the open stretch
     /// <see cref="BotTargetingTests"/> uses. That one — (380, 268) — was found by
     /// looking for the widest unblocked horizontal line, which is a point in the
     /// <em>air</em>: <c>NodeFromWorld</c> answers -1 there, so a follower cannot
@@ -69,13 +69,12 @@ public sealed class ScriptedBotTests
     /// A place a character can actually STAND, under the open stretch.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>(LeftX, FloorY) is a clear SIGHTLINE, not a standing position.</b> It
+    /// <b>(LeftX, FloorY) is a clear SIGHTLINE, not a standing position.</b> It
     /// was measured by sweeping for the widest unblocked horizontal line, which
     /// is exactly what a targeting test wants and exactly what a movement test
     /// must not use: <c>NodeFromWorld</c> answers -1 eighty pixels above a floor,
     /// so the follower cannot plan from it and the bot never moves — which looks
-    /// like every behaviour under test being broken at once. Three tests failed
-    /// that way before this existed.
+    /// like every behaviour under test being broken at once.
     /// </remarks>
     private static (double X, double Y) Stand(NavGraph graph, double offset = 0)
     {
@@ -111,7 +110,7 @@ public sealed class ScriptedBotTests
     /// </summary>
     /// <remarks>
     /// The whole phase in one test: the seam takes it, the combat half aims it,
-    /// the follower routes it, and the simulation moves it. ⚠️ The control is a
+    /// the follower routes it, and the simulation moves it. The control is a
     /// bot with <b>no goal</b> — it must not move — because a bot that walked
     /// regardless would pass every other assertion here.
     /// <para>
@@ -135,7 +134,7 @@ public sealed class ScriptedBotTests
         var goal = Stand(graph, OnFloor);
         Assert.True(bot.SetGoal(goal.X, goal.Y));
 
-        // ⚠️ The regroup hold is randomised per life and is not what this test is
+        // The regroup hold is randomised per life and is not what this test is
         // about; a bot that already existed last tick does not start one.
         bot.AliveLast = true;
 
@@ -150,7 +149,7 @@ public sealed class ScriptedBotTests
 
         Assert.True(Math.Abs(world.State.Characters[slot].X - goal.X) <= BotConstants.ArriveTol);
 
-        // ⚠️ The control: the same bot with no goal goes nowhere at all.
+        // The control: the same bot with no goal goes nowhere at all.
         var idle = Load();
         var idleSlot = idle.Place(PlayerClass.Soldier, Team.Red, here.X, here.Y);
         var still = Bot(idle.Nav, stagger: 1);
@@ -168,7 +167,7 @@ public sealed class ScriptedBotTests
     /// A bot with an enemy in front of it acquires, fires, and does damage.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>In a scenario world rather than on the server, and that is not a
+    /// <b>In a scenario world rather than on the server, and that is not a
     /// shortcut.</b> A server spawns its bots at the map's own spawn points —
     /// opposite ends of ctf_truefort, well past a soldier's 800px attention
     /// radius — so two bots added to a server never see each other at all until
@@ -186,10 +185,10 @@ public sealed class ScriptedBotTests
     {
         var world = Load();
 
-        // ⚠️ The graph is given but no goal is, which is what keeps this a combat
+        // The graph is given but no goal is, which is what keeps this a combat
         // test: a bot with no goal never plans and never walks.
         //
-        // ⚠️ It must NOT be null. The aim solver clamps a target's predicted fall
+        // It must NOT be null. The aim solver clamps a target's predicted fall
         // at the floor under it, and without a graph there is no floor — so a
         // target standing perfectly still is predicted to keep falling and the
         // bot aims below its feet, into the ground. A first draft passed null
@@ -235,7 +234,7 @@ public sealed class ScriptedBotTests
     /// and knows nothing about the route. A rocket jump needs one key from each, so
     /// it is applied here after both halves have run.
     /// <para>
-    /// ⚠️ It OVERRIDES the combat aim rather than being ORed with it. Whatever
+    /// It OVERRIDES the combat aim rather than being ORed with it. Whatever
     /// the bot was shooting at, the arc it is about to fly is worth more than the
     /// shot, and half an aim is a rocket into a wall beside its own feet.
     /// Character's Begin Step reads <c>aimDirection</c> when it fires the weapon and
@@ -243,7 +242,7 @@ public sealed class ScriptedBotTests
     /// down BEFORE the trigger is seen.
     /// </para>
     /// <para>
-    /// ⚠️ 270 is straight down and is not a simplification of a richer choice.
+    /// 270 is straight down and is not a simplification of a richer choice.
     /// <c>vectorfactor</c> in the rocket's blast is sqrt(sin⁴ + cos⁴), which is 1
     /// only when the impulse is axis-aligned and falls to 0.707 at 45°, so an angled
     /// rocket jump throws away up to 30% of its impulse. It also SNAPS rather than
@@ -257,7 +256,7 @@ public sealed class ScriptedBotTests
     {
         var world = Load();
 
-        // ⚠️ NO graph, and that is what isolates the hand-off. The follower CLEARS
+        // NO graph, and that is what isolates the hand-off. The follower CLEARS
         // Path.RocketFire at the top of every Step and sets it only when its own
         // takeoff gate fires — which is right, and which means a test that plants
         // the request and then polls a routed bot has it wiped before Poll ever
@@ -292,7 +291,7 @@ public sealed class ScriptedBotTests
         Assert.Equal(PathFollower.RocketAimDegrees, input.AimDirectionDegrees, 3);
         Assert.True((input.Keys & PlayerKeys.Attack) != 0, "the trigger was not pulled");
 
-        // ⚠️ The control — without the request the same tick aims at the enemy
+        // The control — without the request the same tick aims at the enemy
         // and not at the floor. Without it this passes on a bot that always aims
         // down.
         bot.Path.RocketFire = false;
@@ -314,7 +313,7 @@ public sealed class ScriptedBotTests
     /// The two halves are ORed, and neither can take the other's keys away.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Combat owns ATTACK and SPECIAL, the follower owns LEFT / RIGHT / JUMP /
+    /// Combat owns ATTACK and SPECIAL, the follower owns LEFT / RIGHT / JUMP /
     /// DOWN — which is what makes the OR safe. A bot walking <em>and</em> shooting
     /// is the ordinary case, and a port that let either half clear the other's
     /// bits would have a bot that stops to fire or fires only when standing
@@ -326,7 +325,7 @@ public sealed class ScriptedBotTests
         var world = Load();
         var graph = world.Nav!;
 
-        // ⚠️ The goal is deliberately CLOSE — inside BOT_ENGAGE_GOAL_NEAR — and
+        // The goal is deliberately CLOSE — inside BOT_ENGAGE_GOAL_NEAR — and
         // the enemy deliberately far. The engage hold exists precisely to stop a
         // bot walking past a fight, so with a distant goal the correct behaviour
         // is to STOP walking and this test would be asserting the absence of a
@@ -342,7 +341,7 @@ public sealed class ScriptedBotTests
         var goal = Stand(graph, -OnFloor + 150);
         Assert.True(bot.SetGoal(goal.X, goal.Y));
 
-        // ⚠️ The regroup hold would keep it standing for up to ninety ticks, and
+        // The regroup hold would keep it standing for up to ninety ticks, and
         // this test is not about that.
         bot.AliveLast = true;
 
@@ -352,7 +351,7 @@ public sealed class ScriptedBotTests
         {
             world.Step();
 
-            // ⚠️ Read off the CHARACTER's own key state, which is what the
+            // Read off the CHARACTER's own key state, which is what the
             // simulation applied — not off the bot's two halves, which would be
             // asserting that the OR in ScriptedBot does what the OR in
             // ScriptedBot does.
@@ -374,7 +373,7 @@ public sealed class ScriptedBotTests
     /// A bot inside its class's minimum band walks away from the enemy.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Two bots that walk into each other otherwise stand nose to nose with a
+    /// Two bots that walk into each other otherwise stand nose to nose with a
     /// degenerate aim solve and neither can shoot — and a soldier pinned at
     /// point-blank range cannot fire at all without killing itself. The band
     /// <b>replaces</b> the follower's horizontal keys rather than being ORed with
@@ -401,7 +400,7 @@ public sealed class ScriptedBotTests
             world.State.Characters[shooter].X < startX - 10,
             $"the bot did not back away: {startX} to {world.State.Characters[shooter].X}");
 
-        // ⚠️ The control: a PYRO has no minimum band, because point blank is
+        // The control: a PYRO has no minimum band, because point blank is
         // where it works. The same geometry must not push it back.
         var pyroWorld = Load();
         var pyroHere = Stand(pyroWorld.Nav!);
@@ -423,13 +422,13 @@ public sealed class ScriptedBotTests
     /// A bot alone holds for company; one with a team-mate beside it goes.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Only movement is held</b> — the bot still aims and still shoots, so
+    /// <b>Only movement is held</b> — the bot still aims and still shoots, so
     /// it never reads as frozen. And the hold ends at <c>BOT_REGROUP_MATES</c>,
     /// which is <b>1</b> rather than 2 on purpose: with 2 every bot on a freshly
     /// spawned team satisfied the test on the same frame and the whole team left
     /// as one body, which is the clumping the hold exists to stop.
     /// <para>
-    /// ⚠️ <b>The hold is SET here rather than rolled</b>, because its length is
+    /// <b>The hold is SET here rather than rolled</b>, because its length is
     /// <c>random(BOT_REGROUP_TICKS)</c> — uniform on 0-90 — and this bot's seed
     /// happens to draw about two. A test that let the roll stand would assert
     /// nothing most of the time and fail occasionally, which is the worst of both.
@@ -461,7 +460,7 @@ public sealed class ScriptedBotTests
             Math.Abs(world.State.Characters[alone].X - startX) < 30,
             $"a bot alone left without waiting: {startX} to {world.State.Characters[alone].X}");
 
-        // ⚠️ The control: with a team-mate inside BOT_REGROUP_RADIUS the hold
+        // The control: with a team-mate inside BOT_REGROUP_RADIUS the hold
         // ends at once and the bot goes.
         var withMate = Load();
         var mateHere = Stand(withMate.Nav!, -OnFloor);
@@ -492,12 +491,12 @@ public sealed class ScriptedBotTests
     /// A bot draws from its own stream, not the match's.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A rule rather than a convenience.</b> The match's stream is
+    /// <b>A rule rather than a convenience.</b> The match's stream is
     /// observable simulation — every seeded weapon puts its draw on the wire —
     /// so a bot drawing from it would make the stream's position depend on how
     /// many bots were thinking.
     /// <para>
-    /// ⚠️ And the first draft copied <c>world.State.Random</c> into a local: the
+    /// And the first draft copied <c>world.State.Random</c> into a local: the
     /// copy advanced, the world's did not, and every tick drew the <b>same</b>
     /// numbers. That is what the second assertion here is for — a stream that
     /// never advances passes any determinism test.
@@ -515,7 +514,7 @@ public sealed class ScriptedBotTests
         var bot = Bot(world.Nav, stagger: 3);
         world.Drive(shooter, bot);
 
-        // ⚠️ AliveLast, so the regroup roll does NOT happen. That roll advances
+        // AliveLast, so the regroup roll does NOT happen. That roll advances
         // the stream once on the first tick, and a test that let it run passes
         // even when every combat draw is made from a throwaway copy — which is
         // precisely the silent failure this test exists for. Checked by
@@ -528,7 +527,7 @@ public sealed class ScriptedBotTests
 
         world.Step(200);
 
-        // ⚠️ The bot's own stream moved, and it moved because of the COMBAT
+        // The bot's own stream moved, and it moved because of the COMBAT
         // draws — the aim error and the hold-fire roll.
         Assert.NotEqual(botStream, bot.Random);
 

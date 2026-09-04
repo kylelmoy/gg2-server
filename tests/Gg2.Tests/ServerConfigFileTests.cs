@@ -76,7 +76,7 @@ public sealed class ServerConfigFileTests : IDisposable
     }
 
     /// <summary>
-    /// ⚠️ <c>UseLobby</c> is honoured when written and never inherited.
+    /// <c>UseLobby</c> is honoured when written and never inherited.
     /// </summary>
     /// <remarks>
     /// The reference's ini defaults it to 1. This port must not publish its
@@ -98,7 +98,7 @@ public sealed class ServerConfigFileTests : IDisposable
     /// <remarks>
     /// <c>game_init.gml:96, 101, 103</c> wrap each read in
     /// <c>max(1, min(..., ...))</c>, so <c>CapLimit=0</c> in a stock server's ini
-    /// is a ONE-capture round and not an endless one. ⚠️ TDM invulnerability is
+    /// is a ONE-capture round and not an endless one. TDM invulnerability is
     /// the exception — its floor is 0 — and getting that one wrong would silently
     /// give every deathmatch a third of a second of spawn protection nobody asked
     /// for.
@@ -137,7 +137,7 @@ public sealed class ServerConfigFileTests : IDisposable
     /// <c>[Classlimits]</c>, by name, with 255 for anything unmentioned.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The ini's key order is not <see cref="PlayerClass"/>'s numeric order —
+    /// The ini's key order is not <see cref="PlayerClass"/>'s numeric order —
     /// the reference lists Scout, Pyro, Soldier, Heavy … and the enum is Scout,
     /// Soldier, Sniper, Demoman … so a reader that paired them positionally would
     /// cap the wrong four classes and nothing would say so.
@@ -181,7 +181,7 @@ public sealed class ServerConfigFileTests : IDisposable
         Assert.Equal("ctf_truefort", options.MapRotation[0]);
         Assert.Equal("ctf_eiger", options.MapRotation[^1]);
 
-        // ⚠️ Twenty, not twenty-two: ctf_oldfort and gg_debug ship with the port
+        // Twenty, not twenty-two: ctf_oldfort and gg_debug ship with the port
         // and are NOT in the reference's default rotation.
         Assert.DoesNotContain("ctf_oldfort", options.MapRotation);
         Assert.DoesNotContain("gg_debug", options.MapRotation);
@@ -235,7 +235,7 @@ public sealed class ServerConfigFileTests : IDisposable
     }
 
     /// <summary>
-    /// ⚠️ A rotation file that does not exist falls back to <c>[Maps]</c>,
+    /// A rotation file that does not exist falls back to <c>[Maps]</c>,
     /// silently — because the reference does.
     /// </summary>
     /// <remarks>
@@ -272,7 +272,7 @@ public sealed class ServerConfigFileTests : IDisposable
     }
 
     /// <summary>
-    /// ⛔ A key that must be a number and is not stops the server.
+    /// A key that must be a number and is not stops the server.
     /// </summary>
     /// <remarks>
     /// The alternative — ignoring it and keeping the default — is a server
@@ -292,7 +292,7 @@ public sealed class ServerConfigFileTests : IDisposable
     }
 
     /// <summary>
-    /// ⚠️ An unknown key and an unknown section are ignored, not refused.
+    /// An unknown key and an unknown section are ignored, not refused.
     /// </summary>
     /// <remarks>
     /// A real <c>gg2.ini</c> off a hosted server is mostly client preferences —
@@ -327,12 +327,9 @@ public sealed class ServerConfigFileTests : IDisposable
     /// </summary>
     /// <remarks>
     /// <c>docs/PROTOCOL.md</c> lists rewards and UPnP as deliberately absent.
-    /// ⚠️ This test used to cover <c>ServerPluginList</c> too, with the reason
-    /// "the server would advertise a plugin list it cannot serve". That reason
-    /// expired when the plugin layer landed — see
-    /// <see cref="PluginConfigTests"/>, which now asserts the opposite for those
-    /// two keys. It is worth knowing that the ignore came out <em>with</em> the
-    /// implementation and not before it.
+    /// <c>ServerPluginList</c> and related keys are covered separately, by
+    /// <see cref="PluginConfigTests"/>, which asserts the opposite for those two
+    /// keys.
     /// </remarks>
     [Fact]
     public void UnimplementedServerKeysAreIgnored()

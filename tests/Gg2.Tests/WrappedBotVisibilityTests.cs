@@ -9,7 +9,7 @@ namespace Gg2.Tests;
 /// A bot wrapped in a micro-controller is still a bot to everything that asks.
 /// </summary>
 /// <remarks>
-/// ⛔ <b>`is ScriptedBot` was the server's way of asking "is this slot a bot", and
+/// <b>`is ScriptedBot` was the server's way of asking "is this slot a bot", and
 /// a wrapper silently answers no.</b> Four sites asked it — retargeting, removal
 /// (which frees the leaving bot's <see cref="BotOccupancy"/> reservations), the
 /// map-change hand-off, and the control port's roster — and none of them would
@@ -17,7 +17,7 @@ namespace Gg2.Tests;
 /// would have been a bot still holding edges on a nav graph that no longer exists,
 /// several map rotations later.
 /// <para>
-/// ⚠️ <b>The failure mode is what makes this worth a test.</b> Nothing throws,
+/// <b>The failure mode is what makes this worth a test.</b> Nothing throws,
 /// nothing logs, and a short play session looks perfect — the bots walk, because
 /// the graph they were given at spawn is still the one they are on. It goes wrong
 /// only after a map change, which is exactly the case a quick manual check skips.
@@ -44,7 +44,7 @@ public sealed class WrappedBotVisibilityTests
     }
 
     /// <summary>
-    /// ⛔ The point of the interface: a wrapper that forgets to implement it is
+    /// The point of the interface: a wrapper that forgets to implement it is
     /// invisible again, so this asserts the implementations rather than the helper.
     /// </summary>
     [Fact]
@@ -73,7 +73,7 @@ public sealed class WrappedBotVisibilityTests
     }
 
     /// <summary>
-    /// ⚠️ <c>--bot-mode search</c> reaches the population service, and the bots it makes
+    /// <c>--bot-mode search</c> reaches the population service, and the bots it makes
     /// are still countable, retargetable and removable.
     /// </summary>
     [Fact]
@@ -81,7 +81,7 @@ public sealed class WrappedBotVisibilityTests
     {
         var options = new ServerOptions
         {
-            // ⛔ ANY FREE PORT. This test bound the default 8190 and passed only
+            // ANY FREE PORT. This test bound the default 8190 and passed only
             // while nothing else held it — it went red the moment a real server was
             // running on this machine for a playtest, which is an environment this
             // test has no business caring about. ServerHarness has always done this.

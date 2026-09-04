@@ -17,15 +17,14 @@ namespace Gg2.Tests;
 /// <see cref="Walkmask.Clearance"/>, and that is only legitimate if the answer
 /// does not move.
 /// <para>
-/// ⛔ <b>The parity fixtures cannot be this gate and passing them proves
+/// <b>The parity fixtures cannot be this gate and passing them proves
 /// nothing here.</b> A hitscan in a recorded trace is a short line between two
 /// characters in a firefight; the skip only engages over open ground, and an
 /// over-long skip would step over a thin ledge in the middle of a map that no
-/// trace ever shoots across. That is exactly CLAUDE.md's "a green fixture is not
-/// confirmation of a box".
+/// trace ever shoots across.
 /// </para>
 /// <para>
-/// ⚠️ <b>The control is the production walk with a mask that refuses to
+/// <b>The control is the production walk with a mask that refuses to
 /// promise</b>, not a transcription of it. <see cref="NoSkip"/> answers
 /// <c>IsSolid</c> identically and returns zero from
 /// <c>SafeSkipPixels</c>, which is the documented "walk pixel by pixel" answer —
@@ -40,7 +39,7 @@ public sealed class CollisionLineSkipTests
     /// See the remarks on the class.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The count is the witness that the skip is doing anything at all. Two
+    /// The count is the witness that the skip is doing anything at all. Two
     /// runs that agree prove nothing if the fast one never skipped, and no
     /// arrangement of segments can fake a probe count.
     /// </remarks>
@@ -65,7 +64,7 @@ public sealed class CollisionLineSkipTests
     /// Segments swept across three whole maps agree with the unskipped walk.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Random endpoints over the whole map rather than a fixture's two
+    /// <b>Random endpoints over the whole map rather than a fixture's two
     /// positions.</b> The skip is worth most in the open and is most likely to be
     /// wrong where the open ends, so a shot between two characters standing on a
     /// floor exercises neither. Three maps, including an area-narrowed one,
@@ -112,7 +111,7 @@ public sealed class CollisionLineSkipTests
             var x2 = x1 + Gml.LengthDirX(reach, angle);
             var y2 = y1 + Gml.LengthDirY(reach, angle);
 
-            // ⛔ The production lookup, not the counting one, so what ships is
+            // The production lookup, not the counting one, so what ships is
             // what is under test. The counting pair below is the control and the
             // witness.
             var shipped = CollisionLine.Hits(
@@ -133,14 +132,14 @@ public sealed class CollisionLineSkipTests
                 open++;
         }
 
-        // ⛔ Every case above agrees, and agreement is worthless if the sample is
+        // Every case above agrees, and agreement is worthless if the sample is
         // degenerate. Both bars below are PROPERTIES rather than thresholds fitted
         // to what the run happened to produce — the first says the sweep asks the
         // question both ways round, the second says the thing under test is
         // switched on.
         Assert.True(blocked > 0 && open > 0, $"{map}: {blocked} blocked, {open} open");
 
-        // ⚠️ The witness, and the reason this test is not vacuous: the skipping
+        // The witness, and the reason this test is not vacuous: the skipping
         // walk must probe the mask far less than the pixel-by-pixel one. A skip
         // that never engaged would make these equal and every Assert.Equal above
         // would still pass.
@@ -153,7 +152,7 @@ public sealed class CollisionLineSkipTests
     /// The bound is shared with the geometry fan rather than written twice.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Two readers march this mask now. The fan's own gate,
+    /// Two readers march this mask now. The fan's own gate,
     /// <c>ObservationRayFanTests</c>, proves the bound is safe; this proves the
     /// walk is reading the same one, which is the part that could rot silently
     /// when somebody "tidies" a duplicate constant.

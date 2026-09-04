@@ -1,4 +1,4 @@
-using System.Linq;
+﻿using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Gg2.Protocol;
@@ -7,7 +7,7 @@ using Gg2.Simulation;
 namespace Gg2.Tests;
 
 /// <summary>
-/// ⚠️ <b>What GM8's overlap primitives actually test when a projectile is
+/// <b>What GM8's overlap primitives actually test when a projectile is
 /// rotated — and it is not the bounding box this port uses.</b>
 /// </summary>
 /// <remarks>
@@ -27,7 +27,7 @@ namespace Gg2.Tests;
 /// so nothing in six phases ever noticed.
 /// </para>
 /// <para>
-/// ⚠️ <b>Rotated, the box is not a small over-estimate.</b> A <c>Shot</c> at 45°
+/// <b>Rotated, the box is not a small over-estimate.</b> A <c>Shot</c> at 45°
 /// has 25 opaque pixels inside a 169-pixel box. The port treats all 169 as
 /// solid, so a pellet fired diagonally collides with things it is six pixels
 /// clear of — and the Scattergun spreads every pellet by
@@ -43,7 +43,7 @@ namespace Gg2.Tests;
 /// is that six pixels, isolated.
 /// </para>
 /// <para>
-/// ⚠️ <b>Not yet fixed, and the fix is its own piece of work</b> — it changes
+/// <b>Not yet fixed, and the fix is its own piece of work</b> — it changes
 /// which character every projectile in the game hits, which is observable
 /// simulation, so it needs the exactness bar rather than a good approximation.
 /// The obvious model gets close and not close enough: inverse-rotating each
@@ -111,7 +111,7 @@ public sealed class RotatedMaskSampleTests
     private static ProjectileKind KindOf(string name) => Enum.Parse<ProjectileKind>(name);
 
     /// <summary>
-    /// ✅ <b>Unrotated, the mask and the box are the same rectangle — for all
+    /// <b>Unrotated, the mask and the box are the same rectangle — for all
     /// nine sprites.</b>
     /// </summary>
     /// <remarks>
@@ -163,7 +163,7 @@ public sealed class RotatedMaskSampleTests
     /// between the box and the mask, and that comparison only means anything if
     /// the box half is known to be right.
     /// <para>
-    /// ⚠️ <b>The tie exemption is the same principled one</b>, and deliberately
+    /// <b>The tie exemption is the same principled one</b>, and deliberately
     /// not a list of names: a difference is allowed only where the model itself
     /// says a rotated corner is sitting within <c>1e-9</c> of a half pixel, and
     /// only by one pixel. <b>Do not fudge the rounding</b> —
@@ -173,7 +173,7 @@ public sealed class RotatedMaskSampleTests
     /// <c>random(15) - 7.5</c>.
     /// </para>
     /// <para>
-    /// ⚠️ <b>And it corrects that note in one respect.</b> It says the ties are
+    /// <b>And it corrects that note in one respect.</b> It says the ties are
     /// "210 and 330 degrees, where <c>sin</c> is analytically -0.5". This
     /// fixture puts three of the six at <b>300</b>, where it is <c>cos</c> that
     /// is analytically 0.5 — same mechanism, an axis the old sampler's angle
@@ -265,7 +265,7 @@ public sealed class RotatedMaskSampleTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The open finding, stated as a number: every sprite's box badly
+    /// <b>The open finding, stated as a number: every sprite's box badly
     /// over-states its mask once it is turned.</b>
     /// </summary>
     /// <remarks>
@@ -317,7 +317,7 @@ public sealed class RotatedMaskSampleTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The six pixels that <c>gg_debug</c> costs, isolated: at the
+    /// <b>The six pixels that <c>gg_debug</c> costs, isolated: at the
     /// divergence angle a rocket's top row is ONE pixel wide, and the port
     /// treats it as eight.</b>
     /// </summary>
@@ -362,7 +362,7 @@ public sealed class RotatedMaskSampleTests
     }
 
     /// <summary>
-    /// ✅ <b><see cref="ProjectileMask"/> against every sampled pixel: 99.9736%,
+    /// <b><see cref="ProjectileMask"/> against every sampled pixel: 99.9736%,
     /// and every single mismatch is a rounding tie.</b>
     /// </summary>
     /// <remarks>
@@ -372,7 +372,7 @@ public sealed class RotatedMaskSampleTests
     /// measures — is right on 91.5% of these pixels. The mask is right on
     /// 99.9736%: 82 wrong where the box was 26,342.
     /// <para>
-    /// ⚠️ <b>And the 82 are not a residue traded away — every one is a rounding
+    /// <b>And the 82 are not a residue traded away — every one is a rounding
     /// tie</b>, asserted below rather than counted. A transformed coordinate
     /// within <c>1e-9</c> of an integer is where docs/SIMULATION.md's x87 gap
     /// decides a floor the other way; it is the class
@@ -381,7 +381,7 @@ public sealed class RotatedMaskSampleTests
     /// model itself is wrong, and there are none.
     /// </para>
     /// <para>
-    /// ⚠️ <b>An earlier version of this test scored 431 and blamed 171 of them
+    /// <b>An earlier version of this test scored 431 and blamed 171 of them
     /// on the model.</b> It scored <c>Covers</c> across the whole sampled grid
     /// while the shipped path only ever asks inside the reported box, so it
     /// counted disagreements about pixels no caller can reach. <b>Score what the
@@ -396,7 +396,7 @@ public sealed class RotatedMaskSampleTests
 
         Assert.Equal(310194, total);
 
-        // ⚠️ The assertion with the content. A tie is arithmetic this project
+        // The assertion with the content. A tie is arithmetic this project
         // has already decided it cannot win; a structural mismatch is the model
         // being wrong, and there are none.
         Assert.True(
@@ -517,7 +517,7 @@ public sealed class RotatedMaskSampleTests
     }
 
     /// <summary>
-    /// ⚠️ <b>Two projectiles whose boxes overlap and whose masks do not — the
+    /// <b>Two projectiles whose boxes overlap and whose masks do not — the
     /// case the bubble sites were getting wrong.</b>
     /// </summary>
     /// <remarks>
@@ -575,7 +575,7 @@ public sealed class RotatedMaskSampleTests
     }
 
     /// <summary>
-    /// ✅ <b>MEASURED 2026-08-28: a precise mask hangs off the ROUNDED position,
+    /// <b>MEASURED 2026-08-28: a precise mask hangs off the ROUNDED position,
     /// not the exact one</b> — so <c>ProjectileMask</c>'s anchor is right.
     /// </summary>
     /// <remarks>

@@ -238,7 +238,7 @@ public sealed class SubWireProbe(PortedSimulation inner, IReadOnlyList<TraceTick
         // x*5 — no GML round() first, unlike Intelligence — and its velocity as
         // v*8.5 into a *signed byte*.
         //
-        // ⚠️ Which is why a saturated velocity is skipped rather than compared.
+        // Which is why a saturated velocity is skipped rather than compared.
         // WireQuantise clamps instead of wrapping, so an observed +/-127 says
         // only "at least 14.94 px/tick" and the fraction it was rounded from is
         // gone. Comparing against it would report a residual of whatever the

@@ -1,4 +1,4 @@
-using Gg2.Maps;
+﻿using Gg2.Maps;
 using Gg2.Protocol;
 using Gg2.Simulation;
 
@@ -168,7 +168,7 @@ public sealed class RocketTests
     /// One rocket, twenty pixels ahead of the weapon, at speed 13 along the aim.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The muzzle is the <em>weapon's</em> position plus the offset, and the
+    /// The muzzle is the <em>weapon's</em> position plus the offset, and the
     /// weapon is where the character was at the end of the previous tick, rounded
     /// half to even — <c>Character.events/End Step.xml:64-65</c>. Anchoring the
     /// offset on the character instead moves every rocket.
@@ -240,7 +240,7 @@ public sealed class RocketTests
     /// them correctly because a level entity's mask fills its box, which was
     /// measured against the running game rather than assumed.
     /// <para>
-    /// ⚠️ Team does not enter into it. <c>gunSetSolids</c> makes <em>every</em>
+    /// Team does not enter into it. <c>gunSetSolids</c> makes <em>every</em>
     /// gate solid to a bullet whichever team it belongs to, so a red soldier's
     /// rocket goes off against a red gate. That is why the soldier below is on
     /// the same team as the gate it is shooting.
@@ -351,7 +351,7 @@ public sealed class RocketTests
     }
 
     /// <summary>
-    /// ⚠️ A rocket does not move on a tick it is already colliding, so the blast
+    /// A rocket does not move on a tick it is already colliding, so the blast
     /// lands where it hit rather than a step past it.
     /// </summary>
     /// <remarks>
@@ -391,7 +391,7 @@ public sealed class RocketTests
     /// it fades out and stops being able to hurt anybody.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <c>if (!fade) event_user(5) else instance_destroy()</c> — an
+    /// <c>if (!fade) event_user(5) else instance_destroy()</c> — an
     /// over-range rocket that reaches a wall is deleted in silence, and somebody
     /// standing in front of that wall takes nothing at all.
     /// </remarks>
@@ -534,7 +534,7 @@ public sealed class RocketTests
     }
 
     /// <summary>
-    /// ⚠️ Splash damage depends on which way the victim is facing.
+    /// Splash damage depends on which way the victim is facing.
     /// </summary>
     /// <remarks>
     /// <c>distance_to_object</c> takes GM8's reported bounding box, and a
@@ -662,7 +662,7 @@ public sealed class RocketTests
     }
 
     /// <summary>
-    /// ✅ <b>A rocket jump costs its shooter exactly what the same blast costs an
+    /// <b>A rocket jump costs its shooter exactly what the same blast costs an
     /// enemy — GG2 has no self-damage reduction at all.</b>
     /// </summary>
     /// <remarks>
@@ -673,7 +673,7 @@ public sealed class RocketTests
     /// <c>damageCharacter</c> → <c>dealDamage</c> has no owner test anywhere
     /// below it. So the shooter pays the full linear falloff.
     /// <para>
-    /// ⚠️ <b>The gate is the EQUALITY, not the number.</b>
+    /// <b>The gate is the EQUALITY, not the number.</b>
     /// <c>ARocketJumpHurtsAndLaunchesItsOwnShooter</c> asserts only
     /// <c>Hp &lt; before</c>, which is what a halved or floored self-damage rule
     /// would still satisfy — and adding one is the single most natural "fix"
@@ -728,7 +728,7 @@ public sealed class RocketTests
     }
 
     /// <summary>
-    /// ✅ <b>A rocket that reports its own shooter as the thing it struck does not
+    /// <b>A rocket that reports its own shooter as the thing it struck does not
     /// go off at all</b> — which is why a rocket jump can never cost 25 + 30.
     /// </summary>
     /// <remarks>
@@ -754,7 +754,7 @@ public sealed class RocketTests
     }
 
     /// <summary>
-    /// ✅ <b>The worst a rocket jump can cost a soldier is 30 of 160</b>, so it
+    /// <b>The worst a rocket jump can cost a soldier is 30 of 160</b>, so it
     /// takes six of them from full health to kill you.
     /// </summary>
     /// <remarks>
@@ -786,7 +786,7 @@ public sealed class RocketTests
         // ceiling rather than by rocket-jumping five more times, which would
         // measure the falloff of five different geometries.
         //
-        // ⚠️ 160/30 is 5.33, not 5: a soldier who has rocket-jumped five times
+        // 160/30 is 5.33, not 5: a soldier who has rocket-jumped five times
         // from full is on 10hp and still standing. The first draft of this test
         // asserted five and was wrong, which is the whole reason the count is
         // pinned rather than left in a comment.
@@ -795,10 +795,10 @@ public sealed class RocketTests
     }
 
     /// <summary>
-    /// ✅ <b>A rocket that hits an enemy is GONE, and does not fly on.</b>
+    /// <b>A rocket that hits an enemy is GONE, and does not fly on.</b>
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Reported by a player from the first two-human game</b> — "the
+    /// <b>Reported by a player from the first two-human game</b> — "the
     /// rocket appeared to continue moving past the scout it killed and exploded
     /// against the stairs past the scout". This is the server half of that
     /// report, and it holds: the rocket is destroyed on the tick it hits.
@@ -809,7 +809,7 @@ public sealed class RocketTests
     /// calls — and then asks the pool, which is the question the report asks.
     /// </para>
     /// <para>
-    /// ⚠️ <b>The report's cause is not here, and this test cannot find it.</b>
+    /// <b>The report's cause is not here, and this test cannot find it.</b>
     /// A rocket is <em>never on the wire</em>: <c>WEAPON_FIRE</c> carries the
     /// shooter's quantised position, velocity and an RNG seed, and the client
     /// creates and simulates the whole flight itself with nothing ever
@@ -833,7 +833,7 @@ public sealed class RocketTests
 
         var before = state.Characters[2].Hp;
 
-        // ⚠️ Both stages. A tick is Move and then, well after the characters
+        // Both stages. A tick is Move and then, well after the characters
         // have moved, Collide — MatchSimulation.cs:234 and :313. Calling only
         // Move flies the rocket straight through everybody, which is what the
         // first draft of this test did and why it looked like it had reproduced

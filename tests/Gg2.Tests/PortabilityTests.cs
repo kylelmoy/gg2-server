@@ -17,14 +17,14 @@ namespace Gg2.Tests;
 /// The server runs on Linux, and these are the gates that say so mechanically.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>Written because the claim had nothing behind it.</b> Nothing in the
+/// <b>Written because the claim had nothing behind it.</b> Nothing in the
 /// repo asserted the server was portable; a <c>dotnet publish -r linux-x64</c>
 /// happened to succeed, which is evidence about one afternoon rather than a
 /// gate. The two ways it could quietly stop being true are an unguarded
 /// P/Invoke and a hard-coded Windows path, and both are cheap to check by
 /// reflection.
 /// <para>
-/// ⛔ <b>What these do NOT establish.</b> They are static checks run on Windows.
+/// <b>What these do NOT establish.</b> They are static checks run on Windows.
 /// They cannot see a case-sensitivity assumption, a permissions difference, or
 /// anything about actually running the binary on Linux — <c>docs/DEPLOY.md</c>,
 /// "What is verified and what is not", says which is which. Do not let a green
@@ -35,7 +35,7 @@ public class PortabilityTests
 {
     /// <summary>Every assembly a deployed server actually loads.</summary>
     /// <remarks>
-    /// ⚠️ <c>Gg2.Parity</c> and <c>Gg2.Env</c> are deliberately absent: they are
+    /// <c>Gg2.Parity</c> and <c>Gg2.Env</c> are deliberately absent: they are
     /// development tooling that never ships in the server's publish output, so a
     /// platform dependency in one of them is not a deployment problem. Add an
     /// assembly here when it starts shipping, not when it starts existing.
@@ -91,7 +91,7 @@ public class PortabilityTests
     }
 
     /// <summary>
-    /// ⚠️ The test above passes trivially if the count is zero, so pin the one
+    /// The test above passes trivially if the count is zero, so pin the one
     /// P/Invoke that exists.
     /// </summary>
     /// <remarks>
@@ -117,8 +117,7 @@ public class PortabilityTests
                 // TimerResolution is: the extern is annotated, ReadMemoryWindows
                 // carries the same attribute, and its only call sits under an
                 // OperatingSystem.IsWindows() branch that falls back to
-                // /proc/meminfo. Added when web-admin merged: this gate and the
-                // P/Invoke came from different branches and neither was red alone.
+                // /proc/meminfo.
                 "SystemInfo.GlobalMemoryStatusEx",
                 "TimerResolution.BeginPeriod",
                 "TimerResolution.EndPeriod",
@@ -132,15 +131,15 @@ public class PortabilityTests
     /// resolved.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>This was a real defect, not a hypothetical one.</b> Until 2026-09-01
-    /// every entry point defaulted <c>MapDirectory</c> to
+    /// <b>This was a real defect, not a hypothetical one.</b> Every entry point
+    /// once defaulted <c>MapDirectory</c> to
     /// <c>D:\code\Gang-Garrison-2\Source\gg2\Included Files</c> — see
     /// <c>MapDirectory</c>'s remarks — so the server could not serve a round on
     /// any machine but one, let alone another operating system. Reading the
     /// literals out of the metadata is the cheapest thing that would have caught
     /// it.
     /// <para>
-    /// ⛔ <b>The #US heap specifically, NOT the file's bytes.</b> A first draft
+    /// <b>The #US heap specifically, NOT the file's bytes.</b> A first draft
     /// scanned the whole assembly and failed immediately on
     /// <c>...\obj\Debug\net10.0\Gg2.Server.pdb</c> — the debug directory's
     /// path, which every build embeds and which no code ever reads. Scanning
@@ -183,7 +182,7 @@ public class PortabilityTests
     }
 
     /// <summary>
-    /// ⚠️ The control arm for the check above: the detector fires on the literal
+    /// The control arm for the check above: the detector fires on the literal
     /// that used to be in the code, and does not fire on the backslash literals
     /// that legitimately are.
     /// </summary>

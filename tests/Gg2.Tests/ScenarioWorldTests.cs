@@ -41,7 +41,7 @@ public sealed class ScenarioWorldTests
     /// A character is placed exactly where it was asked for, with its weapon.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The weapon assertion is the one that bites.</b> A weapon starts on
+    /// <b>The weapon assertion is the one that bites.</b> A weapon starts on
     /// its owner's unrounded coordinates and only reaches <c>round(x)</c> in End
     /// Step, and a shot leaves from the <em>weapon</em> — so a character
     /// teleported without its weapon fires its first shot from wherever it
@@ -64,7 +64,7 @@ public sealed class ScenarioWorldTests
         Assert.Equal(1234.5, world.State.Weapons[slot].X);
         Assert.Equal(678.25, world.State.Weapons[slot].Y);
 
-        // ⚠️ Asserted HERE, at placement, and not after a run: spawn protection
+        // Asserted HERE, at placement, and not after a run: spawn protection
         // decays to nothing within a few seconds, so a run of any length hides
         // a world that grants it. WorldState.Spawn hands a TDM character
         // TdmInvulnerabilityTicks of it, and a non-zero value would make every
@@ -83,7 +83,7 @@ public sealed class ScenarioWorldTests
     /// </summary>
     /// <remarks>
     /// The whole claim of item 11, and every clause of it is a "0 means off"
-    /// escape that is easy to leave out. ⚠️ Two thousand ticks is well past the
+    /// escape that is easy to leave out. Two thousand ticks is well past the
     /// shortest round the reference permits, so a world that had a limit set
     /// would have ended one by here — and a round ending opens every gate, which
     /// would quietly change what a routing scenario measures.
@@ -112,7 +112,7 @@ public sealed class ScenarioWorldTests
     /// A death in a scenario is final.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Two things have to be off for this, and each alone is enough to break
+    /// Two things have to be off for this, and each alone is enough to break
     /// it: <see cref="WorldState.RespawnTime"/> at zero, and no
     /// <c>SpawnPoints</c> handed to the tick. Without them a killed dummy comes
     /// back and a damage figure silently becomes a measurement of two lives.
@@ -129,7 +129,7 @@ public sealed class ScenarioWorldTests
 
         Assert.False(world.State.Alive[slot]);
 
-        // ⚠️ Checked on the tick of the death, because that is the only tick on
+        // Checked on the tick of the death, because that is the only tick on
         // which RespawnTime is readable: Deaths.Kill arms the timer from it, and
         // a timer armed at 150 is back at zero 150 ticks later whether or not
         // anybody respawned. A test that looked afterwards would pass with the
@@ -149,7 +149,7 @@ public sealed class ScenarioWorldTests
     /// <remarks>
     /// The control for every combat scenario: a "dummy" is a character with no
     /// source, which is what makes the damage measured unambiguously the
-    /// subject's doing. ⚠️ In the reference a dummy is an acquisition delay and
+    /// subject's doing. In the reference a dummy is an acquisition delay and
     /// a locked goal — ordinary knobs, so a training dummy needs no test-only
     /// code in the game. "No source" is the same thing here, and needs none
     /// either.
@@ -182,7 +182,7 @@ public sealed class ScenarioWorldTests
     /// <remarks>
     /// docs/BOTAI.md's determinism requirement, from the scenario side: a
     /// self-play evaluator that cannot reproduce a run cannot attribute a
-    /// difference to a change. ⚠️ <see cref="WorldState.Random"/> starts at seed
+    /// difference to a change. <see cref="WorldState.Random"/> starts at seed
     /// 0 in a default state, which is exactly what makes this hold — and is why
     /// <c>randomize()</c> is deliberately not transcribed anywhere in this port.
     /// </remarks>
@@ -214,7 +214,7 @@ public sealed class ScenarioWorldTests
     /// This is <c>soldier-holds-and-fires</c> run with the stupidest possible
     /// source — hold the trigger, aim right — so what it gates is the harness:
     /// the placement, the weapon following its owner, the tick loop, and the
-    /// damage arithmetic. ⚠️ The real scenario asserts <c>acquired</c> as well,
+    /// damage arithmetic. The real scenario asserts <c>acquired</c> as well,
     /// which needs a bot that picks targets; that half waits for item 4.
     /// <para>
     /// The control is the null source: with nobody pulling the trigger the same
@@ -280,14 +280,14 @@ public sealed class ScenarioWorldTests
     /// A travel run reports arrival, and stops on the tick it arrives.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Arrival is what a budget is <em>for</em>: "a leg that takes longer is a
+    /// Arrival is what a budget is <em>for</em>: "a leg that takes longer is a
     /// fail even if it eventually arrives — 'gets there in the end' is how a bot
     /// that re-plans in a loop looks from the outside." So the runner has to
     /// stop early and report the tick, not run the budget out and check the
     /// position afterwards.
     /// <para>
     /// The scenario here is synthetic and the source is a held key, because the
-    /// fourteen real ones need a bot. ⚠️ LEFT: red spawns on the <em>right</em>
+    /// fourteen real ones need a bot. LEFT: red spawns on the <em>right</em>
     /// of ctf_truefort and a scout holding RIGHT walks into the back of its own
     /// base.
     /// </para>
@@ -327,14 +327,14 @@ public sealed class ScenarioWorldTests
     /// placed.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The reference's runner does the same and reports the snapped position,
+    /// The reference's runner does the same and reports the snapped position,
     /// because a raw coordinate usually does not resolve to a node.
     /// <c>valley-shaft-crate-to-point</c>'s comment records the trap directly:
     /// its <c>from</c> is deliberately <em>above</em> the crate, because the
     /// search goes downward and a point level with the surface you mean resolves
     /// to whatever is under it instead.
     /// <para>
-    /// ⚠️ The assertion is on a scenario whose snapped x <em>differs</em> from
+    /// The assertion is on a scenario whose snapped x <em>differs</em> from
     /// its raw one, which most do not: an anchor column is six pixels wide and
     /// <c>valley-shaft-crate-to-point</c>'s 2250 lands exactly on a column
     /// centre, so placing it raw and placing it snapped agree by coincidence and
@@ -352,7 +352,7 @@ public sealed class ScenarioWorldTests
 
         Assert.True(snap.Node >= 0);
 
-        // ⚠️ x only. The scenario's y is already a node's exact stand position —
+        // x only. The scenario's y is already a node's exact stand position —
         // these coordinates were chosen by asking the reference's graph — so the
         // snap leaves it alone and asserting it moved would fail for the right
         // reason at the wrong place. The x is two pixels off a column centre,

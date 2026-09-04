@@ -14,7 +14,7 @@ namespace Gg2.Bots;
 /// nothing is serialised from it, and a rollout that forks the world does not
 /// want to fork twelve routes with it.
 /// <para>
-/// ⚠️ <b>Which means a rollout has to decide what to do about it.</b> Forking a
+/// <b>Which means a rollout has to decide what to do about it.</b> Forking a
 /// <see cref="Gg2.Simulation.WorldState"/> and re-using one of these gives the
 /// forked world a bot that is part-way along a route planned in the parent. That
 /// is usually what you want for a short horizon and never what you want for a
@@ -25,7 +25,7 @@ public sealed class BotPathState
 {
     /// <summary>The route, node by node, or empty when there is none.</summary>
     /// <remarks>
-    /// ⚠️ <b>An empty route and a route the bot has finished are different
+    /// <b>An empty route and a route the bot has finished are different
     /// states.</b> <see cref="HasGoal"/> is what says whether the bot is trying
     /// to go anywhere; arriving clears it. A bot with no route and a goal is one
     /// whose search failed and will try again.
@@ -38,12 +38,12 @@ public sealed class BotPathState
     /// nowhere".
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Not the same as the bot's team now.</b> Autobalance can switch a bot
+    /// <b>Not the same as the bot's team now.</b> Autobalance can switch a bot
     /// mid-round and a rotation re-teams every one of them, so a removal that read
     /// the current team would subtract from the wrong map and leave the old one
     /// raised for ever.
     /// <para>
-    /// ⚠️ <b>One field where the reference has two.</b> <c>botOccupied</c> and
+    /// <b>One field where the reference has two.</b> <c>botOccupied</c> and
     /// <c>botOccupiedTeam</c> carry the same information there and can disagree;
     /// here the team IS the flag, so the state that would have to be kept in step
     /// does not exist. <see cref="BotOccupancy"/> owns it; nothing else writes it.
@@ -53,7 +53,7 @@ public sealed class BotPathState
 
     /// <summary>Whether <see cref="Path"/> is counted anywhere.</summary>
     /// <remarks>
-    /// ⚠️ <b>A route is added once and removed in three places</b> — on every
+    /// <b>A route is added once and removed in three places</b> — on every
     /// re-plan, arrival and death; when the bot leaves or the map changes; and by
     /// the planner itself before it searches — so without this an edge two bots
     /// are on would be decremented twice by one of them and the other's count
@@ -63,7 +63,7 @@ public sealed class BotPathState
 
     /// <summary>How far along <see cref="Path"/> the bot has got.</summary>
     /// <remarks>
-    /// ⚠️ Advanced forward only. A bot only ever moves along its own route, and
+    /// Advanced forward only. A bot only ever moves along its own route, and
     /// looking backwards would let a long surface the route touches twice pull
     /// it into a loop.
     /// </remarks>
@@ -82,7 +82,7 @@ public sealed class BotPathState
     /// The route is to a goal that has already been replaced.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Kept only so the bot keeps moving until a plan for the new goal exists.
+    /// Kept only so the bot keeps moving until a plan for the new goal exists.
     /// Its last node is somewhere the bot was sent before, so <b>reaching the end
     /// of it is not an arrival at anything</b> — declaring one would clear
     /// <see cref="HasGoal"/> and throw away the objective the bot was just given.
@@ -95,7 +95,7 @@ public sealed class BotPathState
     /// <summary>The tick <see cref="Arrived"/> was set on.</summary>
     /// <remarks>
     /// Read against the tick the goal was issued, this is how long the leg took —
-    /// the one number a navigation change can be compared on. ⚠️ It cannot be
+    /// the one number a navigation change can be compared on. It cannot be
     /// recovered from outside: arrival clears the goal, so a bot that has arrived
     /// and a bot that never had one look identical a moment later.
     /// </remarks>
@@ -112,7 +112,7 @@ public sealed class BotPathState
     /// (player mod BOT_REPLAN_TICKS)</c>, where <c>player</c> is the instance id
     /// — so a server full of bots does not do all of its searching on one frame.
     /// <para>
-    /// ⚠️ <b>It is ADDED, so it changes the interval and not just the phase</b>,
+    /// <b>It is ADDED, so it changes the interval and not just the phase</b>,
     /// and that has a consequence nothing in the reference remarks on: a
     /// successful re-plan clears the edge in progress, which zeroes
     /// <see cref="TakeoffTicks"/> on the next tick — so a bot's re-plan interval
@@ -131,7 +131,7 @@ public sealed class BotPathState
     /// A failed search parks the next one until this tick.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Only while a route is actually installed. A failed search <em>keeps</em>
+    /// Only while a route is actually installed. A failed search <em>keeps</em>
     /// the old route, so every event-driven caller would otherwise fire again on
     /// the next tick — a full A* per bot per frame, for a goal that cannot be
     /// reached from a pixel away either. A bot with nothing to follow has to keep
@@ -177,7 +177,7 @@ public sealed class BotPathState
     /// does not mention.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Two, not one.</b> A lot of real edges are marginal — a three-column
+    /// <b>Two, not one.</b> A lot of real edges are marginal — a three-column
     /// ledge reached by a slow steep arc — and those are flown stochastically.
     /// Banning one on its first miss costs five seconds of wandering for a
     /// perfectly good edge, which measured as ~250 frames to complete a hop that
@@ -190,7 +190,7 @@ public sealed class BotPathState
     /// Whether the bot is part-way through an arc the generator validated.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Cleared at the top of every follower tick and set only by the in-flight
+    /// Cleared at the top of every follower tick and set only by the in-flight
     /// branch, so every early return leaves it false. The evasion behaviours read
     /// it: an extra jump or a step in the air permanently ruins a
     /// position-per-tick trajectory.
@@ -202,7 +202,7 @@ public sealed class BotPathState
     /// other tick.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Jump is edge-triggered, not held.</b>
+    /// <b>Jump is edge-triggered, not held.</b>
     /// <c>Character.events/Begin Step.xml</c> jumps on <c>pressedKeys &amp; $80</c>
     /// — a rising edge — so a bot holding JUMP down jumps exactly once and then
     /// never again.
@@ -211,7 +211,7 @@ public sealed class BotPathState
 
     /// <summary>Ticks airborne on the current arc, counted from takeoff.</summary>
     /// <remarks>
-    /// ⚠️ <b>Counted rather than read off <c>vspeed</c></b>, which would otherwise
+    /// <b>Counted rather than read off <c>vspeed</c></b>, which would otherwise
     /// give the phase of the arc for free: <c>vspeed</c> pins at 10 once the fall
     /// reaches terminal velocity, and every phase after that reads as the same
     /// tick.
@@ -222,13 +222,13 @@ public sealed class BotPathState
     /// Ticks spent standing at the takeoff column refusing to leave.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Counted <em>only</em> at the gate, and cleared by nothing but a takeoff
+    /// Counted <em>only</em> at the gate, and cleared by nothing but a takeoff
     /// or a change of edge. The failure it exists for is a bot that shuffles
     /// between the gate and its run-up for ever; counting the approach as well
     /// would spend the budget on a long walk and then fire a jump from the middle
     /// of the run.
     /// <para>
-    /// ⚠️ In the reference this was set in four places and incremented in none,
+    /// In the reference this was set in four places and incremented in none,
     /// so <c>BOT_TAKEOFF_PATIENCE</c> could never be reached and the escape hatch
     /// was dead code for its whole life.
     /// </para>
@@ -244,7 +244,7 @@ public sealed class BotPathState
 
     /// <summary>Whether this arc's second impulse has already been spent.</summary>
     /// <remarks>
-    /// ⚠️ A once-only flag rather than a bare equality on the tick: <c>&gt;=</c>
+    /// A once-only flag rather than a bare equality on the tick: <c>&gt;=</c>
     /// with a flag survives a tick that does not reach the branch, where
     /// <c>==</c> would silently fly a double-jump arc as a single jump and land
     /// the bot somewhere the graph never said.
@@ -271,7 +271,7 @@ public sealed class BotPathState
 
     // --- diagnostics ---------------------------------------------------------
     //
-    // Counters rather than logs. ⚠️ `Replans` is deliberately NOT something to
+    // Counters rather than logs. `Replans` is deliberately NOT something to
     // cap in a scenario: it is a measure of how long the leg took rather than of
     // anything going wrong.
 
@@ -279,10 +279,10 @@ public sealed class BotPathState
 
     /// <summary>How many times this bot has been given a new goal.</summary>
     /// <remarks>
-    /// ⛔ <b>The search budget's biggest single term, and it is not the re-plan
+    /// <b>The search budget's biggest single term, and it is not the re-plan
     /// timer.</b> A <see cref="PathFollower.SetGoal"/> sets <c>ReplanAt</c> to 0,
     /// so every goal reissue buys a full A* on the next follower tick — measured
-    /// 2026-09-02 on a twelve-bot <c>ctf_truefort</c> match at <b>181 of the 321
+    /// on a twelve-bot <c>ctf_truefort</c> match at <b>181 of the 321
     /// searches a thousand ticks</b>, against 97 from the timer and 43 from a
     /// lost route. That is why this is counted beside <see cref="Replans"/>
     /// rather than left to a probe: the two together say which half of the
@@ -303,13 +303,13 @@ public sealed class BotPathState
     /// This tick's rocket-jump hand-off: aim straight down and fire.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The follower cannot fire.</b> It owns LEFT / RIGHT / JUMP / DOWN and
+    /// <b>The follower cannot fire.</b> It owns LEFT / RIGHT / JUMP / DOWN and
     /// the aim comes from the combat half alone, so a rocket jump is <em>requested</em>
     /// rather than pressed — <c>botInputUpdate</c> applies it after
     /// <c>botCombatUpdate</c> has run, which is the only place that can see both
     /// halves. <c>ScriptedBot</c> is that place here.
     /// <para>
-    /// ⚠️ <b>A bool rather than the reference's <c>botRocketAim</c> direction</b>,
+    /// <b>A bool rather than the reference's <c>botRocketAim</c> direction</b>,
     /// because 270 is the only value it ever holds and that is a decision rather
     /// than a default: <c>vectorfactor</c> in the rocket's blast is
     /// sqrt(sin⁴ + cos⁴), which is 1 only when the impulse is axis-aligned and
@@ -317,7 +317,7 @@ public sealed class BotPathState
     /// impulse. <c>PathFollower.RocketAimDegrees</c> is the number.
     /// </para>
     /// <para>
-    /// ⚠️ Cleared at the top of every <c>Step</c>, so a tick that does not reach
+    /// Cleared at the top of every <c>Step</c>, so a tick that does not reach
     /// the takeoff gate cannot leave last tick's request standing.
     /// </para>
     /// </remarks>
@@ -331,7 +331,7 @@ public sealed class BotPathState
     /// Handed over like <see cref="RocketFire"/> and for the same reason: the
     /// follower owns LEFT / RIGHT / JUMP / DOWN and cannot fire, so the aim and
     /// the trigger are applied by <c>ScriptedBot</c> after the combat half has
-    /// run. ⚠️ Straight down, for the same <c>vectorfactor</c> reason a rocket
+    /// run. Straight down, for the same <c>vectorfactor</c> reason a rocket
     /// jump aims down.
     /// </remarks>
     public bool MineFire { get; set; }
@@ -341,7 +341,7 @@ public sealed class BotPathState
     /// the <em>same</em> tick as the jump.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Right-click, not attack.</b> <c>Minegun</c>'s User Event 2 detonates
+    /// <b>Right-click, not attack.</b> <c>Minegun</c>'s User Event 2 detonates
     /// every mine the demoman owns, and Begin Step runs the jump branch before
     /// the right-click branch — so pressing both on one tick stacks the blast on
     /// <c>vspeed = -jumpStrength</c>. A tick later would waste the jump.
@@ -356,7 +356,7 @@ public sealed class BotPathState
     /// no sticky jump is being set up</b> rather than "ready now" — a zeroed
     /// state must not read as a mine that is waiting.
     /// <para>
-    /// ⚠️ <b>Reset on every re-plan and on leaving the ground</b>, because a
+    /// <b>Reset on every re-plan and on leaving the ground</b>, because a
     /// countdown that survives either is a bot detonating under a route it is no
     /// longer following.
     /// </para>
@@ -373,7 +373,7 @@ public sealed class BotPathState
     /// How many ticks the follower asked for an edge kind it cannot fly.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Zero once the jump branch lands.</b> Until then a jump, double jump
+    /// <b>Zero once the jump branch lands.</b> Until then a jump, double jump
     /// or rocket jump on a route is steered by nothing, and the bot falls back on
     /// the machinery that already exists for an edge that turns out to be
     /// untraversable — the stuck detector takes it away and the search routes
@@ -390,13 +390,13 @@ public sealed class BotPathState
     /// installed by something other than <c>PathFollower.Plan</c>, which is a
     /// thing only a test does. It forces an immediate re-plan.
     /// <para>
-    /// ⚠️ <b>It is NOT the live capability going away, and saying so was wrong for
+    /// <b>It is NOT the live capability going away, and saying so was wrong for
     /// exactly as long as this counter has existed.</b> The hop is resolved
     /// against <see cref="PlanQuery"/>, so a soldier whose launcher goes cold
     /// mid-arc does not land here — deliberately, because doing so was a loop.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Counted because it is a re-plan that costs a tick of standing
+    /// <b>Counted because it is a re-plan that costs a tick of standing
     /// still</b>, and a route that keeps naming a hop with no edge under it would
     /// otherwise burn a full A* per bot per frame in silence.
     /// </para>
@@ -407,12 +407,12 @@ public sealed class BotPathState
     /// The traveller <see cref="Path"/> was planned for.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A route is a list of NODES, so the edge it costed can only be
+    /// <b>A route is a list of NODES, so the edge it costed can only be
     /// re-derived — and only against the query that costed it.</b>
     /// <c>PathFollower.TryFindEdge</c> picks a pair's cheapest routable edge,
     /// which reproduces A* exactly only if it is asked the same question A* was.
     /// <para>
-    /// ⚠️ <b>Asking the LIVE query instead is a loop, and it was measured.</b>
+    /// <b>Asking the LIVE query instead is a loop, and it was measured.</b>
     /// <c>ScriptedBot</c> rebuilds <see cref="NavQuery.CanRocketJump"/> from the
     /// weapon every tick, and firing the rocket that starts a rocket jump puts
     /// the launcher on cooldown — so the capability goes false on the tick after
@@ -438,7 +438,7 @@ public sealed class BotPathState
     /// Gives up the route and everything that belongs to it.
     /// </summary>
     /// <remarks>
-    /// <c>botPathFree</c>. ⚠️ The per-route counters go with the route — the edge
+    /// <c>botPathFree</c>. The per-route counters go with the route — the edge
     /// in progress, the off-route and stuck counters — which is why this is one
     /// call and not a caller's job to remember.
     /// </remarks>
@@ -452,7 +452,7 @@ public sealed class BotPathState
         OffPathTicks = 0;
         PathStale = false;
 
-        // ⚠️ The run-up belongs to the edge that was being prepared for, and
+        // The run-up belongs to the edge that was being prepared for, and
         // that edge is gone with the route. The takeoff budget is NOT reset here
         // — botPathFree.gml does not touch it — and the distinction is not
         // academic: it is zeroed a moment later anyway, by FollowEdge's
@@ -465,7 +465,7 @@ public sealed class BotPathState
     /// Bans an edge for <c>BOT_BLACKLIST_TICKS</c> — <c>botBlacklistEdge.gml</c>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ An edge already banned is <b>not</b> re-armed. The reference exits on
+    /// An edge already banned is <b>not</b> re-armed. The reference exits on
     /// the existence test, so a ban runs from when it was first imposed and a bot
     /// that keeps failing the same edge cannot extend it indefinitely. Negative
     /// nodes are ignored, which is what makes it safe to call with
@@ -494,7 +494,7 @@ public sealed class BotPathState
         {
             var (key, expiry) = BlacklistOrder[expired];
 
-            // ⚠️ `> tick`, so an entry survives until the tick after its expiry —
+            // `> tick`, so an entry survives until the tick after its expiry —
             // the reference's `break` is on the same comparison. Insertion order
             // is expiry order because every ban is the same length, which is what
             // makes stopping at the first live entry correct.

@@ -11,7 +11,7 @@ namespace Gg2.Tests;
 /// than shoots, and a medic that follows somebody.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>One script, two callers, and they pass different arguments.</b> The
+/// <b>One script, two callers, and they pass different arguments.</b> The
 /// combat half asks with <c>skipFollowers</c> false — a medic beaming another
 /// medic is correct play — and the objective half asks with it true, because two
 /// medics who pick each other as a <em>destination</em> deadlock. A port that made
@@ -41,7 +41,7 @@ public sealed class BotAllyTests(ITestOutputHelper output)
     /// </summary>
     /// <remarks>
     /// <c>score = 1000 * hp/maxHp + distance - maxHp</c>, and every term is there
-    /// for a reason. ⚠️ <b>Anyone actually wounded outscores anyone who is not by
+    /// for a reason. <b>Anyone actually wounded outscores anyone who is not by
     /// far more than distance can make up</b> — 1,000 points across the health
     /// range against a few hundred pixels of map. And the <c>- maxHp</c> term is
     /// what makes a heavy at half health beat a scout at half health: a medic's job
@@ -62,13 +62,13 @@ public sealed class BotAllyTests(ITestOutputHelper output)
 
         Assert.Equal(heavy, BotAlly.Find(View(world), medic, 700, skipFollowers: false));
 
-        // ⚠️ The control: heal the heavy up and the near, healthy scout wins on
+        // The control: heal the heavy up and the near, healthy scout wins on
         // distance. Without it this passes on a search that simply prefers heavies.
         world.State.Characters[heavy].Hp = ClassStats.For(PlayerClass.Heavy).MaxHp;
 
         Assert.Equal(scout, BotAlly.Find(View(world), medic, 700, skipFollowers: false));
 
-        // ⚠️ And the toughness term: two classes at the SAME fraction of health,
+        // And the toughness term: two classes at the SAME fraction of health,
         // the scout nearer. The heavy still wins, by exactly the difference in what
         // it can absorb.
         var fair = Load();
@@ -109,7 +109,7 @@ public sealed class BotAllyTests(ITestOutputHelper output)
     /// The sightline is the BEAM's, not a bullet's.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <c>collision_line</c> against <c>Obstacle</c>, and <b>not</b>
+    /// <c>collision_line</c> against <c>Obstacle</c>, and <b>not</b>
     /// <c>collision_line_bulletblocking</c>. A heal beam is stopped by walls the
     /// same way a bullet is, but the two predicates are not the same object set —
     /// gates, player walls and bullet walls are separate objects, so a medic can
@@ -117,7 +117,7 @@ public sealed class BotAllyTests(ITestOutputHelper output)
     /// decides whether the heal actually connects. <c>Healing</c> uses the same
     /// predicate for the real thing.
     /// <para>
-    /// ⚠️ <b>Filtering during the search rather than rejecting the winner
+    /// <b>Filtering during the search rather than rejecting the winner
     /// afterwards</b> is what lets the second-best candidate win: with the best
     /// candidate behind a wall, a worse one in the open is still picked instead of
     /// the search giving up.
@@ -145,7 +145,7 @@ public sealed class BotAllyTests(ITestOutputHelper output)
         // the healthy scout in the open wins.
         Assert.Equal(healthy, BotAlly.Find(View(world), medic, 900, skipFollowers: false));
 
-        // ⚠️ The control: with no second candidate the search finds NOBODY rather
+        // The control: with no second candidate the search finds NOBODY rather
         // than returning the blocked one.
         var alone = Load();
         var aloneMedic = alone.Place(PlayerClass.Medic, Team.Red, StandX, StandY);
@@ -160,18 +160,18 @@ public sealed class BotAllyTests(ITestOutputHelper output)
     /// <c>skipFollowers</c> drops a medic as a destination and keeps it as a patient.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Two medics who pick each other deadlock.</b> The follow goal is the
+    /// <b>Two medics who pick each other deadlock.</b> The follow goal is the
     /// ally's own position, so medic A's goal is where medic B is standing and B's
     /// is where A is standing: both are already there, both report arrived, and
     /// neither ever leaves spawn. Seen live on koth_valley — two red medics parked
     /// at x=460 with the rest of their team at the point.
     /// <para>
-    /// ⚠️ <b>It is an ARGUMENT rather than a rule inside the search</b>, because the
+    /// <b>It is an ARGUMENT rather than a rule inside the search</b>, because the
     /// <em>beam</em> has no such problem: a medic healing another medic is correct
     /// play. Making it a rule would break healing to fix following.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Filtering during the search lets the second-best win.</b> A medic
+    /// <b>Filtering during the search lets the second-best win.</b> A medic
     /// beside a wounded medic and a healthy heavy still follows the heavy, instead
     /// of giving up on following at all.
     /// </para>
@@ -190,7 +190,7 @@ public sealed class BotAllyTests(ITestOutputHelper output)
         // The beam takes the wounded medic — that is correct play.
         Assert.Equal(wounded, BotAlly.Find(View(world), medic, 700, skipFollowers: false));
 
-        // The follow goal takes the heavy instead. ⚠️ Not "nobody": the exclusion
+        // The follow goal takes the heavy instead. Not "nobody": the exclusion
         // happens during the search, so the second-best candidate still wins.
         Assert.Equal(heavy, BotAlly.Find(View(world), medic, 700, skipFollowers: true));
     }
@@ -203,7 +203,7 @@ public sealed class BotAllyTests(ITestOutputHelper output)
     /// A medic with a patient beams instead of shooting.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The needle gun is on the RIGHT click — the Medigun's left is the heal beam
+    /// The needle gun is on the RIGHT click — the Medigun's left is the heal beam
     /// — so a medic with nobody to heal presses SPECIAL to shoot and one with a
     /// patient presses ATTACK. Those are two different keys, so the switch is
     /// visible from outside without reaching into the bot.
@@ -246,7 +246,7 @@ public sealed class BotAllyTests(ITestOutputHelper output)
     /// A beam is not gated by any of the difficulty clocks.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Every gate on the shooting path — the acquire hold, the fire delay, the
+    /// Every gate on the shooting path — the acquire hold, the fire delay, the
     /// aim settle, the hold-fire roll — is about shooting a person who is trying not
     /// to be shot. <b>A medic that made its own team-mate wait a second and a half
     /// before pointing the beam at them would read as broken rather than as bad</b>,
@@ -261,7 +261,7 @@ public sealed class BotAllyTests(ITestOutputHelper output)
     {
         var world = Load();
 
-        // ⚠️ The WORST tier, which is the point: its acquire hold and fire delay are
+        // The WORST tier, which is the point: its acquire hold and fire delay are
         // the longest in the game.
         var bot = new ScriptedBot(null, new NavQuery(Team.Red), BotSkill.ForTier(1), stagger: 0)
         {
@@ -284,7 +284,7 @@ public sealed class BotAllyTests(ITestOutputHelper output)
             (bot.Combat.AttackKeys & PlayerKeys.Attack) != 0,
             $"the beam waited: acquire {bot.Skill.AcquireTicks}, fire delay {bot.Skill.FireDelayTicks}");
 
-        // ⚠️ And the aim is straight at them with NO lead. The beam has no travel
+        // And the aim is straight at them with NO lead. The beam has no travel
         // time, and leading a team-mate points it at empty air beside them.
         var straight = Gml.PointDirection(StandX, StandY, StandX + 40, StandY);
 
@@ -299,11 +299,11 @@ public sealed class BotAllyTests(ITestOutputHelper output)
     /// A medic's goal is its ally, on the far side of them from the enemy.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>It is decided BEFORE the whole mode cascade and returns early</b>,
+    /// <b>It is decided BEFORE the whole mode cascade and returns early</b>,
     /// because a medic following a team-mate is doing its job in every mode and the
     /// objective is that team-mate's problem.
     /// <para>
-    /// ⚠️ <b>Horizontal only.</b> The goal is a place to STAND, and standing is a
+    /// <b>Horizontal only.</b> The goal is a place to STAND, and standing is a
     /// one-dimensional choice on a given surface.
     /// </para>
     /// </remarks>
@@ -317,26 +317,23 @@ public sealed class BotAllyTests(ITestOutputHelper output)
         var medic = world.Place(PlayerClass.Medic, Team.Red, StandX, StandY);
         var ally = world.Place(PlayerClass.Heavy, Team.Red, StandX + 60, StandY);
 
-        // ⚠️ ScenarioWorld places no objective, so the mode cascade has nothing to
+        // ScenarioWorld places no objective, so the mode cascade has nothing to
         // offer — which is what makes the follow goal's existence visible. Shown
         // with a NON-medic in the same world: the follow goal fires with or without
         // an enemy, so asking the medic with no target proves nothing about the
-        // cascade. The first draft of this asserted exactly that and failed.
+        // cascade.
         var soldier = world.Place(PlayerClass.Soldier, Team.Red, StandX - 40, StandY);
 
-        // ⚠️ CHECKED BEFORE THE ENEMY EXISTS, and it did not have to be until
-        // 2026-08-28. A world with no gamemode is now a DEATHMATCH — the cascade's
-        // last branch hunts the nearest enemy — so "the cascade offers nothing"
-        // stopped being true of any world with somebody to shoot in it. The
-        // scaffolding's premise is restored rather than the assertion weakened:
-        // with no enemy on the map there is genuinely nothing for it to find.
+        // CHECKED BEFORE THE ENEMY EXISTS: a world with no gamemode is a
+        // DEATHMATCH — the cascade's last branch hunts the nearest enemy — so
+        // "the cascade offers nothing" is only true when there is nobody to shoot.
         Assert.False(
             objective.Decide(View(world), soldier, BotRole.Attack, 0, allowSpot: true).Found,
             "the cascade found something, so the follow goal is not what is under test");
 
         var enemy = world.Place(PlayerClass.Soldier, Team.Blue, StandX + 400, StandY);
 
-        // ⚠️ And the other half of the same point: now that there IS an enemy, the
+        // And the other half of the same point: now that there IS an enemy, the
         // cascade has an answer for the soldier. So the medic's goal below is the
         // follow branch's precisely because it returns BEFORE the cascade runs, not
         // because the cascade is empty.
@@ -352,7 +349,7 @@ public sealed class BotAllyTests(ITestOutputHelper output)
         // The enemy is to the RIGHT of the ally, so the medic stands to its LEFT.
         Assert.Equal(world.State.Characters[ally].X - BotConstants.MedicOffset, goal.X);
 
-        // ⚠️ The control: put the enemy on the other side and the medic swaps sides.
+        // The control: put the enemy on the other side and the medic swaps sides.
         // Without it this passes on an offset with a fixed sign.
         world.State.Characters[enemy].X = StandX - 400;
 
@@ -360,7 +357,7 @@ public sealed class BotAllyTests(ITestOutputHelper output)
 
         Assert.Equal(world.State.Characters[ally].X + BotConstants.MedicOffset, swapped.X);
 
-        // ⚠️ And with no enemy at all the offset comes off entirely — there is no
+        // And with no enemy at all the offset comes off entirely — there is no
         // side to be on.
         var quiet = objective.Decide(View(world), medic, BotRole.Attack, 0, allowSpot: true);
         Assert.Equal(world.State.Characters[ally].X, quiet.X);
@@ -370,7 +367,7 @@ public sealed class BotAllyTests(ITestOutputHelper output)
     /// A driven medic really is told where the enemy is.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <c>AMedicFollowsItsAllyOnTheFarSideFromTheEnemy</c> calls the
+    /// <c>AMedicFollowsItsAllyOnTheFarSideFromTheEnemy</c> calls the
     /// objective layer directly and hands it a target, so it gates the RULE and not
     /// the WIRING. Stop <c>ScriptedBot</c> passing its combat target and the medic
     /// stands on top of its ally instead of to one side, and nothing else notices —
@@ -398,7 +395,7 @@ public sealed class BotAllyTests(ITestOutputHelper output)
 
         world.Drive(medic, bot);
 
-        // ⚠️ An enemy to the RIGHT of the ally and INSIDE a medic's attention
+        // An enemy to the RIGHT of the ally and INSIDE a medic's attention
         // radius, which is shorter than most classes' — at 400px it saw nothing and
         // the wiring under test was never exercised.
         world.Place(PlayerClass.Soldier, Team.Blue, StandX + 200, StandY);
@@ -406,7 +403,7 @@ public sealed class BotAllyTests(ITestOutputHelper output)
         world.Step(BotConstants.ObjectivePeriod * 4);
 
         Assert.True(bot.Combat.Target.Exists, "the medic never saw the enemy, so nothing was passed on");
-        // ⚠️ NOT `HasGoal`. The follow position is 60px from the ally and the medic
+        // NOT `HasGoal`. The follow position is 60px from the ally and the medic
         // is standing right there, so it arrives on the tick it is issued — and
         // arrival clears the goal and frees the path together. `GoalX` is what
         // survives, and it is what the claim is about.
@@ -416,7 +413,7 @@ public sealed class BotAllyTests(ITestOutputHelper output)
 
         output.WriteLine($"ally at {allyX:0}, goal at {bot.Path.GoalX:0}");
 
-        // ⚠️ The SIGN, not the exact offset. TryResolve snaps the goal to a
+        // The SIGN, not the exact offset. TryResolve snaps the goal to a
         // node's own column, so the number moves by up to a cell — but which side of
         // the ally it lands on is the whole claim.
         Assert.True(
@@ -428,7 +425,7 @@ public sealed class BotAllyTests(ITestOutputHelper output)
     /// A medic carrying the intel does not follow anybody.
     /// </summary>
     /// <remarks>
-    /// ⚠️ There is exactly one thing to do with an enemy flag and it is not "escort
+    /// There is exactly one thing to do with an enemy flag and it is not "escort
     /// somebody else while holding it".
     /// </remarks>
     [Fact]

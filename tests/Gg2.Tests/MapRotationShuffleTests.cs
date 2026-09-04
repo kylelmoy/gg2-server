@@ -24,7 +24,7 @@ public sealed class MapRotationShuffleTests
     /// A shuffle keeps every entry exactly once and does eventually reorder.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>"It reordered" cannot be asserted on one seed</b> — a shuffle is
+    /// <b>"It reordered" cannot be asserted on one seed</b> — a shuffle is
     /// allowed to return the identity, and a test that demanded otherwise would
     /// be flaky by construction rather than wrong. Over a hundred seeds an
     /// implementation that never permutes is what fails, which is the property
@@ -50,7 +50,7 @@ public sealed class MapRotationShuffleTests
     }
 
     /// <summary>
-    /// ⚠️ <c>AvoidArenaFirst</c> never opens on an arena map when one other map
+    /// <c>AvoidArenaFirst</c> never opens on an arena map when one other map
     /// exists — the reason the mode is the reference's default.
     /// </summary>
     /// <remarks>
@@ -126,7 +126,7 @@ public sealed class MapRotationShuffleTests
     {
         Assert.Empty(MapRotationShuffle.Apply([], mode, new Random(1)));
 
-        // ⚠️ Including the single arena map: there is nothing to swap it with,
+        // Including the single arena map: there is nothing to swap it with,
         // and refusing to serve it would be this port inventing a rule.
         Assert.Equal(
             ["arena_montane"],
@@ -138,10 +138,7 @@ public sealed class MapRotationShuffleTests
     /// </summary>
     /// <remarks>
     /// <c>GameServerCreate.gml:110-113</c>, <c>serverGotoMap(nextMapInRotation())</c>
-    /// from <c>currentMapIndex = -1</c>. ⚠️ Before this landed, a rotation had no
-    /// say in the opening map at all: the server always opened on
-    /// <see cref="ServerOptions.Map"/>, so <c>gg2-server --rotation …</c> would
-    /// have started on <c>ctf_truefort</c> whether or not it was in the list.
+    /// from <c>currentMapIndex = -1</c>.
     /// </remarks>
     [Fact]
     public void AnUnshuffledRotationOpensOnItsFirstEntry()
@@ -161,7 +158,7 @@ public sealed class MapRotationShuffleTests
     /// <see cref="ServerOptions.DefaultMap"/> fallback.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Run over several servers rather than one: an opener that ignored the
+    /// Run over several servers rather than one: an opener that ignored the
     /// shuffle and took <c>rotation[0]</c> would pass a single run, and one that
     /// fell back to <c>ctf_truefort</c> would pass whenever the shuffle happened
     /// to put it first.
@@ -185,9 +182,9 @@ public sealed class MapRotationShuffleTests
             openers.Add(harness.Server.CurrentMap);
         }
 
-        // ⚠️ Not "exactly 3": twelve draws from three maps missing one is about
+        // Not "exactly 3": twelve draws from three maps missing one is about
         // a 1-in-2000 event, and a shuffle that never moved would give exactly 1.
-        // ⚠️ string.Join, not openers.Single(): Assert.True's message argument is
+        // string.Join, not openers.Single(): Assert.True's message argument is
         // evaluated whether or not the assertion holds, so Single() threw on the
         // passing path — a test that fails only when it succeeds.
         Assert.True(

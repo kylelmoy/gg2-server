@@ -8,7 +8,7 @@ namespace Gg2.Tests;
 /// plugin's decisions without a socket.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>It reproduces the two host behaviours a plugin can get wrong</b> rather
+/// <b>It reproduces the two host behaviours a plugin can get wrong</b> rather
 /// than being a bag of stubs: adding a player appends and hands out a fresh
 /// stable id, and <see cref="RemoveAt"/> COMPACTS — so a plugin that keeps state
 /// by slot index fails here the same way it would fail in a game.

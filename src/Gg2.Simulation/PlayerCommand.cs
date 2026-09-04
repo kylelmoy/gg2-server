@@ -7,7 +7,7 @@ namespace Gg2.Simulation;
 /// The things a player can do that are not a bit in the input byte.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>Building a sentry is a client command, not a keypress</b>
+/// <b>Building a sentry is a client command, not a keypress</b>
 /// (<c>processClientCommands.gml</c>'s <c>BUILD_SENTRY</c> case, extracted into
 /// <c>serverBuildSentry.gml</c>) — and so are the zoom, the class and team
 /// changes and <c>DROP_INTEL</c>. None of them flows through

@@ -80,7 +80,7 @@ public static class Movement
     /// <c>good_move_contact_solid</c> with one moving platform temporarily solid.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The reference wraps exactly one call in <c>other.solid = true</c> /
+    /// The reference wraps exactly one call in <c>other.solid = true</c> /
     /// <c>other.solid = false</c> — the branch where a platform drives INTO a
     /// character and has to back them out along its own motion. Nothing else in
     /// the game makes a platform solid, so the collider is a parameter rather
@@ -129,9 +129,8 @@ public static class Movement
 
             if (world.PlaceFree(box, newX, newY, filter, platform))
             {
-                // ⚠️ The loop's fixed point, and the reference has it too — this
-                // is the one line here that is NOT in
-                // `Scripts/Physics/good_move_contact_solid.gml`.
+                // The loop's fixed point; this is the one line here that is NOT
+                // in `Scripts/Physics/good_move_contact_solid.gml`.
                 //
                 // A step this small changes nothing: `totalMoved` gains zero,
                 // `i` does not fall, and every later iteration recomputes these
@@ -140,9 +139,9 @@ public static class Movement
                 // unfinished while `maxDistance - totalMoved` is above 1e-13
                 // (Gml.Epsilon), but a coordinate in the thousands has a ULP of
                 // about 4.5e-13, so a remaining step under half of that rounds
-                // straight back to where it started. Measured, from a real
-                // hang: at (2698.437089230609, 3933.463891267056) with 2.14e-13
-                // left to travel, both axes came back unchanged.
+                // straight back to where it started: at
+                // (2698.437089230609, 3933.463891267056) with 2.14e-13 left to
+                // travel, both axes came back unchanged.
                 //
                 // Nothing observable is given up by stopping. In this state the
                 // reference does not produce a different answer, it produces no

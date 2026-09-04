@@ -195,8 +195,8 @@ public sealed class CollisionLineSampleTests
     /// <para>
     /// The <c>dup</c>-sprite probe is excluded, and that exclusion is the point
     /// rather than a convenience: its sprite origin is (3, 30), and no level
-    /// entity has a non-zero origin — measured 2026-08-25 across all eight solid
-    /// level-entity object types. <see cref="LineCollider.ForSolidRect"/>
+    /// entity has a non-zero origin, across all eight solid level-entity object
+    /// types. <see cref="LineCollider.ForSolidRect"/>
     /// hard-codes an origin of zero on the strength of that, so a probe that
     /// does not share the assumption has nothing to say about it.
     /// </para>

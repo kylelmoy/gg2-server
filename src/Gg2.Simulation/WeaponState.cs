@@ -52,7 +52,7 @@ public struct WeaponState
     /// The weapon instance's own position — <b>where a projectile is created</b>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Not the character's position, and not even this tick's.</b>
+    /// <b>Not the character's position, and not even this tick's.</b>
     /// <c>Character.events/End Step.xml:64-65</c> is the only thing that writes
     /// it, as <c>round(x)</c> and <c>round(y)</c> — GML's round, half to even —
     /// and a weapon fires in <em>Begin Step</em>. So a shot leaves from the
@@ -172,7 +172,7 @@ public struct WeaponState
     /// the overshoot carries — <c>Medigun.events/User Event 1.xml:107</c> is
     /// <c>hphealed -= HP_PER_POINT</c> and not <c>= 0</c>.
     /// <para>
-    /// ⚠️ <b>It belongs to the weapon, so it dies with the medic's character.</b>
+    /// <b>It belongs to the weapon, so it dies with the medic's character.</b>
     /// The stat it feeds belongs to the player and survives; the progress
     /// towards the next point does not. Beaming 799 hp and then dying throws
     /// those 799 away.
@@ -275,7 +275,7 @@ public struct WeaponState
     /// created.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The knife does not land when the button is pressed.</b>
+    /// <b>The knife does not land when the button is pressed.</b>
     /// <c>Revolver.events/User Event 1.xml</c> starts the animation and arms
     /// this for <c>StabreloadTime = 32</c> ticks; <c>Alarm 1</c> is what
     /// actually makes the <c>StabMask</c>. So there is a full second between a
@@ -290,7 +290,7 @@ public struct WeaponState
 
     /// <summary>Spy: <c>alarm[2]</c>, which puts <see cref="ReadyToStab"/> back.</summary>
     /// <remarks>
-    /// ⚠️ <b>Armed by <c>Alarm 1</c>, not by the stab</b> — and by a
+    /// <b>Armed by <c>Alarm 1</c>, not by the stab</b> — and by a
     /// drag-and-drop <c>action_set_alarm(18, 2)</c> that a grep for GML code
     /// does not see. So the whole cooldown is <b>32 + 18 = 50</b> ticks, and it
     /// gates the <em>cloak toggle</em> as well as the next stab.

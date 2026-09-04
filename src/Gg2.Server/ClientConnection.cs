@@ -61,7 +61,7 @@ public sealed class ClientConnection : IDisposable
     /// Bytes this connection has actually put on the wire.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>What the socket accepted, not what was queued.</b> A client whose
+    /// <b>What the socket accepted, not what was queued.</b> A client whose
     /// receive window is full has bytes in <see cref="PendingSendBytes"/> that
     /// have not gone anywhere, and counting those would report bandwidth a
     /// congested link is not carrying — which is exactly the client the operator

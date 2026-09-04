@@ -27,7 +27,7 @@ namespace Gg2.Tests;
 /// the team-gate test all right at once.
 /// </para>
 /// <para>
-/// ⚠️ <b>Two of the four recorded events are out of reach, for reasons that
+/// <b>Two of the four recorded events are out of reach, for reasons that
 /// belong to the recordings rather than to the port</b>, and both are written
 /// up in docs/PARITY.md:
 /// <list type="bullet">
@@ -150,7 +150,7 @@ public sealed class IntelFixtureTests
     /// closed-loop replay.
     /// </para>
     /// <para>
-    /// ⚠️ <b>It is not, however, much of a gate on the briefcase's box.</b>
+    /// <b>It is not, however, much of a gate on the briefcase's box.</b>
     /// Measured by mutation: <see cref="Intel.BoxLeft"/> has to move two pixels
     /// before this test notices, and <see cref="Intel.BoxRight"/>,
     /// <see cref="Intel.BoxTop"/> and <see cref="Intel.BoxBottom"/> can each

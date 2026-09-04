@@ -52,13 +52,11 @@ public static class ProjectileSprites
     /// <c>BubbleS</c>: a twelve-pixel square with the origin in the middle.
     /// </summary>
     /// <remarks>
-    /// ✅ <b>Measured 2026-08-27</b>, and the inference it replaces was right.
-    /// It shipped derived rather than sampled because Quote's weapon landed
-    /// without a live session: <c>Sprites/Projectiles/BubbleS.xml</c> declares
+    /// <b>Measured.</b> <c>Sprites/Projectiles/BubbleS.xml</c> declares
     /// <c>mode="FULL"</c>, which means the bounding box is the whole image
     /// rather than the alpha's extent, and the image is 12x12.
     /// <para>
-    /// ⚠️ <b>A <c>Bubble</c> cannot be sampled the way the rest of this table
+    /// <b>A <c>Bubble</c> cannot be sampled the way the rest of this table
     /// was.</b> <c>tools/sample-rotated-box.js</c> works by creating the
     /// projectile and reading its instance <c>bbox_*</c>, and a bubble is not
     /// something <c>createShot</c> can be handed. It is measured instead by
@@ -77,18 +75,18 @@ public static class ProjectileSprites
     /// <remarks>
     /// An AUTO bound on a 64x64 image about origin (26, 37), so about the
     /// origin it runs <b>2 pixels back, 31 forward, 24 up and 18 down</b> — a
-    /// 34x43 box, the largest melee reach in the game. ⚠️ <b>And
+    /// 34x43 box, the largest melee reach in the game. <b>And
     /// <c>image_xscale</c> is ±1</b>, from the stab's direction
     /// (<c>StabMask.events/Step.xml</c>), so a left-facing stab mirrors all of
     /// it — which is also what decides whether a hit is a backstab.
     /// <para>
-    /// ✅ <b>Measured 2026-08-27</b> by <c>tools/sample-sprite-box.js</c> and
-    /// gated by <c>SpriteBoxSampleTests</c>, which also records that
-    /// <c>StabMask</c> declares no <c>&lt;mask&gt;</c> of its own. The AUTO
-    /// bound read off the PNG was right. ⚠️ <b>This is the one of the three
-    /// late-sampled boxes where the sprite and the collision box genuinely
-    /// differ</b> — 64 wide as an image, 34 as a box — so taking the reach from
-    /// the image dimensions would have been wrong by thirty pixels.
+    /// <b>Measured</b> by <c>tools/sample-sprite-box.js</c> and gated by
+    /// <c>SpriteBoxSampleTests</c>, which also records that <c>StabMask</c>
+    /// declares no <c>&lt;mask&gt;</c> of its own. The AUTO bound read off the
+    /// PNG was right. <b>This is one of the boxes where the sprite and the
+    /// collision box genuinely differ</b> — 64 wide as an image, 34 as a box —
+    /// so taking the reach from the image dimensions would have been wrong by
+    /// thirty pixels.
     /// </para>
     /// </remarks>
     public static Sprite Stab => new(new Aabb(24, 13, 57, 55), 26, 37);

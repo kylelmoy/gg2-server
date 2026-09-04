@@ -14,7 +14,7 @@ namespace Gg2.Tests;
 /// plausible plan and sees nothing land. Only a continuation that keeps acting
 /// separates lookahead from commitment.
 /// <para>
-/// ⚠️ <b>These tests gate the MECHANISM, not the result.</b> Whether a policy
+/// <b>These tests gate the MECHANISM, not the result.</b> Whether a policy
 /// continuation is better is a 1,008-duel measurement in another repo, and no
 /// test here can or should answer it. What is checked is that the knob is wired:
 /// that it changes the rollout, that it runs on the cadence rather than every
@@ -30,13 +30,11 @@ public sealed class ContinuationTests
     /// lands inside a 20-tick horizon.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The distance is load-bearing and the first version of these tests got
-    /// it wrong.</b> At 160px on <c>gg_debug</c> every candidate scores exactly
-    /// zero in BOTH arms, so a difference test cannot fail and a
-    /// no-difference test passes vacuously. A rocket travels ~13px a tick, so a
-    /// gap a rocket cannot cross inside the horizon makes the whole fixture
-    /// blind — the same "what is the check's population?" question this repo has
-    /// asked twice today, arriving in a scenario rather than in a corpus.
+    /// <b>The distance is load-bearing.</b> At 160px on <c>gg_debug</c> every
+    /// candidate scores exactly zero in BOTH arms, so a difference test cannot
+    /// fail and a no-difference test passes vacuously. A rocket travels ~13px a
+    /// tick, so a gap a rocket cannot cross inside the horizon makes the whole
+    /// fixture blind.
     /// </remarks>
     private static ScenarioWorld World(out int red)
     {
@@ -53,10 +51,10 @@ public sealed class ContinuationTests
     /// A policy continuation changes what the search decides.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The load-bearing test, and it is a difference rather than a value.</b>
+    /// <b>The load-bearing test, and it is a difference rather than a value.</b>
     /// Asserting a particular chosen action would pin this build's checkpoint and
     /// go red on any retrain; asserting that the scores MOVE says the policy is
-    /// actually driving the rollout. ⚠️ <b>Mutation-checked by construction</b>:
+    /// actually driving the rollout. <b>Mutation-checked by construction</b>:
     /// if <c>ContinuationPolicy</c> were ignored the two score arrays would be
     /// identical, which is exactly what this fails on.
     /// </remarks>
@@ -94,7 +92,7 @@ public sealed class ContinuationTests
             "every candidate scored identically with and without a policy continuation, "
             + "so the policy is not driving the rollout at all");
 
-        // ⚠️ Guards the direction as well as the difference. A fixture where every
+        // Guards the direction as well as the difference. A fixture where every
         // candidate scores zero in both arms would fail the assertion above for
         // the right reason and pass it for the wrong one if the arms ever differed; this
         // says the policy arm actually made something happen.
@@ -103,10 +101,9 @@ public sealed class ContinuationTests
             "the policy arm scored zero across every candidate, so nothing landed and "
             + "this fixture cannot tell a working continuation from a broken one");
 
-        // ⚠️ AND the neutral arm scores exactly nothing here, which is gg2-rl's
-        // measured diagnosis reproduced mechanically: a neutral continuation picks
-        // a plausible plan and then sees nothing land, because a candidate scores
-        // from damage inside the window where somebody is still acting.
+        // AND the neutral arm scores exactly nothing here: a neutral continuation
+        // picks a plausible plan and then sees nothing land, because a candidate
+        // scores from damage inside the window where somebody is still acting.
         var neutralTotal = 0.0;
 
         foreach (var score in neutral.LastScores)
@@ -119,7 +116,7 @@ public sealed class ContinuationTests
     /// The commitment is still played exactly, whatever continues after it.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The continuation must not leak backwards.</b> A rollout is scored
+    /// <b>The continuation must not leak backwards.</b> A rollout is scored
     /// over the whole horizon, but only the first <c>DecisionTicks</c> of the
     /// winning candidate are ever played — so if a continuation changed what
     /// happens INSIDE the commitment, the search would be choosing an action it
@@ -152,13 +149,12 @@ public sealed class ContinuationTests
     }
 
     /// <summary>
-    /// ⚠️ A commitment that is not a whole number of decisions is REFUSED.
+    /// A commitment that is not a whole number of decisions is REFUSED.
     /// </summary>
     /// <remarks>
     /// At the point the value is SET, which is <c>RolloutOptions.WithDefaults</c>
-    /// — not asserted where it is read. <c>gg2-rl</c> asked for the guard and then
-    /// sharpened its own first proposal (a read-site assert) to get it here: a fix
-    /// belongs where it makes the mistake unavailable.
+    /// — not asserted where it is read: a fix belongs where it makes the mistake
+    /// unavailable.
     /// </remarks>
     [Theory]
     [InlineData(6, 4)]
@@ -174,15 +170,14 @@ public sealed class ContinuationTests
     }
 
     /// <summary>
-    /// ⚠️ <b>But NOT when the commitment covers the whole horizon.</b>
+    /// But NOT when the commitment covers the whole horizon.
     /// </summary>
     /// <remarks>
-    /// The first version of the guard got this wrong and refused eight existing
-    /// configurations. <c>HorizonTicks: 10, DecisionTicks: 4</c> defaults
-    /// <c>CommitTicks</c> to 10, which is not a multiple of 4 — and it does not
-    /// matter, because no continuation runs. A guard that fires where the thing it
-    /// protects does not exist is the mirror image of a gate that can never fire,
-    /// and both are the same mistake about what a check is for.
+    /// <c>HorizonTicks: 10, DecisionTicks: 4</c> defaults <c>CommitTicks</c> to
+    /// 10, which is not a multiple of 4 — and it does not matter, because no
+    /// continuation runs. A guard that fires where the thing it protects does not
+    /// exist is the mirror image of a gate that can never fire, and both are the
+    /// same mistake about what a check is for.
     /// </remarks>
     [Theory]
     [InlineData(10, 4)]
@@ -201,11 +196,11 @@ public sealed class ContinuationTests
     /// A continuation is a decision on the cadence, not a decision every tick.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>This is a cost constraint, not a preference, and it is the reason the
-    /// experiment is affordable at all.</b> Measured 2026-09-01: one policy
-    /// decision is 6.58 µs, so at k=20/horizon 20 a per-tick continuation costs
-    /// 3.48 ms against a 2.45 ms unpruned baseline — more than the search it
-    /// replaces — while cadence 4 costs 1.47 ms.
+    /// <b>This is a cost constraint, not a preference, and it is the reason the
+    /// experiment is affordable at all.</b> One policy decision is 6.58 µs, so at
+    /// k=20/horizon 20 a per-tick continuation costs 3.48 ms against a 2.45 ms
+    /// unpruned baseline — more than the search it replaces — while cadence 4
+    /// costs 1.47 ms.
     /// <para>
     /// Checked by contrast rather than by counting calls: at
     /// <c>DecisionTicks: 1</c> the continuation re-decides every tick and at
@@ -244,7 +239,7 @@ public sealed class ContinuationTests
     /// The continuation does not draw from the match's RNG stream.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>CLAUDE.md's first rule for the bot layer.</b> The match's stream is
+    /// <b>The bot layer's first rule.</b> The match's stream is
     /// observable simulation — every seeded weapon puts its draw on the wire and
     /// every client re-derives the spread from it — so a search whose continuation
     /// consumed draws would make the stream's position depend on how many

@@ -15,18 +15,16 @@ namespace Gg2.Bots;
 /// same step. A mine has to be <em>placed</em>, <em>settle</em>, and only then be
 /// jumped on — <see cref="NavConstants.SjSetupTicks"/> apart.
 /// <para>
-/// ⚠️ <b>The jump and the detonation are the SAME tick.</b> Begin Step's jump
+/// <b>The jump and the detonation are the SAME tick.</b> Begin Step's jump
 /// branch (line 108) runs before its right-click branch (line 137), so
 /// <c>vspeed = -jumpStrength</c> is already in place when the blast's
 /// <c>motion_add</c> lands on top of it. Detonating a tick later throws the jump
 /// away and the arc is an ordinary hop.
 /// </para>
 /// <para>
-/// ⚠️ <b><see cref="Launch"/> is MEASURED, not derived</b>, and the distinction
-/// has already cost this feature once. <c>gg2-nav-gen</c> costed its first 6,497
-/// edges against a derived 18.3 px/tick and a ~310 px apex; flying the manoeuvre
-/// in this port gave <b>-14.460</b> and <b>193.6 px</b>, and the fork's
-/// <c>NAV_SJ_IMPULSE</c> was corrected from 10 to 6.16 the same day.
+/// <b><see cref="Launch"/> is MEASURED, not derived.</b> A derived estimate
+/// gives 18.3 px/tick and a ~310 px apex; flying the manoeuvre in this port
+/// gives <b>-14.460</b> and <b>193.6 px</b> instead.
 /// <c>MineJumpTests</c> pins it, and the follower gates on this rather than on
 /// anything the cache implies — so a stale cache produces edges this port
 /// refuses rather than arcs it flies into a wall.
@@ -39,7 +37,7 @@ public static class StickyModel
     /// because up is negative.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Measured in this port, identical on four maps to three decimals</b>
+    /// <b>Measured in this port, identical on four maps to three decimals</b>
     /// — a mine fired straight down settles at the demoman's feet, so the
     /// geometry that sets the impulse is the character's own and not the map's.
     /// <see cref="MineJumpTests"/> is the measurement; if it moves, every
@@ -64,12 +62,12 @@ public static class StickyModel
     /// badly, because an arc flown without its impulse lands somewhere the route
     /// does not mention and costs a perfectly good edge a blacklist.
     /// <para>
-    /// ⚠️ <c>&gt;</c> and not <c>&gt;=</c> on the hp, matching
+    /// <c>&gt;</c> and not <c>&gt;=</c> on the hp, matching
     /// <see cref="NavQuery.CanAffordRocketJump"/>: at exactly
     /// <see cref="NavConstants.SjDamage"/> the demoman dies in the air.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Ammo is checked but the mine in flight is not.</b> Whether a mine is
+    /// <b>Ammo is checked but the mine in flight is not.</b> Whether a mine is
     /// already placed is the follower's state to know, not this model's — see
     /// <c>BotPathState.StickySetup</c>.
     /// </para>
@@ -85,7 +83,7 @@ public static class StickyModel
     /// jump uses.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Deliberately delegated rather than copied.</b> A mine jump flies
+    /// <b>Deliberately delegated rather than copied.</b> A mine jump flies
     /// under <c>moveStatus</c> 1 exactly as a rocket jump does, so the control
     /// factor is <see cref="NavConstants.RjControl"/> and the friction
     /// <see cref="NavConstants.RjFriction"/> — the same two numbers

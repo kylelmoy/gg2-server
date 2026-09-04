@@ -93,7 +93,7 @@ public enum KickReason : byte
     /// An operator kick, from the control port or the web panel.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Not a reason the reference sends</b> — stock GG2 has no way for an
+    /// <b>Not a reason the reference sends</b> — stock GG2 has no way for an
     /// operator to kick anybody, so there is no byte to match. It is still
     /// handled correctly by a stock client, and that is measured rather than
     /// hoped: <c>ClientBeginStep.gml:433-437</c> compares the byte against its

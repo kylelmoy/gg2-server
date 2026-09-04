@@ -123,7 +123,7 @@ public sealed class JoiningConnection(ClientConnection connection, DateTime now)
             return JoinOutcome.Finished;
         }
 
-        // ⚠️ Above the read, and it does not wait for the client to say anything.
+        // Above the read, and it does not wait for the client to say anything.
         // A downloading client sends NOTHING until it has the whole map, so a
         // pump placed after TryTake below would never run.
         // serviceJoiningPlayer.gml:8-24 puts it above its own read for the same
@@ -274,7 +274,7 @@ public sealed class JoiningConnection(ClientConnection connection, DateTime now)
 
                 _transfer = new MapTransfer(_mapFile);
 
-                // ⚠️ A uint LENGTH first, then the bytes with no framing of their
+                // A uint LENGTH first, then the bytes with no framing of their
                 // own — the client reads exactly this many and then stops. It is
                 // written before the state changes so it precedes the first
                 // chunk in the stream.
@@ -313,7 +313,7 @@ public sealed class JoiningConnection(ClientConnection connection, DateTime now)
 
     private void WriteGreeting(in JoinContext context)
     {
-        // ⚠️ Latched here, not read later. serviceJoiningPlayer.gml:93-94 copies
+        // Latched here, not read later. serviceJoiningPlayer.gml:93-94 copies
         // global.currentMap/currentMapMD5 into advertisedMap/advertisedMapMd5 at
         // exactly this point, so a rotation that lands mid-handshake still serves
         // the file this client was told the hash of. Reading the live map at
@@ -328,7 +328,7 @@ public sealed class JoiningConnection(ClientConnection connection, DateTime now)
             // Empty means "built into the client", and it is also the reference's
             // own guard against serving one: see the DOWNLOAD_MAP case.
             mapMd5: context.MapMd5 ?? string.Empty,
-            // ⚠️ The client derives each plugin's packet id from this string's
+            // The client derives each plugin's packet id from this string's
             // ORDER, so it is the server's plugin set verbatim and never
             // re-sorted. Empty means "no plugins", and the client's whole plugin
             // path is then skipped (ClientBeginStep.gml:60,
@@ -397,12 +397,12 @@ public readonly struct JoinContext
     /// The current map's MD5, or empty when the client has it built in.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Empty is not "unknown" — it is the signal that the map cannot be
+    /// Empty is not "unknown" — it is the signal that the map cannot be
     /// downloaded, and the reference's own guard is exactly
     /// <c>advertisedMapMd5 != ""</c>.
     /// </remarks>
     /// <remarks>
-    /// ⚠️ No <c>= string.Empty</c> initialiser: a struct with one needs an
+    /// No <c>= string.Empty</c> initialiser: a struct with one needs an
     /// explicit constructor, and this is built with an object initialiser
     /// everywhere. A default <see cref="JoinContext"/> therefore has a NULL
     /// md5 rather than an empty one, which is why <see cref="MapFile"/> is what
@@ -430,7 +430,7 @@ public readonly struct JoinContext
     /// commas, or empty for a server with none.
     /// </summary>
     /// <remarks>
-    /// ⚠️ No <c>= string.Empty</c> initialiser, for the same reason
+    /// No <c>= string.Empty</c> initialiser, for the same reason
     /// <see cref="MapMd5"/> has none — an object-initialised struct with one
     /// needs an explicit constructor. A default <see cref="JoinContext"/>
     /// therefore has a null list, and the greeting writes the empty string for
@@ -442,7 +442,7 @@ public readonly struct JoinContext
     /// Whether the client must load those plugins to join.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Advisory. It picks which dialog the client shows and nothing else; the
+    /// Advisory. It picks which dialog the client shows and nothing else; the
     /// reference server does not check that a client complied and neither does
     /// this one. See <c>ServerOptions.ServerPluginsRequired</c>.
     /// </remarks>

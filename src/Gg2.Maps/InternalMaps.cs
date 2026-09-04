@@ -6,7 +6,7 @@ namespace Gg2.Maps;
 /// <remarks>
 /// <c>Scripts/Maps/findInternalMapName.gml</c>, transcribed case for case.
 /// <para>
-/// ⚠️ <b>This is the list that decides whether a map has to be DOWNLOADED.</b>
+/// <b>This is the list that decides whether a map has to be DOWNLOADED.</b>
 /// A client already has these 22 files, so the server advertises an empty MD5
 /// and the download path is never entered. Anything else is a custom map: the
 /// server must advertise its MD5 and be ready to serve the bytes, or a client
@@ -14,7 +14,7 @@ namespace Gg2.Maps;
 /// direction is a join failure, not a cosmetic slip.
 /// </para>
 /// <para>
-/// ⚠️ <b>Five of the names are ALIASES, and they are not decoration.</b>
+/// <b>Five of the names are ALIASES, and they are not decoration.</b>
 /// <c>ctf_2dfort2</c>, <c>ctf_2dfortremix</c>, <c>dkoth_60s</c>,
 /// <c>ctf_2dfort1</c> and <c>ctf_2dfort[0]</c> all resolve to a file under a
 /// different name. A rotation naming one of them is naming a built-in map, and
@@ -22,7 +22,7 @@ namespace Gg2.Maps;
 /// — under a name it will then fail to find.
 /// </para>
 /// <para>
-/// ⚠️ <c>ctf_2dfort[0]</c> has square brackets in it and that is verbatim from
+/// <c>ctf_2dfort[0]</c> has square brackets in it and that is verbatim from
 /// the reference, not a transcription slip. It reads like a typo for
 /// <c>ctf_2dfort0</c> and is very likely one; the client's switch matches the
 /// literal string, so a "correction" here would silently stop accepting a name
@@ -59,7 +59,7 @@ public static class InternalMaps
 
         ["tdm_mantic"] = "tdm_mantic.png",
 
-        // ⚠️ Verbatim, brackets and all — see this type's remarks.
+        // Verbatim, brackets and all — see this type's remarks.
         ["ctf_2dfort[0]"] = "ctf_oldfort.png",
         ["ctf_2dfort1"] = "ctf_oldfort.png",
         ["ctf_oldfort"] = "ctf_oldfort.png",

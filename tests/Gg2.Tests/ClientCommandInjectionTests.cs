@@ -13,24 +13,15 @@ namespace Gg2.Tests;
 /// nothing in an <c>INPUTSTATE</c> ever will.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>The reference has exactly three commands that are not key bits</b>, and
+/// <b>The reference has exactly three commands that are not key bits</b>, and
 /// <c>Scripts/Bots/botServerActions.gml</c> names them in one line: "Zoom, build
 /// and eat are client commands". <c>processClientCommands.gml</c> handles all
 /// three in adjacent cases (212, 232, 236) and each broadcasts at the moment the
-/// server accepts it.
+/// server accepts it. Both zoom and eat are physics: zoom writes
+/// <c>runPower</c> (0.6) and <c>jumpStrength</c> (6.3), and an eat freezes
+/// acceleration and facing for 128 ticks while healing 1.6 hp a tick.
 /// <para>
-/// ⚠️ <b>The replayer injected one of the three for nine phases.</b>
-/// <c>BUILD_SENTRY</c> was wired up when the sentry landed; <c>TOGGLE_ZOOM</c>
-/// and <c>OMNOMNOMNOM</c> were not, while their messages sat in the checked-in
-/// corpus the whole time — 31 zooms across four fixtures and four eats across
-/// two. Both are physics: zoom writes <c>runPower</c> (0.6) and
-/// <c>jumpStrength</c> (6.3), and an eat freezes acceleration and facing for 128
-/// ticks while healing 1.6 hp a tick. The cost was visible only as two anomalous
-/// rows in <c>ClientPredictionGateTests</c>, which that file had written down as
-/// "worth looking at some day" without knowing what they were.
-/// </para>
-/// <para>
-/// ⚠️ <b>Counting the injections is the point of this file.</b> A message family
+/// <b>Counting the injections is the point of this file.</b> A message family
 /// the harness silently drops looks exactly like a physics bug, and the only
 /// thing that distinguishes them is a count of how often the injection actually
 /// fired.
@@ -79,7 +70,7 @@ public sealed class ClientCommandInjectionTests
         Assert.Equal(0, Replay(fixture).ZoomsRefused);
 
     /// <summary>
-    /// ⚠️ <b>One recorded eat is refused, and it is the recording's own first
+    /// <b>One recorded eat is refused, and it is the recording's own first
     /// tick.</b>
     /// </summary>
     /// <remarks>
@@ -89,12 +80,11 @@ public sealed class ClientCommandInjectionTests
     /// told the replay that slot 5 has a character at all. The port refuses it
     /// because there is nobody to feed.
     /// <para>
-    /// ✅ <b>Deferring the injection until after the anchor was tried and does not
-    /// help</b>: the anchor resets characters, it does not create them, so slot 5
-    /// still has none. This is the same limit as
-    /// <c>docs/PARITY.md</c>'s "a recording of players who were already alive is
-    /// open-loop only" — a bootstrap artefact of recording mid-round, not a bug
-    /// in the eat.
+    /// Deferring the injection until after the anchor does not help: the anchor
+    /// resets characters, it does not create them, so slot 5 still has none.
+    /// This is the same limit as <c>docs/PARITY.md</c>'s "a recording of players
+    /// who were already alive is open-loop only" — a bootstrap artefact of
+    /// recording mid-round, not a bug in the eat.
     /// </para>
     /// <para>
     /// Pinned at exactly one so that a second refusal, which would be a real
@@ -111,8 +101,7 @@ public sealed class ClientCommandInjectionTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The fourth message the replayer was throwing away, and the one that
-    /// is not a client command at all: <c>BALANCE</c>.</b>
+    /// <b>A fourth message that is not a client command at all: <c>BALANCE</c>.</b>
     /// </summary>
     /// <remarks>
     /// <c>ServerBalanceTeams.gml</c> moves a player to the other team and
@@ -120,16 +109,10 @@ public sealed class ClientCommandInjectionTests
     /// PLAYER_DEATH is broadcast</b> — so this two-byte message is the entire
     /// record of the decision. A replay that ignored it kept the player on the
     /// old team with a live character, and nothing else would ever correct it.
+    /// <c>closedsentryteam</c> shows the consequence: an autobalance switch at
+    /// t2365 self-destructs the moved engineer's sentry a tick later.
     /// <para>
-    /// ✅ <b>Found by <c>closedsentryteam</c></b>, where an autobalance switch at
-    /// t2365 self-destructs the moved engineer's sentry a tick later and the port
-    /// missed it. Applying the switch fixed that, and took
-    /// <c>ctf_2dfort-autobalance</c>'s open-loop p99 from <b>10/3 to 2/2</b> —
-    /// the worst row in <c>ClientPredictionGateTests</c> apart from the two the
-    /// zoom and the eat already explained.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Stage 1's notice is not a switch.</b> <c>BALANCE 255</c> announces
+    /// <b>Stage 1's notice is not a switch.</b> <c>BALANCE 255</c> announces
     /// the countdown and moves nobody; only the two-byte form is applied.
     /// </para>
     /// </remarks>
@@ -143,11 +126,11 @@ public sealed class ClientCommandInjectionTests
     /// The corpus still contains the commands this file is about.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The direction that matters.</b> Everything above passes vacuously if
+    /// <b>The direction that matters.</b> Everything above passes vacuously if
     /// a re-recording comes out with no zooms and no eats in it, exactly as
-    /// <c>MessageCoverageTests</c> warns for whole message families. These are the
-    /// counts measured 2026-08-28; a re-recording that changes them should change
-    /// this list deliberately.
+    /// <c>MessageCoverageTests</c> warns for whole message families. A
+    /// re-recording that changes these counts should change this list
+    /// deliberately.
     /// </remarks>
     [Fact]
     public void TheCorpusStillContainsTheCommandsThisFileGates()

@@ -47,7 +47,7 @@ public sealed class FixtureFramingTests
         var path = Path.Combine(AppContext.BaseDirectory, "Fixtures", fixture);
         var trace = Trace.Decode(File.ReadAllBytes(path));
 
-        // ⚠️ NARROWED to area 1, and the stream cannot be read without it. A
+        // NARROWED to area 1, and the stream cannot be read without it. A
         // tall map is several rounds stacked vertically and only one area's
         // entities exist — cp_dirtbowl writes six control points and plays two —
         // and the HUD block carries no count prefix, so a reader framing by the
@@ -60,7 +60,7 @@ public sealed class FixtureFramingTests
             .FromPng(trace.Header.Map, ReferenceTree.ReadMap(trace.Header.Map))
             .ForArea(1);
 
-        // ⚠️ And re-shaped on CHANGE_MAP, or a recording that rotates to
+        // And re-shaped on CHANGE_MAP, or a recording that rotates to
         // another gamemode desynchronises the moment a CAPS_UPDATE or
         // FULL_UPDATE arrives on the new map — the only two tiers that carry
         // the HUD block. See ModeChangeFramingTests.

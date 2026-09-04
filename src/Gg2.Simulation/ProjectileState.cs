@@ -101,7 +101,7 @@ public struct ProjectileState
     /// cleared by the mine's own Alarm 0 — the one projectile whose alarm 0 is
     /// not a destroy — thirty ticks after a reflected mine lands, and it
     /// redirects the blame when the mine's blast reaches its own owner.
-    /// ⚠️ <b>Every creation site must write <see cref="NoOwner"/></b>: a
+    /// <b>Every creation site must write <see cref="NoOwner"/></b>: a
     /// defaulted 0 silently names slot 0, the server's own player.
     /// </remarks>
     public byte Reflector;
@@ -129,7 +129,7 @@ public struct ProjectileState
     /// can hit.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>It is written twice, and only the second write is observable.</b>
+    /// <b>It is written twice, and only the second write is observable.</b>
     /// <c>createShot</c> sets it to the aim direction and the Scattergun then
     /// scatters <c>direction</c> alone — but
     /// <c>Scripts/Physics/System/move_all_bullets.gml</c> assigns
@@ -198,7 +198,7 @@ public struct ProjectileState
     /// ammoDrained</c>. So a blade that comes home early still costs five, and
     /// one that lives its full fifteen ticks costs fifteen.
     /// <para>
-    /// ⚠️ <b>It cannot be derived from the remaining lifetime.</b> Both count
+    /// <b>It cannot be derived from the remaining lifetime.</b> Both count
     /// the same ticks, but the alarm stage runs before the End Step, so a blade
     /// destroyed by a collision in between has spent an alarm it never drank —
     /// and the refund at its Destroy would be a unit short.
@@ -226,7 +226,7 @@ public struct ProjectileState
     /// bounces an incoming mine once and then lets it through, rather than
     /// pinning it in mid-air. Nothing ever clears it.
     /// <para>
-    /// ⚠️ <b>Not the same as an airblast's reflection.</b> A pyro's blast reads
+    /// <b>Not the same as an airblast's reflection.</b> A pyro's blast reads
     /// <see cref="Reflector"/> and re-arms the mine's alarm; a bubble writes
     /// both this and the reflector and touches no timer.
     /// </para>
@@ -238,7 +238,7 @@ public struct ProjectileState
     /// with.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A stab hits <em>two</em>.</b> <c>maxKills = 2</c>, and the counter
+    /// <b>A stab hits <em>two</em>.</b> <c>maxKills = 2</c>, and the counter
     /// is bumped by the character and sentry events alike — so one knife can
     /// take a medic and their patient, or a sentry and its engineer. It reaches
     /// 2 and no further, which is why a byte is exact where the reference keeps
@@ -250,7 +250,7 @@ public struct ProjectileState
     /// <c>splashThreshhold</c>: whether this blast skips its outer quarter.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A stuck mine has no cutoff and a flying one does.</b>
+    /// <b>A stuck mine has no cutoff and a flying one does.</b>
     /// <c>move_all_bullets.gml</c> sets it from <c>!stickied</c> on every pass,
     /// and <c>Mine.events/User Event 2.xml</c> guards the quarter-radius
     /// <c>continue</c> with it — so a mine that has landed damages everything
@@ -367,7 +367,7 @@ public struct ProjectileState
     /// with no allocation, and <see cref="WorldState.MaxSlots"/> is 64, which is
     /// exactly a <c>ulong</c>.
     /// <para>
-    /// ⚠️ It names roster slots, so <see cref="WorldState.RemoveSlot"/> has to
+    /// It names roster slots, so <see cref="WorldState.RemoveSlot"/> has to
     /// renumber it like every other stored index — CLAUDE.md's rule. A stale bit
     /// would let a rocket fly through a stranger for free some seconds after an
     /// unrelated disconnect.
@@ -384,7 +384,7 @@ public struct ProjectileState
     /// the collision event both tests and appends to it, so a flame burns each
     /// character at most once however many ticks it spends inside them.
     /// <para>
-    /// ⚠️ <b>The reference stores character ids and this stores roster slots</b>,
+    /// <b>The reference stores character ids and this stores roster slots</b>,
     /// which are not the same thing across a death and a respawn — the same
     /// collapse <see cref="OwnerSlot"/> makes. A flame lives fifteen ticks, so
     /// the window in which it could matter is far shorter than a respawn.
@@ -414,7 +414,7 @@ public struct ProjectileState
     /// How many passes this projectile has spent fading. At ten it is gone.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The reference spells this as a drawing field, and it is not
+    /// <b>The reference spells this as a drawing field, and it is not
     /// decoration.</b> <c>move_all_bullets.gml</c>'s rocket block subtracts 0.1
     /// from <c>image_alpha</c> on every fading pass and then ends its particle
     /// section with <c>if (image_alpha &gt; 0) ... else instance_destroy()</c>.
@@ -457,7 +457,7 @@ public struct ProjectileState
     /// and will no longer explode.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A faded rocket that reaches a wall is destroyed silently.</b>
+    /// <b>A faded rocket that reaches a wall is destroyed silently.</b>
     /// <c>move_all_bullets.gml</c> branches on it — <c>if (!fade) event_user(5)
     /// else instance_destroy()</c> — so a rocket at the end of its range does no
     /// damage at all, even to somebody standing in front of the wall it hits.
@@ -482,7 +482,7 @@ public struct ProjectileState
     /// — recomputed every Step, but a stab's <c>direction</c> is written once
     /// and its speed is zero, so deriving it is exact and costs no field.
     /// <para>
-    /// ⚠️ <b>It is not only the box.</b> The knife compares
+    /// <b>It is not only the box.</b> The knife compares
     /// <c>sign(other.image_xscale) == sign(image_xscale)</c> to decide whether
     /// a hit is a backstab, so this is what makes the difference between 200
     /// damage credited as a stab and 200 credited as a backstab.

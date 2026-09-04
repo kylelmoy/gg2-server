@@ -10,7 +10,7 @@ namespace Gg2.Tests;
 /// machine.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>Nothing here sleeps or reads a clock.</b> <see cref="MicroBudgetController"/>
+/// <b>Nothing here sleeps or reads a clock.</b> <see cref="MicroBudgetController"/>
 /// is handed pressure that has already been measured and counts its window in
 /// ticks, so every assertion is exact. A test that produced real load to trigger
 /// a cut would be asserting things about the build agent.
@@ -33,7 +33,7 @@ public sealed class MicroBudgetTests
     /// 2026-09-03: <b>1831 / 2624 / 3617 / 5116 µs</b> at 2 / 6 / 12 / 20 live
     /// characters. Least squares gives <c>1490 + 181·N</c>.
     /// <para>
-    /// ⚠️ <b>Compared as a SHAPE, not as absolute microseconds.</b> The sweep is on
+    /// <b>Compared as a SHAPE, not as absolute microseconds.</b> The sweep is on
     /// <c>gg_debug</c> and the model is anchored to <c>ctf_truefort</c>'s 4,795 at
     /// twelve, so the two differ by a constant factor of about a third — which is
     /// exactly the machine-and-map factor the model is not trying to capture and
@@ -65,7 +65,7 @@ public sealed class MicroBudgetTests
     }
 
     /// <summary>
-    /// ⛔ Cost is AFFINE in the population, not proportional to it.
+    /// Cost is AFFINE in the population, not proportional to it.
     /// </summary>
     /// <remarks>
     /// The distinction is the whole reason the sweep was run. A proportional
@@ -102,7 +102,7 @@ public sealed class MicroBudgetTests
 
     /// <summary>A policy forward pass does not care how many characters are alive.</summary>
     /// <remarks>
-    /// ⚠️ The control on the whole model: if BOTH controllers scaled, the ratio
+    /// The control on the whole model: if BOTH controllers scaled, the ratio
     /// the arbiter actually uses would be unchanged and the change would be
     /// inert.
     /// </remarks>
@@ -118,7 +118,7 @@ public sealed class MicroBudgetTests
     /// The arbiter admits fewer searches on a fuller server, off one budget.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>This is what the model is FOR.</b> Before it, one constant meant a
+    /// <b>This is what the model is FOR.</b> Before it, one constant meant a
     /// 20-character server was handed the same number of decisions as a
     /// 2-character one while each cost 2.8× more — the budget said the same thing
     /// and meant something different.
@@ -169,7 +169,7 @@ public sealed class MicroBudgetTests
 
     /// <summary>A tick that crowds its deadline halves the budget, immediately.</summary>
     /// <remarks>
-    /// ⚠️ <b>Immediately, not at the window close.</b> A server in trouble should
+    /// <b>Immediately, not at the window close.</b> A server in trouble should
     /// stop being in trouble on the next tick rather than in thirty seconds.
     /// </remarks>
     [Fact]
@@ -185,7 +185,7 @@ public sealed class MicroBudgetTests
     }
 
     /// <summary>
-    /// ⛔ One bad burst does not collapse the budget to the floor.
+    /// One bad burst does not collapse the budget to the floor.
     /// </summary>
     /// <remarks>
     /// The cut is once per window. Without that guard a single stall — a GC
@@ -210,7 +210,7 @@ public sealed class MicroBudgetTests
         var budget = Budget(window: 10);
         var seen = new List<int>();
 
-        // ⚠️ Long enough to REACH the floor. Halving from 10,000 to 7 is eleven
+        // Long enough to REACH the floor. Halving from 10,000 to 7 is eleven
         // cuts and the guard allows one a window, so sixty ticks stops at 78 —
         // which is the controller working, not failing. Asserting the floor needs
         // the ticks the floor actually takes.
@@ -238,7 +238,7 @@ public sealed class MicroBudgetTests
         for (var tick = 2; tick <= 400; tick++)
             budget.Observe(tick, Interval * 0.10, Interval);
 
-        // ⚠️ AT the ceiling, not above it: --bot-arbiter stays an upper bound the
+        // AT the ceiling, not above it: --bot-arbiter stays an upper bound the
         // operator set, and a controller that could exceed it would make the flag
         // a suggestion.
         Assert.Equal(10_000, budget.Units);
@@ -246,7 +246,7 @@ public sealed class MicroBudgetTests
     }
 
     /// <summary>
-    /// ⛔ It does not raise the budget in a window it had to cut in.
+    /// It does not raise the budget in a window it had to cut in.
     /// </summary>
     /// <remarks>
     /// The peak that caused the cut is still in that window, so a controller that
@@ -269,7 +269,7 @@ public sealed class MicroBudgetTests
     }
 
     /// <summary>
-    /// ⚠️ An unpaced server has no deadline, so nothing moves.
+    /// An unpaced server has no deadline, so nothing moves.
     /// </summary>
     /// <remarks>
     /// <c>--speed max</c> never waits, so every tick "overruns". A controller that
@@ -305,15 +305,15 @@ public sealed class MicroBudgetTests
     [Fact]
     public void TheAdaptiveBudgetIsOnByDefaultAndCanBePinned()
     {
-        Assert.True(Program.Parse([]).AdaptiveBotBudget);
-        Assert.False(Program.Parse(["--fixed-bot-budget"]).AdaptiveBotBudget);
+        Assert.True(CommandLine.Parse([]).AdaptiveBotBudget);
+        Assert.False(CommandLine.Parse(["--fixed-bot-budget"]).AdaptiveBotBudget);
     }
 
     /// <summary>
-    /// ⛔ Every mode with a controller gets a budget, including single-tier ones.
+    /// Every mode with a controller gets a budget, including single-tier ones.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>This corrects the Q2 reasoning.</b> <c>--bot-mode search</c> shipped
+    /// <b>A single tier still needs a budget.</b> <c>--bot-mode search</c> shipped
     /// with <c>Arbiter == null</c> on the argument that one tier has nothing to
     /// choose between. An arbiter's second job is to GATE — with one tier it still
     /// returns -1 once the budget is spent and drops the bot to the scripted
@@ -323,11 +323,11 @@ public sealed class MicroBudgetTests
     [Fact]
     public void SingleTierModesAlsoGetABudget()
     {
-        var search = Program.Parse(["--bot-mode", "search"]).Bots.Brain;
+        var search = CommandLine.Parse(["--bot-mode", "search"]).Bots.Brain;
 
         Assert.IsType<DecisionQuotaArbiter>(Assert.IsType<BotBrainSpec>(search).Arbiter);
 
         // Scripted has no controller and so nothing to budget.
-        Assert.Null(Program.Parse(["--bot-mode", "scripted"]).Bots.Brain);
+        Assert.Null(CommandLine.Parse(["--bot-mode", "scripted"]).Bots.Brain);
     }
 }

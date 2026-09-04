@@ -96,10 +96,9 @@ public sealed class ConstantsTests
         ("HP_PER_POINT", GameConstants.HpPerPoint),
         ("INTEL_MAX_TIMER", GameConstants.IntelMaxTimer),
 
-        // ⚠️ GameConstants.CellSize is NOT here. It used to be checked against
-        // NAV_CELL_SIZE, which exists only in the bot fork — the nav graph is
-        // this project's own and stock GG2 has no opinion on its resolution.
-        // Nothing in the reference can confirm it, so nothing pretends to.
+        // GameConstants.CellSize is NOT here: the nav graph is this project's
+        // own and stock GG2 has no opinion on its resolution. Nothing in the
+        // reference can confirm it, so nothing pretends to.
         ("CHARACTER_ANIMATION_NORMAL", GameConstants.CharacterAnimationNormal),
         ("CHARACTER_ANIMATION_INTEL", GameConstants.CharacterAnimationIntel),
         ("CHARACTER_ANIMATION_LEN", GameConstants.CharacterAnimationLen),
@@ -228,13 +227,10 @@ public sealed class ConstantsTests
     /// them.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Read out of an object event, not out of <c>Constants.xml</c>.</b>
+    /// <b>Read out of an object event, not out of <c>Constants.xml</c>.</b>
     /// Stock GG2 has no <c>KEY_*</c> constants at all — <c>PlayerControl</c>'s
     /// Begin Step ors literal <c>$XX</c> masks into <c>keybyte</c>, and those
-    /// literals are the whole definition. The named constants this test used to
-    /// read were added by a fork, so pointing <c>GG2_REFERENCE</c> at an upstream
-    /// checkout turned the strongest check on the input byte into a
-    /// "Constants.xml has no numeric constant named KEY_JUMP" failure.
+    /// literals are the whole definition.
     /// <para>
     /// These bits are <b>observable wire</b>: every <c>INPUTSTATE</c> a client
     /// sends is one byte of them, so this is not a check worth losing to make a

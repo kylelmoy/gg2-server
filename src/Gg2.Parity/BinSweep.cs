@@ -47,7 +47,7 @@ public readonly record struct BinSweepResult(int Points, int Reproduced)
 /// <c>docs/PARITY.md</c>, "an exact window can also end on a threshold".
 /// </para>
 /// <para>
-/// ⚠️ <b>Open loop, and only the swept slot is meaningful.</b> Every other slot
+/// <b>Open loop, and only the swept slot is meaningful.</b> Every other slot
 /// is anchored at the bottom of its own bin and is therefore wrong by up to half
 /// a unit, so a sweep bottoms out at the neighbours' residual rather than at
 /// zero — see <see cref="PortedSimulation.Nudges"/>. Ask it about the slot whose

@@ -1,11 +1,11 @@
-namespace Gg2.Server;
+﻿namespace Gg2.Server;
 
 /// <summary>
 /// A histogram of how long each tick actually took, wall-clock, so that "the
 /// server hitches" can be answered with a distribution instead of a feeling.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>The mean and the median both hide this, and that is the whole reason
+/// <b>The mean and the median both hide this, and that is the whole reason
 /// the class exists.</b> Before <see cref="TimerResolution"/> the idle server's
 /// median tick was <b>31.04ms</b> — <em>below</em> the 33.33ms target — while
 /// 15% of its ticks landed near 47ms, because the pacing loop makes up the time
@@ -17,7 +17,7 @@ namespace Gg2.Server;
 /// dead-reckoned somewhere the next <c>QUICK_UPDATE</c> will visibly correct.
 /// </para>
 /// <para>
-/// ⚠️ <b>This measures pacing, never simulation.</b> A tick computes the same
+/// <b>This measures pacing, never simulation.</b> A tick computes the same
 /// thing whenever it runs, so nothing here can affect determinism; a slow tick
 /// is a delivery problem. It is also not the tick's <em>cost</em> — the interval
 /// between tick starts is mostly the deliberate wait — so a healthy server is

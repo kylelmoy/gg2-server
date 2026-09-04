@@ -11,14 +11,14 @@ namespace Gg2.Tests;
 /// to.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>A spot is chosen without checking reachability.</b>
+/// <b>A spot is chosen without checking reachability.</b>
 /// <see cref="BotGoalSpot"/> ranks nodes by distance, height and sightline and
 /// asks the graph nothing about whether a route exists — deliberately, because a
 /// path search per candidate is a search per bot per objective tick. So a spot in
 /// another component of the map presents as a goal that never plans, and
 /// <see cref="ScriptedBot.SpotBanUntil"/> is the only place that can notice.
 /// <para>
-/// ⚠️ <b>This state is not reachable from any shipped map</b>, which is why the
+/// <b>This state is not reachable from any shipped map</b>, which is why the
 /// branch stood ungated and said so in its own comment for four items: every one
 /// of the 24 cached graphs is connected for the team that owns the ground.
 /// The fixture here is a real graph with one node's edges removed — a genuine
@@ -40,7 +40,7 @@ public sealed class SpotBanTests(ITestOutputHelper output)
     /// The same graph with every edge touching one node removed.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Rebuilt through the real cache format and the real reader</b> rather
+    /// <b>Rebuilt through the real cache format and the real reader</b> rather
     /// than by constructing a <see cref="NavGraph"/> directly: the two derived
     /// indices are bets on the generator's output — edges sorted by from-node,
     /// nodes sorted by row then x — and a graph assembled behind the parser could
@@ -143,7 +143,7 @@ public sealed class SpotBanTests(ITestOutputHelper output)
     /// nothing else.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The premise every other test here rests on, and it is not free.</b>
+    /// <b>The premise every other test here rests on, and it is not free.</b>
     /// A rebuild that silently dropped or reordered nodes would give the spot
     /// search a different set of candidates, and "the spot moved" would then look
     /// exactly like "the ban fired". So the node list is asserted identical and
@@ -193,13 +193,13 @@ public sealed class SpotBanTests(ITestOutputHelper output)
     /// objective itself.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The observable is WHERE the bot is sent, not the flag.</b> A spot is
+    /// <b>The observable is WHERE the bot is sent, not the flag.</b> A spot is
     /// off the point by the class's standoff band; the fallback is the point
     /// itself. So deleting the ban leaves the bot asking for an unreachable perch
     /// for ever, and that shows up as a goal that never comes back to the thing it
     /// was supposed to be defending.
     /// <para>
-    /// ⚠️ <c>HasGoal</c> is what separates "planning failed" from "arrived" —
+    /// <c>HasGoal</c> is what separates "planning failed" from "arrived" —
     /// arrival clears the goal and frees the path together, so a bot that got
     /// there has neither. A test that watched <c>HasPath</c> alone would call an
     /// arrival a failure.
@@ -248,7 +248,7 @@ public sealed class SpotBanTests(ITestOutputHelper output)
 
         var banned = 0;
 
-        // ⚠️ Stop INSIDE the first ban window, and past the objective tick that
+        // Stop INSIDE the first ban window, and past the objective tick that
         // issues the replacement. The ban is a delay rather than a permanent stop —
         // see the lapse test below — so a loop that ran past it would watch the bot
         // pick a SECOND unreachable perch and measure that instead.
@@ -262,7 +262,7 @@ public sealed class SpotBanTests(ITestOutputHelper output)
 
         output.WriteLine($"banned until {banned}, final goal ({bot.Path.GoalX:0},{bot.Path.GoalY:0})");
 
-        // ⚠️ On the tick AFTER the goal was issued, not a whole objective period
+        // On the tick AFTER the goal was issued, not a whole objective period
         // later. The check sits above the period gate on purpose — "notice a spot
         // that never planned BEFORE deciding again, or the ban is always one
         // objective tick behind the goal that earned it" — and moving it below is
@@ -279,7 +279,7 @@ public sealed class SpotBanTests(ITestOutputHelper output)
     /// The ban lapses and the bot tries again.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>It is a delay, not a permanent stop</b>, and the difference matters
+    /// <b>It is a delay, not a permanent stop</b>, and the difference matters
     /// on a map where the graph is right and the bot is merely somewhere awkward:
     /// a bot that gave up on positions for good would spend the rest of the round
     /// standing on the thing it was supposed to be covering. Here the second perch
@@ -325,13 +325,13 @@ public sealed class SpotBanTests(ITestOutputHelper output)
     /// The ban is not re-armed once the replacement goal is in.
     /// </summary>
     /// <remarks>
-    /// ⚠️ It fires on the goal's own <see cref="BotGoal.IsSpot"/>, so the
+    /// It fires on the goal's own <see cref="BotGoal.IsSpot"/>, so the
     /// objective's own point — which on this graph does not plan either, because
     /// the bot's node is isolated — must not extend it. A ban that renewed itself
     /// off any unplannable goal would never lapse, and a bot that lost its route
     /// for a moment would stop taking positions for the rest of the round.
     /// <para>
-    /// ⚠️ <b>Measure past the objective tick that REPLACES the spot goal</b>, and
+    /// <b>Measure past the objective tick that REPLACES the spot goal</b>, and
     /// that is the whole subtlety: between the perch being set and the next
     /// objective tick the goal is still a spot and still unplannable, so the ban
     /// legitimately advances every tick in that gap. What must not advance is the
@@ -380,13 +380,13 @@ public sealed class SpotBanTests(ITestOutputHelper output)
     /// Arriving at a spot is not a spot that never planned.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b><c>HasGoal</c> is what separates "planning failed" from "arrived"</b>
+    /// <b><c>HasGoal</c> is what separates "planning failed" from "arrived"</b>
     /// — arrival clears the goal and frees the path together, so a bot that got
     /// there has neither, and a ban keyed on <c>!HasPath</c> alone would punish it
     /// for succeeding. Every later spot would then be refused for ten seconds
     /// after every arrival, which is most of a bot's life.
     /// <para>
-    /// ⚠️ <b>The arrival is constructed rather than walked to.</b> <c>Poll</c>
+    /// <b>The arrival is constructed rather than walked to.</b> <c>Poll</c>
     /// hands back keys and moves nothing — reaching this state honestly would mean
     /// running the simulation for as long as it takes a sniper to climb to its
     /// perch, and what is being gated is one clause, not the follower.

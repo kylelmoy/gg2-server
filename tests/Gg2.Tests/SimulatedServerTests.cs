@@ -103,18 +103,15 @@ public sealed class SimulatedServerTests
     }
 
     /// <summary>
-    /// ⚠️ <b>A class change immediately after spawning is <em>silent</em>, and
+    /// <b>A class change immediately after spawning is <em>silent</em>, and
     /// the replacement arrives on the next tick.</b>
     /// </summary>
     /// <remarks>
-    /// This test used to assert a <c>BID_FAREWELL</c> death and a thirty-tick
-    /// wait, and it was wrong — <b>every spawn point on every map is inside a
-    /// spawn room</b> (checked on <c>ctf_truefort</c>, <c>koth_valley</c>,
-    /// <c>gg_debug</c> and <c>cp_dirtbowl</c>), so picking a class at spawn,
-    /// which is the commonest action in the game, takes
-    /// <c>processClientCommands.gml:84</c>'s <c>else</c> arm: a bare
-    /// <c>instance_destroy()</c> with no message at all. The port broadcast a
-    /// death there for six phases.
+    /// <b>Every spawn point on every map is inside a spawn room</b> (checked on
+    /// <c>ctf_truefort</c>, <c>koth_valley</c>, <c>gg_debug</c> and
+    /// <c>cp_dirtbowl</c>), so picking a class at spawn, which is the commonest
+    /// action in the game, takes <c>processClientCommands.gml:84</c>'s
+    /// <c>else</c> arm: a bare <c>instance_destroy()</c> with no message at all.
     /// <para>
     /// The one-tick respawn is the other half of it, from
     /// <c>Character.events/Destroy.xml:37</c> — the Destroy event runs whether
@@ -165,7 +162,7 @@ public sealed class SimulatedServerTests
 
         var messages = reader.Drain(client);
 
-        // ⚠️ No death at all.
+        // No death at all.
         Assert.DoesNotContain(messages, m => m.Type == MessageType.PlayerDeath);
         Assert.Contains(messages, m => m.Type == MessageType.PlayerChangeClass);
 
@@ -325,7 +322,7 @@ public sealed class SimulatedServerTests
         {
             o.Map = DuelMap;
 
-            // ⚠️ gg_debug has no objective, so GameModes.Of falls through to
+            // gg_debug has no objective, so GameModes.Of falls through to
             // Team Deathmatch — and a TDM spawn is invulnerable. At the default
             // five seconds a victim who never moves keeps it for 150 ticks,
             // which is longer than the window below, so the shot lands and does
@@ -371,13 +368,12 @@ public sealed class SimulatedServerTests
             var drained = reader.Drain(shooter);
             deaths.AddRange(drained.Where(m => m.Type == MessageType.PlayerDeath));
 
-            // ⚠️ The replacement arrives in the SAME packet as the death, so it
+            // The replacement arrives in the SAME packet as the death, so it
             // has to be caught on this drain or it is consumed and lost. A death
             // is appended in the Character's End Step, which is AFTER the
             // GameServer's End Step flush, so it ships on tick D+1 — and the
             // one-tick respawn's PLAYER_SPAWN is appended in D+1's alarm stage,
-            // which is before that same flush. Measured against the running game
-            // on 2026-09-02; see GameServer.BroadcastEndStepEvents.
+            // which is before that same flush. See GameServer.BroadcastEndStepEvents.
             if (deaths.Count > 0)
                 spawnsWithTheDeath.AddRange(drained.Where(m => m.Type == MessageType.PlayerSpawn));
         }
@@ -388,7 +384,7 @@ public sealed class SimulatedServerTests
             new byte[] { victimSlot, shooterSlot, 255, (byte)DamageSource.Scattergun },
             death.Payload);
 
-        // ⚠️ The body is gone from the world and a *new* one is already back:
+        // The body is gone from the world and a *new* one is already back:
         // gg_debug's spawn points are inside its spawn rooms, so a victim who
         // never moved died in one and takes Destroy.xml:37's one-tick respawn.
         // The replacement is what proves the body was destroyed rather than

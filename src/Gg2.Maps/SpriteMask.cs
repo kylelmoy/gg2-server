@@ -9,7 +9,7 @@ namespace Gg2.Maps;
 /// <c>sprite_add</c> sprites are precise". This is that mask: one bit per source
 /// pixel, before any scaling.
 /// <para>
-/// ⚠️ <b>Only <c>MovingPlatform</c> needs this.</b> Everything else solid in GG2
+/// <b>Only <c>MovingPlatform</c> needs this.</b> Everything else solid in GG2
 /// is the 6x6 walkmask or an axis-aligned rectangle; a platform is the one object
 /// whose shape is an arbitrary image the map author embedded. Do not reach for
 /// this anywhere else without checking that the reference really is precise
@@ -66,7 +66,7 @@ public sealed class SpriteMask
     /// resource.
     /// </param>
     /// <remarks>
-    /// ⚠️ <b>The format is sniffed the way the reference sniffs it</b>, not from
+    /// <b>The format is sniffed the way the reference sniffs it</b>, not from
     /// the file's real magic: <c>stringToResource.gml:10-16</c> takes characters
     /// 1-3 and tests for <c>GIF</c>, then characters 2-4 and tests for <c>PNG</c>.
     /// The second is offset by one because a PNG's signature begins with 0x89.
@@ -92,7 +92,7 @@ public sealed class SpriteMask
     /// <b>bottom-left</b> pixel.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Bottom-left, not top-left, and this is the single most likely thing
+    /// <b>Bottom-left, not top-left, and this is the single most likely thing
     /// in this file to be wrong.</b> It is taken from Game Maker 8's own
     /// documentation for <c>sprite_add</c> ("all pixels with the background
     /// colour, that is the colour of the leftmost bottom pixel") rather than from

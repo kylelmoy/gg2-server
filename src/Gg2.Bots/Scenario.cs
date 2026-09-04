@@ -9,7 +9,7 @@ public readonly record struct ScenarioPoint(double X, double Y);
 /// One enemy placed for a scenario to act on.
 /// </summary>
 /// <param name="Dummy">
-/// Inert unless false: it never aims, never fires and never moves. ⚠️ Leave it
+/// Inert unless false: it never aims, never fires and never moves. Leave it
 /// inert unless the scenario is specifically about a two-sided fight, because
 /// every point of damage measured is then unambiguously the subject's doing.
 /// In the reference these are ordinary knobs — an acquisition delay longer than
@@ -20,7 +20,7 @@ public readonly record struct ScenarioEnemy(PlayerClass Class, ScenarioPoint At,
 
 /// <summary>What a scenario is measuring.</summary>
 /// <remarks>
-/// ⚠️ <b>A scenario is one or the other, never both and never neither.</b> The
+/// <b>A scenario is one or the other, never both and never neither.</b> The
 /// choice is required rather than defaulted because "a combat scenario that
 /// quietly inherited a movement goal would measure the wrong thing and still
 /// pass" — <c>bot-scenarios.js</c>'s own reasoning, and
@@ -40,7 +40,7 @@ public enum ScenarioMode
 /// <param name="MaxDamage">Hp removed from the enemy team, at most.</param>
 /// <param name="MaxTicks">The run took no longer than this.</param>
 /// <param name="MaxMoved">
-/// Pixels from where the subject was placed. ⚠️ In <see cref="ScenarioMode.Hold"/>
+/// Pixels from where the subject was placed. In <see cref="ScenarioMode.Hold"/>
 /// this does <b>not</b> test "did it walk to the objective" — the bot has no
 /// goal, so it cannot path anywhere. It measures knockback and evasive hops, so
 /// a splash class shelling something at close range drifts a lot and a tight
@@ -48,7 +48,7 @@ public enum ScenarioMode
 /// scenario.
 /// </param>
 /// <param name="Acquired">
-/// Did it ever pick a target at all. ⚠️ Latched while it happens, because a
+/// Did it ever pick a target at all. Latched while it happens, because a
 /// target clears when it dies — by the end, a bot that fought and won looks
 /// exactly like one that never saw anything.
 /// </param>
@@ -69,7 +69,7 @@ public readonly record struct ScenarioExpectations(
 /// difference between "the bot is broken" and "this leg was always marginal".
 /// A scenario without that is a red test nobody can act on.
 /// <para>
-/// ⚠️ <b>Coordinates are snapped to nav nodes before use</b>
+/// <b>Coordinates are snapped to nav nodes before use</b>
 /// (<see cref="ScenarioWorld.Snap"/>), and the snapped position is what a run
 /// places and reports. A raw objective coordinate usually does not resolve on
 /// its own.
@@ -129,7 +129,7 @@ public sealed record Scenario
     public string About { get; }
 
     /// <summary>
-    /// ⚠️ Movement is class-independent in the reference — <c>botPathKeys</c>
+    /// Movement is class-independent in the reference — <c>botPathKeys</c>
     /// has no class references at all — so a nav scenario uses the soldier
     /// unless it is specifically about a class. The two that are not
     /// (<c>gallery-pit-climb</c>, <c>atalia-ground-to-point</c>) are heavies on
@@ -149,7 +149,7 @@ public sealed record Scenario
     public int Hold { get; }
 
     /// <summary>
-    /// Ticks allowed, in <see cref="ScenarioMode.Travel"/>. ⚠️ A leg that takes
+    /// Ticks allowed, in <see cref="ScenarioMode.Travel"/>. A leg that takes
     /// longer is a failure even if it eventually arrives — "gets there in the
     /// end" is exactly what a bot that re-plans in a loop looks like from
     /// outside.
@@ -161,7 +161,7 @@ public sealed record Scenario
     public ScenarioExpectations Expect { get; }
 
     /// <summary>
-    /// Set when this reproduces a bug nobody has fixed. ⚠️ It reports rather
+    /// Set when this reproduces a bug nobody has fixed. It reports rather
     /// than fails, so green keeps meaning "no <em>new</em> regressions" — and it
     /// says what has been ruled out, because the next person to read it is
     /// deciding whether to start there. If it starts passing, delete the field.

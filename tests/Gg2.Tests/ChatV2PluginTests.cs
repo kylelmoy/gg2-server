@@ -7,7 +7,7 @@ namespace Gg2.Tests;
 /// The <c>chat_v2_pr</c> server half, against a host that is not a server.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>These are the tests that can actually be wrong in an interesting
+/// <b>These are the tests that can actually be wrong in an interesting
 /// way.</b> The wire plumbing either works or nothing arrives; what is easy to
 /// get subtly wrong is the <em>content</em> — the colour prefix, the <c>#</c>
 /// that separates the name from the message, who a team message reaches, and
@@ -86,7 +86,7 @@ public sealed class ChatV2PluginTests
     }
 
     /// <summary>
-    /// ⚠️ A player who never said hello never receives, which is what makes it
+    /// A player who never said hello never receives, which is what makes it
     /// safe to advertise the plugin as optional.
     /// </summary>
     [Fact]
@@ -121,7 +121,7 @@ public sealed class ChatV2PluginTests
     /// <c>event1</c>: <c>colour + name + ": #W" + message</c> for global chat.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The <c>#</c> is not decoration. The client half uses it to find where
+    /// The <c>#</c> is not decoration. The client half uses it to find where
     /// the colour changes when it wraps a long line (<c>event4</c>), so dropping
     /// it makes every wrapped message continue in the speaker's team colour.
     /// </remarks>
@@ -156,7 +156,7 @@ public sealed class ChatV2PluginTests
     }
 
     /// <summary>
-    /// ⚠️ <c>#</c> in what a player typed becomes a space, because it is the
+    /// <c>#</c> in what a player typed becomes a space, because it is the
     /// client half's own colour marker.
     /// </summary>
     [Fact]
@@ -178,7 +178,7 @@ public sealed class ChatV2PluginTests
     /// else.
     /// </summary>
     /// <remarks>
-    /// ⛔ The one routing rule with a real consequence. A client cannot be
+    /// The one routing rule with a real consequence. A client cannot be
     /// trusted to hide what it has been sent, so team chat leaking here is team
     /// chat the other team reads.
     /// </remarks>
@@ -223,7 +223,7 @@ public sealed class ChatV2PluginTests
     }
 
     /// <summary>
-    /// ⚠️ Player by player, never a broadcast. A broadcast would be cheaper and
+    /// Player by player, never a broadcast. A broadcast would be cheaper and
     /// would send team chat to everybody.
     /// </summary>
     [Fact]
@@ -272,7 +272,7 @@ public sealed class ChatV2PluginTests
     }
 
     /// <summary>
-    /// ⚠️ The window restarts from the <em>last</em> message, not the first, so
+    /// The window restarts from the <em>last</em> message, not the first, so
     /// a steady talker never resets it. Transcribed rather than smoothed.
     /// </summary>
     [Fact]
@@ -328,7 +328,7 @@ public sealed class ChatV2PluginTests
     /// "alice2", for every client whether or not it has the plugin.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The counter is the number of matching players, not the next free
+    /// The counter is the number of matching players, not the next free
     /// number — so the third is "alice3" and, if "alice2" leaves, the next is
     /// "alice2" again.
     /// </remarks>
@@ -347,7 +347,7 @@ public sealed class ChatV2PluginTests
     }
 
     /// <summary>
-    /// ⚠️ Compared on the first 18 bytes, case-insensitively, and truncated to
+    /// Compared on the first 18 bytes, case-insensitively, and truncated to
     /// those 18 before the counter goes on.
     /// </summary>
     [Fact]
@@ -399,7 +399,7 @@ public sealed class ChatV2PluginTests
     // --- the compaction trap -------------------------------------------------
 
     /// <summary>
-    /// ⛔ A departure shifts every slot above it down, and the plugin's state has
+    /// A departure shifts every slot above it down, and the plugin's state has
     /// to move with it.
     /// </summary>
     /// <remarks>
@@ -433,7 +433,7 @@ public sealed class ChatV2PluginTests
     // --- malformed input -----------------------------------------------------
 
     /// <summary>
-    /// ⚠️ A truncated packet is refused, not read past. The reference gets
+    /// A truncated packet is refused, not read past. The reference gets
     /// zeroes from GM8 for an over-read; a span would throw on the tick thread.
     /// </summary>
     [Fact]

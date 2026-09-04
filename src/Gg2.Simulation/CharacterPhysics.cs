@@ -100,13 +100,13 @@ public static class CharacterPhysics
         // Dropdown platforms are the other way to be on the ground —
         // Character.events/Begin Step.xml:32-49.
         //
-        // ⚠️ The two inner tests are written from the PLATFORM's frame in the
+        // The two inner tests are written from the PLATFORM's frame in the
         // reference (`with(DropdownPlatform)`, so `other` is the character).
         // Overlap is symmetric, so "the platform moved up one meets the
         // character" is the same question as "the character moved down one meets
         // the platform", which is what is asked here.
         //
-        // ⚠️ A MovingPlatform would land in this scan too — its parent object IS
+        // A MovingPlatform would land in this scan too — its parent object IS
         // DropdownPlatform, so `place_meeting(…, DropdownPlatform)` matches one —
         // but it never has a SolidRect to be found by. It has no sprite of its
         // own, so its collision box comes from an embedded resource in a custom
@@ -130,7 +130,7 @@ public static class CharacterPhysics
 
                 character.OnGround = true;
 
-                // `resetMoveStatus` defaults to 1 and is a map property. ⚠️ No
+                // `resetMoveStatus` defaults to 1 and is a map property. No
                 // shipped map sets it — checked across all 22 in maps.json — so
                 // it is always true here; a custom map that clears it would get
                 // a surfing platform, which is not modelled.
@@ -145,13 +145,13 @@ public static class CharacterPhysics
         if (character.OnGround)
             character.DoubleJumpUsed = false;
 
-        // Begin Step's "Handle input", and ⚠️ it sits OUTSIDE the
+        // Begin Step's "Handle input", and it sits OUTSIDE the
         // `if(!taunting and !omnomnomnom)` block that opens below — so a
         // character presses jump during a taunt, queues it, and launches on the
         // tick the taunt ends. Transcribed in that order rather than folded into
         // the jump test.
         //
-        // ⚠️ `else if` in the reference, not two independent tests. A tick that
+        // `else if` in the reference, not two independent tests. A tick that
         // carries both a press and a release of the jump key — which
         // ApplyInput's `|=` accumulation makes reachable whenever more than one
         // input arrives between two ticks — queues the jump rather than
@@ -164,7 +164,7 @@ public static class CharacterPhysics
                 character.WantToJump = false;
         }
 
-        // ⚠️ Begin Step.xml:95's `if(!taunting and !omnomnomnom)` opens here and
+        // Begin Step.xml:95's `if(!taunting and !omnomnomnom)` opens here and
         // closes after the jump, and GML evaluates it ONCE. So a character
         // already taunting cannot start another taunt and cannot jump — but one
         // that starts a taunt on this tick still jumps, because the block was
@@ -176,14 +176,14 @@ public static class CharacterPhysics
         // the other statement in the block.
         if (!blocked && !character.Humiliated && (character.PressedKeys & PlayerKeys.Taunt) != 0)
         {
-            // ⚠️ `if (!invisible && cloakAlpha == 1) taunting = true;` — a spy
+            // `if (!invisible && cloakAlpha == 1) taunting = true;` — a spy
             // part-way through a cloak presses taunt and does not taunt.
             // `invisible` is a *drawing* flag the reference sets from the same
             // cloak state, so this port asks the cloak directly.
             if (!character.Cloak && Gml.Equal(character.CloakAlpha, 1))
                 character.Taunting = true;
 
-            // ⚠️ Outside that test, so the counter is rewound whether or not the
+            // Outside that test, so the counter is rewound whether or not the
             // taunt starts. Transcribed rather than tidied.
             character.TauntIndex = 0;
         }
@@ -204,12 +204,12 @@ public static class CharacterPhysics
         {
             if (character.OnGround && !stuckInWall)
             {
-                // ⚠️ Outside the `if(not stabbing)` below it in the reference,
+                // Outside the `if(not stabbing)` below it in the reference,
                 // so a spy who cannot actually jump still loses the slow decay.
                 // Character.events/Begin Step.xml:98.
                 character.DeathmatchInvulnDecay = CharacterState.MovingInvulnDecay;
 
-                // ⚠️ Character.events/Begin Step.xml:99, `if(not stabbing)`.
+                // Character.events/Begin Step.xml:99, `if(not stabbing)`.
                 // A spy in the middle of a knife animation has jumpStrength 0
                 // anyway, so this looks redundant — it is not, because the
                 // guard above compares against that same zeroed jumpStrength
@@ -268,17 +268,17 @@ public static class CharacterPhysics
         // (Documentation/RateController.md). Do not "simplify" it away.
         for (var skip = 0; skip < 2; skip++)
         {
-            // ⚠️ `if(!taunting && !omnomnomnom)` wraps the acceleration and the
+            // `if(!taunting && !omnomnomnom)` wraps the acceleration and the
             // both-keys cancel — and NOT the friction below it. So an eating
             // heavy still decelerates to a stop rather than sliding on at the
             // speed they started with. Begin Step.xml:237-253.
             //
-            // ⚠️ Unlike the jump, this re-reads `taunting` — it is a different
+            // Unlike the jump, this re-reads `taunting` — it is a different
             // block, several lines further down the event — so the tick a taunt
             // starts is already a tick with no acceleration in it.
             if (!character.Taunting && !character.Omnomnomnom)
             {
-                // ⚠️ The character's runPower against the *class's*
+                // The character's runPower against the *class's*
                 // basemaxspeed. The reference never recomputes basemaxspeed when
                 // runPower changes (Create.xml:159 derives it from baseRunPower
                 // once), so a scoped sniper accelerates slowly and is still
@@ -301,7 +301,7 @@ public static class CharacterPhysics
                     character.Controlling = false;
             }
 
-            // ⚠️ Outside the eating guard, deliberately — and note the branch
+            // Outside the eating guard, deliberately — and note the branch
             // below still reads the direction keys, so an eating heavy holding
             // one takes the base-friction arm exactly as a walking one would.
             //
@@ -407,7 +407,7 @@ public static class CharacterPhysics
 
         character.AppliedGravity = 0;
 
-        // Dropdown platforms, Character.events/Step.xml:90-107. ⚠️ This is what
+        // Dropdown platforms, Character.events/Step.xml:90-107. This is what
         // actually holds a character up: the platform is never solid, so nothing
         // in the movement solver stops it, and without this branch the Begin
         // Step ground test above would say "on the ground" while the character
@@ -419,7 +419,7 @@ public static class CharacterPhysics
                 if (rect.Kind != SolidKind.DropdownPlatform)
                     continue;
 
-                // ⚠️ Only a character moving DOWN is caught. Rising through one
+                // Only a character moving DOWN is caught. Rising through one
                 // is the whole point of a drop-through platform.
                 if (Gml.Less(character.Y, character.YPrevious))
                     continue;
@@ -427,7 +427,7 @@ public static class CharacterPhysics
                 if (!Overlaps(rect, box, character.X, character.Y))
                     continue;
 
-                // ⚠️ Already inside it before this tick's move: leave it alone.
+                // Already inside it before this tick's move: leave it alone.
                 // This is what lets a character fall THROUGH a platform it was
                 // already inside, and getting its sign wrong re-seats them on
                 // top of one they had dropped through — measured, see below.
@@ -438,11 +438,11 @@ public static class CharacterPhysics
                 // platform moves DOWN by the character's dy. Relative to the
                 // character that is the same as testing it at its previous y.
                 //
-                // ⚠️ It is NOT the same as moving the character down by dy,
+                // It is NOT the same as moving the character down by dy,
                 // which is what stood here and is the opposite direction — that
                 // asks whether it will be inside the platform NEXT tick.
                 //
-                // ⚠️ And the shift is applied to the platform, not the
+                // And the shift is applied to the platform, not the
                 // character, because GM8 rounds the *calling instance's*
                 // position to build the box it tests. `place_meeting` on the
                 // platform rounds `platformY + dy`; rounding the character's
@@ -506,7 +506,7 @@ public static class CharacterPhysics
     /// hundred takes 1,000 ticks (33 seconds) to come back.
     /// </para>
     /// <para>
-    /// ⚠️ <b><c>event_perform(ev_alarm, 5)</c> is inert here and is deliberately
+    /// <b><c>event_perform(ev_alarm, 5)</c> is inert here and is deliberately
     /// not reproduced.</b> The reference runs the weapon's reload alarm and then
     /// cancels it, but the line above has already filled the magazine — so every
     /// reload body in the game (<c>if ammoCount &lt; maxAmmo</c>) does nothing,
@@ -536,7 +536,7 @@ public static class CharacterPhysics
         // ammo while the win is on screen, so the ten seconds are a free-for-all
         // rather than a scramble for a reload.
         //
-        // ⚠️ `(arenaRoundEnd or global.mapchanging) and !player.humiliated`, so
+        // `(arenaRoundEnd or global.mapchanging) and !player.humiliated`, so
         // the losing team of an Arena round does NOT get the free reload — the
         // ten seconds are a free-for-all for the winners only.
         if ((character.MapChanging || character.ArenaRoundEnded) && !character.Humiliated)
@@ -592,7 +592,7 @@ public static class CharacterPhysics
         // Climbing down stairs. Only when not falling — otherwise every fall
         // would snap to the next ledge down.
         //
-        // ⚠️ And not while standing on a dropdown platform (End Step.xml:21),
+        // And not while standing on a dropdown platform (End Step.xml:21),
         // or the snap would drop a character straight through the thing holding
         // it up. Holding KEY_DOWN re-enables it, which is how you step down off
         // one deliberately.
@@ -657,7 +657,7 @@ public static class CharacterPhysics
         // End Step.xml:69-72, immediately below the clamps: the cloak fading in
         // or out, twenty ticks each way.
         //
-        // ⚠️ An `else if`, so a cloaked character whose flicker is up does
+        // An `else if`, so a cloaked character whose flicker is up does
         // *neither* — the alpha is pinned where dealFlicker left it until
         // alarm[7] clears the flicker. And note the fade is not what decides
         // whether the cloak works: `cloak` alone gates the intel grab and the
@@ -669,14 +669,14 @@ public static class CharacterPhysics
             character.CloakAlpha = Math.Min(character.CloakAlpha + CharacterState.CloakFadeRate, 1);
 
         // End Step.xml:83-96, the sandvich, between the cloak fade and the
-        // cabinet flag. ⚠️ Its position is what makes the facing freeze work:
+        // cabinet flag. Its position is what makes the facing freeze work:
         // the line above derived Facing from the aim, and this overwrites it.
         if (character.Omnomnomnom)
         {
             character.OmnomnomnomIndex += CharacterState.OmnomnomnomRate;
             character.Facing = character.EatFacing;
 
-            // ⚠️ Re-armed EVERY tick of the eat while hurt, not once at the
+            // Re-armed EVERY tick of the eat while hurt, not once at the
             // start. The reference's own comment: "This should prevent the 'ate
             // and got hit but didn't refresh cooldown' bug ... cooldown is now
             // reset continually until fully healed or finished eating." So a
@@ -689,7 +689,7 @@ public static class CharacterPhysics
                 character.EatTimer = Timers.SetAlarm(CharacterState.EatCooldown);
             }
 
-            // ⚠️ `<=`, so the tick a heavy reaches exactly full health still
+            // `<=`, so the tick a heavy reaches exactly full health still
             // gets 1.6 more and ends the tick 1.6 ABOVE maxHp. The clamp is
             // earlier in this same event, so that overshoot survives until the
             // next tick's End Step — and the wire carries it. Transcribed, not
@@ -704,7 +704,7 @@ public static class CharacterPhysics
         // End Step.xml:90-94, the taunt's own clock and the only thing that ever
         // ends one.
         //
-        // ⚠️ `tauntspeed*0.1`, not 0.3 — GM8 holds 3*0.1 and 0.3 as different
+        // `tauntspeed*0.1`, not 0.3 — GM8 holds 3*0.1 and 0.3 as different
         // doubles, and this is a repeated addition compared against a small
         // integer, so the two do not always end on the same tick. The class's
         // frame count is the whole duration: 9 frames for a scout is 30 ticks,
@@ -732,11 +732,11 @@ public static class CharacterPhysics
 
         // Character.events/End Step.xml:131-135, the line below realnumflames.
         //
-        // ⚠️ Two separate `if`s, not an else — so the tick a countdown crosses
+        // Two separate `if`s, not an else — so the tick a countdown crosses
         // zero it is both decremented and clamped, and the clamp is the only
         // thing that ever writes an exact 0.
         //
-        // ⚠️ **And both comparisons are fuzzy, which is load-bearing here.** A
+        // **And both comparisons are fuzzy, which is load-bearing here.** A
         // default five seconds is 30 spent at 0.2 a tick, and 150 subtractions
         // of 0.2 from 30 leave **7.3e-14** rather than zero — inside GML's 1e-13
         // comparison fuzz, so the reference clamps and a raw `<= 0` does not.
@@ -766,24 +766,23 @@ public static class CharacterPhysics
     /// <see cref="BeginStepAccelerate"/> — and it is on the <b>same key</b> as
     /// the right click, so both run on one press.
     /// <list type="bullet">
-    /// <item>⚠️ <b>The cloak is on <c>pressedKeys</c>, not the down-or-pressed
+    /// <item><b>The cloak is on <c>pressedKeys</c>, not the down-or-pressed
     /// union</b> — an edge, so holding the key does not flicker in and out.</item>
-    /// <item>⚠️ <b><c>(cloakAlpha == 1 and !cloak) or cloak</c></b>: you can
+    /// <item><b><c>(cloakAlpha == 1 and !cloak) or cloak</c></b>: you can
     /// only <em>start</em> a cloak from fully visible, and you can always drop
     /// one. A spy who uncloaks and immediately presses again has to wait the
     /// twenty ticks of fade back in.</item>
-    /// <item>⚠️ <b><c>readyToStab</c> gates the toggle</b>, so the fifty ticks
+    /// <item><b><c>readyToStab</c> gates the toggle</b>, so the fifty ticks
     /// after a stab are fifty ticks a spy cannot vanish <em>or</em> reappear.
     /// That flag belongs to the Revolver, which is why the weapon is passed in.
     /// </item>
-    /// <item>⚠️ <b>Uncloaking costs the intel grab</b>: <c>canGrabIntel =
+    /// <item><b>Uncloaking costs the intel grab</b>: <c>canGrabIntel =
     /// false</c> and <c>alarm[1] = max(alarm[1], 25)</c> — <em>max</em>, so a
     /// longer cooldown already running is not shortened. The reference's own
     /// comment: "stop spies immediately picking up intel after uncloaking".</item>
     /// <item>An intel carrier cannot cloak at all, and neither can somebody
-    /// taunting or humiliated — both real since 2026-08-28. The taunt clause
-    /// bites on the tick the taunt starts, because this block is below the one
-    /// that sets the flag.</item>
+    /// taunting or humiliated. The taunt clause bites on the tick the taunt
+    /// starts, because this block is below the one that sets the flag.</item>
     /// </list>
     /// </remarks>
     public static void CloakStep(ref CharacterState character, ref WeaponState weapon)
@@ -827,13 +826,13 @@ public static class CharacterPhysics
     /// <see cref="CharacterState.RunPower"/>. (The spy's End Step is the only
     /// other per-class event of any kind.)
     /// <para>
-    /// ⚠️ <b>It reads <c>keyState</c> alone, not the down-or-pressed
+    /// <b>It reads <c>keyState</c> alone, not the down-or-pressed
     /// union</b>, so a click that arrives and releases inside one tick does not
     /// slow the heavy — unlike the shot it fires, which that same click does
     /// produce.
     /// </para>
     /// <para>
-    /// ⚠️ <b>It runs after the inherited Step</b>, so the rate it sets is the
+    /// <b>It runs after the inherited Step</b>, so the rate it sets is the
     /// one <em>next</em> tick's Begin Step accelerates with. The event's
     /// <c>action_inherited</c> comes first and the code action second.
     /// </para>
@@ -862,7 +861,7 @@ public static class CharacterPhysics
     /// selects.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Public because the bot layer's takeoff gate has to read it live.</b>
+    /// <b>Public because the bot layer's takeoff gate has to read it live.</b>
     /// Begin Step sets these from <c>moveStatus</c> and <b>not</b> from
     /// <c>onground</c>, so the same control factor applies in the air — which is
     /// the whole reason a slow takeoff can be corrected by an in-flight tracker
@@ -880,7 +879,7 @@ public static class CharacterPhysics
             3 => (Gml.PointThreeFive, 1.05), // airblast
             4 => (ClassStats.BaseControl, 1.0), // rocketed by a team-mate
 
-            // ⚠️ Humiliation costs 0.2 and intel 0.1, and they do not add: the
+            // Humiliation costs 0.2 and intel 0.1, and they do not add: the
             // reference is an if/else-if chain, so a humiliated flag carrier
             // loses 0.2 and not 0.3. Begin Step.xml:176-181.
             _ => (character.Humiliated ? ClassStats.BaseControl - 0.2
@@ -954,7 +953,7 @@ public static class CharacterPhysics
     /// The stair descent's dropdown guard, <c>End Step.xml:21</c>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The reference spells it as "may descend", which is
+    /// The reference spells it as "may descend", which is
     /// <c>KEY_DOWN or not on one or already inside one</c>. This is its
     /// negation, and the third clause matters: a character whose box already
     /// overlaps a platform is not standing <em>on</em> it and may step down.

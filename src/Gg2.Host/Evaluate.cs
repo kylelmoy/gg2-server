@@ -16,27 +16,22 @@ namespace Gg2.Host;
 /// the determinism guarantee, are there.
 /// </para>
 /// <para>
-/// ⚠️ <b>A map with no nav cache is reported, not skipped silently.</b> Bots
+/// <b>A map with no nav cache is reported, not skipped silently.</b> Bots
 /// with no graph do not walk anywhere, so on any full-size map the two teams
 /// never meet and every match comes back <c>0-0, unfinished</c> — which reads
-/// exactly like a bot change that broke capturing. The caches are checked in at
-/// <c>nav/</c> and resolved automatically as of 2026-09-01, so this is now the
-/// exception rather than the fresh-checkout default — but a deleted <c>nav/</c>
-/// or an ungenerated custom map still lands here, and the column is what says
-/// so.
+/// exactly like a bot change that broke capturing. The nav caches are checked
+/// in at <c>nav/</c> and resolved automatically, so this is the exception
+/// rather than the fresh-checkout default — but a deleted <c>nav/</c> or an
+/// ungenerated custom map still lands here, and the column is what says so.
 /// </para>
 /// </remarks>
 internal static class Evaluate
 {
     public static int Run(string[] args)
     {
-        // ⚠️ The same resolution the server itself uses. Until 2026-09-01 this
-        // defaulted to a hard-coded absolute path into one machine's checkout of
-        // the bot fork — the standalone change (maps checked in at maps/) had
-        // fixed every entry point but this one, so `eval` with no flags read a
-        // tree CLAUDE.md said nothing depended on any more. Note the resolved
-        // maps/ includes the port-authored gg_debug2, so a no-flag eval covers
-        // 23 maps, not 22.
+        // The same resolution the server itself uses. Note the resolved maps/
+        // includes the port-authored gg_debug2, so a no-flag eval covers 23
+        // maps, not 22.
         var mapDirectory = Flag(args, "--maps") ?? Gg2.Server.MapDirectory.Resolve();
 
         if (mapDirectory.Length == 0)
@@ -148,8 +143,7 @@ internal static class Evaluate
           --threads <n>     matches at once (default: processor count)
           --bots <n>        bots per match (default 12)
           --bot-difficulty <1-5>
-                            how good they are (default 5). Every eval number
-                            recorded before 2026-09-02 was taken at 3.
+                            how good they are (default 5)
           --max-ticks <n>   ceiling per match (default 36000, twenty minutes)
           --seed <n>        batch seed (default 1)
           --maps <path>     where the built-in map PNGs live

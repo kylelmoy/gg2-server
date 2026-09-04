@@ -13,13 +13,13 @@ namespace Gg2.Tests;
 /// described.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>That document was written "while it is still specification" and its
+/// <b>That document was written "while it is still specification" and its
 /// claims had never been checked against the shipped code.</b> Most of them are
 /// prose about design intent, which no test can hold — but four are structural
 /// facts that a single careless change silently destroys, and three of those are
 /// the ones the document says cannot be retrofitted at all.
 /// <para>
-/// ⚠️ <b>The failure mode this exists for is not a broken test elsewhere.</b>
+/// <b>The failure mode this exists for is not a broken test elsewhere.</b>
 /// Putting a <c>List&lt;&gt;</c> or a logger in <see cref="WorldState"/> breaks
 /// nothing that runs today: the server still serves, every parity window holds,
 /// and the whole suite stays green. What it destroys is rollout search, months
@@ -34,13 +34,13 @@ public sealed class BotAiConstraintsTests(ITestOutputHelper output)
     /// Item 1: <see cref="WorldState"/> holds no reference, anywhere in it.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The one item <c>docs/BOTAI.md</c> marks "retrofit cost: total".</b>
+    /// <b>The one item <c>docs/BOTAI.md</c> marks "retrofit cost: total".</b>
     /// A clone has to be a <c>memcpy</c>, so no field may point outside the state
     /// — no map object, no config, no logger, no event sink that owns memory.
     /// Read-only inputs are passed <em>to</em> <c>Tick</c> alongside the state,
     /// never held by it, which is why <see cref="CollisionWorld"/> is a parameter.
     /// <para>
-    /// ⚠️ This is <b>recursive</b>: it fails on a reference nested any depth down,
+    /// This is <b>recursive</b>: it fails on a reference nested any depth down,
     /// including one inside a struct inside an <c>[InlineArray]</c> slot buffer,
     /// which is exactly where one would be added without anybody noticing.
     /// </para>
@@ -52,7 +52,7 @@ public sealed class BotAiConstraintsTests(ITestOutputHelper output)
             RuntimeHelpers.IsReferenceOrContainsReferences<WorldState>(),
             "WorldState now holds a reference: a clone is a graph walk and rollout search is dead on cost");
 
-        // ⚠️ The control, because a test that cannot fail is not a gate: the same
+        // The control, because a test that cannot fail is not a gate: the same
         // question about a type that DOES hold one. Without it, an assertion that
         // silently answered false for everything would read as a pass.
         Assert.True(RuntimeHelpers.IsReferenceOrContainsReferences<WithAReference>());
@@ -72,7 +72,7 @@ public sealed class BotAiConstraintsTests(ITestOutputHelper output)
     /// copyable flat state is a serialisable one". This is what makes that
     /// concrete, and it needs no production code at all: the bytes ARE the state.
     /// <para>
-    /// ⚠️ <b>Restoring is not enough; continuing is the claim.</b> A state that
+    /// <b>Restoring is not enough; continuing is the claim.</b> A state that
     /// compares equal and then diverges on the next tick is the failure this is
     /// really about — a hidden counter, a cursor into a pool, an RNG stream left
     /// outside the struct. So the restored copy is stepped fifty ticks against a
@@ -91,7 +91,7 @@ public sealed class BotAiConstraintsTests(ITestOutputHelper output)
         inputs[1] = new PlayerInput(PlayerKeys.Right | PlayerKeys.Attack, 8192, 40);
         inputs[2] = new PlayerInput(PlayerKeys.Left, 40000, 40);
 
-        // ⚠️ Stop on the CONDITION, not on a tick count. A rocket's whole life is
+        // Stop on the CONDITION, not on a tick count. A rocket's whole life is
         // shorter than its refire, so at most instants after firing there is
         // nothing in the air at all — and a snapshot with an empty pool does not
         // exercise the handles and the creation order, which is the part of the
@@ -112,7 +112,7 @@ public sealed class BotAiConstraintsTests(ITestOutputHelper output)
         var restored = MemoryMarshal.Read<WorldState>(bytes);
         Assert.True(Bytes(in restored).SequenceEqual(bytes), "the round trip is not bit-identical");
 
-        // ⚠️ And it CONTINUES identically, which is the part that matters.
+        // And it CONTINUES identically, which is the part that matters.
         var control = state;
 
         for (var tick = 0; tick < 50; tick++)
@@ -130,11 +130,11 @@ public sealed class BotAiConstraintsTests(ITestOutputHelper output)
     /// Item 1's other half: a steady-state tick allocates nothing.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>"Cheap to copy" is only half of it</b> — if each simulated tick
+    /// <b>"Cheap to copy" is only half of it</b> — if each simulated tick
     /// produces garbage, a search that plays thousands of candidate futures pays
     /// for a collection it never asked for, and no amount of C# speed rescues it.
     /// <para>
-    /// ⚠️ The measurement is per <em>thread</em> and includes the test's own
+    /// The measurement is per <em>thread</em> and includes the test's own
     /// allocations, so everything it needs is allocated before the window opens
     /// and the loop below allocates nothing of its own. The budget is zero rather
     /// than "small": a tick that allocates at all does so every tick.
@@ -173,7 +173,7 @@ public sealed class BotAiConstraintsTests(ITestOutputHelper output)
     /// guarantee is structural.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Constructing one is free and the language <b>refuses</b> to let a source
+    /// Constructing one is free and the language <b>refuses</b> to let a source
     /// stash it in a field or keep it past the call. A by-value projection would
     /// have been a kilobyte copy per bot per decision — item 1 in another costume
     /// — and a class would have been an allocation on the same path.
@@ -193,7 +193,7 @@ public sealed class BotAiConstraintsTests(ITestOutputHelper output)
     /// Item 4: a bot's action is exactly the wire action, with no privileged aim.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The honesty property: a bot cannot aim more precisely than a player
+    /// <b>The honesty property: a bot cannot aim more precisely than a player
     /// can.</b> One action space for humans, scripted bots, search and learned
     /// policies means a logged human action is a valid bot action and vice versa
     /// — no conversion layer, no train/deploy mismatch, and behaviour cloning
@@ -229,7 +229,7 @@ public sealed class BotAiConstraintsTests(ITestOutputHelper output)
         var input = new PlayerInput(PlayerKeys.None, 8192, 40);
         Assert.Equal(45, input.AimDirectionDegrees);
 
-        // ⚠️ And the way IN is quantised too: PlayerInput.FromAim rounds a real
+        // And the way IN is quantised too: PlayerInput.FromAim rounds a real
         // aim onto the same 65,536 steps, so a bot that computed degrees is on the
         // grid a client is on. About 182 steps a degree.
         Assert.Equal(

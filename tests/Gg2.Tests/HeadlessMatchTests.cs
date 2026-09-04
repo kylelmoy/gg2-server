@@ -11,7 +11,7 @@ namespace Gg2.Tests;
 /// </summary>
 /// <remarks>
 /// <para>
-/// ⚠️ <b>That last clause is the one with teeth, and it is a constraint on what
+/// <b>That last clause is the one with teeth, and it is a constraint on what
 /// a match may share.</b> <c>NavSearch</c> is deliberately not thread-safe — its
 /// scratch is reused across queries — so two matches sharing one would
 /// interleave two frontiers into a single <c>gScore</c> and produce routes that
@@ -41,7 +41,7 @@ public sealed class HeadlessMatchTests
     /// The map and its nav graph.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A match without a nav graph is not a weaker test, it is a
+    /// <b>A match without a nav graph is not a weaker test, it is a
     /// different one — and for these it is a vacuous one.</b> Bots with no graph
     /// do not walk anywhere, so on a map the size of <c>ctf_truefort</c> the two
     /// teams never meet: every match comes out
@@ -57,7 +57,7 @@ public sealed class HeadlessMatchTests
     }
 
     /// <summary>
-    /// ⚠️ The load-bearing test: the same batch on one thread and on eight gives
+    /// The load-bearing test: the same batch on one thread and on eight gives
     /// the same array, element for element.
     /// </summary>
     /// <remarks>
@@ -83,7 +83,7 @@ public sealed class HeadlessMatchTests
     /// satisfied by six identical matches.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Without this, a runner that ignored the index and played the same
+    /// Without this, a runner that ignored the index and played the same
     /// match six times would pass every determinism assertion here perfectly.
     /// </remarks>
     [Fact]
@@ -114,7 +114,7 @@ public sealed class HeadlessMatchTests
     }
 
     /// <summary>
-    /// ⚠️ And <see cref="HeadlessMatch.Reset"/> really resets: a match played,
+    /// And <see cref="HeadlessMatch.Reset"/> really resets: a match played,
     /// reset and played again gives what it gave the first time.
     /// </summary>
     /// <remarks>
@@ -165,7 +165,7 @@ public sealed class HeadlessMatchTests
     /// moving and dying.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Without this the determinism tests are satisfied by a match that
+    /// <b>Without this the determinism tests are satisfied by a match that
     /// does nothing at all</b> — reproducibly and on any number of threads. It
     /// asserts deaths rather than captures because a capture needs a carrier to
     /// survive the whole way home, which over 900 ticks it usually does not:
@@ -211,7 +211,7 @@ public sealed class HeadlessMatchTests
     /// anywhere.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <c>navCacheLoad.gml</c>'s own contract, and the same answer
+    /// <c>navCacheLoad.gml</c>'s own contract, and the same answer
     /// <c>ScenarioWorld</c> and <c>GameServer</c> give: a missing cache is "this
     /// map does not navigate", never an error. The nav caches are gitignored in
     /// the reference and are not shipped, so a fresh checkout has none — which
@@ -229,7 +229,7 @@ public sealed class HeadlessMatchTests
     }
 
     /// <summary>
-    /// ⚠️ A defaulted <see cref="MatchResult"/> must not read as "red won".
+    /// A defaulted <see cref="MatchResult"/> must not read as "red won".
     /// </summary>
     /// <remarks>
     /// <c>Team.Red</c> is 0, so a zeroed result names red the winner — the same
@@ -248,7 +248,7 @@ public sealed class HeadlessMatchTests
     }
 
     /// <summary>
-    /// ⚠️ <see cref="HeadlessMatchOptions.Default"/> is not <c>new()</c>, and the
+    /// <see cref="HeadlessMatchOptions.Default"/> is not <c>new()</c>, and the
     /// difference is a match that silently does nothing.
     /// </summary>
     /// <remarks>
@@ -277,7 +277,7 @@ public sealed class HeadlessMatchTests
     /// Explicit teams put exactly that many bots on each side.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>This is what makes a bot change measurable against another</b> —
+    /// <b>This is what makes a bot change measurable against another</b> —
     /// "red runs the new one, blue runs the old" is the comparison
     /// <c>docs/BOTAI.md</c> item 8 exists for, and an evenly-filled match cannot
     /// express it. It is also what settled whether the bots could return a flag
@@ -313,7 +313,7 @@ public sealed class HeadlessMatchTests
     }
 
     /// <summary>
-    /// ⚠️ Zero on a side is a value, not "unspecified" — which is why the
+    /// Zero on a side is a value, not "unspecified" — which is why the
     /// fields are nullable.
     /// </summary>
     /// <remarks>
@@ -340,7 +340,7 @@ public sealed class HeadlessMatchTests
     }
 
     /// <summary>
-    /// ⚠️ <b>A carrier no longer wedges — the regression test for a bug that
+    /// <b>A carrier no longer wedges — the regression test for a bug that
     /// held the flag hostage for a whole round.</b>
     /// </summary>
     /// <remarks>
@@ -358,7 +358,7 @@ public sealed class HeadlessMatchTests
     /// the edge it needed every time the ban expired.
     /// </para>
     /// <para>
-    /// ⚠️ <b>The reference does not have this shape at all</b>:
+    /// <b>The reference does not have this shape at all</b>:
     /// <c>botPathPlan.gml:100</c> takes its start from
     /// <c>navNodeFromWorld(char.x, char.y)</c> and reads the goal separately at
     /// line 107. The port introduced it by parameterising what the reference
@@ -366,7 +366,7 @@ public sealed class HeadlessMatchTests
     /// <c>y</c> in scope.
     /// </para>
     /// <para>
-    /// ⚠️ <b>It was not a nav-graph fault, and that was checked rather than
+    /// <b>It was not a nav-graph fault, and that was checked rather than
     /// assumed.</b> A character placed at the wedge position and told to press
     /// Left walks 350px toward home in 90 ticks; both the real start and the real
     /// goal resolve to nodes (#169 and #643). The geometry and the graph were
@@ -417,7 +417,7 @@ public sealed class HeadlessMatchTests
         }
 
         // A healthy carry on this map is about 1,760 ticks; before the fix this
-        // seed produced one of 22,700. ⚠️ The bound is generous on purpose: the
+        // seed produced one of 22,700. The bound is generous on purpose: the
         // claim is "the carrier does not stop for ever", not a pinned duration.
         Assert.True(
             longestCarry < 5000,
@@ -428,7 +428,7 @@ public sealed class HeadlessMatchTests
 
     /// <summary>The summary reports draws and unfinished matches rather than folding them away.</summary>
     /// <remarks>
-    /// ⚠️ A bot change that makes capturing worse shows up FIRST as more
+    /// A bot change that makes capturing worse shows up FIRST as more
     /// unfinished matches. A summary that only counted red against blue would
     /// hide it, and the win rate would drift for a reason nobody could find.
     /// </remarks>
@@ -455,7 +455,7 @@ public sealed class HeadlessMatchTests
     }
 
     /// <summary>
-    /// ⚠️ Two batches with adjacent seeds are two different experiments.
+    /// Two batches with adjacent seeds are two different experiments.
     /// </summary>
     /// <remarks>
     /// <c>seed + index</c> would make <c>{seed: 1, count: 100}</c> and

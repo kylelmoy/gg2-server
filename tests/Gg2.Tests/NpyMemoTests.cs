@@ -7,12 +7,12 @@ namespace Gg2.Tests;
 /// is not optional.
 /// </summary>
 /// <remarks>
-/// ⛔ <b>The bug this gates rejected every checkpoint <c>gg2-rl</c> had, and this
+/// <b>The bug this gates rejected every checkpoint <c>gg2-rl</c> had, and this
 /// repo could not see it.</b> <c>NpyFile.ReadStrings</c> read only
 /// <c>SHORT_BINUNICODE</c>, so the first repeated value — emitted by pickle as
 /// <c>BINGET</c> — stopped the parse dead with "did not end at APPENDS".
 /// <para>
-/// ⚠️ <b>Why it fired there and not here: pickle's memo is keyed by object
+/// <b>Why it fired there and not here: pickle's memo is keyed by object
 /// IDENTITY, not by value.</b> Metadata of <c>['2', uuid, '2', …]</c> pickles as
 /// two separate strings if the two <c>'2'</c>s are distinct objects and as a
 /// back-reference if they are the same object. This repo's own fixture is the
@@ -22,7 +22,7 @@ namespace Gg2.Tests;
 /// duplicate and does not contain a <c>BINGET</c>.
 /// </para>
 /// <para>
-/// ⚠️ <b>Which is why the fixture here is BUILT rather than checked in.</b> A
+/// <b>Which is why the fixture here is BUILT rather than checked in.</b> A
 /// checked-in npz would freeze whichever accident its writer had; constructing
 /// the bytes states the case being tested, and a reader can see that the
 /// back-reference is really there.
@@ -34,7 +34,7 @@ public sealed class NpyMemoTests
     /// A minimal object-array <c>.npy</c> whose element list repeats a string.
     /// </summary>
     /// <param name="preambleStrings">
-    /// How many memoized strings to put BEFORE the element list. ⚠️ <b>Not
+    /// How many memoized strings to put BEFORE the element list. <b>Not
     /// decoration.</b> In a real checkpoint the list is memo slot 18, behind
     /// <c>_reconstruct</c>, so a reader that assumed the first element was slot 1
     /// would resolve every back-reference to the wrong string. A preamble of zero
@@ -108,7 +108,7 @@ public sealed class NpyMemoTests
     }
 
     /// <summary>
-    /// ⚠️ The regression: a repeated value is read, not refused.
+    /// The regression: a repeated value is read, not refused.
     /// </summary>
     /// <remarks>
     /// The exact metadata shape <c>gg2-rl</c> reported — an action-encoding
@@ -128,7 +128,7 @@ public sealed class NpyMemoTests
     /// the same.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>This is the test that fails if the memo counter is wrong rather than
+    /// <b>This is the test that fails if the memo counter is wrong rather than
     /// missing.</b> Reading back-references but numbering them from 1 would pass
     /// the test above only at <c>preambleStrings: 0</c>; here the same values must
     /// come back whatever the list's absolute slot is.
@@ -149,7 +149,7 @@ public sealed class NpyMemoTests
     /// Several repeats of several values, so an off-by-one cannot pass by luck.
     /// </summary>
     /// <remarks>
-    /// ⚠️ With one repeat of one value, a reader that resolved every
+    /// With one repeat of one value, a reader that resolved every
     /// back-reference to the <em>first</em> string would still pass. These need
     /// each reference to land on its own target.
     /// </remarks>
@@ -173,7 +173,7 @@ public sealed class NpyMemoTests
     }
 
     /// <summary>
-    /// ⚠️ The real checkpoint still loads, and its metadata really does repeat.
+    /// The real checkpoint still loads, and its metadata really does repeat.
     /// </summary>
     /// <remarks>
     /// The other half of the story: this file carries <c>'2'</c> twice and reads

@@ -117,10 +117,8 @@ public struct WorldState
     /// The cost is paid on every clone, which is why it is not larger still:
     /// each slot is a <see cref="ProjectileState"/> plus a generation plus an
     /// order entry, and at this capacity the pool is <b>86 KB of the whole
-    /// state's 156.6 KB — 55%</b> (measured 2026-09-02; it said "43 KB of 66 KB",
-    /// which was true at the end of phase 5 stage 3 and has been wrong since).
-    /// <c>WorldStateTests.ACloneStaysWithinItsBudget</c> is the
-    /// tripwire on that number.
+    /// state's 156.6 KB — 55%</b>. <c>WorldStateTests.ACloneStaysWithinItsBudget</c>
+    /// is the tripwire on that number.
     /// </para>
     /// <para>
     /// <b>The pool is now the majority of a clone, and that changes where to
@@ -187,7 +185,7 @@ public struct WorldState
     /// stay a value type — the reference's <c>ds_map</c> is a handle and an
     /// absent key reads as zero, which a zeroed row gives for free.
     /// <para>
-    /// ⚠️ <b>Both axes are roster indices, so <see cref="RemoveSlot"/> has to
+    /// <b>Both axes are roster indices, so <see cref="RemoveSlot"/> has to
     /// renumber both.</b> It is the only two-dimensional thing in the state and
     /// therefore the only one where the usual one-dimensional renumbering is not
     /// enough.
@@ -344,15 +342,13 @@ public struct WorldState
     /// Moving platforms this state has room for.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Was 16, which was a guess, and the guess was WRONG.</b> No shipped
-    /// map places a platform, so nothing here ever reached the ceiling — but a
-    /// scan of the 2,348-map archive on 2026-09-01 found eight custom maps that
-    /// do, and <c>maw_deathmatch</c> places <b>139</b>. At 16 that map would have
-    /// silently lost 123 of them. Raised to 192 the same day, which is the fix
+    /// <b>No shipped map places a platform</b>, but a scan of a larger map
+    /// archive found custom maps that do — one places 139 — so the ceiling is
+    /// 192 rather than a guess sized to the shipped set. This is the fix
     /// <see cref="MaxProjectiles"/>' remarks prescribe for this class of ceiling:
     /// overrunning is a divergence, not graceful degradation.
     /// <para>
-    /// ⚠️ <b>It costs a bigger <see cref="WorldState"/>, and the state is copied
+    /// <b>It costs a bigger <see cref="WorldState"/>, and the state is copied
     /// per rollout candidate.</b> 176 extra slots is on the order of 4 KB against
     /// a ~145 KB state — a few percent on the fork copy <c>docs/ENV.md</c> prices
     /// at 10-12 µs, paid on every map including the 22 that place none. If that
@@ -413,7 +409,7 @@ public struct WorldState
     /// Whether the round has been decided. False until it is.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A flag rather than a sentinel in <see cref="Winner"/>, on
+    /// <b>A flag rather than a sentinel in <see cref="Winner"/>, on
     /// purpose.</b> The reference spells "nobody has won" as
     /// <c>global.winners = -1</c>, and <see cref="Team"/> has no -1 —
     /// <c>Team.Red</c> is <b>0</b>, so a zeroed state with a plain
@@ -432,7 +428,7 @@ public struct WorldState
     /// the same reason: <c>game_init.gml:103</c> is
     /// <c>max(1, min(65535, ...))</c>, so 0 is unreachable in the reference.
     /// <para>
-    /// ⚠️ <b>The kills themselves are counted in <see cref="RedCaps"/> and
+    /// <b>The kills themselves are counted in <see cref="RedCaps"/> and
     /// <see cref="BlueCaps"/></b>, not in a field of their own. Team Deathmatch
     /// reuses the capture counters — <c>doEventPlayerDeath.gml:313</c> — which
     /// is why it needs no per-player statistics to decide a round, and why its
@@ -446,7 +442,7 @@ public struct WorldState
     /// <see cref="CharacterState.DeathmatchInvulnerable"/> to.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A fifth of the ticks it buys</b> —
+    /// <b>A fifth of the ticks it buys</b> —
     /// <c>seconds * 30 * 0.2</c>, spent at 0.2 a tick. See
     /// <see cref="CharacterState.DeathmatchInvulnerable"/>.
     /// <para>
@@ -485,7 +481,7 @@ public struct WorldState
     /// <c>GameServer.balancecounter</c>: ticks since the notice went out.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Counted every tick while <see cref="BalanceNoticeGiven"/>, but only
+    /// Counted every tick while <see cref="BalanceNoticeGiven"/>, but only
     /// <em>read</em> when something calls <see cref="TeamBalance.Check"/> — a
     /// death, a departure or a team change.
     /// </remarks>
@@ -495,7 +491,7 @@ public struct WorldState
     /// <c>global.classlimits</c>: how many of each class one team may field.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A zeroed state means every class is full</b>, which would send
+    /// <b>A zeroed state means every class is full</b>, which would send
     /// every team change through <c>checkClasslimits</c>' random pick. The
     /// reference's default is 255 and <c>GameServer</c> sets it; a test that
     /// builds a world by hand and cares about classes has to as well. See
@@ -539,7 +535,7 @@ public struct WorldState
     /// Only the first <see cref="ControlPointCount"/> are real.
     /// </summary>
     /// <remarks>
-    /// ⚠️ A zeroed entry is owned by red and being captured by red — see
+    /// A zeroed entry is owned by red and being captured by red — see
     /// <see cref="ControlPoints.Neutral"/>, which is the factory.
     /// </remarks>
     public ControlPointBuffer<ControlPointState> ControlPoints;
@@ -569,7 +565,7 @@ public struct WorldState
     /// <c>ControlPointSetupGate</c> on the map is solid — to characters and
     /// bullets alike, the one solidity rule both lists agree on.
     /// <para>
-    /// ⚠️ At <b>30</b>, not 0, the round clock is reset to the full time limit:
+    /// At <b>30</b>, not 0, the round clock is reset to the full time limit:
     /// the match proper starts a second before the gates actually open.
     /// </para>
     /// </remarks>
@@ -600,7 +596,7 @@ public struct WorldState
     /// <c>roundStart</c>: ticks of setup left before a round begins.
     /// </summary>
     /// <remarks>
-    /// ⚠️ On the wire it is <c>floor(roundStart/2)</c> in a single byte, so the
+    /// On the wire it is <c>floor(roundStart/2)</c> in a single byte, so the
     /// client sees it to the nearest two ticks. 300 fits in a byte; the halving
     /// is the reference's and is not a rounding this port gets to choose.
     /// </remarks>
@@ -610,7 +606,7 @@ public struct WorldState
     /// <c>ArenaHUD.winners</c>: who won the <em>round</em>, not the map.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Not <see cref="Winner"/>, which is <c>global.winners</c> and ends the
+    /// Not <see cref="Winner"/>, which is <c>global.winners</c> and ends the
     /// map. This one is <see cref="Team.Spectator"/> between rounds and is sent
     /// as a signed byte — where the reference's -1 never appears, because it is
     /// initialised to <c>TEAM_SPECTATOR</c> rather than to -1.
@@ -653,7 +649,7 @@ public struct WorldState
     /// far enough that clients are owed an extra <c>CAPS_UPDATE</c>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Bandwidth, not correctness — and it is still on the wire.</b> The
+    /// <b>Bandwidth, not correctness — and it is still on the wire.</b> The
     /// reference asks for one when a point is captured, when a capture meter
     /// crosses three quarters, a quarter or a tenth of the way
     /// (<c>ControlPoint.events/Step.xml:217</c>), and five seconds before the
@@ -673,7 +669,7 @@ public struct WorldState
     /// <c>UNLOCKCP</c>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>In the state rather than in <see cref="TickEvents"/>, and that is
+    /// <b>In the state rather than in <see cref="TickEvents"/>, and that is
     /// deliberate.</b> Every other broadcast the simulation produces is an
     /// event; this one is a fact about the world that happens to be worth one
     /// message, and a client that misses it recovers from the <c>cpUnlock</c> in
@@ -760,7 +756,7 @@ public struct WorldState
         // Minegun.events/Destroy.xml: `with(Mine) if ownerPlayer ==
         // other.ownerPlayer instance_destroy();`
         //
-        // ⚠️ The one exception to "a projectile outlives its owner". A weapon is
+        // The one exception to "a projectile outlives its owner". A weapon is
         // destroyed with its character, and the Minegun takes its mines with it
         // — silently, without exploding them. A rocket already in the air does
         // not care that its shooter died; a mine does. Before the fields are
@@ -792,7 +788,7 @@ public struct WorldState
 
         // Character.events/Destroy.xml: `if (intel) doEventDropIntel(player);`
         //
-        // ⚠️ Every way a character stops existing drops the flag, and none of
+        // Every way a character stops existing drops the flag, and none of
         // them broadcasts a DROP_INTEL. sendEventDropIntel's own comment says
         // why: the drop would be a nested event inside the death, and the
         // client would process the death first and then error out dropping a
@@ -805,7 +801,7 @@ public struct WorldState
         // Before the fields are cleared, so the carrier's position and its
         // charged intelRecharge are still readable.
         //
-        // ⚠️ The `lastDamageSource in (KILL_BOX, FRAG_BOX, PITFALL)` arm
+        // The `lastDamageSource in (KILL_BOX, FRAG_BOX, PITFALL)` arm
         // below it — which sends the flag home instead of leaving it in the pit
         // — is **not here**, and that is deliberate: it is *broadcast* where this
         // drop is not, so it lives in Deaths.Kill, which has the events. Only a
@@ -861,14 +857,14 @@ public struct WorldState
         // Player.events/Destroy.xml, first line: `if(object != -1) with(object)
         // instance_destroy();`
         //
-        // ⚠️ **A departure destroys the character, and that is the *whole* of
+        // **A departure destroys the character, and that is the *whole* of
         // Character.events/Destroy.xml** — the weapon, the mines that die with
         // the Minegun, Quote's blade and bubbles, the knife hitbox, the medic's
         // beam and the intel drop. This path used to do the flag alone, on the
         // reading that a departure is not a death; it is not a death, but it
         // *is* a destruction, and the reference spells it with the same event.
         //
-        // ⚠️ That line is invisible to every code-extracting grep of the
+        // That line is invisible to every code-extracting grep of the
         // reference. GM8 writes an event's code inside
         // `<argument kind="STRING">`, and this one sits on the *same line* as
         // the opening tag — so anything that filters out lines beginning with a
@@ -889,7 +885,7 @@ public struct WorldState
         //     with(Shot)              if(ownerPlayer == other.id) instance_destroy();
         //     with(Needle)            if(ownerPlayer == other.id) instance_destroy();
         //
-        // ⚠️ **A departure takes everything in the air with it, where a death
+        // **A departure takes everything in the air with it, where a death
         // takes almost nothing.** That is the sharpest difference between the
         // two paths and it runs the opposite way from the intuition: a rocket
         // outlives its shooter's death precisely so it can still credit the
@@ -906,7 +902,7 @@ public struct WorldState
         // Mine, Blade, Bubble and Stab are deliberately absent here and absent
         // from the reference's list for the same reason — they belong to the
         // *weapon*, so the character's destruction above has already taken
-        // them. ⚠️ Adding them here is a **proved equivalent mutant**: the two
+        // them. Adding them here is a **proved equivalent mutant**: the two
         // sets are unreachably disjoint by the time this runs, because the only
         // way to own one of those four is to have a weapon, and the only way to
         // still have one after Clear is to have had no character — in which
@@ -938,7 +934,7 @@ public struct WorldState
         // map and badge list are presentation.
 
         // Player.events/Destroy.xml:8 is `clearPlayerDominations(id)`, and it
-        // is deliberately *not* transcribed here. ⚠️ It is load-bearing in the
+        // is deliberately *not* transcribed here. It is load-bearing in the
         // reference and redundant in the port, for the same reason: the
         // reference's tables are keyed by player *instance* and survive the
         // roster list compacting, so a departing player has to be deleted out of
@@ -974,7 +970,7 @@ public struct WorldState
         HasPlayer[MaxSlots - 1] = false;
         DominationKills[MaxSlots - 1] = default;
 
-        // ⚠️ The domination table is indexed by roster slot on *both* axes, so
+        // The domination table is indexed by roster slot on *both* axes, so
         // it is the one thing in the state that needs shifting twice. The rows
         // moved with the loop above; this moves the columns inside each of them.
         for (var i = 0; i < MaxSlots; i++)
@@ -1135,7 +1131,7 @@ public struct WorldState
         // it is the only part of the Create event that reads the *world*: the
         // gamemode, the configured amount, and what the last life had left.
         //
-        // ⚠️ The bypass is spent, not merely read — a player only carries their
+        // The bypass is spent, not merely read — a player only carries their
         // protection across one death, and the arm that set it
         // (Character.events/Destroy.xml:40) writes it again if the next death is
         // protected too.
@@ -1160,7 +1156,7 @@ public struct WorldState
     /// is the order GM8 runs a collision event over them.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Not slot order.</b> See <see cref="CharacterState.CreationOrder"/>
+    /// <b>Not slot order.</b> See <see cref="CharacterState.CreationOrder"/>
     /// for what that costs and the recording that measured it.
     /// <para>
     /// An insertion sort because <see cref="MaxSlots"/> is eight and the caller
@@ -1202,12 +1198,12 @@ public struct WorldState
     /// the order GM8 runs a collision event over them.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Slot order is not build order.</b> The engineer in slot 5 can build
+    /// <b>Slot order is not build order.</b> The engineer in slot 5 can build
     /// before the one in slot 2, and a projectile explodes on the first sentry
     /// its collision event fires against — the same rule
     /// <see cref="CharacterState.CreationOrder"/> was measured for.
     /// <para>
-    /// ⚠️ <b>Unlike the character case, no recording contradicts the old
+    /// <b>Unlike the character case, no recording contradicts the old
     /// behaviour.</b> Seeing it needs two sentries overlapping one projectile's
     /// box, which no fixture holds. This is written because the rule was proven
     /// next door and applying it costs nothing — <b>not</b> because a divergence
@@ -1311,7 +1307,7 @@ public struct WorldState
 
         // BladeB.events/Destroy.xml, both lines: give the slot back, and charge
         // the owner for whatever of the refire cost the flight did not already
-        // drain. ⚠️ The refund is *unguarded* — a blade whose owner has gone
+        // drain. The refund is *unguarded* — a blade whose owner has gone
         // still runs it in the reference, on a weapon instance that is being
         // destroyed in the same breath.
         if (dying.Kind == ProjectileKind.Blade && dying.OwnerSlot != ProjectileState.NoOwner)

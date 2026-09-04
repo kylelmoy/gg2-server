@@ -8,7 +8,7 @@ namespace Gg2.Server;
 /// </summary>
 /// <remarks>
 /// <para>
-/// ⚠️ <b>Why this exists rather than <c>HttpListener</c>.</b> On Windows,
+/// <b>Why this exists rather than <c>HttpListener</c>.</b> On Windows,
 /// <c>HttpListener</c> can only bind a prefix other than <c>localhost</c> if an
 /// administrator has added a URL ACL with <c>netsh http add urlacl</c> — so the
 /// one thing this feature is for, reaching the panel from another machine, would
@@ -17,7 +17,7 @@ namespace Gg2.Server;
 /// dependency, for a page with four endpoints on it.
 /// </para>
 /// <para>
-/// ⚠️ <b>It is a subset, deliberately, and the omissions are the security
+/// <b>It is a subset, deliberately, and the omissions are the security
 /// argument.</b> No chunked request bodies, no pipelining, no ranges, no
 /// upgrades, no multipart. Everything it accepts is bounded before it is
 /// allocated: <see cref="MaxHeaderBytes"/> for the head,
@@ -56,7 +56,7 @@ internal sealed class HttpRequest
 
     /// <summary>One cookie's value, or null.</summary>
     /// <remarks>
-    /// ⚠️ Hand-split rather than parsed with <c>System.Net.Cookie</c>, which
+    /// Hand-split rather than parsed with <c>System.Net.Cookie</c>, which
     /// wants a container and a URI. A request header is a <c>;</c>-separated list
     /// of <c>name=value</c> and nothing else is legal in it.
     /// </remarks>
@@ -84,7 +84,7 @@ internal sealed class HttpRequest
     /// Reads one request, or null when the connection ended or broke a limit.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Null for "stop", never an exception.</b> A closed connection is the
+    /// <b>Null for "stop", never an exception.</b> A closed connection is the
     /// normal end of every keep-alive session and a browser closes them all the
     /// time, so it must not be logged as a fault or the log fills with them.
     /// </remarks>
@@ -107,7 +107,7 @@ internal sealed class HttpRequest
                 if (read <= 0)
                     return null;
 
-                // ⚠️ Search from three bytes back, not from zero: the terminator
+                // Search from three bytes back, not from zero: the terminator
                 // can straddle two reads, and rescanning the whole buffer every
                 // time is quadratic on a slow client — which is a client that can
                 // choose to be slow.
@@ -133,7 +133,7 @@ internal sealed class HttpRequest
                     headers[lines[i][..colon]] = lines[i][(colon + 1)..].Trim();
             }
 
-            // ⛔ Refused rather than ignored. A body this parser does not
+            // Refused rather than ignored. A body this parser does not
             // understand, silently treated as absent, is a request smuggling
             // primitive: the next read would start mid-body and be parsed as a
             // fresh request line.
@@ -243,7 +243,7 @@ internal static class HttpResponse
     /// Headers every reply carries.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The CSP is why the page's CSS and JavaScript are separate routes
+    /// <b>The CSP is why the page's CSS and JavaScript are separate routes
     /// rather than inline.</b> <c>default-src 'self'</c> with no
     /// <c>unsafe-inline</c> means a reflected string can never become script,
     /// which for a panel that renders player-chosen names into the DOM is worth
@@ -299,7 +299,7 @@ internal static class HttpResponse
             + "Content-Type: text/event-stream; charset=utf-8\r\n"
             + "Cache-Control: no-store\r\n"
 
-            // ⚠️ Nginx buffers a proxied response by default, which for an event
+            // Nginx buffers a proxied response by default, which for an event
             // stream means the panel updates in bursts minutes apart and looks
             // broken. Meaningless when nothing is in front of the server, and
             // free.

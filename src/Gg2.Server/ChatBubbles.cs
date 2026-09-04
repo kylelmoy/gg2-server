@@ -8,7 +8,7 @@ namespace Gg2.Server;
 /// <c>processClientCommands.gml:194-206</c>. A chat bubble is otherwise relayed
 /// untouched — the server does not validate the image id, and neither does this.
 /// <para>
-/// ⚠️ <b>This is server behaviour, not decoration, even though its effect is
+/// <b>This is server behaviour, not decoration, even though its effect is
 /// cosmetic.</b> The rewrite happens before the broadcast, so what every client
 /// draws is decided here; a port that relayed the byte unchanged would show a
 /// different bubble from the reference on one day of the year and would relay a
@@ -50,7 +50,7 @@ public static class ChatBubbles
     /// its bare <c>break</c> out of the command switch.
     /// </returns>
     /// <remarks>
-    /// ⚠️ <b>The two clauses are <c>if</c> / <c>else if</c> and the order
+    /// <b>The two clauses are <c>if</c> / <c>else if</c> and the order
     /// matters.</b> On April Fools a <c>61</c> takes the first branch and is
     /// rewritten to itself, so it is relayed; off April Fools the same byte
     /// reaches the second and is dropped. Flattening this into "drop every 61

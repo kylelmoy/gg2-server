@@ -10,7 +10,7 @@ namespace Gg2.Tests;
 /// An empty server does as little as possible, and bots wait for people.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>Nothing here sleeps or measures wall-clock time.</b> Idling is a
+/// <b>Nothing here sleeps or measures wall-clock time.</b> Idling is a
 /// property of <c>GameServer.PacingInterval</c>, which is a pure function of the
 /// roster and the options, so it is asserted directly. A test that started
 /// <c>Run</c> and timed the ticks would be measuring the build agent, and would
@@ -35,7 +35,7 @@ public sealed class IdleServerTests
     }
 
     /// <summary>
-    /// ⛔ A connected client ends idling, and that is the assertion that matters.
+    /// A connected client ends idling, and that is the assertion that matters.
     /// </summary>
     /// <remarks>
     /// Idling that did not stop would be a server that never served anybody. The
@@ -57,7 +57,7 @@ public sealed class IdleServerTests
     }
 
     /// <summary>
-    /// ⚠️ A bot counts as somebody, so a bot-only server is NOT idle.
+    /// A bot counts as somebody, so a bot-only server is NOT idle.
     /// </summary>
     /// <remarks>
     /// A server running bots against each other with nobody watching is still
@@ -91,7 +91,7 @@ public sealed class IdleServerTests
     /// The pacing actually changes — idle is slower, live is the tick rate.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The control is the second half.</b> Asserting only that an empty
+    /// <b>The control is the second half.</b> Asserting only that an empty
     /// server paces at 500 ms would pass if the server paced at 500 ms always,
     /// which would be a server running fifteen times too slowly for everyone.
     /// </remarks>
@@ -127,7 +127,7 @@ public sealed class IdleServerTests
     }
 
     /// <summary>
-    /// ⛔ An explicit <c>--speed</c> wins over idling, in both directions.
+    /// An explicit <c>--speed</c> wins over idling, in both directions.
     /// </summary>
     /// <remarks>
     /// <c>--speed max</c> is a direct instruction about the tick rate, and
@@ -160,7 +160,7 @@ public sealed class IdleServerTests
     }
 
     /// <summary>
-    /// ⚠️ <c>Tick</c> itself is untouched, so every hand-driven caller is too.
+    /// <c>Tick</c> itself is untouched, so every hand-driven caller is too.
     /// </summary>
     /// <remarks>
     /// Idling lives in <c>Run</c> alone. A <c>Tick</c> that no-opped on an empty
@@ -232,7 +232,7 @@ public sealed class IdleServerTests
     }
 
     /// <summary>
-    /// ⛔ <c>--bots-min-humans</c> beats <c>--bots</c> in either order.
+    /// <c>--bots-min-humans</c> beats <c>--bots</c> in either order.
     /// </summary>
     /// <remarks>
     /// <c>--bots</c> rewrites <c>MinHumans</c> to 0, so a naive implementation
@@ -244,21 +244,21 @@ public sealed class IdleServerTests
     [Fact]
     public void BotsMinHumansDoesNotDependOnFlagOrder()
     {
-        var before = Program.Parse(["--bots-min-humans", "1", "--bots", "8"]).Bots;
-        var after = Program.Parse(["--bots", "8", "--bots-min-humans", "1"]).Bots;
+        var before = CommandLine.Parse(["--bots-min-humans", "1", "--bots", "8"]).Bots;
+        var after = CommandLine.Parse(["--bots", "8", "--bots-min-humans", "1"]).Bots;
 
         Assert.Equal(1, before.MinHumans);
         Assert.Equal(1, after.MinHumans);
 
         // And --bots on its own still means "fill an empty server", which is the
         // default this flag exists to override.
-        Assert.Equal(0, Program.Parse(["--bots", "8"]).Bots.MinHumans);
+        Assert.Equal(0, CommandLine.Parse(["--bots", "8"]).Bots.MinHumans);
     }
 
     [Fact]
     public void TheIdleFlagIsReachableAndDefaultsOn()
     {
-        Assert.True(Program.Parse([]).IdleWhenEmpty);
-        Assert.False(Program.Parse(["--no-idle-when-empty"]).IdleWhenEmpty);
+        Assert.True(CommandLine.Parse([]).IdleWhenEmpty);
+        Assert.False(CommandLine.Parse(["--no-idle-when-empty"]).IdleWhenEmpty);
     }
 }

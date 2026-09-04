@@ -50,15 +50,13 @@ public sealed class TimerTests
     }
 
     /// <summary>
-    /// ⚠️ A fired counter settles in <b>two</b> stages, not one: 0 for the rest
+    /// A fired counter settles in <b>two</b> stages, not one: 0 for the rest
     /// of the frame its event ran on, then -1 from the next frame's alarm stage.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>Measured 2026-08-27 against the running game</b>, after this port
-    /// spent a stage writing -1 the instant a counter expired.
-    /// <c>docs/SIMULATION.md</c>'s own pseudocode had it right and the code was
-    /// changed away from it.
+    /// Measured against the running game: a counter must not write -1 the
+    /// instant it expires.
     /// </para>
     /// <para>
     /// It is worth a test of its own because it is worth <em>a whole tick of
@@ -220,14 +218,12 @@ public sealed class TimerTests
     /// that assigns a real — <c>35</c> times a movement-compensation factor —
     /// and it is on the live path for every shot a moving scout takes.
     /// <para>
-    /// ✅ <b>Measured 2026-08-27</b>, against the running game: assigning an
-    /// alarm and reading it straight back in the same frame gives 0.5 → 0,
-    /// 1.5 → 2, 2.5 → 2, 3.5 → 4, 30.5 → 30, 31.5 → 32, 17.5 → 18, 26.25 → 26,
-    /// 26.75 → 27 and 30.4 → 30. Half to even, which is what the codebase's
-    /// default for GML-side rounding (docs/TRAPS-SIMULATION.md's alarm table)
-    /// already assumed. The rows below marked "measured" are that reading;
-    /// docs/SIMULATION.md's "What is genuinely uncertain" carried this as open
-    /// until then.
+    /// Measured against the running game: assigning an alarm and reading it
+    /// straight back in the same frame gives 0.5 → 0, 1.5 → 2, 2.5 → 2, 3.5 → 4,
+    /// 30.5 → 30, 31.5 → 32, 17.5 → 18, 26.25 → 26, 26.75 → 27 and 30.4 → 30 —
+    /// half to even, matching the codebase's default for GML-side rounding
+    /// (docs/TRAPS-SIMULATION.md's alarm table). The rows below marked
+    /// "measured" are that reading.
     /// </para>
     /// </remarks>
     [Theory]

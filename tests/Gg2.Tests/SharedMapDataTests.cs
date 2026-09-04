@@ -9,7 +9,7 @@ namespace Gg2.Tests;
 /// matches, and sharing them changes nothing.
 /// </summary>
 /// <remarks>
-/// ⛔ <b>This is the gate on a shared-mutable-state bug that would be invisible
+/// <b>This is the gate on a shared-mutable-state bug that would be invisible
 /// otherwise.</b> The map decode plus nav parse measured <b>18.0 ms</b> against
 /// <b>283.5 ms</b> to play a 9,000-tick match — 6% of every match, paid again for
 /// bytes that had not changed — so <c>Load</c> goes through
@@ -18,7 +18,7 @@ namespace Gg2.Tests;
 /// into that cache makes one match's state visible to the next</b>, which shows up
 /// as an irreproducible result long after the change that caused it.
 /// <para>
-/// ⚠️ <b>The division is the whole safety argument.</b> <see cref="LevelMap"/> and
+/// <b>The division is the whole safety argument.</b> <see cref="LevelMap"/> and
 /// <see cref="NavGraph"/> are deeply immutable and are shared;
 /// <c>CollisionWorld</c> is NOT, because <c>SetCaptureZones</c> writes to it, and
 /// <c>SpawnPoints</c> is not either. <c>HeadlessMatch.On</c> builds those two per
@@ -71,12 +71,12 @@ public sealed class SharedMapDataTests
     }
 
     /// <summary>
-    /// ⛔ The same seed on a SHARED map plays exactly the same match.
+    /// The same seed on a SHARED map plays exactly the same match.
     /// </summary>
     /// <remarks>
     /// <b>The second match runs on the first match's <c>LevelMap</c> and
     /// <c>NavGraph</c> instances</b>, so anything either match wrote into them
-    /// would show here as a diverging tick count or death tally. ⚠️ <b>Deaths as
+    /// would show here as a diverging tick count or death tally. <b>Deaths as
     /// well as ticks</b>: a match can reach the same tick ceiling by a completely
     /// different route, so the tick count alone is a weak witness.
     /// </remarks>
@@ -88,15 +88,14 @@ public sealed class SharedMapDataTests
 
         Assert.Equal(first, second);
 
-        // ⚠️ The control, and it is stated as a PROPERTY rather than a threshold:
-        // both tallies are non-zero, so both arms of the comparison were exercised
-        // and the match really happened. Two runs of a match that never got going
-        // would agree trivially — on zero at the tick ceiling — and say nothing
-        // about sharing.
+        // The control, stated as a PROPERTY rather than a threshold: both tallies
+        // are non-zero, so both arms of the comparison were exercised and the
+        // match really happened. Two runs of a match that never got going would
+        // agree trivially — on zero at the tick ceiling — and say nothing about
+        // sharing.
         //
-        // ⛔ A tuned number would be worse than this, not better. The first draft
-        // asked for more than five deaths, which a 900-tick match did not reach;
-        // raising the tick count until the number passed would be fitting the bar
+        // A tuned death threshold would be worse than this, not better: raising
+        // the tick count until an arbitrary number passed would be fitting the bar
         // to the data.
         Assert.True(first.Red > 0 && first.Blue > 0, $"deaths were {first.Red}/{first.Blue}");
     }
@@ -105,7 +104,7 @@ public sealed class SharedMapDataTests
     /// A different seed really does play a different match.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The other control, and it is not redundant.</b> Without it, a
+    /// <b>The other control, and it is not redundant.</b> Without it, a
     /// <c>Play</c> that silently returned a constant would satisfy the equality
     /// above forever.
     /// </remarks>
@@ -116,7 +115,7 @@ public sealed class SharedMapDataTests
     }
 
     /// <summary>
-    /// ⛔ The mutable half is NOT shared: every match gets its own
+    /// The mutable half is NOT shared: every match gets its own
     /// <c>CollisionWorld</c> and <c>SpawnPoints</c>.
     /// </summary>
     /// <remarks>

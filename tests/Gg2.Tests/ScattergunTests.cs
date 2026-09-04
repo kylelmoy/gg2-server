@@ -236,7 +236,7 @@ public sealed class ScattergunTests
     }
 
     /// <summary>
-    /// ⚠️ All six pellets carry the <b>aim</b> as their <c>image_angle</c> while
+    /// All six pellets carry the <b>aim</b> as their <c>image_angle</c> while
     /// flying along six scattered headings.
     /// </summary>
     /// <remarks>
@@ -617,7 +617,7 @@ public sealed class ScattergunTests
     }
 
     /// <summary>
-    /// ⚠️ A pellet that reaches somebody <em>through</em> a wall dies there and
+    /// A pellet that reaches somebody <em>through</em> a wall dies there and
     /// deals no damage.
     /// </summary>
     /// <remarks>

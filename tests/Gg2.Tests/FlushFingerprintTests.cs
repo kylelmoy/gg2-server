@@ -15,14 +15,14 @@ namespace Gg2.Tests;
 /// pre-update messages][the update][this tick's post-update messages]</c>, so
 /// where a message sits relative to the update says which stage produced it.
 /// <para>
-/// ⚠️ <b>The port is the easy side.</b> Ticking one at a time and draining after
+/// <b>The port is the easy side.</b> Ticking one at a time and draining after
 /// each gives the groups with no timing inference at all. Against the reference
 /// the same fingerprint needs the <c>.frames</c> sidecar and a heuristic, which
 /// is what <see cref="FlushFrames.Group"/> is for and why it reports its own
 /// ambiguity.
 /// </para>
 /// <para>
-/// ⛔ <b>These are TICK groups, and they are only flush groups because
+/// <b>These are TICK groups, and they are only flush groups because
 /// <see cref="ATickIsExactlyOneFlush"/> says so.</b> A change that made a tick
 /// flush TWICE would put both flushes in one drain and every assertion here
 /// would read as if nothing had happened. That is not hypothetical: it was found
@@ -33,7 +33,7 @@ namespace Gg2.Tests;
 /// everything below it</b>, not a tidy extra.
 /// </para>
 /// <para>
-/// ⚠️ <b>What this cannot settle</b>: three message types have call sites on both
+/// <b>What this cannot settle</b>: three message types have call sites on both
 /// sides of the flush, so for them "leading" and "trailing" are both legitimate
 /// and the fingerprint says nothing. <c>WireStageTests</c> covers those from the
 /// port's own stage flags. This covers the types that sit wholly on one side —
@@ -66,7 +66,7 @@ public sealed class FlushFingerprintTests
 
     /// <summary>Six bots fighting on <see cref="Map"/>.</summary>
     /// <remarks>
-    /// ⚠️ Shared with <see cref="ATickIsExactlyOneFlush"/> deliberately: that
+    /// Shared with <see cref="ATickIsExactlyOneFlush"/> deliberately: that
     /// gate is only meaningful on traffic where ticks APPEND EVENTS after the
     /// state update. On an idle server a stray second flush finds an empty
     /// buffer and returns without counting, so the mutation it exists to catch
@@ -77,7 +77,7 @@ public sealed class FlushFingerprintTests
         {
             options.Map = Map;
 
-            // ⚠️ Without the nav graphs the bots never walk anywhere, never meet
+            // Without the nav graphs the bots never walk anywhere, never meet
             // and never fire — and the fingerprint comes back empty, which reads
             // exactly like agreement. FlushShapeTests shipped that bug once.
             options.NavCacheDirectory = MapDirectory.ResolveNav();
@@ -117,11 +117,11 @@ public sealed class FlushFingerprintTests
     }
 
     /// <summary>
-    /// ⛔ A <c>WEAPON_FIRE</c> is appended in a Character's Begin Step, so it
+    /// A <c>WEAPON_FIRE</c> is appended in a Character's Begin Step, so it
     /// must always TRAIL the update of its own tick and may never lead one.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>This is the shape of <c>cdaa62a</c>.</b> That bug flushed under
+    /// <b>This is the shape of <c>cdaa62a</c>.</b> That bug flushed under
     /// <c>WriteStateUpdate</c>, so every event message waited for the next tick's
     /// flush and led it. A client simulates every projectile itself from
     /// <c>WEAPON_FIRE</c> and the shooter's keys — there is no projectile
@@ -132,7 +132,7 @@ public sealed class FlushFingerprintTests
     {
         var fingerprint = FingerprintOfABotMatch();
 
-        // ⚠️ Not vacuous: zero fires would satisfy the assertion below trivially.
+        // Not vacuous: zero fires would satisfy the assertion below trivially.
         Assert.True(
             fingerprint.Total(MessageType.WeaponFire) > 0,
             $"no WEAPON_FIRE in the whole match, so this proves nothing [{fingerprint}]");
@@ -143,11 +143,11 @@ public sealed class FlushFingerprintTests
     }
 
     /// <summary>
-    /// ⛔ A <c>PLAYER_DEATH</c> from damage is appended in a Character's End
+    /// A <c>PLAYER_DEATH</c> from damage is appended in a Character's End
     /// Step, after the reference has already flushed, so it LEADS the next one.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The other direction of the same boundary, and the reason both are here:
+    /// The other direction of the same boundary, and the reason both are here:
     /// a single assertion that events must trail would have been satisfied by the
     /// code as it stood before 2026-09-02, which sent deaths a tick early.
     /// </remarks>
@@ -166,10 +166,10 @@ public sealed class FlushFingerprintTests
     }
 
     /// <summary>
-    /// ⛔ The coverage ledger: what a bot match on this map never produced.
+    /// The coverage ledger: what a bot match on this map never produced.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>This test is deliberately not a pass/fail on the missing types.</b>
+    /// <b>This test is deliberately not a pass/fail on the missing types.</b>
     /// It pins the SET, so that a session which starts producing one — or stops —
     /// has to come here and say so. An absent row in a fingerprint is
     /// indistinguishable from an agreeing row, and that is how a gate goes
@@ -205,7 +205,7 @@ public sealed class FlushFingerprintTests
     }
 
     /// <summary>
-    /// ⛔ A tick flushes exactly once — the invariant every other test in this
+    /// A tick flushes exactly once — the invariant every other test in this
     /// file rests on.
     /// </summary>
     /// <remarks>
@@ -214,13 +214,13 @@ public sealed class FlushFingerprintTests
     /// messages by tick and calls the groups flushes; that is only true while
     /// this holds.
     /// <para>
-    /// ⚠️ <b>Equality, not "at most one".</b> <c>WriteStateUpdate</c> writes
+    /// <b>Equality, not "at most one".</b> <c>WriteStateUpdate</c> writes
     /// something on every advancing tick, so the buffer is never empty and the
     /// flush is never skipped — an inequality would pass on a server that had
     /// stopped broadcasting altogether.
     /// </para>
     /// <para>
-    /// ⛔ <b>Six bots, not an idle server, and that is the whole test.</b>
+    /// <b>Six bots, not an idle server, and that is the whole test.</b>
     /// <c>FlushBroadcast</c> returns without counting when the buffer is empty,
     /// so on an idle server a second flush per tick finds nothing to send and the
     /// count stays right. The first version of this test was idle and the
@@ -244,11 +244,11 @@ public sealed class FlushFingerprintTests
     }
 
     /// <summary>
-    /// ⚠️ Almost every flush carries a state update, because the server writes
+    /// Almost every flush carries a state update, because the server writes
     /// one every tick.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>The grouping's own sanity check.</b> A run where many groups had no
+    /// <b>The grouping's own sanity check.</b> A run where many groups had no
     /// update would mean the groups are not flushes — which, against a reference
     /// recording, is exactly what a badly chosen
     /// <see cref="FlushFrames.Group"/> gap produces. Here the groups are exact by

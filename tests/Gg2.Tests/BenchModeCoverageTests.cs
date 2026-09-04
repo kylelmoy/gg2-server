@@ -6,27 +6,22 @@ namespace Gg2.Tests;
 /// Every <c>BENCH_*</c> the bench reads is named in its README, and vice versa.
 /// </summary>
 /// <remarks>
-/// ⛔ <b>`BENCH_CONST` existed and was documented nowhere</b> — not in the current
-/// modes table, not in the kept-for-reference list — and it is the mode that
-/// prints <c>SimulationStamp.Uuid</c>. Found on 2026-09-01 by grepping
-/// <c>Program.cs</c> against <c>README.md</c>, which is the only thing that could
-/// have found it: reading the file confirms whatever it says.
+/// A mode can exist and be documented nowhere — not in the current modes
+/// table, not in the kept-for-reference list. Grepping <c>Program.cs</c>
+/// against <c>README.md</c> is the only thing that catches it: reading the
+/// file confirms only whatever it says.
 /// <para>
-/// ⚠️ <b>This is deliberately a TOKEN-SET check and not a table parser.</b>
-/// `gg2-rl`'s refinement, after I had declined to gate this at all on the grounds
-/// that matching a markdown table against an if-chain fails on formatting rather
-/// than on drift. That objection is right and does not apply here: this compares
-/// two sets of identifiers, is blind to layout, and fires only when a mode is
-/// genuinely in one place and not the other.
+/// <b>This is deliberately a TOKEN-SET check and not a table parser.</b>
+/// Matching a markdown table against an if-chain fails on formatting rather
+/// than on drift. Comparing two sets of identifiers is blind to layout, and
+/// fires only when a mode is genuinely in one place and not the other.
 /// </para>
 /// <para>
-/// ⛔ <b>The half it does NOT catch, stated so nobody mistakes it for full
-/// cover.</b> The same audit found <c>Search</c> listed in the current modes table
-/// <em>and</em> in "kept for reference, not current" — and a mode named twice
-/// satisfies a subset check perfectly. <b>This gates "undocumented", never
-/// "contradictorily documented".</b> The second still needs somebody to read the
-/// file, and declining the cheap half because the expensive half is impossible was
-/// the mistake this test exists to correct.
+/// <b>The half it does NOT catch, stated so nobody mistakes it for full
+/// cover.</b> A mode can be listed in the current modes table <em>and</em> in
+/// "kept for reference, not current" — a mode named twice satisfies a subset
+/// check perfectly. <b>This gates "undocumented", never "contradictorily
+/// documented".</b> The second still needs somebody to read the file.
 /// </para>
 /// </remarks>
 public sealed class BenchModeCoverageTests
@@ -50,7 +45,7 @@ public sealed class BenchModeCoverageTests
     }
 
     /// <summary>
-    /// ⚠️ <c>BENCH_[A-Z_]+</c> wherever it appears — source or prose.
+    /// <c>BENCH_[A-Z_]+</c> wherever it appears — source or prose.
     /// </summary>
     /// <remarks>
     /// Matching the identifier rather than its context is what makes this
@@ -73,7 +68,7 @@ public sealed class BenchModeCoverageTests
         foreach (var file in Directory.GetFiles(bench, "*.cs"))
             code.UnionWith(Modes(File.ReadAllText(file)));
 
-        // ⚠️ Not empty by construction — a regex that silently matched nothing
+        // Not empty by construction — a regex that silently matched nothing
         // would make both assertions below pass vacuously, which is the shape
         // this repo has been caught by twice today.
         Assert.NotEmpty(code);
@@ -82,7 +77,7 @@ public sealed class BenchModeCoverageTests
     }
 
     /// <summary>
-    /// ⛔ A mode the bench reads but the README never names.
+    /// A mode the bench reads but the README never names.
     /// </summary>
     /// <remarks>
     /// The direction that actually fired: an operator cannot run what they cannot
@@ -103,7 +98,7 @@ public sealed class BenchModeCoverageTests
     }
 
     /// <summary>
-    /// ⚠️ A mode the README names that the bench no longer has.
+    /// A mode the README names that the bench no longer has.
     /// </summary>
     /// <remarks>
     /// The stale-capability direction, and the one this repo keeps paying for:

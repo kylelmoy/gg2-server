@@ -14,7 +14,7 @@ namespace Gg2.Simulation;
 /// <see cref="WorldState.HasSentry"/>; the stats arrive with the features that
 /// read them.
 /// <para>
-/// ⚠️ <b>Make a player with <see cref="Fresh"/>, never <c>default</c>.</b>
+/// <b>Make a player with <see cref="Fresh"/>, never <c>default</c>.</b>
 /// <c>Team.Red</c> is 0, so a zeroed player is a red scout ready to respawn —
 /// where <c>Player.events/Create.xml</c> starts every player a
 /// <b>spectator</b> with the respawn alarm at rest. The same trap class as
@@ -34,7 +34,7 @@ public struct PlayerState
     /// Arena round now on the scoreboard.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Arena and nothing else, and it is a <em>player</em> flag rather
+    /// <b>Arena and nothing else, and it is a <em>player</em> flag rather
     /// than a character one</b> — it survives the death it is usually earned by.
     /// <c>doEventArenaEndRound.gml:26</c> is <c>with Player if team != win
     /// humiliated = 1</c>, which takes spectators with it because their team is
@@ -73,7 +73,7 @@ public struct PlayerState
     /// Whether this roster slot is driven by a bot rather than by a socket.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>NOTHING IN <c>MatchSimulation</c> MAY READ THIS, ever.</b> "The
+    /// <b>NOTHING IN <c>MatchSimulation</c> MAY READ THIS, ever.</b> "The
     /// simulation never special-cases a bot" is one of the three rules that
     /// outrank everything in the bot layer (<c>CLAUDE.md</c>): a bot is an
     /// <c>IInputSource</c> like a socket, and a simulation that branched on this
@@ -91,7 +91,7 @@ public struct PlayerState
     /// property <c>docs/BOTS.md</c> asks of every bot input.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Default false means "human", which is the safe direction.</b> A slot
+    /// <b>Default false means "human", which is the safe direction.</b> A slot
     /// nobody set is treated as a person, so the worst a missed assignment can do
     /// is engage the controller more often than intended — never less. The
     /// opposite default would silently downgrade real players to scripted
@@ -118,7 +118,7 @@ public struct PlayerState
     /// still had when it died, carried across to its replacement.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>It is a respawn rule as well as a carried value.</b>
+    /// <b>It is a respawn rule as well as a carried value.</b>
     /// <c>Character.events/Destroy.xml:37</c> is
     /// <c>if (place_meeting(x,y,SpawnRoom) or deathmatch_invulnerable != 0)</c>
     /// — a character that dies <em>while still invulnerable</em> arms

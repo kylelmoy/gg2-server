@@ -4,95 +4,6 @@ using Gg2.Simulation;
 
 namespace Gg2.Bots;
 
-/// <summary>What decides when a micro-controller takes the wheel.</summary>
-/// <summary>
-/// Which opponents are worth handing the wheel to a micro-controller for.
-/// </summary>
-/// <remarks>
-/// ⛔ <b>The default here is <see cref="Anyone"/> and the SERVER's default is
-/// <see cref="HumansOnly"/>, and that difference is deliberate.</b> A headless
-/// bot-vs-bot match has no humans in it at all, so a library default of
-/// <c>HumansOnly</c> would make every arm measurement silently measure the
-/// all-scripted control — <c>HeadlessMatch</c>, the scenarios and
-/// <c>tools/bench</c> would all report the controller doing nothing, and the
-/// number would look like a result. The live server has the opposite need, so it
-/// opts in; see <c>ServerOptions.BotEngagesBotsToo</c>.
-/// </remarks>
-public enum EngageOpponents
-{
-    /// <summary>
-    /// Any enemy in range engages the controller. Every recorded arm measurement
-    /// was taken this way, because it is the only setting under which a
-    /// bot-vs-bot match exercises the controller at all.
-    /// </summary>
-    Anyone = 0,
-
-    /// <summary>
-    /// Only a human enemy engages the controller; a bot-vs-bot encounter stays on
-    /// the scripted layer.
-    /// </summary>
-    /// <remarks>
-    /// ⚠️ <b>What this buys is cost, not skill.</b> The expensive controllers
-    /// exist to be good against people; spending a 4,800 µs search decision on
-    /// two bots shooting at each other in an empty corner of the map is the bulk
-    /// of what a populated server pays for. ⛔ <b>It does not make the bots
-    /// better</b>, and a measurement taken under it against bots is measuring the
-    /// scripted layer whatever the mode says.
-    /// </remarks>
-    HumansOnly = 1,
-}
-
-public enum HandoverRule
-{
-    /// <summary>An enemy within <see cref="HybridBot.EngagementRange"/>.</summary>
-    /// <remarks>
-    /// ⛔ <b>Measured to cost the objective.</b> The 300px came from a DUEL
-    /// measurement, where every tick is a combat tick and there is nothing else
-    /// the bot could be doing. In CTF "an enemy is near" means "stop pursuing the
-    /// objective", because that is all a combat controller knows to do with the
-    /// wheel.
-    /// </remarks>
-    Distance,
-
-    /// <summary>
-    /// The scripted layer would itself stop and fight — its own engage hold.
-    /// </summary>
-    /// <remarks>
-    /// ⚠️ <b>Intent AND range</b>, reusing the predicate the macro layer already
-    /// had rather than inventing a second one. Crucially the hold is
-    /// <b>time-bounded</b>: it lapses <c>BotConstants.EngageTicks</c> after the
-    /// target was acquired, so control returns and the route resumes. The distance
-    /// rule has no timer at all.
-    /// <para>
-    /// ⚠️ <b>The range half is not redundant.</b> The scripted hold fires out to
-    /// <c>BotTargeting.ClassRange</c> — 800px for a soldier, 900 for a sniper — so
-    /// intent alone hands the wheel far past where a policy's observation
-    /// saturates. See <see cref="Handover.ShouldEngage"/> for what that measured.
-    /// </para>
-    /// </remarks>
-    MacroTask,
-
-    /// <summary>
-    /// No handover at all: the scripted layer always drives MOVEMENT, the
-    /// controller always drives AIM and FIRE.
-    /// </summary>
-    /// <remarks>
-    /// <b><c>gg2-rl</c>'s arm A, and the argument for it is that a parameter we
-    /// keep getting wrong is a parameter worth deleting.</b> Proximity was wrong;
-    /// intent was better; intent alone was catastrophic until it was conjoined
-    /// with range. A head-level split has no trigger to get wrong, and the two
-    /// concerns separate cleanly — the scripted layer never loses its path state
-    /// or its objective, and the controller contributes only what it is measurably
-    /// good at.
-    /// <para>
-    /// ⚠️ <b>What would falsify it</b>: the death share sliding back toward the
-    /// all-scripted 50.5% would mean the policy's movement was carrying the combat
-    /// gain after all.
-    /// </para>
-    /// </remarks>
-    HeadSplit,
-}
-
 /// <summary>
 /// The hybrid bot: the scripted layer plays the game, a
 /// <see cref="IMicroController"/> fights.
@@ -103,24 +14,20 @@ public enum HandoverRule
 /// engagement range; inside <see cref="EngagementRange"/> the controller owns keys
 /// and aim.
 /// <para>
-/// ⛔ <b>This class REPLACED <c>PolicyBot</c> and <c>SearchBot</c>, which were the
-/// same 200 lines twice.</b> Every difference between them lived in five methods
-/// and is now behind <see cref="IMicroController"/>. That mattered for more than
-/// tidiness: <c>SearchBot</c> had a <c>ScriptedPolls</c> counter and
-/// <c>PolicyBot</c> did not, so the invariant that says the macro layer never
-/// stopped planning during a fight — arm 2's measured bug, 20 captures down to 7 —
-/// was testable on one arm and not the other. <b>Every arm gets every counter
-/// now.</b>
+/// <b>This class replaces separate per-arm bot classes.</b> Every difference
+/// between arms lives behind <see cref="IMicroController"/>, and every counter
+/// is shared, so an invariant like "the macro layer never stops planning during
+/// a fight" is testable on every arm rather than only some of them.
 /// </para>
 /// <para>
-/// ⚠️ <b>TIERS ARE ORDERED MOST CAPABLE FIRST.</b> With one tier and no
-/// <see cref="IMicroArbiter"/> this is exactly what the two old classes did. With
+/// <b>TIERS ARE ORDERED MOST CAPABLE FIRST.</b> With one tier and no
+/// <see cref="IMicroArbiter"/> this is a single fixed controller. With
 /// several, an arbiter picks which one may spend a decision this tick — see
 /// <see cref="IMicroArbiter"/> for why that is the shape the tick tail needs and
 /// what it costs in reproducibility.
 /// </para>
 /// <para>
-/// ⛔ <b>This does NOT reach the wire or observable simulation.</b> A bot may press
+/// <b>This does NOT reach the wire or observable simulation.</b> A bot may press
 /// "drop intel"; <c>MatchSimulation</c> may not decide to drop one. The simulation
 /// never special-cases a bot — CLAUDE.md.
 /// </para>
@@ -131,12 +38,11 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
     /// Straight-line pixels within which a controller drives.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>150, and it was 300 until it was measured in matches.</b> <b>The
-    /// policy was most valuable used SPARINGLY</b>: at 150px it held 7% of ticks
-    /// and beat the all-scripted bot on both combat and captures, where at 300px it
-    /// held 23% and lost the objective.
+    /// <b>The policy is most valuable used SPARINGLY</b>: at 150px it held 7% of
+    /// ticks and beat the all-scripted bot on both combat and captures, where at
+    /// 300px it held 23% and lost the objective.
     /// <para>
-    /// ⛔ <b>Do NOT widen past about 400px for a policy.</b> The observation
+    /// <b>Do NOT widen past about 400px for a policy.</b> The observation
     /// saturates there: goal distance clamps at <c>min(d / 400, 1)</c>, the
     /// geometry rays reach 320px and the walkmask patch covers 128px. Beyond that
     /// the policy is handed the wheel at a range its own input cannot describe. A
@@ -148,7 +54,7 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
     /// still handed over.
     /// </para>
     /// <para>
-    /// ⛔ <b>Every behavioural number quoted here describes
+    /// <b>Every behavioural number quoted here describes
     /// <c>SIM_UUID 7ff5940d97aa7bed</c> and this build is not that simulation.</b>
     /// Treat them as history and re-measure before acting on one — <c>docs/BOTS.md</c>,
     /// "a policy is DATED by the physics".
@@ -161,13 +67,12 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
     /// default.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>Superseded for match play by the sweep of 2026-09-01</b>, 420 matches
-    /// a point with an all-scripted control, confirmed at 1,200. Red's capture
-    /// share against the same opponent: 47.0% at 300px, 59.7% at 220, <b>68.3% at
-    /// 150</b>, 67.2% at 80, against 51.4% for the all-scripted control. The duel
-    /// figure was right for duels — where every tick is a combat tick and there is
-    /// nothing else the bot could be doing — and too wide for a game with an
-    /// objective in it.
+    /// <b>Superseded for match play</b> by a sweep of 420 matches a point with an
+    /// all-scripted control, confirmed at 1,200. Red's capture share against the
+    /// same opponent: 47.0% at 300px, 59.7% at 220, <b>68.3% at 150</b>, 67.2% at
+    /// 80, against 51.4% for the all-scripted control. The duel figure is right
+    /// for duels — where every tick is a combat tick and there is nothing else the
+    /// bot could be doing — and too wide for a game with an objective in it.
     /// </remarks>
     public const double DuelEngagementRange = 300.0;
 
@@ -194,7 +99,7 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
         if (tiers.Count == 0)
             throw new ArgumentException("a hybrid bot needs at least one controller", nameof(tiers));
 
-        // ⚠️ 32 because eligibility is carried in a uint bitmask, which is what
+        // 32 because eligibility is carried in a uint bitmask, which is what
         // keeps the per-decision path allocation-free. Nothing wants 32 tiers; the
         // limit is stated so a 33rd fails loudly rather than silently dropping out
         // of every arbiter's view.
@@ -222,7 +127,7 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
 
     /// <summary>The engagement window. The measured 150px by default.</summary>
     /// <remarks>
-    /// ⚠️ <b>Settable so the frontier can be looked for, not so it can be tuned by
+    /// <b>Settable so the frontier can be looked for, not so it can be tuned by
     /// taste.</b> See <see cref="EngagementRange"/>.
     /// </remarks>
     public double Range { get; init; } = EngagementRange;
@@ -234,7 +139,7 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
     /// Whether a bot opponent is worth engaging a controller for.
     /// </summary>
     /// <remarks>
-    /// ⛔ <see cref="EngageOpponents.Anyone"/> here, <c>HumansOnly</c> on the live
+    /// <see cref="EngageOpponents.Anyone"/> here, <c>HumansOnly</c> on the live
     /// server — see the enum for why the two differ.
     /// </remarks>
     public EngageOpponents Engage { get; init; } = EngageOpponents.Anyone;
@@ -244,7 +149,7 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
     /// intel.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>On by default, and the measurement is the reason.</b> Over 108 matches
+    /// <b>On by default, and the measurement is the reason.</b> Over 108 matches
     /// a side, wiring the policy in took red from <b>20 captures to 2</b> while
     /// blue's stayed at 12 in both arms — the policy fights instead of running the
     /// flag home, which is what a reward of damage dealt minus taken with no
@@ -252,7 +157,7 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
     /// objective task</b>, so this is the architecture's own rule applied rather
     /// than an exception to it.
     /// <para>
-    /// ⚠️ <b>Settable so the measurement can be repeated.</b> A default that could
+    /// <b>Settable so the measurement can be repeated.</b> A default that could
     /// not be turned off would make the 20-versus-2 number unreproducible by anyone
     /// who came later.
     /// </para>
@@ -266,7 +171,7 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
     /// Whether the controller that drove actually DECIDED on the tick just polled.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The expensive event, and not the same as
+    /// <b>The expensive event, and not the same as
     /// <see cref="MicroDrove"/>.</b> See
     /// <see cref="IMicroController.DecidedThisPoll"/>.
     /// </remarks>
@@ -285,15 +190,14 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
     /// Times the scripted layer has been POLLED, which is every tick.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Not the same as <see cref="ScriptedTicks"/>, and the difference is the
+    /// <b>Not the same as <see cref="ScriptedTicks"/>, and the difference is the
     /// point.</b> That counts ticks it DROVE; this counts ticks it THOUGHT. They
     /// differ by exactly <see cref="MicroTicks"/>, and the invariant
     /// <c>ScriptedPolls == MicroTicks + ScriptedTicks</c> is what says the macro
-    /// layer never stopped planning during a fight — arm 2's measured bug, where
-    /// polling it only on the ticks it drove cost 20 captures a hundred matches
-    /// down to 7. ⛔ <b>Without this counter that property is untestable at unit
-    /// level</b>, and a test asserting it from <c>WantsToEngage</c> alone passes on
-    /// the broken version.
+    /// layer never stopped planning during a fight — polling it only on the ticks
+    /// it drove cost 20 captures a hundred matches down to 7. <b>Without this
+    /// counter that property is untestable at unit level</b>, and a test asserting
+    /// it from <c>WantsToEngage</c> alone passes on the broken version.
     /// </remarks>
     public long ScriptedPolls { get; private set; }
 
@@ -302,7 +206,7 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
     /// scripted layer.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A combat controller has no command head and must never acquire
+    /// <b>A combat controller has no command head and must never acquire
     /// one.</b> <c>gg2-rl</c>'s reward is damage dealt minus taken with no
     /// objective term, by its user's decision — a bot that runs past you to tap the
     /// intel is optimal and unpleasant. The macro layer owns objectives entirely.
@@ -320,16 +224,16 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
 
         ref readonly var self = ref world.Character(slot);
 
-        // ⛔ THE SCRIPTED LAYER THINKS EVERY TICK, WHETHER OR NOT IT DRIVES.
+        // THE SCRIPTED LAYER THINKS EVERY TICK, WHETHER OR NOT IT DRIVES.
         //
-        // The first version polled it only on the ticks it drove — so for the 27%
-        // of ticks the policy held the wheel, the macro layer did no objective
-        // planning at all: no re-target, no re-path, no spot ban, and its path
-        // state was stale the moment control came back. A bot that meets enemies
-        // often therefore stopped pursuing the objective even between fights.
-        // Captures fell 20 to 7 over a hundred matches; docs/ENV.md has the arms.
+        // Polling it only on the ticks it drove means that for the ticks the
+        // policy holds the wheel, the macro layer does no objective planning at
+        // all: no re-target, no re-path, no spot ban, and its path state goes
+        // stale the moment control comes back. A bot that meets enemies often
+        // then stops pursuing the objective even between fights. Captures fell
+        // 20 to 7 over a hundred matches; docs/ENV.md has the arms.
         //
-        // ⚠️ Counted beside the poll it counts, in one place, so no mutation can
+        // Counted beside the poll it counts, in one place, so no mutation can
         // leave a counter reporting work that never happened — a counter separable
         // from the thing it counts is the same defect as a qualifier separable from
         // its claim.
@@ -352,7 +256,7 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
         if (Rule == HandoverRule.HeadSplit)
             return HeadSplit(in world, slot, tick, scripted, eligible);
 
-        // ⚠️ Control changes hands only on a DECISION boundary, never mid-decision.
+        // Control changes hands only on a DECISION boundary, never mid-decision.
         // Testing the range every tick would flap two controllers against each
         // other at the threshold, and each holds state the other does not maintain
         // — the scripted layer's follower, a decoder's absolute aim. It also keeps
@@ -360,7 +264,7 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
         if (_driving >= 0 && !_tiers[_driving].AtDecisionBoundary(slot))
             return MicroInput(_driving, in world, slot, tick);
 
-        // ⚠️ Combat.Ally, not a bool: the predicate is Handover's and the fact is
+        // Combat.Ally, not a bool: the predicate is Handover's and the fact is
         // the scripted layer's, the same split WantsToEngage already uses.
         if (!Handover.ShouldEngage(
                 in world, slot, Range, Rule, _scripted.WantsToEngage, Engage, _scripted.Combat.Ally))
@@ -385,17 +289,17 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
     /// Scripted movement, controller aim and fire, every tick, with no gate.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b><c>Special</c> goes with FIRE, not with movement.</b> It is the
+    /// <b><c>Special</c> goes with FIRE, not with movement.</b> It is the
     /// controller's third fire value — a medic's uber, a sniper's zoom, a soldier's
     /// nothing — and leaving it on the scripted side would let the two halves press
     /// two different attacks in one tick.
     /// <para>
-    /// ⚠️ <b><c>Taunt</c> stays with the scripted layer</b>, because a combat
+    /// <b><c>Taunt</c> stays with the scripted layer</b>, because a combat
     /// controller has no taunt head and a taunt freezes the character where it
     /// stands.
     /// </para>
     /// <para>
-    /// ⚠️ <b>No aim resync here and that is correct</b> — the controller owns the
+    /// <b>No aim resync here and that is correct</b> — the controller owns the
     /// bearing continuously, so there is no handover for it to be stale across.
     /// Inherited verbatim from <c>PolicyBot</c>.
     /// </para>
@@ -447,7 +351,7 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
     /// capable eligible tier when there is no arbiter.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Advisory, and separate from <see cref="IMicroArbiter.Admitted"/> on
+    /// <b>Advisory, and separate from <see cref="IMicroArbiter.Admitted"/> on
     /// purpose.</b> A tier chosen here may still not take the wheel — its own
     /// cadence may not be at a boundary — and a budget spent on a decision that
     /// never happened is a budget that under-serves the next bot for no reason.
@@ -457,12 +361,12 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
         if (_arbiter is null)
             return BitOperations.TrailingZeroCount(eligible);
 
-        // ⚠️ Read here rather than passed down from Poll: it is a 64-entry scan
+        // Read here rather than passed down from Poll: it is a 64-entry scan
         // against a decision that costs thousands of microseconds, and threading
         // it through two more signatures buys nothing measurable.
         var chosen = _arbiter.Choose(tick, slot, _tiers, eligible, world.LiveCharacters);
 
-        // ⛔ An arbiter naming an ineligible tier is a bug in the arbiter, and
+        // An arbiter naming an ineligible tier is a bug in the arbiter, and
         // honouring it would drive a class a controller refuses. Refused here
         // rather than clamped, because a silent substitution makes an arm that is
         // not the arm anybody configured.
@@ -486,7 +390,7 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
 
         _driving = chosen;
 
-        // ⛔ Resync absolute aim on every handover IN. The scripted layer writes
+        // Resync absolute aim on every handover IN. The scripted layer writes
         // the character's bearing directly, so a controller carrying the bearing
         // from the last engagement turns from somewhere nobody is pointing —
         // silently, and in exactly the decisions a handover exists to hand it.
@@ -515,7 +419,7 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
         {
             MicroDecisions++;
 
-            // ⚠️ Charged on the DECISION, not on the tick, and only once it really
+            // Charged on the DECISION, not on the tick, and only once it really
             // happened. See Choose.
             _arbiter?.Admitted(tick, slot, tier, _tiers[tier].DecisionCostFor(world.LiveCharacters));
         }

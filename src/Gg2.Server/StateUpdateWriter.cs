@@ -1,4 +1,4 @@
-using Gg2.Maps;
+﻿using Gg2.Maps;
 using Gg2.Protocol;
 
 namespace Gg2.Server;
@@ -26,7 +26,7 @@ public delegate bool SentryLookup(int slot, out SentryBlock sentry);
 /// A delegate for the same reason <see cref="CharacterLookup"/> is: the state
 /// lives in a <c>WorldState</c> the writer must never copy.
 /// <para>
-/// ⚠️ <b>Returns the count as well as filling the span</b>, because a platform's
+/// <b>Returns the count as well as filling the span</b>, because a platform's
 /// block carries no count prefix — the client sizes the read from its own copy of
 /// the map. A writer that emitted a different number from the one the client
 /// expects desynchronises the stream permanently rather than glitching.
@@ -54,7 +54,7 @@ public delegate ObjectiveBlock ObjectiveLookup();
 /// A lookup for the same reason the others are: the counters live in
 /// <c>Gg2.Simulation.WorldState</c>, which the writer must not copy. Null means
 /// a server with no scoreboard simulated, which writes zeroes — what the layout
-/// tests want, and what this port did until the stats landed.
+/// tests want.
 /// </remarks>
 public delegate PlayerStatsBlock StatsLookup(int slot);
 
@@ -66,7 +66,7 @@ public delegate PlayerStatsBlock StatsLookup(int slot);
 /// A second lookup rather than a field on <see cref="PlayerStatsBlock"/>,
 /// because the block a player writes is a <em>row</em> whose length is the
 /// roster size and the writer must not allocate one per player per update. Null
-/// writes zeroes, which is what this port did until the matrix landed.
+/// writes zeroes.
 /// </remarks>
 public delegate byte DominationLookup(int killer, int victim);
 
@@ -107,8 +107,8 @@ public readonly record struct PlayerStatsBlock(
 /// </param>
 /// <param name="RoundTimer">
 /// Ticks left in the round, as a <c>uint</c> on the wire. The client runs its
-/// own copy down between updates, so a server that never advanced it — which
-/// this port did until the round landed — shows every client a frozen clock.
+/// own copy down between updates, so a server that never advances it shows
+/// every client a frozen clock.
 /// </param>
 /// <param name="ControlPoints">
 /// The map's control points, in the order the HUD block wants them —
@@ -126,7 +126,7 @@ public readonly record struct PlayerStatsBlock(
 /// <param name="ArenaWinner">Who won the last <em>round</em>, not the map.</param>
 /// <param name="ArenaEndCount">Ticks of scoreboard left after a round.</param>
 /// <param name="ArenaRoundStart">
-/// Ticks of setup left. ⚠️ Sent as <c>floor(roundStart/2)</c> in one byte.
+/// Ticks of setup left. Sent as <c>floor(roundStart/2)</c> in one byte.
 /// </param>
 /// <param name="SetupTimer">
 /// <c>global.setupTimer</c>: ticks before the setup gates open. In the Invasion
@@ -200,7 +200,7 @@ public sealed class StateUpdateWriter(
     /// How many platform blocks one update can carry.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Must not be smaller than <c>WorldState.MaxMovingPlatforms</c></b>,
+    /// <b>Must not be smaller than <c>WorldState.MaxMovingPlatforms</c></b>,
     /// which is 192. It is written out rather than referenced because this
     /// assembly deliberately does not <c>using Gg2.Simulation</c> — the writer
     /// reaches the world through delegates precisely so it cannot copy one — and
@@ -214,28 +214,25 @@ public sealed class StateUpdateWriter(
     /// built.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>A supplier, and this is a bug fix rather than a style choice.</b>
+    /// <b>Must stay a supplier, not a captured reference.</b>
     /// <c>GameServer.OpenMap</c> replaces <c>_match</c> with a NEW
-    /// <see cref="MatchState"/> on every rotation, and this writer used to
-    /// capture the object once at <c>Start</c>. So after any map change it kept
-    /// writing the <em>previous</em> map's <see cref="MatchState.GameMode"/> —
-    /// and <see cref="WriteHud"/> switches on exactly that.
+    /// <see cref="MatchState"/> on every rotation; a writer that captured the
+    /// object once at <c>Start</c> would keep writing the <em>previous</em>
+    /// map's <see cref="MatchState.GameMode"/>, which <see cref="WriteHud"/>
+    /// switches on.
     /// <para>
-    /// ⚠️ <b>What that cost: every connected stock client died on a
-    /// gamemode-changing rotation.</b> A CTF → KotH change kept emitting a CTF
-    /// HUD block while the client read a KotH one, so the stream desynchronised
-    /// permanently at the first <c>CAPS_UPDATE</c> or <c>FULL_UPDATE</c> after
-    /// the change — phantom roster entries, "Wrong number of players while
-    /// deserializing state", and a fatal error 25-30 seconds later. A rotation
-    /// between two maps of the SAME gamemode was harmless, which is what made it
-    /// look like a rotation bug rather than a staleness bug.
+    /// A CTF → KotH change would then emit a CTF HUD block while the client
+    /// read a KotH one, desynchronising the stream permanently at the first
+    /// <c>CAPS_UPDATE</c> or <c>FULL_UPDATE</c> after the change — phantom
+    /// roster entries, "Wrong number of players while deserializing state", and
+    /// a fatal error 25-30 seconds later. A rotation between two maps of the
+    /// SAME gamemode would stay harmless, which is what makes this easy to miss.
     /// <c>docs/PARITY.md</c>, "A gamemode change desynchronises a stock client".
     /// </para>
     /// <para>
-    /// ⚠️ <b>The cap limit, the class limits, the respawn time and the map area
-    /// were stale too</b>, so a client joining after a rotation was also told the
-    /// wrong ones. Those are values rather than lengths, so they corrupted the
-    /// scoreboard rather than the stream, and nothing noticed.
+    /// The cap limit, the class limits, the respawn time and the map area are
+    /// values rather than lengths, so a stale copy of any of them corrupts the
+    /// scoreboard a joining client sees rather than the stream.
     /// </para>
     /// </remarks>
     private MatchState Match => match();
@@ -275,11 +272,10 @@ public sealed class StateUpdateWriter(
             // prefix — the client has the same map loaded and knows how many
             // there are. No shipped map has any.
             //
-            // ⚠️ The positions come from the simulation, not from the map. Until
-            // 2026-09-01 this wrote match.MovingPlatforms, which was the entity's
-            // LOAD position and never moved — so a custom map's platform sat
-            // still on every client while the client's own End Step walked its
-            // local copy away from it. MovingPlatforms.Step is what moves them.
+            // The positions must come from the simulation, not from the map's
+            // load position — that never moves, so a client's own End Step
+            // would walk its local copy away from a server holding it still.
+            // MovingPlatforms.Step is what moves them.
             if (movingPlatforms is not null)
             {
                 Span<MovingPlatformBlock> blocks = stackalloc MovingPlatformBlock[MaxMovingPlatformBlocks];
@@ -331,7 +327,7 @@ public sealed class StateUpdateWriter(
             // Stats, in serialisation order — which is not StatIndex order:
             // REVENGE and DOMINATIONS are not sent, and POINTS follows BONUS.
             //
-            // ⚠️ Every one is a **real** in the reference and every one but
+            // Every one is a **real** in the reference and every one but
             // healing is written as a ubyte, so the wire rounds them half away
             // from zero. An assist is worth half a point, which means a client's
             // scoreboard can read one point above the host's own — the host
@@ -360,7 +356,7 @@ public sealed class StateUpdateWriter(
 
             // One domination count per *other* player, in roster order — no
             // count prefix, because the length is the roster size the message
-            // already declared. ⚠️ Self is skipped rather than written as a
+            // already declared. Self is skipped rather than written as a
             // zero, so the row is one byte shorter than the roster and a reader
             // that took `count` bytes would be one ahead per player.
             for (var i = 0; i < Match.Roster.Count; i++)
@@ -388,7 +384,7 @@ public sealed class StateUpdateWriter(
     /// <c>Objects/InGameElements/Sentry.events/User Event 12.xml</c>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>On an <c>INPUTSTATE</c> a sentry contributes NOTHING — not even
+    /// <b>On an <c>INPUTSTATE</c> a sentry contributes NOTHING — not even
     /// its hp.</b> Both groups below are guarded on the tier and between them
     /// they cover only <c>QUICK_UPDATE</c> and <c>FULL_UPDATE</c>, so on an
     /// <c>INPUTSTATE</c> the player's block ends at its subobjects byte with
@@ -583,7 +579,7 @@ public sealed class StateUpdateWriter(
                 writer.WriteUByteFromReal(_objective.TimeLimitMinutes);
                 writer.WriteUInt((uint)Math.Max(0, _objective.RoundTimer));
 
-                // ⚠️ Blue first, then red — `with GeneratorBlue event_user(12);
+                // Blue first, then red — `with GeneratorBlue event_user(12);
                 // with GeneratorRed event_user(12);`, in that order, which is
                 // the reverse of every other paired field on the wire.
                 WriteGenerator(writer, _objective.BlueGenerator);
@@ -591,7 +587,7 @@ public sealed class StateUpdateWriter(
                 break;
 
             case GameMode.Arena:
-                // ⚠️ Five extra fields on a FULL_UPDATE only, ahead of the
+                // Five extra fields on a FULL_UPDATE only, ahead of the
                 // scalars every other mode shares. A reader that took them on a
                 // CAPS_UPDATE too would be six bytes out.
                 if (tier == MessageType.FullUpdate)
@@ -667,7 +663,7 @@ public sealed class StateUpdateWriter(
     /// <c>Objects/Map elements/Gamemode-specific/Generator/Generator.events/User Event 12.xml</c>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A destroyed generator writes nothing at all</b> — not a zeroed
+    /// <b>A destroyed generator writes nothing at all</b> — not a zeroed
     /// block. The HUD reaches each one through a <c>with</c>, which visits no
     /// instances once it has been destroyed, so the block shortens by four
     /// bytes and a reader has to know. Already quantised, by

@@ -6,27 +6,27 @@ using Gg2.Simulation;
 namespace Gg2.Tests;
 
 /// <summary>
-/// ⚠️ <b>That the replayer reads each message family from the right tick —
+/// That the replayer reads each message family from the right tick —
 /// asked with a synthetic trace, so the answer does not depend on a fixture
-/// agreeing for a thousand ticks first.</b>
+/// agreeing for a thousand ticks first.
 /// </summary>
 /// <remarks>
 /// <b>This exists because a real one was lost.</b>
 /// <c>SupportClassFixtureTests.ThePortEmitsNoUberMessageTheReferenceDidNot</c>
 /// was the project's only check that <see cref="Fields.Ubers"/> is compared
 /// against the correct tick, and it worked by finding an <c>UBER_CHARGED</c>
-/// 1,155 ticks past where its recording still agreed with the port at all. On
-/// 2026-08-27 a simulation fix moved that charge by one tick, a 30-tick drift
-/// tolerance had to go in, and a harness reading a tick late now looks exactly
-/// like the drift.
+/// 1,155 ticks past where its recording still agreed with the port at all. A
+/// simulation fix that moved a charge by one tick needed a 30-tick drift
+/// tolerance, and a harness reading a tick late now looks exactly like the
+/// drift.
 /// <para>
-/// ⚠️ <b>All four event families were in that condition</b>, not just Ubers —
+/// <b>All four event families were in that condition</b>, not just Ubers —
 /// deaths, the objective and sentries were each gated only by a fixture
 /// happening to reach them, which is one unrelated fix away from the same
 /// problem. They are covered here together.
 /// </para>
 /// <para>
-/// ⚠️ <b>The off-by-one this guards is real and the project has already paid for
+/// <b>The off-by-one this guards is real and the project has already paid for
 /// it once.</b> The control-point comparison read a tick late for several
 /// phases, which presented as the port starting every capture two ticks early —
 /// diagnosed as a simulation bug and pinned as an open finding before anyone
@@ -41,10 +41,10 @@ namespace Gg2.Tests;
 /// off-by-one a fire seed and a spawn have. See <see cref="Replayer"/>.
 /// </para>
 /// <para>
-/// ⚠️ <b>Control points are here too, and they take a different shape.</b> They
+/// <b>Control points are here too, and they take a different shape.</b> They
 /// are not an event family: the block rides on a <c>CAPS_UPDATE</c> and is
 /// compared <em>before</em> the tick runs rather than out of the next tick's
-/// messages. ⚠️ <b>They are also the one this project already got wrong</b> —
+/// messages. They are also the one this project already got wrong —
 /// the comparison read a tick late for several phases. See
 /// <see cref="TheCaptureMeterIsComparedAgainstTheEndOfThePreviousTick"/>.
 /// </para>
@@ -76,7 +76,7 @@ public sealed class ReplayerAlignmentTests
     /// on a tick chosen by the test.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Counted from <see cref="Tick"/> calls rather than from a tick index
+    /// <b>Counted from <see cref="Tick"/> calls rather than from a tick index
     /// the replayer hands over</b>, because it does not hand one over — which is
     /// the point. The simulation cannot know what the harness thinks the time
     /// is, so a harness that lines the two up wrongly has nothing to correct it.
@@ -209,7 +209,7 @@ public sealed class ReplayerAlignmentTests
             .Mismatches];
 
     /// <summary>
-    /// ✅ An event on tick 5 is matched by the message in tick 6's block, and by
+    /// An event on tick 5 is matched by the message in tick 6's block, and by
     /// nothing else — for every family that is read out of the following tick.
     /// </summary>
     [Theory]
@@ -223,7 +223,7 @@ public sealed class ReplayerAlignmentTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The controls, and they are the whole test.</b> Put the same message
+    /// <b>The controls, and they are the whole test.</b> Put the same message
     /// one tick either side and the comparison must object.
     /// </summary>
     /// <remarks>
@@ -231,7 +231,7 @@ public sealed class ReplayerAlignmentTests
     /// that never runs — which is precisely how <see cref="Fields.Ubers"/> came
     /// to be unused for several phases with nothing noticing.
     /// <para>
-    /// ⚠️ Each shift produces <b>two</b> mismatches, not one: the recorded
+    /// Each shift produces <b>two</b> mismatches, not one: the recorded
     /// message nobody claimed (<c>expected 1, got 0</c>) and the port's event
     /// nobody recorded (<c>expected 0, got 1</c>). Asserting the pair rather
     /// than "some mismatch" is what distinguishes a misaligned comparison from
@@ -292,7 +292,7 @@ public sealed class ReplayerAlignmentTests
 
         public bool TryGetControlPoint(int index, out ControlPointBlock point)
         {
-            // ⚠️ Offset so the meter never has to represent a negative. It is a
+            // Offset so the meter never has to represent a negative. It is a
             // ushort on the wire, so an observation a tick BEHIND tick zero
             // would wrap to 65535 and the comparison would report a difference
             // of 65535 rather than of one — true, and useless as a signature.
@@ -367,7 +367,7 @@ public sealed class ReplayerAlignmentTests
             .Mismatches];
 
     /// <summary>
-    /// ✅ <b>The capture meter is compared against the END OF THE PREVIOUS TICK,
+    /// <b>The capture meter is compared against the END OF THE PREVIOUS TICK,
     /// which is what the observation describes.</b>
     /// </summary>
     /// <remarks>
@@ -376,14 +376,14 @@ public sealed class ReplayerAlignmentTests
     /// meter as it stood at the end of T-1 — exactly like the positions beside
     /// it. The replayer therefore compares <b>before</b> <c>Advance</c>.
     /// <para>
-    /// ⚠️ <b>Comparing after it instead is a real bug this project shipped</b>,
-    /// for several phases: it holds the port's end-of-this-tick meter against
-    /// the reference's end-of-last-tick one, so the port reads high by exactly
-    /// one tick of capture. That presented as the port starting every capture
-    /// two ticks early on a soldier recording and four on a scout one, was read
-    /// as a simulation bug, and was pinned as an open finding before anybody
-    /// looked at the harness. docs/PARITY.md, "the capture meter was compared
-    /// one tick late".
+    /// <b>Comparing after it instead is a real bug this project shipped</b>:
+    /// it holds the port's end-of-this-tick meter against the reference's
+    /// end-of-last-tick one, so the port reads high by exactly one tick of
+    /// capture. That presented as the port starting every capture two ticks
+    /// early on a soldier recording and four on a scout one, was read as a
+    /// simulation bug, and was pinned as an open finding before anybody looked
+    /// at the harness. docs/PARITY.md, "the capture meter was compared one
+    /// tick late".
     /// </para>
     /// <para>
     /// The stand-in's meter is just its tick count, so nothing here depends on
@@ -397,7 +397,7 @@ public sealed class ReplayerAlignmentTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The control, and it carries the signature of the original bug:</b>
+    /// <b>The control, and it carries the signature of the original bug:</b>
     /// an observation one tick out makes every comparison read high — or low —
     /// by exactly one.
     /// </summary>
@@ -408,7 +408,7 @@ public sealed class ReplayerAlignmentTests
     /// <em>value</em>, which is the same thing a one-tick misalignment does to
     /// it.
     /// <para>
-    /// ⚠️ <b><c>Expected - Actual = -offset</c> on every tick is the assertion
+    /// <b><c>Expected - Actual = -offset</c> on every tick is the assertion
     /// that matters.</b> "Some mismatch" would also pass for a comparison that
     /// had stopped reading the meter at all; a uniform one-tick lead is the
     /// shape a misaligned clock actually produces.
@@ -431,7 +431,7 @@ public sealed class ReplayerAlignmentTests
     /// The meter is not compared unless <see cref="Fields.ControlPoints"/> asks.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Not a formality here.</b> <c>Fields.ControlPoints</c> spent two
+    /// <b>Not a formality here.</b> <c>Fields.ControlPoints</c> spent two
     /// gamemodes doing nothing: <c>StateUpdateReader</c> parsed the block and
     /// <c>TraceParser</c> threw it away, so a port that never captured the point
     /// replayed a King of the Hill recording exactly as well as a correct one.

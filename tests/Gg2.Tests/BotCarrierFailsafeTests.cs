@@ -10,18 +10,17 @@ namespace Gg2.Tests;
 /// </summary>
 /// <remarks>
 /// <para>
-/// ⚠️ <b>A failsafe, not the fix.</b> The bug it was written for — three of
-/// <c>PathFollower</c>'s re-plan recovery paths passing the goal's <c>y</c> as
-/// the bot's own — is fixed, and <c>HeadlessMatchTests.ACarrierDoesNotWedge</c>
-/// is its regression test. This exists because a briefcase held by a motionless
-/// bot is the worst failure the objective has: it does not end the round, it
-/// does not read as a loss, and it removes the objective from play until the map
-/// changes. Measured against the bug deliberately re-introduced: the longest
-/// carry fell from <b>22,700 ticks to 1,726</b>, and the flag came back into
-/// play 37 times instead of never.
+/// <b>A failsafe, not a fix for any known bug.</b>
+/// <c>HeadlessMatchTests.ACarrierDoesNotWedge</c> is the regression test for the
+/// underlying path-follower defect this guards against. This exists because a
+/// briefcase held by a motionless bot is the worst failure the objective has: it
+/// does not end the round, it does not read as a loss, and it removes the
+/// objective from play until the map changes. Measured against the bug
+/// deliberately re-introduced: the longest carry fell from <b>22,700 ticks to
+/// 1,726</b>, and the flag came back into play 37 times instead of never.
 /// </para>
 /// <para>
-/// ⚠️ <b>It is in the bot, not the simulation, and that is a hard line.</b> A
+/// <b>It is in the bot, not the simulation, and that is a hard line.</b> A
 /// bot pressing "drop intel" is something a player can do, through the same
 /// command dispatch a socket reaches. A rule in <c>MatchSimulation</c> that took
 /// a briefcase off a motionless carrier would be behaviour the stock game does
@@ -41,7 +40,7 @@ public sealed class BotCarrierFailsafeTests
         state.AddPlayer(1);
         state.Players[1].Team = Team.Red;
         state.Players[1].Class = PlayerClass.Scout;
-        // ⚠️ CharacterState.Fresh, never new(): six of its fields name a roster
+        // CharacterState.Fresh, never new(): six of its fields name a roster
         // slot and a zeroed one claims slot 0 hurt it, assisted and is healing
         // it — none of which throws, because slot 0 always exists.
         state.Characters[1] = CharacterState.Fresh(PlayerClass.Scout, Team.Red);
@@ -50,7 +49,7 @@ public sealed class BotCarrierFailsafeTests
         state.Alive[1] = true;
         state.Characters[1].CarryingIntel = true;
 
-        // ⚠️ No nav graph, so the bot cannot go anywhere — which is exactly the
+        // No nav graph, so the bot cannot go anywhere — which is exactly the
         // condition being tested, and needs no broken follower to produce.
         var bot = new ScriptedBot(null, new NavQuery(Team.Red), BotSkill.ForTier(3), stagger: 1);
 
@@ -89,7 +88,7 @@ public sealed class BotCarrierFailsafeTests
     }
 
     /// <summary>
-    /// ⚠️ And it does NOT ask before the timeout — the control that stops this
+    /// And it does NOT ask before the timeout — the control that stops this
     /// becoming "bots drop the intel constantly".
     /// </summary>
     /// <remarks>
@@ -109,7 +108,7 @@ public sealed class BotCarrierFailsafeTests
     }
 
     /// <summary>
-    /// ⚠️ A carrier that keeps MOVING is still made to drop it eventually — the
+    /// A carrier that keeps MOVING is still made to drop it eventually — the
     /// headway check alone is not enough.
     /// </summary>
     /// <remarks>
@@ -121,7 +120,7 @@ public sealed class BotCarrierFailsafeTests
     /// ticks, capturing nothing.
     /// </para>
     /// <para>
-    /// ⚠️ <b>That loop is faithful to the reference, not a port bug.</b>
+    /// <b>That loop is faithful to the reference, not a port bug.</b>
     /// <c>botPathKeys.gml:160-195</c> has the identical off-route rule, and its
     /// own comment describes this failure — "the pair of surfaces becomes a loop
     /// the bot never leaves… the anti-thrash distance check never fires, because

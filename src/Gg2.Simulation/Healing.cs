@@ -39,7 +39,7 @@ namespace Gg2.Simulation;
 /// the wire at all.
 /// </para>
 /// <para>
-/// ⚠️ <b>Two of the three distances in the acquisition are measured from
+/// <b>Two of the three distances in the acquisition are measured from
 /// different points, and they are not interchangeable.</b> The aim ray leaves
 /// the <em>weapon</em> (<c>other.x</c> inside the <c>with(Character)</c>, and a
 /// weapon trails its owner by a tick and a rounding — see
@@ -173,7 +173,7 @@ public static class Healing
         var mouseX = medic.X + Gml.LengthDirX(medic.AimDistance, aim);
         var mouseY = medic.Y + Gml.LengthDirY(medic.AimDistance, aim);
 
-        // ⚠️ Measured from the character, but the ray below is walked from the
+        // Measured from the character, but the ray below is walked from the
         // *weapon*. That is the reference: `owner.x` here, `other.x` there.
         var rayEndX = medic.X + Gml.LengthDirX(MaxHealDistance, aim);
         var rayEndY = medic.Y + Gml.LengthDirY(MaxHealDistance, aim);
@@ -289,7 +289,7 @@ public static class Healing
 
         var healthGained = HealAmount * HealingFactor(patient.TimeUnscathed);
 
-        // ⚠️ The tier test is against the hp the patient had *before* this
+        // The tier test is against the hp the patient had *before* this
         // tick's heal, and the uber-charge test below is against the hp they
         // have *after* it. Same variable, two different readings, four lines
         // apart.
@@ -299,7 +299,7 @@ public static class Healing
         var maxHp = patient.Stats.MaxHp;
         patient.Hp = Math.Min(patient.Hp + healthGained, maxHp);
 
-        // Medigun.events/User Event 1.xml:73-75. ⚠️ The stat takes the *gross*
+        // Medigun.events/User Event 1.xml:73-75. The stat takes the *gross*
         // amount, not the amount that actually landed — a medic beaming a
         // full-health patient banks every point of it. `hphealed` is the
         // weapon's own running total towards a score point, and the two lines
@@ -312,7 +312,7 @@ public static class Healing
             // `if(healTarget.object.hp < healTarget.object.maxHp or setup)`,
             // Medigun.events/User Event 1.xml:92-101.
             //
-            // ⚠️ `setup` is the reference's own conjunction,
+            // `setup` is the reference's own conjunction,
             // `instance_exists(ControlPointSetupGate) && areSetupGatesClosed()`:
             //
             //   - the first half is `state.AttackDefend`, because the map entity
@@ -322,7 +322,7 @@ public static class Healing
             //   - the second is `areSetupGatesClosed.gml`, which is nothing but
             //     `global.setupTimer > 0`.
             //
-            // ⚠️ Read LIVE here rather than through CharacterState.SetupGatesClosed,
+            // Read LIVE here rather than through CharacterState.SetupGatesClosed,
             // which mirrors the same value. The two agree at this point in the
             // tick — the mirror is written before this stage and Rounds.Step
             // decrements the timer after it — so this is the more direct
@@ -333,23 +333,20 @@ public static class Healing
             // clause: during setup nobody is damaged yet, so the hurt rate is the
             // only way to build any charge before the gates open.
             //
-            // ⚠️ Reachable on shipped maps — Rounds.Start arms the timer for
-            // Invasion (ctf_avanti) and for attack/defend control points — and it
-            // was missing for three phases behind a comment claiming no mode here
-            // had a ControlPointSetupGate.
+            // Reachable on shipped maps — Rounds.Start arms the timer for
+            // Invasion (ctf_avanti) and for attack/defend control points.
             //
-            // ⛔ LANDED WITHOUT A SimulationBehaviourVersion BUMP, deliberately,
-            // 2026-09-03. The stamp would not have caught this by itself — its
-            // surface is "chosen, not swept", constants and tables rather than
-            // branch conditions — so the bump would have been a hand-made claim
-            // that every existing checkpoint is now dated. It was skipped because
-            // the change CANNOT REACH TRAINING: nothing in src/Gg2.Env sets
-            // SetupTimer or AttackDefend, so both sit at their default(WorldState)
-            // values and this branch is unreachable there, and PolicyController's
+            // No SimulationBehaviourVersion bump: the stamp's surface is
+            // "chosen, not swept" — constants and tables rather than branch
+            // conditions — so a bump here would be a hand-made claim that every
+            // existing checkpoint is now dated. Skipped because the change
+            // cannot reach training: nothing in src/Gg2.Env sets SetupTimer or
+            // AttackDefend, so both sit at their default(WorldState) values and
+            // this branch is unreachable there, and PolicyController's
             // TrainedClasses (Scout, Soldier, Sniper, Heavy) contains no Medic.
-            // ⚠️ THAT IS THE FALSIFICATION CONDITION: if an env or a duel ever
-            // arms a setup timer, or the policy is trained on Medic, this
-            // reasoning expires and the bump is owed.
+            // Falsification condition: if an env or a duel ever arms a setup
+            // timer, or the policy trains on Medic, this reasoning expires and
+            // the bump is owed.
             var setup = state.AttackDefend && state.SetupTimer > 0;
 
             weapon.UberCharge += Gml.Less(patient.Hp, maxHp) || setup
@@ -378,11 +375,11 @@ public static class Healing
         // Medigun.events/User Event 1.xml:104-108, below the uber block rather
         // than beside the accumulator.
         //
-        // ⚠️ `hphealed -= HP_PER_POINT` rather than `= 0`, so the overshoot
+        // `hphealed -= HP_PER_POINT` rather than `= 0`, so the overshoot
         // carries into the next point. A medic who heals 1,599 in one burst gets
         // one point and starts the next at 799, not at 0.
         //
-        // ⚠️ And it is an `if`, not a `while` — a single tick can never bank
+        // And it is an `if`, not a `while` — a single tick can never bank
         // two points. It cannot in practice either, at 6 hp a tick.
         if (Gml.GreaterOrEqual(weapon.HpHealed, GameConstants.HpPerPoint))
         {
@@ -396,7 +393,7 @@ public static class Healing
     /// charge.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A separate instance's Begin Step, so it runs after the whole of the
+    /// <b>A separate instance's Begin Step, so it runs after the whole of the
     /// owner's.</b> A weapon is created by its character's Create event and
     /// therefore carries a higher instance id, and GM8 runs one event across
     /// instances in id order — so within a tick the order is character, then

@@ -6,7 +6,7 @@ namespace Gg2.Tests;
 /// <see cref="TickPacing"/> — the histogram that answers "the server hitches".
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>The test worth having here is the one that shows the mean and the
+/// <b>The test worth having here is the one that shows the mean and the
 /// median lying.</b> The real distribution that provoked
 /// <see cref="TimerResolution"/> had a median <em>below</em> its own target
 /// while 15% of its ticks were half a tick late, so a report that led with an
@@ -16,7 +16,7 @@ namespace Gg2.Tests;
 public class TickPacingTests
 {
     /// <summary>
-    /// ✅ <b>The measured pre-fix distribution, and what each statistic says
+    /// <b>The measured pre-fix distribution, and what each statistic says
     /// about it.</b>
     /// </summary>
     /// <remarks>
@@ -75,7 +75,7 @@ public class TickPacingTests
     /// still counted as late.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The overflow bucket matters more than its rarity suggests: a server
+    /// The overflow bucket matters more than its rarity suggests: a server
     /// that stalled for a second is exactly the event worth seeing, and a
     /// histogram that dropped it — or that indexed off the end — would lose the
     /// one tick anybody cares about.

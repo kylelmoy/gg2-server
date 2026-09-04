@@ -95,7 +95,7 @@ public sealed class RifleTests
     // --- the scope ------------------------------------------------------------
 
     /// <summary>
-    /// ⚠️ Zoom changes the <b>physics</b>: a scoped sniper accelerates at 0.6
+    /// Zoom changes the <b>physics</b>: a scoped sniper accelerates at 0.6
     /// rather than their class's 0.9 and jumps two units lower.
     /// </summary>
     [Fact]
@@ -122,12 +122,12 @@ public sealed class RifleTests
     }
 
     /// <summary>
-    /// ⚠️ <b><c>basemaxspeed</c> is not recomputed when the run power drops</b>,
+    /// <b><c>basemaxspeed</c> is not recomputed when the run power drops</b>,
     /// so the acceleration <em>guard</em> stays at the unscoped value.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>It is a guard, not a speed cap</b>, which is easy to get backwards
-    /// — and the first version of this test did. A character's terminal speed
+    /// <b>It is a guard, not a speed cap</b>, which is easy to get backwards.
+    /// A character's terminal speed
     /// comes from the friction balance and really is lower while scoped
     /// (0.6/0.9 of it, measured at 3.4 against 5.1); what <c>basemaxspeed</c>
     /// does is decide whether the acceleration is applied at all
@@ -234,7 +234,7 @@ public sealed class RifleTests
     }
 
     /// <summary>
-    /// ⚠️ The ramp is a <b>square root</b>, so a quarter of the charge time is
+    /// The ramp is a <b>square root</b>, so a quarter of the charge time is
     /// already half the bonus — and the <c>floor</c> keeps the damage an
     /// integer.
     /// </summary>
@@ -262,7 +262,7 @@ public sealed class RifleTests
     }
 
     /// <summary>
-    /// ⚠️ <b>Unscoping throws a full charge away instantly</b> — there is no
+    /// <b>Unscoping throws a full charge away instantly</b> — there is no
     /// decay, the <c>else</c> is <c>t = 0</c>.
     /// </summary>
     [Fact]
@@ -285,7 +285,7 @@ public sealed class RifleTests
     }
 
     /// <summary>
-    /// ⚠️ <b>Firing throws it away too</b>, because the shot clears
+    /// <b>Firing throws it away too</b>, because the shot clears
     /// <c>readyToShoot</c> and the charge needs it.
     /// </summary>
     [Fact]
@@ -309,7 +309,7 @@ public sealed class RifleTests
     // --- the shot -------------------------------------------------------------
 
     /// <summary>
-    /// ⚠️ The Rifle has <b>no magazine</b> — <c>maxAmmo = 0</c> — so the shared
+    /// The Rifle has <b>no magazine</b> — <c>maxAmmo = 0</c> — so the shared
     /// ready-and-loaded guard would silence it for ever.
     /// </summary>
     [Fact]
@@ -326,7 +326,7 @@ public sealed class RifleTests
     }
 
     /// <summary>
-    /// ⚠️ A scoped shot takes <b>60</b> ticks to come back and an unscoped one
+    /// A scoped shot takes <b>60</b> ticks to come back and an unscoped one
     /// 40 — <c>alarm[0] = reloadTime + 20*owner.zoomed</c>.
     /// </summary>
     [Theory]
@@ -403,7 +403,7 @@ public sealed class RifleTests
     }
 
     /// <summary>
-    /// ⚠️ <b>A team-mate stops the bullet and takes nothing.</b> Only the
+    /// <b>A team-mate stops the bullet and takes nothing.</b> Only the
     /// shooter's own mask is blanked, so body-blocking a sniper works.
     /// </summary>
     [Fact]
@@ -461,7 +461,7 @@ public sealed class RifleTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The range is the damage.</b> An unscoped shot carries 700 pixels;
+    /// <b>The range is the damage.</b> An unscoped shot carries 700 pixels;
     /// an enemy past that is out of reach even in clear air.
     /// </summary>
     [Fact]
@@ -513,7 +513,7 @@ public sealed class RifleTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The map beats everything behind it.</b> <c>Obstacle</c> is first in
+    /// <b>The map beats everything behind it.</b> <c>Obstacle</c> is first in
     /// the reference's object list, so a wall in the same half of the search
     /// wins over a player.
     /// </summary>
@@ -595,7 +595,7 @@ public sealed class RifleTests
     }
 
     /// <summary>
-    /// ⚠️ A <b>gate</b> stops the shot too, not only the map's own mask — the
+    /// A <b>gate</b> stops the shot too, not only the map's own mask — the
     /// hitscan's object list ends with the same <c>gunSetSolids</c> set every
     /// bullet is tested against.
     /// </summary>
@@ -614,10 +614,9 @@ public sealed class RifleTests
         Put(ref state, 1, GateX, GateY, Team.Red, aimDegrees: 0);
         Put(ref state, 2, GateX + 600, GateY, Team.Blue);
 
-        // ⚠️ The victim has to be well clear of the gate, not merely behind it.
+        // The victim has to be well clear of the gate, not merely behind it.
         // A character is tested *before* a gate in the reference's object list,
-        // so one sharing a sub-segment with the gate is hit through it — which
-        // is what the first version of this test accidentally measured.
+        // so one sharing a sub-segment with the gate is hit through it.
         Assert.False(World.CollisionLineHitsMask(GateX, GateY, GateX + 600, GateY));
         Assert.True(World.CollisionLineBlocksBullets(
             GateX, GateY, GateX + 200, GateY, state.BulletFilter));
@@ -654,7 +653,7 @@ public sealed class RifleTests
     }
 
     /// <summary>
-    /// ⚠️ A <b>friendly</b> sentry is invisible to the shot — its mask is
+    /// A <b>friendly</b> sentry is invisible to the shot — its mask is
     /// blanked — so it neither blocks nor takes damage.
     /// </summary>
     [Fact]

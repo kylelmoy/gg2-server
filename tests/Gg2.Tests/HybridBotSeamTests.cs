@@ -9,11 +9,11 @@ namespace Gg2.Tests;
 /// tier selection, the arbiter, the head split, and the counter invariant.
 /// </summary>
 /// <remarks>
-/// ⛔ <b>None of this was reachable before the wrapper split was merged.</b> The
+/// <b>None of this was reachable before the wrapper split was merged.</b> The
 /// two old classes each hard-coded one controller, so "which controller drives"
 /// was not a decision anything could make and not a decision anything could test.
 /// <para>
-/// ⚠️ <b>These use a STUB controller on purpose.</b> A test that drove a real
+/// <b>These use a STUB controller on purpose.</b> A test that drove a real
 /// <c>RolloutSearch</c> to establish that the arbiter refused it would take
 /// seconds and would fail for a dozen reasons that are not the arbiter. The stub
 /// makes "who was asked, and what did they answer" the only variable — and the
@@ -21,7 +21,7 @@ namespace Gg2.Tests;
 /// <c>PolicyMatchTests</c>, which is the right split.
 /// </para>
 /// <para>
-/// ⚠️ <b>Every assertion of an ABSENCE here states its own control</b>, because an
+/// <b>Every assertion of an ABSENCE here states its own control</b>, because an
 /// absence passes on a deleted feature. The pattern this repo arrived at after
 /// four of eight moving-platform tests turned out to be vacuous — CLAUDE.md.
 /// </para>
@@ -32,7 +32,7 @@ public sealed class HybridBotSeamTests
     /// A controller that always decides, and records what it was asked.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Decides on EVERY poll</b> — <c>AtDecisionBoundary</c> is always true —
+    /// <b>Decides on EVERY poll</b> — <c>AtDecisionBoundary</c> is always true —
     /// so the gate never has to wait for a cadence and a test can count decisions
     /// by counting ticks. The two real controllers have cadences; that is their
     /// tests' subject, not this file's.
@@ -52,7 +52,7 @@ public sealed class HybridBotSeamTests
 
         public int DecisionCost { get; }
 
-        // ⚠️ Flat: a double's cost is whatever the test said it was, and a test
+        // Flat: a double's cost is whatever the test said it was, and a test
         // that varied with the population would be measuring the model rather
         // than the seam it exists to exercise.
         public int DecisionCostFor(int liveCharacters) => DecisionCost;
@@ -114,7 +114,7 @@ public sealed class HybridBotSeamTests
     /// With no arbiter, tier 0 drives and the cheaper tiers are never asked.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The control is the second assertion.</b> "Tier 1 was never polled"
+    /// <b>The control is the second assertion.</b> "Tier 1 was never polled"
     /// passes on a bot that engaged nobody, so tier 0's poll count has to be
     /// positive for the zero to mean anything.
     /// </remarks>
@@ -138,7 +138,7 @@ public sealed class HybridBotSeamTests
     /// scripted layer.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>This is the behaviour the seam was built for</b>: cheaper logic when
+    /// <b>This is the behaviour the seam was built for</b>: cheaper logic when
     /// the expensive one cannot be afforded, rather than an all-or-nothing switch.
     /// The control is the previous test — the same bot with no arbiter runs the
     /// expensive tier — so a zero here is the arbiter's doing and not the gate's.
@@ -165,7 +165,7 @@ public sealed class HybridBotSeamTests
     /// A budget too small for ANY tier leaves the wheel with the scripted layer.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>-1, not "the cheapest tier anyway".</b> A budget that one more
+    /// <b>-1, not "the cheapest tier anyway".</b> A budget that one more
     /// decision always exceeds is not a budget. The scripted layer is a complete
     /// bot, which is why refusing is a safe answer at all.
     /// </remarks>
@@ -203,7 +203,7 @@ public sealed class HybridBotSeamTests
     }
 
     /// <summary>
-    /// ⛔ ONE arbiter shared by several bots is what makes coinciding decisions
+    /// ONE arbiter shared by several bots is what makes coinciding decisions
     /// visible, and it is the only reason this seam exists.
     /// </summary>
     /// <remarks>
@@ -211,7 +211,7 @@ public sealed class HybridBotSeamTests
     /// expensive bot — handovers are correlated, because several bots have an enemy
     /// in range during the same firefight. A per-bot budget cannot see that at all.
     /// <para>
-    /// ⚠️ <b>The spend is ordered by roster slot</b>, so the first bot polled takes
+    /// <b>The spend is ordered by roster slot</b>, so the first bot polled takes
     /// the budget. Deterministic, and stated in <see cref="IMicroArbiter"/> as the
     /// fairness cost.
     /// </para>
@@ -275,10 +275,10 @@ public sealed class HybridBotSeamTests
     }
 
     /// <summary>
-    /// ⛔ The budget resets every TICK, from the tick number and nothing else.
+    /// The budget resets every TICK, from the tick number and nothing else.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The one thing an arbiter may read.</b> A wall clock in here makes a
+    /// <b>The one thing an arbiter may read.</b> A wall clock in here makes a
     /// match unreproducible — <c>HeadlessMatch</c> results stop being a function of
     /// the seed and <c>eval</c> stops being thread-count independent, which this
     /// repo gates rather than assumes. <see cref="IMicroArbiter"/> says so; this
@@ -304,7 +304,7 @@ public sealed class HybridBotSeamTests
     /// whose every tier refuses stays scripted.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Asked per tick, not at construction</b> — a class can change mid-match
+    /// <b>Asked per tick, not at construction</b> — a class can change mid-match
     /// and the wrapper cannot be rebuilt when it does.
     /// </remarks>
     [Fact]
@@ -331,10 +331,10 @@ public sealed class HybridBotSeamTests
     }
 
     /// <summary>
-    /// ⛔ An arbiter naming an ineligible tier throws rather than being clamped.
+    /// An arbiter naming an ineligible tier throws rather than being clamped.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A silent substitution makes an arm that is not the arm anybody
+    /// <b>A silent substitution makes an arm that is not the arm anybody
     /// configured</b>, and it would be invisible in a result table — the class of
     /// failure this repo keeps catching late.
     /// </remarks>
@@ -367,7 +367,7 @@ public sealed class HybridBotSeamTests
     }
 
     /// <summary>
-    /// ⛔ <c>ScriptedPolls == MicroTicks + ScriptedTicks</c>: the macro layer thinks
+    /// <c>ScriptedPolls == MicroTicks + ScriptedTicks</c>: the macro layer thinks
     /// on every tick, including the ones it does not drive.
     /// </summary>
     /// <remarks>
@@ -375,7 +375,7 @@ public sealed class HybridBotSeamTests
     /// drove left it doing no objective planning during fights — no re-target, no
     /// re-path, no spot ban — and captures fell 20 to 7 over a hundred matches.
     /// <para>
-    /// ⚠️ <b>This invariant was testable on ONE arm before the merge.</b>
+    /// <b>This invariant was testable on ONE arm before the merge.</b>
     /// <c>SearchBot</c> counted <c>ScriptedPolls</c> and <c>PolicyBot</c> did not,
     /// so the policy arm carried the same property with nothing able to check it.
     /// Every arm gets every counter now, and this asserts it across a run where
@@ -416,12 +416,12 @@ public sealed class HybridBotSeamTests
     /// fire, every tick, with no gate.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>This rule shipped with ZERO tests until the wrapper merge.</b> It was a
+    /// <b>This rule shipped with ZERO tests until the wrapper merge.</b> It was a
     /// branch inside <c>PolicyBot.Poll</c> that nothing in the suite, the bench or
     /// the host ever selected — so restructuring it was a change nothing could have
     /// caught, which is what made writing this a precondition rather than a bonus.
     /// <para>
-    /// ⚠️ <b>The stub presses <c>Attack</c> and never a movement key</b>, so
+    /// <b>The stub presses <c>Attack</c> and never a movement key</b>, so
     /// "movement came from the scripted layer" is checked by the attack bit
     /// surviving and by the controller being polled on every tick — no gate, no
     /// scripted ticks at all.
@@ -430,7 +430,7 @@ public sealed class HybridBotSeamTests
     [Fact]
     public void TheHeadSplitTakesCombatFromTheControllerAndMovementFromTheScriptedLayer()
     {
-        // ⚠️ TWO worlds built and stepped identically, one driven by a bare
+        // TWO worlds built and stepped identically, one driven by a bare
         // ScriptedBot. Polling does not feed the world in this harness, so the two
         // evolve in lockstep and the bare bot's keys ARE the scripted half of the
         // merge — which is the only way to check the split without asserting
@@ -474,7 +474,7 @@ public sealed class HybridBotSeamTests
         Assert.Equal(0, bot.ScriptedTicks);
         Assert.True(sawAttack, "the controller's fire bit never reached the output");
 
-        // ⚠️ The control for the equality above, which would otherwise pass on a
+        // The control for the equality above, which would otherwise pass on a
         // merge that took EVERYTHING from the scripted layer. The stub holds Left
         // on every tick, so the two halves must disagree somewhere or the assertion
         // is checking nothing.
@@ -491,7 +491,7 @@ public sealed class HybridBotSeamTests
     /// <c>OnHandoverOut</c>, once each per change.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>The aim resync rides on <c>OnHandoverIn</c>.</b> Skipping it makes a
+    /// <b>The aim resync rides on <c>OnHandoverIn</c>.</b> Skipping it makes a
     /// controller turn from a bearing nobody is pointing at, silently, in exactly
     /// the decisions a handover exists to hand it — <c>SearchBotTests</c> asserts
     /// the consequence on a real search; this asserts the call happens at all, which

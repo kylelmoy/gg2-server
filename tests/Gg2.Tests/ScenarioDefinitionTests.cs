@@ -47,7 +47,7 @@ public sealed class ScenarioDefinitionTests
     /// A scenario is a travel or a hold, never both and never neither.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The reference makes the choice required rather than defaulted because
+    /// The choice is required rather than defaulted because
     /// "a combat scenario that quietly inherited a movement goal would measure
     /// the wrong thing and still pass". Here the constructor enforces it, so the
     /// mistake is unrepresentable rather than merely discouraged.
@@ -87,7 +87,7 @@ public sealed class ScenarioDefinitionTests
     /// </summary>
     /// <remarks>
     /// The VOID check, and the sharpest thing available about the ported data.
-    /// ⚠️ A start point with nothing under it inside <c>NAV_MAX_FALL</c> gives a
+    /// A start point with nothing under it inside <c>NAV_MAX_FALL</c> gives a
     /// bot no node to plan from, so it never moves — which reads as a broken bot
     /// and is a broken scenario. The reference's own header records
     /// <c>[1200, 900]</c> on koth_valley as exactly that: it "looked like the
@@ -136,7 +136,7 @@ public sealed class ScenarioDefinitionTests
     /// The rest of this claim — that the two ends are actually <em>connected</em>
     /// for the team walking — moved to
     /// <c>NavSearchFixtureTests.EveryTravelScenarioHasARouteEvenForTheLeastCapableClass</c>
-    /// once there was a real search to ask. ⚠️ It is a better question than the
+    /// once there was a real search to ask. It is a better question than the
     /// breadth-first walk that stood here: a BFS answers "is there any way at
     /// all" and ignores cost, so it cannot see a leg whose only route runs over
     /// an arc the asker cannot fly. Two copies of a reachability check, one of

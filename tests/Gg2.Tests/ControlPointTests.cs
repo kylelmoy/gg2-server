@@ -349,7 +349,7 @@ public sealed class ControlPointTests
         Assert.Equal(Team.Red, state.ControlPoints[0].CappingTeam);
 
         // Ten more ticks wipes the last 15 of red's — and leaves the meter at
-        // zero for one tick. ⚠️ `cappingTeam` is still Red here: the
+        // zero for one tick. `cappingTeam` is still Red here: the
         // `capping <= 0` branch clears `BeingCaptured` and does not touch it,
         // which is why the wire block reads the flag and not the team.
         Tick(world, ref state, 10);
@@ -368,7 +368,7 @@ public sealed class ControlPointTests
     /// reverting.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The presence field is 2 for an ordinary player and 1 for an ubered
+    /// The presence field is 2 for an ordinary player and 1 for an ubered
     /// one, so "only ubered players are here" is a state of its own. The
     /// reference's comment: "He can't cap, but he will prevent the point from
     /// reverting if his team has partially capped it already."
@@ -427,7 +427,7 @@ public sealed class ControlPointTests
 
     /// <summary>A locked point cannot be captured, and loses the meter.</summary>
     /// <remarks>
-    /// ⚠️ <c>capping = 0; exit;</c> — locking a point mid-capture <b>discards</b>
+    /// <c>capping = 0; exit;</c> — locking a point mid-capture <b>discards</b>
     /// the progress rather than pausing it.
     /// </remarks>
     [Fact]
@@ -472,7 +472,7 @@ public sealed class ControlPointTests
     /// </summary>
     /// <remarks>
     /// <c>ControlPoint.events/Step.xml:217</c>: 30, 75 and 225 at the standard
-    /// <c>capTime</c> of 300, plus one when the point is taken. ⚠️ It is an
+    /// <c>capTime</c> of 300, plus one when the point is taken. It is an
     /// <b>equality on <c>floor(capping)</c></b>, not a crossing — a meter moving
     /// two a tick can step straight over an odd threshold and never ask. A lone
     /// soldier moves one a tick and therefore lands on all three.
@@ -512,7 +512,7 @@ public sealed class ControlPointTests
     /// The hill is locked for thirty seconds, and unlocking is announced once.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>901 ticks, not 900.</b> The counter is read and <em>then</em>
+    /// <b>901 ticks, not 900.</b> The counter is read and <em>then</em>
     /// decremented, so a <c>cpUnlock</c> of 900 is 900 ticks of counting down
     /// and one more to notice the zero. Every "n ticks later" number in this
     /// file is the reference's arithmetic rather than the obvious one.
@@ -618,7 +618,7 @@ public sealed class ControlPointTests
     /// they are not capturing.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The mode's whole endgame.</b> The win needs
+    /// <b>The mode's whole endgame.</b> The win needs
     /// <c>capping == 0 and bluePresence == 0</c> as well as the timer and the
     /// ownership — and a contested point has <c>capping == 0</c>, because the
     /// meter is frozen. So the blue player is blocking the win purely by
@@ -698,7 +698,7 @@ public sealed class ControlPointTests
     /// team.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A capture does not clear <c>cappingTeam</c>.</b>
+    /// <b>A capture does not clear <c>cappingTeam</c>.</b>
     /// <c>pointCapture</c> writes <c>team = cappingTeam; capping = 0</c> and
     /// leaves <c>cappingTeam</c> where it was; only the <em>next</em> tick's
     /// <c>capping &lt;= 0</c> branch clears it. So the tick a point changes

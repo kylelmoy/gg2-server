@@ -50,8 +50,8 @@ public sealed class ObservationWriterTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The layout version is mirrored in two places and the compiler
-    /// cannot hold them equal.</b>
+    /// The layout version is mirrored in two places and the compiler cannot
+    /// hold them equal.
     /// </summary>
     /// <remarks>
     /// <c>Gg2.Simulation</c> does not depend on <c>Gg2.Env</c> — the simulation
@@ -112,7 +112,7 @@ public sealed class ObservationWriterTests
     }
 
     /// <summary>
-    /// ⚠️ <b>Every value is finite and inside a sane range.</b>
+    /// Every value is finite and inside a sane range.
     /// </summary>
     /// <remarks>
     /// A NaN or an infinity in an observation poisons a whole training batch and
@@ -146,7 +146,7 @@ public sealed class ObservationWriterTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The buffer is cleared, so a reused one cannot show a stale enemy.</b>
+    /// The buffer is cleared, so a reused one cannot show a stale enemy.
     /// </summary>
     /// <remarks>
     /// Stale features are worse than absent ones: a presence flag of 0 beside a
@@ -215,7 +215,7 @@ public sealed class ObservationWriterTests
     }
 
     /// <summary>
-    /// ⚠️ <b>A Quote is refused rather than silently observed as no class.</b>
+    /// A Quote is refused rather than silently observed as no class.
     /// </summary>
     /// <remarks>
     /// The one-hot is nine wide and the Quote is the tenth class, so encoding it
@@ -245,7 +245,7 @@ public sealed class ObservationWriterTests
     }
 
     /// <summary>
-    /// ⚠️ <b>Writing an observation allocates nothing.</b>
+    /// Writing an observation allocates nothing.
     /// </summary>
     /// <remarks>
     /// <c>docs/BOTAI.md</c> item 6: a feature vector is extracted for every
@@ -253,33 +253,28 @@ public sealed class ObservationWriterTests
     /// the hottest loop the project has. The nearest-K queries take stack
     /// buffers for the same reason.
     /// <para>
-    /// ⚠️ Measured the way <c>BotAiConstraintsTests</c> does it — a warm-up pass
+    /// Measured the way <c>BotAiConstraintsTests</c> does it — a warm-up pass
     /// first, because the first call through a code path JITs and that is not an
     /// allocation the steady state makes.
     /// </para>
     /// <para>
-    /// ⚠️ <b>The warm-up was 5 calls and had to become 200, and the reason is the
-    /// same one that made a benchmark lie earlier the same day.</b> .NET promotes
-    /// a method to tier-1 after <b>30</b> calls, in the background — so 5 warm-up
-    /// calls followed by 50 measured ones puts the promotion <em>inside the
-    /// measured window</em>, and the tiering machinery's own bookkeeping lands on
-    /// the measuring thread. It surfaced as this test failing roughly one run in
-    /// six, with a different byte count each time, on 2026-08-30 when the ray fan
-    /// grew — a bigger method takes longer to promote, so the window widened
-    /// until it was hit.
+    /// The warm-up has to clear 300 calls, not just a handful: .NET promotes a
+    /// method to tier-1 after 30 calls, in the background, and if the promotion
+    /// lands inside the measured window the tiering machinery's own bookkeeping
+    /// gets counted as allocation. A bigger method takes longer to promote, so
+    /// the warm-up needs enough headroom that the rejit has already landed
+    /// before the measured loop starts.
     /// </para>
     /// <para>
-    /// ⚠️ <b>The property itself was never in doubt and was checked separately:
+    /// The property itself holds independent of this measurement wrinkle:
     /// 200,000 calls in a standalone process allocate zero, at tier-0 and at
-    /// tier-1 both.</b> This is a fix to the measurement, not a relaxation of the
-    /// claim — the assertion is still <c>== 0</c>. Do not lower the warm-up
-    /// again; it has to clear 30 with room for the rejit to land.
+    /// tier-1 both. The assertion below is still <c>== 0</c>.
     /// </para>
     /// <para>
-    /// ⚠️ <b>The promotion warm-up does NOT step the episode</b>, and the first
-    /// attempt at this fix did — which ran past <c>DecisionCap</c> of 100 and
-    /// threw on every run. Branch coverage needs a few steps; tier-1 needs a few
-    /// hundred writes. They are separate loops because they want different things.
+    /// The promotion warm-up does not step the episode: branch coverage needs a
+    /// few steps, tier-1 needs a few hundred writes, and stepping enough times to
+    /// satisfy the latter would run past <c>DecisionCap</c> of 100. They are
+    /// separate loops because they want different things.
     /// </para>
     /// </remarks>
     [Fact]
@@ -296,10 +291,9 @@ public sealed class ObservationWriterTests
             env.Step(new EnvAction { Fire = 1, AimDelta = ActionDecoder.AimCentreBin }, EnvAction.Idle);
         }
 
-        // ⚠️ And past tier-1 promotion — 30 calls — WITHOUT stepping. The episode
-        // has a decision cap of 100 and a warm-up that stepped this many times
-        // would run it out and throw, which is what a first attempt at this fix
-        // did on every run. See the remarks.
+        // And past tier-1 promotion — 30 calls — without stepping. The episode
+        // has a decision cap of 100, so a warm-up that stepped this many times
+        // would run it out and throw. See the remarks.
         for (var i = 0; i < 300; i++)
         {
             var warm = new WorldView(in env.World.State, env.World.Collision);

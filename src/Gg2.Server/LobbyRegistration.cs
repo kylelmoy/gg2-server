@@ -43,7 +43,7 @@ public readonly record struct LobbyServerInfo
 /// <c>Scripts/GameServer/sendLobbyRegistration.gml</c> and
 /// <c>sendLobbyUnreg.gml</c>.
 /// <para>
-/// ⚠️ <b>BIG-ENDIAN, and it is the only big-endian thing in this project.</b>
+/// <b>BIG-ENDIAN, and it is the only big-endian thing in this project.</b>
 /// <c>sendLobbyRegistration.gml:9</c> is an explicit
 /// <c>set_little_endian(lobbyBuffer, false)</c>, so every <c>ushort</c> here is
 /// the other way round from the game protocol that <see cref="NetWriter"/>
@@ -52,13 +52,13 @@ public readonly record struct LobbyServerInfo
 /// which is indistinguishable from the server simply not being listed.
 /// </para>
 /// <para>
-/// ⚠️ <b>This is the one thing in the port that talks to a third party</b>, and
+/// <b>This is the one thing in the port that talks to a third party</b>, and
 /// it is off unless <c>--lobby</c> is passed. <c>docs/PROTOCOL.md</c>: "Skip it,
 /// or gate it behind a flag that defaults off." Announcing a private server to a
 /// public list without being asked is not a default anyone should get.
 /// </para>
 /// <para>
-/// ⚠️ <b>Nothing here is verified against the real lobby server.</b> The layout
+/// <b>Nothing here is verified against the real lobby server.</b> The layout
 /// is transcribed from the reference and asserted byte-for-byte, which proves
 /// this port agrees with the GML — not that the GML is what the live service
 /// accepts today. The service is not part of the reference tree and was not
@@ -95,7 +95,7 @@ public static class LobbyRegistration
 
     /// <summary>A fresh random server id.</summary>
     /// <remarks>
-    /// ⚠️ <b>Not drawn from <c>WorldState.Random</c>.</b> That stream is
+    /// <b>Not drawn from <c>WorldState.Random</c>.</b> That stream is
     /// observable simulation — every seeded weapon puts its draw on the wire —
     /// and taking sixteen bytes out of it at startup would shift every later
     /// spread. The reference's <c>irandom</c> here is the menu's RNG, not the
@@ -127,7 +127,7 @@ public static class LobbyRegistration
         WriteUShort(packet, info.PlayerLimit);
         WriteUShort(packet, info.OccupiedSlots);
 
-        // ⚠️ Bots are announced as ZERO, and this port fills itself with them.
+        // Bots are announced as ZERO, and this port fills itself with them.
         // Transcribed rather than corrected: the field's meaning is the lobby's,
         // not ours, and a number the reference never sends is a number no client
         // of that list has ever had to render. Worth revisiting WITH the lobby's
@@ -178,7 +178,7 @@ public static class LobbyRegistration
     /// textual order.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Textual order, not .NET's <c>Guid.ToByteArray()</c> order.</b> A
+    /// <b>Textual order, not .NET's <c>Guid.ToByteArray()</c> order.</b> A
     /// .NET <see cref="Guid"/> byte-reverses its first three groups, so parsing
     /// these through <c>Guid</c> would put four bytes in the wrong places and
     /// the lobby would never recognise the message type. The same trap

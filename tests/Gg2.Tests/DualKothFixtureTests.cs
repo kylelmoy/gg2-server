@@ -10,18 +10,17 @@ namespace Gg2.Tests;
 /// map and no fixture.
 /// </summary>
 /// <remarks>
-/// <b>Recorded 2026-08-27: three soldiers a side on <c>dkoth_atalia</c></b>,
-/// spawn-anchored by the map-reload recipe, with the teams forced <em>after</em>
-/// the reload.
+/// Three soldiers a side on <c>dkoth_atalia</c>, spawn-anchored by the
+/// map-reload recipe, with the teams forced <em>after</em> the reload.
 /// <para>
-/// ⚠️ <b>Every one of DKotH's rules was gated by unit tests alone until now</b>
-/// (<c>DualKothTests</c>), and its rules are the ones most easily got backwards:
-/// the clocks are <b>crossed</b> — <c>redTimer</c> runs down while <em>blue's</em>
-/// hill is red's, so a team wins by holding the enemy's hill — both hills start
-/// owned by their own team, and taking one locks your own.
+/// DKotH's rules are the ones most easily got backwards: the clocks are
+/// <b>crossed</b> — <c>redTimer</c> runs down while <em>blue's</em> hill is
+/// red's, so a team wins by holding the enemy's hill — both hills start owned
+/// by their own team, and taking one locks your own. <c>DualKothTests</c> gates
+/// these at the unit level; this fixture gates them end to end.
 /// </para>
 /// <para>
-/// ✅ <b>It frames to the last byte with two control points.</b> The
+/// <b>It frames to the last byte with two control points.</b> The
 /// control-point block carries <b>no count prefix</b>, so a reader rebuilds the
 /// points from the map in the same order or every update after the first is
 /// misframed; <c>koth_valley</c> proved that for one point, and this is the
@@ -64,7 +63,7 @@ public sealed class DualKothFixtureTests
         Assert.Equal("dkoth_atalia", trace.Header.Map);
         Assert.Equal(GameMode.DualKingOfTheHill, shape.GameMode);
 
-        // ⚠️ The number the framing depends on, and the reader takes it from the
+        // The number the framing depends on, and the reader takes it from the
         // map rather than from the wire.
         Assert.Equal(2, shape.ControlPointCount);
 
@@ -72,7 +71,7 @@ public sealed class DualKothFixtureTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The gate this recording exists for: DKotH never sends
+    /// <b>The gate this recording exists for: DKotH never sends
     /// <c>UNLOCKCP</c>, and KotH always does.</b>
     /// </summary>
     /// <remarks>
@@ -80,8 +79,7 @@ public sealed class DualKothFixtureTests
     /// (docs/SIMULATION.md, "Settled: Dual King of the Hill"): a KotH hill is
     /// unlocked by <c>KothHUD</c> calling <c>doEventUnlockCP</c>, and DKotH's
     /// hills unlock themselves in their own Step, which runs before the HUD's, so
-    /// nothing is broadcast. **Until this recording that was a reading of the
-    /// reference with no evidence behind it.**
+    /// nothing is broadcast.
     /// <para>
     /// The KotH fixture is the control, and it is what makes this assertion mean
     /// something: without it, "no <c>UNLOCKCP</c>" is equally well explained by a
@@ -99,7 +97,7 @@ public sealed class DualKothFixtureTests
     }
 
     /// <summary>
-    /// ✅ <b>Both hills start owned by their own team</b>, which is
+    /// <b>Both hills start owned by their own team</b>, which is
     /// <c>DKothHUD</c>'s Create event rather than <c>User Event 0</c>.
     /// </summary>
     /// <remarks>
@@ -127,7 +125,7 @@ public sealed class DualKothFixtureTests
     /// recording.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Without this, "it framed" is equally consistent with a reader that
+    /// <b>Without this, "it framed" is equally consistent with a reader that
     /// never looked at the control-point block.</b> The block has no count prefix
     /// and no length, so the only thing standing between a correct reader and a
     /// desynchronised one is the number it took from the map — and a wrong

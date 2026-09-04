@@ -12,12 +12,10 @@ namespace Gg2.Tests;
 /// <b>Why this exists.</b> `gg2-nav-gen` built the sticky-jump edge fan on a
 /// <em>derived</em> impulse (<c>NAV_SJ_IMPULSE = 10</c>, giving
 /// <c>NAV_JUMP_V0 + NAV_SJ_IMPULSE = 18.3</c> px/tick and a claimed ~310 px
-/// apex) and flagged it as the one thing to measure before trusting the edges to
-/// a bot — citing its own history, where the rocket jump's derived number
-/// promised 276 px, delivered 206, and every offline check stayed green while
-/// the follower blacklisted the edges.
+/// apex), flagged as the one thing to measure before trusting the edges to a
+/// bot.
 /// <para>
-/// ⚠️ <b>It does not need the live game.</b> This port's mine and explosion
+/// <b>It does not need the live game.</b> This port's mine and explosion
 /// physics are measured exact against the engine (phase 5, nine oracles), so the
 /// manoeuvre can be flown here and read off directly.
 /// </para>
@@ -51,10 +49,9 @@ public sealed class MineJumpTests
     {
         var world = ScenarioWorld.Load(map, 1, ReferenceTree.IncludedFiles, null);
 
-        // ⚠️ A real spawn point, not a coordinate. The first draft of this used
-        // (500, 850) on gg_debug and put the demoman inside terrain, where it
-        // sat at terminal velocity going nowhere and the whole manoeuvre read as
-        // "nothing happened". Same lesson as docs/ENV.md's sampled placement.
+        // A real spawn point, not a coordinate: an arbitrary point can land the
+        // demoman inside terrain, sitting at terminal velocity going nowhere.
+        // Same lesson as docs/ENV.md's sampled placement.
         var slot = world.PlaceAtSpawn(PlayerClass.Demoman, Team.Red, 0);
 
         world.Drive(slot, null);
@@ -67,7 +64,7 @@ public sealed class MineJumpTests
         {
             0 => PlayerInput.FromAim(PlayerKeys.Attack, Down, 100),
 
-            // ⚠️ Jump and detonate on ONE tick, and that is the manoeuvre.
+            // Jump and detonate on ONE tick, and that is the manoeuvre.
             // Character.events/Begin Step.xml runs its jump branch (line 108)
             // BEFORE its right-click branch (line 137), so `vspeed =
             // -jumpStrength` is already in place when the blast's motion_add
@@ -100,14 +97,14 @@ public sealed class MineJumpTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The launch is -14.460 px/tick, and it is the same on every map.</b>
+    /// <b>The launch is -14.460 px/tick, and it is the same on every map.</b>
     /// </summary>
     /// <remarks>
     /// A mine fired straight down settles at the demoman's feet, so the geometry
     /// that decides the impulse is the character's own and not the map's. Four
     /// maps agreeing to three decimals is what says so.
     /// <para>
-    /// ⚠️ <b>Pinned exactly, because a generator is costing arcs against it.</b>
+    /// <b>Pinned exactly, because a generator is costing arcs against it.</b>
     /// If this moves, `gg2-nav-gen`'s sticky-jump envelope is stale and every
     /// type-7 edge it has emitted needs regenerating — that is the whole reason
     /// the number is written down rather than merely bounded.
@@ -126,7 +123,7 @@ public sealed class MineJumpTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The unobstructed apex is 193.6 px, not the ~310 px the generator
+    /// <b>The unobstructed apex is 193.6 px, not the ~310 px the generator
     /// assumed.</b>
     /// </summary>
     /// <remarks>
@@ -137,7 +134,7 @@ public sealed class MineJumpTests
     /// <see cref="ClassStats.RocketJumpGravity"/> and the apex is
     /// <c>v² / 2g</c> — the same arithmetic <c>RocketModel</c> uses.
     /// <para>
-    /// ⚠️ <b>This is a finding for `gg2-nav-gen`, not a bug here.</b> Its
+    /// <b>This is a finding for `gg2-nav-gen`, not a bug here.</b> Its
     /// <c>NAV_SJ_IMPULSE = 10</c> was derived, it says so, and it asked for this
     /// number before its edges were trusted to a bot. The answer is that the
     /// envelope is about 60% too generous, so some fraction of its 6,497 edges

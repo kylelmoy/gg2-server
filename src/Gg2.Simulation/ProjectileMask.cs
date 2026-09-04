@@ -9,8 +9,8 @@ namespace Gg2.Simulation;
 /// </summary>
 /// <remarks>
 /// <b>The two primitives disagree about the same pair of instances, and the
-/// split is measured</b> (2026-08-27, <c>tools/sample-rotated-mask.js</c>,
-/// nine sprites by eighteen angles):
+/// split is measured</b> (<c>tools/sample-rotated-mask.js</c>, nine sprites by
+/// eighteen angles):
 /// <list type="bullet">
 /// <item><c>distance_to_object</c> — every splash radius and its falloff — is
 /// computed from the <b>bounding boxes</b>, rotated or not, with the
@@ -22,14 +22,14 @@ namespace Gg2.Simulation;
 /// this port never noticed.</item>
 /// </list>
 /// <para>
-/// ⚠️ <b>Rotated, the box is not a small over-estimate.</b> A <c>Shot</c> at 45°
+/// <b>Rotated, the box is not a small over-estimate.</b> A <c>Shot</c> at 45°
 /// has 25 opaque pixels inside a 169-pixel box, and the Scattergun spreads every
 /// pellet by <c>random(15) - 7.5</c>, so diagonal pellets are the normal case.
 /// Measured against the fixture, treating the box as solid — what this port did
 /// until now — answers <b>91.5%</b> of 310,194 sampled pixels correctly.
 /// </para>
 /// <para>
-/// ✅ <b>There is no pixel art in any of this, and that is read from the source
+/// <b>There is no pixel art in any of this, and that is read from the source
 /// rather than inferred.</b> All nine projectile sprites declare
 /// <c>RECTANGLE</c> as their mask shape in <c>Sprites/</c>, with MANUAL, AUTO or
 /// FULL bounds — so the mask is exactly the sprite's bbox rectangle and the test
@@ -47,7 +47,7 @@ namespace Gg2.Simulation;
 /// box alone — what this port did until now — is right on 91.5%.
 /// </para>
 /// <para>
-/// ⚠️ <b>Every sample was taken at an INTEGER position</b>, so which coordinate
+/// <b>Every sample was taken at an INTEGER position</b>, so which coordinate
 /// the pixel grid hangs off is not measured. It is anchored on
 /// <see cref="CollisionWorld.RoundPosition"/> here because that is what
 /// <see cref="Aabb.ForRotatedSprite"/> does, and a mask that did not share the
@@ -70,7 +70,7 @@ public static class ProjectileMask
             // Scaled like ForRotatedSprite's corners, so a mirrored sprite's
             // source rectangle is the mirrored one.
             //
-            // ⚠️ Only the Stab is ever mirrored, and no sample covers it: the
+            // Only the Stab is ever mirrored, and no sample covers it: the
             // probe left image_xscale at 1. Ordered rather than assumed
             // positive so a negative scale cannot silently produce an empty
             // rectangle that answers "never touching anything".
@@ -90,7 +90,7 @@ public static class ProjectileMask
             AnchorX = CollisionWorld.RoundPosition(projectile.X);
             AnchorY = CollisionWorld.RoundPosition(projectile.Y);
 
-            // ⚠️ The reported box is part of the answer, not just a broad phase.
+            // The reported box is part of the answer, not just a broad phase.
             // GM8 never reports a mask pixel outside the box it also reports
             // (RotatedMaskSampleTests.ARotatedBoxOverStatesItsMask asserts that
             // over every sample), and the two are rounded by *different* rules —
@@ -168,7 +168,7 @@ public static class ProjectileMask
     /// <c>BubbleHitProjectiles</c>), and a pellet arriving at one is rotated to
     /// its heading — so the box answered yes for pairs that never touched.
     /// <para>
-    /// ⚠️ <b>Both boxes are the broad phase, and their intersection bounds the
+    /// <b>Both boxes are the broad phase, and their intersection bounds the
     /// scan.</b> Neither mask reaches outside its own box, so a pixel outside
     /// either box cannot be in both masks — which is what makes walking only the
     /// overlap correct rather than merely cheaper.

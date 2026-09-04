@@ -10,7 +10,7 @@ namespace Gg2.Tests;
 /// press in the bot layer that has to ask.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>Every fixture here was swept for rather than chosen</b>, because the
+/// <b>Every fixture here was swept for rather than chosen</b>, because the
 /// three cases this distinguishes look identical from a map screenshot: ground
 /// that continues, ground that stops, and a solid that is not ground at all.
 /// A sweep of every floor row on <c>ctf_truefort</c> found 4,528 pit-edged spots,
@@ -26,7 +26,7 @@ public sealed class BotStepTests(ITestOutputHelper output)
     /// A ledge: the ground continues to the right and stops to the left.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The pit floor is <b>216px</b> below — asserted, so the refusal is known
+    /// The pit floor is <b>216px</b> below — asserted, so the refusal is known
     /// to be a real gap rather than a near miss of the 28px tolerance. A mutation
     /// that widened <see cref="BotConstants.EngageDrop"/> would have to widen it
     /// nearly eightfold before this stopped biting.
@@ -53,7 +53,7 @@ public sealed class BotStepTests(ITestOutputHelper output)
 
     /// <summary>A character of a class, put exactly where asked.</summary>
     /// <remarks>
-    /// ⚠️ <c>ScenarioWorld.Place</c> snaps downward to a nav node, so the
+    /// <c>ScenarioWorld.Place</c> snaps downward to a nav node, so the
     /// coordinates are overwritten afterwards: these fixtures are geometry the
     /// sweep found, and none of them is a node's own stand position.
     /// </remarks>
@@ -104,7 +104,7 @@ public sealed class BotStepTests(ITestOutputHelper output)
     /// A step DOWN to a lower ledge still reads as safe.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The drop tolerance is what makes this useful rather than merely
+    /// <b>The drop tolerance is what makes this useful rather than merely
     /// safe.</b> The question is not "can the bot get there" — that is
     /// <c>navFindPath</c>'s, answered against the graph — but only "does the
     /// ground continue", so a bot must be willing to step off a kerb. Without the
@@ -170,7 +170,7 @@ public sealed class BotStepTests(ITestOutputHelper output)
     /// Only <c>Obstacle</c> counts — a team gate is neither wall nor floor.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The reference asks <c>place_meeting(x, y, Obstacle)</c> and not
+    /// <b>The reference asks <c>place_meeting(x, y, Obstacle)</c> and not
     /// <c>place_free</c>, and names the object for a reason its own comment
     /// gives: <c>place_free</c> reads GM8's <c>solid</c> flag and the game toggles
     /// that flag underneath itself, so what it answers depends on where in the
@@ -211,11 +211,11 @@ public sealed class BotStepTests(ITestOutputHelper output)
     /// ledge to reach one.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>This is the only press in the bot layer that no route validated.</b>
+    /// <b>This is the only press in the bot layer that no route validated.</b>
     /// Everything else that moves a bot sideways is either an edge the nav
     /// generator proved or a single step of back-off inside its own blast radius.
     /// <para>
-    /// ⚠️ The window is narrow by construction and the fixture has to sit inside
+    /// The window is narrow by construction and the fixture has to sit inside
     /// it: the hold applies within <c>ClassRange</c> (200 for a pyro) and the
     /// close-in step fires beyond <c>BOT_FLAME_REACH</c> (165), so the enemy has
     /// to be in a 35px band. 180px, either side of the ledge.

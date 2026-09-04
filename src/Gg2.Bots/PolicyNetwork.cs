@@ -13,15 +13,13 @@ namespace Gg2.Bots;
 /// the output block; **no input normalisation**, the observation goes in as
 /// <c>ObservationWriter</c> writes it.
 /// <para>
-/// ⚠️ <b>This reopens <c>docs/ENV.md</c>'s "no ML runtime, no inference path, no
-/// weights format", deliberately.</b> That entry was written before a policy
-/// existed. What it was protecting against — this repo becoming a second source
-/// of truth about what a checkpoint is — is handled by reading the trainer's own
-/// file rather than defining one, and by refusing any file whose stamp is not
-/// this build's.
+/// <b>No weights format lives in this repo.</b> The risk that would guard against
+/// — this repo becoming a second source of truth about what a checkpoint is — is
+/// handled by reading the trainer's own file rather than defining one, and by
+/// refusing any file whose stamp is not this build's.
 /// </para>
 /// <para>
-/// ⚠️ <b>Nothing here draws from <c>WorldState.Random</c></b> and nothing here is
+/// <b>Nothing here draws from <c>WorldState.Random</c></b> and nothing here is
 /// in <c>SIM_UUID</c>. A policy is a bot, and this project's bots are its own —
 /// the observation layout it consumes is stamped, and that is the part that must
 /// not drift.
@@ -73,19 +71,18 @@ public sealed class PolicyNetwork
 
     /// <summary>Ticks the trainer held each decision for.</summary>
     /// <remarks>
-    /// ⚠️ <b>Carried by the checkpoint because a policy trained at one repeat is a
-    /// different policy at another.</b> It decides how often <see cref="PolicyBot"/>
+    /// <b>Carried by the checkpoint because a policy trained at one repeat is a
+    /// different policy at another.</b> It decides how often the controller
     /// re-runs the network, and a bot that ran it every tick would be acting on a
     /// cadence the policy never saw.
     /// </remarks>
     public int ActionRepeat { get; }
 
-    /// <summary>The simulation stamp this policy was trained against.</summary>
     /// <summary>
     /// The simulation stamp this checkpoint was TRAINED against.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Not necessarily this build’s — see the <c>ignoreSimulationStamp</c>
+    /// Not necessarily this build's — see the <c>ignoreSimulationStamp</c>
     /// argument to <see cref="Load(string, bool)"/>. Compare it against
     /// <c>SimulationStamp.Uuid</c> before trusting anything a policy decides.
     /// </remarks>
@@ -95,13 +92,13 @@ public sealed class PolicyNetwork
     /// Loads a checkpoint and refuses it unless it belongs to this build.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Every check is a refusal, never a warning.</b> The <c>PROTOCOL_UUID</c>
+    /// <b>Every check is a refusal, never a warning.</b> The <c>PROTOCOL_UUID</c>
     /// idiom this project already uses: a policy running against a different
     /// observation layout, action encoding or simulation is not slightly wrong, it
     /// is acting on numbers that do not mean what it learned they meant, and it
     /// should find out in the first millisecond.
     /// <para>
-    /// ⚠️ <b>These checks are also what makes <see cref="NpyFile.ReadStrings"/>'s
+    /// <b>These checks are also what makes <see cref="NpyFile.ReadStrings"/>'s
     /// narrow pickle scan safe.</b> A scan that locked on to the wrong bytes
     /// produces metadata that fails them.
     /// </para>
@@ -135,15 +132,15 @@ public sealed class PolicyNetwork
 
         if (!string.Equals(simulationUuid, SimulationStamp.Uuid, StringComparison.Ordinal))
         {
-            // ⛔ THE OVERRIDE DOES NOT MAKE THE POLICY VALID, it makes the refusal
-            // the caller’s decision. The stamp says this checkpoint was trained
-            // against a different simulation; whether that difference can REACH the
-            // maps being played is a question this type cannot answer and the caller
-            // sometimes can. See Gg2.Host’s --policy-ignore-stamp, which exists for
+            // THE OVERRIDE DOES NOT MAKE THE POLICY VALID, it makes the refusal the
+            // caller's decision. The stamp says this checkpoint was trained against
+            // a different simulation; whether that difference can REACH the maps
+            // being played is a question this type cannot answer and the caller
+            // sometimes can. See Gg2.Host's --policy-ignore-stamp, which exists for
             // exactly one case: a simulation change confined to a feature no shipped
             // map contains.
             //
-            // ⚠️ It stays an EXCEPTION by default and an explicit argument to bypass,
+            // It stays an EXCEPTION by default and an explicit argument to bypass,
             // because a flag that defaults to lenient is a guard nobody has.
             if (!ignoreSimulationStamp)
             {
@@ -233,24 +230,21 @@ public sealed class PolicyNetwork
         return Load(file, ignoreSimulationStamp);
     }
 
-    /// <summary>
-    /// Runs the network and writes the greedy index of each head.
-    /// </summary>
-    /// <remarks>
-    /// ⚠️ <b>Argmax per head, never over the product.</b> The heads are
-    /// independent categoricals — that is what the factorisation means — and a
-    /// single argmax over 27 logits would pick one head's index and leave the rest
-    /// at zero, which is a legal-looking action nobody chose.
-    /// <para>
-    /// ⚠️ <b>No allocation.</b> This runs per bot per decision inside a match, and
-    /// the scratch buffers are the instance's.
-    /// </para>
-    /// </remarks>
     /// <summary>The raw output block, for a test that compares against the trainer.</summary>
     /// <remarks>
-    /// ⚠️ Exposed so the cross-language gate can compare LOGITS rather than only
-    /// the argmax. Two implementations can agree on every head and still differ,
-    /// and the difference is what says whether the agreement is robust or lucky.
+    /// <b>Argmax per head, never over the product.</b> The heads are independent
+    /// categoricals — that is what the factorisation means — and a single argmax
+    /// over 27 logits would pick one head's index and leave the rest at zero,
+    /// which is a legal-looking action nobody chose.
+    /// <para>
+    /// <b>No allocation.</b> This runs per bot per decision inside a match, and
+    /// the scratch buffers are the instance's.
+    /// </para>
+    /// <para>
+    /// Exposed so the cross-language gate can compare LOGITS rather than only the
+    /// argmax. Two implementations can agree on every head and still differ, and
+    /// the difference is what says whether the agreement is robust or lucky.
+    /// </para>
     /// </remarks>
     public ReadOnlySpan<float> Logits(ReadOnlySpan<float> observation)
     {
@@ -282,7 +276,7 @@ public sealed class PolicyNetwork
 
             Dense(current, _weights[layer], _biases[layer], destination);
 
-            // ReLU on the hidden layers only; the output block is logits.
+            // ReLU on hidden layers only; the output block is logits.
             if (layer < _weights.Length - 1)
             {
                 for (var i = 0; i < destination.Length; i++)

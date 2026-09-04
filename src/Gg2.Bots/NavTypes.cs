@@ -18,7 +18,7 @@ public enum NavEdgeType
     DoubleJump = 5,
 
     /// <summary>
-    /// ⚠️ An arc that only exists because the bot fires a rocket at its own feet
+    /// An arc that only exists because the bot fires a rocket at its own feet
     /// on the tick it jumps — <c>botInputUpdate.gml</c> negotiates the trigger
     /// and the aim for it, which is the one place a bot's combat and navigation
     /// halves are not independent.
@@ -32,7 +32,7 @@ public enum NavEdgeType
 /// What a node or edge asks about the traveller. <c>NAV_GATE_*</c>.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>Gates are a per-query cost and are deliberately not baked into the
+/// <b>Gates are a per-query cost and are deliberately not baked into the
 /// graph</b> — the answer depends on who is asking, so one graph serves both
 /// teams, carriers and non-carriers alike. See
 /// <see cref="NavGraph.GatePassable"/>.

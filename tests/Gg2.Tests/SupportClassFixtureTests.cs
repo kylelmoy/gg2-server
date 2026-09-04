@@ -10,11 +10,11 @@ namespace Gg2.Tests;
 /// The two recordings of the three classes the port has no weapons for.
 /// </summary>
 /// <remarks>
-/// <b>Recorded 2026-08-26, and the first fixtures in the project containing a
-/// medic, a pyro or an engineer at all.</b> Every earlier recording was scout,
-/// soldier and demoman — <c>reference-ctf_truefort-combat.trace</c> has a medic
-/// who leaves on tick 13 — so three of the nine classes had never been on the
-/// wire here. `docs/PARITY.md` has the recipe and the history.
+/// <b>The first fixtures in the project containing a medic, a pyro or an
+/// engineer at all.</b> Every earlier recording was scout, soldier and demoman
+/// — <c>reference-ctf_truefort-combat.trace</c> has a medic who leaves on tick
+/// 13 — so three of the nine classes had never been on the wire here.
+/// `docs/PARITY.md` has the recipe.
 /// <para>
 /// The recipe is the existing one with one change: the bots are forced to a
 /// fixed 2 medic / 2 pyro / 2 engineer roster rather than left to
@@ -104,14 +104,14 @@ public sealed class SupportClassFixtureTests
     /// character can only be anchored from a quantised broadcast position
     /// (docs/PARITY.md).
     /// <para>
-    /// ⚠️ <c>reference-ctf_truefort-closedcombat.trace</c> does <em>not</em> have
+    /// <c>reference-ctf_truefort-closedcombat.trace</c> does <em>not</em> have
     /// this property outright — its slot 6 never spawns — but that ghost is
     /// last observed at t21, 781 ticks before the anchor, which is exactly the
     /// case <see cref="FixtureAnchors.LastExactAnchor"/> admits. This one is
     /// anchored with no exception at all, by t774.
     /// </para>
     /// <para>
-    /// ⚠️ And note the wave is <em>staggered</em>. The reference respawns on a
+    /// And note the wave is <em>staggered</em>. The reference respawns on a
     /// timer, so reloading the map does not produce one burst: these six spawn
     /// across nearly five hundred ticks. A "spawns within 200 ticks of the
     /// first" heuristic — which the closedcombat tests used until the
@@ -148,7 +148,7 @@ public sealed class SupportClassFixtureTests
     /// as each weapon lands.
     /// </para>
     /// <para>
-    /// ⚠️ It is nonetheless a real weapon gate already, in one direction: a
+    /// It is nonetheless a real weapon gate already, in one direction: a
     /// knockback the port does not apply moves a character, so the window closes
     /// the moment one of these weapons pushes somebody. That it survives 412
     /// ticks says the three classes spent that long shooting things that do not
@@ -170,16 +170,13 @@ public sealed class SupportClassFixtureTests
         var firstBad = after.Length == 0 ? ticks[^1].Index : after.Min(m => m.Tick);
         var exact = firstBad - anchor.Value;
 
-        // 531 today, t774 to t1305. It was 412 until the engineer's Shotgun
-        // landed — seventy-seven ticks bought purely by pellets shoving people
-        // the port previously did not shove, which is the clearest evidence in
-        // the project that a weapon's *knockback* is part of the trajectory and
-        // not just its damage — and 489 until a rotated projectile's precise
-        // mask landed (ProjectileMask), which bought forty-two more the same
-        // way: flames and pellets that stopped touching people they were never
-        // touching.
+        // 531 today, t774 to t1305. Each implemented weapon that pushes people —
+        // the engineer's Shotgun, then a rotated projectile's precise mask
+        // (ProjectileMask) — extended this window, which is the clearest
+        // evidence in the project that a weapon's *knockback* is part of the
+        // trajectory and not just its damage.
         //
-        // ⚠️ Meant to be raised, and it will move for a reason the other
+        // Meant to be raised, and it will move for a reason the other
         // fixtures' bounds do not have: implementing any of these three weapons
         // changes what the port does to everybody's trajectory here.
         Assert.True(
@@ -207,16 +204,13 @@ public sealed class SupportClassFixtureTests
     /// the closed one is <b>36 weapon fires from the first tick</b> and an intel
     /// capture, against a recording that opens with everyone in their base.
     /// <para>
-    /// The numbers are written down so an improvement is visible, and one has
-    /// happened: it replays with <c>|dx|</c> max <b>10</b> / p99 <b>9</b> and
-    /// <c>|dy|</c> max 166 / p99 <b>17</b> wire units over ~1,157 comparisons.
-    /// When those numbers were first written they were max 25 / p99 13 and max
-    /// 166 / p99 30, and the difference is measured rather than guessed:
-    /// <b>disabling the engineer's Shotgun reproduces the old numbers
-    /// exactly</b> (max |dx| 25, p99 |dy| 30). They were recorded before it
-    /// landed and never re-measured.
+    /// The numbers are written down so a change is visible: it replays with
+    /// <c>|dx|</c> max <b>10</b> / p99 <b>9</b> and <c>|dy|</c> max 166 / p99
+    /// <b>17</b> wire units over ~1,157 comparisons. Disabling the engineer's
+    /// Shotgun reproduces max |dx| 25 / p99 |dy| 30 instead, which isolates how
+    /// much of this bound is that weapon's knockback.
     /// <para>
-    /// ⚠️ <b>So this is the second fixture and the second metric on which a
+    /// <b>So this is the second fixture and the second metric on which a
     /// weapon's <em>knockback</em> turns out to be part of the trajectory</b> —
     /// the Shotgun moved <see cref="TheSupportClassesTrajectoriesAreExactFromTheirSpawnAnchors"/>
     /// from 412 to 489 ticks and it moves this p99 from 30 to 17.
@@ -245,13 +239,13 @@ public sealed class SupportClassFixtureTests
         // 9 and 17 today, against 15 and 25 — tightened from 30 and 60, which
         // the port had outgrown by a factor of three.
         //
-        // ⚠️ These bite, and that is measured rather than assumed: switching
+        // These bite, and that is measured rather than assumed: switching
         // the engineer's Shotgun off takes the vertical p99 to **30**, above the
         // ceiling below. At the old bound of 60 the same regression passed.
         Assert.True(report.PercentileXError(99) < 15, $"p99 |dx| {report.PercentileXError(99)} wire units");
         Assert.True(report.PercentileYError(99) < 25, $"p99 |dy| {report.PercentileYError(99)} wire units");
 
-        // ⚠️ And the horizontal MAXIMUM, which is here for a specific bug rather
+        // And the horizontal MAXIMUM, which is here for a specific bug rather
         // than as a general bound: this fixture's pyros fire an unseeded weapon
         // every few ticks, and an unseeded weapon draws from the same stream the
         // alarm stage's spawn-point pick uses. A replay that forced the stream
@@ -271,15 +265,14 @@ public sealed class SupportClassFixtureTests
     /// it</b> while this fixture has a pyro in it.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>This is a ceiling, not a bug, and two sessions in a row guessed
-    /// otherwise.</b> The first hp disagreement after the anchor is t1102, slot
+    /// <b>This is a ceiling, not a bug.</b> The first hp disagreement after the anchor is t1102, slot
     /// 4 — a pyro — and it is 3 hp low because the other pyro's flames have
     /// landed on it. The port applies seven flames between t1096 and t1101; the
     /// reference's nineteen hp of loss is about six. The inputs are identical,
     /// so both pyros pulled the trigger the same number of times: what differs
     /// is which flames connected.
     /// <para>
-    /// ⚠️ <b>And that can never be reproduced.</b>
+    /// <b>And that can never be reproduced.</b>
     /// <c>Flamethrower.events/User Event 1.xml</c> calls <c>randomize()</c> and
     /// broadcasts no seed, so each flame's spread is drawn from an
     /// OS-seeded stream. The spread reaches ±7.2°, which at a flame's range is
@@ -329,8 +322,8 @@ public sealed class SupportClassFixtureTests
     /// reference's before it counts as a divergence.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>This was zero until 2026-08-27, and widening it is a real
-    /// weakening — recorded here rather than buried.</b> Modelling a rotated
+    /// <b>Nonzero, and that is a real weakening — recorded here rather than
+    /// buried.</b> Modelling a rotated
     /// projectile's precise mask (<see cref="ProjectileMask"/>) moved this
     /// recording's charge from t1929 to t1928.
     /// <para>
@@ -352,10 +345,10 @@ public sealed class SupportClassFixtureTests
     /// is 826 ticks past where this trace stopped agreeing at all.
     /// </para>
     /// <para>
-    /// ⚠️ <b>What it cost was the tick-alignment content</b> that
+    /// <b>What it cost was the tick-alignment content</b> that
     /// <see cref="ThePortEmitsNoUberMessageTheReferenceDidNot"/> was written for:
     /// a harness reading uber messages a tick late looks exactly like this drift.
-    /// ✅ <b>That gate has a home again</b> — <see cref="ReplayerAlignmentTests"/>
+    /// <b>That gate has a home again</b> — <see cref="ReplayerAlignmentTests"/>
     /// asks the question of a ten-tick synthetic trace with no drift in it, and
     /// catches the misalignment this file no longer can. What is left here is
     /// still worth having: a shift of more than this many ticks fails, and a rate
@@ -396,15 +389,12 @@ public sealed class SupportClassFixtureTests
     /// does, and never charges twice.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>This used to assert that the port charges at all, and that was a
-    /// mistake — it depended on the medic surviving a pyro.</b> When the
-    /// engineer's Shotgun landed, the port started killing people it previously
-    /// could not, slot 2's medic died to flames at t1742 instead of living to
-    /// t1928, and the assertion failed for a change that improved the fixture on
-    /// every other axis. Whether that medic lives long enough is decided by which
-    /// of the pyro's flames connect, and that is drawn from <c>randomize()</c> and
-    /// never broadcast — see docs/PARITY.md, "an unseeded weapon caps a fixture's
-    /// hp window".
+    /// <b>Asserting that the port charges at all would depend on the medic
+    /// surviving a pyro.</b> Whether that medic lives long enough is decided by
+    /// which of the pyro's flames connect, and that is drawn from
+    /// <c>randomize()</c> and never broadcast — see docs/PARITY.md, "an unseeded
+    /// weapon caps a fixture's hp window" — so a medic death is not itself a
+    /// failure here.
     /// <para>
     /// So what is left is the half with real content and no RNG in it: the port
     /// must not charge <b>early</b>. Charging early cannot be explained by damage
@@ -447,11 +437,11 @@ public sealed class SupportClassFixtureTests
     }
 
     /// <summary>
-    /// ✅ <b>The port emits no uber message the reference did not, on any tick</b>
+    /// <b>The port emits no uber message the reference did not, on any tick</b>
     /// — the first test in the project to use <see cref="Fields.Ubers"/> at all.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b><c>Fields.Ubers</c> existed and nothing exercised it.</b> Found by
+    /// <b><c>Fields.Ubers</c> existed and nothing exercised it.</b> Found by
     /// auditing the replayer's tick alignment after the control-point comparison
     /// turned out to be reading a tick late (docs/PARITY.md, "the capture meter
     /// was compared one tick late"): shifting each comparison family by one tick
@@ -465,7 +455,7 @@ public sealed class SupportClassFixtureTests
     /// through a decorator, so the comparison itself never runs.
     /// </para>
     /// <para>
-    /// ⚠️ <b>The direction is deliberate, and it is the same trade that test
+    /// <b>The direction is deliberate, and it is the same trade that test
     /// makes.</b> Whether this fixture's medic lives long enough to charge is
     /// decided by which of a pyro's unseeded flames connect, so a <em>missing</em>
     /// uber is not evidence of anything. An uber the port emits that the
@@ -475,7 +465,7 @@ public sealed class SupportClassFixtureTests
     /// exactly, zero mismatches in either direction.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Both are far outside the trajectory and hp windows</b> (t774 + 489
+    /// <b>Both are far outside the trajectory and hp windows</b> (t774 + 489
     /// and + 328), so a disagreement here would be uninformative — but
     /// <em>agreement</em> across 1,155 ticks of drift is not, and tick alignment
     /// is what this is for.
@@ -490,13 +480,13 @@ public sealed class SupportClassFixtureTests
         var report = new Replayer(new PortedSimulation(MapLoader)) { Compare = Fields.Ubers }
             .Replay(ClosedSupportTrace, trace.Header.Map, ticks, ReplayMode.ClosedLoop, stopAtFirstBadTick: false);
 
-        // ⚠️ BOTH directions, and the weaker version was tried first and
+        // BOTH directions, and the weaker version was tried first and
         // rejected: asserting only "no uber the reference did not send" passes
         // just as well when the comparison is deleted outright, which is how
         // Fields.Ubers came to be unused in the first place. Measured — routing
         // its mismatches to a discarded list fails nothing under the weak
         // assertion and fails this one.
-        // ⚠️ Within the drift tolerance, and see UberDriftTolerance for why that
+        // Within the drift tolerance, and see UberDriftTolerance for why that
         // is not a convenience. A one-tick slip of the single charge shows up
         // here as a PAIR of mismatches — `exp 1 got 0` on the reference's tick
         // and `exp 0 got 1` on the port's — so both halves of that pair are
@@ -522,7 +512,7 @@ public sealed class SupportClassFixtureTests
         Assert.Single(ticks, t => t.Events.Any(m => m.Type == MessageType.UberCharged));
         Assert.Single(ticks, t => t.Events.Any(m => m.Type == MessageType.Uber));
 
-        // ⚠️ The control, and it is the one that was missing. "No mismatches" is
+        // The control, and it is the one that was missing. "No mismatches" is
         // satisfied just as well by a comparison that never runs — which is
         // precisely how Fields.Ubers sat unused. Replay the same trace with the
         // uber messages taken OUT: the port still emits its own, so the

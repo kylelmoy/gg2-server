@@ -12,7 +12,7 @@ namespace Gg2.Tests;
 /// between them: the greeting that makes a client load the plugin, the container
 /// framing in both directions, and which ids are kicked once some are valid.
 /// <para>
-/// ⚠️ <b>The framing is the part with no symptom.</b> A plugin packet's
+/// <b>The framing is the part with no symptom.</b> A plugin packet's
 /// <c>ushort</c> covers the id byte as well as the data, and a client reads
 /// exactly that many bytes before parsing anything else. One off and the client
 /// keeps going, reading the next message from the wrong offset, and reports it
@@ -54,7 +54,7 @@ public sealed class PluginWireTests
     }
 
     /// <summary>
-    /// ⚠️ Required is one byte of advertisement and nothing else — the server
+    /// Required is one byte of advertisement and nothing else — the server
     /// does not verify that a client loaded anything, and neither does the
     /// reference. A test that assumed enforcement would be asserting a promise
     /// the protocol cannot keep.
@@ -117,7 +117,7 @@ public sealed class PluginWireTests
     }
 
     /// <summary>
-    /// ⚠️ With one plugin loaded, id 0 is valid and every other id is not. The
+    /// With one plugin loaded, id 0 is valid and every other id is not. The
     /// kick is unchanged from a server with no plugins; only the boundary moved.
     /// </summary>
     [Fact]
@@ -140,7 +140,7 @@ public sealed class PluginWireTests
     /// are discarded rather than kicked.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>A divergence, deliberately.</b> The reference would have downloaded
+    /// <b>A divergence, deliberately.</b> The reference would have downloaded
     /// and run the plugin's GML on the server too. Kicking instead would punish a
     /// client for loading exactly what this server asked it to load, which is
     /// worse; the startup log names the gap, and <see cref="PluginListTests"/>
@@ -180,7 +180,7 @@ public sealed class PluginWireTests
         Assert.Equal("alice", harness.Server.NameOf(1));
         Assert.Equal("alice2", harness.Server.NameOf(2));
 
-        // ⚠️ The rename is an ORDINARY PLAYER_CHANGENAME, not a plugin packet.
+        // The rename is an ORDINARY PLAYER_CHANGENAME, not a plugin packet.
         // That is the one thing chat_v2 does that a client without the plugin
         // still sees, and it is why the plugin is not purely additive.
         Assert.True(
@@ -215,7 +215,7 @@ public sealed class PluginWireTests
     /// one chat line, byte for byte.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Built here rather than parsed, so the assertion is on the exact bytes a
+    /// Built here rather than parsed, so the assertion is on the exact bytes a
     /// GM8 client reads: the message id, the <c>ushort</c> that covers
     /// <em>id + data</em>, the packet id, then the plugin's own length-prefixed
     /// string. Searching for the subsequence rather than reading from the head

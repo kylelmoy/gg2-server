@@ -9,7 +9,7 @@ namespace Gg2.Tests;
 /// reference's flush, and the flags that tell them apart.
 /// </summary>
 /// <remarks>
-/// ⛔ <b>`GameServerEndStep` is the FIRST End Step of the frame</b>
+/// <b>`GameServerEndStep` is the FIRST End Step of the frame</b>
 /// (docs/TRAPS-SIMULATION.md, "The GameServer is the OLDEST instance"), so
 /// anything appended at or after another object's End Step misses that frame's
 /// flush and ships on the next tick. Most message types sit wholly on one side
@@ -27,14 +27,14 @@ namespace Gg2.Tests;
 /// (post-flush).</item>
 /// </list>
 /// <para>
-/// ⛔ <b>Both of the latter two were wrong, and the suite did not move when they
+/// <b>Both of the latter two were wrong, and the suite did not move when they
 /// were fixed.</b> That is the alarm CLAUDE.md describes — a real behavioural
 /// change that turns nothing red says the paths are ungated. This file is that
 /// gate. It asserts at the point the distinction is <em>made</em>, because by
 /// the time a message reaches the wire the two are indistinguishable.
 /// </para>
 /// <para>
-/// ⚠️ <b>What this does NOT do</b>: it cannot check that the stage
+/// <b>What this does NOT do</b>: it cannot check that the stage
 /// classification itself is right. That came from reading the reference and from
 /// a live measurement, and it lives in docs/PARITY.md, "Which flush a message
 /// rides". This file only gates that the port routes each stage the way that
@@ -53,7 +53,7 @@ public sealed class WireStageTests
     private static CollisionWorld World => _shared ??= new CollisionWorld(Level());
 
     /// <summary>
-    /// A world whose flags have a base. ⚠️ Without one <see cref="Intel.Return"/>
+    /// A world whose flags have a base. Without one <see cref="Intel.Return"/>
     /// silently does nothing — <c>if (!flag.HasBase) return</c> — so a test on a
     /// bare <c>default(WorldState)</c> asserts against an event that was never
     /// raised and passes for the wrong reason.
@@ -90,7 +90,7 @@ public sealed class WireStageTests
     }
 
     /// <summary>
-    /// ⛔ A sentry that dies of damage is an END STEP destruction, so its
+    /// A sentry that dies of damage is an END STEP destruction, so its
     /// message ships on the following tick.
     /// </summary>
     [Fact]
@@ -104,7 +104,7 @@ public sealed class WireStageTests
         // Straight to zero, which only the hp<=0 arm of the End Step can act on.
         state.Sentries[0].Hp = 0;
 
-        // ⚠️ The producer directly, not a whole tick. The stage classification is
+        // The producer directly, not a whole tick. The stage classification is
         // made here, and driving MatchSimulation.Tick only adds setup that can
         // fail for reasons this test is not about.
         Sentries.EndStep(World, ref state, 0, ref events);
@@ -116,11 +116,11 @@ public sealed class WireStageTests
     }
 
     /// <summary>
-    /// ⛔ A sentry destroyed because its owner stopped being an engineer of that
+    /// A sentry destroyed because its owner stopped being an engineer of that
     /// team is a BEGIN STEP destruction, and rides its own tick's flush.
     /// </summary>
     /// <remarks>
-    /// ⚠️ This is the arm that today's flush fix silently made a tick LATE, and
+    /// This is the arm that today's flush fix silently made a tick LATE, and
     /// nothing caught it — <c>Sentry.events/Begin Step.xml:1-3</c> was folded in
     /// with the End Step one because they share a message type.
     /// </remarks>
@@ -145,7 +145,7 @@ public sealed class WireStageTests
     }
 
     /// <summary>
-    /// ⛔ The recovery timer's return is an ALARM-stage append and rides its own
+    /// The recovery timer's return is an ALARM-stage append and rides its own
     /// tick.
     /// </summary>
     /// <remarks>
@@ -158,7 +158,7 @@ public sealed class WireStageTests
         var state = WithFlagBases();
         var events = default(TickEvents);
 
-        // ⚠️ Through ReturnStep, the real alarm-stage caller — NOT Intel.Return
+        // Through ReturnStep, the real alarm-stage caller — NOT Intel.Return
         // directly, which would only assert that passing the default sets the
         // default. The gate has to be on the CALL SITE's choice.
         state.RedIntel.OnField = true;
@@ -173,12 +173,12 @@ public sealed class WireStageTests
     }
 
     /// <summary>
-    /// ⛔ The return that comes out of a dying carrier is an END STEP append, so
+    /// The return that comes out of a dying carrier is an END STEP append, so
     /// it ships on the following tick — <b>behind the PLAYER_DEATH that caused
     /// it</b>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <c>Character.events/Destroy.xml</c> is reached from inside
+    /// <c>Character.events/Destroy.xml</c> is reached from inside
     /// <c>doEventPlayerDeath</c>, which the Character's End Step calls. Before
     /// this was split out, the port broadcast it above the flush — a tick early,
     /// and after 2026-09-02 put PLAYER_DEATH below the flush, <em>ahead</em> of
@@ -190,7 +190,7 @@ public sealed class WireStageTests
         var state = WithFlagBases();
         var events = default(TickEvents);
 
-        // ⚠️ Through Deaths.Kill, the real End Step caller. Calling Intel.Return
+        // Through Deaths.Kill, the real End Step caller. Calling Intel.Return
         // with inEndStep: true would assert nothing except that the parameter is
         // wired to the field — it would stay green if Deaths.Kill stopped passing
         // it, which is the regression that matters.
@@ -219,7 +219,7 @@ public sealed class WireStageTests
     }
 
     /// <summary>
-    /// ⚠️ The two flags are per team and independent, because one tick can carry
+    /// The two flags are per team and independent, because one tick can carry
     /// a recovery-timer return for one flag and a death-driven return for the
     /// other.
     /// </summary>
@@ -243,10 +243,10 @@ public sealed class WireStageTests
     }
 
     /// <summary>
-    /// ⛔ Clearing a tick's events clears the stage flags with them.
+    /// Clearing a tick's events clears the stage flags with them.
     /// </summary>
     /// <remarks>
-    /// ⚠️ A stage flag that survived into the next tick would re-route a message
+    /// A stage flag that survived into the next tick would re-route a message
     /// that had nothing to do with it — and would do so only on the tick after a
     /// death, which is the hardest kind of bug to see. <c>ClearOutputs</c> is
     /// hand-written per field, so this is a real hazard rather than a formality.

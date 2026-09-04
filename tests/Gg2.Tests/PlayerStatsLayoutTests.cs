@@ -86,7 +86,7 @@ public sealed class PlayerStatsLayoutTests
     }
 
     /// <summary>
-    /// ⚠️ The eleven counters are written in <b>serialisation order, which is
+    /// The eleven counters are written in <b>serialisation order, which is
     /// not <see cref="StatIndex"/> order</b>: DOMINATIONS and REVENGE are
     /// skipped and POINTS follows BONUS.
     /// </summary>
@@ -126,7 +126,7 @@ public sealed class PlayerStatsLayoutTests
     }
 
     /// <summary>
-    /// ⚠️ <b>Healing is the one counter with two bytes</b>, and it needs them: a
+    /// <b>Healing is the one counter with two bytes</b>, and it needs them: a
     /// medic passes 255 hit points in the first few seconds of a match.
     /// </summary>
     [Fact]
@@ -138,7 +138,7 @@ public sealed class PlayerStatsLayoutTests
     }
 
     /// <summary>
-    /// ⚠️ <b>A half point rounds on the wire, so a client's scoreboard can read
+    /// <b>A half point rounds on the wire, so a client's scoreboard can read
     /// one point above the host's.</b> The host draws
     /// <c>floor(stats[POINTS])</c> and the client draws what it was sent, which
     /// is <c>write_ubyte</c>'s half-away-from-zero.
@@ -210,8 +210,7 @@ public sealed class PlayerStatsLayoutTests
     /// frames — the control that the counts and the records agree.
     /// </summary>
     /// <remarks>
-    /// ⚠️ This is the message that shipped framed as <b>bodyless</b> until phase
-    /// 6's Arena work. Its counts are what a reader needs to know the length, so
+    /// Its counts are what a reader needs to know the length, so
     /// writing three records behind a count of zero would lose the stream from
     /// there on — and no recording could ever catch it, because none has been
     /// made on an arena map.

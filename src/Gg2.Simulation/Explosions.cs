@@ -79,7 +79,7 @@ public static class Explosions
     /// rocket that somehow reports its own owner as the thing it hit is neither
     /// exploded nor deleted.
     /// <para>
-    /// ⚠️ The guard also reads as nonsense until you know that <b>GML's
+    /// The guard also reads as nonsense until you know that <b>GML's
     /// <c>self</c> is -1</b>. <c>characterHit</c> starts at -1, so on a wall
     /// explosion <c>characterHit.id</c> resolves to the <em>rocket's own</em> id
     /// and the comparison is trivially true. It is not testing the sentinel.
@@ -173,7 +173,7 @@ public static class Explosions
     /// <c>distance_to_object</c> — the rocket's and the generator's.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The three explosions that pop bubbles use three different
+    /// <b>The three explosions that pop bubbles use three different
     /// formulas, and none of them is the one it uses on characters.</b> A
     /// rocket asks <c>distance_to_object &lt; blastRadius * 0.66</c>; a
     /// generator asks <c>distance_to_object &lt; blastRadius</c>, its full 400;
@@ -262,7 +262,7 @@ public static class Explosions
     /// sentry takes, and an enemy-only test.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Unlike the mine's generator arm below it, this one has <b>no
+    /// Unlike the mine's generator arm below it, this one has <b>no
     /// quarter-radius cutoff</b> — a rocket that lands at the very edge of its
     /// blast still scratches a generator, where a stuck mine's outer quarter
     /// does nothing at all.
@@ -318,7 +318,7 @@ public static class Explosions
 
         // (enemy or the owner themselves) and not ubered.
         //
-        // ⚠️ The reference writes `A || B and C`, and **GML gives `&&`, `||` and
+        // The reference writes `A || B and C`, and **GML gives `&&`, `||` and
         // `^^` the same precedence**, left to right — so it means `(A || B) && C`
         // and not the C reading `A || (B && C)`. Under the C reading an ubered
         // enemy would take the full 25.
@@ -369,7 +369,7 @@ public static class Explosions
 
             ref var victim = ref state.Characters[slot];
 
-            // ⚠️ `distance_to_object` takes the **facing-inflated** box, unlike
+            // `distance_to_object` takes the **facing-inflated** box, unlike
             // `place_meeting` two lines away in Projectiles.CollideOne. A
             // left-facing character's box starts two pixels further left, so
             // splash damage in GG2 genuinely depends on which way the victim is
@@ -498,7 +498,7 @@ public static class Explosions
                 victim.AssistTimer = victim.FinishOffTimer;
             }
 
-            // ⚠️ The reference guards this with `if (other.ownerPlayer != id)`,
+            // The reference guards this with `if (other.ownerPlayer != id)`,
             // which compares the shooter's **player** instance with the victim's
             // **character** instance. Those are instances of different objects,
             // so their ids can never be equal and the guard is always true. A
@@ -568,7 +568,7 @@ public static class Explosions
     // The mine's blast. Objects/Projectiles/Mine.events/User Event 2.xml.
     // ======================================================================
     //
-    // ⚠️ It is NOT the rocket's with different numbers, and five things differ
+    // It is NOT the rocket's with different numbers, and five things differ
     // in ways that change who dies:
     //
     //   1. vectorfactor is point_distance(0, 0, sin(rdir), cos(rdir)*0.8) —
@@ -636,13 +636,13 @@ public static class Explosions
             SplashCharactersFromMine(world, ref state, in mine, ref events);
             SplashSentriesFromMine(ref state, in mine);
 
-            // ⚠️ The mine's generator arm keeps the quarter-radius `continue`
+            // The mine's generator arm keeps the quarter-radius `continue`
             // that its character arm has and the rocket's generator arm does
             // not — Mine.events/User Event 2.xml:88.
             SplashGenerator(ref state, in mine, Team.Red, quarterCutoff: true);
             SplashGenerator(ref state, in mine, Team.Blue, quarterCutoff: true);
 
-            // ⚠️ The mine's bubble sweep is the odd one of the three: a plain
+            // The mine's bubble sweep is the odd one of the three: a plain
             // `point_distance(x, y, other.x, other.y)` centre-to-centre rather
             // than `distance_to_object`, and the radius is *widened* by the
             // bubble's own selfPopRadius instead of being scaled down.
@@ -716,7 +716,7 @@ public static class Explosions
 
             var falloff = gap / radius;
 
-            // ⚠️ `and other.splashThreshhold`: a stuck mine has none of this.
+            // `and other.splashThreshhold`: a stuck mine has none of this.
             if (Gml.LessOrEqual(1 - falloff, 0.25) && mine.SplashThreshold)
                 continue;
 
@@ -766,7 +766,7 @@ public static class Explosions
                 victim.MoveStatus = 1;
             }
 
-            // ⚠️ Outside the damage branch, unlike the rocket's — so a
+            // Outside the damage branch, unlike the rocket's — so a
             // team-mate who is only shoved is still flickered.
             victim.DealFlicker();
         }
@@ -851,7 +851,7 @@ public static class Explosions
             victim.AssistTimer = victim.FinishOffTimer;
         }
 
-        // ⚠️ `if (other.ownerPlayer != id ...)` again compares the owner's
+        // `if (other.ownerPlayer != id ...)` again compares the owner's
         // *player* with the victim's *character*, so it is always true — the
         // same reference quirk the rocket's blast has. See DealSplashDamage.
         victim.FinishOffTimer = GameConstants.AssistTime;

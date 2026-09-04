@@ -24,13 +24,9 @@ namespace Gg2.Simulation;
 /// collapse because nothing can cloak yet; they arrive with the spy.
 /// </para>
 /// <para>
-/// ✅ <b>All of <c>serverBuildSentry</c>'s preconditions are modelled</b>,
+/// <b>All of <c>serverBuildSentry</c>'s preconditions are modelled</b>,
 /// including the two that arrived with the map objects they need — the spawn-room
 /// test and <c>onCabinet</c>. See <see cref="CanBuild"/>, which checks both.
-/// ⚠️ <b>This paragraph described them as missing until 2026-09-03</b>, well
-/// after they landed, while the call site it pointed at had already been
-/// corrected: a pointer and its target drifted apart and only the pointer was
-/// read.
 /// </para>
 /// </remarks>
 public static class Sentries
@@ -109,10 +105,9 @@ public static class Sentries
     /// inflation applied <em>before</em> the rotation.
     /// </summary>
     /// <remarks>
-    /// Measured 2026-08-26 (<c>tools/probes/probe-airblast.js</c>): three
-    /// flipped rotations of <c>SentryTurretS</c> all match the pre-rotation
-    /// model and none match the post-rotation <c>Left - 2</c> this method used
-    /// to apply. See <see cref="Aabb.ForRotatedSpriteReported"/>.
+    /// Measured (<c>tools/probes/probe-airblast.js</c>): three flipped
+    /// rotations of <c>SentryTurretS</c> all match the pre-rotation model.
+    /// See <see cref="Aabb.ForRotatedSpriteReported"/>.
     /// </remarks>
     public static Aabb TurretReportedBox(in SentryState sentry) =>
         Aabb.ForRotatedSpriteReported(
@@ -156,14 +151,14 @@ public static class Sentries
     /// cannot ask (spawn room, cabinet — see the class remarks).
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The stock check is equality, not sufficiency</b>:
+    /// <b>The stock check is equality, not sufficiency</b>:
     /// <c>player.object.nutsNBolts == 100</c>, through GML's fuzzy compare. The
     /// regeneration adds 0.1 per tick and clamps at 100, so the value really
     /// does sit at exactly 100 — but an engineer one tick short of full is
     /// refused, not rounded up.
     /// </remarks>
     /// <param name="world">
-    /// The map, for the spawn-room precondition. ⚠️ <b>Null means "no spawn
+    /// The map, for the spawn-room precondition. <b>Null means "no spawn
     /// rooms"</b>, the same convention <see cref="Deaths.Kill"/> uses.
     /// </param>
     public static bool CanBuild(in WorldState state, int slot, CollisionWorld? world = null)
@@ -173,7 +168,7 @@ public static class Sentries
 
         ref readonly var character = ref state.Characters[slot];
 
-        // ⚠️ `collision_point(x, y, SpawnRoom, 0, 0) < 0` — the origin again,
+        // `collision_point(x, y, SpawnRoom, 0, 0) < 0` — the origin again,
         // matching the class-change swap and not the fast respawn. And
         // `!player.object.onCabinet`, which is `place_meeting` and was written
         // by the *previous* tick's End Step, because a build is a client command
@@ -262,13 +257,10 @@ public static class Sentries
     /// turret's birth, and the fall.
     /// </summary>
     /// <remarks>
-    /// The opening guard is the reference's whole three-clause one since phase
-    /// 6 put the player in the state: <c>ownerPlayer.class != CLASS_ENGINEER or
-    /// team != ownerPlayer.team or collision_circle(...)</c>. It used to be
-    /// split, with the class/team clauses applied at the server and replayer
-    /// seams on the tick of the change — one tick earlier than the reference.
-    /// Now all three fire here, on the tick <em>after</em> the change, which is
-    /// the reference's own timing.
+    /// The opening guard is the reference's whole three-clause one:
+    /// <c>ownerPlayer.class != CLASS_ENGINEER or team != ownerPlayer.team or
+    /// collision_circle(...)</c>. All three fire here, on the tick <em>after</em>
+    /// the change, which is the reference's own timing.
     /// </remarks>
     public static void BeginStep(CollisionWorld world, ref WorldState state, int slot, ref TickEvents events)
     {
@@ -285,7 +277,7 @@ public static class Sentries
             || sentry.Team != state.Players[slot].Team
             || AnySentryInCircle(state, sentry.X, sentry.Y + 10, OverlapClearance, slot))
         {
-            // ⚠️ inEndStep: FALSE. This is the Begin Step destruction
+            // inEndStep: FALSE. This is the Begin Step destruction
             // (Sentry.events/Begin Step.xml:1-3), which makes its own tick's
             // flush — unlike the hp<=0 one below.
             ReportDestruction(ref state, slot, ref events,
@@ -332,7 +324,7 @@ public static class Sentries
         // `if (humiliated == 1 and built == 1 and currentWeapon != -1)
         // event_user(1)`, and the user event destroys currentWeapon.
         //
-        // ⚠️ So a humiliated sentry re-creates its turret above and scraps it
+        // So a humiliated sentry re-creates its turret above and scraps it
         // here, every tick, for the whole of the scoreboard — which also means
         // the branch above heals it to full every tick. Both are the
         // reference's; neither is a shortcut.
@@ -439,12 +431,10 @@ public static class Sentries
     /// standing in a gate loses 999 hp and dies in its own End Step.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>This is what an engineer who builds in a doorway gets, and it is
+    /// <b>This is what an engineer who builds in a doorway gets, and it is
     /// the whole of the "built at T, self-destructed at T+1" finding</b> —
-    /// five of them in
-    /// <c>reference-ctf_truefort-closedsentryteam.trace</c>, which the port
-    /// kept alive for as long as the port had no gate event. The build
-    /// preconditions in <see cref="CanBuild"/> say nothing about a gate, so the
+    /// five of them in <c>reference-ctf_truefort-closedsentryteam.trace</c>.
+    /// The build preconditions in <see cref="CanBuild"/> say nothing about a gate, so the
     /// reference accepts the build, broadcasts it, and then kills the gun on
     /// the next tick. See docs/TRAPS-SIMULATION.md, "the sentry's gate
     /// collision".
@@ -459,7 +449,7 @@ public static class Sentries
     /// noone, noone, 0)</c> in a recording.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Any gate, not just the enemy's.</b> Neither event looks at
+    /// <b>Any gate, not just the enemy's.</b> Neither event looks at
     /// <c>team</c>, so a red engineer's sentry dies in a red team gate — three
     /// of the five in that recording are a sentry in its own team's doorway.
     /// And <b>a setup gate is not a gate</b>: <c>ControlPointSetupGate</c>
@@ -501,7 +491,7 @@ public static class Sentries
                 if (!rect.Overlaps(body.Left, body.Right, body.Top, body.Bottom))
                     continue;
 
-                // ⚠️ Once per overlapping gate, exactly as GM8 runs the event
+                // Once per overlapping gate, exactly as GM8 runs the event
                 // once per colliding instance. 999 already kills it, so the
                 // repeat is only visible in hp, which nothing reads again.
                 sentry.Hp -= GateDamage;
@@ -561,7 +551,7 @@ public static class Sentries
         events.SentryDestroyedInEndStep[slot] = inEndStep;
         events.SentryDestructions[slot] = new SentryDestroyedEvent(slot, killer, assistant, source);
 
-        // doEventDestruction.gml:20-24. ⚠️ Not awarded for an owner detonating
+        // doEventDestruction.gml:20-24. Not awarded for an owner detonating
         // their own — and this path is only reached for a *simulated*
         // destruction anyway, which is the same split DESTROY_SENTRY has.
         Scoring.RecordDestruction(ref state, slot, killer);
@@ -590,7 +580,7 @@ public static class Sentries
         {
             ref var projectile = ref state.Projectiles[state.LiveProjectileSlot(i)];
 
-            // ⚠️ The MASK, not the box. A mine in flight carries image_angle
+            // The MASK, not the box. A mine in flight carries image_angle
             // from createShot, and a rotated box is a strict over-estimate — so
             // the box unsticks mines that are not touching the sentry at all.
             // Order does not matter here (the `with` visits every mine, and
@@ -896,7 +886,7 @@ public static class Sentries
                 ref var victim = ref state.Characters[targetSlot];
 
                 // damageAuto -> damageCharacter -> dealDamage.
-                // ⚠️ Credited to the sentry's OWNER, not to the sentry. A
+                // Credited to the sentry's OWNER, not to the sentry. A
                 // sentry belongs to a player and outlives their character, so
                 // the slot here is the one a DESTROY_SENTRY would name.
                 DamageApi.Deal(

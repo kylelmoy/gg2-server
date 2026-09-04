@@ -7,7 +7,7 @@ namespace Gg2.Tests;
 /// <c>--bot-mode</c>: the four shipped brains, reachable and distinguishable.
 /// </summary>
 /// <remarks>
-/// ⛔ <b>These assert the TIERS a mode builds, not that the flag parses.</b> A
+/// <b>These assert the TIERS a mode builds, not that the flag parses.</b> A
 /// mode that is accepted and then builds the same brain as another is exactly
 /// the failure the flag was meant to remove, and a parse test cannot see it —
 /// which is why every case below reads <c>Brain.Tiers</c> and why
@@ -17,7 +17,7 @@ public sealed class BotModeTests
 {
     /// <summary>A checkpoint that loads in THIS build.</summary>
     /// <remarks>
-    /// ⚠️ <c>MintedForThisBuild</c>, not <c>Checkpoint</c>. The checked-in
+    /// <c>MintedForThisBuild</c>, not <c>Checkpoint</c>. The checked-in
     /// fixture is stamp-invalid against this build (<c>docs/ENV.md</c>, "The
     /// checkpoint is a FIXTURE now"), so using it here would mean passing
     /// <c>--policy-ignore-stamp</c> in every case — and a test suite that
@@ -29,12 +29,12 @@ public sealed class BotModeTests
         [.. args, "--policy", PolicyFixture.MintedForThisBuild];
 
     private static BotBrainSpec? BrainOf(params string[] args) =>
-        Program.Parse(args).Bots.Brain;
+        CommandLine.Parse(args).Bots.Brain;
 
     [Fact]
     public void ScriptedIsTheDefaultAndBuildsNoBrainAtAll()
     {
-        // ⚠️ Null is the all-scripted arm, NOT a broken configuration — see
+        // Null is the all-scripted arm, NOT a broken configuration — see
         // BotBrainSpec's remarks. An empty tier list would be the broken one.
         Assert.Null(BrainOf());
         Assert.Null(BrainOf("--bot-mode", "scripted"));
@@ -42,13 +42,11 @@ public sealed class BotModeTests
     }
 
     /// <remarks>
-    /// ⚠️ <b>This assertion was wrong when it was written, 2026-09-02.</b> It read
-    /// <c>Assert.Null(brain.Arbiter)</c> on the reasoning that one tier has
-    /// nothing to choose between — but an arbiter's second job is to GATE, and
-    /// with one tier it still returns -1 once the budget is spent and drops the
-    /// bot to the scripted layer. Search mode therefore had no throttle at all,
-    /// and twelve bots searching on one tick is 12 × ~4,800 µs against a 33,300 µs
-    /// tick. <c>MicroBudgetTests.SingleTierModesAlsoGetABudget</c> is the gate.
+    /// An arbiter is required even with a single tier: its second job is to GATE,
+    /// returning -1 once the budget is spent and dropping the bot to the scripted
+    /// layer. Without it, search mode has no throttle at all, and twelve bots
+    /// searching on one tick is 12 × ~4,800 µs against a 33,300 µs tick.
+    /// <c>MicroBudgetTests.SingleTierModesAlsoGetABudget</c> is the gate.
     /// </remarks>
     [Fact]
     public void SearchBuildsOneSearchTierWithABudget()
@@ -72,12 +70,12 @@ public sealed class BotModeTests
     /// Tiered builds both, search first, and defaults its own budget.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>Order is the arbiter's whole input</b> — most expensive first, so a
+    /// <b>Order is the arbiter's whole input</b> — most expensive first, so a
     /// server under pressure drops to the policy before it drops to the scripted
     /// layer. A test that only counted two tiers would pass with them reversed,
     /// which is a different and worse bot.
     /// <para>
-    /// ⚠️ The budget default is a <em>stated guess</em>, not a measured result —
+    /// The budget default is a <em>stated guess</em>, not a measured result —
     /// see <see cref="DecisionQuotaArbiter.DefaultTieredBudgetMicroseconds"/>,
     /// which records what would show it wrong. This pins that the default is
     /// applied, not that it is right.
@@ -110,7 +108,7 @@ public sealed class BotModeTests
     }
 
     /// <summary>
-    /// ⛔ The control: no two modes build the same brain.
+    /// The control: no two modes build the same brain.
     /// </summary>
     /// <remarks>
     /// Every assertion above would still pass if two modes were wired to the same
@@ -133,7 +131,7 @@ public sealed class BotModeTests
     }
 
     /// <remarks>
-    /// ⚠️ The arbiter is no longer what tells the modes apart — every mode with a
+    /// The arbiter is no longer what tells the modes apart — every mode with a
     /// controller has one now — so the tier list is doing all the work. It is kept
     /// in the shape because a mode that lost its budget would still be a
     /// difference worth failing on.
@@ -146,7 +144,7 @@ public sealed class BotModeTests
 
     /// <summary>Numbers and names name the same four modes.</summary>
     /// <remarks>
-    /// ⚠️ The numbers are contract: a bench harness sweeping 0..3 asks for each
+    /// The numbers are contract: a bench harness sweeping 0..3 asks for each
     /// arm in turn, so renumbering <see cref="BotMode"/> would silently change
     /// what it measures.
     /// </remarks>
@@ -182,19 +180,19 @@ public sealed class BotModeTests
     [InlineData("tiered")]
     public void APolicyModeWithoutACheckpointIsRefused(string mode)
     {
-        var thrown = Assert.Throws<ArgumentException>(() => Program.Parse(["--bot-mode", mode]));
+        var thrown = Assert.Throws<ArgumentException>(() => CommandLine.Parse(["--bot-mode", mode]));
 
         Assert.Contains("--policy", thrown.Message, StringComparison.Ordinal);
     }
 
     /// <summary>
-    /// ⛔ A checkpoint handed to a mode that cannot consult it is REFUSED, not
+    /// A checkpoint handed to a mode that cannot consult it is REFUSED, not
     /// ignored.
     /// </summary>
     /// <remarks>
     /// The same rule the multi-tier case has always applied: a checkpoint loaded,
     /// printed and never consulted is a server saying it is doing something it is
-    /// not. ⚠️ This is the assertion most likely to be "relaxed" by someone who
+    /// not. This is the assertion most likely to be "relaxed" by someone who
     /// hits it — the fix is to name the mode you meant, not to make the flag
     /// silent.
     /// </remarks>
@@ -204,13 +202,13 @@ public sealed class BotModeTests
     public void ACheckpointGivenToAModeThatCannotUseItIsRefused(string mode)
     {
         var thrown = Assert.Throws<ArgumentException>(
-            () => Program.Parse(WithPolicy("--bot-mode", mode)));
+            () => CommandLine.Parse(WithPolicy("--bot-mode", mode)));
 
         Assert.Contains("never consults", thrown.Message, StringComparison.Ordinal);
     }
 
     /// <summary>
-    /// ⚠️ <c>--policy</c> on its own still means policy mode — the one inference,
+    /// <c>--policy</c> on its own still means policy mode — the one inference,
     /// kept because <c>docs/BOTS.md</c> documents that invocation.
     /// </summary>
     [Fact]
@@ -222,7 +220,7 @@ public sealed class BotModeTests
     }
 
     /// <summary>
-    /// ⚠️ And the inference is ORDER-INDEPENDENT, because both flags are
+    /// And the inference is ORDER-INDEPENDENT, because both flags are
     /// collected before anything reconciles them.
     /// </summary>
     /// <remarks>
@@ -244,17 +242,17 @@ public sealed class BotModeTests
     [Fact]
     public void AnUnknownModeNamesTheFour()
     {
-        var thrown = Assert.Throws<ArgumentException>(() => Program.Parse(["--bot-mode", "clever"]));
+        var thrown = Assert.Throws<ArgumentException>(() => CommandLine.Parse(["--bot-mode", "clever"]));
 
         Assert.Contains("scripted", thrown.Message, StringComparison.Ordinal);
         Assert.Contains("tiered", thrown.Message, StringComparison.Ordinal);
     }
 
-    /// <summary>⚠️ The flag it replaced is gone, and says so by failing.</summary>
+    /// <summary>The flag it replaced is gone, and says so by failing.</summary>
     [Fact]
     public void SearchBotsIsNoLongerAFlag()
     {
-        var thrown = Assert.Throws<ArgumentException>(() => Program.Parse(["--search-bots"]));
+        var thrown = Assert.Throws<ArgumentException>(() => CommandLine.Parse(["--search-bots"]));
 
         Assert.Contains("--search-bots", thrown.Message, StringComparison.Ordinal);
     }

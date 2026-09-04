@@ -31,7 +31,7 @@ public sealed class ServerHarness : IDisposable
 
         Server = new GameServer(Options, Log);
 
-        // ⚠️ Before Start(), which is where plugin hashes are resolved. A test
+        // Before Start(), which is where plugin hashes are resolved. A test
         // that let that fall through to the default source would be reaching
         // ganggarrison.com over HTTP from a unit test.
         configureServer?.Invoke(Server);
@@ -98,7 +98,7 @@ public sealed class ServerHarness : IDisposable
         Assert.Equal(Options.ServerName, client.TakeString1());
         Assert.Equal(Options.Map, client.TakeString1());
         Assert.Equal(string.Empty, client.TakeString1()); // built-in map: no MD5
-        // ⚠️ Read from the server rather than hardcoded to "no plugins". These
+        // Read from the server rather than hardcoded to "no plugins". These
         // two fields sit between the map hash and everything after it, so a
         // harness that assumed them would mis-frame every later assertion the
         // moment a test configured a plugin list.
@@ -109,7 +109,7 @@ public sealed class ServerHarness : IDisposable
         TickUntil(() => client.Received.Count > 0, "the slot reservation");
         Assert.Equal(Gg2.Protocol.MessageType.ReserveSlot, client.TakeMessageType());
 
-        // ⚠️ Humans ON THE ROSTER, which is neither of the two obvious counts.
+        // Humans ON THE ROSTER, which is neither of the two obvious counts.
         // PlayerCount includes bots, so on a server with the population manager
         // running it moves for reasons that have nothing to do with this join — a
         // bot displaced by the joining human puts it straight back where it

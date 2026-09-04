@@ -7,7 +7,7 @@ namespace Gg2.Tests;
 /// The web panel's authentication, on its own — no socket, no clock.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b><see cref="AdminSessions"/> takes its clock as an argument for exactly
+/// <b><see cref="AdminSessions"/> takes its clock as an argument for exactly
 /// this reason.</b> Every rule in it is a duration, and a test that asserted them
 /// by sleeping would be slow, flaky, and would quietly stop asserting anything
 /// the day somebody lengthened a timeout.
@@ -34,7 +34,7 @@ public sealed class AdminSessionTests
     }
 
     /// <summary>
-    /// ⚠️ The tokens are the credential, so they are 256 bits of
+    /// The tokens are the credential, so they are 256 bits of
     /// <c>RandomNumberGenerator</c> and never derived from anything.
     /// </summary>
     [Fact]
@@ -75,7 +75,7 @@ public sealed class AdminSessionTests
     }
 
     /// <summary>
-    /// ⛔ Both timeouts, not one.
+    /// Both timeouts, not one.
     /// </summary>
     /// <remarks>
     /// An idle timeout alone means a tab left polling is authenticated for ever,
@@ -104,7 +104,7 @@ public sealed class AdminSessionTests
     }
 
     /// <summary>
-    /// ⛔ Guessing costs time, and the time grows.
+    /// Guessing costs time, and the time grows.
     /// </summary>
     /// <remarks>
     /// The panel can be reachable from the network, so an online guessing attack
@@ -149,7 +149,7 @@ public sealed class AdminSessionTests
     }
 
     /// <summary>
-    /// ⚠️ Getting it right clears the record.
+    /// Getting it right clears the record.
     /// </summary>
     /// <remarks>
     /// Otherwise an operator who fat-fingered the password five times stays
@@ -166,7 +166,7 @@ public sealed class AdminSessionTests
 
         Assert.True(sessions.LockoutRemaining(Somewhere) > TimeSpan.Zero);
 
-        // ⚠️ The lockout is enforced by the HTTP handler, not by SignIn — SignIn
+        // The lockout is enforced by the HTTP handler, not by SignIn — SignIn
         // is what tells it there is one. So a correct password still works here,
         // and that is the behaviour being asserted rather than a hole.
         _now += AdminSessions.MaxLockout;
@@ -189,7 +189,7 @@ public sealed class AdminSessionTests
     }
 
     /// <summary>
-    /// ⚠️ An authenticated client cannot make the server hold sessions for ever.
+    /// An authenticated client cannot make the server hold sessions for ever.
     /// </summary>
     [Fact]
     public void SessionsAreCappedAndTheLeastRecentlyUsedIsEvicted()
@@ -226,7 +226,7 @@ public sealed class AdminSessionTests
     /// off a terminal and type back.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>No O/0 and no I/l/1</b>: it exists to be transcribed by hand from a
+    /// <b>No O/0 and no I/l/1</b>: it exists to be transcribed by hand from a
     /// log line, and a password that cannot be read reliably is one an operator
     /// replaces with a short one they can.
     /// </remarks>

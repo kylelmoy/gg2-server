@@ -11,13 +11,13 @@ namespace Gg2.Bots;
 /// makes its reactions slower, its tracking coarser and its aim looser, which is
 /// what a weaker player actually looks like.
 /// <para>
-/// ⚠️ <b>The server's 1-5 setting is one point on a continuous scale</b>, in even
+/// <b>The server's 1-5 setting is one point on a continuous scale</b>, in even
 /// steps, so tiers 1, 4 and 5 land exactly on the anchors the tuning tables are
 /// quoted at: <c>0.15 + (tier - 1) × 0.2</c>.
 /// </para>
 /// </remarks>
 /// <param name="AcquireTicks">
-/// How long a bot ignores a target completely after picking it. ⚠️ It does not
+/// How long a bot ignores a target completely after picking it. It does not
 /// even turn towards it — which is what makes a weak bot look <em>slow</em>
 /// rather than blind.
 /// </param>
@@ -47,7 +47,7 @@ public readonly record struct BotSkill(
     /// The knobs for a skill in <c>[0, 1]</c> — <c>botSkillApply.gml</c>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The tick counts are <c>floor(x + 0.5)</c>, which is round-half-up and
+    /// The tick counts are <c>floor(x + 0.5)</c>, which is round-half-up and
     /// <b>not</b> GM8's <c>round()</c> — the reference writes it out that way, and
     /// on a value landing exactly on <c>.5</c> the two disagree by a whole tick.
     /// Transcribed as written.
@@ -67,7 +67,7 @@ public readonly record struct BotSkill(
             MoveErrorMultiplier: Lerp(skill, 1, 0.6, 0.4, 0.3),
             HoldFireChance: Lerp(skill, 0.35, 0.15, 0.05, 0),
 
-            // ⚠️ A step rather than a ramp: knowing to aim at somebody's feet is
+            // A step rather than a ramp: knowing to aim at somebody's feet is
             // a thing you have learnt or have not.
             SplashAim: skill >= 0.6,
 
@@ -89,7 +89,7 @@ public readonly record struct BotSkill(
     /// A four-anchor piecewise ramp — <c>botSkillLerp.gml</c>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Flat below 0.15 and above 0.95, and the three segments between are
+    /// <b>Flat below 0.15 and above 0.95, and the three segments between are
     /// not the same width</b>: 0.15-0.45, 0.45-0.75, then 0.75-0.95. The last is
     /// two thirds the width of the others, so the top tier moves further per
     /// point of skill than the ones below it — which is deliberate, and is why

@@ -10,10 +10,9 @@ namespace Gg2.Tests;
 /// window — the first fixture able to gate the capture rules at all.
 /// </summary>
 /// <remarks>
-/// <b>Recorded 2026-08-27: six red scouts and no blue team on
-/// <c>koth_valley</c></b>, spawn-anchored.
+/// <b>Six red scouts and no blue team on <c>koth_valley</c></b>, spawn-anchored.
 /// <para>
-/// ⚠️ <b>The one-sided roster is the whole design, and it is not laziness.</b>
+/// <b>The one-sided roster is the whole design, and it is not laziness.</b>
 /// <c>reference-koth_valley-closedkoth.trace</c> has a real match in it and is
 /// useless for this: its trajectory window is 330 ticks and its earliest
 /// control-point observation is at t1010, so every disagreement about the hill
@@ -69,7 +68,7 @@ public sealed class KothCaptureFixtureTests
     {
         var (_, ticks) = Load();
 
-        // ⚠️ Asserted, because the whole value of this fixture rests on it: a
+        // Asserted, because the whole value of this fixture rests on it: a
         // re-recording with a blue team in it would have a short window again
         // and quietly stop gating the capture.
         Assert.Equal(0, ticks.Sum(t => t.Events.Count(m => m.Type == MessageType.WeaponFire)));
@@ -84,7 +83,7 @@ public sealed class KothCaptureFixtureTests
     }
 
     /// <summary>
-    /// ✅ <b>Every control-point observation falls inside the trajectory
+    /// <b>Every control-point observation falls inside the trajectory
     /// window</b> — the property that makes this fixture a gate.
     /// </summary>
     /// <remarks>
@@ -114,23 +113,19 @@ public sealed class KothCaptureFixtureTests
     }
 
     /// <summary>
-    /// ✅ <b>The port reproduces this recording's hill exactly</b> — ownership,
+    /// <b>The port reproduces this recording's hill exactly</b> — ownership,
     /// capping team and meter, on every observation.
     /// </summary>
     /// <remarks>
-    /// <b>This replaces <c>ThePortStillCapturesTheHillTooEarly</c></b>, which
-    /// pinned an eleven-mismatch divergence and was written to fail the day it
-    /// was fixed. It failed on 2026-08-27.
-    /// <para>
     /// The divergence was never in the capture arithmetic. It was that a replay
     /// started the King of the Hill pregame timer at the <c>CHANGE_MAP</c>,
     /// which is <b>not</b> the round start — the server keeps serialising the
     /// old round's HUD for a few hundred ticks after announcing the change
     /// (335 in this recording, 254 in <c>closedkoth</c>, so not a constant to
-    /// subtract). <c>Replayer</c> now anchors the counter from the wire.
+    /// subtract). <c>Replayer</c> anchors the counter from the wire instead.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Only a positive <c>cpUnlock</c> is taken, and that is the whole
+    /// <b>Only a positive <c>cpUnlock</c> is taken, and that is the whole
     /// trick.</b> A zero is ambiguous — it means "already unlocked", which is
     /// true of the round the recorder joined <em>and</em> of the one after the
     /// reload — and the early readings here are stale zeroes at t0 and t62. A

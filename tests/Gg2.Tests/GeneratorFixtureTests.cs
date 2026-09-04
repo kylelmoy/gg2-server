@@ -64,7 +64,7 @@ public sealed class GeneratorFixtureTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The generator HUD block does NOT shorten when a generator dies</b>,
+    /// <b>The generator HUD block does NOT shorten when a generator dies</b>,
     /// and that is the finding.
     /// </summary>
     /// <remarks>
@@ -84,7 +84,7 @@ public sealed class GeneratorFixtureTests
     /// reader that never looked at the block.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Why, and why it may be unreachable in practice:</b> destroying a
+    /// <b>Why, and why it may be unreachable in practice:</b> destroying a
     /// generator ends the round immediately (t2027, <c>MAP_END</c> at t2028) and
     /// <b>a round ending does not sweep the map</b> — the dead generator's
     /// instance survives the scoreboard, so the HUD still writes it. On
@@ -114,7 +114,7 @@ public sealed class GeneratorFixtureTests
     /// The round ends inside the recording, and the messages say what happened.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b><c>GENERATOR_DESTROY</c> names the team that LOST one</b>, which
+    /// <b><c>GENERATOR_DESTROY</c> names the team that LOST one</b>, which
     /// <c>sendEventGeneratorDestroy.gml</c>'s own docstring gets backwards.
     /// Blue's was the one destroyed and the payload is 1 — and the
     /// <c>MAP_END</c> a tick later names red as the winner, which is the
@@ -136,20 +136,20 @@ public sealed class GeneratorFixtureTests
         Assert.Equal((byte)Team.Red, mapEnd.Payload[1 + length]);
         Assert.Equal(1, mapEnd.Payload[2 + length]);
 
-        // ⚠️ The destruction and the round end are one tick apart: the winner is
+        // The destruction and the round end are one tick apart: the winner is
         // decided in Step and broadcast in the NEXT tick's Begin Step.
         Assert.Equal(destroy.Tick + 1, mapEnd.Tick);
     }
 
     /// <summary>
-    /// ✅ <b>The map changes ten seconds after the round ends</b> — measured,
+    /// <b>The map changes ten seconds after the round ends</b> — measured,
     /// and the first mid-stream <c>CHANGE_MAP</c> in any fixture.
     /// </summary>
     /// <remarks>
     /// <c>GameServerBeginStep.gml</c>: tell everybody, then change the map ten
     /// seconds later. Exactly 300 ticks, t2028 to t2328.
     /// <para>
-    /// ⚠️ <b>It rotates back to the same map, so the wire shape never changes.</b>
+    /// <b>It rotates back to the same map, so the wire shape never changes.</b>
     /// A rotation to a map of a different mode would leave <c>TraceParser</c>
     /// framing the rest of the recording with the wrong shape — it takes one
     /// shape for the whole trace — so that case is still unreached.

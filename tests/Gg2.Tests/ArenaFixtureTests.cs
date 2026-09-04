@@ -10,25 +10,20 @@ namespace Gg2.Tests;
 /// that contains an <c>ARENA_ENDROUND</c>.
 /// </summary>
 /// <remarks>
-/// <b>Recorded 2026-08-27: three soldiers a side on <c>arena_lumberyard</c></b>,
-/// spawn-anchored by the map-reload recipe. Arena is the only gamemode that had
-/// never been recorded, and it is the one that carried the project's oldest
-/// unreached framing risk.
+/// <b>Three soldiers a side on <c>arena_lumberyard</c></b>, spawn-anchored by the
+/// map-reload recipe.
 /// <para>
-/// ⚠️ <b><c>ARENA_ENDROUND</c> is not a bodyless message and this port framed it
-/// as one</b> until phase 6's arena work (docs/PROTOCOL.md, "Arena"). It carries
-/// five bytes and then five more <em>per MVP</em>, so the counts have to be read
-/// to know the length — a reader that skipped the body would have lost the
-/// stream the first time a round ended. It survived because no recording reached
-/// the state, exactly as the sentry <c>INPUTSTATE</c> bug did for six phases.
-/// <b>This recording is that state.</b>
+/// <b><c>ARENA_ENDROUND</c> is not a bodyless message.</b> It carries five bytes
+/// and then five more <em>per MVP</em>, so the counts have to be read to know the
+/// length — a reader that skipped the body would lose the stream the first time
+/// a round ended. <b>This recording exercises that state.</b>
 /// </para>
 /// <para>
-/// ✅ <b>The result is a negative, and that is the point: it frames to the last
+/// <b>The result is a negative, and that is the point: it frames to the last
 /// byte, three round-ends and all.</b>
 /// </para>
 /// <para>
-/// ⚠️ <b>What this adds over <c>ArenaTests</c> and <c>PlayerStatsLayoutTests</c>,
+/// <b>What this adds over <c>ArenaTests</c> and <c>PlayerStatsLayoutTests</c>,
 /// which already gate the same arithmetic:</b> those round-trip the port's own
 /// writer through the port's own reader, so they agree with each other whether
 /// or not either agrees with the engine. This is the reference's bytes. Both
@@ -85,7 +80,7 @@ public sealed class ArenaFixtureTests
     }
 
     /// <summary>
-    /// ✅ <b>Three rounds actually end inside it</b>, so the variable-length
+    /// <b>Three rounds actually end inside it</b>, so the variable-length
     /// message is exercised rather than merely possible.
     /// </summary>
     /// <remarks>
@@ -116,7 +111,7 @@ public sealed class ArenaFixtureTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The gate: every <c>ARENA_ENDROUND</c>'s length is exactly what its
+    /// <b>The gate: every <c>ARENA_ENDROUND</c>'s length is exactly what its
     /// own MVP counts say it should be.</b>
     /// </summary>
     /// <remarks>
@@ -127,7 +122,7 @@ public sealed class ArenaFixtureTests
     /// <c>5 + 5 × (mvpsRed + mvpsBlue)</c>, with each list capped at three a
     /// side.
     /// <para>
-    /// ⚠️ <b>Both counts are written before either list</b>
+    /// <b>Both counts are written before either list</b>
     /// (<c>serverArenaEndRound.gml</c>), so a sender cannot stream the records
     /// and count as it goes — and a reader cannot know the length until it has
     /// read both.
@@ -181,7 +176,7 @@ public sealed class ArenaFixtureTests
     /// The characters move like the reference from the last spawn wave.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Arena re-spawns everybody at the start of every round</b>
+    /// <b>Arena re-spawns everybody at the start of every round</b>
     /// (<c>respawnEveryone()</c> calls <c>PlayerSpawn()</c> directly rather than
     /// arming <c>alarm[5]</c>), so this recording holds 54 <c>PLAYER_SPAWN</c>s
     /// across five round starts and its last anchor is very late. The window

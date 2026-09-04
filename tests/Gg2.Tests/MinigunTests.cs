@@ -70,12 +70,12 @@ public sealed class MinigunTests
     /// An input for slot 1, aimed straight up.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The aim has to be in the input, not on the character.</b>
+    /// <b>The aim has to be in the input, not on the character.</b>
     /// <c>ApplyInput</c> overwrites <c>NetAimDirection</c> every tick a slot is
     /// covered by the span, so a test that sets the aim on the character and
     /// then ticks with a bare <c>PlayerKeys</c> input is really aiming at 0.
     /// <para>
-    /// ⚠️ And a slot <em>beyond</em> the span keeps the input it had, so
+    /// And a slot <em>beyond</em> the span keeps the input it had, so
     /// "release the trigger" is an explicit <c>PlayerKeys.None</c> input and
     /// never an empty span.
     /// </para>
@@ -119,7 +119,7 @@ public sealed class MinigunTests
     }
 
     /// <summary>
-    /// ⚠️ <b>It is unseeded</b>: no <c>WEAPON_FIRE</c> and no seed, like the
+    /// <b>It is unseeded</b>: no <c>WEAPON_FIRE</c> and no seed, like the
     /// Flamethrower and the Blade.
     /// </summary>
     [Fact]
@@ -154,7 +154,7 @@ public sealed class MinigunTests
     }
 
     /// <summary>
-    /// ⚠️ <b>A minigun bullet lives thirty ticks, not the <c>Shot</c>'s
+    /// <b>A minigun bullet lives thirty ticks, not the <c>Shot</c>'s
     /// forty</b> — <c>shot.alarm[0] = 30</c>.
     /// </summary>
     [Fact]
@@ -169,7 +169,7 @@ public sealed class MinigunTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The muzzle is twenty pixels along the aim and then twelve
+    /// <b>The muzzle is twenty pixels along the aim and then twelve
     /// <em>below</em> that</b> — the drop is outside the <c>lengthdir</c>, so it
     /// is down whichever way the heavy is looking.
     /// </summary>
@@ -236,7 +236,7 @@ public sealed class MinigunTests
             sawLow |= offset < -3;
             sawHigh |= offset > 3;
 
-            // ⚠️ The jitter needs its own control: every speed is *within*
+            // The jitter needs its own control: every speed is *within*
             // [12, 13) whether or not `random(1)` is drawn at all, so only
             // seeing one that is not exactly 12 proves the draw happens. Note
             // Motion snaps a recomputed speed to a whole number within 1e-4, so
@@ -269,7 +269,7 @@ public sealed class MinigunTests
     // --- the wall test --------------------------------------------------------
 
     /// <summary>
-    /// ⚠️ <b>A blocked muzzle costs the shot and nothing else.</b> The ammo, the
+    /// <b>A blocked muzzle costs the shot and nothing else.</b> The ammo, the
     /// refire and the reload buffer all run regardless — firing into a wall you
     /// are standing against still empties the tank.
     /// </summary>
@@ -315,7 +315,7 @@ public sealed class MinigunTests
     // --- the tank -------------------------------------------------------------
 
     /// <summary>
-    /// ⚠️ <b>The guard is two and the charge is three</b>, so a minigun on
+    /// <b>The guard is two and the charge is three</b>, so a minigun on
     /// exactly 2 fires and lands on -1 — which the weapon's own Begin Step then
     /// clamps to 0.
     /// </summary>
@@ -336,7 +336,7 @@ public sealed class MinigunTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The "prevent sputtering" line is above the guard</b>, so holding
+    /// <b>The "prevent sputtering" line is above the guard</b>, so holding
     /// the trigger on an empty tank drives it further negative every tick — the
     /// same shape as the Flamethrower's.
     /// </summary>
@@ -357,7 +357,7 @@ public sealed class MinigunTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The tank rests at 201, not 200</b>, because the refill guard is
+    /// <b>The tank rests at 201, not 200</b>, because the refill guard is
     /// <c>ammoCount &lt;= maxAmmo</c> — the same off-by-one the pyro's 201.8 has.
     /// </summary>
     [Fact]
@@ -375,7 +375,7 @@ public sealed class MinigunTests
     }
 
     /// <summary>
-    /// Holding the trigger stops the tank refilling — and ⚠️ it is the
+    /// Holding the trigger stops the tank refilling — and it is the
     /// <c>alarm[5] = reloadBuffer</c> on <em>every shot</em> that does it, not
     /// the Begin Step's increment.
     /// </summary>
@@ -393,7 +393,7 @@ public sealed class MinigunTests
         // Sixty ticks of held trigger, aimed up so the muzzle clears the floor.
         Span<PlayerInput> firing = [default, Aiming(PlayerKeys.Attack)];
 
-        // ⚠️ Checked on *every* tick, not just at the end. The refill flag is
+        // Checked on *every* tick, not just at the end. The refill flag is
         // cleared again by the next shot, so a burst that started refilling
         // half way through can look untouched by the time the loop ends — which
         // is exactly what a test that only looked at the last tick missed.
@@ -414,7 +414,7 @@ public sealed class MinigunTests
     }
 
     /// <summary>
-    /// ⚠️ <b>What the Begin Step's <c>alarm[5] += 1</c> is actually worth: one
+    /// <b>What the Begin Step's <c>alarm[5] += 1</c> is actually worth: one
     /// tick.</b>
     /// </summary>
     /// <remarks>
@@ -476,7 +476,7 @@ public sealed class MinigunTests
 
         var spent = state.Weapons[1].AmmoCount;
 
-        // ⚠️ An explicit trigger-up input, not an empty span: a slot the span
+        // An explicit trigger-up input, not an empty span: a slot the span
         // does not cover keeps the keys it had, so an empty span would hold the
         // trigger down for ever.
         for (var i = 0; i < 60; i++)
@@ -488,7 +488,7 @@ public sealed class MinigunTests
     }
 
     /// <summary>
-    /// ⚠️ <b>A shot that leaves the tank nearly empty buys a reload buffer two
+    /// <b>A shot that leaves the tank nearly empty buys a reload buffer two
     /// and a half times as long</b>, and the test is on the tank the shot
     /// <em>left behind</em> rather than the one it found.
     /// </summary>
@@ -509,7 +509,7 @@ public sealed class MinigunTests
     // --- the heavy's own Step event -------------------------------------------
 
     /// <summary>
-    /// ⚠️ <b>A heavy holding the trigger walks at 0.3 instead of 0.8.</b>
+    /// <b>A heavy holding the trigger walks at 0.3 instead of 0.8.</b>
     /// <c>Objects/Characters/Heavy.events/Step.xml</c> — the only
     /// class-specific Step event in the game.
     /// </summary>
@@ -545,7 +545,7 @@ public sealed class MinigunTests
     }
 
     /// <summary>
-    /// ⚠️ <b>It reads <c>keyState</c> alone, not the down-or-pressed
+    /// <b>It reads <c>keyState</c> alone, not the down-or-pressed
     /// union</b> — so a click that arrives and releases inside one tick fires a
     /// bullet and does <em>not</em> slow the heavy.
     /// </summary>

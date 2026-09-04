@@ -18,7 +18,7 @@ namespace Gg2.Server;
 /// <c>docs/PROTOCOL.md</c> lists as deliberately absent.
 /// </para>
 /// <para>
-/// ⚠️ <b>Read-only, unlike the reference.</b> <c>game_init</c> writes every key
+/// <b>Read-only, unlike the reference.</b> <c>game_init</c> writes every key
 /// back after reading it, which is how a GM8 player's ini grows its own
 /// defaults. A server that rewrites the operator's config file the first time it
 /// starts is a surprise, and one that does it on a file under version control is
@@ -27,7 +27,7 @@ namespace Gg2.Server;
 /// unedited.
 /// </para>
 /// <para>
-/// ⚠️ <b>Anything absent leaves the option alone.</b> The caller passes an
+/// <b>Anything absent leaves the option alone.</b> The caller passes an
 /// options object already carrying this codebase's defaults, so a key the file
 /// does not mention keeps that default rather than picking up the reference's —
 /// the two agree everywhere except <see cref="ServerOptions.AnnounceToLobby"/>,
@@ -38,7 +38,7 @@ public static class ServerConfigFile
 {
     /// <summary>The ten <c>[Classlimits]</c> keys, in the ini's own spelling.</summary>
     /// <remarks>
-    /// ⚠️ <b>The order here is the INI's, not <see cref="PlayerClass"/>'s.</b>
+    /// <b>The order here is the INI's, not <see cref="PlayerClass"/>'s.</b>
     /// <c>readClasslimitsFromIni.gml</c> writes each into
     /// <c>global.classlimits[CLASS_*]</c> by name, so the pairing is what
     /// matters and the sequence does not — which is exactly why this is a table
@@ -63,7 +63,7 @@ public static class ServerConfigFile
     /// with, in its own order — which is also their default priority, 1-based.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Twenty, and the port ships twenty-two.</b> <c>ctf_oldfort</c> and
+    /// <b>Twenty, and the port ships twenty-two.</b> <c>ctf_oldfort</c> and
     /// <c>gg_debug</c> are playable and are NOT in the reference's default
     /// rotation, so they are absent here too: a server that started rotating
     /// through maps the stock host never picks would be this port inventing
@@ -83,7 +83,7 @@ public static class ServerConfigFile
     /// </summary>
     /// <exception cref="FileNotFoundException">The file does not exist.</exception>
     /// <exception cref="FormatException">
-    /// A key that must be a number is not one. ⚠️ <b>Refused rather than ignored:</b>
+    /// A key that must be a number is not one. <b>Refused rather than ignored:</b>
     /// a typo in <c>PlayerLimit</c> that silently left the default in place is a
     /// server quietly running a configuration nobody wrote.
     /// </exception>
@@ -107,14 +107,14 @@ public static class ServerConfigFile
         options.MultiClientLimit = Int(ini, "Settings", "MultiClientLimit", options.MultiClientLimit);
         options.ServerPlayerName = Text(ini, "Settings", "PlayerName", options.ServerPlayerName);
 
-        // ⚠️ UseLobby is read but the default is NOT the reference's. See
+        // UseLobby is read but the default is NOT the reference's. See
         // ServerOptions.AnnounceToLobby: a headless binary must not publish its
         // address because a config file it inherited said 1. Writing
         // `UseLobby=1` explicitly is a decision and is honoured; leaving it out
         // is not, and leaves this off.
         options.AnnounceToLobby = Bool(ini, "Settings", "UseLobby", options.AnnounceToLobby);
 
-        // ⚠️ No reference key to read: GG2 has no server-side rewards switch,
+        // No reference key to read: GG2 has no server-side rewards switch,
         // because its server answers every request. `Rewards=1` is this port's
         // own, for the same reason UseLobby's default is not the reference's —
         // relaying player identities to a third party is a decision somebody has
@@ -128,11 +128,9 @@ public static class ServerConfigFile
         options.WelcomeMessage = Text(ini, "Server", "WelcomeMessage", options.WelcomeMessage);
         options.Password = Text(ini, "Server", "Password", options.Password);
 
-        // ⚠️ These two used to be deliberately ignored, and the note saying so
-        // was right at the time: reading ServerPluginList without implementing
-        // plugins would advertise a list the server could not serve. It can now
-        // — see ServerPlugins — so the ignore came out with the implementation
-        // and not before.
+        // These two are read now that ServerPlugins can advertise and serve a
+        // plugin list; reading them without that would advertise a list the
+        // server could not serve.
         options.ServerPluginList = Text(ini, "Server", "ServerPluginList", options.ServerPluginList);
         options.ServerPluginsRequired = Bool(
             ini, "Server", "ServerPluginsRequired", options.ServerPluginsRequired);
@@ -143,7 +141,7 @@ public static class ServerConfigFile
             "Total bandwidth limit for map downloads in bytes per second",
             options.MapDownloadBytesPerSecond);
 
-        // ⚠️ The same max/min clamps game_init.gml applies, and they are not
+        // The same max/min clamps game_init.gml applies, and they are not
         // decoration: `CapLimit=0` in the reference is a ONE-capture round, not
         // an endless one, because the floor is applied before anything sees it.
         options.CapLimit = (byte)Clamp(Int(ini, "Server", "CapLimit", options.CapLimit), 1, 255);
@@ -152,7 +150,7 @@ public static class ServerConfigFile
         options.KillLimit = (ushort)Clamp(
             Int(ini, "Server", "Deathmatch Kill Limit", options.KillLimit), 1, 65535);
 
-        // ⚠️ Floored at 0, not 1 — zero really is "no spawn protection" here,
+        // Floored at 0, not 1 — zero really is "no spawn protection" here,
         // which is the one limit in this section with no escape to worry about.
         options.TdmInvulnerabilitySeconds = Clamp(
             Int(ini, "Server", "Team Deathmatch Invulnerability Seconds",
@@ -160,7 +158,7 @@ public static class ServerConfigFile
             0,
             3600);
 
-        // ⚠️ NOT clamped, deliberately: game_init.gml reads Respawn Time raw and
+        // NOT clamped, deliberately: game_init.gml reads Respawn Time raw and
         // GameServerCreate turns a 0 into a single tick. GameServer does the
         // same, so the escape stays where the reference put it.
         options.RespawnTimeSeconds =
@@ -171,12 +169,12 @@ public static class ServerConfigFile
 
         // --- [Web] -----------------------------------------------------------
         //
-        // ⚠️ No reference keys to transcribe: stock GG2 has no admin panel, so
+        // No reference keys to transcribe: stock GG2 has no admin panel, so
         // this whole section is this port's own. It is here rather than
         // command-line-only because the one thing an operator should not have to
         // put in a process listing is the admin password.
         //
-        // ⚠️ Enabled is keyed off Port being PRESENT, not off it being non-zero:
+        // Enabled is keyed off Port being PRESENT, not off it being non-zero:
         // 0 means "ask the OS for a free port" everywhere else in this project
         // and must keep meaning that here.
         if (Text(ini, "Web", "Port", string.Empty).Length != 0)
@@ -205,7 +203,7 @@ public static class ServerConfigFile
         foreach (var (key, playerClass) in ClassLimitKeys)
         {
             // readClasslimitFromIni.gml: min(255, max(0, ...)) with 255 as the
-            // fallback. ⚠️ A negative in the file becomes 0, which BANS the
+            // fallback. A negative in the file becomes 0, which BANS the
             // class rather than unlimiting it.
             limits[(int)playerClass] =
                 (byte)Clamp(Int(ini, "Classlimits", key, limits[(int)playerClass]), 0, 255);
@@ -216,7 +214,7 @@ public static class ServerConfigFile
         // --- the rotation ----------------------------------------------------
         //
         // load_map_rotation.gml: a rotation FILE wins outright, and only when it
-        // is absent does the [Maps] priority list apply. ⚠️ The reference falls
+        // is absent does the [Maps] priority list apply. The reference falls
         // back to [Maps] when the named file does not EXIST, silently. That is
         // transcribed rather than turned into an error: an operator who
         // mistypes the path gets the default rotation on the stock server too,
@@ -236,7 +234,7 @@ public static class ServerConfigFile
     /// when it is relative.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The reference resolves it against the <em>working directory</em>,
+    /// The reference resolves it against the <em>working directory</em>,
     /// because the game's ini is always beside the executable. A server told
     /// <c>--config /etc/gg2/server.ini</c> is not in that position, and
     /// "rotation.txt" in that file plainly means the one next to it. An absolute
@@ -257,7 +255,7 @@ public static class ServerConfigFile
     /// </summary>
     /// <remarks>
     /// The format is documented by <c>sampleMapRotation.txt</c> at the reference
-    /// checkout's root. ⚠️ <b>A map may appear more than once</b> and the order
+    /// checkout's root. <b>A map may appear more than once</b> and the order
     /// is meaningful, so this is a list and not a set — that is how a rotation
     /// plays some maps more often than others.
     /// </remarks>
@@ -285,14 +283,14 @@ public static class ServerConfigFile
     /// queue, with a key of 0 meaning "never play this map".
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Priority order, not file order.</b> The reference builds a
+    /// <b>Priority order, not file order.</b> The reference builds a
     /// <c>ds_priority</c> and drains it with <c>delete_min</c>, so the rotation
     /// runs from the lowest number up and the ini's line order is irrelevant.
     /// A map with no key at all gets its 1-based position in the built-in list
     /// as its priority, which is what makes an empty <c>[Maps]</c> section
     /// produce the stock twenty-map rotation rather than nothing.
     /// <para>
-    /// ⚠️ <b>Ties are broken by the built-in order</b>, because
+    /// <b>Ties are broken by the built-in order</b>, because
     /// <see cref="List{T}.Sort"/> is unstable and <c>ds_priority_delete_min</c>
     /// has its own unspecified answer. Two maps sharing a priority is a
     /// configuration this port makes deterministic and the reference does not;
@@ -345,12 +343,12 @@ public static class ServerConfigFile
     /// values optionally in double quotes.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Section and key lookups are case-insensitive; values are not.</b>
+    /// <b>Section and key lookups are case-insensitive; values are not.</b>
     /// GM8's <c>ini_read_*</c> is case-insensitive on both, and an operator who
     /// wrote <c>[server]</c> or <c>playerlimit</c> means the same thing. A
     /// password or a server name, though, is data and is taken verbatim.
     /// <para>
-    /// ⚠️ <b>A repeated key keeps the LAST one</b>, which is what GM8's own
+    /// <b>A repeated key keeps the LAST one</b>, which is what GM8's own
     /// writer produces after it rewrites a file, and a repeated section merges
     /// into the first rather than replacing it.
     /// </para>
@@ -364,7 +362,7 @@ public static class ServerConfigFile
         {
             var line = raw.Trim();
 
-            // ⚠️ Both comment markers. GM8 writes none itself, but a hand-edited
+            // Both comment markers. GM8 writes none itself, but a hand-edited
             // gg2.ini in the wild carries `;` from the Windows convention and
             // `#` from the rotation file's.
             if (line.Length == 0 || line[0] == ';' || line[0] == '#')
@@ -419,7 +417,7 @@ public static class ServerConfigFile
 
     private static int ParseInt(string section, string key, string value)
     {
-        // ⚠️ Parsed as a double and truncated, because ini_read_real is a real
+        // Parsed as a double and truncated, because ini_read_real is a real
         // read: a file carrying `PlayerLimit=10.0` — which is what GM8 writes
         // for some values — must not be a startup failure.
         if (!double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
@@ -433,7 +431,7 @@ public static class ServerConfigFile
     }
 
     /// <summary>
-    /// ⚠️ <b>Any non-zero is true</b>, as every <c>if(global.someFlag)</c> in the
+    /// <b>Any non-zero is true</b>, as every <c>if(global.someFlag)</c> in the
     /// reference is. A file saying <c>AutoBalance=2</c> turns it on.
     /// </summary>
     private static bool Bool(

@@ -55,12 +55,12 @@ public static class Dominations
     /// <c>doEventPlayerDeath.gml:94-95</c>: the two writes a kill makes.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A kill wipes the victim's count of the killer.</b>
+    /// <b>A kill wipes the victim's count of the killer.</b>
     /// <c>domination_kills_delete(victim.dominationKills, killer)</c> — so one
     /// kill back ends a domination outright rather than chipping at it, and the
     /// counter is "kills since they last killed me", not "kills ever".
     /// <para>
-    /// ⚠️ <b>Both the killer and the assistant get this</b>, from the same
+    /// <b>Both the killer and the assistant get this</b>, from the same
     /// <c>killersForDomination</c> list — a medic who assisted is dominating the
     /// victim just as much as the shooter, and has their own count wiped by a
     /// kill in return.
@@ -73,7 +73,7 @@ public static class Dominations
     /// </para>
     /// </remarks>
     /// <remarks>
-    /// ⚠️ <b>A suicide is a no-op here even without a guard</b>, because the
+    /// <b>A suicide is a no-op here even without a guard</b>, because the
     /// increment and the wipe address the same cell: <c>[me][me]</c> goes up by
     /// one and is then set to zero. The reference is the same shape — one
     /// <c>ds_map</c>, one key, increased and then deleted. The
@@ -99,7 +99,7 @@ public static class Dominations
     /// <remarks>
     /// Called on a <b>team change</b> (<c>processClientCommands.gml:188</c>) and
     /// on a player leaving (<c>Player.events/Destroy.xml:8</c>), and on nothing
-    /// else — ⚠️ <b>a class change does not clear it</b>, so a spy who keeps
+    /// else — <b>a class change does not clear it</b>, so a spy who keeps
     /// switching class stays dominated.
     /// <para>
     /// Both directions, which is the whole point: swapping teams cancels the

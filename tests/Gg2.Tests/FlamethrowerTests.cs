@@ -198,7 +198,7 @@ public sealed class FlamethrowerTests
     /// held.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The reference's comment is "prevent sputtering", and the line sits
+    /// The reference's comment is "prevent sputtering", and the line sits
     /// <b>above</b> the ready-and-loaded guard so it runs whether or not anything
     /// is fired. Without it a tank hovering just under 1.8 would refill to just
     /// over it and fire one frame in every few; with it the tank has to climb out
@@ -225,7 +225,7 @@ public sealed class FlamethrowerTests
     /// The tank refills to <b>201.8</b> and stops there — not to 200.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The guard is <c>ammoCount &lt;= maxAmmo</c>, so a full tank is topped
+    /// The guard is <c>ammoCount &lt;= maxAmmo</c>, so a full tank is topped
     /// up once more and then fails the test. A pyro who has fired once at any
     /// point in the match rests at 201.8 for the rest of it, and the wire carries
     /// <b>202</b> rather than 200.
@@ -399,7 +399,7 @@ public sealed class FlamethrowerTests
     }
 
     /// <summary>
-    /// ⚠️ A <em>fresh</em> flame adds less heat than an old one, which is the
+    /// A <em>fresh</em> flame adds less heat than an old one, which is the
     /// opposite of what the reference's comment beside it says.
     /// </summary>
     /// <remarks>
@@ -468,7 +468,7 @@ public sealed class FlamethrowerTests
     /// A flame burns one person and dies on the <em>second</em>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The cap is compared before the victim is recorded, so an empty list
+    /// The cap is compared before the victim is recorded, so an empty list
     /// passes <c>0 &gt;= 1</c> as false and the first victim is survived.
     /// </remarks>
     [Fact]
@@ -617,14 +617,14 @@ public sealed class FlamethrowerTests
     /// </summary>
     /// <remarks>
     /// <para>
-    /// ⚠️ The gate is <c>alarm[0] == -1</c> <b>exactly</b>, not <c>&lt;= 0</c>,
+    /// The gate is <c>alarm[0] == -1</c> <b>exactly</b>, not <c>&lt;= 0</c>,
     /// and <c>Character.events/Begin Step.xml:67</c> runs <em>before</em> the
     /// alarm stage. So the fade does not start on the tick after the alarm
     /// fires: that tick's Begin Step still reads the 0 the alarm was left at,
     /// and only the tick after <em>that</em> sees -1.
     /// </para>
     /// <para>
-    /// ⚠️ <b>This test used to assert the opposite, and its remark used to give
+    /// <b>This test used to assert the opposite, and its remark used to give
     /// the reason.</b> It read "that is what forced <c>Timers.Advance</c> to
     /// leave a fired counter at -1 rather than 0 — at 0 the decay would start a
     /// tick late, every time." A tick late is exactly what the running game
@@ -657,7 +657,7 @@ public sealed class FlamethrowerTests
         Assert.Equal(Timers.JustFired, state.Characters[1].AfterburnDecayTimer);
         Assert.Equal(9.0 / CharacterState.BurnDecayDuration, state.Characters[1].IntensityDecay, 12);
 
-        // ⚠️ The next tick's Begin Step reads the 0 the alarm was left at, so it
+        // The next tick's Begin Step reads the 0 the alarm was left at, so it
         // does NOT fade — and that tick's own alarm stage is what takes the
         // counter to -1.
         MatchSimulation.Tick(World, ref state, idle);

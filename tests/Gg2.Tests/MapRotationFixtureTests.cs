@@ -9,11 +9,11 @@ namespace Gg2.Tests;
 /// gamemode</b>, mid-stream.
 /// </summary>
 /// <remarks>
-/// <b>Recorded 2026-08-27</b>: <c>gen_destroy</c> with <c>ctf_2dfort</c> appended
-/// to <c>global.map_rotation</c> over the bridge, red's generator finished off so
-/// <b>blue</b> wins, and the server rotates at t2622.
+/// <c>gen_destroy</c> with <c>ctf_2dfort</c> appended to
+/// <c>global.map_rotation</c>, red's generator finished off so <b>blue</b> wins,
+/// and the server rotates at t2622.
 /// <para>
-/// ⚠️ <b>Blue winning is the point.</b> <c>GameServerBeginStep.gml:107</c> takes
+/// <b>Blue winning is the point.</b> <c>GameServerBeginStep.gml:107</c> takes
 /// a different branch when <em>red</em> wins and the map has another area — it
 /// advances the area and keeps the same map — which is why
 /// <c>reference-gen_destroy-closedgen.trace</c> rotated back to
@@ -21,10 +21,9 @@ namespace Gg2.Tests;
 /// <c>nextMapInRotation()</c>.
 /// </para>
 /// <para>
-/// ⚠️ <b><c>MapRotation</c> in the ini is a FILE PATH, not a list</b>
-/// (<c>game_init.gml:94</c>), and with no file the server's rotation held a
-/// single entry — the current map — which is the other reason the earlier
-/// recording could not rotate anywhere. The list was extended over the bridge.
+/// <b><c>MapRotation</c> in the ini is a FILE PATH, not a list</b>
+/// (<c>game_init.gml:94</c>), so with no file the server's rotation holds a
+/// single entry — the current map.
 /// </para>
 /// </remarks>
 public sealed class MapRotationFixtureTests
@@ -107,16 +106,15 @@ public sealed class MapRotationFixtureTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The reader survives the mode change only because nothing after it
+    /// <b>The reader survives the mode change only because nothing after it
     /// reads the HUD.</b>
     /// </summary>
     /// <remarks>
     /// <c>TraceParser</c> takes <b>one shape for the whole trace</b>, so a
     /// rotation to another gamemode should frame the rest of the recording
-    /// wrongly. It does not — and the reason is worth having, because it is why
-    /// this risk has been so hard to reach.
+    /// wrongly. It does not, because of what carries the HUD block.
     /// <para>
-    /// ⚠️ <b>Only <c>FULL_UPDATE</c> and <c>CAPS_UPDATE</c> carry the HUD
+    /// <b>Only <c>FULL_UPDATE</c> and <c>CAPS_UPDATE</c> carry the HUD
     /// block.</b> <c>StateUpdateReader</c> returns before the tail on every
     /// other tier, so an <c>INPUTSTATE</c> and a <c>QUICK_UPDATE</c> never read
     /// it. In this recording the caps updates land at t389, t2188 and t2189 —
@@ -130,10 +128,10 @@ public sealed class MapRotationFixtureTests
     /// fails at byte 432, which is the control proving they cannot be swapped.
     /// </para>
     /// <para>
-    /// ⚠️ <b>If this test fails, the risk has finally been reached</b> — a
+    /// <b>If this test fails, the risk has finally been reached</b> — a
     /// recording with a caps update after a mode change is the thing that would
-    /// force <c>TraceParser</c> to re-shape on <c>CHANGE_MAP</c>. That is good
-    /// news; do the re-shaping and replace this test.
+    /// force <c>TraceParser</c> to re-shape on <c>CHANGE_MAP</c>. Do the
+    /// re-shaping and replace this test.
     /// </para>
     /// </remarks>
     [Fact]

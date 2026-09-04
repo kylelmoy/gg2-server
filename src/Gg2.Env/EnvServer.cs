@@ -16,7 +16,7 @@ namespace Gg2.Env;
 /// like the control port — it executes against live worlds, and a surface that
 /// accepted a second client would need a policy for what "the batch" then meant.
 /// <para>
-/// ⚠️ <b>The <see cref="EnvMessage.Hello"/> REFUSES a mismatch rather than
+/// <b>The <see cref="EnvMessage.Hello"/> refuses a mismatch rather than
 /// warning.</b> The <c>PROTOCOL_UUID</c> idiom this project already uses: a
 /// trainer running against a different observation layout, action encoding or
 /// simulation stamp is not slightly wrong, it is collecting data that cannot be
@@ -40,16 +40,16 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
     /// before it blocks accepting.
     /// </param>
     /// <remarks>
-    /// ⚠️ <b><see cref="IPAddress.Loopback"/>, never <c>Any</c>.</b> This
+    /// <b><see cref="IPAddress.Loopback"/>, never <c>Any</c>.</b> This
     /// executes arbitrary batch commands against live simulation state; the
     /// control port made the same choice for the same reason.
     /// <para>
-    /// ⚠️ <b><paramref name="bound"/> exists because <see cref="Port"/> is
+    /// <b><paramref name="bound"/> exists because <see cref="Port"/> is
     /// unreadable in time.</b> It is assigned here and then this method blocks
     /// in <c>AcceptTcpClient</c>, so a caller on the same thread cannot observe
-    /// it until after the client has already been and gone. `--port 0` printed
-    /// the literal 0 for exactly that reason, which made the OS-assigned port
-    /// the tool's own `--help` promises unobtainable by any launcher.
+    /// it until after the client has already been and gone: without it, `--port
+    /// 0` would print the literal 0, which is not an address anything can
+    /// connect to, making the OS-assigned port unobtainable by any launcher.
     /// </para>
     /// </remarks>
     public void Serve(int port, CancellationToken cancellation = default, Action<int>? bound = null)
@@ -64,13 +64,13 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
         {
             using var client = listener.AcceptTcpClient();
 
-            // ⚠️ Nagle OFF. This is a request/response protocol on loopback where
+            // Nagle off. This is a request/response protocol on loopback where
             // the client is blocked until the reply lands, so there is never a
             // second small write to coalesce with — Nagle can only ever add
-            // delay. Measured at batch 1 before WriteFrame was coalesced: 12
-            // round trips in 20,000 stalled past 10 ms, worst 25.3 ms. A trainer
-            // stepping N workers in lockstep waits for the worst of them, so a
-            // rare 25 ms stall is not rare at the loop level.
+            // delay. Without frame coalescing, 12 round trips in 20,000 stalled
+            // past 10 ms at batch 1, worst 25.3 ms. A trainer stepping N workers
+            // in lockstep waits for the worst of them, so a rare 25 ms stall is
+            // not rare at the loop level.
             client.NoDelay = true;
 
             using var stream = client.GetStream();
@@ -113,7 +113,7 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
             }
             catch (Exception e) when (e is ArgumentException or InvalidOperationException or InvalidDataException)
             {
-                // ⚠️ A refusal is a message, never a dropped connection. A
+                // A refusal is a message, never a dropped connection. A
                 // trainer that saw the socket close would report "the env died"
                 // and the reason would be in nobody's log.
                 reply = Error(e.Message);
@@ -144,14 +144,14 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
     /// Policies loaded by <see cref="EnvMessage.LoadPolicy"/>, by handle.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Index 0 is never used, because 0 means "no continuation" on the
+    /// <b>Index 0 is never used, because 0 means "no continuation" on the
     /// wire.</b> Handles are <c>_policies.Count</c> after the add, so the first is
     /// 1. A table numbered from zero would make the first policy loaded
     /// indistinguishable from none — <c>WorldState</c>'s "nobody is 255, never 0"
     /// trap, one layer out and with the same fix: never let the sentinel be a
     /// valid value.
     /// <para>
-    /// ⚠️ <b>Never emptied.</b> A handle stays valid for the connection's life, so
+    /// <b>Never emptied.</b> A handle stays valid for the connection's life, so
     /// a batch made earlier cannot have its policy pulled out from under it. A
     /// checkpoint is a few hundred KB and a training run loads one or two.
     /// </para>
@@ -162,7 +162,7 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
     /// Loads a checkpoint and returns its handle, refusing a stamp mismatch.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b><c>SimulationStamp.Require</c> throws and that is deliberate.</b> A
+    /// <b><c>SimulationStamp.Require</c> throws and that is deliberate.</b> A
     /// policy trained against physics that has since changed does not error and
     /// does not warn — it plays slightly worse for ever with the cause invisible.
     /// Refusing at load is the <c>PROTOCOL_UUID</c> idiom one layer in, and the
@@ -192,7 +192,7 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
         }
         catch (Exception e)
         {
-            // ⚠️ A stamp mismatch arrives here, and it must reach the trainer as a
+            // A stamp mismatch arrives here, and it must reach the trainer as a
             // refusal with the reason rather than as a dropped connection.
             return Error($"{path}: {e.Message}");
         }
@@ -299,17 +299,17 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
         // redRolloutOpponent, blueRolloutOpponent, minSeparation, maxSeparation,
         // redHorizonTicks, blueHorizonTicks, redShadowSearch, blueShadowSearch.
         //
-        // ⚠️ Every field is REQUIRED rather than optional-if-absent. Tolerating a
+        // Every field is required rather than optional-if-absent. Tolerating a
         // short frame would let an older client through the Hello check it
         // already failed, and it would then read the tail fields out of whatever
-        // followed — for v3 that is the separation band, where a stray non-zero
-        // f64 silently moves placement from spawn points to nav nodes.
+        // followed — e.g. the separation band, where a stray non-zero f64
+        // silently moves placement from spawn points to nav nodes.
         //
-        // ⚠️ Checked as a whole up front rather than per read, because a
+        // Checked as a whole up front rather than per read, because a
         // ReadOnlySpan slice past the end throws an ArgumentOutOfRangeException
         // that says nothing about the protocol.
         //
-        // ⚠️ Read with an explicit cursor rather than local helper functions: a
+        // Read with an explicit cursor rather than local helper functions: a
         // `ReadOnlySpan<byte>` is a ref-like type and cannot be captured by a
         // lambda or a local function at all. The compiler says so, which is the
         // good outcome — the alternative design copies the frame to an array
@@ -328,10 +328,10 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
         var map = System.Text.Encoding.UTF8.GetString(body.Slice(at, nameLength));
         at += nameLength;
 
-        // ⚠️ The fixed tail, checked as one number rather than per read, and the
+        // The fixed tail, checked as one number rather than per read, and the
         // number lives on EnvProtocol beside the version — see
         // EnvProtocol.MakeBatchFixedBytes for why those two are kept together.
-        // This check is the backstop for a mis-framed client; the VERSION is what
+        // This check is the backstop for a mis-framed client; the version is what
         // names a mismatch, and it names it at Hello.
         if (body.Length < at + EnvProtocol.MakeBatchFixedBytes)
         {
@@ -391,8 +391,8 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
         var blueShadow = BinaryPrimitives.ReadInt32LittleEndian(body[at..]) != 0;
         at += 4;
 
-        // v8: the commitment and the continuation, per side. ⚠️ The handle is
-        // resolved to a policy HERE rather than carried into DuelSpec, so there is
+        // v8: the commitment and the continuation, per side. The handle is
+        // resolved to a policy here rather than carried into DuelSpec, so there is
         // one source of truth for "which policy drives this side" and an unknown
         // handle is refused at the protocol edge with a reason on the wire.
         var redCommit = BinaryPrimitives.ReadInt32LittleEndian(body[at..]);
@@ -438,7 +438,7 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
             BlueContinuationPolicy = bluePolicy,
         };
 
-        // ⚠️ Validated HERE as well as in Reset, so a malformed driver is refused
+        // Validated here as well as in Reset, so a malformed driver is refused
         // at the protocol edge with a reason on the wire rather than thrown from
         // inside a batch construction the client cannot see into.
         spec.Validate();
@@ -453,7 +453,7 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
     {
         var batch = _batch ?? throw new InvalidOperationException("no batch; send MakeBatch first");
 
-        // ⚠️ SIX head bytes per agent since v4, red then blue, per world — the
+        // Six head bytes per agent since v4, red then blue, per world — the
         // sixth is Zoom. A v3 client sending five would be read one agent out of
         // step from the second world onward, which is why the head count is part
         // of the version rather than something to tolerate.
@@ -476,7 +476,7 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
         var redOut = new StepResult[batch.Count];
         var blueOut = new StepResult[batch.Count];
 
-        // ⚠️ Applied BEFORE the step and validated in full first, so a bad index
+        // Applied before the step and validated in full first, so a bad index
         // in world 9 cannot leave worlds 0-8 pruned and the batch half in a state
         // nobody asked for. SetGoal's all-worlds form makes the same choice.
         if (restricted)
@@ -484,9 +484,7 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
 
         batch.Step(red, blue, redOut, blueOut);
 
-        // ⚠️ The reply KIND echoes what was asked for, so a client can tell which
-        // shape it is holding without tracking its own request.
-        // ⚠️ The reply KIND echoes what was asked for, so a client can tell which
+        // The reply kind echoes what was asked for, so a client can tell which
         // shape it is holding without tracking its own request.
         return (scored, restricted) switch
         {
@@ -502,7 +500,7 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
     /// <see cref="EnvMessage.StepRestricted"/> body.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Two passes: validate everything, then apply everything.</b> A bad
+    /// <b>Two passes: validate everything, then apply everything.</b> A bad
     /// index in a late world must not leave the earlier ones pruned — a
     /// half-restricted batch is a state the trainer has no way to describe, and
     /// the refusal would look like nothing had happened.
@@ -582,7 +580,7 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
 
                 var slot = side == 0 ? world.RedSlot : world.BlueSlot;
 
-                // ⚠️ Zero means "search everything", so it is NOT an error on a
+                // Zero means "search everything", so it is not an error on a
                 // slot with no search — every non-searching slot sends it.
                 if (count > 0)
                     world.RestrictSearch(slot, indices[..count]);
@@ -608,7 +606,7 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
         Fire = b[3],
         AimDelta = b[4],
 
-        // ⚠️ v4's sixth head. A LEVEL — 0 unscoped, 1 scoped — not a toggle; the
+        // v4's sixth head. A level — 0 unscoped, 1 scoped — not a toggle; the
         // edge is ActionDecoder.WantsZoomToggle's, so a client that keeps sending
         // 1 stays scoped rather than flickering.
         Zoom = b[5],
@@ -619,7 +617,7 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
     /// world or in all of them.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The side is red/blue, not a roster slot.</b> A slot index is a
+    /// <b>The side is red/blue, not a roster slot.</b> A slot index is a
     /// roster index everywhere in this project and a caller could reasonably send
     /// one — but the two agents' slots are this world's business and a trainer
     /// that had to know them would be holding a model of this repo's internals,
@@ -649,7 +647,7 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
 
         var goal = new AgentGoal { Kind = kind, HasTarget = hasTarget, TargetX = x, TargetY = y };
 
-        // ⚠️ Validated ONCE, before anything is written, so an all-worlds call
+        // Validated once, before anything is written, so an all-worlds call
         // with a bad kind does not set half the batch and then refuse.
         goal.Validate();
 
@@ -678,7 +676,7 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
         if ((uint)index >= (uint)batch.Count)
             throw new ArgumentOutOfRangeException(nameof(body), index, "no such world");
 
-        // ⚠️ Through the batch, which owns the spec. Calling
+        // Through the batch, which owns the spec. Calling
         // `World(index).Reset(default, ...)` compiles and resets the world to an
         // EMPTY spec — no map, no classes — which throws somewhere else entirely.
         // The first draft of this did exactly that.
@@ -692,7 +690,7 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
     /// aligned with — red's set, then blue's.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Answered from world 0's spec, which every world in the batch shares, so
+    /// Answered from world 0's spec, which every world in the batch shares, so
     /// this is a property of the batch rather than of a step. A non-rollout side
     /// reports a count of zero — the same explicit zero <c>WriteScores</c> uses,
     /// and for the same reason: "this side does not search" must not be spelled
@@ -719,7 +717,7 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
 
     /// <summary>One side's candidate set: a count, then six i32 per action.</summary>
     /// <remarks>
-    /// ⚠️ Six i32 rather than six bytes, matching how the reward block already
+    /// Six i32 rather than six bytes, matching how the reward block already
     /// reports an action, so a consumer parses the same shape in both places.
     /// </remarks>
     private static void WriteCandidates(byte[] into, ref int at, ReadOnlySpan<EnvAction> candidates)
@@ -782,8 +780,7 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
     /// components when there are any.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>One contiguous block</b>, which is <c>gg2-rl</c>'s
-    /// <c>CONTRACT.md</c> requirement: a trainer maps it straight into a tensor
+    /// <b>One contiguous block</b>, so a trainer maps it straight into a tensor
     /// rather than walking a structure per world.
     /// </remarks>
     private byte[] Observations(
@@ -797,7 +794,7 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
             var world = batch.World(i);
             var view = new WorldView(in world.World.State, world.World.Collision);
 
-            // ⚠️ Each slot's own goal, and default is the nearest-enemy block this
+            // Each slot's own goal, and default is the nearest-enemy block this
             // has always written — so a client that never sends SetGoal gets
             // byte-identical observations. EnvGoalTests pins that.
             ObservationWriter.Write(
@@ -815,7 +812,7 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
 
         var componentBytes = EnvProtocol.ComponentBytes;
 
-        // ⚠️ Sized from the real spans rather than from CandidateCount, because a
+        // Sized from the real spans rather than from CandidateCount, because a
         // sniper's set is twice a soldier's and a batch can hold both. Assuming
         // one length would truncate half of every mixed batch.
         var scoreFloats = 0;
@@ -836,8 +833,8 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
         var reply = new byte[
             1 + 4 + (floats * 4) + (batch.Count * 2 * componentBytes)
             + (carriesScores
-                // ⚠️ A paired block carries an i32 index beside every f32 score,
-                // so its per-score width is EIGHT bytes, not four.
+                // A paired block carries an i32 index beside every f32 score,
+                // so its per-score width is eight bytes, not four.
                 ? (batch.Count * 2 * (4 + (6 * 4))) + (scoreFloats * (paired ? 8 : 4))
                 : 0)];
         var at = 0;
@@ -846,15 +843,15 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
         BinaryPrimitives.WriteInt32LittleEndian(reply.AsSpan(at), batch.Count);
         at += 4;
 
-        // ⚠️ One copy, not 26,752 four-byte writes. The observations are already
+        // One copy, not 26,752 four-byte writes. The observations are already
         // a contiguous float32 block in the layout the wire wants, so on a
         // little-endian host this is a memcpy — and every host this runs on is
         // one. The per-float loop is kept for the other case rather than deleted,
         // because "x86 only" is not a thing this protocol says anywhere.
         //
-        // ⚠️ This was NOT the bottleneck, and docs/ENV.md said it was. Measured
-        // 2026-08-30: the serialisation is ~2% of a batch-16 round trip against
-        // 49% for the observation writer. See that document's measurement table.
+        // Serialisation itself is not the bottleneck: it is roughly 2% of a
+        // batch-16 round trip against roughly 49% for the observation writer.
+        // See docs/ENV.md's measurement table.
         if (BitConverter.IsLittleEndian)
         {
             MemoryMarshal.AsBytes(_observations.AsSpan()).CopyTo(reply.AsSpan(at));
@@ -875,7 +872,7 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
             WriteComponents(reply, ref at, blue is null ? default : blue[i]);
         }
 
-        // ⚠️ The score block, and ONLY for StepScored. Every agent gets a length
+        // The score block, and only for StepScored. Every agent gets a length
         // even when it is zero, so the block is walkable without knowing which
         // slots searched — a client that had to infer that would be holding a
         // model of this repo's internals, which is the thing the whole seam
@@ -908,23 +905,23 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
     /// One agent's candidate scores: a count, then that many float32.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Length-prefixed per agent rather than a batch-wide stride.</b> A
+    /// <b>Length-prefixed per agent rather than a batch-wide stride.</b> A
     /// sniper searches 120 candidates and everything else 60, so a single stride
     /// would either truncate the snipers or pad every other agent — and a batch
     /// can hold both classes at once.
     /// <para>
-    /// ⚠️ <b>Zero is a real length</b>, written for any slot that is not
+    /// <b>Zero is a real length</b>, written for any slot that is not
     /// search-driven. It is not the same as a block of zero scores: zero is a
     /// meaningful score, the blind case, so the two must not be spelled the same
     /// way. See <see cref="StepResult.BestScore"/>.
     /// </para>
     /// <para>
-    /// ⚠️ <b>float32</b>, matching the damage fields a score is a difference of.
+    /// <b>float32</b>, matching the damage fields a score is a difference of.
     /// </para>
     /// </remarks>
     /// <param name="indices">
     /// The candidate index each score belongs to, written before its score as an
-    /// <c>i32</c>. ⚠️ <b>Empty means the unpaired layout</b> — scores alone,
+    /// <c>i32</c>. <b>Empty means the unpaired layout</b> — scores alone,
     /// implicitly 0..n−1 — which is what <see cref="EnvMessage.StepScored"/> has
     /// always sent and must keep sending byte for byte.
     /// </param>
@@ -956,13 +953,13 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
             at += 4;
         }
 
-        // ⚠️ The action the search CHOSE, six i32, after the distribution — and it
+        // The action the search chose, six i32, after the distribution — and it
         // is not derivable from it. A median of four candidates share the best
         // score and the search picks among them on aim error, so "the argmax" is
         // not one action. For a shadow slot this is the label: what the expert
         // would have done in the state the policy reached.
         //
-        // ⚠️ Written even when the count is zero, so the block's shape does not
+        // Written even when the count is zero, so the block's shape does not
         // depend on whether a slot searched. It is meaningless there and the count
         // says so.
         BinaryPrimitives.WriteInt32LittleEndian(into.AsSpan(at), chosen.Horizontal);
@@ -983,7 +980,7 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
     /// One agent's reward components and the action it took.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The action is echoed for a client side too, and that is not
+    /// <b>The action is echoed for a client side too, and that is not
     /// redundancy.</b> A trainer logging transitions would otherwise have to
     /// correlate this reply with its own send buffer, and the two stop agreeing
     /// the moment a side is bot-driven — which is precisely when the action is
@@ -1016,18 +1013,17 @@ public sealed class EnvServer(string mapDirectory, string? navDirectory = null)
         BinaryPrimitives.WriteInt32LittleEndian(into.AsSpan(at), r.Action.Zoom);
         at += 4;
 
-        // ⚠️ 1 or 0 rather than a bool byte, keeping the whole block 4-byte typed
+        // 1 or 0 rather than a bool byte, keeping the whole block 4-byte typed
         // — see EnvProtocol.ComponentBytes.
         BinaryPrimitives.WriteInt32LittleEndian(into.AsSpan(at), r.ActionExact ? 1 : 0);
         at += 4;
 
-        // ⚠️ APPENDED, deliberately, where v4's Zoom was INSERTED. Inserting moved
-        // ActionExact under every reader and my own test caught it by asserting
-        // the zoom level was 1; appending means a stale reader runs off the end
-        // instead, which fails loudly. The action heads had to stay contiguous;
-        // this does not.
+        // Appended, deliberately, where v4's Zoom was inserted. Inserting moves
+        // ActionExact under every reader; appending means a stale reader runs
+        // off the end instead, which fails loudly. The action heads had to stay
+        // contiguous; this does not.
         //
-        // ⚠️ float32 like the damage fields. A score is a damage difference, so it
+        // float32 like the damage fields. A score is a damage difference, so it
         // carries exactly the precision damage does.
         BinaryPrimitives.WriteSingleLittleEndian(into.AsSpan(at), (float)r.BestScore);
         at += 4;

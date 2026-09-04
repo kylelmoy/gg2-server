@@ -15,7 +15,7 @@ namespace Gg2.Tests;
 /// <c>LineCollider</c> per rect per segment. It now filters the rects once
 /// against the box that contains the whole arc.
 /// <para>
-/// ⛔ <b>The mutation that made this necessary:</b> making
+/// <b>The mutation that made this necessary:</b> making
 /// <c>BulletRectsIn</c> keep only its first rect left <b>all 2,643 tests
 /// green</b>. A bot would happily shoot through a spawn gate and no fixture
 /// covers it — the parity traces are recorded firefights, not arcs across a
@@ -23,7 +23,7 @@ namespace Gg2.Tests;
 /// a performance change that "only filters" still needs one.
 /// </para>
 /// <para>
-/// ⚠️ <b>The control is the production overload that takes no candidates</b>, not
+/// <b>The control is the production overload that takes no candidates</b>, not
 /// a transcription. The two share <c>RectBlocks</c>, so what is under test is
 /// exactly the filtering and nothing else.
 /// </para>
@@ -38,7 +38,7 @@ public sealed class BulletRectFilterTests
     /// unfiltered.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Polylines rather than single segments</b>, because the filter is
+    /// <b>Polylines rather than single segments</b>, because the filter is
     /// applied to the box round a whole arc and the interesting failure is a rect
     /// that one segment reaches and the enclosing box was thought not to.
     /// </remarks>
@@ -126,7 +126,7 @@ public sealed class BulletRectFilterTests
             }
         }
 
-        // ⛔ Agreement is worthless if the rect path never decided anything. These
+        // Agreement is worthless if the rect path never decided anything. These
         // are properties, not thresholds fitted to the run: the sweep has to
         // contain segments that only a RECT blocks, and the filter has to be
         // discarding rects at least sometimes — otherwise it is a no-op that

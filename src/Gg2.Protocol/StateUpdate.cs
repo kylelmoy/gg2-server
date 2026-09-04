@@ -77,7 +77,7 @@ public readonly record struct SentryBlock
     /// Whether <see cref="BuiltAndHp"/> was on the wire at all.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>An <c>INPUTSTATE</c>-tier update carries no sentry bytes
+    /// <b>An <c>INPUTSTATE</c>-tier update carries no sentry bytes
     /// whatsoever</b> — not the placement, and not even the hp.
     /// <c>Sentry.events/User Event 12.xml</c> guards each group of writes on
     /// the update tier and between them they cover only <c>FULL_UPDATE</c> and
@@ -218,7 +218,7 @@ public readonly record struct ArenaMvp(byte PlayerId, byte Kills, ushort Healing
 /// <c>ceil(shieldHp)</c>.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>There is one of these per <em>surviving</em> generator, not one per
+/// <b>There is one of these per <em>surviving</em> generator, not one per
 /// team.</b> The HUD block writes them with
 /// <c>with GeneratorBlue event_user(12)</c>, which visits however many
 /// instances exist — so a destroyed generator makes the message four bytes

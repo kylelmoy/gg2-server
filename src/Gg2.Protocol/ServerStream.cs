@@ -72,14 +72,12 @@ public sealed class ServerStream
     /// Roster teams, in order, as a CLIENT would believe them.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>This is the field that makes a client-disagreement bug visible, and
-    /// it was skipped for nine phases</b> — <c>PLAYER_CHANGETEAM</c> read the id
-    /// and did <c>Skip(1)</c> over the team. Nothing in the project asked what a
-    /// client thought anybody's team was, so nothing could notice the server
-    /// failing to tell it. <c>docs/PARITY.md</c>, "nothing compares what a client
-    /// was TOLD".
+    /// <b>This is the field that makes a client-disagreement bug visible</b>: if
+    /// <c>PLAYER_CHANGETEAM</c> read the id and skipped the team byte instead of
+    /// tracking it, nothing would notice the server failing to tell a client its
+    /// team. <c>docs/PARITY.md</c>, "nothing compares what a client was TOLD".
     /// <para>
-    /// ⚠️ <b>Maintained by the reference's rules, not by mirroring the server</b>
+    /// <b>Maintained by the reference's rules, not by mirroring the server</b>
     /// — including the one that makes rotations dangerous: <c>CHANGE_MAP</c> on
     /// area 1 sets <em>every</em> player to <see cref="Team.Spectator"/>
     /// (<c>ClientBeginStep.gml:514-544</c>), so a server that re-teams anybody
@@ -177,7 +175,7 @@ public sealed class ServerStream
                 CurrentMap = reader.ReadString1();
                 reader.ReadString1(); // md5; empty means built-in
 
-                // ⚠️ ClientBeginStep.gml:514-544 — on area 1 the client wipes
+                // ClientBeginStep.gml:514-544 — on area 1 the client wipes
                 // every player's stats and sets every team to TEAM_SPECTATOR,
                 // itself, without being told to. Reproduced here because a
                 // reader that did not would disagree with every real client
@@ -281,9 +279,7 @@ public sealed class ServerStream
 
             case MessageType.Balance:
             {
-                // ⚠️ NOT a fixed-width message, and this port framed it as one
-                // — two body bytes — until phase 6's team balance. There are two
-                // shapes:
+                // NOT a fixed-width message. There are two shapes:
                 //
                 //   BALANCE, 255                     the "teams are uneven" notice
                 //   BALANCE, playerId, class         somebody was actually moved
@@ -291,12 +287,7 @@ public sealed class ServerStream
                 // The client reads one byte and only then decides whether to
                 // read a second (`ClientBeginStep.gml:244-253`), so a reader
                 // that always takes two is one byte ahead from the first notice
-                // onwards. It never fired because autobalance needs a team two
-                // players larger than the other and every fixture is a balanced
-                // bot roster — the fourth message in this project with a
-                // content-dependent length and no recording that reaches it,
-                // after the sentry INPUTSTATE block, ARENA_ENDROUND and the
-                // generator HUD block.
+                // onwards.
                 var who = reader.ReadUByte();
 
                 if (who != BalanceNotice)
@@ -355,8 +346,7 @@ public sealed class ServerStream
             // --- variable ------------------------------------------------------
             case MessageType.ArenaEndRound:
             {
-                // ⚠️ NOT a bodyless message, and it was framed as one here until
-                // phase 6's arena work. `serverArenaEndRound.gml` writes five
+                // NOT a bodyless message. `serverArenaEndRound.gml` writes five
                 // bytes — the winning team, the two MVP counts, and both round
                 // scores — and then five more per MVP, up to three a side:
                 //
@@ -369,9 +359,7 @@ public sealed class ServerStream
                 //
                 // The client reads it in exactly that order
                 // (`clientArenaEndRound.gml`), so a reader that skipped the body
-                // would lose the stream from here on. It never fired because no
-                // recording has ever been made on an arena map — the same reason
-                // the sentry INPUTSTATE bug survived six phases.
+                // would lose the stream from here on.
                 var win = reader.ReadUByte();
                 var mvpsRed = reader.ReadUByte();
                 var mvpsBlue = reader.ReadUByte();
@@ -389,20 +377,18 @@ public sealed class ServerStream
                 var next = reader.ReadString1();
                 reader.Skip(1); // winners
 
-                // ⛔ THE AREA COMES FROM HERE, and this reader used to skip it.
-                // <c>ClientBeginStep.gml:461-469</c> assigns
-                // <c>global.currentMapArea</c> out of MAP_END, ten seconds before
-                // the CHANGE_MAP that acts on it — and CHANGE_MAP carries only
-                // the map NAME, so this is the only place on the wire the area is
-                // ever stated after a join.
+                // THE AREA COMES FROM HERE. <c>ClientBeginStep.gml:461-469</c>
+                // assigns <c>global.currentMapArea</c> out of MAP_END, ten
+                // seconds before the CHANGE_MAP that acts on it — and CHANGE_MAP
+                // carries only the map NAME, so this is the only place on the
+                // wire the area is ever stated after a join.
                 //
-                // ⚠️ Two things below depend on it and both were wrong on a
-                // multi-area map: the entity narrowing a reader does with
-                // ForArea, and the rule that a CHANGE_MAP wipes every team —
-                // which the client applies on area 1 ONLY. Pushing through
-                // cp_dirtbowl's three areas keeps everybody's team, and a reader
-                // stuck on area 1 would have cleared them and then disagreed with
-                // every real client about who was on which side.
+                // Two things depend on it: the entity narrowing a reader does
+                // with ForArea, and the rule that a CHANGE_MAP wipes every team
+                // — which the client applies on area 1 ONLY. A reader stuck on
+                // area 1 on a multi-area map like cp_dirtbowl would clear every
+                // team on each later CHANGE_MAP and disagree with every real
+                // client about who was on which side.
                 CurrentMapArea = reader.ReadUByte();
 
                 return Done(type, ref reader, start, text: next);

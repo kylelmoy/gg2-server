@@ -21,14 +21,14 @@ namespace Gg2.Server;
 /// send; what was missing was a way to write it down without a socket.
 /// </para>
 /// <para>
-/// ⚠️ <b>It is a ghost, not a client.</b> <c>gg2-parity record</c> joins as a
+/// <b>It is a ghost, not a client.</b> <c>gg2-parity record</c> joins as a
 /// spectator, which costs a roster seat, shows up in the player list and — on a
 /// public server — is a seat a person cannot have. This writes the identical
 /// byte stream from inside <see cref="GameServer.FlushBroadcast"/> instead, so
 /// a recording server is indistinguishable from one that is not.
 /// </para>
 /// <para>
-/// ⚠️ <b>Every segment carries its own preamble, and that is what makes it
+/// <b>Every segment carries its own preamble, and that is what makes it
 /// replayable.</b> A trace has to begin at a message that defines a complete
 /// starting point, which is the join burst's <c>FULL_UPDATE</c>. Teeing only
 /// the broadcast would produce a file that starts wherever the recording
@@ -70,14 +70,10 @@ public sealed class MatchRecorder : IDisposable
     /// the actual requirement: an unattended public server must not fill a disk.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A total, not a segment count, and the difference was found by
-    /// running it.</b> The first version capped at 32 segments on the reasoning
-    /// that 32 x <see cref="SegmentBytes"/> is a gigabyte — but a segment also
-    /// rolls on a map change, so a server rotating quickly spends the cap on
-    /// rounds rather than on bytes. Measured: at <c>--speed max</c> with bots,
-    /// rounds ended about once a second and the recorder stopped after
-    /// <b>26 seconds</b> having written 8 MB of its allowed 1,024. A byte total
-    /// bounds the disk whatever the round length is.
+    /// <b>A total, not a segment count.</b> A segment also rolls on a map
+    /// change, so a server rotating quickly through short rounds would spend a
+    /// segment-count cap on rounds rather than on bytes. A byte total bounds the
+    /// disk whatever the round length is.
     /// </remarks>
     public const long MaxTotalBytes = 1024L * 1024 * 1024;
 
@@ -113,7 +109,7 @@ public sealed class MatchRecorder : IDisposable
     /// Starts a segment for <paramref name="map"/>, closing any open one.
     /// </summary>
     /// <remarks>
-    /// Called at startup and at every map change. ⚠️ It must run <em>after</em>
+    /// Called at startup and at every map change. It must run <em>after</em>
     /// the new map is loaded and before the tick that broadcasts on it, or the
     /// preamble describes the previous world.
     /// </remarks>
@@ -150,7 +146,7 @@ public sealed class MatchRecorder : IDisposable
 
     /// <summary>Appends one broadcast flush.</summary>
     /// <remarks>
-    /// ⚠️ Rolls <em>after</em> writing rather than before, so a flush is never
+    /// Rolls <em>after</em> writing rather than before, so a flush is never
     /// split across two segments. A message that straddled a segment boundary
     /// would make one file end mid-message and the next begin mid-message, and
     /// the second is the one that cannot be recovered — a reader has no way to
@@ -212,7 +208,7 @@ public sealed class MatchRecorder : IDisposable
     /// hard limit.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Truncated rather than refused, which is the opposite of what
+    /// Truncated rather than refused, which is the opposite of what
     /// <c>gg2-parity record</c> does with <c>--source</c> — and deliberately.
     /// There the operator is standing at a prompt and can shorten it; here the
     /// value is a server name that arrived from a config file, and refusing to

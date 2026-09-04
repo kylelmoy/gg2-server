@@ -11,7 +11,7 @@ namespace Gg2.Tests;
 /// motion that followed.
 /// </summary>
 /// <remarks>
-/// ⛔ <b>This is the half of the one-tick bug class that nothing else can
+/// <b>This is the half of the one-tick bug class that nothing else can
 /// see.</b> The flush-boundary instruments — the stage table, <c>WireStageTests</c>,
 /// <c>FlushShapeTests</c> — all ask WHEN a message leaves. <c>486ef3e</c>, the
 /// bug that started the whole hunt, was a message that left at exactly the right
@@ -27,14 +27,14 @@ namespace Gg2.Tests;
 /// are really tick <c>N-1</c>'s and the motion is explained by the next row down.
 /// </para>
 /// <para>
-/// ⚠️ <b>Open loop is not a preference here, it is the only mode that works.</b>
+/// <b>Open loop is not a preference here, it is the only mode that works.</b>
 /// Closed loop stops at the first mismatch, and a deliberately mis-phased replay
 /// mismatches almost immediately — the run would end before the prediction error
 /// meant anything. Open loop re-anchors from the trace at every position-bearing
 /// tick, so every window is an independent measurement.
 /// </para>
 /// <para>
-/// ⚠️ <b>A reference trace and a port recording gate DIFFERENT things, and both
+/// <b>A reference trace and a port recording gate DIFFERENT things, and both
 /// are here.</b> Against a reference trace the sweep says the reference's stream
 /// is in phase and the port's physics agrees with it — that validates the
 /// instrument, but it grades the port's PHYSICS and never its server. Against a
@@ -56,7 +56,7 @@ public class InputLagSweepTests
     /// drift in x and y together.
     /// </summary>
     /// <remarks>
-    /// ⚠️ p99 rather than max, for the reason <see cref="ClientPredictionGateTests"/>
+    /// p99 rather than max, for the reason <see cref="ClientPredictionGateTests"/>
     /// gives: a respawn teleports a character across the map and shows up as an
     /// "error" of hundreds. Those are real events, not drift, and a max would be
     /// dominated by them at every lag equally — which would flatten the very
@@ -109,7 +109,7 @@ public class InputLagSweepTests
     /// wrote.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The recorder writes its header on <c>Close</c>, so the harness has to
+    /// The recorder writes its header on <c>Close</c>, so the harness has to
     /// be disposed before the file is readable — that is what the scope below is
     /// for, not tidiness.
     /// </remarks>
@@ -120,7 +120,7 @@ public class InputLagSweepTests
             options.Map = "gg_debug";
             options.RecordingDirectory = directory;
 
-            // ⚠️ Without nav the bots never move, and a recording of six
+            // Without nav the bots never move, and a recording of six
             // characters standing still is in phase at every lag — the curve goes
             // flat and the gate becomes vacuous. TheSweepIsNotFlat... is what
             // notices, and it is why that test exists for this fixture too.
@@ -149,7 +149,7 @@ public class InputLagSweepTests
         string.Join(", ", curve.OrderBy(e => e.Key).Select(e => $"{e.Key:+0;-0;0}={e.Value}"));
 
     /// <summary>
-    /// ⛔ The reference's own stream is in phase: lag 0 predicts strictly better
+    /// The reference's own stream is in phase: lag 0 predicts strictly better
     /// than being a tick out in either direction.
     /// </summary>
     /// <remarks>
@@ -174,11 +174,11 @@ public class InputLagSweepTests
     }
 
     /// <summary>
-    /// ⛔ The vacuity guard: being a tick out has to COST something, or the test
+    /// The vacuity guard: being a tick out has to COST something, or the test
     /// above proves nothing.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>This is the instrument's own calibration, and it is what a
+    /// <b>This is the instrument's own calibration, and it is what a
     /// mutation check would otherwise have to supply.</b> Shifting the inputs by
     /// one tick is exactly the defect <c>486ef3e</c> put on the wire, so a
     /// recording where <c>+1</c> is no worse than <c>0</c> is a recording this
@@ -202,11 +202,11 @@ public class InputLagSweepTests
     }
 
     /// <summary>
-    /// ⛔ <b>The configuration that would have caught <c>486ef3e</c></b>: this
+    /// <b>The configuration that would have caught <c>486ef3e</c></b>: this
     /// server's OWN recording is in phase.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Grades what the server PUBLISHES, which the reference fixtures
+    /// <b>Grades what the server PUBLISHES, which the reference fixtures
     /// cannot.</b> Replaying a reference trace exercises the port's physics
     /// against somebody else's stream; replaying the port's own recording asks
     /// whether the keys this server put on the wire explain the positions it put
@@ -214,7 +214,7 @@ public class InputLagSweepTests
     /// the right keys and only the broadcast was stale — so it is invisible to
     /// every other test in this file.
     /// <para>
-    /// ⚠️ Both halves in one test rather than two, because the recording is the
+    /// Both halves in one test rather than two, because the recording is the
     /// expensive part: a 900-tick bot match per lag, five times. Splitting them
     /// would double it for no extra coverage.
     /// </para>
@@ -236,7 +236,7 @@ public class InputLagSweepTests
                 + $"the broadcast is publishing a different tick's input than it simulated "
                 + $"[{Describe(curve)}]");
 
-            // ⚠️ The vacuity half. Bots standing still are in phase at every lag.
+            // The vacuity half. Bots standing still are in phase at every lag.
             Assert.True(
                 curve[1] > curve[0] && curve[-1] > curve[0],
                 $"being a tick out cost nothing, so this recording could not have "
@@ -256,7 +256,7 @@ public class InputLagSweepTests
     }
 
     /// <summary>
-    /// ⚠️ The curve is monotone away from zero, which is what makes the argmin
+    /// The curve is monotone away from zero, which is what makes the argmin
     /// meaningful rather than a local dip.
     /// </summary>
     /// <remarks>

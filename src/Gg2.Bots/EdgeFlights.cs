@@ -5,17 +5,17 @@ namespace Gg2.Bots;
 
 /// <summary>How a single flight of one real nav edge ended.</summary>
 /// <remarks>
-/// ⚠️ <b>The first five are SKIPS, not refusals, and keeping them apart is the
+/// <b>The first five are SKIPS, not refusals, and keeping them apart is the
 /// whole point of this type.</b> A harness whose goal A* routes to another way,
 /// or whose hop the follower would steer as some other edge, measures a
 /// different edge and then reports the answer against the edge it meant to
 /// measure — which is how "zero sticky jumps across 48 real edges" was quoted
 /// for a fault that was neither the arm's nor those edges'.
 /// <para>
-/// ⚠️ <b>Only <see cref="RoutedAround"/> and <see cref="NoRoute"/> actually fire
-/// on today's caches</b>, and the other three are the harness refusing to guess.
-/// Measured 2026-08-28 — see <c>EdgeFlightTests</c>, which pins both of the
-/// zeroes rather than leaving them as an assumption.
+/// <b>Only <see cref="RoutedAround"/> and <see cref="NoRoute"/> actually fire
+/// on today's caches</b>, and the other three are the harness refusing to guess
+/// — see <c>EdgeFlightTests</c>, which pins both of the zeroes rather than
+/// leaving them as an assumption.
 /// </para>
 /// </remarks>
 public enum EdgeFlightOutcome
@@ -24,7 +24,7 @@ public enum EdgeFlightOutcome
     /// The from-node's own midpoint does not resolve back to the from-node.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>It cannot fire for a midpoint start, and that is a proof rather
+    /// <b>It cannot fire for a midpoint start, and that is a proof rather
     /// than a measurement.</b> <see cref="NavGraph.NodeFromWorld"/> ranks
     /// <c>dy * 4 + dx</c>; a node's own stand y gives it <c>dy = 0</c> exactly,
     /// its own midpoint column gives <c>dx = 0</c>, and no second node can hold
@@ -45,7 +45,7 @@ public enum EdgeFlightOutcome
     /// A route exists but it is not this one hop — A* went round.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Not a refusal.</b> The search costs a jump the same as anything
+    /// <b>Not a refusal.</b> The search costs a jump the same as anything
     /// else, so a two-second walk around a ledge routinely beats the arc over it;
     /// on <c>koth_harvest</c> that is how four of four "flights" arrived without
     /// leaving the ground. The edge is untestable through a route, so it is
@@ -58,11 +58,11 @@ public enum EdgeFlightOutcome
     /// what the follower would steer.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The item-A shape, from the other side: 11,615 of the shipped graphs'
+    /// The item-A shape, from the other side: 11,615 of the shipped graphs'
     /// 104,087 node pairs carry more than one edge kind. Flying the pair does not
     /// fly this edge, so the result says nothing about it.
     /// <para>
-    /// ⚠️ <b>Zero across all 22,528 arc edges of the shipped and sticky caches,
+    /// <b>Zero across all 22,528 arc edges of the shipped and sticky caches,
     /// on both teams</b> — no pair carries a strictly <em>cheaper</em> routable
     /// edge of another kind. That is not the same as "parallel edges are
     /// harmless": item A's bug was picking among them by <b>index order</b>, and
@@ -89,21 +89,20 @@ public enum EdgeFlightOutcome
 /// <see cref="NavEdgeType.StickyJump"/>, rocket jumps for a
 /// <see cref="NavEdgeType.RocketJump"/>, air jumps for a
 /// <see cref="NavEdgeType.DoubleJump"/>, and zero for the kinds that have no
-/// counter. ⚠️ <b>Arriving is not flying</b>: two nodes a jump apart are often
+/// counter. <b>Arriving is not flying</b>: two nodes a jump apart are often
 /// close enough to walk between, so an arrival with zero manoeuvres is an
 /// arrival the arm had no part in — eight of <c>gg_debug</c>'s twenty measurable
 /// rocket jumps, and 114 of <c>ctf_truefort</c>'s 328.
 /// <para>
-/// ⚠️ <b>It counts what the follower ASKED for, not what the weapon fired.</b>
+/// <b>It counts what the follower ASKED for, not what the weapon fired.</b>
 /// <see cref="BotPathState"/>'s counters are incremented inside the takeoff
 /// gate, so a driver that drops <see cref="PathFollower.ApplyLaunch"/> still
-/// reports manoeuvres — measured, by doing it: <c>gg_debug</c> went from 20
-/// arrivals and 12 flights to 16 and 8, not to zero. The arrivals are the half
-/// that collapses.
+/// reports manoeuvres: <c>gg_debug</c> went from 20 arrivals and 12 flights to
+/// 16 and 8, not to zero. The arrivals are the half that collapses.
 /// </para>
 /// </param>
 /// <param name="Blacklists">
-/// Edges the bot gave up on. ⚠️ <b>Not expected to be zero</b> — the off-route
+/// Edges the bot gave up on. <b>Not expected to be zero</b> — the off-route
 /// machinery gives an arc one retry before banning it, and two of
 /// <c>gg_debug</c>'s twenty measurable rocket jumps use it and still arrive. It
 /// is a cost to watch rather than a fault.
@@ -142,20 +141,16 @@ public readonly record struct EdgeFlight(
 /// gates in the test project point it at the shipped caches, and a sweep of
 /// somebody else's cache is one call rather than a rewrite.
 /// <para>
-/// ⚠️ <b>Three premises, asserted rather than assumed, and every one of them was
-/// silently false the first time this was done by hand.</b>
+/// <b>Three premises, asserted rather than assumed.</b>
 /// </para>
 /// <list type="number">
 /// <item>
 /// <b>Start at the from-node's MIDPOINT and check it resolves.</b>
-/// ⚠️ <b>The reason recorded for this in docs/TRAPS-BOTS.md was wrong, and is
-/// corrected there</b>: the takeoff column resolves to the from-node on all
-/// 18,396 arc edges of the shipped caches, so whatever the first hand-rolled
-/// harness started from, it was not that either. The midpoint is used because it
-/// is <em>provably</em> the from-node
-/// (<see cref="EdgeFlightOutcome.StartUnresolved"/>) where the takeoff column
-/// only happens to be, and the check stays because the start position is the
-/// thing somebody will change.
+/// The takeoff column resolves to the from-node on all 18,396 arc edges of the
+/// shipped caches. The midpoint is used because it is <em>provably</em> the
+/// from-node (<see cref="EdgeFlightOutcome.StartUnresolved"/>) where the takeoff
+/// column only happens to be, and the check stays because the start position is
+/// the thing somebody will change.
 /// </item>
 /// <item>
 /// <b>Check the planned route IS this hop.</b> A* costs a jump the same as a
@@ -164,8 +159,7 @@ public readonly record struct EdgeFlight(
 /// rocket jumps and 155 of <c>koth_harvest</c>'s 275 sticky jumps</b>. Driven
 /// anyway, each of those is a bot walking somewhere while a counter says the arc
 /// was attempted; with the check removed <c>gg_debug</c> reports 67 arrivals out
-/// of 67 against 12 real flights, which is the shape of the number that was
-/// quoted by hand.
+/// of 67 against 12 real flights.
 /// </item>
 /// <item>
 /// <b>Check the follower would steer THIS edge.</b> A node pair can carry a
@@ -174,7 +168,7 @@ public readonly record struct EdgeFlight(
 /// </item>
 /// </list>
 /// <para>
-/// ⚠️ <b>The bot is driven with the launch hand-off</b>
+/// <b>The bot is driven with the launch hand-off</b>
 /// (<see cref="PathFollower.ApplyLaunch"/>), not with the follower's movement
 /// keys alone. A harness that keeps only LEFT / RIGHT / JUMP / DOWN gets a
 /// follower that requests a rocket or a mine and never fires it, and every arc
@@ -192,7 +186,7 @@ public static class EdgeFlights
     /// <see cref="NavConstants.SjSetupTicks"/> before it, but the bot also has to
     /// walk from the node's midpoint to the takeoff column, and
     /// <c>BOT_TAKEOFF_PATIENCE</c> plus a re-plan can legitimately cost it two
-    /// approaches. ⚠️ It is a budget, not a measurement — nothing should be
+    /// approaches. It is a budget, not a measurement — nothing should be
     /// pinned to it, and a flight that needs most of it is a flight worth looking
     /// at.
     /// </remarks>
@@ -202,7 +196,7 @@ public static class EdgeFlights
     /// Which class is asked to fly an edge of this kind.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Not a preference — for two of these it is the only class that can.
+    /// Not a preference — for two of these it is the only class that can.
     /// <see cref="RocketModel.Ready"/> wants a rocket launcher and
     /// <see cref="StickyModel.Ready"/> a Minegun, so a demoman on a rocket-jump
     /// edge refuses to leave the ground and the refusal says nothing about the
@@ -220,7 +214,7 @@ public static class EdgeFlights
     /// The query that class asks the search with.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b><see cref="NavQuery.CanStickyJump"/> has no live derivation and that
+    /// <b><see cref="NavQuery.CanStickyJump"/> has no live derivation and that
     /// is deliberate, not an omission.</b> <see cref="ScriptedBot"/> rebuilds
     /// <see cref="NavQuery.CanDoubleJump"/> and <see cref="NavQuery.CanRocketJump"/>
     /// from the character every tick and never touches the sticky flag, because
@@ -241,7 +235,7 @@ public static class EdgeFlights
     /// happened.
     /// </summary>
     /// <param name="world">
-    /// A <b>fresh</b> world. ⚠️ One flight leaves a character, a spent weapon and
+    /// A <b>fresh</b> world. One flight leaves a character, a spent weapon and
     /// possibly a live mine behind it, so re-using a world makes the second
     /// flight a measurement of the first one's litter.
     /// </param>
@@ -295,7 +289,7 @@ public static class EdgeFlights
             return Skipped(EdgeFlightOutcome.Shadowed);
         }
 
-        // ⚠️ The plan above was a dry run against coordinates; the bot has to be
+        // The plan above was a dry run against coordinates; the bot has to be
         // planned for from where it will actually stand. Re-planning from a fresh
         // state is cheaper to reason about than reconciling the two, and the
         // follower plans on its first Step anyway because SetGoal zeroes ReplanAt.
@@ -333,7 +327,7 @@ public static class EdgeFlights
     /// <param name="type">The edge kind to sweep.</param>
     /// <param name="team">Which team the bot is on.</param>
     /// <param name="limit">
-    /// How many edges to fly at most, or 0 for all of them. ⚠️ A sweep rebuilds
+    /// How many edges to fly at most, or 0 for all of them. A sweep rebuilds
     /// the map and its collision world per flight, so a whole cache is minutes
     /// rather than seconds — a gate wants a limit and a measurement does not.
     /// </param>
@@ -401,7 +395,7 @@ public static class EdgeFlights
 
     /// <summary>The world x of a node's middle — where a bot standing on it sits.</summary>
     /// <remarks>
-    /// ⚠️ <b>The middle, not <see cref="NavEdge.Takeoff"/>.</b> The takeoff column
+    /// <b>The middle, not <see cref="NavEdge.Takeoff"/>.</b> The takeoff column
     /// is where the arc was proved from and is the obvious place to start from;
     /// on every shipped arc it also sits inside the from-node's span, so the two
     /// agree today. The middle is used because it is the answer that cannot stop
@@ -442,7 +436,7 @@ public static class EdgeFlights
 
             ref readonly var self = ref world.Character(slot);
 
-            // ⚠️ Rebuilt from live state every tick, exactly as ScriptedBot does.
+            // Rebuilt from live state every tick, exactly as ScriptedBot does.
             // CanRocketJump is the weapon plus an hp test, so a soldier that has
             // just cost itself 30hp sheds its rocket jumps mid-route — and
             // BotPathState.PlanQuery is what stops that unplanning the arc it is

@@ -8,7 +8,7 @@ namespace Gg2.Tests;
 /// That the public lobby is OFF unless somebody asked for it.
 /// </summary>
 /// <remarks>
-/// ⛔ <b>This is a privacy property, not a feature test.</b> Lobby registration
+/// <b>This is a privacy property, not a feature test.</b> Lobby registration
 /// publishes the server's address, name, map and player count to
 /// <c>ganggarrison.com</c>. The reference has it on, because a person ticked a
 /// box in a hosting menu to get there; a headless binary has no such moment, so
@@ -16,7 +16,7 @@ namespace Gg2.Tests;
 /// would be silent, would not fail anything else, and would be discovered by
 /// somebody finding their private server in a public list.
 /// <para>
-/// ⚠️ <b>There is deliberately NO test of the ON path.</b> Exercising it would
+/// <b>There is deliberately NO test of the ON path.</b> Exercising it would
 /// send a real datagram to a real third-party server from anyone's test run,
 /// which is exactly the thing this file exists to prevent. The packet's contents
 /// are covered by <see cref="LobbyRegistrationTests"/>, which needs no socket.
@@ -48,7 +48,7 @@ public sealed class LobbyOptInTests
     /// Nothing else in the option set turns it on as a side effect.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The switches most likely to grow an implicit "…and list it publicly"
+    /// The switches most likely to grow an implicit "…and list it publicly"
     /// are the ones about being played on. Named individually so that adding one
     /// to this list is a deliberate act.
     /// </remarks>

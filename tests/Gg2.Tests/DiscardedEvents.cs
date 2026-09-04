@@ -7,7 +7,7 @@ namespace Gg2.Tests;
 /// directly and do not care what it announced.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>The parameter is required rather than optional on purpose</b>, so that
+/// <b>The parameter is required rather than optional on purpose</b>, so that
 /// a new damage site cannot quietly accumulate nothing — see
 /// <see cref="DamageApi"/>. That decision costs the unit tests an argument they
 /// have no use for, and this is the cheapest honest way to pay it: a convenience
@@ -20,7 +20,7 @@ namespace Gg2.Tests;
 /// rather than merely useless, and one per thread costs nothing.
 /// </para>
 /// <para>
-/// ⚠️ <b>Do not use this in a test that is about what a tick announced.</b>
+/// <b>Do not use this in a test that is about what a tick announced.</b>
 /// Those declare their own and assert on it; this one is deliberately never
 /// cleared, so its contents are meaningless.
 /// </para>

@@ -12,7 +12,7 @@ namespace Gg2.Tests;
 /// <c>Documentation/Authentication.txt</c>, <c>Scripts/Rewards/</c> and
 /// <c>processClientCommands.gml:320-336</c>.
 /// <para>
-/// ⚠️ <b>The auth server is a third party and is never contacted from here.</b>
+/// <b>The auth server is a third party and is never contacted from here.</b>
 /// The end-to-end test stands up a loopback listener and points
 /// <c>--auth-server</c> at it, which is also the only way this flow can be
 /// exercised at all — and the reason <c>AuthServerHost</c> is an option rather
@@ -25,7 +25,7 @@ public sealed class RewardAuthTests
     /// The request the game server sends the auth server, byte for byte.
     /// </summary>
     /// <remarks>
-    /// <c>rewardAuthStart.gml</c>. ⚠️ <b>The UUID is big-endian</b> —
+    /// <c>rewardAuthStart.gml</c>. <b>The UUID is big-endian</b> —
     /// <c>parseUuid</c> emits the hex in reading order — so a
     /// <see cref="Guid"/>-derived byte array would be wrong in its first three
     /// fields and the auth server would reject every request. That is the kind of
@@ -80,10 +80,10 @@ public sealed class RewardAuthTests
     /// Challenges are 16 bytes and are not repeated.
     /// </summary>
     /// <remarks>
-    /// ⚠️ A predictable or shared challenge is the one thing that would weaken
+    /// A predictable or shared challenge is the one thing that would weaken
     /// this handshake: two clients handed the same nonce could replay each
     /// other's answer. The reference draws from GM8's free-running generator;
-    /// this draws from a cryptographic one, and ⛔ <b>neither may draw from
+    /// this draws from a cryptographic one, and <b>neither may draw from
     /// <c>WorldState.Random</c></b>, which is observable simulation.
     /// </remarks>
     [Fact]
@@ -104,7 +104,7 @@ public sealed class RewardAuthTests
     /// With rewards off, a request is answered with silence.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The default, and a deliberate departure from the reference</b>,
+    /// <b>The default, and a deliberate departure from the reference</b>,
     /// which answers unconditionally. Turning it on commits the server to
     /// relaying its players' user ids to a third party, so it is opt-in. The
     /// client neither retries nor blocks — it sends the request once on join and
@@ -162,7 +162,7 @@ public sealed class RewardAuthTests
         SendRewardRequest(player, "user42");
         harness.TickUntil(() => entry.RewardChallenge is not null, "the challenge to be minted");
 
-        // ⚠️ Read off the server rather than scraped out of the stream. A
+        // Read off the server rather than scraped out of the stream. A
         // challenge is 16 random bytes, so there is nothing in it to recognise —
         // a scan for the message byte could land on a coincidental 51 in
         // somebody's position data and the test would be quietly measuring
@@ -185,7 +185,7 @@ public sealed class RewardAuthTests
 
         player.Send([(byte)MessageType.RewardChallengeResponse, .. answer]);
 
-        // ⚠️ Waits on the SERVER's state rather than on a byte in the stream, so
+        // Waits on the SERVER's state rather than on a byte in the stream, so
         // the wait cannot be satisfied by noise and then assert against it.
         WaitFor(harness, () => entry.Rewards.Length > 0, "the auth to come back");
 
@@ -219,7 +219,7 @@ public sealed class RewardAuthTests
     /// <remarks>
     /// <c>rewardAuthStart.gml</c>'s <c>rewardAuthAlreadyStarted</c> and
     /// <c>processClientCommands.gml</c>'s <c>variable_local_exists</c> pair.
-    /// ⚠️ <b>Together they are what bounds the outbound traffic a client can
+    /// <b>Together they are what bounds the outbound traffic a client can
     /// cause</b> — without them one socket can make this server open a connection
     /// to a third party per packet it feels like sending.
     /// </remarks>
@@ -256,7 +256,7 @@ public sealed class RewardAuthTests
         player.Send([(byte)MessageType.RewardChallengeResponse, .. answer]);
         WaitFor(harness, () => auth.Connections > 0, "the auth request");
 
-        // ⚠️ Then keep ticking and waiting, because the claim is that a SECOND
+        // Then keep ticking and waiting, because the claim is that a SECOND
         // connection never happens — and "it has not happened yet" is only
         // evidence if the second one had time to.
         for (var i = 0; i < 30; i++)
@@ -273,12 +273,11 @@ public sealed class RewardAuthTests
     /// relay does off the tick thread.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A tick count is the wrong clock for this and passed only by luck.</b>
-    /// <c>TickUntil</c> can run 600 ticks in a couple of milliseconds, which on a
-    /// loaded machine is less time than the thread pool takes to schedule the
-    /// pump task at all — so the first version of these tests passed alone and
-    /// failed in the full run. The auth relay is deliberately asynchronous, so a
-    /// test of it has to wait the way the outside world does.
+    /// <b>A tick count is the wrong clock for this.</b> <c>TickUntil</c> can run
+    /// 600 ticks in a couple of milliseconds, which on a loaded machine is less
+    /// time than the thread pool takes to schedule the pump task at all. The auth
+    /// relay is deliberately asynchronous, so a test of it has to wait the way
+    /// the outside world does.
     /// </remarks>
     private static void WaitFor(ServerHarness harness, Func<bool> condition, string what)
     {
@@ -302,7 +301,7 @@ public sealed class RewardAuthTests
     /// Finds a whole message in a broadcast stream.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A sequence match rather than a scan for the type byte.</b> The
+    /// <b>A sequence match rather than a scan for the type byte.</b> The
     /// reward messages share this stream with an <c>INPUTSTATE</c> every tick,
     /// whose position bytes take every value — so a one-byte search finds a false
     /// positive sooner or later and the test becomes a coin flip nobody
@@ -325,7 +324,7 @@ public sealed class RewardAuthTests
 /// </summary>
 /// <remarks>
 /// Speaks the one exchange the real service does: read a request, write a reward
-/// string, close. ⚠️ <b>Closing is the protocol</b>, not politeness — the
+/// string, close. <b>Closing is the protocol</b>, not politeness — the
 /// response has no length and no terminator, so end-of-stream is the only thing
 /// that says where it ends.
 /// </remarks>

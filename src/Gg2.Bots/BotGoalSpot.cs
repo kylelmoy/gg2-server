@@ -19,7 +19,7 @@ public enum BotLos
 /// <summary>Where <see cref="BotGoalSpot"/> decided to stand.</summary>
 /// <param name="Node">The nav node, or -1 if nothing in the graph qualified.</param>
 /// <param name="X">
-/// The chosen node's own stand position. ⚠️ On a miss this is the anchor itself
+/// The chosen node's own stand position. On a miss this is the anchor itself
 /// rather than stale, so a caller that ignores <paramref name="Node"/> gets a
 /// usable point instead of whatever the last call left behind.
 /// </param>
@@ -48,7 +48,7 @@ public readonly record struct BotSpot(int Node, double X, double Y);
 /// O(nodes) scoring pass on any one frame.
 /// </para>
 /// <para>
-/// ⚠️ <b>Reachability is deliberately NOT checked.</b> Answering it costs an A*
+/// <b>Reachability is deliberately NOT checked.</b> Answering it costs an A*
 /// per candidate and the caller is about to run exactly one A* anyway — so
 /// <see cref="BotObjective"/> watches for a spot goal that never produces a path
 /// and falls back to the plain objective for a while instead. <b>A goal that
@@ -59,7 +59,7 @@ public sealed class BotGoalSpot
 {
     private readonly NavGraph _graph;
 
-    // ⚠️ Reused across calls, like NavSearch's scratch, and not thread-safe for
+    // Reused across calls, like NavSearch's scratch, and not thread-safe for
     // the same reason: one search at a time per instance.
     private readonly List<(int Node, double Rank)> _candidates = [];
 
@@ -90,7 +90,7 @@ public sealed class BotGoalSpot
     /// <param name="los">Which sightline to the anchor the spot must have.</param>
     /// <param name="highBonus">
     /// How much a pixel of height above the anchor is worth, in the same world
-    /// pixels every other term is in. ⚠️ Height is the whole model of "a good
+    /// pixels every other term is in. Height is the whole model of "a good
     /// position" here: it is what makes a position advantageous and it is the one
     /// part of that which is cheap to ask for. No sightline graph, no cover map.
     /// </param>
@@ -106,7 +106,7 @@ public sealed class BotGoalSpot
 
         Tries = 0;
 
-        // ⚠️ The anchor is the fallback, published even on a miss — see BotSpot.X.
+        // The anchor is the fallback, published even on a miss — see BotSpot.X.
         var miss = new BotSpot(-1, targetX, targetY);
 
         if (maxDistance <= minDistance)
@@ -129,7 +129,7 @@ public sealed class BotGoalSpot
             // walk less, stand in the middle of the band rather than on either
             // edge of it, and prefer height when asked for.
             //
-            // ⚠️ A negative rank is fine and is not clamped. Clamping at 1 the way
+            // A negative rank is fine and is not clamped. Clamping at 1 the way
             // botFindTarget does would collapse every high-ground candidate onto
             // one priority and throw away the ordering this exists for.
             // (botFindTarget clamps only so a printed threat reads sensibly.)
@@ -140,7 +140,7 @@ public sealed class BotGoalSpot
             _candidates.Add((node, rank));
         }
 
-        // ⚠️ Ties broken by node index rather than left to the sort. List.Sort is
+        // Ties broken by node index rather than left to the sort. List.Sort is
         // unstable, and a run of this suite is asserted to be reproducible — an
         // arbitrary tie order would make a bot pick a different spot on a rerun
         // for no reason anybody could see. The reference pops a ds_priority, whose
@@ -182,7 +182,7 @@ public sealed class BotGoalSpot
     /// facing the target.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Whichever part of the run faces the target, not its middle.</b> A long
+    /// <b>Whichever part of the run faces the target, not its middle.</b> A long
     /// floor's midpoint can be well out of range while one of its ends is not, and
     /// rejecting the whole run for that would lose most of the usable ground on a
     /// map.

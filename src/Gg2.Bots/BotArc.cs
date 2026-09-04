@@ -8,7 +8,7 @@ namespace Gg2.Bots;
 /// it is aimed at — sampled along the <b>parabola</b>, not the straight line.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>Nothing else in the bot layer ever checks a projectile's arc.</b> Target
+/// <b>Nothing else in the bot layer ever checks a projectile's arc.</b> Target
 /// selection, the keep-target test and the spot search are all a single straight
 /// chest-to-chest sightline, while the aim solver deliberately aims <em>above</em>
 /// the target to compensate for drop — and the amount is large:
@@ -23,7 +23,7 @@ namespace Gg2.Bots;
 /// that serves the demoman, the soldier's wasted low-ceiling rocket, and every
 /// arcing weapon in the game.
 /// <para>
-/// ⚠️ <b>Withholding rather than re-solving is deliberate.</b> A flatter solution
+/// <b>Withholding rather than re-solving is deliberate.</b> A flatter solution
 /// generally means closing the distance, which is a positioning decision, and
 /// <see cref="BotGoalSpot"/> owns those.
 /// </para>
@@ -35,7 +35,7 @@ public static class BotArc
     /// (<paramref name="targetX"/>, <paramref name="targetY"/>) unobstructed.
     /// </summary>
     /// <param name="speed">
-    /// ⚠️ Must be positive. A hitscan weapon has no arc to sample and its caller
+    /// Must be positive. A hitscan weapon has no arc to sample and its caller
     /// should not be here; zero answers <c>true</c> rather than dividing.
     /// </param>
     public static bool Clear(
@@ -51,13 +51,13 @@ public static class BotArc
         var sx = self.X;
         var sy = self.Y;
 
-        // ⚠️ Gml.LengthDir rather than cos/sin: GM8's y axis points down and these
+        // Gml.LengthDir rather than cos/sin: GM8's y axis points down and these
         // already account for it, and the engine snaps their results where a bare
         // trig call does not (docs/TRAPS-SIMULATION.md, "lengthdir_x and lengthdir_y snap too").
         var vx = Gml.LengthDirX(speed, aimDegrees);
         var vy = Gml.LengthDirY(speed, aimDegrees);
 
-        // ⚠️ When the shot is very nearly vertical the horizontal offset says
+        // When the shot is very nearly vertical the horizontal offset says
         // nothing about the flight time, so fall back to the straight-line estimate.
         // Clamped the same way the lead solver clamps its own t, so an unreachable
         // aim point cannot make this sample a thousand ticks of parabola.
@@ -65,7 +65,7 @@ public static class BotArc
             ? (targetX - sx) / vx
             : Gml.PointDistance(sx, sy, targetX, targetY) / speed;
 
-        // ⚠️ The LOWER bound is reachable and gated — a target on the shooter's own
+        // The LOWER bound is reachable and gated — a target on the shooter's own
         // position gives t ≈ 0 and collapses every sample onto the muzzle. The UPPER
         // bound is a guard against an unreachable aim point walking a thousand ticks
         // of parabola, and is deliberately NOT gated: it is a cost bound like
@@ -75,13 +75,12 @@ public static class BotArc
 
         var filter = CollisionFilter.ForBullet();
 
-        // ⚠️ The samples are laid out FIRST, so the rects can be filtered once
-        // for the whole parabola rather than once per segment. Measured
-        // 2026-09-02: this test is ten segments of a rocket's whole flight, and
-        // walking the map's solid rects ten times over — building a
-        // LineCollider for each, to throw it away — was the larger half of what
-        // the test cost. The samples themselves are unchanged, which is what
-        // keeps the answer identical.
+        // The samples are laid out FIRST, so the rects can be filtered once
+        // for the whole parabola rather than once per segment: walking the
+        // map's solid rects once per segment — building a LineCollider for
+        // each, to throw it away — is the larger half of what this test
+        // costs. The samples themselves are unchanged, which keeps the
+        // answer identical.
         Span<double> px = stackalloc double[BotConstants.ArcSamples + 1];
         Span<double> py = stackalloc double[BotConstants.ArcSamples + 1];
 
@@ -95,7 +94,7 @@ public static class BotArc
 
             if (i == BotConstants.ArcSamples)
             {
-                // ⚠️ The last sample is the TARGET itself, not the parabola's own
+                // The last sample is the TARGET itself, not the parabola's own
                 // endpoint. The flight time is recovered from the horizontal offset,
                 // which carries a tick or so of error, and letting that error put the
                 // final sample a few pixels INTO the floor the target is standing on
@@ -109,7 +108,7 @@ public static class BotArc
             {
                 var t = flight * i / BotConstants.ArcSamples;
 
-                // ⚠️ `t * (t + 1) / 2` is EXACT rather than a continuous
+                // `t * (t + 1) / 2` is EXACT rather than a continuous
                 // approximation. Gravity is added to vspeed BEFORE the move is
                 // applied, so after t ticks the accumulated sag is the triangular
                 // number grav*(1 + 2 + ... + t) — the same correction BotAim.Solve
@@ -136,7 +135,7 @@ public static class BotArc
             bottom = Math.Max(bottom, py[i]);
         }
 
-        // ⛔ Every rect that could block ANY of the segments, filtered once. The
+        // Every rect that could block ANY of the segments, filtered once. The
         // box encloses every sample, so a rect this drops cannot meet a segment
         // — CollisionWorld.BulletRectsIn carries the argument, and both ends use
         // the same overlap body.

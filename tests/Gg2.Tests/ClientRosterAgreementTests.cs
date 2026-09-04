@@ -9,12 +9,11 @@ namespace Gg2.Tests;
 /// What a client was told must add up to what the server believes.
 /// </summary>
 /// <remarks>
-/// ⛔ <b>The gate this project did not have.</b> <c>docs/PARITY.md</c>, "The gap
-/// in every tier above": every other automated check reads the server, so a
-/// disagreement between the server's state and what it actually emitted is
-/// invisible to all of them. Two such bugs were found by hand on 2026-09-03.
+/// <c>docs/PARITY.md</c>, "The gap in every tier above": every other automated
+/// check reads the server, so a disagreement between the server's state and what
+/// it actually emitted is invisible to all of them.
 /// <para>
-/// ⚠️ <b>A rotation is the hard case and gets its own tests.</b> The client sets
+/// <b>A rotation is the hard case and gets its own tests.</b> The client sets
 /// every player to spectator by itself on <c>CHANGE_MAP</c>
 /// (<c>ClientBeginStep.gml:514-544</c>), and a <c>FULL_UPDATE</c>'s player block
 /// carries <b>no team</b> — so after a rotation <c>PLAYER_CHANGETEAM</c> is the
@@ -40,7 +39,7 @@ public sealed class ClientRosterAgreementTests
             options.ShuffleRotation = ShuffleMode.None;
             options.NavCacheDirectory = ReferenceTree.NavCacheDirectory;
 
-            // ⚠️ Named factory, never `default` or `with` off a zeroed one — see
+            // Named factory, never `default` or `with` off a zeroed one — see
             // BotPopulationOptions.Defaults. MinHumans 0 so the bots fill a
             // server whose only human is the watcher.
             options.Bots = new BotPopulationOptions(
@@ -82,11 +81,10 @@ public sealed class ClientRosterAgreementTests
                 + $"and {mirror.Teams[slot]} to the client");
         }
 
-        // ⚠️ Names too, and not for completeness: a stream that has slipped its
-        // framing produces phantom roster entries with EMPTY names — that is
-        // what a real client showed when this was broken, 13 entries against the
-        // server's 5. Comparing only teams would let "everybody is a spectator
-        // and there are eight of them" pass.
+        // Names too, and not for completeness: a stream that has slipped its
+        // framing produces phantom roster entries with EMPTY names. Comparing
+        // only teams would let "everybody is a spectator and there are eight
+        // of them" pass.
         for (var slot = 0; slot < server.Count; slot++)
         {
             Assert.True(
@@ -95,7 +93,7 @@ public sealed class ClientRosterAgreementTests
                 + $"and '{mirror.Names[slot]}' to the client");
         }
 
-        // ⛔ And the sharper question, which team equality does not ask: was this
+        // And the sharper question, which team equality does not ask: was this
         // client ever handed a character for somebody it holds as a spectator?
         // That is the GM8 fatal error, not an approximation of it.
         Assert.True(
@@ -108,7 +106,7 @@ public sealed class ClientRosterAgreementTests
     /// The control: with nobody rotating, the two agree.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Not decoration.</b> A mirror wired up wrongly — a reader that never
+    /// <b>Not decoration.</b> A mirror wired up wrongly — a reader that never
     /// applied <c>PLAYER_CHANGETEAM</c>, say — would fail every test in this file
     /// including the ones that are supposed to fail, and the rotation result
     /// would mean nothing. This says the instrument reads correctly before it is
@@ -153,7 +151,7 @@ public sealed class ClientRosterAgreementTests
     }
 
     /// <summary>
-    /// ⛔ The rotation. With bots, this is the reported crash.
+    /// The rotation. With bots, this is the reported crash.
     /// </summary>
     /// <remarks>
     /// Reproduces <c>docs/PLUGINS.md</c>, "A rotation kills every connected
@@ -179,7 +177,7 @@ public sealed class ClientRosterAgreementTests
     /// The same rotation with no bots, which is the reported passing case.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Kept even though it passes.</b> It is what makes "bots are required"
+    /// <b>Kept even though it passes.</b> It is what makes "bots are required"
     /// a property of this suite rather than a line in someone's write-up, so a
     /// later change that breaks the empty case too is distinguishable from this
     /// bug rather than looking like it.
@@ -199,17 +197,15 @@ public sealed class ClientRosterAgreementTests
     }
 
     /// <summary>
-    /// ⛔ Bots must still be playing after a rotation.
+    /// Bots must still be playing after a rotation.
     /// </summary>
     /// <remarks>
-    /// The bigger of the two bugs, and the one that is invisible even to a real
-    /// client: <c>ResetForNewMap</c> makes every player a spectator, and
-    /// <c>BotPopulationService.Service</c> returns early while
+    /// Invisible even to a real client: <c>ResetForNewMap</c> makes every player
+    /// a spectator, and <c>BotPopulationService.Service</c> returns early while
     /// <c>bots == target</c> — so nothing puts them back. A server whose bots all
     /// spectate still ticks, still rotates and still reports matches as
-    /// completed. ⚠️ <b>This asserts the SERVER's own state</b>, unlike the rest
-    /// of this file: it is a bug the server can see, and it went unnoticed only
-    /// because nothing asked.
+    /// completed. <b>This asserts the SERVER's own state</b>, unlike the rest of
+    /// this file: it is a bug the server can see.
     /// </remarks>
     [Fact]
     public void BotsAreStillPlayingAfterARotation()
@@ -235,7 +231,7 @@ public sealed class ClientRosterAgreementTests
     }
 
     /// <summary>
-    /// ⛔ The HUD block after a GAMEMODE-changing rotation must be the new
+    /// The HUD block after a GAMEMODE-changing rotation must be the new
     /// gamemode's.
     /// </summary>
     /// <remarks>
@@ -246,15 +242,14 @@ public sealed class ClientRosterAgreementTests
     /// the client read a KotH one. The stream desynchronised permanently at the
     /// first <c>CAPS_UPDATE</c> after the change.
     /// <para>
-    /// ⚠️ <b>Why the rest of this file missed it, which is the lesson.</b> The
-    /// HUD block rides on <c>FULL_UPDATE</c> and <c>CAPS_UPDATE</c> only
-    /// (<c>serializeState.gml</c>), and after a rotation nothing was capturing
-    /// anything, so no <c>CAPS_UPDATE</c> was ever emitted in the few hundred
-    /// ticks the other tests run. The gate was right and the exercise was too
-    /// short. **A layout test has to make the layout actually get written.**
+    /// <b>Why the rest of this file could miss it.</b> The HUD block rides on
+    /// <c>FULL_UPDATE</c> and <c>CAPS_UPDATE</c> only (<c>serializeState.gml</c>),
+    /// so a test that never runs long enough for a <c>CAPS_UPDATE</c> to be
+    /// emitted after a rotation never exercises the write path. **A layout test
+    /// has to make the layout actually get written.**
     /// </para>
     /// <para>
-    /// ⚠️ <b>A same-gamemode rotation is NOT a control for this</b> — koth →
+    /// <b>A same-gamemode rotation is NOT a control for this</b> — koth →
     /// koth was healthy against a real client precisely because the stale
     /// gamemode happened to equal the live one. The pair that matters is
     /// gamemode-changing versus not.
@@ -270,7 +265,7 @@ public sealed class ClientRosterAgreementTests
 
         harness.Tick(30);
 
-        // ⚠️ BOTH directions. CTF → KotH and KotH → CTF are different stale
+        // BOTH directions. CTF → KotH and KotH → CTF are different stale
         // pairings, and a fix that only reached one of them would leave half the
         // rotation broken.
         Rotate(harness, mirror);
@@ -294,13 +289,12 @@ public sealed class ClientRosterAgreementTests
     /// Runs on until a <c>CAPS_UPDATE</c> arrives, then checks it read back.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The waiting is the point.</b> The HUD block rides on
+    /// <b>The waiting is the point.</b> The HUD block rides on
     /// <c>FULL_UPDATE</c> and <c>CAPS_UPDATE</c> only
     /// (<c>serializeState.gml</c>), so a test that rotates and then ticks a few
     /// hundred times never makes the server write the layout it is trying to
-    /// check. That is exactly how the rest of this file watched this rotation and
-    /// missed the bug. `_frame % 3600` is the two-minute scoreboard heartbeat and
-    /// is the one trigger that needs nothing to happen in the match.
+    /// check. `_frame % 3600` is the two-minute scoreboard heartbeat and is the
+    /// one trigger that needs nothing to happen in the match.
     /// </remarks>
     private static void AssertHudArrivesAndParses(ServerHarness harness, MirrorClient mirror, string when)
     {

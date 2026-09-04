@@ -6,15 +6,13 @@ using Gg2.Protocol;
 namespace Gg2.Tests;
 
 /// <summary>
-/// ⚠️ <b>OPEN, and pinned so that fixing it fails loudly: the port's Arena round
+/// <b>OPEN, and pinned so that fixing it fails loudly: the port's Arena round
 /// loop cannot be replayed.</b>
 /// </summary>
 /// <remarks>
 /// A replayed Arena recording runs two round loops at once — the reference's,
 /// written down in the stream as <c>ARENA_*</c> messages, and the port's own,
-/// derived from who is alive. They are nowhere near each other, and until
-/// 2026-08-28 nothing said so, because the port's arena state had no observable
-/// effect beyond an ammo refill nobody was comparing.
+/// derived from who is alive. They are nowhere near each other.
 /// <para>
 /// <b>The cause is structural, not arithmetic.</b> <c>doEventArenaRestart</c>
 /// ends in <c>respawnEveryone()</c>, and a replay is only allowed to spawn
@@ -23,7 +21,7 @@ namespace Gg2.Tests;
 /// runs on the round-end and round-setup timers alone: 300 + 300 + 1.
 /// </para>
 /// <para>
-/// ⚠️ <b>Injecting the recording's four messages is the obvious fix and is not
+/// <b>Injecting the recording's four messages is the obvious fix and is not
 /// obviously right.</b> Everything else a replay cannot derive — a spawn, a
 /// build, a zoom — is injected because the reference already made the choice
 /// and put it on the wire, and the arena messages qualify. What has no
@@ -34,12 +32,8 @@ namespace Gg2.Tests;
 /// that question first.
 /// </para>
 /// <para>
-/// ⚠️ <b>This file's first version blamed the whole symptom on replay, and a
-/// LIVE bug was hiding behind it</b> — <c>spawningAllowed()</c> moved from the
-/// respawn alarm into <c>PlayerSpawn</c>, so every arena round began with
-/// nobody alive. That is fixed and gated by <see cref="ArenaRoundLoopTests"/>.
-/// <b>Fixing it moved nothing here</b>, which is the evidence that these are two
-/// causes with one symptom rather than one cause seen twice.
+/// This is a distinct cause from the live spawn bug fixed and gated by
+/// <see cref="ArenaRoundLoopTests"/>: fixing that one moved nothing here.
 /// </para>
 /// <para>
 /// The two <see cref="ClientPredictionGateTests"/> arena rows are the price:
@@ -112,7 +106,7 @@ public sealed class ArenaReplayLoopTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The port ends every round one tick after starting it, and gives
+    /// <b>The port ends every round one tick after starting it, and gives
     /// every one of them to Red.</b>
     /// </summary>
     /// <remarks>

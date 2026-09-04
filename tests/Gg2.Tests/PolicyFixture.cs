@@ -10,27 +10,23 @@ namespace Gg2.Tests;
 /// knows its stamp is not this build's.
 /// </summary>
 /// <remarks>
-/// <b>`gg2-rl` handed over <c>checkpoints/vlong_s0/ppo_final.npz</c> and this repo
-/// checked the bytes in.</b> On 2026-09-02 the moving-platform carry bumped
-/// <c>SimulationBehaviourVersion</c> to 2 and <see cref="SimulationStamp.Uuid"/>
-/// with it, so the checkpoint stopped describing this build and <b>25 tests went
-/// red on one cause</b>.
+/// <b><c>checkpoints/vlong_s0/ppo_final.npz</c>, checked in from `gg2-rl`.</b> Its
+/// <see cref="SimulationStamp.Uuid"/> no longer matches this build's, so it
+/// stopped describing this build's physics.
 /// <para>
-/// ⛔ <b>The checked-in file is NOT re-stamped, and must not be.</b> It really was
-/// trained against a different simulation and its bytes still say so. What changed
-/// is what this repo asks of it: the trained policy is no longer something this
-/// project intends to ship, so the checkpoint here is a <b>fixture</b> — 19,355
+/// <b>The checked-in file is NOT re-stamped, and must not be.</b> It really was
+/// trained against a different simulation and its bytes still say so. The
+/// trained policy is no longer something this project intends to ship, so the
+/// checkpoint here is a <b>fixture</b> — 19,355
 /// real parameters and a real numpy oracle — rather than a policy anyone plays.
 /// </para>
 /// <para>
-/// ⚠️ <b>This is the seam that used to require `gg2-rl` to act.</b> Before it, the
-/// only way back to green was that repo re-stamping or retraining; nothing in this
-/// repo could do it. Now nothing here waits on that repo, and if a retrained
+/// If a retrained
 /// checkpoint ever does arrive, <c>PolicyNetworkTests</c> goes red and says so —
 /// see <see cref="TrainedStamp"/>.
 /// </para>
 /// <para>
-/// ⚠️ <b>Two accessors, and the difference matters.</b> <see cref="Load"/> takes
+/// <b>Two accessors, and the difference matters.</b> <see cref="Load"/> takes
 /// the file as it is and passes <c>ignoreSimulationStamp</c>, which is honest: the
 /// caller wants a network, not a provenance. <see cref="MintedForThisBuild"/>
 /// writes a temporary copy carrying this build's stamp, for the code paths that
@@ -45,7 +41,7 @@ internal static class PolicyFixture
     /// The simulation stamp the checked-in checkpoint was trained against.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Hard-coded rather than read out of the file, so that swapping the file
+    /// <b>Hard-coded rather than read out of the file, so that swapping the file
     /// re-opens the question.</b> A helper that discovered the stamp would absorb a
     /// retrain silently, which is the one event that should make somebody look at
     /// this type again.
@@ -66,7 +62,7 @@ internal static class PolicyFixture
     /// A copy of the fixture's weights carrying <b>this build's</b> stamp.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>Not a valid policy and never presented as one.</b> It exists so that
+    /// <b>Not a valid policy and never presented as one.</b> It exists so that
     /// <c>EnvServer.LoadPolicy</c>'s accept path — handle numbering, the stamp in
     /// the reply, a continuation reaching the rollout — can be tested without
     /// relaxing the refusal that path exists to perform. It is written under the
@@ -79,7 +75,7 @@ internal static class PolicyFixture
 
     /// <summary>Rewrites the archive with this build's stamp in the metadata.</summary>
     /// <remarks>
-    /// ⚠️ <b>The archive is rebuilt rather than patched in place.</b> The entries
+    /// <b>The archive is rebuilt rather than patched in place.</b> The entries
     /// are stored uncompressed, so an in-place ASCII overwrite would work and leave
     /// every CRC wrong — which .NET happens not to check on read today. Rebuilding
     /// costs a few milliseconds once and does not depend on that.
@@ -91,7 +87,7 @@ internal static class PolicyFixture
 
         System.IO.Directory.CreateDirectory(directory);
 
-        // ⚠️ Keyed by process id so two test processes cannot write the same file,
+        // Keyed by process id so two test processes cannot write the same file,
         // and swept on exit — best effort: a killed test host never runs this, and
         // the next run's directory is a different one, so the sweep is a courtesy
         // rather than a guarantee. 79 KB under %TEMP% either way.

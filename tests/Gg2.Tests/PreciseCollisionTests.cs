@@ -8,11 +8,11 @@ namespace Gg2.Tests;
 /// A character's rectangle against a moving platform's per-pixel mask.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>None of this is verified against the running game yet.</b> These pin
-/// the geometry this port implements — origin, scaling, inclusive bounds,
-/// rounding — so that a later probe has something exact to disagree with. The
-/// plan for that probe is in <c>docs/TRAPS-SIMULATION.md</c>. Until it runs, a
-/// green suite here means "self-consistent", not "matches GM8".
+/// <b>Not verified against the running game.</b> These pin the geometry this
+/// port implements — origin, scaling, inclusive bounds, rounding — so that a
+/// later probe has something exact to disagree with. The plan for that probe
+/// is in <c>docs/TRAPS-SIMULATION.md</c>. A green suite here means
+/// "self-consistent", not "matches GM8".
 /// </remarks>
 public sealed class PreciseCollisionTests
 {
@@ -31,7 +31,7 @@ public sealed class PreciseCollisionTests
         PreciseCollision.Meets(mask, sx, sy, scale, scale, Point, cx, cy);
 
     /// <summary>
-    /// ⚠️ The origin is the sprite's TOP-LEFT, not its centre.
+    /// The origin is the sprite's TOP-LEFT, not its centre.
     /// </summary>
     /// <remarks>
     /// <c>sprite_add(name, 1, 1, 0, 0, 0)</c> — the last two arguments are
@@ -117,7 +117,7 @@ public sealed class PreciseCollisionTests
     /// does.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Half to EVEN, so 0.5 rounds to 0 and 1.5 rounds to 2 — GML's
+    /// Half to EVEN, so 0.5 rounds to 0 and 1.5 rounds to 2 — GML's
     /// <c>round</c>, not "away from zero". A character is almost never on an
     /// integer coordinate, so this rule decides nearly every real query.
     /// </remarks>
@@ -156,7 +156,7 @@ public sealed class PreciseCollisionTests
 
     /// <summary>Real maps only ever use whole-number scales.</summary>
     /// <remarks>
-    /// ⚠️ Pins the assumption rather than the behaviour: <c>image_xscale</c> is a
+    /// Pins the assumption rather than the behaviour: <c>image_xscale</c> is a
     /// real in GM8 and a fractional one would need sub-pixel sampling. Nothing in
     /// the archive uses one — see <see cref="PreciseCollision.ScaleOf"/>.
     /// </remarks>

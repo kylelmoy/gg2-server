@@ -10,15 +10,12 @@ namespace Gg2.Tests;
 /// <remarks>
 /// <para>
 /// The enforcement itself — <c>checkClasslimits</c>, its quote-last-resort
-/// quirk and its draw from the shared RNG — is <c>TeamBalanceTests</c>'s and has
-/// been right since phase 6. ⛔ <b>What was missing was the way in.</b>
-/// <see cref="ServerOptions"/> carried a single scalar that
-/// <c>GameServer.ApplyOptions</c> filled across all ten classes, so a server
-/// could cap every class at the same number or none, and the ten independent
-/// limits the simulation implements were unreachable from configuration.
+/// quirk and its draw from the shared RNG — is <c>TeamBalanceTests</c>'s.
+/// <see cref="ServerOptions"/> exposes per-class limits so a server can cap
+/// each class independently rather than only uniformly or not at all.
 /// </para>
 /// <para>
-/// ⚠️ <b>A limit is PER TEAM.</b> <c>countClassmembersExcept</c> counts one
+/// <b>A limit is PER TEAM.</b> <c>countClassmembersExcept</c> counts one
 /// team's members, so <c>medic=1</c> is one medic each and two on the map. This
 /// is the misreading that makes a server look like it is not enforcing.
 /// </para>
@@ -31,7 +28,7 @@ public sealed class ClassLimitConfigTests
     /// <remarks>
     /// End-to-end through <c>GameServer.AddBot</c>, which routes the requested
     /// class through <c>Classlimits.Pick</c> exactly as <c>botAdd.gml:26</c>
-    /// does. ⚠️ <b>Asserting on the class handed BACK, not on the request.</b>
+    /// does. <b>Asserting on the class handed BACK, not on the request.</b>
     /// The refusal is silent — a bot that asked for medic simply becomes
     /// something else — so a server that ignored the limit and one that applied
     /// it look identical from the request side.
@@ -50,7 +47,7 @@ public sealed class ClassLimitConfigTests
         Assert.Equal(PlayerClass.Medic, harness.Server.ClassOf(first));
         Assert.NotEqual(PlayerClass.Medic, harness.Server.ClassOf(second));
 
-        // ⚠️ The other team is counted separately, so red being full says
+        // The other team is counted separately, so red being full says
         // nothing about blue. A reader that counted the whole server would fail
         // here and nowhere else.
         var blue = AddBot(harness, "medic three", Team.Blue, PlayerClass.Medic);
@@ -89,7 +86,7 @@ public sealed class ClassLimitConfigTests
     /// is stored as 255.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Both the enforcement and the wire must see the clamped value.</b>
+    /// <b>Both the enforcement and the wire must see the clamped value.</b>
     /// The reference mutates <c>global.classlimits</c> in place before its first
     /// <c>serializeState</c>, so a client's HUD and the server's own check are
     /// the same numbers. Clamping in one place only would put a limit on the HUD
@@ -117,13 +114,13 @@ public sealed class ClassLimitConfigTests
         Assert.Equal(255, effective[(int)PlayerClass.Spy]);
         Assert.Equal(2, effective[(int)PlayerClass.Scout]);
 
-        // ⚠️ Non-destructive: the configured array is what the operator wrote and
+        // Non-destructive: the configured array is what the operator wrote and
         // is not rewritten under them, unlike the reference's in-place mutation.
         Assert.Equal(10, options.ClassLimits[(int)PlayerClass.Medic]);
     }
 
     /// <summary>
-    /// ⛔ A <see cref="ServerOptions.ClassLimits"/> of the wrong length is
+    /// A <see cref="ServerOptions.ClassLimits"/> of the wrong length is
     /// refused at startup rather than indexed out of bounds mid-tick.
     /// </summary>
     [Fact]
@@ -140,7 +137,7 @@ public sealed class ClassLimitConfigTests
     }
 
     /// <summary>
-    /// ⚠️ The default is ten 255s, and a bare <c>new byte[10]</c> is not it.
+    /// The default is ten 255s, and a bare <c>new byte[10]</c> is not it.
     /// </summary>
     /// <remarks>
     /// A zeroed array means every class is FULL, and <c>Classlimits.Pick</c>'s

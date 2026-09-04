@@ -13,15 +13,15 @@ public readonly record struct FrameMark(int Offset, TimeSpan At);
 /// does not carry.
 /// </summary>
 /// <remarks>
-/// ⛔ <b>A sidecar rather than a change to the trace format, and that is not
+/// <b>A sidecar rather than a change to the trace format, and that is not
 /// squeamishness.</b> docs/PARITY.md gives three reasons the trace is the raw
 /// stream, and the third is that the parity recorder and a live server writing
 /// training data are the same path. Widening the format would break every
 /// checked-in recording and split that path. A sidecar leaves <c>.trace</c>
-/// byte-for-byte what it is and is simply absent for the recordings made before
-/// this existed.
+/// byte-for-byte what it is and is simply absent for recordings made before this
+/// existed.
 /// <para>
-/// ⚠️ <b>What it is FOR.</b> The flush boundary is the only carrier of
+/// <b>What it is FOR.</b> The flush boundary is the only carrier of
 /// docs/PARITY.md's instrument 2, and the byte stream does not carry it: the
 /// send buffer is FIFO, so two different flush orderings produce an identical
 /// stream. Timing is the only signal left.
@@ -82,7 +82,7 @@ public sealed class FlushFrames
     /// — i.e. how much of the grouping is a judgement call rather than obvious.
     /// </param>
     /// <remarks>
-    /// ⚠️ <b>This is a HEURISTIC and the only one in the instrument.</b> TCP may
+    /// <b>This is a HEURISTIC and the only one in the instrument.</b> TCP may
     /// coalesce two flushes into one read, and the reference is not known to set
     /// <c>TCP_NODELAY</c>. <b>Do not trust it uncalibrated</b>: sample
     /// <c>buffer_size(global.sendBuffer)</c> once a frame from the agent bridge
@@ -90,7 +90,7 @@ public sealed class FlushFrames
     /// leftover prefix directly and cannot be wrong. docs/PARITY.md says so at
     /// more length.
     /// <para>
-    /// ⚠️ <b><paramref name="ambiguous"/> is not decoration.</b> A grouping that
+    /// <b><paramref name="ambiguous"/> is not decoration.</b> A grouping that
     /// silently merged half its flushes would produce a clean-looking fingerprint
     /// that means nothing, and this is the only number that would say so.
     /// </para>
@@ -133,7 +133,7 @@ public sealed class FlushFrames
 /// <b>Leading</b> counts the ones before the update, <b>trailing</b> the ones
 /// after.
 /// <para>
-/// ⚠️ <b>Leading conflates two different things and cannot separate them.</b> A
+/// <b>Leading conflates two different things and cannot separate them.</b> A
 /// message appended in an End Step (a <c>PLAYER_DEATH</c>) and one appended in
 /// <c>GameServerBeginStep</c> above <c>serializeState</c> (a <c>PLAYER_LEAVE</c>)
 /// both lead. So this grades the table for types that sit wholly on one side and
@@ -162,7 +162,7 @@ public sealed class FlushFingerprint
 
     /// <summary>Types that never appeared, which is a coverage result and not a pass.</summary>
     /// <remarks>
-    /// ⛔ <b>Report this, always.</b> An absent row is indistinguishable from an
+    /// <b>Report this, always.</b> An absent row is indistinguishable from an
     /// agreeing row, and a CTF bot session never produces generator destruction,
     /// arena transitions, sentry destruction, map change or balance. This repo
     /// has shipped a vacuous gate twice; naming what was never seen is the cheap
@@ -190,7 +190,7 @@ public sealed class FlushFingerprint
                     continue;
                 }
 
-                // ⚠️ A CAPS_UPDATE is written immediately above the tiered update
+                // A CAPS_UPDATE is written immediately above the tiered update
                 // in the same event, so it is neither leading nor trailing in the
                 // sense this measures. Counting it would put a permanent entry in
                 // the leading column that says nothing about any boundary.

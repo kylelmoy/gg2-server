@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using Gg2.Bots;
 using Gg2.Maps;
 using Gg2.Protocol;
@@ -14,14 +15,14 @@ namespace Gg2.Server;
 /// The policy is <see cref="BotPopulation"/>'s and lives in <c>Gg2.Bots</c>; this
 /// is the half that needs a roster, a config and a socket to broadcast a join on.
 /// <para>
-/// ⚠️ <b>It draws from its own stream, never <c>WorldState.Random</c>.</b> The
+/// <b>It draws from its own stream, never <c>WorldState.Random</c>.</b> The
 /// match's stream is observable simulation — every seeded weapon puts its draw on
 /// the wire — so a server that added a bot would shift the position every client
 /// re-derives its spread from. Same rule as <c>ScriptedBot.Random</c>, one layer
 /// up.
 /// </para>
 /// <para>
-/// ⚠️ <b>A bot with no nav graph is still a bot.</b> A map with no cache generated
+/// <b>A bot with no nav graph is still a bot.</b> A map with no cache generated
 /// gets bots that fight whatever comes to them and never walk anywhere, which is
 /// the same degradation <c>NavCache.TryLoad</c> is built for — a server should
 /// keep serving a map it cannot route on rather than refuse to fill.
@@ -32,7 +33,7 @@ public sealed class BotPopulationService
     private readonly GameServer _server;
     private readonly IServerLog _log;
 
-    // ⚠️ Its own, and not the match's. See the remarks above.
+    // Its own, and not the match's. See the remarks above.
     private GmlRandom _random;
 
     private int _nameCounter;
@@ -54,7 +55,7 @@ public sealed class BotPopulationService
     /// The edge crowding every bot on this server plans against.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>One store for the whole server, and it lives here because it is the
+    /// <b>One store for the whole server, and it lives here because it is the
     /// only object that outlives a bot and knows about all of them.</b> Sharing is
     /// the point: it is what makes the mechanism model bots bunching up rather
     /// than approximating it with per-bot noise, and it is why the penalty is the
@@ -69,11 +70,11 @@ public sealed class BotPopulationService
     /// Points the population at a newly loaded map.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Per map <em>and</em> per area.</b> A tall map is several rounds
+    /// <b>Per map <em>and</em> per area.</b> A tall map is several rounds
     /// stacked vertically with one graph each, and only one area's entities exist
     /// — <c>cp_dirtbowl</c> has three graphs over one mask.
     /// <para>
-    /// ⚠️ <b>Existing bots are re-roled here, and that is <c>botReteamAll</c>'s
+    /// <b>Existing bots are re-roled here, and that is <c>botReteamAll</c>'s
     /// second pass.</b> A role counts the bots ahead of this one on its team, so a
     /// team that is still half-built gives the wrong count — every bot would see
     /// only the ones assigned before it and the every-Nth rule would land on the
@@ -90,7 +91,7 @@ public sealed class BotPopulationService
 
         if (navCacheDirectory is { Length: > 0 })
         {
-            // ⚠️ The hash goes INTO TryLoad, which is what actually refuses a
+            // The hash goes INTO TryLoad, which is what actually refuses a
             // stale graph, and the manifest is consulted again here only to say
             // which of the two failures happened. The duplicated read is a
             // manifest-sized file against a 9 ms parse, and it buys a message an
@@ -115,7 +116,7 @@ public sealed class BotPopulationService
             {
                 Nav = graph;
 
-                // ⚠️ Both containers for one map means one of them is being
+                // Both containers for one map means one of them is being
                 // ignored, and the loser is invisible from the outside. The
                 // usual cause is a gg2-nav-gen run into a directory that ships
                 // .txt.gz: the fresh .txt wins, which is what was wanted, but
@@ -131,12 +132,12 @@ public sealed class BotPopulationService
             }
         }
 
-        // ⚠️ Hand every surviving bot the new graph BEFORE re-roling them. A
+        // Hand every surviving bot the new graph BEFORE re-roling them. A
         // follower, a route and a blacklist are all node indices into one graph,
         // so a bot that crosses a rotation carrying them is holding numbers that
         // now mean somewhere else — and its BotObjective holds the old graph and
         // the old map's spawn points too.
-        // ⚠️ The counts go first, and the bots' flags go with SetMap. Occupancy
+        // The counts go first, and the bots' flags go with SetMap. Occupancy
         // keys are node indices, which only mean anything to ONE build of the
         // graph, so counts from the previous map would otherwise sit here making
         // arbitrary edges of the new one look busy — and dropping the maps without
@@ -157,7 +158,7 @@ public sealed class BotPopulationService
     /// One population tick: add or remove bots to reach the target.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Removal is <em>not</em> the mirror of addition.</b> The reference
+    /// <b>Removal is <em>not</em> the mirror of addition.</b> The reference
     /// prefers to drop a bot that is already dead — a body vanishing mid-fight is
     /// worse than a slot staying full for a few seconds — and this port does the
     /// same by taking dead bots first. The reference's deferred-removal timeout is
@@ -168,11 +169,10 @@ public sealed class BotPopulationService
     {
         var options = _server.Options.Bots;
 
-        // ⚠️ `if(!global.botsEnabled) exit;` means DO NOTHING, not "target zero",
+        // `if(!global.botsEnabled) exit;` means DO NOTHING, not "target zero",
         // and the difference is not academic: a bot added by hand on a server with
         // the population manager switched off must survive. Reading it as a target
-        // of zero removes it on the very next tick — which is exactly what happened
-        // here, and it took out seven tests that add a bot to a default server.
+        // of zero would remove it on the very next tick.
         if (!options.Enabled)
             return;
 
@@ -180,20 +180,16 @@ public sealed class BotPopulationService
         var slots = _server.BotSlots;
         var bots = slots.Count;
 
-        // ⛔ ABOVE the count check, and that is the whole bug this fixes. A
-        // spectating bot is still a bot, so `bots == target` holds and the early
-        // return below leaves it spectating FOR EVER.
+        // ABOVE the count check: a spectating bot is still a bot, so
+        // `bots == target` holds and the early return below would leave it
+        // spectating forever.
         //
         // `Rounds.ResetForNewMap` makes every player a spectator on a map change
-        // — the reference's `with(Player) team = TEAM_SPECTATOR`, correct and not
-        // the bug. A human then re-picks from the team-select screen. Nothing
-        // re-picked for a bot, so **every bot stopped playing after the first
-        // rotation** and the server carried on ticking, rotating and reporting
-        // matches as completed with nobody in them.
-        //
-        // ⚠️ Found 2026-09-03 by ClientRosterAgreementTests, which asked the
-        // question no existing test did. It had been reachable since the
-        // population manager landed in phase 7.
+        // — the reference's `with(Player) team = TEAM_SPECTATOR`. A human then
+        // re-picks from the team-select screen; nothing re-picks for a bot, so
+        // without this call every bot stops playing after the first rotation and
+        // the server carries on ticking, rotating and reporting matches as
+        // completed with nobody in them.
         Reteam(slots);
 
         if (bots == target)
@@ -220,17 +216,17 @@ public sealed class BotPopulationService
     /// Puts any spectating bot back on a team.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Normally a no-op, and it has to be cheap for that reason</b> — it
+    /// <b>Normally a no-op, and it has to be cheap for that reason</b> — it
     /// runs every tick. The scan is over <see cref="IGameServer.BotSlots"/>,
     /// which the caller has already materialised, and the team counts are taken
     /// only when there is actually somebody to place.
     /// <para>
-    /// ⚠️ <b>Counted afresh for each bot</b>, not once for the batch: placing the
+    /// <b>Counted afresh for each bot</b>, not once for the batch: placing the
     /// first bot changes what the second should be given, and a batch that read
     /// one count would put every spectator on the same team after a rotation.
     /// </para>
     /// <para>
-    /// ⛔ <b>The request can be REFUSED and that is correct.</b>
+    /// <b>The request can be REFUSED and that is correct.</b>
     /// <c>RequestBotTeam</c> runs the reference's balance guard, which turns down
     /// a request for the bigger team — so a bot that cannot be placed this tick
     /// is simply tried again on the next one, and the loop must not assume it
@@ -257,7 +253,7 @@ public sealed class BotPopulationService
         _server.CountTeams(out var red, out var blue);
 
         var team = BotPopulation.PickTeam(red, blue, ref _random);
-        // ⚠️ Restricted only when asked. The unrestricted draw is the reference's
+        // Restricted only when asked. The unrestricted draw is the reference's
         // irandom(8) and every recorded match depends on its stream — the same rule
         // HeadlessMatch follows, for the same reason.
         var playerClass = options.AllowedClasses is { Length: > 0 } allowed
@@ -267,7 +263,7 @@ public sealed class BotPopulationService
         _nameCounter++;
         var name = options.NamePrefix + _nameCounter.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
-        // ⚠️ The stagger is the roster slot the bot is about to land in, and it is
+        // The stagger is the roster slot the bot is about to land in, and it is
         // load-bearing twice over: it phases the objective and combat cadences so a
         // full server does not pay every bot's scan on one frame, and it is added
         // to the follower's re-plan period, where zero makes BOT_TAKEOFF_PATIENCE
@@ -285,25 +281,23 @@ public sealed class BotPopulationService
         if (Nav is not null && Spawns is not null)
             bot.Objective = new BotObjective(Nav, Spawns);
 
-        // ⛔ THE WRAPPER GOES ON BEFORE AddBot, so the slot never briefly holds a
+        // THE WRAPPER GOES ON BEFORE AddBot, so the slot never briefly holds a
         // bare ScriptedBot that something else could latch onto, and it wraps the
         // SAME instance the lines above configured — a controller owns keys and aim
         // inside its engagement window and delegates everything else back.
         //
-        // ⚠️ Every site that wants the macro layer asks ScriptedBot.Of, never
+        // Every site that wants the macro layer asks ScriptedBot.Of, never
         // `is ScriptedBot`. See IWrapsScriptedBot for what breaks otherwise, and
         // note the Query assignment below still reaches the right object.
         //
-        // ⚠️ ONE field, so there is nothing to rank and nothing to refuse. This
-        // was a ternary over two nullable options plus a hand-written "both are
-        // set" throw, duplicated here and in HeadlessMatch — BotBrainSpec carries
-        // an ORDERED LIST instead, and IMicroArbiter is what picks between its
-        // tiers per decision.
+        // ONE field, so there is nothing to rank and nothing to refuse.
+        // BotBrainSpec carries an ORDERED LIST instead, and IMicroArbiter is what
+        // picks between its tiers per decision.
         IInputSource source = options.Brain is { } brain ? brain.Wrap(bot) : bot;
 
         var slot = _server.AddBot(name, team, playerClass, source);
 
-        // ⚠️ The query has to carry the class the server actually gave it, which
+        // The query has to carry the class the server actually gave it, which
         // is checkClasslimits' answer and not the one asked for — the search's
         // double-jump and rocket-jump arcs are per class, and a scout routed as a
         // heavy walks past every edge it could have flown.
@@ -319,7 +313,7 @@ public sealed class BotPopulationService
         if (slots.Count == 0)
             return;
 
-        // ⚠️ Prefer a bot that is already dead. A body vanishing in the middle of
+        // Prefer a bot that is already dead. A body vanishing in the middle of
         // a fight is the thing the reference's removal timeout exists to avoid,
         // and taking the dead first gets the same outcome without a wall clock.
         var pick = -1;
@@ -336,7 +330,7 @@ public sealed class BotPopulationService
         if (pick < 0)
             pick = slots[^1];
 
-        // ⚠️ `botNavRelease`'s half of the bookkeeping: a bot that is gone is no
+        // `botNavRelease`'s half of the bookkeeping: a bot that is gone is no
         // longer walking its route, and leaving the counts up charges every future
         // search on that team extra for an edge nothing is on. This is the third
         // of the three removal sites the idempotence flag exists for.
@@ -350,7 +344,7 @@ public sealed class BotPopulationService
     /// Re-runs the role assignment across every bot.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A second pass over a finished roster, never inside the first.</b> A
+    /// <b>A second pass over a finished roster, never inside the first.</b> A
     /// role counts this bot's place among its team's bots that share its class
     /// period, so assigning as you go gives every bot a count that only includes
     /// the ones before it — and the every-Nth rule then lands on the wrong bots.
@@ -384,16 +378,9 @@ public sealed class BotPopulationService
                     earlier.Add(_server.ClassOf(other));
             }
 
-            bot.Role = BotRoles.Assign(playerClass, System.Runtime.InteropServices.CollectionsMarshal.AsSpan(earlier));
-            bot.SpreadX = BotRoles.SpreadX(slot);
-            bot.Query = new NavQuery(team, CanDoubleJump: BotClassProfile.AirJump(playerClass));
-
-            // ⚠️ Assigned rather than defaulted, because SetMap clears it: a
-            // BotObjective holds the graph and the map's spawn points, so keeping
-            // one across a rotation is keeping the previous map's answer.
-            bot.Objective = Nav is not null && Spawns is not null
-                ? new BotObjective(Nav, Spawns)
-                : null;
+            // Assigned rather than defaulted, because SetMap clears the
+            // objective: a rotation must hand every bot the new map's answer.
+            bot.Assign(slot, team, playerClass, CollectionsMarshal.AsSpan(earlier), Nav, Spawns);
         }
     }
 }

@@ -18,7 +18,7 @@ namespace Gg2.Tests;
 /// into the server. If a bot's sentry did not reach the wire, a client would not
 /// draw it, and a test that read the world directly would not have noticed.
 /// <para>
-/// ⚠️ <b>None of this is observable simulation and no fixture can gate it.</b>
+/// <b>None of this is observable simulation and no fixture can gate it.</b>
 /// No recording in this project contains a bot; the reference's own bots write
 /// <c>keyState</c> in the same event and the same roster loop that reads a
 /// socket (<c>GameServerBeginStep.gml:79-85</c>), so the seam changes nothing a
@@ -129,7 +129,7 @@ public sealed class InputSourceTests
         var observer = harness.JoinClient("observer");
         var reader = new BroadcastReader(map);
 
-        // ⚠️ Drain first. A joining client's FULL_UPDATE is sent to its own
+        // Drain first. A joining client's FULL_UPDATE is sent to its own
         // socket and sits in its buffer; it was serialised before the bot
         // existed, so reading it later gives an update with no slot for the bot
         // in it at all.
@@ -156,7 +156,7 @@ public sealed class InputSourceTests
     /// then the class, then a spawn.
     /// </summary>
     /// <remarks>
-    /// <c>botAdd.gml</c>'s order, and ⚠️ <b>team before class</b> — the opposite
+    /// <c>botAdd.gml</c>'s order, and <b>team before class</b> — the opposite
     /// of the order <c>CompleteJoin</c> replays an existing roster in. Getting
     /// it the other way round is invisible to this port and visible to a client
     /// that applies a class limit as it reads.
@@ -202,7 +202,7 @@ public sealed class InputSourceTests
     /// broadcast included.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The point of asserting on the <em>message</em> is that a second copy
+    /// The point of asserting on the <em>message</em> is that a second copy
     /// of the handler would pass a test that only checked the world.
     /// <c>botServerActions.gml</c>: a bot "performs them by calling the same
     /// server-side scripts the network path calls".
@@ -244,7 +244,7 @@ public sealed class InputSourceTests
     /// </summary>
     /// <remarks>
     /// The command the phase's handoff names, and the one whose preconditions
-    /// are worth demonstrating from the bot side. ⚠️ <b>Every spawn point on
+    /// are worth demonstrating from the bot side. <b>Every spawn point on
     /// every map is inside a spawn room</b> and
     /// <c>serverBuildSentry.gml</c>'s guard is
     /// <c>collision_point(x, y, SpawnRoom, 0, 0) &lt; 0</c> — so a freshly
@@ -264,7 +264,7 @@ public sealed class InputSourceTests
         var observer = harness.JoinClient("observer");
         var reader = new BroadcastReader(map);
 
-        // ⚠️ LEFT, and it is not arbitrary: red spawns on the *right* of
+        // LEFT, and it is not arbitrary: red spawns on the *right* of
         // ctf_truefort (x ~1608), and an engineer holding RIGHT walks into the
         // back of its own base and stands there inside the spawn room for ever.
         // Measured, by trying it.
@@ -464,7 +464,7 @@ public sealed class InputSourceTests
     /// tick.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <c>processClientCommands.gml:267</c> writes <c>keyState</c> when a
+    /// <c>processClientCommands.gml:267</c> writes <c>keyState</c> when a
     /// packet arrives and nothing clears it, and the client dead-reckons on the
     /// same assumption — so a lost or late packet must leave the player
     /// pressing what they last pressed. A <see cref="NetworkInputSource"/> that

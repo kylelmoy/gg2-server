@@ -29,7 +29,7 @@ public sealed class ScoringTests
     private static LevelMap Level() =>
         LevelMap.FromPng(Map, ReferenceTree.ReadMap(Map)).ForArea(1);
 
-    // ⚠️ The world comes back by return and the state by "out", deliberately.
+    // The world comes back by return and the state by "out", deliberately.
     // A WorldState is well over a hundred kilobytes and these two helpers nest,
     // so returning it in a tuple put half a dozen copies on one stack — and that
     // overflowed the stack the next time the state grew (Quote's two projectile
@@ -81,7 +81,7 @@ public sealed class ScoringTests
     // --- the primitive --------------------------------------------------------
 
     /// <summary>
-    /// ⚠️ Every award writes <em>both</em> arrays. That is not a convenience —
+    /// Every award writes <em>both</em> arrays. That is not a convenience —
     /// all fourteen award sites in the reference write the pair.
     /// </summary>
     [Fact]
@@ -113,7 +113,7 @@ public sealed class ScoringTests
     // --- a death --------------------------------------------------------------
 
     /// <summary>
-    /// ⚠️ <c>victim.stats[DEATHS] += 1</c> is unconditional — a suicide, a pit
+    /// <c>victim.stats[DEATHS] += 1</c> is unconditional — a suicide, a pit
     /// and a generator explosion all count.
     /// </summary>
     [Fact]
@@ -151,7 +151,7 @@ public sealed class ScoringTests
     }
 
     /// <summary>
-    /// ⚠️ An assist is worth <b>half</b> a point — the only fractional award in
+    /// An assist is worth <b>half</b> a point — the only fractional award in
     /// the game, and the reason these counters are reals.
     /// </summary>
     [Fact]
@@ -178,7 +178,7 @@ public sealed class ScoringTests
     /// the kill.
     /// </summary>
     /// <remarks>
-    /// ⚠️ It reads the victim's <em>character</em>, so it has to be awarded
+    /// It reads the victim's <em>character</em>, so it has to be awarded
     /// before the body is cleared — which is the whole reason
     /// <c>Scoring.RecordDeath</c> runs where it does in <c>Deaths.Kill</c>.
     /// </remarks>
@@ -203,7 +203,7 @@ public sealed class ScoringTests
     }
 
     /// <summary>
-    /// Killing a medic sitting on a full charge is a bonus, and ⚠️ the clause is
+    /// Killing a medic sitting on a full charge is a bonus, and the clause is
     /// <em>outside</em> the <c>killer != victim</c> test — so a medic who kills
     /// themselves collects it.
     /// </summary>
@@ -246,7 +246,7 @@ public sealed class ScoringTests
     }
 
     /// <summary>
-    /// ⚠️ A suicide scores no <c>KILLS</c> — <c>killer != victim</c> — though
+    /// A suicide scores no <c>KILLS</c> — <c>killer != victim</c> — though
     /// the death still counts.
     /// </summary>
     [Fact]
@@ -307,7 +307,7 @@ public sealed class ScoringTests
 
     /// <summary>
     /// Pulling down somebody else's sentry is one destruction and one point, and
-    /// ⚠️ pulling down your own is worth nothing.
+    /// pulling down your own is worth nothing.
     /// </summary>
     /// <remarks>
     /// Driven through <see cref="Sentries"/> so that the award being wired into
@@ -333,7 +333,7 @@ public sealed class ScoringTests
         Sentries.Damage(ref state, 1, SentryState.MaxHp + 1,
             (byte)killer, DamageSource.Scattergun);
 
-        // ⚠️ The hp check is in the sentry's End Step, not its Begin Step —
+        // The hp check is in the sentry's End Step, not its Begin Step —
         // Sentries.EndStep, beside the character death check.
         var events = default(TickEvents);
         Sentries.EndStep(world, ref state, 1, ref events);
@@ -346,7 +346,7 @@ public sealed class ScoringTests
     // --- healing --------------------------------------------------------------
 
     /// <summary>
-    /// A medic banks one point per 800 hit points healed, and ⚠️ the overshoot
+    /// A medic banks one point per 800 hit points healed, and the overshoot
     /// <b>carries</b> into the next point rather than being thrown away.
     /// </summary>
     /// <remarks>
@@ -451,7 +451,7 @@ public sealed class ScoringTests
     // --- the resets -----------------------------------------------------------
 
     /// <summary>
-    /// ⚠️ A map change wipes both arrays — but <b>only on area 1</b>, so a
+    /// A map change wipes both arrays — but <b>only on area 1</b>, so a
     /// multi-area Invasion map carries its scoreboard between areas.
     /// </summary>
     [Theory]
@@ -471,7 +471,7 @@ public sealed class ScoringTests
     }
 
     /// <summary>
-    /// An Arena round start clears the round array and ⚠️ leaves the map one
+    /// An Arena round start clears the round array and leaves the map one
     /// alone — which is the entire reason there are two.
     /// </summary>
     /// <remarks>
@@ -514,7 +514,7 @@ public sealed class ScoringTests
     /// on it, and nothing to anybody else.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The test is <c>player.team == point.cappingTeam</c> and not "helped
+    /// The test is <c>player.team == point.cappingTeam</c> and not "helped
     /// capture": a team-mate who walked on this tick scores the same two points
     /// as the one who spent thirty seconds on it.
     /// <para>
@@ -552,7 +552,7 @@ public sealed class ScoringTests
             state.Characters[slot].Y = y;
         }
 
-        // And a blue standing on it too. ⚠️ Reachable, and it is what makes the
+        // And a blue standing on it too. Reachable, and it is what makes the
         // team test load-bearing: a *contested* point is frozen rather than
         // reverting, but a meter that is already full still completes on the
         // tick an enemy arrives — the freeze is in Advance and the completion
@@ -617,7 +617,7 @@ public sealed class ScoringTests
     }
 
     /// <summary>
-    /// ⚠️ Every player on the team goes in whatever they scored, so a team of
+    /// Every player on the team goes in whatever they scored, so a team of
     /// two has two MVPs with nothing to their name — and a team of none has an
     /// empty list.
     /// </summary>
@@ -638,7 +638,7 @@ public sealed class ScoringTests
     }
 
     /// <summary>
-    /// ⚠️ Three a side is the ceiling even when the caller offers more room —
+    /// Three a side is the ceiling even when the caller offers more room —
     /// <c>while ds_priority_size &gt; 3 delete_min</c>, and the wire counts are
     /// bytes the client reads three of at most.
     /// </summary>
@@ -684,7 +684,7 @@ public sealed class ScoringTests
     }
 
     /// <summary>
-    /// ⚠️ Selecting the MVPs <b>writes back</b> a rounded healing total —
+    /// Selecting the MVPs <b>writes back</b> a rounded healing total —
     /// <c>redMVP[i].roundStats[HEALING] = round(...)</c> is an assignment, not a
     /// cast on the way out.
     /// </summary>

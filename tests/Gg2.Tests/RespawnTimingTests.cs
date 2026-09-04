@@ -9,17 +9,10 @@ namespace Gg2.Tests;
 /// then reproduced by the port.
 /// </summary>
 /// <remarks>
-/// <b>This closes an open question that had been carried for several
-/// sessions</b>: "respawn timing untested against a recording". The timing was
-/// gated only by unit tests that asserted the port against itself — a counter
-/// set to <c>RespawnTime</c> and then counted down — which cannot catch the
-/// counter being armed in the wrong event, read in the wrong stage, or off by
-/// one against the engine.
-/// <para>
-/// The fixtures can answer it because a <c>PLAYER_DEATH</c> and a
-/// <c>PLAYER_SPAWN</c> are both real messages with real tick indices, so the gap
-/// between them is the reference's own answer and needs no simulation at all.
-/// </para>
+/// A <c>PLAYER_DEATH</c> and a <c>PLAYER_SPAWN</c> are both real messages with
+/// real tick indices, so the gap between them is the reference's own answer and
+/// needs no simulation at all — unlike a unit test that only checks the port's
+/// counter against itself.
 /// </remarks>
 public sealed class RespawnTimingTests
 {
@@ -33,11 +26,10 @@ public sealed class RespawnTimingTests
     /// The other rule, and it is one tick.
     /// </summary>
     /// <remarks>
-    /// ✅ <b>Measured 2026-08-27</b>, and it is the first fixture evidence in
-    /// the project for <c>Character.events/Destroy.xml:37</c>. That arm writes
-    /// <c>player.alarm[5] = 1</c> rather than the respawn time, and an alarm set
-    /// to <c>n</c> fires <c>n</c> ticks later — so the death and the
-    /// <c>PLAYER_SPAWN</c> answering it land on <b>consecutive</b> ticks.
+    /// Fixture evidence for <c>Character.events/Destroy.xml:37</c>. That arm
+    /// writes <c>player.alarm[5] = 1</c> rather than the respawn time, and an
+    /// alarm set to <c>n</c> fires <c>n</c> ticks later — so the death and the
+    /// <c>PLAYER_SPAWN</c> answering it land on consecutive ticks.
     /// </remarks>
     private const int RecordedSpawnRoomGap = 1;
 
@@ -50,9 +42,6 @@ public sealed class RespawnTimingTests
         "reference-ctf_truefort-hotsupport.trace",
         "reference-ctf_truefort-bots.trace",
 
-        // Recorded 2026-08-27. Added here rather than left to the older five, so
-        // that a rule this file states about "every recorded death" keeps
-        // meaning every one of them: the pair count goes from 28 to 60.
         "reference-ctf_truefort-closedheavy.trace",
         "reference-ctf_truefort-closedsniper.trace",
         "reference-ctf_truefort-closedairblast.trace",
@@ -146,9 +135,8 @@ public sealed class RespawnTimingTests
     }
 
     /// <summary>
-    /// ⚠️ <b>Every recorded death in the project is answered exactly 150 ticks
-    /// later</b> — twenty-eight of them, across five recordings, with no
-    /// variance at all.
+    /// Every recorded death in the project is answered exactly 150 ticks later,
+    /// with no variance at all.
     /// </summary>
     /// <remarks>
     /// The reference's own answer to "how long is a death", and the number the
@@ -159,17 +147,15 @@ public sealed class RespawnTimingTests
     [Fact]
     public void EveryRecordedDeathIsAnsweredAfterExactlyOneHundredAndFiftyTicks()
     {
-        // ⚠️ Outside a spawn room. Since 2026-08-27 one recording contains a
-        // death inside one, and that death is answered in a single tick by a
-        // different rule — see
+        // Outside a spawn room: one recording contains a death inside one,
+        // answered in a single tick by a different rule — see
         // <see cref="ADeathInsideASpawnRoomIsAnsweredOnTheVeryNextTick"/>.
         // Filtered rather than tolerated, so a spawn-room death cannot hide a
         // genuinely wrong gap.
         var pairs = Pairs().Where(p => !p.InRoom).ToList();
 
-        // The fixtures contain the deaths this is about. A re-recording that
-        // came out quiet would otherwise pass by having nothing to measure.
-        // 59 outside a spawn room today, of 60 pairs across eleven recordings.
+        // The fixtures contain the deaths this is about, so a re-recording that
+        // came out quiet cannot pass by having nothing to measure.
         Assert.True(pairs.Count >= 50, $"only {pairs.Count} death-to-respawn pairs");
 
         // And they span more than one recording, so this is not one server's
@@ -188,27 +174,19 @@ public sealed class RespawnTimingTests
     }
 
     /// <summary>
-    /// ✅ <b>A death inside a spawn room is answered on the very next tick</b>,
-    /// and a recording finally says so.
+    /// A death inside a spawn room is answered on the very next tick.
     /// </summary>
     /// <remarks>
-    /// <b>This replaces <c>NoRecordedDeathHappensInASpawnRoom</c></b>, which
-    /// asserted that no fixture contained such a death and was written to fail
-    /// the day one did. It did, on 2026-08-27:
-    /// <c>reference-ctf_truefort-spawnroomdeath.trace</c> was recorded for
-    /// exactly this, and the fast-respawn arm of
-    /// <c>Character.events/Destroy.xml:37</c> now has fixture evidence instead
-    /// of unit tests asserting the port against itself.
+    /// <c>reference-ctf_truefort-spawnroomdeath.trace</c> is fixture evidence
+    /// for the fast-respawn arm of <c>Character.events/Destroy.xml:37</c>.
     /// <para>
-    /// ⚠️ <b>The death had to be forced, and the first attempt failed for a
-    /// reason worth keeping.</b> Setting a character's <c>hp</c> to 0 over the
-    /// bridge produced no death at all: a character standing in a spawn room is
-    /// on a <b>healing cabinet</b>, which tops it back above zero before End
-    /// Step ever tests <c>hp &lt;= 0</c>. Killing one in there needs a value the
-    /// cabinet cannot undo in a single tick.
+    /// A character standing in a spawn room is on a healing cabinet, which tops
+    /// its <c>hp</c> back above zero before End Step ever tests
+    /// <c>hp &lt;= 0</c> — killing one there needs a value the cabinet cannot
+    /// undo in a single tick.
     /// </para>
     /// <para>
-    /// <b>The recording carries its own control</b> — see
+    /// The recording carries its own control — see
     /// <see cref="OneRecordingHoldsBothRules"/>.
     /// </para>
     /// <para>
@@ -267,7 +245,7 @@ public sealed class RespawnTimingTests
     /// anybody by itself") — so the fixtures give the number and this gives the
     /// port's answer to it. Between them the claim is end to end.
     /// <para>
-    /// ⚠️ Driven through <see cref="MatchSimulation.Tick"/> and read off
+    /// Driven through <see cref="MatchSimulation.Tick"/> and read off
     /// <c>Alive</c>, not off <c>RespawnTimer</c>: the counter reaching zero and
     /// a character existing again are two different events, an alarm stage
     /// apart, and only the second is what a client sees.
@@ -284,7 +262,7 @@ public sealed class RespawnTimingTests
         var state = default(WorldState);
         state.RespawnTime = RecordedGap;
 
-        // ⚠️ Outside a spawn room, or the fast arm answers in one tick. Asserted,
+        // Outside a spawn room, or the fast arm answers in one tick. Asserted,
         // so this cannot quietly start measuring the other rule.
         const double X = 2280;
         const double Y = 200;
@@ -329,7 +307,7 @@ public sealed class RespawnTimingTests
     /// </summary>
     /// <remarks>
     /// Without it the test above passes for a port that ignores the spawn room
-    /// entirely — which is what the port did until iteration 43.
+    /// entirely.
     /// </remarks>
     [Fact]
     public void ADeathInASpawnRoomIsAnsweredOnTheNextTick()

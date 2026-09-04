@@ -60,7 +60,7 @@ public readonly ref struct WorldView
     /// How many characters are alive right now.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The cost driver for a rollout search</b>, which re-simulates every
+    /// <b>The cost driver for a rollout search</b>, which re-simulates every
     /// one of them for every tick of every candidate — see
     /// <c>SearchController.DecisionCostFor</c>. It is a count of live CHARACTERS
     /// and not of players: a spectator or a dead player costs a rollout nothing.

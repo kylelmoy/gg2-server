@@ -1,4 +1,4 @@
-using Gg2.Bots;
+﻿using Gg2.Bots;
 using Gg2.Protocol;
 using Gg2.Simulation;
 
@@ -43,10 +43,10 @@ public sealed class ServerOptions
     /// Names are <c>[a-z0-9_]+</c> and the reference refuses a list over 254
     /// characters (<c>game_init.gml:99</c>); both are enforced when the list is
     /// parsed. An entry may be written <c>name@md5</c> to pin an exact zip —
-    /// ⚠️ a port extension, not the reference's syntax, and
+    /// a port extension, not the reference's syntax, and
     /// <c>PluginHashes.Resolve</c> says when each source is used.
     /// <para>
-    /// ⛔ <b>A plugin this port has no C# implementation for is still
+    /// <b>A plugin this port has no C# implementation for is still
     /// advertised</b>, so its client half loads and its packets are discarded.
     /// See <c>ServerPluginCatalogue</c> for what is implemented; the loader logs
     /// a warning naming any plugin that is not.
@@ -62,7 +62,7 @@ public sealed class ServerOptions
     /// One byte of the greeting, and the client's whole use of it is which
     /// dialog it shows (<c>ClientBeginStep.gml:62-121</c>): required offers
     /// "Download and join" or "Disconnect", optional offers "Download" or
-    /// "Skip". ⚠️ <b>The server does not enforce it</b> — a client that skipped
+    /// "Skip". <b>The server does not enforce it</b> — a client that skipped
     /// an optional plugin is indistinguishable from one that has no plugin
     /// support at all, and the reference does not check either. Requiring a
     /// plugin whose server half sends unprompted packets is therefore the only
@@ -76,7 +76,7 @@ public sealed class ServerOptions
     /// </summary>
     /// <remarks>
     /// The reference's <c>votemap</c> plugin reads a <c>votableMaps.txt</c> and
-    /// falls back to <c>global.map_rotation</c>. ⚠️ <b>The third fallback is
+    /// falls back to <c>global.map_rotation</c>. <b>The third fallback is
     /// this port's</b>: with no rotation configured — a single-map server, which
     /// is the default — the reference's votemap can only answer "No maps were
     /// found!", so the feature is off exactly where it would be most used.
@@ -96,7 +96,7 @@ public sealed class ServerOptions
     /// <c>ctf_truefort</c> when the rotation is empty too.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The empty case is <c>global.launchMap</c>: <c>game_init.gml:377-380</c>
+    /// The empty case is <c>global.launchMap</c>: <c>game_init.gml:377-380</c>
     /// makes <c>-map X</c> a rotation of exactly one, and
     /// <c>GameServerCreate.gml:110-113</c> opens on <c>nextMapInRotation()</c>
     /// only when no map was named. A pinned map here does NOT collapse the
@@ -141,13 +141,11 @@ public sealed class ServerOptions
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Ten independent values, as <c>readClasslimitsFromIni.gml</c> reads them —
-    /// this used to be a single scalar filled across all ten, which made the
-    /// simulation's per-class enforcement (<c>Classlimits.Pick</c>) unreachable
-    /// from configuration. <see cref="ClassLimitsBy"/> builds one from names.
+    /// Ten independent values, as <c>readClasslimitsFromIni.gml</c> reads them.
+    /// <see cref="ClassLimitsBy"/> builds one from names.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Zero means the class is FULL, not unlimited.</b> A defaulted
+    /// <b>Zero means the class is FULL, not unlimited.</b> A defaulted
     /// <c>new byte[10]</c> bans every class, and the simulation's answer to that
     /// is to hand out the requested class anyway — see <c>Classlimits.Pick</c>'s
     /// last line. Use <see cref="NoClassLimits"/> rather than an array literal.
@@ -174,7 +172,7 @@ public sealed class ServerOptions
     /// <c>serializeState</c>, so the reference's enforcement and the
     /// <c>FULL_UPDATE</c> it broadcasts are the same clamped numbers.
     /// <para>
-    /// ⚠️ <b>Both callers must use this, not <see cref="ClassLimits"/>.</b>
+    /// <b>Both callers must use this, not <see cref="ClassLimits"/>.</b>
     /// Clamping in one place only would put a limit on the client's HUD that the
     /// server does not apply, or apply one the client does not show — and
     /// neither shows up as an error anywhere.
@@ -212,7 +210,7 @@ public sealed class ServerOptions
     /// <remarks>
     /// <c>global.shuffleRotation</c>, applied once by <see cref="GameServer.Start"/>
     /// — <c>GameServerCreate.gml:92-108</c>, which is where the reference does it
-    /// too. ⚠️ It draws from <see cref="System.Random.Shared"/> and <b>never</b>
+    /// too. It draws from <see cref="System.Random.Shared"/> and <b>never</b>
     /// from <c>WorldState.Random</c>: that stream is observable simulation and
     /// every client re-derives weapon spreads from its position.
     /// </remarks>
@@ -229,7 +227,7 @@ public sealed class ServerOptions
     /// <c>ganggarrison.com:29944</c>, so it appears in the client's server list.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>OFF by default, and the default is the point.</b> The reference's
+    /// <b>OFF by default, and the default is the point.</b> The reference's
     /// ini has <c>UseLobby</c> on — because a person ticked a box in a hosting
     /// menu to get there. A headless binary has no such moment, so
     /// <c>docs/PROTOCOL.md</c> asks for a flag that defaults off: running
@@ -247,7 +245,7 @@ public sealed class ServerOptions
     /// Whether to answer <c>REWARD_REQUEST</c> and relay reward auth.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>OFF by default, and this one is a deliberate departure from the
+    /// <b>OFF by default, and this one is a deliberate departure from the
     /// reference rather than a transcription of it.</b>
     /// <c>processClientCommands.gml:320-325</c> answers every request
     /// unconditionally; there is no server-side switch in GG2 at all. The switch
@@ -280,7 +278,7 @@ public sealed class ServerOptions
     /// </summary>
     /// <remarks>
     /// <c>game_init.gml:94</c>, "Total bandwidth limit for map downloads in bytes
-    /// per second", default 50000. ⚠️ <b>Total, not per client</b> — a second
+    /// per second", default 50000. <b>Total, not per client</b> — a second
     /// downloader halves the first one's rate rather than doubling the server's
     /// outgoing traffic.
     /// </remarks>
@@ -297,7 +295,7 @@ public sealed class ServerOptions
     /// repo's gitignored <c>nav/</c>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Empty, and a missing cache, are both fine and mean different things:
+    /// Empty, and a missing cache, are both fine and mean different things:
     /// empty is "this server does not navigate", a miss is "this map has no cache
     /// generated". Neither is an error, because a server with an ungenerated map
     /// in its rotation should keep serving it — <c>navCacheLoad.gml</c>'s own
@@ -321,7 +319,7 @@ public sealed class ServerOptions
     /// removing it changes throughput and nothing else.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Infinity rather than 0 for "as fast as possible", deliberately.</b>
+    /// <b>Infinity rather than 0 for "as fast as possible", deliberately.</b>
     /// This codebase already has three fields where 0 means "no limit"
     /// (<c>RespawnTime</c>, <c>TimeLimitMinutes</c>, <c>CapLimit</c>) and every
     /// one of them is a documented trap. Here the arithmetic says it instead:
@@ -330,7 +328,7 @@ public sealed class ServerOptions
     /// does not have — freezing is the control port's, not the pacer's.
     /// </para>
     /// <para>
-    /// ⚠️ <b>This does not make the server faster; it makes it not wait.</b> A
+    /// <b>This does not make the server faster; it makes it not wait.</b> A
     /// live server with clients on it must stay at 1.0 — clients pace
     /// themselves at 30 Hz and re-simulate between updates, so an unpaced server
     /// desynchronises every one of them immediately. It is for a headless
@@ -354,7 +352,7 @@ public sealed class ServerOptions
     /// optimal-looking behaviour.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Off by default and it should stay that way.</b> Recording a game
+    /// <b>Off by default and it should stay that way.</b> Recording a game
     /// people are playing is a thing to decide rather than a thing to inherit
     /// from a default, and the data is only worth having if somebody meant to
     /// collect it. See <see cref="MatchRecorder"/> for the on-disk bound.
@@ -372,7 +370,7 @@ public sealed class ServerOptions
     /// Whether to open the control port at all. <b>Off by default.</b>
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A separate flag rather than "a non-zero port means on", because
+    /// <b>A separate flag rather than "a non-zero port means on", because
     /// zero is a port people want</b> — it is how every test asks for an
     /// ephemeral one (<c>ServerHarness.cs</c> does exactly that for the game
     /// port). Overloading zero as "off" would make the one configuration a test
@@ -384,7 +382,7 @@ public sealed class ServerOptions
     /// The <c>[Web]</c> section: the remote admin panel. <b>Off by default.</b>
     /// </summary>
     /// <remarks>
-    /// ⚠️ <see cref="WebAdminOptions.Disabled"/>, never <c>new()</c> — a zeroed
+    /// <see cref="WebAdminOptions.Disabled"/>, never <c>new()</c> — a zeroed
     /// one has a null bind address and throws at startup rather than at
     /// construction. Same trap as <see cref="Bots"/>.
     /// </remarks>
@@ -394,7 +392,7 @@ public sealed class ServerOptions
     /// Logs a histogram of tick intervals every 30 seconds and at shutdown.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Pacing only — it cannot touch the simulation</b>, so unlike the
+    /// <b>Pacing only — it cannot touch the simulation</b>, so unlike the
     /// other switches this one is safe on a server with people on it, which is
     /// the only place the interesting measurement exists. Off by default
     /// because a healthy server's report is a line of noise every 30 seconds.
@@ -407,7 +405,7 @@ public sealed class ServerOptions
     /// </summary>
     /// <remarks>
     /// <para>
-    /// ⚠️ <b>False by default, which is NOT the library default.</b>
+    /// <b>False by default, which is NOT the library default.</b>
     /// <c>BotBrainSpec.Engage</c> defaults to <c>Anyone</c> so that a headless
     /// bot-vs-bot match still exercises the controller — with no humans in it,
     /// <c>HumansOnly</c> would make every arm measurement silently measure the
@@ -417,7 +415,7 @@ public sealed class ServerOptions
     /// most of what a populated server pays for.
     /// </para>
     /// <para>
-    /// ⛔ <b>Turning this on does not make the bots better.</b> It makes
+    /// <b>Turning this on does not make the bots better.</b> It makes
     /// bot-vs-bot fights cheaper and slightly worse. Any measurement of a
     /// controller taken with this true and no humans present is measuring the
     /// scripted layer, whatever <c>--bot-mode</c> said.
@@ -438,7 +436,7 @@ public sealed class ServerOptions
     /// handles the transition in both directions.
     /// </para>
     /// <para>
-    /// ⚠️ <b>The round clock slows with it.</b> Every duration in the game is
+    /// <b>The round clock slows with it.</b> Every duration in the game is
     /// counted in ticks, so an idle server's round advances at a fifteenth of
     /// real time. That is a feature rather than a cost — a server left up
     /// overnight should not greet its first player with twelve seconds left —
@@ -446,12 +444,12 @@ public sealed class ServerOptions
     /// <c>--time-limit</c>.
     /// </para>
     /// <para>
-    /// ⛔ <b>An explicit <c>--speed</c> wins.</b> Idling is skipped entirely when
+    /// <b>An explicit <c>--speed</c> wins.</b> Idling is skipped entirely when
     /// the server is unpaced, because <c>--speed max</c> is a direct instruction
     /// about the tick rate and this must not quietly override it.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Run() only — <c>GameServer.Tick</c> is untouched.</b> Every test and
+    /// <b>Run() only — <c>GameServer.Tick</c> is untouched.</b> Every test and
     /// the control port drive ticks themselves, and a Tick that no-opped on an
     /// empty server would break all of them for no saving: the cost this removes
     /// is the wakeup, and a caller driving ticks by hand has already paid it.
@@ -461,7 +459,7 @@ public sealed class ServerOptions
 
     /// <summary>Ticks per second while idle. A fifteenth of the live rate.</summary>
     /// <remarks>
-    /// ⚠️ <b>Two rather than one, so a joiner is noticed within half a second.</b>
+    /// <b>Two rather than one, so a joiner is noticed within half a second.</b>
     /// The listener is only polled on a tick, so this is also the worst-case
     /// delay before a connecting client's handshake starts — after which the
     /// server is no longer idle and runs at full rate for the rest of it.
@@ -474,7 +472,7 @@ public sealed class ServerOptions
     /// </summary>
     /// <remarks>
     /// <para>
-    /// ⛔ <b>The reason it exists.</b> <c>SearchController</c>'s reference cost was
+    /// <b>The reason it exists.</b> <c>SearchController</c>'s reference cost was
     /// measured on one machine, on one map, in Release. A rented VPS makes every
     /// decision cost more and no compiled-in constant can know that. The arbiter
     /// never uses the absolute scale — only <c>cost &lt;= budget - spent</c> — so
@@ -482,15 +480,15 @@ public sealed class ServerOptions
     /// <c>MicroBudgetController</c> does the walking.
     /// </para>
     /// <para>
-    /// ⚠️ <b><c>--bot-arbiter</c> stays an upper bound.</b> This only ever holds
+    /// <b><c>--bot-arbiter</c> stays an upper bound.</b> This only ever holds
     /// the budget at or below the configured number.
     /// </para>
     /// <para>
-    /// ⛔ <b>On for the live server, and structurally absent everywhere a
+    /// <b>On for the live server, and structurally absent everywhere a
     /// measurement is taken.</b> It lives in <see cref="GameServer.Run"/>, which
     /// <c>HeadlessMatch</c>, the env and <c>eval</c> never call — so a benchmark
     /// cannot pick it up by accident, and the thread-invariance pins keep meaning
-    /// what they say. ⚠️ Bots get quietly worse under load, which is the point and
+    /// what they say. Bots get quietly worse under load, which is the point and
     /// is also why every move it makes is logged.
     /// </para>
     /// </remarks>
@@ -498,7 +496,7 @@ public sealed class ServerOptions
 
     /// <summary>The <c>[Bots]</c> section. Off by default, as in the reference.</summary>
     /// <remarks>
-    /// ⚠️ <see cref="BotPopulationOptions.Default"/>, never <c>new()</c> — see the
+    /// <see cref="BotPopulationOptions.Default"/>, never <c>new()</c> — see the
     /// warning there. A zeroed one has a fill target of 0, a difficulty of 0 and a
     /// null name prefix, and every one of those is silent.
     /// </remarks>
@@ -506,7 +504,7 @@ public sealed class ServerOptions
 
     public void Validate()
     {
-        // ⚠️ First, because it is the one that can be reachable from the network:
+        // First, because it is the one that can be reachable from the network:
         // a configuration error here is the one worth failing fast on.
         Web.Validate();
 
@@ -524,7 +522,7 @@ public sealed class ServerOptions
         if (PlayerLimit is < 1 or > 48)
             throw new ArgumentOutOfRangeException(nameof(PlayerLimit), PlayerLimit, "player limit must be 1..48");
 
-        // ⚠️ Length, not content: a short array would index out of bounds deep in
+        // Length, not content: a short array would index out of bounds deep in
         // GameServer.ApplyOptions, and a long one would silently drop the tail.
         // Zeroes are legal here and mean "this class is full" — see ClassLimits.
         if (ClassLimits.Length != TeamBalance.ClassCount)
@@ -538,7 +536,7 @@ public sealed class ServerOptions
 
         if (MapDirectory.Length == 0)
         {
-            // ⚠️ Reachable only if the checked-in maps/ is missing AND nothing
+            // Reachable only if the checked-in maps/ is missing AND nothing
             // was passed, which means a partial checkout rather than a mistake
             // the caller made. Say where it looked. See MapDirectory.Resolve.
             throw new InvalidOperationException(

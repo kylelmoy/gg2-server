@@ -9,13 +9,13 @@ namespace Gg2.Tests;
 /// why a replay gets it wrong.
 /// </summary>
 /// <remarks>
-/// <b>Measured 2026-08-27.</b> <c>KothHUD.events/Create.xml</c> sets
-/// <c>cpUnlock = 900</c>; its Step fires <c>doEventUnlockCP</c> on the tick it
-/// reads <c>cpUnlock == 0</c> and decrements <em>afterwards</em>, so the unlock
-/// lands <b>901 ticks after the HUD was created</b> — which is when the server
-/// restarts the room, not when it announced the change.
+/// <c>KothHUD.events/Create.xml</c> sets <c>cpUnlock = 900</c>; its Step fires
+/// <c>doEventUnlockCP</c> on the tick it reads <c>cpUnlock == 0</c> and
+/// decrements <em>afterwards</em>, so the unlock lands <b>901 ticks after the
+/// HUD was created</b> — which is when the server restarts the room, not when
+/// it announced the change.
 /// <para>
-/// ⚠️ <b>That distinction is the whole finding.</b> A recorder sees exactly one
+/// <b>That distinction is the whole finding.</b> A recorder sees exactly one
 /// <c>CHANGE_MAP</c>, at t0, and a replay calls <c>LoadMap</c> — and therefore
 /// <c>Rounds.Start</c>, and therefore starts its unlock timer — right there. But
 /// the reference's own round starts <em>later</em>: the two recordings unlock at
@@ -47,8 +47,8 @@ public sealed class KothUnlockTimingTests
         LevelMap.FromPng(name, ReferenceTree.ReadMap(name));
 
     /// <summary>
-    /// ✅ <b>The model: unlock = (spawn wave − 150) + 901</b>, on both
-    /// recordings, exactly.
+    /// <b>The model: unlock = (spawn wave − 150) + 901</b>, on both recordings,
+    /// exactly.
     /// </summary>
     /// <remarks>
     /// Two independent recordings with different spawn waves, and the same
@@ -96,15 +96,13 @@ public sealed class KothUnlockTimingTests
     }
 
     /// <summary>
-    /// ⚠️ <b>And <c>CHANGE_MAP</c> is not the round start</b>, which is what a
+    /// <b>And <c>CHANGE_MAP</c> is not the round start</b>, which is what a
     /// replay assumes.
     /// </summary>
     /// <remarks>
-    /// The direct evidence, and the reason
-    /// <c>KothCaptureFixtureTests.ThePortStillCapturesTheHillTooEarly</c> is
-    /// still red: both recordings carry exactly one <c>CHANGE_MAP</c>, at t0,
-    /// and their unlocks are 1236 and 1160 ticks later. If <c>CHANGE_MAP</c>
-    /// were the round start both would be 901.
+    /// The direct evidence: both recordings carry exactly one <c>CHANGE_MAP</c>,
+    /// at t0, and their unlocks are 1236 and 1160 ticks later. If
+    /// <c>CHANGE_MAP</c> were the round start both would be 901.
     /// <para>
     /// <b>So this is a harness limitation rather than a simulation bug.</b> The
     /// port counts 901 from its own round start correctly; the replay simply

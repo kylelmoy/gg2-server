@@ -41,7 +41,7 @@ public static class JumpModel
     /// it forces a run-up on every jump in the game.
     /// </para>
     /// <para>
-    /// ⚠️ <b>The motion law is <c>Character.events/Begin Step.xml</c> in its own
+    /// <b>The motion law is <c>Character.events/Begin Step.xml</c> in its own
     /// order</b>: the run key adds first and only while under
     /// <c>basemaxspeed</c>, friction divides afterwards, and the snap to rest
     /// applies only with nothing held. The control factor is read live rather
@@ -50,12 +50,12 @@ public static class JumpModel
     /// whole reason the tracker can correct a slow takeoff.
     /// </para>
     /// <para>
-    /// ⚠️ <b>The tracker replayed here is <see cref="PathFollower"/>'s own.</b>
+    /// <b>The tracker replayed here is <see cref="PathFollower"/>'s own.</b>
     /// Anything that changes there has to change here, or the gate is answering a
     /// question about a flight the follower does not make.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Not monotonic in <paramref name="v0"/>, and that is real rather than
+    /// <b>Not monotonic in <paramref name="v0"/>, and that is real rather than
     /// a rounding artefact</b>: on koth_gallery's n56 → n44 arc, 3.50 clears, 3.75
     /// and 4.00 fail, and 4.25 clears again — because arriving <em>ahead</em> of a
     /// constant-velocity schedule makes the tracker brake. So a caller must not
@@ -82,7 +82,7 @@ public static class JumpModel
         var speed = v0;
         var travelled = 0.0;
 
-        // ⚠️ `round`, and it is GM8's — half to even. A fractional tick count
+        // `round`, and it is GM8's — half to even. A fractional tick count
         // rounding the other way is one whole tick of an arc that may only have
         // seventeen.
         var ticks = Math.Max(1, (int)Gml.Round(flightTicks));
@@ -117,12 +117,12 @@ public static class JumpModel
     /// <c>botRunupCol.gml</c>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>This follows WALK edges through the GRAPH, not the route, and that
-    /// is the whole point.</b> It used to clamp the run-up into the source node's
-    /// own columns — and a node one anchor column wide, which is what the top
-    /// step of a staircase is, resolves that clamp back to the column the bot is
-    /// already standing on. The run-up was a no-op and the jump happened from a
-    /// standstill anyway. Modelled offline: <b>3,310 unflyable jump edges → 253,
+    /// <b>This follows WALK edges through the GRAPH, not the route, and that
+    /// is the whole point.</b> Clamping the run-up into the source node's own
+    /// columns fails on a node one anchor column wide — the top step of a
+    /// staircase — because that clamp resolves back to the column the bot is
+    /// already standing on: the run-up becomes a no-op and the jump happens from
+    /// a standstill anyway. Modelled offline: <b>3,310 unflyable jump edges → 253,
     /// and koth_gallery's 105 → 0.</b>
     /// <para>
     /// Walk edges are one continuous floor by construction, so following them
@@ -131,7 +131,7 @@ public static class JumpModel
     /// never mentions, and that case is exactly the one worth allowing.
     /// </para>
     /// <para>
-    /// ⚠️ Gates are honoured, because a run-up through a gate the bot cannot pass
+    /// Gates are honoured, because a run-up through a gate the bot cannot pass
     /// is a run-up into a wall.
     /// </para>
     /// </remarks>
@@ -164,7 +164,7 @@ public static class JumpModel
 
             foreach (var edge in graph.EdgesFrom(current))
             {
-                // ⚠️ Walk edges only. A fall or a jump backwards is not a run-up,
+                // Walk edges only. A fall or a jump backwards is not a run-up,
                 // it is leaving the floor the run-up is being built on.
                 if (edge.Type != NavEdgeType.Walk)
                     continue;

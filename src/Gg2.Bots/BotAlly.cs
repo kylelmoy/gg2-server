@@ -20,7 +20,7 @@ namespace Gg2.Bots;
 /// actually wounded outscores anyone who is not by far more than distance can make
 /// up.
 /// <para>
-/// ⚠️ <b>Line of sight is <c>collision_line</c> against <c>Obstacle</c>, NOT
+/// <b>Line of sight is <c>collision_line</c> against <c>Obstacle</c>, NOT
 /// <c>collision_line_bulletblocking</c>.</b> A heal beam is stopped by walls the
 /// same way a bullet is, but the two predicates are not the same object set —
 /// gates, player walls and bullet walls are separate objects — and the beam's is
@@ -37,26 +37,26 @@ public static class BotAlly
     /// Drop every candidate that is itself a bot of a following class.
     /// </param>
     /// <remarks>
-    /// ⚠️ <b><paramref name="skipFollowers"/> exists because two medics who pick
+    /// <b><paramref name="skipFollowers"/> exists because two medics who pick
     /// each other deadlock.</b> The follow goal is the ally's own position, so medic
     /// A's goal is where medic B is standing and B's is where A is standing: both
     /// are already there, both report arrived, and neither ever leaves spawn. Seen
     /// live on koth_valley — two red medics parked at x=460 with the rest of their
     /// team at the point.
     /// <para>
-    /// ⚠️ <b>It is an ARGUMENT rather than a rule inside this method</b>, because
+    /// <b>It is an ARGUMENT rather than a rule inside this method</b>, because
     /// the <em>beam</em> has no such problem: a medic healing another medic is
     /// correct play, and the combat half passes false so that keeps working. Only
     /// the thing that turns an ally into a <em>destination</em> needs the exclusion.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Filtering during the search rather than rejecting the winner
+    /// <b>Filtering during the search rather than rejecting the winner
     /// afterwards</b> is what lets the second-best candidate win: a medic beside a
     /// wounded medic and a healthy heavy still follows the heavy, instead of giving
     /// up on following at all.
     /// </para>
     /// <para>
-    /// ⚠️ <b>The reference excludes bots of a following class; this excludes the
+    /// <b>The reference excludes bots of a following class; this excludes the
     /// CLASS.</b> See the comment at the test itself — <c>WorldState</c> holds no
     /// "is this a bot" flag and must not grow one for a branch the tick never reads.
     /// </para>
@@ -82,7 +82,7 @@ public static class BotAlly
             if (world.Player(other).Team != team || mate.Hp <= 0)
                 continue;
 
-            // ⚠️ By CLASS alone, where the reference asks `player.isBot and
+            // By CLASS alone, where the reference asks `player.isBot and
             // botClassProfile(class, BOT_CP_FOLLOW)`. WorldState holds no "is this a
             // bot" flag and must not grow one for this: it is not simulation state,
             // nothing in the tick reads it, and docs/BOTAI.md's whole point is that
@@ -107,12 +107,12 @@ public static class BotAlly
             var maxHp = ClassStats.For(mate.Class).MaxHp;
             var score = (1000 * mate.Hp / maxHp) + distance - maxHp;
 
-            // ⚠️ The reference walks a ds_priority and pops the minimum, testing
+            // The reference walks a ds_priority and pops the minimum, testing
             // the sightline only on each pop and stopping at the first that
             // passes. Here the sightline is cheap enough to fold into the scan —
             // it is one collision_line against the map — so this keeps the best
             // candidate that HAS a line rather than the best candidate outright.
-            // Same answer, one pass. ⚠️ Ties go to the lower slot, where the
+            // Same answer, one pass. Ties go to the lower slot, where the
             // reference's ds_priority tie rule is unspecified; nothing observes
             // which, and a stable rule is what keeps a run reproducible.
             if (score >= bestScore)

@@ -138,7 +138,7 @@ public static class MatchSimulation
             // (line 83), then the jump (93-116), then the right-click (120-126),
             // then the friction switch and the acceleration loop (143 onwards).
             //
-            // ⚠️ The detonation genuinely belongs in the middle. A demoman's
+            // The detonation genuinely belongs in the middle. A demoman's
             // mine sets moveStatus on whoever it throws, and the switch below it
             // reads moveStatus on the same tick — that is what a mine jump is.
             // Near the top of Begin Step, above the attack key — so a burning
@@ -175,7 +175,7 @@ public static class MatchSimulation
             CharacterPhysics.BeginStepUberEffects(
                 ref state.Characters[slot], ref state.Weapons[slot]);
 
-            // ⚠️ A weapon is a *separate instance* with a *higher id*, so its
+            // A weapon is a *separate instance* with a *higher id*, so its
             // own Begin Step runs after the whole of its owner's and before the
             // next character's. Three weapons have one: the Medigun spends an
             // uber, and the Flamethrower and the Minigun top up their tanks —
@@ -216,7 +216,7 @@ public static class MatchSimulation
         // same tick, exactly as a GM8 instance created between the stages does.
         Timers.Advance(ref state, spawnPoints, ref events);
 
-        // ⚠️ The projectile pass runs BEFORE the characters move, and that is
+        // The projectile pass runs BEFORE the characters move, and that is
         // measured rather than tidy.
         //
         // `move_all_bullets` is called from Objects/Networking/GameServer.events
@@ -274,7 +274,7 @@ public static class MatchSimulation
             CharacterPhysics.HeavyStep(ref state.Characters[slot]);
         }
 
-        // ⚠️ Every bubble's own Step, which is the one projectile movement that
+        // Every bubble's own Step, which is the one projectile movement that
         // does NOT happen in move_all_bullets — a Bubble has no `with` block
         // there and steers itself instead. Its instance is younger than its
         // owner, so it runs after that character's Step, and the difference is
@@ -339,14 +339,13 @@ public static class MatchSimulation
         // standing in a pit on top of a briefcase grabs it and *then* dies,
         // which is what makes Deaths' return arm reachable at all.
         //
-        // ⚠️ Placed after Intel.CollisionStep for that reason and not for tidiness.
-        // Sentry.events/Collision with {TeamGate, IntelGate}.xml — the two
-        // collision events the port did not have until 2026-08-28, and the
-        // whole of the "built at T, self-destructed at T+1" finding: a sentry
-        // built in a doorway takes 999 and dies in its own End Step below.
-        // TeamGate is object 110 and so strictly runs before KillBox's 506;
-        // IntelGate's 516 falls after FragBox's 509. Unobservable either way —
-        // see Sentries.GateCollisionStep.
+        // Placed after Intel.CollisionStep for that reason and not for tidiness.
+        // Sentry.events/Collision with {TeamGate, IntelGate}.xml — the "built
+        // at T, self-destructed at T+1" finding: a sentry built in a doorway
+        // takes 999 and dies in its own End Step below. TeamGate is object 110
+        // and so strictly runs before KillBox's 506; IntelGate's 516 falls
+        // after FragBox's 509. Unobservable either way — see
+        // Sentries.GateCollisionStep.
         Sentries.GateCollisionStep(world, ref state);
 
         KillBoxes.CollisionStep(world, ref state);
@@ -363,7 +362,7 @@ public static class MatchSimulation
         // runs an event in instance-id order — the same rule that puts
         // Generators.BeginStep above the character loop at the top of this tick.
         //
-        // ⚠️ In the reference this event ALSO carries its riders, inside a
+        // In the reference this event ALSO carries its riders, inside a
         // `with(Character)` that runs before those characters' own End Steps.
         // That half is not ported and cannot be until a platform has a collision
         // box; MovingPlatforms' remarks say why, and the position of this call is
@@ -389,7 +388,7 @@ public static class MatchSimulation
 
             // Character.events/End Step.xml:29-31, `with(GameServer)
             // ServerBalanceTeams()`, immediately after the death event and
-            // inside the block that exits. ⚠️ The player who just died is
+            // inside the block that exits. The player who just died is
             // therefore a candidate: their character is already gone, so the
             // "only dead players" guard passes for them.
             TeamBalance.Check(ref state, ref events);

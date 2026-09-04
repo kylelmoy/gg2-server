@@ -14,7 +14,7 @@ namespace Gg2.Tests;
 /// questions: "does this reader match the documented format" and "does the
 /// documented format match what the generator emits".
 /// <para>
-/// ⚠️ <b>These need the nav caches in <c>nav/</c>, which are gitignored here and
+/// <b>These need the nav caches in <c>nav/</c>, which are gitignored here and
 /// not shipped.</b> A clone whose generator has never been run has none, which is
 /// why they say so with
 /// <see cref="ReferenceTree.RequireNavCache"/> rather than failing as if the
@@ -90,7 +90,7 @@ public sealed class NavGraphFixtureTests
     /// files.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Both indices are correctness bets on the generator's output, not on
+    /// <b>Both indices are correctness bets on the generator's output, not on
     /// this reader's code.</b> <c>navEdgeIndex.gml</c> takes it on trust that
     /// "edges must already be sorted by <c>NAV_EDGE_FROM</c>, which the cache
     /// file guarantees: gg2-nav-gen counting-sorts the edge list by from-node as
@@ -135,7 +135,7 @@ public sealed class NavGraphFixtureTests
     /// The graph's mask dimensions are the map's own, for the area it names.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The cross-check that catches an area mix-up</b>, which is the one
+    /// <b>The cross-check that catches an area mix-up</b>, which is the one
     /// mistake in this layer that produces a completely plausible wrong answer:
     /// a tall map is several rounds stacked vertically and only one area's
     /// entities exist, so <c>cp_dirtbowl</c>'s three graphs describe three
@@ -234,7 +234,7 @@ public sealed class NavGraphFixtureTests
     /// carrier.
     /// </summary>
     /// <remarks>
-    /// Data, asserted so it stops being true loudly. ⚠️ The claim worth having is
+    /// Data, asserted so it stops being true loudly. The claim worth having is
     /// the second one: <b>a CTF map's own team gates are the reason the return
     /// leg is a different query from the outbound one</b> — red walks out of its
     /// own gate freely and cannot carry the enemy flag back through it — and a
@@ -272,14 +272,12 @@ public sealed class NavGraphFixtureTests
     /// A jump edge's velocity survives the load with its fraction intact.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The most expensive single character this port has written was the
-    /// <c>(int)</c> that used to sit in front of this field.</b>
     /// <c>NAV_EDGE_BUCKET</c> is the horizontal velocity <c>navJumpTakeoff</c>
     /// proved the arc at — "cover NAV_EDGE_BUCKET px of ground a tick"
     /// (<c>botPathKeys.gml:436</c>) — and the name invites an integer it has
-    /// never held. It cost five of the fourteen behaviour scenarios: with the
-    /// value truncated, <c>truefort-blue-spawn-exit-west</c> ends 834px from a
-    /// goal 150px away and the reference walks in 58 ticks.
+    /// never held. Truncating it to an <c>int</c> costs five of the fourteen
+    /// behaviour scenarios: <c>truefort-blue-spawn-exit-west</c> ends 834px from
+    /// a goal 150px away where the reference walks in 58 ticks.
     /// <para>
     /// Two assertions, because they fail at different distances from the cause.
     /// <b>No jump edge may read zero</b> — that is the 34.6% the truncation
@@ -290,7 +288,7 @@ public sealed class NavGraphFixtureTests
     /// that quietly started storing indices.
     /// </para>
     /// <para>
-    /// ⚠️ The scenario suite catches this too, and catching it there is not
+    /// The scenario suite catches this too, and catching it there is not
     /// enough: it is a whole map load and 6,000 ticks away from the line that is
     /// wrong, and it reads as a follower defect. Measured over the 24 shipped
     /// caches — 67,013 jump edges, every one fractional.
@@ -325,7 +323,7 @@ public sealed class NavGraphFixtureTests
 
         Assert.True(total > 60000, $"only {total} jump edges across every cache, expected ~67,000");
 
-        // ⚠️ Measured: 67,005 of 67,013. Eight really do land on a whole number,
+        // Measured: 67,005 of 67,013. Eight really do land on a whole number,
         // which is what a velocity does occasionally and what an index does
         // always — so the claim is a proportion, and the sharp gate is the two
         // named edges below.
@@ -335,7 +333,7 @@ public sealed class NavGraphFixtureTests
             + "mostly integral is an index, and the follower's trajectory model is built on "
             + "this being a speed");
 
-        // ⚠️ The gate that actually bites, and it bites on a rounding as well as a
+        // The gate that actually bites, and it bites on a rounding as well as a
         // truncation. Both values are the cache's own bits; the second is the arc
         // the reference's takeoff-gate comment quotes as "0.70 px/tick over 17.2
         // ticks against a 12px gap: exactly 12 for exactly 12", which is
@@ -362,7 +360,7 @@ public sealed class NavGraphFixtureTests
     /// edge index yields first is routinely NOT the one a search would choose.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>This is the measurement that made a whole class of bug visible, and
+    /// <b>This is the measurement that made a whole class of bug visible, and
     /// it is pinned so the synthetic tests for it cannot go quietly vacuous.</b>
     /// A route is a list of nodes, so <c>PathFollower.TryFindEdge</c> re-derives
     /// which edge each hop meant — and it used to take the first match. Nothing
@@ -377,14 +375,14 @@ public sealed class NavGraphFixtureTests
     /// is the gate; this is the evidence that the gate describes real graphs.
     /// </para>
     /// <para>
-    /// ⚠️ <b>A generator that stopped emitting parallel edges would make every one
+    /// <b>A generator that stopped emitting parallel edges would make every one
     /// of those tests pass while testing nothing</b>, and nothing else here would
     /// notice — the caches are built out of band by gg2-nav-gen. So the counts
     /// are exact, and a move is the re-record: check the generator changed the way
     /// you meant, update the numbers, and say so in the commit.
     /// </para>
     /// <para>
-    /// ⚠️ <b>The scout column is deliberately zero and is not padding.</b> The
+    /// <b>The scout column is deliberately zero and is not padding.</b> The
     /// double jump is what the index yields first on every one of those 833 pairs,
     /// so a scout was accidentally right the whole time — which is exactly why the
     /// bug survived: half the population never showed it.
@@ -462,13 +460,11 @@ public sealed class NavGraphFixtureTests
             }
         }
 
-        // Re-recorded 2026-09-01 when the port-authored gg_debug2 joined the nav
-        // cache (+501 pairs, +58 multi, +47 mixed, +38/+4 soldier, +34/0 scout).
         Assert.Equal(104_588, pairs);
         Assert.Equal(11_728, multi);
         Assert.Equal(11_662, mixed);
 
-        // ⚠️ TWO different faults, and keeping them apart is the point.
+        // TWO different faults, and keeping them apart is the point.
         //
         // The larger number is a COST mismatch: 3,821 walk/fall pairs where both
         // edges are flyable by anybody and the cheaper one is simply not the one

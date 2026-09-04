@@ -24,7 +24,7 @@ namespace Gg2.Tests;
 /// </item>
 /// </list>
 /// <para>
-/// ⚠️ <b>These run the opposite way from the intuition.</b> A rocket outlives
+/// <b>These run the opposite way from the intuition.</b> A rocket outlives
 /// its shooter's <em>death</em> on purpose — <c>ownerPlayer</c> is a player and
 /// not a character, precisely so a kill can still be credited to somebody who
 /// died first. The moment that player is gone there is nobody left to credit,
@@ -64,14 +64,13 @@ public sealed class RemoveSlotTests
     // --- the player's own sweep ----------------------------------------------
 
     /// <summary>
-    /// ⚠️ <b>A departing player's projectiles are destroyed</b>, every kind of
+    /// A departing player's projectiles are destroyed, every kind of
     /// them — four of the five families by the player's own sweep and the rest
     /// by the character it destroys first.
     /// </summary>
     /// <remarks>
-    /// The gate the old code could not fail: <c>RemoveSlot</c> used to drop the
-    /// flag and nothing else, so a soldier could disconnect and still kill
-    /// somebody with a rocket a second later.
+    /// Guards against a soldier disconnecting and still killing somebody with a
+    /// rocket a second later.
     /// </remarks>
     [Theory]
     [InlineData(ProjectileKind.Rocket)]
@@ -153,7 +152,7 @@ public sealed class RemoveSlotTests
     }
 
     /// <summary>
-    /// ⚠️ <b>A departing player's sentry goes with them</b>, and the compaction
+    /// <b>A departing player's sentry goes with them</b>, and the compaction
     /// is the whole of it.
     /// </summary>
     /// <remarks>
@@ -188,7 +187,7 @@ public sealed class RemoveSlotTests
     // --- the character it destroys first -------------------------------------
 
     /// <summary>
-    /// ⚠️ <b>The whole character is destroyed, not only its flag.</b>
+    /// <b>The whole character is destroyed, not only its flag.</b>
     /// </summary>
     /// <remarks>
     /// The distinguishing observable is the medic beam: <c>Clear</c> releases
@@ -279,7 +278,7 @@ public sealed class RemoveSlotTests
     // --- the pair ------------------------------------------------------------
 
     /// <summary>
-    /// ⚠️ <b>A death and a departure disagree about five of the nine kinds</b>,
+    /// <b>A death and a departure disagree about five of the nine kinds</b>,
     /// and this is the table that says which.
     /// </summary>
     /// <remarks>

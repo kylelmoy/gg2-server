@@ -128,8 +128,8 @@ public sealed class RotatedBoxSampleTests
     /// left implicit: the exemption is granted only where the model itself says
     /// a corner is on a half, so it cannot quietly cover an ordinary mistake.
     /// <para>
-    /// ⚠️ <b>Those two angles are this fixture's grid, not the rule.</b>
-    /// <c>rotated-mask-samples.json</c> finds ties at <b>300</b> as well, where
+    /// Those two angles are this fixture's grid, not the rule.
+    /// <c>rotated-mask-samples.json</c> finds ties at 300 as well, where
     /// it is <c>cos</c> that is analytically 0.5 (<see cref="RotatedMaskSampleTests"/>).
     /// <see cref="IsRoundingTie"/> already answers for both because it asks
     /// about the corner rather than about the angle — which is exactly why the

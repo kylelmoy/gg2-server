@@ -11,7 +11,7 @@ namespace Gg2.Tests;
 /// <c>votekick.gml</c>, <c>votemap.gml</c>, <c>votemute.gml</c>,
 /// <c>votescramble.gml</c>.
 /// <para>
-/// ⛔ <b>The vote UI is not the reference's, because it cannot be.</b> Those
+/// <b>The vote UI is not the reference's, because it cannot be.</b> Those
 /// plugins extend a newer chat plugin with a vote dialog; the clients here run
 /// <c>chat_v2_pr</c>, which has none. So a vote is announced as text and answered
 /// by typing. What IS the reference's, and is what these assert, is every
@@ -19,7 +19,7 @@ namespace Gg2.Tests;
 /// clock, one vote at a time, and the target of a kick not voting on it.
 /// </para>
 /// <para>
-/// ⚠️ <b>Thresholds are the part with no symptom.</b> A kick that needed 50%
+/// <b>Thresholds are the part with no symptom.</b> A kick that needed 50%
 /// instead of 90% would work perfectly in every manual test and be a grief tool
 /// on a live server. Each one below cites the GML line it comes from.
 /// </para>
@@ -84,7 +84,7 @@ public sealed class ChatV2CommandTests
     // --- the plain commands --------------------------------------------------
 
     /// <summary>
-    /// ⛔ A command is never echoed as chat, even one that was refused.
+    /// A command is never echoed as chat, even one that was refused.
     /// </summary>
     /// <remarks>
     /// The load-bearing half of the whole design. The client sends "/votekick
@@ -139,7 +139,7 @@ public sealed class ChatV2CommandTests
     }
 
     /// <summary>
-    /// ⚠️ <c>/help</c> is split across lines rather than sent as one. A chat
+    /// <c>/help</c> is split across lines rather than sent as one. A chat
     /// message's length prefix is a byte, so one long line would be cut on the
     /// wire — silently, and only once enough commands existed.
     /// </summary>
@@ -158,7 +158,7 @@ public sealed class ChatV2CommandTests
 
     /// <summary>
     /// <c>votekick.gml:107-110</c>: a client asking for a host command is told
-    /// so. ⚠️ A headless server has no host player, so this is the only reachable
+    /// so. A headless server has no host player, so this is the only reachable
     /// branch — and it is the whole of the client-visible behaviour.
     /// </summary>
     [Theory]
@@ -201,7 +201,7 @@ public sealed class ChatV2CommandTests
     }
 
     /// <summary>
-    /// ⛔ <b>Two thirds is not enough to kick.</b> 66% clears every other
+    /// <b>Two thirds is not enough to kick.</b> 66% clears every other
     /// threshold in this file and must not clear this one.
     /// </summary>
     [Fact]
@@ -263,7 +263,7 @@ public sealed class ChatV2CommandTests
     }
 
     /// <summary>
-    /// ⚠️ Not in the reference, which had no bots. Kicking one would succeed and
+    /// Not in the reference, which had no bots. Kicking one would succeed and
     /// mean nothing — the population manager puts it straight back.
     /// </summary>
     [Fact]
@@ -280,7 +280,7 @@ public sealed class ChatV2CommandTests
     }
 
     /// <summary>
-    /// ⛔ <b>A vote outlives a disconnection, and a slot index does not.</b>
+    /// <b>A vote outlives a disconnection, and a slot index does not.</b>
     /// </summary>
     /// <remarks>
     /// Thirty seconds is long enough for somebody unrelated to leave. If the
@@ -361,13 +361,11 @@ public sealed class ChatV2CommandTests
     /// <c>votekick.gml:89</c> is <b>90%</b>.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>Every row votes NEAR a threshold, and that is the whole point.</b>
-    /// The first version of this test voted 3-0 and asserted the mute passed —
-    /// true at <em>every</em> bar, so dropping votemute to a simple majority did
-    /// not move it. The second version voted 75%, which is between 70 and 90 and
-    /// so separates mute from kick — but is still above 50, so it did not catch
-    /// the same mutation either. <b>Both were found by mutation, not by
-    /// review.</b> A threshold needs a row on each side of it:
+    /// <b>Every row votes NEAR a threshold, and that is the whole point.</b> A
+    /// vote of 3-0 passes at every bar and so cannot catch a threshold dropped to
+    /// a simple majority; 75% is between 70 and 90 but still above 50, so it
+    /// alone cannot catch that mutation either. A threshold needs a row on each
+    /// side of it:
     /// <list type="bullet">
     /// <item>60% fails a mute (and would pass a simple majority)</item>
     /// <item>75% passes a mute and fails a kick</item>
@@ -438,7 +436,7 @@ public sealed class ChatV2CommandTests
 
     /// <summary>
     /// <c>votescramble.gml:76-113</c>: everyone on a team is reshuffled into two
-    /// halves. ⚠️ Spectators are left where they are.
+    /// halves. Spectators are left where they are.
     /// </summary>
     [Fact]
     public void AScrambleVoteSplitsTheTeamsAndLeavesSpectatorsAlone()
@@ -538,8 +536,8 @@ public sealed class ChatV2CommandTests
     /// tie passes it — unlike every other yes/no vote here.
     /// </summary>
     /// <remarks>
-    /// ⛔ Another bar that a unanimous test would not have found. The row that
-    /// matters is the 50-50 one: it passes here and fails under any higher bar,
+    /// The row that matters is the 50-50 one: it passes here and fails under
+    /// any higher bar,
     /// and it is also the row that separates this vote from
     /// <c>votescramble</c>'s <c>&gt; 50</c> a few tests up.
     /// </remarks>
@@ -661,7 +659,7 @@ public sealed class ChatV2CommandTests
     /// The guard every one of the five plugins opens with: one vote at a time.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The reference writes this as <c>global.chatWindow.alarm[0] &gt; 0</c>,
+    /// The reference writes this as <c>global.chatWindow.alarm[0] &gt; 0</c>,
     /// which in <c>chat_v2_pr</c> would be the chat window's four-second fade. In
     /// the plugin these extend it is the <b>vote timer</b> — the message divides
     /// it by 30 and calls the result seconds, and <c>sendVote</c> is given
@@ -691,7 +689,7 @@ public sealed class ChatV2CommandTests
     }
 
     /// <summary>
-    /// ⚠️ Re-voting replaces rather than adding.
+    /// Re-voting replaces rather than adding.
     /// </summary>
     /// <remarks>
     /// The reference collects one answer per client because its dialog can only
@@ -699,11 +697,10 @@ public sealed class ChatV2CommandTests
     /// player types it, and counting each one would let one person carry any
     /// vote alone.
     /// <para>
-    /// ⛔ <b>Asserted on the round end, not on a scramble.</b> The first version
-    /// used <c>/votescramble</c> and checked no team moved — which is also true
-    /// when a two-player scramble happens to deal them the teams they already
-    /// had, so the mutation that counted every ballot stayed green. The effect
-    /// under test has to be one that cannot happen by luck.
+    /// <b>Asserted on the round end, not on a scramble.</b> A two-player
+    /// scramble can deal players the teams they already had, so "no team moved"
+    /// is not proof that ballots were not double-counted. The effect under test
+    /// has to be one that cannot happen by luck.
     /// </para>
     /// </remarks>
     [Fact]
@@ -730,7 +727,7 @@ public sealed class ChatV2CommandTests
     /// whatever the split was.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>This port divides the players who could vote; the reference divides
+    /// <b>This port divides the players who could vote; the reference divides
     /// <c>ds_list_size(global.players)</c>.</b> A deliberate difference — this
     /// server fills with bots by default and bots cannot type, so the
     /// reference's sum makes the quorum unreachable on every bot server. The
@@ -758,7 +755,7 @@ public sealed class ChatV2CommandTests
     }
 
     /// <summary>
-    /// ⚠️ Bots do not count towards the quorum, which is the whole reason it is
+    /// Bots do not count towards the quorum, which is the whole reason it is
     /// computed over chatters rather than over the roster.
     /// </summary>
     [Fact]
@@ -781,7 +778,7 @@ public sealed class ChatV2CommandTests
 
     /// <summary>A vote that is still running when the map changes is dropped.</summary>
     /// <remarks>
-    /// ⚠️ Dropped rather than resolved: a scramble or a round-end vote landing in
+    /// Dropped rather than resolved: a scramble or a round-end vote landing in
     /// the round <em>after</em> the one it was called in would act on a world
     /// nobody voted about.
     /// </remarks>
@@ -814,7 +811,7 @@ public sealed class ChatV2CommandTests
     }
 
     /// <summary>
-    /// ⛔ Ambiguity is refused, not resolved. Picking the first of two matches is
+    /// Ambiguity is refused, not resolved. Picking the first of two matches is
     /// how a vote kicks the wrong person.
     /// </summary>
     [Fact]

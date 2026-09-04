@@ -5,9 +5,9 @@ namespace Gg2.Protocol;
 /// values that are not an id space of their own.
 /// </summary>
 /// <remarks>
-/// Facts here were extracted on 2026-08-24 from GG2 v2.9.2. If the reference
-/// fork moves, re-check <see cref="Version"/> and <see cref="ProtocolUuid"/>
-/// first: those two decide whether any client can connect at all.
+/// Extracted from GG2 v2.9.2. If the reference fork moves, re-check
+/// <see cref="Version"/> and <see cref="ProtocolUuid"/> first: those two decide
+/// whether any client can connect at all.
 /// </remarks>
 public static class GameConstants
 {
@@ -19,12 +19,9 @@ public static class GameConstants
     /// <c>GAME_URL_STRING</c>, announced to the lobby as the <c>game_url</c> pair.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Carried since 2026-09-01 and not before.</b> It sat in
-    /// <c>ConstantsTests.NotCarried</c> as "client UI", which was right until
-    /// <c>Gg2.Server.LobbyRegistration</c> needed it — the client shows it on a
-    /// menu AND the server puts it in the registration packet. A constant being
-    /// presentation in one place is not evidence it is presentation everywhere,
-    /// which is worth remembering for the rest of that exclusion list.
+    /// The client shows it on a menu AND the server puts it in the registration
+    /// packet — a constant being presentation in one place is not evidence it is
+    /// presentation everywhere.
     /// </remarks>
     public const string GameUrlString = "http://www.ganggarrison.com";
 

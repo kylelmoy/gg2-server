@@ -14,7 +14,7 @@ namespace Gg2.Server.Plugins;
 /// has them.
 ///
 /// <para>
-/// ⛔ <b>They extend a DIFFERENT chat plugin from the one this server
+/// <b>They extend a DIFFERENT chat plugin from the one this server
 /// advertises, and that changes the design.</b> Every one of them registers into
 /// <c>global.commandMap</c> / <c>global.voteCommandMap</c> and calls
 /// <c>global.sendVote</c>, <c>global.sendVoteResults</c>, <c>global.findPlayer</c>
@@ -32,7 +32,7 @@ namespace Gg2.Server.Plugins;
 /// per rule below.
 /// </para>
 /// <para>
-/// ⚠️ <b>This works because the client half does not know commands exist.</b> It
+/// <b>This works because the client half does not know commands exist.</b> It
 /// sends "/votekick bob" as an ordinary chat message; the server recognises the
 /// leading slash and never echoes it. Nothing on the wire changed.
 /// </para>
@@ -81,7 +81,7 @@ public sealed partial class ChatV2Plugin
         /// Ballots by <b>stable id</b>, never by slot.
         /// </summary>
         /// <remarks>
-        /// ⛔ A vote outlives disconnections by design — thirty seconds is long
+        /// A vote outlives disconnections by design — thirty seconds is long
         /// enough for two — and a slot index means something different after
         /// each one. Keyed by slot, a departure would silently transfer somebody
         /// else's ballot.
@@ -111,7 +111,7 @@ public sealed partial class ChatV2Plugin
     /// </summary>
     /// <remarks>
     /// <c>global.helpMap</c>, with the reference's own wording where it had
-    /// some. ⚠️ Kept as one table so <c>/help</c> cannot list a command that
+    /// some. Kept as one table so <c>/help</c> cannot list a command that
     /// does not exist, or miss one that does.
     /// </remarks>
     private static readonly (string Name, string Help)[] Commands =
@@ -199,7 +199,7 @@ public sealed partial class ChatV2Plugin
 
             case "kick":
             case "nextround":
-                // votekick.gml:107-110 and votemap.gml:301-304, verbatim. ⚠️ A
+                // votekick.gml:107-110 and votemap.gml:301-304, verbatim. A
                 // headless server has no host player, so this branch is the only
                 // reachable one and there is nothing behind it — the operator's
                 // equivalent is the control port. Answering exactly what the
@@ -235,7 +235,7 @@ public sealed partial class ChatV2Plugin
             return;
         }
 
-        // ⚠️ Split across lines rather than sent as one. The length prefix is a
+        // Split across lines rather than sent as one. The length prefix is a
         // byte, and the client half wraps at 53 characters, so one long line
         // would be truncated on the wire before it ever reached the wrapping.
         var line = string.Empty;
@@ -264,7 +264,7 @@ public sealed partial class ChatV2Plugin
     /// <c>global.chatWindow.alarm[0] &gt; 0</c>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ That alarm is the newer chat plugin's <b>vote timer</b>, not the chat
+    /// That alarm is the newer chat plugin's <b>vote timer</b>, not the chat
     /// window's fade — the message it prints divides it by 30 and calls the
     /// result "seconds", and <c>sendVote</c> is called with <c>30 * 30</c>. So
     /// the rule is "one vote at a time", not "wait four seconds after anybody
@@ -426,7 +426,7 @@ public sealed partial class ChatV2Plugin
     /// Fisher-Yates over <see cref="IPluginHost.Random"/>.
     /// </summary>
     /// <remarks>
-    /// ⛔ Not <c>WorldState.Random</c>. That stream is observable simulation —
+    /// Not <c>WorldState.Random</c>. That stream is observable simulation —
     /// every client re-derives a weapon's spread from its position — so
     /// shuffling a map list from it would make the game depend on how many
     /// people had called a vote.
@@ -485,7 +485,7 @@ public sealed partial class ChatV2Plugin
             return;
         }
 
-        // ⚠️ Re-voting replaces rather than adding. The reference collects one
+        // Re-voting replaces rather than adding. The reference collects one
         // answer per client because its dialog can only be answered once; here
         // the same message can arrive twice, and counting both would let one
         // player carry a vote by typing.
@@ -511,7 +511,7 @@ public sealed partial class ChatV2Plugin
     /// Who a vote needs to hear from: <c>floor(voters / 2)</c>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The reference divides <c>ds_list_size(global.players)</c>, and this
+    /// <b>The reference divides <c>ds_list_size(global.players)</c>, and this
     /// divides the players who could actually vote.</b> A deliberate difference,
     /// and not a small one: this server fills with bots by default, and bots and
     /// slot 0 cannot type. Counting them would make the quorum unreachable on
@@ -607,7 +607,7 @@ public sealed partial class ChatV2Plugin
     {
         var slot = Host.SlotOfStableId(vote.TargetId);
 
-        // ⚠️ The target may have left during the thirty seconds, which is the
+        // The target may have left during the thirty seconds, which is the
         // commonest outcome of a kick vote. Nothing to do, and nothing to
         // apologise for — but do not let a stale slot index reach Kick.
         if (slot < 0)
@@ -620,7 +620,7 @@ public sealed partial class ChatV2Plugin
             $"{ColourOrange}Player {Host.NameOf(slot)} has been vote kicked ({percent}% yes)",
             TeamEveryone);
 
-        // ⛔ <b>The kick is ONE disconnection, not a ban.</b> The reference's
+        // <b>The kick is ONE disconnection, not a ban.</b> The reference's
         // plugin sets `target.kicked` and keeps a `chatKicklist` of addresses
         // that its chat plugin refuses on reconnect; a server-wide ban list is a
         // bigger decision than a chat plugin should be making by itself, and a
@@ -629,7 +629,7 @@ public sealed partial class ChatV2Plugin
         // check already keeps — so a vote-kicked player can come back, and comes
         // back unable to talk.
         //
-        // ⚠️ Mute first: it reads the slot, and Kick ends the connection.
+        // Mute first: it reads the slot, and Kick ends the connection.
         Mute(slot);
         Host.Kick(slot, "vote kicked");
     }
@@ -701,10 +701,10 @@ public sealed partial class ChatV2Plugin
     /// half blue, second half red.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Spectators are left alone</b>, so a scramble does not drag somebody
+    /// <b>Spectators are left alone</b>, so a scramble does not drag somebody
     /// who is watching into a game.
     /// <para>
-    /// ⚠️ Bots are included, because they are on teams and leaving them put
+    /// Bots are included, because they are on teams and leaving them put
     /// would make the scramble not a scramble. The reference had none.
     /// </para>
     /// </remarks>
@@ -722,7 +722,7 @@ public sealed partial class ChatV2Plugin
             (players[i], players[j]) = (players[j], players[i]);
         }
 
-        // ⚠️ Read the target teams BEFORE moving anybody. SetTeam can kill a
+        // Read the target teams BEFORE moving anybody. SetTeam can kill a
         // character, and a class limit can bounce a class, but neither reorders
         // the roster — so the slots stay valid. If that ever stops being true,
         // this loop is where it breaks.
@@ -742,7 +742,7 @@ public sealed partial class ChatV2Plugin
     /// The reference's implementation lives in the chat plugin these extend and
     /// is not in the files that were ported, so this is written rather than
     /// transcribed: an exact case-insensitive name first, then a unique
-    /// substring. ⚠️ <b>Ambiguity is refused rather than resolved</b> — picking
+    /// substring. <b>Ambiguity is refused rather than resolved</b> — picking
     /// the first of two matches is how a vote kicks the wrong person, and the
     /// caller can always type more of the name.
     /// </remarks>
@@ -787,7 +787,7 @@ public sealed partial class ChatV2Plugin
     /// was still running.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Abandoning rather than finishing it: a scramble or a round-end vote
+    /// Abandoning rather than finishing it: a scramble or a round-end vote
     /// that resolved into the round <em>after</em> the one it was called in
     /// would act on a world nobody voted about.
     /// </remarks>

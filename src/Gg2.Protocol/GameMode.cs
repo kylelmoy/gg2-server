@@ -76,7 +76,7 @@ public readonly record struct WorldShape
     /// one is destroyed, and zero in every other mode.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The one field here that a map cannot settle for good.</b> The HUD
+    /// <b>The one field here that a map cannot settle for good.</b> The HUD
     /// block reaches each generator through a <c>with</c>
     /// (<c>GeneratorHUD.events/User Event 12.xml</c>), so a destroyed generator
     /// shortens every later update by four bytes — a reader that keeps taking

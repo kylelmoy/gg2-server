@@ -133,13 +133,12 @@ public static class CharacterWire
     /// pool.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The count and the blocks have to come from the same place, and
-    /// for four phases they did not.</b> <see cref="WeaponState.Lobbed"/> was
-    /// the field the simulation maintained and a second field named
-    /// <c>MinesLobbed</c> was the one this method serialised — and nothing ever
-    /// wrote it. So a demoman with mines out put a **0** on the wire and no mine
-    /// blocks, which is self-consistent and therefore silent: every client
-    /// simply drew no mines. Now there is one field.
+    /// <b>The count and the blocks have to come from the same place.</b>
+    /// <see cref="WeaponState.Lobbed"/> is the field the simulation
+    /// maintains and this method serialises from it — a divergence here would
+    /// put a wrong count on the wire with no mine blocks to match, which is
+    /// self-consistent and therefore silent: every client would simply draw
+    /// no mines.
     /// <para>
     /// <c>Minegun.events/User Event 12.xml</c> writes <c>lobbed</c> and then
     /// walks <c>with(Mine) if(ownerPlayer == other.ownerPlayer)</c>, so the
@@ -149,7 +148,7 @@ public static class CharacterWire
     /// a disagreement desynchronises everything after it.
     /// </para>
     /// <para>
-    /// ⚠️ <b>A mine's speeds are quantised by <c>5</c>, not the character's
+    /// <b>A mine's speeds are quantised by <c>5</c>, not the character's
     /// 8.5</b>, and every one of its five fields goes through GML's
     /// <c>round()</c> — where a character's position is a plain <c>x*5</c>. Two
     /// of this codebase's six rounding rules meet in one block.
@@ -166,7 +165,7 @@ public static class CharacterWire
         var mines = new MineBlock[state.Weapons[slot].Lobbed];
         var found = 0;
 
-        // ⚠️ The loop is NOT bounded by mines.Length. Stopping at the count
+        // The loop is NOT bounded by mines.Length. Stopping at the count
         // would make the check below blind in one direction: a pool holding
         // *more* mines than `lobbed` claims would fill the array, agree with
         // itself and write a short block list. Count them all, then compare.

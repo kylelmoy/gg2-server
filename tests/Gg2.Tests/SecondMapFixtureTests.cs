@@ -12,22 +12,21 @@ namespace Gg2.Tests;
 /// fixing that divergence is what this file now gates.
 /// </summary>
 /// <remarks>
-/// <b>Recorded 2026-08-27: three scouts against three soldiers on
+/// <b>Three scouts against three soldiers on
 /// <c>ctf_2dfort</c></b>, the narrowest CTF map (572px of art against
 /// truefort's 891), chosen so the bots meet early enough for a death and its
 /// 150-tick respawn to fit inside a closed-loop window.
 /// <para>
-/// ⚠️ <b>It did not deliver that at first.</b> The window was <b>five ticks</b>,
-/// because every character landed 0.4 world pixels low on its very first fall —
-/// and the cause turned out to be the harness rather than the simulation. ✅
-/// <b>Fixed 2026-08-27</b> by spawning through the alarm stage
+/// The window was originally <b>five ticks</b>, because every character
+/// landed 0.4 world pixels low on its very first fall — a harness bug, not a
+/// simulation one. Fixed by spawning through the alarm stage
 /// (<see cref="ITraceSimulation.QueueSpawn"/>); the window is <b>362 ticks</b>.
 /// <see cref="TheWindowSurvivesTheSpawnStageFix"/> is the gate.
 /// </para>
 /// <para>
 /// The recording holds eight deaths, sixteen spawns, a <c>GRAB_INTEL</c> and the
 /// <c>SCORE_INTEL</c> that follows it — the first capture-with-its-grab in any
-/// fixture here. ⚠️ <b>The capture is still out of reach</b>: the grab is at
+/// fixture here. <b>The capture is still out of reach</b>: the grab is at
 /// t1404 and the window ends at t877, so what blocks it now is ordinary drift
 /// rather than a landing bug.
 /// </para>
@@ -60,7 +59,7 @@ public sealed class SecondMapFixtureTests
     /// How many <em>messages</em> of this type the recording holds.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Not the same as <see cref="Count"/>, and the spawn wave is exactly
+    /// Not the same as <see cref="Count"/>, and the spawn wave is exactly
     /// where the difference bites: six characters spawn on one tick, so the
     /// tick count says 1 where the message count says 6. <c>gg2-parity census</c>
     /// prints the message count, so use this one when comparing against it.
@@ -88,7 +87,7 @@ public sealed class SecondMapFixtureTests
     /// It really is on a different map, and it frames.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Every other fixture in this project is <c>ctf_truefort</c></b>, so
+    /// <b>Every other fixture in this project is <c>ctf_truefort</c></b>, so
     /// nothing had ever loaded a second map's terrain through the replay path —
     /// the trace header, <c>GameModes.ShapeOf</c> and <c>PortedSimulation.LoadMap</c>
     /// all had exactly one map's worth of evidence behind them.
@@ -115,7 +114,7 @@ public sealed class SecondMapFixtureTests
         Assert.True(CountMessages(ticks, MessageType.PlayerSpawn) >= 14, "not enough spawns");
         Assert.True(Count(ticks, MessageType.WeaponFire) >= 50, "not enough seeded fire");
 
-        // ⚠️ The grab and the capture that follows it, in one recording. Nothing
+        // The grab and the capture that follows it, in one recording. Nothing
         // else in the project has a SCORE_INTEL at all, so `doEventScoreIntel`
         // has never been gated end to end — and still is not, because the window
         // below ends 900 ticks before the grab.
@@ -132,7 +131,7 @@ public sealed class SecondMapFixtureTests
     }
 
     /// <summary>
-    /// ✅ <b>The gate on the landing fix: this map's window is hundreds of ticks,
+    /// <b>The gate on the landing fix: this map's window is hundreds of ticks,
     /// not five.</b>
     /// </summary>
     /// <remarks>
@@ -151,23 +150,20 @@ public sealed class SecondMapFixtureTests
     /// dropdown platforms — one <c>Obstacle</c> and nothing else.
     /// </para>
     /// <para>
-    /// <b>So it is the landing, and the reason no earlier fixture caught it is
-    /// that no earlier fixture ever dropped anybody.</b> On <c>ctf_truefort</c>
-    /// the spawn wave produces no such offset — six fixtures there stay exact
-    /// for hundreds of ticks past their anchors — so a spawn-drop is a path
-    /// phase 4's original 48 trajectories evidently never took.
+    /// It is the landing: on <c>ctf_truefort</c> the spawn wave produces no such
+    /// offset, because its spawn markers sit eighteen pixels above the floor,
+    /// outside the snap described below.
     /// </para>
     /// <para>
-    /// ✅ <b>ROOT CAUSE, and it was the harness.</b> The reference creates a
-    /// character in the <b>alarm stage</b> (<c>player.alarm[5]</c> →
+    /// <b>Root cause: the harness, not the simulation.</b> The reference creates
+    /// a character in the <b>alarm stage</b> (<c>player.alarm[5]</c> →
     /// <c>PlayerSpawn.gml</c>), which runs between Begin Step and Step — so on
     /// its first tick a character gets a Step and an End Step but <b>no Begin
     /// Step</b>, and Begin Step is where gravity is applied. Its first End Step
     /// therefore still sees <c>vspeed == 0</c>, the guard on the stair descent,
-    /// and it <b>snaps</b> the six pixels onto the floor. The replayer placed the
-    /// character before running the tick, so it took that tick's gravity and
-    /// fell instead. <c>ctf_truefort</c> never noticed because its markers are
-    /// eighteen pixels up, outside the snap.
+    /// and it <b>snaps</b> the six pixels onto the floor. The replayer had
+    /// placed the character before running the tick, so it took that tick's
+    /// gravity and fell instead.
     /// </para>
     /// <para>
     /// Fixed by <see cref="ITraceSimulation.QueueSpawn"/>, which arms the alarm
@@ -195,8 +191,8 @@ public sealed class SecondMapFixtureTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The capture is still out of reach, and no longer for the old
-    /// reason.</b>
+    /// <b>The capture is still out of reach, but not because of the landing
+    /// bug.</b>
     /// </summary>
     /// <remarks>
     /// The recording's <c>GRAB_INTEL</c> is at t1404 and its <c>SCORE_INTEL</c>
@@ -224,7 +220,7 @@ public sealed class SecondMapFixtureTests
     /// The control that puts the blame on the physics rather than the map.
     /// </summary>
     /// <remarks>
-    /// Measured against the running engine on 2026-08-27 with a live scout's own
+    /// Measured against the running engine with a live scout's own
     /// box at the red spawn column: <c>place_free</c> is true for y ≤ 900 and
     /// false for y ≥ 901. This is the same question asked of the port, and it is
     /// a fifth map for the collision layer — <c>collision-samples.json</c>

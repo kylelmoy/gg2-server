@@ -9,7 +9,7 @@ namespace Gg2.Tests;
 /// The nav cache reader: the format, and the arithmetic that reads it.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>The format is not the obvious one</b>, and the obvious reading costs an
+/// <b>The format is not the obvious one</b>, and the obvious reading costs an
 /// afternoon. A <c>ds_grid_write</c> string is a 12-byte header (uint32 601,
 /// uint32 width, uint32 height) followed by <b>column-major</b> cells of
 /// <b>sixteen</b> bytes each, with the double sitting <b>four</b> bytes into the
@@ -97,7 +97,7 @@ public sealed class NavCacheTests
     /// Every field of every record survives the round trip, in the right column.
     /// </summary>
     /// <remarks>
-    /// The gate for the cell stride. ⚠️ Eight-byte packing — the obvious
+    /// The gate for the cell stride. Eight-byte packing — the obvious
     /// reading — puts every field in the wrong place, and because they are all
     /// plausible small numbers the result is a graph that loads without
     /// complaint and describes geometry that does not exist.
@@ -123,7 +123,7 @@ public sealed class NavCacheTests
         Assert.Equal(new NavNode(10, 20, 26, 0, NavDoor.None, NavGate.TeamRed), graph.Nodes[1]);
         Assert.Equal(new NavNode(17, 4, 30, 0, NavDoor.None, NavGate.Setup), graph.Nodes[2]);
 
-        // ⚠️ Rejump is field 8, and gg2-agent/tools/navgraph.js — the file the
+        // Rejump is field 8, and gg2-agent/tools/navgraph.js — the file the
         // format is documented in — does not read it. A reader written from that
         // alone drops it silently.
         Assert.Equal(
@@ -209,7 +209,7 @@ public sealed class NavCacheTests
     /// underscores.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Not the MD5.</b> <c>serverGotoMap.gml</c> leaves
+    /// <b>Not the MD5.</b> <c>serverGotoMap.gml</c> leaves
     /// <c>currentMapMD5</c> empty for every internal map, so keying on it alone
     /// would give all 22 shipped maps one cache entry and serve the first graph
     /// built for every one of them.
@@ -228,7 +228,7 @@ public sealed class NavCacheTests
     /// The cache guarantees the edge list is sorted by from-node — gg2-nav-gen
     /// counting-sorts it as its last step — which is what lets the index be two
     /// numbers instead of a list. A node with no outgoing edges is an empty
-    /// span, not a slice starting at edge 0: ⚠️ <c>navEdgeIndex.gml</c> defaults
+    /// span, not a slice starting at edge 0: <c>navEdgeIndex.gml</c> defaults
     /// the start to -1 for exactly that ambiguity.
     /// </remarks>
     [Fact]
@@ -260,7 +260,7 @@ public sealed class NavCacheTests
     /// A node lookup rounds the feet row rather than flooring it.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The one word that is the difference between a bot that walks a
+    /// <b>The one word that is the difference between a bot that walks a
     /// staircase and one that hops up it</b>, and the one place this reader
     /// deliberately disagrees with <c>gg2-agent/tools/navgraph.js</c>, which
     /// still floors. <c>navNodeFromWorld.gml</c>'s own header explains it: a
@@ -284,7 +284,7 @@ public sealed class NavCacheTests
         var stand = graph.StandY(0);
         Assert.Equal(0, graph.NodeFromWorld(NavGraph.ColumnWorldX(8), stand));
 
-        // ⚠️ And a pixel higher, which is where the engine actually rests it.
+        // And a pixel higher, which is where the engine actually rests it.
         // (20 + 6) * 6 - 23 = 133; (133 - 1 + 23) / 6 = 25.833, which rounds to
         // 26 = 20 + BoxHeight and floors to 25 — the step above.
         var resting = stand - 1;
@@ -383,7 +383,7 @@ public sealed class NavCacheTests
     /// The anchor-column conversion is a half-box offset, and it round-trips.
     /// </summary>
     /// <remarks>
-    /// ⚠️ A node's x-span is the <em>left edge</em> of the body box; a
+    /// A node's x-span is the <em>left edge</em> of the body box; a
     /// character's <c>x</c> is the centre of its sprite. Dropping the offset is
     /// invisible on a wide surface and quietly wrong on a narrow one — a
     /// two-cell ledge is missed entirely.
@@ -408,7 +408,7 @@ public sealed class NavCacheTests
     /// baked into the graph.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Your own team gate is open <em>unless</em> you are carrying intel
+    /// <b>Your own team gate is open <em>unless</em> you are carrying intel
     /// out of it</b>, and an enemy intel gate is closed only to a carrier. That
     /// first rule is why a CTF return leg is a different query from the outbound
     /// one — the reference records a broken <c>ctf_conflict</c> hiding behind a
@@ -441,9 +441,7 @@ public sealed class NavCacheTests
     /// <c>Gg2.Protocol.NavConstants</c> is the transcription of
     /// <c>Constants.xml</c> and <c>ConstantsTests</c> already pins it to the
     /// file — so the only way these enums can be wrong is by drifting from
-    /// <em>it</em>, which is what this catches. ⚠️ The numbers were nearly
-    /// re-derived from the reference a second time when this reader was written;
-    /// the table had been there since phase 0.
+    /// <em>it</em>, which is what this catches.
     /// </remarks>
     [Fact]
     public void TheTypedViewsMatchTheConstantTable()
@@ -483,17 +481,15 @@ public sealed class NavCacheTests
     /// lands in.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>This looks like an omission and is the reference's rule.</b>
+    /// <b>This looks like an omission and is the reference's rule.</b>
     /// <c>navFindPath.gml</c> tests <c>NAV_EDGE_GATE</c> and nothing else,
     /// because "an arc can cross a gate without landing on it — the generator
     /// stamps an edge that passes through a gate with that gate, so the check
     /// below covers both".
     /// <para>
-    /// ⚠️ <b>This test asserted the opposite until 2026-08-27</b>, because it was
-    /// written from <c>gg2-agent/tools/navgraph.js</c>'s <c>reach</c>, which
-    /// checks both. That tool is an audit answering "can a body get there" and is
-    /// deliberately conservative; the game is the specification. The two agree on
-    /// every shipped graph —
+    /// The game is the specification here, not <c>gg2-agent/tools/navgraph.js</c>'s
+    /// <c>reach</c>, which checks both node and edge gates and is deliberately
+    /// conservative. The two agree on every shipped graph —
     /// <c>NavSearchFixtureTests.NoEdgeLandsOnAGatedNodeUnstamped</c> is the
     /// measurement, and is what notices if a generator ever stops stamping.
     /// </para>
@@ -528,7 +524,7 @@ public sealed class NavCacheTests
         Assert.True(graph.EdgePassable(stamped, Team.Blue, hasIntel: false, setupGatesClosed: false));
         Assert.False(graph.EdgePassable(stamped, Team.Red, hasIntel: false, setupGatesClosed: false));
 
-        // ⚠️ And the edge OUT of a gated node is not refused for standing there:
+        // And the edge OUT of a gated node is not refused for standing there:
         // node 0 carries a red gate, and a blue bot on it can still leave.
         Assert.True(graph.EdgePassable(unstamped, Team.Blue, hasIntel: true, setupGatesClosed: true));
     }
@@ -539,7 +535,7 @@ public sealed class NavCacheTests
     /// </summary>
     /// <remarks>
     /// The multiplier is 100,000 and the largest shipped graph is 833 nodes, so
-    /// this is unreachable today. ⚠️ It is checked because the symptom of a
+    /// this is unreachable today. It is checked because the symptom of a
     /// collision is a bot blacklisting an edge it never tried, which is
     /// indistinguishable from the thrash the blacklist exists to stop.
     /// </remarks>

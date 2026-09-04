@@ -12,7 +12,7 @@ namespace Gg2.Server.Plugins;
 /// <c>socket_remote_ip</c>, <c>current_time</c>, <c>global.sendBuffer</c> and
 /// <c>Scripts/Plugins/API</c>'s two send functions.
 /// <para>
-/// ⛔ <b>Nothing here reaches the simulation DIRECTLY.</b> A plugin can end a
+/// <b>Nothing here reaches the simulation DIRECTLY.</b> A plugin can end a
 /// round, move a player across teams and kick somebody — the reference's own
 /// vote plugins do all three — but every one of those goes through the same
 /// <see cref="GameServer"/> method a client command or the control port uses.
@@ -25,11 +25,9 @@ namespace Gg2.Server.Plugins;
 /// client could not.
 /// </para>
 /// <para>
-/// ⚠️ This list grew on 2026-09-03 for the vote commands, and the earlier
-/// version of this paragraph said flatly that a plugin "may not move a
-/// character". Keeping the growth honest is the point: <b>anything added here is
-/// a capability the reference's plugins had</b>, routed through an existing
-/// server operation. Adding one that is not is a decision, not a convenience.
+/// <b>Anything added here is a capability the reference's plugins had</b>,
+/// routed through an existing server operation. Adding one that is not is a
+/// decision, not a convenience.
 /// </para>
 /// </remarks>
 public interface IPluginHost
@@ -48,7 +46,7 @@ public interface IPluginHost
     /// and for the server's own slot 0.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Not a stable identity — it is what the reference's plugins had, and
+    /// Not a stable identity — it is what the reference's plugins had, and
     /// what chat_v2's mute list keys on, so it is what this exposes. Two players
     /// behind one NAT share it.
     /// </remarks>
@@ -61,23 +59,17 @@ public interface IPluginHost
     /// GML's <c>current_time</c>: milliseconds since the process started.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>MONOTONIC, and that is not a preference.</b> Everything a plugin
+    /// <b>MONOTONIC, and that is not a preference.</b> Everything a plugin
     /// measures with this is an elapsed duration — a spam window, a vote clock, a
     /// rename throttle — and every one of them is written as
     /// <c>now - then &gt; limit</c>. Back it with a wall clock and a DST shift or
     /// an NTP correction backwards stalls all of them until real time catches up,
-    /// silently, on a machine nobody is looking at.
-    /// <para>
-    /// ⚠️ <b>The gg2-server lane hit exactly this on 2026-09-03</b>, in the
-    /// reference's own name throttle: the constant was transcribed and the clock
-    /// was not, so <c>current_time</c> became <c>DateTime.UtcNow</c>. Nothing in
-    /// a test suite can show it. There are THREE clocks in this server and they
-    /// are three different needs — a local calendar date for
+    /// silently, on a machine nobody is looking at. There are THREE clocks in
+    /// this server for three different needs — a local calendar date for
     /// <c>calculateAprilFools</c>, wall-clock instants for connection timeouts,
     /// and this. <b>Do not collapse them into one field.</b>
-    /// </para>
     /// <para>
-    /// ⚠️ Sampled once per tick and constant within it. GM8 re-reads the clock on
+    /// Sampled once per tick and constant within it. GM8 re-reads the clock on
     /// every call, but nothing a plugin does inside one tick takes long enough to
     /// see the difference — and a per-tick value is the one a test can drive.
     /// </para>
@@ -113,12 +105,12 @@ public interface IPluginHost
     /// the roster compacts.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>The only safe way to remember a player across time.</b> A vote runs
+    /// <b>The only safe way to remember a player across time.</b> A vote runs
     /// for thirty seconds; a slot index means something different the moment
     /// anybody disconnects, so a vote holding one would kick whoever inherited
     /// the number. The reference's plugin API has exactly this as
     /// <c>Player.gid</c>, which is some evidence it is the right shape.
-    /// ⚠️ <b>Never put it on the wire</b> — clients name players by position.
+    /// <b>Never put it on the wire</b> — clients name players by position.
     /// </remarks>
     long StableIdOf(int slot);
 
@@ -150,7 +142,7 @@ public interface IPluginHost
     /// A random source for a plugin's own shuffles and tie-breaks.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>NOT <c>WorldState.Random</c>.</b> That one is observable simulation
+    /// <b>NOT <c>WorldState.Random</c>.</b> That one is observable simulation
     /// and a plugin drawing from it would move every client's re-derived weapon
     /// spread. This is the server's own, and nothing on the wire depends on it.
     /// </remarks>
@@ -165,7 +157,7 @@ public interface IPluginHost
 /// plugin stashes it in a global (<c>global.chatPacketID</c>). This is that,
 /// with the id no longer something a plugin can get wrong.
 /// <para>
-/// ⚠️ <b>The id is the plugin's INDEX in the advertised list.</b> Both sides
+/// <b>The id is the plugin's INDEX in the advertised list.</b> Both sides
 /// derive it from position and nothing carries it —
 /// <c>loadserverplugins.gml:194-206</c> uses the loop counter for the queue key
 /// and for <c>env.packetID</c> alike. Reordering <c>ServerPluginList</c>
@@ -189,7 +181,7 @@ public sealed class PluginChannel(IPluginHost host, int packetId)
 /// The server half of a server-sent plugin, written in C#.
 /// </summary>
 /// <remarks>
-/// ⛔ <b>This does not run GML and never will.</b> A GG2 plugin ships as a zip of
+/// <b>This does not run GML and never will.</b> A GG2 plugin ships as a zip of
 /// GML that the client downloads from ganggarrison.com and executes inside Game
 /// Maker 8 (<c>loadserverplugins.gml</c>). The client still does exactly that.
 /// What this port replaces is the <em>host's</em> copy of the same script — the
@@ -197,7 +189,7 @@ public sealed class PluginChannel(IPluginHost host, int packetId)
 /// packets. So a stock client with the plugin loaded cannot tell the difference,
 /// and the port carries no GML.
 /// <para>
-/// ⚠️ <b>An implementation is therefore tied to one version of the plugin.</b>
+/// <b>An implementation is therefore tied to one version of the plugin.</b>
 /// <c>ServerPluginCatalogue</c> pins the zip hash each implementation was
 /// written against, and the loader shouts when the hash actually advertised is a
 /// different one. Without that pin, an upstream re-release changes what the
@@ -230,7 +222,7 @@ public interface IServerPlugin
     /// index above it is about to shift down by one.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>Called BEFORE the removal</b>, so <see cref="IPluginHost"/> still
+    /// <b>Called BEFORE the removal</b>, so <see cref="IPluginHost"/> still
     /// answers for the departing player. Anything a plugin stores per player has
     /// to compact here — see <see cref="PluginPlayerTable{T}"/>, which exists so
     /// that is one line rather than a bug that lands on the wrong player some
@@ -246,7 +238,7 @@ public interface IServerPlugin
     /// or the server opening its first map.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Fired for the FIRST map too, before any client can connect, so a
+    /// Fired for the FIRST map too, before any client can connect, so a
     /// plugin need not special-case startup. Every roster entry is a spectator
     /// again by the time this runs, on a first-area change.
     /// </remarks>

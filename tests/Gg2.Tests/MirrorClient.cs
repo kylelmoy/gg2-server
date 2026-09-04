@@ -8,14 +8,13 @@ namespace Gg2.Tests;
 /// a client was <em>told</em> rather than what the server believes.
 /// </summary>
 /// <remarks>
-/// ⛔ <b>The gate <c>docs/PARITY.md</c> asks for.</b> Every other automated check
+/// <b>The gate <c>docs/PARITY.md</c> asks for.</b> Every other automated check
 /// in this project reads the server — the replayer compares the port against a
 /// recording, the scenario suite reads <c>WorldState</c>, the server tests assert
 /// on a <c>GameServer</c>'s own roster. None of them can see a bug that lives
-/// entirely in the difference between the two, and two such bugs were found on
-/// 2026-09-03 by hand.
+/// entirely in the difference between the two.
 /// <para>
-/// ⚠️ <b>It must derive its roster from the RULES A CLIENT FOLLOWS, never from
+/// <b>It must derive its roster from the RULES A CLIENT FOLLOWS, never from
 /// the server's state.</b> A mirror that copied the server would agree with it by
 /// construction and gate nothing. So the state here comes out of
 /// <see cref="ServerStream"/>, which is transcribed from
@@ -24,7 +23,7 @@ namespace Gg2.Tests;
 /// spectator, client-side, with nothing on the wire saying so.
 /// </para>
 /// <para>
-/// ⚠️ <b>It is not a stock client and does not pretend to be.</b> It reads the
+/// <b>It is not a stock client and does not pretend to be.</b> It reads the
 /// roster stream and the state updates' framing; it does not simulate physics or
 /// render. What it can catch is disagreement about <em>who is who</em> — team,
 /// class, name, roster size — which is the category, not every possible desync.
@@ -78,7 +77,7 @@ public sealed class MirrorClient : IDisposable
     /// Frames everything that has arrived since the last call.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Reshapes on <c>CHANGE_MAP</c> before framing anything after it.</b>
+    /// <b>Reshapes on <c>CHANGE_MAP</c> before framing anything after it.</b>
     /// A state update's width depends on the map, so a reader that kept the old
     /// shape across a rotation would desynchronise on the first update of the new
     /// map and every later assertion would be about garbage. That is a property
@@ -89,13 +88,13 @@ public sealed class MirrorClient : IDisposable
     {
         Socket.Poll();
 
-        // ⛔ DRAINS the socket rather than indexing into it. LoopbackClient.Take
+        // DRAINS the socket rather than indexing into it. LoopbackClient.Take
         // REMOVES bytes from its own list, so a mirror that remembered "I have
         // read the first N" would silently skip or re-read the moment any test
         // also took bytes from the same client — a harness that mis-reads
         // quietly is worse than no harness, because it still goes green.
         //
-        // ⚠️ The consequence is a rule: a LoopbackClient with a mirror on it
+        // The consequence is a rule: a LoopbackClient with a mirror on it
         // belongs to the mirror. Read messages through Messages/Of, never
         // through Socket.Take.
         if (Socket.Received.Count > 0)
@@ -117,14 +116,14 @@ public sealed class MirrorClient : IDisposable
     /// they are a spectator.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>This is the crash, exactly.</b> A real GM8 client that reads a state
+    /// <b>This is the crash, exactly.</b> A real GM8 client that reads a state
     /// update with the character bit set for a player it holds as
     /// <see cref="Team.Spectator"/> runs <c>instance_create(getCharacterObject
     /// (class))</c> and dies in <c>Character</c>'s Create with
     /// <c>Attempted to get a sprite for unknown team ID: 2</c> — the sprite
     /// lookup is by team and there is no spectator sprite.
     /// <para>
-    /// ⚠️ <b>Sharper than comparing rosters</b>, and the difference matters: the
+    /// <b>Sharper than comparing rosters</b>, and the difference matters: the
     /// two rosters can agree that somebody is a spectator and the server can
     /// still be sending a character for them. Team equality would call that
     /// healthy. This asks the question the client's own code asks.

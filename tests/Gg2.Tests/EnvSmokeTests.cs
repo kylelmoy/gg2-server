@@ -7,7 +7,7 @@ namespace Gg2.Tests;
 /// </summary>
 /// <remarks>
 /// <c>docs/ENV.md</c>'s v0 exit criterion 1, at a size the suite can afford.
-/// ⚠️ <b>The thousand-duel run is a CLI command, not a test</b> —
+/// <b>The thousand-duel run is a CLI command, not a test</b> —
 /// <c>gg2-env smoke --worlds 64 --duels 1000</c> — because a multi-second test
 /// in a four-second suite is a test people start skipping. What is here is the
 /// same code path at a size that runs in well under a second, so a break is
@@ -19,7 +19,7 @@ public sealed class EnvSmokeTests
     /// A random policy completes duels without crashing or hanging.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Random is not a weak test here.</b> It reaches states a scripted
+    /// <b>Random is not a weak test here.</b> It reaches states a scripted
     /// policy never does — firing into its own feet, walking off every ledge —
     /// which is the coverage a smoke run wants. What it cannot check is that the
     /// numbers are <em>right</em>; that is what the other Env gates are for.
@@ -35,7 +35,7 @@ public sealed class EnvSmokeTests
     }
 
     /// <summary>
-    /// ⚠️ <b>A world that stopped terminating is REPORTED, not exhibited.</b>
+    /// <b>A world that stopped terminating is REPORTED, not exhibited.</b>
     /// </summary>
     /// <remarks>
     /// The smoke loop has a hard ceiling on its step count as well as on its
@@ -49,7 +49,7 @@ public sealed class EnvSmokeTests
     [Fact]
     public void AnImpossibleDuelCountIsReportedRatherThanHung()
     {
-        // ⚠️ The ceiling is passed explicitly. The default is duels * 1000,
+        // The ceiling is passed explicitly. The default is duels * 1000,
         // which a real run never reaches — correct for the default and useless
         // for a test, so the guard would otherwise be a safety net nobody had
         // ever watched trip. The first draft of this test tried to reach the

@@ -13,8 +13,8 @@ namespace Gg2.Tests;
 /// cost. Measured there: the policy's top 8 of 60 contains this search's best
 /// action 78.2% of the time against 55.9% for a random 8.
 /// <para>
-/// ⚠️ <b>Two of the properties here are load-bearing and would be invisible to
-/// any test that only checked the winner.</b> The restriction is a SET, so the
+/// Two of the properties here are load-bearing and would be invisible to
+/// any test that only checked the winner. The restriction is a SET, so the
 /// decision must not depend on the order the indices arrive in; and a class swap
 /// changes the candidate list between 60 and 120 entries, where index i names a
 /// different action — so a stale mask must be dropped rather than reused.
@@ -43,17 +43,12 @@ public sealed class RolloutRestrictionTests
     /// Every way of asking "how many candidates" gives the same answer.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>The gate on the CLASS of bug, not on the instance of it.</b> Shipping
-    /// candidate pruning shipped a third source for this number — the validator
-    /// asked the live <c>RolloutSearch.CandidateCount</c>, which is the set
-    /// currently built and reads 60 for a sniper until its first decision, while
-    /// <c>Candidates</c> and the score block both said 120. `gg2-rl` found it in
-    /// an hour; every test here passed over it.
-    /// <para>
-    /// ⚠️ <b>An arithmetic count that drifted from the loop that builds the list
-    /// would be the same bug wearing a different hat</b>, which is why this
-    /// compares the two rather than asserting either against a literal.
-    /// </para>
+    /// Three sources can disagree on this number: <c>RolloutSearch.CandidateCount</c>
+    /// reads the set currently built, which for a sniper is 60 until its first
+    /// decision even though <c>Candidates</c> and the score block both say 120.
+    /// This compares the count against the built list rather than against a
+    /// literal, so an arithmetic count that drifts from the loop that builds the
+    /// list is caught too.
     /// </remarks>
     [Theory]
     [InlineData(PlayerClass.Scout)]
@@ -84,9 +79,9 @@ public sealed class RolloutRestrictionTests
     /// And a duel answers the same number for a slot BEFORE its first step.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Before the first step is the whole point</b> — a restriction arrives
-    /// WITH step 0, so a count that only becomes right after a search has run is
-    /// right too late. That is exactly how the sniper bug presented.
+    /// Before the first step is the whole point: a restriction arrives with step
+    /// 0, so a count that only becomes right after a search has run is right too
+    /// late.
     /// </remarks>
     [Theory]
     [InlineData(PlayerClass.Sniper, 120)]
@@ -164,7 +159,7 @@ public sealed class RolloutRestrictionTests
     /// The cost accounting follows what was searched, not what could have been.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The whole point of a restriction is that it costs less.</b> A figure
+    /// The whole point of a restriction is that it costs less. A figure
     /// counted from the candidate list would report a budget nobody spent, and
     /// <c>docs/BOTAI.md</c> item 9 names this as the number to watch.
     /// </remarks>
@@ -189,12 +184,12 @@ public sealed class RolloutRestrictionTests
     /// The decision is a pure function of the SET, not of the order it arrived in.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>This is the property that would rot silently.</b> The tie-break is
-    /// lexicographic — damage, then aim error — and `gg2-rl` measured <b>85.2%</b>
-    /// of non-blind decisions with their top two candidates tied, so iteration
-    /// order settles a great many decisions. A search whose answer depended on how
-    /// a client happened to sort its indices would be irreproducible, and every
-    /// other test here would still pass.
+    /// This is the property that would rot silently. The tie-break is
+    /// lexicographic — damage, then aim error — and a large share of non-blind
+    /// decisions have their top two candidates tied, so iteration order settles
+    /// a great many decisions. A search whose answer depended on how a client
+    /// happened to sort its indices would be irreproducible, and every other
+    /// test here would still pass.
     /// </remarks>
     [Fact]
     public void TheOrderTheIndicesArriveInDoesNotMatter()
@@ -237,10 +232,10 @@ public sealed class RolloutRestrictionTests
     /// the unrestricted search gave that candidate.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Restricting must not change what a candidate is WORTH</b>, only which
-    /// ones are looked at. A rollout that behaved differently under a restriction
-    /// would make every pruned distribution incomparable with an unpruned one, and
-    /// the distillation corpus would silently mix two scales.
+    /// Restricting must not change what a candidate is worth, only which ones
+    /// are looked at. A rollout that behaved differently under a restriction
+    /// would make every pruned distribution incomparable with an unpruned one,
+    /// and the distillation corpus would silently mix two scales.
     /// </remarks>
     [Fact]
     public void ARestrictedScoreEqualsTheUnrestrictedOne()
@@ -299,14 +294,14 @@ public sealed class RolloutRestrictionTests
     /// A restriction is dropped when the candidate set changes size under it.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>The silent failure this whole feature is most exposed to.</b> Only a
-    /// sniper's set carries the zoom dimension, so it holds 120 candidates against
-    /// everyone else's 60 — and <c>BuildCandidates</c> interleaves zoom inside
-    /// each (aim, fire) pair, so index <c>i</c> in the 120-list is a DIFFERENT
-    /// action from index <c>i</c> in the 60-list. A mask that merely fit would
-    /// search six wrong actions and report plausible numbers for them.
+    /// The silent failure this whole feature is most exposed to. Only a
+    /// sniper's set carries the zoom dimension, so it holds 120 candidates
+    /// against everyone else's 60 — and <c>BuildCandidates</c> interleaves zoom
+    /// inside each (aim, fire) pair, so index <c>i</c> in the 120-list is a
+    /// different action from index <c>i</c> in the 60-list. A mask that merely
+    /// fit would search six wrong actions and report plausible numbers for them.
     /// <para>
-    /// ⚠️ Going 120 → 60 is the dangerous direction, because the stale mask is
+    /// Going 120 to 60 is the dangerous direction, because the stale mask is
     /// large enough to index. That is the direction tested here.
     /// </para>
     /// </remarks>
@@ -342,7 +337,7 @@ public sealed class RolloutRestrictionTests
     /// A restriction survives until a decision actually searches.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Only the first tick of a decision searches</b> — a decision is held
+    /// Only the first tick of a decision searches — a decision is held
     /// for <c>DecisionTicks</c> — so a restriction set mid-decision must apply to
     /// the next search rather than be dropped on a tick that was never going to
     /// look at it.

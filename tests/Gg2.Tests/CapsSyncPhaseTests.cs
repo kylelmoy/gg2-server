@@ -9,30 +9,24 @@ namespace Gg2.Tests;
 /// one that asks, which is the reference's phase.
 /// </summary>
 /// <remarks>
-/// ⛔ <b>Nothing had ever pinned the phase of a CAPS_UPDATE, and one of the two
-/// triggers was a tick early while the other did not exist at all.</b>
-/// <para>
 /// <c>GameServerBeginStep.gml:55</c> tests <c>syncTimer</c>, and <b>nothing
 /// inside that event ever sets it</b>. All nine setters live on objects younger
 /// than the GameServer — the generator, the control point, four HUDs and the two
 /// intel-base collisions — so every one of them runs after line 55 has already
 /// been tested for that frame, and the extra scoreboard message lands on the
 /// FOLLOWING tick.
+/// <para>
+/// The port honours that everywhere the request comes out of the simulation,
+/// as <c>GameServer._capsSyncPending</c>'s comment says. The two triggers keyed
+/// on the server's own counters need the same discipline: setting and consuming
+/// the flag inside the same <c>WriteStateUpdate</c> call collapses the one-tick
+/// delay this file exists to pin.
 /// </para>
 /// <para>
-/// The port honoured that everywhere the request came out of the simulation, and
-/// <c>GameServer._capsSyncPending</c>'s comment says so. The two triggers keyed
-/// on the server's own counters did not: the generator's minute timer set the
-/// flag and consumed it inside the same <c>WriteStateUpdate</c> call, and the
-/// setup timer's trigger was missing behind a comment claiming it "waits on the
-/// setup timer being simulated" — which had stopped being true.
-/// </para>
-/// <para>
-/// ⚠️ <b>Same family as the two one-tick delivery bugs fixed on 2026-09-01 and
-/// 02, and invisible for the same reason.</b> A closed-loop replay compares the
-/// stream, and a CAPS_UPDATE one tick out of phase is a well-formed CAPS_UPDATE
-/// in a well-formed stream. Only a test that knows which tick it should have
-/// been on can tell.
+/// This is invisible to a closed-loop replay: it compares the stream, and a
+/// CAPS_UPDATE one tick out of phase is a well-formed CAPS_UPDATE in a
+/// well-formed stream. Only a test that knows which tick it should have been on
+/// can tell.
 /// </para>
 /// </remarks>
 public sealed class CapsSyncPhaseTests
@@ -41,7 +35,7 @@ public sealed class CapsSyncPhaseTests
     /// Whether the packet this tick sent LED with a <c>CAPS_UPDATE</c>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Reading the first byte is enough, and that is not a shortcut: the
+    /// Reading the first byte is enough, and that is not a shortcut: the
     /// flush leads with the tick's own state update (<see cref="FlushShapeTests"/>),
     /// and <c>WriteStateUpdate</c> writes the CAPS_UPDATE ahead of the tiered
     /// one. So a tick that owed a scoreboard sync leads with CAPS_UPDATE and
@@ -54,7 +48,7 @@ public sealed class CapsSyncPhaseTests
     }
 
     /// <summary>
-    /// ⛔ The whole question for the generator: frame 1800 asks, frame 1801
+    /// The whole question for the generator: frame 1800 asks, frame 1801
     /// answers.
     /// </summary>
     /// <remarks>
@@ -64,7 +58,7 @@ public sealed class CapsSyncPhaseTests
     /// persistent and older. So the frame whose number is the multiple of 1800
     /// is the frame that ASKS, and the next one is the frame that SENDS.
     /// <para>
-    /// ⚠️ Mutation-checked: putting the request back inside
+    /// Mutation-checked: putting the request back inside
     /// <c>WriteStateUpdate</c> moves the CAPS_UPDATE onto 1800 and fails both
     /// assertions at once.
     /// </para>
@@ -90,8 +84,8 @@ public sealed class CapsSyncPhaseTests
     }
 
     /// <summary>
-    /// ⛔ At two minutes the reference sends TWO scoreboard updates on
-    /// consecutive ticks, and the port used to send one.
+    /// At two minutes the reference sends TWO scoreboard updates on
+    /// consecutive ticks.
     /// </summary>
     /// <remarks>
     /// 3600 is a multiple of 1800, so the heartbeat at
@@ -100,7 +94,7 @@ public sealed class CapsSyncPhaseTests
     /// after it is set. Folding the generator's trigger into the same <c>||</c>
     /// as the heartbeat silently merged them.
     /// <para>
-    /// ⚠️ Not a restatement of the test above: that one locates a message, this
+    /// Not a restatement of the test above: that one locates a message, this
     /// one counts them, and only counting catches the merge.
     /// </para>
     /// </remarks>
@@ -129,7 +123,7 @@ public sealed class CapsSyncPhaseTests
     }
 
     /// <summary>
-    /// ⛔ The setup timer's trigger, and it carries its own proof of phase.
+    /// The setup timer's trigger, and it carries its own proof of phase.
     /// </summary>
     /// <remarks>
     /// <c>GameServerBeginStep.gml:55</c>'s third disjunct is
@@ -138,27 +132,26 @@ public sealed class CapsSyncPhaseTests
     /// younger than the GameServer — so the frame that decrements it to 180 is
     /// not the frame that sees 180.
     /// <para>
-    /// ⚠️ <b>The CAPS_UPDATE serialises the setup timer, so the message names
+    /// <b>The CAPS_UPDATE serialises the setup timer, so the message names
     /// the tick it went out on</b> — which is what this asserts, rather than
     /// frame arithmetic that would need to know when the round started.
     /// </para>
     /// <para>
-    /// ⛔ <b>What this does NOT pin, checked rather than assumed.</b> It cannot
-    /// tell the placement above — after <c>MatchSimulation.Tick</c> — from the
-    /// set-and-consume inside <c>WriteStateUpdate</c> that the generator's
-    /// trigger was guilty of. Serialisation precedes the simulation, so the
-    /// setup timer is the SAME value on both sides of that boundary: both
-    /// versions emit one CAPS_UPDATE, on the same tick, reading 180. The
-    /// placement is chosen to match the reference's shape and to keep
-    /// <c>WriteStateUpdate</c>'s "nothing sets the flag from in here" invariant
-    /// whole, and this test is honest that it is not the thing enforcing it.
+    /// <b>What this does NOT pin, checked rather than assumed.</b> It cannot
+    /// tell the placement above — after <c>MatchSimulation.Tick</c> — from a
+    /// set-and-consume inside <c>WriteStateUpdate</c>. Serialisation precedes
+    /// the simulation, so the setup timer is the SAME value on both sides of
+    /// that boundary: both placements emit one CAPS_UPDATE, on the same tick,
+    /// reading 180. The placement here is chosen to match the reference's shape
+    /// and to keep <c>WriteStateUpdate</c>'s "nothing sets the flag from in
+    /// here" invariant whole, and this test is honest that it is not the thing
+    /// enforcing it.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Mutation-checked in the direction that IS observable:</b> moving
+    /// <b>Mutation-checked in the direction that IS observable:</b> moving
     /// the call ABOVE <c>MatchSimulation.Tick</c> makes it read the previous
     /// tick's value, sets the flag a tick late, and the update then carries
-    /// <b>179</b>. Measured, not predicted — the first version of this comment
-    /// guessed 181 and was wrong.
+    /// <b>179</b>, measured rather than predicted.
     /// </para>
     /// </remarks>
     [Fact]
@@ -175,7 +168,7 @@ public sealed class CapsSyncPhaseTests
         var client = harness.JoinClient("watcher");
         harness.TickUntil(() => harness.Server.RosterCount > 1, "the client joined");
 
-        // ⚠️ ControlPointCount deliberately zeroed. The ControlPoints HUD writes
+        // ControlPointCount deliberately zeroed. The ControlPoints HUD writes
         // its points AFTER the setup timer, and how many of them a CAPS_UPDATE
         // carries depends on which AREA of a multi-area map is open — which
         // ShapeOf, given the whole PNG, cannot know. Zero stops the reader at the
@@ -207,7 +200,7 @@ public sealed class CapsSyncPhaseTests
             setupTimers.Add(update.HudScalars[2]);
         }
 
-        // ⚠️ Not vacuous: a run whose setup phase produced no CAPS_UPDATE at all
+        // Not vacuous: a run whose setup phase produced no CAPS_UPDATE at all
         // would satisfy "every one of them reads 180" trivially.
         var duringSetup = setupTimers.Where(timer => timer > 0).ToList();
 
@@ -221,7 +214,7 @@ public sealed class CapsSyncPhaseTests
     private static ServerHarness NewGeneratorServer() =>
         new(options =>
         {
-            // ⚠️ The rotation is pinned to the one map so that a round ending
+            // The rotation is pinned to the one map so that a round ending
             // inside the 3,600 ticks below cannot rotate onto a map with no
             // generator and quietly stop the trigger under test.
             options.Map = "gen_destroy";

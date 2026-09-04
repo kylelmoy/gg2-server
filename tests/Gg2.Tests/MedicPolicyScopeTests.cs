@@ -11,8 +11,8 @@ namespace Gg2.Tests;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Requested by <c>gg2-rl</c> 2026-09-03, who are adding Medic to the trained
-/// class set with uber deliberately out of scope. ⛔ <b>The two halves compose,
+/// Requested by <c>gg2-rl</c>, who are adding Medic to the trained class set
+/// with uber deliberately out of scope. <b>The two halves compose,
 /// and that is the point rather than a coincidence:</b> the uber press requires a
 /// beam target (<c>BotClassKeys</c>' medic case wants <c>UberReady</c> AND an ally
 /// on the beam AND an enemy within <c>UberRange</c>), and a medic on the beam is
@@ -22,7 +22,7 @@ namespace Gg2.Tests;
 /// would be pressing the keys instead.
 /// </para>
 /// <para>
-/// ⚠️ Both halves are behaviour a measurement cannot see: a policy driving a medic
+/// Both halves are behaviour a measurement cannot see: a policy driving a medic
 /// away from its patient still plays, and an untrained weight reading an
 /// off-distribution column still produces an action. They fail quietly or not at
 /// all, which is why they are pinned here.
@@ -41,7 +41,7 @@ public sealed class MedicPolicyScopeTests
     /// A medic on the beam stays scripted; the same medic with no patient does not.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The control is the second half.</b> Asserting only that a beaming
+    /// <b>The control is the second half.</b> Asserting only that a beaming
     /// medic is refused would pass just as well if medics were never handed over
     /// at all — which would delete the arm <c>gg2-rl</c> is about to train.
     /// </remarks>
@@ -58,7 +58,7 @@ public sealed class MedicPolicyScopeTests
     }
 
     /// <summary>
-    /// ⚠️ A dead or departed patient is not a patient.
+    /// A dead or departed patient is not a patient.
     /// </summary>
     /// <remarks>
     /// The term reuses <c>BotAlly.StillValid</c> rather than testing the slot
@@ -78,7 +78,7 @@ public sealed class MedicPolicyScopeTests
     }
 
     /// <summary>
-    /// ⛔ The term is the MEDIC's, not everyone's.
+    /// The term is the MEDIC's, not everyone's.
     /// </summary>
     /// <remarks>
     /// <c>BotClassProfile.Heals</c> is medic-only, and a term that leaked to other
@@ -112,7 +112,7 @@ public sealed class MedicPolicyScopeTests
     // ------------------------------------------------------------------
 
     /// <summary>
-    /// ⛔ A medic's übercharge does not reach the observation at all.
+    /// A medic's übercharge does not reach the observation at all.
     /// </summary>
     /// <remarks>
     /// The shared special column was <c>Medic =&gt; UberCharge</c>, and it has been
@@ -122,7 +122,7 @@ public sealed class MedicPolicyScopeTests
     /// a patient — so a deployed medic carrying banked charge would have been the
     /// only time that weight ever saw a non-zero input.
     /// <para>
-    /// ⚠️ <b>Compared as whole observations rather than by column index</b>, so
+    /// <b>Compared as whole observations rather than by column index</b>, so
     /// this keeps working when the layout moves and cannot quietly start asserting
     /// about the wrong float.
     /// </para>
@@ -137,7 +137,7 @@ public sealed class MedicPolicyScopeTests
     }
 
     /// <summary>
-    /// ⚠️ The control: the column is still WIRED, and the test can see it move.
+    /// The control: the column is still WIRED, and the test can see it move.
     /// </summary>
     /// <remarks>
     /// Without this, <see cref="AMedicsUberChargeIsInvisibleToThePolicy"/> would
@@ -155,11 +155,11 @@ public sealed class MedicPolicyScopeTests
     }
 
     /// <summary>
-    /// ⛔ KNOWN GAP, PINNED: a sniper's rifle charge is invisible to the policy.
+    /// KNOWN GAP, PINNED: a sniper's rifle charge is invisible to the policy.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <c>WeaponState.Charge</c> is real state and <c>Weapons.cs:733</c> sets rifle
+    /// <c>WeaponState.Charge</c> is real state and <c>Weapons.RifleBeginStep</c> sets rifle
     /// damage to <c>base + sqrt(Charge / RifleChargeTime) * (max - base)</c> over
     /// 105 ticks — so charge <em>is</em> the sniper's damage. Sniper falls to the
     /// shared column's <c>_</c> arm and Sniper is in
@@ -168,7 +168,7 @@ public sealed class MedicPolicyScopeTests
     /// it.</b>
     /// </para>
     /// <para>
-    /// ⚠️ <b>This test asserts the WRONG behaviour on purpose.</b> Closing the gap
+    /// <b>This test asserts the WRONG behaviour on purpose.</b> Closing the gap
     /// is an <c>ObservationLayoutVersion</c> bump and a full retrain, which is
     /// <c>gg2-rl</c>'s cost to price and not a free improvement to hand them. The
     /// pin exists so that closing it FAILS HERE and becomes a deliberate change to
@@ -176,7 +176,7 @@ public sealed class MedicPolicyScopeTests
     /// message, which is exactly how the sandvich went missing for eight phases.
     /// </para>
     /// <para>
-    /// ⛔ <b>When it is closed:</b> delete this test, bump
+    /// <b>When it is closed:</b> delete this test, bump
     /// <c>ObservationLayoutVersion</c>, and say in the commit that every existing
     /// checkpoint is dated by it.
     /// </para>

@@ -7,7 +7,7 @@ namespace Gg2.Bots;
 /// One tick of a bot's combat brain — <c>Scripts/Bots/botCombatUpdate.gml</c>.
 /// </summary>
 /// <remarks>
-/// Returns the key bits it wants pressed. ⚠️ <b>The caller ORs them with the
+/// Returns the key bits it wants pressed. <b>The caller ORs them with the
 /// navigation half's</b>, and the two cannot conflict because this one owns
 /// ATTACK and SPECIAL and <see cref="PathFollower"/> owns LEFT/RIGHT/JUMP/DOWN.
 /// <para>
@@ -17,7 +17,7 @@ namespace Gg2.Bots;
 /// <list type="number">
 /// <item><b>see</b> — a target is picked on a staggered cadence.</item>
 /// <item><b>acquire</b> — the bot ignores it entirely for
-/// <see cref="BotSkill.AcquireTicks"/>. ⚠️ It does not even turn towards it,
+/// <see cref="BotSkill.AcquireTicks"/>. It does not even turn towards it,
 /// which is what makes a weak bot look <em>slow</em> rather than blind.</item>
 /// <item><b>aim</b> — the desired direction is recomputed every
 /// <see cref="BotSkill.AimInterval"/> ticks from a snapshot that itself only
@@ -31,14 +31,14 @@ namespace Gg2.Bots;
 /// comes up.</item>
 /// </list>
 /// <para>
-/// ⚠️ <b>SPECIAL is gated on acquisition but not on the fire delay</b>, because
+/// <b>SPECIAL is gated on acquisition but not on the fire delay</b>, because
 /// the special-key behaviours are reactive — a pyro's airblast, a demoman
 /// detonating under somebody's feet — and a reaction that arrives a second and a
 /// half late is not a reaction. The one exception is a medic, whose needle gun
 /// <em>is</em> its right click.
 /// </para>
 /// <para>
-/// ⚠️ <b>Aim error is uniform, not Gaussian.</b> Quake III's <c>crandom()</c> is
+/// <b>Aim error is uniform, not Gaussian.</b> Quake III's <c>crandom()</c> is
 /// uniform and so is every error term built on it. Two multipliers ride on top:
 /// the moving-target scale, and Quake III's close-range penalty, which makes
 /// <em>every</em> tier worse at point-blank range. That one is an
@@ -59,7 +59,7 @@ public static class BotCombat
     /// Advances one bot's combat state by a tick and returns ATTACK / SPECIAL.
     /// </summary>
     /// <param name="random">
-    /// The match's own stream. ⚠️ <see cref="WorldState.Random"/> and not a
+    /// The match's own stream. <see cref="WorldState.Random"/> and not a
     /// private one: docs/BOTAI.md item 2 wants a forked world to fork every
     /// stream with it, and <c>randomize()</c> is deliberately not transcribed
     /// anywhere in this port.
@@ -97,7 +97,7 @@ public static class BotCombat
 
         // --- the medic exception: a hurt team-mate outranks an enemy ---------
         //
-        // ⚠️ The ally REPLACES the subject rather than adding to it, and
+        // The ally REPLACES the subject rather than adding to it, and
         // everything downstream then treats it as the thing being aimed at. That is
         // what makes a medic stop shooting and start healing: BotClassKeys' medic
         // case reads the flag and presses ATTACK (the beam) instead of SPECIAL (the
@@ -119,13 +119,13 @@ public static class BotCombat
                 state.Ally = BotAlly.None;
         }
 
-        // ⚠️ The medic exception is decided ABOVE this, because an ally is a
+        // The medic exception is decided ABOVE this, because an ally is a
         // subject in its own right: a medic with a patient and no enemy anywhere
         // still beams, and deciding it after the no-target return would make a medic
         // heal only while something was shooting at it.
         if (!state.Target.Exists)
         {
-            // ⚠️ With nothing to shoot at the aim follows the walk, so a bot
+            // With nothing to shoot at the aim follows the walk, so a bot
             // crossing a map faces the way it is going. The threshold is
             // BOT_REST_SPEED — the same "is it really moving" floor GG2's own
             // ice-skating snap uses — so a bot standing still keeps whatever it
@@ -140,13 +140,13 @@ public static class BotCombat
                 Slew(state, in skill);
                 aim = state.AimDir;
 
-                // ⚠️ The class policy STILL RUNS with nothing to aim at —
+                // The class policy STILL RUNS with nothing to aim at —
                 // botCombatUpdate's own no-subject branch does the same, because
                 // "nothing to aim at is a state a class can still have an opinion
                 // about: a spy re-cloaks, an engineer builds, a heavy eats". Only
                 // the aiming is skipped.
                 //
-                // ⚠️ The case that made it matter here is the pyro's AIRBLAST: a
+                // The case that made it matter here is the pyro's AIRBLAST: a
                 // reflect is a reaction to something already in the air and has
                 // nothing to do with having a target. Returning None here left a
                 // pyro with an empty screen unable to deflect a rocket at all.
@@ -163,11 +163,11 @@ public static class BotCombat
         var distance = Gml.PointDistance(self.X, self.Y, target.X, target.Y);
         var sinceSeen = tick - state.TargetAt;
 
-        // ⚠️ The acquire gate returns BEFORE the slew, so the aim does not even
+        // The acquire gate returns BEFORE the slew, so the aim does not even
         // begin to move. That is the difference between a slow bot and a blind
         // one, and folding it in after the slew would make every tier turn at the
         // same speed and only differ in when it shot.
-        // ⚠️ An ally is NOT acquired. Every difficulty gate on this path —
+        // An ally is NOT acquired. Every difficulty gate on this path —
         // the acquire hold, the fire delay, the aim settle, the hold-fire roll — is
         // about shooting a person who is trying not to be shot. A medic that made its
         // own team-mate wait a second and a half before pointing the beam at them
@@ -182,7 +182,7 @@ public static class BotCombat
 
         if (subjectIsAlly)
         {
-            // ⚠️ Straight at them, with NO lead solve. The beam has no travel
+            // Straight at them, with NO lead solve. The beam has no travel
             // time — botAimSolve exists to put a projectile where a target will be —
             // and leading a team-mate points the beam at empty air beside them.
             state.AimX = target.X;
@@ -206,7 +206,7 @@ public static class BotCombat
 
         var canFire = sinceSeen >= skill.AcquireTicks + skill.FireDelayTicks;
 
-        // ⚠️ `!subjectIsAlly &&` on the whole suppression, not on each clause.
+        // `!subjectIsAlly &&` on the whole suppression, not on each clause.
         // A beam is not a shot: it costs nothing to be wrong about, it cannot miss,
         // and holding it back on a settle tolerance is a medic that stops healing
         // every time its patient walks round a corner.
@@ -214,7 +214,7 @@ public static class BotCombat
         {
             keys &= ~PlayerKeys.Attack;
 
-            // ⚠️ Only for a class whose SPECIAL is part of firing. Everyone
+            // Only for a class whose SPECIAL is part of firing. Everyone
             // else's is a reaction and is not gated on the fire delay at all.
             if (BotClassProfile.SpecialIsFire(self.Class))
                 keys &= ~PlayerKeys.Special;
@@ -226,7 +226,7 @@ public static class BotCombat
 
     /// <summary>An ally, in the shape the aim and the keys already understand.</summary>
     /// <remarks>
-    /// ⚠️ <see cref="BotTarget.Visible"/> is true by construction — the ally
+    /// <see cref="BotTarget.Visible"/> is true by construction — the ally
     /// search would not have returned a slot with no line to it. Leaving it false
     /// would make the blind-fallback machinery downstream treat a team-mate standing
     /// in the open as somebody remembered through a wall.
@@ -242,7 +242,7 @@ public static class BotCombat
     /// Keeps the current target if it is still worth shooting at, or drops it.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The line-of-sight test is on the perceive cadence, not every
+    /// <b>The line-of-sight test is on the perceive cadence, not every
     /// tick</b>, and a broken sightline does not drop the target for thirty
     /// ticks. That memory window is what lets a bot hold its aim on a doorway
     /// somebody has just stepped behind and engage the moment they step back out.
@@ -253,7 +253,7 @@ public static class BotCombat
         if (!state.Target.Exists)
             return;
 
-        // ⚠️ A potshot target is outside the ordinary radius by construction, so
+        // A potshot target is outside the ordinary radius by construction, so
         // it is kept inside the same widened band that let it be picked.
         var keepRange = state.Potshot ? range * BotConstants.PotshotMult : range;
 
@@ -266,7 +266,7 @@ public static class BotCombat
             return;
         }
 
-        // ⚠️ Measured to the same point the search measured to when it picked
+        // Measured to the same point the search measured to when it picked
         // this target — the centre of a map object's body, the chest of a
         // character. Mixing the two would let a generator be acquired at its
         // centre and dropped on its origin the next tick, over and over, on any
@@ -300,7 +300,7 @@ public static class BotCombat
 
     /// <summary>Is the target still alive, still an enemy, and still not cloaked.</summary>
     /// <remarks>
-    /// ⚠️ A sentry and a generator have hp and a team and nothing else this chain
+    /// A sentry and a generator have hp and a team and nothing else this chain
     /// reads — no cloak, no ground, no player — so their checks are a character's
     /// minus the fields they do not have. In GM8 getting that wrong is not a
     /// crash, it is a silent read of some other instance's variable.
@@ -373,7 +373,7 @@ public static class BotCombat
     /// ordinary radius is empty.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Only the SEARCH widens.</b> Everything afterwards, including the fire
+    /// <b>Only the SEARCH widens.</b> Everything afterwards, including the fire
     /// gates, is identical for a potshot — it is an ordinary target that happens
     /// to be far away.
     /// </remarks>
@@ -409,11 +409,11 @@ public static class BotCombat
     /// Refreshes the snapshot of where the target is and how fast it is going.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Only while the target is visible.</b> A bot does not learn where
+    /// <b>Only while the target is visible.</b> A bot does not learn where
     /// somebody went while they were behind a wall — which is the whole reason
     /// the aim stays on the last known position rather than tracking through it.
     /// <para>
-    /// ⚠️ And a change of <em>subject</em> refreshes it immediately, whatever the
+    /// And a change of <em>subject</em> refreshes it immediately, whatever the
     /// cadence says: a stale snapshot of the previous target would aim the first
     /// shot at the wrong place entirely.
     /// </para>
@@ -470,9 +470,9 @@ public static class BotCombat
         // doorway the better answer is the first point on the route they would have
         // to walk back along that this bot can actually see.
         //
-        // ⚠️ On its own clock, not on the aim interval. BotSuppress.Spot is a
+        // On its own clock, not on the aim interval. BotSuppress.Spot is a
         // graph walk and the aim interval is 2 ticks at the top tier.
-        // ⚠️ state.Visible, NOT state.Target.Visible. The first is the LIVE flag —
+        // state.Visible, NOT state.Target.Visible. The first is the LIVE flag —
         // maintained on the perceive cadence and false exactly while the sightline
         // is broken — and the second is only what the search reported at
         // acquisition, which never changes again. Reading the target's made the
@@ -496,7 +496,7 @@ public static class BotCombat
             {
                 (aimX, aimY) = BotSuppress.Centre(graph, state.SuppressNode);
 
-                // ⚠️ The velocity that came with the snapshot belongs to a body
+                // The velocity that came with the snapshot belongs to a body
                 // that was moving when it was last seen; A DOORWAY IS NOT MOVING.
                 // Leading a fixed point by a dead man's velocity is how a suppression
                 // shot ends up in the far wall.
@@ -509,7 +509,7 @@ public static class BotCombat
             state.SuppressNode = BotSuppress.NoSpot;
         }
 
-        // ⚠️ The splash classes aim at a grounded target's FEET, and only at a
+        // The splash classes aim at a grounded target's FEET, and only at a
         // skill high enough to know to. BOT_FEET_OFFSET below the chest is where
         // a rocket does the most damage to somebody standing on the floor.
         if (state.Target.Kind == BotTargetKind.Character
@@ -525,7 +525,7 @@ public static class BotCombat
 
         state.AimWant = BotAim.Solve(
             in self, aimX, aimY, state.SeeVx, state.SeeVy, skill.LeadMode,
-            // ⚠️ <b>The floor under the TARGET, and it is load-bearing.</b>
+            // <b>The floor under the TARGET, and it is load-bearing.</b>
             // BotAim.FallPredict applies gravity whatever the target's vertical
             // speed is, so without the clamp a target standing perfectly still is
             // predicted to keep falling — and the bot aims BELOW its feet, into
@@ -544,11 +544,11 @@ public static class BotCombat
             skill.AimConeDeg * BotClassProfile.AimError(self.Class),
             skill.MoveErrorMultiplier, moving, sinceSeen, distance);
 
-        // ⚠️ Uniform on [-1, 1], not Gaussian: Quake III's crandom() is uniform
+        // Uniform on [-1, 1], not Gaussian: Quake III's crandom() is uniform
         // and so is every error term built on it.
         state.AimWant += (random.Next(2) - 1) * spread;
 
-        // ⚠️ Rolled once per aim interval rather than per tick, so it withholds a
+        // Rolled once per aim interval rather than per tick, so it withholds a
         // burst rather than stuttering the trigger.
         state.HoldFire = random.Next(1) < skill.HoldFireChance;
     }
@@ -558,12 +558,12 @@ public static class BotCombat
     /// </summary>
     /// <remarks>
     /// A floor plus a cone that <b>decays the longer the target is watched</b>,
-    /// scaled down when it is moving and — ⚠️ <b>scaled UP at close range, for
+    /// scaled down when it is moving and — <b>scaled UP at close range, for
     /// every tier</b>. That last one is Quake III's close-range penalty and is an
     /// anti-frustration measure rather than a difficulty knob: without it bots are
     /// unbeatable in a brawl.
     /// <para>
-    /// ⚠️ The close factor <em>divides</em>, and it is below 1 near the target —
+    /// The close factor <em>divides</em>, and it is below 1 near the target —
     /// so dividing makes the spread larger. Reading it as a multiplier inverts
     /// the whole intent.
     /// </para>
@@ -589,7 +589,7 @@ public static class BotCombat
     /// Turns the actual aim towards the desired one at the skill's turn rate.
     /// </summary>
     /// <remarks>
-    /// ⚠️ It <b>snaps</b> when the remaining difference is within one tick's turn,
+    /// It <b>snaps</b> when the remaining difference is within one tick's turn,
     /// rather than always stepping — otherwise the aim oscillates either side of
     /// the target for ever and the settle gate never opens.
     /// </remarks>

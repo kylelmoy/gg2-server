@@ -12,20 +12,20 @@ namespace Gg2.Tests;
 /// </summary>
 /// <remarks>
 /// <para>
-/// ⛔ <b>This is the only thing in the project that answers to the network, so
+/// <b>This is the only thing in the project that answers to the network, so
 /// the tests that matter most are the refusals.</b> Every other surface here is
 /// either a game client on a port a player already trusts or a loopback tool. A
 /// bug in this file's subject is somebody else's server.
 /// </para>
 /// <para>
-/// ⚠️ <b>A real socket and a real HTTP client, not a call into the handler.</b>
+/// <b>A real socket and a real HTTP client, not a call into the handler.</b>
 /// The parser is hand-written (see <c>HttpExchange.cs</c>) and half of what is
 /// being asserted — that a cookie is <c>HttpOnly</c>, that a 401 really is a 401,
 /// that the CSRF header is required — is only true if the bytes on the wire say
 /// so. Testing the method behind it would assert the design and not the server.
 /// </para>
 /// <para>
-/// ⚠️ <b>The server is ticked by a background thread.</b> Unlike
+/// <b>The server is ticked by a background thread.</b> Unlike
 /// <c>ControlPortTests</c>, an HTTP request cannot be interleaved with manual
 /// ticks from the test thread: the panel's commands are queued and drained by
 /// <c>Pump</c>, so a request would deadlock against a server nobody is ticking.
@@ -49,14 +49,14 @@ public sealed class WebAdminTests : IDisposable
         {
             Enabled = true,
 
-            // ⚠️ Port 0: an ephemeral port read back from the server, for the
+            // Port 0: an ephemeral port read back from the server, for the
             // reason ControlPortTests gives — a hard-coded one makes the suite
             // un-parallelisable and the failure intermittent.
             Port = 0,
             Password = Password,
         });
 
-        // ⚠️ MinHumans defaults to 1, and below it the population manager's
+        // MinHumans defaults to 1, and below it the population manager's
         // target is ZERO rather than the fill — so a bot test on a server with
         // nobody connected would silently never get a bot. The panel says the
         // same thing to an operator rather than looking like a broken button.
@@ -98,7 +98,7 @@ public sealed class WebAdminTests : IDisposable
     // --- the refusals --------------------------------------------------------
 
     /// <summary>
-    /// ⛔ Nothing behind the password answers without one.
+    /// Nothing behind the password answers without one.
     /// </summary>
     /// <remarks>
     /// A <see cref="Theory"/> over every route rather than one endpoint, because
@@ -139,7 +139,7 @@ public sealed class WebAdminTests : IDisposable
     }
 
     /// <summary>
-    /// ⛔ A valid session is not enough: a mutating request must echo the token
+    /// A valid session is not enough: a mutating request must echo the token
     /// issued at sign-in.
     /// </summary>
     /// <remarks>
@@ -159,7 +159,7 @@ public sealed class WebAdminTests : IDisposable
     }
 
     /// <summary>
-    /// ⛔ The map route joins its argument to a directory, so it takes a map
+    /// The map route joins its argument to a directory, so it takes a map
     /// name and nothing else.
     /// </summary>
     [Theory]
@@ -196,14 +196,14 @@ public sealed class WebAdminTests : IDisposable
         Assert.Contains("HttpOnly", cookie, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("SameSite=Strict", cookie, StringComparison.OrdinalIgnoreCase);
 
-        // ⚠️ NOT Secure, and that is right on plain HTTP: a browser drops a
+        // NOT Secure, and that is right on plain HTTP: a browser drops a
         // Secure cookie on an unencrypted connection, so setting it there would
         // make the panel impossible to sign in to rather than safer.
         Assert.DoesNotContain("Secure", cookie, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
-    /// ⚠️ A reload must not mean signing in again, so a browser holding a valid
+    /// A reload must not mean signing in again, so a browser holding a valid
     /// cookie gets its CSRF token back.
     /// </summary>
     [Fact]
@@ -261,7 +261,7 @@ public sealed class WebAdminTests : IDisposable
     }
 
     /// <summary>
-    /// ⛔ A command posted on a socket thread lands on the tick thread.
+    /// A command posted on a socket thread lands on the tick thread.
     /// </summary>
     /// <remarks>
     /// The property this whole class is built around: nothing on an HTTP thread
@@ -281,19 +281,19 @@ public sealed class WebAdminTests : IDisposable
     }
 
     /// <summary>
-    /// ⛔ The panel and the control port are one dispatch, not two.
+    /// The panel and the control port are one dispatch, not two.
     /// </summary>
     /// <remarks>
     /// <para>
     /// Every verb the control port answers is answered here, because both go
-    /// through <see cref="ControlCommands"/>. ⚠️ <b>What this establishes is that
+    /// through <see cref="ControlCommands"/>. <b>What this establishes is that
     /// each verb is <em>reachable</em>, not that it does the same thing</b> — it
     /// asserts the reply is not "unknown cmd". If someone gives the panel its own
     /// switch statement, this test keeps passing until the two lists differ,
     /// which is the point at which it starts failing.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Adding a verb to <c>ControlCommands</c> means adding a row here</b>,
+    /// <b>Adding a verb to <c>ControlCommands</c> means adding a row here</b>,
     /// and the negative control below is what says the assertion can fail at all.
     /// </para>
     /// </remarks>
@@ -332,7 +332,7 @@ public sealed class WebAdminTests : IDisposable
     }
 
     /// <summary>
-    /// ⚠️ Kicking a bot is refused, and says why.
+    /// Kicking a bot is refused, and says why.
     /// </summary>
     /// <remarks>
     /// A bot has no connection to close and the population manager would put it
@@ -360,13 +360,9 @@ public sealed class WebAdminTests : IDisposable
     /// that is the byte a plugin vote-kick sends too.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Written at the server-plugins/web-admin merge, because the two
-    /// branches disagreed and nothing would have gone red either way.</b> Each
-    /// had written its own <c>KickPlayer</c>; git merged them as separate
-    /// members with no conflict, and the plugin half sent
-    /// <see cref="KickReason.Name"/>. That byte is not neutral —
+    /// <see cref="KickReason.Name"/> is not a neutral byte —
     /// <c>ClientBeginStep.gml:433</c> renders it as <b>"Name Exploit"</b>, so a
-    /// vote-kicked player was told they had been caught cheating their name.
+    /// vote-kicked player would be told they had been caught cheating their name.
     /// <see cref="KickReason.Operator"/> falls through that chain to
     /// <c>else kickReason = ""</c> and shows the bare "You have been kicked
     /// from the server", which is what both paths actually mean.
@@ -379,7 +375,7 @@ public sealed class WebAdminTests : IDisposable
     [Fact]
     public void AnOperatorKickSendsTheOperatorReason()
     {
-        // ⚠️ Its OWN harness, not the fixture's. This class ticks on a
+        // Its OWN harness, not the fixture's. This class ticks on a
         // background thread, and a test that also drives TickUntil and reads
         // the receive buffer from the test thread is racing it.
         using var harness = new ServerHarness();
@@ -391,7 +387,7 @@ public sealed class WebAdminTests : IDisposable
         var slot = harness.Server.RosterCount - 1;
         Assert.Equal(KickOutcome.Kicked, harness.Server.KickPlayer(slot, "by the operator"));
 
-        // ⚠️ KickPlayer flushes, but the loopback transport still has to be
+        // KickPlayer flushes, but the loopback transport still has to be
         // pumped before the bytes are readable here — the same wait
         // NameAndBubbleTests does around its own kick.
         harness.TickUntil(() => client.IsClosed, "the kick");
@@ -419,7 +415,7 @@ public sealed class WebAdminTests : IDisposable
     /// The system section describes the box, on whichever OS it is running.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Asserts the SHAPE, not the values.</b> The suite runs on Windows
+    /// <b>Asserts the SHAPE, not the values.</b> The suite runs on Windows
     /// today and the server is meant for a Linux VPS, so pinning a CPU model or a
     /// memory figure would only pin this machine. What must hold on both is that
     /// every group is present, that the counts are sane, and that a platform
@@ -443,7 +439,7 @@ public sealed class WebAdminTests : IDisposable
         var cpu = info.GetProperty("cpu");
         Assert.Equal(Environment.ProcessorCount, cpu.GetProperty("logicalCores").GetInt32());
 
-        // ⚠️ Nullable by design on a platform that will not say, so the assertion
+        // Nullable by design on a platform that will not say, so the assertion
         // is that the property EXISTS and is one of the two — not that it is set.
         Assert.Contains(
             cpu.GetProperty("model").ValueKind,
@@ -464,7 +460,7 @@ public sealed class WebAdminTests : IDisposable
     }
 
     /// <summary>
-    /// ⛔ The command line and the environment are never in it.
+    /// The command line and the environment are never in it.
     /// </summary>
     /// <remarks>
     /// <c>--web-password</c> is in the command line and may be in the
@@ -491,7 +487,7 @@ public sealed class WebAdminTests : IDisposable
     // --- the page ------------------------------------------------------------
 
     /// <summary>
-    /// ⛔ The panel's files are compiled in, and a build that dropped one would
+    /// The panel's files are compiled in, and a build that dropped one would
     /// serve a working binary and a broken page.
     /// </summary>
     [Theory]
@@ -510,7 +506,7 @@ public sealed class WebAdminTests : IDisposable
     }
 
     /// <summary>
-    /// ⚠️ The CSP has no <c>unsafe-inline</c>, which is why the page's CSS and
+    /// The CSP has no <c>unsafe-inline</c>, which is why the page's CSS and
     /// JavaScript are separate routes.
     /// </summary>
     /// <remarks>
@@ -533,12 +529,11 @@ public sealed class WebAdminTests : IDisposable
     // --- what it costs -------------------------------------------------------
 
     /// <summary>
-    /// ⛔ A server with the panel enabled and nobody watching builds no
+    /// A server with the panel enabled and nobody watching builds no
     /// snapshots.
     /// </summary>
     /// <remarks>
-    /// The claim that makes leaving <c>--web</c> on reasonable, and precisely the
-    /// kind of sentence this repo has been wrong about before — so it is measured
+    /// The claim that makes leaving <c>--web</c> on reasonable, so it is measured
     /// rather than asserted in a comment. The panel has been up and ticking for
     /// the whole of this test's life; the number is still zero.
     /// </remarks>
@@ -558,7 +553,7 @@ public sealed class WebAdminTests : IDisposable
     }
 
     /// <summary>
-    /// ⛔ The performance history IS collected with nobody watching, which is the
+    /// The performance history IS collected with nobody watching, which is the
     /// opposite of the snapshot and is the point.
     /// </summary>
     /// <remarks>
@@ -581,12 +576,12 @@ public sealed class WebAdminTests : IDisposable
 
         Assert.True(samples.GetArrayLength() > 0, "no samples were collected");
 
-        // ⛔ And nobody was watching for any of it.
+        // And nobody was watching for any of it.
         Assert.Equal(0, _harness.Server.WebSnapshotCount);
     }
 
     /// <summary>
-    /// ⛔ The field list and the rows cannot drift apart.
+    /// The field list and the rows cannot drift apart.
     /// </summary>
     /// <remarks>
     /// The samples go over the wire as arrays of bare numbers — 300 samples of
@@ -618,7 +613,7 @@ public sealed class WebAdminTests : IDisposable
 
     /// <summary>The history reaches a browser over the same stream as the rest.</summary>
     /// <remarks>
-    /// ⚠️ The backlog goes out on the stream's FIRST pass, so a panel that has
+    /// The backlog goes out on the stream's FIRST pass, so a panel that has
     /// just connected draws a full five minutes immediately instead of filling in
     /// over the next five.
     /// </remarks>
@@ -655,14 +650,14 @@ public sealed class WebAdminTests : IDisposable
         await using var body = await reply.Content.ReadAsStreamAsync();
         using var reader = new StreamReader(body, Encoding.UTF8);
 
-        // ⚠️ Not "the first event": the stream also carries the server's log, and
+        // Not "the first event": the stream also carries the server's log, and
         // a server that has just started has a backlog of it waiting. Asserting
         // on event ONE made this a race against how much had been logged.
         var state = await ReadEventAsync(reader, "state");
 
         Assert.Contains("\"ok\":true", state, StringComparison.Ordinal);
 
-        // ⚠️ The placeholder must never reach a browser: the panel renders the
+        // The placeholder must never reach a browser: the panel renders the
         // first state event it is given, and one with no fields in it threw.
         Assert.DoesNotContain("no snapshot yet", state, StringComparison.Ordinal);
         Assert.True(_harness.Server.WebSnapshotCount > 0);
@@ -671,7 +666,7 @@ public sealed class WebAdminTests : IDisposable
     // --- the password --------------------------------------------------------
 
     /// <summary>
-    /// ⛔ There is no configuration in which the panel is unauthenticated.
+    /// There is no configuration in which the panel is unauthenticated.
     /// </summary>
     /// <remarks>
     /// "No password" means "one you did not choose", printed once at startup. The
@@ -694,7 +689,7 @@ public sealed class WebAdminTests : IDisposable
 
         Assert.True(generated.Length >= 16, $"a generated password of {generated.Length} characters");
 
-        // ⚠️ Read BEFORE the ticking thread starts. RecordingLog is a bare List
+        // Read BEFORE the ticking thread starts. RecordingLog is a bare List
         // and Start() has already written the line, so this is the one moment it
         // can be read without racing the server's own logging.
         Assert.True(harness.Log.Contains(generated), "the generated password was never printed");

@@ -16,12 +16,12 @@ namespace Gg2.Env;
 /// the decision-steps-per-second it manages is the number that decides whether
 /// shared memory ever gets built.
 /// <para>
-/// ⚠️ <b>Over the real socket, not by calling <see cref="EnvBatch"/>.</b> The
+/// <b>Over the real socket, not by calling <see cref="EnvBatch"/>.</b> The
 /// throughput question is about the boundary — framing, copying, the round trip
 /// — and measuring the batch directly would answer a question nobody asked.
 /// </para>
 /// <para>
-/// ⚠️ <b>Random is not a weak test here.</b> A random policy reaches states a
+/// <b>Random is not a weak test here.</b> A random policy reaches states a
 /// scripted one never does — firing into its own feet, walking off every ledge —
 /// which is exactly the coverage a smoke run wants. What it cannot do is check
 /// that the numbers are <em>right</em>; that is the gates' job.
@@ -44,7 +44,7 @@ public static class SmokeRun
     /// Runs until <paramref name="duels"/> episodes have terminated.
     /// </summary>
     /// <param name="maxSteps">
-    /// A hard ceiling on decision steps. ⚠️ <b>Exposed so the guard can be
+    /// A hard ceiling on decision steps. <b>Exposed so the guard can be
     /// gated.</b> A safety net nobody has watched trip is indistinguishable from
     /// one that does not work, and the default is far too generous to reach in a
     /// test — which is correct for the default and useless for a test.
@@ -101,7 +101,7 @@ public static class SmokeRun
 
         var clock = Stopwatch.StartNew();
 
-        // ⚠️ A hard ceiling on the loop, not just on the duel count. A world that
+        // A hard ceiling on the loop, not just on the duel count. A world that
         // stopped terminating would otherwise hang the smoke run for ever, which
         // is the one failure a smoke run must report rather than exhibit: a hung
         // run in CI is indistinguishable from an infrastructure problem, and
@@ -151,7 +151,7 @@ public static class SmokeRun
         heads[3] = (byte)random.Next(3);
         heads[4] = (byte)random.Next(ActionDecoder.AimBins);
 
-        // ⚠️ v4's Zoom head, and the random agent DOES exercise it. The smoke run
+        // v4's Zoom head, and the random agent does exercise it. The smoke run
         // is the random-head criterion: a head it never set would be a head the
         // socket path was never measured on, which is how a field arrives that is
         // accepted, echoed and inert.
@@ -159,7 +159,7 @@ public static class SmokeRun
     }
 
     /// <summary>
-    /// How many agents reported a terminal step. ⚠️ Counted from the RED agent
+    /// How many agents reported a terminal step. Counted from the red agent
     /// only — in a duel both sides end together, and counting both would report
     /// twice as many duels as happened.
     /// </summary>
@@ -196,12 +196,12 @@ public static class SmokeRun
     private static void MakeBatch(Stream stream, int worlds, uint seed, int threads)
     {
         var name = System.Text.Encoding.UTF8.GetBytes("gg_debug");
-        // ⚠️ Sized from EnvProtocol.MakeBatchFixedBytes rather than by adding a
-        // term per version. The hand-summed form had to be edited in step with
-        // every bump and silently wrote past its end when v8 added four fields —
-        // an ArgumentOutOfRangeException from BinaryPrimitives, three layers from
-        // the cause. The count and the name length are the only parts that are
-        // not fixed.
+        // Sized from EnvProtocol.MakeBatchFixedBytes rather than by adding a
+        // term per version. A hand-summed form has to be edited in step with
+        // every bump and silently writes past its end when a version adds
+        // fields — an ArgumentOutOfRangeException from BinaryPrimitives, three
+        // layers from the cause. The count and the name length are the only
+        // parts that are not fixed.
         var body = new byte[4 + 4 + name.Length + EnvProtocol.MakeBatchFixedBytes];
         var at = 0;
 
@@ -233,7 +233,7 @@ public static class SmokeRun
         Int((int)seed);
         Int(threads);
 
-        // ⚠️ v2's drivers. The smoke run is the RANDOM-HEAD agent's exit
+        // v2's drivers. The smoke run is the random-head agent's exit
         // criterion, so both sides stay Client here on purpose — a bot-driven
         // side would be measuring the bot rather than the socket.
         Int((int)EnvDriver.Client);
@@ -241,7 +241,7 @@ public static class SmokeRun
         Int(0);
         Int(0);
 
-        // ⚠️ v3's four, all at their defaults. The rollout opponents are unread
+        // v3's four, all at their defaults. The rollout opponents are unread
         // with no Rollout side, and the separation band is OFF — the smoke run
         // names its coordinates, and a band is refused with explicit
         // placements rather than ignored. Written out rather than left off

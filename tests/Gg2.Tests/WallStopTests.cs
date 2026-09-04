@@ -12,23 +12,20 @@ namespace Gg2.Tests;
 /// </summary>
 /// <remarks>
 /// <b>What this file is for.</b> <c>GgDebugSplashOpenFindingTests</c> pins the
-/// divergence at t523; three sessions could not measure it, because a trace
-/// carries x to a fifth of a pixel and the reference's exact position is
-/// unrecoverable from any recording. This reproduces the whole of the
-/// interesting part — slot 4's walk from t383 — with no trace, no replayer and
-/// no other player, so that the engine can be asked the same question directly:
-/// <c>tools/probes/probe-wall-stop.js</c> runs exactly this scenario in GM8 and
-/// prints the difference.
+/// divergence at t523; a trace carries x to only a fifth of a pixel, so the
+/// reference's exact position is unrecoverable from any recording. This
+/// reproduces the whole of the interesting part — slot 4's walk from t383 —
+/// with no trace, no replayer and no other player, so that the engine can be
+/// asked the same question directly: <c>tools/probes/probe-wall-stop.js</c>
+/// runs exactly this scenario in GM8 and prints the difference.
 /// <para>
-/// ⚠️ <b>The stop is a WALL, not friction.</b> The recording holds key 0x20 —
+/// <b>The stop is a WALL, not friction.</b> The recording holds key 0x20 —
 /// RIGHT, held — on every tick from t388 through t406, and <c>hspeed</c> goes
-/// to zero at t404 anyway. The handoff's "suspect ordinary walking and friction
-/// arithmetic" pointer was wrong, and it is what sent two sessions to the
-/// acceleration formula, which <see cref="PhysicsSampleTests"/> already
-/// measures exact.
+/// to zero at t404 anyway; the acceleration formula itself, which
+/// <see cref="PhysicsSampleTests"/> already measures exact, is not the cause.
 /// </para>
 /// <para>
-/// ⚠️ <b>And the "+0.4865 residual that grows and then freezes" is not a
+/// <b>And the "+0.4865 residual that grows and then freezes" is not a
 /// divergence at all.</b> It is <c>x*5 - 3147</c> for the port's own resting
 /// position: the character comes to rest at 629.4972928…, whose <c>x*5</c> is
 /// 3147.4865. It grows while the character walks because the character is
@@ -70,7 +67,7 @@ public sealed class WallStopTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The free/blocked boundary at that wall is exactly x = 629.5 — a
+    /// <b>The free/blocked boundary at that wall is exactly x = 629.5 — a
     /// rounding tie</b>, and the character rests 0.0027 px short of it.
     /// </summary>
     /// <remarks>
@@ -106,8 +103,8 @@ public sealed class WallStopTests
     /// 0.1717, then 0.0107 three times — and then the smallest rung no longer
     /// fits and the position is fixed for ever.
     /// <para>
-    /// ⚠️ <b>The ladder is not an uncovered arm.</b> Measured 2026-08-28 by
-    /// counting it inside <see cref="PhysicsSampleTests"/>: the 64 engine
+    /// <b>The ladder is not an uncovered arm.</b> Measured by counting it
+    /// inside <see cref="PhysicsSampleTests"/>: the 64 engine
     /// scenarios enter the back-off branch 1,354 times and come to rest on a
     /// rung 198 times, and the port is exact on all of them. So the arithmetic
     /// below is gated against the engine everywhere except at this particular
@@ -146,7 +143,7 @@ public sealed class WallStopTests
     /// <c>tools/probes/probe-wall-stop.js</c> compares the engine against.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>If this test fails, do not repair it and move on.</b> It is the
+    /// <b>If this test fails, do not repair it and move on.</b> It is the
     /// baseline of an open measurement: the probe's whole output is
     /// <c>engine − 629.4972928249938</c>, and a port change that moves this
     /// number invalidates a comparison somebody may already have run. Re-run the

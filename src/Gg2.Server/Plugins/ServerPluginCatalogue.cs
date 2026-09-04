@@ -4,7 +4,7 @@ namespace Gg2.Server.Plugins;
 /// The plugins whose server half this port implements.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>Each entry pins the zip it was written against, and that pin is load
+/// <b>Each entry pins the zip it was written against, and that pin is load
 /// bearing.</b> A plugin's two halves are one script: the client runs the GML
 /// the site serves, and this port runs C# transcribed from one version of it. If
 /// the site re-releases the plugin, the client half moves and the C# half does
@@ -12,7 +12,7 @@ namespace Gg2.Server.Plugins;
 /// failure that looks like "chat sometimes doesn't work". <see cref="PluginHashes"/>
 /// advertises the pin by default and shouts when something else overrides it.
 /// <para>
-/// ⛔ <b>Re-check the pin before changing a plugin implementation.</b> If you
+/// <b>Re-check the pin before changing a plugin implementation.</b> If you
 /// port a newer version of a plugin's GML, move the hash in the same commit and
 /// say which zip you read. A pin that no longer names the file the code was
 /// written from is worse than none, because it claims a guarantee it is not
@@ -26,12 +26,11 @@ public static class ServerPluginCatalogue
     private static readonly Dictionary<string, Entry> Entries = new(StringComparer.Ordinal)
     {
         // chat_v2_pr — "chat_v2 by Lorgan, various fixes by PrOF", plugin.gml
-        // dated 2017-04-10. Ported 2026-09-03 from
+        // dated 2017-04-10, from
         // http://www.ganggarrison.com/plugins/chat_v2_pr@46d0937c9206dcf27e036100d1ea8685.zip
         // (md5 of the zip confirmed to equal the hash in its own filename, and
-        // http://www.ganggarrison.com/plugins/chat_v2_pr.md5 confirmed to serve
-        // the same hash on 2026-09-03 — so this pin was current when written).
-        // ⚠️ Re-check that URL before changing this implementation; a difference
+        // to match http://www.ganggarrison.com/plugins/chat_v2_pr.md5).
+        // Re-check that URL before changing this implementation; a difference
         // means the client half has moved and nobody has read the new GML.
         ["chat_v2_pr"] = new("46d0937c9206dcf27e036100d1ea8685", () => new ChatV2Plugin()),
     };

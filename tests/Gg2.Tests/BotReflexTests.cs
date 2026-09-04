@@ -10,8 +10,7 @@ namespace Gg2.Tests;
 /// rocket dodge.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>Both were originally a radius test in the reference, and both were wrong
-/// in the same way.</b> Neither question can be answered by measuring a distance —
+/// <b>Neither question can be answered by measuring a distance</b> —
 /// the airblast's trigger volume is a narrow beam an order of magnitude smaller
 /// than the radius it used, and whether jumping helps depends on where the rocket
 /// is aimed rather than on how near it is. So every test here is about the SHAPE
@@ -33,7 +32,7 @@ public sealed class BotReflexTests(ITestOutputHelper output)
 
     /// <summary>Points a character's aim, in degrees.</summary>
     /// <remarks>
-    /// ⚠️ <c>AimDirection</c> is derived and read-only — the stored field is the
+    /// <c>AimDirection</c> is derived and read-only — the stored field is the
     /// wire's <c>ushort</c>, <c>direction * 65536 / 360</c>. Writing the derived
     /// property is not possible, and a test that reached for it would be reaching
     /// for a number the simulation never stores.
@@ -45,7 +44,7 @@ public sealed class BotReflexTests(ITestOutputHelper output)
     /// An enemy rocket at a place, moving at a velocity, that has already flown.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <c>LastKnownX/Y</c> is where the travelled distance is measured from —
+    /// <c>LastKnownX/Y</c> is where the travelled distance is measured from —
     /// this port derives it rather than storing a counter, exactly as
     /// <c>move_all_bullets</c> does. Putting it far away is what makes the rocket
     /// eligible for a reflect.
@@ -80,15 +79,14 @@ public sealed class BotReflexTests(ITestOutputHelper output)
     /// The blast volume is a beam with a near edge, not a circle.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>There IS a near edge and it is not a rounding detail</b>: a rocket
+    /// <b>There IS a near edge and it is not a rounding detail</b>: a rocket
     /// already at the pyro's feet is UNDER the beam and cannot be blasted at all.
     /// The three constants come off the running exe — the poof spawns 25px along the
     /// aim, its AUTO mask reads left 8 / right 96 / top −13 / bottom 14, and
     /// <c>collision_circle</c> adds 5.
     /// <para>
-    /// ⚠️ <b>Every one of these four points is inside a 150px circle</b>, which is
-    /// what the reference used to test — so a radius answers "yes" to all four and
-    /// the beam answers "yes" to one.
+    /// Every one of these four points is inside a 150px circle, so a radius test
+    /// answers "yes" to all four while the beam answers "yes" to only one.
     /// </para>
     /// </remarks>
     [Fact]
@@ -106,7 +104,7 @@ public sealed class BotReflexTests(ITestOutputHelper output)
         // In the beam: comfortably along the aim and on the line.
         Assert.True(At(80, 0));
 
-        // ⚠️ At the pyro's own feet — under the beam, not in it.
+        // At the pyro's own feet — under the beam, not in it.
         Assert.False(At(10, 0));
         Assert.False(At(BotConstants.AirblastNear - 1, 0));
         Assert.True(At(BotConstants.AirblastNear, 0));
@@ -115,20 +113,18 @@ public sealed class BotReflexTests(ITestOutputHelper output)
         Assert.True(At(BotConstants.AirblastReach, 0));
         Assert.False(At(BotConstants.AirblastReach + 1, 0));
 
-        // ⚠️ Off-axis: 80px out and 40px to the side is well inside a 150px circle
-        // and nowhere near the beam. This is the case the old radius-and-arc test
-        // pressed SPECIAL for, spending 40 ticks of cooldown on a rocket it could
-        // not touch.
+        // Off-axis: 80px out and 40px to the side is well inside a 150px circle
+        // and nowhere near the beam.
         Assert.False(At(80, 40));
         Assert.True(At(80, BotConstants.AirblastHalfw));
         Assert.False(At(80, BotConstants.AirblastHalfw + 1));
 
-        // ⚠️ Symmetric about the aim line, because the offset is compared unsigned.
+        // Symmetric about the aim line, because the offset is compared unsigned.
         // The real mask is very slightly not (−13/+14); the smaller half-width is
         // the conservative reading, and declining a blast costs nothing.
         Assert.Equal(At(80, BotConstants.AirblastHalfw), At(80, -BotConstants.AirblastHalfw));
 
-        // ⚠️ And BEHIND the pyro is never in it, at any distance — the forward
+        // And BEHIND the pyro is never in it, at any distance — the forward
         // projection is signed.
         Assert.False(At(-80, 0));
     }
@@ -137,7 +133,7 @@ public sealed class BotReflexTests(ITestOutputHelper output)
     /// A pyro blasts a rocket in the beam and ignores one beside it.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The press is not free.</b> It sets <c>readyToBlast</c> false for 40
+    /// <b>The press is not free.</b> It sets <c>readyToBlast</c> false for 40
     /// ticks whether or not anything was there, and a rocket 150px out is about 12
     /// ticks from impact — so a wasted blast is still on cooldown when the thing it
     /// was meant for arrives. That is why the volume has to be the weapon's own and
@@ -156,7 +152,7 @@ public sealed class BotReflexTests(ITestOutputHelper output)
 
         Assert.True(BotReflex.IncomingProjectile(View(world), pyro, BotConstants.AirblastMinTravel));
 
-        // ⚠️ The control: the same rocket 40px off the aim line. Inside a 150px
+        // The control: the same rocket 40px off the aim line. Inside a 150px
         // circle, outside the beam.
         var beside = Load();
         var besidePyro = beside.Place(PlayerClass.Pyro, Team.Red, StandX, StandY);
@@ -173,12 +169,11 @@ public sealed class BotReflexTests(ITestOutputHelper output)
     /// A rocket that has just left the barrel is not reflected.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The airblast has no delay of any kind</b> — it is re-evaluated every
+    /// <b>The airblast has no delay of any kind</b> — it is re-evaluated every
     /// tick and the bit is returned the frame a rocket appears — so without this a
-    /// rocket fired point-blank came back on the frame it was born. Confirmed
-    /// inhuman, exactly as reported from play.
+    /// rocket fired point-blank would come back on the frame it was born.
     /// <para>
-    /// ⚠️ <b>It is a DISTANCE rather than an age counter</b>, twice over: it says
+    /// <b>It is a DISTANCE rather than an age counter</b>, twice over: it says
     /// "do not reflect a rocket the instant it leaves the barrel" directly rather
     /// than by proxy, and it is frame-rate independent. 60px is about five ticks of
     /// rocket travel.
@@ -197,7 +192,7 @@ public sealed class BotReflexTests(ITestOutputHelper output)
 
         Assert.False(BotReflex.IncomingProjectile(View(world), pyro, BotConstants.AirblastMinTravel));
 
-        // ⚠️ The control: the identical rocket, further from its shooter.
+        // The control: the identical rocket, further from its shooter.
         var flown = Load();
         var flownPyro = flown.Place(PlayerClass.Pyro, Team.Red, StandX, StandY);
 
@@ -212,7 +207,7 @@ public sealed class BotReflexTests(ITestOutputHelper output)
     /// </summary>
     /// <remarks>
     /// The reflectable set is Rocket, Flare and Mine — <c>Flamethrower</c>'s own
-    /// <c>User Event 2</c>. ⚠️ A flame or a bullet is not on it, so a pyro that
+    /// <c>User Event 2</c>. A flame or a bullet is not on it, so a pyro that
     /// pressed SPECIAL at one would spend 40 ticks of cooldown on nothing.
     /// </remarks>
     [Fact]
@@ -237,7 +232,7 @@ public sealed class BotReflexTests(ITestOutputHelper output)
 
         Assert.False(BotReflex.IncomingProjectile(View(pellet), b, BotConstants.AirblastMinTravel));
 
-        // ⚠️ The control: a mine in the same place IS reflectable.
+        // The control: a mine in the same place IS reflectable.
         var mine = Load();
         var c = mine.Place(PlayerClass.Pyro, Team.Red, StandX, StandY);
 
@@ -255,13 +250,11 @@ public sealed class BotReflexTests(ITestOutputHelper output)
     /// A rocket at the chest is dodged; one over the head is not.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>This is the whole feature, and the second half is the bug it was
-    /// written for.</b> A rocket passing above is exactly the case where rising 57px
+    /// A rocket passing above is exactly the case where rising 57px
     /// is what CREATES the collision, so a bot that jumps at anything nearby is a
-    /// guaranteed hit for anyone who aims high. Reported from play; stated here as a
-    /// rule rather than patched as a case.
+    /// guaranteed hit for anyone who aims high.
     /// <para>
-    /// ⚠️ Both rockets are the same distance away and travelling at the same speed,
+    /// Both rockets are the same distance away and travelling at the same speed,
     /// so a proximity test answers identically for both — which is exactly what a
     /// proximity test cannot do.
     /// </para>
@@ -277,7 +270,7 @@ public sealed class BotReflexTests(ITestOutputHelper output)
 
         Assert.True(BotReflex.RocketDodge(View(chest), a), "a rocket at the chest was not dodged");
 
-        // ⚠️ The same rocket 60px higher: it misses a standing bot entirely, and a
+        // The same rocket 60px higher: it misses a standing bot entirely, and a
         // jumping one rises into it.
         var over = Load();
         var b = over.Place(PlayerClass.Soldier, Team.Red, StandX, StandY);
@@ -291,7 +284,7 @@ public sealed class BotReflexTests(ITestOutputHelper output)
     /// A rocket that hits either way is not dodged.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The other half of the verdict, and it is easy to leave ungated.</b>
+    /// <b>The other half of the verdict, and it is easy to leave ungated.</b>
     /// "The standing bot is hit at some tick AND the jumping bot is hit at none" — a
     /// test built only from a rocket at the chest and one over the head never
     /// exercises the second clause, because the over-the-head one misses the standing
@@ -317,7 +310,7 @@ public sealed class BotReflexTests(ITestOutputHelper output)
             BotReflex.RocketDodge(View(world), slot),
             "the bot jumped at a rocket that hits it either way");
 
-        // ⚠️ The control — the SAME rocket one tick further out, where the
+        // The control — the SAME rocket one tick further out, where the
         // jump has had two ticks to rise and clears it. Without it this passes on a
         // dodge that never fires.
         var clears = Load();
@@ -336,7 +329,7 @@ public sealed class BotReflexTests(ITestOutputHelper output)
     /// <remarks>
     /// The verdict is "the standing bot is hit at some tick AND the jumping bot is
     /// hit at none" — so a shot that was never going to connect fails the first half
-    /// and the bot stands still. ⚠️ Without that a bot hops at every rocket in the
+    /// and the bot stands still. Without that a bot hops at every rocket in the
     /// air, which is both wasted and, on a ledge, dangerous.
     /// </remarks>
     [Fact]
@@ -358,7 +351,7 @@ public sealed class BotReflexTests(ITestOutputHelper output)
 
         Assert.False(BotReflex.RocketDodge(View(low), lowSlot));
 
-        // ⚠️ The control: the same geometry as the first, aimed at the chest, IS
+        // The control: the same geometry as the first, aimed at the chest, IS
         // dodged. Without it this passes on a dodge that never fires at all.
         var real = Load();
         var realSlot = real.Place(PlayerClass.Soldier, Team.Red, StandX, StandY);
@@ -381,7 +374,7 @@ public sealed class BotReflexTests(ITestOutputHelper output)
 
         Assert.False(BotReflex.RocketDodge(View(friendly), a));
 
-        // ⚠️ Beyond BOT_DODGE_RANGE. It would connect eventually, but not inside
+        // Beyond BOT_DODGE_RANGE. It would connect eventually, but not inside
         // BOT_DODGE_TICKS, and reacting now is reacting to nothing.
         var far = Load();
         var b = far.Place(PlayerClass.Soldier, Team.Red, StandX, StandY);
@@ -399,12 +392,12 @@ public sealed class BotReflexTests(ITestOutputHelper output)
     /// A driven bot presses JUMP at an incoming rocket, and only on the ground.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Grounded only, which is what keeps it out of every planned jump arc</b>
+    /// <b>Grounded only, which is what keeps it out of every planned jump arc</b>
     /// without needing to know anything about that arc. And ORing is safe because
     /// JUMP is edge-triggered in Begin Step: a press cannot double a jump the
     /// follower already wants.
     /// <para>
-    /// ⚠️ This is the ONLY thing that presses JUMP outside the path follower.
+    /// This is the ONLY thing that presses JUMP outside the path follower.
     /// </para>
     /// </remarks>
     [Fact]
@@ -429,7 +422,7 @@ public sealed class BotReflexTests(ITestOutputHelper output)
 
         Assert.True((input.Keys & PlayerKeys.Jump) != 0, "the bot did not dodge");
 
-        // ⚠️ The control: airborne, the same rocket presses nothing. Without it this
+        // The control: airborne, the same rocket presses nothing. Without it this
         // passes on a dodge with no ground gate, which would fire in the middle of a
         // validated arc.
         world.State.Characters[slot].OnGround = false;
@@ -443,20 +436,19 @@ public sealed class BotReflexTests(ITestOutputHelper output)
     /// A driven pyro with NOTHING to shoot at still blasts a rocket in its beam.
     /// </summary>
     /// <remarks>
-    /// <b>The sharp version of the claim, and the one that caught a real gap.</b> A
-    /// reflect is a reaction to something already in the air and has nothing to do
-    /// with having a target — but this port returned no keys at all from the combat
-    /// half when there was nothing to aim at, so the class policy never ran and a
-    /// pyro with an empty screen could not deflect a rocket.
+    /// A reflect is a reaction to something already in the air and has nothing to do
+    /// with having a target — so the combat half must not return no keys at all just
+    /// because there is nothing to aim at, or the class policy never runs and a
+    /// pyro with an empty screen cannot deflect a rocket.
     /// <para>
-    /// ⚠️ `botCombatUpdate`'s own no-subject branch calls `botClassKeys`
+    /// `botCombatUpdate`'s own no-subject branch calls `botClassKeys`
     /// anyway — "nothing to aim at is a state a class can still have an opinion
     /// about: a spy re-cloaks, an engineer builds, a heavy eats" — and only the
     /// aiming is skipped. Every branch that would otherwise fire at empty air now
     /// carries its own subject test, which is where the reference puts them.
     /// </para>
     /// <para>
-    /// ⚠️ The airblast is on SPECIAL, which for a pyro is not part of firing,
+    /// The airblast is on SPECIAL, which for a pyro is not part of firing,
     /// so the combat half's fire suppression leaves it alone. A reflect a second and
     /// a half late is not a reflect.
     /// </para>
@@ -473,7 +465,7 @@ public sealed class BotReflexTests(ITestOutputHelper output)
         var pyro = world.Place(PlayerClass.Pyro, Team.Red, StandX, StandY);
         world.Drive(pyro, bot);
 
-        // ⚠️ Long enough for the blast to come off its own cooldown. A freshly
+        // Long enough for the blast to come off its own cooldown. A freshly
         // spawned weapon starts NOT ready — the same way ReadyToShoot does — so a
         // shorter settle asserts nothing and looks exactly like a broken reflex.
         world.Step(60);
@@ -497,7 +489,7 @@ public sealed class BotReflexTests(ITestOutputHelper output)
 
         Assert.True((input.Keys & PlayerKeys.Special) != 0, "the pyro did not airblast");
 
-        // ⚠️ ...and it does NOT hold the flame trigger. With no subject the
+        // ...and it does NOT hold the flame trigger. With no subject the
         // distance is 0, which is inside the flame's reach — so without a subject
         // test on that branch a pyro with an empty screen burns its tank for ever.
         Assert.Equal(PlayerKeys.None, input.Keys & PlayerKeys.Attack);
@@ -507,7 +499,7 @@ public sealed class BotReflexTests(ITestOutputHelper output)
     /// A pyro with an empty or reloading tank does not press at all.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <c>readyToBlast</c> and the ammo are checked FIRST and are not
+    /// <c>readyToBlast</c> and the ammo are checked FIRST and are not
     /// decoration. The blast is on a 40-tick cooldown and the reflect test runs only
     /// on the frame of the press — so the cost of a press that cannot reflect is not
     /// the ammo, it is that the next rocket, the one that was going to land, arrives

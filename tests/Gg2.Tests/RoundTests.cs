@@ -184,7 +184,7 @@ public sealed class RoundTests
     /// A tie with a briefcase off its base is overtime, not a draw.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The "is capping" tests are not about a player.</b>
+    /// <b>The "is capping" tests are not about a player.</b>
     /// <c>redIsCapping</c> is true when <em>blue's</em> briefcase is not sitting
     /// on its own base — carried by anybody, or merely lying somewhere else. So
     /// a flag dropped in a corridor at 0:00 holds a drawn match open, which is
@@ -275,7 +275,7 @@ public sealed class RoundTests
     [InlineData(GameMode.Invasion, true, 26999)]
     [InlineData(GameMode.KingOfTheHill, false, 27000)]
 
-    // ⚠️ Arena and Team Deathmatch each run a clock of their own — Arena's map
+    // Arena and Team Deathmatch each run a clock of their own — Arena's map
     // timer, which counts down in every state, and TDM's round clock — so their
     // round timers move even though a cap limit means nothing to either. That is
     // what separates "does not use these rules" from "does nothing".
@@ -301,7 +301,7 @@ public sealed class RoundTests
     /// does an intel gate — but an intel gate stays shut to a <em>bullet</em>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The asymmetry is the reference's and it is easy to miss:
+    /// The asymmetry is the reference's and it is easy to miss:
     /// <c>charSetSolids.gml:4</c> wraps both its gate blocks in
     /// <c>if(!global.mapchanging)</c>, and <c>gunSetSolids.gml:5</c> wraps only
     /// its <c>TeamGate</c> block — <c>with(IntelGate) solid = true</c> sits
@@ -408,7 +408,7 @@ public sealed class RoundTests
     /// anyway.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <c>PlayerSpawn.gml:2</c> puts the guard <em>inside</em> the script, so
+    /// <c>PlayerSpawn.gml:2</c> puts the guard <em>inside</em> the script, so
     /// the alarm still fires and still resets itself; the player simply does not
     /// appear. That is what makes the map change's blanket
     /// <c>alarm[5] = 1</c> safe to run for everybody at once.

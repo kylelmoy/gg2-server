@@ -76,7 +76,7 @@ public sealed class MoveBoxTests
     // --- what the maps place --------------------------------------------------
 
     /// <summary>
-    /// ⚠️ <b>One shipped map places move boxes: <c>tdm_mantic</c>, nine up and
+    /// <b>One shipped map places move boxes: <c>tdm_mantic</c>, nine up and
     /// six down.</b>
     /// </summary>
     /// <remarks>
@@ -145,7 +145,7 @@ public sealed class MoveBoxTests
     }
 
     /// <summary>
-    /// ⚠️ <b>It accelerates rather than setting</b>, and fires on every tick the
+    /// <b>It accelerates rather than setting</b>, and fires on every tick the
     /// boxes overlap — which is what makes a column of them a lift.
     /// </summary>
     /// <remarks>
@@ -180,7 +180,7 @@ public sealed class MoveBoxTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The push is a <em>component</em> write</b>, so it goes through
+    /// <b>The push is a <em>component</em> write</b>, so it goes through
     /// <see cref="Motion"/>'s component path and re-derives the polar pair with
     /// the snap.
     /// </summary>
@@ -204,7 +204,7 @@ public sealed class MoveBoxTests
     }
 
     /// <summary>
-    /// ⚠️ <b><c>moveStatus = 0</c> is outside the frame-rate guard</b>, so a
+    /// <b><c>moveStatus = 0</c> is outside the frame-rate guard</b>, so a
     /// move box cancels a rocket-jump's control override as well as shoving.
     /// </summary>
     [Fact]
@@ -262,7 +262,7 @@ public sealed class MoveBoxTests
     /// unparseable falls back to the Create event's 5.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <c>readProperty(..., REAL, pushPower)</c> — a REAL, not a BOOL, so
+    /// <c>readProperty(..., REAL, pushPower)</c> — a REAL, not a BOOL, so
     /// unlike the cabinet's switches this one accepts any number the map writes.
     /// No shipped map writes one.
     /// </remarks>
@@ -296,11 +296,10 @@ public sealed class MoveBoxTests
         var level = LevelMap.FromPng(Mantic, ReferenceTree.ReadMap(Mantic)).ForArea(1);
         var world = new CollisionWorld(level);
 
-        // ⚠️ Not just any up box. A character's box is 34 pixels tall and a
+        // Not just any up box. A character's box is 34 pixels tall and a
         // move box is 42, so one standing in the middle of a lift can also
         // overlap a *down* box stacked beside it — and 5 up plus 5 down is
-        // exactly nothing. The first up box on tdm_mantic is one of those, which
-        // is how this test first failed. Pick one that is unambiguous.
+        // exactly nothing. Pick one that is unambiguous.
         var up = world.MoveBoxes.First(candidate =>
         {
             if (candidate.Direction != PushDirection.Up)
@@ -331,21 +330,19 @@ public sealed class MoveBoxTests
     // --- what tdm_mantic actually places, measured against the running game ---
 
     /// <summary>
-    /// ⚠️ <b>Six of <c>tdm_mantic</c>'s nine up boxes are cancelled by a down box
+    /// <b>Six of <c>tdm_mantic</c>'s nine up boxes are cancelled by a down box
     /// at the same left edge, six pixels below.</b> Only three of them lift
     /// anything at all.
     /// </summary>
     /// <remarks>
-    /// <b>Measured 2026-08-27 against the running game</b>, by enumerating
+    /// <b>Measured against the running game</b>, by enumerating
     /// <c>MoveBoxUp</c> and <c>MoveBoxDown</c> and matching each up box against a
     /// down box with the same <c>bbox_left</c> and <c>bbox_top + 6</c>: the
     /// engine answered <c>111111000</c>, and the port's map layer agrees here.
     /// <para>
-    /// ⚠️ <b>This is the fact that explains two failed recording attempts.</b>
-    /// The notes carried "fifteen move boxes on <c>tdm_mantic</c>" and read that
-    /// as a lift column worth steering bots into. Two thirds of them do
-    /// <em>nothing</em>: a character overlapping the up box overlaps the down box
-    /// as well, and five up plus five down is exactly zero
+    /// Two thirds of the nine boxes do <em>nothing</em>: a character overlapping
+    /// the up box overlaps the down box as well, and five up plus five down is
+    /// exactly zero
     /// (<see cref="ACharacterCentredOnACancelledUpBoxIsPushedNowhere"/>). The
     /// three that work are single boxes hanging in open air, listed below, and
     /// no bot has any reason to go near them.
@@ -382,7 +379,7 @@ public sealed class MoveBoxTests
     }
 
     /// <summary>
-    /// ⚠️ <b>A character standing in one of the six cancelled boxes is pushed
+    /// <b>A character standing in one of the six cancelled boxes is pushed
     /// nowhere at all</b>, through the real map's own geometry.
     /// </summary>
     /// <remarks>

@@ -10,7 +10,7 @@ namespace Gg2.Tests;
 /// keeps the client and the server in agreement.
 /// </summary>
 /// <remarks>
-/// ⛔ <b>An area advance is NOT a rotation, and almost nothing about it is
+/// <b>An area advance is NOT a rotation, and almost nothing about it is
 /// shared.</b> <c>GameServerBeginStep.gml</c>: red winning on a map with areas
 /// left replays the <em>same</em> map at the next area instead of rotating, and
 /// the reset is then run with <c>firstArea: false</c> — so teams and the
@@ -19,13 +19,13 @@ namespace Gg2.Tests;
 /// (<c>ClientBeginStep.gml:514-544</c>). Two independent implementations of "did
 /// the area change", and nothing was checking they agreed.
 /// <para>
-/// ⚠️ <b>Nothing in this project had ever advanced an area.</b>
+/// <b>Nothing in this project had ever advanced an area.</b>
 /// <c>ServerStreamTests</c> asserted <c>CurrentMapArea == 1</c> at rest and that
 /// was the whole of it — no test, no fixture and no recording ever reached area
 /// 2, on the one shipped map that has one.
 /// </para>
 /// <para>
-/// ⚠️ <b>And the reader was wrong because of it.</b> <c>ServerStream</c> skipped
+/// <b>And the reader was wrong because of it.</b> <c>ServerStream</c> skipped
 /// the area byte in <c>MAP_END</c>, which is the only place the wire ever states
 /// it after a join — <c>CHANGE_MAP</c> carries just the map name. So a reader sat
 /// on area 1 for ever, narrowed entities with the wrong <c>ForArea</c>, and wiped
@@ -38,7 +38,7 @@ public sealed class MultiAreaMapTests
     /// The one shipped map with more than one area.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Asserted rather than assumed below: if <c>cp_dirtbowl</c> ever stopped
+    /// Asserted rather than assumed below: if <c>cp_dirtbowl</c> ever stopped
     /// being multi-area, every test in this file would still pass while checking
     /// nothing at all.
     /// </remarks>
@@ -101,7 +101,7 @@ public sealed class MultiAreaMapTests
                 $"the client to be told about area {area}",
                 maxTicks: 600);
 
-            // ⛔ The property that separates an advance from a rotation: the
+            // The property that separates an advance from a rotation: the
             // player is STILL on red. A rotation would have made them a
             // spectator, on both sides, and a port that reset here would take
             // everyone back to team select every time red pushed a point.
@@ -128,7 +128,7 @@ public sealed class MultiAreaMapTests
     /// times whatever happened, and nobody would notice quickly because the
     /// symptom is just "we keep playing this map".
     /// <para>
-    /// ⚠️ <b>The red half is verified live rather than here</b> — it needs red to
+    /// <b>The red half is verified live rather than here</b> — it needs red to
     /// actually take the points, which is the control-point simulation's job and
     /// is already covered by <c>ControlPointModeTests</c> at the
     /// <c>WorldState</c> level. What is untested by both is only the four-line
@@ -145,7 +145,7 @@ public sealed class MultiAreaMapTests
             options.MapRotation = [Map, "ctf_truefort"];
             options.ShuffleRotation = ShuffleMode.None;
 
-            // ⚠️ No TimeLimitMinutes here, and setting one would be misleading:
+            // No TimeLimitMinutes here, and setting one would be misleading:
             // attack/defend runs on its OWN clock. Rounds.AttackDefendTimeLimit
             // is a fixed three minutes and Rounds.Start assigns it over whatever
             // the server was configured with, after 30 seconds of setup. So a

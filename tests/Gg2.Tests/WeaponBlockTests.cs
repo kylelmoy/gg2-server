@@ -68,8 +68,7 @@ public sealed class WeaponBlockTests
     /// A reader that is two bytes short on a weapon block does not fail politely
     /// at that field — it reads the next message's type byte out of the middle
     /// of a player block and runs off the end of the buffer, hundreds of
-    /// messages later. Before the fix this trace stopped on its very first
-    /// <c>FULL_UPDATE</c>, at byte 46 of 3841 in the smaller probe capture.
+    /// messages later.
     /// </remarks>
     [Fact]
     public void FramesARecordingThatContainsCharacters()

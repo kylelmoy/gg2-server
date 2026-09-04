@@ -10,18 +10,18 @@ namespace Gg2.Tests;
 /// The first recording in the project containing a <c>DESTROY_SENTRY</c>.
 /// </summary>
 /// <remarks>
-/// <b>Recorded 2026-08-27: three engineers against three soldiers on
+/// <b>Three engineers against three soldiers on
 /// <c>ctf_truefort</c></b>, spawn-anchored by the map-reload recipe. Six
 /// sentries built, three shot down, 125 seeded rocket fires.
 /// <para>
-/// ⚠️ <b>The roster is the design again.</b> <c>closedsupport</c> has engineers
+/// <b>The roster is the design again.</b> <c>closedsupport</c> has engineers
 /// and two sentries in it, but its other classes are medic and pyro — nothing
 /// there hits hard enough to take a sentry down, so it holds no
 /// <c>DESTROY_SENTRY</c> at all. A rocket deals 25 + 30 to one and is seeded, so
 /// soldiers give both the kill and a reproducible one.
 /// </para>
 /// <para>
-/// ⚠️ <b>This fixture is the reason <see cref="Fields.Sentries"/> exists.</b>
+/// <b>This fixture is the reason <see cref="Fields.Sentries"/> exists.</b>
 /// The harness injected <c>BUILD_SENTRY</c> like a spawn but compared no sentry
 /// state whatever, so a port that destroyed the wrong sentry — or none — replayed
 /// every recording without a murmur. A sentry writes <b>no bytes at all</b> on an
@@ -115,12 +115,8 @@ public sealed class SentryKillFixtureTests
         // fires against 38, eleven deaths against five — not because engineers
         // are modelled worse than pyros.
         //
-        // ⚠️ Raised 550 -> 585 on 2026-08-27, when modelling a rotated
-        // projectile's precise mask (ProjectileMask) took this window from 581
-        // to 595. The floor moves with the measurement on purpose: a gain left
-        // unprotected by its bound is a gain that can be lost silently, which is
-        // this project's "a bound nobody re-measures decays into a formality"
-        // running the other way.
+        // The floor moves with the measurement on purpose: a gain left
+        // unprotected by its bound is a gain that can be lost silently.
         Assert.True(
             exact >= 585,
             $"{SentryKill}: exact for only {exact} ticks after the last spawn anchor (t{anchor})");
@@ -141,7 +137,7 @@ public sealed class SentryKillFixtureTests
     /// with the killer, and it is inside the trajectory window.</item>
     /// <item><b>t2296</b> — another self-destruct.</item>
     /// </list>
-    /// ⚠️ <b>The port reproduces neither self-destruct, and one of them is a
+    /// <b>The port reproduces neither self-destruct, and one of them is a
     /// real divergence.</b> See
     /// <see cref="ThePortStillMissesBothOfTheReferencesSentrySelfDestructs"/>,
     /// which pins it so that fixing it fails loudly.
@@ -154,7 +150,7 @@ public sealed class SentryKillFixtureTests
         var report = new Replayer(new PortedSimulation(MapLoader)) { Compare = Fields.Sentries }
             .Replay(SentryKill, trace.Header.Map, ticks, ReplayMode.ClosedLoop, stopAtFirstBadTick: false);
 
-        // ⚠️ Reported against the PRECEDING tick, like a death: the turret fires
+        // Reported against the PRECEDING tick, like a death: the turret fires
         // from End Step, which runs after the server has serialised the tick.
         // So the destruction the recording puts at t1691 is reconciled at t1690.
         Assert.DoesNotContain(report.Mismatches, m => m.Tick == 1690);
@@ -169,18 +165,15 @@ public sealed class SentryKillFixtureTests
     }
 
     /// <summary>
-    /// ✅ <b>ANSWERED 2026-08-28: both self-destructs are the sentry's
-    /// <c>Collision with TeamGate</c> event, and the port reproduces them on
-    /// the tick.</b>
+    /// <b>Both self-destructs are the sentry's <c>Collision with TeamGate</c>
+    /// event, and the port reproduces them on the tick.</b>
     /// </summary>
     /// <remarks>
-    /// This was pinned as a known divergence for five sessions, on the reading
-    /// that <c>killer 255, assistant 255, cause 0</c> could only be
+    /// <c>killer 255, assistant 255, cause 0</c> looks like
     /// <c>Sentries.BeginStep</c>'s three-clause guard, whose only literal 0 it
-    /// is. <b>That reading was wrong in one step</b>: the four collision events
-    /// leave <c>lastDamageSource</c> at the <c>-1</c>
-    /// <c>Sentry.events/Create.xml</c> set, and <c>-1</c> reaches the wire
-    /// through <c>write_ubyte</c> as <b>0</b> as well. So an End Step
+    /// is — but the four collision events leave <c>lastDamageSource</c> at the
+    /// <c>-1</c> <c>Sentry.events/Create.xml</c> set, and <c>-1</c> reaches the
+    /// wire through <c>write_ubyte</c> as <b>0</b> as well. So an End Step
     /// destruction with nobody to blame is byte-identical to the guard's.
     /// <para>
     /// The evidence is positional and it is total. Across
@@ -189,15 +182,6 @@ public sealed class SentryKillFixtureTests
     /// that live overlap nothing</b> — and the two here are a thirteenth and a
     /// fourteenth of the same shape. <c>docs/TRAPS-SIMULATION.md</c>, "the
     /// sentry's gate collision", has the table.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>The live session that "eliminated position" was right about its
-    /// own experiment and wrong about the conclusion.</b> It rebuilt at the
-    /// trace's coordinates and watched the sentry die — but the control at a
-    /// known-good position died too, both of them to the server resetting a
-    /// lone test player to <c>TEAM_SPECTATOR</c>, so the experiment could not
-    /// see a gate even where there was one. A contaminated experiment does not
-    /// eliminate a hypothesis; it fails to test it.
     /// </para>
     /// </remarks>
     [Fact]
@@ -208,7 +192,7 @@ public sealed class SentryKillFixtureTests
         var report = new Replayer(new PortedSimulation(MapLoader)) { Compare = Fields.Sentries }
             .Replay(SentryKill, trace.Header.Map, ticks, ReplayMode.ClosedLoop, stopAtFirstBadTick: false);
 
-        // ⚠️ Reported against the preceding tick: the destruction is broadcast
+        // Reported against the preceding tick: the destruction is broadcast
         // from End Step, after the server has serialised the tick. The
         // recording's t496 and t2296 are reconciled at t495 and t2295.
         Assert.DoesNotContain(report.Mismatches, m => m.Tick is 495 or 2295);

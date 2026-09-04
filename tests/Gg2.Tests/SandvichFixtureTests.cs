@@ -9,21 +9,19 @@ namespace Gg2.Tests;
 /// The first recording containing a sandvich the port can be held to.
 /// </summary>
 /// <remarks>
-/// <b>Recorded 2026-08-28: six heavies, three a side on <c>ctf_truefort</c></b>,
-/// spawn-anchored by the map-reload recipe, with the eats forced over the bridge
+/// Six heavies, three a side on <c>ctf_truefort</c>, spawn-anchored by the
+/// map-reload recipe, with the eats forced over the bridge
 /// (<c>serverEatSandvich</c>, the same script a bot calls) rather than waited for.
 /// <para>
-/// ⚠️ <b>Forcing them is the whole point, and take one of this recording is why.</b>
-/// A heavy's own AI eats when it is hurt and out of the fight, which is late —
-/// take one put its eats at t824 and t1531 against an exact window of
-/// [t367, t705], so a recording full of sandviches gated <b>none</b> of them.
-/// <c>closedheavy</c> has the same shape: three eats at t0, t184 and t1263
-/// against a window of [t499, t895]. <b>An event outside the exact window is a
-/// message the harness frames and the simulation is never held to.</b> Take two
-/// fires the first batch 118 ticks after the anchor.
+/// <b>Forcing them is the whole point.</b> A heavy's own AI eats when it is hurt
+/// and out of the fight, which is late — an unforced take put its eats at t824
+/// and t1531 against an exact window of [t367, t705], so a recording full of
+/// sandviches gated <b>none</b> of them. <b>An event outside the exact window is
+/// a message the harness frames and the simulation is never held to.</b> The
+/// first forced batch fires 118 ticks after the anchor.
 /// </para>
 /// <para>
-/// ⚠️ <b>At full health a heavy can eat again immediately.</b> The 45-second
+/// <b>At full health a heavy can eat again immediately.</b> The 45-second
 /// cooldown is armed only while <c>hp &lt; maxHp</c>
 /// (<c>Character.events/End Step.xml:87-91</c>), so six heavies at 200 hp gave
 /// 22 eats in 70 seconds rather than the six the cooldown suggests.
@@ -69,7 +67,7 @@ public sealed class SandvichFixtureTests
     /// The recording holds eats, and holds them where they can be gated.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Both halves are asserted.</b> A re-recording whose forcing silently
+    /// <b>Both halves are asserted.</b> A re-recording whose forcing silently
     /// failed would pass every window test below by having nothing to get wrong —
     /// and would pass them with a <em>longer</em> window, which is the direction
     /// nobody looks at.
@@ -112,7 +110,7 @@ public sealed class SandvichFixtureTests
     /// characters whose movement the reference and the port have to agree about
     /// while they are frozen.
     /// <para>
-    /// ⚠️ <b>687 is longer than any other combat fixture on this map</b>
+    /// <b>687 is longer than any other combat fixture on this map</b>
     /// (<c>closedheavy</c> 396, <c>closedsentrykill</c> 595) and the reason is
     /// that the heavies spend a fifth of the window standing still eating rather
     /// than firing an unseeded Minigun at each other.
@@ -129,7 +127,7 @@ public sealed class SandvichFixtureTests
     }
 
     /// <summary>
-    /// ⚠️ <b>OPEN FINDING: the overshoot comes back down one comparison tick
+    /// <b>OPEN FINDING: the overshoot comes back down one comparison tick
     /// later in the port than in the reference.</b>
     /// </summary>
     /// <remarks>
@@ -146,7 +144,7 @@ public sealed class SandvichFixtureTests
     /// which both forced batches did (t511 and t952) — so it is systematic, not a
     /// sampling artefact.
     /// <para>
-    /// ✅ <b>Three explanations have been eliminated.</b> (1) The port's eat
+    /// <b>Three explanations have been eliminated.</b> (1) The port's eat
     /// length is right: 128 increments of 0.25 to 32, with the heal before the
     /// end check, transcribed from <c>End Step.xml</c> and confirmed frame by
     /// frame against the live game — the reference's last eat tick heals and then

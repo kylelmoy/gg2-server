@@ -9,13 +9,13 @@ namespace Gg2.Tests;
 /// re-shaping that answers it.
 /// </summary>
 /// <remarks>
-/// <b>Recorded 2026-08-27.</b> <c>gen_destroy</c> rotates to <c>ctf_2dfort</c>
-/// exactly as <c>reference-gen_destroy-rotation.trace</c> does — but this time a
+/// <c>gen_destroy</c> rotates to <c>ctf_2dfort</c> exactly as
+/// <c>reference-gen_destroy-rotation.trace</c> does — but this time a
 /// <c>CAPS_UPDATE</c> is forced <em>after</em> the change, with
 /// <c>GameServer.syncTimer = 1</c>, which is precisely what a capture does
 /// (<c>doEventScoreIntel</c>).
 /// <para>
-/// ⚠️ <b>That one message is the whole difference between a trace that frames
+/// <b>That one message is the whole difference between a trace that frames
 /// and one that does not.</b> Only <c>FULL_UPDATE</c> and <c>CAPS_UPDATE</c>
 /// carry the HUD block — <c>StateUpdateReader</c> returns before the tail on
 /// every other tier — so a reader holding the wrong gamemode's shape is
@@ -38,7 +38,7 @@ public sealed class ModeChangeFramingTests
     }
 
     /// <summary>
-    /// ⚠️ <b>A single shape cannot frame this recording</b> — the control that
+    /// <b>A single shape cannot frame this recording</b> — the control that
     /// makes the fix below mean something.
     /// </summary>
     /// <remarks>
@@ -61,7 +61,7 @@ public sealed class ModeChangeFramingTests
     }
 
     /// <summary>
-    /// ✅ <b>Re-shaping on <c>CHANGE_MAP</c> frames it to the last byte.</b>
+    /// <b>Re-shaping on <c>CHANGE_MAP</c> frames it to the last byte.</b>
     /// </summary>
     [Fact]
     public void ReShapingOnChangeMapFramesItWhole()
@@ -101,7 +101,7 @@ public sealed class ModeChangeFramingTests
         Assert.Equal("ctf_2dfort", rotation.Map);
         Assert.NotEqual(ShapeOf("gen_destroy").GameMode, ShapeOf(rotation.Map).GameMode);
 
-        // ⚠️ The message that makes the wrong shape bite.
+        // The message that makes the wrong shape bite.
         var capsAfter = ticks
             .Where(t => t.Index > rotation.Index)
             .Count(t => t.Events.Any(m => m.Type is MessageType.CapsUpdate or MessageType.FullUpdate));

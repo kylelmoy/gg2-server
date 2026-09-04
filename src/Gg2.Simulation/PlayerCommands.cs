@@ -13,7 +13,7 @@ namespace Gg2.Simulation;
 /// <see cref="WorldState"/>, so the live server and the parity harness share
 /// one copy of it.
 /// <para>
-/// ⚠️ <b>A change with a live character is a death.</b> The reference sends
+/// <b>A change with a live character is a death.</b> The reference sends
 /// <c>DAMAGE_SOURCE_BID_FAREWELL</c> — the player killed themself by leaving
 /// the body — unless somebody had damaged them recently, in which case that
 /// somebody gets a <c>DAMAGE_SOURCE_FINISHED_OFF</c> kill with the usual
@@ -38,7 +38,7 @@ public static class PlayerCommands
     /// </summary>
     /// <returns>The death to broadcast, if the change killed a character.</returns>
     /// <param name="world">
-    /// The map, for the spawn-room swap. ⚠️ <b>Null means "no spawn rooms"</b>,
+    /// The map, for the spawn-room swap. <b>Null means "no spawn rooms"</b>,
     /// so a hand-built test world always takes the death arm — the same
     /// convention <see cref="Deaths.Kill"/> uses.
     /// </param>
@@ -52,7 +52,7 @@ public static class PlayerCommands
 
         if (state.IsAlive(slot))
         {
-            // ⚠️ processClientCommands.gml:84,
+            // processClientCommands.gml:84,
             // `if (collision_point(x, y, SpawnRoom, 0, 0) < 0)` — the character's
             // *origin*, not its box, and the else arm is a bare
             // `instance_destroy()`. So a class change inside a spawn room is a
@@ -60,7 +60,7 @@ public static class PlayerCommands
             // and — because the Destroy event still runs — a one-tick respawn
             // on top.
             //
-            // ⚠️ The two guards on the same object disagree: this one is the
+            // The two guards on the same object disagree: this one is the
             // point and the Destroy event's is the box, so a character with its
             // feet outside the room and its head inside is killed *and* comes
             // back next tick.
@@ -91,7 +91,7 @@ public static class PlayerCommands
     /// resolved — kill the body if there is one, remember the team.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Unlike a class change, a team change with a live character re-arms
+    /// Unlike a class change, a team change with a live character re-arms
     /// the respawn timer <em>explicitly</em> after the death
     /// (<c>processClientCommands.gml:175</c>) — which in the reference
     /// overrides the spawn-room fast respawn the Destroy event may have set.
@@ -133,7 +133,7 @@ public static class PlayerCommands
     /// the team is announced — then the change, then
     /// <c>ServerBalanceTeams()</c>.
     /// <para>
-    /// ⚠️ <b>The class change is broadcast separately and only when it
+    /// <b>The class change is broadcast separately and only when it
     /// actually changed</b> (<c>if newClass != player.class</c>), which is why
     /// this reports it rather than folding it into the team change.
     /// </para>
@@ -162,7 +162,7 @@ public static class PlayerCommands
         var death = ChangeTeam(ref state, slot, newTeam);
 
         // processClientCommands.gml:188, between the team message and the
-        // balance. ⚠️ A *class* change does not do this — only a team change
+        // balance. A *class* change does not do this — only a team change
         // cancels the dominations a player holds and the ones held over them.
         Dominations.Clear(ref state, slot);
 
@@ -177,12 +177,12 @@ public static class PlayerCommands
     /// </summary>
     /// <returns>Whether the toggle was accepted and should be broadcast.</returns>
     /// <remarks>
-    /// ⚠️ <b>Zoom is not a key.</b> It is its own client command, which is why
+    /// <b>Zoom is not a key.</b> It is its own client command, which is why
     /// the reference extracted this into a script of its own — a bot has no
     /// socket to send itself a packet on and there is no bit in the input byte
     /// it could set instead.
     /// <para>
-    /// ⚠️ <b>It changes the physics.</b> A scoped sniper accelerates at
+    /// <b>It changes the physics.</b> A scoped sniper accelerates at
     /// <b>0.6</b> rather than their class's 0.9 and jumps two units lower — but
     /// <c>basemaxspeed</c> is <em>not</em> recomputed, so the acceleration
     /// <em>guard</em> stays at the unscoped value even though the speed they
@@ -209,7 +209,7 @@ public static class PlayerCommands
 
         if (character.Zoomed)
         {
-            // ⚠️ 0.6 is one of the five decimal literals GM8 parses a ULP above
+            // 0.6 is one of the five decimal literals GM8 parses a ULP above
             // the IEEE nearest, and it appears twice here — once as the run
             // power and once inside the jump's halved-gravity correction.
             character.RunPower = Gml.PointSix;
@@ -334,7 +334,7 @@ public static class PlayerCommands
     /// either way. What differs is only whether a <c>PLAYER_DEATH</c> went out
     /// first.
     /// <para>
-    /// ⚠️ <b>The fast-respawn arm is not guarded by
+    /// <b>The fast-respawn arm is not guarded by
     /// <see cref="WorldState.RespawnTime"/></b>, exactly as
     /// <see cref="Deaths.Kill"/>'s is not: the reference writes
     /// <c>alarm[5] = 1</c> outright. A replay is protected by its null
@@ -370,12 +370,11 @@ public static class PlayerCommands
     /// precondition fails, which is silence rather than an error.
     /// </summary>
     /// <remarks>
-    /// All five of the reference's clauses since 2026-08-28, when
-    /// <c>player.humiliated</c> and <c>object.taunting</c> stopped being notes
-    /// and became state. A heavy cannot eat while taunting, and the losing side
-    /// of an Arena round cannot eat at all.
+    /// All five of the reference's clauses, including <c>player.humiliated</c>
+    /// and <c>object.taunting</c>: a heavy cannot eat while taunting, and the
+    /// losing side of an Arena round cannot eat at all.
     /// <para>
-    /// ⚠️ <b>The heal is not here.</b> <c>serverEatSandvich</c> only starts the
+    /// <b>The heal is not here.</b> <c>serverEatSandvich</c> only starts the
     /// animation; every point of health comes from
     /// <c>Character.events/End Step.xml:83-96</c>, a tick at a time, and stops
     /// if the character dies mid-eat. Healing on the command instead would give
@@ -392,12 +391,12 @@ public static class PlayerCommands
         if (character.Class != PlayerClass.Heavy)
             return false;
 
-        // ⚠️ Already eating is a refusal, not a restart. Without it a heavy
+        // Already eating is a refusal, not a restart. Without it a heavy
         // holding the key would hold `omnomnomnomindex` at zero and eat forever.
         if (character.Omnomnomnom || !character.CanEat)
             return false;
 
-        // `!player.humiliated and !player.object.taunting`. ⚠️ The humiliation
+        // `!player.humiliated and !player.object.taunting`. The humiliation
         // is read off the PLAYER rather than the mirrored copy on the character,
         // because a client command is processed outside the tick and the mirror
         // is written inside it.

@@ -13,23 +13,21 @@ namespace Gg2.Simulation;
 /// User Events 10 and 11 for the five bytes each one puts on every
 /// <c>QUICK_UPDATE</c> and <c>FULL_UPDATE</c>.
 /// <para>
-/// ✅ <b>The carry landed 2026-09-01</b> — the <c>with(Character)</c> block that
-/// picks up riders and shoves whoever the platform drives into. It was gated for
-/// a week on something else entirely: every branch of it is a
+/// The carry is the <c>with(Character)</c> block that picks up riders and
+/// shoves whoever the platform drives into. Every branch of it is a
 /// <c>place_meeting</c> against the platform's own mask, and <b>a
 /// <c>MovingPlatform</c> has no sprite</b> (<c>MovingPlatform.xml</c> declares
 /// <c>&lt;sprite/&gt;</c> empty, unlike its parent <c>DropdownPlatform</c>'s
 /// <c>sprite44</c>). The mask comes from an embedded resource in the map's own
-/// metadata, so the decoders and <see cref="PreciseCollision"/> had to exist
-/// first, and both are now verified against the running game.
+/// metadata, decoded via <see cref="PreciseCollision"/>.
 /// <para>
-/// ⚠️ <b>A platform with no usable <c>resource</c> still carries nobody</b>, and
+/// <b>A platform with no usable <c>resource</c> still carries nobody</b>, and
 /// that is the reference's behaviour rather than a shortcut: GM8 leaves
 /// <c>sprite_index = -1</c> and collides with nothing. All four of
 /// <c>gg_debug2</c>'s original platforms are like that; its raft is not.
 /// </para>
 /// <para>
-/// ⚠️ <b>The parent still matters, and it is why STANDING needed no new rule.</b>
+/// <b>The parent still matters, and it is why STANDING needed no new rule.</b>
 /// Because <c>MovingPlatform</c>'s parent IS <c>DropdownPlatform</c>, every
 /// <c>with(DropdownPlatform)</c> in the character physics already means "or a
 /// moving platform". What is here is only the part that has no equivalent: moving
@@ -85,7 +83,7 @@ public static class MovingPlatforms
     /// is the raw bytes of a PNG or GIF stored as a string in the <c>meta</c>
     /// block, and <c>sprite_add(name, 1, 1, 0, 0, 0)</c> turns it into a sprite.
     /// <para>
-    /// ⚠️ <b>Every failure here returns null, and every one of them is also what
+    /// <b>Every failure here returns null, and every one of them is also what
     /// GM8 does.</b> No <c>resource</c>, a name the metadata does not carry, or
     /// bytes neither decoder accepts all leave <c>sprite_index = -1</c> — a
     /// platform that moves and collides with nothing. <c>ctf_2dfort-ani</c>'s
@@ -124,7 +122,7 @@ public static class MovingPlatforms
 
     /// <summary>One entity as a definition.</summary>
     /// <remarks>
-    /// ⚠️ <b><c>top</c> is the distance travelled UP, so the offset is
+    /// <b><c>top</c> is the distance travelled UP, so the offset is
     /// <c>(left, -top)</c></b> — a positive <c>top</c> moves the platform towards
     /// smaller y. The sign lives in the offset rather than in the property, which
     /// is why every expression below carries a <c>-def.Top</c> rather than
@@ -213,7 +211,7 @@ public static class MovingPlatforms
     /// in play.
     /// </param>
     /// <remarks>
-    /// ⚠️ <b>Taken explicitly so a test can supply a platform with a MASK.</b>
+    /// <b>Taken explicitly so a test can supply a platform with a MASK.</b>
     /// A definition's mask comes from an embedded resource the map entity names,
     /// and <b>every moving platform in every shipped map resolves to null</b> —
     /// so a platform loaded from a map carries nobody and the whole of
@@ -247,7 +245,7 @@ public static class MovingPlatforms
 
             // MovingPlatform/End Step.xml — the block runs when the platform
             // moved, OR when a trigger platform is parked waiting to be stood on.
-            // ⚠️ That second arm is why a stopped trigger platform still scans:
+            // That second arm is why a stopped trigger platform still scans:
             // it is how it notices a rider and starts.
             var moved = stepX != 0 || stepY != 0;
             var waitingOnATrigger = platform.MovementState == Stopped && definition.Trigger > 0;
@@ -267,13 +265,13 @@ public static class MovingPlatforms
     /// drove into.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Every test here is against the platform at its PREVIOUS rounded
+    /// <b>Every test here is against the platform at its PREVIOUS rounded
     /// position</b> (<paramref name="before"/>), because the reference does not
     /// assign <c>x</c>/<c>y</c> until after this block. The platform is where it
     /// was; <paramref name="stepX"/>/<paramref name="stepY"/> is where it is
     /// going.
     /// <para>
-    /// ⚠️ <b>A platform with no mask carries nobody</b>, and the early return is
+    /// <b>A platform with no mask carries nobody</b>, and the early return is
     /// not an optimisation — GM8 with <c>sprite_index = -1</c> collides with
     /// nothing, so every branch below would be false anyway.
     /// </para>
@@ -316,7 +314,7 @@ public static class MovingPlatforms
             if ((character.KeyState & PlayerKeys.Down) != 0)
                 continue;
 
-            // ⚠️ Two-part on purpose, and the reference comments on it: checking
+            // Two-part on purpose, and the reference comments on it: checking
             // only for upward motion would let a rising platform pass through
             // somebody rising more slowly, and comparing vspeeds alone would stop
             // a platform carrying anyone downwards.
@@ -366,7 +364,7 @@ public static class MovingPlatforms
             character.X += stepX;
             character.Y += stepY;
 
-            // ⚠️ Zeroed, not preserved. A rider is not falling, and leaving the
+            // Zeroed, not preserved. A rider is not falling, and leaving the
             // accumulated gravity would make them drop the instant they step off.
             character.VSpeed = 0;
         }
@@ -387,7 +385,7 @@ public static class MovingPlatforms
     /// ended up on top.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Rewind, test, then commit or roll back.</b> The reference moves the
+    /// <b>Rewind, test, then commit or roll back.</b> The reference moves the
     /// character with <c>good_move_contact_solid</c> against the platform made
     /// briefly solid, checks whether they now stand on it, and <b>restores their
     /// original position if they do not</b>. Leaving them where the rewind put
@@ -454,7 +452,7 @@ public static class MovingPlatforms
     /// turned round.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The direction round-trip through degrees is deliberate and must not
+    /// <b>The direction round-trip through degrees is deliberate and must not
     /// be simplified.</b> The reference takes a <c>point_direction</c>, converts
     /// it back with <c>degtorad</c> and feeds <c>cos</c>/<c>sin</c> — so a
     /// vertical platform's horizontal step is <c>cos(90°)</c>, which is 6.1e-17
@@ -464,7 +462,7 @@ public static class MovingPlatforms
     /// <c>x_*5</c> would eventually disagree about. CLAUDE.md: transcribe GML
     /// arithmetic, not GML structure.
     /// <para>
-    /// ⚠️ <b>No motion snap.</b> <c>Gml.SnapToNearInteger</c> applies to
+    /// <b>No motion snap.</b> <c>Gml.SnapToNearInteger</c> applies to
     /// <c>lengthdir_*</c> and to the four motion variables when they are
     /// recomputed from each other; this is a bare <c>cos</c> into a plain
     /// instance variable, which is on that helper's explicit "does NOT apply"
@@ -502,7 +500,7 @@ public static class MovingPlatforms
         var totalDistance = Gml.PointDistance(0, 0, definition.Left, -definition.Top);
 
         // A platform told to travel nowhere parks itself on the start and stops.
-        // ⚠️ This is also the divide-by-zero guard for the projection below, so
+        // This is also the divide-by-zero guard for the projection below, so
         // it has to stay above it rather than folding into the arms.
         if (Gml.LessOrEqual(totalDistance, 0))
         {
@@ -520,7 +518,7 @@ public static class MovingPlatforms
 
         if (platform.MovementState == Down && Gml.LessOrEqual(distance, 0))
         {
-            // ⚠️ Snapped back to the start exactly, not left where the step
+            // Snapped back to the start exactly, not left where the step
             // landed. The overshoot is discarded rather than carried into the
             // next leg, so a platform's period is an exact number of ticks and
             // does not drift.
@@ -530,7 +528,7 @@ public static class MovingPlatforms
         }
         else if (platform.MovementState == Up && Gml.GreaterOrEqual(distance, totalDistance))
         {
-            // ⚠️ And NOT snapped at the far end — the reference only clamps at
+            // And NOT snapped at the far end — the reference only clamps at
             // the start. A platform therefore turns round a fraction of a pixel
             // past its stated top and the asymmetry is real, not a slip here.
             platform.MovementState = Down;
@@ -551,7 +549,7 @@ public readonly record struct MovingPlatformDefinition
 {
     /// <summary>The platform's collision shape, or null when it has none.</summary>
     /// <remarks>
-    /// ⚠️ <b>Null is the common case and is not a failure.</b> A
+    /// <b>Null is the common case and is not a failure.</b> A
     /// <c>MovingPlatform</c> has no sprite of its own; the mask comes from an
     /// embedded resource the entity names, and a platform with no
     /// <c>resource</c>, a name that resolves to nothing, or bytes no decoder
@@ -587,7 +585,7 @@ public readonly record struct MovingPlatformDefinition
     /// on by an intel carrier.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A real, not an enum, and it is only ever compared against 0 here.</b>
+    /// <b>A real, not an enum, and it is only ever compared against 0 here.</b>
     /// Telling 1 from 2 is the carry's job — the reference reads
     /// <c>other.trigger == 2 and intel</c> inside the <c>with(Character)</c>
     /// block — and that is the part this port does not have. A non-zero trigger
@@ -599,7 +597,7 @@ public readonly record struct MovingPlatformDefinition
 
 /// <summary>One <c>MovingPlatform</c>'s per-tick state: the three values on the wire.</summary>
 /// <remarks>
-/// ⚠️ <b><see cref="X"/> and <see cref="Y"/> are the reference's <c>x_</c> and
+/// <b><see cref="X"/> and <see cref="Y"/> are the reference's <c>x_</c> and
 /// <c>y_</c>, not its <c>x</c> and <c>y</c>.</b> The underscored pair is the real
 /// position the motion accumulates into; GM8's <c>x</c>/<c>y</c> are
 /// <c>round()</c>ed copies it draws and collides with. The wire carries the
@@ -621,7 +619,7 @@ public struct MovingPlatformState
     /// GM8's <c>x</c> — the rounded copy it draws and collides with.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>STORED, and it LAGS <see cref="X"/> by one step during the End
+    /// <b>STORED, and it LAGS <see cref="X"/> by one step during the End
     /// Step.</b> The reference computes <c>colldx = round(x_) - round(x)</c>
     /// after moving <c>x_</c> but before assigning <c>x</c>, so throughout the
     /// carry the platform's mask sits at its PREVIOUS rounded position while

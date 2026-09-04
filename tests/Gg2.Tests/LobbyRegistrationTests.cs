@@ -11,7 +11,7 @@ namespace Gg2.Tests;
 /// <c>sendLobbyUnreg.gml</c>.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>These prove this port agrees with the GML. They do NOT prove the live
+/// <b>These prove this port agrees with the GML. They do NOT prove the live
 /// lobby accepts it</b> — <c>ganggarrison.com:29944</c> is a third-party service,
 /// is not part of the reference tree, and was not contacted. If a server run with
 /// <c>--lobby</c> never shows up in the list, the layout below is the thing that
@@ -70,7 +70,7 @@ public sealed class LobbyRegistrationTests
     }
 
     /// <summary>
-    /// ⚠️ The five counters are BIG-endian, and this is the test that says so.
+    /// The five counters are BIG-endian, and this is the test that says so.
     /// </summary>
     /// <remarks>
     /// <c>sendLobbyRegistration.gml:9</c> is an explicit
@@ -151,7 +151,7 @@ public sealed class LobbyRegistrationTests
         Assert.Equal("http://www.ganggarrison.com", Encoding.UTF8.GetString(pairs[4].Value));
         Assert.Equal("ctf_truefort", Encoding.UTF8.GetString(pairs[5].Value));
 
-        // ⚠️ The seventh value is 16 RAW BYTES, not text. It is written by hand
+        // The seventh value is 16 RAW BYTES, not text. It is written by hand
         // in the reference for exactly that reason, and running it through
         // writeKeyValue would have been the obvious tidy-up and would have been
         // wrong.
@@ -159,7 +159,7 @@ public sealed class LobbyRegistrationTests
     }
 
     /// <summary>
-    /// ⚠️ The UUIDs go on the wire in TEXTUAL order, which is not what .NET's
+    /// The UUIDs go on the wire in TEXTUAL order, which is not what .NET's
     /// <see cref="Guid"/> would produce.
     /// </summary>
     /// <remarks>
@@ -209,7 +209,7 @@ public sealed class LobbyRegistrationTests
 
     /// <summary>Two server ids differ, and are the right length.</summary>
     /// <remarks>
-    /// ⚠️ Thin, and deliberately so: what matters about a server id is that it is
+    /// Thin, and deliberately so: what matters about a server id is that it is
     /// stable for a process and unique between them. The stability half is
     /// <c>GameServer</c>'s and is asserted there.
     /// </remarks>

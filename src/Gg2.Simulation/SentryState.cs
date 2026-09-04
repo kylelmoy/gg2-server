@@ -35,7 +35,7 @@ public struct SentryState
     /// GM8's instance id, near enough: which sentry was built first.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Slot order is not build order</b>, and a projectile explodes on the
+    /// <b>Slot order is not build order</b>, and a projectile explodes on the
     /// first sentry its collision event fires against. Issued from
     /// <see cref="WorldState.NextInstanceOrder"/>, the same counter characters
     /// draw from, because GM8 has one id sequence for every object.
@@ -58,7 +58,7 @@ public struct SentryState
     /// Hp added per tick while building.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The reference's ramp is a no-op and this constant is the whole
+    /// <b>The reference's ramp is a no-op and this constant is the whole
     /// story.</b> <c>Sentry.events/Begin Step.xml</c> follows the increment with
     /// <c>buildrate = min(buildrate, buildrate + 0.6/45)</c> under a comment
     /// claiming the rate climbs from 0.5 to 1 — but <c>min</c> of a value and a
@@ -153,14 +153,13 @@ public struct SentryState
     /// <c>doEventArenaEndRound.gml:27</c> runs on every sentry whose team is not
     /// the winner's.
     /// <para>
-    /// ⚠️ <b>The sentry is NOT destroyed</b> — only <c>currentWeapon</c> is, and
+    /// <b>The sentry is NOT destroyed</b> — only <c>currentWeapon</c> is, and
     /// this flag is what keeps it that way: <c>Begin Step.xml:51</c> re-runs the
     /// user event every tick, so the gun that the build branch above it
-    /// re-creates each tick is scrapped again before it can fire. The port had
-    /// this as an outright destruction until 2026-08-28.
+    /// re-creates each tick is scrapped again before it can fire.
     /// </para>
     /// <para>
-    /// ⚠️ <b>And that loop heals it.</b> The re-creation branch is
+    /// <b>And that loop heals it.</b> The re-creation branch is
     /// <c>if (built == 1 and currentWeapon == -1) { ... hp = maxHp; ... }</c>,
     /// so a humiliated sentry is restored to full health on every tick of the
     /// scoreboard. That is the reference's behaviour, not a convenience.

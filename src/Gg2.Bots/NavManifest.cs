@@ -22,7 +22,7 @@ public enum NavMatch
 /// against, so a graph and a map that have drifted apart can say so.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>This closes the one hole a nav cache has always had.</b>
+/// <b>This closes the one hole a nav cache has always had.</b>
 /// <see cref="NavCache.Key"/> is keyed on the map <em>name</em>, deliberately —
 /// its remarks explain why the MD5 cannot be the key — and the consequence is
 /// that a graph built against an older version of a map loads perfectly and
@@ -31,7 +31,7 @@ public enum NavMatch
 /// edit that keeps the dimensions is invisible. It looks like a bot bug and is
 /// not one.
 /// <para>
-/// ⚠️ <b>The hash is over the WALKMASK AND THE ENTITIES, not the map file.</b>
+/// <b>The hash is over the WALKMASK AND THE ENTITIES, not the map file.</b>
 /// Those are the inputs a nav graph is actually built from, so this fires on the
 /// changes that invalidate a graph and stays quiet for the ones that cannot —
 /// re-drawn art, a re-encoded PNG, an added text chunk. Hashing the file would
@@ -40,7 +40,7 @@ public enum NavMatch
 /// a measurement rather than a precaution.
 /// </para>
 /// <para>
-/// ⚠️ <b>A missing entry is <see cref="NavMatch.Unknown"/>, never a failure.</b>
+/// <b>A missing entry is <see cref="NavMatch.Unknown"/>, never a failure.</b>
 /// An operator generating graphs for their own maps has no manifest line for
 /// them, and must not be worse off than before this existed —
 /// <c>NavCache.TryLoad</c>'s "a miss is not an error" contract, inherited from
@@ -75,21 +75,19 @@ public sealed class NavManifest
     /// the entities standing on it.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Pass the map ALREADY SLICED to its area</b> —
+    /// <b>Pass the map ALREADY SLICED to its area</b> —
     /// <c>LevelMap.ForArea(n)</c> — because that is what the graph was built
     /// from and what the key names.
     /// <para>
-    /// ⛔ <b>The entities are in here because the walkmask alone was measurably
-    /// not enough.</b> A first version hashed only the mask, and
-    /// <c>cp_dirtbowl</c>'s three areas came out with the SAME hash — while
-    /// carrying genuinely different graphs, of 835, 837 and 837 nodes.
-    /// <c>ForArea</c> slices entities and shares the mask, so a mask-only check
-    /// could not tell the three apart and could not see a door or a gate move.
-    /// That is a check with a hole in exactly the place it was added to cover;
-    /// the three now hash differently, and <c>NavManifestTests</c> asserts it.
+    /// <b>The entities are in here because the walkmask alone is not enough.</b>
+    /// <c>ForArea</c> slices entities but shares the mask across areas, so a
+    /// mask-only hash cannot tell a multi-area map's stages apart and cannot see
+    /// a door or a gate move — <c>cp_dirtbowl</c>'s three areas carry genuinely
+    /// different graphs (835, 837 and 837 nodes) and must hash differently,
+    /// which <c>NavManifestTests</c> asserts.
     /// </para>
     /// <para>
-    /// ⚠️ <b>The direction of the trade is deliberate.</b> Hashing every entity
+    /// <b>The direction of the trade is deliberate.</b> Hashing every entity
     /// property means a cosmetic entity edit can fail the check even though no
     /// graph changed — a false alarm whose cost is regenerating nav and
     /// re-recording, which is cheap and safe. The opposite error is a stale
@@ -97,7 +95,7 @@ public sealed class NavManifest
     /// is not there and a session spent looking for the bug in the bot layer.
     /// </para>
     /// <para>
-    /// ⚠️ <b><see cref="Walkmask.ToCellBytes"/> is the canonical form on
+    /// <b><see cref="Walkmask.ToCellBytes"/> is the canonical form on
     /// purpose.</b> The mask's own storage is packed words whose tail bits past
     /// the last column are unspecified, so hashing them would make the answer
     /// depend on padding rather than on geometry. One byte per cell is the
@@ -106,7 +104,7 @@ public sealed class NavManifest
     /// checked against something outside this repository.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Truncated to 16 bytes.</b> This is a staleness check, not a
+    /// <b>Truncated to 16 bytes.</b> This is a staleness check, not a
     /// security boundary — nobody is constructing a second map to collide with a
     /// nav graph — and 32 hex characters keeps the manifest readable.
     /// </para>
@@ -139,7 +137,7 @@ public sealed class NavManifest
         digest.AppendData(header);
         digest.AppendData(cells);
 
-        // ⚠️ File order, NOT sorted. The reference walks entities in creation
+        // File order, NOT sorted. The reference walks entities in creation
         // order and LevelMap preserves it (ForArea's remarks), so order is part
         // of what a map IS — two maps differing only in the order of their
         // entities are different maps to the game, and should be to this.
@@ -159,7 +157,7 @@ public sealed class NavManifest
     /// One entity, rendered so that any change to it changes the text.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Not <c>LevelEntity.ToString()</c>, which is type and position
+    /// <b>Not <c>LevelEntity.ToString()</c>, which is type and position
     /// only.</b> Using it here would have made scales and every property
     /// invisible to the check — including the gate and door properties a nav
     /// graph reads. "R" round-trips a double exactly, so a coordinate that moved
@@ -218,7 +216,7 @@ public sealed class NavManifest
     /// Reads the manifest in <paramref name="directory"/>, or an empty one.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Every failure answers "empty", including a malformed file.</b> A
+    /// <b>Every failure answers "empty", including a malformed file.</b> A
     /// manifest that cannot be read must not stop a server serving rounds; the
     /// worst it can do is give up the check it was added to provide. An
     /// <see cref="IOException"/> is deliberately not caught — a directory that
@@ -277,7 +275,7 @@ public sealed class NavManifest
         foreach (var (key, hash) in entries.OrderBy(e => e.Key, StringComparer.Ordinal))
             lines.Add(string.Create(CultureInfo.InvariantCulture, $"{key}\t{hash}"));
 
-        // ⚠️ LF explicitly, not File.WriteAllLines, which writes
+        // LF explicitly, not File.WriteAllLines, which writes
         // Environment.NewLine: the same maps would otherwise produce different
         // BYTES on Windows and on Linux, and the checked-in manifest would flip
         // back and forth depending on who last re-recorded it. .gitattributes

@@ -18,7 +18,7 @@ namespace Gg2.Bots;
 /// that every coordinate resolves to a real nav node on its real map, which is
 /// the check the reference's runner reports as VOID.
 /// <para>
-/// ⚠️ <b>Six of the fourteen do not pass, and the list is asserted exactly.</b>
+/// <b>Six of the fourteen do not pass, and the list is asserted exactly.</b>
 /// Five look like one defect in the takeoff run-up and one may not be; the
 /// diagnosis lives on <c>ScenarioSuiteTests.Unmet</c>, beside the names, because
 /// it is only useful to somebody reading the failure.

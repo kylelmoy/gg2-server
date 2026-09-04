@@ -15,13 +15,13 @@ namespace Gg2.Bots;
 /// against a weights format in this repo is that it would be **a second source of
 /// truth about what a checkpoint is**, and reading theirs keeps there being one.
 /// <para>
-/// ⚠️ <b>Deliberately narrow, and it REFUSES rather than guesses.</b> It handles
+/// <b>Deliberately narrow, and it REFUSES rather than guesses.</b> It handles
 /// little-endian <c>f4</c>/<c>f8</c> arrays and one pickled shape: a 1-D object
 /// array of strings, which is how the metadata rides along. Anything else throws.
 /// A loader that coped with more would be a loader nobody had tested on more.
 /// </para>
 /// <para>
-/// ⚠️ <b>Why a misparse is safe.</b> Every field it recovers is checked against a
+/// <b>Why a misparse is safe.</b> Every field it recovers is checked against a
 /// constant this build already knows — the simulation stamp, the action encoding
 /// version, the observation layout version, the head shape, the observation
 /// length. A parse that went wrong produces values that fail those checks and the
@@ -35,12 +35,10 @@ public static class NpyFile
     /// <c>.npy</c>'s six-byte signature: <c>0x93</c> then <c>NUMPY</c>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Written as bytes, not as a string literal, because 0x93 is not
-    /// ASCII.</b> <c>"NUMPY"u8</c> is the obvious spelling and it is wrong:
-    /// the escape is the CHARACTER U+0093, which UTF-8 encodes as two bytes, so
-    /// the literal is seven bytes long and matches nothing. It cost a debugging
-    /// round trip — the file was read correctly, the archive was read correctly,
-    /// and the header check refused it.
+    /// Written as bytes, not as a string literal, because 0x93 is not ASCII.
+    /// <c>"NUMPY"u8</c> is the obvious spelling and it is wrong: the escape is the
+    /// CHARACTER U+0093, which UTF-8 encodes as two bytes, so the literal is seven
+    /// bytes long and matches nothing.
     /// </remarks>
     private static ReadOnlySpan<byte> Magic => [0x93, (byte)'N', (byte)'U', (byte)'M', (byte)'P', (byte)'Y'];
 
@@ -81,7 +79,7 @@ public static class NpyFile
     /// Reads a numeric array, flattened row-major, with its shape.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Fortran order is REFUSED, not transposed.</b> Transposing silently
+    /// <b>Fortran order is REFUSED, not transposed.</b> Transposing silently
     /// would be the same class of bug as a wrong head offset: a plausible matrix
     /// of the wrong thing. Nothing <c>numpy.savez</c> writes from a C-ordered
     /// array is Fortran-ordered, so this only fires on a file that was not
@@ -134,40 +132,37 @@ public static class NpyFile
     /// Reads a 1-D object array of strings — the shape metadata rides in.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Not a pickle interpreter.</b> It finds the element list that numpy
+    /// <b>Not a pickle interpreter.</b> It finds the element list that numpy
     /// emits for an object array — <c>NEWFALSE, EMPTY_LIST, MEMOIZE, MARK</c> —
     /// and then reads the entries that follow, stopping at <c>APPENDS</c>. Any
     /// other opcode in that run, or a count that disagrees with the header's
     /// shape, is a refusal.
     /// <para>
-    /// ⚠️ <b>The count cross-check is the load-bearing part.</b> The header says
+    /// <b>The count cross-check is the load-bearing part.</b> The header says
     /// how many elements there should be, independently of the pickle, so a scan
     /// that locked on to the wrong place has to produce the right NUMBER of
     /// strings as well as the right ones.
     /// </para>
     /// <para>
-    /// ⛔ <b>A REPEATED STRING IS A <c>BINGET</c>, NOT A SECOND
-    /// <c>SHORT_BINUNICODE</c>, AND THAT WAS A BUG HERE UNTIL 2026-09-01.</b>
-    /// Pickle memoizes, so the second time an object is written it emits a
-    /// back-reference. This loop read only <c>SHORT_BINUNICODE</c>, stopped dead
-    /// on the <c>BINGET</c> and threw "did not end at APPENDS". Found by
-    /// <c>gg2-rl</c>, whose metadata is <c>['2', 'uuid', '2', ...]</c> — an
-    /// action-encoding version and a layout version that are both small integers,
-    /// which is the ordinary case rather than a freak one.
+    /// <b>A repeated string is a <c>BINGET</c>, not a second
+    /// <c>SHORT_BINUNICODE</c>.</b> Pickle memoizes, so the second time an object
+    /// is written it emits a back-reference rather than repeating the bytes; a loop
+    /// that reads only <c>SHORT_BINUNICODE</c> stops dead on the <c>BINGET</c> and
+    /// throws "did not end at APPENDS".
     /// </para>
     /// <para>
-    /// ⚠️ <b>It fired for them and not here because pickle's memo is keyed by
-    /// object IDENTITY, not by value.</b> This repo's fixture holds two distinct
-    /// <c>'2'</c> objects and pickles them as two strings; theirs holds one object
-    /// twice and pickles the second as a back-reference. So whether a checkpoint
-    /// loads depended on whether the trainer happened to reuse a variable —
-    /// invisible from the file, and flipped by a one-line refactor upstream.
-    /// <b>The phase-4 21-map table loaded by luck.</b>
+    /// <b>Whether a checkpoint hits this depends on object identity, not
+    /// value.</b> Pickle's memo is keyed by identity: metadata built from two
+    /// distinct equal strings pickles them as two separate entries, while metadata
+    /// that reuses one string object pickles the second occurrence as a
+    /// back-reference. So handling <c>BINGET</c> is not an edge case — whether it
+    /// appears depends on how the writer happened to construct the value, which is
+    /// invisible from the file itself.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Resolving a back-reference needs the memo's absolute numbering</b>,
-    /// and the element list is not slot 0 — in a real checkpoint it is 18, behind
-    /// the <c>_reconstruct</c> preamble. <see cref="CountMemoSlots"/> walks that
+    /// <b>Resolving a back-reference needs the memo's absolute numbering</b>, and
+    /// the element list is not slot 0 — in a real checkpoint it is 18, behind the
+    /// <c>_reconstruct</c> preamble. <see cref="CountMemoSlots"/> walks that
     /// preamble to count them, and <b>refuses on an opcode it does not know</b>
     /// rather than guessing a length and silently miscounting.
     /// </para>
@@ -262,7 +257,7 @@ public static class NpyFile
     /// How many memo slots the pickle has assigned before <paramref name="limit"/>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Counting <c>0x94</c> bytes would be wrong</b> — that value occurs
+    /// <b>Counting <c>0x94</c> bytes would be wrong</b> — that value occurs
     /// inside a FRAME length, inside a string's UTF-8 and inside any binary
     /// payload. This walks opcodes so it counts only real <c>MEMOIZE</c>s, and it
     /// <b>throws on an opcode it does not know</b> rather than assuming a length:

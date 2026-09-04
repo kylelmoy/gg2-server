@@ -11,12 +11,12 @@ namespace Gg2.Tests;
 /// </summary>
 /// <remarks>
 /// The see → acquire → aim-settled → fire chain, which is the whole difficulty
-/// model. ⚠️ Every gate here is asserted by <em>counting ticks</em> rather than by
+/// model. Every gate here is asserted by <em>counting ticks</em> rather than by
 /// checking a final state, because each one is about <b>when</b> something is
 /// allowed and a test that only looks at the end cannot tell a gate that fires
 /// late from one that is missing.
 /// <para>
-/// ⚠️ The open stretch is the measured one — (380, 268) on ctf_truefort, clear
+/// The open stretch is the measured one — (380, 268) on ctf_truefort, clear
 /// for 1,000px — for the reason <see cref="BotTargetingTests"/> records: picking
 /// coordinates off a screenshot is how a combat test ends up measuring a wall.
 /// </para>
@@ -100,7 +100,7 @@ public sealed class BotCombatTests
     /// The four gates open in order, and each is worth its own ticks.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The acquire gate holds the AIM, not just the trigger</b>, and that is
+    /// <b>The acquire gate holds the AIM, not just the trigger</b>, and that is
     /// the difference between a bot that looks slow and one that looks blind. A
     /// port that gated only the trigger would turn instantly and then wait, which
     /// is exactly what a weak bot must not look like.
@@ -115,7 +115,7 @@ public sealed class BotCombatTests
         Assert.True(aimed >= 0, "the aim never moved");
         Assert.True(fired >= 0, "the trigger was never pulled");
 
-        // ⚠️ The aim does not begin to move until the acquire delay has passed.
+        // The aim does not begin to move until the acquire delay has passed.
         Assert.True(
             aimed - acquired >= weak.AcquireTicks - 1,
             $"the aim moved {aimed - acquired} ticks after acquiring, inside the "
@@ -132,7 +132,7 @@ public sealed class BotCombatTests
     /// A stronger bot reacts sooner, on every gate.
     /// </summary>
     /// <remarks>
-    /// The claim the whole difficulty model rests on. ⚠️ Asserted as a
+    /// The claim the whole difficulty model rests on. Asserted as a
     /// <em>relationship between tiers</em> rather than as numbers, because the
     /// numbers are the tuning table and pinning them would pin
     /// <see cref="BotSkill"/> to itself.
@@ -156,7 +156,7 @@ public sealed class BotCombatTests
     /// The skill table is flat at both ends and ramps in three unequal segments.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The last segment is 0.75-0.95 — two thirds the width of the two below
+    /// The last segment is 0.75-0.95 — two thirds the width of the two below
     /// it — so the top tier moves further per point of skill. That is deliberate
     /// and is why it is a table rather than a formula.
     /// </remarks>
@@ -172,7 +172,7 @@ public sealed class BotCombatTests
         Assert.Equal(20, BotSkill.Lerp(0.45, 10, 20, 30, 40), 9);
         Assert.Equal(30, BotSkill.Lerp(0.75, 10, 20, 30, 40), 9);
 
-        // ⚠️ The last segment is steeper: 10 units over 0.2 against 10 over 0.3.
+        // The last segment is steeper: 10 units over 0.2 against 10 over 0.3.
         var lastSlope = (BotSkill.Lerp(0.95, 10, 20, 30, 40) - BotSkill.Lerp(0.75, 10, 20, 30, 40)) / 0.2;
         var middleSlope = (BotSkill.Lerp(0.75, 10, 20, 30, 40) - BotSkill.Lerp(0.45, 10, 20, 30, 40)) / 0.3;
 
@@ -188,7 +188,7 @@ public sealed class BotCombatTests
     /// A bot with nothing to shoot at faces the way it is walking.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The threshold is <c>BOT_REST_SPEED</c> — GG2's own "is it really
+    /// The threshold is <c>BOT_REST_SPEED</c> — GG2's own "is it really
     /// moving" floor — so a bot standing still keeps whatever it was last
     /// pointing at rather than snapping to the right. A port that used
     /// <c>&gt; 0</c> would have every idle bot facing east.
@@ -198,7 +198,7 @@ public sealed class BotCombatTests
     {
         var state = World((Team.Red, PlayerClass.Soldier, LeftX, FloorY));
         var collision = Collision();
-        // ⚠️ Both, not just AimDir. The slew always runs towards AimWant, so a
+        // Both, not just AimDir. The slew always runs towards AimWant, so a
         // state whose two halves disagree is a bot already mid-turn — which is
         // exactly what a "standing still leaves the aim alone" fixture must not
         // be. The reference starts both at 0 in Player's Create for the same
@@ -216,7 +216,7 @@ public sealed class BotCombatTests
 
         Assert.Equal(90, combat.AimDir, 9);
 
-        // ⚠️ And drifting BELOW the rest speed is still standing still. A port
+        // And drifting BELOW the rest speed is still standing still. A port
         // that used `> 0` would turn a bot that is merely coasting to a stop, and
         // the difference is invisible at exactly zero — which is why this is
         // asserted at 0.1 rather than at 0.
@@ -258,12 +258,12 @@ public sealed class BotCombatTests
     /// says fire.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The fourth gate, and the only one that is not a clock.</b> A bot
+    /// <b>The fourth gate, and the only one that is not a clock.</b> A bot
     /// whose acquire and fire delays have both expired still must not shoot while
     /// it is turning — otherwise a weak bot with a long turn rate sprays at the
     /// wall it was facing when it acquired.
     /// <para>
-    /// ⚠️ It has to be tested by <em>constructing</em> an unsettled aim. On a
+    /// It has to be tested by <em>constructing</em> an unsettled aim. On a
     /// stationary target the slew settles long before the fire delay expires, so
     /// a test that just runs the chain passes with the whole gate deleted — which
     /// is what the first draft did.
@@ -316,7 +316,7 @@ public sealed class BotCombatTests
     /// The aim slews at the skill's turn rate rather than snapping.
     /// </summary>
     /// <remarks>
-    /// ⚠️ There is no filter and no smoothing: tracking lag, overshoot and
+    /// There is no filter and no smoothing: tracking lag, overshoot and
     /// settling are all consequences of the perceive interval, the aim interval
     /// and the turn rate, and of nothing else. A port that snapped would have a
     /// tier-1 bot as accurate as a tier-5 one on a stationary target.
@@ -339,7 +339,7 @@ public sealed class BotCombatTests
 
         Assert.Equal(skill.TurnRate, moved, 6);
 
-        // ⚠️ And it snaps once the remainder is inside one tick's turn, or the
+        // And it snaps once the remainder is inside one tick's turn, or the
         // aim oscillates either side of the target for ever and the settle gate
         // never opens.
         var nearly = new BotCombatState { AimDir = skill.TurnRate / 2, AimWant = skill.TurnRate / 2 };
@@ -352,7 +352,7 @@ public sealed class BotCombatTests
     /// A target behind a wall is kept for a memory window and then dropped.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The bot holds its aim on the last known position and does not refresh
+    /// <b>The bot holds its aim on the last known position and does not refresh
     /// it through the wall</b>, so it engages the moment the sightline opens
     /// instead of re-paying the whole acquire chain then. The snapshot is only
     /// refreshed while the target is visible, which is what makes that true.
@@ -398,7 +398,7 @@ public sealed class BotCombatTests
     /// What one class wants to press at a target this far away.
     /// </summary>
     /// <remarks>
-    /// ⚠️ One world per call, built inside. A <c>WorldState</c> is about 160KB —
+    /// One world per call, built inside. A <c>WorldState</c> is about 160KB —
     /// the clone budget <c>WorldStateTests</c> audits — so four of them as locals
     /// in one test method is 640KB of stack and a genuine
     /// <c>StackOverflowException</c>. Found the hard way: the first draft held
@@ -425,7 +425,7 @@ public sealed class BotCombatTests
     /// Each class presses what its own weapon wants, not a generic trigger.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A medic's needle gun is on the RIGHT click</b> — the Medigun's left
+    /// <b>A medic's needle gun is on the RIGHT click</b> — the Medigun's left
     /// is the heal beam — which is also why the medic is the only class whose
     /// SPECIAL is gated by the fire delay. And a pyro's flame reaches
     /// <c>BOT_FLAME_REACH</c>, so it holds fire beyond that rather than emptying
@@ -441,7 +441,7 @@ public sealed class BotCombatTests
         Assert.Equal(PlayerKeys.Attack, Wanted(PlayerClass.Pyro, BotConstants.FlameReach - 10));
         Assert.Equal(PlayerKeys.None, Wanted(PlayerClass.Pyro, BotConstants.FlameReach + 10));
 
-        // ⚠️ A soldier refuses a shot inside its own splash-safe band, because a
+        // A soldier refuses a shot inside its own splash-safe band, because a
         // rocket at that range kills the shooter.
         Assert.Equal(PlayerKeys.Attack, Wanted(PlayerClass.Soldier, BotConstants.SplashSafe + 10));
         Assert.Equal(PlayerKeys.None, Wanted(PlayerClass.Soldier, BotConstants.SplashSafe - 10));
@@ -455,7 +455,7 @@ public sealed class BotCombatTests
     /// A scoped sniper waits for a charge proportional to the range.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The Rifle's damage IS its range</b>, so a scoped sniper firing early
+    /// <b>The Rifle's damage IS its range</b>, so a scoped sniper firing early
     /// simply cannot reach — and one that waited for a full charge at every
     /// distance would never shoot at anything close. Unscoped it fires
     /// immediately, because there is no charge to wait for.
@@ -483,7 +483,7 @@ public sealed class BotCombatTests
     /// range.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The close-range penalty makes EVERY tier worse in a brawl</b>, and it
+    /// <b>The close-range penalty makes EVERY tier worse in a brawl</b>, and it
     /// is an anti-frustration measure rather than a difficulty knob: without it
     /// bots are unbeatable at point blank. The factor <em>divides</em> and is
     /// below 1 near the target, so reading it as a multiplier inverts the whole
@@ -500,7 +500,7 @@ public sealed class BotCombatTests
 
         Assert.True(watched < fresh, $"watching for 300 ticks did not tighten the aim: {watched} against {fresh}");
 
-        // ⚠️ It decays towards the floor and never below it.
+        // It decays towards the floor and never below it.
         var forever = BotCombat.Spread(Error, Cone, 1, moving: false, sinceSeen: 100_000, distance: 500);
         Assert.True(forever >= Error, $"the spread decayed below its floor to {forever}");
 
@@ -510,7 +510,7 @@ public sealed class BotCombatTests
 
         Assert.Equal(still * 0.5, moving, 9);
 
-        // ⚠️ And the close penalty WIDENS: at point blank the same shot is
+        // And the close penalty WIDENS: at point blank the same shot is
         // 1/BOT_CLOSE_PENALTY times as loose.
         var far = BotCombat.Spread(Error, Cone, 1, moving: false, sinceSeen: 0, distance: BotConstants.CloseRange);
         var near = BotCombat.Spread(Error, Cone, 1, moving: false, sinceSeen: 0, distance: 0);
@@ -524,7 +524,7 @@ public sealed class BotCombatTests
     /// same ticks.
     /// </summary>
     /// <remarks>
-    /// docs/BOTAI.md item 2 from the combat side. ⚠️ The aim error and the
+    /// docs/BOTAI.md item 2 from the combat side. The aim error and the
     /// hold-fire roll both draw from <see cref="WorldState.Random"/> rather than
     /// a private stream, which is what makes a forked world fork the bot's
     /// behaviour with it — and is why <c>randomize()</c> is deliberately not
@@ -538,7 +538,7 @@ public sealed class BotCombatTests
 
         Assert.Equal(first, second);
 
-        // ⚠️ And the stagger genuinely shifts the cadence, or a server full of
+        // And the stagger genuinely shifts the cadence, or a server full of
         // bots would run every target search on one frame.
         var staggered = Chain(Duel(), BotSkill.ForTier(3), stagger: 7);
         Assert.NotEqual(first.Acquired, staggered.Acquired);

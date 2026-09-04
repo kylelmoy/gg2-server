@@ -6,26 +6,18 @@ using Gg2.Simulation;
 namespace Gg2.Tests;
 
 /// <summary>
-/// <c>docs/ENV.md</c>'s <c>MakeBatch</c> row promised "explicit positions <b>or
-/// sampled</b>" from the first draft, and only the first half existed.
+/// Sampled duel placement: <c>docs/ENV.md</c>'s <c>MakeBatch</c> row promises
+/// "explicit positions <b>or sampled</b>".
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>A documented capability that was never built is the same trap as a
-/// gap recorded only in a code comment</b> — <c>CLAUDE.md</c> names the second
-/// and this is the first. Nothing was wrong with the code; the document was
-/// describing a surface that did not exist, and a reader who trusted it wrote a
-/// trainer around it.
-/// <para>
-/// <b>What it cost, measured by <c>gg2-rl</c> before it was built:</b> a duel on
-/// any map required the caller to know that map's coordinates. Driving
-/// <c>gg_debug</c>'s (600,850) at four other maps, 8 worlds, 199 steps:
-/// <c>gg_debug</c>, <c>arena_lumberyard</c> and <c>koth_harvest</c> ran every
-/// episode to the cap with no deaths, <c>ctf_2dfort</c> killed intermittently,
-/// and <b><c>tdm_mantic</c> killed both characters every episode</b> — 32 deaths
-/// across 16, exactly 2.0 each. That is the map's six pit falls, not combat, and
-/// a trainer scoring damage would have learned to avoid the map rather than to
-/// fight.
-/// </para>
+/// Without sampling, a duel on any map requires the caller to know that map's
+/// coordinates. Driving <c>gg_debug</c>'s (600,850) at four other maps, 8
+/// worlds, 199 steps: <c>gg_debug</c>, <c>arena_lumberyard</c> and
+/// <c>koth_harvest</c> ran every episode to the cap with no deaths,
+/// <c>ctf_2dfort</c> killed intermittently, and <b><c>tdm_mantic</c> killed both
+/// characters every episode</b> — 32 deaths across 16, exactly 2.0 each. That is
+/// the map's six pit falls, not combat, and a trainer scoring damage would have
+/// learned to avoid the map rather than to fight.
 /// </remarks>
 public sealed class SampledSpawnTests
 {
@@ -45,7 +37,7 @@ public sealed class SampledSpawnTests
     private static DuelEnv Env() => new(ReferenceTree.IncludedFiles, null);
 
     /// <summary>
-    /// ✅ <b>A sampled duel stands on a real spawn point on every shipped map</b>,
+    /// <b>A sampled duel stands on a real spawn point on every shipped map</b>,
     /// and needs no coordinate from the caller.
     /// </summary>
     /// <remarks>
@@ -77,25 +69,20 @@ public sealed class SampledSpawnTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The control, and the reason this was built:</b> the explicit
-    /// coordinates a caller would have had to guess kill both characters on
-    /// <c>tdm_mantic</c>.
+    /// <b>The control:</b> the explicit coordinates a caller would have had to
+    /// guess kill both characters on <c>tdm_mantic</c>.
     /// </summary>
     /// <remarks>
-    /// This is <c>gg2-rl</c>'s measurement reproduced as a test. It is pinned
-    /// rather than fixed because there is nothing to fix — (600,850) is over a
-    /// pit fall on that map, and a coordinate that is fine on one map being
-    /// lethal on another is precisely the argument for sampling.
+    /// Pinned rather than fixed because there is nothing to fix — (600,850) is
+    /// over a pit fall on that map, and a coordinate that is fine on one map
+    /// being lethal on another is precisely the argument for sampling.
     /// </remarks>
     [Fact]
     public void TheExplicitCoordinatesThatWorkOnOneMapAreLethalOnAnother()
     {
-        // ⚠️ 200 ticks, not 60. They are in OPEN AIR at (600,850) and the fall
-        // is about 1,400 pixels: y reaches 2,267 by t150 and both die at t152,
-        // together, which is what makes gg2-rl's 2.0 deaths per episode
-        // environmental rather than combat. A shorter budget finds them alive
-        // and mid-fall, and the first draft of this test asserted at t60 and
-        // failed for that reason.
+        // 200 ticks, not 60: they are in open air at (600,850) and the fall is
+        // about 1,400 pixels, reaching y=2,267 by t150 and dying together at
+        // t152. A shorter budget finds them alive and mid-fall.
         var env = Env();
         env.Reset(Spec("tdm_mantic", sampled: false), seed: 4);
         env.World.Step(200);
@@ -118,10 +105,9 @@ public sealed class SampledSpawnTests
     /// really do move it.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The draw comes out of the match's own stream, which is seeded
-    /// <em>before</em> placement for exactly this reason. Seeding afterwards —
-    /// which is what the code did until sampling existed — would take the draw
-    /// from whatever the previous episode left behind.
+    /// The draw comes out of the match's own stream, which is seeded
+    /// <em>before</em> placement for exactly this reason: seeding afterwards
+    /// would take the draw from whatever the previous episode left behind.
     /// </remarks>
     [Fact]
     public void ASampledPlacementIsReproducibleAndSeedDependent()
@@ -164,7 +150,7 @@ public sealed class SampledSpawnTests
     }
 
     /// <summary>
-    /// ⚠️ <b>Half a sampled pair is refused</b>, which is what makes a NaN
+    /// <b>Half a sampled pair is refused</b>, which is what makes a NaN
     /// sentinel safe to have at all.
     /// </summary>
     /// <remarks>
@@ -187,11 +173,9 @@ public sealed class SampledSpawnTests
 
     /// <summary>Both agents face each other, however they were placed.</summary>
     /// <remarks>
-    /// ⚠️ The facing used to be read off the <em>spec</em>, and a sampled spec
-    /// holds two NaNs — <c>NaN &lt;= NaN</c> is false either way, so both agents
-    /// would have faced 180 and one would start with its back turned. Reading
-    /// the placed positions instead is what fixes it, and this is the assertion
-    /// that would have caught it.
+    /// Facing must be read off the placed positions, not the spec: a sampled
+    /// spec holds two NaNs, and <c>NaN &lt;= NaN</c> is false either way, so
+    /// reading it would face both agents 180 with one's back turned.
     /// </remarks>
     [Fact]
     public void BothAgentsFaceEachOtherWhenSampled()

@@ -43,9 +43,9 @@ public static class TraceParser
     /// 60,000 comes back as a handful of ticks, every test that loads it passes,
     /// and nothing anywhere says the other 59,500 bytes were thrown away.
     /// <para>
-    /// That is exactly what an engineer's sentry did on 2026-08-26
-    /// (<c>StateUpdateReader.ReadSentry</c>). Use this overload in any test that
-    /// asserts something about a fixture's <em>contents</em>.
+    /// A framing bug in <c>StateUpdateReader.ReadSentry</c> produced exactly
+    /// this failure mode. Use this overload in any test that asserts something
+    /// about a fixture's <em>contents</em>.
     /// </para>
     /// </remarks>
     /// <param name="shapeForMap">
@@ -53,7 +53,7 @@ public static class TraceParser
     /// <c>CHANGE_MAP</c> onto a map of a different gamemode.
     /// </param>
     /// <remarks>
-    /// ⚠️ <b>Without <paramref name="shapeForMap"/> a trace is framed by one
+    /// <b>Without <paramref name="shapeForMap"/> a trace is framed by one
     /// shape from end to end, and a rotation to another gamemode desynchronises
     /// it.</b> Measured on
     /// <c>reference-gen_destroy-rotationcaps.trace</c>: framing stops at byte
@@ -110,7 +110,7 @@ public static class TraceParser
                 break;
             }
 
-            // ⚠️ Re-shape before anything else reads a body. The server is on
+            // Re-shape before anything else reads a body. The server is on
             // the new map from this message onwards, and if its gamemode differs
             // the HUD block changes length underneath the reader.
             if (message.Type == MessageType.ChangeMap && shapeForMap is not null
@@ -152,7 +152,7 @@ public static class TraceParser
                 Tier = state.Tier,
                 Slots = SlotsOf(state),
 
-                // ⚠️ NOT from `state`. The control-point block is read only on
+                // NOT from `state`. The control-point block is read only on
                 // a FULL_UPDATE or a CAPS_UPDATE — StateUpdateReader returns
                 // before the HUD tail on anything else — and neither of those
                 // delimits a tick, so both are sitting in `pending`. A tick's
@@ -175,7 +175,7 @@ public static class TraceParser
     /// arriving with this tick, or empty.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A recording observes a control point only when the server chose to
+    /// <b>A recording observes a control point only when the server chose to
     /// send one of those</b>, which on a King of the Hill recording is a few
     /// dozen times in several thousand ticks — not every tick, and not on the
     /// positional cadence either. The last one wins: two in a tick would mean
@@ -186,7 +186,7 @@ public static class TraceParser
     /// tick, or null.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Index 0 of the HUD scalars, and only for the two hill modes.</b>
+    /// <b>Index 0 of the HUD scalars, and only for the two hill modes.</b>
     /// <c>StateUpdateReader.ReadHud</c> writes <c>cpUnlock, redTimer,
     /// blueTimer</c> for <c>KingOfTheHill</c> and <c>DualKingOfTheHill</c>; every
     /// other mode has a different layout, so this deliberately refuses to guess
@@ -213,7 +213,7 @@ public static class TraceParser
     /// tick carried one.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Not gated on the gamemode, unlike <see cref="UnlockIn"/>.</b> The
+    /// <b>Not gated on the gamemode, unlike <see cref="UnlockIn"/>.</b> The
     /// field is on every <c>FULL_UPDATE</c> whatever the map is playing, and a
     /// recording that rotates onto a Team Deathmatch map mid-stream would carry
     /// the value in an update the shape at parse time still calls something
@@ -226,7 +226,7 @@ public static class TraceParser
 
         foreach (var message in pending)
         {
-            // ⚠️ FULL_UPDATE only, and asked by tier rather than by "is the
+            // FULL_UPDATE only, and asked by tier rather than by "is the
             // value non-zero": StateUpdateReader leaves it at zero on every
             // other tier, and zero is also a legitimate setting, so a reader
             // that took any non-zero value would silently keep a stale one for

@@ -16,8 +16,7 @@ namespace Gg2.Tests;
 /// <para>
 /// <b>No fixture reaches it.</b> The table rides in a <c>FULL_UPDATE</c>, and a
 /// recording holds exactly one — sent on the join path before anybody has killed
-/// anybody. A port that wrote zeroes for ever replays every fixture identically,
-/// which is what this one did until now.
+/// anybody. A port that wrote zeroes would replay every fixture identically.
 /// </para>
 /// </remarks>
 public sealed class DominationTests
@@ -111,7 +110,7 @@ public sealed class DominationTests
     }
 
     /// <summary>
-    /// ⚠️ <b>One kill back wipes the count entirely.</b>
+    /// <b>One kill back wipes the count entirely.</b>
     /// <c>domination_kills_delete</c>, not a decrement — so the counter is
     /// "kills since they last killed me", and a single revenge ends a
     /// domination however long it ran.
@@ -135,7 +134,7 @@ public sealed class DominationTests
     }
 
     /// <summary>
-    /// ⚠️ <b>An assistant is dominating the victim just as much as the
+    /// <b>An assistant is dominating the victim just as much as the
     /// shooter</b> — both go into <c>killersForDomination</c>.
     /// </summary>
     [Fact]
@@ -175,7 +174,7 @@ public sealed class DominationTests
     }
 
     /// <summary>
-    /// ⚠️ A suicide records nothing — the killer only joins
+    /// A suicide records nothing — the killer only joins
     /// <c>killersForDomination</c> inside <c>if (killer != victim)</c>.
     /// </summary>
     [Fact]
@@ -223,7 +222,7 @@ public sealed class DominationTests
     // --- clearing -------------------------------------------------------------
 
     /// <summary>
-    /// ⚠️ A <b>team change</b> clears both directions — the dominations held and
+    /// A <b>team change</b> clears both directions — the dominations held and
     /// the ones held over you.
     /// </summary>
     [Fact]
@@ -249,7 +248,7 @@ public sealed class DominationTests
     }
 
     /// <summary>
-    /// ⚠️ A <b>class</b> change does not — only a team change cancels a
+    /// A <b>class</b> change does not — only a team change cancels a
     /// domination.
     /// </summary>
     [Fact]
@@ -269,7 +268,7 @@ public sealed class DominationTests
     // --- the roster shift -----------------------------------------------------
 
     /// <summary>
-    /// ⚠️ <b>The matrix is indexed by roster slot on both axes, so a departure
+    /// <b>The matrix is indexed by roster slot on both axes, so a departure
     /// has to shift it twice.</b> It is the only two-dimensional thing in the
     /// state, and a one-dimensional renumbering would leave every column one to
     /// the right of where it belongs.
@@ -333,7 +332,7 @@ public sealed class DominationTests
     // --- the wire -------------------------------------------------------------
 
     /// <summary>
-    /// ⚠️ A player's row is one byte per <b>other</b> roster entry, in roster
+    /// A player's row is one byte per <b>other</b> roster entry, in roster
     /// order, with <em>self skipped</em> — so it is one byte shorter than the
     /// roster and carries no count of its own.
     /// </summary>

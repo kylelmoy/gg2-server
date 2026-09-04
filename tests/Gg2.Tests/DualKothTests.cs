@@ -13,7 +13,7 @@ namespace Gg2.Tests;
 /// <c>Objects/Overlays/Gamemodes/DKothHUD.events/{Create, Step}.xml</c> and the
 /// <c>mode == 4</c> branch of <c>ControlPoint.events/Step.xml:12-19</c>.
 /// <para>
-/// ⚠️ <b>Reading it as "KotH with two points" gets every condition backwards.</b>
+/// <b>Reading it as "KotH with two points" gets every condition backwards.</b>
 /// <c>redTimer</c> counts down while <b>blue's</b> hill is red's: you win by
 /// holding the enemy's hill, and your own is only ever something to lose.
 /// </para>
@@ -213,7 +213,7 @@ public sealed class DualKothTests
     /// next tick.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The line this pins is belt-and-braces on a server and load-bearing
+    /// <b>The line this pins is belt-and-braces on a server and load-bearing
     /// on a client.</b> <c>ControlPoint.events/Step.xml</c> re-asserts
     /// <c>locked = true</c> from <c>DKothHUD.cpUnlock &gt; 0</c> every tick, and
     /// nothing in a headless server ever clears a hill's lock early — the points
@@ -247,7 +247,7 @@ public sealed class DualKothTests
     /// <c>UNLOCKCP</c>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The one wire difference between the two hill modes, and it falls
+    /// <b>The one wire difference between the two hill modes, and it falls
     /// out of instance order.</b> A <c>ControlPoint</c> is a map instance and a
     /// HUD is created by <c>basicRoomSetup</c> afterwards, so the points' Steps
     /// run first: on the tick <c>cpUnlock</c> reaches zero they clear their own
@@ -399,7 +399,7 @@ public sealed class DualKothTests
     /// A standoff runs the idle timer out, and a close one is a draw.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A margin, not a tie.</b> Within thirty seconds of each other
+    /// <b>A margin, not a tie.</b> Within thirty seconds of each other
     /// (<c>abs(redTimer - blueTimer) &lt; 30*30</c>) the round is drawn; outside
     /// that <c>if (redTimer &lt; blueTimer) global.winners = TEAM_RED</c> — the
     /// <em>lower</em> clock wins, because a clock only runs down while its team
@@ -458,7 +458,7 @@ public sealed class DualKothTests
 
     /// <summary>Somebody standing on either hill stops the idle timer.</summary>
     /// <remarks>
-    /// ⚠️ The reference's comments call these clauses "blu uncontested" and
+    /// The reference's comments call these clauses "blu uncontested" and
     /// "red uncontested", but each checks the presence of the hill's <em>own</em>
     /// team. Together with the two <c>capping == 0</c> clauses — which an enemy
     /// would break — it means nobody at all is on either hill, which is what an

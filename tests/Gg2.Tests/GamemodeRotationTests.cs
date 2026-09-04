@@ -9,7 +9,7 @@ namespace Gg2.Tests;
 /// that was reported broken.
 /// </summary>
 /// <remarks>
-/// ⛔ <b>The generalisation of the stale-<c>MatchState</c> bug.</b> That one made
+/// <b>The generalisation of the stale-<c>MatchState</c> bug.</b> That one made
 /// the server keep writing the previous map's HUD block after a rotation, which
 /// killed every connected stock client — and it was found against exactly one
 /// pair of gamemodes, CTF → KotH, because that is the pair somebody happened to
@@ -19,13 +19,13 @@ namespace Gg2.Tests;
 /// <c>StateUpdateReader</c> and nothing was checking that they agree across a
 /// change of mode.
 /// <para>
-/// ⚠️ <b>It walks a cycle rather than every pair.</b> Eight modes is 56 ordered
+/// <b>It walks a cycle rather than every pair.</b> Eight modes is 56 ordered
 /// pairs and ~1,800 ticks each to reach a scoreboard heartbeat; a cycle visits
 /// every mode once as a source and once as a destination, which is what catches a
 /// layout that is wrong rather than a transition that is special.
 /// </para>
 /// <para>
-/// ⚠️ <b>This shares the port's own reader</b> — <c>docs/PARITY.md</c>, the blind
+/// <b>This shares the port's own reader</b> — <c>docs/PARITY.md</c>, the blind
 /// spot beside the gate. It proves the writer and the reader agree about each
 /// mode and that neither goes stale; it cannot prove either matches a real GM8
 /// client. Only driving one does that.
@@ -41,7 +41,7 @@ public sealed class GamemodeRotationTests
     /// hand-written list that would rot.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <c>ReferenceTree.PortAuthoredMaps</c> is excluded for the reason every
+    /// <c>ReferenceTree.PortAuthoredMaps</c> is excluded for the reason every
     /// shipped-map census excludes it: <c>gg_debug2</c> is this repo's own and is
     /// not a map anybody rotates onto.
     /// </remarks>
@@ -50,7 +50,7 @@ public sealed class GamemodeRotationTests
         var byMode = new Dictionary<GameMode, string>();
         var seenFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        // ⚠️ Keyed on the FILE's own base name, not on the roster of names.
+        // Keyed on the FILE's own base name, not on the roster of names.
         // InternalMaps.Names carries five aliases — ctf_2dfort1, ctf_2dfort[0]
         // and friends — that resolve to another map's PNG and have none of their
         // own. Two of them sort ahead of the map they alias, so deduping by file
@@ -128,7 +128,7 @@ public sealed class GamemodeRotationTests
     /// agrees with the server.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>Waiting for the <c>CAPS_UPDATE</c> is the whole point.</b> The HUD
+    /// <b>Waiting for the <c>CAPS_UPDATE</c> is the whole point.</b> The HUD
     /// block rides on <c>FULL_UPDATE</c> and <c>CAPS_UPDATE</c> only
     /// (<c>serializeState.gml</c>), so a rotation test that ticks a few hundred
     /// times never makes the server write the layout it means to check — which is

@@ -8,34 +8,33 @@ namespace Gg2.Server;
 /// One second of the server's health, as the panel graphs it.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>Every rate is per-second and already divided</b>, so the browser plots
-/// what it is given and cannot get the denominator wrong. The one thing this
-/// project has repeatedly been bitten by is a number whose denominator was not
-/// the one it looked like (CLAUDE.md, "the author is the one reader guaranteed
-/// to reconstruct the mistake"), and a graph is the worst place to find out.
+/// <b>Every rate is per-second and already divided</b>, so the browser plots
+/// what it is given and cannot get the denominator wrong. A graph is the worst
+/// place to find a denominator that was not the one it looked like (CLAUDE.md,
+/// "the author is the one reader guaranteed to reconstruct the mistake").
 /// </remarks>
 /// <param name="Sequence">Monotonic, so the panel can ask for "everything after".</param>
 /// <param name="TickMeanMs">Mean cost of <c>GameServer.Tick</c> over this second.</param>
 /// <param name="TickPeakMs">The worst single tick in this second — the one that hitches.</param>
 /// <param name="TickBudgetMs">The pacing interval to compare both against.</param>
-/// <param name="Ticks">Ticks actually run. ⚠️ 30 at full rate, 2 when idling.</param>
+/// <param name="Ticks">Ticks actually run. 30 at full rate, 2 when idling.</param>
 /// <param name="CpuPercent">
 /// Process CPU as a percentage of <b>one core</b>, over a trailing
 /// <see cref="PerfHistory.CpuWindowMs"/> window.
 /// <para>
-/// ⚠️ <b>Not of the machine.</b> The tick loop is a single thread, so "60% of one
+/// <b>Not of the machine.</b> The tick loop is a single thread, so "60% of one
 /// core" is the number that says how close it is to being the bottleneck;
 /// dividing by the core count would hide that behind a comfortable-looking 7%.
 /// It can exceed 100 — GC and the panel's own threads are in it.
 /// </para>
 /// <para>
-/// ⛔ <b>A trailing window, not this second, and that is a measurement fact
+/// <b>A trailing window, not this second, and that is a measurement fact
 /// rather than a smoothing preference.</b> Windows accounts process CPU at the
 /// 15.625 ms clock interrupt, so a one-second delta can only ever be a multiple
-/// of <b>1.56%</b> — measured: this server, which really uses about 0.4% of a
-/// core with ten bots, reported an alternating 0.00 / 1.56 / 0.00 sawtooth that
-/// read as spiking. Over five seconds the same quantum is 0.31%, which is below
-/// the resolution anybody reads off a graph.
+/// of <b>1.56%</b>: a server that really uses about 0.4% of a core with ten
+/// bots reports an alternating 0.00 / 1.56 / 0.00 sawtooth that reads as
+/// spiking. Over five seconds the same quantum is 0.31%, below the resolution
+/// anybody reads off a graph.
 /// </para>
 /// </param>
 /// <param name="WorkingSetMb">Physical memory the process is holding.</param>
@@ -69,14 +68,14 @@ public readonly record struct PerfSample(
 /// </summary>
 /// <remarks>
 /// <para>
-/// ⚠️ <b>Collected whenever the panel is enabled, not only while somebody is
+/// <b>Collected whenever the panel is enabled, not only while somebody is
 /// watching</b> — unlike the state snapshot, which is the opposite. The whole
 /// value of a graph is that it already covers the minute before you opened it:
 /// an operator goes to the panel <em>because</em> something happened, and a
 /// history that started when they arrived would answer a question nobody has.
 /// </para>
 /// <para>
-/// ⚠️ <b>What that costs: one <see cref="Environment.TickCount64"/> comparison
+/// <b>What that costs: one <see cref="Environment.TickCount64"/> comparison
 /// per tick, and a handful of syscalls per second.</b> The comparison is the only
 /// thing on the per-tick path. <see cref="Process.TotalProcessorTime"/> and
 /// <see cref="Environment.WorkingSet"/> are the syscalls; at 1 Hz against a
@@ -84,7 +83,7 @@ public readonly record struct PerfSample(
 /// at 1 Hz rather than with the 5 Hz snapshot.
 /// </para>
 /// <para>
-/// ⚠️ <b>Sequence numbers, not indices</b> — the same rule as
+/// <b>Sequence numbers, not indices</b> — the same rule as
 /// <see cref="LogRing"/>. A browser asking by index would silently skip samples
 /// whenever the ring wrapped between two polls.
 /// </para>
@@ -108,7 +107,7 @@ public sealed class PerfHistory
     /// The window each CPU figure is measured over: <b>5 seconds</b>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Longer than the sample interval on purpose.</b> See
+    /// <b>Longer than the sample interval on purpose.</b> See
     /// <see cref="PerfSample.CpuPercent"/> — Windows accounts process CPU at the
     /// 15.625 ms clock interrupt, so a one-second delta quantises to 1.56% and a
     /// nearly-idle server draws a sawtooth. Five seconds takes that to 0.31%.
@@ -143,7 +142,7 @@ public sealed class PerfHistory
     /// Takes a sample if a second has gone by. Call once per tick.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>On the tick thread only.</b> It reads the roster and calls
+    /// <b>On the tick thread only.</b> It reads the roster and calls
     /// <see cref="GameServer.TakeTickWork"/>, which resets an accumulator — a
     /// second caller would silently halve both windows.
     /// </remarks>
@@ -176,7 +175,7 @@ public sealed class PerfHistory
 
         var seconds = elapsedMs / 1000.0;
 
-        // ⚠️ Bots counted in the SAME pass, not from GameServer.BotSlots — that
+        // Bots counted in the SAME pass, not from GameServer.BotSlots — that
         // property builds a List<int> on every access, and this runs inside
         // GameServer.Tick. Once a second is not the tick loop's hot path, but an
         // allocation in there is the kind of thing that gets copied to somewhere
@@ -201,7 +200,7 @@ public sealed class PerfHistory
             TickBudgetMs: server.TickInterval.TotalMilliseconds,
             Ticks: ticks,
 
-            // ⚠️ Divided by WALL time, and by one core, over a window that is
+            // Divided by WALL time, and by one core, over a window that is
             // deliberately longer than this sample. See PerfSample.CpuPercent.
             CpuPercent: CpuOver(now, cpu),
             WorkingSetMb: Environment.WorkingSet / (1024.0 * 1024.0),
@@ -230,7 +229,7 @@ public sealed class PerfHistory
     /// <see cref="CpuWindowMs"/>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The oldest reading still in the window, not the one exactly
+    /// <b>The oldest reading still in the window, not the one exactly
     /// <see cref="CpuWindowMs"/> back.</b> For the first few seconds of a
     /// server's life there is no such reading, and waiting for one would leave
     /// the chart empty at exactly the moment somebody is watching a start-up.
@@ -284,7 +283,7 @@ public sealed class PerfHistory
 
     /// <summary>Samples after <paramref name="after"/>, as a JSON array.</summary>
     /// <remarks>
-    /// ⚠️ Arrays of numbers rather than objects per point — 300 samples of
+    /// Arrays of numbers rather than objects per point — 300 samples of
     /// fifteen named fields is 60 KB of repeated key names for 5 KB of data, on a
     /// reply the panel fetches on every connect. The order is fixed and the
     /// panel names it once; <see cref="Fields"/> is that contract.

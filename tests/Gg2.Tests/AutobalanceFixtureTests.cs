@@ -9,12 +9,11 @@ namespace Gg2.Tests;
 /// self-shortening messages that no fixture could frame.
 /// </summary>
 /// <remarks>
-/// <b>Recorded 2026-08-27: four soldiers against two on <c>ctf_2dfort</c></b>,
+/// The recording: four soldiers against two on <c>ctf_2dfort</c>,
 /// spawn-anchored by the map-reload recipe, with the roster forced lopsided
 /// <em>after</em> the reload.
 /// <para>
-/// ⚠️ <b><c>BALANCE</c> is not a fixed-width message and this port framed it as
-/// one</b> — two body bytes — until phase 6's team balance. There are two shapes:
+/// <b><c>BALANCE</c> is not a fixed-width message.</b> There are two shapes:
 /// <c>BALANCE, 255</c> is the "teams are uneven" notice, and
 /// <c>BALANCE, playerId, class</c> says somebody was actually moved. The client
 /// reads one byte and only then decides whether to read a second
@@ -22,7 +21,7 @@ namespace Gg2.Tests;
 /// byte ahead from the first notice onwards.
 /// </para>
 /// <para>
-/// ⚠️ <b>Why no earlier fixture reached it.</b> <c>ServerBalanceTeams.gml</c>
+/// <b>Why no earlier fixture reached it.</b> <c>ServerBalanceTeams.gml</c>
 /// needs a team <b>two players larger</b> than the other, and every other
 /// recording here is a balanced bot roster. It is also not enough to make the
 /// teams uneven: the script is called only on a <b>death, a departure or a team
@@ -31,7 +30,7 @@ namespace Gg2.Tests;
 /// ticks at the default respawn time.
 /// </para>
 /// <para>
-/// ⚠️ <b>And the reload re-balances the roster underneath you.</b> A map change
+/// <b>And the reload re-balances the roster underneath you.</b> A map change
 /// puts every player back to spectator and the bots re-pick, which turned a
 /// forced 4/2 into 3/3 — so the roster has to be forced <em>after</em> the
 /// reload, not before. That is what the <c>PLAYER_LEAVE</c> in this recording
@@ -79,7 +78,7 @@ public sealed class AutobalanceFixtureTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The gate: both shapes are on the wire, and each is exactly as long
+    /// <b>The gate: both shapes are on the wire, and each is exactly as long
     /// as its first byte says.</b>
     /// </summary>
     /// <remarks>
@@ -134,7 +133,7 @@ public sealed class AutobalanceFixtureTests
     /// <c>PLAYER_CHANGETEAM</c> for that slot follows it.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The move is not a death</b> — no <c>PLAYER_DEATH</c>, no credit and
+    /// <b>The move is not a death</b> — no <c>PLAYER_DEATH</c>, no credit and
     /// no deaths stat (docs/SIMULATION.md, "Settled: autobalance") — so the only
     /// thing on the wire that says it happened is this pair. The class byte is
     /// <c>checkClasslimits</c>'s answer rather than the player's old class, which

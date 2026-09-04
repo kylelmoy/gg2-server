@@ -11,13 +11,13 @@ namespace Gg2.Tests;
 /// </summary>
 /// <remarks>
 /// <b>This is the gate on a performance change that claims to be exact.</b>
-/// <c>ObservationWriter.WriteGeometry</c> used to probe the walkmask every four
-/// pixels out to 320 — up to 80 probes a ray, 24 rays an observation, and 88% of
-/// what writing one costs. It now skips open ground using
-/// <see cref="Walkmask.Clearance"/>, which is only legitimate if the answer does
-/// not move.
+/// The naive form of <c>ObservationWriter.WriteGeometry</c> probes the walkmask
+/// every four pixels out to 320 — up to 80 probes a ray, 24 rays an observation,
+/// and 88% of what writing one costs. The real writer instead skips open ground
+/// using <see cref="Walkmask.Clearance"/>, which is only legitimate if the
+/// answer does not move.
 /// <para>
-/// ⚠️ <b>"Identical" and "close enough" are different claims and only the first
+/// <b>"Identical" and "close enough" are different claims and only the first
 /// one was made.</b> A ray value is a distance to the first solid probe; an
 /// optimisation that skipped one thin ledge would shift a single float in a
 /// 209-float vector, train perfectly happily, and be invisible to every other
@@ -25,7 +25,7 @@ namespace Gg2.Tests;
 /// loop is transcribed here and the two are compared bit for bit.
 /// </para>
 /// <para>
-/// ⚠️ <b>Positions are swept across whole maps, not taken from a duel.</b> The
+/// <b>Positions are swept across whole maps, not taken from a duel.</b> The
 /// skip is worth most in the open and is most likely to be wrong near geometry,
 /// so a fixture position — which is one arbitrary spot on a floor — would exercise
 /// neither. Three maps, including a tall one, because the clearance field is
@@ -39,7 +39,7 @@ public sealed class ObservationRayFanTests
     /// and its documented tail order: rays, then the patch, then the goal block.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Computed from the tail rather than by re-adding the head's blocks. The
+    /// Computed from the tail rather than by re-adding the head's blocks. The
     /// head's widths are private, and a test that restated them would be a second
     /// copy of the layout that goes stale silently — which is the failure this
     /// file exists to prevent, not one to introduce.
@@ -83,7 +83,7 @@ public sealed class ObservationRayFanTests
 
             for (var ray = 0; ray < ObservationWriter.Rays; ray++)
             {
-                // ⚠️ Exact equality, on the float the layout actually carries.
+                // Exact equality, on the float the layout actually carries.
                 // A tolerance here would pass the one thing being tested for.
                 Assert.Equal((float)(expected[ray] / 320.0), buffer[RaysAt + ray]);
             }
@@ -99,7 +99,7 @@ public sealed class ObservationRayFanTests
     /// right by construction.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Kept as a transcription of the loop that was replaced</b>, down to
+    /// <b>Kept as a transcription of the loop that was replaced</b>, down to
     /// recomputing the trig per ray. If it is ever "tidied" to share the writer's
     /// direction table or its constants it stops being an independent statement
     /// of the answer and this file stops testing anything.
@@ -134,7 +134,7 @@ public sealed class ObservationRayFanTests
     /// to the nearest solid cell, capped.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Checked against a brute-force search, not against itself.</b> The
+    /// <b>Checked against a brute-force search, not against itself.</b> The
     /// two-pass chamfer is the kind of code that is subtly wrong at a border and
     /// right everywhere else, and the ray test above would only notice if the
     /// error made it <em>over</em>-estimate. An under-estimate is invisible there
@@ -185,7 +185,7 @@ public sealed class ObservationRayFanTests
     /// The FIRST write against a mask nothing has touched allocates nothing.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>This is a regression test for a bug that passed twice before it
+    /// <b>This is a regression test for a bug that passed twice before it
     /// failed.</b> <see cref="Walkmask.Clearance"/> was lazy at first, so the
     /// first <c>Write</c> on a map built the field and allocated
     /// <c>Width * Height</c> bytes inside a method <c>docs/ENV.md</c> gates as
@@ -195,7 +195,7 @@ public sealed class ObservationRayFanTests
     /// <c>ObservationWriterTests.WritingAnObservationAllocatesNothing</c> passed
     /// on two runs and failed on the third, with nothing changed between them.
     /// <para>
-    /// ⚠️ <b><c>resources: null</c> is the whole point of this test.</b> Going
+    /// <b><c>resources: null</c> is the whole point of this test.</b> Going
     /// through the cache would hand back a mask some other test had already
     /// warmed, which is exactly the condition that hid the bug. A fresh decode is
     /// the only way to ask the question this is asking, and that is why the
@@ -205,7 +205,7 @@ public sealed class ObservationRayFanTests
     [Fact]
     public void TheFirstWriteAgainstAFreshMaskAllocatesNothing()
     {
-        // ⚠️ Uncached, so this really is a mask whose clearance field has never
+        // Uncached, so this really is a mask whose clearance field has never
         // been asked for.
         var world = ScenarioWorld.Load("ctf_2dfort", 1, ReferenceTree.IncludedFiles, null, resources: null);
         var slot = world.Place(PlayerClass.Soldier, Team.Red, 600, 850);
@@ -233,7 +233,7 @@ public sealed class ObservationRayFanTests
     /// clearance of <c>c</c> vouches for.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>This is the test that actually pins the constant, and it replaced a
+    /// <b>This is the test that actually pins the constant, and it replaced a
     /// map sweep that did not.</b> The sweep placed origins at random and compared
     /// against the naive fan; mutating the bound from <c>6c - 7</c> to
     /// <c>6c - 1</c> — six pixels too far — still passed it, because catching that
@@ -248,7 +248,7 @@ public sealed class ObservationRayFanTests
     /// which is the sensitivity the sweep lacked.
     /// </para>
     /// <para>
-    /// ⚠️ <b>And the bound is deliberately one pixel tighter than the algebra
+    /// <b>And the bound is deliberately one pixel tighter than the algebra
     /// forces.</b> <c>6c - 6</c> is also safe; the march uses <c>6c - 7</c>
     /// because the tight value has no margin at all and buys a quarter of one
     /// probe. The tightness half below records that, so nobody "fixes" the
@@ -290,7 +290,7 @@ public sealed class ObservationRayFanTests
     /// leave the vouched-for block.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The other direction, so the pair brackets the constant.</b> Without
+    /// <b>The other direction, so the pair brackets the constant.</b> Without
     /// this, <c>6c - 700</c> would satisfy the safety test perfectly and make the
     /// skip useless — a correctness gate that a do-nothing implementation passes
     /// is not measuring the thing anybody cares about.

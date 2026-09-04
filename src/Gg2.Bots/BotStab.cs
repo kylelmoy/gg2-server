@@ -7,7 +7,7 @@ namespace Gg2.Bots;
 /// <c>botStabWindow</c>: would a spy pressing ATTACK <em>now</em> actually connect?
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>The obvious test — "the enemy is within <c>BOT_STAB_RANGE</c> right now"
+/// <b>The obvious test — "the enemy is within <c>BOT_STAB_RANGE</c> right now"
 /// — is aimed a full second early.</b> The mechanic, out of the Revolver's cloaked
 /// branch and its alarms:
 /// <list type="number">
@@ -23,7 +23,7 @@ namespace Gg2.Bots;
 /// A press keyed on where the enemy is <em>now</em> is close to a guaranteed miss
 /// against anything moving, and it spends 38 frozen ticks in the open to take it.
 /// <para>
-/// ⚠️ <b>The box is the sprite, not a radius.</b> <c>StabMaskS</c> is 64×64 with
+/// <b>The box is the sprite, not a radius.</b> <c>StabMaskS</c> is 64×64 with
 /// origin (26, 37), and the mask's Step sets <c>image_xscale</c> from
 /// <c>direction</c> without ever touching <c>image_angle</c> — so it is
 /// axis-aligned and merely flipped: 37px the way the spy faces, 26px behind, 37px
@@ -31,7 +31,7 @@ namespace Gg2.Bots;
 /// stays what it always described, the reach.
 /// </para>
 /// <para>
-/// ⚠️ <b>The target is grown by its own bounds rather than treated as a point</b>,
+/// <b>The target is grown by its own bounds rather than treated as a point</b>,
 /// because the mask collides mask-to-mask: a character whose centre is just
 /// outside the box still overlaps it by a shoulder.
 /// </para>
@@ -57,7 +57,7 @@ public static class BotStab
         // The mask in world coordinates around where the spy is standing — which is
         // also where it will still be standing, since the press is what freezes it.
         //
-        // ⚠️ Inclusive at BOTH ends, so an aim of exactly 90 or exactly 270 faces
+        // Inclusive at BOTH ends, so an aim of exactly 90 or exactly 270 faces
         // left. That is the reference's own test and it decides which way the box
         // is 37 long on a spy looking straight up or straight down.
         var facing = self.AimDirection >= 90 && self.AimDirection <= 270 ? -1 : 1;
@@ -73,7 +73,7 @@ public static class BotStab
         var maskTop = self.Y - BotConstants.StabReach;
         var maskBottom = self.Y + BotConstants.StabBack;
 
-        // ⚠️ The floor the target cannot be predicted THROUGH. A target running off
+        // The floor the target cannot be predicted THROUGH. A target running off
         // a ledge is exactly the case a straight-line prediction gets wrong, and at
         // knife range it is common. No node below is the same as no floor.
         var floor = BotAim.FloorUnder(graph, target.X, target.Y);
@@ -88,7 +88,7 @@ public static class BotStab
             var px = target.X + (vx * t);
             var py = BotAim.FallPredict(target.Y, target.Motion.VSpeed, t, floor);
 
-            // ⚠️ Fuzzy comparisons, because the reference's are: GML's `>=` is
+            // Fuzzy comparisons, because the reference's are: GML's `>=` is
             // fuzzy to 1e-13, and a target whose shoulder lands exactly on the
             // mask's edge is a real outcome rather than a rounding artefact.
             if (Gml.GreaterOrEqual(px + box.Right, maskLeft)

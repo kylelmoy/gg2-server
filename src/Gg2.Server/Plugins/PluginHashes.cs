@@ -25,12 +25,12 @@ public interface IPluginHashSource
 /// <c>getpluginhashes.gml</c>'s HTTP half: <c>GET PLUGIN_SOURCE + name + ".md5"</c>.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>Synchronous and at startup only.</b> The reference blocks in a
+/// <b>Synchronous and at startup only.</b> The reference blocks in a
 /// <c>http_step</c> spin loop for exactly this
 /// (<c>getpluginhashes.gml:57-60</c>), before the listening socket exists, so
 /// nothing is being starved. Do not move this onto the tick thread's path.
 /// <para>
-/// ⚠️ The reference reads the first 32 bytes of the body and asks no further
+/// The reference reads the first 32 bytes of the body and asks no further
 /// questions (<c>:73</c>, <c>read_string(body, 32)</c>). This validates the hex,
 /// because a headless server that advertises an html error page as a hash sends
 /// every client on a 404 hunt.
@@ -112,7 +112,7 @@ public static class PluginHashes
     /// instead of the site's.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Relative to the working directory, and the client looks in its own
+    /// Relative to the working directory, and the client looks in its own
     /// copy of the same directory. The reference warns the operator out loud
     /// that clients need the same file; this port logs the same warning, because
     /// the failure otherwise is "nobody can connect" with no cause on screen.
@@ -130,7 +130,7 @@ public static class PluginHashes
     /// first choice, and how a plugin is developed.
     /// </item>
     /// <item>
-    /// ⛔ <b>The hash this port's C# implementation was written against</b>, when
+    /// <b>The hash this port's C# implementation was written against</b>, when
     /// there is one. This is NOT what the reference does, and the difference is
     /// the point: the reference downloads the plugin's GML and runs both halves
     /// of it, so a new upstream release changes both halves together. Here the
@@ -140,7 +140,7 @@ public static class PluginHashes
     /// </item>
     /// <item>The site, exactly as <c>getpluginhashes.gml</c> does.</item>
     /// </list>
-    /// ⚠️ When 1, 2 or 4 disagree with an implementation's pin, the mismatch is
+    /// When 1, 2 or 4 disagree with an implementation's pin, the mismatch is
     /// logged rather than swallowed. It is the one condition under which the
     /// server half and the client half are running different protocols.
     /// </remarks>

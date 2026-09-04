@@ -13,13 +13,13 @@ namespace Gg2.Bots;
 /// describes the shape, the code decides it, and
 /// <see cref="LayoutVersion"/> is what a trainer checks.
 /// <para>
-/// ⚠️ <b>Egocentric and normalised, not raw.</b> Absolute world coordinates
+/// <b>Egocentric and normalised, not raw.</b> Absolute world coordinates
 /// would make a policy learn one map's geometry rather than the game, and
 /// unnormalised velocities would put a rocket's 13 px/tick and a hp fraction on
 /// scales three orders of magnitude apart in the same vector.
 /// </para>
 /// <para>
-/// ⚠️ <b>Nothing here allocates and nothing enumerates the whole world.</b>
+/// <b>Nothing here allocates and nothing enumerates the whole world.</b>
 /// <c>docs/BOTAI.md</c> item 6: a feature vector is extracted for every agent on
 /// every decision, so "nearest K" written as a scan costs more than the
 /// simulation it observes. <see cref="WorldView.NearestEnemies"/> and
@@ -29,14 +29,14 @@ namespace Gg2.Bots;
 public static class ObservationWriter
 {
     /// <summary>
-    /// ⚠️ <b>Bumped whenever any count, order or scale below changes</b>, and
-    /// folded into the simulation stamp so a trainer cannot silently load a
-    /// checkpoint trained on a different vector.
+    /// Bumped whenever any count, order or scale below changes, and folded into
+    /// the simulation stamp so a trainer cannot silently load a checkpoint trained
+    /// on a different vector.
     /// </summary>
     public const int LayoutVersion = 1;
 
     /// <summary>
-    /// ⚠️ <b>Nine, not ten: the Quote has no slot.</b> It is a joke class that a
+    /// Nine, not ten: the Quote has no slot. It is a joke class that a
     /// duel never selects, and a tenth column would be a column that is always
     /// zero. <see cref="Write"/> refuses a Quote rather than encoding it as
     /// "no class at all", because silently observing nothing is the failure
@@ -64,8 +64,8 @@ public static class ObservationWriter
 
     // --- normalising scales, all v0 constants -------------------------------
     //
-    // ⚠️ A scale is part of the layout: changing one changes what the numbers
-    // mean and is a layout bump, exactly like changing a count.
+    // A scale is part of the layout: changing one changes what the numbers mean
+    // and is a layout bump, exactly like changing a count.
 
     /// <summary>Pixels that map to 1.0 in a relative position.</summary>
     private const double PositionScale = 400.0;
@@ -103,7 +103,7 @@ public static class ObservationWriter
     /// Fills <paramref name="destination"/> with this slot's view of the world.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The span is cleared first.</b> A caller reusing a buffer across
+    /// <b>The span is cleared first.</b> A caller reusing a buffer across
     /// steps would otherwise see last step's enemy in a slot that is now empty —
     /// stale features are worse than absent ones, because a presence flag of 0
     /// beside a stale position teaches the policy that the flag means nothing.
@@ -172,33 +172,26 @@ public static class ObservationWriter
             ? (float)(weapon.ReloadTimer / (double)stats.ReloadTime)
             : 0f;
 
-        // ⚠️ One column for several resources, because they are the same thing to
-        // a policy: "the special I am holding is this full". They never coexist on
+        // One column for several resources, because they are the same thing to a
+        // policy: "the special I am holding is this full". They never coexist on
         // one character, so a column each would be columns of zeros.
         //
-        // ⛔ KNOWN GAP, and it is the sharpest one in this file: a SNIPER's rifle
-        // charge is NOT here. This comment used to claim it was.
+        // KNOWN GAP: a sniper's rifle charge is NOT here. WeaponState.Charge is
+        // real state, and Weapons.RifleBeginStep sets rifle damage to
+        // base + sqrt(Charge / RifleChargeTime) * (max - base) over 105 ticks, so
+        // charge IS the sniper's damage. Sniper falls to the `_` arm below, and
+        // Sniper is in PolicyController.TrainedClasses — so a trained sniper
+        // policy fires without seeing the one variable that determines what the
+        // shot does, and cannot learn to hold it. Closing it is an
+        // ObservationLayoutVersion bump and a full retrain, so it stays deliberate
+        // rather than a free improvement; pinned by
+        // MedicPolicyScopeTests.ASnipersChargeIsInvisibleToThePolicy.
         //
-        // WeaponState.Charge is real state, and Weapons.cs:733 sets rifle damage
-        // to base + sqrt(Charge / RifleChargeTime) * (max - base) over 105 ticks.
-        // So charge IS the sniper's damage. Sniper falls to the `_` arm, and
-        // Sniper is in PolicyController.TrainedClasses — which means a trained
-        // sniper policy fires without being able to see the one variable that
-        // determines what the shot does, and cannot learn to hold it.
+        // THE MEDIC'S UBER IS DELIBERATELY NOT HERE. Three facts make that the
+        // right call:
         //
-        // ⚠️ Verified with gg2-rl 2026-09-03, who found it from the stale comment
-        // and priced it: closing it is an ObservationLayoutVersion bump and a full
-        // retrain, so it is THEIR call and not a free improvement. Pinned by
-        // MedicPolicyScopeTests.ASnipersChargeIsInvisibleToThePolicy so that
-        // closing it is a deliberate change to a recorded fact rather than a
-        // silent one.
-        //
-        // ⛔ THE MEDIC'S UBER IS DELIBERATELY NOT HERE, removed 2026-09-03 at
-        // gg2-rl's request and on this side's call. Three facts make it the right
-        // way round:
-        //
-        //   1. The column has been identically 0.0 in every training row of every
-        //      run, because no trained class has ever hit a non-`_` arm. Its
+        //   1. The column is identically 0.0 in every training row of every run,
+        //      because no trained class has ever hit a non-`_` arm. Its
         //      first-layer weights are still the random draw.
         //   2. Uber cannot accrue in a 1v1 duel at all — Healing's only accrual
         //      path needs a patient — so adding Medic to the trained set does NOT
@@ -213,12 +206,12 @@ public static class ObservationWriter
         // untrained weight at deployment and nowhere else — the worst of both, and
         // for a number the policy is not allowed to act on.
         //
-        // ⚠️ NO ObservationLayoutVersion BUMP, and the reason is checkable: the
-        // layout is unchanged, and no checkpoint that exists was ever driven as a
-        // medic, so no checkpoint's inputs move. ⛔ That expires the moment a
-        // medic-trained checkpoint predates this line.
+        // NO ObservationLayoutVersion BUMP: the layout is unchanged and no
+        // checkpoint that exists was ever driven as a medic, so no checkpoint's
+        // inputs move. That reasoning expires the moment a medic-trained
+        // checkpoint exists.
         //
-        // ⚠️ The engineer's arm is left alone and carries the same latent trap:
+        // The engineer's arm is left alone and carries the same latent trap:
         // Engineer is not in PolicyController.TrainedClasses, so a policy never
         // drives one and never reads it. Training engineer without checking this
         // walks into the identical problem.
@@ -259,10 +252,9 @@ public static class ObservationWriter
             o[at++] = (float)Math.Sin(aim);
             o[at++] = (float)Math.Cos(aim);
 
-            // ⚠️ Time since seen is a fixed 0 in v0 and the column exists anyway.
-            // The reaction-delay ring buffer is gg2-rl phase 5; carrying the
-            // column now is what stops the layout churning — and a bump costs a
-            // retrain, while a constant column costs one float.
+            // Time since seen is a fixed 0 in v0 and the column exists anyway, so a
+            // future reaction-delay feature does not need a layout bump — a bump
+            // costs a retrain, while a constant column costs one float.
             o[at++] = 0f;
         }
     }
@@ -289,7 +281,7 @@ public static class ObservationWriter
 
             OneHot(o, ref at, (int)shot.Kind, ProjectileKindCount);
 
-            // Mine or theirs. ⚠️ By TEAM, not by owner slot: a team-mate's rocket
+            // Mine or theirs. By TEAM, not by owner slot: a team-mate's rocket
             // is as harmless to this agent as its own, and in a duel the
             // distinction the policy needs is "is this coming for me".
             o[at++] = shot.Team == self.Team ? 0f : 1f;
@@ -298,7 +290,7 @@ public static class ObservationWriter
 
     /// <summary>Pixels between probes along a ray.</summary>
     /// <remarks>
-    /// ⚠️ <b>Part of the layout, like a scale.</b> The fan reports the first
+    /// <b>Part of the layout, like a scale.</b> The fan reports the first
     /// probe that lands on something solid, so the spacing decides which thin
     /// geometry the policy can see at all. Changing it is a layout bump.
     /// </remarks>
@@ -311,7 +303,7 @@ public static class ObservationWriter
     /// The fan's unit directions, which are the same 24 every call.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Computed from the same expression the loop used</b> —
+    /// <b>Computed from the same expression the loop used</b> —
     /// <c>Math.Cos(i * (2 * Math.PI / Rays))</c>, not a rearrangement of it — so
     /// every direction is the identical double and the fan is unchanged. This is
     /// a table for 48 trig calls an observation, not a new set of angles.
@@ -336,7 +328,7 @@ public static class ObservationWriter
     /// and still be certain of landing on something open.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Public, and a named function rather than an expression inline in
+    /// <b>Public, and a named function rather than an expression inline in
     /// the march, because a test has to be able to read it.</b> Making it
     /// <c>internal</c> instead would have needed <c>InternalsVisibleTo</c> on this
     /// assembly, which also exposes the <c>Program</c> that top-level statements
@@ -352,7 +344,7 @@ public static class ObservationWriter
     /// <c>floor((d + 5) / 6) &lt;= c - 1</c>, which holds up to <c>d = 6c - 6</c>.
     /// </para>
     /// <para>
-    /// ⚠️ <b>One pixel is given back deliberately.</b> <c>6c - 6</c> is the tight
+    /// <b>One pixel is given back deliberately.</b> <c>6c - 6</c> is the tight
     /// value; the extra pixel costs at most a quarter of one probe and leaves the
     /// bound with margin rather than sitting exactly on the boundary of an
     /// argument about rounding. It is not a slip to be tidied up.
@@ -364,13 +356,12 @@ public static class ObservationWriter
         in WorldView view, in CharacterState self, Span<float> o, ref int at)
     {
         // A fan of rays from the character's origin, marched against the
-        // walkmask. ⚠️ Marched rather than asked of CollisionLine: that
-        // primitive answers "is anything in the way", and a policy needs how
-        // far, which is a different question and not one the simulation ever
-        // has to answer.
+        // walkmask. Marched rather than asked of CollisionLine: that primitive
+        // answers "is anything in the way", and a policy needs how far, which is
+        // a different question and not one the simulation ever has to answer.
         //
-        // ⚠️ The march SKIPS open ground rather than probing every four pixels,
-        // and the result is identical rather than approximate. Walkmask.Clearance
+        // The march SKIPS open ground rather than probing every four pixels, and
+        // the result is identical rather than approximate. Walkmask.Clearance
         // gives the Chebyshev cell distance to the nearest solid cell; a
         // clearance of c guarantees every world pixel within 6c - 7 of the probe
         // is open, so advancing by no more than that lands somewhere already
@@ -437,15 +428,13 @@ public static class ObservationWriter
     private static void WriteGoal(
         in WorldView view, int slot, in CharacterState self, in AgentGoal goal, Span<float> o, ref int at)
     {
-        // ⚠️ Was a constant "engage the nearest enemy" until 2026-08-30, and the
-        // block was reserved from day one for exactly this. docs/ENV.md's
-        // hybrid-boundary rule: a macro goal the policy has never seen cannot be
-        // introduced later without a layout bump and a retrain, and a constant
-        // column costs four floats. gg2-rl phase 4 is what cashed that in.
+        // docs/ENV.md's hybrid-boundary rule: a macro goal the policy has never
+        // seen cannot be introduced later without a layout bump and a retrain, so
+        // this block is reserved for it and a constant column costs four floats.
         //
-        // ⚠️ A DEFAULT AgentGoal takes the nearest-enemy path below, unchanged,
-        // so every observation written by a caller that knows nothing about goals
-        // is byte-identical to the ones every existing checkpoint trained on.
+        // A DEFAULT AgentGoal takes the nearest-enemy path below, unchanged, so
+        // every observation written by a caller that knows nothing about goals is
+        // byte-identical to the ones every existing checkpoint trained on.
         // ObservationRayFanTests' sibling, ObservationGoalTests, pins that.
         double dx;
         double dy;
@@ -482,9 +471,8 @@ public static class ObservationWriter
 
             if (distance > 0)
             {
-                // ⚠️ dy first, then dx. That is the order the block has always
-                // been written in and it is what every trained checkpoint reads;
-                // it looks like a transposition and is not one to fix.
+                // dy first, then dx. That is the order every trained checkpoint
+                // reads; it looks like a transposition and is not one to fix.
                 o[at++] = (float)(dy / distance);
                 o[at++] = (float)(dx / distance);
             }
@@ -500,7 +488,7 @@ public static class ObservationWriter
             at += 3;
         }
 
-        // ⚠️ Validated where the goal is SET. OneHot writes no column at all for
+        // Validated where the goal is SET. OneHot writes no column at all for
         // an out-of-range index, which would reach the policy as "no goal" rather
         // than as an error.
         OneHot(o, ref at, goal.Kind, GoalKinds);

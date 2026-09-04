@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 
 namespace Gg2.Server;
@@ -19,21 +19,20 @@ namespace Gg2.Server;
 /// So <b>15% of ticks arrived about 14ms late</b> — nearly half a tick — and the
 /// mean hid it completely, because the loop catches up on the following ticks.
 /// <para>
-/// ⚠️ <b>Why that reaches a player.</b> The stock client re-simulates the physics
+/// <b>Why that reaches a player.</b> The stock client re-simulates the physics
 /// between position updates and corrects when one arrives (docs/PARITY.md). A
 /// server whose ticks arrive irregularly makes those corrections irregular, and
-/// the client shows it as rubberbanding. Two humans playing the port reported
-/// exactly that on 2026-08-27, which is what sent anyone looking at the clock.
+/// the client shows it as rubberbanding.
 /// </para>
 /// <para>
-/// ⚠️ <b>This changes pacing only — never simulation.</b> A tick computes the
+/// <b>This changes pacing only — never simulation.</b> A tick computes the
 /// same thing whenever it runs; <c>docs/SIMULATION.md</c>'s determinism contract
 /// is about what a tick does, not when. It is safe by CLAUDE.md's rule
 /// ("compatible on the wire and in observable simulation, free everywhere
 /// else") precisely because the wire content does not depend on it.
 /// </para>
 /// <para>
-/// ⚠️ <b>The obvious alternative does not work</b>, and was measured rather than
+/// <b>The obvious alternative does not work</b>, and was measured rather than
 /// assumed: a <c>Thread.Sleep(1)</c> plus spin loop is bimodal in the same way,
 /// because <c>Sleep</c> is rounded by the same quantum. Nothing short of
 /// changing the quantum — or burning a core on a pure spin — moves it.
@@ -63,7 +62,7 @@ public static class TimerResolution
     /// Raises the resolution until the returned handle is disposed.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Every <c>timeBeginPeriod</c> needs its <c>timeEndPeriod</c></b> —
+    /// <b>Every <c>timeBeginPeriod</c> needs its <c>timeEndPeriod</c></b> —
     /// the setting is reference-counted per process and outlives a process that
     /// leaks it only until that process dies, but leaking it inside a long-lived
     /// server keeps the whole machine on a 1ms quantum. Hence the handle rather

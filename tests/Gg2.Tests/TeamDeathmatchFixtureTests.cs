@@ -11,23 +11,19 @@ namespace Gg2.Tests;
 /// play it.
 /// </summary>
 /// <remarks>
-/// <b>Recorded 2026-08-27</b>, six soldiers, both spawn-anchored by the
-/// map-reload recipe. Until then every fixture here was Capture the Flag, so
-/// <c>GameModes.ShapeOf</c> had never produced a Team Deathmatch shape for a
-/// real reader and the mode's wire had no evidence behind it at all.
+/// Six soldiers, both spawn-anchored by the map-reload recipe.
 /// <para>
-/// ✅ <b>Both frame cleanly to the last byte</b>, and <c>gg2-parity census</c>
+/// <b>Both frame cleanly to the last byte</b>, and <c>gg2-parity census</c>
 /// reports <c>TeamDeathmatch</c> for each. That negative is the first thing
 /// these recordings buy — the Arena <c>ARENA_ENDROUND</c> bug and the
 /// engineer's <c>INPUTSTATE</c> bug were both of this shape and both survived
 /// because no recording reached the state.
 /// </para>
 /// <para>
-/// ⚠️ <b>They disagree wildly about everything else, and that is the finding.</b>
+/// <b>They disagree wildly about everything else, and that is the finding.</b>
 /// <c>tdm_mantic</c> replays exactly for <b>3,043</b> ticks — the longest
-/// closed-loop window in the project — and <c>gg_debug</c> for <b>142</b>. That
-/// second number has been 2, 23, 100, 135 and now 142 in a single day, and each
-/// step was a different bug: the alarm-stage spawn seam, dropdown platforms, the
+/// closed-loop window in the project — and <c>gg_debug</c> for <b>142</b>, gated
+/// by a chain of bugs: the alarm-stage spawn seam, dropdown platforms, the
 /// rotated projectile mask, Team Deathmatch's spawn invulnerability, and walking
 /// characters in creation order rather than slot order. See
 /// <see cref="GgDebugReplaysPastItsDropdownPlatformsAndStopsOnDamage"/>.
@@ -97,7 +93,7 @@ public sealed class TeamDeathmatchFixtureTests
     /// small map. Every one of those deaths is a Team Deathmatch kill, so this
     /// is also the first recorded evidence that the mode scores at all.
     /// <para>
-    /// ⚠️ <b>Most of it is still not assertable</b>: the window reaches t523 of
+    /// <b>Most of it is still not assertable</b>: the window reaches t523 of
     /// 2,998, which is four of the fifty-two deaths. It is worth keeping
     /// precisely because it becomes the sharpest combat fixture in the project
     /// as that window grows, and it has grown from 2 ticks to 142 by being
@@ -125,7 +121,7 @@ public sealed class TeamDeathmatchFixtureTests
     /// fixture had ever touched, on <c>Trajectory | Hp | Deaths</c> with zero
     /// mismatches.
     /// <para>
-    /// ⚠️ <b>It does NOT gate the move boxes</b>, which is the reason it was
+    /// <b>It does NOT gate the move boxes</b>, which is the reason it was
     /// recorded on this map — <c>tdm_mantic</c> is the only shipped map placing
     /// any (nine up, six down, confirmed live as fifteen). Checked by mutation:
     /// commenting out <c>MoveBoxes.CollisionStep</c> leaves the window at 3,043
@@ -152,7 +148,7 @@ public sealed class TeamDeathmatchFixtureTests
     }
 
     /// <summary>
-    /// ⚠️ <b><c>gg_debug</c> shows the same landing divergence as
+    /// <b><c>gg_debug</c> shows the same landing divergence as
     /// <c>ctf_2dfort</c>, and that narrows the open finding a long way.</b>
     /// </summary>
     /// <remarks>
@@ -182,43 +178,33 @@ public sealed class TeamDeathmatchFixtureTests
     /// which is what a fall that really happened looks like.</item>
     /// </list>
     /// <para>
-    /// ✅ <b>The landing half of that is FIXED (2026-08-27)</b> — it was the
-    /// replayer pre-placing a spawning character instead of building it in the
-    /// alarm stage, and <see cref="ITraceSimulation.QueueSpawn"/> closes it.
-    /// <c>ctf_2dfort</c> went from 5 ticks to 362.
+    /// The landing divergence was the replayer pre-placing a spawning character
+    /// instead of building it in the alarm stage;
+    /// <see cref="ITraceSimulation.QueueSpawn"/> closes it.
     /// </para>
     /// <para>
-    /// ✅ <b>The DROPDOWN PLATFORMS are implemented (2026-08-27) and this window
-    /// is no longer about them.</b> <c>gg_debug</c> places two, at
-    /// <c>438,216</c> and <c>498,216</c>, and slots 1 and 3 used to fall past
-    /// them while the reference rested on <c>y = 192</c>. Implementing the
-    /// reference's three branches — the Begin Step ground test, the Step
-    /// push-out and the End Step stair guard — took the window from <b>23 ticks
-    /// to 100</b>.
+    /// <b>Dropdown platforms are implemented.</b> <c>gg_debug</c> places two, at
+    /// <c>438,216</c> and <c>498,216</c>; the reference's three branches — the
+    /// Begin Step ground test, the Step push-out and the End Step stair guard —
+    /// are all modelled.
     /// </para>
     /// <para>
-    /// ⚠️ <b>And the trajectories inside it are now EXACT</b> — the closed-loop
-    /// replay reports <c>|dx| max 0, |dy| max 0</c> over 132 ticks and 86
-    /// comparisons. What stopped it next was <b>damage</b>, not position: slot 4
-    /// survived a death the reference recorded at t476.
+    /// The trajectories inside the window are exact — the closed-loop replay
+    /// reports <c>|dx| max 0, |dy| max 0</c> over 132 ticks and 86 comparisons.
+    /// What stops the window next is <b>damage</b>, not position: slot 4 survived
+    /// a death the reference recorded at t476, traced to two stacked bugs —
+    /// GM8's overlap primitives use the precise mask for a rotated projectile
+    /// where this port used the bounding box (<see cref="ProjectileMask"/>), and
+    /// the parity harness had never read Team Deathmatch's spawn invulnerability
+    /// off the wire, so every replayed respawn was mortal from its first frame.
+    /// The full arithmetic is in <see cref="GgDebugSplashOpenFindingTests"/>.
     /// </para>
     /// <para>
-    /// ✅ <b>And that is fixed (2026-08-27), which took the window from 100 to
-    /// 135 — on <em>every</em> field, not just the trajectory.</b> It was two
-    /// bugs stacked: GM8's overlap primitives use the precise mask for a rotated
-    /// projectile where this port used the bounding box
-    /// (<see cref="ProjectileMask"/>), and behind it the parity harness had never
-    /// read Team Deathmatch's spawn invulnerability off the wire, so every
-    /// replayed respawn was mortal from its first frame. The whole story, and
-    /// the arithmetic that found it, is in
-    /// <see cref="GgDebugSplashOpenFindingTests"/>.
+    /// <b>What stops it now, at t523, is a fifth of a pixel</b> on slot 4's x —
+    /// a rounding residue rather than a missing kill.
     /// </para>
     /// <para>
-    /// ⚠️ <b>What stops it now, at t523, is a fifth of a pixel</b> on slot 4's x.
-    /// Three missing kills became a rounding residue.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>The platform's BOX is inferred rather than measured.</b>
+    /// <b>The platform's BOX is inferred rather than measured.</b>
     /// <c>DropdownPlatform.xml</c> names sprite44 and <c>sprite44.xml</c> puts
     /// its origin at (0,0); sprite44's 60x6 is itself measured, because floors
     /// and walls share it. But the collision oracle never sampled a dropdown

@@ -10,24 +10,18 @@ namespace Gg2.Tests;
 /// one.
 /// </summary>
 /// <remarks>
-/// <b>Recorded 2026-08-27: three soldiers a side on <c>cp_dirtbowl</c></b>,
-/// spawn-anchored.
+/// Three soldiers a side on <c>cp_dirtbowl</c>, spawn-anchored.
 /// <para>
-/// ⚠️ <b>It did not frame at all on its first outing</b>, and that is what it
-/// was recorded to find. A tall map is several rounds stacked vertically and
-/// only one area's entities exist: <c>cp_dirtbowl</c> writes <b>six</b> control
-/// points and plays <b>two</b>. The HUD block carries <b>no count prefix</b>, so
-/// a reader framing by the wrong number desynchronises on the very first
-/// update — measured, byte 458 of 138,406, with 137,948 bytes silently thrown
-/// away.
+/// A tall map is several rounds stacked vertically and only one area's
+/// entities exist: <c>cp_dirtbowl</c> writes <b>six</b> control points and
+/// plays <b>two</b>. The HUD block carries <b>no count prefix</b>, so a reader
+/// framing by the wrong number desynchronises on the very first update —
+/// byte 458 of 138,406, with 137,948 bytes silently thrown away.
 /// </para>
 /// <para>
-/// <c>PortedSimulation.LoadMap</c> had narrowed with <c>ForArea(1)</c> since
-/// phase 6 and carried a comment saying it "would need the recording's own
-/// currentMapArea if one were ever made on cp_dirtbowl". One has been now — and
-/// the gap was not there but in every <em>reader</em>: <c>gg2-parity</c>'s
-/// three <c>ShapeOf</c> call sites and <c>FixtureFramingTests</c> all passed the
-/// un-narrowed map.
+/// Every reader of this map must narrow with <c>ForArea(1)</c> — the
+/// <c>gg2-parity</c> <c>ShapeOf</c> call sites and <see cref="FixtureFramingTests"/>
+/// included — or it frames against the wrong control-point count.
 /// </para>
 /// </remarks>
 public sealed class CpDirtbowlFixtureTests
@@ -35,7 +29,7 @@ public sealed class CpDirtbowlFixtureTests
     private const string Fixture = "reference-cp_dirtbowl-closedcp.trace";
 
     /// <summary>
-    /// ⚠️ Narrowed, exactly as every reader of a recording must.
+    /// Narrowed, exactly as every reader of a recording must.
     /// </summary>
     private static LevelMap MapLoader(string name) =>
         LevelMap.FromPng(name, ReferenceTree.ReadMap(name)).ForArea(1);
@@ -54,7 +48,7 @@ public sealed class CpDirtbowlFixtureTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The control: narrowing is load-bearing, not tidiness.</b>
+    /// <b>The control: narrowing is load-bearing, not tidiness.</b>
     /// </summary>
     /// <remarks>
     /// Without this the fix above could be reverted and every test in this file
@@ -95,7 +89,7 @@ public sealed class CpDirtbowlFixtureTests
         Assert.Equal(GameMode.ControlPoints, shape.GameMode);
         Assert.Equal(2, shape.ControlPointCount);
 
-        // ⚠️ Attack/defend is the arrangement with a setup gate, which is how
+        // Attack/defend is the arrangement with a setup gate, which is how
         // the port tells it from a symmetrical control-points map.
         Assert.True(GameModes.HasSetupGate(MapLoader("cp_dirtbowl")), "no setup gate");
 

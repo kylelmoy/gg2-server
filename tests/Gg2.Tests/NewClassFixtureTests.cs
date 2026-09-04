@@ -10,12 +10,12 @@ namespace Gg2.Tests;
 /// The four recordings of the four classes no fixture had ever contained.
 /// </summary>
 /// <remarks>
-/// <b>Recorded 2026-08-27.</b> The heavy, the sniper, Quote and the spy all
-/// landed on 2026-08-26 and not one of them appeared in any checked-in
-/// recording — every earlier fixture is some mixture of scout, soldier,
-/// demoman, medic, pyro and engineer, which is what <c>botPickClass</c> picks.
-/// docs/PARITY.md, "four classes now exist in the port that no fixture has ever
-/// contained", is the standing argument for these.
+/// <b>The heavy, the sniper, Quote and the spy landed without ever appearing in
+/// a checked-in recording</b> — every earlier fixture is some mixture of
+/// scout, soldier, demoman, medic, pyro and engineer, which is what
+/// <c>botPickClass</c> picks. docs/PARITY.md, "four classes now exist in the
+/// port that no fixture has ever contained", is the standing argument for
+/// these.
 /// <para>
 /// <b>Six of one class each, three a side</b>, rather than one mixed roster.
 /// That is CLAUDE.md's bisect-the-roster shape: a framing error never points at
@@ -25,14 +25,14 @@ namespace Gg2.Tests;
 /// <em>may</em> pick and does not decide what it does.
 /// </para>
 /// <para>
-/// ✅ <b>All four frame cleanly to the last byte</b>, which is the headline
+/// <b>All four frame cleanly to the last byte</b>, which is the headline
 /// result and a genuine negative: there is no <c>INPUTSTATE</c>-style layout bug
 /// for any of the four. <see cref="FixtureFramingTests"/> is a Theory over the
 /// directory, so it covers these without being told about them; what is here is
 /// the content and the closed-loop trajectory windows.
 /// </para>
 /// <para>
-/// ⚠️ <b>Three of the four record no <c>WEAPON_FIRE</c> at all, and that is
+/// <b>Three of the four record no <c>WEAPON_FIRE</c> at all, and that is
 /// correct.</b> The Minigun and the Blade call <c>randomize()</c> and broadcast
 /// no seed, so a heavy-only or Quote-only recording contains none however much
 /// shooting happens — see docs/SIMULATION.md, "an unseeded weapon caps a
@@ -144,7 +144,7 @@ public sealed class NewClassFixtureTests
         var (_, ticks) = Load(fixture);
         var classes = Classes(ticks);
 
-        // ⚠️ The recorder itself contributes one PLAYER_CHANGECLASS. It joins as
+        // The recorder itself contributes one PLAYER_CHANGECLASS. It joins as
         // a passive spectator and its class byte is the default Scout, so the
         // set is always {the class, Scout} and never {the class} alone. None of
         // these four is a Scout fixture, so that stays unambiguous — and it is
@@ -186,7 +186,7 @@ public sealed class NewClassFixtureTests
     /// the others end at +23. A wrong box changes where a character stops
     /// against a wall, which is a trajectory error and not a drawing one.
     /// <para>
-    /// ⚠️ <b>Trajectory only, and for two different reasons.</b> Three of the
+    /// <b>Trajectory only, and for two different reasons.</b> Three of the
     /// four weapons here are unseeded or hitscan, so the port cannot be held to
     /// this recording's hp: the Minigun and the Blade broadcast no seed and the
     /// Rifle is a binary search rather than a projectile. The thresholds below
@@ -194,28 +194,19 @@ public sealed class NewClassFixtureTests
     /// </para>
     /// </remarks>
     [Theory]
-    // Re-measured 2026-08-27 after the alarm-stage spawn seam landed, and
-    // 2026-08-28 after the TOGGLE_ZOOM and OMNOMNOMNOM injections.
+    // The sniper's window depends on the replayer applying the scope: the Rifle
+    // is hitscan and this comparison is trajectory-only, and what ends the
+    // window is the zoom's runPower and jumpStrength effect on the port,
+    // not the weapon's fire itself. See ClientCommandInjectionTests.
     //
-    // ✅ The sniper's window went 362 -> 1630 the moment the replayer started
-    // applying the scope. ⚠️ This comment used to explain 362 as the weapons —
-    // "an unseeded Minigun's spread cannot be reproduced" — which is true of the
-    // heavy and was never true of the sniper: the Rifle is hitscan, this
-    // comparison is trajectory-only, and what actually ended the window was
-    // t923's unapplied zoom, four ticks of runPower and jumpStrength the port
-    // never took. A plausible explanation covering two rows hid the one row it
-    // did not fit. See ClientCommandInjectionTests.
-    //
-    // The heavy's 396 is genuinely the Minigun, and it did not move: its three
-    // recorded eats are at t0, t184 and t1263, all outside [t499, t895].
-    //
-    // ⚠️ The heavy's is the one number here that moved for the seam: 270 before
-    // and 396 after, attributed by measurement rather than guessed (switching the
-    // queueing off reproduces 270 exactly). Quote's and the spy's run nearly the
-    // whole recording because a bubble barely pushes and a cloaked spy is not
-    // fighting, and neither has ever moved — the control.
+    // The heavy's 396 is genuinely the Minigun, and it does not move: its three
+    // recorded eats are at t0, t184 and t1263, all outside [t499, t895]. The
+    // number is attributed to the alarm-stage spawn queueing (switching it off
+    // reproduces 270 exactly). Quote's and the spy's run nearly the whole
+    // recording because a bubble barely pushes and a cloaked spy is not
+    // fighting, and neither number has ever moved — the control.
     [InlineData(Heavy, 350)]    // 396 today, t499
-    [InlineData(Sniper, 1600)]  // 1630 today, t613 — was 362 before the zoom injection
+    [InlineData(Sniper, 1600)]  // 1630 today, t613
     [InlineData(Quote, 1700)]   // 1756 today, t486
     [InlineData(Spy, 1750)]     // 1829 today, t406
     public void TheNewClassesTrajectoriesAreExactFromTheirSpawnAnchors(string fixture, int floor)
@@ -243,7 +234,7 @@ public sealed class NewClassFixtureTests
     {
         var (_, ticks) = Load(Heavy);
 
-        // ⚠️ Zero WEAPON_FIRE is correct and must stay asserted: the Minigun
+        // Zero WEAPON_FIRE is correct and must stay asserted: the Minigun
         // calls randomize() and broadcasts no seed. Damage is the only evidence
         // a heavy shot anything, so that is what is asserted.
         Assert.Equal(0, Count(ticks, MessageType.WeaponFire));
@@ -266,7 +257,7 @@ public sealed class NewClassFixtureTests
         Assert.True(Count(ticks, MessageType.WeaponFire) >= 25, "not enough rifle fire");
         Assert.True(Count(ticks, MessageType.PlayerDeath) >= 4, "not enough deaths");
 
-        // ⚠️ Zoom is never serialised as a state — a client infers it from the
+        // Zoom is never serialised as a state — a client infers it from the
         // charge byte and from a TOGGLE_ZOOM that does not say which way. This
         // is the project's first recorded evidence that the message exists on
         // the wire at all.
@@ -289,7 +280,7 @@ public sealed class NewClassFixtureTests
         // "Quote wandered".
         Assert.True(MinObservedHp(ticks) < 140, "nobody took a single point of damage");
 
-        // ⚠️ An intel event inside a recording. docs/PARITY.md's "the objective
+        // An intel event inside a recording. docs/PARITY.md's "the objective
         // is the one thing four fixtures observe and none anchors" is why this
         // is worth keeping.
         Assert.True(Count(ticks, MessageType.ReturnIntel) >= 1, "no intel event");
@@ -299,7 +290,7 @@ public sealed class NewClassFixtureTests
     /// The spy's recording, and the one state it exists for.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The cloak bit is the point of this fixture.</b> A spy's <c>cloak</c>
+    /// <b>The cloak bit is the point of this fixture.</b> A spy's <c>cloak</c>
     /// rides in bit 0 of the <c>moveStatus</c> flags byte of every
     /// <c>QUICK_UPDATE</c>, and until this recording nothing in the project had
     /// ever read one back from a real server — the bit was written by the port

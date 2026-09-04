@@ -12,7 +12,7 @@ namespace Gg2.Bots;
 /// walking an edge the less attractive it is to the next bot to plan. That is the
 /// whole route-variety mechanism.
 /// <para>
-/// ⚠️ <b>It is the only safe way to spread a team out, and a per-edge random
+/// <b>It is the only safe way to spread a team out, and a per-edge random
 /// jitter is not.</b> The jitter was tried in the reference and deleted: it is
 /// mean-reverting, so over a sixty-edge route every candidate inflates by the same
 /// average and on ctf_truefort all eight bots got the <em>identical</em> 68-node
@@ -35,7 +35,7 @@ namespace Gg2.Bots;
 /// </remarks>
 public sealed class BotOccupancy
 {
-    // ⚠️ Keys are NavGraph.EdgeKey values built out of node indices, and a node
+    // Keys are NavGraph.EdgeKey values built out of node indices, and a node
     // index only means anything to one build of the graph — so both maps are
     // dropped on a map change (Reset). Counts from the previous map would
     // otherwise sit here making arbitrary edges of the new one look busy.
@@ -52,7 +52,7 @@ public sealed class BotOccupancy
 
     /// <summary>Adds this bot's installed route to <paramref name="team"/>'s counts.</summary>
     /// <remarks>
-    /// ⚠️ <b>Idempotent, and that is not tidiness.</b> A route is added in exactly
+    /// <b>Idempotent, and that is not tidiness.</b> A route is added in exactly
     /// one place — once a search has succeeded — but removed in three: on every
     /// re-plan, arrival and death; when the bot leaves or the map changes; and by
     /// the planner itself, which takes its own route out of the counts before
@@ -66,7 +66,7 @@ public sealed class BotOccupancy
 
         if (state.Path.Count < 2)
         {
-            // ⚠️ No route means nothing to count, and the flag must come off with
+            // No route means nothing to count, and the flag must come off with
             // it: a flag left set against a route that no longer exists makes the
             // next add a no-op and leaves the bot permanently invisible to its
             // team-mates' searches.
@@ -87,7 +87,7 @@ public sealed class BotOccupancy
 
     /// <summary>Takes this bot's route back out of the counts.</summary>
     /// <remarks>
-    /// ⚠️ <b>Against <see cref="BotPathState.OccupiedTeam"/> — the team the route
+    /// <b>Against <see cref="BotPathState.OccupiedTeam"/> — the team the route
     /// was counted under — and never against the bot's team now.</b> The two
     /// genuinely come apart: autobalance switches the lowest-scoring player on the
     /// larger team mid-round and can perfectly well pick a bot, and a map rotation
@@ -119,7 +119,7 @@ public sealed class BotOccupancy
     /// Drops both teams' counts — <c>botOccupancyReset</c>, on a map change.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Clearing the bots' flags is the half that is easy to forget</b>, and
+    /// <b>Clearing the bots' flags is the half that is easy to forget</b>, and
     /// it is the caller's job here because this type holds no roster. Dropping the
     /// maps alone leaves every bot believing its route is still counted, so the
     /// next removal declines to decrement and the route is then added a second

@@ -10,7 +10,7 @@ namespace Gg2.Server;
 /// </summary>
 /// <remarks>
 /// <para>
-/// ⛔ <b>This is the whole of the panel's authentication.</b> Everything else in
+/// <b>This is the whole of the panel's authentication.</b> Everything else in
 /// the project answers to a game client on a LAN or to a tool on loopback; this
 /// answers to whatever can reach the bind address. The three things that matter
 /// are here rather than spread through the request handler: the password is
@@ -18,7 +18,7 @@ namespace Gg2.Server;
 /// issued, and a wrong password costs the guesser time that grows.
 /// </para>
 /// <para>
-/// ⚠️ <b>Sessions live in memory only.</b> A restart signs everybody out, which
+/// <b>Sessions live in memory only.</b> A restart signs everybody out, which
 /// is the correct behaviour for an operator console and removes any question of
 /// a token file with the wrong permissions on it.
 /// </para>
@@ -38,7 +38,7 @@ public sealed class AdminSessions
     /// How long a session lasts however much it is used.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Both limits, not one.</b> An idle timeout alone means a tab left
+    /// <b>Both limits, not one.</b> An idle timeout alone means a tab left
     /// polling is authenticated for ever, which is precisely the tab most likely
     /// to be on a machine somebody else can reach.
     /// </remarks>
@@ -66,7 +66,7 @@ public sealed class AdminSessions
     /// What every failed sign-in costs, lockout or not.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Paid before the answer is sent, not after.</b> It blunts online
+    /// <b>Paid before the answer is sent, not after.</b> It blunts online
     /// guessing on its own and it flattens the timing difference between "no
     /// such session" and "wrong password", which is the only side channel a
     /// login endpoint this small has.
@@ -96,7 +96,7 @@ public sealed class AdminSessions
         /// The double-submit token every mutating request must echo.
         /// </summary>
         /// <remarks>
-        /// ⚠️ <b>SameSite=Strict on the cookie is the first defence and this is
+        /// <b>SameSite=Strict on the cookie is the first defence and this is
         /// the second.</b> The cookie stops a cross-site form post from carrying
         /// credentials at all; this stops anything that gets past it, because a
         /// page on another origin cannot read this value out of the JSON that
@@ -135,7 +135,7 @@ public sealed class AdminSessions
     /// Checks a password and, if it is right, issues a session.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b><see cref="CryptographicOperations.FixedTimeEquals"/>, not
+    /// <b><see cref="CryptographicOperations.FixedTimeEquals"/>, not
     /// <c>==</c>.</b> The panel is reachable from the network by design, so the
     /// comparison is one an attacker can time.
     /// </remarks>
@@ -164,7 +164,7 @@ public sealed class AdminSessions
             return null;
         }
 
-        // ⚠️ A correct password clears the record. Otherwise an operator who
+        // A correct password clears the record. Otherwise an operator who
         // fat-fingered it five times stays locked out after getting it right,
         // which is a lockout doing the opposite of its job.
         _failures.TryRemove(key, out _);
@@ -222,7 +222,7 @@ public sealed class AdminSessions
 
         foreach (var (key, failures) in _failures)
         {
-            // ⚠️ Only a record that is not currently holding anybody back, or the
+            // Only a record that is not currently holding anybody back, or the
             // sweep would be a way to clear a lockout by waiting.
             lock (failures)
             {
@@ -262,7 +262,7 @@ public sealed class AdminSessions
     /// A password to use when the operator gave none.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>There is no unauthenticated configuration</b>, so "no password" has
+    /// <b>There is no unauthenticated configuration</b>, so "no password" has
     /// to mean something, and the only safe something is "one you did not
     /// choose". Base32-ish without the characters that are read wrongly out
     /// loud or off a terminal — no O/0, no I/l/1 — because it is going to be

@@ -95,7 +95,7 @@ public sealed class ShotgunTests
     /// range compensation.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The single most deletable difference between the two weapons.</b>
+    /// <b>The single most deletable difference between the two weapons.</b>
     /// The Scattergun ends every pellet with
     /// <c>alarm[0] = 35 * ((min(1, forward/actual) - 1)/2 + 1)</c>, which
     /// shortens the fuse when the shooter's own speed is helping the pellet

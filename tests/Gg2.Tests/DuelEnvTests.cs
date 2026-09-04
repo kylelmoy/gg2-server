@@ -43,11 +43,9 @@ public sealed class DuelEnvTests
         var env = Env();
         env.Reset(Spec(), seed: 1);
 
-        // ⚠️ 1 and 2, not 0 and 1. Slot 0 is the server's own reserved player
+        // 1 and 2, not 0 and 1. Slot 0 is the server's own reserved player
         // and always exists — `ScenarioWorld` starts its counter at 1 for the
-        // same reason a headless server does. A test that expected 0 here (the
-        // first draft of this one did) is asserting the one thing CLAUDE.md
-        // says never to assume.
+        // same reason a headless server does.
         Assert.Equal(1, env.RedSlot);
         Assert.Equal(2, env.BlueSlot);
         Assert.True(env.RedSlot < env.BlueSlot, "red must be placed first");
@@ -61,7 +59,7 @@ public sealed class DuelEnvTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The action repeat is counted in TICKS and the cap in DECISIONS.</b>
+    /// <b>The action repeat is counted in TICKS and the cap in DECISIONS.</b>
     /// </summary>
     /// <remarks>
     /// A cap in ticks would silently change episode length when the repeat
@@ -104,7 +102,7 @@ public sealed class DuelEnvTests
         Assert.Equal(Termination.TickCap, last.Red.Termination);
         Assert.Equal(6, env.Tick);
 
-        // ⚠️ Stepping a finished episode is a mistake worth refusing loudly: a
+        // Stepping a finished episode is a mistake worth refusing loudly: a
         // trainer that ignored `done` would otherwise keep collecting
         // transitions from a world where one agent is a corpse.
         Assert.Throws<InvalidOperationException>(() => env.Step(Idle, Idle));
@@ -136,7 +134,7 @@ public sealed class DuelEnvTests
     }
 
     /// <summary>
-    /// ⚠️ <b>Damage is accumulated over the repeat's ticks, not read from the
+    /// <b>Damage is accumulated over the repeat's ticks, not read from the
     /// last one.</b>
     /// </summary>
     /// <remarks>
@@ -203,7 +201,7 @@ public sealed class DuelEnvTests
     }
 
     /// <summary>
-    /// ⚠️ <b>Restoring is not the claim; CONTINUING is.</b>
+    /// <b>Restoring is not the claim; CONTINUING is.</b>
     /// </summary>
     /// <remarks>
     /// <c>docs/BOTAI.md</c> item 2's rule, and the reason it is written that way:
@@ -257,7 +255,7 @@ public sealed class DuelEnvTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The decoder's aim is part of the snapshot.</b>
+    /// <b>The decoder's aim is part of the snapshot.</b>
     /// </summary>
     /// <remarks>
     /// The world's bytes are the world's, and the aim lives outside them. A
@@ -364,7 +362,7 @@ public sealed class DuelEnvTests
     /// A client side gets back exactly the action it sent.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Echoed rather than left to the trainer to remember.</b> A trainer
+    /// <b>Echoed rather than left to the trainer to remember.</b> A trainer
     /// logging transitions would otherwise correlate the reply with its own send
     /// buffer — which works right up until a side is bot-driven and the two stop
     /// agreeing, which is exactly when the action matters most.
@@ -389,7 +387,7 @@ public sealed class DuelEnvTests
     /// An idle driver presses nothing, and the slot still earns its rewards.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The first of the two properties <c>gg2-rl</c> asked for</b>: a
+    /// <b>The first of the two properties <c>gg2-rl</c> asked for</b>: a
     /// bot-driven slot has to keep returning its own observation and reward
     /// components, or an opponent cannot be scored and self-play cannot be
     /// evaluated. The floor case is the one worth gating, because a driver that
@@ -401,7 +399,7 @@ public sealed class DuelEnvTests
         var env = NavEnv();
         env.Reset(Spec() with { BlueDriver = EnvDriver.Idle }, seed: 1);
 
-        // ⚠️ The premise, asserted rather than assumed: a driver really is behind
+        // The premise, asserted rather than assumed: a driver really is behind
         // that slot. Without this the whole test passes on an env that ignored the
         // driver field entirely, because a CLIENT slot sent EnvAction.Idle behaves
         // identically — checked by mutation, and it did.
@@ -421,12 +419,12 @@ public sealed class DuelEnvTests
             damage += blue.DamageTaken;
         }
 
-        // ⚠️ NOT asserted: that it stayed where it was. It does not — measured at
+        // NOT asserted: that it stayed where it was. It does not — measured at
         // 20px — because rocket splash moves a character that pressed nothing, and
         // that is the simulation being right. "Presses nothing" is the claim, and
         // the per-step action assertion above is what states it.
         //
-        // ⚠️ The load-bearing half: the idle side's reward components are real,
+        // The load-bearing half: the idle side's reward components are real,
         // not zeroed because nothing drove it from outside.
         Assert.True(damage > 0, "an idle opponent was shot at for 60 decisions and recorded no damage taken");
     }
@@ -440,7 +438,7 @@ public sealed class DuelEnvTests
     /// all, which is what blocked <c>gg2-rl</c>'s phase 1 exit criterion and its
     /// phase 3 opponent pool.
     /// <para>
-    /// ⚠️ <b>Deaths, not merely damage.</b> "N episodes completed" is satisfiable
+    /// <b>Deaths, not merely damage.</b> "N episodes completed" is satisfiable
     /// by a broken feature — <c>MatchActuallyHappensTests</c> exists because five
     /// instant Arena rounds looked exactly like five real ones — and a duel that
     /// ends on its tick cap with two bots standing in their own spawns is the same
@@ -448,7 +446,7 @@ public sealed class DuelEnvTests
     /// timer.
     /// </para>
     /// <para>
-    /// ⚠️ <b><c>gg_debug</c> and sampled spawns on purpose.</b> On a CTF or KotH
+    /// <b><c>gg_debug</c> and sampled spawns on purpose.</b> On a CTF or KotH
     /// map both spawns sit behind their own team gates, so neither bot can route
     /// to the other and nobody ever fires — correct simulation, useless duel. The
     /// maps that work are recorded in <c>docs/ENV.md</c>.
@@ -480,11 +478,11 @@ public sealed class DuelEnvTests
             }
         }
 
-        // ⚠️ Somebody DIED. Not "the episode ended".
+        // Somebody DIED. Not "the episode ended".
         Assert.Equal(Termination.Death, env.Termination);
         Assert.True(damage > 0, "two scripted bots fought to a death and dealt no damage");
 
-        // ⚠️ The second property gg2-rl asked for: what the bot chose comes back.
+        // The second property gg2-rl asked for: what the bot chose comes back.
         // Zero here is the silent failure — a driver that ran the bot correctly
         // and reported EnvAction.Idle for every step would pass every other
         // assertion in this test.
@@ -493,7 +491,7 @@ public sealed class DuelEnvTests
     }
 
     /// <summary>
-    /// ⚠️ A scripted driver is refused without a nav graph rather than downgraded.
+    /// A scripted driver is refused without a nav graph rather than downgraded.
     /// </summary>
     /// <remarks>
     /// <c>ScriptedBot</c> takes a null graph happily and then has no follower at
@@ -520,7 +518,7 @@ public sealed class DuelEnvTests
     }
 
     /// <summary>
-    /// ⚠️ A snapshot is refused while a bot drives a slot.
+    /// A snapshot is refused while a bot drives a slot.
     /// </summary>
     /// <remarks>
     /// <b>The honest edge of "the bytes ARE the state".</b> That claim is true of
@@ -530,7 +528,7 @@ public sealed class DuelEnvTests
     /// alone would resume with an opponent mid-way through a plan for a world that
     /// no longer exists, and it would do it silently.
     /// <para>
-    /// ⚠️ <b>The control matters more than the refusal.</b> Both slots
+    /// <b>The control matters more than the refusal.</b> Both slots
     /// client-driven still snapshots, so this is a statement about bots rather
     /// than a snapshot path that quietly stopped working.
     /// </para>
@@ -553,25 +551,17 @@ public sealed class DuelEnvTests
     }
 
     /// <summary>
-    /// ⚠️ Hunting a target that cannot be reached must not search every decision.
+    /// Hunting a target that cannot be reached must not search every decision.
     /// </summary>
     /// <remarks>
-    /// <b>Kept from a version of this that nearly shipped.</b> The env used to
-    /// re-point a scripted opponent at the other agent itself, because a duel had
-    /// no objective layer to do it — and <c>PathFollower.SetGoal</c> clears both
-    /// <c>ReplanAt</c> and <c>PlanFailUntil</c>, so calling it unconditionally
-    /// defeated the unreachable-goal throttle completely: a full A* per bot per
-    /// decision, for ever. <b>Measured at 55 searches in 60 decisions.</b>
-    /// <para>
-    /// That hand-rolled chase is gone — <c>BotObjective</c>'s deathmatch branch
-    /// does it now, throttled on the RESOLVED node by
-    /// <c>BOT_GOAL_RETARGET_DIST</c> — but the gate is worth more than the code
-    /// that prompted it. ⚠️ <b>
-    /// <c>PathFollowerFixtureTests.AnUnreachableGoalIsSearchedForOnTheTimerAndNotEveryTick</c>
-    /// gates the throttle and could not see it</b>, because it does not know about
-    /// this caller. <b>A throttle is only as good as every path that reaches
-    /// it</b>, and the objective layer is now one of those paths.
-    /// </para>
+    /// <c>PathFollower.SetGoal</c> clears both <c>ReplanAt</c> and
+    /// <c>PlanFailUntil</c>, so calling it unconditionally on every decision
+    /// defeats the unreachable-goal throttle completely: a full A* per bot per
+    /// decision, for ever. <c>BotObjective</c>'s deathmatch branch sets the goal
+    /// instead, throttled on the RESOLVED node by <c>BOT_GOAL_RETARGET_DIST</c> —
+    /// but <c>PathFollowerFixtureTests</c>' throttle gate does not see this
+    /// caller, so this test gates it here too: <b>a throttle is only as good as
+    /// every path that reaches it</b>.
     /// <para>
     /// <c>ctf_2dfort</c> because it is genuinely unreachable and not merely far:
     /// both sampled spawns sit behind their own team gates, so A* correctly
@@ -593,7 +583,7 @@ public sealed class DuelEnvTests
         Assert.False(bot.Path.HasPath, "the opponent turned out to be reachable; this map no longer tests the throttle");
         Assert.True(bot.Path.HasGoal, "the deathmatch goal never set anything at all, so nothing here was tested");
 
-        // ⚠️ The bound is the throttle's own, not a round number: BOT_REPLAN_TICKS
+        // The bound is the throttle's own, not a round number: BOT_REPLAN_TICKS
         // apart over the episode's ticks, plus slack for the stagger and the first
         // plan. Unthrottled is one per decision — 200 — so this bites hard.
         var ticks = 200 * 4;
@@ -606,34 +596,25 @@ public sealed class DuelEnvTests
     }
 
     /// <summary>
-    /// ✅ A scripted opponent hunts down and kills an agent that never moves.
+    /// A scripted opponent hunts down and kills an agent that never moves.
     /// </summary>
     /// <remarks>
-    /// <b>The case the env's own hand-rolled chase could not do</b>, and the
-    /// reason it was replaced by <c>BotObjective</c>. Chasing the enemy's exact
-    /// position walked a soldier to point blank — inside its own splash-safe band,
-    /// where <c>BotClassKeys</c> correctly refuses to fire — and left it there:
-    /// <b>250 decisions of walking, arrival 59px away against a band of 110, zero
-    /// shots and zero damage</b>. The objective layer stands at a <em>spot</em>
-    /// anchored on the enemy at the class's own band instead, which is a real
-    /// walkable node it can shoot from.
+    /// Chasing the enemy's exact position walks a soldier to point blank —
+    /// inside its own splash-safe band, where <c>BotClassKeys</c> correctly
+    /// refuses to fire — and leaves it there with zero shots and zero damage.
+    /// The objective layer instead stands at a <em>spot</em> anchored on the
+    /// enemy at the class's own band, a real walkable node it can shoot from.
     /// <para>
-    /// <b>Measured over 8 seeds, sampled spawns, 250-decision cap:</b>
-    /// <c>arena_montane</c> went from 0 duels ending in a death to <b>8 of 8</b>,
-    /// and <c>tdm_mantic</c> from 0 to 5 of 8.
+    /// <b>An idle opponent, not a scripted one, and that is the point.</b> Two
+    /// scripted bots find each other because both are walking; a stationary
+    /// target separates "the opponent moves" from "the opponent hunts", and is
+    /// also what an untrained policy looks like on its first episodes.
     /// </para>
     /// <para>
-    /// ⚠️ <b>An idle opponent, not a scripted one, and that is the point.</b> Two
-    /// scripted bots find each other because both are walking; a stationary target
-    /// is the case that separates "the opponent moves" from "the opponent hunts",
-    /// and it is also what an untrained policy looks like on its first episodes.
-    /// </para>
-    /// <para>
-    /// ⚠️ <c>arena_montane</c> rather than <c>gg_debug</c>: gg_debug's two spawn
-    /// points are <b>59px apart</b>, already inside a soldier's band, and a bot
-    /// that starts there does not leave — 41px in 250 decisions. That is an open
-    /// question recorded in <c>docs/TRAPS-BOTS.md</c>, and it is not what this
-    /// test is about.
+    /// <c>arena_montane</c> rather than <c>gg_debug</c>: gg_debug's two spawn
+    /// points are 59px apart, already inside a soldier's band, so a bot that
+    /// starts there does not need to leave. That gap is recorded in
+    /// <c>docs/TRAPS-BOTS.md</c> and is not what this test is about.
     /// </para>
     /// </remarks>
     [Fact]
@@ -653,9 +634,9 @@ public sealed class DuelEnvTests
                 deaths++;
         }
 
-        // ⚠️ Not 8 of 8, though that is what it measures: an exact pin on eight
-        // stochastic-looking episodes is a re-record every time a spawn moves. The
-        // number that matters is that it is not ZERO, which is what it was.
+        // An exact pin on eight stochastic-looking episodes would be a
+        // re-record every time a spawn moves; the bound just needs to be well
+        // above zero.
         Assert.True(
             deaths >= 5,
             $"a scripted opponent killed a stationary agent in only {deaths} of 8 duels; before the "
@@ -664,7 +645,7 @@ public sealed class DuelEnvTests
 
     /// <summary>A driver or tier outside the table is refused, not clamped.</summary>
     /// <remarks>
-    /// ⚠️ Silently giving an out-of-range tier the top one would make an
+    /// Silently giving an out-of-range tier the top one would make an
     /// experiment report a matchup that never happened, which is worse than a
     /// crash because it is publishable.
     /// </remarks>
@@ -679,7 +660,7 @@ public sealed class DuelEnvTests
         Assert.Throws<ArgumentOutOfRangeException>(
             () => env.Reset(Spec() with { BlueDriver = EnvDriver.Scripted, BlueTier = 6 }, seed: 1));
 
-        // ⚠️ The control: a tier is only checked for the driver that uses one, so
+        // The control: a tier is only checked for the driver that uses one, so
         // a leftover tier on a client side is not an error.
         env.Reset(Spec() with { RedTier = 6 }, seed: 1);
     }
@@ -688,7 +669,7 @@ public sealed class DuelEnvTests
     /// A bot-driven duel is a pure function of its seed.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b><c>ScriptedBot.Random</c> is the bot's own stream and is NOT
+    /// <b><c>ScriptedBot.Random</c> is the bot's own stream and is NOT
     /// <c>WorldState.Random</c></b> — deliberately, because the match's stream is
     /// observable simulation and a bot drawing from it would make its position
     /// depend on how many bots were thinking. So it has to be seeded from

@@ -12,7 +12,7 @@ namespace Gg2.Bots;
 /// </para>
 /// <list type="bullet">
 /// <item>
-/// ⚠️ <b>Every match owns everything mutable it touches.</b> A
+/// <b>Every match owns everything mutable it touches.</b> A
 /// <see cref="HeadlessMatch"/> builds its own <c>WorldState</c>, its own
 /// <c>CollisionWorld</c>, its own <c>ScriptedBot</c>s and — through them — its
 /// own <c>PathFollower</c> and its own <c>NavSearch</c>. <b><c>NavSearch</c> is
@@ -30,7 +30,7 @@ namespace Gg2.Bots;
 /// </item>
 /// </list>
 /// <para>
-/// ⚠️ <b>The one thing matches DO share is the loaded map</b>, and it is safe
+/// <b>The one thing matches DO share is the loaded map</b>, and it is safe
 /// only because it is immutable after load: <c>LevelMap</c> and its walkmask,
 /// and the <c>NavGraph</c>, are read-only. The <c>CollisionWorld</c> is
 /// <em>not</em> shared, because <c>SetCaptureZones</c> writes to it.
@@ -43,7 +43,7 @@ public static class MatchRunner
     /// <paramref name="options"/>'s seed and their own index.
     /// </summary>
     /// <param name="threads">
-    /// How many at once. 1 is sequential. ⚠️ The answers must not depend on
+    /// How many at once. 1 is sequential. The answers must not depend on
     /// this — <see cref="Run"/> is what a test varies to prove it.
     /// </param>
     public static MatchResult[] Run(
@@ -55,7 +55,7 @@ public static class MatchRunner
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(count);
 
-        // ⚠️ Loaded ONCE for the batch. A LevelMap and a NavGraph are immutable
+        // Loaded ONCE for the batch. A LevelMap and a NavGraph are immutable
         // after load, so sharing them saves a PNG decode and a cache read per
         // match; the CollisionWorld is not shared, because SetCaptureZones
         // writes to it.
@@ -93,7 +93,7 @@ public static class MatchRunner
             return results;
         }
 
-        // ⚠️ Written to results[i], never appended. An appending runner gives
+        // Written to results[i], never appended. An appending runner gives
         // the right multiset in the wrong order, which is exactly the kind of
         // difference that makes "the same however many threads" true of a
         // summary statistic and false of the data behind it.
@@ -110,7 +110,7 @@ public static class MatchRunner
     /// Builds and plays match <paramref name="index"/> of a batch.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The per-match seed mixes the index in rather than adding it.</b>
+    /// <b>The per-match seed mixes the index in rather than adding it.</b>
     /// <c>seed + index</c> makes batch <c>{seed: 1, count: 100}</c> and batch
     /// <c>{seed: 2, count: 100}</c> overlap in 99 of their 100 matches, so two
     /// "independent" batches are almost the same experiment. Multiplying by an
@@ -130,7 +130,7 @@ public static class MatchRunner
     /// Win rate over a batch, which is what a bot change is measured by.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Draws and exhausted matches are reported, not folded away.</b> A
+    /// <b>Draws and exhausted matches are reported, not folded away.</b> A
     /// change that makes bots worse at capturing shows up first as more
     /// exhausted matches, and a summary that only counted red-versus-blue would
     /// hide it — the win rate would drift for a reason nobody could see.
@@ -155,21 +155,4 @@ public static class MatchRunner
 
         return summary with { Matches = results.Length };
     }
-}
-
-/// <summary>What a batch of matches came to.</summary>
-public readonly record struct MatchSummary(
-    int Matches,
-    int RedWins,
-    int BlueWins,
-    int Draws,
-    int Exhausted,
-    long TotalTicks)
-{
-    /// <summary>Ticks of match played per match, averaged.</summary>
-    public double MeanTicks => Matches == 0 ? 0 : (double)TotalTicks / Matches;
-
-    public override string ToString() =>
-        $"{Matches} matches: red {RedWins}, blue {BlueWins}, drawn {Draws}, "
-        + $"unfinished {Exhausted}, mean {MeanTicks:0} ticks";
 }

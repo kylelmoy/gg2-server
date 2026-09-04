@@ -109,15 +109,15 @@ public readonly record struct IntelRecord(byte Id, IntelEvent Event);
 /// nothing in one names a killer — so a port that destroyed the wrong sentry, or
 /// none, or credited the wrong player, replays a recording without a murmur.
 /// <para>
-/// ⚠️ <b>And a sentry contributes nothing at all to an <c>INPUTSTATE</c>-tier
-/// update, not even its hp</b> (docs/PROTOCOL.md, "Per sentry"), which is the
-/// bug that shipped for six phases. That makes the message the only per-tick
-/// evidence a recording carries about a sentry's fate.
+/// <b>And a sentry contributes nothing at all to an <c>INPUTSTATE</c>-tier
+/// update, not even its hp</b> (docs/PROTOCOL.md, "Per sentry"). That makes the
+/// message the only per-tick evidence a recording carries about a sentry's
+/// fate.
 /// </para>
 /// <para>
 /// The assistant is the <b>killer's healer</b> rather than a second damage
 /// dealer — a sentry has none to demote — and <see cref="Cause"/> is 0 for the
-/// Begin Step self-destruct. ⚠️ An owner detonating their own sentry broadcasts
+/// Begin Step self-destruct. An owner detonating their own sentry broadcasts
 /// <em>nothing</em>, so no record is produced by either side for that.
 /// </para>
 /// </remarks>
@@ -181,7 +181,7 @@ public interface ITraceSimulation
     /// falls back to <see cref="SpawnCharacter"/>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Where a character is created is observable, and
+    /// <b>Where a character is created is observable, and
     /// <see cref="SpawnCharacter"/> gets it wrong by one stage.</b> The
     /// reference creates one from <c>player.alarm[5]</c>
     /// (<c>Scripts/Spawning/PlayerSpawn.gml</c>), and the alarm stage runs
@@ -226,7 +226,7 @@ public interface ITraceSimulation
     /// A player left: their slot goes, and every slot above it moves down one.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Not <see cref="ClearCharacter"/>.</b> A roster index is positional,
+    /// <b>Not <see cref="ClearCharacter"/>.</b> A roster index is positional,
     /// so a departure <em>renumbers</em> everybody above it — CLAUDE.md, "Roster
     /// indices are positional and shift on PLAYER_LEAVE". The server's own
     /// state updates are already compacted by the time they reach a recording,
@@ -279,13 +279,13 @@ public interface ITraceSimulation
     /// A <c>DROP_INTEL</c>: the carrier puts the briefcase down where they stand.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A client command, like <c>BUILD_SENTRY</c> and unlike everything
+    /// <b>A client command, like <c>BUILD_SENTRY</c> and unlike everything
     /// else about the objective.</b> <c>processClientCommands.gml:221-229</c>
     /// handles it — a replay cannot derive it, because nothing in an
     /// <c>INPUTSTATE</c> says the player pressed drop, so it has to be injected
     /// the way a spawn is.
     /// <para>
-    /// ⚠️ <b>Not to be confused with the drop a death causes</b>, which
+    /// <b>Not to be confused with the drop a death causes</b>, which
     /// broadcasts nothing at all: <c>sendEventDropIntel.gml</c>'s own docstring
     /// says the event is skipped on death "to avoid issues with order of
     /// execution", and the client infers it from the <c>PLAYER_DEATH</c> it
@@ -302,7 +302,7 @@ public interface ITraceSimulation
     /// A <c>TOGGLE_ZOOM</c>: this slot's sniper raised or lowered the scope.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The reference has exactly three client commands — zoom, build and
+    /// <b>The reference has exactly three client commands — zoom, build and
     /// eat</b> (<c>Scripts/Bots/botServerActions.gml</c>'s own wording), and all
     /// three are invisible to an <c>INPUTSTATE</c>: none of them is a key bit, so
     /// a replay can only learn about them from the broadcast the server makes
@@ -312,7 +312,7 @@ public interface ITraceSimulation
     /// <c>GameServerBeginStep</c>, ahead of <c>serializeState</c>, so the
     /// message is in its OWN tick's block.
     /// <para>
-    /// ⚠️ <b>Zoom is physics, not a HUD flag.</b> <c>toggleZoom.gml</c> writes
+    /// <b>Zoom is physics, not a HUD flag.</b> <c>toggleZoom.gml</c> writes
     /// <c>runPower</c> (0.6) and <c>jumpStrength</c> (6.3), so a scoped sniper
     /// accelerates and jumps differently — an unapplied zoom is a trajectory
     /// divergence, not a cosmetic one.
@@ -331,7 +331,7 @@ public interface ITraceSimulation
     /// <see cref="ToggleZoom"/> — <c>serverEatSandvich.gml</c> broadcasts at the
     /// moment it accepts, inside <c>processClientCommands.gml:232</c>.
     /// <para>
-    /// ⚠️ <b>Also physics.</b> The eat freezes the character's acceleration and
+    /// <b>Also physics.</b> The eat freezes the character's acceleration and
     /// its facing for 128 ticks and heals 1.6 hp a tick
     /// (<c>Character.events/End Step.xml:83-96</c>), so an unapplied eat drifts
     /// position, facing and hp at once.
@@ -347,7 +347,7 @@ public interface ITraceSimulation
     /// and left it as this class.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Not a client command, and injected for a different reason:</b> the
+    /// <b>Not a client command, and injected for a different reason:</b> the
     /// server decided this on its own out of
     /// <c>Scripts/GameServer/ServerBalanceTeams.gml</c>, and the only trace of
     /// the decision on the wire is this message. The team it moved the player to
@@ -355,7 +355,7 @@ public interface ITraceSimulation
     /// — so the flip is red-to-blue or blue-to-red from whatever the replay
     /// already believes.
     /// <para>
-    /// ⚠️ <b>The character dies silently.</b> <c>ServerBalanceTeams</c> calls
+    /// <b>The character dies silently.</b> <c>ServerBalanceTeams</c> calls
     /// <c>instance_destroy()</c> on it and broadcasts no <c>PLAYER_DEATH</c> at
     /// all — the same shape as the intel drop a death performs. A replay that
     /// keeps the character alive keeps it on the wrong team, and anything
@@ -364,7 +364,7 @@ public interface ITraceSimulation
     /// injection was found by.
     /// </para>
     /// <para>
-    /// ⚠️ <b>The notice is not a switch.</b> Stage 1 broadcasts
+    /// <b>The notice is not a switch.</b> Stage 1 broadcasts
     /// <c>BALANCE 255</c> to announce the countdown and moves nobody; only the
     /// two-byte stage-2 message is this.
     /// </para>
@@ -469,7 +469,7 @@ public interface ITraceSimulation
     /// False when it has no point at that index.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>State rather than a message, so unlike <see cref="DeathsLastTick"/>
+    /// <b>State rather than a message, so unlike <see cref="DeathsLastTick"/>
     /// this is compared on every position-bearing tick.</b> A point's index is
     /// its load order, which <c>ControlPoints.Place</c> fixes once — the same
     /// order the wire uses, because the block carries no identifier of its own.
@@ -480,7 +480,7 @@ public interface ITraceSimulation
     /// Anchors the King of the Hill pregame timer, in ticks.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>An input, unlike everything else about a control point</b>, and for
+    /// <b>An input, unlike everything else about a control point</b>, and for
     /// the same reason a <c>PLAYER_SPAWN</c>'s position is: a replay cannot
     /// derive it. The timer starts when the server restarts the room, and a
     /// recording's only landmark is the <c>CHANGE_MAP</c> that announced the
@@ -499,13 +499,13 @@ public interface ITraceSimulation
     /// configured it.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Injected rather than derived, for the same reason a
+    /// <b>Injected rather than derived, for the same reason a
     /// <c>PLAYER_SPAWN</c>'s position is</b>: it is server configuration
     /// (<c>ServerOptions.TdmInvulnerabilitySeconds</c>) that the port has no way
     /// to know and the server broadcasts on its <c>FULL_UPDATE</c>. See
     /// <see cref="TraceTick.TdmInvulnerability"/>.
     /// <para>
-    /// ⚠️ <b>Leaving it at zero is not neutral — it is a port that damages
+    /// <b>Leaving it at zero is not neutral — it is a port that damages
     /// people the reference could not.</b> Measured on
     /// <c>reference-gg_debug-closedtdm.trace</c>: slot 4 respawns at t478, the
     /// reference's blast at t480 does nothing to it, and the port took eleven hp
@@ -546,8 +546,7 @@ public sealed class EmptySimulation : ITraceSimulation
 
     /// <remarks>
     /// Always false: this stand-in has no map, so it has no spawn points to
-    /// resolve against and the replayer anchors from the wire instead. That is
-    /// the phase-2 behaviour, kept as it was.
+    /// resolve against and the replayer anchors from the wire instead.
     /// </remarks>
     public bool SpawnCharacter(int slot, int spawnpointId, int group) => false;
 

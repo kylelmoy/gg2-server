@@ -10,16 +10,15 @@ namespace Gg2.Tests;
 /// <c>botPopulationUpdate</c>: a server that fills itself with bots.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>The assertions are made from the server's own roster and from the
+/// <b>The assertions are made from the server's own roster and from the
 /// broadcast, not from the population service.</b> The claim is that a bot the
 /// manager added is a player like any other — it holds a slot, it has a team and a
 /// class, it spawns, and every client is told — and a test that asked the service
 /// what it thought it had done would pass with none of that true.
 /// <para>
-/// ⚠️ <b>No fixture can gate any of this and none ever will.</b> No recording in
-/// this project contains a bot, and the reference's own population manager runs in
-/// the same event the socket path does, so it is invisible to a trace by
-/// construction.
+/// <b>No fixture can gate any of this.</b> No recording in this project contains a
+/// bot, and the reference's own population manager runs in the same event the
+/// socket path does, so it is invisible to a trace by construction.
 /// </para>
 /// </remarks>
 public sealed class BotPopulationTests(ITestOutputHelper output)
@@ -47,10 +46,10 @@ public sealed class BotPopulationTests(ITestOutputHelper output)
     /// The target is a fill, and it is zero below the human floor.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>It is a <em>fill</em> target, not a bot count.</b> A server filling to
+    /// <b>It is a <em>fill</em> target, not a bot count.</b> A server filling to
     /// 8 with 3 humans on it runs 5 bots and drops one every time somebody joins.
     /// <para>
-    /// ⚠️ <b>And below <c>MinHumans</c> it is zero rather than the fill</b>, which
+    /// <b>And below <c>MinHumans</c> it is zero rather than the fill</b>, which
     /// is the first test rather than a clamp on the last: an empty server running
     /// eight bots against each other looks full in the lobby list and is not.
     /// </para>
@@ -66,11 +65,11 @@ public sealed class BotPopulationTests(ITestOutputHelper output)
         Assert.Equal(0, BotPopulation.Target(8, in options));
         Assert.Equal(0, BotPopulation.Target(20, in options));
 
-        // ⚠️ The ceiling is on top of the fill, not instead of it.
+        // The ceiling is on top of the fill, not instead of it.
         var capped = options with { MaxBots = 2 };
         Assert.Equal(2, BotPopulation.Target(1, in capped));
 
-        // ⚠️ And a floor of zero really does mean "fill an empty server", which is
+        // And a floor of zero really does mean "fill an empty server", which is
         // what a dedicated bot server wants. The control for the MinHumans branch:
         // the same call with a floor of 1 answers 0.
         var open = options with { MinHumans = 0 };
@@ -84,9 +83,9 @@ public sealed class BotPopulationTests(ITestOutputHelper output)
     /// </summary>
     /// <remarks>
     /// Quote is out because it is not part of the normal roster — the draw is
-    /// <c>irandom(8)</c>, nine classes, stopping short of it. ⚠️ The spy is out by
-    /// request after playtesting, and not because the spy's own code is broken:
-    /// almost everything it does is invisible to the rest of the bot model, so a
+    /// <c>irandom(8)</c>, nine classes, stopping short of it. The spy is excluded
+    /// deliberately, not because the spy's own code is broken: almost everything it
+    /// does is invisible to the rest of the bot model, so a
     /// spy doing it badly is indistinguishable from a bot that is broken and makes
     /// every other behaviour harder to judge.
     /// </remarks>
@@ -102,7 +101,7 @@ public sealed class BotPopulationTests(ITestOutputHelper output)
         Assert.DoesNotContain(PlayerClass.Spy, seen);
         Assert.DoesNotContain(PlayerClass.Quote, seen);
 
-        // ⚠️ And it really does reach every other class — a rejection loop with the
+        // And it really does reach every other class — a rejection loop with the
         // wrong bound would silently narrow the roster instead of excluding one.
         Assert.Equal(8, seen.Count);
     }
@@ -111,7 +110,7 @@ public sealed class BotPopulationTests(ITestOutputHelper output)
     /// The team picker takes the smaller team and tosses a coin on a tie.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The tie has to be random rather than a fixed side, or the first two bots
+    /// The tie has to be random rather than a fixed side, or the first two bots
     /// on an empty server both land on red and the balance never recovers — every
     /// later pick sees blue smaller and feeds it, so the teams alternate around a
     /// permanent offset of one.
@@ -142,18 +141,13 @@ public sealed class BotPopulationTests(ITestOutputHelper output)
     /// A defaulted options value is the reference's defaults, not a zeroed struct.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A record struct's primary-constructor defaults do NOT apply to its
+    /// <b>A record struct's primary-constructor defaults do NOT apply to its
     /// parameterless form.</b> <c>new BotPopulationOptions()</c> resolves to the
     /// implicit zeroing constructor, so a "defaulted" value has a fill target of 0,
     /// a difficulty of 0 and a <b>null</b> name prefix — and every one of those is
-    /// silent.
-    /// <para>
-    /// Measured, by running the thing: a server started with <c>--bots 12</c> named
-    /// its bots "1".."12" instead of "[BOT] 1".."[BOT] 12", because the flag handler
-    /// built its options with <c>with</c> from <c>ServerOptions.Bots</c>, which was
-    /// initialised with <c>new()</c>. Nothing in the suite noticed, because every
-    /// test that cared constructed its options explicitly.
-    /// </para>
+    /// silent. A server built from that zeroed form (e.g. via <c>with</c> from an
+    /// uninitialised <c>ServerOptions.Bots</c>) names its bots "1".."12" instead of
+    /// "[BOT] 1".."[BOT] 12" with no error.
     /// <para>
     /// The same shape as <c>CharacterState.Fresh</c> and <c>PlayerState.Fresh</c>:
     /// in this codebase a zeroed value type is routinely not a valid one.
@@ -168,13 +162,13 @@ public sealed class BotPopulationTests(ITestOutputHelper output)
         Assert.Equal(8, options.FillToPlayers);
         Assert.Equal(8, options.MaxBots);
         Assert.Equal(1, options.MinHumans);
-        // ⚠️ 5, the TOP tier, and not the reference's 3 — changed 2026-09-02 by
-        // request. `BotDifficultyReachesTheBot` is the gate that it survives the
-        // trip to an actual bot; this one only pins the record.
+        // 5, the TOP tier, not the reference's 3. `BotDifficultyReachesTheBot` is
+        // the gate that it survives the trip to an actual bot; this one only pins
+        // the record.
         Assert.Equal(5, options.Difficulty);
         Assert.Equal("[BOT] ", options.NamePrefix);
 
-        // ⚠️ The control, and the whole reason this test exists: the zeroed form is
+        // The control, and the whole reason this test exists: the zeroed form is
         // reachable and is NOT the same thing. If these two ever agree, the factory
         // has stopped doing anything and the trap is back.
         var zeroed = default(BotPopulationOptions);
@@ -188,7 +182,7 @@ public sealed class BotPopulationTests(ITestOutputHelper output)
     /// A bot the server added is named with the configured prefix.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The end of the same story: the prefix is the only part of the config a
+    /// The prefix is the only part of the config a
     /// human sees in the scoreboard, and a null one reads as a player called "7".
     /// </remarks>
     [Fact]
@@ -217,7 +211,7 @@ public sealed class BotPopulationTests(ITestOutputHelper output)
     /// the team, the class, the join broadcast, the spawn and a role for each — is
     /// the layer under test.
     /// <para>
-    /// ⚠️ <b>The control is the same server with <c>Enabled</c> false</b>, which
+    /// <b>The control is the same server with <c>Enabled</c> false</b>, which
     /// must stay empty. Without it every assertion here is also satisfied by a
     /// server that fills unconditionally, and "bots off" is the default.
     /// </para>
@@ -233,7 +227,7 @@ public sealed class BotPopulationTests(ITestOutputHelper output)
 
         Assert.Equal(8, slots.Count);
 
-        // ⚠️ Every bot is a real player: a team that is not spectator, a class, a
+        // Every bot is a real player: a team that is not spectator, a class, a
         // roster slot of its own, and a character in the world.
         var red = 0;
         var blue = 0;
@@ -258,7 +252,7 @@ public sealed class BotPopulationTests(ITestOutputHelper output)
             () => harness.Server.BotSlots.All(harness.Server.IsAlive),
             "every bot to spawn");
 
-        // ⚠️ Every bot got a policy with a role and an objective. A bot with no
+        // Every bot got a policy with a role and an objective. A bot with no
         // objective still walks nowhere, which is the failure this whole item is
         // about and which is invisible from the roster.
         var defenders = 0;
@@ -287,11 +281,9 @@ public sealed class BotPopulationTests(ITestOutputHelper output)
     /// A bot added by hand survives a server with the population manager off.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <c>botPopulationUpdate</c> opens with <c>if(!global.botsEnabled) exit;</c>,
+    /// <c>botPopulationUpdate</c> opens with <c>if(!global.botsEnabled) exit;</c>,
     /// which means <b>do nothing</b> and not "the target is zero". Reading it as a
-    /// target removes a hand-added bot on the very next tick — measured, it took
-    /// out seven of <c>InputSourceTests</c>' eight tests, every one of which adds a
-    /// bot to a default server.
+    /// target would remove a hand-added bot on the very next tick.
     /// </remarks>
     [Fact]
     public void APopulationManagerThatIsOffRemovesNothing()
@@ -311,8 +303,8 @@ public sealed class BotPopulationTests(ITestOutputHelper output)
     /// Bots make room for humans and come back when they leave.
     /// </summary>
     /// <remarks>
-    /// The fill target is over the total, so a joining human displaces a bot — and
-    /// ⚠️ <b>a dead bot is displaced first.</b> A body vanishing in the middle of a
+    /// The fill target is over the total, so a joining human displaces a bot, and
+    /// <b>a dead bot is displaced first.</b> A body vanishing in the middle of a
     /// fight is what the reference's removal timeout exists to avoid; taking the
     /// dead first gets the same outcome without a wall clock, which a fixed-tick
     /// server does not have.
@@ -332,7 +324,7 @@ public sealed class BotPopulationTests(ITestOutputHelper output)
         Assert.Equal(1, harness.Server.HumanCount);
         Assert.Equal(3, harness.Server.BotSlots.Count);
 
-        // ⚠️ And the survivors are still a coherent roster: every slot the server
+        // And the survivors are still a coherent roster: every slot the server
         // still calls a bot is driven by one, which is what RemoveSlot's compaction
         // would break if the population manager removed by a stale index.
         foreach (var slot in harness.Server.BotSlots)
@@ -343,7 +335,7 @@ public sealed class BotPopulationTests(ITestOutputHelper output)
     /// A map rotation hands every surviving bot the new graph.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A follower, a route and a blacklist are all node indices into ONE
+    /// <b>A follower, a route and a blacklist are all node indices into ONE
     /// graph.</b> A bot that crosses a rotation carrying them is holding numbers
     /// that now mean somewhere else — a route through a map that is no longer
     /// loaded, and a blacklist banning edges that were never flown. Its
@@ -357,13 +349,10 @@ public sealed class BotPopulationTests(ITestOutputHelper output)
     [Fact]
     public void ARotationHandsEveryBotTheNewGraph()
     {
-        // ⚠️ It starts on a TEAM DEATHMATCH map, and that is not incidental. TDM is
+        // It starts on a TEAM DEATHMATCH map, and that is not incidental. TDM is
         // the only mode with NO OVERTIME — every other one can hang past its clock,
-        // and CTF hangs precisely when a flag is off its base at 0:00. This test used
-        // to start on ctf_truefort and was flaky for exactly that reason: once the
-        // rocket jump landed, two bots reached the enemy flag often enough that some
-        // runs went into an unbounded overtime and the wait below gave up after
-        // 5,400 ticks with no "round over" in the log at all.
+        // and CTF hangs precisely when a flag is off its base at 0:00, which makes a
+        // CTF map here liable to an unbounded overtime and a flaky wait below.
         //
         // gg_debug is a TDM map (basicRoomSetup's chain ends there for a map with no
         // objective) and both it and ctf_truefort have a nav cache, which the
@@ -384,7 +373,7 @@ public sealed class BotPopulationTests(ITestOutputHelper output)
             .Select(s => (ScriptedBot)harness.Server.SourceOf(s))
             .ToArray();
 
-        // ⚠️ The OBJECTIVE instances, captured now. Holding the bots and reading
+        // The OBJECTIVE instances, captured now. Holding the bots and reading
         // `bot.Objective` after the rotation reads the new one — LINQ is lazy and
         // the property is live, so the first draft of this compared each new
         // objective against itself and passed for the wrong reason.
@@ -393,11 +382,11 @@ public sealed class BotPopulationTests(ITestOutputHelper output)
         foreach (var objective in before)
             Assert.NotNull(objective);
 
-        // ⚠️ There has to BE nav state to invalidate, or the assertions below pass
+        // There has to BE nav state to invalidate, or the assertions below pass
         // on a rotation that does nothing: a bot re-spawned on the new map has no
         // route yet either way. So wait for a real route and plant a real ban.
         //
-        // ⚠️ The goal is given BY HAND, because Team Deathmatch has no landmark and
+        // The goal is given BY HAND, because Team Deathmatch has no landmark and
         // the objective layer correctly declines to invent one — so on gg_debug a
         // bot plans nothing at all. That is the objective layer's own claim
         // (BotObjectiveTests.TeamDeathmatchGivesNoGoal) and not this test's; what is
@@ -424,7 +413,7 @@ public sealed class BotPopulationTests(ITestOutputHelper output)
 
         Assert.All(bots, b => Assert.NotEmpty(b.Path.Blacklist));
 
-        // ⚠️ Wait for the map to be OPEN, not for the round to announce it. The
+        // Wait for the map to be OPEN, not for the round to announce it. The
         // announcement — "round over ... koth_valley area 1 in ten seconds" — lands
         // 300 ticks before the load, so a log match exits the wait while the old
         // map is still running and every assertion below then reads the state this
@@ -440,11 +429,11 @@ public sealed class BotPopulationTests(ITestOutputHelper output)
         {
             var bot = (ScriptedBot)harness.Server.SourceOf(slot);
 
-            // ⚠️ A fresh objective, not the one built against ctf_truefort's graph.
+            // A fresh objective, not the one built against the previous map's graph.
             Assert.NotNull(bot.Objective);
             Assert.DoesNotContain(bot.Objective, before);
 
-            // ⚠️ And no route or blacklist carried over — those are node indices.
+            // And no route or blacklist carried over — those are node indices.
             Assert.False(bot.Path.HasPath, $"bot in slot {slot} kept a route across the rotation");
             Assert.Empty(bot.Path.Blacklist);
         }
@@ -463,13 +452,13 @@ public sealed class BotPopulationTests(ITestOutputHelper output)
     /// loose against that, because the point is an order of magnitude rather than a
     /// digit and a CI machine under load is not a benchmark.
     /// <para>
-    /// ⚠️ <b>What is measured is a real server</b> — the population manager, twelve
+    /// <b>What is measured is a real server</b> — the population manager, twelve
     /// policies each planning and fighting, the whole simulation, the state
     /// serialiser and the broadcast — and not a bot in a scenario world. The
     /// difference is most of the cost.
     /// </para>
     /// <para>
-    /// ⚠️ <b>The first ticks are not the steady state</b> and are dropped: the map
+    /// <b>The first ticks are not the steady state</b> and are dropped: the map
     /// load, the twelve joins and the first plan for each all land in them, and a
     /// mean over them measures start-up.
     /// </para>
@@ -511,15 +500,14 @@ public sealed class BotPopulationTests(ITestOutputHelper output)
     /// default that reaches it is tier 5.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>The gate the default change owed.</b> Pinning
-    /// <c>BotPopulationOptions.Difficulty</c> proves what the record says and
+    /// Pinning <c>BotPopulationOptions.Difficulty</c> proves what the record says and
     /// nothing about what the server does with it: a
     /// <c>BotSkill.ForTier(3)</c> hard-coded in <c>BotPopulationService</c> would
     /// leave every difficulty pin green and every bot on the wrong tier. This
     /// walks the whole path — options, population service, the bot's own
     /// <see cref="ScriptedBot.Skill"/>.
     /// <para>
-    /// ⚠️ <b>The second half is the control, and it is what makes the first half
+    /// <b>The second half is the control, and it is what makes the first half
     /// mean anything.</b> Asserting only "the default bot equals ForTier(5)"
     /// passes just as well if the plumbing ignores the option and every bot is
     /// tier 5 by accident. Tier 1 must produce a DIFFERENT skill through the same
@@ -555,7 +543,7 @@ public sealed class BotPopulationTests(ITestOutputHelper output)
             o.Map = Map;
             o.NavCacheDirectory = ReferenceTree.NavCacheDirectory;
 
-            // ⚠️ `with`, from Default rather than from a zeroed struct — see the
+            // `with`, from Default rather than from a zeroed struct — see the
             // factory's own remarks. MinHumans 0 because no client connects here.
             o.Bots = BotPopulationOptions.Default with
             {
@@ -571,7 +559,7 @@ public sealed class BotPopulationTests(ITestOutputHelper output)
 
         harness.Tick(2);
 
-        // ⚠️ A fill of 2 is TWO bots, not one: slot 0 is the reserved server
+        // A fill of 2 is TWO bots, not one: slot 0 is the reserved server
         // spectator and does not count towards the fill.
         var slots = harness.Server.BotSlots;
         Assert.Equal(2, slots.Count);

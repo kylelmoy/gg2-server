@@ -58,7 +58,7 @@ public static class Rounds
     public const int InvasionSetupTicks = 1800;
 
     /// <summary>
-    /// ⚠️ Attack/defend <b>ignores the configured time limit</b> and always
+    /// Attack/defend <b>ignores the configured time limit</b> and always
     /// runs three minutes: <c>timeLimit = 3*30*60</c>. Each capture then adds
     /// another 5,400 ticks, capped at 9,000.
     /// </summary>
@@ -120,7 +120,7 @@ public static class Rounds
 
         if (state.GameMode == GameMode.ControlPoints)
         {
-            // ⚠️ Attack/defend ignores the configured time limit entirely and
+            // Attack/defend ignores the configured time limit entirely and
             // always plays three minutes, plus three more per capture.
             if (state.AttackDefend)
             {
@@ -133,7 +133,7 @@ public static class Rounds
                 state.ControlPoints[i].CapTime =
                     ControlPoints.CapTimeFor(state.AttackDefend, state.ControlPointCount, i);
 
-                // ⚠️ `User Event 0` starts a point locked in Arena, KotH and
+                // `User Event 0` starts a point locked in Arena, KotH and
                 // DKotH and **unlocked** in the two control-point modes. It
                 // matters for the points the neighbour rules never write to: a
                 // neutral middle point is touched by neither branch, so it
@@ -155,7 +155,7 @@ public static class Rounds
         state.BlueTimer = KothHoldTicks;
         state.ControlPointUnlock = KothUnlockTicks;
 
-        // ⚠️ DKotH starts with each hill owned by its own team, which KotH does
+        // DKotH starts with each hill owned by its own team, which KotH does
         // not: `KothRedControlPoint.team = TEAM_RED; KothBlueControlPoint.team =
         // TEAM_BLUE;`. Without it both hills read neutral and the cross-lock —
         // which asks who owns the *other* one — never engages.
@@ -181,7 +181,7 @@ public static class Rounds
     /// that opens every gate in <c>charSetSolids</c> for the characters that
     /// move later in the same tick.
     /// <para>
-    /// ⚠️ <b>The server does not act on the decision until the next tick.</b>
+    /// <b>The server does not act on the decision until the next tick.</b>
     /// <c>GameServerBeginStep.gml:105</c> reads <c>global.winners</c> in the
     /// server's Begin Step, which is the first thing in a frame — so a round
     /// decided in tick N's Step is broadcast at the start of tick N+1, after
@@ -248,7 +248,7 @@ public static class Rounds
         if (!timeUp && !capsReached)
             return;
 
-        // ⚠️ Neither of the two `is capping` reads is about the *player* doing
+        // Neither of the two `is capping` reads is about the *player* doing
         // the capturing: `redIsCapping` is true when blue's briefcase is not
         // sitting on its own base — carried by anybody, or lying anywhere else.
         // It is "a capture is in progress", and it is what holds a drawn match
@@ -292,7 +292,7 @@ public static class Rounds
     /// <em>down per team</em> rather than for the round, and the winner is
     /// whoever runs their own timer out while holding the point.
     /// <para>
-    /// ⚠️ <b>Winning needs the point uncontested as well as held.</b>
+    /// <b>Winning needs the point uncontested as well as held.</b>
     /// <c>redTimer == 0 and team == TEAM_RED and capping == 0 and
     /// bluePresence == 0</c> — so a blue player standing on red's hill at 0:00
     /// stops red winning for as long as they survive, even though they are not
@@ -300,7 +300,7 @@ public static class Rounds
     /// whole endgame.
     /// </para>
     /// <para>
-    /// ⚠️ <b>The timers only run while the point is unlocked</b>, and the point
+    /// <b>The timers only run while the point is unlocked</b>, and the point
     /// is locked for the first 900 ticks. So a KotH round is thirty seconds of
     /// pregame and then at least three minutes.
     /// </para>
@@ -344,7 +344,7 @@ public static class Rounds
                 state.BlueTimer--;
         }
 
-        // ⚠️ `redTimer == 0`, exactly — not `<= 0`. The timer is only ever
+        // `redTimer == 0`, exactly — not `<= 0`. The timer is only ever
         // decremented from above zero, so the two agree; written as the
         // reference writes it.
         if (state.RedTimer == 0 && hill.Owned && hill.Team == Team.Red
@@ -362,7 +362,7 @@ public static class Rounds
         // The pregame unlock. `doEventUnlockCP` is `with ControlPoint locked =
         // 0` — every point at once, which in KotH is the one hill.
         //
-        // ⚠️ The `cpUnlock == 150` arm is an `else if`: five seconds before the
+        // The `cpUnlock == 150` arm is an `else if`: five seconds before the
         // hill opens, clients are owed a CAPS_UPDATE so their countdown is right
         // when it does. Both are inside `if (locked and !mapchanging)`, so a
         // round that ends during pregame never unlocks.
@@ -390,7 +390,7 @@ public static class Rounds
     /// </summary>
     /// <remarks>
     /// <c>ControlPointHUD</c> and <c>InvasionHUD</c> run the same five lines.
-    /// ⚠️ <b>The round clock is reset at 30, not at 0</b> — one second before
+    /// <b>The round clock is reset at 30, not at 0</b> — one second before
     /// the gates actually open, which is the siren. Everything above 30 in the
     /// reference is a countdown sound.
     /// </remarks>
@@ -414,14 +414,14 @@ public static class Rounds
     /// Attack/defend is won by red taking the <b>last</b> point, and by blue
     /// simply surviving the clock.
     /// <para>
-    /// ⚠️ <b>Overtime here is not CTF's.</b> It is recomputed from scratch every
+    /// <b>Overtime here is not CTF's.</b> It is recomputed from scratch every
     /// tick as "the clock is out <em>and</em> some point has a capture in
     /// progress", so it switches off again the moment the capture is reverted.
     /// CTF's is a latch. And it is what stops the clock ending a match while a
     /// point is being taken.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Attack/defend's clock is capped at 9,000 ticks</b> — five minutes —
+    /// <b>Attack/defend's clock is capped at 9,000 ticks</b> — five minutes —
     /// because each capture adds 5,400 to it
     /// (<c>ControlPoint.events/Step.xml:222</c>) and it would otherwise
     /// overflow the <c>uint</c> it is sent in. The reference credits the two
@@ -471,7 +471,7 @@ public static class Rounds
             return;
         }
 
-        // ⚠️ Both ends the same team — including both *neutral*, which the
+        // Both ends the same team — including both *neutral*, which the
         // reference guards against by testing for a real team afterwards rather
         // than by excluding it from the equality.
         if (first.Owned && last.Owned && first.Team == last.Team)
@@ -485,19 +485,18 @@ public static class Rounds
     /// defends the clock.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Not CTF's rules, and the port used to run it through them.</b>
-    /// Invasion is one-sided: only blue's briefcase can be taken (the red one is
+    /// <b>Not CTF's rules.</b> Invasion is one-sided: only blue's briefcase can be taken (the red one is
     /// scenery — see <c>IntelState.Grabbable</c>), red wins on the cap limit,
     /// and blue wins simply by running the clock out.
     /// <para>
-    /// ⚠️ <b>Blue's win has a let-off for a red team that is nearly there</b>:
+    /// <b>Blue's win has a let-off for a red team that is nearly there</b>:
     /// <c>timer &lt;= 0 and (!redIsCapping or global.redCaps+1 &lt; caplimit)</c>.
     /// So a capture in progress only holds the match open when it would be the
     /// <em>winning</em> capture; at 1 of 5 with the flag out, blue still wins on
     /// the whistle.
     /// </para>
     /// <para>
-    /// ⚠️ And <c>redIsCapping</c> is a different test from CTF's "away from
+    /// And <c>redIsCapping</c> is a different test from CTF's "away from
     /// base": it is <c>!instance_exists(IntelligenceBlue) or alarm[0] &gt; 0</c>
     /// — carried, or dropped with its return timer still running. A briefcase
     /// dropped with a dead timer does not count.
@@ -535,20 +534,20 @@ public static class Rounds
     /// and <see cref="WorldState.BlueCaps"/> — Team Deathmatch has no counter of
     /// its own. See <see cref="Deaths"/>.
     /// <para>
-    /// ⚠️ <b>The win condition is not in an <c>else</c>.</b> Unlike every other
+    /// <b>The win condition is not in an <c>else</c>.</b> Unlike every other
     /// mode, the decrement and the decision are the same statement sequence, so
     /// the tick a kill limit is reached is the tick the round ends — no waiting
     /// for the next one. The clock's own arm still has to reach zero first.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Reaching the kill limit does not mean you win.</b> The three-way
+    /// <b>Reaching the kill limit does not mean you win.</b> The three-way
     /// comparison below runs whatever triggered it, so a team that hits the
     /// limit by team-killing... cannot, because a team kill scores nothing. But
     /// a simultaneous double kill that puts both teams over on one tick is a
     /// <em>draw</em>, and so is the clock running out level.
     /// </para>
     /// <para>
-    /// ⚠️ <b><c>overtime</c> is dead here.</b> <c>Create.xml</c> sets it false
+    /// <b><c>overtime</c> is dead here.</b> <c>Create.xml</c> sets it false
     /// and nothing in the mode ever writes it again — the only gamemode with no
     /// overtime at all. A capture cannot be in progress, so there is nothing to
     /// hold a round open for.
@@ -589,7 +588,7 @@ public static class Rounds
     /// running out with both still standing, and it does it by comparing how
     /// badly damaged each one is.
     /// <para>
-    /// ⚠️ <b>The comparison is by <em>stage</em>, not by hit points.</b> Each
+    /// <b>The comparison is by <em>stage</em>, not by hit points.</b> Each
     /// generator is 3 above two thirds, 2 above one third and 1 below — the
     /// same three sprite ranges the Begin Step picks between — so a generator on
     /// 1,400 hp and one on 2,100 are tied, and whoever has done the most damage
@@ -597,7 +596,7 @@ public static class Rounds
     /// the simulation cares what is drawn.
     /// </para>
     /// <para>
-    /// ⚠️ <b>A generator hit in the last three seconds forces overtime</b>, and
+    /// <b>A generator hit in the last three seconds forces overtime</b>, and
     /// it is the generator of the team that is about to <em>win</em> whose
     /// alarm is read — <c>redStage &gt; blueStage &amp;&amp;
     /// GeneratorRed.alarm[0] &gt; -1</c>, red ahead and <b>red's</b> generator
@@ -637,7 +636,7 @@ public static class Rounds
         var redStage = DamageStage(state.RedGenerator);
         var blueStage = DamageStage(state.BlueGenerator);
 
-        // ⚠️ Each `exit`s, so overtime is a latch here as it is in CTF: nothing
+        // Each `exit`s, so overtime is a latch here as it is in CTF: nothing
         // in this method ever writes it back to false, and only a map change
         // clears it.
         var redUnderFire = state.RedGenerator.RegenerationAlarm > Timers.Inactive;
@@ -661,7 +660,7 @@ public static class Rounds
             return;
         }
 
-        // ⚠️ The winner is the team whose generator is in *better* shape, which
+        // The winner is the team whose generator is in *better* shape, which
         // reads backwards until you notice that `redStage` is red's own
         // generator: red wins by having taken less damage, not by having dealt
         // more.
@@ -696,19 +695,19 @@ public static class Rounds
     /// the <em>other</em> team's.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The timers are crossed, and that is the whole mode.</b>
+    /// <b>The timers are crossed, and that is the whole mode.</b>
     /// <c>redTimer</c> counts down while <b>KothBlueControlPoint</b> is red's —
     /// you win by holding the enemy's hill, not your own. Reading it as KotH
     /// with two points gets every condition in this method backwards.
     /// <para>
-    /// ⚠️ <b>The draw rule is a margin, not a tie.</b> When the idle timer runs
+    /// <b>The draw rule is a margin, not a tie.</b> When the idle timer runs
     /// out the round is a draw if the two clocks are within
     /// <c>30*30</c> ticks — thirty seconds — of each other, and otherwise goes
     /// to whichever is <em>lower</em>, because a lower clock means that team has
     /// held the enemy hill longer.
     /// </para>
     /// <para>
-    /// ⚠️ <b>The idle timer resets to full whenever either hill is locked</b>,
+    /// <b>The idle timer resets to full whenever either hill is locked</b>,
     /// which includes the whole pregame — so it only ever starts counting once
     /// both hills are in play and both are home. And it fires on
     /// <c>hostTimer &lt;= 0</c> where KotH uses <c>== 0</c>; the two agree
@@ -726,7 +725,7 @@ public static class Rounds
 
         if (state.TimeLimitMinutes > 0 && state.RoundTimer > 0)
         {
-            // ⚠️ The reference's comments call the last two clauses "blu
+            // The reference's comments call the last two clauses "blu
             // uncontested" and "red uncontested", but each checks the presence
             // of the hill's *own* team, not the enemy's. Together with the two
             // `capping == 0` clauses — which an enemy on a hill would break —
@@ -778,7 +777,7 @@ public static class Rounds
             Decide(ref state, Team.Blue);
         }
 
-        // ⚠️ Both hills, not either. And in practice this is never true on the
+        // Both hills, not either. And in practice this is never true on the
         // tick cpUnlock reaches zero: the points unlock themselves in their own
         // Step, which runs first — see ControlPoints.Relock. So DKotH sends the
         // five-second scoreboard update and never an UNLOCKCP.
@@ -831,7 +830,7 @@ public static class Rounds
     /// Ends the round with <paramref name="winner"/>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Public only so an operator or a plugin can end a round the way the
+    /// <b>Public only so an operator or a plugin can end a round the way the
     /// clock does</b> — <c>global.winners = ...</c> is what the reference's own
     /// <c>votenextround</c> plugin writes, and a server that ended a round by
     /// any other route would produce a sequence no client has ever been sent.
@@ -877,13 +876,10 @@ public static class Rounds
     /// </item>
     /// </list>
     /// <para>
-    /// ✅ <b><c>player.humiliated</c> IS modelled</b> —
+    /// <b><c>player.humiliated</c> IS modelled</b> —
     /// <see cref="PlayerState.Humiliated"/>, set by <see cref="Arena"/> and read
     /// by <see cref="CharacterPhysics"/> for the control penalty, the suppressed
-    /// attack, taunt, cloak and sandvich, and the withheld ammo refill. ⚠️ <b>This
-    /// paragraph said "not modelled" until 2026-09-03</b>, three phases after it
-    /// landed. Its reasoning — that only a drawing object sets it — was true of
-    /// the reference and never the whole story here.
+    /// attack, taunt, cloak and sandvich, and the withheld ammo refill.
     /// </para>
     /// </remarks>
     public static void BeginMapChange(ref WorldState state) => state.MapChanging = true;
@@ -900,7 +896,7 @@ public static class Rounds
     /// reset to spectator, and each is given <c>alarm[5] = 1</c> so it spawns in
     /// the same tick's alarm stage.
     /// <para>
-    /// ⚠️ <b>Only on area 1.</b> A multi-area map (Invasion) keeps its teams
+    /// <b>Only on area 1.</b> A multi-area map (Invasion) keeps its teams
     /// between areas, so <paramref name="firstArea"/> false leaves everybody on
     /// the team they had and merely respawns them.
     /// </para>

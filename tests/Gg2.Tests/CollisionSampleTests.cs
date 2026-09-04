@@ -256,12 +256,11 @@ public sealed class CollisionSampleTests
     /// Scales in the shipped maps include 0.3, 0.8, 1.7, 2, 3, 7.3 and 13, so
     /// the rounding is genuinely exercised.
     /// <para>
-    /// <b>Bullet walls are in it now.</b> They used to be held out: the sampler
-    /// enumerated only the objects <c>charSetSolids</c> names, and
-    /// <c>BulletWall</c> is in <c>gunSetSolids</c> instead, so the oracle had
-    /// nothing to say about it. Regenerated 2026-08-25 against the running game
-    /// with <c>BulletWall</c> listed and <c>arena_lumberyard</c> added, so the
-    /// comparison is now over every rectangle the port builds.
+    /// <b>Bullet walls are in it too.</b> <c>BulletWall</c> is in
+    /// <c>gunSetSolids</c> rather than the <c>charSetSolids</c> list the sampler
+    /// otherwise enumerates, so it is listed explicitly alongside
+    /// <c>arena_lumberyard</c>, and the comparison covers every rectangle the
+    /// port builds.
     /// </para>
     /// </remarks>
     [Theory]
@@ -271,16 +270,16 @@ public sealed class CollisionSampleTests
         var sample = SampleFor(name);
         var world = new CollisionWorld(LevelMap.FromPng(name, ReferenceTree.ReadMap(name)));
 
-        // ⚠️ SOLID rectangles only, and the exclusion is the oracle's rather than
+        // SOLID rectangles only, and the exclusion is the oracle's rather than
         // this test's. `tools/sample-collision.js` enumerates the objects
-        // `charSetSolids` names (plus BulletWall, added 2026-08-25), and
-        // `DropdownPlatform` is in neither list because it is never solid — you
-        // walk and jump straight through one in every direction. So the game was
-        // never asked for its bounding box, and comparing against it here would
-        // fail for a rectangle the oracle does not contain rather than for one
-        // the port gets wrong.
+        // `charSetSolids` names (plus BulletWall), and `DropdownPlatform` is in
+        // neither list because it is never solid — you walk and jump straight
+        // through one in every direction. So the game was never asked for its
+        // bounding box, and comparing against it here would fail for a
+        // rectangle the oracle does not contain rather than for one the port
+        // gets wrong.
         //
-        // ⚠️ Which means the dropdown platform's box is INFERRED, not measured:
+        // Which means the dropdown platform's box is INFERRED, not measured:
         // `DropdownPlatform.xml` names sprite44 and `sprite44.xml` puts its
         // origin at (0,0), and sprite44's 60x6 *is* measured because floors and
         // walls share it. `DropdownPlatformRectanglesComeFromTheEntityList`

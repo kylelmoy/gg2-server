@@ -73,7 +73,7 @@ public static class GameModes
     /// Everything a state update's shape depends on, beyond the roster.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Give it the map the server is actually serving</b> — that is, one
+    /// <b>Give it the map the server is actually serving</b> — that is, one
     /// already narrowed with <see cref="LevelMap.ForArea"/>. On a multi-area
     /// map the unnarrowed entity list holds every area's control points at
     /// once, and a shape built from it makes a reader expect more blocks than
@@ -99,7 +99,7 @@ public static class GameModes
     /// round.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Unlike every other count in a <see cref="WorldShape"/>, this one
+    /// Unlike every other count in a <see cref="WorldShape"/>, this one
     /// falls during a match: a destroyed generator stops being serialised. See
     /// <see cref="WorldShape.GeneratorCount"/>.
     /// </remarks>

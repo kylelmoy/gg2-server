@@ -11,7 +11,7 @@ namespace Gg2.Bots;
 /// Two questions, both asked with the character's own box at the position it
 /// would occupy: is there a wall in the way, and is there a floor under it.
 /// <para>
-/// ⚠️ <b>It exists for the engage hold's close-in step, which is the only place in
+/// <b>It exists for the engage hold's close-in step, which is the only place in
 /// the bot layer that presses a movement key no route validated.</b> Everything
 /// else that moves a bot horizontally is either following an edge the nav
 /// generator proved or backing off a single step inside its own blast radius; a
@@ -21,7 +21,7 @@ namespace Gg2.Bots;
 /// cannot climb out of and stays there until it dies.
 /// </para>
 /// <para>
-/// ⚠️ <b>The drop tolerance is deliberately short.</b> This is not "can the bot
+/// <b>The drop tolerance is deliberately short.</b> This is not "can the bot
 /// get there", which is <see cref="NavSearch"/>'s question and is answered against
 /// the graph; it is only "does the ground continue", so a step down to a lower
 /// ledge reads as safe and a step over a pit does not.
@@ -39,7 +39,7 @@ public static class BotStep
 
         var ahead = self.X + (dir * BotConstants.EngageStep);
 
-        // ⚠️ Obstacle ALONE — the reference asks `place_meeting(x, y, Obstacle)`
+        // Obstacle ALONE — the reference asks `place_meeting(x, y, Obstacle)`
         // rather than `place_free`, because in GM8 `place_free` reads the `solid`
         // flag and the game toggles that flag underneath itself (gunSetSolids
         // brackets every hitscan trace), so what it answers depends on where in

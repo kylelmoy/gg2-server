@@ -15,7 +15,7 @@ namespace Gg2.Tests;
 /// every bot on every decision tick during training and a whole-collection
 /// enumeration there costs more than the simulation it observes.
 /// <para>
-/// ⚠️ <b>None of this is observable simulation.</b> A bot's arithmetic never
+/// <b>None of this is observable simulation.</b> A bot's arithmetic never
 /// reaches the wire and no client re-derives it, so these use ordinary squared
 /// distances rather than <see cref="Gml"/>'s fuzzy comparisons. What they owe is
 /// determinism, which is why the tie-break below is asserted rather than left to
@@ -38,7 +38,7 @@ public sealed class WorldViewTests
             state.Players[slot].Team = characters[slot].Team;
             state.Players[slot].Class = PlayerClass.Scout;
 
-            // ⚠️ Fresh, never `new CharacterState()` — six of its fields name a
+            // Fresh, never `new CharacterState()` — six of its fields name a
             // roster slot and a zeroed one claims slot 0 last hurt it.
             var character = CharacterState.Fresh(PlayerClass.Scout, characters[slot].Team);
             character.X = characters[slot].X;

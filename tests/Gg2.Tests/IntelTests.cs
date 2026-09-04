@@ -221,7 +221,7 @@ public sealed class IntelTests
     /// gate — which is not solid to them.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <c>!place_meeting(x, y, TeamGate)</c> is a plain mask overlap and asks
+    /// <c>!place_meeting(x, y, TeamGate)</c> is a plain mask overlap and asks
     /// nothing about solidity, so the gate a red player walks straight through
     /// still refuses them the briefcase. That is what stops a defender reaching
     /// out of their own spawn door.
@@ -339,7 +339,7 @@ public sealed class IntelTests
     /// </summary>
     /// <remarks>
     /// <c>INTEL_MAX_TIMER/((3 + abs(min(hspeed, 7))/3.5)*30)</c>: a full charge
-    /// in three seconds at rest, five at speed 7 and above. ⚠️ The comment beside
+    /// in three seconds at rest, five at speed 7 and above. The comment beside
     /// it in the reference describes the rate the right way round, unlike the
     /// afterburn falloff's.
     /// </remarks>
@@ -439,7 +439,7 @@ public sealed class IntelTests
     /// A carrier who dies drops it, and no <c>DROP_INTEL</c> goes out.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <c>sendEventDropIntel</c> is not called from
+    /// <c>sendEventDropIntel</c> is not called from
     /// <c>Character.events/Destroy.xml</c>, on purpose: it would be a nested
     /// event inside the death and the client would process the death first and
     /// then error out dropping a flag for a character it had destroyed. This is
@@ -652,7 +652,7 @@ public sealed class IntelTests
     /// the enemy's carrier and nobody else — including that team's own carrier,
     /// who has nothing of theirs to take out.
     /// <para>
-    /// ⚠️ Built by hand rather than read off a map, because <b>no built-in map
+    /// Built by hand rather than read off a map, because <b>no built-in map
     /// places an intel gate</b> — checked across all 22 in <c>maps.json</c>,
     /// where the only gates are 46 red and 40 blue <em>team</em> gates. The
     /// entity type exists and <c>ColliderSprites</c> handles it, so a custom map

@@ -12,7 +12,7 @@ namespace Gg2.Tests;
 /// up on real geometry — which is a different question, and the one that catches
 /// an assumption about the graph rather than about A*.
 /// <para>
-/// ⚠️ These need the nav caches in <c>nav/</c>, gitignored here and not
+/// These need the nav caches in <c>nav/</c>, gitignored here and not
 /// shipped. See <see cref="ReferenceTree.RequireNavCache"/>.
 /// </para>
 /// </remarks>
@@ -34,7 +34,7 @@ public sealed class NavSearchFixtureTests
     /// Every shipped edge that lands on a gated node carries that gate itself.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The invariant that makes the search's edge-only gate test correct
+    /// <b>The invariant that makes the search's edge-only gate test correct
     /// rather than a bug.</b> <c>navFindPath.gml</c> tests
     /// <c>NAV_EDGE_GATE</c> and never the gate on the node an edge arrives at,
     /// on the grounds that "the generator stamps an edge that passes through a
@@ -42,7 +42,7 @@ public sealed class NavSearchFixtureTests
     /// about the <em>generator</em>, not about the search, and nothing in the
     /// game checks it.
     /// <para>
-    /// Measured 2026-08-27 across all 24 shipped graphs: <b>115,757 edges, 1,350
+    /// Measured across all 24 shipped graphs: <b>115,757 edges, 1,350
     /// of them stamped, 148 gated nodes, and zero edges landing on a gated node
     /// unstamped.</b> If a future generator stops stamping, this fires — and the
     /// symptom without it would be a bot routed into a gate it cannot pass,
@@ -96,7 +96,7 @@ public sealed class NavSearchFixtureTests
     /// search does not survive: an edge index off by one, a self-loop, a
     /// disconnected component that spins the pop guard.
     /// <para>
-    /// ⚠️ Every returned route is walked and checked edge by edge. A route is
+    /// Every returned route is walked and checked edge by edge. A route is
     /// only useful if a follower can actually take each hop, and a search that
     /// returned a plausible-looking list of node indices with no edge between two
     /// of them would pass every other assertion here.
@@ -174,7 +174,7 @@ public sealed class NavSearchFixtureTests
     /// <remarks>
     /// The property test builds a gate to prove the mechanism; this shows it
     /// bites on shipped geometry, which is the thing that would silently stop
-    /// being true if a map changed. ⚠️ <c>ctf_truefort</c> is the map whose blue
+    /// being true if a map changed. <c>ctf_truefort</c> is the map whose blue
     /// spawn exit hides a pit "whose only exit is behind a BLUE TEAM GATE", so a
     /// red bot or a blue carrier that falls in is stuck until something kills it.
     /// </remarks>
@@ -207,7 +207,7 @@ public sealed class NavSearchFixtureTests
     /// Carrying the intel shrinks what a bot can reach on a CTF map.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Your own team gate is open unless you are carrying intel out of
+    /// <b>Your own team gate is open unless you are carrying intel out of
     /// it</b>, which is why a CTF return leg is a different query from the
     /// outbound one — and why checking only the outbound leg hid a broken
     /// <c>ctf_conflict</c> behind a passing audit for two revisions. A carrier
@@ -258,7 +258,7 @@ public sealed class NavSearchFixtureTests
     /// This replaces the breadth-first reachability check
     /// <c>ScenarioDefinitionTests</c> had while there was no search: a BFS
     /// answers "is there any way at all", and a scenario needs the route the bot
-    /// will actually be handed. ⚠️ The two can disagree — a BFS ignores cost, so
+    /// will actually be handed. The two can disagree — a BFS ignores cost, so
     /// it cannot see a leg whose only route runs over an arc the asker's class
     /// cannot fly.
     /// <para>

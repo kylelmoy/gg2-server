@@ -10,21 +10,18 @@ namespace Gg2.Tests;
 /// The first recording in the project in which a pyro can airblast at all.
 /// </summary>
 /// <remarks>
-/// <b>Recorded 2026-08-27: three pyros against three soldiers on
-/// <c>ctf_truefort</c></b>, spawn-anchored by the map-reload recipe.
+/// <b>Three pyros against three soldiers on <c>ctf_truefort</c></b>,
+/// spawn-anchored by the map-reload recipe.
 /// <para>
-/// ⚠️ <b>The roster is the whole design.</b> The reflectable set is
+/// <b>The roster is the whole design.</b> The reflectable set is
 /// <c>Rocket</c>, <c>Flare</c> and <c>Mine</c>
 /// (<c>Flamethrower.events/User Event 2.xml</c>), so a pyro with nothing of
 /// those in front of it never presses the key. <c>closedsupport</c> has two
 /// pyros in it and contains <b>no rockets and no mines</b> — medic, pyro,
-/// engineer — so <em>its</em> pyros could not airblast however long it ran.
-/// That is why implementing the airblast moved none of the existing bounds, and
-/// docs/SIMULATION.md's "no fixture moved and none can" was a statement about
-/// the fixtures that existed rather than about the airblast.
+/// engineer — so <em>its</em> pyros cannot airblast however long it runs.
 /// </para>
 /// <para>
-/// ⚠️ <b>An unseeded Flamethrower does NOT cap a trajectory window, only an hp
+/// <b>An unseeded Flamethrower does NOT cap a trajectory window, only an hp
 /// one</b> — unlike the Minigun. <c>Projectiles.BurningHitCharacter</c> deals
 /// damage and calls no <c>motion_add</c> at all, so where the port's flames land
 /// cannot move anybody. The soldier's rockets are seeded, so every rocket in
@@ -98,7 +95,7 @@ public sealed class AirblastFixtureTests
         Assert.Contains(PlayerClass.Soldier, classes);
         Assert.Equal(3, classes.Count);
 
-        // ⚠️ Every one of these is a *rocket*. The Flamethrower broadcasts no
+        // Every one of these is a *rocket*. The Flamethrower broadcasts no
         // seed, so a pyro's own fire contributes nothing to this count however
         // much of it there is — which is what makes the number meaningful as a
         // measure of how much reflectable ammunition was in the air.
@@ -129,7 +126,7 @@ public sealed class AirblastFixtureTests
     /// projectile in a five-pixel one. Both are trajectory, and both are in this
     /// window.
     /// <para>
-    /// ⚠️ <b>Trajectory only, deliberately.</b> The Flamethrower is unseeded, so
+    /// <b>Trajectory only, deliberately.</b> The Flamethrower is unseeded, so
     /// the port's flames land somewhere else and the hp window is far shorter —
     /// docs/PARITY.md, "an unseeded weapon caps a fixture's hp window". The
     /// flames cannot move anybody, so they do not touch this number.
@@ -142,12 +139,11 @@ public sealed class AirblastFixtureTests
 
         // 1,266 today, t471 to t1737.
         //
-        // ⚠️ THIS IS THE AIRBLAST'S GATE, and it is a sharp one: stubbing
+        // THIS IS THE AIRBLAST'S GATE, and it is a sharp one: stubbing
         // Weapons.AirBlast out to a no-op takes the same fixture from 1,266
-        // ticks to 286 — a factor of 4.4 — which is the measurement that
-        // retires "no fixture moved and none can". Nothing else in the port is
-        // touched by that stub, so the whole of the difference is the shove and
-        // the reflect.
+        // ticks to 286 — a factor of 4.4. Nothing else in the port is touched
+        // by that stub, so the whole of the difference is the shove and the
+        // reflect.
         Assert.True(
             exact >= 1200,
             $"{Airblast}: exact for only {exact} ticks after the last spawn anchor (t{anchor})");
@@ -164,7 +160,7 @@ public sealed class AirblastFixtureTests
     /// damage and a pyro has to be close to burn anybody. Compare
     /// <c>closedsupport</c>, where the same weapon caps hp at 328.
     /// <para>
-    /// ⚠️ <b>Do not raise this floor by implementing something.</b> The ceiling
+    /// <b>Do not raise this floor by implementing something.</b> The ceiling
     /// here is a property of the recording — the first flame that connects and
     /// lands differently ends it, whatever the port does. docs/PARITY.md, "an
     /// unseeded weapon caps a fixture's hp window".

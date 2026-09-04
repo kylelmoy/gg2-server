@@ -11,8 +11,8 @@ namespace Gg2.Maps;
 /// because five of the eight platform maps use it — including
 /// <c>maw_deathmatch</c>, whose 139 platforms are 40x40 GIF bubbles.
 /// <para>
-/// ✅ <b>EVERY frame, unioned — measured against the running game 2026-09-01,
-/// not reasoned.</b> <c>stringToResource.gml</c> asks for one subimage
+/// <b>EVERY frame, unioned — measured against the running game, not
+/// reasoned.</b> <c>stringToResource.gml</c> asks for one subimage
 /// (<c>sprite_add(name, 1, 1, 0, 0, 0)</c>) and GM8 expands an animated GIF into
 /// several anyway: <c>sprite_get_number</c> answers <b>4</b> for
 /// <c>maw_deathmatch</c>'s bubble. The engine's collision mask is the
@@ -22,13 +22,11 @@ namespace Gg2.Maps;
 /// collision is concerned.
 /// </para>
 /// <para>
-/// ⚠️ <b><c>removeback</c> is applied PER SUBIMAGE, each sampling its OWN
-/// bottom-left pixel.</b> This is the part no amount of reading would have got
-/// right. The bubble's later frames are 3x5 and 3x7 patches whose own corners are
-/// a different colour from the first frame's, so a single global background
-/// colour leaves three pixels solid that the engine clears. First-frame-only was
-/// out by ten pixels, a global background by three, and this model by
-/// <b>zero</b>. <c>probe-platform-mask.js</c> and
+/// <b><c>removeback</c> is applied PER SUBIMAGE, each sampling its OWN
+/// bottom-left pixel.</b> The bubble's later frames are 3x5 and 3x7 patches whose
+/// own corners are a different colour from the first frame's, so a single global
+/// background colour leaves three pixels solid that the engine clears; unioning
+/// per-frame backgrounds matches exactly. <c>probe-platform-mask.js</c> and
 /// <c>tests/Gg2.Tests/Fixtures/sprite-mask-samples.json</c>.
 /// </para>
 /// </remarks>
@@ -102,10 +100,10 @@ internal static class GifSprite
     /// Unions one subimage into the mask and advances past its data.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The background colour is THIS frame's own bottom-left pixel</b>, not
-    /// the first frame's and not the logical screen's. Measured: using a single
-    /// global background leaves three pixels of <c>maw_deathmatch</c>'s bubble
-    /// solid that the engine clears, because its 3x5 and 3x7 patch frames have a
+    /// <b>The background colour is THIS frame's own bottom-left pixel</b>, not
+    /// the first frame's and not the logical screen's. Using a single global
+    /// background leaves three pixels of <c>maw_deathmatch</c>'s bubble solid
+    /// that the engine clears, because its 3x5 and 3x7 patch frames have a
     /// different corner colour from the 40x40 first frame.
     /// </remarks>
     private static bool AddFrame(
@@ -132,12 +130,11 @@ internal static class GifSprite
 
         var minimumCodeSize = file[offset++];
 
-        // ⚠️ Decode from a COPY of the offset, then walk the sub-block chain
+        // Decode from a COPY of the offset, then walk the sub-block chain
         // properly to find the next frame. Lzw returns the moment it sees the end
         // code, which leaves its cursor in the middle of a sub-block — following
         // that cursor lands on a length byte read as a block type, the walk stops,
-        // and only the first frame is ever seen. That is a ten-pixel error on the
-        // bubble and it looks exactly like "GIF animation is not supported".
+        // and only the first frame is ever seen.
         var dataStart = offset;
         var cursor = offset;
         var indices = Lzw(file, ref cursor, minimumCodeSize, frameWidth * frameHeight);

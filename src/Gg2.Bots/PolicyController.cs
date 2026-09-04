@@ -8,13 +8,12 @@ namespace Gg2.Bots;
 /// action heads out, decoded to keys and aim.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>Every line here came out of <c>PolicyBot</c> unchanged.</b> That class
-/// was phase 4's shipped arm and the anchor every controller comparison is made
-/// against; if its behaviour moved by a hair while being split in two, the anchor
-/// is gone and nobody would see it. <c>PolicyMatchTests</c>,
-/// <c>ScenarioSuiteTests</c> and the pinned baselines are what say it did not.
+/// <b>Behaviour-identical to <c>PolicyBot</c>.</b> That class is the anchor every
+/// controller comparison is made against, so this split must not move it by a
+/// hair. <c>PolicyMatchTests</c>, <c>ScenarioSuiteTests</c> and the pinned
+/// baselines are what say it does not.
 /// <para>
-/// ⛔ <b>A policy is DATED BY THE PHYSICS it was trained against</b> — see
+/// <b>A policy is DATED BY THE PHYSICS it was trained against</b> — see
 /// <c>docs/BOTS.md</c>. The only checkpoint that exists is stamp-invalid for this
 /// build and is a test fixture, so this class ships with nothing to run: it is
 /// here for the next checkpoint, and <c>PolicyNetwork.Load</c>'s stamp refusal is
@@ -50,13 +49,13 @@ public sealed class PolicyController : IMicroController
     /// <b>7 µs</b> — 2.2 extracting the observation plus 4.7 in the forward pass.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Measured 2026-09-02, Release, <c>BENCH_POLICYCOST</c></b> on the
-    /// 209→64→64→27 checkpoint: 4,733 ns a forward pass over a million calls,
-    /// 2,165 ns an observation. Both allocate 40 bytes total, not per call.
-    /// <b>Re-measure if the network's shape changes</b> — this is linear in it.
+    /// Release, <c>BENCH_POLICYCOST</c>, on the 209→64→64→27 checkpoint: 4,733 ns
+    /// a forward pass over a million calls, 2,165 ns an observation. Both allocate
+    /// 40 bytes total, not per call. <b>Re-measure if the network's shape
+    /// changes</b> — this is linear in it.
     /// </remarks>
     /// <remarks>
-    /// ⚠️ <b>Flat in the population, unlike the search.</b> A forward pass is a
+    /// <b>Flat in the population, unlike the search.</b> A forward pass is a
     /// fixed-size network over a fixed-length observation; nothing in it walks the
     /// roster. The argument is ignored deliberately rather than by omission.
     /// </remarks>
@@ -69,13 +68,13 @@ public sealed class PolicyController : IMicroController
     /// drive.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>Five of the nine class columns were constant zero for every decision
-    /// of every training run</b>, self block and enemy block, so their first-layer
-    /// weights are still the random draw — byte-identical between iteration 400
-    /// and 2400. Driving a demoman, medic, engineer, spy or pyro does not tell the
-    /// policy which class it is; it injects untrained noise.
+    /// <b>Five of the nine class columns are constant zero for every decision of
+    /// every training run</b>, self block and enemy block, so their first-layer
+    /// weights are still the random draw. Driving a demoman, medic, engineer, spy
+    /// or pyro does not tell the policy which class it is; it injects untrained
+    /// noise.
     /// <para>
-    /// ⚠️ <b>The trained set is not a prefix.</b> Heavy is <c>PlayerClass</c> index
+    /// <b>The trained set is not a prefix.</b> Heavy is <c>PlayerClass</c> index
     /// 6, so the untrained columns are 3, 4, 5, 7 and 8 — interleaved. Anything
     /// that assumes "the first four" is wrong.
     /// </para>
@@ -104,7 +103,7 @@ public sealed class PolicyController : IMicroController
     /// actually pointing.
     /// </summary>
     /// <remarks>
-    /// ⛔ The scripted layer writes the bearing directly, so a decoder carrying
+    /// The scripted layer writes the bearing directly, so a decoder carrying
     /// the bearing from the last engagement would turn from somewhere nobody is
     /// pointing. <c>RolloutSearch.ResyncAim</c> documents the same trap.
     /// </remarks>
@@ -115,8 +114,8 @@ public sealed class PolicyController : IMicroController
     /// Abandons a part-finished decision, so a re-entry starts a fresh one.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b><c>PolicyBot.Scripted</c> zeroed this counter on every scripted tick
-    /// and <c>SearchBot</c> zeroed nothing</b>, which is why
+    /// <b>Different controllers own this cadence differently</b> — one scripted
+    /// arm zeroes it on every tick, another zeroes nothing — which is why
     /// <see cref="IMicroController.OnHandoverOut"/> exists at all rather than the
     /// gate resetting a cadence it does not own. See that member's remarks.
     /// </remarks>
@@ -132,7 +131,7 @@ public sealed class PolicyController : IMicroController
         {
             _slot = slot;
 
-            // ⚠️ The network runs once per ActionRepeat ticks, which is the cadence
+            // The network runs once per ActionRepeat ticks, which is the cadence
             // it was trained at and is carried by the checkpoint. Running it every
             // tick would be a policy acting on a rhythm it never saw.
             _ticksLeftInDecision = Math.Max(1, _policy.ActionRepeat);

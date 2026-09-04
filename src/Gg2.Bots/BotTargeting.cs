@@ -23,10 +23,10 @@ public enum BotTargetKind
 /// <param name="Slot">
 /// The roster slot for a character or a sentry; meaningless for a generator.
 /// </param>
-/// <param name="X">Where to aim. ⚠️ For a sentry or a generator this is the box's
+/// <param name="X">Where to aim. For a sentry or a generator this is the box's
 /// <em>centre</em>, not its origin — see <see cref="BotTargeting.Find"/>.</param>
 /// <param name="Visible">
-/// ⚠️ False for a target chosen through a wall. The bot still has a target — it
+/// False for a target chosen through a wall. The bot still has a target — it
 /// just cannot see it <em>from here</em> — and the combat layer holds its aim on
 /// the last known position rather than refreshing it through the wall.
 /// </param>
@@ -54,7 +54,7 @@ public readonly record struct BotTarget(
 ///                   + range × inside my class's minimum band
 /// </code>
 /// <para>
-/// ⚠️ <b>Every term is in pixels, which is what makes them comparable.</b> Taking
+/// <b>Every term is in pixels, which is what makes them comparable.</b> Taking
 /// the intel carrier means being willing to walk 300px past someone harmless to
 /// reach them, and a medic is worth 120px of that because leaving one alive
 /// undoes everything else the bot is about to do.
@@ -89,7 +89,7 @@ public static class BotTargeting
     /// How close is too close for this class — <c>botClassMinBand.gml</c>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The splash classes keep their distance because their own weapon would
+    /// The splash classes keep their distance because their own weapon would
     /// kill them; the pyro, the spy and the medic have <b>no</b> minimum at all,
     /// because point blank is where all three of them work. Everyone else gets
     /// <c>BOT_MIN_ENGAGE</c>, which is about not standing inside somebody.
@@ -138,12 +138,12 @@ public static class BotTargeting
     /// <c>botAngleDelta.gml</c>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ GML's <c>mod</c> keeps the sign of the dividend, so the <c>+ 540</c> is
+    /// GML's <c>mod</c> keeps the sign of the dividend, so the <c>+ 540</c> is
     /// what makes this work for a negative first difference rather than
     /// decoration. C#'s <c>%</c> behaves the same way, which is why the
     /// transcription is literal.
     /// <para>
-    /// ⚠️ Exactly opposite answers <b>-180, not +180</b>: the wrap takes 360 back
+    /// Exactly opposite answers <b>-180, not +180</b>: the wrap takes 360 back
     /// to 0 before the subtraction, so the half turn lands on the low end. That
     /// decides which way a bot turns to face directly behind it.
     /// </para>
@@ -158,11 +158,11 @@ public static class BotTargeting
     /// Picks the thing this bot should shoot at, or nothing.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Line of sight is checked when a candidate is <em>popped</em>, not
+    /// <b>Line of sight is checked when a candidate is <em>popped</em>, not
     /// when it is pushed</b>, so the collision line runs once for the best
     /// candidate instead of once per enemy on the map.
     /// <para>
-    /// ⚠️ <b>Losing every candidate to line of sight does not mean there is
+    /// <b>Losing every candidate to line of sight does not mean there is
     /// nothing to fight</b>, and treating it that way is the "bots walk straight
     /// past enemies" report. A bot whose target is behind a crate 80px away has a
     /// target; it just cannot see it <em>from here</em>. So a blocked search
@@ -174,7 +174,7 @@ public static class BotTargeting
     /// at scenery.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Threat is floored at 1</b> rather than allowed to go negative — not
+    /// <b>Threat is floored at 1</b> rather than allowed to go negative — not
     /// because anything downstream cares, but because a negative one reads like a
     /// bug to whoever prints it.
     /// </para>
@@ -196,7 +196,7 @@ public static class BotTargeting
         Span<double> threats = stackalloc double[WorldState.MaxSlots * 2 + 1];
         var count = 0;
 
-        // Characters. ⚠️ A cloaked spy is not a candidate at all — not merely a
+        // Characters. A cloaked spy is not a candidate at all — not merely a
         // worse one.
         for (var other = 0; other < WorldState.MaxSlots; other++)
         {
@@ -217,7 +217,7 @@ public static class BotTargeting
             if (candidate.CarryingIntel)
                 threat -= 300;
 
-            // ⚠️ Whoever is currently shooting *this* bot is a live threat rather
+            // Whoever is currently shooting *this* bot is a live threat rather
             // than a scoring opportunity, and answering them is what a player
             // does before anything else. LastDamageDealer is a roster slot and is
             // cleared on its own timer, so this decays without a timer here.
@@ -234,29 +234,26 @@ public static class BotTargeting
             if (candidate.Hp <= ClassStats.For(candidate.Class).MaxHp * 0.4)
                 threat -= 100;
 
-            // ⚠️ The lock-breaker, and it is a *lock* problem rather than the
-            // range problem it was reported as. A soldier's band is 110-800px and
-            // it fires throughout — but with threat as pure distance it always
-            // locked whoever was nearest, and the combat layer does not look for
-            // a new target while it holds a valid one. An enemy that closes
-            // inside BOT_SPLASH_SAFE therefore pins a soldier permanently: it
-            // keeps the lock, refuses to fire because a rocket at that range
-            // kills the shooter, and a second enemy at a perfectly shootable
-            // 300px is never considered. Ranking anyone inside the band a full
-            // attention radius worse breaks the lock without adding a rule.
+            // The lock-breaker: a *lock* problem, not a range one. A soldier's band
+            // is 110-800px and it fires throughout — but with threat as pure
+            // distance it always locks whoever is nearest, and the combat layer
+            // does not look for a new target while it holds a valid one. An enemy
+            // that closes inside BOT_SPLASH_SAFE therefore pins a soldier
+            // permanently: it keeps the lock, refuses to fire because a rocket at
+            // that range kills the shooter, and a second enemy at a perfectly
+            // shootable 300px is never considered. Ranking anyone inside the band a
+            // full attention radius worse breaks the lock without adding a rule.
             if (distance < minBand)
                 threat += range;
 
             Insert(order, threats, ref count, other, Math.Max(1, threat));
         }
 
-        // Sentries. ⚠️ Reported from play as "bots are not shooting at sentries —
-        // dies to them": a sentry is a turret with 100hp that shoots back, and
-        // the script iterated characters and a generator, so a bot walked into
-        // one, got killed by it, and respawned to do it again with no term
-        // anywhere in the model for the thing that killed it. It ranks a little
-        // ahead of a player at the same distance, because a player can be walked
-        // away from and a sentry covers its ground until somebody removes it.
+        // Sentries: a turret with 100hp that shoots back, and without a term for
+        // it in the model a bot walks into one, dies, and respawns to do it again.
+        // It ranks a little ahead of a player at the same distance, because a
+        // player can be walked away from and a sentry covers its ground until
+        // somebody removes it.
         for (var owner = 0; owner < WorldState.MaxSlots; owner++)
         {
             if (!world.State.HasSentry[owner])
@@ -280,7 +277,7 @@ public static class BotTargeting
         }
 
         // The enemy generator, at BOT_GEN_THREAT — far past any distance term, so
-        // it is only ever chosen when nothing live is available. ⚠️ A bot that
+        // it is only ever chosen when nothing live is available. A bot that
         // keeps shooting a wall while somebody kills it is worse than one that
         // never shoots the wall.
         ref readonly var generator = ref team == Team.Red
@@ -334,7 +331,7 @@ public static class BotTargeting
 
     /// <summary>Turns an encoded candidate index back into a target.</summary>
     /// <remarks>
-    /// ⚠️ A sentry and a generator are aimed at by the <b>centre of the box</b>
+    /// A sentry and a generator are aimed at by the <b>centre of the box</b>
     /// and a character by its origin, which is its chest. The reference makes the
     /// same distinction with <c>botIsCharacter</c>, and getting it wrong aims a
     /// bot at a sentry's feet.
@@ -370,7 +367,7 @@ public static class BotTargeting
 
     /// <summary>Insertion into the sorted prefix, lowest threat first.</summary>
     /// <remarks>
-    /// ⚠️ Strictly <c>&lt;</c>, so an equal threat leaves the earlier candidate in
+    /// Strictly <c>&lt;</c>, so an equal threat leaves the earlier candidate in
     /// front. The reference uses a <c>ds_priority</c> whose tie rule is
     /// unspecified; a defined one is what makes a bot's choice reproducible,
     /// which docs/BOTAI.md needs and the reference does not.

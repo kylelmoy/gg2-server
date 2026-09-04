@@ -11,7 +11,7 @@ namespace Gg2.Server;
 /// </summary>
 /// <remarks>
 /// <para>
-/// ⛔ <b>Two transports, one dispatch.</b> <see cref="ControlPort"/> speaks a
+/// <b>Two transports, one dispatch.</b> <see cref="ControlPort"/> speaks a
 /// line of JSON over loopback TCP and <see cref="WebAdminServer"/> speaks HTTP
 /// to a browser somewhere else, and the day they each grow their own copy of
 /// "what does <c>step</c> mean" is the day one of them starts doing something
@@ -20,7 +20,7 @@ namespace Gg2.Server;
 /// lives here.
 /// </para>
 /// <para>
-/// ⚠️ <b>Every method here runs on the tick thread.</b> Both callers arrange
+/// <b>Every method here runs on the tick thread.</b> Both callers arrange
 /// that — the control port is serviced from inside <see cref="GameServer.Tick"/>
 /// and the web admin marshals through a queue drained there — because
 /// <c>WorldState</c> has no locks and this reads it. A third caller that skipped
@@ -28,7 +28,7 @@ namespace Gg2.Server;
 /// kind.
 /// </para>
 /// <para>
-/// ⚠️ <b>It cannot do anything a client cannot, except operator things.</b>
+/// <b>It cannot do anything a client cannot, except operator things.</b>
 /// Freezing, stepping, teleporting, kicking and changing the map are operator
 /// actions no client can ask for. Anything a client <em>can</em> ask for goes
 /// through <c>command</c>, which submits a <see cref="PlayerCommand"/> to the
@@ -108,7 +108,7 @@ public static class ControlCommands
             ? Ok()
             : Error("no live character in that slot"),
 
-        // ⚠️ An operator action with no client equivalent, and the only one that
+        // An operator action with no client equivalent, and the only one that
         // ends a connection. A bot and the reserved slot 0 are refused BY NAME
         // rather than in silence: a kick that appeared to work on a bot would be
         // the panel lying about what it did, and the population manager would
@@ -144,7 +144,7 @@ public static class ControlCommands
     /// Submits a <see cref="PlayerCommand"/> on a slot's behalf.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The whole point of this command: everything a client can do reaches
+    /// The whole point of this command: everything a client can do reaches
     /// the server through one dispatch, and an operator surface uses that
     /// dispatch rather than growing its own copy of each action.
     /// </remarks>
@@ -174,14 +174,14 @@ public static class ControlCommands
     /// </summary>
     /// <remarks>
     /// <para>
-    /// ⚠️ <b>Additive only.</b> The control port has answered <c>state</c> since
+    /// <b>Additive only.</b> The control port has answered <c>state</c> since
     /// phase 8 and scripts read named fields out of it, so a field may be added
     /// here and one that already exists may not change meaning. The web panel's
     /// whole dashboard is built out of this same object, which is why it now
     /// carries much more than the control port ever needed.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Exact positions, not the wire's.</b> <c>TryGetExactPosition</c>
+    /// <b>Exact positions, not the wire's.</b> <c>TryGetExactPosition</c>
     /// hands back the unquantised doubles for the reason the control port wanted
     /// them: an operator surface exists to answer "where is it really", and one
     /// that silently reported the wire's rounding would make every sub-pixel
@@ -220,7 +220,7 @@ public static class ControlCommands
         json.Append(",\"bytesSent\":").Append(server.BytesSent);
         json.Append(",\"botFill\":").Append(server.Options.Bots.FillToPlayers);
 
-        // ⚠️ Sent because it is the reason a bot count set from the panel can
+        // Sent because it is the reason a bot count set from the panel can
         // appear to do nothing: below MinHumans the population manager's target
         // is ZERO rather than the fill, so an empty server with the default of 1
         // stays empty. The panel says so rather than leaving an operator to
@@ -258,7 +258,7 @@ public static class ControlCommands
         json.Append(",\"x\":").Append(Number(intel.OnField ? intel.X : intel.HomeX));
         json.Append(",\"y\":").Append(Number(intel.OnField ? intel.Y : intel.HomeY));
 
-        // ⚠️ The home position is sent as well as the current one, because
+        // The home position is sent as well as the current one, because
         // OnField does NOT mean "dropped": it means the briefcase instance
         // exists rather than being carried, which is also true of one sitting in
         // its own base. A panel that called both "dropped" would report a CTF
@@ -284,7 +284,7 @@ public static class ControlCommands
                 .Append(point.Owned ? point.Team.ToString() : "None").Append('"');
             json.Append(",\"capping\":\"")
                 .Append(point.BeingCaptured ? point.CappingTeam.ToString() : "None").Append('"');
-            // ⚠️ CapTime is PER POINT, not a constant: dual-koth halves it.
+            // CapTime is PER POINT, not a constant: dual-koth halves it.
             json.Append(",\"progress\":").Append(Number(
                 point.CapTime > 0 ? Math.Round(point.Capping / point.CapTime, 4) : 0));
             json.Append('}');
@@ -343,19 +343,18 @@ public static class ControlCommands
     /// Escapes a string for a JSON literal.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b><see cref="JsonEncodedText"/> rather than three <c>Replace</c>
-    /// calls, and the difference is a reply that does not parse.</b> The
-    /// hand-rolled version handled backslash, quote and newline — and
-    /// <c>ArgumentOutOfRangeException.Message</c> is multi-line with a
-    /// <em>carriage return</em> in it, which is a raw control character inside a
-    /// JSON string and therefore invalid. So the port answered an invalid speed
-    /// with an unparseable error: the one reply a caller most needs to read.
-    /// Measured — it failed the test that sends <c>"value":0</c>.
+    /// <b><see cref="JsonEncodedText"/> rather than three <c>Replace</c>
+    /// calls, and the difference is a reply that does not parse.</b> A
+    /// hand-rolled version handling only backslash, quote and newline misses
+    /// that <c>ArgumentOutOfRangeException.Message</c> is multi-line with a
+    /// <em>carriage return</em> in it, a raw control character inside a JSON
+    /// string and therefore invalid — an unescaped one turns an invalid speed
+    /// into an unparseable error, the one reply a caller most needs to read.
     /// </remarks>
     public static string Escape(string value) => JsonEncodedText.Encode(value).ToString();
 
     /// <remarks>
-    /// ⚠️ Invariant culture and "R", because a machine reads this. A decimal
+    /// Invariant culture and "R", because a machine reads this. A decimal
     /// comma would make the reply un-parseable on exactly the machines whose
     /// locale uses one, and nowhere else — the worst kind of bug to be handed.
     /// Infinity is not JSON, so an unpaced server reports its speed as the

@@ -80,7 +80,7 @@ public sealed class SpawnRoomTests
     }
 
     /// <summary>
-    /// ⚠️ <b>Every spawn point on every map is inside a spawn room</b>, which is
+    /// <b>Every spawn point on every map is inside a spawn room</b>, which is
     /// what makes the two rules below the common case rather than a corner.
     /// </summary>
     [Fact]
@@ -128,7 +128,7 @@ public sealed class SpawnRoomTests
         Assert.Equal(31, cabinet.Right - cabinet.Left);
         Assert.Equal(47, cabinet.Bottom - cabinet.Top);
 
-        // ⚠️ Built rather than taken from the map: every shipped spawn room is
+        // Built rather than taken from the map: every shipped spawn room is
         // scaled, so none of them pins the sprite's own size.
         var room = SpawnRooms.Of(new LevelEntity
         {
@@ -145,7 +145,7 @@ public sealed class SpawnRoomTests
     // --- the two guards that disagree -----------------------------------------
 
     /// <summary>
-    /// ⚠️ <b>The reference asks about the same object in two ways.</b> A class
+    /// <b>The reference asks about the same object in two ways.</b> A class
     /// change and a sentry build use <c>collision_point</c> — the origin, at the
     /// character's feet — and the fast respawn uses <c>place_meeting</c>, the
     /// whole box. So there is a band above every room where the two disagree.
@@ -178,7 +178,7 @@ public sealed class SpawnRoomTests
     // --- the fast respawn -----------------------------------------------------
 
     /// <summary>
-    /// ⚠️ <b>Dying inside a spawn room arms <c>alarm[5] = 1</c></b>: the
+    /// <b>Dying inside a spawn room arms <c>alarm[5] = 1</c></b>: the
     /// replacement is out on the next tick rather than after the respawn time.
     /// </summary>
     [Fact]
@@ -243,7 +243,7 @@ public sealed class SpawnRoomTests
     // --- the silent class swap ------------------------------------------------
 
     /// <summary>
-    /// ⚠️ <b>A class change inside a spawn room broadcasts nothing at all</b> —
+    /// <b>A class change inside a spawn room broadcasts nothing at all</b> —
     /// <c>processClientCommands.gml:84</c>'s <c>else</c> arm is a bare
     /// <c>instance_destroy()</c>.
     /// </summary>
@@ -267,7 +267,7 @@ public sealed class SpawnRoomTests
     }
 
     /// <summary>
-    /// ⚠️ <b>In the band where the two guards disagree, a class change kills
+    /// <b>In the band where the two guards disagree, a class change kills
     /// you <em>and</em> brings you straight back.</b>
     /// </summary>
     /// <remarks>
@@ -407,7 +407,7 @@ public sealed class SpawnRoomTests
     }
 
     /// <summary>
-    /// ⚠️ <b>A refill cancels the reload timer</b>, so a cabinet does not leave a
+    /// <b>A refill cancels the reload timer</b>, so a cabinet does not leave a
     /// round arriving a moment later. That cancel is the only observable half of
     /// the reference's <c>event_perform(ev_alarm, 5)</c>; the body it runs is a
     /// no-op once the magazine is already full.
@@ -429,7 +429,7 @@ public sealed class SpawnRoomTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The extinguish is outside the <c>heal</c> guard</b>, so a cabinet a
+    /// <b>The extinguish is outside the <c>heal</c> guard</b>, so a cabinet a
     /// map has switched healing off on still puts a burning character out.
     /// </summary>
     [Fact]
@@ -457,7 +457,7 @@ public sealed class SpawnRoomTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The whole event is inside <c>if (!global.mapchanging)</c></b>: a
+    /// <b>The whole event is inside <c>if (!global.mapchanging)</c></b>: a
     /// cabinet does nothing during the victory screen.
     /// </summary>
     [Fact]
@@ -477,7 +477,7 @@ public sealed class SpawnRoomTests
     }
 
     /// <summary>
-    /// ⚠️ <b>Team Deathmatch trickles ten hit points a second instead</b>, and
+    /// <b>Team Deathmatch trickles ten hit points a second instead</b>, and
     /// refills no nuts and bolts at all.
     /// </summary>
     [Fact]
@@ -572,7 +572,7 @@ public sealed class SpawnRoomTests
     }
 
     /// <summary>
-    /// ⚠️ <b>A BOOL property is only <c>"true"</c> or <c>"false"</c>.</b>
+    /// <b>A BOOL property is only <c>"true"</c> or <c>"false"</c>.</b>
     /// <c>readProperty.gml</c>'s BOOL arm returns the default for anything else,
     /// so "TRUE", "1" and "yes" all mean "whatever the Create event said".
     /// </summary>

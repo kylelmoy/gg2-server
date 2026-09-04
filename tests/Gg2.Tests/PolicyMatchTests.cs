@@ -13,14 +13,14 @@ namespace Gg2.Tests;
 /// none of those things. Everything about the policy is measured; how it survives
 /// contact with a real match is what these assert.
 /// <para>
-/// ⛔ <b>"200 matches completed" is NOT the criterion, and this project has the
-/// scar.</b> <c>eval</c> reported Arena matches as clean wins for two phases
-/// because five <em>instant</em> rounds reach a cap exactly as five real ones do.
-/// Every match here asserts <b>duration and deaths</b>, and a match with no deaths
-/// is a failed match rather than a fast one.
+/// <b>"200 matches completed" is NOT the criterion.</b> <c>eval</c> reported
+/// Arena matches as clean wins because five <em>instant</em> rounds reach a cap
+/// exactly as five real ones do. Every match here asserts <b>duration and
+/// deaths</b>, and a match with no deaths is a failed match rather than a fast
+/// one.
 /// </para>
 /// <para>
-/// ⚠️ <b>The second half is not optional either: no map may produce a stuck bot.</b>
+/// <b>The second half is not optional either: no map may produce a stuck bot.</b>
 /// A duel-strong bot that cannot leave spawn is worse than what ships today, so
 /// movement is asserted per map and not only aggregate outcomes.
 /// </para>
@@ -119,7 +119,7 @@ public sealed class PolicyMatchTests
     /// policy really drove.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The premise assertions are the point.</b> Without
+    /// <b>The premise assertions are the point.</b> Without
     /// <c>PolicyTicks &gt; 0</c> every other assertion here passes on a hybrid
     /// whose engagement gate never fired — a scripted bot with extra steps, which
     /// would win, lose and last exactly like one. <c>docs/ENV.md</c> records four
@@ -148,7 +148,7 @@ public sealed class PolicyMatchTests
     /// No map produces a stuck bot.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>The half of the exit criterion that is not about winning.</b> A
+    /// <b>The half of the exit criterion that is not about winning.</b> A
     /// duel-strong bot that cannot leave spawn is worse than what ships today, and
     /// a win rate cannot see it — a stuck bot on the losing team looks like a
     /// weaker bot.
@@ -162,12 +162,11 @@ public sealed class PolicyMatchTests
     {
         var played = Play(map, seed, Trained, Policy());
 
-        // ⚠️ MOST bots, not the best one. "The furthest any bot got" is satisfied
-        // by seven stuck bots and one that ran — which is what the first version
-        // of this asserted, and it would have passed a map where the policy
-        // pinned the whole team.
+        // MOST bots, not the best one. "The furthest any bot got" is satisfied
+        // by seven stuck bots and one that ran, and it would pass a map where
+        // the policy pinned the whole team.
         //
-        // ⚠️ And not ALL bots either, because that is not true today and asserting
+        // And not ALL bots either, because that is not true today and asserting
         // it would be asserting a fix nobody has made: measured over 864 bots,
         // 11 moved under 100px with the policy and 7 without, and the worst case
         // in BOTH arms is a scripted bot. See docs/ENV.md.
@@ -180,7 +179,7 @@ public sealed class PolicyMatchTests
     /// The restricted match really contains only trained classes.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>The premise of every measurement above.</b> A default headless match
+    /// <b>The premise of every measurement above.</b> A default headless match
     /// is <b>50% untrained classes</b> — <c>BotPopulation.PickClass</c> draws
     /// uniformly from the eight it allows, four of which are trained — and
     /// <c>ClassLimits</c> does not gate it, so without
@@ -195,7 +194,7 @@ public sealed class PolicyMatchTests
 
         for (var slot = 1; slot < WorldState.MaxSlots; slot++)
         {
-            // ⚠️ An input source is what makes a slot a BOT. Team is the wrong
+            // An input source is what makes a slot a BOT. Team is the wrong
             // test — Team.Red is 0, so every empty PlayerState reads as red and
             // the first version of this counted all 63.
             if (match.SourceOf(slot) is null)
@@ -216,7 +215,7 @@ public sealed class PolicyMatchTests
     /// restriction above is doing work.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Without this the test above passes on a picker that happened to draw
+    /// <b>Without this the test above passes on a picker that happened to draw
     /// four trained classes</b>, and the restriction would be untested. This is
     /// the measurement behind "a default match is 50% untrained".
     /// </remarks>
@@ -252,7 +251,7 @@ public sealed class PolicyMatchTests
     /// An untrained class is driven by the scripted layer, never by the policy.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>Their class columns never received a gradient</b>, so their
+    /// <b>Their class columns never received a gradient</b>, so their
     /// first-layer weights are still the random draw. Driving one is not playing
     /// badly, it is acting on noise.
     /// </remarks>

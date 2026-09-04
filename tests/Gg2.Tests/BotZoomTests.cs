@@ -10,28 +10,21 @@ namespace Gg2.Tests;
 /// A bot sniper raises its scope, and therefore plays its actual weapon.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>No bot in this port could zoom until 2026-08-29.</b> <c>toggleZoom</c> is
-/// not a key — it is a client command — and a bot's <see cref="PlayerInput"/> is
-/// keys plus an aim, so nothing ever asked for it. From
+/// <c>toggleZoom</c> is not a key — it is a client command — and a bot's
+/// <see cref="PlayerInput"/> is keys plus an aim, so a bot that only emits
+/// <see cref="PlayerInput"/> can never ask for it. From
 /// <c>Weapons.RifleBeginStep</c>: unscoped is a flat <b>35</b>, scoped ramps
-/// <b>45 to 75</b> over <c>RifleChargeTime</c>. So every scripted sniper in the
-/// game fired at 35 for ever, and <c>BotClassKeys</c>' charge-proportional-to-range
-/// arm read <c>self.Zoomed</c> — always false — which made it <b>unreachable code
-/// that looked like the feature working</b>.
+/// <b>45 to 75</b> over <c>RifleChargeTime</c>. Without the command channel a
+/// scripted sniper fires at 35 for ever, and <c>BotClassKeys</c>' charge-
+/// proportional-to-range arm reads <c>self.Zoomed</c> — always false — which
+/// makes it unreachable code that looks like the feature working.
 /// <para>
-/// ⚠️ <b>Two separate gaps, and the second was the one nobody would have
-/// guessed.</b> <see cref="ScriptedBot"/> has implemented
-/// <see cref="ICommandSource"/> since phase 7, and <c>GameServer</c> and
-/// <see cref="HeadlessMatch"/> both poll it — but <see cref="ScenarioWorld"/> did
-/// not, so a duel or a scenario <b>dropped every command a bot emitted</b>. Even
-/// a bot that asked to zoom would have been ignored in exactly the harness where
-/// zooming gets measured.
-/// </para>
-/// <para>
-/// Found chasing <c>gg2-rl</c>'s sniper-v-sniper hole. ⚠️ It is <b>not</b> the
-/// cause of that hole — both sides were unzoomed, so it was symmetric — which is
-/// worth stating because a fix that arrives beside an unexplained number invites
-/// the assumption that it explains it.
+/// <b>Two separate seams have to carry the command.</b>
+/// <see cref="ScriptedBot"/> implements <see cref="ICommandSource"/>, and
+/// <c>GameServer</c> and <see cref="HeadlessMatch"/> both poll it — but
+/// <see cref="ScenarioWorld"/> must poll it too, or a duel or a scenario drops
+/// every command a bot emits and a bot that asks to zoom is ignored in exactly
+/// the harness where zooming gets measured.
 /// </para>
 /// </remarks>
 public sealed class BotZoomTests(Xunit.Abstractions.ITestOutputHelper output)
@@ -54,35 +47,35 @@ public sealed class BotZoomTests(Xunit.Abstractions.ITestOutputHelper output)
         };
 
     /// <summary>
-    /// ✅ A scripted sniper with a target scopes, charges, and hits for more than
+    /// A scripted sniper with a target scopes, charges, and hits for more than
     /// the unscoped 35.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Asserted on the DAMAGE, not on the flag.</b> <c>Zoomed</c> going true
+    /// <b>Asserted on the DAMAGE, not on the flag.</b> <c>Zoomed</c> going true
     /// is the mechanism; what the change is for is the weapon, and a bot that
     /// scoped and never charged (see the toggle-thrash remark on
     /// <c>ScriptedBot.WantsZoom</c>) would set the flag and still fire for 35.
     /// <para>
-    /// ⚠️ 45 is <c>RifleBaseDamage</c>, the value at zero charge, so requiring
+    /// 45 is <c>RifleBaseDamage</c>, the value at zero charge, so requiring
     /// strictly more than it is requiring that the charge ramp is really running
     /// rather than that the scope is merely up.
     /// </para>
     /// <para>
-    /// ⚠️ <b>PEAK hit damage, not final</b>, and the first draft of this test got
-    /// it wrong. <c>RifleBeginStep</c> zeroes the charge the instant the shot
-    /// clears <c>ReadyToShoot</c>, so reading <c>HitDamage</c> after the loop
-    /// samples a rifle that has just fired and reports the 45 floor — which looks
-    /// exactly like a scope that never charged.
+    /// <b>PEAK hit damage, not final.</b> <c>RifleBeginStep</c> zeroes the
+    /// charge the instant the shot clears <c>ReadyToShoot</c>, so reading
+    /// <c>HitDamage</c> after the loop samples a rifle that has just fired and
+    /// reports the 45 floor — which looks exactly like a scope that never
+    /// charged.
     /// </para>
     /// <para>
-    /// ⚠️ <b>And the charge stays small on purpose.</b> <c>BotClassKeys</c> fires
+    /// <b>And the charge stays small on purpose.</b> <c>BotClassKeys</c> fires
     /// at <c>RifleChargeTime * min(1, distance / ClassRange)</c> — "the Rifle's
     /// damage IS its range, so a scoped sniper firing early simply cannot reach,
     /// and one that waited for a full charge at every distance would never shoot
     /// at anything close". The objective layer walks the bot to its own band at
     /// about 120px against a <c>ClassRange</c> of 900, so the threshold there is
-    /// about 14 of 105 and the shot lands at <b>55</b>. That is the rule working,
-    /// not the scope failing: 55 against the 35 it used to be stuck at.
+    /// about 14 of 105 and the shot lands at <b>55</b> — well above the 35
+    /// unscoped floor.
     /// </para>
     /// </remarks>
     [Fact]
@@ -117,24 +110,22 @@ public sealed class BotZoomTests(Xunit.Abstractions.ITestOutputHelper output)
 
         Assert.True(zoomedAt >= 0, "the sniper never raised its scope");
 
-        // ⚠️ The point of the whole change, in one number: 55 against the 35 this
-        // bot was stuck at for eight phases. Strictly past RifleBaseDamage's 45,
-        // so the charge ramp is really running rather than the scope merely being
-        // up — and pinned, because a drop back to exactly 45 or 35 is the shape
-        // of this feature silently coming undone.
+        // 55, strictly past RifleBaseDamage's 45, so the charge ramp is really
+        // running rather than the scope merely being up — pinned because a drop
+        // back to exactly 45 or 35 is the shape of this feature silently coming
+        // undone.
         Assert.Equal(55, peakHit);
 
         Assert.True(damage > 0, "the sniper scoped and never fired");
     }
 
     /// <summary>
-    /// ⚠️ THE CONTROL: with the command channel taken away, the same bot is
+    /// THE CONTROL: with the command channel taken away, the same bot is
     /// pinned at the unscoped 35.
     /// </summary>
     /// <remarks>
-    /// This is what the port did for eight phases, reproduced deliberately by
-    /// driving the bot as an <see cref="IInputSource"/> only — which is exactly
-    /// what <see cref="ScenarioWorld"/> used to do to every source it was given.
+    /// Reproduced deliberately by driving the bot as an
+    /// <see cref="IInputSource"/> only, dropping every command it emits.
     /// <para>
     /// Without this, deleting <c>WantsZoom</c> or <c>ScenarioWorld.RunCommands</c>
     /// leaves a green suite: nothing else in the project asserts that a sniper
@@ -149,8 +140,8 @@ public sealed class BotZoomTests(Xunit.Abstractions.ITestOutputHelper output)
         var red = world.Place(PlayerClass.Sniper, Team.Red, 600, StandY);
         world.Place(PlayerClass.Sniper, Team.Blue, 900, StandY);
 
-        // ⚠️ Wrapped so the world sees an IInputSource and NOT an ICommandSource,
-        // which is the old behaviour exactly: keys and an aim, nothing else.
+        // Wrapped so the world sees an IInputSource and NOT an ICommandSource:
+        // keys and an aim, nothing else.
         world.Drive(red, new KeysOnly(Sniper(world, Team.Red)));
 
         world.Step(400);
@@ -162,7 +153,7 @@ public sealed class BotZoomTests(Xunit.Abstractions.ITestOutputHelper output)
     }
 
     /// <summary>
-    /// ⚠️ The toggle is edge-shaped, so a sniper that keeps its target keeps its
+    /// The toggle is edge-shaped, so a sniper that keeps its target keeps its
     /// charge.
     /// </summary>
     /// <remarks>
@@ -203,7 +194,7 @@ public sealed class BotZoomTests(Xunit.Abstractions.ITestOutputHelper output)
         // A handful of legitimate changes as targets come and go; not sixty.
         Assert.True(flips < 10, $"the scope changed {flips} times in 200 ticks; the toggle is level-shaped");
 
-        // ⚠️ Charge is zeroed the moment the scope drops OR the shot fires, so a
+        // Charge is zeroed the moment the scope drops OR the shot fires, so a
         // peak above the fire threshold is the proof the bot held the scope up
         // across ticks rather than merely reaching it. It is deliberately not a
         // big number: BotClassKeys fires at RifleChargeTime * min(1, distance /
@@ -217,7 +208,7 @@ public sealed class BotZoomTests(Xunit.Abstractions.ITestOutputHelper output)
     /// A sniper that loses its target lowers the scope again.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Not tidiness. Scoped <c>RunPower</c> is 0.6, so a bot that stayed scoped
+    /// Not tidiness. Scoped <c>RunPower</c> is 0.6, so a bot that stayed scoped
     /// would cross the map at a fraction of its speed and never reach an
     /// objective. <c>PlayerCommands.ToggleZoom</c> is what sets that, and the walk
     /// back is what the objective layer assumes.
@@ -246,20 +237,20 @@ public sealed class BotZoomTests(Xunit.Abstractions.ITestOutputHelper output)
     }
 
     /// <summary>
-    /// ✅ <b>The action space can ask for the scope</b>, and asking for it works.
+    /// <b>The action space can ask for the scope</b>, and asking for it works.
     /// </summary>
     /// <remarks>
     /// The policy half of the same gap. <see cref="EnvAction.Zoom"/> is v4's sixth
     /// head, and without it a distilled policy could never learn the sniper —
     /// only the unscoped third of it.
     /// <para>
-    /// ⚠️ <b>A LEVEL, not a toggle</b>, which is what this test's shape asserts:
+    /// <b>A LEVEL, not a toggle</b>, which is what this test's shape asserts:
     /// the same action is sent on every step and the scope goes up once and stays
     /// up. A toggle-shaped head under the same input would flip every decision
     /// and hold a charge of zero for ever.
     /// </para>
     /// <para>
-    /// ⚠️ <b>The control is the same duel with the head at 0.</b> Without it,
+    /// <b>The control is the same duel with the head at 0.</b> Without it,
     /// deleting <c>FixedInput.PollCommands</c> would leave a green suite: the head
     /// would be accepted, echoed back in the reward block, and inert — which is
     /// precisely the failure mode this whole change exists to close.
@@ -300,7 +291,7 @@ public sealed class BotZoomTests(Xunit.Abstractions.ITestOutputHelper output)
 
         Assert.Equal(expected, env.World.State.Characters[env.RedSlot].Zoomed);
 
-        // ⚠️ The reward block echoes what actually happened, so a trainer's own
+        // The reward block echoes what actually happened, so a trainer's own
         // dataset records the scope it really had rather than the one it asked
         // for. For a client slot those coincide; asserting it here is what makes
         // the head observable end to end.
@@ -308,17 +299,15 @@ public sealed class BotZoomTests(Xunit.Abstractions.ITestOutputHelper output)
     }
 
     /// <summary>
-    /// ⚠️ <b><see cref="RolloutSearch"/> searches OVER the scope</b>, and only
+    /// <b><see cref="RolloutSearch"/> searches OVER the scope</b>, and only
     /// when it is holding a rifle.
     /// </summary>
     /// <remarks>
-    /// Raised by <c>gg2-rl</c> before the measurement was taken rather than after:
-    /// <see cref="ScriptedBot"/> gained the scope on the same day, so a search
-    /// still enumerating five heads would have been measured against a scripted
-    /// sniper playing a 75-damage weapon while itself capped at 35 — and the
-    /// honest reading of that number would have been "the search got worse".
+    /// Without this a search enumerating without the zoom dimension would be
+    /// measured against a scripted sniper playing a 75-damage weapon while
+    /// itself capped at 35, misreading the gap as the search getting worse.
     /// <para>
-    /// ⚠️ <b>Sniper only, and the count is the point.</b> The zoom dimension
+    /// <b>Sniper only, and the count is the point.</b> The zoom dimension
     /// doubles 60 candidates to 120, and a decision was measured at 2.94 ms for
     /// 60 (Release, gg_debug). Every other class would be paying twice to evaluate
     /// the same sixty actions under two labels, because
@@ -353,12 +342,11 @@ public sealed class BotZoomTests(Xunit.Abstractions.ITestOutputHelper output)
     }
 
     /// <summary>
-    /// ⚠️⚠️ <b>A rollout-driven sniper raises the scope only when its horizon can
+    /// <b>A rollout-driven sniper raises the scope only when its horizon can
     /// see a shot — and at the DEFAULT horizon it cannot.</b>
     /// </summary>
     /// <remarks>
-    /// <b>This is the asymmetry <c>gg2-rl</c> predicted before the change landed</b>,
-    /// measured. <see cref="ScriptedBot"/> uses the scope immediately, because its
+    /// <see cref="ScriptedBot"/> uses the scope immediately, because its
     /// rule is "have a target, be scoped". <see cref="RolloutSearch"/> only uses
     /// what pays inside its horizon, and for a rifle nothing does:
     /// <list type="bullet">
@@ -371,16 +359,15 @@ public sealed class BotZoomTests(Xunit.Abstractions.ITestOutputHelper output)
     /// <b>horizon 90 scopes</b> and scores 70-105.</item>
     /// </list>
     /// <para>
-    /// ⚠️ <b>RE-RECORDED 2026-08-29: horizon 20 now scopes too.</b> The aim
-    /// tie-break changed it. Scoping alters <c>RunPower</c>, which alters where
-    /// the character ends up, which alters the aim error the tie-break compares —
-    /// so a zoom candidate can now win a tie that enumeration order used to give
-    /// to the unscoped twin. ⚠️ <b>That is the scope being chosen by a side effect
-    /// rather than on merit</b>, which is better than never being chosen and is
-    /// not the same as being chosen well. It is recorded rather than celebrated.
+    /// Horizon 20 scopes too, but by a side effect rather than on merit: scoping
+    /// alters <c>RunPower</c>, which alters where the character ends up, which
+    /// alters the aim error the tie-break compares — so a zoom candidate can win
+    /// a tie that enumeration order would otherwise give to the unscoped twin.
+    /// That is better than never being chosen and is not the same as being
+    /// chosen well.
     /// </para>
     /// <para>
-    /// ⚠️ <b>The default was deliberately NOT changed to fix this.</b> A horizon
+    /// <b>The default was deliberately NOT changed to fix this.</b> A horizon
     /// is a whole-bot tuning knob: 20 → 45 was measured at 12 mirror duels a
     /// class as better for the soldier -- RETRACTED, it does not reproduce at 80
     /// duels a cell, where the soldier goes 93.8% to 78.8% -- and worse for the
@@ -415,12 +402,11 @@ public sealed class BotZoomTests(Xunit.Abstractions.ITestOutputHelper output)
     }
 
     /// <summary>
-    /// ⚠️⚠️ <b>THE SCOPE COSTS THE SCRIPTED SNIPER ~10% OF ITS DAMAGE</b>, and
+    /// <b>THE SCOPE COSTS THE SCRIPTED SNIPER ~10% OF ITS DAMAGE</b>, and
     /// this pins the trade so a future tune is measured rather than guessed.
     /// </summary>
     /// <remarks>
-    /// <b>Reported by <c>gg2-rl</c> and reproduced here independently.</b> Giving
-    /// the bot a capability made it worse. Same map, band, cap, tier and classes;
+    /// Giving the bot a capability made it worse. Same map, band, cap, tier and classes;
     /// only the command channel differs. 24 banded sniper duels against
     /// <c>RolloutSearch</c> on <c>ctf_2dfort</c>, 2,400 ticks:
     /// <list type="bullet">
@@ -430,14 +416,14 @@ public sealed class BotZoomTests(Xunit.Abstractions.ITestOutputHelper output)
     /// <b>19 of 24</b>, 217 scope toggles, 74% of ticks scoped.</item>
     /// </list>
     /// <para>
-    /// ⚠️ <b>The mechanism is fire rate, not the movement penalty</b> — average
+    /// <b>The mechanism is fire rate, not the movement penalty</b> — average
     /// separation was 189 against 190, so positioning is unchanged. 1.58× the
     /// damage a shot, 0.57× the shots: <c>BotClassKeys</c> waits
     /// <c>RifleChargeTime * min(1, distance / ClassRange)</c> before every shot,
     /// and at duel range that wait costs more than the charge buys.
     /// </para>
     /// <para>
-    /// ⚠️⚠️ <b>NOT TUNED, deliberately, because the obvious model is contradicted
+    /// <b>NOT TUNED, deliberately, because the obvious model is contradicted
     /// by the measurement.</b> Sustained DPS says scoping at 190px is BETTER —
     /// 0.933 against unscoped 0.875 — and says it is worse beyond about 250px and
     /// far worse at sniper range (0.517 at 900px). Reality says 190px is 10%
@@ -450,7 +436,7 @@ public sealed class BotZoomTests(Xunit.Abstractions.ITestOutputHelper output)
     /// measured, and <b>write the hard ones down</b>.
     /// </para>
     /// <para>
-    /// ⚠️ <b>A rule that has never executed is not a tuned rule, it is an untested
+    /// <b>A rule that has never executed is not a tuned rule, it is an untested
     /// one.</b> The <c>BOT_*</c> constants have real playtesting behind them and
     /// that is why this port prefers them — but this arm could not have been
     /// played, by construction, for eight phases. It is new code that has just met
@@ -465,7 +451,7 @@ public sealed class BotZoomTests(Xunit.Abstractions.ITestOutputHelper output)
 
         output.WriteLine($"scoped {scoped}, unscoped {plain}");
 
-        // ⚠️ THE MECHANISM is what is gated, not the net effect. Both halves of the
+        // THE MECHANISM is what is gated, not the net effect. Both halves of the
         // trade, pinned: damage per shot up by 1.6x, shots down by a third. Any
         // future tuning of the charge-by-range rule has to move one of these
         // without giving back the other.
@@ -475,7 +461,7 @@ public sealed class BotZoomTests(Xunit.Abstractions.ITestOutputHelper output)
         Assert.Equal(54.25, scoped.Damage / scoped.Hits, 2);
         Assert.Equal(12, scoped.Hits);
 
-        // ⚠️ THE NET EFFECT IS DELIBERATELY NOT ASSERTED HERE, and the reason is
+        // THE NET EFFECT IS DELIBERATELY NOT ASSERTED HERE, and the reason is
         // now sharper than "the sample is small". Against a STATIONARY target the
         // scope WINS — 651 against 560 here — which is what the sustained-DPS
         // model predicts at this range. It is only in live play that it loses:
@@ -484,7 +470,7 @@ public sealed class BotZoomTests(Xunit.Abstractions.ITestOutputHelper output)
         // targets lost mid-charge and the charge zeroed by a toggle — and a test
         // against a dummy cannot see it by construction.
         //
-        // ⚠️ That is worth more than a pinned direction: it says the fix is about
+        // That is worth more than a pinned direction: it says the fix is about
         // WHEN to hold the scope, not about the charge arithmetic, and it says a
         // static bench will endorse the current rule.
     }
@@ -494,7 +480,7 @@ public sealed class BotZoomTests(Xunit.Abstractions.ITestOutputHelper output)
     /// the scope.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The opponent is DRIVEN BY NOTHING on purpose, and that is a cost
+    /// <b>The opponent is DRIVEN BY NOTHING on purpose, and that is a cost
     /// decision as well as a clean one.</b> The claim being gated is a property of
     /// the scripted sniper's own firing rule — damage a shot against shots a
     /// second — so the other side only has to be shootable. Using
@@ -503,7 +489,7 @@ public sealed class BotZoomTests(Xunit.Abstractions.ITestOutputHelper output)
     /// 16s to 1m46s</b>: 60 candidates × 20 horizon ticks per decision buys
     /// nothing this assertion needs.
     /// <para>
-    /// ⚠️ So the numbers here are NOT the numbers in the remarks above, and must
+    /// So the numbers here are NOT the numbers in the remarks above, and must
     /// not be read as them. Those are 24 banded duels against a live search; these
     /// are four fixed duels against a stationary target. What carries across is the
     /// <em>shape</em> — 1.6× the damage a shot, roughly half the shots — which is
@@ -547,6 +533,41 @@ public sealed class BotZoomTests(Xunit.Abstractions.ITestOutputHelper output)
     }
 
     /// <summary>Presents a source as keys-only, hiding its commands.</summary>
+    /// <summary>
+    /// The same scope, in a <see cref="HeadlessMatch"/>. The headless driver must
+    /// dispatch <c>ToggleZoom</c> along with <c>DropIntel</c>, or <c>eval</c>
+    /// measures snipers stuck at 35 while the server's scoped.
+    /// <see cref="DrivenWorld"/> is the one dispatch both drivers share, and this
+    /// is what goes red if either grows its own again.
+    /// </summary>
+    [Fact]
+    public void AHeadlessSniperScopesLikeAServerOne()
+    {
+        ReferenceTree.RequireAvailable();
+        ReferenceTree.RequireNavCache();
+
+        var match = HeadlessMatch.Load(
+            HeadlessMatchOptions.Default with { Bots = 6, AllowedClasses = [PlayerClass.Sniper] },
+            ReferenceTree.IncludedFiles,
+            ReferenceTree.NavCacheDirectory);
+
+        var zoomedAt = -1;
+
+        for (var tick = 0; tick < 3000 && zoomedAt < 0; tick++)
+        {
+            match.Step();
+
+            for (var slot = 1; slot < match.SlotCount; slot++)
+            {
+                if (match.State.IsAlive(slot) && match.State.Characters[slot].Zoomed)
+                    zoomedAt = tick;
+            }
+        }
+
+        output.WriteLine($"first headless scope at t={zoomedAt}");
+        Assert.True(zoomedAt >= 0, "no sniper in a headless match ever raised its scope");
+    }
+
     private sealed class KeysOnly(IInputSource inner) : IInputSource
     {
         public PlayerInput Poll(in WorldView world, int slot, int tick) => inner.Poll(in world, slot, tick);

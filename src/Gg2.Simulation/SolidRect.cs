@@ -43,7 +43,7 @@ public enum SolidKind
     /// <c>DropdownPlatform</c> — <b>never solid, to anything.</b>
     /// </summary>
     /// <remarks>
-    /// ⚠️ It is in the rectangle list purely so <c>PlaceMeetingKind</c> can find
+    /// It is in the rectangle list purely so <c>PlaceMeetingKind</c> can find
     /// it, and <see cref="IsSolidFor"/> deliberately has no case for it: the
     /// object's own <c>solid</c> is false and it is not in <c>charSetSolids</c>,
     /// so <c>place_free</c> passes straight through one in every direction. A
@@ -97,7 +97,7 @@ public readonly record struct CollisionFilter
     /// <c>global.mapchanging</c>: the round is over and the win is on screen.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Every gate opens, and the two lists disagree about which.</b>
+    /// <b>Every gate opens, and the two lists disagree about which.</b>
     /// <c>charSetSolids.gml:4</c> wraps <em>both</em> its <c>IntelGate</c> and
     /// <c>TeamGate</c> blocks in <c>if(!global.mapchanging)</c>, so to a
     /// character neither kind is solid; <c>gunSetSolids.gml:5</c> wraps only its
@@ -248,9 +248,9 @@ public readonly record struct SolidRect
     /// Every solid a map places wears one of two sprites the game builds at
     /// runtime: a 6x60 vertical bar and a 60x6 horizontal one. Both have their
     /// origin at (0, 0) and a mask that fills the sprite exactly — measured
-    /// 2026-08-25 across eight object types and twenty instances, at scales from
-    /// 0.3 to 13, with every point inside the reported bounding box solid to a
-    /// precise <c>collision_point</c>. That is what lets this be two integers
+    /// across eight object types and twenty instances, at scales from 0.3 to 13,
+    /// with every point inside the reported bounding box solid to a precise
+    /// <c>collision_point</c>. That is what lets this be two integers
     /// instead of sprite metadata.
     /// </remarks>
     public required int SpriteWidth { get; init; }
@@ -278,7 +278,7 @@ public readonly record struct SolidRect
         // Likewise: solid = (team != other.team and other.intel) for a
         // character, and simply solid for a bullet.
         //
-        // ⚠️ But only charSetSolids' half is inside the mapchanging guard.
+        // But only charSetSolids' half is inside the mapchanging guard.
         // gunSetSolids opens its TeamGate block and leaves `with(IntelGate)
         // solid = true` outside it, so a bullet is still stopped by an intel
         // gate during the victory screen and a character walks through it.

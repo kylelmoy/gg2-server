@@ -9,7 +9,7 @@ namespace Gg2.Tests;
 /// Edge occupancy: why a team of bots does not all walk down the same corridor.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>This is the only safe way to spread a team out, and a per-edge random
+/// <b>This is the only safe way to spread a team out, and a per-edge random
 /// jitter is not.</b> The jitter was tried in the reference and deleted: it is
 /// mean-reverting, so over a sixty-edge route every candidate inflates by the same
 /// average and all eight bots got the identical route anyway. Occupancy works
@@ -24,7 +24,7 @@ public sealed class BotOccupancyTests(ITestOutputHelper output)
     /// A leg with two genuinely different lanes.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Swept for, not chosen.</b> Most legs have one sensible route and a
+    /// <b>Swept for, not chosen.</b> Most legs have one sensible route and a
     /// 25% penalty on a few edges does not move them, so a fixture picked by eye
     /// gates nothing at all. Swept across every seventh start and eleventh goal on
     /// two maps: node 0 → 143 goes from a 32-node route to a 14-node one with
@@ -54,7 +54,7 @@ public sealed class BotOccupancyTests(ITestOutputHelper output)
     /// route.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The claim the whole mechanism exists for, and the control is the half
+    /// <b>The claim the whole mechanism exists for, and the control is the half
     /// that matters:</b> the identical four searches with no occupancy return the
     /// identical route four times, which is what the server did before this.
     /// </remarks>
@@ -100,7 +100,7 @@ public sealed class BotOccupancyTests(ITestOutputHelper output)
     /// The other team is not pushed around by ours.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Per team rather than one shared map, because the thing being spread
+    /// <b>Per team rather than one shared map, because the thing being spread
     /// out is a team.</b> A blue bot has no reason to avoid the route red is
     /// walking — if anything it wants to be on it — and folding both into one map
     /// would have each team's routes push the other's around for no reason anyone
@@ -122,7 +122,7 @@ public sealed class BotOccupancyTests(ITestOutputHelper output)
         Assert.True(search.Find(From, To, new NavQuery(Team.Red), redAgain, null, shared.Counts(Team.Red)));
         Assert.False(redAgain.SequenceEqual(red), "red was not moved, so this gates nothing");
 
-        // ⚠️ Blue's answer is compared with BLUE's own uncrowded answer, never
+        // Blue's answer is compared with BLUE's own uncrowded answer, never
         // with red's. The two teams do not agree about this leg in the first
         // place — a gate is passable to the team that owns it — so a test that
         // expected the same route would fail on the gates and say nothing at all
@@ -141,7 +141,7 @@ public sealed class BotOccupancyTests(ITestOutputHelper output)
     /// A planner does not charge a bot for the route it is already walking.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Not an optimisation — it is what makes a route stable across
+    /// <b>Not an optimisation — it is what makes a route stable across
     /// re-plans.</b> A bot that can see its own route in the counts is charged
     /// extra for the path it is on, so every re-plan tries to move it somewhere
     /// else and the whole team churns lanes every <c>BOT_REPLAN_TICKS</c>.
@@ -177,7 +177,7 @@ public sealed class BotOccupancyTests(ITestOutputHelper output)
         Assert.True(new NavSearch(graph).Find(From, To, query, mate, null, shared.Counts(Team.Red)));
         Assert.False(mate.SequenceEqual(first), "the counts moved nobody, so self-exclusion gates nothing");
 
-        // ⚠️ ReplanAt and PlanFailUntil are the follower's own throttles; a
+        // ReplanAt and PlanFailUntil are the follower's own throttles; a
         // re-plan from the same place at a later tick is what a real bot does
         // every BOT_REPLAN_TICKS.
         Assert.True(follower.Plan(state, sx, sy, BotConstants.ReplanTicks * 2, in query, shared));
@@ -190,7 +190,7 @@ public sealed class BotOccupancyTests(ITestOutputHelper output)
     /// Adding twice counts once, and removing twice does not go negative.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A count that goes negative makes an edge CHEAPER the more bots are on
+    /// <b>A count that goes negative makes an edge CHEAPER the more bots are on
     /// it</b>, which is the exact opposite of the point — and it is reachable,
     /// because a route is added in one place and removed in three: on every
     /// re-plan, arrival and death; when the bot leaves or the map changes; and by
@@ -224,7 +224,7 @@ public sealed class BotOccupancyTests(ITestOutputHelper output)
         shared.Remove(state);
         Assert.Equal(0, shared.EdgeCount(Team.Red));
 
-        // ⚠️ And the case the flag actually protects, which the empty map above
+        // And the case the flag actually protects, which the empty map above
         // does NOT reach: a second bot on the same edges. `if (was <= 0) remove`
         // means a count can never be stored negative, so a double-decrement of a
         // lone bot's route is invisible — what it costs is somebody ELSE's count.
@@ -248,7 +248,7 @@ public sealed class BotOccupancyTests(ITestOutputHelper output)
     /// A removal goes to the team the route was counted against.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The two genuinely come apart.</b> Autobalance switches the
+    /// <b>The two genuinely come apart.</b> Autobalance switches the
     /// lowest-scoring player on the larger team mid-round and can perfectly well
     /// pick a bot, and a map rotation re-teams every one of them. A removal that
     /// read the bot's team <em>now</em> would subtract from the map it has just
@@ -305,13 +305,13 @@ public sealed class BotOccupancyTests(ITestOutputHelper output)
     /// A map change drops the counts and the flag together.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Clearing the flag is the half that is easy to forget.</b> Dropping
+    /// <b>Clearing the flag is the half that is easy to forget.</b> Dropping
     /// the maps alone leaves every bot believing its route is still counted, so
     /// the next removal declines to decrement and the route is added a
     /// <em>second</em> time on the next plan — a count of 2 for one bot, on a map
     /// where it may be the only thing walking.
     /// <para>
-    /// ⚠️ And occupancy keys are node indices, which only mean anything to one
+    /// And occupancy keys are node indices, which only mean anything to one
     /// build of the graph — counts from the previous map would sit there making
     /// arbitrary edges of the new one look busy.
     /// </para>
@@ -356,7 +356,7 @@ public sealed class BotOccupancyTests(ITestOutputHelper output)
     /// Arriving takes the route off the counts.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Off the counts BEFORE the route is freed</b>, because the edges can
+    /// <b>Off the counts BEFORE the route is freed</b>, because the edges can
     /// only be found through the path that is about to be cleared. This is the
     /// third of the three places <c>botPathFree</c> removes from — re-plan,
     /// arrival, death — and the one that is invisible to a test that never lets a
@@ -379,7 +379,7 @@ public sealed class BotOccupancyTests(ITestOutputHelper output)
         Assert.True(follower.Plan(state, sx, sy, 0, in query, shared));
         Assert.True(shared.EdgeCount(Team.Red) > 0);
 
-        // Standing on the goal, stopped. ⚠️ Arrival needs the bot STOPPED and not
+        // Standing on the goal, stopped. Arrival needs the bot STOPPED and not
         // merely close — GG2 keeps horizontal speed for ~10 ticks after the keys
         // come off, so the follower brakes inside the band rather than declaring
         // arrival on position.

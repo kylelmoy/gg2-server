@@ -4,8 +4,7 @@ using Gg2.Simulation;
 namespace Gg2.Tests;
 
 /// <summary>
-/// Taunting and the humiliation round — the two features <c>CLAUDE.md</c> named
-/// as still absent, landed 2026-08-28.
+/// Taunting and the humiliation round.
 /// </summary>
 /// <remarks>
 /// <b>Both are observable simulation rather than presentation</b>, which is why
@@ -80,7 +79,7 @@ public sealed class TauntTests
     }
 
     /// <summary>
-    /// ⚠️ The duration is the class's taunt sprite frame count and nothing else,
+    /// The duration is the class's taunt sprite frame count and nothing else,
     /// so it is different for every class.
     /// </summary>
     /// <remarks>
@@ -119,7 +118,7 @@ public sealed class TauntTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The jump on the tick a taunt starts still fires.</b>
+    /// <b>The jump on the tick a taunt starts still fires.</b>
     /// </summary>
     /// <remarks>
     /// GML enters <c>if(!taunting and !omnomnomnom)</c> once and sets the flag
@@ -183,7 +182,7 @@ public sealed class TauntTests
     }
 
     /// <summary>
-    /// ⚠️ A humiliated character loses 0.2 of control, and it does <b>not</b>
+    /// A humiliated character loses 0.2 of control, and it does <b>not</b>
     /// stack with the intel's 0.1.
     /// </summary>
     /// <remarks>

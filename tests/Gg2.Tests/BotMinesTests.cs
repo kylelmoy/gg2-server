@@ -9,7 +9,7 @@ namespace Gg2.Tests;
 /// When a demoman presses SPECIAL — <c>botMinesArmed</c>.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>Every test here that names a distance pairs it with what the engine's own
+/// <b>Every test here that names a distance pairs it with what the engine's own
 /// blast actually does at that distance</b>, by detonating the mine and reading
 /// the victim's hp. That is deliberate: the reference's first version of this
 /// triggered at 60px because it read the mine's <em>affect</em> radius, and the
@@ -36,7 +36,7 @@ public sealed class BotMinesTests(ITestOutputHelper output)
 
     /// <summary>A mine at a place, owned by a slot.</summary>
     /// <remarks>
-    /// ⚠️ <c>SplashThreshold</c> is what <c>move_all_bullets</c> CLEARS on landing,
+    /// <c>SplashThreshold</c> is what <c>move_all_bullets</c> CLEARS on landing,
     /// so <c>inFlight: false</c> — the default, and what a mined doorway is — means
     /// the mine has <b>no quarter-radius cutoff</b>. The two forms deal different
     /// damage at the same distance and the tests measure both.
@@ -66,7 +66,7 @@ public sealed class BotMinesTests(ITestOutputHelper output)
 
     /// <summary>Where <c>Place</c> actually put somebody.</summary>
     /// <remarks>
-    /// ⚠️ <b><c>ScenarioWorld.Place</c> snaps downward to a nav node, so the
+    /// <b><c>ScenarioWorld.Place</c> snaps downward to a nav node, so the
     /// coordinate handed to it is a request rather than a position.</b> Every
     /// distance in this file is measured from where the character ended up and the
     /// MINE is placed relative to that — the mine's own position is the only one
@@ -119,7 +119,7 @@ public sealed class BotMinesTests(ITestOutputHelper output)
     /// The trigger is the mine's DAMAGE radius, not its affect radius.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>This is the whole behaviour, and the reference paid for it in play.</b>
+    /// <b>This is the whole behaviour, and the reference paid for it in play.</b>
     /// The first version of that script triggered at <b>60</b> px because it read
     /// the mine's <c>affectRadius</c> (65) rather than its <c>blastRadius</c> (40),
     /// so the bot detonated the moment an enemy came near, blew its whole stock and
@@ -131,7 +131,7 @@ public sealed class BotMinesTests(ITestOutputHelper output)
     /// the trigger back fails on what the number is <em>for</em>.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Measured here, and the reference's own comment is only half of it: a
+    /// <b>Measured here, and the reference's own comment is only half of it: a
     /// STUCK mine has no quarter-radius cutoff</b>, so the "takes nothing at all
     /// past 30 of box distance" it quotes is true of one still in flight and not of
     /// one lying in a doorway. Past 30px of box distance a stuck mine keeps dealing
@@ -227,7 +227,7 @@ public sealed class BotMinesTests(ITestOutputHelper output)
     /// A team-mate, a corpse and a cloaked spy are all worth nothing.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The cloak clause is the one worth having a control for. Nothing else in
+    /// The cloak clause is the one worth having a control for. Nothing else in
     /// the bot layer can see a cloaked spy — target selection skips one — so
     /// detonating on one would be the single place a bot acted on information it
     /// does not have.
@@ -269,7 +269,7 @@ public sealed class BotMinesTests(ITestOutputHelper output)
     /// A sentry is asked with the BOX metric, and a character with the centre one.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Not a refinement — it is the only reading that works.</b> The
+    /// <b>Not a refinement — it is the only reading that works.</b> The
     /// reference's script scanned characters and nothing else, so a demoman that
     /// had chosen a sentry as its target put its whole stock on that sentry and
     /// then never pressed SPECIAL, because no character was ever standing next to
@@ -343,7 +343,7 @@ public sealed class BotMinesTests(ITestOutputHelper output)
 
         Assert.True(BotMines.Armed(View(world), demo));
 
-        // ⚠️ The control is the SAME generator moved to red, not moved away: it is
+        // The control is the SAME generator moved to red, not moved away: it is
         // the team test being gated, and a blast that hurts nobody is not worth
         // spending eight mines on.
         world.State.RedGenerator = world.State.BlueGenerator;
@@ -357,13 +357,13 @@ public sealed class BotMinesTests(ITestOutputHelper output)
     /// does not wait for a target.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>No <c>hasSubject</c> test on purpose.</b> A mined doorway is worth
+    /// <b>No <c>hasSubject</c> test on purpose.</b> A mined doorway is worth
     /// springing on whoever walks into it, and that is very often not the thing
     /// this demoman is aiming at. Every other branch in
     /// <see cref="BotClassKeys"/> that fires carries one; this is the exception,
     /// so it gets the control.
     /// <para>
-    /// ⚠️ <c>BotClassKeys.For</c> rather than the whole combat step: the trigger
+    /// <c>BotClassKeys.For</c> rather than the whole combat step: the trigger
     /// this file is about would otherwise be measured through the fire delay, the
     /// aim settle and the hold-fire roll, and the last of those makes a pipeline
     /// test intermittent.

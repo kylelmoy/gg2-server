@@ -5,27 +5,21 @@ namespace Gg2.Env;
 /// into a server.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>This exists because the composition root dropped an argument and
-/// nothing could tell.</b> <c>Program.cs</c> parsed <c>--nav</c> into a local and
-/// then built <c>new EnvServer(maps)</c> without it, so every served world had a
-/// null nav graph and <c>EnvDriver.Scripted</c> was refused — correctly, and for
-/// a reason the caller could do nothing about. It compiled because
-/// <see cref="EnvServer"/>'s nav directory is an optional parameter, and every
-/// test upstream passed because every test constructs <see cref="EnvServer"/>
-/// itself.
+/// <b>Top-level statements cannot be called by a test.</b> A dropped argument
+/// in <c>Program.cs</c> — parsing <c>--nav</c> into a local and then building
+/// <c>new EnvServer(maps)</c> without it — is otherwise ungateable: it compiles
+/// because <see cref="EnvServer"/>'s nav directory is an optional parameter, so
+/// every served world silently gets a null nav graph and
+/// <c>EnvDriver.Scripted</c> is refused for a reason the caller can do nothing
+/// about, while every test upstream passes because every test constructs
+/// <see cref="EnvServer"/> itself. The fix is structural: the parse and the
+/// wiring both live here, <c>Program.cs</c> is the shell around them, and
+/// <c>EnvOptionsTests</c> drives <see cref="CreateServer"/> — the line that
+/// actually matters.
 /// <para>
-/// ⚠️ <b>Top-level statements cannot be called by a test.</b> That is the whole
-/// reason a dropped argument in <c>Program.cs</c> was un-gateable, and the fix is
-/// structural rather than a fresh pair of eyes: the parse and the wiring both
-/// live here, <c>Program.cs</c> is the shell around them, and
-/// <c>EnvOptionsTests</c> drives <see cref="CreateServer"/> — the actual line
-/// that was wrong.
-/// </para>
-/// <para>
-/// It is also the failure class this project keeps naming: <c>docs/ENV.md</c>
-/// documented a driver the served env could not produce, and only a caller who
-/// acted on the description could find out. Found by <c>gg2-rl</c> doing exactly
-/// that.
+/// This is also the general failure class: <c>docs/ENV.md</c> can document a
+/// driver the served env cannot actually produce, and only a caller who acts on
+/// the description finds out.
 /// </para>
 /// </remarks>
 public sealed record EnvOptions
@@ -49,7 +43,7 @@ public sealed record EnvOptions
     /// Where the bot nav caches live, or null.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Null is a real answer and not "unset"</b> — it means
+    /// <b>Null is a real answer and not "unset"</b> — it means
     /// <see cref="EnvDriver.Scripted"/> is refused, which is the right behaviour
     /// for an env with no graphs and the wrong one when the caller passed
     /// <c>--nav</c>.
@@ -89,7 +83,7 @@ public sealed record EnvOptions
 
         for (var i = 1; i < args.Length; i++)
         {
-            // ⚠️ Every option takes a value, so a trailing flag would read past
+            // Every option takes a value, so a trailing flag would read past
             // the end. Refused with the flag's own name rather than an
             // IndexOutOfRangeException from inside a parse.
             if (args[i].StartsWith("--", StringComparison.Ordinal) && i + 1 >= args.Length)
@@ -162,10 +156,10 @@ public sealed record EnvOptions
     /// The composition root: the server these options describe.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>One line, and it was the bug.</b> Everything about the served env's
-    /// capability is decided here, so this is what a test has to call — asserting
-    /// that <see cref="Nav"/> parses is not the same claim as asserting it
-    /// reaches the server, and the parse was never the half that was wrong.
+    /// <b>One line, and it decides everything.</b> Everything about the served
+    /// env's capability is decided here, so this is what a test has to call —
+    /// asserting that <see cref="Nav"/> parses is not the same claim as
+    /// asserting it reaches the server.
     /// </remarks>
     public EnvServer CreateServer() => new(Maps, Nav);
 }

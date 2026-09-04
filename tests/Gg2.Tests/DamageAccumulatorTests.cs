@@ -15,7 +15,7 @@ namespace Gg2.Tests;
 /// healing, spawn invulnerability, a cabinet and a respawn all move hp without
 /// anybody dealing damage.
 /// <para>
-/// ⚠️ <b>The accumulation is on <c>DamageApi.Deal</c> and its parameters are
+/// <b>The accumulation is on <c>DamageApi.Deal</c> and its parameters are
 /// required.</b> An overload without them would let a new damage site accumulate
 /// nothing and nobody notice — a reward signal that is quietly incomplete is far
 /// harder to see than one that is obviously broken. Making the compiler ask "who
@@ -106,7 +106,7 @@ public sealed class DamageAccumulatorTests
         Assert.Equal(events.DamageDealt[1], events.DamageTaken[2], 9);
         Assert.Equal(before - state.Characters[2].Hp, events.DamageTaken[2], 9);
 
-        // ⚠️ The shooter is 60 px away, so their own blast catches them too —
+        // The shooter is 60 px away, so their own blast catches them too —
         // and this is the sharpest form of the self-damage rule: ONE explosion
         // deals to the enemy and self-damages the shooter, and only the first
         // half reaches DamageDealt. A reward that summed the blast would pay a
@@ -119,7 +119,7 @@ public sealed class DamageAccumulatorTests
     }
 
     /// <summary>
-    /// ⚠️ <b>Self-damage is taken and never dealt.</b>
+    /// <b>Self-damage is taken and never dealt.</b>
     /// </summary>
     /// <remarks>
     /// <c>docs/ENV.md</c>: "A rocket jump must not score positive reward." The
@@ -154,7 +154,7 @@ public sealed class DamageAccumulatorTests
     /// victim — and credits nobody once that pyro has left.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The dealer slot follows <c>LastDamageDealer</c> semantics</b>, so
+    /// <b>The dealer slot follows <c>LastDamageDealer</c> semantics</b>, so
     /// this is the same rule that lets a rocket already in the air credit a
     /// shooter who has since died. <see cref="CharacterState.Nobody"/> is 255
     /// and never 0 — a defaulted zero would quietly credit the server's own

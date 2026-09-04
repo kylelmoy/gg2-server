@@ -88,7 +88,7 @@ public sealed class GeneratorUpdateLayoutTests
     }
 
     /// <summary>
-    /// ⚠️ Blue's generator is written first, then red's — the reverse of every
+    /// Blue's generator is written first, then red's — the reverse of every
     /// other paired field on the wire.
     /// </summary>
     /// <remarks>
@@ -120,7 +120,7 @@ public sealed class GeneratorUpdateLayoutTests
     }
 
     /// <summary>
-    /// ⚠️ A destroyed generator writes <b>nothing</b> — not a zeroed block — so
+    /// A destroyed generator writes <b>nothing</b> — not a zeroed block — so
     /// the message is four bytes shorter and a following message still frames.
     /// </summary>
     /// <remarks>

@@ -12,26 +12,24 @@ namespace Gg2.Bots;
 /// detonates <b>every</b> mine the player owns at once — so the question is never
 /// "is this mine worth it" but "is any of them".
 /// <para>
-/// ⚠️ <b><see cref="BotConstants.MineTrigger"/> is measured against the mine's
+/// <b><see cref="BotConstants.MineTrigger"/> is measured against the mine's
 /// <em>damage</em> radius, not its affect radius, and the difference is the whole
 /// behaviour.</b> <c>Mine.events/User Event 2.xml</c> damages through
 /// <c>blastRadius</c> (40) and not <c>affectRadius</c> (65), and skips a character
 /// outright when <c>1 - distance/blastRadius &lt;= 0.25</c> — so anything at a
 /// box distance of 30 or more takes <em>nothing at all</em>, and the 45 damage
-/// falls off to 11 across the 30px that are left. The reference used to trigger at
-/// 60 centre-to-centre, which is outside the blast on every axis: the bot
-/// detonated the moment an enemy came near, blew its whole stock and dealt zero.
-/// Reported from play as "detonates too early, doesn't damage enemies".
+/// falls off to 11 across the 30px that are left. A trigger measured
+/// centre-to-centre instead of to the blast radius would detonate on approach
+/// and deal zero damage.
 /// </para>
 /// <para>
-/// ⚠️ <b>A sentry and a generator are asked the same question with a different
+/// <b>A sentry and a generator are asked the same question with a different
 /// metric, and that is not a refinement — it is the only reading that works.</b>
 /// The reference's script scanned characters and nothing else, so a demoman that
 /// had chosen a <em>sentry</em> as its target (<see cref="BotTargeting"/> takes
 /// sentry and generator targets, and <see cref="BotClassKeys"/> lobs at them) put
 /// its whole stock on that sentry and then never pressed SPECIAL, because no
-/// character was ever standing next to them. Reported from play as "shooting
-/// grenades at sentries, but not detonating". The blast damages both.
+/// character was ever standing next to them. The blast damages both.
 /// </para>
 /// <para>
 /// The metric for those two is <c>distance_to_object</c> — box to box — because
@@ -51,7 +49,7 @@ public static class BotMines
         if (!world.IsAlive(slot))
             return false;
 
-        // ⚠️ The CHARACTER's team, which is what the reference reads. A player's
+        // The CHARACTER's team, which is what the reference reads. A player's
         // and their character's agree everywhere except across the tick a team
         // change lands, and the mines belong to the body that lobbed them.
         var team = world.Character(slot).Team;
@@ -90,7 +88,7 @@ public static class BotMines
 
             ref readonly var candidate = ref world.Character(other);
 
-            // ⚠️ A cloaked spy is not a reason to spend the stock. It is the same
+            // A cloaked spy is not a reason to spend the stock. It is the same
             // exclusion the target search makes, and for the same reason: nothing
             // else in the bot layer can see one either, so detonating on one would
             // be the only place a bot acted on information it does not have.
@@ -123,7 +121,7 @@ public static class BotMines
             if (sentry.Team == team || !Gml.Greater(sentry.Hp, 0))
                 continue;
 
-            // ⚠️ The REPORTED box, which is the one distance_to_object answers with
+            // The REPORTED box, which is the one distance_to_object answers with
             // — a sentry's mask does not animate and its bbox_left carries the
             // two-pixel facing inflation (docs/TRAPS-SIMULATION.md, "the sentry's box").
             if (Gml.Less(Sentries.ReportedBox(sentry).Distance(mineBox), BotConstants.MineTrigger))

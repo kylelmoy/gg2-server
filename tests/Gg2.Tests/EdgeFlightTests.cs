@@ -12,12 +12,11 @@ namespace Gg2.Tests;
 /// <see cref="PathFollowerTests"/> asserts the arms' decisions on hand-built
 /// graphs and <see cref="PathFollowerFixtureTests"/> walks one long leg made
 /// entirely of the kinds that need no weapon. Neither ever leaves the ground
-/// under a rocket or a mine on an arc a generator actually emitted, and the one
-/// time that was done by hand it produced a number — "zero sticky jumps across
-/// 48 real edges on four maps" — that was true, useless, and about a bug three
-/// layers away (docs/TRAPS-BOTS.md, "the arm was never asked").
+/// under a rocket or a mine on an arc a generator actually emitted — a hand-swept
+/// count of that can look green while measuring a bug three layers away
+/// (docs/TRAPS-BOTS.md, "the arm was never asked").
 /// <para>
-/// ⚠️ <b>These pin counts against the nav caches in <c>nav/</c>, which are
+/// <b>These pin counts against the nav caches in <c>nav/</c>, which are
 /// <c>gg2-nav-gen</c>'s output and not checked in.</b> Same exposure as
 /// <see cref="PathFollowerFixtureTests"/>'s 137-node route, and the same
 /// discipline: a failure here is the <b>re-record</b> — check the change is one
@@ -77,13 +76,9 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
     /// shipped graph — and so does the takeoff column.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>This corrects a claim this repo made about itself.</b>
-    /// docs/TRAPS-BOTS.md said the first flight harness measured the wrong edges
-    /// because "on <c>ctf_truefort</c> and <c>cp_egypt</c> the takeoff column does
-    /// not resolve to the from-node". Measured here over all 18,396 rocket-jump
-    /// and air-jump edges in <c>nav/</c>: <b>the takeoff column
-    /// resolves to the from-node every single time</b>, and so does the midpoint.
-    /// Whatever that harness started from, it was neither of these.
+    /// Measured over every rocket-jump and air-jump edge in <c>nav/</c>: the
+    /// takeoff column resolves to the from-node every single time, and so does
+    /// the midpoint.
     /// <para>
     /// The midpoint is what <see cref="EdgeFlights"/> uses anyway, and the reason
     /// is stronger than a measurement: <see cref="NavGraph.NodeFromWorld"/> ranks
@@ -135,7 +130,6 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
 
         output.WriteLine($"{edges} arc edges; midpoint resolves {midResolves}, takeoff column {takeoffResolves}");
 
-        // Re-recorded 2026-09-01: gg_debug2's graph adds 113 arc edges.
         Assert.Equal(18_509, edges);
         Assert.Equal(edges, midResolves);
         Assert.Equal(edges, takeoffResolves);
@@ -145,7 +139,7 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
     /// A soldier flies real rocket-jump arcs off the shipped cache.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b><see cref="EdgeFlight.Flown"/> is the load-bearing number and
+    /// <b><see cref="EdgeFlight.Flown"/> is the load-bearing number and
     /// arrivals are not it.</b> Twenty of <c>gg_debug</c>'s 67 rocket jumps can be
     /// posed as a route, all twenty arrive, and only twelve of those arrivals
     /// involved a rocket — the other eight are node pairs close enough that the
@@ -153,7 +147,7 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
     /// against 214 flights. A gate on arrivals alone would stay green with the arm
     /// deleted.
     /// <para>
-    /// ⚠️ Which is exactly what makes this the control the synthetic tests could
+    /// Which is exactly what makes this the control the synthetic tests could
     /// not be. <b>Mutation-checked</b>: rip the ATTACK half out of
     /// <see cref="PathFollower.ApplyLaunch"/> and this goes <b>20 arrivals / 12
     /// flights → 16 / 8</b>. Note which half moves. It does <em>not</em> go to
@@ -176,7 +170,7 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
         Assert.Equal(21, arrived);
         Assert.Equal(12, flown);
 
-        // ⚠️ TWO, and pinning the real number rather than a hoped-for zero is the
+        // TWO, and pinning the real number rather than a hoped-for zero is the
         // point. Both are one arc each: 28->30 fires once, goes off route, and the
         // retry arrives; 30->12 fires twice and takes 166 ticks against the 74-97
         // every other arc on this map needs. That is the off-route machinery doing
@@ -213,7 +207,7 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
     /// mean anything.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The premise this test asserts is its whole point.</b> A* costs a jump
+    /// <b>The premise this test asserts is its whole point.</b> A* costs a jump
     /// the same as a walk, so on <c>gg_debug</c> it goes round 47 of the 67
     /// rocket-jump arcs — and every one of those, driven anyway, is a bot walking
     /// somewhere while a counter says "rocket jump attempted". That is how
@@ -275,7 +269,7 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
     /// "never seen" is a measurement rather than an assumption.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A branch nothing reaches is a claim nothing checks</b>, and this repo
+    /// <b>A branch nothing reaches is a claim nothing checks</b>, and this repo
     /// has been bitten twice in a week by exactly that shape. Both of these are
     /// the harness refusing to guess rather than dead code:
     /// <list type="bullet">
@@ -288,7 +282,7 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
     /// <item>
     /// <see cref="EdgeFlightOutcome.Shadowed"/> reads <b>zero across all 22,528
     /// arc edges</b> of the shipped and sticky caches, on both teams: no node pair
-    /// carries a strictly cheaper routable edge of another kind. ⚠️ That is not the
+    /// carries a strictly cheaper routable edge of another kind. That is not the
     /// same as saying parallel edges are harmless — 11,615 pairs carry more than
     /// one kind, and picking among them by <em>index order</em> rather than by cost
     /// was a live bug for eight phases. Cost order simply happens to agree with the
@@ -339,7 +333,6 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
 
         output.WriteLine($"{arcs} routable arcs across both teams; {shadowed} shadowed");
 
-        // Re-recorded 2026-09-01: gg_debug2's graph adds 212 routable arcs.
         Assert.Equal(36_797, arcs);
         Assert.Equal(0, shadowed);
     }

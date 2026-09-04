@@ -11,11 +11,11 @@ namespace Gg2.Tests;
 /// port's meter really does run ahead.
 /// </summary>
 /// <remarks>
-/// <b>Recorded 2026-08-27: six red scouts and no blue team</b>, spawn-anchored,
-/// roster forced after the reload, and the bots steered onto the neutral middle
-/// point and then onto the next one.
+/// <b>Six red scouts and no blue team</b>, spawn-anchored, roster forced
+/// after the reload, and the bots steered onto the neutral middle point and
+/// then onto the next one.
 /// <para>
-/// ⚠️ <b>The one-sided roster is the design, for the third time.</b> What ends a
+/// <b>The one-sided roster is the design, for the third time.</b> What ends a
 /// closed-loop window is weapon knockback, so removing the enemy team is how you
 /// buy one long enough to watch a slow objective — it did this for
 /// <c>koth_valley</c>'s hill and <c>ctf_2dfort</c>'s capture, and it is what was
@@ -65,7 +65,7 @@ public sealed class UncontestedControlPointFixtureTests
     /// It is the quiet recording it was meant to be, and it captures.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Not silent, and the difference matters.</b> With no enemy team there
+    /// <b>Not silent, and the difference matters.</b> With no enemy team there
     /// is still a handful of weapon fire and a few deaths — a scout shooting a
     /// wall, and falls. What buys the window is that <em>nothing shoves anybody
     /// else</em>, not that nothing happens. Asserted loosely for that reason:
@@ -93,7 +93,7 @@ public sealed class UncontestedControlPointFixtureTests
     }
 
     /// <summary>
-    /// ✅ <b>The window is 4,617 ticks and every control-point observation after
+    /// <b>The window is 4,617 ticks and every control-point observation after
     /// the anchor is inside it.</b>
     /// </summary>
     /// <remarks>
@@ -129,31 +129,18 @@ public sealed class UncontestedControlPointFixtureTests
     }
 
     /// <summary>
-    /// ✅ <b>The port captures the point exactly as the reference does</b> — the
+    /// <b>The port captures the point exactly as the reference does</b> — the
     /// first time the symmetrical capture rules have been held to the engine.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>This was an open finding for a few hours, and it was the HARNESS.</b>
-    /// The port looked like it started every capture two ticks early: +2 against
-    /// three soldiers on <c>reference-cp_egypt-closedsymmetric.trace</c> and +4
-    /// against six scouts here, which is what a fixed head start does to a meter
-    /// that advances by <c>capStrength</c> a tick. It was not a head start.
-    /// <c>Replayer</c> compared the control-point block <em>after</em> running
-    /// the tick, where the block — serialised in the server's Begin Step, like
-    /// the positions beside it — describes the <b>end of the previous tick</b>.
-    /// One tick of capture, read as a rule error.
+    /// The control-point block — serialised in the server's Begin Step, like the
+    /// positions beside it — describes the <b>end of the previous tick</b>, so
+    /// <c>Replayer</c> must compare it <em>after</em> running the tick; comparing
+    /// before makes a capture look like it starts a tick early.
     /// <para>
-    /// ⚠️ <b>The lesson is the one this project keeps paying for</b>: the KotH
-    /// capture looked exactly like this and turned out to be the replay starting
-    /// the round early. <b>Eliminate the harness before believing a divergence
-    /// is the simulation</b> — and note what nearly hid it, which is that the
-    /// wrong order made <c>koth_valley</c> exact and only a second CP recording
-    /// with a different <c>capStrength</c> made the shape of the error legible.
-    /// </para>
-    /// <para>
-    /// This test is now the gate on that ordering: moving the comparison back
-    /// after <c>Advance</c> fails it, and so does moving the unlock injection
-    /// after the comparison.
+    /// This test gates that ordering: moving the comparison back after
+    /// <c>Advance</c> fails it, and so does moving the unlock injection after
+    /// the comparison.
     /// </para>
     /// </remarks>
     [Fact]
@@ -167,7 +154,7 @@ public sealed class UncontestedControlPointFixtureTests
             .Where(m => m.Tick > anchor)
             .ToArray();
 
-        // ⚠️ The control, and it is the one that was missing across three of the
+        // The control, and it is the one that was missing across three of the
         // five comparison families. "No mismatches" is satisfied just as well by
         // a comparison that never runs — measured: routing
         // ReconcileControlPoints' output to a discarded list failed nothing until

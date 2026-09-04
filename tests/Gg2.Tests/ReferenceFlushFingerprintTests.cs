@@ -9,19 +9,19 @@ namespace Gg2.Tests;
 /// only test in this repo that grades the stage table against GG2 itself.
 /// </summary>
 /// <remarks>
-/// ⛔ <b>Everything else about the flush boundary is graded against a table
+/// <b>Everything else about the flush boundary is graded against a table
 /// written by reading GML.</b> <c>WireStageTests</c> and
 /// <c>FlushFingerprintTests</c> both check that the port routes each stage the
 /// way docs/PARITY.md says; neither can notice if docs/PARITY.md is wrong. This
 /// one reads the reference's own broadcast and asks what it actually did.
 /// <para>
 /// <b>The recording.</b> <c>reference-ctf_truefort-framed.trace</c> — 40 seconds
-/// of six bots fighting on a live GG2 2.9.2 server, captured 2026-09-02 by
+/// of six bots fighting on a live GG2 2.9.2 server, captured by
 /// <c>gg2-parity record</c>, with the <c>.frames</c> sidecar of read boundaries
 /// beside it. 48 KB, 1,188 reads, 1,196 state updates.
 /// </para>
 /// <para>
-/// ⚠️ <b>Flush boundaries are inferred from arrival time and cannot be
+/// <b>Flush boundaries are inferred from arrival time and cannot be
 /// otherwise</b> — the byte stream is identical whichever side of the flush a
 /// message was appended on, which is the whole reason this class of bug survived
 /// six phases. The inference is sound here because the reference sends one
@@ -73,16 +73,16 @@ public sealed class ReferenceFlushFingerprintTests
     }
 
     /// <summary>
-    /// ⛔ <b>The End Step finding, confirmed from the reference's own TCP
-    /// stream.</b> Every <c>PLAYER_DEATH</c> in 40 seconds of live GG2 leads its
+    /// The End Step finding, confirmed from the reference's own TCP
+    /// stream. Every <c>PLAYER_DEATH</c> in 40 seconds of live GG2 leads its
     /// packet; every <c>WEAPON_FIRE</c> trails.
     /// </summary>
     /// <remarks>
-    /// This is the independent confirmation of the 2026-09-02 measurement.
-    /// That one read <c>buffer_size(global.sendBuffer)</c> from inside the game
-    /// and found 12 bytes of leftover after two deaths; this one never touches
-    /// the game and reads the same fact off the wire. <b>Two instruments, no
-    /// shared assumption but the reference itself.</b>
+    /// This is independent confirmation of an in-game measurement that read
+    /// <c>buffer_size(global.sendBuffer)</c> and found 12 bytes of leftover
+    /// after two deaths; this one never touches the game and reads the same
+    /// fact off the wire. <b>Two instruments, no shared assumption but the
+    /// reference itself.</b>
     /// <para>
     /// A death is appended in <c>Character.events/End Step.xml</c>, after
     /// <c>GameServerEndStep</c> has already flushed, so it waits for the next
@@ -96,7 +96,7 @@ public sealed class ReferenceFlushFingerprintTests
     {
         var fingerprint = Read(10, out _, out _);
 
-        // ⚠️ Not vacuous: a recording with no deaths or no shots would satisfy
+        // Not vacuous: a recording with no deaths or no shots would satisfy
         // every assertion below by having nothing to disagree with.
         Assert.True(fingerprint.Total(MessageType.PlayerDeath) > 0, "no deaths in the fixture");
         Assert.True(fingerprint.Total(MessageType.WeaponFire) > 0, "no shots in the fixture");
@@ -127,19 +127,18 @@ public sealed class ReferenceFlushFingerprintTests
     }
 
     /// <summary>
-    /// ⛔ The grouping heuristic's own guard: the answer must not depend on the
+    /// The grouping heuristic's own guard: the answer must not depend on the
     /// gap.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>This is what makes the two tests above readable at all.</b> They
+    /// <b>This is what makes the two tests above readable at all.</b> They
     /// rest on a timing inference, and an inference that flipped its answer when
-    /// the threshold moved would be measuring the threshold. Measured across a
-    /// 14x range on 2026-09-02: 2, 5 and 10ms all give 1,187 groups and 20 and
-    /// 28ms give 1,141 — and the fingerprint is byte-for-byte identical at all
-    /// five. The reference sends one packet a tick, so there is a wide plateau to
-    /// sit on.
+    /// the threshold moved would be measuring the threshold. Across a 14x range,
+    /// 2, 5 and 10ms all give 1,187 groups and 20 and 28ms give 1,141 — and the
+    /// fingerprint is byte-for-byte identical at all five. The reference sends
+    /// one packet a tick, so there is a wide plateau to sit on.
     /// <para>
-    /// ⚠️ <c>FlushFrames.Group</c>'s ambiguity count is what says which end of
+    /// <c>FlushFrames.Group</c>'s ambiguity count is what says which end of
     /// the range is safe: 0 boundaries near the threshold at 2 and 5ms, 950 at
     /// 20ms. A fingerprint taken at a gap with a high count is not to be trusted
     /// even when it agrees.
@@ -157,7 +156,7 @@ public sealed class ReferenceFlushFingerprintTests
         Assert.Equal(0, fingerprint.Trailing.GetValueOrDefault(MessageType.PlayerDeath));
         Assert.Equal(0, fingerprint.Leading.GetValueOrDefault(MessageType.WeaponFire));
 
-        // ⚠️ Every group carries an update, which is the sanity check on the
+        // Every group carries an update, which is the sanity check on the
         // grouping itself: the reference flushes once a tick and always has an
         // update to send, so a group without one is a group that is not a flush.
         Assert.Equal(0, fingerprint.GroupsWithoutAnUpdate);

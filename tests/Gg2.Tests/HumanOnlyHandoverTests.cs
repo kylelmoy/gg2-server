@@ -14,14 +14,14 @@ namespace Gg2.Tests;
 /// </summary>
 /// <remarks>
 /// <para>
-/// ⚠️ <b>What this buys is COST, not skill.</b> The expensive controllers exist
+/// <b>What this buys is COST, not skill.</b> The expensive controllers exist
 /// to be good against people; a 4,800 µs search decision spent on two bots
 /// shooting at each other in an empty corner is most of what a populated server
-/// pays for. ⛔ A controller measurement taken under <c>HumansOnly</c> with no
+/// pays for. A controller measurement taken under <c>HumansOnly</c> with no
 /// humans present is measuring the scripted layer, whatever the mode said.
 /// </para>
 /// <para>
-/// ⛔ <b>Which is why the library default is <see cref="EngageOpponents.Anyone"/>
+/// <b>Which is why the library default is <see cref="EngageOpponents.Anyone"/>
 /// and only the live server defaults to <c>HumansOnly</c></b> — a headless
 /// bot-vs-bot match has no humans in it, so the other way round would have made
 /// every recorded arm measurement silently measure the all-scripted control.
@@ -36,7 +36,7 @@ public sealed class HumanOnlyHandoverTests
     // ------------------------------------------------------------------
 
     /// <summary>
-    /// ⛔ The library default is <see cref="EngageOpponents.Anyone"/>.
+    /// The library default is <see cref="EngageOpponents.Anyone"/>.
     /// </summary>
     /// <remarks>
     /// If this ever flips, every headless arm comparison starts measuring the
@@ -66,10 +66,10 @@ public sealed class HumanOnlyHandoverTests
     {
         Assert.False(new ServerOptions().BotEngagesBotsToo);
 
-        var humansOnly = Program.Parse(["--bot-mode", "search"]).Bots.Brain;
+        var humansOnly = CommandLine.Parse(["--bot-mode", "search"]).Bots.Brain;
         Assert.Equal(EngageOpponents.HumansOnly, Assert.IsType<BotBrainSpec>(humansOnly).Engage);
 
-        var anyone = Program.Parse(["--bot-mode", "search", "--bot-engages-bots"]).Bots.Brain;
+        var anyone = CommandLine.Parse(["--bot-mode", "search", "--bot-engages-bots"]).Bots.Brain;
         Assert.Equal(EngageOpponents.Anyone, Assert.IsType<BotBrainSpec>(anyone).Engage);
     }
 
@@ -78,10 +78,10 @@ public sealed class HumanOnlyHandoverTests
     // ------------------------------------------------------------------
 
     /// <summary>
-    /// ⛔ A nearer bot does not hide a human standing behind it.
+    /// A nearer bot does not hide a human standing behind it.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The bug this rules out is the obvious implementation.</b> Asking
+    /// <b>The bug this rules out is the obvious implementation.</b> Asking
     /// <c>NearestEnemies</c> for one result and then rejecting it if it is a bot
     /// reports "no human in range" whenever any bot happens to be closer — which,
     /// on a server filled to twelve with two people on it, is most of the time.
@@ -146,7 +146,7 @@ public sealed class HumanOnlyHandoverTests
     // ------------------------------------------------------------------
 
     /// <summary>
-    /// ⛔ <b>The simulation cannot see the flag.</b>
+    /// <b>The simulation cannot see the flag.</b>
     /// </summary>
     /// <remarks>
     /// "The simulation never special-cases a bot" is one of the three rules that
@@ -156,7 +156,7 @@ public sealed class HumanOnlyHandoverTests
     /// a client cannot. This runs identical scripted inputs with the flag set
     /// every way and requires the resulting worlds to be indistinguishable.
     /// <para>
-    /// ⚠️ It compares the full <see cref="WorldState"/>, not a summary: a
+    /// It compares the full <see cref="WorldState"/>, not a summary: a
     /// difference in one character's sub-pixel position is exactly the kind of
     /// divergence that would otherwise surface as unexplained client
     /// rubberbanding months later.
@@ -176,7 +176,7 @@ public sealed class HumanOnlyHandoverTests
             asBots.Players[i].IsBot = false;
         }
 
-        // ⚠️ Compared as BYTES, not with Assert.Equal(WorldState, WorldState).
+        // Compared as BYTES, not with Assert.Equal(WorldState, WorldState).
         // xunit's structural comparer recurses through the InlineArray slot
         // buffers and overflows the stack — measured, it aborts the whole test
         // host. The byte compare is also the stronger assertion, and it is only
@@ -189,7 +189,7 @@ public sealed class HumanOnlyHandoverTests
     }
 
     /// <summary>
-    /// ⚠️ A departure renumbers the flag with everything else that names a player.
+    /// A departure renumbers the flag with everything else that names a player.
     /// </summary>
     /// <remarks>
     /// <c>RemoveSlot</c> compacts the roster, and <c>CLAUDE.md</c> is explicit
@@ -231,7 +231,7 @@ public sealed class HumanOnlyHandoverTests
         new(null, new NavQuery(Team.Red), BotSkill.ForTier(5));
 
     /// <summary>
-    /// ⚠️ A real <see cref="CollisionWorld"/>: <see cref="WorldView"/> refuses a
+    /// A real <see cref="CollisionWorld"/>: <see cref="WorldView"/> refuses a
     /// null one, and the handover's own scan never touches it — the geometry
     /// below is placed in open air so nothing here depends on the map.
     /// </summary>
@@ -296,7 +296,7 @@ public sealed class HumanOnlyHandoverTests
             state.Players[slot].Class = PlayerClass.Soldier;
             state.Players[slot].IsBot = markBots;
 
-            // ⛔ LIVE characters, and this is the whole difference between a gate
+            // LIVE characters, and this is the whole difference between a gate
             // and a decoration. The first version of this test added players and
             // never spawned them, so both runs simulated an empty world and the
             // comparison was two default states — it passed against a deliberate

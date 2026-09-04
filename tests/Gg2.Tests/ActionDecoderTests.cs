@@ -20,7 +20,7 @@ public sealed class ActionDecoderTests
         new() { Horizontal = horizontal, Jump = jump, Down = down, Fire = fire, AimDelta = aim };
 
     /// <summary>
-    /// ⚠️ <b>Jump is emitted on the first tick of a decision and no other.</b>
+    /// <b>Jump is emitted on the first tick of a decision and no other.</b>
     /// </summary>
     /// <remarks>
     /// GG2 jumps on the PRESSED edge, so a held bit fires once and then does
@@ -45,7 +45,7 @@ public sealed class ActionDecoderTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The mask is built fresh every tick, so no bit can survive a change
+    /// <b>The mask is built fresh every tick, so no bit can survive a change
     /// of direction.</b>
     /// </summary>
     /// <remarks>
@@ -88,8 +88,7 @@ public sealed class ActionDecoderTests
         Assert.True(decoder.Decode(1, Action(fire: 2), true).Special);
         Assert.False(decoder.Decode(1, Action(fire: 2), true).Attack);
 
-        // ⚠️ Taunt has no head at all. It cannot be pressed, which is correct
-        // for v0 — taunting is not implemented in the port (CLAUDE.md), so a
+        // Taunt has no head at all: it is not implemented in the port, so a
         // head for it would be a head that trains on nothing.
         Assert.False(decoder.Decode(1, Action(fire: 1), true).Taunt);
     }
@@ -116,7 +115,7 @@ public sealed class ActionDecoderTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The turn happens once per DECISION, not once per tick.</b>
+    /// <b>The turn happens once per DECISION, not once per tick.</b>
     /// </summary>
     /// <remarks>
     /// Repeating it across an action repeat of k would make the effective cap k
@@ -163,7 +162,7 @@ public sealed class ActionDecoderTests
 
         // And the decoded angle is within half a wire step of the tracked one.
         //
-        // ⚠️ Asserted as a bound rather than with Assert.Equal's decimal places:
+        // Asserted as a bound rather than with Assert.Equal's decimal places:
         // a step is 360/65536 = 0.00549 degrees, and comparing to two places
         // makes the test a question about which side of a rounding boundary the
         // value fell on rather than about accuracy. The first draft did that and

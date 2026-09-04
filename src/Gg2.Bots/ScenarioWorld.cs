@@ -33,27 +33,19 @@ namespace Gg2.Bots;
 /// the comment on <c>Generators.Place</c> in the constructor.
 /// </para>
 /// </remarks>
-public sealed class ScenarioWorld
+public sealed class ScenarioWorld : DrivenWorld
 {
-    private readonly IInputSource?[] _sources = new IInputSource?[WorldState.MaxSlots];
-    private PlayerCommandBuffer _commands;
-    private WorldState _state;
-    private TickEvents _events;
-    private int _slots;
-
     private ScenarioWorld(LevelMap map, CollisionWorld collision, NavGraph? nav)
+        : base(map, collision, nav)
     {
-        Map = map;
-        Collision = collision;
-        Nav = nav;
 
-        // ⚠️ Every one of these is a "0 means off" escape, and each is load
+        // Every one of these is a "0 means off" escape, and each is load
         // bearing on its own:
         //
         //   GameMode          TeamDeathmatch is the objectiveless mode —
         //                     basicRoomSetup's chain ends there, so it is what a
         //                     map with no objective IS.
-        //                     ⚠️ But it is NOT what makes this world inert, and
+        //                     But it is NOT what makes this world inert, and
         //                     it would be easy to believe it is: every mode's
         //                     Step reads entities this world never places, so
         //                     KingOfTheHill with no control points and CTF with
@@ -71,32 +63,32 @@ public sealed class ScenarioWorld
         //   RespawnTime       0 disables autonomous respawn outright. A killed
         //                     dummy must stay dead, or a damage measurement
         //                     silently becomes a measurement of two lives.
-        //   TdmInvulnerable   ⚠️ NOT zero by accident. WorldState.Spawn gives a
+        //   TdmInvulnerable   NOT zero by accident. WorldState.Spawn gives a
         //                     TDM character this many ticks of spawn protection,
         //                     so a non-zero value would make every damage figure
         //                     in every scenario wrong for the first seconds and
         //                     look like a bot that could not shoot.
-        //   Autobalance       ⚠️ moves DEAD players across teams. In a scenario
+        //   Autobalance       moves DEAD players across teams. In a scenario
         //                     that would take the dummy the bot just killed and
         //                     put it on the bot's own team, which is a silent
         //                     wrong answer rather than a failure.
-        _state.GameMode = GameMode.TeamDeathmatch;
-        _state.TimeLimitMinutes = 0;
-        _state.CapLimit = 0;
-        _state.KillLimit = 0;
-        _state.RespawnTime = 0;
-        _state.TdmInvulnerabilityTicks = 0;
-        _state.Autobalance = false;
-        _state.SetupTimer = 0;
+        State.GameMode = GameMode.TeamDeathmatch;
+        State.TimeLimitMinutes = 0;
+        State.CapLimit = 0;
+        State.KillLimit = 0;
+        State.RespawnTime = 0;
+        State.TdmInvulnerabilityTicks = 0;
+        State.Autobalance = false;
+        State.SetupTimer = 0;
 
-        // ⚠️ A zeroed ClassLimits means every class is FULL — 255 is the
+        // A zeroed ClassLimits means every class is FULL — 255 is the
         // default the reference uses and a hand-built world has to say so.
         // Nothing in a scenario asks Classlimits.Pick today; it is set because
         // the day something does, the failure is a class silently swapped.
         for (var i = 0; i < TeamBalance.ClassCount; i++)
-            _state.ClassLimits[i] = 255;
+            State.ClassLimits[i] = 255;
 
-        // ⚠️ The one objective a scenario world DOES place, and the exception is
+        // The one objective a scenario world DOES place, and the exception is
         // not an inconsistency. A generator is not something a bot stands on or
         // carries — it is a 2,100 hp thing that gets SHOT, so it is a combat
         // target rather than a gamemode, and `soldier-shells-generator` exists
@@ -108,33 +100,17 @@ public sealed class ScenarioWorld
         // TeamDeathmatch — so the generators take damage, regenerate their
         // shields exactly as they would in a real match, and decide nothing.
         // A map with no generators gets none and nothing changes.
-        Generators.Place(ref _state, Map);
-        MovingPlatforms.Place(ref _state, Map);
+        Generators.Place(ref State, Map);
+        MovingPlatforms.Place(ref State, Map);
 
         // Slot 0 is the server's own reserved player and always exists, which is
         // what makes CharacterState.Nobody 255 rather than 0. A scenario has no
         // server, but the invariant is the state's, not the server's.
-        _state.AddPlayer(0);
-        _slots = 1;
+        State.AddPlayer(AddSlot());
     }
 
-    /// <summary>The map, narrowed to its area.</summary>
-    public LevelMap Map { get; }
 
-    /// <summary>The collision geometry the tick is given.</summary>
-    public CollisionWorld Collision { get; }
 
-    /// <summary>The nav graph for this map and area, if a cache was found.</summary>
-    public NavGraph? Nav { get; }
-
-    /// <summary>The world, by reference — it is a value type and copying it is a fork.</summary>
-    public ref WorldState State => ref _state;
-
-    /// <summary>What the last <see cref="Step"/> reported.</summary>
-    public ref TickEvents Events => ref _events;
-
-    /// <summary>Ticks stepped since the world was built.</summary>
-    public int Tick { get; private set; }
 
     /// <summary>
     /// Builds a scenario world on a built-in map.
@@ -150,13 +126,13 @@ public sealed class ScenarioWorld
     /// by default; pass null to decode fresh.
     /// </param>
     /// <remarks>
-    /// ⚠️ <b><see cref="LevelMap.ForArea"/> at the load site, once.</b> A tall
+    /// <b><see cref="LevelMap.ForArea"/> at the load site, once.</b> A tall
     /// map is several rounds stacked vertically and only one area's entities
     /// exist; narrowing here is what makes everything downstream — the
     /// collision world included — see the right one. The nav graph is loaded for
     /// the same area for the same reason.
     /// <para>
-    /// ⚠️ <b>The map and the nav graph come from a cache; the
+    /// <b>The map and the nav graph come from a cache; the
     /// <c>CollisionWorld</c> and the <see cref="WorldState"/> never do.</b> This
     /// method is the episode reset path — a duel batch calls it every time an
     /// episode ends — and re-parsing <c>ctf_truefort</c>'s 2 MB nav text cost
@@ -206,7 +182,7 @@ public sealed class ScenarioWorld
     /// moved, which is also what the reference's own runner does to a bot
     /// (<c>botscenario.js</c> places by writing <c>x</c>/<c>y</c>).
     /// <para>
-    /// ⚠️ <b>The weapon is moved with it.</b> A weapon starts on its owner's
+    /// <b>The weapon is moved with it.</b> A weapon starts on its owner's
     /// unrounded coordinates and only reaches <c>round(x)</c> in End Step — so a
     /// character teleported without its weapon fires its first shot from
     /// wherever it spawned, which on a big map is across the room.
@@ -216,22 +192,19 @@ public sealed class ScenarioWorld
     /// </remarks>
     public int Place(PlayerClass playerClass, Team team, double x, double y)
     {
-        if (_slots >= WorldState.MaxSlots)
-            throw new InvalidOperationException($"a scenario world holds {WorldState.MaxSlots} slots");
-
-        var slot = _slots++;
+        var slot = AddSlot();
         var spawnPoints = new SpawnPoints(Map);
 
-        if (!_state.Spawn(spawnPoints, slot, playerClass, team, spawnpointId: 0, group: 0))
+        if (!State.Spawn(spawnPoints, slot, playerClass, team, spawnpointId: 0, group: 0))
         {
             throw new InvalidOperationException(
                 $"{Map.Name} has no spawn point for {team}; a scenario character cannot be created");
         }
 
-        _state.Characters[slot].X = x;
-        _state.Characters[slot].Y = y;
-        _state.Weapons[slot].X = x;
-        _state.Weapons[slot].Y = y;
+        State.Characters[slot].X = x;
+        State.Characters[slot].Y = y;
+        State.Weapons[slot].X = x;
+        State.Weapons[slot].Y = y;
 
         return slot;
     }
@@ -248,7 +221,7 @@ public sealed class ScenarioWorld
     /// coordinates the caller had to know.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>This is <see cref="Place"/> without the override.</b> `Place` calls
+    /// <b>This is <see cref="Place"/> without the override.</b> `Place` calls
     /// <see cref="WorldState.Spawn"/>, which already puts the character on a
     /// real spawn point, and then moves it to the caller's x and y — so the only
     /// difference here is the two lines that do not run.
@@ -262,7 +235,7 @@ public sealed class ScenarioWorld
     /// up until a map changed.
     /// </para>
     /// <para>
-    /// ⚠️ <b>The caller draws the index, not this method.</b> Whose random
+    /// <b>The caller draws the index, not this method.</b> Whose random
     /// stream a placement comes out of is a decision with consequences — see
     /// <see cref="DuelEnv"/>, which draws from the match's own so that a world's
     /// placement is reproducible from its seed.
@@ -270,12 +243,9 @@ public sealed class ScenarioWorld
     /// </remarks>
     public int PlaceAtSpawn(PlayerClass playerClass, Team team, int spawnpointId, int group = 0)
     {
-        if (_slots >= WorldState.MaxSlots)
-            throw new InvalidOperationException($"a scenario world holds {WorldState.MaxSlots} slots");
+        var slot = AddSlot();
 
-        var slot = _slots++;
-
-        if (!_state.Spawn(new SpawnPoints(Map), slot, playerClass, team, spawnpointId, group))
+        if (!State.Spawn(new SpawnPoints(Map), slot, playerClass, team, spawnpointId, group))
         {
             throw new InvalidOperationException(
                 $"{Map.Name} has no spawn point {spawnpointId} in group {group} for {team}");
@@ -291,14 +261,14 @@ public sealed class ScenarioWorld
     /// <param name="minSeparation">The closest the pair may be, in pixels.</param>
     /// <param name="maxSeparation">The furthest the pair may be, in pixels.</param>
     /// <remarks>
-    /// ⚠️ <b>This is what makes a batch of N worlds N SAMPLES.</b> Placing at
+    /// <b>This is what makes a batch of N worlds N SAMPLES.</b> Placing at
     /// fixed coordinates gives two deterministic bots the identical duel in every
     /// world — <c>gg2-rl</c> measured 8 worlds returning 74 decisions and 165
     /// damage eight times over, seed-invariant, and a sixteen-duel win rate
     /// computed off a sample size of one. Banded, the same matchup returns 15
     /// distinct episode lengths out of 16.
     /// <para>
-    /// ⚠️ <b>And a fixed position does not merely repeat, it MISLEADS.</b> Twelve
+    /// <b>And a fixed position does not merely repeat, it MISLEADS.</b> Twelve
     /// duels of <c>RolloutSearch</c> against a tier-5 <c>ScriptedBot</c> on
     /// <c>gg_debug</c> read <b>11-1-0 at x=600 and 4-2-6 at x=1500</b> — same map,
     /// same classes, same budget, budget-invariant out to 5,400 ticks. One spot
@@ -307,20 +277,20 @@ public sealed class ScenarioWorld
     /// names its position or it names nothing.</b>
     /// </para>
     /// <para>
-    /// ⚠️ <b>A PAIR placement, not two draws.</b> A separation is a property of
+    /// <b>A PAIR placement, not two draws.</b> A separation is a property of
     /// the two together, so it cannot be expressed as one <see cref="Place"/>
     /// followed by another.
     /// </para>
     /// <para>
     /// The draw is red first, uniformly over the nodes red may stand on; then
     /// blue uniformly over the nodes blue may stand on whose stand position is
-    /// inside the band. ⚠️ <b>Red first, and out of the world's own
+    /// inside the band. <b>Red first, and out of the world's own
     /// <see cref="WorldState.Random"/></b>: a slot index is a roster index, and a
     /// sampled placement must be a pure function of the world's seed. Seed the
     /// world <em>before</em> calling this.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Gate-filtered per team.</b> A node whose gate that team cannot pass
+    /// <b>Gate-filtered per team.</b> A node whose gate that team cannot pass
     /// is a node that team cannot legitimately stand on, and placing there is
     /// what produced <c>gg2-rl</c>'s four maps at 0 of 8 engagements: the pair
     /// started behind their own team gates and could not route to one another.
@@ -328,20 +298,20 @@ public sealed class ScenarioWorld
     /// <c>setupGatesClosed</c> is false because this world zeroes the setup timer.
     /// </para>
     /// <para>
-    /// ⚠️ <b>The node's MIDPOINT, not a column drawn inside it.</b> A node spans
+    /// <b>The node's MIDPOINT, not a column drawn inside it.</b> A node spans
     /// several columns and drawing one would add a few pixels of variety on top
     /// of a draw that already has hundreds of nodes in it — while making every
     /// placement's own resolution back to its node a thing to check rather than a
     /// certainty (see <see cref="EdgeFlights"/>, which pays for that property).
     /// </para>
     /// <para>
-    /// ⚠️ <b>Straight-line distance, deliberately not path length.</b> What "in
+    /// <b>Straight-line distance, deliberately not path length.</b> What "in
     /// range" means here is what a weapon and a rollout horizon reach, which is a
     /// line; a path metric would call two agents either side of a thin wall 0px
     /// apart.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Retries the red draw rather than widening the band.</b> A band with
+    /// <b>Retries the red draw rather than widening the band.</b> A band with
     /// nothing in it for one red node usually has plenty for another, and
     /// widening silently would answer a question the caller did not ask. After
     /// <see cref="BandAttempts"/> reds it gives up loudly, naming the map and the
@@ -370,7 +340,7 @@ public sealed class ScenarioWorld
 
         for (var attempt = 0; attempt < BandAttempts; attempt++)
         {
-            var redNode = red[(int)_state.Random.Next(red.Count)];
+            var redNode = red[(int)State.Random.Next(red.Count)];
             var redX = NodeMidpoint(graph, redNode);
             var redY = graph.StandY(redNode);
 
@@ -387,7 +357,7 @@ public sealed class ScenarioWorld
             if (candidates.Count == 0)
                 continue;
 
-            var blueNode = candidates[(int)_state.Random.Next(candidates.Count)];
+            var blueNode = candidates[(int)State.Random.Next(candidates.Count)];
 
             return (
                 Place(redClass, Team.Red, redX, redY),
@@ -401,7 +371,7 @@ public sealed class ScenarioWorld
 
     /// <summary>How many red nodes are tried before a band is called empty.</summary>
     /// <remarks>
-    /// ⚠️ It is a caller error rather than a rare draw that this catches, so it is
+    /// It is a caller error rather than a rare draw that this catches, so it is
     /// small on purpose: a band a map really supports is satisfied by the first
     /// draw almost always, and a band it does not is not going to be satisfied by
     /// the thousandth.
@@ -426,8 +396,6 @@ public sealed class ScenarioWorld
     private static double NodeMidpoint(NavGraph graph, int node) =>
         NavGraph.ColumnWorldX((graph.Nodes[node].X0 + graph.Nodes[node].X1) / 2);
 
-    /// <summary>Gives a slot an input source. Null means it presses nothing.</summary>
-    public void Drive(int slot, IInputSource? source) => _sources[slot] = source;
 
     /// <summary>
     /// Advances the world, polling every driven slot once per tick.
@@ -437,7 +405,7 @@ public sealed class ScenarioWorld
     /// decides against the state the previous tick left, exactly as an
     /// <c>INPUTSTATE</c> that arrived before the server's own service pass does.
     /// <para>
-    /// ⚠️ <b>No <see cref="SpawnPoints"/> is passed to the tick</b>, which is
+    /// <b>No <see cref="SpawnPoints"/> is passed to the tick</b>, which is
     /// what stops the alarm stage respawning anybody. Between that and
     /// <see cref="WorldState.RespawnTime"/> at zero, a death in a scenario is
     /// final — which is what makes a damage figure mean one life.
@@ -445,92 +413,15 @@ public sealed class ScenarioWorld
     /// </remarks>
     public void Step(int ticks = 1)
     {
-        Span<PlayerInput> inputs = stackalloc PlayerInput[WorldState.MaxSlots];
-
         for (var i = 0; i < ticks; i++)
-        {
-            RunCommands();
-
-            for (var slot = 0; slot < _slots; slot++)
-            {
-                inputs[slot] = _sources[slot] is { } source
-                    ? source.Poll(new WorldView(in _state, Collision), slot, Tick)
-                    : PlayerInput.None;
-            }
-
-            MatchSimulation.Tick(Collision, ref _state, inputs[.._slots], ref _events);
-            Tick++;
-        }
-    }
-
-    /// <summary>
-    /// Runs the commands every driven slot asked for this tick.
-    /// </summary>
-    /// <remarks>
-    /// ⚠️ <b>Until 2026-08-29 this world DROPPED every command a source
-    /// emitted</b>, because it only ever polled <see cref="IInputSource"/>.
-    /// <c>GameServer</c> and <see cref="HeadlessMatch"/> both poll
-    /// <see cref="ICommandSource"/>; a duel and a scenario did not, so a bot in
-    /// one of them could press keys and nothing else. That is not a small gap —
-    /// <b>everything a player can do that is not a key is a command</b>: the
-    /// zoom, the sandvich, dropping the intel, building a sentry. A scenario is
-    /// where those get measured.
-    /// <para>
-    /// ⚠️ <b>BEFORE the poll, not after</b>, matching <see cref="HeadlessMatch"/>
-    /// and the server: a command is the reference's <c>processClientCommands</c>,
-    /// which runs ahead of the tick that reads its effect. A zoom issued after
-    /// the input poll would not change the aim that same tick, and the sniper's
-    /// charge would start a tick late for ever.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Every arm dispatches to the same <see cref="PlayerCommands"/> method
-    /// the server calls.</b> CLAUDE.md's rule about the three places a command
-    /// lives: the body is shared or a bot can do something a client cannot.
-    /// Unhandled kinds are silently skipped rather than thrown, exactly as
-    /// <see cref="HeadlessMatch"/> does — a scenario places no intel and no
-    /// sentry, so those are unreached rather than unsupported.
-    /// </para>
-    /// </remarks>
-    private void RunCommands()
-    {
-        for (var slot = 0; slot < _slots; slot++)
-        {
-            if (_sources[slot] is not ICommandSource source)
-                continue;
-
-            _commands.Clear();
-            source.PollCommands(new WorldView(in _state, Collision), slot, Tick, ref _commands);
-
-            for (var i = 0; i < _commands.Count; i++)
-            {
-                switch (_commands[i].Kind)
-                {
-                    case PlayerCommandKind.ToggleZoom:
-                        PlayerCommands.ToggleZoom(ref _state, slot);
-                        break;
-
-                    case PlayerCommandKind.EatSandvich:
-                        PlayerCommands.EatSandvich(ref _state, slot);
-                        break;
-
-                    // ⚠️ Unreached rather than unsupported, and the distinction
-                    // is HeadlessMatch's: a scenario world places no briefcase,
-                    // no sentry site and no roster to change class on, so the
-                    // rest cannot arise here. When one can, add it against the
-                    // simulation method the server already calls — never a
-                    // second copy of the body.
-                    default:
-                        break;
-                }
-            }
-        }
+            Advance(spawnPoints: null);
     }
 
     /// <summary>
     /// <c>botNodeSnap.gml</c>: the nearest node below a point, or -1.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A raw objective coordinate usually does not resolve to a node on its
+    /// <b>A raw objective coordinate usually does not resolve to a node on its
     /// own.</b> Map objects are not anchored the way a character is, by
     /// different amounts on different maps — a capture zone's marker can float
     /// sixty pixels above the floor it belongs to — so a scenario's coordinates

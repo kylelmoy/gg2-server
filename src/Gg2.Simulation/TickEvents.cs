@@ -243,7 +243,7 @@ public struct TickEvents
     /// sentry's <b>End Step</b> — and which therefore ship on the FOLLOWING tick.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>Two call sites, two stages.</b> <c>Sentry.events/End Step.xml</c>
+    /// <b>Two call sites, two stages.</b> <c>Sentry.events/End Step.xml</c>
     /// is the <c>hp &lt;= 0</c> death, after the GameServer's End Step has
     /// flushed. <c>Sentry.events/Begin Step.xml:1-3</c> is the other one — an
     /// owner who stopped being an engineer of that team, or two sentries too
@@ -284,7 +284,7 @@ public struct TickEvents
     /// <c>DROP_INTEL</c>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A drop caused by the carrier dying is deliberately absent.</b>
+    /// <b>A drop caused by the carrier dying is deliberately absent.</b>
     /// <c>Character.events/Destroy.xml</c> drops the flag without sending
     /// anything (see <see cref="WorldState.Clear"/>), so this is set only by the
     /// ubered drop and by the client's own <c>DROP_INTEL</c> command.
@@ -317,7 +317,7 @@ public struct TickEvents
     /// Step</b> — and which therefore ship on the FOLLOWING tick.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>A return has two call sites in two different stages, and only one
+    /// <b>A return has two call sites in two different stages, and only one
     /// of them makes this tick's flush.</b> <c>Intelligence.events/Alarm 0.xml</c>
     /// is the recovery timer, in the alarm stage, and rides its own tick.
     /// <c>Character.events/Destroy.xml:20-32</c> is a carrier killed by a kill
@@ -325,11 +325,11 @@ public struct TickEvents
     /// <c>doEventPlayerDeath</c>, which the Character's End Step calls after the
     /// GameServer's End Step has already flushed.
     /// <para>
-    /// ⚠️ <b>So the message type alone does not say which flush it rides</b>, and
+    /// <b>So the message type alone does not say which flush it rides</b>, and
     /// a broadcast keyed only on <see cref="ReturnedRedIntel"/> puts the
-    /// death-driven one a tick early and — since 2026-09-02 put PLAYER_DEATH on
-    /// the far side of the flush — <em>ahead</em> of the death that caused it.
-    /// The reference emits the death first and the return from inside it.
+    /// death-driven one a tick early — <em>ahead</em> of the death that caused
+    /// it, since <c>PLAYER_DEATH</c> is on the far side of the flush. The
+    /// reference emits the death first and the return from inside it.
     /// docs/PARITY.md, "Which flush a message rides".
     /// </para>
     /// </remarks>
@@ -343,7 +343,7 @@ public struct TickEvents
     /// — <c>GENERATOR_DESTROY</c>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The message names the team that <em>lost</em> a generator</b>, and
+    /// <b>The message names the team that <em>lost</em> a generator</b>, and
     /// <c>sendEventGeneratorDestroy.gml</c>'s own docstring says the opposite;
     /// its one caller settles it. Two flags rather than one team field for the
     /// same reason the intel returns are two: both generators can reach zero on
@@ -369,7 +369,7 @@ public struct TickEvents
     /// <c>BALANCE</c> with an id.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Per slot rather than a single field</b>, because Arena's
+    /// <b>Per slot rather than a single field</b>, because Arena's
     /// between-rounds balance moves as many players as it takes to close the
     /// gap — <c>serverArenaRestart</c> loops where <c>ServerBalanceTeams</c>
     /// moves one.
@@ -388,24 +388,24 @@ public struct TickEvents
     /// invulnerability and a respawn all move hp without anybody dealing
     /// damage.
     /// <para>
-    /// ⚠️ <b>Credited at application time, following <c>LastDamageDealer</c>
+    /// <b>Credited at application time, following <c>LastDamageDealer</c>
     /// semantics</b> — so a rocket in the air still credits its shooter after
     /// they have died, exactly as a kill does.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Self-damage is never dealt, only taken.</b> A rocket jump must not
+    /// <b>Self-damage is never dealt, only taken.</b> A rocket jump must not
     /// score a positive reward, and a soldier who kills himself must not
     /// out-earn one who kills somebody else.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Blocked damage accumulates nothing.</b> <c>DamageApi.Deal</c>
+    /// <b>Blocked damage accumulates nothing.</b> <c>DamageApi.Deal</c>
     /// returning false is Team Deathmatch invulnerability: no amount landed, so
     /// neither side's counter moves. Note this is deliberately *not* the same
     /// rule the reference uses for <c>timeUnscathed</c>, which it resets even
     /// on a blocked hit.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Sentries and generators are out.</b> Their damage does not route
+    /// <b>Sentries and generators are out.</b> Their damage does not route
     /// through <c>DamageApi.Deal</c> at all, and `docs/ENV.md` puts them beyond
     /// v0 because a duel has no objective. Damage a sentry's turret deals to a
     /// <em>character</em> is in, because that goes through <c>Deal</c> like
@@ -418,7 +418,7 @@ public struct TickEvents
     /// Hit points this slot lost to damage this tick, including its own.
     /// </summary>
     /// <remarks>
-    /// See <see cref="DamageDealt"/>. ⚠️ <b>This is damage, not hp lost</b> —
+    /// See <see cref="DamageDealt"/>. <b>This is damage, not hp lost</b> —
     /// falling in a pit, a spawn-room kill box and the generator explosion all
     /// take hp without going through <c>DamageApi.Deal</c>, and none of them
     /// appears here.

@@ -19,7 +19,7 @@ namespace Gg2.Tests;
 /// is in it.
 /// </para>
 /// <para>
-/// ⚠️ <b>The framing assertion is the load-bearing one</b>, for the reason
+/// <b>The framing assertion is the load-bearing one</b>, for the reason
 /// <see cref="FixtureFramingTests"/> exists: <c>TraceParser.Parse</c> treats a
 /// <c>ProtocolException</c> as the end of a recording, so a mis-framed file is
 /// indistinguishable from a short one. A recorder that wrote subtly wrong bytes
@@ -48,7 +48,7 @@ public sealed class MatchRecorderTests : IDisposable
 
     /// <summary>Recording is off unless it is asked for.</summary>
     /// <remarks>
-    /// ⚠️ Not a formality. Recording a game people are playing is a decision,
+    /// Not a formality. Recording a game people are playing is a decision,
     /// and a default that recorded would make every test run, every parity
     /// replay and every bot rollout write files somebody has to notice and
     /// delete.
@@ -71,7 +71,7 @@ public sealed class MatchRecorderTests : IDisposable
     {
         var ticks = RecordAGame(out var trace, out var start);
 
-        // ⚠️ The anchor, and it comes back as `start` rather than as ticks[0]:
+        // The anchor, and it comes back as `start` rather than as ticks[0]:
         // TraceParser lifts the opening FULL_UPDATE out of the tick list,
         // because it is the starting point the following ticks are relative to.
         // Teeing only the broadcast would give a file that starts wherever the
@@ -80,7 +80,7 @@ public sealed class MatchRecorderTests : IDisposable
         Assert.NotNull(start);
         Assert.NotEmpty(ticks);
 
-        // ⚠️ And the file opens with the join burst rather than with the first
+        // And the file opens with the join burst rather than with the first
         // broadcast: a JOIN_UPDATE is the first byte.
         Assert.Equal((byte)MessageType.JoinUpdate, trace.Stream[0]);
 
@@ -90,7 +90,7 @@ public sealed class MatchRecorderTests : IDisposable
     }
 
     /// <summary>
-    /// ⚠️ The point of the whole item: a person's keypress is in the file.
+    /// The point of the whole item: a person's keypress is in the file.
     /// </summary>
     /// <remarks>
     /// <c>processClientCommands.gml:267</c> — one byte of keys, two of aim, one
@@ -122,7 +122,7 @@ public sealed class MatchRecorderTests : IDisposable
     /// </summary>
     /// <remarks>
     /// <para>
-    /// ⚠️ <b>The bytes cannot be compared with a real joiner's, and it is worth
+    /// <b>The bytes cannot be compared with a real joiner's, and it is worth
     /// saying why rather than leaving it looking untested.</b> A preamble is
     /// taken against the roster as it is at that moment: the recorder's is taken
     /// at startup, when only the server's own slot 0 exists, and any joiner's is
@@ -158,7 +158,7 @@ public sealed class MatchRecorderTests : IDisposable
     }
 
     /// <summary>
-    /// ⚠️ The on-disk bound is a byte total, so a server that rolls segments
+    /// The on-disk bound is a byte total, so a server that rolls segments
     /// often does not spend its cap on rolls.
     /// </summary>
     /// <remarks>
@@ -225,7 +225,7 @@ public sealed class MatchRecorderTests : IDisposable
 
     /// <summary>A map change rolls a new segment, so a segment is always one map.</summary>
     /// <remarks>
-    /// ⚠️ Not tidiness: the header carries a single map name, and
+    /// Not tidiness: the header carries a single map name, and
     /// <c>TraceParser</c> is handed one starting shape. A segment spanning a
     /// rotation would carry a header naming the map it no longer plays.
     /// </remarks>
@@ -285,7 +285,7 @@ public sealed class MatchRecorderTests : IDisposable
             harness.Tick();
         }
 
-        // ⚠️ A segment only becomes a readable .trace when it is closed, so the
+        // A segment only becomes a readable .trace when it is closed, so the
         // server has to be disposed before the file is read. That is the whole
         // reason Dispose closes the recorder first.
         harness.Server.Dispose();

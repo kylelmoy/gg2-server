@@ -4,7 +4,7 @@ namespace Gg2.Bots;
 
 /// <summary>One walkable surface span, in nav cells.</summary>
 /// <remarks>
-/// ⚠️ <see cref="X0"/> and <see cref="X1"/> are <b>anchor columns</b>, not world
+/// <see cref="X0"/> and <see cref="X1"/> are <b>anchor columns</b>, not world
 /// pixels and not the sprite's centre — see <see cref="NavConstants.BoxW"/>.
 /// Use <see cref="NavGraph.WorldSpan"/> to get pixels.
 /// </remarks>
@@ -18,17 +18,16 @@ public readonly record struct NavNode(int Row, int X0, int X1, int Flags, NavDoo
 /// arc was validated from, which a follower has to actually reach before
 /// pressing — an arc proved from one column does not reach from the next.
 /// <para>
-/// ⚠️ <b><see cref="Bucket"/> is a horizontal VELOCITY in px/tick and it is
+/// <b><see cref="Bucket"/> is a horizontal VELOCITY in px/tick and it is
 /// fractional — it is not a bucket index, whatever the cache column is called.</b>
 /// <c>NAV_EDGE_BUCKET</c> is what <c>navJumpTakeoff</c> proved the arc at:
 /// "leave the takeoff column, cover NAV_EDGE_BUCKET px of ground a tick, be over
-/// the landing when the arc comes back down" (<c>botPathKeys.gml:436</c>). This
-/// port declared it <c>int</c> and truncated it on load for three items.
-/// Measured over the 24 cached graphs: <b>all 67,013 jump edges carry a
-/// fractional value and 23,184 of them — 34.6% — truncate to ZERO</b>, which
-/// makes the in-flight tracker steer for the takeoff column itself and the
-/// takeoff gate demand the whole gap from a reach of nothing. The name is the
-/// trap; <c>NavGraphFixtureTests</c> is what stops it coming back.
+/// the landing when the arc comes back down" (<c>botPathKeys.gml:436</c>).
+/// Truncating it to <c>int</c> zeroes out over a third of jump edges across the
+/// shipped graphs, which makes the in-flight tracker steer for the takeoff
+/// column itself and the takeoff gate demand the whole gap from a reach of
+/// nothing. The name is the trap; <c>NavGraphFixtureTests</c> is what stops it
+/// coming back.
 /// </para>
 /// </remarks>
 public readonly record struct NavEdge(
@@ -50,7 +49,7 @@ public readonly record struct NavEdge(
 /// and re-deriving both costs less than the parse that just happened.
 /// </para>
 /// <para>
-/// ⚠️ <b>A graph is per map <em>and per area</em>.</b> A tall map is several
+/// <b>A graph is per map <em>and per area</em>.</b> A tall map is several
 /// rounds stacked vertically and <c>basicRoomSetup</c> destroys everything
 /// outside the active stage's y-band, so each stage is genuinely a different
 /// graph — <c>cp_dirtbowl</c> writes six control points and plays two. Give the
@@ -64,7 +63,7 @@ public sealed class NavGraph
     /// How far below a character's origin its feet are.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A literal in the GML, not a <c>NAV_*</c> constant</b> — which is why
+    /// <b>A literal in the GML, not a <c>NAV_*</c> constant</b> — which is why
     /// it is here and not in <see cref="NavConstants"/>. The origin sits at the
     /// chest; every stand position in the nav layer is
     /// <c>(row + BoxH) * CellSize - 23</c>, which is what
@@ -134,7 +133,7 @@ public sealed class NavGraph
         _rowStart = new int[maskHeight + 2];
         Array.Fill(_rowStart, -1);
 
-        // ⚠️ Backwards, so the lowest index on each row is what survives —
+        // Backwards, so the lowest index on each row is what survives —
         // navRowIndex.gml. Forwards would leave the *last*, and the tie-break in
         // NodeFromWorld is a strict `<`, so the two orders resolve ties to
         // different nodes.
@@ -185,7 +184,7 @@ public sealed class NavGraph
     /// world x occupies.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The <c>- BoxWidth/2</c> is the half-box offset between a node's span
+    /// The <c>- BoxWidth/2</c> is the half-box offset between a node's span
     /// (the box's left edge) and a character's <c>x</c> (the sprite's centre).
     /// <c>div</c> in GML is an integer divide, and <see cref="NavConstants.BoxW"/>
     /// is even, so a plain <c>/ 2</c> is exact here.
@@ -234,24 +233,22 @@ public sealed class NavGraph
     /// path follower think it fell off the graph and re-plan, which is how a bot
     /// thrashes in place.
     /// <para>
-    /// ⚠️ <b>The feet row is <em>rounded</em>, not floored, and that one word is
+    /// <b>The feet row is <em>rounded</em>, not floored, and that one word is
     /// the difference between a bot that walks a staircase and one that hops up
     /// it.</b> A node's feet sit exactly on a row boundary, but GG2 rests a
     /// character with its feet a pixel <em>above</em> the surface — so flooring
     /// puts a stationary bot in the row above the one it is plainly standing in.
     /// On a wide floor nothing notices; on stepped terrain the node one row up
     /// is also one column across, wins the tie-break, and the bot believes it is
-    /// on the step behind the one it is on. Measured in the reference on
-    /// <c>ctf_truefort</c>: resolving y=835 at n616's own stand position gives
-    /// n616 and resolving 834 — where the engine actually rests the body — gives
-    /// n608, the step above.
+    /// on the step behind the one it is on. On <c>ctf_truefort</c>, resolving
+    /// y=835 at n616's own stand position gives n616, but resolving 834 — where
+    /// the engine actually rests the body — gives n608, the step above.
     /// </para>
     /// <para>
-    /// ⚠️ <b><c>gg2-agent/tools/navgraph.js</c> still floors here.</b> That file
-    /// is the format's documentation and is right about the format; it is a
-    /// revision behind the game on this line. The reference is the
-    /// specification — CLAUDE.md, "the reference is the specification, not this
-    /// repo" — so this rounds, and <c>NavGraphTests</c> gates the difference.
+    /// <c>gg2-agent/tools/navgraph.js</c> floors instead of rounding here — it
+    /// documents the format but is wrong about this line. The reference is the
+    /// specification (CLAUDE.md, "the reference is the specification, not this
+    /// repo"), so this rounds, and <c>NavGraphTests</c> gates the difference.
     /// </para>
     /// <para>
     /// The round is <see cref="Gml.Round"/>, half to even, because that is what
@@ -269,8 +266,8 @@ public sealed class NavGraph
 
         // Only seven mask rows can pass the dy test, so the search goes through
         // the row index rather than reading every node to reject almost all of
-        // them. The reference measured the linear version at 0.65ms a call on
-        // ctf_truefort's 687 nodes — and botNodeSnap calls it up to 151 times.
+        // them: a linear scan over ctf_truefort's 687 nodes costs real time
+        // once botNodeSnap starts calling this up to 151 times a decision.
         var rowLow = Math.Max(0, my - NavConstants.BoxH - 3);
         var rowHigh = Math.Min(_rowStart.Length - 1, my - NavConstants.BoxH + 3);
 
@@ -320,10 +317,10 @@ public sealed class NavGraph
     /// below a map object, and where a bot would stand on it.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Map objects are not anchored the way a character is</b>, and no
-    /// single offset generalises across object types — the reference measured
-    /// <c>koth_corinth</c>'s capture-zone marker floating 48px above its floor
-    /// and <c>koth_harvest</c>'s 66px. Taking the marker's own y gives -1. So
+    /// <b>Map objects are not anchored the way a character is</b>, and no
+    /// single offset generalises across object types — <c>koth_corinth</c>'s
+    /// capture-zone marker floats 48px above its floor and <c>koth_harvest</c>'s
+    /// floats 66px. Taking the marker's own y gives -1. So
     /// search downward for the first node that resolves and derive the goal from
     /// <em>that</em> node, which is what makes the same call resolve the same way
     /// every time.
@@ -356,13 +353,13 @@ public sealed class NavGraph
     /// TeamGate   solid = (team != other.team or other.intel)
     /// IntelGate  solid = (team != other.team and other.intel)
     /// </code>
-    /// Inverted: ⚠️ <b>your own team gate is open unless you are carrying intel
+    /// Inverted: <b>your own team gate is open unless you are carrying intel
     /// out of it</b>, and an enemy intel gate is closed only to a carrier. That
     /// first rule is why a CTF return leg is a different query from the outbound
-    /// one — checking only the outbound leg passed a broken <c>ctf_conflict</c>
-    /// where red could fetch the flag and then not carry it home.
+    /// one — checking only the outbound leg lets a carrier fetch the flag on
+    /// <c>ctf_conflict</c> and never carry it home.
     /// <para>
-    /// ⚠️ An unknown code refuses passage. A graph built by a newer generator, or
+    /// An unknown code refuses passage. A graph built by a newer generator, or
     /// a corrupt row, should make a bot refuse to walk through something — worse
     /// behaviour, not a broken game.
     /// </para>
@@ -383,21 +380,16 @@ public sealed class NavGraph
     /// Whether this traveller may take <paramref name="edge"/>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The test is on the EDGE and not on the node it arrives at</b>, which
+    /// <b>The test is on the EDGE and not on the node it arrives at</b>, which
     /// looks like an omission and is the reference's rule —
     /// <c>navFindPath.gml</c>: "an arc can cross a gate without landing on it —
     /// the generator stamps an edge that passes through a gate with that gate,
-    /// so the check below covers both".
-    /// <para>
-    /// <b>Measured, because the two rules are only equivalent if the generator
-    /// really does stamp them.</b> Across all 24 shipped graphs and 115,757
-    /// edges, <b>none</b> lands on one of the 148 gated nodes without carrying
-    /// that gate itself — <see cref="Nodes"/>, and
-    /// <c>NavGraphFixtureTests.NoEdgeLandsOnAGatedNodeUnstamped</c>, which is
+    /// so the check below covers both". Across every shipped graph, no edge
+    /// lands on a gated node without carrying that gate itself — <see cref="Nodes"/>,
+    /// and <c>NavGraphFixtureTests.NoEdgeLandsOnAGatedNodeUnstamped</c>, which is
     /// what notices if a future generator stops.
-    /// </para>
     /// <para>
-    /// ⚠️ It also falls out of this that <b>a bot standing inside a gate it may
+    /// It also falls out of this that <b>a bot standing inside a gate it may
     /// not pass still gets edges out</b> — one that has just picked up the intel,
     /// or anyone the setup gates shut around. Those edges arrive somewhere
     /// ungated and are never refused. Adding the landing-node test would not
@@ -413,13 +405,13 @@ public sealed class NavGraph
     /// and the class arcs together.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The one copy of the rule, and it has to stay the one copy.</b>
+    /// <b>The one copy of the rule, and it has to stay the one copy.</b>
     /// <see cref="NavSearch"/> applies it per <em>edge</em> while choosing a
     /// route; <see cref="PathFollower"/> applies it again when it re-resolves the
     /// hop it is steering. Those two answering differently is not a cosmetic
     /// inconsistency — it is a bot flying an arc its own route never costed.
     /// <para>
-    /// ⚠️ <b>Refusing is the DEFAULT for every class arc.</b> The failure mode of
+    /// <b>Refusing is the DEFAULT for every class arc.</b> The failure mode of
     /// the opposite is a heavy routed over something it physically cannot fly,
     /// which is worse than a longer walk.
     /// </para>
@@ -442,7 +434,7 @@ public sealed class NavGraph
     /// expires in seconds and a rebuild only happens on a map change, which
     /// clears the bots' paths anyway.
     /// <para>
-    /// ⚠️ The multiplier is comfortably above any node count a real map produces
+    /// The multiplier is comfortably above any node count a real map produces
     /// — the largest shipped graph, <c>cp_dirtbowl</c>, comes to 833 — and is
     /// checked rather than assumed, because a collision here silently blacklists
     /// or crowds the wrong edge.

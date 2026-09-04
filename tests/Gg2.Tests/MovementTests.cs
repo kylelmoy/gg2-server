@@ -378,19 +378,19 @@ public sealed class MovementTests
 
     /// <summary>
     /// The crawl terminates when what is left to travel is too small for the
-    /// position to represent — the hang <c>gg2-rl</c> reported on 2026-08-30.
+    /// position to represent — the hang <c>gg2-rl</c> reported from training.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>These numbers are a recording, not a construction.</b> They are the
-    /// state a phase 3 training run reached on <c>cp_dirtbowl</c> (scout against
-    /// a soldier, iteration 78, worker 12, step 30), read out of a temporary
-    /// iteration guard in <see cref="Movement.GoodMoveContactSolid"/>: with
-    /// 2.14e-13 of the distance left, both axes came back unchanged, so
-    /// <c>totalMoved</c> stopped growing while GML's fuzzy comparison — whose
-    /// epsilon is 1e-13 — still called the move unfinished. See
-    /// docs/TRAPS-SIMULATION.md, "the crawl that could not finish".
+    /// <b>These numbers are a recording, not a construction.</b> They are the
+    /// state a training run reached on <c>cp_dirtbowl</c> (scout against a
+    /// soldier), read out of a temporary iteration guard in
+    /// <see cref="Movement.GoodMoveContactSolid"/>: with 2.14e-13 of the
+    /// distance left, both axes came back unchanged, so <c>totalMoved</c>
+    /// stopped growing while GML's fuzzy comparison — whose epsilon is 1e-13 —
+    /// still called the move unfinished. See docs/TRAPS-SIMULATION.md, "the
+    /// crawl that could not finish".
     /// <para>
-    /// ⚠️ <b>Any y in the thousands has the same window</b>, which is why
+    /// <b>Any y in the thousands has the same window</b>, which is why
     /// <c>cp_dirtbowl</c> is where it showed up: a ULP there is about 4.5e-13,
     /// so a step under 2.27e-13 rounds away while a residual over 1e-13 keeps
     /// the loop going. Below about y=1024 the window is empty and no map that
@@ -399,7 +399,7 @@ public sealed class MovementTests
     /// <para>
     /// Run on a thread with a deadline because the failure it guards is a
     /// non-terminating loop: a plain call would wedge the whole test run
-    /// instead of going red. ⚠️ <b>A dedicated thread rather than
+    /// instead of going red. <b>A dedicated thread rather than
     /// <c>Task.Run</c>, and that is not a style preference</b> — a pool work
     /// item in a suite this size can wait on a saturated pool, and a
     /// wall-clock deadline would then fail for a reason that has nothing to do

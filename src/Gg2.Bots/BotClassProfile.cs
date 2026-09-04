@@ -23,7 +23,7 @@ public enum BotSpotMode
 /// <c>botObjectiveUpdate</c> one each) precisely so that "what is different about
 /// a pyro" is answerable by reading one file.
 /// <para>
-/// ⚠️ <b>Every row is a deliberate exception, and the default is the interesting
+/// <b>Every row is a deliberate exception, and the default is the interesting
 /// part.</b> A class that is not named in a property behaves like everyone else,
 /// so adding a class needs no edit here at all — and a row that names <em>every</em>
 /// class is a property that should not be in this table.
@@ -36,7 +36,7 @@ public static class BotClassProfile
     /// radius.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Not the pyro or the medic: a flame does not reach and a medic's needles
+    /// Not the pyro or the medic: a flame does not reach and a medic's needles
     /// are not what it is for. Everyone else will.
     /// </remarks>
     public static bool Potshots(PlayerClass playerClass) =>
@@ -61,7 +61,7 @@ public static class BotClassProfile
     /// reaction.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Only the medic, whose needle gun is on the right click. That is what
+    /// Only the medic, whose needle gun is on the right click. That is what
     /// makes the fire gates apply to SPECIAL for a medic and not for anybody
     /// else: a pyro's airblast and a demoman's detonation are <em>reactions</em>,
     /// and a reaction that arrives a second and a half late is not a reaction.
@@ -83,7 +83,7 @@ public static class BotClassProfile
 
     /// <summary>How much of the difficulty's aim error this class carries.</summary>
     /// <remarks>
-    /// ⚠️ A multiplier on the knob rather than a knob of its own, so a weak
+    /// A multiplier on the knob rather than a knob of its own, so a weak
     /// sniper is still relatively accurate and a strong heavy is still relatively
     /// sloppy — which is what makes the classes feel different at every tier
     /// rather than only at the top.
@@ -98,7 +98,7 @@ public static class BotClassProfile
 
     /// <summary>How settled this class's aim must be before it will fire.</summary>
     /// <remarks>
-    /// A multiplier on <c>BOT_AIM_SETTLE_DEG</c>. ⚠️ A heavy is allowed to fire
+    /// A multiplier on <c>BOT_AIM_SETTLE_DEG</c>. A heavy is allowed to fire
     /// while still turning — a minigun sprays — and a sniper is not.
     /// </remarks>
     public static double AimSettle(PlayerClass playerClass) => playerClass switch
@@ -112,7 +112,7 @@ public static class BotClassProfile
     /// How near this class wants to be before it stops walking at a target.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Only the pyro, and it is the one thing that makes the engage hold walk
+    /// Only the pyro, and it is the one thing that makes the engage hold walk
     /// <em>toward</em> an enemy instead of standing where the hold caught it.
     /// Zero is "no opinion".
     /// </remarks>
@@ -132,7 +132,7 @@ public static class BotClassProfile
     /// One bot in every N of this class's lean group defends.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The class term is a PERIOD, not a veto, and that distinction is the
+    /// <b>The class term is a PERIOD, not a veto, and that distinction is the
     /// whole design.</b> The obvious rule — "Engineers and Heavies defend, Scouts
     /// and Spies attack" — breaks at both ends: a team of nine Engineers would
     /// have nobody attacking and a team of nine Scouts nobody defending, and

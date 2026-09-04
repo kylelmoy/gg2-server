@@ -12,7 +12,7 @@ namespace Gg2.Tests;
 /// broadcasts nothing — its damage reaches the wire only as the victim's hp
 /// byte — and no checked-in fixture holds a sentry that survives to shoot in a
 /// closed loop. So these tests are the gate. Geometry that needs the running
-/// engine was measured on 2026-08-26 (docs/SIMULATION.md: the sentry's constant
+/// engine was measured (docs/SIMULATION.md: the sentry's constant
 /// mask box, the turret's rotated one, collision_circle's Euclidean rule) and
 /// the boxes here are those measurements, not readings of the sprite XML.
 /// <para>
@@ -211,7 +211,7 @@ public sealed class SentryTests
         // move_outside_solid keeps the fractional part of its start — and the
         // exact value pins the whole falling arithmetic: five ticks of 0.6
         // gravity from vspeed 0.001 leave y at 717.006, and the contact crawl's
-        // (i/8)² back-off lands on this. ⚠️ The fixture landing gate cannot see
+        // (i/8)² back-off lands on this. The fixture landing gate cannot see
         // a wrong gravity constant on an eleven-pixel fall (0.6 and 0.7 land on
         // the same tick in the same wire bin — checked by mutation), so this
         // digit-exact value is the control that bites.
@@ -764,7 +764,7 @@ public sealed class SentryTests
     }
 
     /// <summary>
-    /// ✅ <b>A sentry built inside a team gate dies on the same tick</b> —
+    /// <b>A sentry built inside a team gate dies on the same tick</b> —
     /// <c>Sentry.events/Collision with TeamGate.xml</c>, <c>hp -= 999</c>, and
     /// the End Step below it does the rest.
     /// </summary>
@@ -789,7 +789,7 @@ public sealed class SentryTests
         Assert.False(state.HasSentry[1]);
         Assert.True(events.SentryDestroyed[1]);
 
-        // ⚠️ Byte-identical to the Begin Step guard's destruction, and that is
+        // Byte-identical to the Begin Step guard's destruction, and that is
         // the whole reason the recorded ones were misattributed for five
         // sessions: lastDamageSource stays at Create's -1, which write_ubyte
         // puts on the wire as 0.
@@ -800,7 +800,7 @@ public sealed class SentryTests
     }
 
     /// <summary>
-    /// ⚠️ <b>Its own team's gate kills it too.</b> Neither collision event
+    /// <b>Its own team's gate kills it too.</b> Neither collision event
     /// looks at <c>team</c>.
     /// </summary>
     /// <remarks>
@@ -856,7 +856,7 @@ public sealed class SentryTests
     }
 
     /// <summary>
-    /// ✅ <b>A sentry whose owner is dropped to SPECTATOR scraps itself</b> —
+    /// <b>A sentry whose owner is dropped to SPECTATOR scraps itself</b> —
     /// the second clause, reached by a roster reset rather than a side switch.
     /// </summary>
     /// <remarks>
@@ -865,21 +865,17 @@ public sealed class SentryTests
     /// already covers red-to-blue; this is the other way into the same clause,
     /// and it is the one that happens without anybody choosing it.
     /// <para>
-    /// ⚠️ <b>Reproduced live 2026-08-28, by accident.</b> A sentry built by a lone
-    /// player on a dedicated server died one tick after the server reset that
-    /// player's roster entry to <c>TEAM_SPECTATOR</c> — the same reset
-    /// <c>CLAUDE.md</c> records the server doing on a map change. A sentry's own
-    /// team is copied once at build (<c>buildSentry.gml</c>) and never updated,
-    /// so <b>the clause is an inequality, not a red-versus-blue test</b>:
-    /// spectator orphans a sentry exactly as switching sides does.
+    /// A sentry's own team is copied once at build (<c>buildSentry.gml</c>) and
+    /// never updated, so <b>the clause is an inequality, not a red-versus-blue
+    /// test</b>: a roster reset to <c>TEAM_SPECTATOR</c> — the same reset the
+    /// server performs on a map change — orphans a sentry exactly as switching
+    /// sides does.
     /// </para>
     /// <para>
-    /// ⚠️ <b>This is also why a live "reproduction" of the recorded self-destructs
-    /// was wrong.</b> Building at the trace's exact coordinates killed the sentry
-    /// and looked like the answer; the control at a position the trace says works
-    /// killed it identically, because both deaths were this roster reset.
-    /// <b>Position is eliminated</b> — see <c>SentryKillFixtureTests</c>' open
-    /// finding.
+    /// Position is not the cause of the recorded self-destructs — building at
+    /// the trace's exact coordinates and building at a position the trace says
+    /// works both die identically to this same roster reset. See
+    /// <c>SentryKillFixtureTests</c>' open finding.
     /// </para>
     /// </remarks>
     [Fact]

@@ -43,15 +43,12 @@ public static class Timers
     /// </item>
     /// </list>
     /// <para>
-    /// ⚠️ <b>MEASURED 2026-08-27 against the running game, after this file spent
-    /// a stage asserting the opposite.</b> The code wrote <c>Inactive</c> the
-    /// instant a counter expired, on the reasoning that GM8 sets -1 before the
-    /// event body. It does not: a fired alarm reads <b>0</b> for the rest of
-    /// that frame. <c>docs/SIMULATION.md</c>'s own pseudocode had it right and
-    /// the code was changed away from it.
+    /// <b>Measured against the running game.</b> GM8 does not set -1 the
+    /// instant a counter expires: a fired alarm reads <b>0</b> for the rest of
+    /// that frame, and only the next frame's alarm stage takes it to -1.
     /// </para>
     /// <para>
-    /// ⚠️ <b>One site makes it observable, and it is a whole tick of behaviour.</b>
+    /// <b>One site makes it observable, and it is a whole tick of behaviour.</b>
     /// <c>Character.events/Begin Step.xml:67</c> gates the afterburn intensity
     /// decay on <c>alarm[0] == -1</c> <em>exactly</em>, and Begin Step runs
     /// <em>before</em> the alarm stage. So with the eager write the frame after
@@ -72,7 +69,7 @@ public static class Timers
 
         timer--;
 
-        // ⚠️ The counter is deliberately LEFT AT ZERO here. GM8 does not write
+        // The counter is deliberately LEFT AT ZERO here. GM8 does not write
         // -1 until the next frame's alarm stage, and the difference is one tick
         // of afterburn decay — see the remarks above. A `timer = Inactive;` on
         // this line reads like tidiness and is a measured behaviour change.
@@ -87,7 +84,7 @@ public static class Timers
     /// before the next frame's alarm stage takes it to <see cref="Inactive"/>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A spent counter is not immediately an inactive one</b>, and the
+    /// <b>A spent counter is not immediately an inactive one</b>, and the
     /// difference is a whole tick of afterburn decay — see
     /// <see cref="Advance(ref int)"/>. It exists as a name because seven test
     /// sites assert "this alarm has been spent" on the tick it fired, and a
@@ -111,7 +108,7 @@ public static class Timers
     /// <see cref="Advance(ref int)"/>'s "fires only on exactly zero" rule would
     /// mean the pellet never expired.
     /// <para>
-    /// ⚠️ <b>Half to even, and this specific choice is not measured.</b> GM8's
+    /// <b>Half to even, and this specific choice is not measured.</b> GM8's
     /// alarms are a Delphi array of integers and an assignment converts; the
     /// rounding it uses is the one thing about
     /// <see cref="Timers"/> still taken from the OpenGMK transcription rather
@@ -257,7 +254,7 @@ public static class Timers
             // different weapon: thirty-two ticks after a spy commits to a stab,
             // the knife's hitbox finally exists.
             //
-            // ⚠️ And the event ends with a drag-and-drop
+            // And the event ends with a drag-and-drop
             // `action_set_alarm(18, 2)` that no grep for GML code inside the
             // event finds — see Weapons.StabCooldown.
             if (Advance(ref state.Weapons[slot].StabTimer))
@@ -366,9 +363,9 @@ public static class Timers
         // alarms visited by the *later* indices of this same stage, exactly as a
         // GM8 instance created mid-stage is.
         //
-        // ⚠️ THE GUARD IS ON THE ALARM, NOT INSIDE PlayerSpawn, and this port
-        // had it inside for two phases. That is not a stylistic difference: it
-        // is the whole of Arena. `respawnEveryone()` calls `PlayerSpawn()`
+        // THE GUARD IS ON THE ALARM, NOT INSIDE PlayerSpawn. That is not a
+        // stylistic difference: it is the whole of Arena. `respawnEveryone()`
+        // calls `PlayerSpawn()`
         // DIRECTLY (Scripts/Maps/Arena/respawnEveryone.gml) and so bypasses
         // this test — which is what lets a round start with everybody alive
         // even though `doEventArenaStartRound` has already set the HUD to
@@ -377,7 +374,7 @@ public static class Timers
         // empty team is a win, and every round in this port ended one tick after
         // it started. See Arena.Sweep and ArenaRoundLoopTests.
         //
-        // ⚠️ The alarm is still SPENT when the guard refuses — `Advance` runs
+        // The alarm is still SPENT when the guard refuses — `Advance` runs
         // first and short-circuit order matters here.
         for (var slot = 0; slot < WorldState.MaxSlots; slot++)
         {
@@ -446,7 +443,7 @@ public static class Timers
                     // the weapon's own Begin Step instead — 1.8 at a time for
                     // the pyro and 1 at a time for the heavy.
                     //
-                    // ⚠️ The Minigun's buffer is longer than it looks: its Begin
+                    // The Minigun's buffer is longer than it looks: its Begin
                     // Step pushes alarm[5] back up by one on every tick the
                     // trigger is held, so this fires only once the heavy stops
                     // shooting. See Weapons.WeaponBeginStep.
@@ -500,7 +497,7 @@ public static class Timers
         // game that belongs to a single class. It re-arms itself, so it runs
         // once a second for as long as the medic lives.
         //
-        // ⚠️ It is last because alarms are index-major (see this method's
+        // It is last because alarms are index-major (see this method's
         // remarks) and eleven is the highest index in the game — so a medic
         // regenerates *after* every refire, every lifetime and every reload has
         // been resolved this tick.
@@ -552,13 +549,13 @@ public static class Timers
     /// <c>PlayerSpawn()</c> called directly rather than through the alarm.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Arena's <c>respawnEveryone()</c> does exactly this</b>, and the
+    /// <b>Arena's <c>respawnEveryone()</c> does exactly this</b>, and the
     /// difference is a whole tick: arming <c>alarm[5] = 1</c> instead would put
     /// every character in a new round one tick later than the reference does,
     /// and the round starts on the same tick. The guards are the script's own,
     /// so a spectator still spawns nothing.
     /// <para>
-    /// ⚠️ <b>And it deliberately does NOT consult
+    /// <b>And it deliberately does NOT consult
     /// <see cref="Arena.SpawningAllowed"/></b>, because
     /// <c>respawnEveryone.gml</c> calls <c>PlayerSpawn()</c> directly while
     /// <c>Player.events/Alarm 5.xml</c> is <c>if (spawningAllowed())
@@ -583,12 +580,12 @@ public static class Timers
         ref readonly var player = ref state.Players[slot];
 
         // `if(global.isHost and !global.mapchanging and team != TEAM_SPECTATOR
-        // and object == -1)` — the script's own guard, and all of it. ⚠️ The
+        // and object == -1)` — the script's own guard, and all of it. The
         // alarm still fires while the map is changing (that test IS inside the
         // script) so the timer is spent and the player simply does not appear,
         // which is what makes the reset's blanket `alarm[5] = 1` safe.
         //
-        // ⚠️ `spawningAllowed()` is NOT one of these, and putting it here broke
+        // `spawningAllowed()` is NOT one of these, and putting it here broke
         // Arena outright — see the alarm-5 stage above.
         if (spawnPoints is null
             || state.MapChanging

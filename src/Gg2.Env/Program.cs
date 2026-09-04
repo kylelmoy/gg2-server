@@ -2,14 +2,12 @@ using Gg2.Env;
 
 // gg2-env: the batch-stepping surface's entry point. docs/ENV.md.
 //
-// ⚠️ Loopback only, one client. It executes batch commands against live
+// Loopback only, one client. It executes batch commands against live
 // simulation state, which is the same reason --control-port is off by default
 // on the game server.
 //
-// ⚠️ The parsing and the wiring are in EnvOptions, not here. Top-level
-// statements cannot be called by a test, and a dropped --nav in this file cost
-// gg2-rl its phase 1 exit criterion while every test upstream passed — see
-// EnvOptions' own remarks.
+// The parsing and the wiring are in EnvOptions, not here. Top-level
+// statements cannot be called by a test — see EnvOptions' own remarks.
 if (args.Length == 0 || args[0] is "--help" or "-h")
 {
     Console.WriteLine(
@@ -45,7 +43,7 @@ if (!Directory.Exists(options.Maps))
     return 1;
 }
 
-// ⚠️ Warned about rather than refused. An env with no graphs is a legitimate
+// Warned about rather than refused. An env with no graphs is a legitimate
 // configuration — Idle and Rollout need none — so this is not an error; it is
 // the one fact that decides whether Scripted can be asked for, said out loud at
 // startup instead of arriving as a per-batch refusal the caller cannot explain.
@@ -62,11 +60,9 @@ if (options.Command == "smoke")
 
     Console.WriteLine(result);
 
-    // ⚠️ The build is printed WITH the number, never left to the reader.
-    // CLAUDE.md's standing rule: this project's headroom figure sat stale in
-    // four documents because a re-measure forgot to name its configuration, and
-    // Debug reads about half of Release. A throughput number without a build is
-    // not a measurement.
+    // The build is printed with the number, never left to the reader.
+    // Debug reads about half of Release, so a throughput number without a
+    // build is not a measurement.
 #if DEBUG
     Console.WriteLine("build: DEBUG - roughly half of Release; do not quote this as the number");
 #else
@@ -78,11 +74,11 @@ if (options.Command == "smoke")
 
 var server = options.CreateServer();
 
-// ⚠️ Printed from the BOUND callback, never from the requested `port`. Printing
+// Printed from the bound callback, never from the requested `port`. Printing
 // the request means `--port 0` announces "127.0.0.1:0", which is not an address
 // anything can connect to — and this tool's own --help promises it prints the
-// one the OS granted. A launcher that scrapes this line got 0 and failed to
-// connect, which is how it was found.
+// one the OS granted. A launcher that scrapes this line before the callback
+// fires would get 0 and fail to connect.
 server.Serve(options.Port, bound: actual =>
 {
     Console.WriteLine($"gg2-env serving on 127.0.0.1:{actual}");

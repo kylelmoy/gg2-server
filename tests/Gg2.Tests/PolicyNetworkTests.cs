@@ -14,9 +14,9 @@ namespace Gg2.Tests;
 /// read out of that repo's working tree, because a gate that depends on another
 /// repo's uncommitted state is not a gate.
 /// <para>
-/// ⛔ <b>Its stamp is no longer this build's, and nothing here waits for that to
-/// be fixed.</b> The moving-platform carry bumped <c>SIM_UUID</c> on 2026-09-02;
-/// the checkpoint still says <c>7ff5940d97aa7bed</c> and always will. Every test
+/// <b>Its stamp does not match this build's, and nothing here waits for that to
+/// be fixed.</b> The moving-platform carry bumped <c>SIM_UUID</c>; the
+/// checkpoint still says <c>7ff5940d97aa7bed</c> and always will. Every test
 /// below treats it as a <b>numerics fixture</b> — real weights, a real numpy
 /// oracle — rather than as a policy this project intends to run, and reaches it
 /// through <see cref="PolicyFixture"/>, which is where that decision is written
@@ -24,14 +24,14 @@ namespace Gg2.Tests;
 /// and then corrupted, so the guard is tested without a live checkpoint existing.
 /// </para>
 /// <para>
-/// ⚠️ <b>The fixture compares LOGITS against numpy, not just the argmax.</b> Two
+/// <b>The fixture compares LOGITS against numpy, not just the argmax.</b> Two
 /// implementations can agree on every head and still differ — a wrong head offset
 /// produces a plausible ranking over the wrong actions, which is the failure
 /// `gg2-rl` named when it built its own head-gathering. Comparing the raw output
 /// block says whether the agreement is structural or lucky.
 /// </para>
 /// <para>
-/// ⚠️ <b>The 64 observations are real states from a duel</b>, not random floats.
+/// <b>The 64 observations are real states from a duel</b>, not random floats.
 /// A forward pass agrees on noise whatever its offsets are; what has to agree is
 /// the ranking in states the bot will meet. Across the fixture every head takes
 /// several distinct values — 3, 2, 2, 3, 10 and 2 respectively — so a head stuck
@@ -51,7 +51,7 @@ public sealed class PolicyNetworkTests
     /// this one.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The stamp assertion is the falsification condition for
+    /// <b>The stamp assertion is the falsification condition for
     /// <see cref="PolicyFixture"/>.</b> Everything that type says rests on this
     /// file being the one `gg2-rl` handed over, trained against
     /// <c>7ff5940d97aa7bed</c>. If a retrained checkpoint is ever dropped in, this
@@ -76,10 +76,8 @@ public sealed class PolicyNetworkTests
     /// Loading the checked-in checkpoint without the override is a refusal.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>This is the red the 2026-09-02 carry produced, kept as an
-    /// assertion.</b> 25 tests failed on it; they now say what they meant, and this
-    /// one holds the fact they were accidentally carrying — the shipped checkpoint
-    /// does not belong to this build and <c>Load</c> says so rather than playing it.
+    /// <b>The shipped checkpoint does not belong to this build</b>, and
+    /// <c>Load</c> says so rather than playing it.
     /// </remarks>
     [Fact]
     public void TheCheckedInCheckpointIsRefusedWithoutTheOverride()
@@ -94,7 +92,7 @@ public sealed class PolicyNetworkTests
     /// A checkpoint carrying this build's stamp loads with no override at all.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The accept path, which the test above cannot cover.</b> Without it a
+    /// <b>The accept path, which the test above cannot cover.</b> Without it a
     /// <c>Load</c> that refused <em>every</em> checkpoint would pass everything
     /// here — and the whole suite would still be green, because every other caller
     /// passes the override.
@@ -113,10 +111,10 @@ public sealed class PolicyNetworkTests
     /// The forward pass agrees with the trainer's numpy one, logit for logit.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The tolerance is float32 summation-order noise and nothing else.</b>
+    /// <b>The tolerance is float32 summation-order noise and nothing else.</b>
     /// Measured at <b>6.7e-6</b> absolute over the fixture; 1e-4 is the bound
     /// asserted, which is fifteen times the observed worst case and still far
-    /// below any logit gap that decides a head. ⚠️ <b>The heads are compared
+    /// below any logit gap that decides a head. <b>The heads are compared
     /// EXACTLY</b> — a tolerance there would be a tolerance on the answer.
     /// </remarks>
     [Fact]
@@ -162,7 +160,7 @@ public sealed class PolicyNetworkTests
 
         Assert.True(worstLogit < 1e-4, $"worst logit deviation {worstLogit:0.###e0} is past float32 noise");
 
-        // ⚠️ The premise: a loop that compared nothing would satisfy everything
+        // The premise: a loop that compared nothing would satisfy everything
         // above.
         Assert.Equal(64 * ActionDecoder.HeadShape.Length, headsCompared);
     }
@@ -171,7 +169,7 @@ public sealed class PolicyNetworkTests
     /// Every head actually varies across the fixture.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Without this the comparison above is weaker than it looks.</b> If a
+    /// <b>Without this the comparison above is weaker than it looks.</b> If a
     /// head were constant over all 64 rows, an implementation that always returned
     /// that constant — or that read the wrong slice and happened to argmax to the
     /// same index — would pass. This is the check that the fixture exercises what
@@ -204,7 +202,7 @@ public sealed class PolicyNetworkTests
 
     /// <summary>Running the policy allocates nothing.</summary>
     /// <remarks>
-    /// ⚠️ Warmed past tier-1 promotion (30 calls) before measuring — a short
+    /// Warmed past tier-1 promotion (30 calls) before measuring — a short
     /// warm-up puts the rejit inside the measured window and its bookkeeping on
     /// the measuring thread.
     /// </remarks>
@@ -233,14 +231,14 @@ public sealed class PolicyNetworkTests
     /// A checkpoint whose stamp is not this build's is refused, not warned about.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The <c>PROTOCOL_UUID</c> idiom.</b> A policy running against a
+    /// <b>The <c>PROTOCOL_UUID</c> idiom.</b> A policy running against a
     /// different simulation is not slightly wrong — it is acting on numbers that
     /// do not mean what it learned they meant.
     /// </remarks>
     [Fact]
     public void AForeignStampIsRefused()
     {
-        // ⚠️ The MINTED copy, because this has to start from a checkpoint this
+        // The MINTED copy, because this has to start from a checkpoint this
         // build accepts. Corrupting the checked-in one proves nothing — it is
         // already refused, and the test would pass on a Load that never looked.
         var bytes = File.ReadAllBytes(PolicyFixture.MintedForThisBuild);

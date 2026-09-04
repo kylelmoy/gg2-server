@@ -6,7 +6,7 @@ namespace Gg2.Tests;
 /// <see cref="LateTickMonitor"/>: warn on an overrunning tick, without flooding.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>No clock and no sleeping anywhere in this file.</b> The monitor is
+/// <b>No clock and no sleeping anywhere in this file.</b> The monitor is
 /// handed lateness that has already been measured and counts its window in
 /// ticks, which is what makes every assertion here exact rather than a
 /// tolerance. A test that slept to produce a late tick would be measuring the
@@ -43,13 +43,12 @@ public sealed class LateTickMonitorTests
     /// A late tick that did almost no work blames the machine, not the server.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>The line has to answer this or it is not actionable.</b> Measured
-    /// 2026-09-03: a twelve-bot server used <b>0.104 ms of CPU per tick</b>, 0.3%
-    /// of one core, and still showed p99 100 ms and a 262 ms worst case — because
-    /// a neighbouring lane was running seventy training processes on the same
-    /// machine. Without the work figure on the line, that reads exactly like a bot
-    /// layer that has become too expensive, and the response to the two is
-    /// opposite.
+    /// <b>The line has to answer this or it is not actionable.</b> A twelve-bot
+    /// server can use 0.104 ms of CPU per tick — 0.3% of one core — and still
+    /// show p99 100 ms and a 262 ms worst case, because a neighbouring lane was
+    /// running other work on the same machine. Without the work figure on the
+    /// line, that reads exactly like a bot layer that has become too expensive,
+    /// and the response to the two is opposite.
     /// </remarks>
     [Fact]
     public void ALateTickThatDidNoWorkBlamesTheMachine()
@@ -90,7 +89,7 @@ public sealed class LateTickMonitorTests
     /// The verdict uses the same threshold lateness itself does.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Otherwise the two can disagree — a tick could be reported late while the
+    /// Otherwise the two can disagree — a tick could be reported late while the
     /// verdict said its work was fine, at a work figure that would itself have
     /// been reported late. One constant, both answers.
     /// </remarks>
@@ -121,7 +120,7 @@ public sealed class LateTickMonitorTests
     /// The threshold is 20% of the interval — 40 ms at the default 30 Hz.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The same 40 ms <c>TickPacing</c> counts, and for the same measured
+    /// The same 40 ms <c>TickPacing</c> counts, and for the same measured
     /// reason: one and a quarter ticks is where the stock client has
     /// dead-reckoned far enough that the correction is visible.
     /// </remarks>
@@ -137,7 +136,7 @@ public sealed class LateTickMonitorTests
     }
 
     /// <summary>
-    /// ⛔ An unpaced server can never be late.
+    /// An unpaced server can never be late.
     /// </summary>
     /// <remarks>
     /// <c>--speed max</c> never waits, so every tick overruns by construction.
@@ -154,7 +153,7 @@ public sealed class LateTickMonitorTests
     }
 
     /// <summary>
-    /// ⚠️ A faster <c>--speed</c> lowers the bar with the interval.
+    /// A faster <c>--speed</c> lowers the bar with the interval.
     /// </summary>
     /// <remarks>
     /// A fixed 40 ms would mean a <c>--speed 4</c> server (8.3 ms interval)
@@ -177,7 +176,7 @@ public sealed class LateTickMonitorTests
 
     /// <summary>The first late tick in a window prints immediately.</summary>
     /// <remarks>
-    /// ⚠️ Immediately, not at the end of the window: an operator watching a
+    /// Immediately, not at the end of the window: an operator watching a
     /// server hitch needs to see it while they are still watching, and a
     /// summary-only design would delay every first warning by up to 30 seconds.
     /// </remarks>
@@ -200,7 +199,7 @@ public sealed class LateTickMonitorTests
     }
 
     /// <summary>
-    /// ⛔ The flood control: a thousand consecutive late ticks produce THREE
+    /// The flood control: a thousand consecutive late ticks produce THREE
     /// lines, not a thousand.
     /// </summary>
     /// <remarks>
@@ -208,7 +207,7 @@ public sealed class LateTickMonitorTests
     /// on every tick would otherwise print thirty lines a second, which is not a
     /// warning but a denial of service on the operator's terminal.
     /// <para>
-    /// ⚠️ <b>Three and not two, because 1,000 ticks spans two 900-tick
+    /// <b>Three and not two, because 1,000 ticks spans two 900-tick
     /// windows</b>: the immediate warning, the summary when the first window
     /// closes, and the immediate warning that opens the second. That is the
     /// intended shape — the limit is a RATE, not a mute, and a monitor that went
@@ -235,14 +234,14 @@ public sealed class LateTickMonitorTests
         Assert.Contains("more late tick(s)", lines[1], StringComparison.Ordinal);
         Assert.Contains("late tick 900", lines[2], StringComparison.Ordinal);
 
-        // ⚠️ Every late tick is still COUNTED, even when it is not printed —
+        // Every late tick is still COUNTED, even when it is not printed —
         // "one late tick" and "a thousand" must not be indistinguishable.
         Assert.Equal(1000, monitor.LateTicks);
     }
 
     /// <summary>The summary names the WORST tick in the window, not the last.</summary>
     /// <remarks>
-    /// ⚠️ The worst is the one worth chasing; the last is an accident of where
+    /// The worst is the one worth chasing; the last is an accident of where
     /// the window boundary fell. A test that only checked "a summary appeared"
     /// would pass with either.
     /// </remarks>
@@ -267,7 +266,7 @@ public sealed class LateTickMonitorTests
     /// A single late tick in a window produces no summary — one line, not two.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The control on the flood test.</b> Without this, a monitor that
+    /// <b>The control on the flood test.</b> Without this, a monitor that
     /// always emitted a summary would pass "a thousand ticks produce two lines"
     /// and still double every isolated hitch.
     /// </remarks>
@@ -286,7 +285,7 @@ public sealed class LateTickMonitorTests
     /// A new window warns immediately again — the limit is a rate, not a mute.
     /// </summary>
     /// <remarks>
-    /// ⛔ The failure this rules out is a monitor that warns once and then never
+    /// The failure this rules out is a monitor that warns once and then never
     /// again for the life of the server, which is strictly worse than no warning
     /// at all: it would read as "the hitch stopped".
     /// </remarks>
@@ -327,7 +326,7 @@ public sealed class LateTickMonitorTests
 
     /// <summary>A healthy server prints nothing at all.</summary>
     /// <remarks>
-    /// ⚠️ Which is why this is always on rather than behind a flag — there is no
+    /// Which is why this is always on rather than behind a flag — there is no
     /// cost to leaving it armed on a server that never hitches.
     /// </remarks>
     [Fact]
@@ -349,7 +348,7 @@ public sealed class LateTickMonitorTests
     /// The arbiter spend appears only when there is an arbiter.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Null means "no arbiter", never "spent zero" — a tiered server that
+    /// Null means "no arbiter", never "spent zero" — a tiered server that
     /// granted nothing this tick is a real and different observation from a
     /// scripted server that has no arbiter to ask.
     /// </remarks>

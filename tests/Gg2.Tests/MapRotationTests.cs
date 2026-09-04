@@ -64,11 +64,9 @@ public sealed class MapRotationTests
     /// its starting value.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The one field <c>docs/PARITY.md</c>'s phase-1 byte diff always
-    /// disagreed on.</b> The port serialised a frozen <c>MatchState.Timer</c>,
-    /// so its stream was "byte-identical to the reference's apart from the CTF
-    /// round timer" — and a client, which runs its own copy down between
-    /// updates, saw the clock jump back to fifteen minutes on every full update.
+    /// The client runs its own copy of the round timer down between updates, so
+    /// this field must actually count down rather than sit frozen at
+    /// <c>MatchState.Timer</c>'s starting value.
     /// </remarks>
     [Fact]
     public void TheRoundTimerReachesTheClientAndCountsDown()
@@ -82,7 +80,7 @@ public sealed class MapRotationTests
         var first = reader.Drain(client)
             .Last(m => m.State is { Tier: MessageType.FullUpdate }).State!;
 
-        // ⚠️ The HUD block rides in a FULL_UPDATE and a CAPS_UPDATE and nowhere
+        // The HUD block rides in a FULL_UPDATE and a CAPS_UPDATE and nowhere
         // else, and a FULL_UPDATE is sent to a joining connection alone — not
         // broadcast. So the second reading comes from a *second* client's own
         // join, a hundred ticks later. The only other source is the 3,600-frame
@@ -106,9 +104,8 @@ public sealed class MapRotationTests
 
         // The claim worth making is the *rate*: one tick off the clock per tick
         // of the server, over the hundred-odd ticks between the two readings.
-        // A frozen timer — which is what this port had until the round landed —
-        // gives a drop of 0, and one decremented per state update gives about
-        // fifteen.
+        // A frozen timer gives a drop of 0; one decremented per state update
+        // gives about fifteen.
         Assert.InRange(first.HudScalars[1] - later.HudScalars[1], 100, 112);
     }
 
@@ -176,7 +173,7 @@ public sealed class MapRotationTests
         // Ten seconds of victory screen, then the map change. Nothing before the
         // last tick of it may carry a CHANGE_MAP.
         //
-        // ⚠️ The literal 300 is deliberate. Written as
+        // The literal 300 is deliberate. Written as
         // `Rounds.MapChangeDelay - 1` this asserted nothing at all: changing the
         // constant moved the test with it, which a mutation run caught. A number
         // taken from the reference has to be spelled out where it is checked.
@@ -340,17 +337,15 @@ public sealed class MapRotationTests
     /// on.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Found by writing this file.</b> Both the <c>HELLO</c> and the join
-    /// path's <c>CHANGE_MAP</c> named <c>ServerOptions.Map</c>, which is the map
-    /// the server <em>started</em> on. They are the same string until the first
-    /// rotation and different for ever afterwards, so every player who joined
-    /// after the first round loaded the wrong map — and then simulated a
-    /// different world from everybody else, silently, because nothing in the
-    /// protocol re-states the map.
+    /// Both the <c>HELLO</c> and the join path's <c>CHANGE_MAP</c> must name the
+    /// map the server is <em>currently</em> on, not <c>ServerOptions.Map</c> (the
+    /// map it <em>started</em> on) — those are the same string until the first
+    /// rotation and different afterwards, so a stale reference would join every
+    /// later player to the wrong map and silently desync their simulation from
+    /// everybody else's, since nothing in the protocol re-states the map.
     /// <para>
-    /// It survived because <c>Start</c> was the only path that ever set a map.
-    /// The whole reason to make the map change reuse <c>OpenMap</c> is that it
-    /// puts the two on the same footing.
+    /// The map change reuses <c>OpenMap</c>, the same path <c>Start</c> uses, so
+    /// both are on the same footing.
     /// </para>
     /// </remarks>
     [Fact]
@@ -429,7 +424,7 @@ public sealed class MapRotationTests
         Assert.Equal(Map, System.Text.Encoding.ASCII.GetString(end!.Payload, 1, end.Payload[0]));
     }
     /// <summary>
-    /// ⚠️ <b><c>--time-limit 0</c> is a ONE-MINUTE round, not an unlimited
+    /// <b><c>--time-limit 0</c> is a ONE-MINUTE round, not an unlimited
     /// one</b> — and that is correct, because the reference cannot express "no
     /// limit" at all.
     /// </summary>
@@ -440,15 +435,14 @@ public sealed class MapRotationTests
     /// (see its round-configuration block), which is what keeps the port
     /// wire-compatible with an operator who writes <c>Time Limit = 0</c>.
     /// <para>
-    /// ⚠️ <b>Zero means "no limit" one layer down, in
+    /// <b>Zero means "no limit" one layer down, in
     /// <c>WorldState.TimeLimitMinutes</c>, and only there.</b> That escape exists
     /// so a defaulted world — every unit test and every bot rollout — is not a
-    /// round whose clock already reads 0:00. The two conventions meet at this
-    /// floor, and confusing them is not academic: a live session on 2026-08-27
-    /// started <c>gg2-server --time-limit 0</c> expecting an endless round,
-    /// watched the driven client get put back on the team-select screen about
-    /// fifty seconds in, and spent the time on the AFK timer before finding the
-    /// map change that had actually caused it.
+    /// round whose clock already reads 0:00. Confusing the two conventions is
+    /// not academic: <c>gg2-server --time-limit 0</c> expecting an endless round
+    /// instead gets put back on the team-select screen about fifty seconds in,
+    /// which looks like an AFK timeout unless the map change is traced back to
+    /// this floor.
     /// </para>
     /// <para>
     /// The gate is the wire reading as much as the <c>MAP_END</c>: if the floor

@@ -9,18 +9,11 @@ namespace Gg2.Tests;
 /// that does the actual healing.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>This was reported by a player, not found by a test</b>, and it had been
-/// missing for the whole port: "heavy sandwich doesn't work", from the first
-/// two-human game. It was recorded as absent in four separate source comments
-/// and in none of the places anybody looks — which is the transferable part.
-/// <b>A gap noted only in a code comment is a gap nobody is tracking.</b>
-/// <para>
-/// ⚠️ <b>The heal is not in the command.</b> <c>serverEatSandvich</c> only sets
+/// <b>The heal is not in the command.</b> <c>serverEatSandvich</c> only sets
 /// the animation going; every hit point arrives from
 /// <c>Character.events/End Step.xml:83-96</c>, a tick at a time, and stops if
 /// the character dies part way through. Healing on the command would give a
 /// heavy 200 hp the instant they pressed the key.
-/// </para>
 /// </remarks>
 public sealed class SandvichTests
 {
@@ -80,7 +73,7 @@ public sealed class SandvichTests
 
     /// <summary>The reference's preconditions, each refused in silence.</summary>
     /// <remarks>
-    /// ⚠️ <b>A refusal is <c>false</c>, never an exception.</b>
+    /// <b>A refusal is <c>false</c>, never an exception.</b>
     /// <c>botServerActions.gml</c> says each server action "re-checks its own
     /// preconditions", and the socket path and the bot path share this one
     /// method precisely so a bot cannot do something a client cannot.
@@ -95,7 +88,7 @@ public sealed class SandvichTests
         var eating = World();
         Assert.True(PlayerCommands.EatSandvich(ref eating, 1));
 
-        // ⚠️ Already eating is a refusal, not a restart — without it a heavy
+        // Already eating is a refusal, not a restart — without it a heavy
         // holding the key would hold the index at zero and eat for ever.
         eating.Characters[1].OmnomnomnomIndex = 20;
         Assert.False(PlayerCommands.EatSandvich(ref eating, 1));
@@ -107,7 +100,7 @@ public sealed class SandvichTests
     }
 
     /// <summary>
-    /// ✅ <b>128 ticks of eating</b>, and the animation counter is what ends it.
+    /// <b>128 ticks of eating</b>, and the animation counter is what ends it.
     /// </summary>
     /// <remarks>
     /// <c>omnomnomnomindex</c> starts at 0, gains <b>0.25</b> a tick and stops at
@@ -133,7 +126,7 @@ public sealed class SandvichTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The heal overshoots <c>maxHp</c> by 1.6 and stays there for a
+    /// <b>The heal overshoots <c>maxHp</c> by 1.6 and stays there for a
     /// tick</b>, because the clamp is earlier in the same event.
     /// </summary>
     /// <remarks>
@@ -142,12 +135,11 @@ public sealed class SandvichTests
     /// <c>End Step.xml:37</c> runs <em>above</em> this block, so it cannot catch
     /// the overshoot on the tick that made it.
     /// <para>
-    /// ⚠️ <b>And on the next tick the clamp is immediately undone</b>, because
+    /// <b>And on the next tick the clamp is immediately undone</b>, because
     /// the character is still eating: clamp to 200, then <c>200 &lt;= 200</c>
     /// adds 1.6 again. <b>A heavy who eats at full health sits at 201.6 for the
     /// whole 128 ticks</b>, and every state update in that window carries it.
-    /// Only when the eat ends does the clamp finally stick. My first draft of
-    /// this test asserted 200 on the second tick and was wrong about it.
+    /// Only when the eat ends does the clamp finally stick.
     /// </para>
     /// </remarks>
     [Fact]
@@ -193,7 +185,7 @@ public sealed class SandvichTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The cooldown is re-armed on every tick of the eat while hurt, not
+    /// <b>The cooldown is re-armed on every tick of the eat while hurt, not
     /// once at the start</b> — and it is <b>1350 ticks</b>, 45 seconds.
     /// </summary>
     /// <remarks>
@@ -204,9 +196,9 @@ public sealed class SandvichTests
     /// who reaches full health early keeps whatever was left when the re-arming
     /// stopped.
     /// <para>
-    /// ⚠️ <b>And the reference's other comment, on the client, says "10 second
-    /// cooldown" beside the same variable. It is wrong.</b> Copying the comment
-    /// instead of the value would have imported the bug.
+    /// The reference's other comment, on the client, says "10 second cooldown"
+    /// beside the same variable — it is wrong, and copying the comment instead of
+    /// the value would have imported the bug.
     /// </para>
     /// </remarks>
     [Fact]
@@ -249,7 +241,7 @@ public sealed class SandvichTests
     }
 
     /// <summary>
-    /// ⚠️ <b>Eating suppresses movement, and friction still applies.</b>
+    /// <b>Eating suppresses movement, and friction still applies.</b>
     /// </summary>
     /// <remarks>
     /// <c>Begin Step.xml:237</c> wraps the acceleration and the both-keys cancel
@@ -283,7 +275,7 @@ public sealed class SandvichTests
     /// explosion hurts.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Not cosmetic here.</b> <c>End Step.xml:86</c> writes
+    /// <b>Not cosmetic here.</b> <c>End Step.xml:86</c> writes
     /// <c>image_xscale = xscale</c> <em>after</em> the line deriving the facing
     /// from the aim, and <c>Aabb.ForCharacter</c> inflates a character's box by
     /// two pixels on the side it faces — the box <c>distance_to_object</c>

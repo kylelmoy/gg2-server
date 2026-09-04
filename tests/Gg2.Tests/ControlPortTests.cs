@@ -12,9 +12,9 @@ namespace Gg2.Tests;
 /// <remarks>
 /// <para>
 /// The two claims worth gating are structural rather than functional.
-/// ⚠️ <b>A freeze must not stop the network</b> — a frozen server that stopped
+/// <b>A freeze must not stop the network</b> — a frozen server that stopped
 /// servicing sockets would drop the clients it was frozen to inspect, and would
-/// stop answering the port that froze it, which reads as a hang. And ⚠️ <b>the
+/// stop answering the port that froze it, which reads as a hang. And <b>the
 /// port must not be able to do anything a client cannot</b>, which is kept true
 /// by routing every client-issuable action through the same <c>Execute</c> the
 /// socket switch and the bots reach.
@@ -33,7 +33,7 @@ public sealed class ControlPortTests : IDisposable
 
         _harness = new ServerHarness(o =>
         {
-            // ⚠️ Port 0: an ephemeral port, read back from the server. A
+            // Port 0: an ephemeral port, read back from the server. A
             // hard-coded one makes the suite un-parallelisable and the failure
             // intermittent.
             o.ControlPort = 0;
@@ -63,7 +63,7 @@ public sealed class ControlPortTests : IDisposable
     /// Sends one command and ticks until its reply arrives.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The tick is not incidental: the port is serviced from inside
+    /// The tick is not incidental: the port is serviced from inside
     /// <c>GameServer.Tick</c>, on the tick thread, so a command sent to a server
     /// nobody is ticking is never read. That is the design — no locks, and every
     /// command lands between two ticks rather than inside one.
@@ -117,7 +117,7 @@ public sealed class ControlPortTests : IDisposable
     }
 
     /// <summary>
-    /// ⚠️ The load-bearing one: a freeze stops the simulation and leaves the
+    /// The load-bearing one: a freeze stops the simulation and leaves the
     /// network running.
     /// </summary>
     /// <remarks>
@@ -158,7 +158,7 @@ public sealed class ControlPortTests : IDisposable
     }
 
     /// <summary>
-    /// ⚠️ And a frozen server still accepts and serves CLIENTS — which is the
+    /// And a frozen server still accepts and serves CLIENTS — which is the
     /// half of "the network keeps running" that the round clock cannot see.
     /// </summary>
     /// <remarks>
@@ -199,14 +199,14 @@ public sealed class ControlPortTests : IDisposable
     /// leaves the server frozen.
     /// </summary>
     /// <remarks>
-    /// ⚠️ It freezes first rather than refusing on a running server: a step
+    /// It freezes first rather than refusing on a running server: a step
     /// against a server still ticking would advance an unknowable number of
     /// times, which is the opposite of what stepping is for.
     /// </remarks>
     [Fact]
     public void StepAdvancesExactlyThatManySimulationTicks()
     {
-        // ⚠️ Freeze and read the clock FIRST. RoundTimer() goes through the
+        // Freeze and read the clock FIRST. RoundTimer() goes through the
         // port, which means it ticks the server — so reading it after the step
         // spends part of the budget being measured, and the first version of
         // this test was off by one for exactly that reason.
@@ -251,7 +251,7 @@ public sealed class ControlPortTests : IDisposable
     }
 
     /// <summary>
-    /// ⚠️ The other load-bearing one: a client-issuable action goes through the
+    /// The other load-bearing one: a client-issuable action goes through the
     /// shared dispatch, so the port can do exactly what a client can and no more.
     /// </summary>
     /// <remarks>
@@ -315,7 +315,7 @@ public sealed class ControlPortTests : IDisposable
 
     /// <summary>The speed can be changed on a running server, including to unpaced.</summary>
     /// <remarks>
-    /// ⚠️ <c>GameServer.Run</c> re-reads the interval every tick for this. A
+    /// <c>GameServer.Run</c> re-reads the interval every tick for this. A
     /// captured one would make <c>--speed</c> a startup-only setting and this
     /// command a silent no-op.
     /// </remarks>
@@ -335,7 +335,7 @@ public sealed class ControlPortTests : IDisposable
 
     /// <summary>A map change is refused for a map that does not exist.</summary>
     /// <remarks>
-    /// ⚠️ The accepting case goes down the same path a finished round takes —
+    /// The accepting case goes down the same path a finished round takes —
     /// <c>BeginMapChange</c>, the countdown and a <c>MAP_END</c> — so what a
     /// client sees is a sequence it already knows. <c>MapRotationTests</c> gates
     /// that path itself; this gates the refusal.
@@ -350,7 +350,7 @@ public sealed class ControlPortTests : IDisposable
         Assert.False(Ok(Send("""{"cmd":"map","name":"ctf_2dfort"}""")));
     }
 
-    /// <summary>⚠️ Off unless it is asked for.</summary>
+    /// <summary>Off unless it is asked for.</summary>
     /// <remarks>
     /// It executes commands against a live game, which is the same reason the
     /// GM8 bridge is off by default. A server that opened it because a port

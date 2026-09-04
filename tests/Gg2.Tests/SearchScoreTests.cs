@@ -8,38 +8,21 @@ namespace Gg2.Tests;
 /// <see cref="StepResult.BestScore"/> — the field that labels a blind decision.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>A third of a distillation corpus was the search's tie-break rather than
-/// its judgment, and nothing about it looked wrong.</b> <c>RolloutSearch</c>'s own
-/// remark has always said that when nothing can score inside the horizon every
-/// candidate ties at exactly 0, the tie goes to the first, and the first is
-/// <c>[0,0,0,0,0,0]</c> — "turn hard left, do nothing". <c>gg2-rl</c> measured
-/// what that does to training data. ⚠️ <b>Its first estimate, by matching the row
-/// value, was 35.2% — and the truth measured with THIS FIELD is 70.9%.</b> The
-/// heuristic ran at 93.5% precision and <b>46.4% recall</b>: right about what it
-/// flagged, missing more than half. Filtering on it would have dropped 35% of the
-/// corpus, left another 35% of exactly the same poison in place, and produced a
-/// dataset that then LOOKED clean.
+/// When nothing can score inside the horizon every candidate ties at exactly 0
+/// and the tie goes to the first candidate — <c>RolloutSearch</c>'s own tie-break.
+/// A blind decision is therefore not distinguishable from a genuinely-chosen
+/// low-score decision by its action value alone: a sniper at range may
+/// legitimately choose "hold still", which is indistinguishable from the
+/// fallback by value. <b>The score is what makes them separable</b> — a consumer
+/// that wants to exclude blind rows from training data must filter on
+/// <c>BestScore == 0</c>, not on the action.
 /// <para>
-/// It missed them because the tie-break has <b>two faces</b>: with the env asking
-/// for an action every 2 ticks and <c>RolloutSearch</c> re-planning every 4, half
-/// the blind rows are candidate 0 and half are "no turn" — the in-between
+/// The blind fraction depends on the cadence: with the env asking for an action
+/// every few ticks and <c>RolloutSearch</c> re-planning less often, some blind
+/// rows are the tie-break candidate and some are "no turn" — the in-between
 /// decisions, where the measured action is whatever the character was already
-/// holding. Matching the cadence collapses 1,960 rows to 989 with the blind
-/// fraction unchanged, which is how the duplicates were identified at all.
-/// </para>
-/// <para>
-/// By class, with the real signal: scout (refire 8) <b>32.7%</b>, heavy (12)
-/// 46.8%, soldier (30) 80.5%, <b>sniper (40) 92.8%</b>. A sniper corpus at
-/// horizon 20 is not noisy, it is noise — one row in fourteen carries a decision.
-/// </para>
-/// <para>
-/// Every one of those rows is <b>valid</b>: correct action, correctly recorded,
-/// 99.8% exact. Cloning them teaches a policy to turn hard left and freeze
-/// whenever it is unsure, and it would have shown up as an inexplicable leftward
-/// bias <em>after</em> a training run. ⚠️ <b>A consumer cannot filter them by
-/// value</b> — a genuinely chosen "hold still" is sensible for a sniper at range
-/// and is indistinguishable from the fallback. The score is what makes them
-/// separable.
+/// holding. It also depends heavily on class refire vs. horizon: a short-refire
+/// class scores most decisions, a long-refire one (e.g. sniper) scores very few.
 /// </para>
 /// </remarks>
 public sealed class SearchScoreTests(Xunit.Abstractions.ITestOutputHelper output)
@@ -63,15 +46,15 @@ public sealed class SearchScoreTests(Xunit.Abstractions.ITestOutputHelper output
         new(ReferenceTree.IncludedFiles, ReferenceTree.NavCacheDirectory);
 
     /// <summary>
-    /// ✅ <b>Zero means blind, and it really happens</b> — a fresh soldier's
-    /// refire is 30 ticks against a 20-tick horizon, so its first decisions score
-    /// nothing and take candidate 0.
+    /// Zero means blind, and it really happens — a fresh soldier's refire is
+    /// 30 ticks against a 20-tick horizon, so its first decisions score nothing
+    /// and take the tie-break candidate.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Asserted together with the ACTION</b>, because the claim is not "a
-    /// score of zero occurs" but "a score of zero is exactly the state in which
-    /// the action is the enumeration's first candidate". Checking the score alone
-    /// would pass on a search that scored zero and still chose sensibly.
+    /// Asserted together with the action, because the claim is not "a score of
+    /// zero occurs" but "a score of zero is exactly the state in which the action
+    /// is the tie-break candidate". Checking the score alone would pass on a
+    /// search that scored zero and still chose sensibly.
     /// </remarks>
     [Fact]
     public void AZeroScoreIsExactlyTheTieBreakAction()
@@ -95,16 +78,11 @@ public sealed class SearchScoreTests(Xunit.Abstractions.ITestOutputHelper output
             {
                 blind++;
 
-                // ⚠️ RE-RECORDED 2026-08-29 and the change is the point. This
-                // used to assert aim bin 0 — hard LEFT — because ties went to the
-                // enumeration's first candidate. RolloutSearch now breaks ties on
-                // aim error, so a blind decision points at the enemy instead:
-                // bin 7, no turn, from a duel that starts facing.
-                //
-                // ⚠️ So gg2-rl's [0,0,0,0,0,0] corpus signature is GONE, and a
-                // blind row is no longer identifiable by its action at all — only
-                // by this score being zero. That makes BestScore load-bearing
-                // rather than convenient.
+                // RolloutSearch breaks ties on aim error, so a blind decision
+                // points at the enemy instead: bin 7, no turn, from a duel that
+                // starts facing. A blind row is not identifiable by its action
+                // alone — only by this score being zero — which makes BestScore
+                // load-bearing rather than convenient.
                 Assert.Equal(0, red.Action.Horizontal);
                 Assert.Equal(0, red.Action.Jump);
                 Assert.Equal(0, red.Action.Fire);
@@ -128,7 +106,7 @@ public sealed class SearchScoreTests(Xunit.Abstractions.ITestOutputHelper output
     }
 
     /// <summary>
-    /// ⚠️ NaN for every driver that is not a search, because zero is the value
+    /// NaN for every driver that is not a search, because zero is the value
     /// that carries meaning.
     /// </summary>
     /// <remarks>
@@ -158,7 +136,7 @@ public sealed class SearchScoreTests(Xunit.Abstractions.ITestOutputHelper output
     }
 
     /// <summary>
-    /// ⚠️ <b>The horizon reaches the search, and it is the blind fraction that
+    /// <b>The horizon reaches the search, and it is the blind fraction that
     /// moves</b> — which is the number the knob exists for.
     /// </summary>
     /// <remarks>
@@ -167,14 +145,14 @@ public sealed class SearchScoreTests(Xunit.Abstractions.ITestOutputHelper output
     /// <c>new RolloutSearch()</c> and its defaults. With
     /// <see cref="DuelSpec.RedHorizonTicks"/> the curve is measurable.
     /// <para>
-    /// ⚠️ <b>Asserted through the BLIND FRACTION rather than through a getter.</b>
+    /// <b>Asserted through the BLIND FRACTION rather than through a getter.</b>
     /// A test that read the horizon back would gate the assignment, which is the
     /// shape that passed while <c>--nav</c> was being dropped a layer up. A
     /// soldier's refire is 30 ticks: at a horizon of 20 nothing can fire inside it
     /// and almost every decision scores zero; at 60 most can.
     /// </para>
     /// <para>
-    /// ⚠️ <b>The default is UNCHANGED and this test does not argue for changing
+    /// <b>The default is UNCHANGED and this test does not argue for changing
     /// it.</b> Which value ships is a decision that should follow
     /// <c>gg2-rl</c>'s curves — blind fraction and win rate — rather than precede
     /// them.
@@ -191,10 +169,8 @@ public sealed class SearchScoreTests(Xunit.Abstractions.ITestOutputHelper output
 
         output.WriteLine($"horizon 20: {shortHorizon:0.00} blind, horizon 60: {longHorizon:0.00}");
 
-        // ⚠️ RE-RECORDED 2026-08-29: this bound was 0.5 and the measurement was
-        // 0.84. The aim tie-break dropped it to 0.29 — better aim lands more shots
-        // inside the horizon, so fewer decisions score nothing. That is a second-
-        // order benefit of the tie-break and it is the direction phase 2 wants.
+        // Better aim lands more shots inside the horizon, so fewer decisions
+        // score nothing — a second-order benefit of the aim tie-break.
         Assert.True(
             shortHorizon > 0.2,
             $"a 20-tick horizon left only {shortHorizon:0.00} of a soldier's decisions blind; "
@@ -231,7 +207,7 @@ public sealed class SearchScoreTests(Xunit.Abstractions.ITestOutputHelper output
     }
 
     /// <summary>
-    /// ✅ <b>A shadow search grades a client-driven slot without driving it</b> —
+    /// <b>A shadow search grades a client-driven slot without driving it</b> —
     /// DAgger's aggregation step.
     /// </summary>
     /// <remarks>
@@ -241,7 +217,7 @@ public sealed class SearchScoreTests(Xunit.Abstractions.ITestOutputHelper output
     /// labels, a better expert — leaving <b>which states the labels are for</b> as
     /// the only untested one.
     /// <para>
-    /// ⚠️ <b>Both halves are asserted and the second is the one that can silently
+    /// <b>Both halves are asserted and the second is the one that can silently
     /// fail.</b> A shadow that drove would be a Rollout slot wearing a different
     /// name, and the symptom would be a corpus labelled for states the policy
     /// never chose — the exact defect it exists to remove. So this checks the
@@ -267,7 +243,7 @@ public sealed class SearchScoreTests(Xunit.Abstractions.ITestOutputHelper output
         {
             var (red, _) = env.Step(action, EnvAction.Idle);
 
-            // ⚠️ THE CLIENT STILL DRIVES, asserted on the CHARACTER rather than on
+            // THE CLIENT STILL DRIVES, asserted on the CHARACTER rather than on
             // the reported action. `ActionTaken` echoes what a client SENT without
             // consulting the world, so `red.Action` would read "right" even if the
             // shadow had taken the wheel — the first draft of this test asserted
@@ -277,7 +253,7 @@ public sealed class SearchScoreTests(Xunit.Abstractions.ITestOutputHelper output
                 (env.World.State.Characters[env.RedSlot].KeyState & PlayerKeys.Right) != 0,
                 "the character is not holding RIGHT; something other than the client is driving it");
 
-            // ⚠️ AND THE SEARCH GRADED. A client slot reports NaN without a
+            // AND THE SEARCH GRADED. A client slot reports NaN without a
             // shadow; with one it reports a real score.
             Assert.False(double.IsNaN(red.BestScore), "the shadow did not grade this step");
 
@@ -300,13 +276,13 @@ public sealed class SearchScoreTests(Xunit.Abstractions.ITestOutputHelper output
         Assert.Equal(60, env.ScoresFor(env.RedSlot).Length);
         Assert.Equal(60, env.CandidatesFor(env.RedSlot).Length);
 
-        // ⚠️ And the graded action is the SEARCH's, not the client's — that is the
+        // And the graded action is the SEARCH's, not the client's — that is the
         // whole product. If these were equal by construction the shadow would be
         // reporting the policy back to itself.
         Assert.NotEqual(action, env.SearchActionFor(env.RedSlot));
     }
 
-    /// <summary>⚠️ A shadow on a driving search is refused, not doubled.</summary>
+    /// <summary>A shadow on a driving search is refused, not doubled.</summary>
     /// <remarks>
     /// It would run a second search whose answer the first already reports, at
     /// double the cost, silently. A caller asking for that has a bug.
@@ -323,11 +299,10 @@ public sealed class SearchScoreTests(Xunit.Abstractions.ITestOutputHelper output
     /// The score reported is the search's own, not a recomputation.
     /// </summary>
     /// <remarks>
-    /// ⚠️ It is read off <c>RolloutSearch.LastBestScore</c>, which is the argmax
+    /// It is read off <c>RolloutSearch.LastBestScore</c>, which is the argmax
     /// of <c>LastScores</c> — asserted in <c>RolloutSearchTests</c>. Tying the
     /// wire field to the same number here is what stops the two drifting into
-    /// separate answers to the same question, which is this session's recurring
-    /// failure.
+    /// separate answers to the same question.
     /// </remarks>
     [Fact]
     public void TheReportedScoreIsTheSearchsOwn()

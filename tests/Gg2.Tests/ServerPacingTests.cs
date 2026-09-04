@@ -66,7 +66,7 @@ public sealed class ServerPacingTests
     /// exactly zero.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Infinity rather than 0 for "as fast as possible" is deliberate. Three
+    /// Infinity rather than 0 for "as fast as possible" is deliberate. Three
     /// fields in this codebase already use 0 for "no limit" and every one is a
     /// documented trap; here the arithmetic says it instead, because
     /// <c>tickLength / speed</c> really is zero at infinity. A 0 would read as
@@ -114,7 +114,7 @@ public sealed class ServerPacingTests
     }
 
     /// <summary>
-    /// ⚠️ The load-bearing one: an unpaced server must not report tick backlog.
+    /// The load-bearing one: an unpaced server must not report tick backlog.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -155,7 +155,7 @@ public sealed class ServerPacingTests
     /// loop.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Each of the three produces a different flavour of wrong wait —
+    /// Each of the three produces a different flavour of wrong wait —
     /// infinite, negative and NaN — and <c>WaitHandle.WaitOne</c> throws on the
     /// last two from inside a running server rather than at configuration time.
     /// Zero is refused because "stopped" is not a mode the pacer has; freezing
@@ -178,7 +178,7 @@ public sealed class ServerPacingTests
     /// <paramref name="untilFrame"/>, then cancels and joins.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The join is what makes reading the log safe. <see cref="RecordingLog"/>
+    /// The join is what makes reading the log safe. <see cref="RecordingLog"/>
     /// is a plain list and the server writes to it from the run thread; joining
     /// first is the memory barrier, and reading while it ran would be a race
     /// that fails once a fortnight.

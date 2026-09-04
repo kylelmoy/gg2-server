@@ -6,14 +6,14 @@ namespace Gg2.Tests;
 /// <see cref="TimerResolution"/>'s disposal contract.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>What justifies this class is a measurement, not this test.</b> On an
+/// <b>What justifies this class is a measurement, not this test.</b> On an
 /// idle server, pacing a 33.333ms tick with <c>WaitHandle.WaitOne</c> gave a
 /// bimodal distribution — 736 ticks at 30–34ms and <b>133 at 45–49ms</b>, 15%
 /// of them nearly half a tick late — and raising the Windows timer quantum to
 /// 1ms took that to <b>868 of 870 in one bucket, p99 34.79ms, none over 40</b>.
 /// Both runs are in <c>docs/TRAPS-SIMULATION.md</c>.
 /// <para>
-/// ⚠️ <b>That is not gated by a test and cannot honestly be</b>: a timing
+/// <b>That is not gated by a test and cannot honestly be</b>: a timing
 /// assertion strong enough to catch a regression is an assertion that fails on
 /// a loaded CI box. The same is true of this project's headroom number. What is
 /// gated here is the part that is ordinary logic and would be a real bug — the
@@ -34,7 +34,7 @@ public sealed class TimerResolutionTests
     }
 
     /// <summary>
-    /// ⚠️ Disposing twice must not lower the resolution twice.
+    /// Disposing twice must not lower the resolution twice.
     /// </summary>
     /// <remarks>
     /// <c>timeBeginPeriod</c>/<c>timeEndPeriod</c> are reference-counted per

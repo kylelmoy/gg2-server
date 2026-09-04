@@ -73,12 +73,11 @@ public sealed class ControlPointModeTests
     /// A multi-area map yields one area's entities at a time.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The port ignored map areas entirely until this landed.</b>
     /// <c>cp_dirtbowl</c> writes six control points into its file and plays two
     /// at a time; <c>basicRoomSetup.gml</c> destroys everything outside the
     /// vertical slice being played. Everything downstream — the collision
     /// rectangles, the spawn points, the objective, and the count of blocks a
-    /// state update carries — was reading all three areas at once.
+    /// state update carries — must read only that slice's area, not all three.
     /// </remarks>
     [Fact]
     public void AMultiAreaMapYieldsOneAreaAtATime()
@@ -275,7 +274,7 @@ public sealed class ControlPointModeTests
     /// and the only one in play is the neutral centre — which neither branch
     /// touches, because it belongs to nobody.
     /// <para>
-    /// ⚠️ <b>That is the whole reason a control point starts unlocked in this
+    /// <b>That is the whole reason a control point starts unlocked in this
     /// mode.</b> Nothing ever writes the middle point's lock, so it keeps
     /// <c>User Event 0</c>'s value; starting it locked would make the opening
     /// fight of every symmetrical map impossible, and no other mode would
@@ -387,11 +386,10 @@ public sealed class ControlPointModeTests
     /// The setup timer runs down and closes the map's setup gates while it does.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>This had been broken since phase 3.</b>
-    /// <c>CollisionFilter.SetupGatesClosed</c> existed and was never set, so
-    /// every setup gate on an Invasion or attack/defend map was open from the
-    /// first tick — attackers could simply walk out during the setup period.
-    /// No fixture noticed, because no fixture is on either kind of map.
+    /// If <c>CollisionFilter.SetupGatesClosed</c> is never set, every setup gate
+    /// on an Invasion or attack/defend map is open from the first tick —
+    /// attackers could simply walk out during the setup period. No fixture
+    /// catches this, because no fixture is on either kind of map.
     /// </remarks>
     [Theory]
     [InlineData(AttackDefendMap, 900)]
@@ -536,7 +534,7 @@ public sealed class ControlPointModeTests
     /// again the moment it is reverted.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Overtime here is not CTF's latch.</b> It is recomputed from scratch
+    /// <b>Overtime here is not CTF's latch.</b> It is recomputed from scratch
     /// every tick — <c>overtime = 0</c> and then re-derived from the points — so
     /// it switches off as soon as the meter empties, and the round ends on that
     /// tick.
@@ -658,10 +656,10 @@ public sealed class ControlPointModeTests
     /// Invasion is a Capture the Flag map with setup gates, and its own rules.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The port used to run it through Capture the Flag's round rules,
-    /// which are the wrong ones.</b> Invasion is one-sided: red attacks blue's
-    /// briefcase, only that briefcase can be taken, red wins on the cap limit,
-    /// and blue wins by surviving the clock rather than by matching it.
+    /// Invasion is one-sided: red attacks blue's briefcase, only that briefcase
+    /// can be taken, red wins on the cap limit, and blue wins by surviving the
+    /// clock rather than by matching it — Capture the Flag's round rules do not
+    /// apply.
     /// </remarks>
     [Fact]
     public void InvasionIsCtfWithSetupGatesAndOneWayRules()
@@ -694,7 +692,7 @@ public sealed class ControlPointModeTests
     /// the briefcase out.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <c>timer &lt;= 0 and (!redIsCapping or global.redCaps+1 &lt; caplimit)</c>.
+    /// <c>timer &lt;= 0 and (!redIsCapping or global.redCaps+1 &lt; caplimit)</c>.
     /// The let-off is narrow: a capture in progress only holds the match open
     /// when it would be the <em>winning</em> capture. At one of five with the
     /// flag out, blue still wins on the whistle.
@@ -730,7 +728,7 @@ public sealed class ControlPointModeTests
     /// open.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Invasion's <c>redIsCapping</c> is <b>not</b> Capture the Flag's "away
+    /// Invasion's <c>redIsCapping</c> is <b>not</b> Capture the Flag's "away
     /// from base": it is <c>!instance_exists(IntelligenceBlue) or
     /// alarm[0] &gt; 0</c> — carried, or dropped with its return timer still
     /// running. A flag dropped straight off its base has an alarm of zero (see

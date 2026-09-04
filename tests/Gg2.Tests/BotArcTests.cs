@@ -11,7 +11,7 @@ namespace Gg2.Tests;
 /// <b>parabola</b> it will actually fly.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>Nothing else in the bot layer checks an arc.</b> Target selection, the
+/// <b>Nothing else in the bot layer checks an arc.</b> Target selection, the
 /// keep-target test and the spot search are all a straight chest-to-chest
 /// sightline, while the aim solver deliberately aims <em>above</em> the target to
 /// compensate for drop — about 178px of it at 500px for a Minegun round. So a
@@ -19,7 +19,7 @@ namespace Gg2.Tests;
 /// storey above it, and indoors that is the reported "sometimes shooting at the
 /// ceiling".
 /// <para>
-/// ⚠️ <b>The triangular drop itself is gated by
+/// <b>The triangular drop itself is gated by
 /// <c>BotAimTests.TheProjectileDropIsTheTriangularNumber</c></b> and is not
 /// re-tested here — <see cref="BotArc"/> flies the same law the solver aims with,
 /// and testing it twice would gate the copy rather than the rule.
@@ -29,16 +29,15 @@ public sealed class BotArcTests(ITestOutputHelper output)
 {
     private const string Map = "ctf_truefort";
 
-    // ⚠️ Swept for, and the sweep had to be sharpened twice. A demoman at node 27
-    // and a target 368px away at node 136: the straight line is CLEAR, and the arc
-    // leaving at the solved 355° is blocked BY THE SAG — the same aim fired flat gets
-    // through. Both are inside the demoman's 500px attention radius and the heavy's.
+    // A demoman at node 27 and a target 368px away at node 136: the straight line is
+    // CLEAR, and the arc leaving at the solved 355° is blocked BY THE SAG — the same
+    // aim fired flat gets through. Both are inside the demoman's 500px attention
+    // radius and the heavy's.
     //
-    // ⚠️ The first fixture was blocked by the AIM DIRECTION rather than by gravity —
-    // the shot simply pointed into geometry — so three mutations survived against it,
-    // including "sample the arc as a straight line". A fixture for this feature has
-    // to separate `Clear(aim, speed, grav)` from `Clear(aim, speed, 0)`, not merely
-    // from the chest-to-chest line, and only a handful of pairs on this map do.
+    // The fixture must be blocked by SAG rather than by the aim simply pointing into
+    // geometry: it has to separate `Clear(aim, speed, grav)` from
+    // `Clear(aim, speed, 0)`, not merely from the chest-to-chest line, and only a
+    // handful of pairs on this map do.
     private const int ShooterNode = 27;
     private const int SagTarget = 136;
 
@@ -46,7 +45,7 @@ public sealed class BotArcTests(ITestOutputHelper output)
     // not this file's only answer.
     private const int OpenNode = 2;
 
-    // ⚠️ A vertical shot where the parabola's OWN endpoint (4290, 576) lands past the
+    // A vertical shot where the parabola's OWN endpoint (4290, 576) lands past the
     // target at (4290, 547) and inside the floor under it. Ending the walk there
     // instead of on the aim point refuses this shot, which is the commonest shot in
     // the game — a grounded enemy.
@@ -57,7 +56,7 @@ public sealed class BotArcTests(ITestOutputHelper output)
     /// A pair where a rocket's LEAD alone decides it — see the soldier test.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Swept for across every node pair on the map: the chest-to-chest line is
+    /// Swept for across every node pair on the map: the chest-to-chest line is
     /// clear, the still-aim arc is clear, and the led arc is blocked. Twelve pairs
     /// qualify and this is the one with the widest angular separation, so the
     /// fixture is not a knife edge.
@@ -87,13 +86,12 @@ public sealed class BotArcTests(ITestOutputHelper output)
 
     /// <summary>The class's own solved aim at a point, which is what it would fire.</summary>
     /// <remarks>
-    /// ⚠️ <b>WITH the floor under the target, never <c>BotAim.NoFloor</c>.</b> The
+    /// <b>WITH the floor under the target, never <c>BotAim.NoFloor</c>.</b> The
     /// solver applies gravity whatever the target's vertical speed is, so with no
     /// floor a target standing perfectly still is predicted to keep falling and the
-    /// aim comes back pointing BELOW its feet, into the ground. Every arc solved that
-    /// way is then blocked, which reads as this whole feature refusing everything —
-    /// the first draft of this file did exactly that, and so did the sweep that chose
-    /// its fixtures. docs/TRAPS-BOTS.md, "Phase 7 item 4d".
+    /// aim comes back pointing BELOW its feet, into the ground — which blocks every
+    /// arc solved that way and reads as this whole feature refusing everything.
+    /// docs/TRAPS-BOTS.md, "Phase 7 item 4d".
     /// </remarks>
     private static double Aim(NavGraph graph, in CharacterState self, double x, double y) =>
         BotAim.Solve(in self, x, y, 0, 0, BotLeadMode.Full, BotAim.FloorUnder(graph, x, y));
@@ -132,7 +130,7 @@ public sealed class BotArcTests(ITestOutputHelper output)
             BotArc.Clear(world, in demo, aim, speed, gravity, tx, ty),
             "the arc was called clear where the sag clips the geometry");
 
-        // ⚠️ The control that makes it the SAG and not the aim direction: the same
+        // The control that makes it the SAG and not the aim direction: the same
         // shooter, the same target, THE SAME AIM, fired with no gravity. A rocket
         // flies that path, and it gets through.
         //
@@ -148,7 +146,7 @@ public sealed class BotArcTests(ITestOutputHelper output)
     /// A shot with a clear arc is allowed.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The control the whole file rests on: without it every assertion here is
+    /// The control the whole file rests on: without it every assertion here is
     /// satisfied by a method that returns false.
     /// </remarks>
     [Fact]
@@ -170,7 +168,7 @@ public sealed class BotArcTests(ITestOutputHelper output)
     /// A hitscan weapon has no arc, and a zero speed says so rather than dividing.
     /// </summary>
     /// <remarks>
-    /// ⚠️ A speed of zero is how the hitscan and melee weapons — the Rifle, the
+    /// A speed of zero is how the hitscan and melee weapons — the Rifle, the
     /// knife, the Medigun — fall out of the ballistics model without a special case.
     /// Their caller should not be here, and if it is, the answer is "no arc to
     /// block" rather than a division by zero.
@@ -181,7 +179,7 @@ public sealed class BotArcTests(ITestOutputHelper output)
         var graph = Graph();
         var world = World();
 
-        // ⚠️ A pair whose STRAIGHT LINE is blocked, which is what makes the guard
+        // A pair whose STRAIGHT LINE is blocked, which is what makes the guard
         // observable at all. With a clear line the method answers true either way —
         // a zero speed makes every sample the shooter's own position and the last one
         // the target, which is exactly the straight-line test.
@@ -200,14 +198,14 @@ public sealed class BotArcTests(ITestOutputHelper output)
     /// The last sample is the target, not the parabola's own endpoint.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The flight time is recovered from the horizontal offset and carries a
+    /// <b>The flight time is recovered from the horizontal offset and carries a
     /// tick or so of error.</b> Letting that error put the final sample a few pixels
     /// INTO the floor the target is standing on would refuse every shot at a grounded
     /// enemy — so the last sample is the aim point itself, which is also exactly what
     /// the straight sight test does, and a flat weapon therefore gets the answer it
     /// always did.
     /// <para>
-    /// ⚠️ The fixture is a vertical shot at a target 198px below, where the parabola's
+    /// The fixture is a vertical shot at a target 198px below, where the parabola's
     /// own endpoint lands 29px PAST it and inside the floor. Asserted as a premise
     /// below, because a pair where the two coincide gates nothing.
     /// </para>
@@ -250,7 +248,7 @@ public sealed class BotArcTests(ITestOutputHelper output)
     /// A near-vertical shot falls back to the straight-line flight time.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The horizontal offset says nothing about the flight time when the shot is
+    /// The horizontal offset says nothing about the flight time when the shot is
     /// nearly straight up or down — dividing by it gives an enormous or infinite t,
     /// and the samples then walk a parabola a thousand ticks long. The fallback is
     /// distance over speed, clamped the same way the lead solver clamps its own.
@@ -271,7 +269,7 @@ public sealed class BotArcTests(ITestOutputHelper output)
 
         output.WriteLine($"straight up {up}, straight down {down}");
 
-        // ⚠️ Straight down from a node's stand position is into the floor the bot is
+        // Straight down from a node's stand position is into the floor the bot is
         // standing on, which is the one answer that is certain here.
         Assert.False(down);
     }
@@ -288,7 +286,7 @@ public sealed class BotArcTests(ITestOutputHelper output)
     /// the way its own solver would aim.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <c>BotClassKeys.For</c> directly rather than the whole combat step,
+    /// <c>BotClassKeys.For</c> directly rather than the whole combat step,
     /// and that is not a shortcut. The trigger this file is about sits behind three
     /// other gates in <c>BotCombat</c> — the fire delay, the aim settle and the
     /// hold-fire roll — so a test that drove the pipeline would be measuring those
@@ -310,7 +308,7 @@ public sealed class BotArcTests(ITestOutputHelper output)
         var slot = world.Place(playerClass, Team.Red, sx, sy);
         var enemy = world.Place(PlayerClass.Scout, Team.Blue, tx, ty);
 
-        // ⚠️ The aim has to be SET, because the arc is sampled from the
+        // The aim has to be SET, because the arc is sampled from the
         // character's live aimDirection rather than from the target. A defaulted aim
         // points right and the arc then has nothing to do with the target at all.
         // It is stored as the wire's ushort; the degrees property is derived.
@@ -331,14 +329,12 @@ public sealed class BotArcTests(ITestOutputHelper output)
     /// A soldier withholds a rocket whose LEAD takes it into geometry.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>This is the branch that stood ungated, and the reason it did.</b> A
-    /// rocket flies flat, so a soldier's arc is very nearly the straight line the
-    /// target search already cleared — and every fixture that separated the two
-    /// needed something the file did not have: a <b>moving</b> target, so the aim
-    /// solver leads and the shot no longer goes down the line the target was
-    /// cleared on.
+    /// A rocket flies flat, so a soldier's arc is very nearly the straight line the
+    /// target search already cleared, and separating the two needs a <b>moving</b>
+    /// target, so the aim solver leads and the shot no longer goes down the line the
+    /// target was cleared on.
     /// <para>
-    /// ⚠️ <b>Swept for.</b> The pair has to satisfy three things at once: the
+    /// <b>Swept for.</b> The pair has to satisfy three things at once: the
     /// chest-to-chest line clear (or the target search would never offer it), the
     /// still-aim arc clear (or it is the demoman's case and gravity is doing the
     /// work), and the led arc blocked. Node 0 → 214 on <c>ctf_truefort</c> at
@@ -346,7 +342,7 @@ public sealed class BotArcTests(ITestOutputHelper output)
     /// 300.8°, nineteen degrees into a wall.
     /// </para>
     /// <para>
-    /// ⚠️ The class policy reads the character's live <c>aimDirection</c> and does
+    /// The class policy reads the character's live <c>aimDirection</c> and does
     /// not solve, so the solve happens here and the angle is what is handed over —
     /// which is also what makes the control exact: the <em>same</em> soldier at
     /// the <em>same</em> pair, aimed the way it would aim at a stationary target,
@@ -397,7 +393,7 @@ public sealed class BotArcTests(ITestOutputHelper output)
     /// A demoman holds fire when its arc is blocked; a soldier's flat rocket does not.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Only the two classes whose shot kills them if it goes off next to
+    /// <b>Only the two classes whose shot kills them if it goes off next to
     /// them</b> pay for this test at all — but the two answer differently on the same
     /// geometry, because a rocket has no gravity. Its arc IS the straight line the
     /// target search already cleared, so the gate is very nearly free for a soldier
@@ -420,7 +416,7 @@ public sealed class BotArcTests(ITestOutputHelper output)
 
         Assert.Equal(PlayerKeys.None, Keys(PlayerClass.Demoman, SagTarget) & PlayerKeys.Attack);
 
-        // ⚠️ The control — a SOLDIER at the same place, whose rocket has no
+        // The control — a SOLDIER at the same place, whose rocket has no
         // gravity. Without it this passes on a gate that refuses everything.
         var soldier = At(graph, PlayerClass.Soldier, ShooterNode);
         Assert.Equal(0, BotAim.Ballistics(in soldier).Gravity);
@@ -432,7 +428,7 @@ public sealed class BotArcTests(ITestOutputHelper output)
     /// A demoman with a clear arc fires.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The other control, and the one that stops the gate becoming "a
+    /// The other control, and the one that stops the gate becoming "a
     /// demoman never shoots". Only 8 of the 58 sampled pairs on this map are blocked,
     /// so the common case has to keep working.
     /// </remarks>
@@ -453,7 +449,7 @@ public sealed class BotArcTests(ITestOutputHelper output)
     /// A class with no arc gate fires regardless.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The gate is deliberately NOT universal. A heavy's Minigun arcs as
+    /// The gate is deliberately NOT universal. A heavy's Minigun arcs as
     /// much as a scattergun and it still fires: the cost of a wasted round is ammo it
     /// has plenty of, where a demoman's is a mine on its own side of a wall — and
     /// withholding would make a scout stop firing in exactly the corridors it wants

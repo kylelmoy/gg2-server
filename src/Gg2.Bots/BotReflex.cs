@@ -22,7 +22,7 @@ public static class BotReflex
     /// <remarks>
     /// The reference walks every instance of each type. This is a fixed scratch
     /// buffer instead, sized well past what a match produces — a pool of 512 in
-    /// total, and the search is already radius-limited. ⚠️ It is a ceiling on a
+    /// total, and the search is already radius-limited. It is a ceiling on a
     /// <em>reaction</em>, so overflowing it declines a blast rather than
     /// mis-declining one, which is the safe direction.
     /// </remarks>
@@ -33,12 +33,12 @@ public static class BotReflex
     /// reflect — <c>botInBlastBeam</c>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>It is a BEAM, not a cone.</b> What gates a reflect is
+    /// <b>It is a BEAM, not a cone.</b> What gates a reflect is
     /// <c>collision_circle(projectile.x, projectile.y, 5, poof, false, true)</c>
     /// against an <c>AirBlastO</c> spawned 25px along the aim, whose mask is a
     /// narrow rectangle — so a cone test is the wrong shape at every distance.
     /// <para>
-    /// ⚠️ <b>The three constants are measured off the running exe, not off the
+    /// <b>The three constants are measured off the running exe, not off the
     /// sprite file, which does not agree with it.</b> <c>AirBlastMaskS</c> is a
     /// 120×30 image but its mask bounds are AUTO, so GM8 takes them from the opaque
     /// pixels: left 8, right 96, top -13, bottom 14 about the poof's own origin. The
@@ -46,11 +46,11 @@ public static class BotReflex
     /// near 28 (8 + 25 − 5), reach 126 (96 + 25 + 5) and half-width 18 (13 + 5).
     /// </para>
     /// <para>
-    /// ⚠️ <b>There IS a near edge, and it is not a rounding detail</b>: a rocket
+    /// <b>There IS a near edge, and it is not a rounding detail</b>: a rocket
     /// already at the pyro's feet is UNDER the beam and cannot be blasted at all.
     /// </para>
     /// <para>
-    /// ⚠️ <b>The perpendicular offset is compared unsigned</b>, so the beam is
+    /// <b>The perpendicular offset is compared unsigned</b>, so the beam is
     /// symmetric about the aim line. The real mask is very slightly not (−13 above,
     /// +14 below); taking the smaller as the half-width is the conservative reading,
     /// which is the one to want — a blast declined costs nothing and a blast spent
@@ -83,19 +83,14 @@ public static class BotReflex
     /// The reflectable set is Rocket, Flare and Mine
     /// (<c>Flamethrower/User Event 2</c>).
     /// <para>
-    /// ⚠️ <b>This used to be a radius-and-arc question in the reference — within
-    /// 150px and 75° of the aim — and both numbers were wrong the same way</b>: they
-    /// were copied from the Flamethrower's own <c>blastDistance</c> and
-    /// <c>blastAngle</c>, neither of which gates a reflect any more. The bot pressed
-    /// SPECIAL for rockets it could not possibly touch, and <b>the press is not
-    /// free</b>: the reflect test runs only on the press frame and the press sets
-    /// <c>readyToBlast</c> false for 40 ticks, so a wasted blast on a rocket 150px
-    /// out was still on cooldown when it arrived. Reported from play as a pyro
-    /// unable to deflect rockets even from a distance — not a delay that was too
-    /// long, a trigger volume about ten times wider than the weapon.
+    /// <b>The press is not free.</b> The reflect test runs only on the press frame,
+    /// and pressing sets <c>readyToBlast</c> false for 40 ticks — so a press wasted
+    /// on a rocket that was never in reach leaves the blast on cooldown when a real
+    /// one arrives. This is the reason the trigger volume has to be the true beam
+    /// rather than a wider approximation.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Both the projectile's current position and its position one tick on are
+    /// <b>Both the projectile's current position and its position one tick on are
     /// tested, and either will do.</b> The press and the blast do not resolve in the
     /// same place in the frame — the input is written, then Begin Step runs the
     /// reflect, then the projectile pass moves it — and a rocket covers about 12px a
@@ -103,14 +98,14 @@ public static class BotReflex
     /// allow the frame either way round.
     /// </para>
     /// <para>
-    /// ⚠️ <b><paramref name="minTravel"/> is a DISTANCE on purpose.</b> The airblast
+    /// <b><paramref name="minTravel"/> is a DISTANCE on purpose.</b> The airblast
     /// has no delay of any kind — this is re-evaluated every tick — so without it a
     /// rocket fired point-blank came back on the frame it was born, which was
     /// confirmed inhuman. A distance says "do not reflect a rocket the instant it
     /// leaves the barrel" directly rather than by proxy, and is frame-rate
-    /// independent. It is 60 rather than the 120 it was first set to, and the beam
-    /// is why: the window is 28 to 126px, so at 120 a shooter standing 130px away
-    /// produced a rocket that was never eligible at any point on its flight.
+    /// independent. It is 60: the beam's window is 28 to 126px, and a larger value
+    /// risks a shooter standing far enough away that the rocket is never eligible
+    /// at any point on its flight.
     /// </para>
     /// </remarks>
     public static bool IncomingProjectile(in WorldView world, int slot, double minTravel)
@@ -122,7 +117,7 @@ public static class BotReflex
         var team = world.Player(slot).Team;
 
         // The aim's unit vector and its perpendicular, once — the same for every
-        // projectile on a given tick. ⚠️ Gml.LengthDir rather than cos/sin: GM8's y
+        // projectile on a given tick. Gml.LengthDir rather than cos/sin: GM8's y
         // axis points down and these already account for it, and the engine snaps
         // their results where a bare trig call does not.
         var forwardX = Gml.LengthDirX(1, self.AimDirection);
@@ -172,14 +167,14 @@ public static class BotReflex
     /// <remarks>
     /// Grounded callers only: it models the jump from a standstill.
     /// <para>
-    /// ⚠️ <b>The old test was "is an enemy projectile within 150px", and it was
-    /// wrong in BOTH directions.</b> It jumped at rockets that were never going to
-    /// connect, and — reported from play — it jumped <em>into</em> ones fired over
-    /// the bot's head: a rocket passing above is exactly the case where rising 57px
-    /// is what creates the collision, so aiming high was a guaranteed hit rather
-    /// than a miss. <b>Anything that answers this has to model the arc</b>, because
-    /// "would it hit" and "does jumping help" have opposite answers depending on
-    /// where the shot is aimed, and no proximity test can tell them apart.
+    /// A plain proximity test is wrong in both directions here: it jumps at
+    /// rockets that were never going to connect, and it jumps <em>into</em> ones
+    /// fired over the bot's head — a rocket passing above is exactly the case
+    /// where rising 57px is what creates the collision, so aiming high turns a
+    /// miss into a guaranteed hit. <b>Anything that answers this has to model the
+    /// arc</b>, because "would it hit" and "does jumping help" have opposite
+    /// answers depending on where the shot is aimed, and no proximity test can
+    /// tell them apart.
     /// </para>
     /// <para>
     /// The model is small because both bodies are. A rocket is a straight line at
@@ -190,7 +185,7 @@ public static class BotReflex
     /// the graph generator uses.
     /// </para>
     /// <para>
-    /// ⚠️ <b>The verdict is "the standing bot is hit at some tick AND the jumping
+    /// <b>The verdict is "the standing bot is hit at some tick AND the jumping
     /// bot is hit at none".</b> That is the whole feature: never jump at a rocket
     /// that misses anyway, and never jump into one. A rocket at the feet clears
     /// easily, one at the chest needs about 13px of rise and so about two ticks of
@@ -201,7 +196,7 @@ public static class BotReflex
     /// once the arc has come back down past where it started — a late crossing met by
     /// a bot that is falling again, which has to count as a hit.
     /// <para>
-    /// ⚠️ <b>That case is unreachable and the subtraction is faithful rather
+    /// <b>That case is unreachable and the subtraction is faithful rather
     /// than load-bearing.</b> Measured: with <c>NAV_JUMP_V0</c> 8.3 and
     /// <c>NAV_JUMP_GRAVITY</c> 0.6 the rise crosses zero at t = 27.67, and
     /// <c>BOT_DODGE_TICKS</c> is <b>26</b> — one tick short. Over the whole walk the
@@ -211,7 +206,7 @@ public static class BotReflex
     /// and a clamp would then be silently wrong.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Splash is deliberately not modelled.</b> A rocket detonating on the
+    /// <b>Splash is deliberately not modelled.</b> A rocket detonating on the
     /// floor under a jumping bot still catches it inside <c>blastRadius</c> 65, so
     /// counting splash would refuse nearly every dodge. What the jump reliably
     /// avoids is the direct hit — 25 damage plus the 30 from an explosion centred on
@@ -284,14 +279,14 @@ public static class BotReflex
     /// How far this projectile has flown from whoever fired it.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A rocket already carries this number and the other two do not.</b>
+    /// <b>A rocket already carries this number and the other two do not.</b>
     /// <c>move_all_bullets</c> measures a rocket from its owner's live position every
     /// step for the game's own 800px fade, and this port keeps the same pair of
     /// coordinates (<c>LastKnownX/Y</c>) — which freeze where a dead shooter fell, so
     /// the distance keeps growing and a dead shooter's rocket stays eligible.
     /// <para>
     /// A flare and a mine have no such field, so theirs is measured to the owner's
-    /// character. ⚠️ <b>One whose owner has since died is treated as having travelled
+    /// character. <b>One whose owner has since died is treated as having travelled
     /// far enough</b> — it has, by then.
     /// </para>
     /// </remarks>

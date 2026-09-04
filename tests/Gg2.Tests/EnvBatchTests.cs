@@ -83,7 +83,7 @@ public sealed class EnvBatchTests
     }
 
     /// <summary>
-    /// ⚠️ <b>World i behaves identically whether the batch holds 1 or 64.</b>
+    /// <b>World i behaves identically whether the batch holds 1 or 64.</b>
     /// </summary>
     /// <remarks>
     /// The property the whole surface rests on: a seed is a pure function of
@@ -124,7 +124,7 @@ public sealed class EnvBatchTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The same however many threads, compared whole.</b>
+    /// <b>The same however many threads, compared whole.</b>
     /// </summary>
     [Theory]
     [InlineData(2)]
@@ -142,7 +142,7 @@ public sealed class EnvBatchTests
     /// not passing on trajectories that never reset.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The control this file needs most. Determinism gates are easy to pass
+    /// The control this file needs most. Determinism gates are easy to pass
     /// when nothing interesting happens, and an auto-reset that never fired
     /// would make every assertion above a statement about the first twelve
     /// decisions of one episode.
@@ -158,7 +158,7 @@ public sealed class EnvBatchTests
     }
 
     /// <summary>
-    /// ⚠️ <b>Consecutive episodes in one world differ.</b>
+    /// <b>Consecutive episodes in one world differ.</b>
     /// </summary>
     /// <remarks>
     /// The bug this test exists for was real and was mine: the first draft
@@ -184,7 +184,7 @@ public sealed class EnvBatchTests
     }
 
     /// <summary>
-    /// ⚠️ <b>Two batches one seed apart do not overlap.</b>
+    /// <b>Two batches one seed apart do not overlap.</b>
     /// </summary>
     /// <remarks>
     /// <c>seed + index</c> would make <c>{seed 1, count 100}</c> and
@@ -226,7 +226,7 @@ public sealed class EnvBatchTests
     /// The spec above with a scripted opponent on blue.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Sampled spawns and a nav cache</b>, because a scripted driver is
+    /// <b>Sampled spawns and a nav cache</b>, because a scripted driver is
     /// refused without a graph and a duel it cannot walk in tests nothing.
     /// </remarks>
     private static DuelSpec BotSpec => Spec with
@@ -253,7 +253,7 @@ public sealed class EnvBatchTests
         var redOut = new StepResult[count];
         var blueOut = new StepResult[count];
 
-        // ⚠️ BOTH sides are logged here where the client-driven version logs only
+        // BOTH sides are logged here where the client-driven version logs only
         // red. Blue is the bot, so its results are the half that could differ —
         // logging red alone would compare the side whose actions the test already
         // controls.
@@ -280,7 +280,7 @@ public sealed class EnvBatchTests
     }
 
     /// <summary>
-    /// ⚠️ <b>A bot-driven world behaves identically at batch 1 and batch 32.</b>
+    /// <b>A bot-driven world behaves identically at batch 1 and batch 32.</b>
     /// </summary>
     /// <remarks>
     /// <b>The existing batch-size gate could not see this</b>, because with both
@@ -290,7 +290,7 @@ public sealed class EnvBatchTests
     /// <c>WorldState.Random</c> — so a driver seeded from anything but this
     /// world's own seed makes every world in a batch share one opponent's rolls.
     /// <para>
-    /// ⚠️ <b>That failure is invisible at a stagger of 0.</b> A scripted bot with
+    /// <b>That failure is invisible at a stagger of 0.</b> A scripted bot with
     /// a fixed seed is deterministic, so a shared stream produces identical
     /// behaviour and looks correct — right up until two worlds take different
     /// numbers of decisions and the shared stream desynchronises them. Which is
@@ -333,7 +333,7 @@ public sealed class EnvBatchTests
     }
 
     /// <summary>
-    /// ⚠️ <b>A bot-driven batch is the same however many threads.</b>
+    /// <b>A bot-driven batch is the same however many threads.</b>
     /// </summary>
     /// <remarks>
     /// The property a shared driver instance would break. <c>IdleInput</c> is
@@ -359,7 +359,7 @@ public sealed class EnvBatchTests
     /// The premise of the two gates above: the bot really is doing something.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Without this they are satisfiable by a driver that does nothing at
+    /// <b>Without this they are satisfiable by a driver that does nothing at
     /// all.</b> Two identical rows of "the opponent pressed nothing and dealt no
     /// damage" compare equal at any batch size and on any number of threads —
     /// which is the shape of every "N completed" criterion this project has been
@@ -373,7 +373,7 @@ public sealed class EnvBatchTests
         var batch = new EnvBatch(
             4, BotSpec, seed: 4242, ReferenceTree.IncludedFiles, ReferenceTree.NavCacheDirectory, 1);
 
-        // ⚠️ The premise first: every world really has a bot behind blue and
+        // The premise first: every world really has a bot behind blue and
         // nothing behind red. Without it the rest passes on an env that ignored
         // the driver field, because a client slot fed a deterministic script is
         // also identical at every batch size — checked by mutation, and it was.

@@ -7,7 +7,7 @@ using Gg2.Simulation;
 namespace Gg2.Tests;
 
 /// <summary>
-/// ✅ <b>The divergence that found the rotated-mask bug — fixed 2026-08-27.</b>
+/// <b>The divergence that found the rotated-mask bug — fixed 2026-08-27.</b>
 /// <c>reference-gg_debug-closedtdm.trace</c> replayed for 100 ticks after its
 /// spawn anchor and then let slot 4 live through a death the reference
 /// recorded. It now runs to 142, on every field.
@@ -35,7 +35,7 @@ namespace Gg2.Tests;
 /// the escape is horizontal, so on the box the rocket always lands at 36
 /// whatever shape it is.
 /// <para>
-/// ⚠️ <b>Two candidates were killed by running oracles rather than by argument,
+/// <b>Two candidates were killed by running oracles rather than by argument,
 /// and the second is the one to remember.</b> Widening the two-pixel
 /// <c>image_xscale = -1</c> inflation to eight reproduces the missing distance
 /// of <em>exactly</em> 30 — the number the arithmetic demanded, to the pixel —
@@ -43,7 +43,7 @@ namespace Gg2.Tests;
 /// evidence.</b>
 /// </para>
 /// <para>
-/// ⚠️ <b>And a second bug was hiding behind the first.</b> With the mask in, the
+/// <b>And a second bug was hiding behind the first.</b> With the mask in, the
 /// divergence moved to t481: slot 4 respawned at t478 and the port took eleven
 /// hp off it where the reference took none. Team Deathmatch's spawn
 /// invulnerability rides on the <c>FULL_UPDATE</c> — this recording says 30
@@ -51,7 +51,7 @@ namespace Gg2.Tests;
 /// respawn was mortal from its first frame. <see cref="ITraceSimulation.SetTdmInvulnerability"/>.
 /// </para>
 /// <para>
-/// ✅ <b>And a THIRD bug was behind the second.</b> The next divergence was slot 6
+/// <b>And a THIRD bug was behind the second.</b> The next divergence was slot 6
 /// finishing 25 hp high — exactly a rocket's contact damage. The reference's
 /// t509 rocket struck slot 6 and the port's struck slot 2, because
 /// <c>CollideOne</c> walked characters in <b>slot</b> order where GM8 fires a
@@ -127,7 +127,7 @@ public sealed class GgDebugSplashOpenFindingTests
     /// bookkeeping chose.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The tick is 476 and the message is in 477's block.</b> A death is
+    /// <b>The tick is 476 and the message is in 477's block.</b> A death is
     /// reported in the following tick's events for the same reason a fire seed
     /// is — <c>GameServerBeginStep.gml</c> has already serialised the tick that
     /// killed it. See <see cref="Replayer"/>.
@@ -153,7 +153,7 @@ public sealed class GgDebugSplashOpenFindingTests
     }
 
     /// <summary>
-    /// ✅ <b>The port reproduces that death, and everything else, for 142 ticks
+    /// <b>The port reproduces that death, and everything else, for 142 ticks
     /// after the spawn wave.</b>
     /// </summary>
     /// <remarks>
@@ -163,7 +163,7 @@ public sealed class GgDebugSplashOpenFindingTests
     /// mask but without the spawn invulnerability, and 135 before characters
     /// were walked in creation order.
     /// <para>
-    /// ⚠️ <b>The tick is pinned exactly rather than bounded below</b>, because
+    /// <b>The tick is pinned exactly rather than bounded below</b>, because
     /// both directions are news here. Shrinking means one of the three fixes has
     /// regressed — 135, 100 and 95 each name a different one; growing means the
     /// t523 sub-pixel residue has been closed, and this recording's 52 deaths
@@ -192,14 +192,14 @@ public sealed class GgDebugSplashOpenFindingTests
         // that separately is the point: the tick above could move for reasons
         // that have nothing to do with the finding this file is named after.
         //
-        // ⚠️ Bounded by the divergence, not by the recording. Past t516 the two
+        // Bounded by the divergence, not by the recording. Past t516 the two
         // simulations have parted and every later death disagrees; asserting
         // over the whole trace would be asserting about drift.
         Assert.DoesNotContain(after, m => m.Field == "death" && m.Tick <= first.Tick);
     }
 
     /// <summary>
-    /// ⚠️ <b>Team Deathmatch's spawn invulnerability is on the wire, and this
+    /// <b>Team Deathmatch's spawn invulnerability is on the wire, and this
     /// recording says thirty ticks.</b>
     /// </summary>
     /// <remarks>
@@ -209,7 +209,7 @@ public sealed class GgDebugSplashOpenFindingTests
     /// invulnerability at all for six phases, so every replayed respawn could be
     /// damaged on its first frame.
     /// <para>
-    /// ⚠️ <b>It rides on a <c>FULL_UPDATE</c> and a recording holds exactly
+    /// <b>It rides on a <c>FULL_UPDATE</c> and a recording holds exactly
     /// one</b>, at the join, so this is non-null on a single tick of nearly
     /// three thousand. A reader that looked for it anywhere else would find
     /// nothing and conclude the feature was off.
@@ -227,7 +227,7 @@ public sealed class GgDebugSplashOpenFindingTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The whole finding in one test: on the bounding box no stopping
+    /// <b>The whole finding in one test: on the bounding box no stopping
     /// place can kill slot 4, and on the mask the rocket stops four pixels back
     /// and does.</b>
     /// </summary>
@@ -247,7 +247,7 @@ public sealed class GgDebugSplashOpenFindingTests
     /// <c>ceil(hp)</c> demanded and exactly what kills slot 4.
     /// </para>
     /// <para>
-    /// ⚠️ <b>This replicates the back-out loop rather than calling it</b>, because
+    /// <b>This replicates the back-out loop rather than calling it</b>, because
     /// <c>Projectiles.BackOutOfCharacter</c> is private and the shape of the
     /// argument is what is being asserted. The production path is gated by the
     /// fixture instead — see <see cref="ThePortReproducesThatDeathAndRunsToTick523"/>.

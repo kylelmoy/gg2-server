@@ -9,11 +9,11 @@ namespace Gg2.Bots;
 /// <para>
 /// The numbers are part of the contract: <c>--bot-mode</c> accepts them as well
 /// as the names, so a script can say <c>--bot-mode 3</c> and a person can say
-/// <c>--bot-mode tiered</c>. ⚠️ <b>Do not renumber them</b> — a benchmark harness
+/// <c>--bot-mode tiered</c>. <b>Do not renumber them</b> — a benchmark harness
 /// that sweeps 0..3 would silently start measuring different arms.
 /// </para>
 /// <para>
-/// ⚠️ <b>This replaced <c>--search-bots</c>, a boolean.</b> With one flag per
+/// <b>This replaced <c>--search-bots</c>, a boolean.</b> With one flag per
 /// controller the four combinations were reachable only by knowing which pairs of
 /// flags to give together, and the two-controller case additionally needed
 /// <c>--bot-arbiter</c> or it was refused. One enum makes the reachable set
@@ -27,7 +27,7 @@ public enum BotMode
     /// made against.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A complete bot, not a degraded one.</b> It walks, fights and plays
+    /// <b>A complete bot, not a degraded one.</b> It walks, fights and plays
     /// the objective; the other three only replace its keys and aim inside the
     /// engagement window.
     /// </remarks>
@@ -37,9 +37,9 @@ public enum BotMode
     /// The scripted layer plus a rollout-search micro-controller — arm 3.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The better bot and the expensive one.</b> Better on death share than
+    /// <b>The better bot and the expensive one.</b> Better on death share than
     /// both the all-scripted control and the policy hybrid, pooled over ~34,000
-    /// deaths and 840+ matches an arm. ⛔ <b>Never measured with humans in the
+    /// deaths and 840+ matches an arm. <b>Never measured with humans in the
     /// server</b> — a rollout re-simulates every live character for every tick of
     /// every candidate, so cost rises with the population and every number quoted
     /// comes from 8-bot headless matches. Watch <c>--tick-stats</c>.
@@ -57,11 +57,11 @@ public enum BotMode
     /// decision when several bots engage on the same tick. Needs <c>--policy</c>.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>Ordering is the arbiter's whole input</b> — search then policy, so a
+    /// <b>Ordering is the arbiter's whole input</b> — search then policy, so a
     /// server under pressure drops to the cheaper controller before it drops to
     /// the scripted layer. See <c>HybridBot</c>.
     /// <para>
-    /// ⚠️ Unlike the other three this one <em>defaults</em> a budget
+    /// Unlike the other three this one <em>defaults</em> a budget
     /// (<see cref="DecisionQuotaArbiter.DefaultTieredBudgetMicroseconds"/>)
     /// rather than refusing without <c>--bot-arbiter</c>: refusing made the mode
     /// unreachable without a number nobody has tuned, which is a worse default
@@ -79,7 +79,7 @@ public static class BotModes
     /// needs one loaded.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Used in both directions by the host</b>: a mode that needs a policy
+    /// <b>Used in both directions by the host</b>: a mode that needs a policy
     /// and was given none is refused, and a policy given to a mode that cannot
     /// use it is refused too. The second is the one worth having — a checkpoint
     /// loaded, reported and never consulted is exactly the shape of claim this
@@ -96,7 +96,7 @@ public static class BotModes
     /// Whether this mode runs any micro-controller, and so needs a budget.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>ANY controller, not just more than one.</b> An arbiter has two jobs
+    /// <b>ANY controller, not just more than one.</b> An arbiter has two jobs
     /// and only the first needs a choice: it picks between tiers, and it GATES —
     /// returning -1 once the budget is spent, which drops that bot to the scripted
     /// layer. A single-tier mode still wants the second. Reading it as "choose

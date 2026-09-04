@@ -24,7 +24,7 @@ public sealed class RosterEntry
     /// An id that does <b>not</b> move when the roster compacts.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Never on the wire, and never a substitute for the slot index.</b>
+    /// <b>Never on the wire, and never a substitute for the slot index.</b>
     /// Everything a client sees names a player by position, and that is not
     /// negotiable. This exists for the server's own side of a question that
     /// outlives a departure — "the vote running right now is about whom?" — where
@@ -68,14 +68,14 @@ public sealed class RosterEntry
     /// <c>PLAYER_CHANGENAME</c>, or null if they have never renamed.
     /// </summary>
     /// <remarks>
-    /// <c>player.lastNamechange</c>, and ⚠️ <b>a MONOTONIC millisecond counter
+    /// <c>player.lastNamechange</c>, and <b>a MONOTONIC millisecond counter
     /// rather than a wall clock</b> — GM8's <c>current_time</c> is milliseconds
     /// since the program started. A <see cref="DateTime"/> here would be wrong in
     /// a way that never shows up in a test: an NTP correction or a DST step
     /// moving the clock backwards would stall every rename on the server until
     /// real time caught up again.
     /// <para>
-    /// ⚠️ <b>Null rather than a sentinel</b>, which is <c>variable_local_exists</c>
+    /// <b>Null rather than a sentinel</b>, which is <c>variable_local_exists</c>
     /// exactly: the reference's variable does not exist until the first rename,
     /// so that one is unconditional. A zero default would instead throttle the
     /// first rename of a server that had been up for less than a second, and
@@ -121,7 +121,7 @@ public sealed class RosterEntry
     /// The reward string this player authenticated for, or empty.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Kept because <c>FULL_UPDATE</c> carries it</b> —
+    /// <b>Kept because <c>FULL_UPDATE</c> carries it</b> —
     /// <c>Player.events/User Event 12</c> writes <c>unparseRewards(rewards)</c>
     /// per player — so a client joining after somebody authenticated still draws
     /// their badges. Without it the <c>REWARD_UPDATE</c> broadcast would reach
@@ -162,6 +162,12 @@ public sealed class Roster
     private long _nextStableId;
 
     /// <summary>
+    /// Bumped on every add and remove, so a caller can cache a view of the roster
+    /// — <see cref="GameServer.BotSlots"/> — and know when it has gone stale.
+    /// </summary>
+    public int Version { get; private set; }
+
+    /// <summary>
     /// Creates the roster with slot 0 filled by a permanent spectator standing
     /// in for the reference's local player.
     /// </summary>
@@ -184,6 +190,7 @@ public sealed class Roster
     {
         entry.StableId = _nextStableId++;
         _entries.Add(entry);
+        Version++;
         return _entries.Count - 1;
     }
 
@@ -204,6 +211,7 @@ public sealed class Roster
             throw new InvalidOperationException("slot 0 is reserved and cannot be removed");
 
         _entries.RemoveAt(index);
+        Version++;
     }
 
     /// <summary>The index of <paramref name="entry"/>, or -1.</summary>

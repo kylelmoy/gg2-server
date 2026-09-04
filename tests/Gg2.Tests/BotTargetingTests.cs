@@ -12,7 +12,7 @@ namespace Gg2.Tests;
 /// <remarks>
 /// The targeting tests build a world by hand, because every claim is about the
 /// <em>ordering</em> of candidates and the only way to see an ordering is to
-/// construct one where the answers disagree. ⚠️ Threat is scored in pixels, so
+/// construct one where the answers disagree. Threat is scored in pixels, so
 /// each bonus is asserted by putting the favoured candidate <em>further away</em>
 /// than the one it has to beat — a test where the preferred target is also the
 /// nearest gates nothing.
@@ -23,7 +23,7 @@ public sealed class BotTargetingTests
 
     /// <summary>An open stretch of the map, so line of sight is not the variable.</summary>
     /// <remarks>
-    /// ⚠️ Every targeting test here runs on real geometry, because
+    /// Every targeting test here runs on real geometry, because
     /// <see cref="BotTargeting.Find"/>'s last act is a real
     /// <c>collision_line_bulletblocking</c>. A hand-built empty world would make
     /// every candidate visible and the blind-fallback branch unreachable.
@@ -45,7 +45,7 @@ public sealed class BotTargetingTests
             state.Players[slot].Team = people[slot].Team;
             state.Players[slot].Class = people[slot].Class;
 
-            // ⚠️ Fresh, never `new CharacterState()` — six of its fields name a
+            // Fresh, never `new CharacterState()` — six of its fields name a
             // roster slot and a zeroed one claims slot 0 last hurt it, which here
             // would hand slot 0 the attacker bonus in every test.
             var character = CharacterState.Fresh(people[slot].Class, people[slot].Team);
@@ -63,12 +63,11 @@ public sealed class BotTargetingTests
     /// A clear stretch of ctf_truefort, and a wall just below it.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Found by sweeping the map for the widest unblocked horizontal
-    /// sightline, not read off a screenshot.</b> A first draft used (3400, 456),
-    /// which looks like open floor and is not: four of the threat-bonus cases
-    /// failed because the <em>further</em> candidate — the one the bonus is
-    /// supposed to lift — was behind geometry, so the near one won by default and
-    /// the test measured a wall.
+    /// <b>Found by sweeping the map for the widest unblocked horizontal
+    /// sightline, not read off a screenshot.</b> A candidate that looks like open
+    /// floor can still put the <em>further</em> threat-bonus candidate behind
+    /// geometry, so the near one wins by default and the test measures a wall
+    /// instead of the bonus.
     /// <para>
     /// Measured: from (380, 268) the sightline is clear for at least 1,000px
     /// horizontally, and blocked 80px straight down — which is what makes the
@@ -82,7 +81,7 @@ public sealed class BotTargetingTests
 
     /// <summary>The class radius is an attention radius, and it is per class.</summary>
     /// <remarks>
-    /// ⚠️ A sniper looks four times as far as a pyro. Getting this from the
+    /// A sniper looks four times as far as a pyro. Getting this from the
     /// weapon's range instead would give a soldier 1,000 and a pyro 165, and the
     /// numbers are a tuned set rather than a derivation.
     /// </remarks>
@@ -104,7 +103,7 @@ public sealed class BotTargetingTests
     /// at all.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The pyro, the spy and the medic are zero because point blank is where
+    /// The pyro, the spy and the medic are zero because point blank is where
     /// all three of them work — a minimum band would make a pyro back away from
     /// the only range its weapon reaches.
     /// </remarks>
@@ -149,7 +148,7 @@ public sealed class BotTargetingTests
     /// enemy by exactly that much.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The favoured candidate is placed FURTHER AWAY on purpose.</b> Every
+    /// <b>The favoured candidate is placed FURTHER AWAY on purpose.</b> Every
     /// term is in pixels, and the whole point of the scoring is that it is
     /// willing to walk past someone harmless — so a test where the preferred
     /// target is also the nearest passes with the entire bonus deleted.
@@ -200,8 +199,8 @@ public sealed class BotTargetingTests
     /// radius worse.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>This is a LOCK problem rather than the range problem it was reported
-    /// as.</b> A soldier's band is 110-800px and it fires throughout — but with
+    /// <b>This is a LOCK problem, not a range problem.</b> A soldier's band is
+    /// 110-800px and it fires throughout — but with
     /// threat as pure distance it always locked whoever was nearest, and the
     /// combat layer does not look for a new target while it holds a valid one. An
     /// enemy that closes inside <c>BOT_SPLASH_SAFE</c> therefore pins a soldier
@@ -223,7 +222,7 @@ public sealed class BotTargetingTests
 
         Assert.Equal(2, BotTargeting.Find(new WorldView(in state, Collision()), 0, 800).Slot);
 
-        // ⚠️ The control: a pyro has no minimum band, so the same geometry gives
+        // The control: a pyro has no minimum band, so the same geometry gives
         // the opposite answer. Point blank is where a pyro works.
         var pyro = World(
             (Team.Red, PlayerClass.Pyro, LeftX, FloorY),
@@ -255,14 +254,13 @@ public sealed class BotTargetingTests
     /// A target behind a wall is still a target, inside the blind radius.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Losing every candidate to line of sight does not mean there is
-    /// nothing to fight</b>, and treating it that way is the "bots walk straight
-    /// past enemies" report. So a blocked search falls back to the nearest
+    /// <b>Losing every candidate to line of sight does not mean there is
+    /// nothing to fight.</b> A blocked search falls back to the nearest
     /// candidate inside <c>BOT_BLIND_RANGE</c> and returns it with
     /// <see cref="BotTarget.Visible"/> false — the combat layer holds its aim on
     /// the last known position and engages the moment the sightline opens.
     /// <para>
-    /// ⚠️ And the radius is short on purpose: a blind target across the map is a
+    /// And the radius is short on purpose: a blind target across the map is a
     /// bot aiming at scenery. The second half of this test is what fails if the
     /// fallback is made unconditional.
     /// </para>
@@ -289,7 +287,7 @@ public sealed class BotTargetingTests
         Assert.False(blind.Visible);
         Assert.Equal(1, blind.Slot);
 
-        // ⚠️ Past BOT_BLIND_RANGE the same blocked candidate is nothing at all.
+        // Past BOT_BLIND_RANGE the same blocked candidate is nothing at all.
         var far = World(
             (Team.Red, PlayerClass.Soldier, LeftX, FloorY),
             (Team.Blue, PlayerClass.Scout, LeftX, FloorY + BotConstants.BlindRange + 200));
@@ -302,14 +300,13 @@ public sealed class BotTargetingTests
     /// distance.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Reported from play as "bots are not shooting at sentries — dies to
-    /// them".</b> The script iterated characters and a generator, so a bot walked
-    /// into one, got killed by it, and respawned to do it again with no term
-    /// anywhere in the model for the thing that killed it. It ranks ahead of a
-    /// player at the same distance because a player can be walked away from and a
-    /// sentry covers its ground until somebody removes it.
+    /// A sentry must be a candidate in its own right, distinct from characters and
+    /// the generator, or a bot walks into one, dies, and respawns to do it again
+    /// with no term anywhere in the model for the thing that killed it. It ranks
+    /// ahead of a player at the same distance because a player can be walked away
+    /// from and a sentry covers its ground until somebody removes it.
     /// <para>
-    /// ⚠️ And a sentry is aimed at by the <b>centre of its box</b>, not its
+    /// And a sentry is aimed at by the <b>centre of its box</b>, not its
     /// origin — the reference makes the same distinction with
     /// <c>botIsCharacter</c>, and getting it wrong aims a bot at the sentry's
     /// feet.
@@ -332,7 +329,7 @@ public sealed class BotTargetingTests
         Assert.Equal(BotTargetKind.Sentry, target.Kind);
         Assert.Equal(2, target.Slot);
 
-        // ⚠️ The aim point is the box's CENTRE, and a sentry's box is
+        // The aim point is the box's CENTRE, and a sentry's box is
         // `-8, -7, 7, 12` about its origin — so the centre is 2.5px *below* it,
         // not above. Asserted as the number rather than as an inequality,
         // because "somewhere near the sentry" is satisfied by aiming at the
@@ -353,7 +350,7 @@ public sealed class BotTargetingTests
     /// </summary>
     /// <remarks>
     /// <c>BOT_GEN_THREAT</c> is 4,000 — far past any distance term inside any
-    /// class's radius. ⚠️ A bot that keeps shooting a wall while somebody kills
+    /// class's radius. A bot that keeps shooting a wall while somebody kills
     /// it is worse than one that never shoots the wall.
     /// </remarks>
     [Fact]
@@ -370,7 +367,7 @@ public sealed class BotTargetingTests
             BotTargetKind.Generator,
             BotTargeting.Find(new WorldView(in state, Collision()), 0, 800).Kind);
 
-        // ⚠️ Anything alive beats it, even at the far edge of the radius.
+        // Anything alive beats it, even at the far edge of the radius.
         var withEnemy = World(
             (Team.Red, PlayerClass.Soldier, LeftX, FloorY),
             (Team.Blue, PlayerClass.Scout, LeftX + 700, FloorY));
@@ -425,14 +422,14 @@ public sealed class BotTargetingTests
 
     /// <summary>The signed angle difference wraps the short way round.</summary>
     /// <remarks>
-    /// ⚠️ The <c>+ 540</c> is what makes it work for a negative first difference
+    /// The <c>+ 540</c> is what makes it work for a negative first difference
     /// rather than decoration: GML's <c>mod</c> keeps the sign of the dividend
     /// and so does C#'s <c>%</c>, so <c>(10 - 350) % 360</c> is -340 and not 20.
     /// </remarks>
     [Theory]
     [InlineData(10, 350, 20)]
     [InlineData(350, 10, -20)]
-    // ⚠️ Exactly opposite gives -180, not +180: the range is [-180, 180). The
+    // Exactly opposite gives -180, not +180: the range is [-180, 180). The
     // arithmetic wraps 360 back to 0 before the subtraction, so the half turn
     // lands on the low end. Worth pinning because "which way does a bot turn to
     // face directly behind it" is decided here.

@@ -7,7 +7,7 @@ namespace Gg2.Bots;
 /// instance per bot, and nothing that is per-bot state.
 /// </summary>
 /// <remarks>
-/// ⛔ <b>A controller is built PER BOT and a spec is shared.</b> Both shipped
+/// <b>A controller is built PER BOT and a spec is shared.</b> Both shipped
 /// controllers hold per-slot state — <c>RolloutSearch</c>'s decision counter, a
 /// decoder's absolute aim — so one instance driving several bots would have them
 /// stepping on each other's cadence. What may be shared is the immutable half:
@@ -26,7 +26,7 @@ public abstract record MicroControllerSpec
 
 /// <summary>A trained checkpoint driving keys and aim. <c>docs/BOTS.md</c>'s arm 2.</summary>
 /// <remarks>
-/// ⛔ <b>The only checkpoint that exists is stamp-invalid for this build</b> and is
+/// <b>The only checkpoint that exists is stamp-invalid for this build</b> and is
 /// a test fixture; <c>PolicyNetwork.Load</c> refuses a foreign stamp by design.
 /// <c>docs/ENV.md</c>, "The checkpoint is a FIXTURE now".
 /// </remarks>
@@ -58,12 +58,12 @@ public sealed record SearchMicroSpec(
 /// and a hand-written "both are set" throw — <b>duplicated in two places, and a
 /// third controller meant editing both.</b> A list has no such arity.
 /// <para>
-/// ⚠️ <b>Null means the all-scripted arm</b>, not a broken configuration. That is
+/// <b>Null means the all-scripted arm</b>, not a broken configuration. That is
 /// arm 1, it is a complete bot, and it is the control every comparison is made
 /// against.
 /// </para>
 /// <para>
-/// ⚠️ <b>Tiers are ordered MOST CAPABLE FIRST</b> and only matter when an
+/// <b>Tiers are ordered MOST CAPABLE FIRST</b> and only matter when an
 /// <see cref="Arbiter"/> is set — without one, tier 0 always drives. See
 /// <see cref="IMicroArbiter"/> before configuring several, including what it costs
 /// in reproducibility to decide between them badly.
@@ -79,7 +79,7 @@ public sealed record BotBrainSpec
     /// tier 0.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>ONE instance shared by every bot on a server</b>, which is the whole
+    /// <b>ONE instance shared by every bot on a server</b>, which is the whole
     /// point — a per-bot arbiter cannot see the coinciding decisions that make the
     /// tick tail. It is held here rather than created per bot for that reason.
     /// </remarks>
@@ -92,7 +92,7 @@ public sealed record BotBrainSpec
     /// Whether a bot opponent is worth engaging the controller for.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b><see cref="EngageOpponents.Anyone"/> here, and <c>HumansOnly</c> on
+    /// <b><see cref="EngageOpponents.Anyone"/> here, and <c>HumansOnly</c> on
     /// the live server.</b> A headless bot-vs-bot match has no humans, so
     /// defaulting this to <c>HumansOnly</c> would make every arm measurement
     /// silently measure the all-scripted control. See the enum.
@@ -114,7 +114,7 @@ public sealed record BotBrainSpec
     /// <c>+</c>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>An arm nobody can name in a result table is an arm nobody can
+    /// <b>An arm nobody can name in a result table is an arm nobody can
     /// report.</b> The bench printed "hybrid" for two different controllers.
     /// </remarks>
     public string Name
@@ -137,7 +137,7 @@ public sealed record BotBrainSpec
 
     /// <summary>Builds this bot's controllers and wraps a macro layer in them.</summary>
     /// <remarks>
-    /// ⚠️ Called once per bot at construction, never in the tick loop — every
+    /// Called once per bot at construction, never in the tick loop — every
     /// allocation a controller needs happens here.
     /// </remarks>
     public HybridBot Wrap(ScriptedBot scripted)

@@ -7,7 +7,7 @@ namespace Gg2.Tests;
 /// map archive.
 /// </summary>
 /// <remarks>
-/// ⛔ <b>These are REGRESSION values, not verified truth.</b> Nothing here has
+/// <b>These are REGRESSION values, not verified truth.</b> Nothing here has
 /// been checked against the running game: the counts are what this port's
 /// decoders produce today, pinned so a change to them is visible. The thing they
 /// cannot tell you is whether GM8 agrees — in particular whether
@@ -44,7 +44,7 @@ public sealed class SpriteMaskTests
     /// <c>removeback</c>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>This is the fixture that would move if the background rule is
+    /// <b>This is the fixture that would move if the background rule is
     /// wrong.</b> The file carries no alpha and no <c>tRNS</c>, so with
     /// <c>removeback</c> off it would be a full 10x2 rectangle; half of it
     /// disappears because the bottom-left pixel's colour is removed. If GM8
@@ -85,7 +85,7 @@ public sealed class SpriteMaskTests
     }
 
     /// <summary>
-    /// ⚠️ A bubble is round, and the mask has to be too.
+    /// A bubble is round, and the mask has to be too.
     /// </summary>
     /// <remarks>
     /// The whole argument against using a bounding box rests on this being a disc

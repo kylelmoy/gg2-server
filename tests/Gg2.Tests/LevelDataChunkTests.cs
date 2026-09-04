@@ -8,7 +8,7 @@ namespace Gg2.Tests;
 /// Which PNG text chunks the level-data reader accepts.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>Every one of the 22 shipped maps is <c>zTXt</c>, so the whole test
+/// <b>Every one of the 22 shipped maps is <c>zTXt</c>, so the whole test
 /// suite passed while this port read only <c>zTXt</c> — and rejected 438 real
 /// custom maps that the game opens fine.</b> That is the shape of gap a fixture
 /// corpus cannot show you: the corpus was produced by the one writer whose

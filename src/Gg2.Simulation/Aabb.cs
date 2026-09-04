@@ -68,7 +68,7 @@ public readonly record struct Aabb(int Left, int Top, int Right, int Bottom)
     /// rounding table.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Exact except on a rounding tie.</b> Six of those 1,008 boxes differ
+    /// <b>Exact except on a rounding tie.</b> Six of those 1,008 boxes differ
     /// by one pixel, and every one of them is an angle where a rotated corner
     /// lands on a precise half. There the x87 gap in docs/SIMULATION.md's "four
     /// motion variables" decides the tie the other way. It is unreachable in
@@ -76,14 +76,11 @@ public readonly record struct Aabb(int Left, int Top, int Right, int Bottom)
     /// direction, so an exact 210.000 has probability zero. Do not add a fudge
     /// for it — a fudge would be wrong at every angle instead of at a few.
     /// <para>
-    /// ⚠️ <b>The tie is not only where <c>sin</c> is a half.</b> This used to say
-    /// "210 and 330 degrees, where <c>sin</c> is analytically -0.5", which is
-    /// what <c>sample-rotated-box.js</c>'s angle grid happened to expose.
-    /// <c>rotated-mask-samples.json</c> (2026-08-27) puts three of its six ties
-    /// at <b>300</b>, where it is <c>cos</c> that is analytically 0.5 — the same
-    /// mechanism on the other axis. <c>RotatedBoxSampleTests.IsRoundingTie</c>
-    /// always covered both, because it tests the rotated corner rather than the
-    /// angle; only this prose was narrow.
+    /// <b>The tie is not only where <c>sin</c> is a half.</b> Ties occur at 210
+    /// and 330 degrees, where <c>sin</c> is analytically -0.5, and also at
+    /// <b>300</b>, where <c>cos</c> is analytically 0.5 — the same mechanism on
+    /// the other axis. <c>RotatedBoxSampleTests.IsRoundingTie</c> tests the
+    /// rotated corner rather than the angle, so it covers both.
     /// </para>
     /// </para>
     /// </remarks>
@@ -148,15 +145,15 @@ public readonly record struct Aabb(int Left, int Top, int Right, int Bottom)
     /// the flipped-sprite inflation included.
     /// </summary>
     /// <remarks>
-    /// Measured 2026-08-26 (<c>tools/probes/probe-airblast.js</c>, 19 boxes on
+    /// Measured (<c>tools/probes/probe-airblast.js</c>, 19 boxes on
     /// <c>AirBlastMaskS</c> plus three flipped angles on <c>SentryTurretS</c>):
     /// at <c>image_xscale = -1</c> GM8's box is the mirrored sprite box with the
     /// mirrored-left edge extended by <b>two sprite pixels before the
     /// rotation</b> — the same two pixels a left-facing character gains on
     /// <c>bbox_left</c>, but applied to the sprite-space edge and then rotated,
     /// so at 45 degrees it moves <em>two</em> world edges by one pixel each.
-    /// Applying it to the rotated box instead (what <c>TurretReportedBox</c>
-    /// used to assume) reproduces none of the three measured flipped rotations.
+    /// Applying it to the rotated box instead reproduces none of the three
+    /// measured flipped rotations.
     /// <para>
     /// This is what <c>distance_to_object</c> and <c>collision_circle</c>
     /// consume; <c>place_meeting</c> and <c>collision_line</c> test the mask and

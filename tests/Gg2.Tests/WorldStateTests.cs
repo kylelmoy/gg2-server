@@ -227,7 +227,7 @@ public sealed class WorldStateTests
     /// get — to whoever slid into their index.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The <em>owner</em> of a projectile used to be this test's second half,
+    /// The <em>owner</em> of a projectile used to be this test's second half,
     /// and it was asserting the port's bug: a departing player's shot cannot be
     /// left ownerless because it no longer exists — <c>Player.events/Destroy.xml</c>
     /// destroys it. See <see cref="RemoveSlotTests"/>. The rule itself is still
@@ -316,7 +316,7 @@ public sealed class WorldStateTests
         // a rocket's leash, knockback, fade and pass-through set; 132,016 after
         // phase 6's scoreboard; 143,304 after Quote's Blade, which cost a
         // projectile its `ammoDrained` and its `bubbled` flag and a weapon four
-        // small fields. ⚠️ That last 11 KB is what overflowed the stack in
+        // small fields. That last 11 KB is what overflowed the stack in
         // ScoringTests — a struct this size is not free to pass by value, and
         // the budget below is not the only thing its growth can break.
         // The ceiling is a budget rather than a
@@ -345,7 +345,7 @@ public sealed class WorldStateTests
         //    the same class of silent off-by-one as a roster index, and this
         //    file exists to keep those out.
         //
-        // ⚠️ MEASURED 2026-09-02: the state is 156,624 bytes, which is 98% of the
+        // MEASURED 2026-09-02: the state is 156,624 bytes, which is 98% of the
         // 160 KB ceiling below. This assertion is one ordinary addition away from
         // firing, and the next person to add a field will read it as a surprise
         // unless it says so here.
@@ -356,7 +356,7 @@ public sealed class WorldStateTests
         // MovingPlatforms 7.7. Shrinking the pool is a behaviour change: see
         // WorldState.MaxProjectiles.
         //
-        // ⚠️ The clone cost is NOT where a rollout search spends its time, which is
+        // The clone cost is NOT where a rollout search spends its time, which is
         // the reason to know the number rather than a reason to shrink it. Measured
         // at population 12: the whole-struct copy is 2.2 us against 20 simulated
         // ticks at 3.7 us each, so the fork is about 3% of a candidate.
@@ -375,7 +375,7 @@ public sealed class WorldStateTests
     // --- creation order ------------------------------------------------------
 
     /// <summary>
-    /// ⚠️ <b>A respawn makes slot order stop being creation order, and the
+    /// <b>A respawn makes slot order stop being creation order, and the
     /// ordering helper follows the respawn rather than the slot.</b>
     /// </summary>
     /// <remarks>
@@ -386,7 +386,7 @@ public sealed class WorldStateTests
     /// Measured on <c>reference-gg_debug-closedtdm.trace</c>: see
     /// <see cref="CharacterState.CreationOrder"/>.
     /// <para>
-    /// ⚠️ <b>The last assertion is the control.</b> Without it a helper that
+    /// <b>The last assertion is the control.</b> Without it a helper that
     /// simply returned the live slots in slot order would pass the first two —
     /// slot order and creation order agree until something respawns, which is
     /// exactly why this was wrong for six phases and no test noticed.
@@ -461,7 +461,7 @@ public sealed class WorldStateTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The same rule for sentries: the engineer in slot 5 can build before
+    /// <b>The same rule for sentries: the engineer in slot 5 can build before
     /// the one in slot 2, and the ordering follows the build.</b>
     /// </summary>
     /// <remarks>
@@ -469,7 +469,7 @@ public sealed class WorldStateTests
     /// against, so this decides an outcome exactly as
     /// <see cref="ARespawnMovesACharacterToTheBackOfTheCreationOrder"/> does.
     /// <para>
-    /// ⚠️ <b>Unlike the character case, no recording contradicts the old
+    /// <b>Unlike the character case, no recording contradicts the old
     /// behaviour</b> — seeing it needs two sentries overlapping one projectile's
     /// box, which no fixture holds. This exists because the rule was proven next
     /// door and applying it costs nothing, and saying so is the point: a future
@@ -477,7 +477,7 @@ public sealed class WorldStateTests
     /// rather than on one of its own.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Both lists draw from one counter</b>, because GM8 has one id
+    /// <b>Both lists draw from one counter</b>, because GM8 has one id
     /// sequence for every object — so the sentry built between two spawns sorts
     /// between them, and this asserts that interleaving rather than assuming the
     /// two sequences are independent.

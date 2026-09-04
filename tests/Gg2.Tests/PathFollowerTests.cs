@@ -13,10 +13,10 @@ namespace Gg2.Tests;
 /// is under test is the decision and not the physics.
 /// <see cref="PathFollowerFixtureTests"/> is where a leg is actually walked.
 /// <para>
-/// ⚠️ <b>The jump edges are not implemented</b> (phase 7 item 4b-ii), so no
-/// fixture here has one on a route it expects to be followed. The one that does
-/// asserts it is <em>counted and abandoned</em>, which is the behaviour that has
-/// to hold until they land.
+/// The jump edges are not implemented (phase 7 item 4b-ii), so no fixture here
+/// has one on a route it expects to be followed. The one that does asserts it
+/// is counted and abandoned, which is the behaviour that has to hold until
+/// they land.
 /// </para>
 /// </remarks>
 public sealed class PathFollowerTests
@@ -65,7 +65,7 @@ public sealed class PathFollowerTests
     /// A character standing (or flying) at a chosen place.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <see cref="CharacterState.Fresh"/>, never <c>new CharacterState()</c>:
+    /// Uses <see cref="CharacterState.Fresh"/>, never <c>new CharacterState()</c>:
     /// six of its fields name a roster slot and a zeroed one claims slot 0 last
     /// hurt it — and <c>RunPower</c> starts at zero, so a hand-built character
     /// that skipped the factory would stand still and the takeoff gate would ask
@@ -73,8 +73,8 @@ public sealed class PathFollowerTests
     /// </remarks>
     /// <summary>A Rocketlauncher with rounds in it and off cooldown.</summary>
     /// <remarks>
-    /// ⚠️ The rest of <see cref="WeaponState"/> is defaulted deliberately —
-    /// the rocket gate reads only these two — but a zeroed one is NOT loaded and NOT
+    /// The rest of <see cref="WeaponState"/> is defaulted deliberately — the
+    /// rocket gate reads only these two — but a zeroed one is not loaded and not
     /// ready, which is the conservative answer and what every other test here wants.
     /// </remarks>
     private static WeaponState Loaded(double ammo = 4) =>
@@ -153,13 +153,12 @@ public sealed class PathFollowerTests
     /// The route index advances only while the bot is on the ground.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The single most expensive bug in the reference's follower.</b>
     /// <c>NodeFromWorld</c> tolerates being a couple of cells off a surface, so an
     /// arc passing over its own landing resolves to that node about fifteen pixels
     /// before the feet reach it — and advancing there hands the follower the
-    /// <em>next</em> edge while the bot is still in the air. Measured on
-    /// ctf_truefort's two stacked jumps: the bot took off, was switched onto the
-    /// return leg at the apex, landed back where it started, and did it again.
+    /// next edge while the bot is still in the air. On ctf_truefort's two stacked
+    /// jumps that made a bot take off, switch onto the return leg at the apex,
+    /// land back where it started, and do it again.
     /// <para>
     /// The fixture puts the bot squarely on node 1 — which it would advance to if
     /// asked — and shows the index does not move while airborne and does the tick
@@ -193,12 +192,11 @@ public sealed class PathFollowerTests
     /// Arrival needs the bot stopped, not merely close.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Being within tolerance of the goal is not the same as stopping
-    /// there.</b> GG2 keeps a character's horizontal speed for about ten ticks
-    /// after the keys come off, so declaring arrival on position alone and then
-    /// pressing nothing coasts the bot thirty to forty pixels past the thing it
-    /// was sent to — measured in the reference on all three legs of the gg_debug
-    /// walk, the last of which slid into the left wall.
+    /// Being within tolerance of the goal is not the same as stopping there.
+    /// GG2 keeps a character's horizontal speed for about ten ticks after the
+    /// keys come off, so declaring arrival on position alone and then pressing
+    /// nothing coasts the bot thirty to forty pixels past the thing it was sent
+    /// to.
     /// <para>
     /// So inside the band the bot <em>brakes</em>: a press against its own
     /// motion, which is how a player stops. The speed floor of 1 is what keeps
@@ -266,8 +264,8 @@ public sealed class PathFollowerTests
     /// A stale route never declares an arrival.
     /// </summary>
     /// <remarks>
-    /// ⚠️ A route kept only so the bot keeps moving until a plan for the new goal
-    /// exists ends somewhere the bot was sent <em>before</em>. Reaching the end of
+    /// A route kept only so the bot keeps moving until a plan for the new goal
+    /// exists ends somewhere the bot was sent before. Reaching the end of
     /// it is not an arrival at anything, and declaring one would clear
     /// <see cref="BotPathState.HasGoal"/> and throw away the objective the bot was
     /// just given.
@@ -304,13 +302,13 @@ public sealed class PathFollowerTests
     /// takes the edge away.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Not on the first miss.</b> A lot of real edges are marginal — a
+    /// <b>Not on the first miss.</b> A lot of real edges are marginal — a
     /// three-column ledge reached by a slow steep arc — and those are flown
     /// stochastically. Banning one the first time it is missed cost the reference
     /// ~250 frames to complete a hop that takes about 30: fifteen off-route events
     /// produced fifteen blacklists, and the blacklist was the whole delay.
     /// <para>
-    /// ⚠️ And it re-plans <em>immediately</em> rather than riding out
+    /// And it re-plans <em>immediately</em> rather than riding out
     /// <c>BOT_OFFPATH_TICKS</c>: standing on a surface the route does not mention
     /// is a finished move that went somewhere else, and waiting to admit it is how
     /// a bot walks somewhere it cannot get back from.
@@ -319,7 +317,7 @@ public sealed class PathFollowerTests
     [Fact]
     public void LandingOffTheRouteRePlansAndTheSecondMissBlacklists()
     {
-        // ⚠️ Node 3 is a DEAD END, and that is what makes a *second* consecutive
+        // Node 3 is a DEAD END, and that is what makes a *second* consecutive
         // miss reachable: with a way back the re-plan simply installs a route
         // that starts where the bot actually landed, so it is on its route again
         // and the strike counter never reaches two. Which is the right
@@ -368,7 +366,7 @@ public sealed class PathFollowerTests
     /// Pressing something and going nowhere gives up on the edge.
     /// </summary>
     /// <remarks>
-    /// Surfacer's stuck detector, widened to <c>BOT_STUCK_TICKS</c>. ⚠️ Gated on
+    /// Surfacer's stuck detector, widened to <c>BOT_STUCK_TICKS</c>. Gated on
     /// actually pressing something, or a bot standing on its target waiting for a
     /// jump window would report itself stuck — and the moved test is half a pixel
     /// rather than zero, because <c>good_move_contact_solid</c> works at eighth-pixel
@@ -391,7 +389,7 @@ public sealed class PathFollowerTests
         Assert.Equal(1, state.BlacklistFires);
         Assert.Contains(NavGraph.EdgeKey(0, 1), state.Blacklist);
 
-        // ⚠️ A quarter-pixel wobble is still "went nowhere": the threshold is half
+        // A quarter-pixel wobble is still "went nowhere": the threshold is half
         // a pixel and not zero.
         var wobbling = new BotPathState();
         follower.SetGoal(wobbling, Stand(graph, 2, 45).X, Stand(graph, 2, 45).Y);
@@ -411,7 +409,7 @@ public sealed class PathFollowerTests
     /// </summary>
     /// <remarks>
     /// The two halves that make the blacklist a delay rather than a permanent
-    /// verdict. ⚠️ Expiry is swept at plan time and nowhere else — that is the
+    /// verdict. Expiry is swept at plan time and nowhere else — that is the
     /// only moment a stale entry could affect anything, so it needs no timer of
     /// its own.
     /// </remarks>
@@ -450,7 +448,7 @@ public sealed class PathFollowerTests
     /// A ban already imposed is not re-armed by another failure.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The reference exits on the existence test, so a ban runs from when it
+    /// The reference exits on the existence test, so a ban runs from when it
     /// was first imposed. Without that a bot that keeps failing the same edge
     /// extends it indefinitely, and the blacklist stops being a delay.
     /// </remarks>
@@ -477,14 +475,14 @@ public sealed class PathFollowerTests
     /// A failed search keeps the old route and parks the next attempt.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The search runs before the old route is given up.</b> This was the
+    /// <b>The search runs before the old route is given up.</b> This was the
     /// reference's "bots momentarily stop moving" report, and the stall was
     /// structural: with free-then-search, a bot between a goal changing and a
     /// route existing had nothing to follow at all. Keeping the old route means a
     /// bot whose new goal cannot be planned for keeps walking the last route that
     /// worked, which is what a person does.
     /// <para>
-    /// ⚠️ And the failure parks the next search for a re-plan window, or every
+    /// And the failure parks the next search for a re-plan window, or every
     /// event-driven caller would fire again on the very next tick — a full A* per
     /// bot per frame for a goal that cannot be reached from a pixel away either.
     /// </para>
@@ -525,7 +523,7 @@ public sealed class PathFollowerTests
     /// Two re-plans in the same place take the edge away.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The anti-thrash check catches the case the stuck detector cannot: a bot
+    /// The anti-thrash check catches the case the stuck detector cannot: a bot
     /// that is technically moving — shuffling back and forth across a ledge — and
     /// getting nowhere. It lives with the planner rather than the detector
     /// because it is about re-planning, not about failing outright.
@@ -540,7 +538,7 @@ public sealed class PathFollowerTests
         var at = Stand(graph, 0, 4);
         follower.SetGoal(state, Stand(graph, 2, 45).X, Stand(graph, 2, 45).Y);
 
-        // ⚠️ The edge in progress is re-established before every plan, because
+        // The edge in progress is re-established before every plan, because
         // that is what the follower does: FollowEdge writes it each tick and a
         // successful plan clears it again. A test that set it once would find
         // nothing to blacklist by the third call and would pass with the whole
@@ -560,7 +558,7 @@ public sealed class PathFollowerTests
         follower.Plan(state, at.X, at.Y, 2, new NavQuery(Team.Red));
         Assert.Equal(1, state.BlacklistFires);
 
-        // ⚠️ And moving further than BOT_THRASH_DIST between re-plans resets it:
+        // And moving further than BOT_THRASH_DIST between re-plans resets it:
         // a bot covering ground is not thrashing.
         var moved = new BotPathState();
         follower.SetGoal(moved, Stand(graph, 2, 45).X, Stand(graph, 2, 45).Y);
@@ -579,7 +577,7 @@ public sealed class PathFollowerTests
     /// A drop-through is taken from the middle of the run, with DOWN held.
     /// </summary>
     /// <remarks>
-    /// The generator takes the drop from the middle of the surface, and ⚠️ DOWN
+    /// The generator takes the drop from the middle of the surface, and DOWN
     /// disables the platform entirely — both the standing test and the push-out —
     /// so the key is what makes the edge work rather than merely an intention.
     /// </remarks>
@@ -611,7 +609,7 @@ public sealed class PathFollowerTests
     /// A fall walks off the end the edge names, and then holds that column.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Which end cannot be re-derived, which is why the edge carries it.</b>
+    /// <b>Which end cannot be re-derived, which is why the edge carries it.</b>
     /// "The column just past the run is inside the landing node" is true of BOTH
     /// ends wherever the landing surface reaches under the whole run — what a
     /// platform standing on a wider ledge looks like — and guessing picked the
@@ -619,7 +617,7 @@ public sealed class PathFollowerTests
     /// bot on ctf_avanti into the solid block against its right end and wedged it
     /// there, when the fall it wanted was off the left.
     /// <para>
-    /// ⚠️ And in the air the plan is a STRAIGHT VERTICAL DROP from that column, so
+    /// And in the air the plan is a STRAIGHT VERTICAL DROP from that column, so
     /// the bot's job is to hold it. Without that a fall is the one edge kind
     /// flown with no plan at all: the bot walks off at whatever speed it had, keeps
     /// it, and sails past any landing narrower than the drift.
@@ -663,7 +661,7 @@ public sealed class PathFollowerTests
     /// The rocket law is not the ordinary law, in both directions at once.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>They differ in BOTH terms of the motion law, not one.</b>
+    /// <b>They differ in BOTH terms of the motion law, not one.</b>
     /// Character's Begin Step sets the control and friction factors from
     /// <c>moveStatus</c>, and 1 — "rocketing/mining myself" — gives 0.65 and
     /// <b>1</b> where the default gives 0.85 and 1.15. A friction of 1 means
@@ -689,7 +687,7 @@ public sealed class PathFollowerTests
     /// ACCEPTS arcs the bot sails straight past.
     /// </para>
     /// <para>
-    /// ⚠️ This is the control that makes the two models' existence
+    /// This is the control that makes the two models' existence
     /// load-bearing. Point the rocket branch of the takeoff gate at
     /// <see cref="JumpModel"/> and every other follower test still passes — the arcs
     /// in them are flyable under either law.
@@ -718,7 +716,7 @@ public sealed class PathFollowerTests
             $"a hot rocket takeoff shed speed like an ordinary one: "
             + $"{rocketHot:0.#} against {jumpHot:0.#}");
 
-        // ⚠️ and it really does sail past its own schedule, which is the
+        // And it really does sail past its own schedule, which is the
         // half a caller has to care about — 2 px/tick over 30 ticks is 60.
         Assert.True(rocketHot > 2 * 30, $"the hot arc landed on schedule at {rocketHot:0.#}");
         Assert.True(jumpHot <= 2 * 30, $"the ordinary law also overshot, at {jumpHot:0.#}");
@@ -728,7 +726,7 @@ public sealed class PathFollowerTests
     /// The takeoff gate asks the ROCKET model about a rocket arc.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <c>TheRocketLawIsNotTheOrdinaryLaw</c> gates that the two models
+    /// <c>TheRocketLawIsNotTheOrdinaryLaw</c> gates that the two models
     /// differ; this gates that the takeoff gate picks the right one, which is a
     /// separate claim and was briefly ungated. Point the gate at
     /// <see cref="JumpModel"/> and every other follower test still passes, because
@@ -770,7 +768,7 @@ public sealed class PathFollowerTests
         Assert.True((keys & PlayerKeys.Jump) != 0);
         Assert.Equal(-1, state.RunupAt);
 
-        // ⚠️ The control — the SAME arc as an ordinary jump edge is refused
+        // The control — the SAME arc as an ordinary jump edge is refused
         // and does start a run-up. Without it this passes on a gate that accepts
         // everything.
         var ordinary = Build(
@@ -793,7 +791,7 @@ public sealed class PathFollowerTests
     /// A rocket jump needs hp above the damage it does, strictly.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Strictly greater, because the damage lands before the bot
+    /// <b>Strictly greater, because the damage lands before the bot
     /// does</b> — a soldier on exactly <c>NAV_RJ_DAMAGE</c> arrives dead. And the
     /// health test is re-asked at the gate because the search only ever answered it
     /// at plan time: a route planned at 160hp is still installed at 35.
@@ -819,7 +817,7 @@ public sealed class PathFollowerTests
             RocketModel.Ready(in cooling, new WeaponState { ReadyToShoot = false, AmmoCount = 4 }),
             "a launcher on cooldown was ready");
 
-        // ⚠️ the class, not the weapon slot — every class has a WeaponState,
+        // The class, not the weapon slot — every class has a WeaponState,
         // and only the soldier's is a Rocketlauncher.
         var scout = At(0, 0, playerClass: PlayerClass.Scout);
         scout.Hp = 200;
@@ -830,7 +828,7 @@ public sealed class PathFollowerTests
     /// A loaded soldier takes off on a rocket-jump edge and asks for the rocket.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The follower cannot fire.</b> It owns LEFT / RIGHT / JUMP / DOWN;
+    /// <b>The follower cannot fire.</b> It owns LEFT / RIGHT / JUMP / DOWN;
     /// the aim and the trigger come from the combat half. So a rocket jump is a JUMP
     /// press plus a <em>request</em> — <see cref="BotPathState.RocketFire"/> — that
     /// <c>ScriptedBot</c> turns into an aim of 270 and an ATTACK bit after combat
@@ -862,7 +860,7 @@ public sealed class PathFollowerTests
         Assert.Equal(1, state.RocketJumps);
         Assert.Equal(0, state.UnsupportedEdgeTicks);
 
-        // ⚠️ Cleared at the top of the next Step, so a tick that does not
+        // Cleared at the top of the next Step, so a tick that does not
         // reach the takeoff gate cannot leave the request standing. Without that a
         // bot fires a rocket at its own feet every tick of the flight.
         follower.Step(state, At(at.X, at.Y - 40, 3, onGround: false), in loaded, 41, able);
@@ -870,7 +868,7 @@ public sealed class PathFollowerTests
     }
 
     /// <summary>
-    /// ✅ <b>A demoman on a sticky-jump edge places a mine, waits, and then jumps
+    /// <b>A demoman on a sticky-jump edge places a mine, waits, and then jumps
     /// and detonates on ONE tick.</b>
     /// </summary>
     /// <remarks>
@@ -881,7 +879,7 @@ public sealed class PathFollowerTests
     /// starts a <see cref="NavConstants.SjSetupTicks"/> countdown and the launch
     /// is five ticks later.
     /// <para>
-    /// ⚠️ <b>The jump and the detonation are the same tick, and that ordering is
+    /// <b>The jump and the detonation are the same tick, and that ordering is
     /// the manoeuvre.</b> Begin Step's jump branch (line 108) runs before its
     /// right-click branch (line 137), so <c>vspeed = -jumpStrength</c> is already
     /// in place when the blast's <c>motion_add</c> lands on top of it —
@@ -936,7 +934,7 @@ public sealed class PathFollowerTests
     }
 
     /// <summary>
-    /// ⚠️ <b>Placing the mine puts the launcher on cooldown, and the countdown
+    /// <b>Placing the mine puts the launcher on cooldown, and the countdown
     /// must survive that.</b>
     /// </summary>
     /// <remarks>
@@ -948,7 +946,7 @@ public sealed class PathFollowerTests
     /// jumps. Measured across 48 real edges on four maps from
     /// <c>gg2-nav-gen</c>'s sticky cache: <b>zero sticky jumps taken</b>.
     /// <para>
-    /// ⚠️ <b>The synthetic tests could not see it because their fixture weapon is
+    /// <b>The synthetic tests could not see it because their fixture weapon is
     /// permanently ready</b> — <c>Loaded()</c> sets <c>ReadyToShoot</c> once and
     /// nothing ever spends it. This test hands the follower a weapon that goes
     /// cold the moment the mine is placed, which is what the simulation does.
@@ -993,7 +991,7 @@ public sealed class PathFollowerTests
     }
 
     /// <summary>
-    /// ⚠️ <b>A cold launcher makes a sticky jump WAIT on the takeoff column</b>,
+    /// <b>A cold launcher makes a sticky jump WAIT on the takeoff column</b>,
     /// exactly as it does a rocket jump.
     /// </summary>
     /// <remarks>
@@ -1004,7 +1002,7 @@ public sealed class PathFollowerTests
     /// takeoff patience budget until the edge is blacklisted. That is a refusal
     /// with no bad arc anywhere in it.
     /// <para>
-    /// ⚠️ <b>Fixing it did not change any real flight</b>, which is recorded
+    /// <b>Fixing it did not change any real flight</b>, which is recorded
     /// rather than hidden: it is a correct policy and it was not the thing
     /// refusing `gg2-nav-gen`'s edges. See docs/TRAPS-BOTS.md.
     /// </para>
@@ -1041,7 +1039,7 @@ public sealed class PathFollowerTests
     }
 
     /// <summary>
-    /// ⚠️ <b>A sticky-jump edge is refused to anybody who cannot fly one</b>, and
+    /// <b>A sticky-jump edge is refused to anybody who cannot fly one</b>, and
     /// the follower counts the ticks rather than steering it.
     /// </summary>
     /// <remarks>
@@ -1083,20 +1081,20 @@ public sealed class PathFollowerTests
     /// With no rocket the bot waits on the takeoff column, then gives the edge up.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Jumping without the rocket is the worst available outcome</b>:
+    /// <b>Jumping without the rocket is the worst available outcome</b>:
     /// the arc rises 276px where an ordinary jump rises 57, so the bot would leave
     /// the ground, track a trajectory it cannot be on, and land somewhere the route
     /// does not mention — costing an off-route fire and, on the second, a blacklist
     /// on a perfectly good edge.
     /// <para>
-    /// ⚠️ <b>And it WAITS rather than running up.</b> The launcher's refire is
+    /// <b>And it WAITS rather than running up.</b> The launcher's refire is
     /// 30 ticks against <c>BOT_TAKEOFF_PATIENCE</c>'s 60, so the overwhelmingly
     /// common reason to be here is a rocket a second away — and walking away from a
     /// jump the bot is about to be able to make and back again is the shuffle that
     /// budget exists to end, not a thing to spend it on.
     /// </para>
     /// <para>
-    /// ⚠️ <b>The escape hatch takes the EDGE away rather than shoving the bot
+    /// <b>The escape hatch takes the EDGE away rather than shoving the bot
     /// off it</b>, which is what it does for every other arc. Two seconds at the
     /// gate with no rocket is an honest "untraversable right now"; the search
     /// re-plans without it and the ban expires long after the launcher has reloaded.
@@ -1111,13 +1109,13 @@ public sealed class PathFollowerTests
 
         var follower = new PathFollower(graph);
 
-        // ⚠️ The stagger is not decoration. A re-plan clears the edge in progress
+        // The stagger is not decoration. A re-plan clears the edge in progress
         // and the takeoff budget with it, so a bot's re-plan interval is a hard
         // ceiling on that budget — at the default stagger of 0 the interval is
         // BOT_REPLAN_TICKS (45), BOT_TAKEOFF_PATIENCE is 60, and the escape hatch is
-        // unreachable. Item 4b-ii found that by a test failing; it bites here too.
+        // unreachable.
         //
-        // ⚠️ Which means a bot with an EMPTY launcher waits at the gate rather than
+        // Which means a bot with an EMPTY launcher waits at the gate rather than
         // giving the edge up, at every stagger below 15 — and that is very nearly
         // always the right answer, because the launcher's refire is 30 ticks and its
         // ammo comes back. The hatch is for the case where it does not.
@@ -1146,9 +1144,9 @@ public sealed class PathFollowerTests
 
         Assert.Contains(NavGraph.EdgeKey(0, 1), state.Blacklist);
 
-        // ⚠️ The control — the same bot with a loaded launcher jumps instead
-        // of waiting. Without it this passes on a follower that refuses every rocket
-        // edge, which is where the port was before this landed.
+        // The control — the same bot with a loaded launcher jumps instead
+        // of waiting. Without it this passes on a follower that refuses every
+        // rocket edge.
         var loadedState = new BotPathState();
         follower.SetGoal(loadedState, NavGraph.ColumnWorldX(25), graph.StandY(1));
 
@@ -1166,7 +1164,7 @@ public sealed class PathFollowerTests
     /// A rocket that did not go off is not the arc that was planned.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <c>moveStatus</c> 1 is "rocketing/mining myself" and is set by the
+    /// <c>moveStatus</c> 1 is "rocketing/mining myself" and is set by the
     /// blast itself, so a rocket-jump edge in the air <em>without</em> it is an
     /// ORDINARY jump — 57px of rise against the arc's 276 — and steering it toward a
     /// trajectory it cannot be on only carries the bot further from where an
@@ -1175,7 +1173,7 @@ public sealed class PathFollowerTests
     /// edge one retry before banning it — right, because the common causes are
     /// transient (an enemy walked into the rocket) and the uncommon one is not.
     /// <para>
-    /// ⚠️ <c>AirTicks &gt; 1</c> rather than <c>&gt;= 1</c>: the blast lands
+    /// <c>AirTicks &gt; 1</c> rather than <c>&gt;= 1</c>: the blast lands
     /// in the same tick's simulation as the takeoff press, so tick one is always
     /// <c>moveStatus</c> 0 and a stricter test would abandon every rocket jump on
     /// its first airborne tick.
@@ -1211,7 +1209,7 @@ public sealed class PathFollowerTests
         Assert.False(state.FlyingEdge, "the follower kept flying an arc the rocket never made");
         Assert.Equal(PlayerKeys.None, keys & (PlayerKeys.Left | PlayerKeys.Right));
 
-        // ⚠️ The control — the same two ticks WITH moveStatus 1 are steered,
+        // The control — the same two ticks WITH moveStatus 1 are steered,
         // so the bail is the moveStatus test and not simply "airborne".
         var rocketing = drifting;
         rocketing.MoveStatus = 1;
@@ -1233,7 +1231,7 @@ public sealed class PathFollowerTests
     /// the run.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The generator SEARCHED for the takeoff column rather than assuming it.
+    /// The generator SEARCHED for the takeoff column rather than assuming it.
     /// It is usually the end of the run facing the landing — but where the
     /// landing surface is also what ends the run (climbing onto a crate) the body
     /// is flush against it there and the only flyable arcs start a few cells
@@ -1264,7 +1262,7 @@ public sealed class PathFollowerTests
     /// A jump is a press on alternate ticks, never a hold.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <c>Character.events/Begin Step.xml</c> jumps on <c>pressedKeys and $80</c>
+    /// <c>Character.events/Begin Step.xml</c> jumps on <c>pressedKeys and $80</c>
     /// — a rising edge — so a bot holding JUMP down jumps exactly once and then
     /// never again. Alternating is what gives a bot that still wants to jump a
     /// fresh press every other tick until it leaves the ground.
@@ -1272,7 +1270,7 @@ public sealed class PathFollowerTests
     [Fact]
     public void AJumpIsAPressOnAlternateTicksAndNeverAHold()
     {
-        // ⚠️ The arc has to cover its own gap, or this is not a fixture a
+        // The arc has to cover its own gap, or this is not a fixture a
         // generator could ever have written: takeoff column 9 to landing column
         // 12 is 18 world pixels, and 1.2 px/tick over 20 ticks is 24. A first
         // draft asked 0.5 over 20 — a 10px arc across an 18px gap — and the gate
@@ -1303,7 +1301,7 @@ public sealed class PathFollowerTests
     /// when it does not.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The measurement that decided the gate's whole shape.</b>
+    /// <b>The measurement that decided the gate's whole shape.</b>
     /// "Not moving away" accepts a standstill, which is right for nine arcs in
     /// ten — <b>91.9% of jump edges need no takeoff speed at all</b> — and
     /// catastrophic for the rest: an arc asking for most of the class's ceiling
@@ -1336,7 +1334,7 @@ public sealed class PathFollowerTests
                 .HasFlag(PlayerKeys.Jump),
             "a gentle arc was refused from a standstill; 91.9% of arcs are this one");
 
-        // ⚠️ The same shape, but SHORT and FAST: 54px of ground in twelve ticks
+        // The same shape, but SHORT and FAST: 54px of ground in twelve ticks
         // wants 4.5 px/tick from tick zero, which is essentially a heavy's
         // ceiling — so there is no surplus for the tracker to make the
         // acceleration ramp back out of and the bot would land short. This is
@@ -1390,7 +1388,7 @@ public sealed class PathFollowerTests
     /// The escape hatch jumps anyway once the gate has refused for two seconds.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A gate that can refuse is a gate that can refuse for ever.</b> A bot
+    /// <b>A gate that can refuse is a gate that can refuse for ever.</b> A bot
     /// on a run too short to build the speed, or wedged against a wall it cannot
     /// back away from, would otherwise work the gate for the rest of the round
     /// with every other detector reading it as healthy: it is not stuck (it is
@@ -1398,7 +1396,7 @@ public sealed class PathFollowerTests
     /// says). Jump on whatever it has instead — that either works, or it lands
     /// back where it started and the off-route machinery already knows what to do.
     /// <para>
-    /// ⚠️ In the reference the budget was set in four places and incremented in
+    /// In the reference the budget was set in four places and incremented in
     /// none, so this was dead code for its whole life.
     /// </para>
     /// </remarks>
@@ -1414,12 +1412,11 @@ public sealed class PathFollowerTests
 
         var follower = new PathFollower(graph);
 
-        // ⚠️ The stagger is not decoration here. A re-plan clears the edge in
+        // The stagger is not decoration here. A re-plan clears the edge in
         // progress and the budget with it, so a bot's re-plan interval is a hard
         // ceiling on its takeoff budget — at the default stagger of 0 the
-        // interval is BOT_REPLAN_TICKS (45), BOT_TAKEOFF_PATIENCE is 60, and the
-        // hatch is unreachable. Nothing in the reference remarks on that; it was
-        // found by this test failing.
+        // interval is BOT_REPLAN_TICKS (45) and BOT_TAKEOFF_PATIENCE is 60, so
+        // the hatch is unreachable.
         var state = new BotPathState { ReplanStagger = BotConstants.ReplanTicks - 1 };
 
         follower.SetGoal(state, NavGraph.ColumnWorldX(22), graph.StandY(1));
@@ -1427,7 +1424,7 @@ public sealed class PathFollowerTests
         var at = Stand(graph, 0, 9);
         var jumpedAt = -1;
 
-        // ⚠️ The bot is jittered so the stuck detector never fires: what is under
+        // The bot is jittered so the stuck detector never fires: what is under
         // test is the takeoff budget, and a stuck bot would be taken away by the
         // other mechanism first.
         for (var tick = 0; tick < BotConstants.TakeoffPatience + 5 && jumpedAt < 0; tick++)
@@ -1451,7 +1448,7 @@ public sealed class PathFollowerTests
     /// clock.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>An arc is flown as a trajectory, not as a speed.</b> The target is
+    /// <b>An arc is flown as a trajectory, not as a speed.</b> The target is
     /// <c>takeoffX + dir * min(distance, needVx * airTicks)</c> — an absolute
     /// world x — so being behind is a reason to press forward and being ahead is
     /// a reason to brake. Holding a speed instead loses most of a cell of ground
@@ -1486,7 +1483,7 @@ public sealed class PathFollowerTests
 
         Assert.Equal(PlayerKeys.Left, ahead);
 
-        // ⚠️ And the target is CLAMPED at the arc's own distance, so a late bot
+        // And the target is CLAMPED at the arc's own distance, so a late bot
         // keeps pressing toward the landing rather than aiming past it. 3 * 20 is
         // 60 pixels: a hundred ticks in, the plan is still 60 pixels out and not
         // three hundred.
@@ -1510,13 +1507,13 @@ public sealed class PathFollowerTests
     /// generator proved it at, and only for a class that has one.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <c>Rejump</c> is -1 on every other edge kind, so the branch is inert
+    /// <c>Rejump</c> is -1 on every other edge kind, so the branch is inert
     /// for them without testing the type. It is a <b>press</b>, not a hold: Begin
     /// Step takes the second jump on the rising edge and refuses it while
     /// <c>vspeed</c> is still above the jump strength, so holding JUMP through the
     /// arc would consume the edge on the takeoff tick and leave nothing to press.
     /// <para>
-    /// ⚠️ <c>CanDoubleJump</c> is checked even though the search will not hand
+    /// <c>CanDoubleJump</c> is checked even though the search will not hand
     /// these edges to anything else: a route outlives the plan that made it, and
     /// a bot can change class mid-life while a path is still installed.
     /// </para>
@@ -1549,12 +1546,12 @@ public sealed class PathFollowerTests
         Assert.Equal([5], presses);
         Assert.Equal(1, state.DoubleJumps);
 
-        // ⚠️ A class with no second jump never presses it, whatever the edge says
+        // A class with no second jump never presses it, whatever the edge says
         // — and the situation is the reference's own: <b>a route outlives the
         // plan that made it</b>, so the route is planned as a scout and then
         // flown by something that cannot double jump.
         //
-        // ⚠️ The plan has to be the SCOUT's. A first draft planned and flew with
+        // The plan has to be the SCOUT's. A first draft planned and flew with
         // the same no-double-jump query, and the search simply refused the edge:
         // the bot had no route, the branch was never reached, and the control
         // passed with the CanDoubleJump test deleted.
@@ -1568,7 +1565,7 @@ public sealed class PathFollowerTests
 
         for (var air = 1; air <= 8; air++)
         {
-            // ⚠️ And the timer must not re-plan the route away mid-flight, or the
+            // And the timer must not re-plan the route away mid-flight, or the
             // bot loses the edge for a reason that has nothing to do with the
             // test.
             reclassed.ReplanAt = int.MaxValue;
@@ -1586,7 +1583,7 @@ public sealed class PathFollowerTests
     /// A run-up follows walk edges through the graph, not the node's own columns.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The clamp into the node's own columns was the bug the whole change
+    /// <b>The clamp into the node's own columns was the bug the whole change
     /// is about.</b> A node one anchor column wide — which is what the top step of
     /// a staircase is — resolves that clamp back to the column the bot is already
     /// standing on, so the run-up was a no-op and the jump happened from a
@@ -1613,7 +1610,7 @@ public sealed class PathFollowerTests
 
         Assert.Equal(20 - BotConstants.RunupCells, mark);
 
-        // ⚠️ The control: clamped into node 1's own span the answer is 20 — the
+        // The control: clamped into node 1's own span the answer is 20 — the
         // column the bot is already on — and the run-up is a no-op.
         Assert.NotEqual(20, mark);
 
@@ -1632,7 +1629,7 @@ public sealed class PathFollowerTests
     /// A bot part-way through a run-up is not treated as off route.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A run-up deliberately walks BACKWARDS along the route</b>, and the
+    /// <b>A run-up deliberately walks BACKWARDS along the route</b>, and the
     /// forward-only route advance cannot see that. Without the suppression a bot
     /// backing up to build speed lands on a node the route does not mention
     /// <em>ahead</em> of it, which reads as a finished move that went somewhere
@@ -1640,7 +1637,7 @@ public sealed class PathFollowerTests
     /// blacklists the very edge it was preparing for. That is the single reason
     /// the obvious "just let it back up" fix is not a two-line change.
     /// <para>
-    /// ⚠️ And <see cref="BotPathState.PathAt"/> must not move: the edge being
+    /// And <see cref="BotPathState.PathAt"/> must not move: the edge being
     /// prepared for has to stay the current one for the whole run-up, or the
     /// follower is handed a different edge half way through and steers to the
     /// wrong takeoff column.
@@ -1686,7 +1683,7 @@ public sealed class PathFollowerTests
     /// <remarks>
     /// The tracker replayed inside <see cref="JumpModel.Reach"/> is
     /// <see cref="PathFollower"/>'s own, so a bot leaving at exactly the arc's
-    /// speed covers the arc's own distance. ⚠️ Leaving from a standstill does
+    /// speed covers the arc's own distance. Leaving from a standstill does
     /// not: the acceleration ramp is a deficit the tracker only repays out of the
     /// surplus between the arc's speed and the class's ceiling — and
     /// <c>NAV_JUMP_VX</c> (4.53) is literally a heavy's ceiling, which is why the
@@ -1706,7 +1703,7 @@ public sealed class PathFollowerTests
         var fromRest = JumpModel.Reach(soldier, needVx: 3, flightTicks: 20, v0: 0);
         Assert.True(fromRest < onPlan, $"a standstill reached {fromRest} against {onPlan} on plan");
 
-        // ⚠️ A heavy on an arc at its own ceiling has no surplus at all, so the
+        // A heavy on an arc at its own ceiling has no surplus at all, so the
         // deficit is never repaid — this is the 3,310-of-62,069 case.
         var heavy = CharacterState.Fresh(PlayerClass.Heavy, Team.Red);
         var ceiling = JumpModel.Reach(heavy, needVx: 4.53, flightTicks: 40, v0: 0);
@@ -1723,7 +1720,7 @@ public sealed class PathFollowerTests
     /// can only fly one of them gets that one.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>This was a live bug on the SHIPPED graphs, and it hid an entire
+    /// <b>This was a live bug on the SHIPPED graphs, and it hid an entire
     /// feature.</b> A route is a list of nodes, so the follower re-derives which
     /// edge each hop meant — and it used to take the first the edge index yielded.
     /// <see cref="NavSearch"/> refuses per <em>edge</em>, so the two disagreed
@@ -1748,7 +1745,7 @@ public sealed class PathFollowerTests
     [Fact]
     public void ASoldierOnAPairThatAlsoCarriesADoubleJumpStillTakesTheRocketJump()
     {
-        // ⚠️ The double jump is declared FIRST and is what the old resolution
+        // The double jump is declared FIRST and is what the old resolution
         // yielded. Its cost is deliberately the CHEAPER of the two, so this
         // cannot pass by accident on a cost comparison that ignored the query.
         var graph = Build(
@@ -1782,7 +1779,7 @@ public sealed class PathFollowerTests
     /// The control: the same pair, and a scout gets the double jump.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Without this the test above is satisfied by "always prefer the rocket
+    /// <b>Without this the test above is satisfied by "always prefer the rocket
     /// jump".</b> The claim is that the follower resolves whatever the search
     /// resolved, which means the answer has to change with the traveller — so the
     /// discriminating fact is the pair of results, not either one.
@@ -1823,7 +1820,7 @@ public sealed class PathFollowerTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The same fault hid the whole sticky-jump arm.</b>
+    /// <b>The same fault hid the whole sticky-jump arm.</b>
     /// </summary>
     /// <remarks>
     /// A cache carrying type-7 edges puts a rocket jump beside a sticky jump on
@@ -1835,7 +1832,7 @@ public sealed class PathFollowerTests
     /// itself entirely correct</b>. <see cref="StickyModel.Ready"/> was never
     /// consulted once.
     /// <para>
-    /// ⚠️ <b>Six hypotheses had been eliminated by measurement before this</b> —
+    /// <b>Six hypotheses had been eliminated by measurement before this</b> —
     /// the reach, the need, the gate arithmetic, the goal snap, the harness start
     /// and the dispatch switch — and every one of them was correct. They were all
     /// asking whether the arm refused, and the arm was never asked.
@@ -1876,14 +1873,14 @@ public sealed class PathFollowerTests
     /// leaves the earlier one standing.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>This is A*'s tie-break, not a choice.</b> <see cref="NavSearch"/>
+    /// <b>This is A*'s tie-break, not a choice.</b> <see cref="NavSearch"/>
     /// relaxes with <c>existing &gt;= 0 &amp;&amp; existing &lt;= tentative →
     /// continue</c>, so among parallel edges it keeps the strictly cheapest and an
     /// equal cost never displaces what is already there. The follower has to
     /// reproduce that exactly or it steers an arc the route did not cost, which is
     /// the whole bug this group of tests exists for.
     /// <para>
-    /// ⚠️ The occupancy multiplier deliberately does not enter it: it is keyed on
+    /// The occupancy multiplier deliberately does not enter it: it is keyed on
     /// the node pair, so it scales every parallel edge by the same factor and
     /// cannot reorder them.
     /// </para>
@@ -1932,7 +1929,7 @@ public sealed class PathFollowerTests
     }
 
     /// <summary>
-    /// ⚠️ <b>A route is steered against the query that PLANNED it, and losing the
+    /// <b>A route is steered against the query that PLANNED it, and losing the
     /// capability mid-arc must not change which edge is being flown.</b>
     /// </summary>
     /// <remarks>
@@ -1981,7 +1978,7 @@ public sealed class PathFollowerTests
 
         var replansAtTakeoff = state.Replans;
 
-        // ⚠️ The next ticks are the real test: the rocket has gone, so the launcher
+        // The next ticks are the real test: the rocket has gone, so the launcher
         // is cold and the live query no longer offers a rocket jump — while the bot
         // is airborne under moveStatus 1, on the arc it just bought.
         var flying = At(at.X, at.Y - 40, hSpeed: 3, onGround: false);

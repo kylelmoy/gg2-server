@@ -40,7 +40,7 @@ public struct StatBuffer
 /// <c>Scripts/Maps/pointCapture.gml</c> and
 /// <c>Objects/Weapons/Medigun.events/User Event 1.xml</c>.
 /// <para>
-/// ⚠️ <b>Every award writes <em>both</em> arrays, without exception.</b> Every
+/// <b>Every award writes <em>both</em> arrays, without exception.</b> Every
 /// one of the fourteen <c>stats[X] += n</c> lines in the reference is
 /// immediately followed by <c>roundStats[X] += n</c> with the same index and the
 /// same amount — checked across <c>Scripts/</c> and <c>Objects/</c>. So
@@ -56,12 +56,10 @@ public struct StatBuffer
 /// reads the second one — but everything writes it.
 /// </para>
 /// <para>
-/// ✅ <b>The domination kill table IS modelled</b> — <see cref="Dominations"/>,
+/// <b>The domination kill table is modelled</b> — <see cref="Dominations"/>,
 /// reached from <c>GameServer</c> and written into the <c>FULL_UPDATE</c> block
-/// that carries one byte per <em>other</em> player. ⚠️ <b>This paragraph said
-/// "not modelled, written as zeroes" until 2026-09-03, long after it landed</b>,
-/// and nothing could go red for it: a stale "not done" reads as a gap somebody
-/// might go and close twice. <see cref="StatIndex.Dominations"/> and
+/// that carries one byte per <em>other</em> player.
+/// <see cref="StatIndex.Dominations"/> and
 /// <see cref="StatIndex.Revenge"/> are vestigial in the reference too — reset in
 /// four places and incremented nowhere.
 /// </para>
@@ -77,7 +75,7 @@ public static class Scoring
     /// of order.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The serialisation order is <b>not</b> <see cref="StatIndex"/> order:
+    /// The serialisation order is <b>not</b> <see cref="StatIndex"/> order:
     /// <c>Player.events/User Event 12.xml</c> writes KILLS through BONUS and then
     /// <b>POINTS</b>, skipping DOMINATIONS and REVENGE. See
     /// <c>Gg2.Server.StateUpdateWriter</c>, which has the one copy of that order.
@@ -128,7 +126,7 @@ public static class Scoring
     /// <c>GameServerBeginStep.gml:144-169</c>: a map change wipes both arrays.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Only on area 1</b>, inside the same <c>global.currentMapArea == 1</c>
+    /// <b>Only on area 1</b>, inside the same <c>global.currentMapArea == 1</c>
     /// guard that decides whether teams are reset — so a multi-area Invasion map
     /// carries its scoreboard from one area to the next.
     /// <see cref="Rounds.ResetForNewMap"/> is the caller and holds that flag.
@@ -148,21 +146,21 @@ public static class Scoring
     /// <param name="victimSlot">Whose character died.</param>
     /// <param name="death">The credit <see cref="Deaths.Resolve"/> worked out.</param>
     /// <remarks>
-    /// ⚠️ <b>Called before the body is cleared</b>, because four of the six
+    /// <b>Called before the body is cleared</b>, because four of the six
     /// clauses read the victim's <em>character</em>: the medic-bonus one reads
     /// its weapon and the defence one reads whether it was carrying a briefcase.
     /// <para>
-    /// ⚠️ <b><c>victim.stats[DEATHS] += 1</c> is unconditional.</b> Falling in a
+    /// <b><c>victim.stats[DEATHS] += 1</c> is unconditional.</b> Falling in a
     /// pit, standing in a generator explosion and shooting yourself all count.
     /// </para>
     /// <para>
-    /// ⚠️ <b>The stab and medic-bonus clauses are inside <c>if(killer)</c> but
+    /// <b>The stab and medic-bonus clauses are inside <c>if(killer)</c> but
     /// <em>outside</em> <c>if(killer != victim)</c></b>, so a medic who kills
     /// themselves with a full ubercharge awards themselves the bonus point. Read
     /// as one nested block, the two would agree; they do not.
     /// </para>
     /// <para>
-    /// ⚠️ <b>An assist is worth half a point</b>, which is the only fractional
+    /// <b>An assist is worth half a point</b>, which is the only fractional
     /// award in the game and the reason these counters are reals. It is also why
     /// a client's scoreboard can read one point above the host's: the wire
     /// carries <c>write_ubyte(stats[POINTS])</c>, which rounds half away from
@@ -192,7 +190,7 @@ public static class Scoring
         // two blocks above appended to: the killer only when
         // `killer != victim`, and the assistant whenever there is one.
         //
-        // ⚠️ So a suicide records no domination for anybody, and an assistant
+        // So a suicide records no domination for anybody, and an assistant
         // is dominating the victim exactly as much as the shooter is.
         if (killer != CharacterState.Nobody && state.HasPlayer[killer] && killer != victimSlot)
             Dominations.RecordKill(ref state, victimSlot, killer);
@@ -205,10 +203,9 @@ public static class Scoring
     private static void RecordKillCredit(
         ref WorldState state, int victimSlot, int killer, DamageSource source)
     {
-        // ⚠️ **Outside the `killer != victim` test**, which is the surprising
+        // **Outside the `killer != victim` test**, which is the surprising
         // part: a spy who somehow stabs themselves is awarded the stab and the
-        // point. Reachable since the spy landed — it was transcribed and dead
-        // for four phases before that.
+        // point.
         if (source is DamageSource.Knife or DamageSource.Backstab)
         {
             Award(ref state, killer, StatIndex.Stabs, 1);
@@ -250,20 +247,20 @@ public static class Scoring
     /// </summary>
     /// <returns>How many entries of <paramref name="into"/> were filled.</returns>
     /// <remarks>
-    /// ⚠️ <b>Every player on the team goes in, whether or not they scored or
+    /// <b>Every player on the team goes in, whether or not they scored or
     /// even played.</b> The reference adds each to a <c>ds_priority</c> keyed on
     /// <c>roundStats[POINTS]</c> and only then trims to three, so on a team of
     /// three everybody is an MVP with nothing to their name. It does not read
     /// <c>object</c>, so the dead and the never-spawned are included.
     /// <para>
-    /// ⚠️ <b><c>redMVP[i].roundStats[HEALING] = round(...)</c> writes the stat
+    /// <b><c>redMVP[i].roundStats[HEALING] = round(...)</c> writes the stat
     /// back.</b> The rounding is not only on the way out: a medic's round
     /// healing total is permanently rounded, half to even, the moment a round
     /// ends. Harmless, because the round array is about to be reset — but it is
     /// an assignment and not a cast, so it is transcribed as one.
     /// </para>
     /// <para>
-    /// ⚠️ <b>The tie rule is not the reference's, and cannot be until somebody
+    /// <b>The tie rule is not the reference's, and cannot be until somebody
     /// measures <c>ds_priority_delete_min</c>.</b> GM8's priority queue is a
     /// heap and which of two equal keys it evicts is an implementation detail
     /// this project has not established. The port breaks ties by roster index,
@@ -326,7 +323,7 @@ public static class Scoring
     /// else.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b><c>killer != owner</c></b>, so an engineer who detonates their own
+    /// <b><c>killer != owner</c></b>, so an engineer who detonates their own
     /// sentry scores nothing — and neither does the generator explosion, whose
     /// killer is nobody. That is the whole guard; there is no team test, so
     /// destroying a team-mate's sentry does score.

@@ -42,11 +42,10 @@ public sealed class MatchState
 
         CapLimit = options.CapLimit;
         RespawnTimeSeconds = options.RespawnTimeSeconds;
-        // Ten independent values since the [Classlimits] section became
-        // reachable from configuration. ⚠️ EffectiveClassLimits, because this is
-        // the array that reaches the wire and GameServer.ApplyOptions enforces
-        // the same one — a limit shown on the client's HUD that the server does
-        // not apply is invisible from inside either side.
+        // EffectiveClassLimits, because this is the array that reaches the wire
+        // and GameServer.ApplyOptions enforces the same one — a limit shown on
+        // the client's HUD that the server does not apply is invisible from
+        // inside either side.
         options.EffectiveClassLimits().AsSpan(0, ClassLimits.Length).CopyTo(ClassLimits);
 
         BuildEntities();
@@ -64,12 +63,10 @@ public sealed class MatchState
 
     // --- objective entities --------------------------------------------------
     //
-    // The intel moved into Gg2.Simulation.WorldState with phase 6's objective;
-    // the round timer and time limit followed it with the round, and the control
-    // points and the KotH/DKotH timers with those, the arena's round state with
-    // Arena and the generators with theirs. All of it is simulated now and
-    // StateUpdateWriter reads it through an ObjectiveLookup rather than out of
-    // this bag.
+    // The intel, round timer, time limit, control points, KotH/DKotH timers,
+    // arena round state and generators are all simulated in
+    // Gg2.Simulation.WorldState now; StateUpdateWriter reads them through an
+    // ObjectiveLookup rather than out of this bag.
 
     /// <summary>
     /// The points the HUD block serialises, already in the order it wants them.
@@ -107,15 +104,12 @@ public sealed class MatchState
     public byte[] ClassLimits { get; } = new byte[10];
 
     /// <summary>
-    /// ⚠️ Nothing left to build from the entity list.
+    /// Nothing left to build from the entity list.
     /// </summary>
     /// <remarks>
-    /// The moving platforms were the last thing here, and they moved into
-    /// <c>Gg2.Simulation.WorldState</c> on 2026-09-01 because they had to start
-    /// actually moving — this class held their LOAD position and nothing ever
-    /// advanced it. That is the shrink this type's own remarks ask for; the
-    /// method stays only as the seam <see cref="BuildControlPoints"/> is reached
-    /// through.
+    /// Moving platforms now live and advance in <c>Gg2.Simulation.WorldState</c>;
+    /// this method stays only as the seam <see cref="BuildControlPoints"/> is
+    /// reached through.
     /// </remarks>
     private void BuildEntities() => BuildControlPoints();
 

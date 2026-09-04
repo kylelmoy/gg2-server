@@ -196,12 +196,10 @@ public sealed class ProjectileMoveTests
     /// <c>createShot</c> gave it.
     /// </summary>
     /// <remarks>
-    /// <c>image_angle = direction;</c>, every pass. This repo asserted the
-    /// opposite for three phases — that a blast's six pellets share the aim's
-    /// box while flying six ways — because <c>Shot</c> has no Step event and the
-    /// script was not read. The Scattergun still scatters <c>direction</c> alone;
-    /// it is just that the scattered value is copied onto the angle before
-    /// anything can look at the box.
+    /// <c>image_angle = direction;</c>, every pass. The Scattergun scatters
+    /// <c>direction</c> alone; the scattered value is then copied onto the angle
+    /// before anything can look at the box, so a blast's six pellets each end up
+    /// with their own box angle rather than sharing the aim's.
     /// </remarks>
     [Fact]
     public void EveryPelletOfABlastEndsUpWithItsOwnBoxAngle()
@@ -239,9 +237,7 @@ public sealed class ProjectileMoveTests
     /// damage.
     /// </summary>
     /// <remarks>
-    /// The look-ahead <c>place_free</c> at the destination. Until this landed a
-    /// pellet flew straight through the map and could hit somebody standing on
-    /// the far side of a wall.
+    /// The look-ahead <c>place_free</c> at the destination.
     /// </remarks>
     [Fact]
     public void APelletFlownIntoTheFloorDies()

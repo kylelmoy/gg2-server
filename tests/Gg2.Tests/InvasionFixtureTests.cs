@@ -13,7 +13,7 @@ namespace Gg2.Tests;
 /// <b>Recorded 2026-08-27: three soldiers a side on <c>ctf_avanti</c></b>,
 /// spawn-anchored by the map-reload recipe, teams forced after the reload.
 /// <para>
-/// ⚠️ <b>"Invasion has no shipped map" was WRONG, and the reason is worth more
+/// <b>"Invasion has no shipped map" was WRONG, and the reason is worth more
 /// than the fixture.</b> It was concluded by looking for an <c>inv_*</c> map and
 /// finding none. Invasion is not a map-name prefix at all: it is <b>a Capture
 /// the Flag map that places a <c>ControlPointSetupGate</c></b>
@@ -22,7 +22,7 @@ namespace Gg2.Tests;
 /// <b>Classify a map by asking the code, never by reading its name.</b>
 /// </para>
 /// <para>
-/// ⚠️ <b>Invasion is not Capture the Flag with gates</b> (docs/SIMULATION.md):
+/// <b>Invasion is not Capture the Flag with gates</b> (docs/SIMULATION.md):
 /// red wins on the cap limit, <b>blue wins by surviving the clock</b>, and its
 /// <c>redIsCapping</c> is "carried, or dropped with a live return timer" rather
 /// than "away from base". The port ran it through CTF's round rules until phase
@@ -53,7 +53,7 @@ public sealed class InvasionFixtureTests
         ticks.Sum(t => t.Events.Count(m => m.Type == type));
 
     /// <summary>
-    /// ⚠️ <b>A map called <c>ctf_avanti</c> plays Invasion</b>, and it frames.
+    /// <b>A map called <c>ctf_avanti</c> plays Invasion</b>, and it frames.
     /// </summary>
     [Fact]
     public void AMapCalledCtfPlaysInvasionAndItFramesCleanly()
@@ -71,7 +71,7 @@ public sealed class InvasionFixtureTests
     }
 
     /// <summary>
-    /// ⚠️ <b>Exactly one shipped map plays Invasion, and it is not named for
+    /// <b>Exactly one shipped map plays Invasion, and it is not named for
     /// it.</b>
     /// </summary>
     /// <remarks>
@@ -109,7 +109,7 @@ public sealed class InvasionFixtureTests
     /// way red can win.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Blue wins by surviving the clock</b> — there is no blue capture in
+    /// <b>Blue wins by surviving the clock</b> — there is no blue capture in
     /// this mode — so a recording that held no <c>SCORE_INTEL</c> would exercise
     /// none of the round rules that make Invasion different from Capture the
     /// Flag. Three of them here, with their grabs.
@@ -130,7 +130,7 @@ public sealed class InvasionFixtureTests
 
     /// <summary>The soldiers move like the reference from the last spawn anchor.</summary>
     /// <remarks>
-    /// ⚠️ Invasion opens with a <b>full minute</b> of setup
+    /// Invasion opens with a <b>full minute</b> of setup
     /// (<c>Rounds.InvasionSetupTicks</c>, against attack/defend's thirty
     /// seconds), during which the setup gates are solid — so this is also the
     /// first recording in which a character is held behind one.

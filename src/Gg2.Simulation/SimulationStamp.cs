@@ -10,14 +10,14 @@ namespace Gg2.Simulation;
 /// <c>docs/BOTAI.md</c> item 9's <c>SIM_UUID</c>.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>A policy trained against physics that has since changed does not error
+/// <b>A policy trained against physics that has since changed does not error
 /// and does not warn. It plays slightly worse for ever and the cause is
 /// invisible.</b> GG2 has the idiom one layer up: the reference refuses a client
 /// whose <c>PROTOCOL_UUID</c> does not match rather than letting it connect and
 /// desync. <see cref="Require"/> is the same thing for a policy file — refuse, do
 /// not warn.
 /// <para>
-/// ⚠️ <b>The surface is chosen, not swept.</b> What goes in is what a policy's
+/// <b>The surface is chosen, not swept.</b> What goes in is what a policy's
 /// behaviour actually depends on: the physics constants, the <c>BOT_*</c> and
 /// <c>NAV_*</c> blocks, the per-class and per-projectile tables that
 /// <c>docs/SIMULATION.md</c> marks contract, and the three hand-bumped version
@@ -26,7 +26,7 @@ namespace Gg2.Simulation;
 /// <c>GameConstants</c> is therefore deliberately absent.
 /// </para>
 /// <para>
-/// ⚠️ <b>Every bump invalidates every checkpoint, and that is correct.</b> The
+/// <b>Every bump invalidates every checkpoint, and that is correct.</b> The
 /// alternative is a checkpoint nobody can date.
 /// </para>
 /// </remarks>
@@ -37,18 +37,16 @@ public static class SimulationStamp
     /// changes — a new key bit, a different aim quantisation, a new head.
     /// </summary>
     /// <remarks>
-    /// <b>v2, 2026-08-29</b>: <c>EnvAction</c> gains a sixth head,
-    /// <c>Zoom</c> — the sniper's scope, as a LEVEL rather than a toggle. Until
-    /// it, <b>no bot in this port could zoom at all</b>: <c>toggleZoom</c> is a
-    /// client command rather than a key, and a bot's whole output was
-    /// <see cref="PlayerInput"/>. Every bot sniper fired at the unscoped 35
-    /// against a weapon that reaches 75, and a distilled policy would have
-    /// inherited that permanently. See docs/TRAPS-BOTS.md and <c>BotZoomTests</c>.
+    /// <c>EnvAction</c>'s sixth head, <c>Zoom</c>, is the sniper's scope as a
+    /// LEVEL rather than a toggle: <c>toggleZoom</c> is a client command rather
+    /// than a key, so a bot's output through <see cref="PlayerInput"/> alone
+    /// cannot reach it, and a policy without this head fires an unscoped 35
+    /// against a weapon that reaches 75. See docs/TRAPS-BOTS.md and
+    /// <c>BotZoomTests</c>.
     /// <para>
-    /// ⚠️ <b>Done at this moment on purpose.</b> The bump is free until a
-    /// checkpoint exists to invalidate, and <c>gg2-rl</c> held phase 2 — the
-    /// first training run — for it. A sixth head added afterwards would
-    /// invalidate every checkpoint before it and every number derived from them.
+    /// The bump is free until a checkpoint exists to invalidate — a head added
+    /// afterwards would invalidate every checkpoint before it and every number
+    /// derived from them.
     /// </para>
     /// </remarks>
     public const int ActionEncodingVersion = 2;
@@ -57,18 +55,16 @@ public static class SimulationStamp
     /// The observation layout.
     /// </summary>
     /// <remarks>
-    /// <b>Was 0, meaning "undesigned"</b>, while <c>docs/BOTAI.md</c> item 6
-    /// deliberately left the feature set open. ✅ **1 since 2026-08-28**: the v0
-    /// layout is <c>Gg2.Env.ObservationWriter</c>, whose field order is the
-    /// authority and whose own <c>LayoutVersion</c> this mirrors.
+    /// The authority is <c>Gg2.Env.ObservationWriter</c>'s field order and its
+    /// own <c>LayoutVersion</c>, which this mirrors.
     /// <para>
-    /// ⚠️ <b>This is mirrored rather than referenced.</b> <c>Gg2.Simulation</c>
-    /// does not and must not depend on <c>Gg2.Env</c> — the simulation is the
-    /// thing an env observes, not the other way round — so the two constants are
-    /// held equal by a test instead of by the compiler.
+    /// <b>Mirrored rather than referenced.</b> <c>Gg2.Simulation</c> does not
+    /// and must not depend on <c>Gg2.Env</c> — the simulation is the thing an
+    /// env observes, not the other way round — so the two constants are held
+    /// equal by a test instead of by the compiler.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Bumping this changes <see cref="Uuid"/>, and that is the point.</b>
+    /// <b>Bumping this changes <see cref="Uuid"/>, and that is the point.</b>
     /// A checkpoint trained against one layout must not silently load against
     /// another. When it moves, the pinned digest in <c>SimulationStampTests</c>
     /// is <em>updated as the bump</em>, not fixed as a broken test.
@@ -82,26 +78,23 @@ public static class SimulationStamp
     /// learned against.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Asked for by <c>gg2-rl</c> on 2026-08-30, and the case for it is a
-    /// commit in this repo.</b> The rest of this surface is constants and two
-    /// encodings, so <c>3bba987</c> changed a line of <c>Movement.cs</c> — control
-    /// flow in the physics — and the stamp could not move. A trainer had no way
-    /// to tell, and the failure that hides behind it is the one this whole type
+    /// The rest of this surface is constants and two encodings, so a change to
+    /// control flow in the physics (e.g. inside <c>Movement.cs</c>) can move a
+    /// trajectory without moving the stamp unless this counter is bumped by hand.
+    /// The failure that hides behind a missed bump is the one this whole type
     /// exists to prevent: a policy that plays slightly worse for ever with the
     /// cause invisible.
     /// <para>
     /// <b>What counts as a bump.</b> Anything that can move a trajectory, a
     /// damage number, a projectile path or a stage's position in
-    /// <c>MatchSimulation</c>. ⚠️ <b>What does not: a refactor, a rename, a
-    /// comment, a performance change — or a change demonstrated to be
-    /// unobservable, and DEMONSTRATED is the word.</b> <c>3bba987</c> is exempt
-    /// because two independent 90-iteration training runs reproduced their
-    /// per-iteration numbers to the digit across 1.66M agent-steps, not because
-    /// the argument for it was good. Reasoning is not checking; this project has
-    /// the scars.
+    /// <c>MatchSimulation</c>. <b>What does not: a refactor, a rename, a
+    /// comment, a performance change — or a change DEMONSTRATED to be
+    /// unobservable</b> (e.g. by reproducing training numbers to the digit
+    /// across independent runs, not by argument alone — reasoning is not
+    /// checking).
     /// </para>
     /// <para>
-    /// ⚠️ <b>Deliberately hand-bumped, and deliberately not a sweep of the
+    /// <b>Deliberately hand-bumped, and deliberately not a sweep of the
     /// code.</b> Hashing the assembly would move on a comment, a refactor or a
     /// compiler upgrade, invalidate every checkpoint for nothing, and teach
     /// everyone to ignore the stamp. The surface is chosen — see this type's
@@ -110,140 +103,63 @@ public static class SimulationStamp
     /// catches the change you knew you were making, not the one you did not.
     /// </para>
     /// <para>
-    /// <b>1, 2026-08-30</b>: the behaviour this build has. It is a starting
-    /// point rather than a claim that anything changed.
-    /// </para>
-    /// <para>
-    /// ⛔ <b>2, 2026-09-01: THE CARRY. The exemption below is spent — read it as
-    /// history, not as a live licence.</b> <c>MovingPlatforms.Carry</c> moves a
+    /// <b>2: the moving-platform carry.</b> <c>MovingPlatforms.Carry</c> moves a
     /// character with the platform it is standing on and backs one out of a
-    /// platform that drives into it, so this stage now moves trajectories
-    /// directly. That is the unconditional bump the paragraphs below said it
-    /// would be, taken the moment it became true rather than argued around.
+    /// platform that drives into it, which moves trajectories directly and is an
+    /// unconditional bump. Every checkpoint trained against an earlier stamp is
+    /// invalid and <see cref="Require"/> refuses it — that is the stamp working,
+    /// not a regression.
     /// <para>
-    /// ⚠️ <b>Every checkpoint trained against <c>7ff5940d97aa7bed</c> is
-    /// invalid</b> and <see cref="Require"/> will refuse it. That is the stamp
-    /// working, not a regression — but it means <c>gg2-rl</c> must re-stamp or
-    /// retrain before a policy loads, and until then <c>PolicyBot</c> cannot run.
+    /// A sealed-chamber argument does not buy an exemption from this bump: a
+    /// trainer that seeds duels from nav nodes rather than coordinates (as
+    /// <c>gg2-rl</c> does) can place a character inside a region a flood fill
+    /// from spawn points would call unreachable, because a nav graph floods the
+    /// whole walkable mask rather than seeding from spawns. Unreachable by
+    /// <em>walking</em> is not the same as unreachable by <em>placement</em>, so
+    /// "nobody can walk there" is not a boundary an exemption can be drawn
+    /// around.
+    /// </para>
     /// </para>
     /// <para>
-    /// ⚠️ <b>Reachability bought nothing here and was never going to.</b> The
-    /// sealed-chamber argument was already dead — <c>gg2-rl</c> seeds duels from
-    /// nav nodes, and 18 of <c>gg_debug2</c>'s 70 are inside sealed regions — so
-    /// there was no version of this change that could have shipped unbumped.
-    /// </para>
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>HISTORY: NOT bumped for moving platforms, earlier on 2026-09-01.</b>
-    /// <c>MovingPlatforms.EndStep</c> arrived as a new stage in
-    /// <see cref="MatchSimulation.Tick"/> that only moved the platform. It was
-    /// exempt because a platform <b>could not reach a character</b> — the stage
-    /// wrote only to <see cref="WorldState.MovingPlatforms"/>, and the one path
-    /// from there to a character was the carry, which did not exist yet. That
-    /// held for exactly as long as the carry was missing.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>The first wording of this exemption said the stage was structurally
-    /// unreachable because no shipped map places a platform. That was true on
-    /// 2026-09-01 and stopped being true within the week</b>, when
-    /// <c>gg_debug2</c> arrived in this repo's own <c>maps/</c> with four of them
-    /// — and the test named as the gate <b>could not have noticed</b>, because it
-    /// scanned only the <em>reference's</em> maps. A gate that cannot fire is
-    /// worse than no gate: it reads as diligence while checking nothing. Both
-    /// halves are corrected — the claim above no longer depends on absence, and
+    /// <b>A <c>MovingPlatform</c> has no <c>SolidRect</c></b>
+    /// (<see cref="CharacterPhysics"/>'s dropdown scan says why), so nothing
+    /// stands on one regardless of its mask or placement, and a shipped map
+    /// gaining a platform is not by itself a reason to bump — only a platform
+    /// with a sprite <em>somewhere a character can reach</em> is.
     /// <c>MovingPlatformTests.NoShippedMapPlacesAPlatformThatCouldCarryAnyone</c>
-    /// now scans both map sources and asserts the property that matters. (What
-    /// that property IS narrowed again the same day; the paragraph below is the
-    /// current one, and this sentence deliberately does not restate it — two
-    /// statements of the same predicate is how one of them goes stale.)
+    /// flood-fills each map from its spawns and fails on any resourced platform
+    /// whose swept extent a character could reach; this is a tripwire for when
+    /// the mask pipeline stops being theoretical, not a proof that any given
+    /// platform is exempt from the carry bump.
     /// </para>
     /// <para>
-    /// ⛔ <b>What voids this exemption: porting the CARRY — or the standing box
-    /// alone.</b> The day a platform can support or move a character, this stage
-    /// moves trajectories and must bump; that is a change somebody makes
-    /// deliberately, so it is a condition a person can act on rather than one a
-    /// test must catch. Until then a shipped map gaining a platform is not by
-    /// itself a reason to bump; a shipped map gaining a platform with a sprite
-    /// <em>somewhere a character can be</em> is, and that is what goes red.
+    /// Custom maps are the live edge: nothing stops an operator pointing
+    /// <c>--map</c> at a map with a platform on it. The exemption is about what
+    /// the <em>checkpoint</em> was trained against, and no training run uses a
+    /// custom map; a match on one is outside the stamp's claim either way.
     /// </para>
     /// <para>
-    /// ⚠️ <b>The gate narrowed on 2026-09-01, by agreement between the lane that
-    /// wrote it and the lane that trips it, when <c>gg_debug2</c> gained the
-    /// raft</b> — a resourced platform placed to give the mask pipeline a real
-    /// embedded sprite, inside a sealed chamber whose unreachability is itself
-    /// flood-fill-asserted. The first wording ("no shipped platform names a
-    /// resource at all") would have forced a bump for it, and a bump would have
-    /// claimed a behaviour change that does not exist: today a resourced
-    /// platform still has no <c>SolidRect</c>, so nothing stands on it whatever
-    /// its mask says (<see cref="CharacterPhysics"/>'s dropdown scan says why),
-    /// and therefore nothing any placement does can differ. The gate asserts
-    /// reachability rather than absence:
-    /// <c>MovingPlatformTests.NoShippedMapPlacesAPlatformThatCouldCarryAnyone</c>
-    /// flood-fills each map from its spawns and fails on any resourced
-    /// platform whose swept extent a character could reach.
-    /// </para>
-    /// <para>
-    /// ⛔ <b>The sealed chamber buys NO post-carry exemption, and the bump above
-    /// is unconditional — owed to <c>gg2-rl</c>, 2026-09-01.</b> The tempting
-    /// argument — "a platform nobody can walk to still cannot move anyone, so
-    /// the carry could land without a bump as long as every shaped platform is
-    /// sealed" — is false for how training actually places characters:
-    /// <c>gg2-rl</c>'s banded duels draw both spawns from <b>nav nodes</b>, not
-    /// coordinates, and <c>gg2-nav-gen</c> floods the whole walkable mask rather
-    /// than seeding from spawns — <c>gg_debug2</c>'s sealed chambers carry
-    /// <b>exactly 18</b> island nodes. Measured independently in this repo, not
-    /// taken on report: load <c>nav/gg_debug2_a1.txt</c>, flood the walkmask from
-    /// the spawn entities, and count nodes whose stand cell the flood never
-    /// reaches. One of them is <c>(348,145)</c> — beside the raft at
-    /// <c>(282,150)</c>. An ordinary graph draw could seed a duel inside a sealed
-    /// chamber with no teleport and no intent anywhere in either repo. A sealed
-    /// region is unreachable by <em>walking</em>, not by <em>placement</em> — so
-    /// intent is not a boundary the exemption can be drawn around.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Which leaves the gate a TRIPWIRE rather than a proof, and it is
-    /// worth being exact about that or somebody will try to extend it.</b> What
-    /// licenses today's no-bump is not reachability — it is that a
-    /// <c>MovingPlatform</c> has no <c>SolidRect</c> at all, so it touches nothing
-    /// whether a character can get to it or not, and the raft would be equally
-    /// harmless in the middle of a spawn room. The flood fill earns its keep as an
-    /// early warning: it fires when a shipped map gains a shaped platform
-    /// somewhere a character can walk, which is the moment the mask pipeline stops
-    /// being theoretical. <b>It is not, and must not be turned into, an argument
-    /// that some platforms are exempt from the carry bump.</b>
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Custom maps are the live edge.</b> Nothing stops an operator pointing
-    /// <c>--map</c> at a map with a platform on it today. The exemption is about
-    /// what the <em>checkpoint</em> was trained against, and no training run uses
-    /// a custom map; a match on one is outside the stamp's claim either way.
-    /// </para>
-    /// </remarks>
-    /// <para>
-    /// ⛔ <b>3, 2026-09-03: QUEUED JUMPING.</b> <c>CharacterPhysics</c> now reads
+    /// <b>3: queued jumping.</b> <c>CharacterPhysics</c> reads
     /// <c>player.queueJump</c> and the <c>wantToJump</c> queue it drives, so a
     /// client with the setting on jumps the tick it lands instead of waiting for
-    /// a fresh press. That moves trajectories, which is the unconditional bump.
-    /// <para>
-    /// ⚠️ <b>Reachability was considered and does NOT buy an exemption, for the
-    /// same reason the carry's did not.</b> The flag defaults false and no bot
-    /// or fixture sets it today — but <see cref="PlayerState.QueueJump"/> is
-    /// ordinary <c>WorldState</c>, so anything that builds a state can set it,
-    /// and "nothing sets it yet" is an argument that expires the first time
-    /// something does. The stamp is about what a checkpoint was trained against;
-    /// a build where the jump rule depends on a state field is a different
-    /// build from one where it cannot.
+    /// a fresh press — this moves trajectories and is an unconditional bump.
+    /// <see cref="PlayerState.QueueJump"/> is ordinary <c>WorldState</c>, so
+    /// anything that builds a state can set it regardless of whether a bot or
+    /// fixture does so today; the stamp is about what a checkpoint was trained
+    /// against, and a build where the jump rule depends on a state field is a
+    /// different build from one where it cannot, whether or not the field is
+    /// exercised yet.
     /// </para>
-    /// </para>
+    /// </remarks>
     public const int SimulationBehaviourVersion = 3;
 
     /// <summary>The types whose public constants are part of the contract.</summary>
     /// <remarks>
-    /// ⚠️ <c>GameConstants</c> is NOT here, on purpose — see the type's remarks.
+    /// <c>GameConstants</c> is NOT here, on purpose — see the type's remarks.
     /// </remarks>
     private static readonly Type[] ConstantSources =
     [
-        // ⚠️ ClassStats is where the PHYSICS constants live — gravity, the
+        // ClassStats is where the PHYSICS constants live — gravity, the
         // control and friction factors, terminal velocity, the rest speed — not
         // just the per-class table below. Leaving it out was the first draft's
         // mistake and would have made a changed gravity invisible to the stamp,
@@ -259,9 +175,9 @@ public static class SimulationStamp
     /// </summary>
     /// <remarks>
     /// <para>
-    /// ⛔ <b>Split out of the gating surface 2026-09-03</b>, on the user's
-    /// authorisation, after <c>gg2-rl</c> reported being stranded twice in two
-    /// days by nav edits their own world fingerprint said had changed nothing.
+    /// Split out of the gating surface so a nav edit that changes only where a
+    /// bot ends up, not what an action does, does not strand a checkpoint whose
+    /// world fingerprint says nothing behavioural changed.
     /// </para>
     /// <para>
     /// <b>The line, so the next addition knows which side it is on:</b> the
@@ -274,27 +190,26 @@ public static class SimulationStamp
     /// rather than a reason to refuse to run.
     /// </para>
     /// <para>
-    /// <para>
-    /// ✅ <b>And a routing change really can move behaviour, which is why this is
-    /// REPORTED rather than dropped.</b> <c>gg2-rl</c> established on 2026-09-03
-    /// that <c>SearchWeight</c> is a <c>NavConstant</c>, so the A* weight
-    /// 1.0 → 1.3 and the <c>SIM_UUID</c> bump that accompanied it had <b>one
-    /// cause, not two</b> — and their arm A moved measurably across it. A surface
+    /// <b>A routing change really can move behaviour, which is why this is
+    /// REPORTED rather than dropped.</b> A <c>NavConstant</c> like the A* search
+    /// weight moving is exactly the kind of edit that changes how the bots
+    /// play, and a change here can be the sole cause of an observed behaviour
+    /// shift even when the gating <see cref="Uuid"/> did not move. A surface
     /// whose edits change how the bots play is exactly the surface you want a
     /// digest for; what it does not justify is <em>refusing to run</em>.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Nothing here is read at inference.</b> A policy drives keys and aim
+    /// <b>Nothing here is read at inference.</b> A policy drives keys and aim
     /// inside an engagement window; routing is the scripted layer's, and the
     /// observation's geometry rays come from <c>Walkmask</c>, not from these.
     /// </para>
     /// <para>
-    /// ⚠️ <b><c>BotConstants</c> is arguably the same question and was NOT moved.</b>
+    /// <b><c>BotConstants</c> is arguably the same question and was NOT moved.</b>
     /// It changes when the policy is handed the wheel rather than what an action
     /// does, which is this surface's own description — but no measurement has been
-    /// taken across a <c>BotConstants</c> edit the way <c>gg2-rl</c> took one
-    /// across the nav edits, and moving it on the strength of the argument alone
-    /// would be widening an authorisation past its evidence. Open.
+    /// taken across a <c>BotConstants</c> edit the way the nav edits were
+    /// measured, and moving it on the strength of the argument alone would be
+    /// widening an authorisation past its evidence. Open.
     /// </para>
     /// </remarks>
     private static readonly Type[] RoutingSources =
@@ -315,13 +230,13 @@ public static class SimulationStamp
     /// A second digest over <see cref="RoutingSources"/> — reported, never gated.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Printed beside <see cref="Uuid"/> so a puzzling behaviour change can
+    /// <b>Printed beside <see cref="Uuid"/> so a puzzling behaviour change can
     /// still be attributed.</b> Removing nav from the gate must not mean removing
     /// it from the record: "the bots play differently and both stamps match" and
     /// "the bots play differently and the routing digest moved" are completely
     /// different investigations.
     /// <para>
-    /// ⚠️ <b>Nothing compares it yet</b>, because no checkpoint records one. If
+    /// <b>Nothing compares it yet</b>, because no checkpoint records one. If
     /// <c>gg2-rl</c> starts writing it into their metadata, comparing and WARNING
     /// on a mismatch is the natural next step — and a warning is the right verb
     /// here, where <see cref="Require"/>'s throw is right for the other surface.
@@ -333,7 +248,7 @@ public static class SimulationStamp
     /// Refuses a policy whose stamp is not this build's.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Throws rather than logging</b>, which is the entire point of the
+    /// <b>Throws rather than logging</b>, which is the entire point of the
     /// item: a mismatch that merely warns is a mismatch nobody notices until the
     /// policy has been blamed for months.
     /// </remarks>
@@ -365,7 +280,7 @@ public static class SimulationStamp
     {
         var lines = new List<string>();
 
-        // ⚠️ Sorted by name for the same reason the gating surface is: reflection
+        // Sorted by name for the same reason the gating surface is: reflection
         // field order is unspecified.
         foreach (var source in RoutingSources)
         {
@@ -390,7 +305,7 @@ public static class SimulationStamp
             $"behaviour={SimulationBehaviourVersion}",
         };
 
-        // ⚠️ Sorted by name, because reflection's field order is unspecified and
+        // Sorted by name, because reflection's field order is unspecified and
         // a stamp that depended on it would move between runtimes for nothing.
         foreach (var source in ConstantSources)
         {
@@ -403,7 +318,7 @@ public static class SimulationStamp
                 lines.Add($"{source.Name}.{field.Name}={Format(field.GetRawConstantValue())}");
         }
 
-        // The per-class tables. ⚠️ A class's run power, jump strength and hit
+        // The per-class tables. A class's run power, jump strength and hit
         // points are contract in exactly the sense that matters here: a policy
         // that learned to lead a scout is wrong the moment a scout is slower.
         foreach (var playerClass in Enum.GetValues<PlayerClass>().OrderBy(c => (int)c))
@@ -434,7 +349,7 @@ public static class SimulationStamp
     }
 
     /// <summary>
-    /// ⚠️ Round-trip format, so a <b>one-ULP</b> change to a constant moves the
+    /// Round-trip format, so a <b>one-ULP</b> change to a constant moves the
     /// stamp. <c>Gml.PointSix</c> and its four siblings exist precisely because
     /// GM8 parses some decimals one ULP above the IEEE nearest; a stamp that
     /// printed them to fifteen digits could not tell those apart from the plain
@@ -453,7 +368,7 @@ public static class SimulationStamp
     /// FNV-1a over the surface, 64 bits as hex.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Not <c>string.GetHashCode()</c>, which is randomised per process</b>
+    /// <b>Not <c>string.GetHashCode()</c>, which is randomised per process</b>
     /// — a stamp that changed every time the server restarted would refuse every
     /// policy including its own. This is a change detector rather than a security
     /// boundary, so a non-cryptographic hash is the right tool and pulling in
@@ -462,7 +377,7 @@ public static class SimulationStamp
     private static string Compute() => Hash(Lines());
 
     /// <summary>
-    /// FNV-1a over the lines, newline-terminated. ⚠️ <b>Shared by both digests on
+    /// FNV-1a over the lines, newline-terminated. <b>Shared by both digests on
     /// purpose</b>: two hashes computed different ways would be two things to keep
     /// in step, and the surfaces are already separate enough.
     /// </summary>

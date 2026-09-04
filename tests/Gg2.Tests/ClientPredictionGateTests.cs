@@ -9,14 +9,10 @@ namespace Gg2.Tests;
 /// prediction has drifted by the moment a correction lands.</b>
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>This is the failure mode CLAUDE.md calls invisible</b> — "there is no
-/// test that fails when trajectories drift — the client just snaps". It is not
-/// quite invisible, and the correction matters: <c>ReplayMode.OpenLoop</c> has
-/// existed since phase 2 and <c>docs/PARITY.md</c> chose to report it "as a
-/// distribution rather than pass/fail". What was missing was not the instrument
-/// but the pin.
+/// <c>docs/PARITY.md</c> reports <c>ReplayMode.OpenLoop</c>'s drift "as a
+/// distribution rather than pass/fail"; this file is the pin on that instrument.
 /// <para>
-/// ✅ <b>Open-loop IS the client's view, exactly.</b> <c>Replayer.Anchor</c>
+/// <b>Open-loop IS the client's view, exactly.</b> <c>Replayer.Anchor</c>
 /// resets each slot from the trace's <em>observed</em> block — the quantised
 /// wire values, position to 1/5 px and velocity to 1/8.5 px/tick — and then
 /// simulates forward to the next position-bearing tick with the recorded
@@ -25,7 +21,7 @@ namespace Gg2.Tests;
 /// then dead-reckon for seven ticks. So the number here is the size of the snap.
 /// </para>
 /// <para>
-/// ⚠️ <b>Why this is not redundant with the closed-loop windows.</b> Closed-loop
+/// <b>Why this is not redundant with the closed-loop windows.</b> Closed-loop
 /// asks "does the port match the reference tick for tick", and a fixture's exact
 /// window answers with a single number that says nothing about how bad things
 /// are just past its edge. This asks "how wrong is the client allowed to be",
@@ -33,7 +29,7 @@ namespace Gg2.Tests;
 /// recording rather than stopping at the first disagreement.
 /// </para>
 /// <para>
-/// ⚠️ <b>p99, not max, is the statistic — and that is forced, not preferred.</b>
+/// <b>p99, not max, is the statistic — and that is forced, not preferred.</b>
 /// A death teleports a character to a spawn point, so the window containing a
 /// respawn shows an "error" of most of the map. Those are real events, not
 /// drift, and they are why the combat fixtures below have maxima in the hundreds
@@ -64,7 +60,7 @@ public class ClientPredictionGateTests
     /// Frames a trace, and refuses one that does not frame to its last byte.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The three-argument <c>Parse</c> discards the "stopped" flag</b>, and
+    /// <b>The three-argument <c>Parse</c> discards the "stopped" flag</b>, and
     /// a pin measured on a half-framed recording is a pin on an arbitrary prefix:
     /// it would hold, and it would mean nothing. Every number in this file is
     /// only worth having if the whole recording was read.
@@ -78,7 +74,7 @@ public class ClientPredictionGateTests
         if (stopped is null)
             return ticks;
 
-        // ⚠️ A multi-area map writes every area's control points into its file
+        // A multi-area map writes every area's control points into its file
         // and plays one area's worth — cp_dirtbowl writes six and plays two — so
         // the un-narrowed shape expects a wider HUD block than the wire carries
         // and loses the stream almost immediately. `CpDirtbowlFixtureTests`
@@ -100,7 +96,7 @@ public class ClientPredictionGateTests
     }
 
     /// <summary>
-    /// ✅ <b>The recordings with one character in them, pinned exactly on both
+    /// <b>The recordings with one character in them, pinned exactly on both
     /// statistics.</b>
     /// </summary>
     /// <remarks>
@@ -110,22 +106,10 @@ public class ClientPredictionGateTests
     /// second character to be wrong about. <b>Four of the five hold the client to
     /// two wire units, which is 0.4 px.</b>
     /// <para>
-    /// ✅ <b>This gate paid for itself within the hour, and the human take's row
-    /// is the receipt.</b> It was pinned at <b>270 / 44</b> in y on the day it
-    /// was written — 54 px of correction — because the port held a player up on
-    /// a dropdown platform they had dropped through. One sign fixed in
-    /// <c>CharacterPhysics</c>'s Step push-out took the row to <b>24 / 2</b>,
-    /// and <c>gg_debug-closedtdm</c>'s p99 in y from <b>77 to 2</b> with it.
-    /// <b>Nothing else in the suite moved on that second fixture</b>, so this
-    /// was the only thing watching it.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Exact equality, not an upper bound, and deliberately so.</b> This
-    /// project has been bitten by bounds that decayed into formalities — see
+    /// <b>Exact equality, not an upper bound, and deliberately so.</b> See
     /// <c>docs/TRAPS-SIMULATION.md</c>, "a bound nobody re-measures decays into a
-    /// formality", where a 25-unit gate outlived a port five times more accurate
-    /// than when it was written. An exact pin fails in <b>both</b> directions, so
-    /// an improvement has to be noticed and recorded rather than quietly banked.
+    /// formality" — an exact pin fails in <b>both</b> directions, so an
+    /// improvement has to be noticed and recorded rather than quietly banked.
     /// </para>
     /// </remarks>
     [Theory]
@@ -156,41 +140,18 @@ public class ClientPredictionGateTests
     /// respawn cannot forge.
     /// </summary>
     /// <remarks>
-    /// <b>Measured 2026-08-28 across the whole fixture set, and re-measured the
-    /// same day after the zoom and eat injections landed.</b> Most sit at 2 wire
-    /// units, under half a pixel, with both generator maps noticeably worse.
+    /// Most fixtures sit at 2 wire units, under half a pixel, with both generator
+    /// maps noticeably worse.
     /// <para>
-    /// ✅ <b>Two of the four rows this remark used to nominate as "worth looking
-    /// at some day" were the missing client commands, and looking at them cost an
-    /// afternoon rather than a day.</b> The heavy at 49 in x was the sandvich the
-    /// replayer never applied (now 15) and the sniper at 20 in y was the scope
-    /// (now 3) — <c>jumpStrength</c> 6.3 against 6 is a y-axis quantity, which is
-    /// why it showed up there. See <c>ClientCommandInjectionTests</c>.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>One row moved the other way and it is not a regression:</b>
-    /// <c>cp_egypt-uncontestedcp</c> went 5/1 to 6/2 when its three recorded
-    /// zooms started being applied. <b>Its maxima did not move at all</b> (53 and
-    /// 111, both configurations), so no new outlier appeared — the distribution
-    /// shifted by one wire unit, 0.2 px, on a fixture whose sniper then stands
-    /// scoped for thousands of ticks. A control fixture with neither message
-    /// (<c>cp_egypt-closedsymmetric</c>, 6/2) is byte-identical either way, which
-    /// is what says the change reaches only what it should.
-    /// </para>
-    /// <b>The rows still worth looking at some day</b>, recorded here because
-    /// nothing else in the suite would notice them: the sniper still at 25 in x,
-    /// <c>gg_debug-closedtdm</c> at 77 in y, and <c>gen_destroy-closedgen</c> at
-    /// 18/30.
-    /// <para>
-    /// ⚠️ <b>A high row here is not automatically a bug.</b> These fixtures have
+    /// <b>A high row here is not automatically a bug.</b> These fixtures have
     /// several characters in them and open-loop compares every slot: a knockback,
     /// an airblast or a sentry shove all move somebody in a way seven ticks of
     /// dead reckoning cannot predict, and the reference's own client would be
     /// corrected too. What the pin gives is a <b>baseline that moves when the
-    /// physics moves</b>, which is the thing that did not exist.
+    /// physics moves</b>.
     /// </para>
     /// <para>
-    /// ⚠️ <b>One fixture of the 36 is deliberately absent:
+    /// <b>One fixture of the 36 is deliberately absent:
     /// <c>gen_destroy-rotationcaps</c>.</b> It exists to be the recording a
     /// single shape <em>cannot</em> frame — it rotates to a different gamemode
     /// and then forces a <c>CAPS_UPDATE</c>, the one tier that carries the HUD
@@ -200,18 +161,14 @@ public class ClientPredictionGateTests
     /// recording is a pin on an arbitrary prefix.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Both of those were found by the framing assertion, not by
-    /// inspection</b> — and the first draft of this file pinned numbers taken
-    /// from <b>458 bytes of cp_dirtbowl's 138,406</b>, which would have passed
-    /// forever and meant nothing. A distribution is only worth pinning if the
-    /// whole recording was read.
+    /// A distribution is only worth pinning if the whole recording was read —
+    /// both of the above were found by the framing assertion, not by inspection.
     /// </para>
     /// </remarks>
     [Theory]
-    // ⚠️ THE TWO ARENA ROWS MEASURE A HARNESS ARTEFACT, NOT THE PORT. They were
-    // 2 and 9 until 2026-08-28, when the humiliation round landed and gave
-    // Arena's round-end state an observable effect for the first time — the
-    // losing team's control factor drops from 0.85 to 0.65.
+    // THE TWO ARENA ROWS MEASURE A HARNESS ARTEFACT, NOT THE PORT. Arena's
+    // round-end state has an observable effect: the losing team's control
+    // factor drops from 0.85 to 0.65.
     //
     // Under REPLAY the port's Arena loop is nowhere near the recording's: it
     // ends a round one tick after starting it, on a 601-tick cycle, always for
@@ -268,7 +225,7 @@ public class ClientPredictionGateTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The gate has to be able to fail, and this is the proof it can.</b>
+    /// <b>The gate has to be able to fail, and this is the proof it can.</b>
     /// </summary>
     /// <remarks>
     /// A pin nobody has watched move is indistinguishable from a pin on a
@@ -298,8 +255,8 @@ public class ClientPredictionGateTests
     }
 
     /// <summary>
-    /// ⚠️ <b>Measured, and worth knowing before choosing a fixture to test a
-    /// physics change against: a steady walk cannot see an input-phase error.</b>
+    /// <b>Worth knowing before choosing a fixture to test a physics change
+    /// against: a steady walk cannot see an input-phase error.</b>
     /// </summary>
     /// <remarks>
     /// Pairing each update with the wrong tick is the mutation

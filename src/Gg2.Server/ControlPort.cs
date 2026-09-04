@@ -19,14 +19,14 @@ namespace Gg2.Server;
 /// map, teleport, freeze and resume, and run faster than real time.
 /// </para>
 /// <para>
-/// ⚠️ <b>Loopback only, and off unless asked for</b>, for the same reason the
+/// <b>Loopback only, and off unless asked for</b>, for the same reason the
 /// GM8 bridge is: it executes commands against a live game. It binds
 /// <see cref="IPAddress.Loopback"/> specifically rather than <c>Any</c>, so
 /// there is no configuration in which it is reachable from the network — that
 /// is a property of the bind, not of a check somebody can forget.
 /// </para>
 /// <para>
-/// ⚠️ <b>Serviced from inside <see cref="GameServer.Tick"/>, on the tick
+/// <b>Serviced from inside <see cref="GameServer.Tick"/>, on the tick
 /// thread.</b> No locks, no concurrent access to <c>WorldState</c>, and a
 /// command's effect always lands between two ticks rather than in the middle of
 /// one. A control port on its own thread would need the simulation to be
@@ -34,7 +34,7 @@ namespace Gg2.Server;
 /// and the failures would be the irreproducible kind.
 /// </para>
 /// <para>
-/// ⚠️ <b>It cannot do anything a client cannot, except operator things.</b>
+/// <b>It cannot do anything a client cannot, except operator things.</b>
 /// Freezing, stepping, teleporting and changing the map are operator actions no
 /// client can ask for. Anything a client <em>can</em> ask for goes through
 /// <c>command</c>, which submits a <see cref="PlayerCommand"/> to the same
@@ -72,7 +72,7 @@ public sealed class ControlPort : IDisposable
 
     public void Start(int port)
     {
-        // ⚠️ Loopback, never Any. See the remarks.
+        // Loopback, never Any. See the remarks.
         _listener = new TcpListener(IPAddress.Loopback, port);
         _listener.Start();
 
@@ -175,7 +175,7 @@ public sealed class ControlPort : IDisposable
     /// Answers one line.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>Transport only.</b> Every verb, every reply and every error message
+    /// <b>Transport only.</b> Every verb, every reply and every error message
     /// lives in <see cref="ControlCommands"/>, so that this port and the web
     /// admin panel cannot drift into two slightly different control surfaces.
     /// Do not add a <c>cmd</c> here.

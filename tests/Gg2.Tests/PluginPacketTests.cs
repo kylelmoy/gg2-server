@@ -6,15 +6,13 @@ namespace Gg2.Tests;
 /// What a server with no plugins does with a <c>PLUGIN_PACKET</c>.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>This file used to open by saying plugin support "is not portable and
-/// this is not an attempt at it".</b> That was wrong, and it is worth leaving
-/// the correction here rather than deleting the claim: a plugin is ONE script
+/// A plugin is ONE script
 /// with <c>global.isHost</c> branches in it, so only the client's half has to be
-/// GML. The host's half can be C# that speaks the same packets, and as of
-/// 2026-09-03 it is — see <c>docs/PLUGINS.md</c>, <see cref="PluginWireTests"/>
-/// and <see cref="ChatV2PluginTests"/>.
+/// GML. The host's half can be C# that speaks the same packets — see
+/// <c>docs/PLUGINS.md</c>, <see cref="PluginWireTests"/> and
+/// <see cref="ChatV2PluginTests"/>.
 /// <para>
-/// What this file still covers, unchanged, is the <b>default</b>: a server with
+/// What this file still covers is the <b>default</b>: a server with
 /// no plugins configured, whose answer to a plugin packet is not "ignore".
 /// </para>
 /// <para>
@@ -23,10 +21,9 @@ namespace Gg2.Tests;
 /// <c>global.pluginPacketBuffers</c> — a map filled only by
 /// <c>loadserverplugins</c>. With no plugins the map is empty, <b>every</b> id is
 /// unrecognised, and the sender is kicked with <c>KICK_BAD_PLUGIN_PACKET</c>.
-/// This port had been silently ignoring them.
 /// </para>
 /// <para>
-/// ⚠️ <b>A stock client cannot reach this</b>, which is why it went unnoticed:
+/// <b>A stock client cannot reach this</b>, which is why it went unnoticed:
 /// the client only sends plugin packets for plugins in the list the HELLO
 /// advertised, and a server with none advertises none. Reaching it means a
 /// client that invented a packet id — exactly who the reference kicks. The same
@@ -41,7 +38,7 @@ public sealed class PluginPacketTests
     /// keeps the kick unreachable for a default server.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The load-bearing half of the pair: the advertisement and the kick must
+    /// The load-bearing half of the pair: the advertisement and the kick must
     /// agree, or a stock client sends packets the server can only answer by
     /// kicking it. That invariant is now the general one — the kick's boundary
     /// is the advertised list's length — and this asserts the default end of it,
@@ -87,7 +84,7 @@ public sealed class PluginPacketTests
         // commandBytesPrefixLength2), then the plugin packet id and its body.
         // One byte of id, three of payload, so the prefix is 4.
         //
-        // ⚠️ LITTLE-endian, unlike the lobby packet. CommandStream reads it as
+        // LITTLE-endian, unlike the lobby packet. CommandStream reads it as
         // `bytes[0] | bytes[1] << 8`. Writing it the other way round here made
         // the server wait for 1024 bytes that never came, and the test failed as
         // "no kick" rather than as "bad length" — which is what a real client
@@ -100,7 +97,7 @@ public sealed class PluginPacketTests
     }
 
     /// <summary>
-    /// ⚠️ The framing is consumed even though the body is thrown away.
+    /// The framing is consumed even though the body is thrown away.
     /// </summary>
     /// <remarks>
     /// The length prefix is what makes a plugin packet skippable at all. If the
@@ -139,7 +136,7 @@ public sealed class PluginPacketTests
     /// The last thing the server said was KICK / KICK_BAD_PLUGIN_PACKET.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Asserted on the TAIL rather than on the next byte. The join burst is
+    /// Asserted on the TAIL rather than on the next byte. The join burst is
     /// still arriving when the plugin packet goes out — the broadcast PLAYER_JOIN
     /// lands a tick later — so "drain, then read one message" is a race that
     /// passes or fails on tick timing. The kick is the last thing written before

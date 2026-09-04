@@ -11,10 +11,10 @@ namespace Gg2.Tests;
 /// other half of a gamemode that had only ever been recorded attack/defend.
 /// </summary>
 /// <remarks>
-/// <b>Recorded 2026-08-27: three soldiers a side on <c>cp_egypt</c></b>,
-/// spawn-anchored by the map-reload recipe, teams forced after the reload.
+/// <b>Three soldiers a side on <c>cp_egypt</c></b>, spawn-anchored by the
+/// map-reload recipe, teams forced after the reload.
 /// <para>
-/// ⚠️ <b><c>ControlPoints</c> is two rule sets, not one</b>, and
+/// <b><c>ControlPoints</c> is two rule sets, not one</b>, and
 /// <c>GameModes.HasSetupGate</c> is the whole of what separates them
 /// (<c>ControlPointHUD.events/Create.xml</c>). <c>cp_dirtbowl</c> places a setup
 /// gate and plays attack/defend; <c>cp_egypt</c> places none and plays the
@@ -61,7 +61,7 @@ public sealed class SymmetricControlPointFixtureTests
         Assert.Equal(GameMode.ControlPoints, shape.GameMode);
         Assert.Equal(5, shape.ControlPointCount);
 
-        // ⚠️ The one thing that decides which of the two CP rule sets runs.
+        // The one thing that decides which of the two CP rule sets runs.
         Assert.False(GameModes.HasSetupGate(map));
 
         // And the control: the other CP map is the attack/defend one.
@@ -99,7 +99,7 @@ public sealed class SymmetricControlPointFixtureTests
     }
 
     /// <summary>
-    /// ✅ <b>The five points open red, red, neutral, blue, blue</b> — read off the
+    /// <b>The five points open red, red, neutral, blue, blue</b> — read off the
     /// wire.
     /// </summary>
     /// <remarks>
@@ -108,7 +108,7 @@ public sealed class SymmetricControlPointFixtureTests
     /// had ever observed that from a real stream, because the only CP recording
     /// was attack/defend, where every point starts blue.
     /// <para>
-    /// ⚠️ <b>The wire cannot show <c>locked</c></b> — the block is team, capping
+    /// <b>The wire cannot show <c>locked</c></b> — the block is team, capping
     /// team and meter — so the neighbouring rule that keeps four of these five
     /// locked stays unobservable. What this asserts is the ownership, which is
     /// what the lock rule is derived from.
@@ -128,19 +128,19 @@ public sealed class SymmetricControlPointFixtureTests
     }
 
     /// <summary>
-    /// ✅ <b>And the PORT opens them the same way</b> — the assertion above is
+    /// <b>And the PORT opens them the same way</b> — the assertion above is
     /// about the recording, this one is about
     /// <c>ControlPoints.AssignStartingOwners</c>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Reading a fact off a fixture is not a gate on the port.</b>
+    /// <b>Reading a fact off a fixture is not a gate on the port.</b>
     /// <see cref="TheFivePointsOpenRedRedNeutralBlueBlue"/> would go on passing
     /// against a port that opened every point neutral, because it never asks the
     /// port anything. This loads the same map into the same code the replayer
     /// uses and asks it, which is the half that bites: breaking
     /// <c>AssignStartingOwners</c> fails it.
     /// <para>
-    /// ⚠️ <b>Asked directly rather than through a replay, and that is not
+    /// <b>Asked directly rather than through a replay, and that is not
     /// laziness</b> — see
     /// <see cref="ThePortsMeterOnTheMiddlePointIsTwoAheadInsideTheWindow"/> for
     /// why a replay cannot answer it here.
@@ -160,8 +160,8 @@ public sealed class SymmetricControlPointFixtureTests
             teams.Add(point.Team);
         }
 
-        // Exactly what the engine had on 2026-08-27, and what the recording's
-        // own first observation shows.
+        // Exactly what the engine has, and what the recording's own first
+        // observation shows.
         Assert.Equal(
             [(sbyte)Team.Red, (sbyte)Team.Red, (sbyte)-1, (sbyte)Team.Blue, (sbyte)Team.Blue],
             teams);
@@ -171,7 +171,7 @@ public sealed class SymmetricControlPointFixtureTests
     }
 
     /// <summary>
-    /// ✅ <b>The port's capture meter agrees with the reference</b>, on the one
+    /// <b>The port's capture meter agrees with the reference</b>, on the one
     /// observation that falls inside this fixture's window.
     /// </summary>
     /// <remarks>
@@ -183,7 +183,7 @@ public sealed class SymmetricControlPointFixtureTests
     /// not available as an explanation, and the port read <b>65</b> where the
     /// reference read <b>63</b>.
     /// <para>
-    /// ⚠️ <b>It was the harness, not the simulation.</b> <c>Replayer</c> compared
+    /// <b>It was the harness, not the simulation.</b> <c>Replayer</c> compared
     /// the control-point block after running the tick, and the block describes
     /// the end of the <em>previous</em> tick. See
     /// <see cref="UncontestedControlPointFixtureTests.ThePortCapturesThePointExactlyAsTheReferenceDoes"/>,

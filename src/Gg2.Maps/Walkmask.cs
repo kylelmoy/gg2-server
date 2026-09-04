@@ -35,24 +35,24 @@ public sealed class Walkmask
     /// that were not worth a table.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>This is a morphological EROSION of the mask, precomputed once per
+    /// <b>This is a morphological EROSION of the mask, precomputed once per
     /// map, and it exists because the shapes a character box produces are almost
     /// constant.</b> A box's cell rectangle is <c>w</c> or <c>w+1</c> columns by
     /// <c>h</c> or <c>h+1</c> rows — the pixel size is fixed per class and only the
     /// sub-cell phase of the position varies — so a handful of shapes answers
-    /// nearly every query. <b>Measured over 2,940 ticks of real bot matches: FOUR
-    /// shapes (3x6, 4x6, 3x7, 4x7) cover 86.7%, 88.4% and 94.5% of all mask
-    /// queries on three maps</b>, and off-map queries are 0.02%. Pyro's two shapes
-    /// were added on top so that every class in the bot draw is covered.
+    /// nearly every query. <b>Measured over real bot matches: FOUR shapes (3x6,
+    /// 4x6, 3x7, 4x7) cover 86.7%, 88.4% and 94.5% of all mask queries on three
+    /// maps</b>, and off-map queries are 0.02%. Pyro's two shapes were added on
+    /// top so that every class in the bot draw is covered.
     /// <para>
-    /// ⚠️ <b>At CELL resolution, which is what makes it small.</b> One bit per
+    /// <b>At CELL resolution, which is what makes it small.</b> One bit per
     /// possible top-left cell is the same footprint as the mask itself — about
     /// 20 KB a shape on <c>ctf_truefort</c>, 80 KB for the four. A per-PIXEL table
     /// would be 36x that and would not stay in cache, which is the version of this
     /// idea that does not work.
     /// </para>
     /// <para>
-    /// ⚠️ <b>The lookup is exact, not conservative.</b> It answers the same
+    /// <b>The lookup is exact, not conservative.</b> It answers the same
     /// question <see cref="AnySolidInBox"/> answers, so there is no fallback path
     /// for a "maybe" — a shape is either tabulated or it is not.
     /// </para>
@@ -64,7 +64,7 @@ public sealed class Walkmask
     /// rectangle has a precomputed table.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Exposed for a TEST, and the test is the point.</b> Equivalence alone
+    /// <b>Exposed for a TEST, and the test is the point.</b> Equivalence alone
     /// cannot tell a working table from one nothing reaches — both are green. This
     /// lets <c>WalkmaskBoxTests</c> assert that the shapes real character boxes
     /// produce are the shapes that are tabulated, so a change to
@@ -78,7 +78,7 @@ public sealed class Walkmask
     /// cell rectangle, or -1 where no table exists.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>3-4 columns by 5-7 rows, and that set is DERIVED from the shipped
+    /// <b>3-4 columns by 5-7 rows, and that set is DERIVED from the shipped
     /// character boxes rather than guessed.</b> A box's cell rectangle is fixed by
     /// its pixel size and the sub-cell phase of its position, so each class
     /// produces at most two widths and two heights. Enumerated over all 36 phases:
@@ -86,19 +86,17 @@ public sealed class Walkmask
     /// varies. Scout, Soldier, Sniper, Demoman, Medic, Engineer, Heavy and Spy are
     /// 3-4 x 6-7; <b>Pyro is 3-4 x 5-6</b>, which is why the row range starts at 5.
     /// <para>
-    /// ⚠️ <b>Quote alone falls outside (4-5 rows) and takes the general path</b> —
+    /// <b>Quote alone falls outside (4-5 rows) and takes the general path</b> —
     /// correct, merely slower, and it is not in the bot class draw:
     /// <c>Program.ParseClasses</c> refuses anything above Pyro.
     /// </para>
     /// <para>
-    /// ⛔ <b>This set was wrong when it was REASONED about, and a test control
-    /// caught it.</b> The first version excluded Heavy on a hand-derived claim that
-    /// a 19 px box spans 4-5 columns. It spans exactly 4. <b>Enumerate the phases;
-    /// do not derive them by hand</b> — <c>WalkmaskBoxTests</c> now asserts the
-    /// intersection mechanically.
+    /// <b>Enumerate the phases; do not derive them by hand.</b> A hand-derived
+    /// claim that a 19 px box spans 4-5 columns is wrong — it spans exactly 4 —
+    /// so <c>WalkmaskBoxTests</c> asserts the intersection mechanically instead.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Widening further is a memory decision — about 20 KB a shape — and
+    /// <b>Widening further is a memory decision — about 20 KB a shape — and
     /// wants a shape-mix measurement rather than a guess.</b> Four shapes measured
     /// at 87-95% of all mask queries over three real matches; Pyro's two were added
     /// on top so that every class in the draw is covered.
@@ -153,24 +151,19 @@ public sealed class Walkmask
     /// row instead of one test per cell.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>This is what the bitset was built for and for six phases nothing
-    /// called it.</b> This class's own summary has said since phase 3 that the
-    /// storage is a word-strided bitset "because <c>PlaceFree</c> is the hottest
-    /// call in the server and a character rectangle spans only a handful of cells
-    /// — the test wants to be a few masked word reads, not a byte loop". Both
-    /// <c>CollisionWorld.PlaceFreeInMask</c> overloads were the byte loop. The
-    /// description was true of the layout and false of every consumer, which is
-    /// CLAUDE.md's "a claim the repo makes about itself" wearing a performance
-    /// hat: nothing could fail, because the loop was correct.
+    /// <b>This is what the bitset was built for.</b> The storage is a
+    /// word-strided bitset because <c>PlaceFree</c> is the hottest call in the
+    /// server and a character rectangle spans only a handful of cells — the test
+    /// wants to be a few masked word reads, not a byte loop.
     /// <para>
-    /// ⚠️ <b>Measured, 2026-09-02, Release, a soldier on <c>ctf_truefort</c>:</b>
-    /// a box test visits <b>18 cells over 6 rows</b> and its three columns land
-    /// in ONE word per row, so this reads 6 words where the loop ran 18 tests.
+    /// <b>Measured on a soldier on <c>ctf_truefort</c>:</b> a box test visits
+    /// <b>18 cells over 6 rows</b> and its three columns land in ONE word per
+    /// row, so this reads 6 words where a per-cell loop runs 18 tests.
     /// <c>PlaceFreeInMask</c> 17.1 ns → 6.8 ns, and a 10px crawl — which calls it
     /// about thirteen times — 310 ns → 179 ns.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Exactly the same predicate, including off-mask.</b> Out-of-range is
+    /// <b>Exactly the same predicate, including off-mask.</b> Out-of-range is
     /// OPEN, as <see cref="IsSolid"/> has it, so the rectangle is clamped rather
     /// than rejected and a box hanging off the edge of the map reports only what
     /// the cells inside say. <c>WalkmaskBoxTests</c> asserts the equivalence
@@ -178,7 +171,7 @@ public sealed class Walkmask
     /// leaving it to reading.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Bits above <see cref="Width"/> in a row's last word are excluded by
+    /// <b>Bits above <see cref="Width"/> in a row's last word are excluded by
     /// the clamp</b>, so this does not depend on the decoder leaving them zero —
     /// a dependency that would be invisible until a map whose width is not a
     /// multiple of 64 had junk there.
@@ -186,7 +179,7 @@ public sealed class Walkmask
     /// </remarks>
     public bool AnySolidInBox(int firstColumn, int lastColumn, int firstRow, int lastRow)
     {
-        // ⚠️ THE TABLE FIRST, because it answers most queries and answers them
+        // THE TABLE FIRST, because it answers most queries and answers them
         // exactly. A shape is tabulated only for rectangles wholly on the map, so
         // the unsigned bounds tests below are the whole precondition — where they
         // hold, clamping is a no-op and the tabulated rectangle IS the rectangle
@@ -267,7 +260,7 @@ public sealed class Walkmask
     /// observation — <b>88% of the cost of writing one</b>, and an observation
     /// is written for every agent on every decision.
     /// <para>
-    /// ⚠️ <b>It makes the march skip, never guess.</b> A clearance of <c>c</c>
+    /// <b>It makes the march skip, never guess.</b> A clearance of <c>c</c>
     /// says every cell within Chebyshev distance <c>c - 1</c> is open, so every
     /// world pixel within <c>6c - 7</c> of the probe is open too — one cell of
     /// slack for the probe's own position inside its cell. A marcher that
@@ -278,19 +271,13 @@ public sealed class Walkmask
     /// the naive loop.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Built WITH the mask, and it was lazy first.</b> "A game server never
-    /// marches a ray and should not pay <c>Width * Height</c> bytes for a field
-    /// it will not read" is true and is the wrong trade. Lazy meant the
-    /// <em>first</em> <c>ObservationWriter.Write</c> on a map allocated, which
-    /// broke that type's zero-allocation gate — and broke it
-    /// <b>order-dependently</b>, because the <see cref="Walkmask"/> is shared
-    /// through <c>ScenarioResources</c>, so whether the field already existed
-    /// depended on which test had run first. It passed twice before failing.
-    /// </para>
-    /// <para>
-    /// Eager costs one pass and <c>Width * Height</c> bytes per map — 160 KB and
-    /// about 0.3 ms for <c>ctf_truefort</c>, once, on a load that is itself
-    /// cached. <b>An unconditional property is worth more than that.</b>
+    /// <b>Built eagerly, with the mask.</b> Computing it lazily — on the first
+    /// read — would allocate inside whichever call happens to read it first, and
+    /// since the <see cref="Walkmask"/> is shared through <c>ScenarioResources</c>,
+    /// that would make an allocation gate elsewhere pass or fail depending on
+    /// test order. Eager costs one pass and <c>Width * Height</c> bytes per map —
+    /// 160 KB and about 0.3 ms for <c>ctf_truefort</c>, once, on a load that is
+    /// itself cached. <b>An unconditional property is worth more than that.</b>
     /// </para>
     /// </remarks>
     public ReadOnlySpan<byte> Clearance => _clearance;
@@ -314,7 +301,7 @@ public sealed class Walkmask
     /// <c>floor((d + 5) / 6) &lt;= c - 1</c>, which holds up to <c>d = 6c - 6</c>.
     /// </para>
     /// <para>
-    /// ⚠️ <b>One pixel is given back deliberately.</b> <c>6c - 6</c> is the tight
+    /// <b>One pixel is given back deliberately.</b> <c>6c - 6</c> is the tight
     /// value; the extra pixel leaves the bound with margin rather than sitting
     /// exactly on the boundary of an argument about rounding. It is not a slip to
     /// be tidied up.
@@ -323,7 +310,7 @@ public sealed class Walkmask
     public static int SafeSkipPixels(int clearance) => (6 * clearance) - 7;
 
     /// <summary>
-    /// The value <see cref="Clearance"/> saturates at. ⚠️ <b>A cap, so a reader
+    /// The value <see cref="Clearance"/> saturates at. <b>A cap, so a reader
     /// must treat it as "at least this", never "exactly this"</b> — which is all
     /// a marcher needs, since it only ever skips forward by what the value
     /// guarantees.
@@ -344,7 +331,7 @@ public sealed class Walkmask
     /// vertical pass over <c>h</c> rows of that — so the cost is linear in cells
     /// rather than in cells x w x h. Sub-millisecond per map.
     /// <para>
-    /// ⚠️ <b>Rectangles that would run off the right or bottom edge are left
+    /// <b>Rectangles that would run off the right or bottom edge are left
     /// CLEAR, and nothing reads them</b>: <see cref="AnySolidInBox"/> only consults
     /// a table when the whole rectangle is on the map. Leaving them clear rather
     /// than solid keeps a stray read failing open, which matches what off-mask
@@ -356,9 +343,8 @@ public sealed class Walkmask
         var tables = new ulong[6][];
 
         // How many solid cells the sliding window currently holds. A count rather
-        // than a boolean, so the window advances in O(1) — recomputing the OR over
-        // the whole window at every position is what made the first version of
-        // this six times slower and 14.5 ms a map.
+        // than a boolean, so the window advances in O(1) instead of recomputing
+        // the OR over the whole window at every position.
         var rowOr = new bool[Width * Height];
 
         foreach (var width in (ReadOnlySpan<int>)[3, 4])
@@ -435,7 +421,7 @@ public sealed class Walkmask
 
         // The two-pass chamfer that computes a Chebyshev transform exactly: a
         // forward sweep over the four already-visited neighbours, then a
-        // backward sweep over the other four. ⚠️ Off-mask counts as OPEN, like
+        // backward sweep over the other four. Off-mask counts as OPEN, like
         // IsSolid — so the edges are not seeded with zeros, and a ray leaving
         // the map is not stopped by a wall that is not there.
         for (var y = 0; y < height; y++)

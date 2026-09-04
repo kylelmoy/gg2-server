@@ -122,7 +122,7 @@ public sealed class LevelMap
     /// than one area, and the only attack/defend map — six control points are
     /// written in the file and exactly two exist at a time.
     /// <para>
-    /// ⚠️ <b>The terrain is <em>not</em> narrowed, only the entities.</b> The
+    /// <b>The terrain is <em>not</em> narrowed, only the entities.</b> The
     /// collision mask is one instance covering the whole image and survives the
     /// destroy, so every area's ground stays solid; what changes is which
     /// spawns, gates, points and objectives exist. <see cref="Walkmask"/> is
@@ -196,7 +196,7 @@ public sealed class LevelMap
     /// what the draw can land on instead — see
     /// <c>PortedSimulation.SeedIndependentSpawnPoints</c>.
     /// <para>
-    /// ⚠️ <b>Nothing in the server or the simulation should use this.</b> A map
+    /// <b>Nothing in the server or the simulation should use this.</b> A map
     /// whose entities do not come from its own level data is not the map the
     /// client loaded, and the whole point of the port is that both sides build
     /// the world from the same bytes.

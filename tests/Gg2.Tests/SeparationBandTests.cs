@@ -8,19 +8,14 @@ namespace Gg2.Tests;
 /// Sampled placements that are within engagement range of each other.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>The problem was that no map satisfied phase 1's exit criterion</b>, and
-/// it was measured by <c>gg2-rl</c> rather than argued. Sampling drew from spawn
-/// points, which is what a real respawn does and is the right default:
+/// Sampling from spawn points is the right default — it is what a real respawn
+/// does — but it fails two ways:
 /// <list type="bullet">
 /// <item><c>gg_debug</c> has ONE spawn point per team, so every sampled duel is
-/// the same duel. Sixteen of them reported 100.0% [70.7%, 100.0%] p=3.1e-05 off a
-/// sample size of one — the duels genuinely happened, and they were one duel
-/// counted sixteen times.</item>
-/// <item>A real map gives variety and no engagement. <c>RolloutSearch</c> against
-/// a stationary <c>Idle</c> on <c>arena_lumberyard</c> and <c>ctf_2dfort</c>
-/// produced <b>two</b> distinct actions, 0 damage and the tick cap — no candidate
-/// can reach damage inside a 20-tick horizon at spawn separation, so every
-/// candidate scores zero and the tie goes to the first.</item>
+/// the same duel regardless of seed.</item>
+/// <item>A real map gives variety but no engagement: at spawn separation no
+/// candidate can reach damage inside a 20-tick horizon, so every candidate
+/// scores zero and the tie goes to the first.</item>
 /// </list>
 /// <see cref="DuelSpec.MaxSeparation"/> is the answer: draw from the nav graph's
 /// walkable nodes, gate-filtered per team, paired inside a band.
@@ -57,11 +52,10 @@ public sealed class SeparationBandTests(Xunit.Abstractions.ITestOutputHelper out
     /// A banded placement lands inside its band, on every shape of map.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The four maps named are <c>gg2-rl</c>'s four zeros</b> —
     /// <c>koth_harvest</c>, <c>ctf_2dfort</c>, <c>koth_valley</c> and
-    /// <c>dkoth_atalia</c> engaged 0 of 8 sampled duels, because the pair started
-    /// behind their own team gates and could not route to one another. They are
-    /// here rather than a convenient map for exactly that reason.
+    /// <c>dkoth_atalia</c> are included because a spawn-sampled pair on them starts
+    /// behind their own team gates and cannot route to one another, so they engage
+    /// 0 of 8 sampled duels — the case banding exists to fix.
     /// </remarks>
     [Theory]
     [InlineData("koth_harvest")]
@@ -91,7 +85,7 @@ public sealed class SeparationBandTests(Xunit.Abstractions.ITestOutputHelper out
             Assert.True(env.World.State.IsAlive(env.RedSlot));
             Assert.True(env.World.State.IsAlive(env.BlueSlot));
 
-            // ⚠️ Standing on it, not falling past it. A nav node is a walkable
+            // Standing on it, not falling past it. A nav node is a walkable
             // surface, so a placement that needs gravity to find the floor means
             // the stand y is wrong — and a duel that starts with a fall is a
             // duel whose first second is not a fight.
@@ -103,13 +97,12 @@ public sealed class SeparationBandTests(Xunit.Abstractions.ITestOutputHelper out
     }
 
     /// <summary>
-    /// ⚠️ <b>The half that spawn-point sampling could not give: VARIETY.</b>
+    /// The half that spawn-point sampling could not give: variety.
     /// </summary>
     /// <remarks>
     /// On <c>gg_debug</c> spawn sampling has one point per team, so twenty-four
-    /// seeds produce one duel twenty-four times — which is how sixteen duels came
-    /// to report a confidence interval off a sample size of one. The control is
-    /// exactly that: the same map and the same seeds with the band off.
+    /// seeds produce one duel twenty-four times. The control is exactly that: the
+    /// same map and the same seeds with the band off.
     /// </remarks>
     [Fact]
     public void ABandedDrawVariesWithTheSeedWhereSpawnSamplingDoesNot()
@@ -148,15 +141,13 @@ public sealed class SeparationBandTests(Xunit.Abstractions.ITestOutputHelper out
     }
 
     /// <summary>
-    /// ⚠️ <b>The half that variety could not give: ENGAGEMENT.</b> Two scripted
+    /// The half that variety could not give: engagement. Two scripted
     /// bots placed in a band actually fight; placed on spawn points they do not.
     /// </summary>
     /// <remarks>
-    /// The honest end-to-end claim, and the one <c>gg2-rl</c>'s exit criterion
-    /// needs. Measured as damage dealt, because that is what its two-distinct-
-    /// actions signature was the absence of.
+    /// Measured as damage dealt.
     /// <para>
-    /// ⚠️ <b>The pinned numbers are a floor and a ceiling, not an equality.</b>
+    /// The pinned numbers are a floor and a ceiling, not an equality.
     /// A fight's exact damage depends on every weapon draw in it; what is being
     /// asserted is the difference between fighting and not, which is the size of
     /// the gap rather than its digits.
@@ -182,20 +173,14 @@ public sealed class SeparationBandTests(Xunit.Abstractions.ITestOutputHelper out
             banded > spawned * 2,
             $"{map}: banded {banded} is not decisively more than spawn-sampled {spawned}");
 
-        // ⚠️ PINNED EXACTLY, and this is the gate on the DRAW rather than on the
-        // fight. Everything here is seeded — the world's GmlRandom, the scripted
-        // bots' streams, the physics — so the total is a pure function of the
-        // sequence of Random.Next calls the placement makes. Nothing else in the
-        // suite would notice if that sequence changed, and it nearly went
-        // unnoticed: PlaceInBand moved from DuelEnv to ScenarioWorld and the only
-        // reason the move is known to be draw-identical is that these three
-        // numbers were compared by hand before and after. `gg2-rl` asked whether
-        // the move invalidated a run in flight; without this it would have been an
-        // argument rather than an answer.
+        // Pinned exactly: this gates the DRAW rather than the fight. Everything
+        // here is seeded — the world's GmlRandom, the scripted bots' streams, the
+        // physics — so the total is a pure function of the sequence of
+        // Random.Next calls the placement makes.
         //
-        // ⚠️ A failure here is the RE-RECORD, and it means the placement draw
+        // A failure here is the RE-RECORD, and it means the placement draw
         // moved — which makes every duel figure taken against the old one
-        // incomparable, including another lane's. Say so in the commit.
+        // incomparable. Say so in the commit.
         var expected = map switch
         {
             "ctf_2dfort" => 1425.0518090166911,
@@ -243,8 +228,8 @@ public sealed class SeparationBandTests(Xunit.Abstractions.ITestOutputHelper out
     /// Every way a band can be half-specified is refused, loudly.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Refused rather than ignored</b>, and the argument is the half-NaN
-    /// one <see cref="DuelSpec.Sampled"/> already makes: silently ignoring a band
+    /// Refused rather than ignored, for the same reason as the half-NaN case
+    /// <see cref="DuelSpec.Sampled"/> already makes: silently ignoring a band
     /// gives back exactly the spawn-point sampling the band exists to replace,
     /// which is the failure it was asked for.
     /// </remarks>
@@ -260,7 +245,7 @@ public sealed class SeparationBandTests(Xunit.Abstractions.ITestOutputHelper out
         var negative = Banded("gg_debug", -1, 100);
         Assert.Throws<ArgumentOutOfRangeException>(negative.Validate);
 
-        // ⚠️ A minimum without a maximum does not switch banding on, so it would
+        // A minimum without a maximum does not switch banding on, so it would
         // be read as "sample spawn points, at least 200px apart" — which nothing
         // enforces. Saying so beats honouring half of it.
         var floorOnly = Banded("gg_debug", 200, 0);
@@ -268,7 +253,7 @@ public sealed class SeparationBandTests(Xunit.Abstractions.ITestOutputHelper out
     }
 
     /// <summary>
-    /// ⚠️ A band without a nav graph is refused, not downgraded to spawn points.
+    /// A band without a nav graph is refused, not downgraded to spawn points.
     /// </summary>
     /// <remarks>
     /// The same rule <see cref="EnvDriver.Scripted"/> follows, for the same

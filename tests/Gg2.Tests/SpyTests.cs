@@ -28,7 +28,7 @@ public sealed class SpyTests
     /// Open air with eighty clear pixels each side of it, found by scanning.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The knife needs the room: its box reaches 31 pixels forward and 24
+    /// The knife needs the room: its box reaches 31 pixels forward and 24
     /// up, and every reach test here is really a line-of-sight test as well. A
     /// spot with only a character-sized clearance passes the box test and fails
     /// the line, which looks exactly like a wrong box.
@@ -135,7 +135,7 @@ public sealed class SpyTests
 
         CharacterPhysics.EndStep(World, ref state.Characters[1]);
 
-        // ⚠️ Exactly zero, not a residue — the reference clamps with
+        // Exactly zero, not a residue — the reference clamps with
         // max(cloakAlpha - 0.05, 0) rather than by comparison.
         Assert.Equal(0, state.Characters[1].CloakAlpha);
     }
@@ -159,7 +159,7 @@ public sealed class SpyTests
     }
 
     /// <summary>
-    /// ⚠️ <b>A cloak can only be <em>started</em> from fully visible</b>, so a
+    /// <b>A cloak can only be <em>started</em> from fully visible</b>, so a
     /// spy who drops it cannot vanish again until the twenty ticks of fade-in
     /// have run.
     /// </summary>
@@ -202,7 +202,7 @@ public sealed class SpyTests
     }
 
     /// <summary>
-    /// ⚠️ <b><c>readyToStab</c> gates the toggle</b>, so the fifty ticks after a
+    /// <b><c>readyToStab</c> gates the toggle</b>, so the fifty ticks after a
     /// stab are fifty a spy cannot vanish or reappear.
     /// </summary>
     [Fact]
@@ -231,7 +231,7 @@ public sealed class SpyTests
     }
 
     /// <summary>
-    /// ⚠️ And a spy who ends up carrying one while cloaked is uncloaked
+    /// And a spy who ends up carrying one while cloaked is uncloaked
     /// <em>outright</em>, not faded.
     /// </summary>
     [Fact]
@@ -251,7 +251,7 @@ public sealed class SpyTests
     }
 
     /// <summary>
-    /// ⚠️ <b>Uncloaking costs the intel grab for 25 ticks</b> — and the alarm is
+    /// <b>Uncloaking costs the intel grab for 25 ticks</b> — and the alarm is
     /// a <c>max</c>, so a longer cooldown already running is not shortened.
     /// </summary>
     [Fact]
@@ -293,7 +293,7 @@ public sealed class SpyTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The fade is frozen while a hit has the cloak flickering</b> — the
+    /// <b>The fade is frozen while a hit has the cloak flickering</b> — the
     /// two branches are an <c>else if</c>, so a flickering cloaked spy neither
     /// fades out nor back in.
     /// </summary>
@@ -342,7 +342,7 @@ public sealed class SpyTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The reload is <c>reloadBuffer + reloadTime</c> in one go</b> — 63
+    /// <b>The reload is <c>reloadBuffer + reloadTime</c> in one go</b> — 63
     /// ticks — and the whole cylinder comes back at once rather than a round at
     /// a time.
     /// </summary>
@@ -359,7 +359,7 @@ public sealed class SpyTests
         for (var i = 0; i < Stats.ReloadBuffer + Stats.ReloadTime - 1; i++)
             Timers.Advance(ref state, null, ref events);
 
-        // ⚠️ Emptied first: with a single round spent, "put one back" and
+        // Emptied first: with a single round spent, "put one back" and
         // "put the whole cylinder back" are the same answer and the test gates
         // neither.
         state.Weapons[1].AmmoCount = 0;
@@ -370,7 +370,7 @@ public sealed class SpyTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The muzzle is the weapon's own <c>x</c></b> — the only weapon with
+    /// <b>The muzzle is the weapon's own <c>x</c></b> — the only weapon with
     /// no <c>lengthdir</c> at all — five pixels up, and then a whole extra step
     /// forward before anything can test it.
     /// </summary>
@@ -388,7 +388,7 @@ public sealed class SpyTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The speed boost is a product of two speeds</b>, not the owner's
+    /// <b>The speed boost is a product of two speeds</b>, not the owner's
     /// alone: <c>speed += owner.hspeed * shot.hspeed / 15</c>. So it adds when
     /// the spy runs with the bullet, subtracts when they run against it, and is
     /// nothing at all straight up.
@@ -433,7 +433,7 @@ public sealed class SpyTests
     // --- the stab -------------------------------------------------------------
 
     /// <summary>
-    /// ⚠️ <b>The attack key stabs when the spy is cloaked</b>, and nothing takes
+    /// <b>The attack key stabs when the spy is cloaked</b>, and nothing takes
     /// damage for another thirty-two ticks.
     /// </summary>
     [Fact]
@@ -454,7 +454,7 @@ public sealed class SpyTests
     }
 
     /// <summary>
-    /// ⚠️ <b>A spy holding the cloak key cannot stab</b> — that is what stops the
+    /// <b>A spy holding the cloak key cannot stab</b> — that is what stops the
     /// press that uncloaks them also burying a knife.
     /// </summary>
     [Fact]
@@ -471,7 +471,7 @@ public sealed class SpyTests
     }
 
     /// <summary>
-    /// ⚠️ <b>An uncloaked spy who <em>cannot</em> shoot does not stab
+    /// <b>An uncloaked spy who <em>cannot</em> shoot does not stab
     /// either.</b> The <c>else</c> arm has its own <c>owner.cloak</c> clause, so
     /// an empty cylinder is silence rather than a knife.
     /// </summary>
@@ -536,7 +536,7 @@ public sealed class SpyTests
 
         var events = default(TickEvents);
 
-        // ⚠️ Literals, not Weapons.StabWindUp — a test that counts with the
+        // Literals, not Weapons.StabWindUp — a test that counts with the
         // constant it is testing cannot fail when the constant changes, which
         // is how four of these survived their first mutation run.
         for (var i = 0; i < 31; i++)
@@ -549,7 +549,7 @@ public sealed class SpyTests
         Assert.Equal(1, CountOf(state, ProjectileKind.Stab));
         Assert.False(state.Weapons[1].ReadyToStab);
 
-        // ⚠️ The two alarms cost 49 more ticks and not 50, because GM8's
+        // The two alarms cost 49 more ticks and not 50, because GM8's
         // alarm stage is index-major: alarm[1]'s event sets alarm[2] and the
         // same stage then walks index 2 and spends one of it. Fifty ticks from
         // the stab, which is the number that matters.
@@ -585,7 +585,7 @@ public sealed class SpyTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The freeze lasts fifty-two ticks</b>, long after the knife has come
+    /// <b>The freeze lasts fifty-two ticks</b>, long after the knife has come
     /// and gone, and it is the animation that ends it.
     /// </summary>
     [Fact]
@@ -611,12 +611,12 @@ public sealed class SpyTests
     }
 
     /// <summary>
-    /// ⚠️ <b>A stabbing spy cannot jump</b>, and the guard is its own — a zeroed
+    /// <b>A stabbing spy cannot jump</b>, and the guard is its own — a zeroed
     /// <c>jumpStrength</c> is not enough, because the test above it compares
     /// against that same zero and passes.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The spy has to be <em>moving downwards</em> for this to test
+    /// <b>The spy has to be <em>moving downwards</em> for this to test
     /// anything.</b> The guard above the flag is
     /// <c>vspeed &gt; -jumpStrength</c>, and with a stabbing spy's zeroed
     /// jumpStrength that is <c>vspeed &gt; 0</c> — which a spy resting on the
@@ -696,7 +696,7 @@ public sealed class SpyTests
     }
 
     /// <summary>
-    /// ⚠️ <b>One knife takes two people.</b> <c>maxKills = 2</c>, so a stab that
+    /// <b>One knife takes two people.</b> <c>maxKills = 2</c>, so a stab that
     /// lands on a medic still has one left for the patient behind them.
     /// </summary>
     [Fact]
@@ -720,7 +720,7 @@ public sealed class SpyTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The two facings agreeing is what makes it a backstab</b> — the
+    /// <b>The two facings agreeing is what makes it a backstab</b> — the
     /// victim's against the <em>knife's</em>, which is the direction the spy
     /// committed to and not where they are looking now.
     /// </summary>
@@ -748,7 +748,7 @@ public sealed class SpyTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The knife's box is mirrored by the direction it was aimed</b>, so a
+    /// <b>The knife's box is mirrored by the direction it was aimed</b>, so a
     /// stab aimed left reaches thirty-one pixels left and two right.
     /// </summary>
     [Fact]
@@ -774,7 +774,7 @@ public sealed class SpyTests
     }
 
     /// <summary>
-    /// ⚠️ <b>A wall between them blocks the stab and destroys the knife</b> —
+    /// <b>A wall between them blocks the stab and destroys the knife</b> —
     /// the <c>else</c> is inside the guard, so it costs the whole hitbox rather
     /// than one of its two hits.
     /// </summary>
@@ -801,7 +801,7 @@ public sealed class SpyTests
     }
 
     /// <summary>
-    /// ⚠️ <b>But a spy standing <em>inside</em> somebody stabs them through
+    /// <b>But a spy standing <em>inside</em> somebody stabs them through
     /// anything</b> — the first half of the test is the spy's own
     /// <c>place_meeting</c>, and the line only matters for the reach beyond
     /// arm's length.
@@ -837,7 +837,7 @@ public sealed class SpyTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The knife trails its spy by one tick's velocity</b>, because its
+    /// <b>The knife trails its spy by one tick's velocity</b>, because its
     /// Step reads the owner's mid-Step position and it has no speed of its own
     /// to be moved by afterwards.
     /// </summary>
@@ -855,7 +855,7 @@ public sealed class SpyTests
     }
 
     /// <summary>
-    /// ⚠️ <b>A generator takes 0.36 of the knife</b> — 72 — and there is no
+    /// <b>A generator takes 0.36 of the knife</b> — 72 — and there is no
     /// line-of-sight test at all, which every other arm of the same event has.
     /// </summary>
     [Fact]
@@ -876,7 +876,7 @@ public sealed class SpyTests
         Projectiles.StabStep(ref state);
         Projectiles.Collide(world, ref state, ref DiscardedEvents.Events);
 
-        // ⚠️ The *shield* takes the full 72 and the hit points take half of
+        // The *shield* takes the full 72 and the hit points take half of
         // it — the generator's own discount, which is why this asserts the
         // shield: it is the only place the 0.36 shows up undivided.
         Assert.Equal(shieldBefore - (200 * 0.36), state.BlueGenerator.ShieldHp, 9);

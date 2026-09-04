@@ -134,7 +134,7 @@ public sealed class MinegunTests
     /// angle set back to zero.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <c>createShot</c> sets <c>image_angle</c> to the aim and
+    /// <c>createShot</c> sets <c>image_angle</c> to the aim and
     /// <c>Minegun.events/User Event 3.xml</c> immediately writes
     /// <c>oid.image_angle = 0</c>. A mine is the one projectile with an
     /// axis-aligned box however it is thrown, and unlike the Shot and the Rocket
@@ -232,7 +232,7 @@ public sealed class MinegunTests
     }
 
     /// <summary>
-    /// ⚠️ And never faster than 8, which is the only terminal velocity on any
+    /// And never faster than 8, which is the only terminal velocity on any
     /// projectile in the game.
     /// </summary>
     /// <remarks>
@@ -283,7 +283,7 @@ public sealed class MinegunTests
         Assert.Equal(0, mine.Motion.Speed);
         Assert.True(World.PlaceFree(mine.Box, CollisionFilter.ForBullet()), "it stuck inside the wall");
 
-        // ⚠️ Still true on the pass that landed it: `splashThreshhold` is set
+        // Still true on the pass that landed it: `splashThreshhold` is set
         // from `!stickied` at the *top* of the block and the stick happens at
         // the bottom, so the cutoff a blast sees is always a tick behind. That
         // is the reason ProjectileState stores it instead of deriving it.
@@ -299,7 +299,7 @@ public sealed class MinegunTests
     }
 
     /// <summary>
-    /// ⚠️ A mine sticks only to the map. A gate kills it.
+    /// A mine sticks only to the map. A gate kills it.
     /// </summary>
     /// <remarks>
     /// The stick is guarded by <c>place_meeting(x, y, Obstacle)</c>, bracketed
@@ -487,7 +487,7 @@ public sealed class MinegunTests
     }
 
     /// <summary>
-    /// ⚠️ A stuck mine has no quarter-radius cutoff and a flying one does.
+    /// A stuck mine has no quarter-radius cutoff and a flying one does.
     /// </summary>
     /// <remarks>
     /// <c>if (1 - d/blastRadius &lt;= 0.25 <b>and other.splashThreshhold</b>)
@@ -572,7 +572,7 @@ public sealed class MinegunTests
     // --- the ordering ---------------------------------------------------------
 
     /// <summary>
-    /// ⚠️ Detonating in the middle of Begin Step is not the same tick's physics
+    /// Detonating in the middle of Begin Step is not the same tick's physics
     /// as detonating after it.
     /// </summary>
     /// <remarks>

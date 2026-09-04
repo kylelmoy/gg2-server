@@ -4,146 +4,31 @@ using Gg2.Simulation;
 namespace Gg2.Bots;
 
 /// <summary>
-/// What the search assumes the other characters do while it is looking ahead.
-/// </summary>
-/// <remarks>
-/// ⚠️ <b>This is <c>docs/BOTAI.md</c> item 12's "one open design question", made
-/// explicit on purpose.</b> The item's instruction is to decide it and write it
-/// down, because *"leaving it implicit is how a search ends up with a hidden
-/// opponent model nobody chose"* — and this project already has the cautionary
-/// example: <c>botAimLead.gml</c> assumes constant velocity plus gravity, which
-/// is the assumption the whole learning programme exists because it is wrong.
-/// </remarks>
-/// ⚠️ <b>The values are EXPLICIT because this enum goes on the wire.</b>
-/// <c>EnvServer.MakeBatch</c> reads it as an <c>i32</c>, so the declaration order
-/// IS the protocol — reordering these two members would be a silent wire change
-/// that compiles, runs, and quietly selects the other opponent model. `gg2-rl`'s
-/// drift gate reads this enum positionally out of this file and is the only thing
-/// that would catch it; the numbers mean it has nothing to catch.
-/// <para>
-/// ⚠️ Same class as the <c>Idle</c>-declared-first bug this seam already hit once,
-/// recorded in the remark below. <c>EnvDriver</c> and <c>PlayerClass</c> were
-/// already explicit; this was the one that was not.
-/// </para>
-public enum RolloutOpponent
-{
-    /// <summary>
-    /// <b>The default.</b> Every other character holds the input it is
-    /// <em>already</em> holding, for the whole horizon.
-    /// </summary>
-    /// <remarks>
-    /// Their <c>keyState</c> and <c>aimDirection</c> are in
-    /// <see cref="CharacterState"/>, put there by the tick that just ran, so
-    /// this needs no history, no allocation and no model — it is the wire's own
-    /// last word about them replayed forward.
-    /// <para>
-    /// It is chosen over <see cref="Idle"/> because it is right about the thing
-    /// that matters over a 20-tick horizon: somebody running left keeps running
-    /// left, and somebody holding fire keeps firing. It is wrong about
-    /// <em>reactions</em>, and it is wrong in the safe direction — it assumes
-    /// the opponent goes on doing what they were doing rather than that they
-    /// stop.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>What it is NOT is self-play</b>, which is what item 12 points at as
-    /// the answer that needs no data. Rolling the opponent out with the same
-    /// search costs a nested search per candidate per tick and is deliberately
-    /// out of v0. The seam for it is this enum: a third member and a branch in
-    /// <see cref="RolloutSearch.OpponentInput"/>.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>It is FIRST, so that it is zero, and that is a bug fix rather than
-    /// a tidy-up.</b> <see cref="Idle"/> used to be declared first, so
-    /// <c>default(RolloutOptions).Opponent</c> was <see cref="Idle"/> — and
-    /// <c>new RolloutSearch()</c> takes <c>default</c>. <b>Every caller who took
-    /// the documented default got the opposite of it</b>, including
-    /// <c>Gg2.Env</c>'s duels and this repo's own "11-0-1 against tier 5"
-    /// figure. It is exactly the trap <see cref="RolloutOptions.WithDefaults"/>
-    /// was written for and it caught two of the three fields; an enum cannot be
-    /// fixed there at all, because "unset" and "explicitly Idle" are the same
-    /// zero. Ordering is the only fix, so the order is load-bearing: <b>the
-    /// default member of an enum that rides in a <c>default</c>-able struct must
-    /// be the zero one.</b>
-    /// </para>
-    /// </remarks>
-    HoldLastInput = 0,
-
-    /// <summary>
-    /// ⚠️ <b>The opponent presses nothing.</b> Cheapest, and <b>optimistic</b>:
-    /// a search that believes nobody will shoot back walks into fire.
-    /// </summary>
-    /// <remarks>
-    /// Kept because it is the honest floor for a comparison — if a search is not
-    /// better with a moving opponent than with a statue, the opponent model is
-    /// not what is wrong. Not the default.
-    /// </remarks>
-    Idle = 1,
-}
-
-/// <summary>
 /// How a <see cref="RolloutSearch"/> is configured.
 /// </summary>
 /// <param name="HorizonTicks">
 /// How far each candidate is played forward. <c>docs/BOTAI.md</c> item 12 says
 /// 15-30; 20 is the default.
-/// ⚠️ <b>That default is a DESIGN-TIME RANGE, not a measurement, and the only
-/// direction anyone has measured says it should come down.</b> <c>gg2-rl</c>'s
-/// sweep (2026-08-29) took it from 20 out to 90 and found the win rate falling
-/// monotonically in every class — sniper 68.4% → 22.8%, soldier 93.8% → 63.7%.
-/// <b>Nobody has run it BELOW 20</b>, and 15 is inside item 12's own range, so
-/// the whole measured curve points into an untested region.
 /// <para>
-/// ⛔ <b>Do not lower it on that reasoning alone.</b> The monotone stretch is
-/// 20-90, and extrapolating off the end of a measured range is how the blind
-/// fraction came to be minimised in the first place.
+/// Win rate is non-monotone in horizon: it falls off steadily above 20 (sniper
+/// 68.4% -> 22.8%, soldier 93.8% -> 63.7% from horizon 20 to 90), but below 20
+/// it peaks rather than continuing to rise — the peak sits somewhere between 12
+/// and 20, with 15 and 20 statistically indistinguishable at large sample sizes
+/// (864 duels a cell: 91.6% [88.6, 93.8] vs 90.5% [87.6, 92.8]). The default
+/// stays at 20 because it sits inside that peak region and nothing currently
+/// depends on the exact value.
 /// </para>
 /// <para>
-/// ✅ <b>RUN 2026-08-31, and the refusal above was right for the right reason:
-/// THE CURVE IS NOT MONOTONE BELOW THE DEFAULT.</b> Four classes, in-range band,
-/// tier 5, 288 duels a cell — horizon 8 wins <b>80.4%</b> [73.6, 85.8], 12 wins
-/// 88.5%, 15 wins <b>93.1%</b> [88.1, 96.1], 20 wins 90.8%. So the upward sweep's
-/// monotone fall was <b>one side of a peak</b>, not a slope running off to the
-/// left, and "shorter is simply better" would have been wrong at 8 — where the
-/// interval is cleanly disjoint from 15's.
-/// </para>
-/// <para>
-/// ⛔ <b>"15 beats 20" DID NOT HOLD, and the re-run is why this paragraph never
-/// said it did.</b> At 288 a cell it read 93.1% against 90.8%, a clean +2.3 with
-/// the interesting sign. At <b>864</b> a cell: <b>91.6%</b> [88.6, 93.8] against
-/// <b>90.5%</b> [87.6, 92.8] — +1.1, overlapping. ⚠️ <b>The default's cell was
-/// the stable one</b> (90.8 → 90.5) and the 15 cell was the noisy one
-/// (93.1 → 91.6), so the apparent effect was almost entirely one arm being lucky.
-/// </para>
-/// <para>
-/// ✅ <b>So the default STAYS AT 20, and now for a measured reason rather than an
-/// unexamined one</b>: it sits inside the peak region, and the region below it has
-/// been looked at. The peak's location is somewhere between 12 and 20 on present
-/// evidence, with 15 and 20 indistinguishable at 864 a cell. Pinning it further
-/// would want many more duels or seeds and <b>nothing currently depends on the
-/// exact value</b>.
-/// </para>
-/// <para>
-/// ⚠️ <b>That sweep's BLIND column is not comparable and should not be used.</b>
-/// It was measured over the decisions each arm actually generated, and the arms
-/// play differently, so they visit different states — it is non-monotone in a way
-/// that gives it away (8 reads less blind than 12, which no mechanism predicts).
-/// The upward sweep's blind numbers stepped a fixed count precisely to avoid
-/// that. <b>The two sets of blind fractions are from different instruments and
-/// must not be merged.</b>
-/// </para>
-/// <para>
-/// ⚠️ <b>And it reproduced at 864 a cell — 15 blinder than 20, 62.1% against
-/// 54.7%, at both sample sizes — which does NOT redeem it.</b> A biased
-/// instrument is biased consistently; agreement between two runs of the same
-/// wrong measurement is not evidence about the quantity. If the blind axis ever
-/// matters for this question it wants the fixed-step harness, not a by-product of
-/// a win-rate run.
+/// A blind-fraction column measured alongside a win-rate sweep is not
+/// comparable across arms that play differently: they visit different states,
+/// so their blind fractions come from different instruments and must not be
+/// merged with a fixed-step blind measurement.
 /// </para>
 /// </param>
 /// <param name="DecisionTicks">
 /// How many ticks one decision covers before the search runs again — the action
 /// repeat, and the same one <c>Gg2.Env</c>'s <c>DuelEnv</c> uses.
-/// ⚠️ <b>Receding horizon</b>: only the first <paramref name="DecisionTicks"/>
+/// <b>Receding horizon</b>: only the first <paramref name="DecisionTicks"/>
 /// of the winning candidate are ever played, and the rest is thrown away.
 /// </param>
 /// <param name="AimBins">
@@ -152,122 +37,38 @@ public enum RolloutOpponent
 /// horizon cannot tell apart.
 /// </param>
 /// <param name="CommitTicks">
-/// How many ticks a candidate's action is actually HELD before the rollout
+/// How many ticks a candidate's action is actually held before the rollout
 /// continues under a neutral continuation. <b>0 means the whole horizon</b>,
 /// which is what this search has always done.
-/// ⚠️ <b>Lookahead and commitment are the same number until this is set</b>, and
-/// <c>gg2-rl</c>'s horizon sweep is what showed that mattered: blind fraction and
-/// win rate oppose monotonically for every class, because at horizon 90 the
-/// search is choosing among plans of the shape "hold this key and this aim for
-/// three seconds". Seeing further and committing longer are separable, and this
-/// is the separation.
 /// <para>
-/// ❌ <b>MEASURED 2026-08-29, AND IT DOES NOT HELP.</b> The signature of a real
-/// fix was agreed in advance — the blind fraction falling <em>without</em> the
-/// win rate falling. It does the opposite. <c>ctf_2dfort</c> banded, tier 5,
-/// <b>24 duels a cell</b> — see the sample-size caveat below:
-/// </para>
-/// <list type="bullet">
-/// <item>sniper, horizon 60: commit=horizon <b>0.523 blind / 0.375 win</b>;
-/// commit=4 <b>0.965 / 0.625</b>; commit=8 <b>0.962 / 0.667</b>.</item>
-/// <item>soldier, horizon 60: commit=horizon <b>0.562 / 0.750</b>; commit=8
-/// <b>0.851 / 0.792</b>.</item>
-/// </list>
-/// <para>
-/// ⚠️ <b>Shortening the commitment puts the blindness straight back</b> — to
-/// 0.965 for a sniper, worse than horizon 20's 0.933 — while recovering only part
-/// of the win rate. It slides back along the same trade rather than breaking it,
-/// and the reason is the same refire arithmetic: a candidate scores from damage
-/// landing inside the window where it is acting, and shortening the commitment
-/// shortens that window.
+/// <b>Lookahead and commitment are the same number until this is set.</b> At a
+/// long horizon the search ends up choosing among plans of the shape "hold this
+/// key and this aim for three seconds", so blind fraction and win rate move
+/// together even though seeing further and committing longer are conceptually
+/// separable.
 /// </para>
 /// <para>
-/// ⚠️ <b>AND THE WIN-RATE HALF IS THIN — 24 duels a cell.</b> `gg2-rl` found
-/// four results on 2026-08-31 that moved substantially when the sample was
-/// widened, one of them from −4.5 to −13.7 points at four times the duels, and
-/// concluded its default duel count had been chosen for a task that no longer
-/// existed. <b>These cells are smaller than that default.</b> The BLIND fractions
-/// here are ratios over many decisions and are not in doubt; 0.523 → 0.965 is not
-/// a sampling artefact. The win rates are: 0.375 against 0.625 at n = 24 barely
-/// separate. So <b>"it slides back along the same trade" is solid on the blind
-/// axis and provisional on the win axis</b>, and anybody about to act on the win
-/// half should widen it first.
+/// Shortening the commitment under a neutral continuation (keys released,
+/// bearing kept) does separate the two, but does not help: it reduces the blind
+/// fraction while costing win rate, and the loss is not recovered. A
+/// continuation that keeps acting (<see cref="ContinuationPolicy"/>, added in
+/// protocol v8) reduces blindness further at a given commitment without paying
+/// the same win-rate cost as the neutral one — but a head-to-head against the
+/// unpruned search (commit = horizon) still loses substantially, so the reduced
+/// blindness does not translate into a stronger search.
 /// </para>
 /// <para>
-/// ⚠️ <b>This is a negative result about THIS continuation, not about the
-/// idea.</b> The continuation here is neutral — keys released, bearing kept —
-/// because holding the candidate on is exactly what the split removes. A
-/// continuation that kept <em>acting</em>, such as a distilled policy, is a
-/// different experiment and is the one <c>gg2-rl</c> named for phase 3.
+/// <b>Blindness and search strength are largely independent quantities here.</b>
+/// A blind fraction is not a reliable proxy for search quality — the horizon
+/// sweep's monotone opposition between the two is real but does not license a
+/// causal reading.
 /// </para>
 /// <para>
-/// ✅ <b>THAT EXPERIMENT HAS NOW RUN, and the mechanism works exactly as this
-/// paragraph hoped.</b> Protocol v8 added <see cref="ContinuationPolicy"/>;
-/// <c>gg2-rl</c> measured all four arms at k=30, 1,008 duels each, 6 maps × 4
-/// classes, 2026-09-01:
-/// </para>
-/// <list type="table">
-/// <item><term>A unpruned, commit=horizon</term><description>blind@60 <b>64.8%</b>, win 90.7%</description></item>
-/// <item><term>B pruned k=30</term><description>blind 65.3%, win 85.6%</description></item>
-/// <item><term>C + commit 4, neutral</term><description>blind 76.8%, win 74.6%</description></item>
-/// <item><term>D + commit 4, POLICY</term><description>blind <b>63.4%</b>, win 73.5%</description></item>
-/// </list>
-/// <para>
-/// <b>Arm D is less blind than unpruned at 73% of its cost.</b> The
-/// entanglement this parameter exists to break really does break: only a
-/// continuation that keeps acting separates lookahead from commitment, and a
-/// neutral one cannot.
-/// </para>
-/// <para>
-/// ⛔ <b>AND IT BUYS NOTHING, because the premise underneath the whole idea was
-/// wrong.</b> Decomposed: the short commitment costs <b>11.0</b> points of win
-/// share and adds 11.5 of blindness; the policy continuation then removes
-/// <b>13.4</b> points of blindness and returns <b>1.1</b> points of win share —
-/// nothing, within noise. <b>Removing the blindness recovers none of what the
-/// short commitment cost.</b> Not some of it.
-/// </para>
-/// <para>
-/// ⚠️ <b>So "the search is blind, therefore it is weak" is retired.</b> Blindness
-/// and strength are close to independent here, and this is the second measurement
-/// to say so — pruning had already cost 5.1 points of win share while moving
-/// blind 0.5. Anything in this repo that reads a blind fraction as a proxy for
-/// search quality is reading it wrong, and the horizon sweep above is the
-/// clearest example: its monotone opposition is real and does not license the
-/// causal reading it invites.
-/// </para>
-/// <para>
-/// ⚠️ <b>The knob stays, and is now load-bearing rather than speculative.</b> The
-/// numbers above exist only because the continuation actually worked — a broken
-/// one produces the same win column and settles nothing, which is why
-/// <c>EnvProtocolTests.APolicyLoadedOverTheSocketReachesTheRollout</c> gates the
-/// whole wire-to-rollout chain.
-/// </para>
-/// <para>
-/// ⛔ <b>THE VERDICT: criterion 2 passed, criterion 1 failed by nineteen
-/// points.</b> The head-to-head — arm D on red against arm A on blue, one world,
-/// null exactly 50%, no ceiling — put <b>D at 27.7% [24.2%, 31.4%]</b> against
-/// A's 56.0%, with 16.3% draws over 1,008 duels. ⚠️ <b>D is CHEAPER</b> (2.93 ms
-/// against 3.99), so <em>at equal cost</em> was satisfied outright and the
-/// criterion failed on <b>stronger</b>. <c>gg2-rl</c>'s draw guard fired — 16.3%
-/// against the arm table's 0.5-1.4% — so this is weaker evidence than that table
-/// by its own rule, and the verdict survives the discount by nineteen points.
-/// </para>
-/// <para>
-/// ⚠️ <b>Both instruments agree, and the ceiling cuts the way that strengthens
-/// it</b>: it would have compressed A's advantage in the fallback, and A still
-/// won. ⚠️ <b>What was NOT the cause</b>, each checked: not the prior (the
-/// exploration monitor never fired at any k in any arm), not cost, not phase, and
-/// <b>not the plumbing</b> — a severed wire-to-rollout chain produces this exact
-/// win column, which is what
-/// <c>EnvProtocolTests.APolicyLoadedOverTheSocketReachesTheRollout</c> exists to
-/// rule out.
-/// </para>
-/// <para>
-/// ⚠️ <b>This does NOT establish that a policy continuation cannot work.</b> One
-/// policy, k=30, commit 4, horizon 20. That the continuation hands the rollout to
-/// something weaker than the search it replaces is the obvious reading and <b>a
-/// hypothesis this run does not test</b>. Nobody has an explanation for the short
-/// commitment's 11 points either — only that it is not blindness.
+/// The knob stays and is load-bearing rather than speculative: the measurements
+/// behind these conclusions depend on the wire-to-rollout chain actually being
+/// intact, which <c>EnvProtocolTests.APolicyLoadedOverTheSocketReachesTheRollout</c>
+/// gates — a severed chain would produce the same-looking win column and settle
+/// nothing.
 /// </para>
 /// </param>
 /// <param name="Threads">
@@ -275,13 +76,13 @@ public enum RolloutOpponent
 /// default and the shipped behaviour</b>; 0 means the same thing.
 /// </param>
 /// <remarks>
-/// ⚠️ <b>A decision is IDENTICAL at every thread count, and that is gated</b> by
+/// <b>A decision is identical at every thread count</b>, gated by
 /// <c>RolloutThreadingTests</c> rather than argued: candidates are scored into
 /// per-index slots and the winner is picked afterwards in ascending order, so the
 /// lexicographic tie-break sees the order it saw serially. It is a cost knob and
 /// nothing else.
 /// <para>
-/// ⛔ <b>It is REFUSED together with a <c>ContinuationPolicy</c>.</b>
+/// <b>It is refused together with a <c>ContinuationPolicy</c>.</b>
 /// <see cref="PolicyNetwork"/> forwards through shared <c>_hiddenA</c>/
 /// <c>_hiddenB</c>/<c>_output</c> scratch, so two lanes calling it at once race
 /// on the hidden layer and produce a silently wrong action. Refusing at
@@ -291,132 +92,6 @@ public enum RolloutOpponent
 /// </para>
 /// </remarks>
 /// <param name="ConsiderSpecial">
-
-/// Whether the right-click head is searched. Off by default: for most classes it
-/// is a reload or nothing, and it triples nothing useful.
-/// </param>
-public readonly record struct RolloutOptions(
-    int HorizonTicks = 20,
-    int DecisionTicks = 4,
-    RolloutOpponent Opponent = RolloutOpponent.HoldLastInput,
-    byte[]? AimBins = null,
-    bool ConsiderSpecial = false,
-    int CommitTicks = 0,
-    PolicyNetwork? ContinuationPolicy = null,
-    int Threads = 0)
-{
-    /// <summary><c>docs/BOTAI.md</c> item 12 says 15-30 ticks; this is the middle.</summary>
-    public const int DefaultHorizonTicks = 20;
-
-    /// <summary>The same action repeat <c>Gg2.Env</c>'s duels use.</summary>
-    public const int DefaultDecisionTicks = 4;
-
-    /// <summary>
-    /// The default aim ladder: hard left, half left, straight on, half right,
-    /// hard right.
-    /// </summary>
-    /// <remarks>
-    /// Bin 7 is no turn and the cap is ±30 degrees per decision
-    /// (<see cref="ActionDecoder.MaxTurnDegreesPerDecision"/>), so these are
-    /// -30, -17, 0, +17 and +30.
-    /// </remarks>
-    public static byte[] DefaultAimBins => [0, 3, 7, 11, 14];
-
-    public byte[] Aims => AimBins ?? DefaultAimBins;
-
-    /// <summary>
-    /// This record with its zeroes filled in.
-    /// </summary>
-    /// <remarks>
-    /// ⚠️ <b><c>new RolloutOptions()</c> is NOT the primary constructor.</b> A
-    /// record struct's parameterless form is <c>default</c> — every field zero,
-    /// none of the declared defaults applied — so a caller who writes
-    /// <c>default</c> or <c>new()</c> gets a zero horizon and a zero decision
-    /// length, which are the two values <see cref="RolloutSearch"/> refuses. The
-    /// declared defaults still work through the primary constructor
-    /// (<c>new RolloutOptions(ConsiderSpecial: true)</c>), so the two forms
-    /// disagree, and this is what makes them agree.
-    /// </remarks>
-    public RolloutOptions WithDefaults()
-    {
-        var horizon = HorizonTicks == 0 ? DefaultHorizonTicks : HorizonTicks;
-        var decision = DecisionTicks == 0 ? DefaultDecisionTicks : DecisionTicks;
-
-        // ⚠️ 0 means "commit for the whole horizon", which is the behaviour this
-        // search has always had — see the parameter's own remarks. It is resolved
-        // here rather than at the use site so there is one place that decides.
-        var commit = CommitTicks == 0 ? horizon : CommitTicks;
-
-        // ⛔ THE PHASE GUARD, and it is here — where CommitTicks is SET — rather
-        // than asserted where it is read, because a fix belongs at the point that
-        // makes the mistake unavailable. `gg2-rl` asked for exactly this and
-        // sharpened its own first proposal (a read-site assert) to get it.
-        //
-        // A continuation re-decides every DecisionTicks ticks counting from the
-        // end of the commitment. If the commitment is not a whole number of
-        // decisions, the policy's decision boundaries fall out of phase with the
-        // one the search actually plays — so a candidate is scored under a
-        // continuation whose cadence it will never experience in the real match,
-        // and the whole point of matching the training action_repeat is lost.
-        //
-        // ⚠️ Enforced whether or not a POLICY is attached -- that was the ask, and
-        // a rule that only applies sometimes is one nobody can rely on.
-        //
-        // ⛔ But NOT enforced when no continuation runs at all, and the first
-        // version of this guard got that wrong. `commit == horizon` is the
-        // default and means the candidate is held for the whole rollout, so the
-        // `tick >= CommitTicks` branch is never reached and there are no
-        // continuation decisions to be out of phase. Requiring a multiple there
-        // is a constraint on the HORIZON wearing a commitment's clothes, and it
-        // refused eight existing configurations -- `HorizonTicks: 10,
-        // DecisionTicks: 4` among them -- that have no continuation and never did.
-        //
-        // ⚠️ This is CLAUDE.md's "check that a criterion could actually fire" in
-        // its mirror image: not a gate that can never fire, but one firing where
-        // the thing it protects does not exist. Both are the same mistake about
-        // what a check is FOR, and the tests caught this one in under a minute.
-        if (commit < horizon && commit % decision != 0)
-        {
-            throw new ArgumentException(
-                $"CommitTicks {commit} is not a multiple of DecisionTicks {decision} "
-                + $"(horizon {horizon}, so a continuation does run). "
-                + "A continuation re-decides on the decision cadence counting from the end of "
-                + "the commitment, so a partial decision at the seam puts every later one out "
-                + "of phase with the cadence the policy was trained at.",
-                nameof(CommitTicks));
-        }
-
-        var threads = Threads == 0 ? 1 : Threads;
-
-        if (threads < 1)
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(Threads), Threads, "a search runs on at least one thread");
-        }
-
-        // ⛔ See the Threads remarks: PolicyNetwork forwards through shared scratch,
-        // so a threaded search with a continuation is a data race on the hidden
-        // layer. It would not throw and it would not look wrong — it would just
-        // decide from a half-written activation, which is the shape of bug this
-        // repo has no instrument for. Refused where the combination is chosen.
-        if (threads > 1 && ContinuationPolicy is not null)
-        {
-            throw new ArgumentException(
-                $"Threads {threads} cannot be combined with a ContinuationPolicy: "
-                + "PolicyNetwork.Act writes through per-instance hidden-layer scratch and "
-                + "is not re-entrant, so concurrent candidates would race on it.",
-                nameof(Threads));
-        }
-
-        return this with
-        {
-            HorizonTicks = horizon,
-            DecisionTicks = decision,
-            CommitTicks = commit,
-            Threads = threads,
-        };
-    }
-}
 
 /// <summary>
 /// <c>docs/BOTAI.md</c> item 12: a bot that decides by <b>playing the game
@@ -436,13 +111,13 @@ public readonly record struct RolloutOptions(
 /// </para>
 /// <para>
 /// <b>It is also a parity fuzzer.</b> A search systematically tries what no
-/// human would, so it finds physics-port bugs by exploiting them. ⚠️ <b>An
+/// human would, so it finds physics-port bugs by exploiting them. <b>An
 /// exploit is a finding for <c>docs/PARITY.md</c>, not something to penalise in
 /// the score</b> — <c>gg2-rl/docs/PLAN.md</c> phase 1 says so explicitly, and
 /// scoring around a bug hides it.
 /// </para>
 /// <para>
-/// ⚠️ <b>The fork is a <see cref="WorldState"/> copy, and it is ~150 KB.</b>
+/// <b>The fork is a <see cref="WorldState"/> copy, and it is ~150 KB.</b>
 /// That is the whole of item 2's snapshot/restore: the state holds no reference
 /// to anything, so assignment is a snapshot and assignment back is a restore.
 /// The two buffers are fields, allocated once, because <c>docs/BOTAI.md</c> item
@@ -450,7 +125,7 @@ public readonly record struct RolloutOptions(
 /// be worse than an allocation.
 /// </para>
 /// <para>
-/// ⚠️ <b>The rollout draws from the FORK's RNG, never the match's.</b> That is
+/// <b>The rollout draws from the fork's RNG, never the match's.</b> That is
 /// automatic and it is the reason it is safe: <see cref="WorldState.Random"/>
 /// travels inside the copy, so a candidate's shots advance a stream that is
 /// thrown away. Nothing this class does moves the real one. Its own candidate
@@ -458,34 +133,31 @@ public readonly record struct RolloutOptions(
 /// <see cref="ScriptedBot.Random"/> for why that rule exists.
 /// </para>
 /// <para>
-/// ⚠️ <b>A horizon shorter than a refire timer makes the search blind.</b> Every
+/// <b>A horizon shorter than a refire timer makes the search blind.</b> Every
 /// candidate scores exactly zero when nothing can fire inside the horizon, the
 /// tie goes to the first candidate, and the bot stands still looking broken. A
-/// freshly spawned soldier's <c>refireTimer</c> starts at <b>29</b> and a scout
-/// is nineteen ticks from its first shot, so the first second of every life is
-/// like that — measured, and it cost two tests here before it was understood.
-/// It is a real weakness of scoring on damage alone, and the honest fix is a
-/// shaping term (distance, facing, ammo), not a longer horizon: 20 ticks is
-/// already 1,200 simulated ticks a decision.
+/// freshly spawned soldier's <c>refireTimer</c> starts at 29 and a scout is
+/// nineteen ticks from its first shot, so the first second of every life is
+/// like that. It is a real weakness of scoring on damage alone, and the honest
+/// fix is a shaping term (distance, facing, ammo), not a longer horizon: 20
+/// ticks is already 1,200 simulated ticks a decision.
 /// </para>
 /// <para>
-/// <b>Measured 2026-08-28, Release</b>, one searcher on <c>gg_debug</c> with
-/// the default options: <b>2.94 ms per decision</b> — 60 candidates x 20 ticks
-/// = 1,200 simulated ticks — which at a decision every 4 ticks is about 0.74 ms
-/// of a 33.3 ms tick for a single bot. ⚠️ <b>Name the build when re-measuring</b>;
-/// Debug is roughly twice that, and <c>CLAUDE.md</c> records a stale
-/// unattributed figure sitting in four documents.
+/// One searcher on <c>gg_debug</c> with the default options, Release build:
+/// 2.94 ms per decision — 60 candidates x 20 ticks = 1,200 simulated ticks —
+/// which at a decision every 4 ticks is about 0.74 ms of a 33.3 ms tick for a
+/// single bot. Name the build when re-measuring; Debug is roughly twice that.
 /// <para>
 /// Against <c>ScriptedBot</c> at skill tier 5 over twelve duels on the same map:
-/// <b>11 wins, 0 losses, 1 draw</b>. That is a smoke test rather than the exit
+/// 11 wins, 0 losses, 1 draw. That is a smoke test rather than the exit
 /// criterion — <c>gg2-rl/docs/PLAN.md</c> phase 1 asks for 500 duels per class
 /// matchup at p &lt; 0.01, and that harness lives there.
 /// </para>
 /// </para>
 /// <para>
-/// ⚠️ <b>Expect it to be too slow to ship.</b> That is not a defect;
+/// <b>Expect it to be too slow to ship.</b> That is not a defect;
 /// <c>gg2-rl</c> phase 2 is the distillation step that exists because of it, and
-/// phase 1's exit criterion asks for the per-decision cost to be *recorded*
+/// phase 1's exit criterion asks for the per-decision cost to be recorded
 /// rather than to be small. <see cref="LastDecisionTicksSimulated"/> is what to
 /// record it with.
 /// </para>
@@ -524,7 +196,7 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
     // Whether _candidates currently carries the zoom dimension. See CandidatesFor.
     private bool _candidatesAreSniper;
 
-    // ⚠️ Fields, not locals: 150 KB each, allocated once. See the remarks.
+    // Fields, not locals: 150 KB each, allocated once. See the remarks.
     private WorldState _baseline;
 
     private int _ticksLeftInDecision;
@@ -554,7 +226,7 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
     /// drove, not the class it is about to.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Not the number to validate a restriction against.</b> The constructor
+    /// <b>Not the number to validate a restriction against.</b> The constructor
     /// builds without the zoom dimension, so this reads 60 for a sniper until its
     /// first decision has searched. Use
     /// <see cref="CandidateCountFor(RolloutOptions, PlayerClass)"/>, which is a
@@ -581,21 +253,13 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
     /// <see cref="LastCandidates"/>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>This is the whole reason a search is a better expert than a reward
-    /// signal, and until 2026-08-29 it did not survive the method that computed
-    /// it.</b> <c>gg2-rl/docs/DESIGN.md</c> — "its output is an ACTION
-    /// DISTRIBUTION rather than a scalar, so every logged decision carries far
+    /// <b>This is the whole reason a search is a better expert than a reward
+    /// signal.</b> <c>gg2-rl/docs/DESIGN.md</c> — "its output is an action
+    /// distribution rather than a scalar, so every logged decision carries far
     /// more signal than a reward sample does" — and its collection step logs
     /// <c>(observation, distribution over actions, outcome)</c>. <see cref="Search"/>
-    /// scored all 60 (or 120) candidates and kept only <c>bestScore</c>; every
-    /// other score was discarded inside the loop that produced it.
-    /// <para>
-    /// ⚠️ <b>Nothing was inconsistent, which is why it took a phase needing the
-    /// data to surface it.</b> This class did exactly what it documented and that
-    /// document said exactly what it wanted, and no test on either side compared
-    /// the two. Fourth instance of that shape in three days and the first that was
-    /// nobody's bug.
-    /// </para>
+    /// scores all 60 (or 120) candidates and every score is kept, not just the
+    /// winner's.
     /// <para>
     /// <b>Why it matters concretely:</b> a one-hot on the argmax throws away the
     /// search's own uncertainty. That two candidates scored 70 and 69 is exactly
@@ -603,12 +267,12 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
     /// policy to be confident there instead.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Written into a pre-allocated buffer</b>, resized only when the
+    /// <b>Written into a pre-allocated buffer</b>, resized only when the
     /// candidate set changes — docs/BOTAI.md item 1 forbids allocating in the tick
     /// loop, and this is written once per candidate per decision.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Valid only until the next decision</b>, and a span so it cannot be
+    /// <b>Valid only until the next decision</b>, and a span so it cannot be
     /// stashed. A caller logging a dataset copies it.
     /// </para>
     /// </remarks>
@@ -618,7 +282,7 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
     /// The candidate set the scores are aligned with.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Handed back with the scores rather than left to be re-derived.</b>
+    /// <b>Handed back with the scores rather than left to be re-derived.</b>
     /// The set is per class — a sniper's carries the zoom dimension and is twice
     /// the size — so a caller that rebuilt it from <see cref="RolloutOptions"/>
     /// would silently mis-align every sniper's distribution against a
@@ -630,12 +294,12 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
     /// Which candidate index each entry of <see cref="LastScores"/> belongs to.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Identity for an unrestricted search</b> — 0, 1, 2 … — so a caller
+    /// <b>Identity for an unrestricted search</b> — 0, 1, 2 … — so a caller
     /// that ignores it is correct exactly as long as nobody prunes. Under
     /// <see cref="RestrictNextDecision"/> it is the searched set, and the scores
     /// are a distribution over <em>that</em>, not over the whole candidate list.
     /// <para>
-    /// ⚠️ <b>A distribution without these indices is "a ranking over an unnamed
+    /// <b>A distribution without these indices is "a ranking over an unnamed
     /// list"</b> — the same argument <see cref="LastCandidates"/> makes, one level
     /// down. It is what makes a pruned search's output usable as a training
     /// target: `gg2-rl` masks the unevaluated candidates out of its
@@ -654,11 +318,11 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
     /// there — the policy's top 8 of 60 contains this search's best action
     /// <b>78.2%</b> of the time against <b>55.9%</b> for a random 8.
     /// <para>
-    /// ⚠️ <b>An empty span means "search everything"</b>, which is the default and
+    /// <b>An empty span means "search everything"</b>, which is the default and
     /// the behaviour every existing caller gets.
     /// </para>
     /// <para>
-    /// ⚠️ <b>It is a SET, not a ranking, and this must never come to depend on the
+    /// <b>It is a set, not a ranking, and this must never come to depend on the
     /// order it arrives in.</b> The candidates are visited in ascending index
     /// order whatever order they are given, so the decision is a pure function of
     /// the set — which matters because the tie-break is lexicographic and 85.2% of
@@ -666,23 +330,23 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
     /// decides a great many of them. Duplicates collapse.
     /// </para>
     /// <para>
-    /// ⚠️ <b>And the set is deliberately NOT the policy's top k.</b> `gg2-rl` sends
+    /// <b>And the set is deliberately not the policy's top k.</b> `gg2-rl` sends
     /// top-(k−m) plus m sampled from the remainder, because a search that only
     /// ever evaluates what the policy already likes, feeding a policy trained on
     /// what the search evaluated, is self-confirming: it cannot be corrected where
     /// it is wrong, because where it is wrong is where nothing gets looked at.
-    /// **Nothing here may assume index 0 is anybody's favourite.**
+    /// Nothing here may assume index 0 is anybody's favourite.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Consumed by the next SEARCH, not the next Poll.</b> A decision is
+    /// <b>Consumed by the next search, not the next Poll.</b> A decision is
     /// held for <see cref="RolloutOptions.DecisionTicks"/> ticks and only its
     /// first tick searches, so a restriction set mid-decision applies to the
     /// decision after it rather than being silently dropped.
     /// </para>
     /// </remarks>
     /// <exception cref="ArgumentOutOfRangeException">
-    /// An index is negative or past <see cref="CandidateCount"/>. ⚠️ <b>Refused,
-    /// never clamped</b> — an index that silently meant a different action would
+    /// An index is negative or past <see cref="CandidateCount"/>. Refused,
+    /// never clamped — an index that silently meant a different action would
     /// be a wrong search reported with plausible numbers.
     /// </exception>
     public void RestrictNextDecision(ReadOnlySpan<int> indices, PlayerClass playerClass)
@@ -693,7 +357,7 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
             return;
         }
 
-        // ⚠️ The count for the class this slot WILL be searched as, never the
+        // The count for the class this slot will be searched as, never the
         // instance's CandidateCount — that reads 60 for a sniper until its first
         // decision, which refused a valid index 76 on step 0. See
         // CandidateCountFor.
@@ -732,7 +396,7 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
     /// Would the next <see cref="Poll"/> for this slot start a NEW decision.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>For a gate that hands control to this search, so it changes hands on
+    /// <b>For a gate that hands control to this search, so it changes hands on
     /// the search's boundary rather than on one of its own.</b> Two controllers
     /// with independent cadences flap against each other at the threshold, and
     /// each holds state the other does not maintain — the scripted layer's
@@ -741,7 +405,7 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
     /// to be able to ask the same question, and <b>inventing a second counter to
     /// answer it is the two-cadence bug with extra steps.</b>
     /// <para>
-    /// ⚠️ <b>Takes the slot, because a slot change forces a boundary.</b>
+    /// <b>Takes the slot, because a slot change forces a boundary.</b>
     /// <see cref="Poll"/> resets the decision when the slot moves, so a
     /// parameterless property would answer for the wrong character on the tick a
     /// bot is re-assigned and would be wrong exactly once, silently.
@@ -753,7 +417,7 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
     /// Points this search's decoder at where the character is ACTUALLY aiming.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>Call this on every handover INTO the search, or the first decision
+    /// <b>Call this on every handover into the search, or the first decision
     /// after each one turns from a bearing nobody is pointing at.</b> The decoder
     /// carries an absolute aim across ticks and advances it by the turn each
     /// action asks for. While another controller holds the character — the
@@ -761,27 +425,23 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
     /// and <see cref="Poll"/>'s own resync only fires when the <em>slot</em>
     /// changes, which a handover is not.
     /// <para>
-    /// ⚠️ <b>This is a wrong-verdict bug rather than a wrong-number bug, which is
+    /// <b>This is a wrong-verdict bug rather than a wrong-number bug, which is
     /// why it is public rather than a note.</b> A search aiming from a stale
     /// bearing does not fail; it fights slightly worse, in exactly the engagements
     /// a handover exists to hand it, and reports as "the search hybrid
-    /// underperforms". That is indistinguishable from a real negative — the same
-    /// failure class as a severed wire-to-rollout chain in step 3, and the second
-    /// time on this seam that the danger was a wrong conclusion rather than a
-    /// wrong measurement.
+    /// underperforms" — indistinguishable from a real negative.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Takes the world rather than degrees on purpose.</b> The wire's aim is
+    /// <b>Takes the world rather than degrees on purpose.</b> The wire's aim is
     /// a <c>ushort</c> over a full turn and the conversion is
     /// <c>* 360.0 / 65536.0</c>; a caller handed a degrees parameter has to know
     /// that, and <c>PolicyBot</c> already carries its own copy of the expression.
     /// One more copy is one more place to get a magic constant wrong.
     /// </para>
     /// <para>
-    /// ✅ <b>Unreachable in a duel, so no existing figure moves.</b> An
-    /// <c>EnvDriver.Rollout</c> side has no handover and no scripted layer writing
-    /// its bearing, so <c>_currentSlot</c> never changes hands and the stale path
-    /// cannot occur. The 82.5% and every other duel number stand.
+    /// <b>Unreachable in a duel.</b> An <c>EnvDriver.Rollout</c> side has no
+    /// handover and no scripted layer writing its bearing, so
+    /// <c>_currentSlot</c> never changes hands and the stale path cannot occur.
     /// </para>
     /// </remarks>
     public void ResyncAim(in WorldView world, int slot) =>
@@ -792,7 +452,7 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
     /// order.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Deterministic and drawn from nothing.</b> A search that broke ties
+    /// <b>Deterministic and drawn from nothing.</b> A search that broke ties
     /// with a random draw would not be reproducible from a seed, and
     /// reproducibility is what makes it usable as an evaluation baseline. Ties
     /// go to the earlier candidate, which is the one nearer "stand still and do
@@ -837,20 +497,18 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
     /// The candidate set for the class this search is currently driving.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Rebuilt when the class changes, and ONLY the sniper pays for the
+    /// <b>Rebuilt when the class changes, and only the sniper pays for the
     /// zoom dimension.</b> Doubling 60 candidates to 120 doubles the per-decision
     /// cost — measured at 2.94 ms for 60 (Release, gg_debug) — and
     /// <c>PlayerCommands.ToggleZoom</c> refuses every class but the sniper, so
     /// every other class would be paying twice to evaluate the same sixty actions
     /// under two labels.
     /// <para>
-    /// ⚠️ <b>Without this the zoom head would be a trap rather than a feature.</b>
-    /// <see cref="ScriptedBot"/> gained the scope on the same day; a search whose
-    /// candidate set was still a five-head enumeration would have been measured
-    /// against a scripted sniper playing a 75-damage weapon while itself capped at
-    /// 35, and the honest reading of that number would have been "the search got
-    /// worse". Raised by <c>gg2-rl</c> before the measurement was taken, which is
-    /// the only reason it is here rather than in a post-mortem.
+    /// <b>Without this the zoom head would be a trap rather than a feature.</b>
+    /// <see cref="ScriptedBot"/> also has the scope; a search whose candidate set
+    /// was still a five-head enumeration would be measured against a scripted
+    /// sniper playing a 75-damage weapon while itself capped at 35, and the
+    /// honest reading of that number would be "the search got worse".
     /// </para>
     /// </remarks>
     /// <summary>
@@ -858,12 +516,12 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
     /// without needing one to exist.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Pure and static on purpose.</b> The instance path rebuilds
+    /// <b>Pure and static on purpose.</b> The instance path rebuilds
     /// <c>_candidates</c> in place, and calling that out of band could shrink the
     /// array under a <see cref="LastCandidates"/> span still describing the
     /// previous class's length. Nothing here touches instance state.
     /// <para>
-    /// ⚠️ <b>It exists because a distribution is useless without the actions it
+    /// <b>It exists because a distribution is useless without the actions it
     /// is over.</b> <c>StepScored</c> sends scores aligned with this list and a
     /// consumer that had to reconstruct the enumeration would be holding a second
     /// source of truth about this search — the exact thing the input seam exists
@@ -879,16 +537,16 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
     /// would return, without building them.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>This exists because a THIRD source for the count shipped a bug.</b>
+    /// <b>This exists because a third source for the count shipped a bug.</b>
     /// <c>DuelEnv.CandidatesFor</c> derives the set from the batch spec's class
     /// and answers 120 for a sniper before the first step; the instance
-    /// <see cref="CandidateCount"/> answers whatever class was last SEARCHED, and
+    /// <see cref="CandidateCount"/> answers whatever class was last searched, and
     /// the constructor builds without the zoom dimension — so it answers 60 for a
     /// sniper until its first decision. The restriction validator read the
     /// instance and refused a perfectly valid index 76, on step 0 only, for
-    /// snipers only. Found by <c>gg2-rl</c> within an hour of it shipping.
+    /// snipers only.
     /// <para>
-    /// ⚠️ <b>Anything that needs "how many candidates will this SLOT have" must
+    /// <b>Anything that needs "how many candidates will this slot have" must
     /// come here or to <c>CandidatesFor</c>, never to
     /// <see cref="CandidateCount"/>.</b>
     /// <c>RolloutRestrictionTests.EveryCountSourceAgrees</c> pins the two together
@@ -925,7 +583,7 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
 
     /// <inheritdoc />
     /// <remarks>
-    /// ⚠️ <b>The scope, and it is the only thing this search does that is not a
+    /// <b>The scope, and it is the only thing this search does that is not a
     /// key.</b> The chosen candidate's <see cref="EnvAction.Zoom"/> is a level, so
     /// the command is issued only when it differs from the character — see
     /// <see cref="ActionDecoder.WantsZoomToggle"/>, which is the one edge detector
@@ -945,7 +603,7 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
     {
         LastDecisionTicksSimulated = 0;
 
-        // ⚠️ The decoder carries this slot's absolute aim across ticks, and a
+        // The decoder carries this slot's absolute aim across ticks, and a
         // fresh character has to start from where the wire says it is pointing
         // or the first decision turns from stale bearing.
         if (slot != _currentSlot)
@@ -972,7 +630,7 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
     /// Plays every candidate to the horizon and returns the best.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The decoder's aim is saved and restored around every candidate.</b>
+    /// <b>The decoder's aim is saved and restored around every candidate.</b>
     /// <c>ActionDecoder.Decode</c> advances the slot's absolute bearing, so a
     /// rollout that turned would leave the real decision starting from a bearing
     /// that only existed inside a simulation nobody played. That is exactly the
@@ -983,19 +641,19 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
     /// Everything ONE candidate rollout mutates, so candidates can run apart.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The candidate loop is embarrassingly parallel once this exists</b>, and
-    /// it was not before: every rollout wrote the same <c>_fork</c>, the same
-    /// <c>_events</c> and the same <c>_decoder</c>. What it READS — the baseline, the
-    /// options, the <c>CollisionWorld</c> — is immutable for the duration of a
-    /// decision, and <c>Gg2.Simulation</c> holds no mutable statics, so
+    /// <b>The candidate loop is embarrassingly parallel once this exists</b>:
+    /// without it every rollout would write the same <c>_fork</c>, the same
+    /// <c>_events</c> and the same <c>_decoder</c>. What it reads — the baseline,
+    /// the options, the <c>CollisionWorld</c> — is immutable for the duration of
+    /// a decision, and <c>Gg2.Simulation</c> holds no mutable statics, so
     /// <c>MatchSimulation.Tick</c> is pure over its arguments.
     /// <para>
-    /// ⛔ <b>A fork is a 145 KB <c>WorldState</c> copy, so lanes are allocated ONCE
+    /// <b>A fork is a 145 KB <c>WorldState</c> copy, so lanes are allocated once
     /// and reused</b> across decisions. k lanes rather than k forks per decision is
     /// the difference between a pool and a leak.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Determinism does not come from the lanes; it comes from the REDUCTION.</b>
+    /// <b>Determinism does not come from the lanes; it comes from the reduction.</b>
     /// Scores are written to a per-candidate slot and the winner is chosen afterwards
     /// in ascending candidate order, so the lexicographic tie-break sees exactly the
     /// order it saw serially — which matters because 85.2% of non-blind decisions have
@@ -1015,7 +673,7 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
 
     private Lane[] _lanes = [];
 
-    // ⚠️ Indexed by CANDIDATE index, not by search order, so a worker writes its
+    // Indexed by candidate index, not by search order, so a worker writes its
     // own slot and the reduction reads them back in ascending order. That is the
     // whole determinism argument; see the Lane remarks.
     private double[] _scoreByIndex = [];
@@ -1026,12 +684,12 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
     {
         _baseline = world.State;
 
-        // ⚠️ Per CLASS, so only a sniper pays for the zoom dimension — and asked
+        // Per class, so only a sniper pays for the zoom dimension — and asked
         // here rather than in the constructor because a bot can be re-classed
         // mid-life, exactly as ScriptedBot rebuilds its NavQuery every tick.
         var candidates = CandidatesFor(world.Character(slot).Class);
 
-        // ⚠️ Grown here and not per decision. CandidatesFor can change the length
+        // Grown here and not per decision. CandidatesFor can change the length
         // when the class does, so the check is against the current set rather
         // than done once in the constructor.
         if (_scores.Length < candidates.Length)
@@ -1043,7 +701,7 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
             _aimByIndex = new double[candidates.Length];
         }
 
-        // ⚠️ The restriction is DROPPED if the candidate set changed under it, and
+        // The restriction is dropped if the candidate set changed under it, and
         // the check is on the exact size rather than on the buffer being big
         // enough. A class swap moves the list between 60 and 120, and
         // BuildCandidates interleaves zoom inside each (aim, fire) — so index i
@@ -1060,7 +718,7 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
         var bestScore = double.NegativeInfinity;
         var bestAimError = double.PositiveInfinity;
 
-        // ⚠️ ASCENDING candidate order whatever order the restriction arrived in,
+        // Ascending candidate order whatever order the restriction arrived in,
         // so the decision is a pure function of the SET. The tie-break below is
         // lexicographic and 85.2% of non-blind decisions have their top two tied,
         // so iteration order decides a great many of them — a search whose answer
@@ -1074,7 +732,7 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
                 _searched[kept++] = i;
         }
 
-        // ⛔ SCORING AND CHOOSING ARE SEPARATE PASSES, and that is what makes the
+        // Scoring and choosing are separate passes, and that is what makes the
         // threaded path identical to the serial one rather than merely similar.
         // Scores land in per-candidate slots in whatever order the workers finish;
         // the winner is picked below in ascending order, so the lexicographic
@@ -1089,13 +747,13 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
             var i = _searched[n];
             var score = _scoreByIndex[i];
 
-            // ⚠️ EVERY score is kept, not just the winner’s. See LastScores: the
-            // distribution is the thing that makes a search a better expert than
-            // a reward sample, and it used to be discarded inside this loop.
+            // Every score is kept, not just the winner's. See LastScores: the
+            // distribution is what makes a search a better expert than a reward
+            // sample.
             _scores[n] = score;
             _searchedCandidates[n] = candidates[i];
 
-            // ⚠️ LEXICOGRAPHIC: damage first, aim error only as a TIE-BREAK. It
+            // Lexicographic: damage first, aim error only as a tie-break. It
             // cannot change any decision where the scores differ, so it cannot
             // trade away the thing the search is actually optimising — it only
             // replaces enumeration order on the decisions that were arbitrary.
@@ -1114,7 +772,7 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
 
         _scoreCount = kept;
 
-        // ⚠️ Counted from what was SEARCHED, not from the candidate list. The
+        // Counted from what was searched, not from the candidate list. The
         // whole point of a restriction is that it costs less, and an accounting
         // figure that ignored it would report a budget nobody spent — this is the
         // number docs/BOTAI.md item 9 says to watch.
@@ -1139,16 +797,16 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
 
     /// <summary>Every kept candidate, scored across <c>Threads</c> lanes.</summary>
     /// <remarks>
-    /// ⚠️ <b>Contiguous chunks, one lane each, no work stealing.</b> A worker owns
+    /// <b>Contiguous chunks, one lane each, no work stealing.</b> A worker owns
     /// its lane for the whole call, so nothing is shared and nothing is locked —
     /// which is the only reason a 145 KB fork per lane is affordable at all. The
     /// split is by count rather than by cost and candidates are not equal-cost (a
     /// candidate that dies early stops at its own <c>IsAlive</c> break), so the tail
     /// is ragged and the speedup is below the thread count before any other effect.
     /// <para>
-    /// ⚠️ <b><c>Parallel.For</c> allocates</b> — the closure, the task objects, the
+    /// <b><c>Parallel.For</c> allocates</b> — the closure, the task objects, the
     /// range state — inside what CLAUDE.md calls the tick loop. That is real and it
-    /// is deliberately INSIDE the measurement rather than excluded from it: a
+    /// is deliberately inside the measurement rather than excluded from it: a
     /// threading factor quoted with its own overhead removed is not the factor the
     /// tick budget would see.
     /// </para>
@@ -1194,7 +852,7 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
     /// One candidate, played forward and scored.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The score is the damage the simulation EMITS, not a state diff.</b>
+    /// <b>The score is the damage the simulation emits, not a state diff.</b>
     /// <c>docs/BOTAI.md</c> item 7 exists for this: diffing two snapshots is
     /// slow, ambiguous about attribution, and would make the bot re-derive game
     /// rules it must not know. <see cref="TickEvents.DamageDealt"/> is credited
@@ -1204,12 +862,12 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
     /// Damage taken is subtracted at equal weight. That is a choice, not a
     /// transcription: it makes the search trade a hit for a hit rather than
     /// chase damage at any cost, and it is the simplest thing that is not
-    /// obviously wrong. ⚠️ <b>It is also the first knob to question</b> if the
+    /// obviously wrong. <b>It is also the first knob to question</b> if the
     /// bot plays suicidally — an asymmetric weight is a one-line change here and
     /// a real behavioural difference.
     /// </para>
     /// <para>
-    /// ⚠️ <b>A death ends the rollout early.</b> Without that the search happily
+    /// <b>A death ends the rollout early.</b> Without that the search happily
     /// dies on tick 3 to land a hit on tick 12, because a corpse deals no damage
     /// and takes none — so the remaining ticks look free.
     /// </para>
@@ -1220,23 +878,23 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
     /// <see cref="double.PositiveInfinity"/> when there is nobody to point at.
     /// </param>
     /// <remarks>
-    /// ⚠️ <b>The tie-break, and it exists because the search is INDIFFERENT on
-    /// most of its decisions.</b> Measured by <c>gg2-rl</c> over a real corpus:
-    /// <b>85.2%</b> of non-blind decisions have the top two candidates tied, a
-    /// median of <b>6</b> actions share the best score, and only <b>7.8%</b> have
-    /// a unique best. Ties went to the first candidate, and
+    /// <b>The tie-break, and it exists because the search is indifferent on
+    /// most of its decisions.</b> Measured over a real corpus: 85.2% of
+    /// non-blind decisions have the top two candidates tied, a median of 6
+    /// actions share the best score, and only 7.8% have a unique best. Ties
+    /// went to the first candidate, and
     /// <see cref="BuildCandidates"/> loops aim outermost from bin 0 — a hard left
     /// turn — so the bot took <b>0.966</b> (soldier) and <b>0.929</b> (scout) of
     /// its decisions with the aim swung hard left. <b>Its aiming was enumeration
     /// order, not scoring.</b>
     /// <para>
-    /// ⚠️ <b>Damage stays the only objective.</b> This is compared only when the
+    /// <b>Damage stays the only objective.</b> This is compared only when the
     /// scores are exactly equal, so no decision the score can settle is changed,
     /// and the search cannot trade a hit for a better bearing. What it replaces is
     /// loop order.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Measured at the END of the rollout, not the start.</b> Where a
+    /// <b>Measured at the end of the rollout, not the start.</b> Where a
     /// candidate leaves the character pointing is what the next decision inherits;
     /// the bearing it started from is the same for every candidate and would
     /// discriminate nothing.
@@ -1247,7 +905,7 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
     {
         lane.Fork = _baseline;
 
-        // ⚠️ The candidate's scope is applied to the FORK before it is played, or
+        // The candidate's scope is applied to the fork before it is played, or
         // the search scores a zoom it never raised — every zoom candidate would
         // simulate identically to its unzoomed twin, the tie would go to the
         // earlier one, and the head would look measured while being inert.
@@ -1259,7 +917,7 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
         Span<PlayerInput> inputs = stackalloc PlayerInput[WorldState.MaxSlots];
         var score = 0.0;
 
-        // ⚠️ Per CANDIDATE, not per search. Each candidate is an independent
+        // Per candidate, not per search. Each candidate is an independent
         // forward simulation, so its continuation has to start from the same
         // state — otherwise candidate n+1 inherits candidate n's last policy
         // action and the ordering of the candidate list becomes observable.
@@ -1287,14 +945,14 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
                     continue;
                 }
 
-                // ⚠️ Past the commitment the candidate is NOT held. Without a
+                // Past the commitment the candidate is not held. Without a
                 // policy the searcher keeps the bearing the action turned it to
                 // and releases the keys, which models "I will decide again shortly
                 // and am not committed to this key" — the ordinary receding-horizon
                 // split. With CommitTicks defaulted to the horizon this is
                 // unreachable and the behaviour is exactly what it always was.
                 //
-                // ⚠️ With a policy attached the continuation keeps ACTING, which is
+                // With a policy attached the continuation keeps acting, which is
                 // the whole point: the neutral continuation picks a plausible plan
                 // and then sees nothing land, because a candidate scores from
                 // damage inside the window where somebody is still playing.
@@ -1318,7 +976,7 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
     /// forked world, in absolute degrees.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Infinity rather than 0 when there is nobody to aim at, so "no target"
+    /// Infinity rather than 0 when there is nobody to aim at, so "no target"
     /// loses every tie-break to "some target, badly aimed" rather than winning
     /// them all. A zero here would make every candidate equal again the moment the
     /// searcher is alone, which is the state this whole tie-break exists to stop
@@ -1349,13 +1007,13 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
     /// What the searcher itself is assumed to do after its commitment ends.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Keys released, bearing kept.</b> The aim is carried by the decoder
+    /// <b>Keys released, bearing kept.</b> The aim is carried by the decoder
     /// across ticks, so an action with no turn and no keys leaves the character
     /// pointing where the candidate put it and pressing nothing. That is the
     /// neutral continuation: it scores what the action buys inside its
     /// commitment, plus whatever follows from merely being there.
     /// <para>
-    /// ⚠️ <b>It is deliberately NOT hold-last-input.</b> Holding the candidate on
+    /// <b>It is deliberately not hold-last-input.</b> Holding the candidate on
     /// is precisely the behaviour the split exists to remove, so a continuation
     /// that did it would make <c>CommitTicks</c> a no-op that looked implemented.
     /// </para>
@@ -1366,19 +1024,19 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
     /// One policy decision for the searcher, taken inside the forked world.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>This is why the continuation cannot be driven from outside.</b> It
+    /// <b>This is why the continuation cannot be driven from outside.</b> It
     /// runs inside the fork, k times per candidate per decision, in worlds the
     /// socket never sees — so unlike a past checkpoint (which is
     /// <c>EnvDriver.Client</c>, because the trainer holds the weights and can
     /// drive that slot itself) there is no way to hand this out over the seam.
     /// It is the first thing in this repo that requires a policy in-process.
     /// <para>
-    /// ⚠️ <b>The observation is of the FORK</b>, which is the point — a
+    /// <b>The observation is of the fork</b>, which is the point — a
     /// continuation reading the real world would be answering about a state the
     /// candidate did not produce, and every candidate would get the same reply.
     /// </para>
     /// <para>
-    /// ⚠️ <b>A bot must not draw from <c>WorldState.Random</c> and this does not:
+    /// <b>A bot must not draw from <c>WorldState.Random</c> and this does not:
     /// <see cref="PolicyNetwork.Act"/> takes the argmax of each head.</b> It is
     /// deterministic given the observation, so a continuation adds no draws to the
     /// match's stream and cannot make the stream's position depend on how many
@@ -1410,7 +1068,7 @@ public sealed class RolloutSearch : IInputSource, ICommandSource
     /// </summary>
     /// <remarks>
     /// See <see cref="RolloutOpponent"/> for why this is a named decision rather
-    /// than an accident. ⚠️ <b>A dead or absent slot gets
+    /// than an accident. <b>A dead or absent slot gets
     /// <see cref="PlayerInput.None"/></b>, which matters because the input span
     /// covers every slot and a stale key mask for somebody who is not there
     /// would be read by nothing but is one more thing to reason about.

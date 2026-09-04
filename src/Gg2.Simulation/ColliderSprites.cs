@@ -31,14 +31,13 @@ public static class ColliderSprites
     /// <c>Character.events/Begin Step.xml</c> because a character stands on one
     /// only when falling onto it and not holding <c>KEY_DOWN</c>.
     /// <para>
-    /// <c>BulletWall</c> <em>is</em> here, and used to not be. It is solid to
-    /// nothing a character does — which is why phase 3 could leave it out — and
-    /// solid to every projectile, because <c>gunSetSolids</c> ends with it.
-    /// Whether a given rectangle is solid to a given asker is
+    /// <c>BulletWall</c> <em>is</em> here. It is solid to nothing a character
+    /// does and solid to every projectile, because <c>gunSetSolids</c> ends
+    /// with it. Whether a given rectangle is solid to a given asker is
     /// <see cref="SolidRect.IsSolidTo"/>'s business, not this function's.
     /// </para>
     /// <para>
-    /// ⚠️ <b>A bullet wall can open, and that is not modelled.</b>
+    /// <b>A bullet wall can open, and that is not modelled.</b>
     /// <c>BulletWall.events/Begin Step.xml</c> clears its mask while any
     /// character is within a <c>distance</c> property the map may set, so a map
     /// can build a window that closes when nobody is near it. The property
@@ -88,7 +87,7 @@ public static class ColliderSprites
         EntityTypes.IntelGateHorizontal =>
             Bar(entity, vertical: false, SolidKind.IntelGate, Team.Any),
 
-        // ⚠️ A horizontal bar like a floor, and NOT solid — see
+        // A horizontal bar like a floor, and NOT solid — see
         // SolidKind.DropdownPlatform. It is here so the physics can ask where
         // the platforms are, not so anything collides with them.
         EntityTypes.DropdownPlatform =>

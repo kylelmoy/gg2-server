@@ -10,7 +10,7 @@ namespace Gg2.Tests;
 /// and its <b>flags</b> byte.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>Found by census, not by suspicion.</b> After <c>Fields.Ubers</c> turned
+/// <b>Found by census, not by suspicion.</b> After <c>Fields.Ubers</c> turned
 /// out to be used by no test at all, the obvious follow-up was to count which
 /// members of <see cref="Fields"/> any test ever passes to a <c>Replayer</c>.
 /// <c>Trajectory</c>, <c>Hp</c>, <c>Deaths</c>, <c>Ubers</c>, <c>Intel</c>,
@@ -25,10 +25,10 @@ namespace Gg2.Tests;
 /// nowhere else.
 /// </para>
 /// <para>
-/// ⚠️ Each gate has a <b>liveness control</b> beside it, for the reason the last
-/// audit established: <c>Assert(mismatches.Length == 0)</c> is satisfied just as
-/// well by a comparison that never runs. docs/PARITY.md, "every comparison family
-/// is now pinned to its tick AND proved alive".
+/// Each gate has a <b>liveness control</b> beside it: <c>Assert(mismatches.Length
+/// == 0)</c> is satisfied just as well by a comparison that never runs.
+/// docs/PARITY.md, "every comparison family is now pinned to its tick AND proved
+/// alive".
 /// </para>
 /// </remarks>
 public sealed class AmmoAndFlagsParityTests
@@ -92,7 +92,7 @@ public sealed class AmmoAndFlagsParityTests
             .ToList();
 
     /// <summary>
-    /// ✅ <b>The port's ammo matches the reference for 1,325 ticks</b> on the
+    /// <b>The port's ammo matches the reference for 1,325 ticks</b> on the
     /// sharpest combat fixture.
     /// </summary>
     /// <remarks>
@@ -120,14 +120,14 @@ public sealed class AmmoAndFlagsParityTests
         // The window really is the whole recording after the anchor: 1,325 ticks.
         Assert.True(ticks[^1].Index - anchor > 1300, "the fixture is shorter than it was measured to be");
 
-        // ⚠️ Liveness: a comparison that never runs reports nothing either.
+        // Liveness: a comparison that never runs reports nothing either.
         Assert.True(
             Replay(Combat, trace, Doctored(ticks), Fields.Ammo, anchor).Length > 0,
             "the ammo comparison reported nothing against doctored blocks — it is not running");
     }
 
     /// <summary>
-    /// ✅ <b>The port's flags byte matches for 1,829 ticks on the spy
+    /// <b>The port's flags byte matches for 1,829 ticks on the spy
     /// recording</b> — cloak bit included.
     /// </summary>
     /// <remarks>
@@ -156,14 +156,14 @@ public sealed class AmmoAndFlagsParityTests
             ticks,
             t => t.Slots.Any(s => s.Observed is { Cloaked: true }));
 
-        // ⚠️ Liveness.
+        // Liveness.
         Assert.True(
             Replay(Spy, trace, Doctored(ticks), Fields.Flags, anchor).Length > 0,
             "the flags comparison reported nothing against doctored blocks — it is not running");
     }
 
     /// <summary>
-    /// ⚠️ <b>An unseeded weapon caps an AMMO window too, and not the flags one
+    /// <b>An unseeded weapon caps an AMMO window too, and not the flags one
     /// beside it.</b>
     /// </summary>
     /// <remarks>

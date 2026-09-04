@@ -11,7 +11,7 @@ namespace Gg2.Simulation;
 /// object serves four gamemodes — symmetrical CP, attack/defend, King of the
 /// Hill and Arena — and its <c>mode</c> decides which of them it is behaving as.
 /// <para>
-/// ⚠️ <b>A defaulted <see cref="ControlPointState"/> is owned by red and being
+/// <b>A defaulted <see cref="ControlPointState"/> is owned by red and being
 /// captured by red.</b> <c>User Event 0</c> writes <c>team = -1</c> and
 /// <c>cappingTeam = -1</c>, and <see cref="Team"/> has no -1 — the same trap
 /// <see cref="WorldState.RoundDecided"/> exists to avoid. Both are flags here,
@@ -52,7 +52,7 @@ public struct ControlPointState
     /// 0 nobody, 1 only ubered players, 2 at least one player who can capture.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Three states, not a count.</b> <c>redPresence = max(2, ...)</c> for
+    /// <b>Three states, not a count.</b> <c>redPresence = max(2, ...)</c> for
     /// an ordinary player and <c>max(1, ...)</c> for an ubered one, so the value
     /// says <em>what kind</em> of presence there is and never how many. An
     /// ubered player alone (1) cannot capture but does stop the point
@@ -113,10 +113,10 @@ public static class ControlPoints
     /// <c>team = -1; cappingTeam = -1; capping = 0</c>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Use this rather than <c>default</c>: <see cref="Team.Red"/> is 0, so a
+    /// Use this rather than <c>default</c>: <see cref="Team.Red"/> is 0, so a
     /// zeroed point is red's and being taken by red.
     /// <para>
-    /// ⚠️ <b>Locked, which is right for three of the five modes and wrong for
+    /// <b>Locked, which is right for three of the five modes and wrong for
     /// two.</b> <c>User Event 0</c> writes <c>locked = true</c> for Arena, KotH
     /// and DKotH and <c>locked = false</c> for both control-point
     /// arrangements — <see cref="Rounds.Start"/> applies that difference. It is
@@ -152,7 +152,7 @@ public static class ControlPoints
     /// times six seconds, counting from point 1.
     /// </item>
     /// </list>
-    /// ⚠️ <b>The multipliers are not whole numbers below five points</b>
+    /// <b>The multipliers are not whole numbers below five points</b>
     /// (<c>1.5</c>, <c>2.25</c>, <c>4.5</c>, <c>7.5</c>), and the two-point
     /// attack/defend row carries a commented-out alternative in the reference —
     /// <c>basetime*2.5/*5*/</c> — so the live value is 2.5. A map with more
@@ -244,11 +244,9 @@ public static class ControlPoints
     /// <b>The order is the wire's.</b> <c>ControlPointHUD</c> walks
     /// <c>global.cp[1..totalControlPoints]</c> by number, <c>DKothHUD</c> writes
     /// red then blue, and the rest have one point — so the numbered types go in
-    /// numbered order and everything else in the order the map lists them. Same
-    /// decision <c>Gg2.Server.MatchState</c> used to make, moved here now that
-    /// the points are simulated.
+    /// numbered order and everything else in the order the map lists them.
     /// <para>
-    /// ⚠️ <b>A capture zone belongs to the <em>nearest</em> point, and that is
+    /// <b>A capture zone belongs to the <em>nearest</em> point, and that is
     /// resolved once.</b> <c>CaptureZone.events/Alarm 0.xml</c> is
     /// <c>cp = instance_nearest(x, y, ControlPoint)</c> — or the arena point if
     /// there is one — run a step after creation so a custom map's entity order
@@ -380,12 +378,12 @@ public static class ControlPoints
     /// <em>point</em> rather than its own box. Standing with your feet over the
     /// edge of a zone does not count; the origin has to be inside it.
     /// <para>
-    /// ⚠️ <b>A cloaked spy is not on the point, and neither is one still fading
+    /// <b>A cloaked spy is not on the point, and neither is one still fading
     /// in.</b> <c>zone >= 0 and !cloak and cloakAlpha == 1</c> — the second
     /// clause means the seconds after decloaking do not count either.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Not measured against the running game.</b> Whether GM8 rounds the
+    /// <b>Not measured against the running game.</b> Whether GM8 rounds the
     /// point before testing it is the open question, and it costs at most half a
     /// pixel at the rim of a 42-pixel square. See docs/SIMULATION.md.
     /// </para>
@@ -402,7 +400,7 @@ public static class ControlPoints
         var x = CollisionWorld.RoundPosition(character.X);
         var y = CollisionWorld.RoundPosition(character.Y);
 
-        // ⚠️ Indexed rather than `foreach`, and for the same reason as the boxes:
+        // Indexed rather than `foreach`, and for the same reason as the boxes:
         // CaptureZones is an INTERFACE, and enumerating one allocates a boxed
         // enumerator per live character per tick. docs/BOTAI.md item 1.
         var zones = world.CaptureZones;
@@ -448,7 +446,7 @@ public static class ControlPoints
     /// <remarks>
     /// <c>floor(capping) == floor(capTime - capTime/4) || floor(capping) ==
     /// floor(capTime/4) || floor(capping) == floor(capTime/10)</c> — 225, 75 and
-    /// 30 at the standard 300. ⚠️ It is an <em>equality on the floor</em>, so a
+    /// 30 at the standard 300. It is an <em>equality on the floor</em>, so a
     /// meter moving 2 a tick can step straight over an odd threshold and never
     /// ask; that is the reference's, and it is why these are worth writing down
     /// rather than reading as "every quarter".
@@ -475,7 +473,7 @@ public static class ControlPoints
 
         if (point.Locked)
         {
-            // ⚠️ It clears the meter and exits, so a point locked mid-capture
+            // It clears the meter and exits, so a point locked mid-capture
             // loses the progress rather than pausing it. The presences are left
             // where they were, which is what the KotH HUD's "nobody capping"
             // test then reads.
@@ -491,7 +489,7 @@ public static class ControlPoints
         double redCappers = 0;
         double blueCappers = 0;
 
-        // ⚠️ The reference wraps this scan in `if(not arenaRoundEnd)`, and that
+        // The reference wraps this scan in `if(not arenaRoundEnd)`, and that
         // guard is **dead code**: `arenaRoundEnd` sets `locked = true` twelve
         // lines above and the `if(locked) { capping = 0; exit; }` below it has
         // already returned. Not transcribed, for the same reason
@@ -522,7 +520,7 @@ public static class ControlPoints
             }
             else
             {
-                // ⚠️ `else`, not `if team == TEAM_BLUE`. A spectator has no
+                // `else`, not `if team == TEAM_BLUE`. A spectator has no
                 // character, so the only two teams that reach here are red and
                 // blue — but the asymmetry is the reference's and is worth
                 // keeping visible.
@@ -538,11 +536,11 @@ public static class ControlPoints
             }
         }
 
-        // ⚠️ 1 for every point except an ArenaControlPoint's, where it scales
+        // 1 for every point except an ArenaControlPoint's, where it scales
         // by how much of the *enemy* team is still alive — see
         // Arena.CappingPower.
         //
-        // ⚠️ Both teams' are computed, and the reference then uses two different
+        // Both teams' are computed, and the reference then uses two different
         // ones: the *reverting* branches take the power of whoever was already
         // capping when the Step began, and the capture branch takes the power of
         // the team it has just assigned. They differ on the tick a capture
@@ -582,7 +580,7 @@ public static class ControlPoints
         }
         else if (point.Capping >= point.CapTime)
         {
-            // ⚠️ `else if`, so a meter that lands exactly on a threshold on the
+            // `else if`, so a meter that lands exactly on a threshold on the
             // tick it would also complete does not capture this tick. Unreachable
             // at the standard capTime — 225, 75 and 30 are all below 300 — and
             // kept in the reference's shape because a custom capTime could reach
@@ -619,7 +617,7 @@ public static class ControlPoints
     /// causing errors in other modes".
     /// </para>
     /// <para>
-    /// ⚠️ <b>And it is what stops <c>UNLOCKCP</c> ever being sent in DKotH.</b>
+    /// <b>And it is what stops <c>UNLOCKCP</c> ever being sent in DKotH.</b>
     /// A <c>ControlPoint</c> is a map instance and a HUD is created by
     /// <c>basicRoomSetup</c> afterwards, so the points' Steps run <em>first</em>:
     /// on the tick <c>cpUnlock</c> reaches zero they unlock themselves here, and
@@ -653,7 +651,7 @@ public static class ControlPoints
         // KothBlueControlPoint (`cp = 2`) — ControlPoints.Place puts them in
         // that order, and the reference's two `if`s are keyed on those numbers.
         //
-        // ⚠️ Each reads the *other* point's team as of this tick, and the two
+        // Each reads the *other* point's team as of this tick, and the two
         // points' Steps run in index order — so index 1 sees index 0 already
         // updated and index 0 does not. Observable only on the tick a hill
         // changes hands, and it is the reference's instance order.
@@ -679,7 +677,7 @@ public static class ControlPoints
     /// blue's — blue pushes the other way.
     /// </item>
     /// </list>
-    /// ⚠️ <b>The end points are special by omission.</b> The blue rule is
+    /// <b>The end points are special by omission.</b> The blue rule is
     /// guarded by <c>if (cp &gt; 1)</c> and the red one by
     /// <c>if (cp &lt; totalControlPoints)</c>, so the first point when blue owns
     /// it and the last when red owns it fall through <em>without their lock
@@ -687,13 +685,13 @@ public static class ControlPoints
     /// <c>User Event 0</c> is unlocked. Those are the two points that end the
     /// match, and they are always takeable.
     /// <para>
-    /// ⚠️ <b>And a neutral point is never touched either.</b> Neither branch
+    /// <b>And a neutral point is never touched either.</b> Neither branch
     /// runs when <c>team</c> is -1, so a middle point on an odd-numbered
     /// symmetrical map stays unlocked from the start — which is what makes it
     /// the opening fight.
     /// </para>
     /// <para>
-    /// ⚠️ <b>In attack/defend a red point is locked unconditionally</b>
+    /// <b>In attack/defend a red point is locked unconditionally</b>
     /// (<c>if(mode==1 &amp;&amp; team == TEAM_RED) locked = true</c>), after the
     /// rules above. Blue is defending and never takes anything back.
     /// </para>
@@ -764,14 +762,14 @@ public static class ControlPoints
     /// </item>
     /// </list>
     /// <para>
-    /// ⚠️ <b>Reverting the enemy's progress is much faster than capturing.</b>
+    /// <b>Reverting the enemy's progress is much faster than capturing.</b>
     /// <c>capping -= (1 + cappers*0.5)</c> against the capture's
     /// <c>+cappers</c>, so two ordinary players wipe out an enemy capture at 2 a
     /// tick and then start their own at 2 a tick — the same rate, which is why
     /// taking a half-captured point takes twice as long as taking a fresh one.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Past two cappers the capture rate is halved.</b>
+    /// <b>Past two cappers the capture rate is halved.</b>
     /// <c>cappers &lt;= 2 ? cappers : cappers/2 + 1</c>: two ordinary players
     /// cap at 2, four cap at 3 rather than 4. A single scout is
     /// <c>capStrength</c> 2 and so caps at the full 2, where two scouts are 4
@@ -831,7 +829,7 @@ public static class ControlPoints
         point.CappingTeam = onPoint;
         point.Cappers = cappers;
 
-        // ⚠️ The *new* capping team's power, assigned two lines above — not
+        // The *new* capping team's power, assigned two lines above — not
         // cappingTeamPower, which was read before the assignment.
         var power = onPoint == Team.Red ? redPower : bluePower;
 
@@ -846,12 +844,12 @@ public static class ControlPoints
     /// team.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The test is <c>player.team == point.cappingTeam</c>, not "was
+    /// <b>The test is <c>player.team == point.cappingTeam</c>, not "was
     /// helping".</b> A team-mate who arrived this tick and contributed nothing
     /// still scores, and an enemy standing on a point their team just took —
     /// which cannot happen, since a contested point is frozen — would too.
     /// <para>
-    /// ⚠️ <b>Called before <see cref="Capture"/></b>, because that is where the
+    /// <b>Called before <see cref="Capture"/></b>, because that is where the
     /// reference has it: the whole loop runs above the
     /// <c>with point { team = cappingTeam; capping = 0 }</c> at the bottom of
     /// the script. It reads <c>cappingTeam</c>, which the capture leaves alone
@@ -887,7 +885,7 @@ public static class ControlPoints
     /// and the rest is the kill log, the sound and the per-capper stats, none of
     /// which any client re-simulates.
     /// <para>
-    /// ⚠️ <b><c>cappingTeam</c> is <em>not</em> cleared.</b> The point is owned
+    /// <b><c>cappingTeam</c> is <em>not</em> cleared.</b> The point is owned
     /// by the team that took it and still says they are capturing it; only the
     /// next tick's <c>capping &lt;= 0</c> branch clears that. It is observable —
     /// <c>cappingTeam</c> goes on the wire — and it is the reference's.

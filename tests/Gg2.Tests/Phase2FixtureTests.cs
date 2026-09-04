@@ -11,22 +11,20 @@ namespace Gg2.Tests;
 /// character rather than a bot's own judgement.</b>
 /// </summary>
 /// <remarks>
-/// <b>Recorded 2026-08-27.</b> Three scripted takes on <c>gg_debug</c>, a scout
-/// driven from the agent bridge, and <b>one take of a human playing
-/// <c>tdm_mantic</c></b>. <c>docs/PLAN.md</c> has asked for these since phase 2
-/// and listed them as the one deliverable still open:
-/// "a double-jump, a wall step-up, a corner fall and a drop-through platform
-/// need scripted input rather than a bot's own judgement". Every other fixture
-/// in this project is bots playing, which covers walking and jumping only
-/// incidentally.
+/// Three scripted takes on <c>gg_debug</c>, a scout driven from the agent
+/// bridge, and <b>one take of a human playing <c>tdm_mantic</c></b>. Every
+/// other fixture in this project is bots playing, which covers walking and
+/// jumping only incidentally; these target a double-jump, a wall step-up, a
+/// corner fall and a drop-through platform, which need scripted or human
+/// input to reach.
 /// <para>
-/// ✅ <b>All four replay closed-loop with zero mismatches</b> on
-/// <see cref="Fields.All"/> — 723, 625, 474 and <b>1,161</b> ticks. Nobody fires
-/// and nobody dies in any of them, so unlike the combat fixtures there is
-/// nothing to cap a window but the recording's own length, or a real divergence.
+/// All four replay closed-loop with zero mismatches on <see cref="Fields.All"/>
+/// — 723, 625, 474 and <b>1,161</b> ticks. Nobody fires and nobody dies in any
+/// of them, so unlike the combat fixtures there is nothing to cap a window but
+/// the recording's own length, or a real divergence.
 /// </para>
 /// <para>
-/// ⚠️ <b>THE HUMAN TAKE IS THE ONE THAT WORKED, and that is the finding.</b>
+/// <b>THE HUMAN TAKE IS THE ONE THAT WORKED, and that is the finding.</b>
 /// Three scripted recordings reached <see cref="CharacterHitObstacle"/>'s step
 /// arms <b>zero</b> times between them, despite 505 wall collisions — every one
 /// taking the arm that stops the character dead. A hundred seconds of a person
@@ -38,10 +36,8 @@ namespace Gg2.Tests;
 /// <b>Why, and it is worth knowing before writing another driver:</b> a script
 /// walks in straight lines between points worked out in advance, so it only ever
 /// meets the geometry somebody predicted. A person wanders, changes direction
-/// mid-stride, and taps keys for five ticks and releases them. Two of the three
-/// scripted routes were also planned against a walkmask profile taken with the
-/// <em>wrong collision filter</em>, which is its own lesson — but the deeper one
-/// is that <b>a person is a better fuzzer than a plan</b>.
+/// mid-stride, and taps keys for five ticks and releases them. <b>A person is a
+/// better fuzzer than a plan.</b>
 /// </para>
 /// </remarks>
 public sealed class Phase2FixtureTests
@@ -66,16 +62,16 @@ public sealed class Phase2FixtureTests
     private const string Stairs = "reference-gg_debug-scriptedstairs.trace";
 
     /// <summary>
-    /// ✅ <b>A HUMAN playing <c>tdm_mantic</c> for a hundred seconds</b>, and the
+    /// A HUMAN playing <c>tdm_mantic</c> for a hundred seconds, and the
     /// only recording in the project that is neither a bot nor a script.
     /// </summary>
     /// <remarks>
-    /// <b>It reaches both branches three scripted attempts could not</b> — 50
+    /// <b>It reaches both branches the scripted attempts could not</b> — 50
     /// step-ups and 3 sloping ceilings against zero — and it found a bug on the
     /// way. See <see cref="TheMutationTableThatSaysWhatTheseFixturesGate"/> and
     /// <see cref="ThePortPutsAPlayerBackOnAPlatformTheyDroppedThrough"/>.
     /// <para>
-    /// ⚠️ <b>The lesson is about the recording method, not the map.</b> A script
+    /// <b>The lesson is about the recording method, not the map.</b> A script
     /// walks in straight lines between the points somebody worked out in
     /// advance; a person wanders, changes their mind, taps a key and releases
     /// it. Every branch this fixture reaches that the others do not is of that
@@ -147,7 +143,7 @@ public sealed class Phase2FixtureTests
     }
 
     /// <summary>
-    /// ✅ <b>Both replay to the last tick of their recording, on every field.</b>
+    /// <b>Both replay to the last tick of their recording, on every field.</b>
     /// </summary>
     /// <remarks>
     /// 723 and 625 ticks today, which is the whole of each trace after its spawn
@@ -169,41 +165,40 @@ public sealed class Phase2FixtureTests
     }
 
     /// <summary>
-    /// ⚠️ <b>What these fixtures actually gate, measured by deleting each branch
+    /// <b>What these fixtures actually gate, measured by deleting each branch
     /// and watching the window — not by what the route was meant to do.</b>
     /// </summary>
     /// <remarks>
-    /// <b>The table, run 2026-08-27.</b> Each row disables one branch and reports
-    /// the three windows:
+    /// Each row disables one branch and reports the three windows:
     /// <list type="table">
     /// <item><term>baseline</term><description>walk 723, jumps 625, stairs 474</description></item>
     /// <item><term>double jump (<c>CharacterPhysics</c>, <c>CanDoubleJump</c>)</term>
-    /// <description>jumps <b>162</b> ✅, others unchanged</description></item>
+    /// <description>jumps <b>162</b>, others unchanged</description></item>
     /// <item><term>dropdown platform (<c>CharacterPhysics</c>, the Step push-out)</term>
-    /// <description>walk <b>116</b> ✅, others unchanged</description></item>
+    /// <description>walk <b>116</b>, others unchanged</description></item>
     /// <item><term>stair descent (<c>CharacterPhysics</c> End Step)</term>
     /// <description>walk <b>4</b>, jumps <b>1</b> — gated hard, but see below</description></item>
     /// <item><term>wall step-up (<c>CharacterHitObstacle</c>, <c>Y -= StepHeight</c>)</term>
-    /// <description>scripted: unchanged ❌ — <b>human: 50 executions</b> ✅</description></item>
+    /// <description>scripted: unchanged — <b>human: 50 executions</b></description></item>
     /// <item><term>sloping ceiling (<c>CharacterHitObstacle</c>, <c>Y += StepHeight</c>)</term>
-    /// <description>scripted: unchanged ❌ — <b>human: 3 executions</b> ✅</description></item>
+    /// <description>scripted: unchanged — <b>human: 3 executions</b></description></item>
     /// </list>
     /// <para>
-    /// ✅ <b>So phase 2 gains a double-jump gate and a second, much sharper
-    /// dropdown-platform gate.</b> The platform branch was previously covered
+    /// <b>So phase 2 gains a double-jump gate and a second, much sharper
+    /// dropdown-platform gate.</b> The platform branch is otherwise covered
     /// only by <c>gg_debug-closedtdm</c>, whose window moves 135 → about 23 when
     /// it regresses; this one moves 723 → 116.
     /// </para>
     /// <para>
-    /// ⚠️ <b>The stair descent collapses both walking fixtures, but that is not
-    /// evidence these recordings are special</b> — it runs on every grounded
+    /// The stair descent collapses both walking fixtures, but that is not
+    /// evidence these recordings are special — it runs on every grounded
     /// tick, so almost any fixture would show it. It is in the table for
     /// completeness, not as a claim of new coverage.
     /// </para>
     /// <para>
-    /// ⚠️ <b>The step arms are executed ZERO times by all three recordings, and
-    /// that is measured rather than inferred.</b> A counter on each arm during
-    /// the replays: the walk and stairs fixtures enter
+    /// <b>The step arms are executed ZERO times by all three scripted
+    /// recordings, and that is measured rather than inferred.</b> A counter on
+    /// each arm during the replays: the walk and stairs fixtures enter
     /// <c>characterHitObstacle</c>'s wall branch <b>340 and 165 times</b> — 505
     /// real wall collisions — and <em>every one</em> takes the third arm, the
     /// one that stops the character dead. Neither step is ever free.
@@ -217,10 +212,10 @@ public sealed class Phase2FixtureTests
     /// with headroom above it.
     /// </para>
     /// <para>
-    /// ✅ <b>And a human found that geometry in a hundred seconds without being
-    /// told where it was.</b> 50 step-ups and 3 sloping ceilings on
-    /// <c>tdm_mantic</c>, closing both branches that three planned routes missed.
-    /// ⚠️ Note the counters are of <em>executions</em>, not window movement:
+    /// A human found that geometry in a hundred seconds without being
+    /// told where it was: 50 step-ups and 3 sloping ceilings on
+    /// <c>tdm_mantic</c>, closing both branches the scripted routes missed.
+    /// Note the counters are of <em>executions</em>, not window movement:
     /// disabling an arm that fires 50 times still may not move a window, which
     /// is why the count is the measurement here and the mutation is not.
     /// </para>
@@ -245,8 +240,8 @@ public sealed class Phase2FixtureTests
     /// that does not depend on the port.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Without this, "disabling the double jump shrinks the window" could
-    /// be true of any recording that happens to leave the ground.</b> A scout
+    /// Without this, "disabling the double jump shrinks the window" could
+    /// be true of any recording that happens to leave the ground. A scout
     /// jumping thirty times in place is a specific claim about what was
     /// recorded, and it is checkable: the jump key is on the wire on every tick,
     /// on every tier.
@@ -284,53 +279,40 @@ public sealed class Phase2FixtureTests
     }
 
     /// <summary>
-    /// ⚠️ <b>OPEN FINDING: the port puts a player back on a dropdown platform
-    /// they had already dropped through.</b>
+    /// A player who drops through a dropdown platform keeps falling, rather
+    /// than being lifted back onto it.
     /// </summary>
     /// <remarks>
-    /// <b>Found by a human tapping a key, 2026-08-27.</b> At t1621–1625 of
-    /// <see cref="Human"/> the player holds <c>KEY_DOWN</c> on the platform at
-    /// <c>2622,1014</c>, and lets go. The reference drops them through and they
-    /// keep falling — y 990.4 → 1001.2 → 1041.2 → 1086.4. The port starts
-    /// falling with them and then, once <c>Down</c> is released, <b>lifts them
-    /// back onto the platform</b> and holds them at 990.4 for the rest of the
-    /// recording.
+    /// At t1621-1625 of <see cref="Human"/> the player holds <c>KEY_DOWN</c> on
+    /// the platform at <c>2622,1014</c>, and lets go. The reference drops them
+    /// through and they keep falling — y 990.4 → 1001.2 → 1041.2 → 1086.4.
     /// <para>
-    /// ⚠️ <b>All three dropdown paths DO honour <c>KEY_DOWN</c></b> — the Begin
-    /// Step ground test, the Step push-out and
-    /// <c>CharacterPhysics.StandingOnDropdown</c> each check it, so this was
-    /// never a missing feature. ✅ <b>The suspect named here was the right one</b>
-    /// — the Step push-out's "already inside it before this tick's move" guard —
-    /// and the defect was its <b>sign</b>.
+    /// All three dropdown paths honour <c>KEY_DOWN</c> — the Begin Step ground
+    /// test, the Step push-out and <c>CharacterPhysics.StandingOnDropdown</c>
+    /// each check it. The Step push-out's "already inside it before this tick's
+    /// move" guard is the one that matters here.
+    /// </para>
     /// <para>
-    /// ✅ <b>FIXED 2026-08-28.</b> The reference is
+    /// The reference is
     /// <c>place_meeting(x, y + (other.y - other.y_previous), other)</c> inside
     /// <c>with(DropdownPlatform)</c>, so <c>x</c>/<c>y</c> are the <b>platform's</b>
     /// and it moves the platform DOWN by the character's dy — which relative to
-    /// the character asks "was I already inside it at my previous y". The port
-    /// moved the <em>character</em> down by dy instead, which asks whether it
-    /// will be inside the platform <em>next</em> tick. Opposite direction, and
-    /// the comment above it already described the correct behaviour.
+    /// the character asks "was I already inside it at my previous y". Moving the
+    /// <em>character</em> down by dy instead asks whether it will be inside the
+    /// platform <em>next</em> tick — the opposite direction, and wrong.
     /// </para>
     /// <para>
-    /// <b>What one sign was worth:</b> this fixture's exact window went
-    /// <b>1,161 → 2,525</b>, which is the whole recording past its anchor with
-    /// zero mismatches; the client-prediction gate's row for it went
-    /// <b>270 / 44 → 24 / 2</b> in y; and <c>gg_debug-closedtdm</c>'s p99 in y
-    /// went <b>77 → 2</b> — a fixture nothing else in the suite was watching for
-    /// this.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>The shift is applied to the platform, not the character, and that
-    /// is not equivalent.</b> GM8 rounds the <em>calling instance's</em> position
-    /// to build the box it tests, so the reference rounds <c>platformY + dy</c>;
-    /// rounding the character's <c>y - dy</c> is a different number with an
-    /// unrelated fractional part. See the comment in <c>CharacterPhysics</c>.
+    /// <b>The shift must be applied to the platform, not the character, and the
+    /// two are not equivalent.</b> GM8 rounds the <em>calling instance's</em>
+    /// position to build the box it tests, so the reference rounds
+    /// <c>platformY + dy</c>; rounding the character's <c>y - dy</c> is a
+    /// different number with an unrelated fractional part. See the comment in
+    /// <c>CharacterPhysics</c>.
     /// </para>
     /// <para>
     /// Note the earlier dropdown coverage is NOT this: the walk fixture gates the
     /// platform <em>holding a character up</em>, which is the opposite direction.
-    /// Both directions now have a gate.
+    /// Both directions have a gate.
     /// </para>
     /// </remarks>
     [Fact]
@@ -352,10 +334,8 @@ public sealed class Phase2FixtureTests
         var report = new Replayer(new PortedSimulation(MapLoader)) { Compare = Fields.All }
             .Replay(Human, trace.Header.Map, ticks, ReplayMode.ClosedLoop, stopAtFirstBadTick: false);
 
-        // ⚠️ Was tick 1634, six ticks after the key came up, with the reference
-        // 254 wire units — nearly 51 px — BELOW the port, which is the port
-        // holding the player up on a platform they had left. Now there is
-        // nothing at all after the anchor.
+        // No mismatch after the anchor: the port no longer holds the player up
+        // on a platform they had left.
         Assert.DoesNotContain(report.Mismatches, m => m.Tick > anchor);
     }
 }

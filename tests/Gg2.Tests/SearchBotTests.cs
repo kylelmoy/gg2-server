@@ -8,7 +8,7 @@ namespace Gg2.Tests;
 /// Arm 3: the scripted bot with a <see cref="RolloutSearch"/> micro-controller.
 /// </summary>
 /// <remarks>
-/// ⛔ <b>What these gate is that ONE thing differs from the policy arm: which
+/// <b>What these gate is that ONE thing differs from the policy arm: which
 /// controller <see cref="HybridBot"/> hands to.</b>
 /// An arm-2/arm-3 comparison is a comparison of controllers only if the gate, the
 /// range, the rule, the intel carve-out and the every-tick scripted poll are the
@@ -55,7 +55,7 @@ public sealed class SearchBotTests
     /// Far apart, the scripted layer drives and the search never runs.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The cheap half of the gate, and what makes the cost bearable at all: a
+    /// The cheap half of the gate, and what makes the cost bearable at all: a
     /// search decision is 23% of a tick at twelve characters, so a bot that
     /// engaged everywhere would be unshippable however well it fought.
     /// </remarks>
@@ -90,17 +90,17 @@ public sealed class SearchBotTests
     }
 
     /// <summary>
-    /// ⛔ The intel carrier is the macro layer's, exactly as in arm 2.
+    /// The intel carrier is the macro layer's, exactly as in arm 2.
     /// </summary>
     /// <remarks>
     /// Carrying the intel is an objective task and objectives are the scripted
-    /// layer's. ⚠️ If this differed between the arms, arm 3 would be playing a
+    /// layer's. If this differed between the arms, arm 3 would be playing a
     /// different game on every CTF map rather than running a different controller.
     /// </remarks>
     [Fact]
     public void TheIntelCarrierIsAlwaysTheScriptedLayers()
     {
-        // ⚠️ HandoverRule.Range, NOT the shipped MacroTask conjunction, and that is
+        // HandoverRule.Range, NOT the shipped MacroTask conjunction, and that is
         // what makes this test mean anything. Under MacroTask the scripted layer does
         // not want to engage while carrying the intel anyway, so the search stays out
         // whether or not the carve-out exists — deleting it left this green. Dropping
@@ -136,10 +136,10 @@ public sealed class SearchBotTests
     }
 
     /// <summary>
-    /// ⚠️ The scripted layer thinks on EVERY tick, including ones it does not drive.
+    /// The scripted layer thinks on EVERY tick, including ones it does not drive.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>The measured lesson from arm 2, asserted rather than assumed.</b>
+    /// <b>The measured lesson from arm 2, asserted rather than assumed.</b>
     /// Polling the scripted bot only on the ticks it drove left the macro layer
     /// doing no objective planning during fights — no re-target, no re-path, no
     /// spot ban — and captures fell 20 to 7 over a hundred matches. A search
@@ -164,7 +164,7 @@ public sealed class SearchBotTests
         Assert.True(bot.MicroTicks > 0, "the search never drove, so this proves nothing");
         Assert.Equal(16, bot.MicroTicks + bot.ScriptedTicks);
 
-        // ⛔ The load-bearing assertion, and WantsToEngage alone was NOT it: with
+        // The load-bearing assertion, and WantsToEngage alone was NOT it: with
         // the scripted poll moved behind `if it drives`, this class still passed,
         // because the hold stays set from the ticks it did drive. ScriptedPolls
         // counts THINKING rather than DRIVING, and only it separates the two.
@@ -176,20 +176,19 @@ public sealed class SearchBotTests
     }
 
     /// <summary>
-    /// ⛔ Both arms engage at the same distances, because they share one gate.
+    /// Both arms engage at the same distances, because they share one gate.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Behavioural rather than structural.</b> Asserting that both call
+    /// <b>Behavioural rather than structural.</b> Asserting that both call
     /// <c>Handover</c> would pass on two classes calling it with different
     /// arguments. This runs a real <see cref="PolicyController"/> and a real
     /// <see cref="SearchController"/> over the same world and asserts they agree
     /// about who drives — which is the property the experiment actually needs.
     /// <para>
-    /// ⚠️ <b>Weaker than it was, and deliberately kept.</b> Both arms are now the
-    /// same <see cref="HybridBot"/>, so the gate is shared by construction and this
-    /// can no longer catch two gates drifting apart. What it still catches is a
-    /// CONTROLLER that changes when the gate fires — an <c>AtDecisionBoundary</c>
-    /// or a <c>Drives</c> that disagrees between them.
+    /// Both arms are the same <see cref="HybridBot"/>, so the gate is shared by
+    /// construction and this cannot catch two gates drifting apart. What it
+    /// catches is a CONTROLLER that changes when the gate fires — an
+    /// <c>AtDecisionBoundary</c> or a <c>Drives</c> that disagrees between them.
     /// </para>
     /// </remarks>
     [Theory]
@@ -219,10 +218,10 @@ public sealed class SearchBotTests
     }
 
     /// <summary>
-    /// ⛔ The search is resynced when control comes BACK to it.
+    /// The search is resynced when control comes BACK to it.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The tests above never handed control back, so deleting the resync call
+    /// <b>The tests above never handed control back, so deleting the resync call
     /// left them all green.</b> Found by mutation, which is the only thing that could
     /// have found it: a missing resync does not throw, it makes the first decision
     /// after each handover turn from a bearing nobody is pointing at.
@@ -244,7 +243,7 @@ public sealed class SearchBotTests
         Run(bot, world, red, 8);
         Assert.True(bot.MicroTicks > 0, "the search never drove, so this proves nothing");
 
-        // ⚠️ Force control OUT through a real gate path rather than by moving the
+        // Force control OUT through a real gate path rather than by moving the
         // enemy: picking up the intel is the carve-out, is deterministic, and does
         // not depend on the scripted layer re-acquiring a target.
         world.State.Characters[red].CarryingIntel = true;
@@ -277,10 +276,10 @@ public sealed class SearchBotTests
     }
 
     /// <summary>
-    /// ⛔ Control changes hands only on the search’s decision boundary.
+    /// Control changes hands only on the search’s decision boundary.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Two controllers with independent cadences flap against each other at
+    /// <b>Two controllers with independent cadences flap against each other at
     /// the threshold</b>, and each holds state the other does not maintain — the
     /// macro layer’s follower, the search’s absolute aim. The policy arm refuses
     /// to swap mid-decision for that reason and this must too.
@@ -288,7 +287,7 @@ public sealed class SearchBotTests
     /// Checked deterministically rather than by jittering the range: engage, then
     /// teleport the enemy away MID-decision. Respecting the boundary, the search
     /// keeps the wheel until its decision ends; ignoring it, control returns on the
-    /// very next tick. ⚠️ Found by mutation — replacing the boundary test left every
+    /// very next tick. Found by mutation — replacing the boundary test left every
     /// other test in this class green.
     /// </para>
     /// </remarks>

@@ -21,13 +21,13 @@ public enum BotRole
 /// attacks the other's), but CTF wants it just as much: a flag nobody is guarding
 /// is a flag that leaves and does not come back.
 /// <para>
-/// ⚠️ <b>Assigned once, when the bot joins or is re-teamed, never re-decided per
+/// <b>Assigned once, when the bot joins or is re-teamed, never re-decided per
 /// tick.</b> A role that changes while a bot is walking somewhere is
 /// indistinguishable from a bot that cannot make up its mind, and the whole value
 /// of the split is that it reads as team composition from the outside.
 /// </para>
 /// <para>
-/// ⚠️ <b>Counting rather than rolling a die is deliberate.</b> With three bots on
+/// <b>Counting rather than rolling a die is deliberate.</b> With three bots on
 /// a team a 1-in-3 roll gives all-attack about 30% of the time, and "the split
 /// sometimes just does not happen" is not a thing anyone can debug from a
 /// screenshot.
@@ -41,7 +41,7 @@ public static class BotRoles
     /// </summary>
     /// <param name="playerClass">Whose period decides the rate.</param>
     /// <param name="placeInGroup">
-    /// ⚠️ <b>This bot's POSITION among its team's bots that share its period</b> —
+    /// <b>This bot's POSITION among its team's bots that share its period</b> —
     /// not how many team-mates it has, and not its position on the whole team.
     /// <para>
     /// Both of those are wrong in ways worth naming. A count of team-mates is the
@@ -94,7 +94,7 @@ public static class BotRoles
     /// arrives spread along it rather than stacked on one column.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>It must be constant for the bot's whole life.</b> A spread that
+    /// <b>It must be constant for the bot's whole life.</b> A spread that
     /// changes re-issues the goal every time it is read, which fights the re-plan
     /// timer the follower was built around.
     /// <para>
@@ -102,24 +102,21 @@ public static class BotRoles
     /// Consecutive bots differ by one, so <c>mod 2</c> alternates the side and the
     /// second term walks the magnitude around an 11-cycle — enough spread for any
     /// team size a GG2 server runs, and exactly reproducible from the bot's
-    /// identity. ⚠️ In the reference the identity is a GM8 instance id and here it
+    /// identity. In the reference the identity is a GM8 instance id and here it
     /// is the roster slot; the arithmetic is the same and the sequence differs,
     /// which is free (nothing observes which bot took which offset).
     /// </para>
     /// <para>
-    /// ⚠️ <b>A per-bot route seed used to be derived the same way and it is gone
-    /// for good.</b> It fed a cost jitter in the search that produced no route
-    /// variety at all — measured on ctf_truefort, all eight bots got the identical
-    /// route, because per-edge noise averages out over a long path and leaves the
-    /// ordering between routes untouched. Route variety is a shared occupancy
-    /// penalty instead. Do not re-add it.
+    /// <b>Do not derive a per-bot route seed the same way.</b> A cost jitter fed
+    /// from such a seed produces no route variety: per-edge noise averages out
+    /// over a long path and leaves the ordering between routes untouched
+    /// (measured on ctf_truefort — all eight bots got the identical route). Route
+    /// variety comes from a shared occupancy penalty instead.
     /// </para>
     /// <para>
-    /// ⚠️ In the reference this assignment was once deleted along with that seed
-    /// and its comment left behind, so <c>botSpreadX</c> sat at 0 for every bot and
-    /// the whole spread quietly did nothing. Its own test asserted
-    /// <c>abs(botSpreadX) &lt;= BOT_SPREAD_MAX</c>, which 0 satisfies — which is
-    /// why the gate here asserts that the offsets actually differ.
+    /// A bounds check alone (<c>abs(botSpreadX) &lt;= BOT_SPREAD_MAX</c>) is
+    /// satisfied even if every bot's offset is silently 0, so the gate here
+    /// asserts that the offsets actually differ.
     /// </para>
     /// </remarks>
     public static double SpreadX(int slot) =>

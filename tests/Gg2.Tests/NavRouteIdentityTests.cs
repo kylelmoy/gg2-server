@@ -7,7 +7,7 @@ namespace Gg2.Tests;
 /// The exact routes A\* returns on every shipped graph, pinned.
 /// </summary>
 /// <remarks>
-/// ⛔ <b>The gate the nav layer did not have.</b> <c>NavSearchFixtureTests</c>
+/// <b>The gate the nav layer did not have.</b> <c>NavSearchFixtureTests</c>
 /// asserts <em>properties</em> — a route is a walkable chain, it starts and ends
 /// where it was asked to, a gate takes routes away — and every one of them holds
 /// for a route that is not the route this port returns today. So a change that
@@ -15,7 +15,7 @@ namespace Gg2.Tests;
 /// suite: the three pinned bot measurements cover three legs, and nothing covered
 /// the other hundreds of thousands.
 /// <para>
-/// ⚠️ <b>Equal-cost routes are not a corner case here.</b> Half the shipped maps
+/// <b>Equal-cost routes are not a corner case here.</b> Half the shipped maps
 /// are symmetric by construction, so two mirror-image routes of identical cost
 /// are the normal situation and which one comes back is decided by the order the
 /// frontier happens to pop. That order is an implementation detail of
@@ -24,10 +24,10 @@ namespace Gg2.Tests;
 /// other test in this repo would notice.
 /// </para>
 /// <para>
-/// ⚠️ <b>A failure here is a RE-RECORD, not a broken test</b>, and it is the same
+/// <b>A failure here is a RE-RECORD, not a broken test</b>, and it is the same
 /// rule the three pinned bot measurements carry: check the change is one you
 /// meant, check it went the way you meant, update the row, and say so in the
-/// commit. ⛔ <b>And the other direction is the alarm</b> — a digest that does
+/// commit. <b>And the other direction is the alarm</b> — a digest that does
 /// <em>not</em> move when the search was deliberately changed says the change
 /// never reached what this measures.
 /// </para>
@@ -38,13 +38,10 @@ public sealed class NavRouteIdentityTests
     private const int Pairs = 250;
 
     /// <summary>
-    /// The digest of every route on every shipped graph. ⚠️ RE-RECORDED 2026-09-02
-    /// when the search took NavConstants.SearchWeight and stopped re-opening: 23 of
-    /// the 25 digests moved and every found-count is unchanged, which is the
-    /// property that mattered — no route that existed became unreachable.
+    /// The digest of every route on every shipped graph.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A digest rather than a list, and that is a real trade.</b> The whole
+    /// <b>A digest rather than a list, and that is a real trade.</b> The whole
     /// sweep is about 150,000 node indices; a checked-in list of them would be
     /// unreadable and unreviewable, and nobody would diff it. The cost is that a
     /// failure says "something moved" and not "which leg moved" — the second
@@ -91,7 +88,7 @@ public sealed class NavRouteIdentityTests
 
         var actual = Sweep();
 
-        // ⚠️ Recorded rather than asserted, when the table is empty: printing the
+        // Recorded rather than asserted, when the table is empty: printing the
         // rows is how the table is filled, and an empty table must not pass.
         Assert.NotEmpty(Expected);
 
@@ -103,7 +100,7 @@ public sealed class NavRouteIdentityTests
 
         Assert.Equal(Expected.Count, actual.Count);
 
-        // ⛔ Agreement is worthless if the sweep found nothing to agree about.
+        // Agreement is worthless if the sweep found nothing to agree about.
         var found = actual.Values.Sum(v => v.Found);
         Assert.True(found > 5_000, $"only {found} routes were found across {actual.Count} graphs");
     }
@@ -112,7 +109,7 @@ public sealed class NavRouteIdentityTests
     /// Folds every route on every shipped graph into one digest per graph.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The pairs are derived arithmetically, not drawn from
+    /// <b>The pairs are derived arithmetically, not drawn from
     /// <see cref="Random"/>.</b> A seeded <c>Random</c> would be reproducible in
     /// practice and is a dependency on a framework implementation detail for a
     /// value that gets checked in — the two coprime strides below are the same
@@ -182,7 +179,7 @@ public sealed class NavRouteIdentityTests
     /// Prints the table above. Not a test of anything; run it to re-record.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Skipped rather than deleted.</b> A recorder that lives in the
+    /// <b>Skipped rather than deleted.</b> A recorder that lives in the
     /// session that wrote it has to be rebuilt by whoever re-records, and they
     /// will rebuild it slightly differently — which is how a re-recorded pin
     /// stops meaning what the old one meant.

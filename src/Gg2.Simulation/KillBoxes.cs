@@ -16,7 +16,7 @@ public enum KillBoxKind
     Kill,
 
     /// <summary>
-    /// <c>pitfall</c>: kills a character and ⚠️ <b>leaves a sentry alone</b>.
+    /// <c>pitfall</c>: kills a character and <b>leaves a sentry alone</b>.
     /// </summary>
     Pit,
 
@@ -39,12 +39,12 @@ public readonly record struct KillBoxRect(int Left, int Top, int Right, int Bott
 /// <b>What a shipped map actually places</b>, scanned across all 22:
 /// <c>tdm_mantic</c> places <b>six pitfalls</b> and nothing else places
 /// anything. So a <c>killbox</c> and a <c>fragbox</c> are reachable only on a
-/// custom map — and ⚠️ <b>the flag-returning arm they unlock is reachable on no
+/// custom map — and <b>the flag-returning arm they unlock is reachable on no
 /// shipped map at all</b>, because the one map with boxes is Team Deathmatch and
 /// has no intel. See <see cref="Deaths"/>.
 /// </para>
 /// <para>
-/// ⚠️ These are <em>character</em> collision events, so GM8 keys them by the
+/// These are <em>character</em> collision events, so GM8 keys them by the
 /// other object's id and they run <b>after</b> the objective and the cabinet:
 /// <c>IntelligenceBase*</c> 104/105, <c>HealingCabinet</c> 126,
 /// <c>Intelligence*</c> 133/134, then <c>KillBox</c> 506, <c>FragBox</c> 509,
@@ -122,7 +122,7 @@ public static class KillBoxes
     /// recently.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A frag box hands the kill over as a <em>gib</em> and the other two
+    /// <b>A frag box hands the kill over as a <em>gib</em> and the other two
     /// as a plain finish-off.</b> The three events are otherwise identical, and
     /// this and <see cref="SourceOf"/> are the whole difference — plus the frag
     /// box's explosion sound, which is presentation.
@@ -135,12 +135,12 @@ public static class KillBoxes
     /// boxes.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The box does not kill; it sets <c>hp = 0</c>.</b> The death happens
+    /// <b>The box does not kill; it sets <c>hp = 0</c>.</b> The death happens
     /// in the victim's own End Step, later in the same tick, through exactly the
     /// path any other lethal damage takes — which is what makes the kill log,
     /// the scoring and the respawn all behave normally.
     /// <para>
-    /// ⚠️ <b>And a pit fall does not touch a sentry.</b>
+    /// <b>And a pit fall does not touch a sentry.</b>
     /// <c>Sentry.events/</c> has a <c>Collision with KillBox</c> and a
     /// <c>Collision with FragBox</c> and no <c>Collision with PitFall</c>, so an
     /// engineer can build in a pit and the gun survives what its owner does not.
@@ -174,7 +174,7 @@ public static class KillBoxes
             ref var character = ref state.Characters[slot];
             var box = Aabb.ForCharacter(character.Box, character.X, character.Y);
 
-                // ⚠️ Indexed rather than `foreach`: this list arrives as an
+                // Indexed rather than `foreach`: this list arrives as an
                 // INTERFACE, and enumerating one allocates a boxed enumerator —
                 // measured at 32 bytes per live character per tick, every tick,
                 // which is exactly what docs/BOTAI.md item 1 forbids. Indexing an
@@ -213,7 +213,7 @@ public static class KillBoxes
             {
                 var killBox = boxes[i];
 
-                // ⚠️ A pit fall has no Sentry event at all.
+                // A pit fall has no Sentry event at all.
                 if (killBox.Kind == KillBoxKind.Pit)
                     continue;
 

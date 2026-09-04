@@ -9,12 +9,12 @@ namespace Gg2.Tests;
 /// a platform picks up, who it shoves, and who it drops.
 /// </summary>
 /// <remarks>
-/// ⛔ <b>362 lines that no test reached at all until 2026-09-02.</b> Confirmed by
+/// <b>362 lines that no test reached at all.</b> Confirmed by
 /// neutralising <see cref="MovingPlatforms.Carry"/> and re-running: <b>2,601
 /// passing before and after</b>. Not an oversight anybody could have spotted from
 /// the suite — the code is <em>unreachable</em> through a shipped map.
 /// <para>
-/// ⛔ <b>Why.</b> A platform's collision shape comes from an embedded resource the
+/// <b>Why.</b> A platform's collision shape comes from an embedded resource the
 /// map entity names, and <b>every moving platform in every shipped map resolves
 /// to a null mask</b> — including all four of <c>gg_debug2</c>'s.
 /// <c>MovingPlatformDefinition.Mask</c>'s own remarks say so. A platform with no
@@ -23,12 +23,12 @@ namespace Gg2.Tests;
 /// map that reaches it.
 /// </para>
 /// <para>
-/// ⚠️ So these tests build the platform rather than loading one, through the
+/// So these tests build the platform rather than loading one, through the
 /// explicit-definitions <c>EndStep</c> overload — the same shape
 /// <c>KillBoxes.CollisionStep</c> has, and for the same reason.
 /// </para>
 /// <para>
-/// ⛔ <b>COVERAGE, measured rather than estimated.</b> Neutralising the carry
+/// <b>COVERAGE, measured rather than estimated.</b> Neutralising the carry
 /// fails <b>nine of the eleven</b> tests here. The two survivors are meant to
 /// survive: <see cref="TheRoundedPairCatchesUpAtTheEndOfTheTick"/> is about
 /// <c>EndStep</c>'s bookkeeping and correctly does not depend on the carry, and
@@ -47,7 +47,7 @@ namespace Gg2.Tests;
 /// </list>
 /// </para>
 /// <para>
-/// ⚠️ <b>Four of the eleven assert an ABSENCE</b> and would pass on a deleted
+/// <b>Four of the eleven assert an ABSENCE</b> and would pass on a deleted
 /// carry, so each states its own control. That is not decoration: an earlier
 /// draft had four such tests with no controls, all of them passed, and
 /// neutralising the carry failed only four of eight.
@@ -112,7 +112,7 @@ public sealed class MovingPlatformCarryTests
     /// Puts <paramref name="slot"/> standing exactly on top of the platform.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Found by search, not by arithmetic.</b> "On top" is
+    /// <b>Found by search, not by arithmetic.</b> "On top" is
     /// <c>Meets(box, x, y + 1) &amp;&amp; !Meets(box, x, y)</c> — the carry's own
     /// test — and the y that satisfies it depends on the character's box origin,
     /// the mask's origin and the scale. Computing it here would encode a second
@@ -169,7 +169,7 @@ public sealed class MovingPlatformCarryTests
     /// How far the rider moved in y over one tick. <b>Zero means not carried.</b>
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>Every "not carried" assertion below states its own control through
+    /// <b>Every "not carried" assertion below states its own control through
     /// this.</b> A test that only asserts the rider did not move passes just as
     /// happily when the carry is DELETED — measured, not supposed: neutralising
     /// <c>Carry</c> leaves four of the eight tests in this file green, and they
@@ -193,7 +193,7 @@ public sealed class MovingPlatformCarryTests
     }
 
     /// <summary>
-    /// ⛔ The whole point of the carry: a rider moves with the platform.
+    /// The whole point of the carry: a rider moves with the platform.
     /// </summary>
     [Fact]
     public void ARiderMovesWithThePlatform()
@@ -214,13 +214,13 @@ public sealed class MovingPlatformCarryTests
         Assert.True(stepY != 0, "the platform did not move, so nothing was carried");
         Assert.Equal(startY + stepY, state.Characters[0].Y);
 
-        // ⚠️ Zeroed, not preserved: a rider is not falling, and leaving the
+        // Zeroed, not preserved: a rider is not falling, and leaving the
         // accumulated gravity would drop them the instant they step off.
         Assert.Equal(0, state.Characters[0].VSpeed);
     }
 
     /// <summary>
-    /// ⛔ Holding DOWN drops you through — "Cannot collide or move along if they
+    /// Holding DOWN drops you through — "Cannot collide or move along if they
     /// hold down".
     /// </summary>
     [Fact]
@@ -239,16 +239,16 @@ public sealed class MovingPlatformCarryTests
         Assert.Equal(startY, state.Characters[0].Y);
         Assert.Equal(3, state.Characters[0].VSpeed);
 
-        // ⚠️ The control, in the same test: the identical scene without the key
+        // The control, in the same test: the identical scene without the key
         // IS carried. Without this the assertions above pass on a deleted carry.
         Assert.NotEqual(0, CarriedY(static (ref WorldState s) => s.Characters[0].VSpeed = 3));
     }
 
     /// <summary>
-    /// ⛔ A character rising FASTER than the platform passes through it.
+    /// A character rising FASTER than the platform passes through it.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The reference's guard is two-part and the comment says why</b>:
+    /// <b>The reference's guard is two-part and the comment says why</b>:
     /// testing only for upward motion would let a rising platform pass through
     /// somebody rising more slowly, and comparing speeds alone would stop a
     /// platform carrying anybody downwards. This is the branch that needs both —
@@ -278,7 +278,7 @@ public sealed class MovingPlatformCarryTests
     }
 
     /// <summary>
-    /// ⚠️ ...and one rising SLOWER is still carried, which is the half a
+    /// ...and one rising SLOWER is still carried, which is the half a
     /// speed-only guard would break.
     /// </summary>
     [Fact]
@@ -302,12 +302,12 @@ public sealed class MovingPlatformCarryTests
     }
 
     /// <summary>
-    /// ⛔ A trigger platform is started by being stood on — and a stopped
+    /// A trigger platform is started by being stood on — and a stopped
     /// platform scans for riders at all only because of the second arm of
     /// <c>EndStep</c>'s guard.
     /// </summary>
     /// <remarks>
-    /// ⚠️ This is the one branch where the carry runs on a platform that did not
+    /// This is the one branch where the carry runs on a platform that did not
     /// move. <c>waitingOnATrigger</c> is what gets it there; without it a trigger
     /// platform would sit still for ever because nothing would ever notice the
     /// rider.
@@ -327,7 +327,7 @@ public sealed class MovingPlatformCarryTests
     }
 
     /// <summary>
-    /// ⛔ A <c>trigger == 2</c> platform waits for an INTEL CARRIER, and an
+    /// A <c>trigger == 2</c> platform waits for an INTEL CARRIER, and an
     /// ordinary rider does not start it.
     /// </summary>
     [Fact]
@@ -351,11 +351,11 @@ public sealed class MovingPlatformCarryTests
     }
 
     /// <summary>
-    /// ⛔ A platform with no mask carries nobody — which is every platform in
+    /// A platform with no mask carries nobody — which is every platform in
     /// every shipped map.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Not a degenerate case to be tidied away.</b> GM8 with
+    /// <b>Not a degenerate case to be tidied away.</b> GM8 with
     /// <c>sprite_index = -1</c> collides with nothing, so this is the reference's
     /// behaviour and not a guard the port invented. It is also the reason this
     /// whole file has to build its platform by hand.
@@ -387,7 +387,7 @@ public sealed class MovingPlatformCarryTests
 
     /// <summary>The integer step this platform is about to take.</summary>
     /// <remarks>
-    /// ⚠️ Taken by running <see cref="MovingPlatforms.Step"/> on a COPY rather
+    /// Taken by running <see cref="MovingPlatforms.Step"/> on a COPY rather
     /// than by assuming a sign convention. The step goes through
     /// <c>point_direction</c> and <c>cos</c>/<c>sin</c>, so a "purely vertical"
     /// platform's horizontal component is 6.1e-17 rather than 0 — deriving it
@@ -413,7 +413,7 @@ public sealed class MovingPlatformCarryTests
     /// HORIZONTALLY, where the character ends up beside it and is rolled back.
     /// </param>
     /// <remarks>
-    /// ⛔ <b>These are <see cref="MovingPlatforms"/>' own three entry conditions
+    /// <b>These are <see cref="MovingPlatforms"/>' own three entry conditions
     /// for the push-out</b>, in its order — <c>!Meets(x, y)</c>,
     /// <c>!Meets(x, y + 1)</c>, <c>Meets(x - stepX, y - stepY)</c>. Searched
     /// rather than computed, for the same reason <see cref="PutRiderOnTop"/>
@@ -473,11 +473,11 @@ public sealed class MovingPlatformCarryTests
     }
 
     /// <summary>
-    /// ⛔ The push-out's carried branch: a rising platform drives into somebody
+    /// The push-out's carried branch: a rising platform drives into somebody
     /// just above it, backs them out onto its top, and takes them with it.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The rewind moves them the "wrong" way on purpose.</b>
+    /// <b>The rewind moves them the "wrong" way on purpose.</b>
     /// <c>good_move_contact_solid</c> heads towards
     /// <c>(x - stepX, y - stepY)</c> — <em>against</em> the platform's motion —
     /// until it touches the platform at its OLD position. For a rising platform
@@ -510,16 +510,16 @@ public sealed class MovingPlatformCarryTests
     }
 
     /// <summary>
-    /// ⛔ The push-out's ROLL-BACK: somebody a platform merely brushes is put
+    /// The push-out's ROLL-BACK: somebody a platform merely brushes is put
     /// back exactly where they were.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The trap this branch exists for.</b> The rewind has already moved
+    /// <b>The trap this branch exists for.</b> The rewind has already moved
     /// the character by the time the "did they end up on top" test runs, so
     /// leaving them there would teleport anyone a platform passed near. The
     /// reference restores the original position and the port has to as well.
     /// <para>
-    /// ⛔ <b>This assertion is an ABSENCE, so it needs its meaning from
+    /// <b>This assertion is an ABSENCE, so it needs its meaning from
     /// elsewhere</b> — an unchanged position is also what a push-out that never
     /// ran produces. Two things supply it: the carried case above proves the
     /// fixture reaches the push-out at all, and the roll-back was
@@ -528,7 +528,7 @@ public sealed class MovingPlatformCarryTests
     /// it is written down here.
     /// </para>
     /// <para>
-    /// ⚠️ The vspeed is asserted UNTOUCHED, which is the half that separates a
+    /// The vspeed is asserted UNTOUCHED, which is the half that separates a
     /// roll-back from a carry: only the carried branch zeroes it.
     /// </para>
     /// </remarks>
@@ -560,7 +560,7 @@ public sealed class MovingPlatformCarryTests
     /// once on open ground so it can be reused anywhere on the map.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Measured through the same search <see cref="PutRiderOnTop"/> uses, for
+    /// Measured through the same search <see cref="PutRiderOnTop"/> uses, for
     /// the same reason: it is the carry's own definition of "standing on", not a
     /// second opinion about box origins.
     /// </remarks>
@@ -579,7 +579,7 @@ public sealed class MovingPlatformCarryTests
     /// <paramref name="lift"/> — a ceiling.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>Searched on the shipped map rather than invented.</b> This is the one
+    /// <b>Searched on the shipped map rather than invented.</b> This is the one
     /// branch of the carry that cannot be reached on open ground: it needs a
     /// destination that is genuinely not <c>PlaceFree</c>, which means real
     /// geometry. Scanning for it is cheaper and far more honest than hard-coding
@@ -609,7 +609,7 @@ public sealed class MovingPlatformCarryTests
     }
 
     /// <summary>
-    /// ⛔ A rider whose destination is blocked is LEFT WHERE THEY ARE, not shoved
+    /// A rider whose destination is blocked is LEFT WHERE THEY ARE, not shoved
     /// into the wall.
     /// </summary>
     /// <remarks>
@@ -618,13 +618,13 @@ public sealed class MovingPlatformCarryTests
     /// rising into a ceiling therefore slides out from under whoever is standing
     /// on it rather than pushing them through the map.
     /// <para>
-    /// ⚠️ <b>The vspeed is asserted UNTOUCHED as well as the position.</b> The
+    /// <b>The vspeed is asserted UNTOUCHED as well as the position.</b> The
     /// zeroing lives inside the same <c>if</c>, so a blocked rider keeps whatever
     /// they had — and checking only the position would pass on an implementation
     /// that skipped the move but still zeroed the fall.
     /// </para>
     /// <para>
-    /// ⚠️ The control is <see cref="CarriedY()"/>: the same rider on open ground
+    /// The control is <see cref="CarriedY()"/>: the same rider on open ground
     /// IS moved. Without it this is another absence that a deleted carry would
     /// satisfy.
     /// </para>
@@ -652,7 +652,7 @@ public sealed class MovingPlatformCarryTests
 
         Put(ref state, 0, ceiling.Value.X, ceiling.Value.Y, vspeed: 3);
 
-        // ⚠️ Assert the rider really is on top before running, or a fixture that
+        // Assert the rider really is on top before running, or a fixture that
         // drifted would test the "not touching it" path and still look green.
         var collider = ColliderFor(definitions[0], state.MovingPlatforms[0]);
         var box = state.Characters[0].Box;
@@ -671,15 +671,15 @@ public sealed class MovingPlatformCarryTests
     }
 
     /// <summary>
-    /// ⚠️ The rounded pair is brought up to date after the carry, not before.
+    /// The rounded pair is brought up to date after the carry, not before.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>This one is about <c>EndStep</c>'s bookkeeping and not about the
+    /// <b>This one is about <c>EndStep</c>'s bookkeeping and not about the
     /// carry</b>, so it stays green with <c>Carry</c> neutralised — correctly.
     /// It is here because the lag it pins is what the carry depends on.
     /// </remarks>
     /// <remarks>
-    /// ⛔ <b>The lag is the whole reason <c>RoundedX</c>/<c>RoundedY</c> are
+    /// <b>The lag is the whole reason <c>RoundedX</c>/<c>RoundedY</c> are
     /// stored rather than derived.</b> Through the carry the platform's mask sits
     /// at its PREVIOUS rounded position while the step describes where it is
     /// going; deriving them from <c>X</c>/<c>Y</c> would put the mask where the

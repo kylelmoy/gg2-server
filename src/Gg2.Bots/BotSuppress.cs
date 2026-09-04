@@ -16,7 +16,7 @@ namespace Gg2.Bots;
 /// the graph already knows: the enemy has to walk a route, and the first node on it
 /// this bot can see is the place worth denying.
 /// <para>
-/// ⚠️ <b>Worth building because the case is common, and that was measured before
+/// <b>Worth building because the case is common, and that was measured before
 /// any of it was written.</b> Twelve bots on koth_valley over 3,172 frames:
 /// <b>13,733 bot-ticks with a live target, 2,744 of them — 20% — with no line of
 /// sight to it</b>, and for a heavy specifically 1,432 of 6,442, or 22%. About one
@@ -24,7 +24,7 @@ namespace Gg2.Bots;
 /// the 30-tick drop does not already eat most of it.
 /// </para>
 /// <para>
-/// ⚠️ <b>A BOUNDED BREADTH-FIRST WALK, NOT AN A* — and that is a measurement, not a
+/// <b>A BOUNDED BREADTH-FIRST WALK, NOT AN A* — and that is a measurement, not a
 /// preference.</b> The design asked for "run the path search from there toward the
 /// heavy's own node and walk that path outward". Built that way first and timed:
 /// <b>8.13 ms a call on koth_valley's 270 nodes</b>. Amortised over
@@ -50,7 +50,7 @@ public static class BotSuppress
     /// How many nodes the frontier may hold.
     /// </summary>
     /// <remarks>
-    /// ⚠️ At most <c>BOT_SUPPRESS_HOPS</c> nodes are ever dequeued, so this only has
+    /// At most <c>BOT_SUPPRESS_HOPS</c> nodes are ever dequeued, so this only has
     /// to hold what those expand to. Overflowing it stops enqueuing rather than
     /// throwing, which can only <em>shrink</em> the answer — and a smaller answer is
     /// a suppression declined, which costs nothing.
@@ -58,7 +58,7 @@ public static class BotSuppress
     private const int Frontier = 512;
 
     /// <param name="foeTeam">
-    /// ⚠️ <b>The walk uses the ENEMY's gates, not ours.</b> It is their route, and a
+    /// <b>The walk uses the ENEMY's gates, not ours.</b> It is their route, and a
     /// red bot must not decide that a blue enemy will come out through a red spawn
     /// gate.
     /// </param>
@@ -70,7 +70,7 @@ public static class BotSuppress
         ArgumentNullException.ThrowIfNull(graph);
         ArgumentNullException.ThrowIfNull(collision);
 
-        // Where they were. ⚠️ Snapped DOWNWARD, because a position in mid-air
+        // Where they were. Snapped DOWNWARD, because a position in mid-air
         // belongs to the surface under it — a target last seen jumping is going to
         // land on something.
         var source = graph.SnapObjective(lastX, lastY).Node;
@@ -98,7 +98,7 @@ public static class BotSuppress
 
             var (x, y) = Centre(graph, node);
 
-            // ⚠️ NOT the node they were last seen on: that one is behind cover by
+            // NOT the node they were last seen on: that one is behind cover by
             // construction, and shooting it is exactly the behaviour this replaces.
             // The test is cheap and it is also the guard that stops a caller aiming
             // at a wall when the enemy simply stood still.
@@ -112,7 +112,7 @@ public static class BotSuppress
                 if (Contains(seen[..seenCount], to))
                     continue;
 
-                // ⚠️ hasIntel is false — a carrier is on everyone's HUD anyway, and
+                // hasIntel is false — a carrier is on everyone's HUD anyway, and
                 // guessing wrong only closes gates, which can only shrink the answer.
                 if (!graph.EdgePassable(in edge, foeTeam, hasIntel: false, setupGatesClosed: false))
                     continue;
@@ -141,7 +141,7 @@ public static class BotSuppress
 
         var n = graph.Nodes[node];
 
-        // ⚠️ `floor` of the column midpoint, not a rounded one: the reference takes
+        // `floor` of the column midpoint, not a rounded one: the reference takes
         // the integer division of the two anchor columns, and a node an odd number
         // of columns wide would otherwise land half a cell to the right of where the
         // sightline was tested from.

@@ -19,16 +19,14 @@ public sealed record TraceHeader
     /// The longest string a header field can hold.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Every header string is written with a one-byte length prefix</b>
+    /// <b>Every header string is written with a one-byte length prefix</b>
     /// (<see cref="Trace.Encode"/>), so 255 is a hard limit rather than a
     /// convention — and it is <b>not</b> raised, because the prefix is the
     /// checked-in trace format and every fixture in the corpus is written in it.
     /// <para>
     /// Named so a caller can refuse an over-long value <em>before</em> doing the
     /// work: <c>Encode</c> runs after a recording has finished, and a throw there
-    /// discards however many minutes of capture produced it. Measured on
-    /// 2026-08-27 by losing a 175-second recording to a 284-character
-    /// <c>--source</c>.
+    /// discards however many minutes of capture produced it.
     /// </para>
     /// </remarks>
     public const int MaxStringLength = 255;
@@ -198,13 +196,10 @@ public sealed class TraceTick
     /// <c>INPUTSTATE</c>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Kept because nothing else in a recording says anything about a
+    /// <b>Kept because nothing else in a recording says anything about a
     /// control point.</b> The block rides on the same tiers as positions, and
     /// carries <b>no count prefix</b> — a reader rebuilds the points from the
-    /// map (docs/PROTOCOL.md, "The KotH HUD block"). Until 2026-08-27
-    /// <c>TraceParser</c> parsed it and threw it away, so a port that never
-    /// captured a hill replayed a King of the Hill recording exactly as well as
-    /// a correct one.
+    /// map (docs/PROTOCOL.md, "The KotH HUD block").
     /// </remarks>
     public ControlPointBlock[] ControlPoints { get; init; } = [];
 
@@ -212,7 +207,7 @@ public sealed class TraceTick
     /// <c>cpUnlock</c>, when this tick carried a King of the Hill HUD block.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The one thing a replay cannot derive about a King of the Hill
+    /// <b>The one thing a replay cannot derive about a King of the Hill
     /// round.</b> <c>KothHUD.events/Create.xml</c> starts it at 900 and the
     /// unlock fires 901 ticks later — but the HUD is created when the server
     /// <em>restarts the room</em>, and a recording's only landmark is the
@@ -233,11 +228,11 @@ public sealed class TraceTick
     /// configured it — or null on a tick whose update did not carry it.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>It rides on a <c>FULL_UPDATE</c> and on nothing else</b>, and a
+    /// <b>It rides on a <c>FULL_UPDATE</c> and on nothing else</b>, and a
     /// recording holds exactly one of those, at the moment the recorder joined.
     /// So this is non-null on one tick of a whole trace.
     /// <para>
-    /// ⚠️ <b>A replay cannot derive it.</b> It is server configuration
+    /// <b>A replay cannot derive it.</b> It is server configuration
     /// (<c>ServerOptions.TdmInvulnerabilitySeconds</c>, five by default), so a
     /// port replaying a recording made against a differently-configured server
     /// has no way to know except by being told — and the server tells everyone,

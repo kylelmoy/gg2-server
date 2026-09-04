@@ -32,7 +32,7 @@ public struct ClassLimitBuffer
 /// level on their own.
 /// </para>
 /// <para>
-/// ⚠️ <b>The counter runs every tick and the check does not.</b>
+/// <b>The counter runs every tick and the check does not.</b>
 /// <c>GameServerBeginStep.gml:1-2</c> increments <c>balancecounter</c> at the
 /// very top of every frame, but <c>ServerBalanceTeams</c> is only <em>called</em>
 /// from three places: a character's death (<c>End Step.xml:30</c>), a player
@@ -67,7 +67,7 @@ public static class TeamBalance
     /// every frame.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Only while a notice is outstanding</b> — <c>if(serverbalance != 0)</c>
+    /// <b>Only while a notice is outstanding</b> — <c>if(serverbalance != 0)</c>
     /// — so the counter is not a free-running clock, and a server that has never
     /// been unbalanced has it at zero.
     /// </remarks>
@@ -84,7 +84,7 @@ public static class TeamBalance
     /// Called from a death, a departure and a team change, and from nowhere
     /// else.
     /// <para>
-    /// ⚠️ <b>Arena is excluded</b> (<c>!instance_exists(ArenaHUD)</c>) — it
+    /// <b>Arena is excluded</b> (<c>!instance_exists(ArenaHUD)</c>) — it
     /// balances between rounds instead, in <see cref="ArenaRestart"/>, where it
     /// can move several players at once and does not have to wait for anybody to
     /// be dead. And a decided round is excluded too
@@ -141,16 +141,16 @@ public static class TeamBalance
     /// The same "two or more larger" test and the same lowest-points pick, and
     /// then three differences that matter:
     /// <list type="bullet">
-    /// <item>⚠️ <b>It loops</b>, moving players until the gap is under two —
+    /// <item><b>It loops</b>, moving players until the gap is under two —
     /// where <see cref="Check"/> moves at most one per call.</item>
-    /// <item>⚠️ <b>There is no "only dead players" guard.</b> Between rounds
+    /// <item><b>There is no "only dead players" guard.</b> Between rounds
     /// everybody is about to be respawned anyway.</item>
-    /// <item>⚠️ <b>It does not arm <c>alarm[5]</c>.</b> The round start
+    /// <item><b>It does not arm <c>alarm[5]</c>.</b> The round start
     /// respawns everybody directly (<c>respawnEveryone</c>), so a balanced
     /// player would otherwise come back twice.</item>
     /// </list>
     /// <para>
-    /// ⚠️ The loop counts down its own local <c>teammore</c>/<c>teamless</c>
+    /// The loop counts down its own local <c>teammore</c>/<c>teamless</c>
     /// rather than recounting, which is what makes it terminate. It also clears
     /// the ordinary fuse on every iteration.
     /// </para>
@@ -207,7 +207,7 @@ public static class TeamBalance
     /// for Arena's, which respawns everybody itself a moment later.
     /// </param>
     /// <remarks>
-    /// ⚠️ <b>Destroying the character here is not a death.</b> No
+    /// <b>Destroying the character here is not a death.</b> No
     /// <c>PLAYER_DEATH</c> goes out, nobody is credited, and the client is told
     /// only by the <c>BALANCE</c> message — which is why it carries the class.
     /// <c>WorldState.Clear</c> still runs the Destroy event's own work, so a
@@ -247,7 +247,7 @@ public static class TeamBalance
     /// How many players are on each team.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Players, not characters.</b> A dead player and a player who has
+    /// <b>Players, not characters.</b> A dead player and a player who has
     /// never spawned both count, which is what makes the balance stable rather
     /// than swinging with every death.
     /// </remarks>
@@ -274,7 +274,7 @@ public static class TeamBalance
     /// The lowest-scoring player on a team who is also <b>dead</b>, or -1.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The guard is on the character, not on the player</b>, and its shape
+    /// <b>The guard is on the character, not on the player</b>, and its shape
     /// is <c>if (player.object != -1) if (!(player.object.hp &lt;= 0)) continue;</c>
     /// — so a player with no character at all is eligible, and so is one whose
     /// character is alive but already on no hit points. That second case is how
@@ -348,17 +348,17 @@ public static class Classlimits
     /// The desired class if the team has room, otherwise a random one that does.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Quote is excluded from the random pick and then offered as a last
+    /// <b>Quote is excluded from the random pick and then offered as a last
     /// resort.</b> The loop runs <c>class &lt; 9</c> and the reference's comment
     /// says why — "Quote shouldn't be randomly assigned" — but the line below
     /// the loop hands it out anyway when nothing else is free.
     /// <para>
-    /// ⚠️ <b>And if even Quote is full it returns the desired class regardless</b>,
+    /// <b>And if even Quote is full it returns the desired class regardless</b>,
     /// over the limit. A full server does not refuse a class; it just stops
     /// enforcing.
     /// </para>
     /// <para>
-    /// ⚠️ <b>The random pick is a draw from the shared stream</b>
+    /// <b>The random pick is a draw from the shared stream</b>
     /// (<c>irandom(ds_list_size - 1)</c>), so it advances the seed every client
     /// re-derives weapon spreads from. Which class comes out is free —
     /// docs/SIMULATION.md's "server-side RNG is free" covers it, because the

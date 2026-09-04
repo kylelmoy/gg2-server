@@ -10,9 +10,7 @@ namespace Gg2.Tests;
 /// </summary>
 /// <remarks>
 /// <c>serviceJoiningPlayer.gml:131-144</c> (the answer) and <c>:8-24</c> (the
-/// rate-limited pump). Until 2026-09-01 this server advertised an empty MD5 for
-/// every map and dropped any client that asked to download one, so a custom map
-/// could only be played by people who already had the file.
+/// rate-limited pump).
 /// </remarks>
 public sealed class MapDownloadTests : IDisposable
 {
@@ -28,7 +26,7 @@ public sealed class MapDownloadTests : IDisposable
     }
 
     /// <summary>
-    /// ⚠️ 32 lowercase hex characters, settled from the DLL's own source.
+    /// 32 lowercase hex characters, settled from the DLL's own source.
     /// </summary>
     /// <remarks>
     /// <c>CustomMapGetMapMD5</c> calls the compiled <c>GG2DLL_compute_MD5</c>,
@@ -52,7 +50,7 @@ public sealed class MapDownloadTests : IDisposable
 
     /// <summary>The 22 built-in names, and the five aliases among them.</summary>
     /// <remarks>
-    /// ⚠️ The aliases are the part worth testing. Treating <c>dkoth_60s</c> as a
+    /// The aliases are the part worth testing. Treating <c>dkoth_60s</c> as a
     /// custom map would make every client download a file it already has, under a
     /// name it then cannot find.
     /// </remarks>
@@ -81,7 +79,7 @@ public sealed class MapDownloadTests : IDisposable
     /// download.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The two lists are independent — one is the client's compiled-in switch,
+    /// The two lists are independent — one is the client's compiled-in switch,
     /// the other is what is on disk — and a mismatch is silent. A shipped map
     /// missing from <see cref="InternalMaps"/> would be advertised with an MD5 and
     /// downloaded by every client that already had it.
@@ -168,7 +166,7 @@ public sealed class MapDownloadTests : IDisposable
     }
 
     /// <summary>
-    /// ⚠️ The transfer is rate-limited, and the limit is real rather than
+    /// The transfer is rate-limited, and the limit is real rather than
     /// nominal.
     /// </summary>
     /// <remarks>
@@ -227,7 +225,7 @@ public sealed class MapDownloadTests : IDisposable
 
     /// <summary>Writes a fake custom map and returns its bytes.</summary>
     /// <remarks>
-    /// ⚠️ Not a real PNG, and it does not need to be: nothing on the download
+    /// Not a real PNG, and it does not need to be: nothing on the download
     /// path parses the file. It is opened as a map only when the server loads it,
     /// which is why the two tests that serve one never let the server pick it up
     /// as the level — <c>ServerHarness</c> would throw on a malformed PNG. The

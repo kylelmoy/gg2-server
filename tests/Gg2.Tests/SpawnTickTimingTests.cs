@@ -9,7 +9,7 @@ namespace Gg2.Tests;
 /// maps: it gives it a Begin Step the reference never gave it.
 /// </summary>
 /// <remarks>
-/// <b>Diagnosed 2026-08-27</b>, and it is the root cause of the divergence
+/// This is the root cause of the divergence
 /// <see cref="SecondMapFixtureTests"/> and <see cref="TeamDeathmatchFixtureTests"/>
 /// pin on <c>ctf_2dfort</c> and <c>gg_debug</c>.
 /// <para>
@@ -27,7 +27,7 @@ namespace Gg2.Tests;
 /// </para>
 /// </para>
 /// <para>
-/// ⚠️ <b>Which is why <c>ctf_truefort</c> never caught this.</b> Its spawn
+/// <b>Which is why <c>ctf_truefort</c> never caught this.</b> Its spawn
 /// markers are eighteen pixels above the floor — outside the six-pixel snap — so
 /// both sides genuinely fall and agree. <c>gg_debug</c> (162 → 168) and
 /// <c>ctf_2dfort</c> (894 → 900) are exactly six.
@@ -40,7 +40,7 @@ public sealed class SpawnTickTimingTests
 
     /// <summary>The floor under gg_debug's red spawn, and the marker above it.</summary>
     /// <remarks>
-    /// Measured from both sides on 2026-08-27: the engine and
+    /// Measured from both sides: the engine and
     /// <c>CollisionWorld.PlaceFree</c> agree that a scout box is free at y &lt;= 168
     /// and blocked from 169, and both resolve the marker to (570, 162).
     /// </remarks>
@@ -49,7 +49,7 @@ public sealed class SpawnTickTimingTests
     private const double RestingY = 168;
 
     /// <summary>
-    /// ✅ <b>The simulation is right</b>: spawned through the alarm stage, as the
+    /// <b>The simulation is right</b>: spawned through the alarm stage, as the
     /// reference does, the character is on the floor on its first tick.
     /// </summary>
     /// <remarks>
@@ -84,7 +84,7 @@ public sealed class SpawnTickTimingTests
     }
 
     /// <summary>
-    /// ⚠️ <b>And placing the character before the tick — what a replay does —
+    /// <b>And placing the character before the tick — what a replay does —
     /// does not.</b>
     /// </summary>
     /// <remarks>
@@ -104,7 +104,7 @@ public sealed class SpawnTickTimingTests
     /// never respawns anybody by itself").
     /// </para>
     /// <para>
-    /// ⚠️ <b>If this test fails, the seam has arrived and the bug is fixed</b> —
+    /// <b>If this test fails, the seam has arrived and the bug is fixed</b> —
     /// delete it, and raise the two pinned windows it explains.
     /// </para>
     /// </remarks>

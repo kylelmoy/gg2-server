@@ -83,7 +83,7 @@ public sealed class GeneratorTests
             Assert.Equal(Generators.MaxShieldHp, generator.ShieldHp);
             Assert.False(generator.IsShieldRegenerating);
 
-            // ⚠️ At rest, not at zero: the round's tie-break reads this alarm as
+            // At rest, not at zero: the round's tie-break reads this alarm as
             // "hit in the last three seconds", and a resting 0 would say yes for
             // ever.
             Assert.Equal(Timers.Inactive, generator.RegenerationAlarm);
@@ -107,7 +107,7 @@ public sealed class GeneratorTests
     // --- damage and the shield ----------------------------------------------
 
     /// <summary>
-    /// ⚠️ The shield is a discount, not a barrier: a covered hit still costs
+    /// The shield is a discount, not a barrier: a covered hit still costs
     /// half its damage in real hit points, and costs the shield all of it.
     /// </summary>
     [Fact]
@@ -182,7 +182,7 @@ public sealed class GeneratorTests
     /// stops at full.
     /// </summary>
     /// <remarks>
-    /// ⚠️ One a tick because <c>isShieldRegenerating</c> is used as the
+    /// One a tick because <c>isShieldRegenerating</c> is used as the
     /// <em>rate</em> and GM8's <c>true</c> is 1. Ten seconds for a full shield.
     /// </remarks>
     [Fact]
@@ -200,7 +200,7 @@ public sealed class GeneratorTests
         Assert.Equal(shieldAfterHit, state.RedGenerator.ShieldHp);
         Assert.False(state.RedGenerator.IsShieldRegenerating);
 
-        // ⚠️ The tick the buffer expires is also the tick the shield first
+        // The tick the buffer expires is also the tick the shield first
         // moves: the alarm stage runs between Begin Step and Step, and the
         // regeneration is in the Step below it.
         MatchSimulation.Tick(world, ref state, []);
@@ -240,7 +240,7 @@ public sealed class GeneratorTests
     }
 
     /// <summary>
-    /// ⚠️ The first generator to go decides the match; a second one going on
+    /// The first generator to go decides the match; a second one going on
     /// the same tick cannot overturn it.
     /// </summary>
     /// <remarks>
@@ -283,7 +283,7 @@ public sealed class GeneratorTests
     // --- the explosion ------------------------------------------------------
 
     /// <summary>
-    /// ⚠️ The explosion has no team test: the team that just won is gibbed too.
+    /// The explosion has no team test: the team that just won is gibbed too.
     /// </summary>
     [Fact]
     public void TheExplosionKillsBothTeamsAlike()
@@ -346,7 +346,7 @@ public sealed class GeneratorTests
     }
 
     /// <summary>
-    /// ⚠️ Somebody else hurt them last, so they are <em>finished off</em> and
+    /// Somebody else hurt them last, so they are <em>finished off</em> and
     /// that somebody keeps the kill — the dealer is left in place.
     /// </summary>
     [Fact]
@@ -368,7 +368,7 @@ public sealed class GeneratorTests
     }
 
     /// <summary>
-    /// ⚠️ A victim whose own last dealer was themselves takes the generator's
+    /// A victim whose own last dealer was themselves takes the generator's
     /// credit, not a finish-off: <c>lastDamageDealer != player</c>.
     /// </summary>
     [Fact]
@@ -388,7 +388,7 @@ public sealed class GeneratorTests
     }
 
     /// <summary>
-    /// A sentry in the blast is destroyed — and ⚠️ does <b>not</b> take the
+    /// A sentry in the blast is destroyed — and does <b>not</b> take the
     /// permanent build-rate penalty, because the event writes <c>hp</c> straight
     /// rather than calling <c>damageSentry</c>.
     /// </summary>
@@ -492,7 +492,7 @@ public sealed class GeneratorTests
     }
 
     /// <summary>
-    /// ⚠️ The <c>Shot</c>'s generator event has <b>no wall test</b>, where its
+    /// The <c>Shot</c>'s generator event has <b>no wall test</b>, where its
     /// character and sentry events both open with one.
     /// </summary>
     /// <remarks>
@@ -572,7 +572,7 @@ public sealed class GeneratorTests
     }
 
     /// <summary>
-    /// ⚠️ A direct rocket deals its hit <em>and</em> its splash at distance
+    /// A direct rocket deals its hit <em>and</em> its splash at distance
     /// zero, unlike a sentry hit where the direct half is <c>damageAuto</c>.
     /// </summary>
     [Fact]
@@ -594,7 +594,7 @@ public sealed class GeneratorTests
 
     /// <summary>
     /// A rocket that goes off nearby scratches the generator with the same
-    /// linear falloff a sentry takes — and ⚠️ has no quarter-radius cutoff, so
+    /// linear falloff a sentry takes — and has no quarter-radius cutoff, so
     /// even the outer edge of the blast counts.
     /// </summary>
     [Fact]
@@ -615,7 +615,7 @@ public sealed class GeneratorTests
     }
 
     /// <summary>
-    /// ⚠️ A <em>flying</em> mine's blast skips its outer quarter, and a landed
+    /// A <em>flying</em> mine's blast skips its outer quarter, and a landed
     /// one does not — <c>and other.splashThreshhold</c>, which the movement
     /// pass clears on landing.
     /// </summary>
@@ -689,7 +689,7 @@ public sealed class GeneratorTests
     }
 
     /// <summary>
-    /// At 0:00 the healthier generator wins — ⚠️ by <em>damage stage</em>, not
+    /// At 0:00 the healthier generator wins — by <em>damage stage</em>, not
     /// by hit points, so the two are tied anywhere inside one band.
     /// </summary>
     [Theory]
@@ -716,7 +716,7 @@ public sealed class GeneratorTests
     }
 
     /// <summary>
-    /// ⚠️ It is the generator that is about to <em>win</em> whose alarm is
+    /// It is the generator that is about to <em>win</em> whose alarm is
     /// read: a push against the leader holds the match open.
     /// </summary>
     /// <remarks>
@@ -771,7 +771,7 @@ public sealed class GeneratorTests
     }
 
     /// <summary>
-    /// ⚠️ The tie-break cannot run on the tick the clock reaches zero — the
+    /// The tie-break cannot run on the tick the clock reaches zero — the
     /// reference's <c>else if</c> means the decrement and the decision are
     /// never the same tick.
     /// </summary>

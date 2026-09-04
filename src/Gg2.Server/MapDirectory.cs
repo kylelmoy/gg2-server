@@ -6,30 +6,23 @@ namespace Gg2.Server;
 /// Where the built-in map PNGs are, without needing a reference checkout.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>The maps are checked in at <c>maps/</c> as of 2026-09-01, and this is
-/// what made the server standalone.</b> Until then every entry point defaulted to
-/// <c>D:\code\Gang-Garrison-2\Source\gg2\Included Files</c> — a hard-coded
-/// absolute path to one machine's checkout of a fork — and
-/// <see cref="ServerOptions.MapDirectory"/> threw if it was not set. A clone of
-/// this repo could not serve a single round.
+/// <b>The maps are checked in at <c>maps/</c>, and this is what makes the server
+/// standalone</b> — a clone of this repo can serve a round with no reference
+/// checkout and no environment variable set.
 /// <para>
-/// ⚠️ <b>They are 23 PNGs and 458 KB</b> — the reference's 22, plus the
+/// <b>They are 23 PNGs and 458 KB</b> — the reference's 22, plus the
 /// port-authored <c>gg_debug2</c> (docs/DEBUG-MAPS.md), which no census of the
-/// shipped maps should count. The old comment said "there is nowhere
-/// else to get them: they ship inside the Game Maker project", which was true
-/// about their origin and wrong about the consequence — nothing stopped them
-/// being copied, and the cost of not copying them was a hard dependency on
-/// another repository for the product's core function.
+/// shipped maps should count.
 /// </para>
 /// <para>
-/// ⚠️ <b>The reference's 22 are kept byte-identical to it, and <c>maps.json</c>
+/// <b>The reference's 22 are kept byte-identical to it, and <c>maps.json</c>
 /// is what says so.</b> <c>LevelEntityTests.MatchesTheEntityOracle</c> reads every map
 /// through this resolver and compares each entity against the checked-in oracle,
 /// so a map that drifted from the reference's fails the suite. Copying them here
 /// did not weaken that gate; it pointed it at the copy.
 /// </para>
 /// <para>
-/// ⚠️ <b><c>Gg2.Parity</c> has a parallel copy of this probe order</b> and does
+/// <b><c>Gg2.Parity</c> has a parallel copy of this probe order</b> and does
 /// not reference <c>Gg2.Server</c>. Change one, change the other. It is not
 /// shared through <c>Gg2.Maps</c> on purpose: <c>Gg2.Simulation</c> references
 /// that assembly, and CLAUDE.md's no-I/O rule is enforced by keeping file access
@@ -40,7 +33,7 @@ public static class MapDirectory
 {
     /// <summary>The map every probe uses to recognise a real map directory.</summary>
     /// <remarks>
-    /// ⚠️ <b>Probing for the directory alone is not enough.</b> An empty
+    /// <b>Probing for the directory alone is not enough.</b> An empty
     /// <c>maps/</c> left behind by a partial checkout would satisfy
     /// <c>Directory.Exists</c> and then fail at the first join, which is a much
     /// worse error than not finding it at all.
@@ -94,22 +87,12 @@ public static class MapDirectory
     /// the executable or above it. Empty when there are none.
     /// </summary>
     /// <remarks>
-    /// ✅ <b>Copied into build and publish output alongside the maps, since
-    /// 2026-09-03.</b> They used to be opt-in behind <c>-p:PublishNav=true</c>
-    /// because they were 34 MB; gzipping the container made them 1.11 MB, which
-    /// is less than the maps beside them, and the flag was deleted rather than
-    /// kept for a cost that no longer exists.
+    /// <b>Copied into build and publish output alongside the maps, no flag
+    /// needed.</b> The gzipped container is 1.11 MB, less than the maps beside it,
+    /// so shipping it by default costs little. <c>NavCache.CompressedExtension</c>
+    /// has the measurements.
     /// <para>
-    /// ⛔ <b>That 34 MB was a working-tree number doing duty as a shipping
-    /// cost.</b> Git had been storing ~1.1 MB of it the whole time, because hex
-    /// of <c>ds_grid_write</c> doubles compresses about 32:1. The flag it
-    /// justified made the DEFAULT deployment one where bots do not navigate —
-    /// a much worse property than a large build directory, and it went
-    /// unnoticed because nothing goes red when a server's bots merely walk into
-    /// walls. <c>NavCache.CompressedExtension</c> has the measurements.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>Empty is not an error.</b> <c>NavCache.TryLoad</c> degrades to bots
+    /// <b>Empty is not an error.</b> <c>NavCache.TryLoad</c> degrades to bots
     /// that fight whatever reaches them and walk nowhere, which is what a server
     /// with an ungenerated map in its rotation should do. Returning empty here
     /// preserves that; it must not start throwing.
@@ -147,7 +130,7 @@ public static class MapDirectory
     /// Whether a directory actually holds nav graphs, in either container.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>An empty <c>nav/</c> must not satisfy the probe</b>, for the reason
+    /// <b>An empty <c>nav/</c> must not satisfy the probe</b>, for the reason
     /// <see cref="Sentinel"/> exists on the map side: a directory that is there
     /// and empty resolves, and then every map misses one at a time, which reads
     /// as twenty-five separate faults instead of one missing directory.

@@ -56,7 +56,7 @@ public static class CollisionLine
         /// step over anything solid. Zero means "no idea, walk pixel by pixel".
         /// </summary>
         /// <remarks>
-        /// ⛔ <b>It makes the walk SKIP, never guess, and the answer is identical
+        /// <b>It makes the walk SKIP, never guess, and the answer is identical
         /// rather than approximate.</b> <see cref="Walk{TMask}"/> advances at most
         /// one pixel on each axis per step — the major axis is chosen so the
         /// slope's magnitude is at most one — so <c>k</c> steps move the sample
@@ -65,7 +65,7 @@ public static class CollisionLine
         /// is open, so the samples the walk jumps over cannot be the first solid
         /// one.
         /// <para>
-        /// ⚠️ <b>Zero is the honest answer wherever the promise cannot be made</b>
+        /// <b>Zero is the honest answer wherever the promise cannot be made</b>
         /// — off the mask, or for a mask with no clearance field. Returning
         /// anything else is a bullet through a wall, and no test of the walk's
         /// ordinary cases would notice.
@@ -157,13 +157,12 @@ public static class CollisionLine
     /// end, exclusive at the high end, and that asymmetry is load-bearing — see
     /// the measurements in docs/SIMULATION.md.
     /// <para>
-    /// ⛔ <b>Public because a caller with many colliders wants it BEFORE building
-    /// them, and it has to be the same body.</b> A copy of this interval with
-    /// <c>bbox_right</c> in place of <c>bbox_right + 1</c> was mutated into
-    /// <c>CollisionWorld</c> on 2026-09-02 and <b>all 2,643 tests stayed
-    /// green</b> — a collision quietly refused at the edge of a gate is invisible
-    /// to this suite. Shared, the same mutation reddens four, because this body
-    /// is under <c>CollisionLineTests</c>' 9,014-segment oracle.
+    /// <b>Public because a caller with many colliders wants it BEFORE building
+    /// them, and it has to be the same body.</b> A separate copy of this
+    /// interval with <c>bbox_right</c> in place of <c>bbox_right + 1</c> passes
+    /// the whole suite silently — a collision quietly refused at the edge of a
+    /// gate is invisible to it. Shared, the same mutation reddens four, because
+    /// this body is under <c>CollisionLineTests</c>' 9,014-segment oracle.
     /// </para>
     /// </remarks>
     public static bool MightMeet(Aabb bbox, double x1, double y1, double x2, double y2)
@@ -247,7 +246,7 @@ public static class CollisionLine
             if (mask.IsSolid(mx, my))
                 return true;
 
-            // ⚠️ Open ground is skipped rather than walked, and the result is
+            // Open ground is skipped rather than walked, and the result is
             // IDENTICAL rather than approximate — IMask.SafeSkipPixels carries
             // the argument. This is the difference between a soldier's arc test
             // costing a few hundred mask probes and costing a few dozen: the

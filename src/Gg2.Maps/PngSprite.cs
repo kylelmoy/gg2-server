@@ -7,7 +7,7 @@ namespace Gg2.Maps;
 /// Just enough PNG to get a collision mask out of a map's embedded sprite.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>Not a general PNG decoder and must not become one.</b> It answers one
+/// <b>Not a general PNG decoder and must not become one.</b> It answers one
 /// question — is this pixel opaque — for the shapes the map archive actually
 /// contains, and throws with a clear message for everything else rather than
 /// guessing. Written by hand because this project carries no image dependency and

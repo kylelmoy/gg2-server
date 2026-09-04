@@ -14,15 +14,12 @@ namespace Gg2.Tests;
 /// through <see cref="ScenarioWorld"/>, so the character is moved by the same
 /// <c>MatchSimulation.Tick</c> the parity fixtures gate.
 /// <para>
-/// ⚠️ <b>The leg here avoids the arcs that need a WEAPON, and that is now a
-/// statement about the harness rather than about the follower.</b> The jump and
-/// double-jump branches landed in item 4b-ii and the rocket branch in 4i, so
-/// <see cref="Steerable"/> excludes only the two kinds whose takeoff gate asks a
-/// weapon this harness does not model. The leg is chosen by asking the graph
-/// for one every edge of which this follower can steer, so these tests widen on
-/// their own as the arms land, and
-/// <see cref="ABotWalksALegItCanActuallySteer"/> says so if the leg it finds
-/// changes shape.
+/// The leg here avoids the arcs that need a weapon: <see cref="Steerable"/>
+/// excludes only the two edge kinds whose takeoff gate asks about a weapon this
+/// harness does not model. The leg is chosen by asking the graph for one every
+/// edge of which this follower can steer, so these tests widen on their own as
+/// more arms land, and <see cref="ABotWalksALegItCanActuallySteer"/> says so if
+/// the leg it finds changes shape.
 /// </para>
 /// </remarks>
 public sealed class PathFollowerFixtureTests(Xunit.Abstractions.ITestOutputHelper output)
@@ -31,18 +28,12 @@ public sealed class PathFollowerFixtureTests(Xunit.Abstractions.ITestOutputHelpe
 
     /// <summary>Edge kinds this fixture asks a leg to be made of.</summary>
     /// <remarks>
-    /// ⚠️ <b>Not "the kinds the follower can steer" any more — every kind the
-    /// generator emits is steered.</b> The two missing here are the two whose
-    /// takeoff gate asks about a weapon, and both are refused by the search on
-    /// this query anyway (<see cref="NavQuery.CanRocketJump"/> and
+    /// Every kind the generator emits is steered; the two missing here are the
+    /// two whose takeoff gate asks about a weapon, and both are refused by the
+    /// search on this query anyway (<see cref="NavQuery.CanRocketJump"/> and
     /// <see cref="NavQuery.CanStickyJump"/> default false), so neither can reach a
     /// route here. Keeping them out makes the chosen leg deterministic rather than
     /// making a claim about the follower.
-    /// <para>
-    /// ⚠️ This remark said "RocketJump is the only one missing … when the rocket
-    /// half lands this list is complete" for a phase after the rocket half landed,
-    /// and it never mentioned <see cref="NavEdgeType.StickyJump"/> at all.
-    /// </para>
     /// </remarks>
     private static bool Steerable(NavEdgeType type) =>
         type is NavEdgeType.Walk or NavEdgeType.Fall or NavEdgeType.DropThrough
@@ -61,12 +52,11 @@ public sealed class PathFollowerFixtureTests(Xunit.Abstractions.ITestOutputHelpe
     /// can steer.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>"There exists a walk-only way there" is the wrong question</b>, and
-    /// asking it was this test's first draft. The follower is handed
-    /// <see cref="NavSearch"/>'s route, not any route — and the search costs a
-    /// jump the same as anything else, so it happily prefers one across a leg a
-    /// bot could have walked. On ctf_truefort the first walk-only chain found had
-    /// a jump in the middle of the route the search actually returned.
+    /// "There exists a walk-only way there" is the wrong question: the follower
+    /// is handed <see cref="NavSearch"/>'s route, not any route — and the search
+    /// costs a jump the same as anything else, so it happily prefers one across a
+    /// leg a bot could have walked. On ctf_truefort the first walk-only chain
+    /// found had a jump in the middle of the route the search actually returned.
     /// <para>
     /// So: propose candidates with a breadth-first walk over steerable edges,
     /// longest first, and accept the first one whose <em>planned</em> route is
@@ -159,10 +149,10 @@ public sealed class PathFollowerFixtureTests(Xunit.Abstractions.ITestOutputHelpe
     /// steering, the brake band and the arrival — against a character moved by
     /// the real simulation rather than by a test's arithmetic.
     /// <para>
-    /// ⚠️ The controls are what make it a gate rather than a demonstration: a bot
-    /// with <b>no</b> goal must not move, and the arrival must be an arrival
-    /// rather than the budget running out. Without those, a follower that pressed
-    /// RIGHT unconditionally would pass.
+    /// The controls are what make it a gate rather than a demonstration: a bot
+    /// with no goal must not move, and the arrival must be an arrival rather than
+    /// the budget running out. Without those, a follower that pressed RIGHT
+    /// unconditionally would pass.
     /// </para>
     /// </remarks>
     [Fact]
@@ -194,42 +184,18 @@ public sealed class PathFollowerFixtureTests(Xunit.Abstractions.ITestOutputHelpe
 
         world.Drive(slot, new Followed(follower, state, new NavQuery(Team.Red)));
 
-        // ⚠️ Six thousand is the reference's own budget for a leg across this map
+        // Six thousand is the reference's own budget for a leg across this map
         // (`truefort-spawn-to-intel`), and it is not slack: the leg chosen here
-        // is the LONGEST steerable one on ctf_truefort, not spawn-to-intel.
+        // is the longest steerable one on ctf_truefort, not spawn-to-intel.
         //
-        // ⚠️ RE-RECORDED 2026-09-02: 1,786 ticks, 39 re-plans, 0 stuck fires, 10
-        // off-route events, 0 blacklists. It read **1,572 / 33 / 4 / 0** measured
-        // 2026-08-27.
+        // Pinned figures: 1,786 ticks, 39 re-plans, 0 stuck fires, 10 off-route
+        // events, 0 blacklists. This is one of the project's exactly-pinned
+        // end-to-end bot measurements (see CLAUDE.md); a failure here is a
+        // re-record, not a broken test — confirm the change was intended before
+        // updating the numbers.
         //
-        // ✅ The move is the A* weight going 1.0 → 1.3, and it was MEASURED AND
-        // ATTRIBUTED when it happened — docs/ARCHITECTURE.md records this leg
-        // getting worse (1,572 → 1,786) while `BotObjectiveTests`' intel run got
-        // better on all three counters (1,697 → 1,598, 48 → 32, 18 → 10), and
-        // concludes that two single-leg pins disagreeing in opposite directions is
-        // not evidence for choosing a weight. This is a re-record of a known
-        // change, NOT a drift that went unnoticed.
-        //
-        // ⛔ What WAS missing is the gate. Until this commit the only assertion
-        // here was `Arrived` inside a 6,000-tick budget — 71% slack against a
-        // 1,786-tick leg, the identical hole `BotObjectiveTests` closed for the
-        // intel run and `ScenarioSuiteTests` for the suite. CLAUDE.md calls this
-        // "the third of three end-to-end bot measurements, pinned exactly, in both
-        // directions"; it was the one of the three that was not pinned at all, so
-        // the next move would have been silent. The pin below makes the claim
-        // true. Reproduced across three separate process runs.
-        //
-        // The reference quotes 2,200-2,500 ticks "with no blacklists now" for its
-        // own SHORTER leg, so this port is still ahead of it on a longer route.
-        //
-        // ⚠️ It read 2,655 / 76 / 34 / 9 when this was written, and that gap was
-        // recorded here as "this port misses more marginal arcs — the thing to
-        // watch when the takeoff machinery is next touched". It was not the
-        // takeoff machinery. It was a single (int) cast in NavCache truncating
-        // NAV_EDGE_BUCKET, the horizontal velocity every arc is flown at, which
-        // zeroed a third of the jump edges in the game. Worth remembering the
-        // shape of: a plausible-looking gap in a behaviour layer, explained
-        // entirely by a lossy read three layers below it.
+        // The reference quotes 2,200-2,500 ticks for its own shorter leg, so this
+        // port is still ahead of it on a longer route.
         const int Budget = 6000;
 
         var arrivedAt = -1;
@@ -246,15 +212,12 @@ public sealed class PathFollowerFixtureTests(Xunit.Abstractions.ITestOutputHelpe
             + $"short, replans {state.Replans}, stuck {state.StuckFires}, off-route {state.OffRouteFires}, "
             + $"blacklisted {state.BlacklistFires}");
 
-        // ⚠️ PINNED, exactly, and a failure here is the RE-RECORD rather than a
-        // broken test — the same discipline `BotObjectiveTests`' intel run and
-        // `ScenarioSuiteTests.Baseline` ask for, and exact for the same reason:
-        // every draw is seeded, the graph comes off disk and the physics is IEEE
-        // doubles, so a number that moves at all is a behaviour change, not noise.
-        //
-        // ⛔ AND THE OTHER DIRECTION: a pin that does NOT move when you changed
-        // something real says the change never reached what it measures. Quote the
-        // diff with the number, never the number alone.
+        // Pinned exactly, the same discipline `BotObjectiveTests`' intel run and
+        // `ScenarioSuiteTests.Baseline` ask for: every draw is seeded, the graph
+        // comes off disk and the physics is IEEE doubles, so a number that moves
+        // at all is a behaviour change, not noise. Equally, a pin that does not
+        // move when you changed something real says the change never reached what
+        // it measures — quote the diff with the number, never the number alone.
         Assert.Equal(1786, arrivedAt);
         Assert.Equal(39, state.Replans);
         Assert.Equal(0, state.StuckFires);
@@ -266,31 +229,21 @@ public sealed class PathFollowerFixtureTests(Xunit.Abstractions.ITestOutputHelpe
             + $"stuck {state.StuckFires}, off-route {state.OffRouteFires}, "
             + $"blacklisted {state.BlacklistFires}");
 
-        // ⚠️ Arrived means stopped on it, not merely near it.
+        // Arrived means stopped on it, not merely near it.
         Assert.True(Math.Abs(world.State.Characters[slot].X - goalX) <= BotConstants.ArriveTol);
 
         // Nothing on the route was an edge kind the follower cannot steer, so
         // this is a real crossing rather than a lucky one.
         Assert.Equal(0, state.UnsupportedEdgeTicks);
 
-        // ⚠️ PINNED, exactly, and a failure here is the RE-RECORD rather than a
-        // broken test — the discipline `ScenarioSuiteTests.Baseline`,
-        // `BotObjectiveTests`' intel run and the pinned `SIM_UUID` all ask for.
-        // Exact for the same reason: every draw is seeded, the graph comes off
-        // disk and the physics is IEEE doubles, so a number that moves at all is a
-        // behaviour change and not noise.
+        // Pinned exactly, the discipline `ScenarioSuiteTests.Baseline`,
+        // `BotObjectiveTests`' intel run and the pinned `SIM_UUID` all ask for:
+        // every draw is seeded, the graph comes off disk and the physics is IEEE
+        // doubles, so a number that moves at all is a behaviour change, not
+        // noise. A loose bound here can hide a large regression while looking
+        // like diligence, so these are exact rather than thresholds.
         //
-        // ⚠️ <b>The bound this replaces was `ArrivedAt < 2400` and three of these
-        // five were asserted by nothing at all.</b> That was already the tightened
-        // version — "half again on the measurement" — and it still admitted a 53%
-        // regression silently, while the re-plan, off-route and blacklist counts
-        // this file's own comment quotes could go anywhere. Two loose bounds on
-        // consecutive items were found to be hiding drift before this one was
-        // swept; this one had not drifted, which is worth knowing only because it
-        // was checked.
-        //
-        // ⚠️ <b>Zero blacklists is the load-bearing one.</b> It read 9 before the
-        // `NAV_EDGE_BUCKET` truncation was found, and a bot that starts banning
+        // Zero blacklists is the load-bearing one: a bot that starts banning
         // edges again still arrives — just slowly, inside any budget, with the
         // route quality gone and nothing red.
         Assert.Equal(121, route.Count);
@@ -317,7 +270,7 @@ public sealed class PathFollowerFixtureTests(Xunit.Abstractions.ITestOutputHelpe
     /// search every tick.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The throttle that matters at twelve bots. A goal that is genuinely
+    /// The throttle that matters at twelve bots. A goal that is genuinely
     /// unreachable makes every search fail, and retrying it every tick is a full
     /// A* per bot per frame that can never succeed — so planning is on the timer
     /// even when it fails.

@@ -15,13 +15,11 @@ namespace Gg2.Tests;
 /// from this repo (CLAUDE.md).
 /// </para>
 /// <para>
-/// ⚠️ <b>The default is stock upstream GG2, not the bot fork.</b> It used to be
-/// <c>D:\code\Gang-Garrison-2</c>, a fork carrying 42 commits of its own bot and
-/// nav work — 69 extra scripts and 198 extra constants. Tests grew to assert
-/// against those, so "the specification" quietly meant one person's branch. This
-/// port's bot layer has since diverged from that branch anyway, which leaves no
-/// reason to check anything against it. Stock GG2 is the thing a stock client
-/// runs, and that is the only thing this port owes compatibility to.
+/// <b>The default is stock upstream GG2, not the bot fork.</b> The fork at
+/// <c>D:\code\Gang-Garrison-2</c> carries its own bot and nav work, which this
+/// port's bot layer has diverged from — there is no reason to check anything
+/// against it. Stock GG2 is the thing a stock client runs, and that is the only
+/// thing this port owes compatibility to.
 /// </para>
 /// </remarks>
 public static class ReferenceTree
@@ -34,7 +32,7 @@ public static class ReferenceTree
     /// from the reference by design.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Every census that makes a claim about what the SHIPPED maps contain
+    /// Every census that makes a claim about what the SHIPPED maps contain
     /// must exclude these, or adding a port-authored map silently changes what
     /// "no shipped map does X" means. <see cref="MapCopyTests"/> asserts the
     /// other direction: none of these may exist in the reference tree.
@@ -61,24 +59,17 @@ public static class ReferenceTree
     /// root of this repo.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Deliberately NOT under <see cref="Root"/>.</b> These used to be read
-    /// from the reference's <c>Source/build/botnav</c> — the GM8 build directory
-    /// of whichever checkout <c>GG2_REFERENCE</c> pointed at — which quietly made
-    /// 190-odd bot tests depend on a fork that had run the in-game generator.
-    /// A nav graph is <em>this project's</em> artefact and the reference knows
-    /// nothing about it, so it does not belong in a tree CLAUDE.md calls
-    /// read-only.
+    /// <b>Deliberately NOT under <see cref="Root"/>.</b> A nav graph is
+    /// <em>this project's</em> artefact and the reference knows nothing about
+    /// it, so it does not belong in a tree CLAUDE.md calls read-only.
     /// <para>
-    /// ⚠️ <b>They are CHECKED IN as of 2026-09-01</b>, so a fresh clone has them
-    /// and can run a bot. They were gitignored until then, which meant
-    /// regenerating them needed a Game Maker 8 build of a fork.
+    /// <b>Checked in</b>, so a fresh clone has them and can run a bot.
     /// <see cref="RequireNavCache"/> still guards, because a clone can still
     /// delete them.
     /// <para>
-    /// ✅ <b>Stored gzipped since 2026-09-03</b> — 1.11 MB rather than 35.68 MB
-    /// on disk, and the same ~1.1 MB in the pack either way, since that is what
-    /// git was storing before. <see cref="NavCache.List"/> accepts both
-    /// containers, which is why this probe goes through it rather than globbing.
+    /// <b>Stored gzipped</b> — 1.11 MB rather than 35.68 MB on disk.
+    /// <see cref="NavCache.List"/> accepts both containers, which is why this
+    /// probe goes through it rather than globbing.
     /// </para>
     /// </para>
     /// </remarks>
@@ -136,16 +127,14 @@ public static class ReferenceTree
     /// this repo, or the reference's <c>Included Files</c> if that is missing.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The maps are checked in as of 2026-09-01</b>, which reverses this
-    /// type's original "the map tests read the maps out of it rather than
-    /// copying them here". That decision had a real reason — <em>a copied map is
-    /// a map that can silently go stale</em> — and copying them does not answer
-    /// it by itself. <see cref="MapCopyTests"/> is the answer: whenever a
+    /// <b>The maps are checked in</b>, which is in tension with <em>a copied map
+    /// is a map that can silently go stale</em> — copying them does not answer
+    /// that by itself. <see cref="MapCopyTests"/> is the answer: whenever a
     /// reference checkout is present, every copied map is asserted
     /// byte-identical to the reference's. So the copy is gated rather than
     /// trusted, and the tests stop needing a checkout to run at all.
     /// <para>
-    /// ⚠️ <b>Falling back to the reference matters for more than tidiness.</b>
+    /// <b>Falling back to the reference matters for more than tidiness.</b>
     /// <c>LevelEntityTests</c> compares every entity against
     /// <c>Fixtures/maps.json</c>; pointing it at a copy that is never checked
     /// against the reference would leave both sides reading the same bytes and
@@ -169,7 +158,7 @@ public static class ReferenceTree
     /// </summary>
     public static byte[] ReadMap(string map)
     {
-        // ⚠️ Deliberately NOT RequireAvailable(): the maps are checked in, so a
+        // Deliberately NOT RequireAvailable(): the maps are checked in, so a
         // map test no longer needs a reference checkout. RequireAvailable still
         // guards the tests that read Constants.xml or the scripts, which really
         // do need one.

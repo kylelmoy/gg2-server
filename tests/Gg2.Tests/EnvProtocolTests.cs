@@ -13,7 +13,7 @@ namespace Gg2.Tests;
 /// </summary>
 /// <remarks>
 /// <c>docs/ENV.md</c>: "Protocol round-trip against a real socket, including the
-/// `Hello` refuse." ⚠️ <b>A real socket rather than a memory stream, and that
+/// `Hello` refuse." <b>A real socket rather than a memory stream, and that
 /// is the point of the gate</b> — framing bugs hide behind a stream that always
 /// returns everything asked for, and reappear the first time a frame is split
 /// across two reads.
@@ -122,7 +122,7 @@ public sealed class EnvProtocolTests : IDisposable
     /// the reply already shows it.
     /// </summary>
     /// <remarks>
-    /// <b><c>gg2-rl</c> phase 4.</b> ⚠️ <b>The world of -1 form is the one a
+    /// <b><c>gg2-rl</c> phase 4.</b> <b>The world of -1 form is the one a
     /// trainer uses</b>, so it is the one tested; a per-world call is the
     /// degenerate case of the same loop.
     /// </remarks>
@@ -148,7 +148,7 @@ public sealed class EnvProtocolTests : IDisposable
             Assert.Equal(1f, Observation(reply, world, 0, GoalAt + 3 + 2));
         }
 
-        // ⚠️ Blue is untouched — a side is a side. Without this the test passes on
+        // Blue is untouched — a side is a side. Without this the test passes on
         // a handler that sets both, which is the likelier slip.
         Assert.Equal(1f, Observation(reply, 0, 1, GoalAt + 3 + 0));
         Assert.Equal(0f, Observation(reply, 0, 1, GoalAt + 3 + 2));
@@ -158,7 +158,7 @@ public sealed class EnvProtocolTests : IDisposable
     /// A bad kind is refused, and nothing is left set.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The second half is the point.</b> An all-worlds call that validated
+    /// <b>The second half is the point.</b> An all-worlds call that validated
     /// inside the loop would set some of the batch and then refuse, leaving the
     /// trainer with a batch it has no way to describe — and the refusal would look
     /// like nothing had happened.
@@ -187,7 +187,7 @@ public sealed class EnvProtocolTests : IDisposable
     }
 
     /// <summary>
-    /// ⚠️ <see cref="EnvMessage.SetGoal"/> did NOT bump
+    /// <see cref="EnvMessage.SetGoal"/> did NOT bump
     /// <see cref="EnvProtocol.Version"/>, on <see cref="EnvMessage.Candidates"/>'s
     /// precedent: no existing message's body or reply moved by a byte, so a
     /// client that never sends it is unaffected.
@@ -221,7 +221,7 @@ public sealed class EnvProtocolTests : IDisposable
     /// body write.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>This is the gate on a latency fix, and the property it pins is
+    /// <b>This is the gate on a latency fix, and the property it pins is
     /// invisible to every other test here.</b> Two writes put a 4-byte segment on
     /// the wire ahead of the body, which is exactly what Nagle holds back waiting
     /// for an ACK. Measured at batch 1 before the fix: <b>12 round trips in
@@ -229,7 +229,7 @@ public sealed class EnvProtocolTests : IDisposable
     /// correctness test passes either way — a frame that arrives in two segments
     /// is still a correct frame — so nothing but this would notice a revert.
     /// <para>
-    /// ⚠️ <b>Throughput cannot see it either.</b> The smoke run reads 40k
+    /// <b>Throughput cannot see it either.</b> The smoke run reads 40k
     /// steps/sec before and after, because a tight request/response loop keeps
     /// the ACK clock running and rarely stalls. It is the trainer stepping N
     /// workers in lockstep that pays the worst of them.
@@ -253,7 +253,7 @@ public sealed class EnvProtocolTests : IDisposable
     /// And writing one does not allocate, because it is on the per-step path.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Warmed past tier-1 promotion (30 calls) before measuring.</b> .NET
+    /// <b>Warmed past tier-1 promotion (30 calls) before measuring.</b> .NET
     /// rejits in the background, so a short warm-up puts the promotion inside the
     /// measured window and its bookkeeping lands on the measuring thread — which
     /// made a sibling test in this repo fail one run in six.
@@ -320,7 +320,7 @@ public sealed class EnvProtocolTests : IDisposable
     /// candidate set contains.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>Regression for a bug <c>gg2-rl</c> found within an hour of the
+    /// <b>Regression for a bug <c>gg2-rl</c> found within an hour of the
     /// feature shipping, and which every test here passed over.</b> Only a sniper
     /// carries the zoom dimension, so its set is 120; but
     /// <c>RolloutSearch</c>'s constructor builds without zoom, so the instance
@@ -329,7 +329,7 @@ public sealed class EnvProtocolTests : IDisposable
     /// what <see cref="EnvMessage.Candidates"/> reported — was refused on step 0
     /// and only on step 0.
     /// <para>
-    /// ⚠️ <b>Three sources disagreed about one number</b>: <c>Candidates</c> said
+    /// <b>Three sources disagreed about one number</b>: <c>Candidates</c> said
     /// 120, the score block said 120, the validator said 60. The fix is that
     /// <c>DuelEnv.TrySearchShape</c> is now the only place that decides, and this
     /// test is the one that would have caught it — <b>step 0 specifically</b>,
@@ -374,7 +374,7 @@ public sealed class EnvProtocolTests : IDisposable
     /// a multi-world sniper batch, its exact index list, on step 0.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Six worlds and the real index list, because the single-world test
+    /// <b>Six worlds and the real index list, because the single-world test
     /// above proves the bound and this proves the REPORT.</b> A fix that passed a
     /// tidied-down version of somebody's repro and not the repro is a fix nobody
     /// can confirm from outside. The one thing not reproduced is the scripted
@@ -464,7 +464,7 @@ public sealed class EnvProtocolTests : IDisposable
     /// candidates and reports them as (index, score) pairs.
     /// </summary>
     /// <remarks>
-    /// <b><c>gg2-rl</c>'s DESIGN.md step 3.</b> ⚠️ The pairs are the point: a
+    /// <b><c>gg2-rl</c>'s DESIGN.md step 3.</b> The pairs are the point: a
     /// pruned distribution without the indices it is over is "a ranking over an
     /// unnamed list", and a full-length block with a sentinel could not say which
     /// actions were looked at — zero is already a real score, the blind case.
@@ -507,7 +507,7 @@ public sealed class EnvProtocolTests : IDisposable
     /// An out-of-range index is refused and the batch does not step.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The second half is the point.</b> Validation runs over the whole
+    /// <b>The second half is the point.</b> Validation runs over the whole
     /// frame before anything is applied, so a bad index in a late world cannot
     /// leave the earlier ones pruned and the batch in a state the trainer has no
     /// way to describe.
@@ -534,7 +534,7 @@ public sealed class EnvProtocolTests : IDisposable
 
         Assert.Equal((byte)EnvMessage.Error, Receive()[0]);
 
-        // ⚠️ A message that reports observations WITHOUT stepping, so the check is
+        // A message that reports observations WITHOUT stepping, so the check is
         // that the world is where it was rather than that it moved by one step.
         // SetGoal with the default goal is that message.
         Send(EnvMessage.SetGoal, Concat(Int(-1), Int(0), Int(0), Int(0), Real(0), Real(0)));
@@ -543,7 +543,7 @@ public sealed class EnvProtocolTests : IDisposable
 
         Assert.Equal(before, after);
 
-        // ⚠️ AND world 0 was not left restricted, which is the half the first
+        // AND world 0 was not left restricted, which is the half the first
         // version of this test missed entirely: a restriction changes no
         // observation, so "nothing stepped" passes just as well on a server that
         // applied world 0's restriction and then refused world 1's. Removing the
@@ -577,7 +577,7 @@ public sealed class EnvProtocolTests : IDisposable
     /// Restricting a slot that has no search is refused rather than ignored.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Accepting it silently would let a trainer believe it was pruning
+    /// <b>Accepting it silently would let a trainer believe it was pruning
     /// while it paid for a full search</b>, which reads as "pruning does not
     /// help" and is not.
     /// </remarks>
@@ -677,7 +677,7 @@ public sealed class EnvProtocolTests : IDisposable
             Int(1234),
             Int(threads),
 
-            // ⚠️ v2's four driver fields. They are REQUIRED, not
+            // v2's four driver fields. They are REQUIRED, not
             // optional-if-absent: the reward block changed length in v2, so a
             // client that omitted them would be reading a reply it cannot slice.
             Int((int)red),
@@ -685,7 +685,7 @@ public sealed class EnvProtocolTests : IDisposable
             Int(redTier),
             Int(blueTier),
 
-            // ⚠️ v3's four. Required for the same reason plus a sharper one: a
+            // v3's four. Required for the same reason plus a sharper one: a
             // short frame would read the separation band out of whatever
             // followed, and any non-zero maximum moves placement off the spawn
             // points entirely.
@@ -729,7 +729,7 @@ public sealed class EnvProtocolTests : IDisposable
     }
 
     /// <summary>
-    /// ⚠️ <b>The minted copy, not the checked-in fixture.</b>
+    /// <b>The minted copy, not the checked-in fixture.</b>
     /// <c>EnvServer.LoadPolicy</c> refuses a foreign stamp by design and the
     /// fixture's is foreign — see <see cref="PolicyFixture"/>. Testing this path
     /// with the override would delete the guard it exists to exercise.
@@ -741,7 +741,7 @@ public sealed class EnvProtocolTests : IDisposable
     /// against.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Handle 1, not 0.</b> 0 means "no continuation" in <c>MakeBatch</c>, so
+    /// <b>Handle 1, not 0.</b> 0 means "no continuation" in <c>MakeBatch</c>, so
     /// a table numbered from zero would make the first policy loaded
     /// indistinguishable from none.
     /// </remarks>
@@ -785,7 +785,7 @@ o\such\policy.npz"));
     }
 
     /// <summary>
-    /// ⚠️ A continuation handle nobody loaded is refused, and nothing is built.
+    /// A continuation handle nobody loaded is refused, and nothing is built.
     /// </summary>
     /// <remarks>
     /// The same discipline as a bad candidate index: refused at the protocol edge
@@ -808,7 +808,7 @@ o\such\policy.npz"));
     }
 
     /// <summary>
-    /// ⚠️ <b>The continuation is PER SIDE</b>, which is the half the criterion needs.
+    /// <b>The continuation is PER SIDE</b>, which is the half the criterion needs.
     /// </summary>
     /// <remarks>
     /// It is what lets the new search face the old one head-to-head in one world:
@@ -840,7 +840,7 @@ o\such\policy.npz"));
     }
 
     /// <summary>
-    /// ⚠️ A misphased commitment is refused over the socket, not thrown into it.
+    /// A misphased commitment is refused over the socket, not thrown into it.
     /// </summary>
     [Fact]
     public void AMisphasedCommitmentIsRefusedOverTheWire()
@@ -860,10 +860,10 @@ o\such\policy.npz"));
     }
 
     /// <summary>
-    /// ⛔ END TO END: a policy loaded over the socket really drives the search.
+    /// END TO END: a policy loaded over the socket really drives the search.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The gap this closes is the one arm D would otherwise have found.</b>
+    /// <b>The gap this closes is the one arm D would otherwise have found.</b>
     /// <c>ContinuationTests</c> proves the search uses a policy when handed one
     /// in-process; <c>OneSideMayHaveAContinuationAndTheOtherNot</c> proves a batch
     /// naming a handle is accepted. Neither <b>steps</b>, so nothing checked that
@@ -918,7 +918,7 @@ o\such\policy.npz"));
                 cap: 60,
                 red: EnvDriver.Rollout,
                 blue: EnvDriver.Idle,
-                // ⚠️ commit 4 because the search's DecisionTicks is 4 and is NOT the
+                // commit 4 because the search's DecisionTicks is 4 and is NOT the
                 // batch's action repeat — MakeBot does not wire the wire's `repeat`
                 // into RolloutOptions, so the continuation cadence is the search's
                 // own 4 whatever k the batch asked for. commit 2 here is refused by
@@ -955,7 +955,7 @@ o\such\policy.npz"));
     }
 
     /// <summary>
-    /// ⚠️ <b>The version and the frame layout are pinned to each other</b>, so
+    /// <b>The version and the frame layout are pinned to each other</b>, so
     /// changing one without the other is a failing test rather than a silent lie.
     /// </summary>
     /// <remarks>
@@ -967,7 +967,7 @@ o\such\policy.npz"));
     /// and the commit message, the document and the message to <c>gg2-rl</c> all
     /// asserted that it had been.
     /// <para>
-    /// ⚠️ <b>What it cost was the handshake's whole purpose.</b> A client
+    /// <b>What it cost was the handshake's whole purpose.</b> A client
     /// speaking the real layout sent <c>Hello(3)</c> and was <em>refused</em>;
     /// a client speaking the stale one handshook <em>successfully</em> and then
     /// failed its first <c>MakeBatch</c> on the frame-length check — with an
@@ -977,7 +977,7 @@ o\such\policy.npz"));
     /// mis-framed client, not a substitute for it.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Nothing in this repo could have caught it, and that is the point of
+    /// <b>Nothing in this repo could have caught it, and that is the point of
     /// the pin.</b> Every test here builds its own frames from the same constants
     /// the server reads, so client and server agreed with each other about a
     /// layout the version misdescribed. Only a caller with an independent notion
@@ -990,19 +990,19 @@ o\such\policy.npz"));
     [Fact]
     public void TheVersionAndTheFrameLayoutMoveTogether()
     {
-        // ⚠️ Change BOTH or neither. If you are here because you added a field to
+        // Change BOTH or neither. If you are here because you added a field to
         // MakeBatch, the version below is the other half of that change — and
         // gg2-rl has to be told, because its suite pins these from outside.
         Assert.Equal(8, EnvProtocol.Version);
         Assert.Equal(128, EnvProtocol.MakeBatchFixedBytes);
 
-        // ⚠️ v8's LoadPolicy is 13, NOT 10 — 10 is SetGoal. The shape was
+        // v8's LoadPolicy is 13, NOT 10 — 10 is SetGoal. The shape was
         // specified to gg2-rl as 10 before that was checked, and pinning the id
         // here is what stops the two repos disagreeing about a number that
         // compiles fine on both sides and mis-dispatches at run time.
         Assert.Equal(13, (int)EnvMessage.LoadPolicy);
 
-        // ⚠️ v4's sixth action head, on both sides of the wire. A client a version
+        // v4's sixth action head, on both sides of the wire. A client a version
         // behind sends five bytes an agent and every action from the second world
         // on is read one byte out of step — plausible values, wrong agent.
         Assert.Equal(6, EnvProtocol.ActionBytes);
@@ -1047,7 +1047,7 @@ o\such\policy.npz"));
     }
 
     /// <summary>
-    /// ⚠️ <b>The advertised action space matches the one the wire actually
+    /// <b>The advertised action space matches the one the wire actually
     /// carries</b> — one head per action byte, and every width real.
     /// </summary>
     /// <remarks>
@@ -1057,7 +1057,7 @@ o\such\policy.npz"));
     /// <c>Handshake.HeadShape</c> at five entries. The server read six bytes and
     /// wrote six heads back while telling every client the space had five.
     /// <para>
-    /// ⚠️ <b>Nothing here could have caught it and the failure is silent.</b>
+    /// <b>Nothing here could have caught it and the failure is silent.</b>
     /// Every test in this file builds its frames from the constants directly, so
     /// none of them ever asks the handshake what the action space is. A trainer
     /// that believed the advertisement would size a five-head policy against a
@@ -1066,7 +1066,7 @@ o\such\policy.npz"));
     /// because it asserts the advertised shape rather than assuming it.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Derived from <see cref="EnvProtocol.ActionBytes"/>, never restated.</b>
+    /// <b>Derived from <see cref="EnvProtocol.ActionBytes"/>, never restated.</b>
     /// A literal 6 here would drift exactly as the literal 5 did — the whole
     /// lesson of this bug and of the version constant before it is that a
     /// self-description checked against another copy of itself is not checked.
@@ -1080,7 +1080,7 @@ o\such\policy.npz"));
         // One head per byte the Step request carries per agent.
         Assert.Equal(EnvProtocol.ActionBytes, shape.Length);
 
-        // ⚠️ And the reward block echoes every head plus ActionExact, at four
+        // And the reward block echoes every head plus ActionExact, at four
         // bytes each after the five reward fields — so the sizes are tied too.
         // Getting this wrong is how ActionExact silently moved under a reader.
         // five reward fields, one per action head, ActionExact, BestScore.
@@ -1094,7 +1094,7 @@ o\such\policy.npz"));
     }
 
     /// <summary>
-    /// ✅ <b><see cref="EnvMessage.StepScored"/> carries the search's whole
+    /// <b><see cref="EnvMessage.StepScored"/> carries the search's whole
     /// candidate distribution, and plain <see cref="EnvMessage.Step"/> carries
     /// none of it.</b>
     /// </summary>
@@ -1105,7 +1105,7 @@ o\such\policy.npz"));
     /// candidates scored 70 and 69 is exactly the information saying "either is
     /// fine".
     /// <para>
-    /// ⚠️ <b>Opt-in per call, and the control is the point.</b> 60 floats an agent
+    /// <b>Opt-in per call, and the control is the point.</b> 60 floats an agent
     /// (120 for a sniper) against a 52-byte reward block would tax the random-head
     /// smoke run and move phase 0's throughput criterion — the one number quoted
     /// for the socket boundary. So this asserts that a plain Step reply is exactly
@@ -1113,7 +1113,7 @@ o\such\policy.npz"));
     /// longer.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Length-prefixed per agent</b>, because a batch can hold a sniper
+    /// <b>Length-prefixed per agent</b>, because a batch can hold a sniper
     /// (120 candidates) beside a soldier (60) and a single stride would truncate
     /// one or pad the other. A non-searching slot gets a length of <b>zero</b>,
     /// which is deliberately not the same as a block of zero scores: zero is a
@@ -1142,7 +1142,7 @@ o\such\policy.npz"));
         Send(EnvMessage.StepScored, actions);
         var scored = Receive();
 
-        // ⚠️ The reply KIND echoes the request, so a client never has to track
+        // The reply KIND echoes the request, so a client never has to track
         // which shape it is holding.
         Assert.Equal((byte)EnvMessage.StepScored, scored[0]);
 
@@ -1168,7 +1168,7 @@ o\such\policy.npz"));
             at += 4;
         }
 
-        // ⚠️ v7: six i32 for the action the search CHOSE, after the distribution.
+        // v7: six i32 for the action the search CHOSE, after the distribution.
         // Not derivable from it — a median of four candidates share the best score
         // and the search picks among them on aim error.
         at += 6 * 4;
@@ -1176,7 +1176,7 @@ o\such\policy.npz"));
         var blueCount = BinaryPrimitives.ReadInt32LittleEndian(scored.AsSpan(at));
         at += 4;
 
-        // ⚠️ Zero, written explicitly. An Idle slot did not search; that is not
+        // Zero, written explicitly. An Idle slot did not search; that is not
         // the same as having searched and scored nothing.
         Assert.Equal(0, blueCount);
 
@@ -1203,19 +1203,19 @@ o\such\policy.npz"));
     }
 
     /// <summary>
-    /// ✅ <b>The candidate ACTIONS come back, and the action at the distribution's
+    /// <b>The candidate ACTIONS come back, and the action at the distribution's
     /// argmax is the action the search took.</b>
     /// </summary>
     /// <remarks>
     /// <c>StepScored</c> sent scores aligned with a candidate list whose actions
     /// the env never sent, so a consumer turning an index into an action had to
     /// reconstruct <c>RolloutSearch</c>'s enumeration in its own repo — the second
-    /// source of truth the seam exists to prevent. ⚠️ <b>This repo made exactly
+    /// source of truth the seam exists to prevent. <b>This repo made exactly
     /// that argument about the shadow slot's argmax and did not notice it applied
     /// to the whole distribution</b>; <c>gg2-rl</c> did, and without the actions it
     /// could build only margin weighting rather than true soft targets.
     /// <para>
-    /// ⚠️ <b>ALIGNMENT is the assertion, not presence.</b> A candidate list that
+    /// <b>ALIGNMENT is the assertion, not presence.</b> A candidate list that
     /// came back in a different order from the scores would train a policy towards
     /// the wrong actions and nothing about it would look wrong. The one relation
     /// that cannot hold by accident is that the action at the argmax of the
@@ -1223,7 +1223,7 @@ o\such\policy.npz"));
     /// what is checked, across the socket, on a real search.
     /// </para>
     /// <para>
-    /// ⚠️ <b>No version bump</b>: a new kind leaves every existing reply
+    /// <b>No version bump</b>: a new kind leaves every existing reply
     /// byte-identical, so a client that never sends it is unaffected. Asserted
     /// here by checking the plain <c>Step</c> reply's length is untouched.
     /// </para>
@@ -1234,7 +1234,7 @@ o\such\policy.npz"));
         Send(EnvMessage.Hello, Int(EnvProtocol.Version));
         Receive();
 
-        // ⚠️ A cap of 120 rather than the default 20: a soldier's refire starts at
+        // A cap of 120 rather than the default 20: a soldier's refire starts at
         // 29 ticks against a 20-tick horizon, so the first decisions are all the
         // blind tie-break and a short episode never reaches one that scores.
         Send(EnvMessage.MakeBatch, MakeBatchBody(
@@ -1264,7 +1264,7 @@ o\such\policy.npz"));
             at += 24;
         }
 
-        // ⚠️ Blue is Idle: an explicit zero, not an absent field.
+        // Blue is Idle: an explicit zero, not an absent field.
         Assert.Equal(0, BinaryPrimitives.ReadInt32LittleEndian(table.AsSpan(at)));
         Assert.Equal(at + 4, table.Length);
 
@@ -1316,7 +1316,7 @@ o\such\policy.npz"));
             BinaryPrimitives.ReadInt32LittleEndian(scored.AsSpan(componentsAt + 36)),
             BinaryPrimitives.ReadInt32LittleEndian(scored.AsSpan(componentsAt + 40)));
 
-        // ⚠️ RE-RECORDED 2026-08-29. This used to assert the taken action was the
+        // RE-RECORDED 2026-08-29. This used to assert the taken action was the
         // candidate at the FIRST argmax index, and that stopped being true when
         // RolloutSearch gained its aim tie-break: the search now picks among tied
         // candidates on aim error rather than on enumeration order, so the action
@@ -1324,7 +1324,7 @@ o\such\policy.npz"));
         // gg2-rl measured a median of SIX actions sharing the best score, so
         // "the argmax" was never a single thing to begin with.
         //
-        // ⚠️ THE ALIGNMENT CLAIM SURVIVES AND IS THE SAME ONE: look the taken
+        // THE ALIGNMENT CLAIM SURVIVES AND IS THE SAME ONE: look the taken
         // action up in the candidate table and its score must be maximal. A table
         // returned in a different order from the scores still fails — the action
         // is found at an index whose score is not the max — which is what the
@@ -1363,12 +1363,12 @@ o\such\policy.npz"));
         var uuid = System.Text.Encoding.UTF8.GetString(reply, at, uuidLength);
         at += uuidLength;
 
-        // ⚠️ The simulation stamp is in the handshake because a policy trained
+        // The simulation stamp is in the handshake because a policy trained
         // against different physics is not loadable, and a version check that
         // covered only the framing would let that through.
         Assert.Equal(SimulationStamp.Uuid, uuid);
 
-        // ⚠️ DERIVED from ActionBytes, not restated. This line read
+        // DERIVED from ActionBytes, not restated. This line read
         // `Assert.Equal(5, Next())` while the wire carried six heads, and it
         // passed — because it checked the advertisement against a literal copy of
         // the advertisement rather than against the thing advertised. That is the
@@ -1382,7 +1382,7 @@ o\such\policy.npz"));
     }
 
     /// <summary>
-    /// ⚠️ <b>A version mismatch is REFUSED, not warned about.</b>
+    /// <b>A version mismatch is REFUSED, not warned about.</b>
     /// </summary>
     /// <remarks>
     /// The <c>PROTOCOL_UUID</c> idiom. A trainer running against a different
@@ -1468,7 +1468,7 @@ o\such\policy.npz"));
     }
 
     /// <summary>
-    /// ⚠️ <b>A malformed request is answered with an Error, never a dropped
+    /// <b>A malformed request is answered with an Error, never a dropped
     /// connection.</b>
     /// </summary>
     /// <remarks>
@@ -1500,7 +1500,7 @@ o\such\policy.npz"));
     }
 
     /// <summary>
-    /// ⚠️ <b>A frame is read to its length, however the socket splits it.</b>
+    /// <b>A frame is read to its length, however the socket splits it.</b>
     /// </summary>
     /// <remarks>
     /// A socket read returns what has arrived, not what was asked for. Treating
@@ -1538,13 +1538,13 @@ o\such\policy.npz"));
     /// be asked for at all. That blocked <c>gg2-rl</c>'s phase 1 exit criterion,
     /// its phase 2 collection and its phase 3 opponent pool.
     /// <para>
-    /// ⚠️ <b>The two properties it asked for are the two assertions here</b>: a
+    /// <b>The two properties it asked for are the two assertions here</b>: a
     /// bot-driven slot still returns its own reward components, and the action the
     /// bot chose comes back. Neither is visible from outside the process any other
     /// way.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Idle rather than Scripted, on purpose.</b> A scripted opponent needs
+    /// <b>Idle rather than Scripted, on purpose.</b> A scripted opponent needs
     /// a nav cache, which is generated out of band and gitignored — a protocol
     /// test that skipped without one would be a protocol test nobody runs. Idle is
     /// the driver whose behaviour is certain, so a reply that carries its action
@@ -1577,7 +1577,7 @@ o\such\policy.npz"));
                 actions[(w * 10) + 3] = 1;
                 actions[(w * 10) + 4] = ActionDecoder.AimCentreBin;
 
-                // ⚠️ blue is sent a hard left turn and a jump, which the env must
+                // blue is sent a hard left turn and a jump, which the env must
                 // throw away because a bot drives that slot. If the driver were
                 // ignored and the client's action used instead, this is what would
                 // come back.
@@ -1601,7 +1601,7 @@ o\such\policy.npz"));
                 var jump = BinaryPrimitives.ReadInt32LittleEndian(reply.AsSpan(blueAt + 24));
                 var aim = BinaryPrimitives.ReadInt32LittleEndian(reply.AsSpan(blueAt + 36));
 
-                // ⚠️ v4 inserted Zoom at 40, so `exact` moved to 44. Reading it at
+                // v4 inserted Zoom at 40, so `exact` moved to 44. Reading it at
                 // the old offset returned the zoom level and asserted it was 1 —
                 // which is the failure a tail-appended field would NOT have caused
                 // and an inserted one does. It is why the head went at the end of
@@ -1627,7 +1627,7 @@ o\such\policy.npz"));
             }
         }
 
-        // ⚠️ The other half: a bot-driven slot still earns its reward components.
+        // The other half: a bot-driven slot still earns its reward components.
         // Without this the test passes on a server that returned a zeroed block
         // for every bot slot.
         Assert.True(sawDamage, "a bot-driven slot was shot at for 40 steps and reported no damage taken");
@@ -1635,7 +1635,7 @@ o\such\policy.npz"));
 
     /// <summary>An unknown driver is refused on the wire, with a reason.</summary>
     /// <remarks>
-    /// ⚠️ <b>Refused at the protocol edge rather than thrown from inside the batch
+    /// <b>Refused at the protocol edge rather than thrown from inside the batch
     /// construction</b>, so the client gets a sentence it can print instead of a
     /// dropped connection.
     /// </remarks>

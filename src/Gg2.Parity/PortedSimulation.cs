@@ -75,8 +75,7 @@ public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSim
     /// A slot's class, off the world's own player state - taken from the
     /// trace's <c>PLAYER_CHANGECLASS</c> messages rather than guessed: a scout
     /// and a heavy are different widths and different speeds, so replaying one
-    /// as the other is not a near miss. Scout for a slot no message has named,
-    /// which is what the old per-harness dictionary defaulted to.
+    /// as the other is not a near miss. Scout for a slot no message has named.
     /// </summary>
     private PlayerClass ClassOf(int slot) =>
         _state.HasPlayer[slot] ? _state.Players[slot].Class : PlayerClass.Scout;
@@ -90,8 +89,8 @@ public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSim
         _state.HasPlayer[slot] ? _state.Players[slot].Team : Team.Red;
 
     /// <summary>
-    /// First contact with a slot's player: the harness's old dictionary-miss
-    /// defaults, with the respawn alarm at rest. RespawnTime stays 0 on the
+    /// First contact with a slot's player: the default class and team, with the
+    /// respawn alarm at rest. RespawnTime stays 0 on the
     /// whole state, so nothing in a replay ever arms it - the recording's own
     /// <c>PLAYER_SPAWN</c>s are injected instead.
     /// </summary>
@@ -159,22 +158,18 @@ public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSim
         // reachable only from a custom map a recording was made on.
         MovingPlatforms.Place(ref _state, level);
 
-        // ⚠️ The mode FIRST, and it is not cosmetic: ControlPoints.Place
+        // The mode FIRST, and it is not cosmetic: ControlPoints.Place
         // switches on state.GameMode to decide which entity types are points,
         // so a defaulted (Capture the Flag) mode places none of a King of the
         // Hill map's. GameServer sets it at load for the same reason.
         _state.GameMode = GameModes.ShapeOf(level).GameMode;
 
-        // ⚠️ And the control points, which this did NOT do until 2026-08-27: a
-        // replay of any King of the Hill or Control Points map had no hill in
-        // it at all. Nothing noticed, because until Fields.ControlPoints landed
-        // nothing in the harness compared one — TraceParser read the block and
-        // threw it away. The zones have to reach the collision world too, or a
-        // character standing on the point is standing on nothing.
+        // And the control points: the zones have to reach the collision world
+        // too, or a character standing on the point is standing on nothing.
         ControlPoints.Place(ref _state, level, out var zones);
         _world.SetCaptureZones(zones);
 
-        // ⚠️ And the gamemode's own round setup, which is what LOCKS a King of
+        // And the gamemode's own round setup, which is what LOCKS a King of
         // the Hill point before its unlock timer fires. Place leaves every point
         // neutral and unlocked; without this a replay's hill is capturable from
         // the first tick, so six characters standing on it took it immediately
@@ -204,13 +199,10 @@ public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSim
         var playerClass = ClassOf(slot);
         var team = TeamOf(slot);
 
-        // ⚠️ CharacterState.Fresh, not `new CharacterState()`. Six of a
+        // CharacterState.Fresh, not `new CharacterState()`. Six of a
         // character's fields name a roster slot and their "nobody" is 255, so a
         // zeroed one claims slot 0 last hurt it, assisted, set it on fire and is
-        // healing it — and slot 0 always exists, so nothing complains. This read
-        // `new CharacterState()` until 2026-08-25, and it surfaced as a
-        // PLAYER_DEATH on the hot-combat trace naming an assistant the reference
-        // said was nobody.
+        // healing it — and slot 0 always exists, so nothing complains.
         var character = alive ? _state.Characters[slot] : CharacterState.Fresh(playerClass, team);
 
         character.Class = playerClass;
@@ -228,9 +220,8 @@ public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSim
 
         character.KeyState = observed.Keys;
 
-        // ⚠️ LastKeyState is deliberately NOT anchored for a character the
-        // replay already has, and this used to be a bug that only appeared one
-        // tick in seven.
+        // LastKeyState is deliberately NOT anchored for a character the
+        // replay already has.
         //
         // Edge-detected keys — jump, the demoman's right-click, the spy's cloak
         // — fire on `KeyState & ~LastKeyState`. A state update carries this
@@ -254,7 +245,7 @@ public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSim
         character.MoveStatus = observed.MoveStatus;
         character.Cloak = observed.Cloaked;
 
-        // ⚠️ The objective is NOT anchored here, and it cannot be through this
+        // The objective is NOT anchored here, and it cannot be through this
         // seam. `observed` is the tick's own update block, and a tick's update
         // is never a FULL_UPDATE — TraceParser files that one under `start` and
         // treats it as an event, because it is sent on the join path outside the
@@ -378,10 +369,9 @@ public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSim
 
     /// <summary>
     /// A recorded <c>PLAYER_CHANGECLASS</c>, applied to the world's player.
-    /// The sentry consequences are the simulation's own now: <c>Sentry.events/
+    /// The sentry consequences are the simulation's own: <c>Sentry.events/
     /// Begin Step.xml</c>'s guard reads this player state on the next tick,
-    /// which is the reference's own timing - the old harness-side destroy here
-    /// fired a tick early.
+    /// which is the reference's own timing.
     /// </summary>
     public void SetPlayerClass(int slot, PlayerClass playerClass)
     {
@@ -450,7 +440,7 @@ public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSim
 
     /// <inheritdoc />
     /// <remarks>
-    /// ⚠️ <b>The preconditions are re-run rather than assumed, and a refusal is
+    /// <b>The preconditions are re-run rather than assumed, and a refusal is
     /// counted rather than swallowed.</b> That is the opposite of
     /// <see cref="BuildSentry"/>, deliberately: a build's preconditions depend on
     /// where the builder is standing, which a replay can only approximate, while
@@ -580,7 +570,7 @@ public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSim
     /// which is where the reference creates one — see the interface for why the
     /// stage is observable.
     /// <para>
-    /// ⚠️ <b>Only group 0 can be expressed</b>, because
+    /// <b>Only group 0 can be expressed</b>, because
     /// <c>Scripts/Spawning/PlayerSpawn.gml</c> hard-codes
     /// <c>selectSpawnGroup</c>'s answer for every mode the port runs. A
     /// recording naming any other group falls back to being placed directly.
@@ -631,7 +621,7 @@ public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSim
     /// recording named, over the whole replay.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A silent wrong-marker spawn is worth a counter of its own</b>,
+    /// <b>A silent wrong-marker spawn is worth a counter of its own</b>,
     /// because almost nothing notices one: <c>ctf_truefort</c>'s markers are 24
     /// world pixels apart, which is a handful of wire units on one comparison,
     /// and it moved no percentile and no closed-loop window when it was really
@@ -675,7 +665,7 @@ public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSim
     /// matter.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>This exists because forcing the RNG is fragile and the fragility is
+    /// <b>This exists because forcing the RNG is fragile and the fragility is
     /// measured.</b> <see cref="TryForceSpawnPointDraws"/> arranges the stream
     /// before <see cref="MatchSimulation.Tick"/> runs, but the alarm stage is not
     /// the first thing in a tick: weapons fire in Begin Step, and an
@@ -693,7 +683,7 @@ public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSim
     /// consumed, which keeps the stream where the reference's was.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Only when at most one slot per team is spawning.</b> A wave wants a
+    /// <b>Only when at most one slot per team is spawning.</b> A wave wants a
     /// different point per slot from one shared list, which this cannot express;
     /// those fall back to the seed search, which is sound for them because a
     /// wave happens at a round start with nothing shooting yet.
@@ -753,7 +743,7 @@ public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSim
     /// it. Walking that run and testing the rest finds a seed for a whole spawn
     /// wave in a few thousand steps.
     /// <para>
-    /// ⚠️ <b>Overwriting the stream is free here and nowhere else.</b> The
+    /// <b>Overwriting the stream is free here and nowhere else.</b> The
     /// spawn-point choice is server-side RNG the port is explicitly free about
     /// — the reference broadcasts the id it drew — and a replay already forces
     /// every <em>weapon</em> seed from the recording, which is the one place the
@@ -828,9 +818,8 @@ public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSim
     /// characters the old way and disarm the alarms so nothing spawns twice.
     /// </summary>
     /// <remarks>
-    /// This is the pre-2026-08-27 behaviour, which is a tick's worth of gravity
-    /// wrong on a map whose spawn markers are within the stair descent's six
-    /// pixels — so it is a fallback, not an equivalent.
+    /// A tick's worth of gravity wrong on a map whose spawn markers are within
+    /// the stair descent's six pixels — a fallback, not an equivalent.
     /// </remarks>
     private void PlacePendingDirectly()
     {
@@ -867,10 +856,9 @@ public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSim
     /// <c>PLAYER_LEAVE</c>: the slot goes and the roster closes up behind it.
     /// </summary>
     /// <remarks>
-    /// <see cref="WorldState.RemoveSlot"/> does all of it now - the players
+    /// <see cref="WorldState.RemoveSlot"/> does all of it - the players
     /// compact with the characters, weapons and sentries, and every stored
-    /// roster index is renumbered. The per-harness class and team dictionaries
-    /// this used to shift by hand moved into the state with phase 6.
+    /// roster index is renumbered.
     /// </remarks>
     public void RemoveSlot(int slot)
     {
@@ -896,7 +884,7 @@ public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSim
 
         if (_pendingSpawns.Count > 0)
         {
-            // ⚠️ Prefer the seed-independent route. Forcing the stream only
+            // Prefer the seed-independent route. Forcing the stream only
             // works if nothing draws from it between here and the alarm stage —
             // and an UNSEEDED weapon fired in Begin Step does exactly that, so a
             // respawn in the middle of a fight lands on the wrong marker.
@@ -933,7 +921,7 @@ public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSim
         // Arena's four round transitions, kept for the whole replay rather than
         // for one tick: they are 300 ticks apart and what a test wants to know
         // is whether the port reaches them where the recording did.
-        // ⚠️ Nothing in the wire comparison covers this — the replayer injects
+        // Nothing in the wire comparison covers this — the replayer injects
         // no arena message at all, so the port derives every round end itself
         // and nothing was checking the arithmetic.
         if (_events.ArenaRoundEnded)
@@ -987,7 +975,7 @@ public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSim
             if (_events.Ubered[slot])
                 _ubers.Add(new UberRecord((byte)slot, UberEvent.Started));
 
-            // ⚠️ A sentry outlives its owner, so this is NOT inside the death
+            // A sentry outlives its owner, so this is NOT inside the death
             // arm below: a turret can be shot down on a tick its engineer is
             // alive, and an engineer can die on a tick their sentry does not.
             if (_events.SentryDestroyed[slot])
@@ -1055,7 +1043,7 @@ public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSim
 
     /// <inheritdoc />
     /// <remarks>
-    /// ⚠️ <b>Re-locks the points as well as setting the counter, and that is
+    /// <b>Re-locks the points as well as setting the counter, and that is
     /// sound rather than convenient.</b> <c>KothHUD.events/Step.xml</c> fires
     /// <c>doEventUnlockCP</c> on the tick it reads <c>cpUnlock == 0</c>, so a
     /// <em>positive</em> <c>cpUnlock</c> on the wire means the reference has not
@@ -1082,7 +1070,7 @@ public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSim
         {
             _state.ControlPoints[i].Locked = true;
 
-            // ⚠️ And the meter with it. Locking a point DISCARDS its progress —
+            // And the meter with it. Locking a point DISCARDS its progress —
             // `capping = 0; exit;` in ControlPoint's Step — so a lock that left
             // the meter standing would be a state the reference cannot be in.
             // Ownership is untouched: locking does not hand the point back.

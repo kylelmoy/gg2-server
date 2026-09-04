@@ -11,13 +11,13 @@ namespace Gg2.Tests;
 /// the spot search.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>These build a world with a real objective in it, which
+/// <b>These build a world with a real objective in it, which
 /// <see cref="ScenarioWorld"/> deliberately does not.</b> That harness's whole
 /// contract is "no gamemode", so it is the wrong instrument here and the mode
 /// tests' pattern — a <c>CollisionWorld</c> and a <c>WorldState</c> built directly
 /// — is the right one.
 /// <para>
-/// ⚠️ <b>The end-to-end test is the one that matters and the unit ones exist
+/// <b>The end-to-end test is the one that matters and the unit ones exist
 /// because it is slow to bisect.</b> Every rule below is invisible from outside:
 /// a bot with the wrong role still walks somewhere, a bot with no spread still
 /// arrives, and a cascade that picks the wrong flag looks exactly like a routing
@@ -91,12 +91,12 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
     /// One bot in every N defends, and N comes from the class.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The class term is a PERIOD, not a veto.</b> "Engineers defend, scouts
+    /// <b>The class term is a PERIOD, not a veto.</b> "Engineers defend, scouts
     /// attack" breaks at both ends: a team of nine engineers would have nobody
     /// attacking and a team of nine scouts nobody defending, and the population
     /// picker rolls a class with <c>irandom(8)</c>, so it can produce either.
     /// <para>
-    /// ⚠️ <b>The first bot on a team is an attacker every time</b>, which is the
+    /// <b>The first bot on a team is an attacker every time</b>, which is the
     /// right default when there is only one — and it is what the <c>+1</c> in the
     /// modulo buys. A rule keyed on <c>place % every == 0</c> instead makes the
     /// lone bot on a team a defender with nothing to defend against.
@@ -120,7 +120,7 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
 
         Assert.Equal(BotRole.Defend, BotRoles.Assign(PlayerClass.Scout, 5));
 
-        // ⚠️ The control that makes the whole design bite: an all-one-class team
+        // The control that makes the whole design bite: an all-one-class team
         // still splits. A veto rule leaves one of these two with nobody.
         var engineers = 0;
         var scouts = 0;
@@ -142,7 +142,7 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
     /// The count is over the bot's own lean group, not over the whole team.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Counting the whole team makes the period meaningless in a mixed
+    /// <b>Counting the whole team makes the period meaningless in a mixed
     /// one.</b> Two engineers separated by four scouts sit at whole-team positions
     /// 0 and 5, and neither lands on a multiple of 2 — so a team with two engineers
     /// in it has no defenders at all. Sharing a period is what makes a lean group:
@@ -189,7 +189,7 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
     /// Bots get different spreads, and they stay inside the maximum.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>"Inside the maximum" alone is what let this silently do nothing in the
+    /// <b>"Inside the maximum" alone is what let this silently do nothing in the
     /// reference for a whole build.</b> The assignment was deleted along with an
     /// unrelated route seed and its comment left behind, so every bot's spread sat
     /// at its Create-event 0 — and the test asserted only
@@ -244,12 +244,12 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
         Assert.True(attack.Found);
         Assert.True(defend.Found);
 
-        // ⚠️ The enemy flag has to be TOUCHED — a capture is a collision — so the
+        // The enemy flag has to be TOUCHED — a capture is a collision — so the
         // spread is off entirely and the goal is the flag itself.
         Assert.Equal(state.BlueIntel.X, attack.X);
         Assert.True(attack.MustTouch);
 
-        // ⚠️ A defender does NOT stand on what it guards, and BOT_DEFEND_RADIUS is
+        // A defender does NOT stand on what it guards, and BOT_DEFEND_RADIUS is
         // added even at a spread of zero: `if(spreadX >= 0) spreadX += ...`. So the
         // claim here is "beside its own flag", not "on it" — the first draft of this
         // test asserted equality and failed by exactly 220px.
@@ -268,7 +268,7 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
     /// </summary>
     /// <remarks>
     /// Roles do not apply here: there is exactly one thing to do with an enemy
-    /// intel and it is not "guard something else while holding it". ⚠️ A capture is
+    /// intel and it is not "guard something else while holding it". A capture is
     /// a collision with the base, exactly like the grab at the other end of the
     /// run, so it is the second goal that has to be walked into rather than covered.
     /// </remarks>
@@ -296,7 +296,7 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
     /// A stolen flag is chased by every role, not only by defenders.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Our own flag being carried outranks fetching theirs, and it is tested
+    /// <b>Our own flag being carried outranks fetching theirs, and it is tested
     /// first for that reason.</b> Before this only a defender chased a thief — so
     /// on a team that happened to roll none (the role count runs down the roster,
     /// and a short team can land none) an enemy could stand in the open holding the
@@ -329,14 +329,14 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
             Assert.Equal(state.Characters[thief].X, goal.X);
             Assert.Equal(state.Characters[thief].Y, goal.Y);
 
-            // ⚠️ A moving target takes neither a standoff band nor a spread: the
+            // A moving target takes neither a standoff band nor a spread: the
             // first is a bot orbiting a running player and the second is a
             // deliberate miss of the one thing worth intercepting.
             Assert.True(goal.MustTouch);
             Assert.False(goal.IsSpot);
         }
 
-        // ⚠️ The control: with the flag back on its base the same attacker goes for
+        // The control: with the flag back on its base the same attacker goes for
         // the enemy's instead. Without it this passes on any implementation that
         // always chases whoever is nearest.
         state.RedIntel.OnField = true;
@@ -350,7 +350,7 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
     /// </summary>
     /// <remarks>
     /// The flag this bot was going to fetch is already in a team-mate's hands, so
-    /// there is nothing left at the far end to walk to. ⚠️ Measured in the reference
+    /// there is nothing left at the far end to walk to. Measured in the reference
     /// on ctf_truefort: three of four blue bots stood at the empty red stand for the
     /// whole time their team-mate was running the flag back.
     /// </remarks>
@@ -376,7 +376,7 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
     /// A control point's goal is the middle of its capture zone.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The middle, not the origin.</b> A capture zone's origin is its top-left
+    /// <b>The middle, not the origin.</b> A capture zone's origin is its top-left
     /// corner, so aiming there asks the follower to stop on the exact boundary of
     /// the thing it is trying to stand in — and arrival is only accurate to
     /// <c>BOT_ARRIVE_TOL</c>. Measured in the reference on koth_valley: the bot
@@ -410,7 +410,7 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
         Assert.Equal((zone.Left + zone.Right) / 2.0, goal.X);
         Assert.Equal((zone.Top + zone.Bottom) / 2.0, goal.Y);
 
-        // ⚠️ And it is not the origin. Without this the test passes on a port that
+        // And it is not the origin. Without this the test passes on a port that
         // aims at the corner, since the corner is also "in the zone" by any loose
         // reading.
         Assert.NotEqual(zone.Left, goal.X);
@@ -421,7 +421,7 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
     /// A locked point is still walked to.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Every point is locked for the first 900 ticks of a KotH round and 1,800 of
+    /// Every point is locked for the first 900 ticks of a KotH round and 1,800 of
     /// an Arena one, during which the nearest-unlocked-point loop finds nothing and
     /// would leave the bot with <b>no goal at all</b> — standing frozen at spawn
     /// while a human is already walking out to be on the point the moment it opens.
@@ -456,13 +456,13 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
     /// An enemy on our point cancels every "stand somewhere better" behaviour.
     /// </summary>
     /// <remarks>
-    /// ⚠️ A control point is captured by <b>bodies inside the zone</b> and by nothing
+    /// A control point is captured by <b>bodies inside the zone</b> and by nothing
     /// else, so the moment an enemy is standing in it, an overlook 250px up the hill
     /// and a push 400px out toward their spawn are the same mistake: the bot is
     /// looking at the point it is losing. Reported from play as "if the enemy is
     /// capturing the point, bots should return to it to fight / contest".
     /// <para>
-    /// ⚠️ <b>Presence, not the capture meter.</b> Presence is recomputed every step
+    /// <b>Presence, not the capture meter.</b> Presence is recomputed every step
     /// from the characters in the zone, so it is true on the frame an enemy steps
     /// inside; the meter takes a second to become non-zero, and by the time it reads
     /// as a capture the point is a third gone.
@@ -514,7 +514,7 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
         Assert.False(underAttack.IsSpot, "a defender kept its perch while the point was being taken");
         Assert.Equal(centreX, underAttack.X);
 
-        // ⚠️ And the spread comes off too. A capture zone is 125px wide here, the
+        // And the spread comes off too. A capture zone is 125px wide here, the
         // spread is up to 96 either way and a defender adds another 220 on top —
         // measured live in the reference, a defending sniper sent to contest its own
         // point stood at 2544 while the zone ended at 2393, contesting nothing.
@@ -527,7 +527,7 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
     /// </summary>
     /// <remarks>
     /// The objective here is to <em>destroy</em> a generator, not to touch one, and a
-    /// generator is shot from wherever a bot has line of sight to it. ⚠️ At 2,100 hp
+    /// generator is shot from wherever a bot has line of sight to it. At 2,100 hp
     /// that is a sustained-fire job from range, and standing on it was never the goal.
     /// A defender wants to be <em>near</em> its own rather than lined up on it, so
     /// only the attacker's goal is a spot.
@@ -571,7 +571,7 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
         Assert.True(defend.Found);
         Assert.False(defend.IsSpot);
 
-        // ⚠️ Beside its own generator, not on it — BOT_DEFEND_RADIUS again, added
+        // Beside its own generator, not on it — BOT_DEFEND_RADIUS again, added
         // at a spread of zero.
         var red = Generators.BodyBox(in state.RedGenerator);
         Assert.Equal(((red.Left + red.Right) / 2.0) + BotConstants.DefendRadius, defend.X);
@@ -583,7 +583,7 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
     /// <remarks>
     /// It has no landmark: <c>basicRoomSetup</c>'s cascade ends there precisely
     /// because there is nothing on the map to head for, so bots keep fighting
-    /// whatever wanders into range. ⚠️ This is also the property that keeps
+    /// whatever wanders into range. This is also the property that keeps
     /// <see cref="ScenarioWorld"/> inert — a scenario places no objective, and a
     /// cascade that invented one would retask every scenario's bot mid-run.
     /// </remarks>
@@ -623,7 +623,7 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
     /// sightline sense.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b><c>Avoid</c> is the same test with the answer inverted</b>, and it is
+    /// <b><c>Avoid</c> is the same test with the answer inverted</b>, and it is
     /// the spy's flank: near enough to the objective to walk in from, out of sight
     /// of whoever is guarding it. A port that treated it as "do not care" would give
     /// the spy the same position as everybody else and nothing would look wrong.
@@ -654,11 +654,11 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
         Assert.False(world.CollisionLineBlocksBullets(need.X, need.Y, TargetX, TargetY, filter));
         Assert.True(world.CollisionLineBlocksBullets(avoid.X, avoid.Y, TargetX, TargetY, filter));
 
-        // ⚠️ Height, when asked for. It is the whole model of "a good position" —
+        // Height, when asked for. It is the whole model of "a good position" —
         // no sightline graph, no cover map — so a bonus that did nothing would leave
         // a defending sniper standing at the same level as the thing it is watching.
         //
-        // ⚠️ The anchor is a DIFFERENT point from the sightline one above and was
+        // The anchor is a DIFFERENT point from the sightline one above and was
         // found by sweeping every node rather than chosen: (380, 268) is already
         // near the top of ctf_truefort, so no node in a 200-600px band with a clear
         // line to it is any higher and the bonus correctly changes nothing. Only 10
@@ -674,7 +674,7 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
         Assert.True(flat.Node >= 0 && high.Node >= 0);
         Assert.True(high.Y < flat.Y, $"the height bonus chose no higher ground: {high.Y} against {flat.Y}");
 
-        // ⚠️ And the miss publishes the anchor rather than something stale, so a
+        // And the miss publishes the anchor rather than something stale, so a
         // caller that ignores the -1 gets a usable point.
         var impossible = spot.Find(3570, 325, TargetX, TargetY, 90000, 90001, BotLos.Need, 0, world, filter);
 
@@ -687,7 +687,7 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
     /// The sightline budget stops a hopeless search.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <c>BOT_SPOT_TRIES</c> is what makes the worst case a fixed cost rather than
+    /// <c>BOT_SPOT_TRIES</c> is what makes the worst case a fixed cost rather than
     /// one collision-line per node, and <b>it is invisible on any search that
     /// succeeds</b> — a bounded search and an unbounded one return the same node and
     /// pay the same number of tests, because both stop at the first that passes. A
@@ -707,7 +707,7 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
         var world = new CollisionWorld(level);
         var spot = new BotGoalSpot(Graph());
 
-        // ⚠️ Node 35's own stand position, not a round number near it: the anchor
+        // Node 35's own stand position, not a round number near it: the anchor
         // has to be somewhere nothing can see, and moving it a few pixels lands it
         // back in the open.
         var result = spot.Find(2202, 343, 2202, 343, 150, 4000, BotLos.Need, 0, world, CollisionFilter.ForBullet());
@@ -732,13 +732,13 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
     /// An unchanged objective is not reissued.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Reissuing a goal forces an immediate re-plan</b> — it clears the
+    /// <b>Reissuing a goal forces an immediate re-plan</b> — it clears the
     /// follower's re-plan deadline outright — so an objective layer that set the
     /// same destination every 30 ticks would fight the very timer the follower was
     /// built around. Hence the <c>BOT_GOAL_RETARGET_DIST</c> test rather than an
     /// unconditional set.
     /// <para>
-    /// ⚠️ <b>The observable is the deadline, not the arrival.</b> Measured on the
+    /// <b>The observable is the deadline, not the arrival.</b> Measured on the
     /// end-to-end leg below, deleting the throttle costs 41 re-plans → 58 and 10
     /// off-route events → 19, and the bot <em>still arrives</em> — slightly sooner,
     /// in fact (1,780 ticks → 1,693). So a test that only watches whether the bot
@@ -756,7 +756,7 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
         var (state, world, spawns) = Ctf();
         var graph = Graph();
 
-        // ⚠️ A HEAVY, not a soldier. This test measures the objective cadence's
+        // A HEAVY, not a soldier. This test measures the objective cadence's
         // contribution to the re-plan count, and a soldier's routes now contain
         // rocket-jump arcs — which are blacklisted and re-planned around whenever
         // the launcher is not loaded, adding churn that has nothing to do with the
@@ -788,7 +788,7 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
 
         var goalX = bot.Path.GoalX;
 
-        // ⚠️ Keep STEPPING rather than polling in isolation. A Poll with no tick
+        // Keep STEPPING rather than polling in isolation. A Poll with no tick
         // behind it leaves the character where it was, and the follower's own
         // plan/fail bookkeeping then reads a world that never moved — which is a
         // different experiment from the one this is about. A first draft did that
@@ -808,7 +808,7 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
         // objective layer contributed nothing to that re-plan count.
         Assert.Equal(goalX, bot.Path.GoalX);
 
-        // ⚠️ Now move it past BOT_GOAL_RETARGET_DIST and run the same window. Each
+        // Now move it past BOT_GOAL_RETARGET_DIST and run the same window. Each
         // of the four objective ticks now reissues, and each reissue forces a plan.
         replansBefore = bot.Path.Replans;
         var moved = 0;
@@ -843,7 +843,7 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
     /// A spread that steps off a ledge is refused.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The objective's own node is resolved first and the spread only earns its
+    /// <b>The objective's own node is resolved first and the spread only earns its
     /// way in.</b> Getting that the other way round is a defect the reference shipped
     /// for one build: the snap searches <em>downward</em>, so snapping an
     /// already-offset position can land on a floor several storeys below the
@@ -852,7 +852,7 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
     /// place with nothing to do with its objective, which is far worse than not
     /// spreading at all.
     /// <para>
-    /// ⚠️ <b>The fixtures were swept for, not chosen.</b> ctf_orange's node 1 is the
+    /// <b>The fixtures were swept for, not chosen.</b> ctf_orange's node 1 is the
     /// extreme case — a 96px spread there drops <b>636px</b>, most of the map — and
     /// ctf_truefort's node 1 is the ordinary one at 102px, which is still more than
     /// a body's height and so still wrong. The guard is "within a body's height",
@@ -890,7 +890,7 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
             Math.Abs(gx - x) < Spread,
             $"the spread survived a {graph.StandY(cliff) - graph.StandY(home):0}px drop: {gx:0} against {x:0}");
 
-        // ⚠️ The control: a spread that stays on the same level is KEPT. Without it
+        // The control: a spread that stays on the same level is KEPT. Without it
         // this passes on an implementation that ignores the spread entirely, which
         // would silently undo the whole reason it exists.
         var flatGoal = new BotGoal(Found: true, x - Spread, y, IsSpot: false, MustTouch: false);
@@ -920,14 +920,14 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
     /// planning, flying two stacked jumps, arriving, grabbing, and re-deciding for
     /// the run home — is the layer under test.
     /// <para>
-    /// ⚠️ <b>The turn-round half is not a bonus assertion.</b> A cascade that finds
+    /// <b>The turn-round half is not a bonus assertion.</b> A cascade that finds
     /// the enemy flag and then keeps finding it after the grab sends the carrier
     /// back to the base it just left; the carry branch is what stops that, and it is
     /// invisible until somebody is actually carrying. Reaching the flag proves the
     /// route; leaving with it proves the cascade.
     /// </para>
     /// <para>
-    /// ⚠️ <b>The control is a bot with no objective at all</b>, which must go
+    /// <b>The control is a bot with no objective at all</b>, which must go
     /// nowhere. Without it every assertion here is also satisfied by a bot that
     /// happens to spawn on the flag, and the spawn points are the map's.
     /// </para>
@@ -953,7 +953,7 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
 
         var grabbedAt = -1;
 
-        // ⚠️ The scenario suite does this leg (`truefort-spawn-to-intel`) in 1,750
+        // The scenario suite does this leg (`truefort-spawn-to-intel`) in 1,750
         // ticks with the goal handed over; the same budget it uses is the budget
         // here, so a regression that doubles the walk fails rather than passing
         // slowly.
@@ -981,52 +981,31 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
             + $"off-route {bot.Path.OffRouteFires}, blacklisted {bot.Path.BlacklistFires}, "
             + $"rocket jumps {bot.Path.RocketJumps}");
 
-        // ⚠️ PINNED, exactly, and a failure here is the RE-RECORD rather than a
+        // PINNED, exactly, and a failure here is the RE-RECORD rather than a
         // broken test: check the change is one you meant, then that it went the way
         // you meant, then update these and say so in the commit. The same
         // discipline `ScenarioSuiteTests.Baseline` and the pinned `SIM_UUID` ask
         // for, and it is exact for the same reason — every draw is seeded, the
         // graph comes off disk and the physics is IEEE doubles, so a number that
-        // moves at all is a behaviour change and not noise. Four separate process
-        // runs across nine commits agree on every one of these.
+        // moves at all is a behaviour change and not noise.
         //
-        // ⚠️ <b>The bound this replaces was `< 3000` against a leg that takes
-        // 1,748 — 71% of slack.</b> Nothing in the project could see this run get
-        // half as good again, which is the same hole `ScenarioSuiteTests` had: a
-        // budget set before the arcs were flown is not a gate on the cost.
+        // A budget set before the arcs were flown is not itself a gate on the cost
+        // — that is why this pins the exact tick rather than an upper bound.
         //
-        // ⚠️ <b>And the number it recorded was wrong on the day it was written.</b>
-        // The note said 1,747; the test has printed 1,748 since the commit that
-        // wrote it — bisected across nine commits, so it is a transcription error
-        // rather than a drift. A measurement quoted in three documents and gated by
-        // nothing does not get corrected by being read again.
-        //
-        // Against the rocket jump landing this read 1,780 / 41 / 0 / 10 / 2: the
-        // leg got FASTER and the re-plan and off-route counts went UP, which is
-        // what flying arcs that sometimes miss costs. The scenario suite is the
-        // better signal on that trade and it improved across the board
-        // (avanti 311 → 175, valley-floor 251 → 219).
-        //
-        // ⚠️ <b>RE-RECORDED 2026-08-28</b>, when `PathFollower.TryFindEdge` stopped
-        // taking the first edge of a parallel pair and started resolving the one
-        // `NavSearch` actually costed. <b>1,748 → 1,697, and all four counters
-        // moved the good way</b>: re-plans 49 → 48, off-route 19 → 18, and the
-        // blacklist 1 → 0.
-        //
-        // ⚠️ <b>That last one is the informative one.</b> ctf_truefort carries 833
-        // node pairs (across the shipped caches) where a soldier's route is costed
-        // as a rocket jump while the edge index yields a double jump first; the bot
-        // flew the ordinary hop, landed somewhere its route did not mention, and
-        // banned a perfectly good edge. Nothing here could see that: the ban was
-        // one of the counters, and `UnsupportedEdgeTicks` stayed at zero
-        // throughout, because the dispatch switch saw a type it handles.
+        // ctf_truefort carries 833 node pairs (across the shipped caches) where a
+        // soldier's route is costed as a rocket jump while the edge index yields a
+        // double jump first; a bot that flies the ordinary hop instead lands
+        // somewhere its route did not mention and can ban a perfectly good edge.
+        // `UnsupportedEdgeTicks` does not see this: the ban is one of the counters
+        // above, and it stays at zero because the dispatch switch saw a type it
+        // handles.
         Assert.Equal(1598, grabbedAt);
         Assert.Equal(32, bot.Path.Replans);
         Assert.Equal(0, bot.Path.StuckFires);
         Assert.Equal(10, bot.Path.OffRouteFires);
         Assert.Equal(0, bot.Path.BlacklistFires);
 
-        // ⚠️ And it turns round. The goal has to be re-decided on the objective
+        // And it turns round. The goal has to be re-decided on the objective
         // cadence, so step past one before asking.
         var beforeX = bot.Path.GoalX;
 
@@ -1045,7 +1024,7 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
             Math.Abs(bot.Path.GoalX - state.RedIntel.HomeX) < 200,
             $"the carrier is heading for {bot.Path.GoalX:0}, not its own base at {state.RedIntel.HomeX:0}");
 
-        // ⚠️ The control: the same bot with no objective layer never moves, so the
+        // The control: the same bot with no objective layer never moves, so the
         // walk above is the cascade's doing and not the map's spawn placement.
         var (idleState, idleWorld, idleSpawns) = Ctf();
         var idleSlot = Put(ref idleState, idleSpawns, 1, PlayerClass.Soldier, Team.Red, 384, 864);

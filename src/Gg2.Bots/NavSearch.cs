@@ -7,30 +7,30 @@ namespace Gg2.Bots;
 /// </summary>
 /// <remarks>
 /// Everything in the graph is static — one edge set serves every bot — so the
-/// per-asker facts live here and are applied per query. ⚠️ <b>That is the shape
+/// per-asker facts live here and are applied per query. <b>That is the shape
 /// the whole nav layer is built on</b>: gate nodes and class-specific arcs are
 /// carried in the graph with full connectivity and refused at search time, so a
 /// blue bot's search simply cannot expand through a red spawn gate and the same
 /// graph still serves the red bots going through it.
 /// </remarks>
 /// <param name="CanDoubleJump">
-/// May take a <see cref="NavEdgeType.DoubleJump"/> arc. ⚠️ In the reference this
+/// May take a <see cref="NavEdgeType.DoubleJump"/> arc. In the reference this
 /// is read off the <em>character</em>'s <c>canDoublejump</c> rather than tested
 /// against the scout class, because that is the field the game itself gates the
 /// second jump on — a class list would be a second copy of the fact, and the two
 /// would disagree the first time a class gained or lost the ability.
 /// </param>
 /// <param name="CanRocketJump">
-/// May take a <see cref="NavEdgeType.RocketJump"/> arc. ⚠️ <b>Not a property of
+/// May take a <see cref="NavEdgeType.RocketJump"/> arc. <b>Not a property of
 /// the class</b>, and not even of the life: it is read off the <em>weapon</em>
 /// (firing a rocket at your own feet is a thing a Rocketlauncher does) <b>and</b>
 /// carries an hp test, because the arc costs <c>NAV_RJ_DAMAGE</c> to traverse.
 /// So a soldier's routes shed their rocket jumps on their own as it takes
-/// damage. ⚠️ Strictly greater than the damage, not equal: the damage is dealt
+/// damage. Strictly greater than the damage, not equal: the damage is dealt
 /// before the bot lands, so equal health is a bot that dies in mid-air on an
 /// edge it was told to fly.
 /// <para>
-/// ⚠️ Health is a <em>plan-time</em> gate and cannot be the only one. This
+/// Health is a <em>plan-time</em> gate and cannot be the only one. This
 /// refuses every rocket-jump edge to a bot that cannot afford one; it has no way
 /// to say "you can afford two of the three on this route". The follower has to
 /// re-ask at each takeoff.
@@ -49,7 +49,7 @@ public readonly record struct NavQuery(
     /// </summary>
     /// <remarks>
     /// <c>botPathPlan.gml</c>'s test, extracted so the strictness cannot drift.
-    /// ⚠️ <c>&gt;</c>, never <c>&gt;=</c>: "a rocket jump taken at 31hp is a real
+    /// <c>&gt;</c>, never <c>&gt;=</c>: "a rocket jump taken at 31hp is a real
     /// thing a player does, and the point of these edges is a bot that reads
     /// like a player" — but at exactly 30 the bot dies in the air.
     /// </remarks>
@@ -59,7 +59,7 @@ public readonly record struct NavQuery(
     /// Whether a character of this hp may be routed over a sticky jump.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The game cannot make this refusal and this port can.</b>
+    /// <b>The game cannot make this refusal and this port can.</b>
     /// <c>navFindPath</c> takes <c>canDouble</c> and <c>canRocket</c> and has no
     /// <c>canSticky</c>, so a cache containing type-7 edges routes <em>every
     /// class</em> over them in the stock game — a medic walking to a takeoff to
@@ -82,7 +82,7 @@ public readonly record struct NavQuery(
 /// a search is not on it, but a rollout that re-plans is, and the shape costs
 /// nothing.
 /// <para>
-/// ⚠️ <b>Not thread-safe, on purpose.</b> One search at a time per instance;
+/// <b>Not thread-safe, on purpose.</b> One search at a time per instance;
 /// give each worker its own. Sharing one across a batched policy evaluation
 /// would interleave two frontiers into one <c>gScore</c> and produce routes that
 /// are wrong rather than slow.
@@ -91,7 +91,7 @@ public readonly record struct NavQuery(
 public sealed class NavSearch
 {
     /// <summary>
-    /// The pop guard. ⚠️ The graph is a few hundred nodes; a runaway here means a
+    /// The pop guard. The graph is a few hundred nodes; a runaway here means a
     /// corrupt edge list, and a hung server is far worse than a missing path.
     /// </summary>
     private const int PopGuard = 100_000;
@@ -125,7 +125,7 @@ public sealed class NavSearch
     /// </param>
     /// <param name="blocked">
     /// Edge keys (<see cref="NavGraph.EdgeKey"/>) to refuse, or null.
-    /// ⚠️ <b>The anti-thrash half of the follower</b>: without it a bot that
+    /// <b>The anti-thrash half of the follower</b>: without it a bot that
     /// wedges in a doorway re-plans, is handed the same route it just failed, and
     /// wedges again for ever. It is per bot, which is why it is a parameter and
     /// not part of the graph — and a set rather than a cost multiplier, which is
@@ -136,14 +136,13 @@ public sealed class NavSearch
     /// it costs <c>(1 + BOT_OCCUPANCY_COST × count)</c> times its honest cost, so
     /// a team fans out across whatever alternatives the map offers.
     /// <para>
-    /// ⚠️ <b>A per-edge random jitter is not a substitute and was deleted from the
-    /// reference.</b> It is mean-reverting — over a sixty-edge route every
-    /// candidate inflates by about the same average — so on ctf_truefort all
-    /// eight bots got the <em>identical</em> 68-node route: the jitter did not
-    /// fan the team out, it moved the whole team onto one slightly worse route.
-    /// Occupancy works because it is structured (what it makes expensive is
-    /// exactly what is crowded), the same for every bot asking at the same
-    /// moment, and coarse. Do not re-add the jitter.
+    /// <b>A per-edge random jitter is not a substitute.</b> It is mean-reverting
+    /// — over a sixty-edge route every candidate inflates by about the same
+    /// average — so on ctf_truefort all eight bots got the <em>identical</em>
+    /// 68-node route: the jitter did not fan the team out, it moved the whole
+    /// team onto one slightly worse route. Occupancy works because it is
+    /// structured (what it makes expensive is exactly what is crowded), the
+    /// same for every bot asking at the same moment, and coarse.
     /// </para>
     /// </param>
     /// <returns>Whether a route was found.</returns>
@@ -175,21 +174,20 @@ public sealed class NavSearch
         _open.Clear();
 
         // The heuristic's target: the goal's surface midpoint, in mask cells.
-        // ⚠️ The node's ROW, not its floor row — the same quantity for every
+        // The node's ROW, not its floor row — the same quantity for every
         // node, so the difference cancels and the distance is the same. Kept as
         // the reference writes it so a reader comparing the two does not have to
         // prove that.
         var goalX = (_graph.Nodes[goal].X0 + _graph.Nodes[goal].X1) / 2.0;
         var goalY = (double)_graph.Nodes[goal].Row;
 
-        // ⚠️ Hoisted out of the edge loop, and it is a measurement rather than
-        // tidiness. Both collections are usually EMPTY — a bot's blacklist
-        // averaged 0.15 entries a search over a ctf_truefort match, and the
-        // occupancy map is null whenever the caller fields one team — but an
-        // empty one still cost the key arithmetic plus an interface-dispatched
-        // lookup on every edge the frontier touched, about two thousand a
-        // search. Neither can become non-empty mid-search: nothing in this loop
-        // writes to either.
+        // Hoisted out of the edge loop for real cost, not tidiness. Both
+        // collections are usually EMPTY — a bot's blacklist averages about 0.15
+        // entries a search over a match, and the occupancy map is null whenever
+        // the caller fields one team — but even an empty one costs the key
+        // arithmetic plus an interface-dispatched lookup on every edge the
+        // frontier touches. Neither can become non-empty mid-search: nothing in
+        // this loop writes to either.
         var hasBlocked = blocked is { Count: > 0 };
         var hasOccupancy = occupancy is { Count: > 0 };
 
@@ -234,33 +232,28 @@ public sealed class NavSearch
                 if ((uint)next >= (uint)_graph.NodeCount)
                     continue;
 
-                // ⚠️ A closed node is NOT revisited, and this is a deliberate
+                // A closed node is NOT revisited, and this is a deliberate
                 // departure from the reference — navFindPath.gml re-opens one
                 // when a cheaper route arrives, because the straight-line
                 // heuristic is admissible but not *consistent* and skipping is
-                // only sound when it is. So this gives up optimality on purpose.
+                // only sound when it is. So this gives up optimality on purpose:
+                // routes cost a few percent more on average (worst case ~1.65x),
+                // nothing that existed becomes unreachable, and the bots' search
+                // cost drops substantially in return.
                 //
-                // ⛔ Measured 2026-09-02 over 1,500 searches: routes cost 0.6%
-                // more on average with the skip alone, 3.0% more together with
-                // NavConstants.SearchWeight, worst seen 1.65x. Nothing that
-                // existed became unreachable — the found-counts over all 25
-                // shipped graphs are identical. Against that, the bots' whole
-                // Poll is 11.5% cheaper.
-                //
-                // ⚠️ The two halves belong together. An inflated heuristic
-                // WITHOUT this makes the search SLOWER, not faster — measured at
-                // weight 1.5 it popped 636 nodes against 408 — because an
-                // inconsistent heuristic re-opens far more, and every re-open is
-                // a re-expansion. That is the opposite of the textbook result
-                // and it is why the weight cannot be added on its own.
+                // The two halves belong together. An inflated heuristic WITHOUT
+                // this makes the search SLOWER, not faster, because an
+                // inconsistent heuristic re-opens far more and every re-open is
+                // a re-expansion — the opposite of the textbook result, and why
+                // NavConstants.SearchWeight cannot be added on its own.
                 if (_closed[next])
                     continue;
 
-                // ⚠️ The gate test is on the EDGE and not on the node it arrives
+                // The gate test is on the EDGE and not on the node it arrives
                 // at. An arc can cross a gate without landing on it, and the
                 // generator stamps such an edge with that gate — so this covers
-                // both. Measured on all 24 shipped graphs: of 115,757 edges,
-                // none lands on a gated node without carrying the gate itself
+                // both; across the shipped graphs no edge lands on a gated node
+                // without carrying the gate itself
                 // (NavGraphFixtureTests.NoEdgeLandsOnAGatedNodeUnstamped).
                 //
                 // It also falls out of this that a bot standing inside a gate it
@@ -273,12 +266,11 @@ public sealed class NavSearch
                 // sticky one being the refusal the reference's own A* cannot make
                 // at all, see NavQuery.CanAffordStickyJump.
                 //
-                // ⚠️ BOTH halves live in NavGraph.EdgeRoutable and are applied a
+                // BOTH halves live in NavGraph.EdgeRoutable and are applied a
                 // SECOND time by PathFollower.TryFindEdge, which re-resolves the
                 // hop it is steering. Inlining either of them back here would let
                 // the two answers drift, and a follower steering an edge this
-                // search refused is a bot flying an arc its route never costed —
-                // measured at 833 node pairs on the shipped graphs.
+                // search refused is a bot flying an arc its route never costed.
                 if (!NavGraph.EdgeRoutable(in edge, in query))
                     continue;
 
@@ -310,7 +302,7 @@ public sealed class NavSearch
                 var nextX = (_graph.Nodes[next].X0 + _graph.Nodes[next].X1) / 2.0;
                 var nextY = (double)_graph.Nodes[next].Row;
 
-                // ⚠️ WEIGHTED. NavConstants.SearchWeight inflates the estimate,
+                // WEIGHTED. NavConstants.SearchWeight inflates the estimate,
                 // which makes the frontier commit to the goal's direction sooner
                 // and expand fewer nodes for a route that may be longer. The
                 // trade, and why it is 1.2 rather than more, is recorded there.
@@ -331,7 +323,7 @@ public sealed class NavSearch
     /// Walks <c>cameFrom</c> back from the goal, front-inserting as it goes.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A chain that does not reach the start is reported as no path at
+    /// <b>A chain that does not reach the start is reported as no path at
     /// all</b>, not as a partial one: an inconsistent <c>cameFrom</c> would
     /// otherwise hand a follower a route that does not start where it is
     /// standing, which is a bot walking confidently in the wrong direction.
@@ -361,7 +353,7 @@ public sealed class NavSearch
             guard++;
         }
 
-        // ⚠️ Walked goal-first and turned round at the end, rather than
+        // Walked goal-first and turned round at the end, rather than
         // front-inserted the way the reference writes it. Insert(0, …) shifts
         // the whole list on every step, so a sixty-node route moved about two
         // thousand elements to produce sixty — quadratic in a route length the

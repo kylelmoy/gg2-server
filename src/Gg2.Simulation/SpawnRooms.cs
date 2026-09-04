@@ -30,7 +30,7 @@ public readonly record struct HealingCabinet(
 /// The spawn room, and the four questions asked of it.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>The reference asks about a spawn room in two different ways and they
+/// <b>The reference asks about a spawn room in two different ways and they
 /// do not agree.</b> A class change and a sentry build use
 /// <c>collision_point(x, y, SpawnRoom, 0, 0)</c> — the character's
 /// <em>origin</em>, which is at its feet — and the fast respawn uses
@@ -95,7 +95,7 @@ public static class SpawnRooms
 /// <em>character's</em> collision event, so it runs in the collision stage; the
 /// cabinet's own object has only a Create and a property reader.
 /// <para>
-/// ⚠️ <b>The extinguish is outside the <c>heal</c> guard</b>, so a cabinet a
+/// <b>The extinguish is outside the <c>heal</c> guard</b>, so a cabinet a
 /// map has switched healing off on still puts a burning character out. It is
 /// also outside the ammo guard, so it happens whatever else the cabinet is for.
 /// </para>
@@ -117,7 +117,7 @@ public static class Cabinets
     /// </summary>
     /// <remarks>
     /// <c>hp += global.delta_factor/30*10</c>, which at 30 Hz is a third of a
-    /// hit point a tick. ⚠️ <b>And that arm does nothing else</b> — no nuts and
+    /// hit point a tick. <b>And that arm does nothing else</b> — no nuts and
     /// bolts, no sandvich reset — so a Team Deathmatch engineer gets no build
     /// resource from a cabinet at all.
     /// </remarks>
@@ -171,7 +171,7 @@ public static class Cabinets
     /// <c>readProperty(properties, key, BOOL, fallback)</c>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Only the exact strings <c>"true"</c> and <c>"false"</c> count.</b>
+    /// <b>Only the exact strings <c>"true"</c> and <c>"false"</c> count.</b>
     /// <c>readProperty.gml</c>'s BOOL arm returns the default for anything else
     /// — "TRUE", "1" and "yes" all fall through — so a map that spells it any
     /// other way gets the default rather than an error.
@@ -189,7 +189,7 @@ public static class Cabinets
     /// whole roster.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The whole event is inside <c>if (!global.mapchanging)</c></b>, so a
+    /// <b>The whole event is inside <c>if (!global.mapchanging)</c></b>, so a
     /// cabinet does nothing at all during the victory screen — the one map
     /// object that switches off with the round rather than opening up.
     /// <para>
@@ -228,7 +228,7 @@ public static class Cabinets
             ref var character = ref state.Characters[slot];
             var box = Aabb.ForCharacter(character.Box, character.X, character.Y);
 
-                // ⚠️ Indexed rather than `foreach`: this list arrives as an
+                // Indexed rather than `foreach`: this list arrives as an
                 // INTERFACE, and enumerating one allocates a boxed enumerator —
                 // measured at 32 bytes per live character per tick, every tick,
                 // which is exactly what docs/BOTAI.md item 1 forbids. Indexing an
@@ -256,7 +256,7 @@ public static class Cabinets
 
         // `if ((hp < maxHp or nutsNBolts < 100 or !canEat) and other.heal)`.
         //
-        // ⚠️ The third clause is load-bearing now that the sandvich exists: a
+        // The third clause is load-bearing now that the sandvich exists: a
         // heavy at full health with full ammo and a spent sandvich still
         // *enters* this branch, purely to have the cooldown cleared. Before the
         // sandvich was modelled it was a no-op and was transcribed as a comment.
@@ -267,8 +267,8 @@ public static class Cabinets
         {
             if (state.GameMode == GameMode.TeamDeathmatch)
             {
-                // ⚠️ A trickle, not a fill — and nothing else. See
-                // DeathmatchHealPerTick. ⚠️ Note it does NOT clear the sandvich
+                // A trickle, not a fill — and nothing else. See
+                // DeathmatchHealPerTick. Note it does NOT clear the sandvich
                 // cooldown either, so a Team Deathmatch heavy who steps on a
                 // cabinet to reset their sandvich gets a third of a hit point
                 // and keeps waiting.
@@ -289,7 +289,7 @@ public static class Cabinets
             }
         }
 
-        // ⚠️ Outside the heal guard, and outside the ammo guard: a cabinet with
+        // Outside the heal guard, and outside the ammo guard: a cabinet with
         // `heal:false` and `refill:false` still puts a burning character out.
         if (Gml.Greater(character.BurnIntensity, 0) || Gml.Greater(character.BurnDuration, 0))
         {
@@ -308,7 +308,7 @@ public static class Cabinets
             // `if (alarm[5] > 0) event_perform(ev_alarm, 5); alarm[5] = -1;` for
             // five of the ten weapons.
             //
-            // ⚠️ The event_perform is a no-op and only the cancel is real. Each
+            // The event_perform is a no-op and only the cancel is real. Each
             // of those five alarm-5 bodies either guards on
             // `ammoCount < maxAmmo` — false, the line above just filled it — or,
             // for the Medigun, assigns the maximum unconditionally, which is the
@@ -324,7 +324,7 @@ public static class Cabinets
 
         // `if (other.uber and currentWeapon.object_index == Medigun)`.
         //
-        // ⚠️ No charge is added — the cabinet hands over a *finished* uber, and
+        // No charge is added — the cabinet hands over a *finished* uber, and
         // only to a medic who is neither already holding one nor spending one.
         // `global.isHost` is always true here.
         if (cabinet.Uber && kind == WeaponKind.Medigun && !weapon.UberReady && !weapon.Ubering)

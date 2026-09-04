@@ -13,17 +13,17 @@ namespace Gg2.Tests;
 /// <c>wantToJump</c> from the jump key's press and release, and the
 /// <c>or (player.queueJump and wantToJump)</c> arm of the jump test.
 /// <para>
-/// ⚠️ <b>This is observable simulation, which is why it is worth a file.</b>
+/// <b>This is observable simulation, which is why it is worth a file.</b>
 /// Every client re-simulates every character between position updates, using
 /// that character's own <c>queueJump</c>. A server that ignores the setting puts
 /// itself on a different jump rule from the client that sent it, and the symptom
 /// is a correction on every landing — indistinguishable from ordinary netcode
-/// jitter, which is how it survived nine phases behind a code comment.
+/// jitter.
 /// </para>
 /// <para>
-/// ⚠️ <b><c>CharacterState.WantToJump</c> existed the whole time and was never
-/// set.</b> Two lines cleared it and nothing wrote it, so the field read as
-/// evidence the feature was there. A dead field is worse than a missing one.
+/// <b>A dead field reads as evidence a feature is there when it is not.</b>
+/// <c>CharacterState.WantToJump</c> was cleared in two places but never written,
+/// so the field alone cannot be trusted as proof the queue is wired in.
 /// </para>
 /// </remarks>
 public sealed class QueueJumpTests
@@ -127,7 +127,7 @@ public sealed class QueueJumpTests
     /// A press made in mid-air fires the moment the character lands.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>This, and not "holding jump bunny-hops", is what the feature
+    /// <b>This, and not "holding jump bunny-hops", is what the feature
     /// does.</b> <c>pressedKeys</c> is a transition rather than a level, so a
     /// held key sets <c>wantToJump</c> exactly once — and if the character was on
     /// the ground at the time, the jump it triggers clears the queue on the same
@@ -150,13 +150,12 @@ public sealed class QueueJumpTests
     /// the character ever launched again with no new press to explain it.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The relaunch is detected by the velocity turning over, not by
+    /// <b>The relaunch is detected by the velocity turning over, not by
     /// watching <c>OnGround</c>.</b> A queued jump fires in the same Begin Step
     /// that notices the landing, so <c>OnGround</c> is never observably true on
     /// the tick it matters — a test that waited for it would sail past the event
     /// and measure the <em>next</em> landing, by which time the queue is spent
-    /// and both arms of the A/B agree. That is what the first version of this
-    /// test did, and it failed against a working implementation.
+    /// and both arms of the A/B agree.
     /// <para>
     /// Falling to rising is unambiguous: nothing but a jump turns a descent into
     /// a climb, and with the key held down for the whole window there is no
@@ -234,13 +233,10 @@ public sealed class QueueJumpTests
     /// The setting reaches the world, the roster and every other client.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Three destinations and all three matter.</b> The world copy is what
+    /// <b>Three destinations and all three matter.</b> The world copy is what
     /// the physics above reads; the roster copy is what a joiner's
     /// <c>FULL_UPDATE</c> carries; the broadcast is what already-connected
-    /// clients need in order to dead-reckon this character correctly. The port
-    /// had only the second of the three, which is the half that made the gap look
-    /// closed — <c>docs/PLAN.md</c> recorded the setting as landed on the
-    /// strength of it.
+    /// clients need in order to dead-reckon this character correctly.
     /// </remarks>
     [Fact]
     public void TheSettingReachesTheWorldAndIsBroadcast()
@@ -274,7 +270,7 @@ public sealed class QueueJumpTests
     /// Finds a <c>CLIENT_SETTINGS</c> in a broadcast stream.
     /// </summary>
     /// <remarks>
-    /// ⚠️ A scan rather than a parse, because the stream this shares with an
+    /// A scan rather than a parse, because the stream this shares with an
     /// <c>INPUTSTATE</c> every tick is not worth decoding to answer "was it sent
     /// at all". The two payload bytes are checked by the caller, which is what
     /// makes a coincidental 58 in someone's position bytes fail loudly rather

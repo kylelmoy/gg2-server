@@ -45,7 +45,7 @@ public static class Afterburn
 
         if (Gml.Greater(character.BurnDuration, 0))
         {
-            // ⚠️ The reference's own comment on this guard, citing its bug
+            // The reference's own comment on this guard, citing its bug
             // number: "Don't count if someone else already finished him off, to
             // prevent afterburn from 'stealing' sticky kills (Bug #1021989)."
             // A character whose hp is already at or below zero this tick is
@@ -70,7 +70,7 @@ public static class Afterburn
                 // dealDamage, not damageCharacter — so this does not reset
                 // timeUnscathed itself. The line four below does it instead,
                 // and it runs whether or not the victim was still alive.
-                // ⚠️ Credited to `BurnedBy`, the line above — the pyro who lit
+                // Credited to `BurnedBy`, the line above — the pyro who lit
                 // the fire, not whoever last hit them. That slot can be
                 // CharacterState.Nobody once the lighter has left, and then the
                 // burn is taken by somebody and dealt by no one.
@@ -82,7 +82,7 @@ public static class Afterburn
             character.TimeUnscathed = 0;
         }
 
-        // ⚠️ `alarm[0] == -1`, exactly — not `<= 0`. The timer is re-armed to 90
+        // `alarm[0] == -1`, exactly — not `<= 0`. The timer is re-armed to 90
         // by every flame that lands, so this is false for as long as somebody is
         // being sprayed and for ninety ticks afterwards; only then does the heat
         // start bleeding off at the rate Alarm 0 computed. See Timers.Advance
@@ -108,7 +108,7 @@ public static class Afterburn
     /// flame adds to a victim already alight.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The falloff runs the opposite way round from the comment beside
+    /// <b>The falloff runs the opposite way round from the comment beside
     /// it.</b> The reference says "value higher when life is fresh (alarm 0 is
     /// high)" and "Reduce heat additions of 'old'/distant flames", but the
     /// expression is <c>(flameLife - alarm[0]) / flameLife</c> — which is

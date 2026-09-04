@@ -16,7 +16,7 @@ namespace Gg2.Tests;
 /// retrain of 83 checkpoints. Its words: "I would rather have that than a cleaner
 /// API."
 /// <para>
-/// ⚠️ So the first test here is the boring one, and it is the one that matters.
+/// So the first test here is the boring one, and it is the one that matters.
 /// If it ever goes red, <b>that is a layout bump and a retrain</b>, not a test to
 /// update.
 /// </para>
@@ -44,7 +44,7 @@ public sealed class ObservationGoalTests
     /// A default goal writes exactly what the writer wrote before goals existed.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Checked against a transcription of the old block, not against
+    /// <b>Checked against a transcription of the old block, not against
     /// another call to the new one.</b> Comparing <c>Write(view, slot, buffer)</c>
     /// with <c>Write(view, slot, buffer, default)</c> would pass however wrong
     /// both were — they are the same code path, and the optional parameter makes
@@ -80,7 +80,7 @@ public sealed class ObservationGoalTests
     /// direction and distance to the nearest enemy, kind 0.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A transcription, kept deliberately verbatim.</b> Sharing anything
+    /// <b>A transcription, kept deliberately verbatim.</b> Sharing anything
     /// with the writer — its scale constant, its <c>OneHot</c> — would make this
     /// agree with the implementation by construction rather than by being right.
     /// </remarks>
@@ -148,7 +148,7 @@ public sealed class ObservationGoalTests
     /// enemy being consulted at all.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The enemy is MOVED between the two reads and the block does not
+    /// <b>The enemy is MOVED between the two reads and the block does not
     /// change.</b> Asserting only that the goal block matches the target would
     /// pass if the writer were still secretly mixing the enemy in — this is the
     /// premise check, the same shape as <c>docs/ENV.md</c>'s per-slot driver
@@ -174,7 +174,7 @@ public sealed class ObservationGoalTests
         for (var i = 0; i < 3 + ObservationWriter.GoalKinds; i++)
             Assert.Equal(before[GoalAt + i], after[GoalAt + i]);
 
-        // ⚠️ And the premise: moving the enemy DID change the observation
+        // And the premise: moving the enemy DID change the observation
         // elsewhere. Without this the test above passes on a writer that ignores
         // the world entirely.
         Assert.False(before.AsSpan().SequenceEqual(after), "moving the enemy changed nothing at all");
@@ -198,7 +198,7 @@ public sealed class ObservationGoalTests
     /// A goal outlives the episode it was set in.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The half of this feature most likely to surprise, so it is pinned.</b>
+    /// <b>The half of this feature most likely to surprise, so it is pinned.</b>
     /// <c>EnvBatch.Step</c> auto-resets a finished world inside the call, so a
     /// trainer has no moment at which to re-set a goal; clearing it would train
     /// the policy on "engage" while the trainer believed otherwise.

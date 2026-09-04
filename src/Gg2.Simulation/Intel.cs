@@ -14,7 +14,7 @@ namespace Gg2.Simulation;
 /// everything else is in the four <c>doEvent*Intel</c> scripts and in the
 /// character's four collision events.
 /// <para>
-/// ⚠️ <b>A carried intel has no instance at all.</b> <c>doEventGrabIntel</c>
+/// <b>A carried intel has no instance at all.</b> <c>doEventGrabIntel</c>
 /// ends with <c>instance_destroy()</c> and <c>doEventDropIntel</c> creates a
 /// fresh one where the carrier stood, so "who has it" is not a field on the
 /// intel — it is <see cref="CharacterState.CarryingIntel"/> on the carrier, and
@@ -23,7 +23,7 @@ namespace Gg2.Simulation;
 /// which is why <c>StateUpdate.RedIntel</c> is an array and not a nullable.
 /// </para>
 /// <para>
-/// ⚠️ <b>A default <see cref="IntelState"/> is not a valid one</b>, the same
+/// <b>A default <see cref="IntelState"/> is not a valid one</b>, the same
 /// trap as <see cref="CharacterState.Fresh"/> and <see cref="PlayerState.Fresh"/>:
 /// <see cref="RecoverTimer"/> rests at <see cref="Timers.Inactive"/> and a
 /// zeroed struct says 0, which is a live alarm one tick from firing everywhere
@@ -73,7 +73,7 @@ public struct IntelState
     /// <see cref="Timers.Inactive"/>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>It is set from the carrier's <c>intelRecharge</c>, and that can be
+    /// <b>It is set from the carrier's <c>intelRecharge</c>, and that can be
     /// zero.</b> <c>doEventDropIntel</c> writes
     /// <c>newIntelInstance.alarm[0] = intelRecharge</c>, and a flag grabbed
     /// straight off its base starts the carrier at <c>max(0, -1) = 0</c> — so a
@@ -119,27 +119,25 @@ public static class Intel
     /// being fully transparent. So one box serves the flags and the bases alike,
     /// and every map places them at <c>xscale = yscale = 1</c>.
     /// <para>
-    /// ✅ <b>Measured 2026-08-27 against the running game</b>, by
+    /// <b>Measured against the running game</b>, by
     /// <c>tools/sample-sprite-box.js</c> and gated by
     /// <c>SpriteBoxSampleTests</c>. The engine reports all three of
     /// <c>IntelligenceRedS</c>, <c>IntelligenceBlueS</c> and
     /// <c>IntelligenceBaseS</c> as <c>0, 0, 19, 19</c> about origin (9, 12) on a
     /// 20x22 image, and none of the four objects that wear them declares a
     /// <c>&lt;mask&gt;</c> — so one box really does serve the flags and the
-    /// bases alike. The inference below was right in every edge.
+    /// bases alike.
     /// </para>
     /// <para>
-    /// ⚠️ <b>It was worth measuring because the fixtures corroborate almost none
-    /// of it.</b> Measured by mutation against <c>closedsupport</c>'s recorded
-    /// grab, the one message a replay reproduces on its exact tick: widening
-    /// <see cref="BoxLeft"/> to -11 moves the tick, -10 does not, and
-    /// <see cref="BoxRight"/>, <see cref="BoxTop"/> and <see cref="BoxBottom"/>
-    /// can each be moved by <b>sixteen pixels</b> without any fixture noticing.
-    /// A bot walks in from one side and grabs; the other three edges are never
-    /// the ones it crosses. Until the live measurement landed, the only gate on
-    /// three quarters of this box was
-    /// <c>IntelTests.TheGrabHappensExactlyWhereTheBoxesTouch</c>, which asserts
-    /// the same inference it was derived from.
+    /// <b>The fixtures corroborate almost none of it.</b> Measured by mutation
+    /// against <c>closedsupport</c>'s recorded grab, the one message a replay
+    /// reproduces on its exact tick: widening <see cref="BoxLeft"/> to -11
+    /// moves the tick, -10 does not, and <see cref="BoxRight"/>,
+    /// <see cref="BoxTop"/> and <see cref="BoxBottom"/> can each be moved by
+    /// <b>sixteen pixels</b> without any fixture noticing — a bot walks in from
+    /// one side and grabs, so the other three edges are never the ones it
+    /// crosses. <c>IntelTests.TheGrabHappensExactlyWhereTheBoxesTouch</c>
+    /// asserts the same inference it was derived from.
     /// </para>
     /// </remarks>
     public const int BoxLeft = -9;
@@ -181,7 +179,7 @@ public static class Intel
     /// or null when it is being carried and there is no instance to serialise.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b><c>round(x*5)</c>, not the character's plain <c>x*5</c>.</b> GML's
+    /// <b><c>round(x*5)</c>, not the character's plain <c>x*5</c>.</b> GML's
     /// own <c>round</c> is half to <em>even</em> and runs first, after which the
     /// extension's half-away-from-zero rule has nothing left to decide — two
     /// objects, two quantisations, one wire. docs/TRAPS-SIMULATION.md's rounding table has all
@@ -284,7 +282,7 @@ public static class Intel
     /// reference's own order — the charge at line 303-337 and the uber drop at
     /// 366-369, with the animation counter between them.
     /// <para>
-    /// ⚠️ <b>The charge rate falls with speed, so standing still returns the
+    /// <b>The charge rate falls with speed, so standing still returns the
     /// flag sooner.</b> <c>INTEL_MAX_TIMER/((3 + abs(min(hspeed, 7))/3.5)*30)</c>
     /// is a full charge in three seconds at rest and in five at a scout's top
     /// speed. <c>min</c> and not <c>abs</c> first, so running left is capped by
@@ -317,7 +315,7 @@ public static class Intel
         // says the line is there "in case anyone ever applies this code to
         // another gamemode".
         //
-        // Begin Step.xml:328-332, immediately above the recharge: ⚠️ **a spy
+        // Begin Step.xml:328-332, immediately above the recharge: **a spy
         // who is carrying the intel is uncloaked outright**, not faded —
         // `cloak = false; cloakAlpha = 1;`. So there is no window in which a
         // cloaked spy holds a briefcase, and the End Step fade never gets to
@@ -393,7 +391,7 @@ public static class Intel
     {
         ArgumentNullException.ThrowIfNull(world);
 
-        // ⚠️ `if(global.isHost and !global.mapchanging)` guards the two *grab*
+        // `if(global.isHost and !global.mapchanging)` guards the two *grab*
         // events and not the two capture ones — so a carrier who somehow still
         // held the flag when the round ended could still score. They cannot:
         // Begin Step drops it on the same tick the flag becomes ungrabbable.
@@ -445,13 +443,13 @@ public static class Intel
     /// touching a briefcase takes it.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b><c>place_meeting(x, y, TeamGate)</c> is the object <c>TeamGate</c>
+    /// <b><c>place_meeting(x, y, TeamGate)</c> is the object <c>TeamGate</c>
     /// and not <c>Gate</c>.</b> <c>IntelGate</c> is its <em>sibling</em> under
     /// <c>Gate</c>, so standing inside an intel gate does not stop a grab and
     /// standing inside a team gate — either team's — does. That is what stops a
     /// player reaching through their own spawn door.
     /// <para>
-    /// ⚠️ <b>The gate test asks about solidity nowhere.</b> A team gate is
+    /// <b>The gate test asks about solidity nowhere.</b> A team gate is
     /// non-solid to its own team, and this still refuses the grab: it is a plain
     /// mask overlap, so a red player standing in the red gate cannot grab
     /// either.
@@ -504,7 +502,7 @@ public static class Intel
     /// the carrier inherits its remaining return timer.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Which flag is taken comes from the <em>grabber's team</em>, not
+    /// <b>Which flag is taken comes from the <em>grabber's team</em>, not
     /// from the instance that was touched.</b> The script re-derives it —
     /// <c>if(argument0.team == TEAM_RED) ... IntelligenceBlue</c> — so a red
     /// player always takes the blue briefcase whatever collided. Same answer as
@@ -552,7 +550,7 @@ public static class Intel
     /// the carrier is standing, with whatever timer they charged.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A drop caused by the carrier's death broadcasts nothing.</b>
+    /// <b>A drop caused by the carrier's death broadcasts nothing.</b>
     /// <c>sendEventDropIntel</c>'s own comment: "This event is not sent when the
     /// character dies to avoid issues with order of execution. Instead,
     /// character destruction implicitly drops the intel." So
@@ -616,7 +614,7 @@ public static class Intel
     /// its base with its alarm cleared.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The reference's "force carriers to drop it" branch is dead code.</b>
+    /// <b>The reference's "force carriers to drop it" branch is dead code.</b>
     /// When the flag is not on the field the script does
     /// <c>with(Character) if (team == argument0 and intel) event_user(5);</c> —
     /// and <c>Character</c> has no <c>User Event 5</c>, so GM8 runs nothing. It
@@ -667,7 +665,7 @@ public static class Intel
     /// team scores and the briefcase reappears on its own base.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>It does not touch <c>canGrabIntel</c> or <c>alarm[1]</c>.</b> Unlike
+    /// <b>It does not touch <c>canGrabIntel</c> or <c>alarm[1]</c>.</b> Unlike
     /// a drop, a capture leaves the player able to pick the next flag up
     /// immediately — which they can, because the flag they just captured is
     /// recreated at <em>its own</em> base and not at theirs.

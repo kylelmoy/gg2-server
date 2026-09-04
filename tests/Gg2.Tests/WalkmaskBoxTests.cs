@@ -9,7 +9,7 @@ namespace Gg2.Tests;
 /// over <see cref="Walkmask.IsSolid"/> answers.
 /// </summary>
 /// <remarks>
-/// ⛔ <b>The parity fixtures are NOT this test and cannot be.</b> They were green
+/// <b>The parity fixtures are NOT this test and cannot be.</b> They were green
 /// before the word path existed and green after, which says only that the
 /// positions those traces visit agree. A box overhanging the top of the map, or
 /// one whose columns straddle a 64-cell word boundary, appears in no checked-in
@@ -17,12 +17,12 @@ namespace Gg2.Tests;
 /// separate code. <b>A green fixture is not confirmation of a box</b>: CLAUDE.md
 /// says so about collision boxes and it is true here for the same reason.
 /// <para>
-/// ⚠️ <b>The naive loop is the oracle and it is written out here rather than
+/// <b>The naive loop is the oracle and it is written out here rather than
 /// called</b>, so that replacing the implementation cannot silently replace the
 /// thing it is checked against.
 /// </para>
 /// <para>
-/// ⚠️ <b>Every case asserts the SAMPLE WAS NOT DEGENERATE.</b> An equivalence
+/// <b>Every case asserts the SAMPLE WAS NOT DEGENERATE.</b> An equivalence
 /// test over rectangles that are all open passes on any implementation that
 /// returns false, which is most of the ways this can be got wrong — the clamp,
 /// the low mask, the high mask and the straddle branch all fail in that
@@ -50,7 +50,7 @@ public sealed class WalkmaskBoxTests
     /// maps.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Stepped by ONE PIXEL, not by one cell.</b> Column alignment inside a
+    /// <b>Stepped by ONE PIXEL, not by one cell.</b> Column alignment inside a
     /// 64-cell word is the whole subject, and a cell-aligned sweep would visit
     /// only every sixth phase of it.
     /// </remarks>
@@ -86,7 +86,7 @@ public sealed class WalkmaskBoxTests
             }
         }
 
-        // ⚠️ Both directions really occurred. Without this the test passes on
+        // Both directions really occurred. Without this the test passes on
         // `return false`, which is what every mask-and-clamp mistake degrades to.
         Assert.True(solid > 1000, $"{map}: only {solid} solid answers — sample is degenerate");
         Assert.True(open > 1000, $"{map}: only {open} open answers — sample is degenerate");
@@ -96,7 +96,7 @@ public sealed class WalkmaskBoxTests
     /// A box overhanging each edge of the map reports only the cells inside it.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>Off-mask is OPEN</b>, which <see cref="Walkmask.IsSolid"/> gets from a
+    /// <b>Off-mask is OPEN</b>, which <see cref="Walkmask.IsSolid"/> gets from a
     /// bounds check and the word path gets from a clamp — different code, same
     /// answer required. The reference clamps characters into the map in
     /// <c>Character.events/End Step.xml</c> rather than walling the edges, so a
@@ -142,7 +142,7 @@ public sealed class WalkmaskBoxTests
     /// character box takes about one position in twenty.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Swept across the boundary one cell at a time and out to three words
+    /// <b>Swept across the boundary one cell at a time and out to three words
     /// wide</b>, so the single-word case, the two-word case and the case with
     /// whole words in the middle are all reached — the middle-word loop is
     /// unreachable at character widths and would otherwise never run.
@@ -188,14 +188,14 @@ public sealed class WalkmaskBoxTests
     /// Every tabulated shape, at every position on the map, against the cell loop.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>This is the direct gate on the precomputed erosion tables</b>
+    /// <b>This is the direct gate on the precomputed erosion tables</b>
     /// (<c>Walkmask.BuildEroded</c>), and it is separate from the sweeps above
     /// because those reach the tables only incidentally — through whichever shapes
     /// a Heavy box happens to produce. This walks each tabulated shape across every
     /// legal top-left cell, which is exactly the domain the table covers and
     /// nothing else.
     /// <para>
-    /// ⚠️ <b>The table is an EXACT answer, not a conservative one.</b> There is no
+    /// <b>The table is an EXACT answer, not a conservative one.</b> There is no
     /// "maybe" path to fall through to, so a wrong bit is a wrong collision answer
     /// — a character walking through a wall, or stopped by nothing.
     /// </para>
@@ -230,7 +230,7 @@ public sealed class WalkmaskBoxTests
             }
         }
 
-        // ⚠️ Both directions really occurred, and the shapes really exist. Without
+        // Both directions really occurred, and the shapes really exist. Without
         // these the test passes on a `return false` and on an empty shape set.
         Assert.True(checkedCells > 100_000, $"{map}: only {checkedCells} positions — no shapes tabulated?");
         Assert.True(solid > 1000, $"{map}: only {solid} solid answers — sample is degenerate");
@@ -241,13 +241,13 @@ public sealed class WalkmaskBoxTests
     /// The shapes real character boxes produce are the shapes that are tabulated.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>Equivalence cannot catch a table nothing reaches.</b> If
+    /// <b>Equivalence cannot catch a table nothing reaches.</b> If
     /// <c>CharacterBox.For</c> changed so that no query matched a tabulated shape,
     /// every test above would stay green and every query would quietly take the
     /// general path — the optimisation gone, nothing red. This asserts the
     /// intersection directly.
     /// <para>
-    /// ⚠️ <b>Scout, Soldier, Sniper, Demoman, Medic, Engineer and Spy are covered;
+    /// <b>Scout, Soldier, Sniper, Demoman, Medic, Engineer and Spy are covered;
     /// Heavy, Pyro and Quote are NOT, and that is deliberate.</b> Their boxes fall
     /// outside 3-4 columns by 6-7 rows, and tabulating them costs ~20 KB a shape
     /// for classes that are a minority of queries — measured at 87-95% coverage
@@ -258,7 +258,7 @@ public sealed class WalkmaskBoxTests
     [Fact]
     public void TheClassesTheTableTargetsReallyProduceTabulatedShapes()
     {
-        // ⚠️ Every class in the bot draw. `ParseClasses` refuses anything above
+        // Every class in the bot draw. `ParseClasses` refuses anything above
         // Pyro, so this is the whole playable set.
         var covered = new[]
         {
@@ -289,7 +289,7 @@ public sealed class WalkmaskBoxTests
             Assert.Equal(total, tabulated);
         }
 
-        // ⛔ The control, and it earned its place: the first version of this test
+        // The control, and it earned its place: the first version of this test
         // named Heavy here on a hand-derived claim that a 19 px box spans 4-5
         // columns. It spans exactly 4, Heavy was already covered, and the control
         // failed — which is the only reason the shape set was enumerated rather
@@ -305,7 +305,7 @@ public sealed class WalkmaskBoxTests
                 quoteUncovered++;
         }
 
-        // ⚠️ SOME, not all: Quote's two heights are 4 and 5, and 5 became
+        // SOME, not all: Quote's two heights are 4 and 5, and 5 became
         // tabulated when Pyro's shapes were added — so exactly the h=4 phases fall
         // through. Asserting "all six" here failed, which is the correct outcome
         // for a control written from a guess rather than from the enumeration.
@@ -320,7 +320,7 @@ public sealed class WalkmaskBoxTests
     /// An empty range — the caller asking about nothing — is open, both ways.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Reachable through <c>CollisionWorld</c> only if a box were inverted, which
+    /// Reachable through <c>CollisionWorld</c> only if a box were inverted, which
     /// it never is; asserted because the clamp can produce one from a valid box that
     /// lies entirely off the map, and the two implementations reach that answer by
     /// different routes.
@@ -340,7 +340,7 @@ public sealed class WalkmaskBoxTests
     /// map, including the last word of a row whose width is not a multiple of 64.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>This is what says the word path does not depend on the decoder leaving
+    /// <b>This is what says the word path does not depend on the decoder leaving
     /// the bits above <c>Width</c> zero.</b> A map whose width is not a multiple of
     /// 64 has such bits, and a high mask that included them would report a
     /// phantom solid at the right-hand edge — on that map only, and only for a box

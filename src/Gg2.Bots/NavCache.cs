@@ -22,7 +22,7 @@ namespace Gg2.Bots;
 /// tick that reads it.
 /// </para>
 /// <para>
-/// ⚠️ <b>A miss is not an error.</b> <c>navCacheLoad.gml</c> returns false —
+/// <b>A miss is not an error.</b> <c>navCacheLoad.gml</c> returns false —
 /// having allocated nothing — when the file is absent, was written by a
 /// different <c>NAV_CACHE_VERSION</c>, or does not deserialise to the shape its
 /// header promised, and callers treat that as "no bots path on this map" rather
@@ -44,26 +44,24 @@ public static class NavCache
     /// The same bytes deflated, which is what this repository checks in.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The compression is the container, not the format.</b> Decompressing
+    /// <b>The compression is the container, not the format.</b> Decompressing
     /// one of these gives back exactly the file <c>gg2-nav-gen</c> wrote, byte
     /// for byte, and <see cref="Parse"/> never learns which it came from — so a
     /// generator that knows nothing about gzip stays a working generator and
     /// <c>NAV_CACHE_VERSION</c> does not move.
     /// <para>
-    /// ⚠️ <b>It is a 32x saving and it costs about a millisecond.</b> Measured
-    /// 2026-09-03, Release, on all 25 checked-in graphs: 35.68 MB of hex becomes
-    /// 1.11 MB, and the largest map's load goes 9.14 ms → 10.29 ms against a
-    /// 33.3 ms tick, once per map change. A hand-rolled binary format was
-    /// measured against this and rejected: it takes the working tree to 4.06 MB
-    /// but the <em>compressed</em> size to 1.111 MB — 0.1% — because everything
-    /// it removes is redundancy deflate was already removing for free.
-    /// docs/DEPLOY.md, "the nav graphs".
+    /// It is roughly a 32x saving and costs about a millisecond of load time per
+    /// map change — a hand-rolled binary format was rejected because the
+    /// <em>compressed</em> size barely improves on it: everything it would remove
+    /// is redundancy deflate already removes for free. docs/DEPLOY.md, "the nav
+    /// graphs".
     /// </para>
     /// <para>
-    /// ⚠️ These numbers assume <b>one graph per map change</b>, which is what
-    /// <c>BotPopulationService.MapChanged</c> does. Re-measure before reusing
-    /// them if nav ever loads per-round, per-area-transition, or eagerly for a
-    /// whole rotation: 10 ms once a round is free, 10 ms x 25 at startup is not.
+    /// This assumes <b>one graph per map change</b>, which is what
+    /// <c>BotPopulationService.MapChanged</c> does. Re-measure before reusing it
+    /// if nav ever loads per-round, per-area-transition, or eagerly for a whole
+    /// rotation: a load cost that is free once a round is not free times 25 at
+    /// startup.
     /// </para>
     /// </remarks>
     public const string CompressedExtension = ".txt.gz";
@@ -81,7 +79,7 @@ public static class NavCache
     /// The filename stem for a map and area — <c>navCacheKey.gml</c>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The map <em>name</em> is the identity, not its MD5.</b>
+    /// <b>The map <em>name</em> is the identity, not its MD5.</b>
     /// <c>serverGotoMap.gml</c> leaves <c>currentMapMD5</c> empty for every
     /// internal map, so keying on the MD5 alone would give all 22 shipped maps
     /// the same cache entry and serve the first graph built for every one of
@@ -117,24 +115,16 @@ public static class NavCache
     /// plain one, or empty when neither is there.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>PLAIN WINS, and the first version of this had it the other way
-    /// round.</b> The reasoning for preferring the compressed file was that it
-    /// is what shipped — which sounds right and is backwards, because of where
-    /// the plain file comes from. <c>gg2-nav-gen</c> writes
-    /// <c>&lt;key&gt;.txt</c> into <c>../gg2-server/nav</c> by default, the very
-    /// directory this repository ships <c>.txt.gz</c> in. So the only way a
-    /// <c>.txt</c> appears beside a <c>.gz</c> is that somebody just ran the
-    /// generator, and "compressed wins" meant their regenerated graphs were
-    /// silently ignored while everything stayed green — <c>NavManifestTests</c>
-    /// hashes the MAPS, which a regeneration does not touch.
-    /// <para>
-    /// ⚠️ <b>That is the exact failure this whole area was changed to end</b>, so
-    /// it is worth stating as a rule: <b>the file somebody just wrote wins over
+    /// <b>PLAIN WINS.</b> <c>gg2-nav-gen</c> writes <c>&lt;key&gt;.txt</c> into
+    /// <c>../gg2-server/nav</c> by default, the very directory this repository
+    /// ships <c>.txt.gz</c> in, so the only way a <c>.txt</c> appears beside a
+    /// <c>.gz</c> is that somebody just ran the generator — <c>NavManifestTests</c>
+    /// hashes the MAPS, not the graph files, so a regeneration alone would not
+    /// otherwise be noticed. The rule: <b>the file somebody just wrote wins over
     /// the file that shipped</b>. The shipped one is the default; a plain file
     /// next to it is a deliberate act.
-    /// </para>
     /// <para>
-    /// ⚠️ <b>Neither answer is silent.</b> <see cref="HasBothContainers"/> says
+    /// <b>Neither answer is silent.</b> <see cref="HasBothContainers"/> says
     /// when a graph exists twice, and <c>BotPopulationService</c> logs it on the
     /// map change — because whichever way the tie breaks, one of the two files
     /// is being ignored and the operator should know which.
@@ -262,13 +252,13 @@ public static class NavCache
         if (!Directory.Exists(directory))
             return [];
 
-        // ⚠️ A set, not a list: a directory holding both containers for one map
+        // A set, not a list: a directory holding both containers for one map
         // names that map once, the way it holds one graph.
         var found = new SortedSet<(string, int)>();
 
         foreach (var file in Directory.EnumerateFiles(directory))
         {
-            // ⚠️ Matched by suffix rather than with a "*.txt" glob. Windows
+            // Matched by suffix rather than with a "*.txt" glob. Windows
             // matches a search pattern against 8.3 short names as well as real
             // ones, so a three-character extension can pick up longer ones;
             // doing it here also keeps both containers in one place rather than
@@ -302,7 +292,7 @@ public static class NavCache
     /// </summary>
     /// <remarks>
     /// <c>navCacheLoad.gml</c>'s order, and its checks: the version line, the
-    /// dimensions line, then the two grids. ⚠️ <b>The header and the payload
+    /// dimensions line, then the two grids. <b>The header and the payload
     /// have to agree</b>, or the columns do not mean what the field constants
     /// say they mean — which is a graph that parses cleanly and describes
     /// geometry that does not exist.
@@ -341,7 +331,7 @@ public static class NavCache
 
         var nodeGrid = ReadGrid(lines[2].Trim());
 
-        // ⚠️ The edge line may be absent: navCacheLoad guards its second read on
+        // The edge line may be absent: navCacheLoad guards its second read on
         // file_text_eof, so a graph with no edges is a two-grid file with one
         // grid in it. Every shipped map has edges; a hand-built fixture need
         // not.
@@ -383,10 +373,10 @@ public static class NavCache
                 (int)edgeGrid.At(NavConstants.EdgeTo, e),
                 (NavEdgeType)(int)edgeGrid.At(NavConstants.EdgeType, e),
 
-                // ⚠️ NOT cast. NAV_EDGE_BUCKET is the arc's horizontal velocity
-                // in px/tick and every jump edge in every shipped cache carries a
-                // fractional one — see NavEdge. An (int) here truncated a third of
-                // them to zero and cost this port five of its fourteen scenarios.
+                // NOT cast. NAV_EDGE_BUCKET is the arc's horizontal velocity in
+                // px/tick and every jump edge in every shipped cache carries a
+                // fractional one — see NavEdge. Casting to (int) truncates about
+                // a third of them to zero, which breaks in-flight tracking.
                 edgeGrid.At(NavConstants.EdgeBucket, e),
                 edgeGrid.At(NavConstants.EdgeTicks, e),
                 edgeGrid.At(NavConstants.EdgeCost, e),

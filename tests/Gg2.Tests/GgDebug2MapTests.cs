@@ -16,7 +16,7 @@ namespace Gg2.Tests;
 /// dropped a feature goes red here rather than in whatever was using the map to
 /// test something else.
 /// <para>
-/// ⚠️ <b>A failure after editing the generator is the re-record path</b>, the
+/// <b>A failure after editing the generator is the re-record path</b>, the
 /// same rule as the pinned bot measurements: check the change is one you meant,
 /// update the expectation, and say so in the commit.
 /// </para>
@@ -43,7 +43,7 @@ public sealed class GgDebug2MapTests
     /// The FULL_UPDATE shape has nothing in it the writer cannot serialise.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The four moving platforms are load-bearing for the wire</b>: this is
+    /// <b>The four moving platforms are load-bearing for the wire</b>: this is
     /// the only built-in map that places any, so it is the only place the
     /// platform blocks' framing is exercised by a real map. The count is safe on
     /// the wire with or without the platform <em>motion</em> —
@@ -116,7 +116,7 @@ public sealed class GgDebug2MapTests
     /// motion has merged: two mirrored valley ferries on a horizontal loop, a
     /// vertical chamber hoist with asymmetric speeds, and one triggered
     /// platform that stays parked for ever because the carry (and so any
-    /// rider) does not exist. ⚠️ None of the four can ever carry a character —
+    /// rider) does not exist. None of the four can ever carry a character —
     /// a MovingPlatform's collision mask comes from an embedded sprite named
     /// by a <c>resource</c> property, and this map embeds none.
     /// </remarks>
@@ -161,7 +161,7 @@ public sealed class GgDebug2MapTests
     /// the key the entity names, and its bytes are the PNG the generator wrote.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The binding is by name and nothing on this side validates it</b> —
+    /// <b>The binding is by name and nothing on this side validates it</b> —
     /// a platform naming a missing resource just gets no sprite and collides
     /// with nothing, exactly like the reference (<c>stringToResource</c>
     /// returns -1). So the linkage is asserted here, where it can fail loudly.
@@ -349,7 +349,7 @@ public sealed class GgDebug2MapTests
     /// spawn to the enemy intel, and can NOT path into the enemy spawn zone.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>This is the bug the map's first cut shipped with</b>: the team
+    /// <b>This is the bug the map's first cut shipped with</b>: the team
     /// gates sat on the outer doors, so each intel was behind a gate solid to
     /// the enemy and no route to it existed for anybody — while every geometry
     /// test stayed green. Pathability is a claim about the graph, so it is

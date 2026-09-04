@@ -31,13 +31,13 @@ public readonly record struct MoveBoxRect(
 /// if (global.run_virtual_ticks) hspeed += other.pushPower;
 /// </code>
 /// <para>
-/// ⚠️ <b>It accelerates, it does not set.</b> The write is <c>+=</c> and the
+/// <b>It accelerates, it does not set.</b> The write is <c>+=</c> and the
 /// event fires on <em>every</em> tick the boxes overlap, so standing in a column
 /// of them gains five units of speed a tick without limit — which is what makes
 /// them lifts rather than conveyor belts.
 /// </para>
 /// <para>
-/// ⚠️ <b><c>moveStatus = 0</c> is outside the <c>run_virtual_ticks</c>
+/// <b><c>moveStatus = 0</c> is outside the <c>run_virtual_ticks</c>
 /// guard</b>, and it is the observable half at any frame rate: it puts a
 /// character blasted by a rocket back on ordinary friction and control (see
 /// <see cref="CharacterPhysics.BeginStepAccelerate"/>), so a move box cancels a
@@ -111,7 +111,7 @@ public static class MoveBoxes
 
     /// <summary>Every character's collision events with the four move boxes.</summary>
     /// <remarks>
-    /// ⚠️ <b>The push is a <em>component</em> write</b>, so it goes through
+    /// <b>The push is a <em>component</em> write</b>, so it goes through
     /// <see cref="Motion"/>'s component path and re-derives <c>direction</c> and
     /// <c>speed</c> with the snap — not the polar path. A character shoved
     /// straight up out of a standstill ends with an exactly vertical direction
@@ -119,7 +119,7 @@ public static class MoveBoxes
     /// <para>
     /// The four boxes' object ids are 756, 758, 759 and 761, which puts them
     /// between <c>FragBox</c> (509) and <c>PitFall</c> (794) in a character's
-    /// collision-event order. ⚠️ <b>None of that interleaving is observable</b>:
+    /// collision-event order. <b>None of that interleaving is observable</b>:
     /// the killing boxes write <c>hp</c> and <c>lastDamageSource</c> and these
     /// write the velocity pair and <c>moveStatus</c>, and two boxes pushing the
     /// same character compose by addition, which does not care about order —
@@ -152,12 +152,12 @@ public static class MoveBoxes
             ref var character = ref state.Characters[slot];
             var box = Aabb.ForCharacter(character.Box, character.X, character.Y);
 
-                // ⚠️ Indexed rather than `foreach`: this list arrives as an
+                // Indexed rather than `foreach`: this list arrives as an
                 // INTERFACE, and enumerating one allocates a boxed enumerator —
-                // measured at 32 bytes per live character per tick, every tick,
-                // which is exactly what docs/BOTAI.md item 1 forbids. Indexing an
-                // IReadOnlyList costs an interface call per element and allocates
-                // nothing, and these lists are a handful of rectangles.
+                // 32 bytes per live character per tick, which is exactly what
+                // docs/BOTAI.md item 1 forbids. Indexing an IReadOnlyList costs
+                // an interface call per element and allocates nothing, and these
+                // lists are a handful of rectangles.
                 for (var i = 0; i < boxes.Count; i++)
             {
                 var moveBox = boxes[i];

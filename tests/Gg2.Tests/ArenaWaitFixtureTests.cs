@@ -9,8 +9,8 @@ namespace Gg2.Tests;
 /// message no fixture contained.
 /// </summary>
 /// <remarks>
-/// <b>Recorded 2026-08-27</b>: three soldiers a side on <c>arena_lumberyard</c>,
-/// with blue removed while the scoreboard was up.
+/// The recording: three soldiers a side on <c>arena_lumberyard</c>, with blue
+/// removed while the scoreboard was up.
 /// <para>
 /// <b>The recipe comes from the branch itself.</b>
 /// <c>ArenaHUD.events/Step.xml</c> decides what happens when a round's
@@ -55,7 +55,7 @@ public sealed class ArenaWaitFixtureTests
             .ToArray();
 
     /// <summary>
-    /// ✅ <b>It holds an <c>ARENA_WAIT_FOR_PLAYERS</c>, and the message really is
+    /// <b>It holds an <c>ARENA_WAIT_FOR_PLAYERS</c>, and the message really is
     /// bodyless.</b>
     /// </summary>
     /// <remarks>
@@ -80,12 +80,12 @@ public sealed class ArenaWaitFixtureTests
         Assert.All(All(ticks, MessageType.ArenaRestart), m => Assert.Empty(m.Message.Payload));
         Assert.All(All(ticks, MessageType.ArenaStartRound), m => Assert.Empty(m.Message.Payload));
 
-        // ⚠️ The control: ARENA_ENDROUND, in the same stream, is not bodyless.
+        // The control: ARENA_ENDROUND, in the same stream, is not bodyless.
         Assert.All(All(ticks, MessageType.ArenaEndRound), m => Assert.True(m.Message.Payload.Length >= 5));
     }
 
     /// <summary>
-    /// ⚠️ <b>The gate: the last round ended into a WAIT rather than a
+    /// <b>The gate: the last round ended into a WAIT rather than a
     /// RESTART.</b>
     /// </summary>
     /// <remarks>
@@ -111,7 +111,7 @@ public sealed class ArenaWaitFixtureTests
 
         Assert.True(wait > lastEnd, $"the wait at t{wait} is not after the last round end at t{lastEnd}");
 
-        // ⚠️ The branch is exclusive — `else serverArenaRestart()` — so nothing
+        // The branch is exclusive — `else serverArenaRestart()` — so nothing
         // may restart between them, and nothing does afterwards either while the
         // team stays empty.
         var restartsAfter = All(ticks, MessageType.ArenaRestart).Where(m => m.Tick > lastEnd).ToArray();

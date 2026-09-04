@@ -10,7 +10,7 @@ namespace Gg2.Tests;
 /// refuses one built against a different map.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>Written because the rest of the suite cannot see either.</b> Every
+/// <b>Written because the rest of the suite cannot see either.</b> Every
 /// other nav test reads <c>nav/</c>, which now holds exactly one container and
 /// a manifest that matches — so "both containers work", "the compressed one
 /// wins" and "a mismatch is refused" were all true by construction and asserted
@@ -62,17 +62,15 @@ public sealed class NavContainerTests : IDisposable
     }
 
     /// <summary>
-    /// ⛔ With both present the PLAIN one wins — a regenerated graph takes
+    /// With both present the PLAIN one wins — a regenerated graph takes
     /// effect.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>This asserted the opposite for about an hour, and the opposite was
-    /// a bug.</b> "Compressed wins, because it is what shipped" sounds right
-    /// until you ask where the plain file came from: <c>gg2-nav-gen</c> writes
-    /// <c>&lt;key&gt;.txt</c> into <c>../gg2-server/nav</c> by default, which is
-    /// the directory holding the shipped <c>.txt.gz</c>. So preferring the
-    /// compressed file meant a regeneration was silently ignored — and nothing
-    /// caught it, because <c>NavManifestTests</c> hashes the MAPS, which a
+    /// "Compressed wins, because it is what shipped" is wrong: <c>gg2-nav-gen</c>
+    /// writes <c>&lt;key&gt;.txt</c> into <c>../gg2-server/nav</c> by default, which
+    /// is the directory holding the shipped <c>.txt.gz</c>. So preferring the
+    /// compressed file would mean a regeneration is silently ignored — and nothing
+    /// would catch it, because <c>NavManifestTests</c> hashes the MAPS, which a
     /// regeneration does not touch.
     /// <para>
     /// The graphs here are deliberately different sizes so the assertion can
@@ -97,7 +95,7 @@ public sealed class NavContainerTests : IDisposable
 
         Assert.True(NavCache.HasBothContainers(_directory, "ctf_truefort", 1));
 
-        // ⚠️ And with only the shipped one there, it is used and nothing is
+        // And with only the shipped one there, it is used and nothing is
         // reported as ambiguous — otherwise the warning would fire on every
         // normal server.
         File.Delete(Path.Combine(_directory, "ctf_truefort_a1.txt"));
@@ -108,11 +106,11 @@ public sealed class NavContainerTests : IDisposable
     }
 
     /// <summary>
-    /// ⛔ The regeneration cycle end to end: generate, compress, still the same
+    /// The regeneration cycle end to end: generate, compress, still the same
     /// graph.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>This is the workflow, and every step of it is a place to lose
+    /// <b>This is the workflow, and every step of it is a place to lose
     /// data.</b> <c>gg2-nav-gen</c> writes <c>.txt</c>;
     /// <c>tools/compress-nav.sh</c> gzips and deletes the original; the loader
     /// has to read the result as the same graph. Asserting the round trip here
@@ -139,7 +137,7 @@ public sealed class NavContainerTests : IDisposable
         Assert.Equal(fromPlain!.Nodes.Length, fromCompressed!.Nodes.Length);
         Assert.Equal(fromPlain.Edges.Length, fromCompressed.Edges.Length);
 
-        // ⚠️ Node-for-node, not just the counts. A container change that lost
+        // Node-for-node, not just the counts. A container change that lost
         // the fractional NAV_EDGE_BUCKET would keep every count identical and
         // cost five of fourteen scenarios — NavCache.Parse's remarks on the cast
         // that already did exactly that once.
@@ -162,10 +160,10 @@ public sealed class NavContainerTests : IDisposable
     }
 
     /// <summary>
-    /// ⛔ The load-bearing one: a graph whose manifest line disagrees is refused.
+    /// The load-bearing one: a graph whose manifest line disagrees is refused.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Both arms, and the negative arm is the real assertion.</b> Checking
+    /// <b>Both arms, and the negative arm is the real assertion.</b> Checking
     /// only that a matching hash loads would pass against a
     /// <c>TryLoad</c> that ignored the parameter entirely — which is exactly
     /// what the first draft of this feature would have shipped, since the file
@@ -198,7 +196,7 @@ public sealed class NavContainerTests : IDisposable
             "a graph built against different geometry was loaded anyway");
         Assert.Null(refused);
 
-        // ⚠️ And with no hash offered it still loads: the check is something a
+        // And with no hash offered it still loads: the check is something a
         // caller opts into, so a fixture or a tool is not forced to own a map.
         Assert.True(NavCache.TryLoad(_directory, "ctf_truefort", 1, out _));
     }
@@ -236,7 +234,7 @@ public sealed class NavContainerTests : IDisposable
     }
 
     /// <summary>
-    /// ⚠️ An empty <c>nav/</c> must not satisfy <c>ResolveNav</c>'s probe.
+    /// An empty <c>nav/</c> must not satisfy <c>ResolveNav</c>'s probe.
     /// </summary>
     /// <remarks>
     /// Otherwise the directory resolves and then every map misses one at a time,
@@ -257,7 +255,7 @@ public sealed class NavContainerTests : IDisposable
 
     /// <summary>The shipped directory really is the compressed container.</summary>
     /// <remarks>
-    /// ⚠️ <b>A guard against the repository silently reverting.</b> Everything
+    /// <b>A guard against the repository silently reverting.</b> Everything
     /// above works with either container, so nothing else in the suite would
     /// notice 35 MB of plain text coming back — and the publish size, which is
     /// the thing that actually mattered, is not otherwise gated.
@@ -291,10 +289,9 @@ public sealed class NavContainerTests : IDisposable
     /// <c>MapDirectory.ResolveNav</c> finds a directory holding only <c>.gz</c>.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>The probe used to glob <c>*.txt</c></b>, so gzipping the graphs
-    /// would have made it resolve nothing and every deployment would have run
-    /// bots that never walk — the exact failure this change was made to end,
-    /// reintroduced by the change itself.
+    /// <b>The probe must not glob only <c>*.txt</c></b> — gzipping the graphs
+    /// would then make it resolve nothing, and every deployment would run bots
+    /// that never walk.
     /// </remarks>
     [Fact]
     public void ResolveNavFindsACompressedDirectory()

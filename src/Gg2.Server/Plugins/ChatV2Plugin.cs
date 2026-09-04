@@ -22,7 +22,7 @@ namespace Gg2.Server.Plugins;
 /// <c>event5</c> are drawing.
 /// </para>
 /// <para>
-/// ⚠️ <b>The wire format is two bytes of framing and no version field.</b>
+/// <b>The wire format is two bytes of framing and no version field.</b>
 /// Client to server: a kind byte, then for a chat message a <c>ubyte</c> length
 /// and that many bytes. Server to client: a <c>ubyte</c> length and that many
 /// bytes, already coloured and already prefixed with the speaker's name — the
@@ -31,7 +31,7 @@ namespace Gg2.Server.Plugins;
 /// why <see cref="ServerPluginCatalogue"/> pins the zip.
 /// </para>
 /// <para>
-/// ⚠️ Strings here are GM8 byte strings, not UTF-8 — see <see cref="Gg2Text"/>.
+/// Strings here are GM8 byte strings, not UTF-8 — see <see cref="Gg2Text"/>.
 /// A char is a byte, which is what makes the 255-byte truncation below a plain
 /// <c>string</c> slice.
 /// </para>
@@ -65,7 +65,7 @@ public sealed partial class ChatV2Plugin : ServerPlugin
     /// <c>team + 1</c>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Off by one on purpose, on both sides. The client sends
+    /// Off by one on purpose, on both sides. The client sends
     /// <c>_team + 1</c> for a boolean "is this team chat"
     /// (<c>event3</c>), so 1 means global and 2 means team; the host then
     /// re-derives 0-for-global / <c>1 + team</c> from the packet kind. The two
@@ -104,7 +104,7 @@ public sealed partial class ChatV2Plugin : ServerPlugin
     /// <c>global.chatBanlist</c>: the addresses of players muted for spamming.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Keyed on the remote address, not the roster slot, so a mute survives a
+    /// Keyed on the remote address, not the roster slot, so a mute survives a
     /// reconnect — which is the point — and catches everyone behind the same NAT,
     /// which is not. Transcribed rather than improved: a client sees a mute the
     /// reference would have given it.
@@ -125,13 +125,13 @@ public sealed partial class ChatV2Plugin : ServerPlugin
     /// and tell the chat about it.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>This is the one thing the plugin does that a client can see without
+    /// <b>This is the one thing the plugin does that a client can see without
     /// the plugin</b> — it broadcasts <c>PLAYER_CHANGENAME</c>, so a player
     /// joining a chat server as "bob" while a "bob" is already there is renamed
     /// to "bob2" for everybody, plugin or not. It runs on join too, because a
     /// fresh <c>nameBkp</c> is <c>""</c> and so differs from any real name.
     /// <para>
-    /// ⚠️ Placed after the tick's client commands rather than before, so a
+    /// Placed after the tick's client commands rather than before, so a
     /// <c>PLAYER_CHANGENAME</c> that arrived this tick is de-duplicated in the
     /// same tick. GM8 gave the reference no such choice and no guarantee about
     /// which instance's Begin Step ran first; nothing observable turns on it.
@@ -166,7 +166,7 @@ public sealed partial class ChatV2Plugin : ServerPlugin
                 continue;
             }
 
-            // ⚠️ Only announced to players who have chat. A rename by somebody
+            // Only announced to players who have chat. A rename by somebody
             // without the plugin leaves nameBkp stale for ever, so this branch
             // is re-evaluated every tick from then on — harmless, because the
             // de-duplication settles after one pass, and transcribed rather than
@@ -185,7 +185,7 @@ public sealed partial class ChatV2Plugin : ServerPlugin
     /// <c>event0</c>: a packet from a client, dispatched on its kind byte.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The reference reads past the end of a short buffer and GM8 hands it
+    /// The reference reads past the end of a short buffer and GM8 hands it
     /// zeroes; this clamps instead. Both refuse the packet in the end, but a
     /// truncated read here would be an exception on the tick thread rather than a
     /// message nobody sees.
@@ -200,7 +200,7 @@ public sealed partial class ChatV2Plugin : ServerPlugin
         switch (data[0])
         {
             case KindHello:
-                // ⚠️ The mute check is here and nowhere else: a muted player who
+                // The mute check is here and nowhere else: a muted player who
                 // reconnects re-sends hello and is refused, silently, which is
                 // what makes the address-keyed ban list work at all.
                 if (_banlist.Contains(Host.RemoteAddressOf(slot)) || chatter.HasChat)
@@ -219,7 +219,7 @@ public sealed partial class ChatV2Plugin : ServerPlugin
 
                 var message = ReadMessage(data);
 
-                // ⚠️ Intercepted BEFORE the delivery, so a command is never
+                // Intercepted BEFORE the delivery, so a command is never
                 // echoed as chat. The client half has no idea commands exist —
                 // it sends "/votekick bob" as ordinary text — which is what
                 // makes a whole command layer possible without touching the GML.
@@ -231,7 +231,7 @@ public sealed partial class ChatV2Plugin : ServerPlugin
 
                 Deliver(Format(slot, message, TeamEveryone), TeamEveryone);
 
-                // ⚠️ AFTER the delivery, which is the reference's order: the
+                // AFTER the delivery, which is the reference's order: the
                 // message that trips the limit is still sent, and the mute
                 // notice follows it.
                 CheckForSpam(slot);
@@ -280,13 +280,13 @@ public sealed partial class ChatV2Plugin : ServerPlugin
     /// half draws.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <c>#</c> is stripped from what the player typed because the client half
+    /// <c>#</c> is stripped from what the player typed because the client half
     /// uses it as its own marker: when a line is too long to fit the window,
     /// <c>event4</c> looks for the last <c>#</c> to find which colour the
     /// continuation should start in. A <c>#</c> in a message would recolour the
     /// rest of it.
     /// <para>
-    /// ⚠️ The reference has a third branch here — <c>#O</c> instead of <c>#W</c>
+    /// The reference has a third branch here — <c>#O</c> instead of <c>#W</c>
     /// when the speaker is <c>global.myself</c>, so the host sees its own
     /// messages in orange. A headless server's slot 0 never speaks, so that
     /// branch is unreachable and is not transcribed.
@@ -317,7 +317,7 @@ public sealed partial class ChatV2Plugin : ServerPlugin
     /// <see cref="TeamEveryone"/>, or <c>team + 1</c> for one team only.
     /// </param>
     /// <remarks>
-    /// ⚠️ Player by player rather than as a broadcast, because a team message
+    /// Player by player rather than as a broadcast, because a team message
     /// must not reach the other team's clients — a client cannot be trusted to
     /// hide what it has been sent. The reference uses <c>PluginPacketSendTo</c>
     /// in a <c>with(Player)</c> loop for the same reason, and global chat goes
@@ -356,7 +356,7 @@ public sealed partial class ChatV2Plugin : ServerPlugin
     /// </summary>
     /// <remarks>
     /// The reference sends these with the same <c>sendChatMessage</c> it
-    /// broadcasts with, passing a target as a fourth argument. ⚠️ It reaches a
+    /// broadcasts with, passing a target as a fourth argument. It reaches a
     /// player who is not in chat: a command's answer has to arrive even when the
     /// answer is "you are muted", or the command looks broken rather than
     /// refused.
@@ -376,7 +376,7 @@ public sealed partial class ChatV2Plugin : ServerPlugin
     /// sender.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The window restarts from the <em>last</em> message, not from the first:
+    /// The window restarts from the <em>last</em> message, not from the first:
     /// the count only resets after a two-second gap, so a player typing steadily
     /// every 1.9 seconds is muted on their sixth line. That is the reference's
     /// behaviour and players are used to it.
@@ -424,7 +424,7 @@ public sealed partial class ChatV2Plugin : ServerPlugin
     /// else's, case-insensitively.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The counter is <b>how many players match</b>, not the next free
+    /// The counter is <b>how many players match</b>, not the next free
     /// number, so the third "bob" becomes "bob3" — and if "bob2" then leaves,
     /// the next "bob" is "bob2" again. It also counts the renaming player
     /// itself, which is why the test is <c>&gt; 1</c>.

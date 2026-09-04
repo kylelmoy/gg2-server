@@ -114,26 +114,20 @@ public sealed class PhysicsParityTests
     /// not "within a wire unit", zero — and so is every hp, across 898 ticks of
     /// two scouts running, jumping, falling, landing and shooting each other.
     /// <para>
-    /// <b>This test used to stop at tick 393</b>, the first tick on which
-    /// anything took damage, because phase 4 implemented no weapons: the
-    /// divergence from there on was the scattergun, arriving as hp and hspeed
-    /// together. It now runs to the end of the fixture, which is phase 5 stage
-    /// 3's exit criterion — and that it went from "exact until 393" to "exact
-    /// throughout" in one step is the result worth noticing, because the six
-    /// blasts in this recording exercise the muzzle position, the seeded RNG
-    /// stream, <c>lengthdir</c>'s snap, the rotated bounding box, the overlap
-    /// test, the damage and the knockback all at once. Any one of them wrong
-    /// shows up here.
+    /// This runs to the end of the fixture rather than stopping at the first
+    /// damage, because the six blasts in this recording exercise the muzzle
+    /// position, the seeded RNG stream, <c>lengthdir</c>'s snap, the rotated
+    /// bounding box, the overlap test, the damage and the knockback all at
+    /// once. Any one of them wrong shows up here.
     /// </para>
     /// <para>
-    /// <b>The anchor is what makes a gate of zero reachable.</b> A replay used
-    /// to start every character from a broadcast position, which carries a fifth
-    /// of a pixel of position and <c>1/8.5</c> px/tick of velocity, so it began
+    /// <b>The anchor is what makes a gate of zero reachable.</b> A replay
+    /// anchored from a broadcast position carries a fifth of a pixel of
+    /// position and <c>1/8.5</c> px/tick of velocity, so it would begin
     /// somewhere inside a bin rather than on the state the reference was in.
     /// Resolving <c>PLAYER_SPAWN</c> against the map's own spawn points instead
     /// (<see cref="SpawnPoints"/>) starts them on an integer coordinate with both
-    /// speeds zero — a state that passed through no wire. docs/PLAN.md phase 4
-    /// has the history.
+    /// speeds zero — a state that passed through no wire.
     /// </para>
     /// </remarks>
     [Fact]
@@ -286,7 +280,7 @@ public sealed class PhysicsParityTests
     /// six fields that name a roster slot — not with slot 0.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The trap CLAUDE.md names, from the direction it is easy to miss.</b>
+    /// <b>The trap CLAUDE.md names, from the direction it is easy to miss.</b>
     /// <c>Nobody</c> is <b>255</b>, so a zeroed <see cref="CharacterState"/>
     /// claims that slot 0 last hurt it, assisted in hurting it, set it on fire
     /// and is healing it. Slot 0 is the server's own reserved player and always
@@ -475,13 +469,11 @@ public sealed class PhysicsParityTests
         // regression collapses the window and every other assertion here then
         // fails for the derived reason rather than the real one.
         //
-        // ⚠️ This bound is meant to be raised. It went 335 -> 357 when the
-        // projectile pass was moved ahead of the character move (see
-        // MatchSimulation), and every fix that pushes the first divergence later
-        // should push this with it — that is what stops the fixture decaying
-        // into a formality.
+        // This bound is meant to be raised: every fix that pushes the first
+        // divergence later should push this with it — that is what stops the
+        // fixture decaying into a formality.
         //
-        // ⚠️ But do not go hunting for a bug at tick 1274. It is a rounding
+        // But do not go hunting for a bug at tick 1274. It is a rounding
         // boundary, not a divergence: the port has slot 1 at 14125.5014 wire
         // units and the reference rounded to 14125, so the two disagree about an
         // integer while being 0.0014 wire units — 0.0003 world pixels — apart,
@@ -511,7 +503,7 @@ public sealed class PhysicsParityTests
     /// scattergun blast, rocket, mine and death, with no disagreement about any
     /// character's hp byte.
     /// <para>
-    /// ⚠️ <b>This fixture can carry the claim and the support one cannot, and
+    /// <b>This fixture can carry the claim and the support one cannot, and
     /// the difference is which weapons are in it.</b> Every class here — scout,
     /// soldier, demoman — fires a weapon that broadcasts its seed, so a replay
     /// re-derives the same spread and hits the same people. A pyro does not:
@@ -665,8 +657,8 @@ public sealed class PhysicsParityTests
     /// literally what happens at tick 1274 — 0.0014 wire units, and then four
     /// hundred more clean ticks.
     /// <para>
-    /// So this asks the continuous question instead. As of 2026-08-25 the answer
-    /// is <b>756 ticks</b> — t917 to t1673, containing <b>fourteen weapon fires,
+    /// So this asks the continuous question instead. The answer is <b>756
+    /// ticks</b> — t917 to t1673, containing <b>fourteen weapon fires,
     /// a death and a respawn</b> across five characters and 514 comparisons —
     /// against the exact window's 357.
     /// </para>
@@ -708,7 +700,7 @@ public sealed class PhysicsParityTests
         // Asserted first, because a regression collapses the window and then
         // every assertion below it fails for the derived reason.
         //
-        // ⚠️ Meant to be raised, like the exact window it sits beside. 756
+        // Meant to be raised, like the exact window it sits beside. 756
         // today; reverting the projectile-pass ordering takes it to 336.
         Assert.True(
             window >= 700,
@@ -841,16 +833,14 @@ public sealed class PhysicsParityTests
     /// </para>
     /// <para>
     /// <b>The bound is deliberately loose and the numbers are recorded here so
-    /// that an improvement is visible.</b> ✅ <b>Re-measured 2026-08-27: max
-    /// <c>|dx|</c> 77 and max <c>|dy|</c> 75 are unchanged, but both p99s are now
-    /// <b>2</b>, down from 11 and 30 on 2026-08-25</b> — the maxima are single
-    /// discrete events and the percentiles are the part that improved as the
-    /// weapons landed. Those are much worse than the combat trace's p99
-    /// of 2, and that is the point of having it: the residual is combat and
-    /// airborne physics, which nothing else exercises. Three leads are written up
-    /// in the handoff — a repeating six-pixel vertical offset, an assist
-    /// attribution that produces 0 where the reference says 255, and windows
-    /// where the port under-damages.
+    /// that an improvement is visible.</b> Max <c>|dx|</c> is 77 and max
+    /// <c>|dy|</c> is 75; both p99s are 2 — the maxima are single discrete
+    /// events, while the p99s track how well the weapons land. Those maxima are
+    /// much worse than the combat trace's p99 of 2, and that is the point of
+    /// having it: the residual is combat and
+    /// airborne physics, which nothing else exercises. Known leads: a repeating
+    /// six-pixel vertical offset, an assist attribution that produces 0 where
+    /// the reference says 255, and windows where the port under-damages.
     /// </para>
     /// </remarks>
     [Fact]
@@ -1306,12 +1296,11 @@ public sealed class PhysicsParityTests
     /// quantisation bin — so moving it can only make things worse.
     /// </summary>
     /// <remarks>
-    /// <b>This test asserts the inverse of what it used to.</b> While a replay
-    /// anchored from the wire, the honest question was "is the residual the
-    /// arithmetic or the anchor?", and the answer was found by sweeping each
-    /// slot's anchor across its own bin to see the divergence move later. There
-    /// is no bin left to sweep: a spawn resolves to an integer coordinate with
-    /// both speeds zero.
+    /// With a wire-anchored replay, "is the residual the arithmetic or the
+    /// anchor?" was answered by sweeping each slot's anchor across its own
+    /// quantisation bin to see the divergence move later. A spawn-anchored
+    /// replay has no bin left to sweep: a spawn resolves to an integer
+    /// coordinate with both speeds zero.
     /// <para>
     /// So the experiment inverts. Nudging now starts a character somewhere the
     /// reference never was, and every offset must be strictly worse than none.
@@ -1325,7 +1314,7 @@ public sealed class PhysicsParityTests
         var (trace, ticks) = Load();
         var baseline = Replay(ticks, trace.Header.Map, ReplayMode.ClosedLoop);
 
-        // Well inside what used to be a wire bin, so this is not a test that a
+        // Well inside a wire quantisation bin, so this is not a test that a
         // large displacement breaks things — a fiftieth of a pixel is far below
         // the resolution the wire could even express.
         foreach (var offset in new[] { -0.1, -0.02, 0.02, 0.1 })
@@ -1374,11 +1363,8 @@ public sealed class PhysicsParityTests
         Assert.True(report.Comparisons > 150, $"only {report.Comparisons} comparisons");
 
         // Five wire units is one world pixel, and this test's name is a claim
-        // about exactly that. 2 and 3 today, over 207 comparisons.
-        //
-        // ⚠️ The horizontal bound was 25 — five pixels — which contradicted
-        // the name it sits under and had not been re-measured since the port
-        // was a fifth as accurate. One pixel is the claim; hold it to it.
+        // about exactly that. 2 and 3 today, over 207 comparisons. One pixel is
+        // the claim; hold it to it.
         Assert.True(report.PercentileXError(99) <= 5,
             $"p99 |dx| was {report.PercentileXError(99)}: {report.Render()}");
         Assert.True(report.PercentileYError(99) <= 5,

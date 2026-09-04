@@ -20,7 +20,7 @@ public enum ShuffleMode
     /// an arena one. The reference's own default, and the ini's.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Why arena is special.</b> An arena round starts with one life each
+    /// <b>Why arena is special.</b> An arena round starts with one life each
     /// and no respawns, so a server that opens on one greets its first two
     /// joiners with a round that ends the moment one of them dies.
     /// </remarks>
@@ -34,7 +34,7 @@ public enum ShuffleMode
 /// <c>GameServerCreate.gml:92-108</c>, the rotation shuffle.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>Separate from <see cref="GameServer"/> so it can be tested with a seeded
+/// <b>Separate from <see cref="GameServer"/> so it can be tested with a seeded
 /// <see cref="Random"/>.</b> The server itself passes <see cref="Random.Shared"/>:
 /// a rotation that came out the same on every run would not be a shuffle, and
 /// seeding it from anything stable about the server (the port, say — which is
@@ -76,7 +76,7 @@ public static class MapRotationShuffle
     /// a bug and is not worth diverging over.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>It does not stop at the first non-arena map.</b> The GML loop runs
+    /// <b>It does not stop at the first non-arena map.</b> The GML loop runs
     /// to the end of the list and swaps <em>every</em> non-arena entry it meets
     /// into slot 0, so what actually opens the server is the <b>last</b>
     /// non-arena map in the shuffled order, not the first. The observable
@@ -104,7 +104,7 @@ public static class MapRotationShuffle
     /// <c>string_copy(map, 0, 6) == 'arena_'</c>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Ordinal, and case-sensitive.</b> GML's <c>==</c> on strings is a
+    /// <b>Ordinal, and case-sensitive.</b> GML's <c>==</c> on strings is a
     /// byte compare, so a map called <c>Arena_x</c> is not an arena map to the
     /// reference either. Every shipped one is lowercase.
     /// </remarks>

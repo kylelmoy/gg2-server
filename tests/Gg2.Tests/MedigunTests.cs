@@ -137,7 +137,7 @@ public sealed class MedigunTests
     /// The guard is <c>if(targetScore &lt; bestScore) continue;</c> — strictly
     /// less, so an equal score displaces the incumbent rather than losing to it.
     /// <para>
-    /// ⚠️ <b>Which candidate is "last" is an approximation here.</b> The
+    /// <b>Which candidate is "last" is an approximation here.</b> The
     /// reference walks <c>with(Character)</c> in instance order, which is
     /// creation order; the port walks roster order, as
     /// <see cref="MatchSimulation"/> does everywhere. The two agree until
@@ -239,7 +239,7 @@ public sealed class MedigunTests
     /// <b>character</b> is pointing.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <c>other.x</c> and <c>owner.x</c> in the same expression, four lines
+    /// <c>other.x</c> and <c>owner.x</c> in the same expression, four lines
     /// apart: <c>collision_line(other.x, other.y, aimRayEndX, aimRayEndY, ...)</c>
     /// where <c>aimRayEndX = owner.x + lengthdir_x(maxHealDistance, ...)</c>. In
     /// play the two differ by half a pixel and a tick of travel
@@ -429,7 +429,7 @@ public sealed class MedigunTests
     /// stack.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The tier is tested against the hp the patient had <em>before</em> this
+    /// The tier is tested against the hp the patient had <em>before</em> this
     /// tick's heal, so a patient sitting on exactly 125 gets one more full-rate
     /// tick before it bites.
     /// </remarks>
@@ -628,13 +628,13 @@ public sealed class MedigunTests
     /// the map entity is called <c>SetupGate</c> and
     /// <c>builder_init.gml:301</c> builds a <c>ControlPointSetupGate</c> from it.
     /// <para>
-    /// ⚠️ <b>The clause is the only way to build charge before the gates open.</b>
+    /// <b>The clause is the only way to build charge before the gates open.</b>
     /// During setup nobody has been shot yet, so every patient is at full health
     /// and the healthy rate would mean a medic arrives at the first fight with
     /// 30% less meter than the reference gives them.
     /// </para>
     /// <para>
-    /// ⛔ <b>Both halves are required, and each has its own control below.</b> A
+    /// <b>Both halves are required, and each has its own control below.</b> A
     /// fix that keyed on the timer alone would hand the hurt rate to every
     /// gamemode with a setup timer and no gate; one that keyed on the map alone
     /// would never stop giving it. Reachable on <c>ctf_avanti</c> (Invasion) and
@@ -650,7 +650,7 @@ public sealed class MedigunTests
 
         Assert.Equal(2.5, ChargeOffAFullHealthPatient(attackDefend: true, setupTimer: 90));
 
-        // ⚠️ Each half on its own is NOT enough — the reference's `setup` is a
+        // Each half on its own is NOT enough — the reference's `setup` is a
         // conjunction, and either of these passing at 2.5 would mean a mode with
         // a setup timer and no gate, or a gate map after setup ended, kept the
         // hurt rate for ever.
@@ -735,7 +735,7 @@ public sealed class MedigunTests
     /// pressed this tick.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The uber arm reads <c>owner.keyState</c> where everything around it
+    /// The uber arm reads <c>owner.keyState</c> where everything around it
     /// reads the down-or-pressed union, so a click that arrives and is released
     /// inside one tick opens the beam and will not pop the charge.
     /// </remarks>
@@ -805,7 +805,7 @@ public sealed class MedigunTests
     /// 240 the arithmetic looks like.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Two hundred and forty subtractions of <c>25/3</c> from 2000 do not
+    /// <b>Two hundred and forty subtractions of <c>25/3</c> from 2000 do not
     /// reach zero.</b> They leave <c>7.02e-12</c>, which is seventy times GML's
     /// own 1e-13 comparison fuzz — so <c>if(uberCharge &lt;= 0)</c> is false and
     /// the uber survives into a 241st tick. The reference performs the identical
@@ -1027,7 +1027,7 @@ public sealed class MedigunTests
         Assert.Equal(DamageSource.Needlegun, needle.Source);
         Assert.Equal(4, needle.HitDamage);
         Assert.Equal(40, needle.Lifetime);
-        // ⚠ Not 30: aim crosses the wire as one of 65,536 steps, so the
+        // Not 30: aim crosses the wire as one of 65,536 steps, so the
         // reference's own aimDirection is 29.998… and the needle inherits that.
         Assert.Equal(state.Characters[1].AimDirection, needle.ImageAngle);
         Assert.Equal(state.Characters[1].AimDirection, needle.Motion.Direction);
@@ -1153,13 +1153,11 @@ public sealed class MedigunTests
 
         Assert.Equal(40, state.Weapons[1].AmmoCount);
 
-        // Spent, and — unlike the Scattergun's — not re-armed. ⚠️ Zero rather
-        // than -1, and the old comment here had the mechanism backwards: GM8
-        // does NOT write -1 before running an alarm's body. A fired alarm reads
-        // 0 for the rest of that frame and reaches -1 on the next frame's alarm
-        // stage. What lets a handler re-arm its own alarm is simply that
-        // nothing wipes the value afterwards. Measured 2026-08-27; see
-        // Timers.Advance.
+        // Spent, and — unlike the Scattergun's — not re-armed. Zero rather
+        // than -1: GM8 does NOT write -1 before running an alarm's body. A
+        // fired alarm reads 0 for the rest of that frame and reaches -1 on the
+        // next frame's alarm stage. What lets a handler re-arm its own alarm is
+        // simply that nothing wipes the value afterwards. See Timers.Advance.
         Assert.Equal(Timers.JustFired, state.Weapons[1].ReloadTimer);
     }
 

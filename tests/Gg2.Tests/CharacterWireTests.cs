@@ -7,10 +7,10 @@ namespace Gg2.Tests;
 /// The character and weapon blocks, now that there is state behind them.
 /// </summary>
 /// <remarks>
-/// Three of these fields were placeholder zeros for four phases, and one of them
-/// — the medic's heal target — was a zero that named roster slot 0 rather than
-/// nobody. What is checked here is that each now comes from somewhere real, and
-/// that the two sentinels are 255 and not 0.
+/// Checks that ammo, the class-specific byte, and the medic's heal target each
+/// come from real weapon/character state, and that the sentinel values (a heal
+/// target of nobody, a saturated ammo count) are 255 and not 0 — a zero would
+/// name roster slot 0 rather than nobody.
 /// </remarks>
 public sealed class CharacterWireTests
 {
@@ -105,8 +105,7 @@ public sealed class CharacterWireTests
 
     /// <summary>
     /// <c>Weapon.events/Create.xml</c>: a weapon spawns unable to fire, with its
-    /// refire counter already running. The pair this used to send — ready, with
-    /// nothing pending — was a guess made before there was any weapon state.
+    /// refire counter already running.
     /// </summary>
     [Fact]
     public void AFreshWeaponReportsItselfNotReady()

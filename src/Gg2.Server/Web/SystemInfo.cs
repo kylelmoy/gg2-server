@@ -20,7 +20,7 @@ namespace Gg2.Server;
 /// performance number mean something different.
 /// </para>
 /// <para>
-/// ⛔ <b>THE COMMAND LINE AND THE ENVIRONMENT ARE NEVER REPORTED.</b>
+/// <b>THE COMMAND LINE AND THE ENVIRONMENT ARE NEVER REPORTED.</b>
 /// <c>--web-password</c> is in one and may be in the other, and this endpoint
 /// exists to be read by a browser. Nothing here reads
 /// <see cref="Environment.GetCommandLineArgs"/> or
@@ -28,13 +28,13 @@ namespace Gg2.Server;
 /// individually, on purpose.
 /// </para>
 /// <para>
-/// ⚠️ <b>Runs on an HTTP thread, not the tick thread</b>, and may because it
+/// <b>Runs on an HTTP thread, not the tick thread</b>, and may because it
 /// touches no game state — only the OS, the runtime, and the option strings that
 /// are set once at startup and never written again. It is the one route that
 /// does not go through the command queue.
 /// </para>
 /// <para>
-/// ⚠️ <b>Every platform lookup degrades to null rather than throwing.</b> A panel
+/// <b>Every platform lookup degrades to null rather than throwing.</b> A panel
 /// that 500s because <c>/proc</c> looked different on somebody's distro is worse
 /// than one that says "unknown" for the CPU model.
 /// </para>
@@ -45,7 +45,7 @@ public static class SystemInfo
     /// The CPU's model and clock, or nulls where the platform will not say.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The two platforms report different things and the panel says which.</b>
+    /// <b>The two platforms report different things and the panel says which.</b>
     /// Windows' registry value is the NOMINAL clock recorded at boot; Linux's
     /// <c>/proc/cpuinfo</c> is the CURRENT clock of core 0, which on any modern
     /// machine is whatever the governor is doing this instant and will not match
@@ -54,7 +54,7 @@ public static class SystemInfo
     private static readonly (string? Model, int? Megahertz, bool Nominal) Cpu = ReadCpu();
 
     /// <remarks>
-    /// ⚠️ <b>This is how <c>Gg2.Server</c> was compiled, which is the one that
+    /// <b>This is how <c>Gg2.Server</c> was compiled, which is the one that
     /// matters</b>: the simulation and the bot layer live here. CLAUDE.md's
     /// standing rule is that a tick figure without its build is meaningless —
     /// the same twelve-bot tick is 0.151ms in Release and 0.307ms in Debug — so
@@ -87,12 +87,12 @@ public static class SystemInfo
         json.Append(",\"cpu\":{\"model\":").Append(Text(Cpu.Model));
         json.Append(",\"megahertz\":").Append(Cpu.Megahertz?.ToString(CultureInfo.InvariantCulture) ?? "null");
 
-        // ⚠️ Said out loud rather than left for the reader to assume: Windows
+        // Said out loud rather than left for the reader to assume: Windows
         // reports the clock recorded at boot and Linux reports what core 0 is
         // doing right now.
         json.Append(",\"clockIsNominal\":").Append(Cpu.Nominal ? "true" : "false");
 
-        // ⚠️ LOGICAL cores, and container-aware: on a VPS with a CPU quota this
+        // LOGICAL cores, and container-aware: on a VPS with a CPU quota this
         // is what the runtime will actually schedule on, which is the number
         // that explains the tick cost. It is not the host's core count.
         json.Append(",\"logicalCores\":").Append(Environment.ProcessorCount).Append('}');
@@ -150,8 +150,8 @@ public static class SystemInfo
     }
 
     /// <remarks>
-    /// ⚠️ <c>Microsoft.Win32.Registry</c> needs no package on <c>net10.0</c> —
-    /// checked — but it is Windows-only, so the call sits behind
+    /// <c>Microsoft.Win32.Registry</c> needs no package on <c>net10.0</c>,
+    /// but it is Windows-only, so the call sits behind
     /// <see cref="OperatingSystem.IsWindows"/>, which is what the platform
     /// analyser reads. Without that guard a <c>linux-x64</c> publish fails the
     /// build, which is how this was verified.
@@ -164,7 +164,7 @@ public static class SystemInfo
         var model = Microsoft.Win32.Registry.GetValue(Key, "ProcessorNameString", null) as string;
         var megahertz = Microsoft.Win32.Registry.GetValue(Key, "~MHz", null) as int?;
 
-        // ⚠️ Nominal: the registry records the clock as it was at boot, not now.
+        // Nominal: the registry records the clock as it was at boot, not now.
         return (model?.Trim(), megahertz, true);
     }
 
@@ -190,7 +190,7 @@ public static class SystemInfo
                 break;
         }
 
-        // ⚠️ NOT nominal — this is whatever the governor has core 0 at right now,
+        // NOT nominal — this is whatever the governor has core 0 at right now,
         // and on a shared VPS it moves between requests.
         return (model, megahertz is null ? null : (int)Math.Round(megahertz.Value), false);
     }
@@ -208,14 +208,14 @@ public static class SystemInfo
     /// </summary>
     /// <remarks>
     /// <para>
-    /// ⛔ <b><c>GC.GetGCMemoryInfo()</c> is NOT used for this, and that is
-    /// measured.</b> Its fields describe <em>the last garbage collection</em>, not
-    /// the present: on a freshly started server this build reported
-    /// <c>MemoryLoadBytes = 0</c> while the machine had 64 GB in it. A panel
-    /// showing "0 bytes in use" would be worse than showing nothing.
+    /// <b><c>GC.GetGCMemoryInfo()</c> is NOT used for this.</b> Its fields
+    /// describe <em>the last garbage collection</em>, not the present: on a
+    /// freshly started server it reports <c>MemoryLoadBytes = 0</c> even with
+    /// plenty of physical memory free. A panel showing "0 bytes in use" would
+    /// be worse than showing nothing.
     /// </para>
     /// <para>
-    /// ⚠️ <b>The cgroup is preferred over <c>/proc/meminfo</c> where one exists</b>,
+    /// <b>The cgroup is preferred over <c>/proc/meminfo</c> where one exists</b>,
     /// because that is the whole point on a VPS: a container sees the host's
     /// <c>/proc/meminfo</c> and is killed at its own limit. The panel says which
     /// of the two it read.
@@ -292,10 +292,9 @@ public static class SystemInfo
     }
 
     /// <remarks>
-    /// ⚠️ <b>A P/Invoke, because the BCL has no cross-platform answer</b> — and
-    /// the same shape <see cref="TimerResolution"/> already uses for
-    /// <c>winmm.dll</c>, so it is not a new kind of thing in this project.
-    /// Guarded, so a <c>linux-x64</c> publish still builds.
+    /// <b>A P/Invoke, because the BCL has no cross-platform answer</b> — the
+    /// same shape <see cref="TimerResolution"/> already uses for
+    /// <c>winmm.dll</c>. Guarded, so a <c>linux-x64</c> publish still builds.
     /// </remarks>
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     private static (long?, long?, string?) ReadMemoryWindows()
@@ -329,7 +328,7 @@ public static class SystemInfo
     // --- the rest ------------------------------------------------------------
 
     /// <remarks>
-    /// ⚠️ <b><see cref="Environment.TickCount64"/> is NOT the OS uptime on every
+    /// <b><see cref="Environment.TickCount64"/> is NOT the OS uptime on every
     /// platform</b> — it is a monotonic clock, which on Linux is
     /// <c>CLOCK_MONOTONIC</c> and does not count time suspended. Linux has the
     /// real answer in <c>/proc/uptime</c>, so that is read where it exists and
@@ -387,7 +386,7 @@ public static class SystemInfo
     /// What the tick loop's pacing is resting on.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Worth a line on the panel because it explains a whole class of late
+    /// Worth a line on the panel because it explains a whole class of late
     /// ticks. On Windows the loop raises the timer to 1 ms
     /// (<see cref="TimerResolution"/>) because a wait would otherwise round up to
     /// the 15.6 ms quantum; on Linux there is nothing to raise and nothing to
@@ -403,7 +402,7 @@ public static class SystemInfo
 
         try
         {
-            // ⚠️ The LONGEST matching mount point, not the first. On Linux every
+            // The LONGEST matching mount point, not the first. On Linux every
             // path matches "/", so picking the first drive would report the root
             // filesystem for a maps directory on its own mount.
             var full = Path.GetFullPath(path);

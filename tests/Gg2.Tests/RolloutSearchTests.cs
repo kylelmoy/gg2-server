@@ -1,4 +1,4 @@
-using Gg2.Maps;
+﻿using Gg2.Maps;
 using Gg2.Bots;
 using Gg2.Protocol;
 using Gg2.Simulation;
@@ -35,7 +35,7 @@ public sealed class RolloutSearchTests
     private const double StandY = 850;
 
     /// <summary>
-    /// ⚠️ <b>Ticks to step before a duel means anything.</b> A freshly spawned
+    /// <b>Ticks to step before a duel means anything.</b> A freshly spawned
     /// soldier's <c>refireTimer</c> starts at <b>29</b> and counts down, so for
     /// the first thirty ticks of its life no candidate can fire and every one of
     /// them scores exactly zero. Two tests here asserted against a live weapon
@@ -83,7 +83,7 @@ public sealed class RolloutSearchTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The search runs once per decision, not once per tick.</b>
+    /// <b>The search runs once per decision, not once per tick.</b>
     /// </summary>
     /// <remarks>
     /// The receding horizon is the whole shape of the thing: it looks 20 ticks
@@ -132,7 +132,7 @@ public sealed class RolloutSearchTests
     }
 
     /// <summary>
-    /// ⚠️ <b>A decision draws nothing from the match's RNG</b>, however many
+    /// <b>A decision draws nothing from the match's RNG</b>, however many
     /// candidates it played forward.
     /// </summary>
     /// <remarks>
@@ -150,7 +150,7 @@ public sealed class RolloutSearchTests
     [Fact]
     public void SearchingDoesNotMoveTheMatchsRandomStream()
     {
-        // ⚠️ A Scout, not a Soldier. A rocket has no spread and draws NOTHING
+        // A Scout, not a Soldier. A rocket has no spread and draws NOTHING
         // from the stream, so the control below would fail against a perfectly
         // correct search. The scattergun's pellets are seeded and do draw.
         var bot = new RolloutSearch();
@@ -167,10 +167,10 @@ public sealed class RolloutSearchTests
         // state, DOES move a stream. If it did not, the line above would be
         // vacuous — a search that simulated nothing would pass it.
         //
-        // ⚠️ Slot 1, not 0. A ScenarioWorld reserves slot 0 for the server's own
+        // Slot 1, not 0. A ScenarioWorld reserves slot 0 for the server's own
         // player and starts placing at 1, so a test that polls 0 polls nobody
         // and every assertion about it holds for the wrong reason.
-        // ⚠️ Forty ticks, not one. A weapon's refire timer is longer than a
+        // Forty ticks, not one. A weapon's refire timer is longer than a
         // tick and longer than most of them: a scout coming out of its spawn
         // cooldown is still nineteen ticks from its first shot, so a
         // single-tick control asserts that nothing drew and passes against a
@@ -193,7 +193,7 @@ public sealed class RolloutSearchTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The bearing the bot ends a decision with is the one the winning
+    /// <b>The bearing the bot ends a decision with is the one the winning
     /// candidate implies — not the one the last candidate rolled out to.</b>
     /// </summary>
     /// <remarks>
@@ -227,7 +227,7 @@ public sealed class RolloutSearchTests
     }
 
     /// <summary>
-    /// ✅ <b>It fights.</b> Against a target that never acts, the search finds
+    /// <b>It fights.</b> Against a target that never acts, the search finds
     /// damage where an idle bot finds none.
     /// </summary>
     /// <remarks>
@@ -236,7 +236,7 @@ public sealed class RolloutSearchTests
     /// control is the same duel with the searcher replaced by nothing at all: a
     /// soldier who presses no keys deals exactly zero.
     /// <para>
-    /// ⚠️ <b>Not a win-rate test.</b> <c>gg2-rl</c> phase 1's exit criterion is
+    /// <b>Not a win-rate test.</b> <c>gg2-rl</c> phase 1's exit criterion is
     /// 500 duels per class matchup at p &lt; 0.01, which is that repo's harness
     /// and does not belong in a unit suite.
     /// </para>
@@ -252,7 +252,7 @@ public sealed class RolloutSearchTests
         idle.Step(120);
         var untouched = idle.State.Characters[idleTarget].Hp;
 
-        // ⚠️ The control is a run, not a constant. A soldier's maxHp is 160 and
+        // The control is a run, not a constant. A soldier's maxHp is 160 and
         // an earlier draft of this assumed 200, which read as 40 damage dealt by
         // a bot pressing nothing.
         Assert.Equal(ClassStats.For(PlayerClass.Soldier).MaxHp, untouched);
@@ -264,7 +264,7 @@ public sealed class RolloutSearchTests
     /// The opponent model is a live knob, not a comment.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Asserted because an unread option is the failure mode this whole
+    /// <b>Asserted because an unread option is the failure mode this whole
     /// enum exists to prevent.</b> <c>docs/BOTAI.md</c> item 12's open question
     /// is *which* model, and an enum that changed nothing would let the question
     /// look answered while the search went on assuming whatever was hard-coded.
@@ -286,7 +286,7 @@ public sealed class RolloutSearchTests
             var blue = world.Place(PlayerClass.Soldier, Team.Blue, RedX + 60, StandY);
             world.Step(SpawnCooldownTicks);
 
-            // ⚠️ Written AFTER the warm-up, not before: the warm-up ticks run
+            // Written AFTER the warm-up, not before: the warm-up ticks run
             // the whole simulation, and a slot driven by nothing has its
             // keyState rewritten to none on every one of them.
             world.State.Characters[blue].KeyState = PlayerKeys.Attack;
@@ -297,7 +297,7 @@ public sealed class RolloutSearchTests
             return bot.LastBestScore;
         }
 
-        // ⚠️ Compared on the SCORE rather than on the chosen action. Two
+        // Compared on the SCORE rather than on the chosen action. Two
         // opponent models can pick the same action for different reasons — and
         // in a position where nothing lands inside the horizon they both pick
         // the first candidate, which made an earlier draft of this test compare
@@ -310,10 +310,10 @@ public sealed class RolloutSearchTests
     }
 
     /// <summary>
-    /// ✅ <b>It beats the bot this repo ships.</b> One duel, as a smoke test.
+    /// <b>It beats the bot this repo ships.</b> One duel, as a smoke test.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>One duel, deliberately.</b> <c>gg2-rl/docs/PLAN.md</c> phase 1's
+    /// <b>One duel, deliberately.</b> <c>gg2-rl/docs/PLAN.md</c> phase 1's
     /// exit criterion is 500 duels per class matchup at p &lt; 0.01, and that
     /// harness belongs to that repo; a unit suite that ran it would take
     /// minutes. What this catches is the regression that matters — a change
@@ -324,7 +324,7 @@ public sealed class RolloutSearchTests
     /// So one duel is a weak sample of a wide margin rather than a coin flip.
     /// </para>
     /// <para>
-    /// ⚠️ <b>RE-TAKEN 2026-08-29, because that figure was owed two corrections.</b>
+    /// <b>RE-TAKEN 2026-08-29, because that figure was owed two corrections.</b>
     /// It ran under <c>new RolloutSearch()</c>, which was silently
     /// <see cref="RolloutOpponent.Idle"/> rather than the documented
     /// <see cref="RolloutOpponent.HoldLastInput"/>; and <c>gg2-rl</c> reported
@@ -341,7 +341,7 @@ public sealed class RolloutSearchTests
     /// here are genuine stalemates, and this scenario has almost none.</item>
     /// </list>
     /// <para>
-    /// ⚠️⚠️ <b>AND THE POSITION MATTERS FAR MORE THAN EITHER.</b> The same twelve
+    /// <b>AND THE POSITION MATTERS FAR MORE THAN EITHER.</b> The same twelve
     /// duels — same map, same classes, same tier, same budget — run at
     /// <c>x = 1500</c> instead of <see cref="RedX"/>'s 600 give <b>4-2-6 and
     /// 3-0-9</b>, budget-invariant out to 5,400 ticks. One spot on
@@ -351,7 +351,7 @@ public sealed class RolloutSearchTests
     /// <c>RolloutOpponentSelectionTests</c>).
     /// </para>
     /// <para>
-    /// ✅ <b>So here is the figure that is a claim about the BOT rather than about
+    /// <b>So here is the figure that is a claim about the BOT rather than about
     /// a spot.</b> <see cref="ScenarioWorld.PlaceInBand"/>, 150-350px, 24 duels
     /// (soldier and scout mirrors, seeds 1-12), tier 5, 2,400 ticks — which is
     /// <c>gg2-rl</c>'s own cap of 600 decisions at an action repeat of 4, so it is
@@ -362,14 +362,14 @@ public sealed class RolloutSearchTests
     /// (Idle). <c>gg2-rl</c>'s 1,600-duel run over sixteen pairings reads 76.5%
     /// [73.5%, 79.2%], with the soldier and scout pairings in the 65-96% band —
     /// so these agree.</item>
-    /// <item><c>gg_debug</c>: <b>4-1-19</b>. ⚠️ Banded, it is nineteen stalemates
+    /// <item><c>gg_debug</c>: <b>4-1-19</b>. Banded, it is nineteen stalemates
     /// out of twenty-four. One spawn point per team, zero opponent-model
     /// divergence in 12 of 12, an order-of-magnitude position swing between two
     /// spots in one room, and now this. <b>It is a determinism and throughput
     /// fixture, not an evaluation map.</b></item>
     /// </list>
     /// <para>
-    /// ⚠️ <b>Those numbers were 4-0-20 and 2-0-22 before the opponent had an
+    /// <b>Those numbers were 4-0-20 and 2-0-22 before the opponent had an
     /// <see cref="ScriptedBot.Objective"/></b>, which is the correction above and
     /// the largest single effect measured on this bot all session — larger than
     /// the position, the opponent model and the horizon put together.
@@ -385,7 +385,7 @@ public sealed class RolloutSearchTests
         world.Drive(red, new RolloutSearch());
         world.Drive(blue, new ScriptedBot(world.Nav, new NavQuery(Team.Blue), BotSkill.ForTier(5), stagger: 1)
         {
-            // ⚠️ WITHOUT THIS the opponent is not the scripted bot, it is the
+            // WITHOUT THIS the opponent is not the scripted bot, it is the
             // scripted bot with its objective layer off — it never hunts and
             // stands where it was placed. `DuelEnv.MakeBot` has always set it and
             // this test never did, which was invisible here (the two start 160px
@@ -404,7 +404,7 @@ public sealed class RolloutSearchTests
     }
 
     /// <summary>
-    /// ✅ <b>Every candidate's score survives the decision</b>, aligned with the
+    /// <b>Every candidate's score survives the decision</b>, aligned with the
     /// candidate set — the action distribution, not just the argmax.
     /// </summary>
     /// <remarks>
@@ -415,19 +415,19 @@ public sealed class RolloutSearchTests
     /// <see cref="RolloutSearch.Search"/> scored all 60 candidates and kept only
     /// the best; every other score was discarded inside the loop that computed it.
     /// <para>
-    /// ⚠️ <b>Nothing was inconsistent, which is why it survived.</b> This class did
+    /// <b>Nothing was inconsistent, which is why it survived.</b> This class did
     /// what it documented, that document said what it wanted, and no test compared
     /// them. It took a phase actually needing the data to surface it.
     /// </para>
     /// <para>
-    /// ⚠️ <b>The alignment is the load-bearing claim, not the presence.</b> A
+    /// <b>The alignment is the load-bearing claim, not the presence.</b> A
     /// distribution mis-indexed against the candidate set trains a policy towards
     /// the wrong actions and nothing about it looks wrong — so this asserts that
     /// the argmax of the scores IS the action the search returned, which is the
     /// one relation that cannot hold by accident.
     /// </para>
     /// <para>
-    /// ⚠️ <b>And it must re-align when the class changes.</b> A sniper's set
+    /// <b>And it must re-align when the class changes.</b> A sniper's set
     /// carries the zoom dimension and is twice the length; a stale count would
     /// hand out a soldier-shaped span over a sniper's scores.
     /// </para>
@@ -460,7 +460,7 @@ public sealed class RolloutSearchTests
         Assert.Equal(bot.LastCandidates[bestAt], bot.LastAction);
         Assert.Equal(bot.LastBestScore, bot.LastScores[bestAt]);
 
-        // ⚠️ And the distribution is a distribution rather than a constant. A
+        // And the distribution is a distribution rather than a constant. A
         // search whose candidates all score the same is the blind case its own
         // remarks describe, and cloning it teaches nothing — so a test that did
         // not check this would pass on exactly the state the data is useless in.
@@ -481,7 +481,7 @@ public sealed class RolloutSearchTests
     }
 
     /// <summary>
-    /// ⚠️ <see cref="RolloutOptions.CommitTicks"/> really shortens the commitment,
+    /// <see cref="RolloutOptions.CommitTicks"/> really shortens the commitment,
     /// so the knob cannot rot into a no-op.
     /// </summary>
     /// <remarks>
@@ -491,7 +491,7 @@ public sealed class RolloutSearchTests
     /// because a continuation that keeps <em>acting</em> (a distilled policy) is a
     /// different experiment somebody will want to run.
     /// <para>
-    /// ⚠️ <b>So this gates that it DOES something, not that it does something
+    /// <b>So this gates that it DOES something, not that it does something
     /// good.</b> An option kept for a future experiment is exactly the kind that
     /// quietly becomes inert — this session has now hit that shape four times —
     /// and a default of "commit for the whole horizon" makes an inert
@@ -531,7 +531,7 @@ public sealed class RolloutSearchTests
     }
 
     /// <summary>
-    /// ⚠️ <b>Among tied candidates the search points at the enemy, not hard
+    /// <b>Among tied candidates the search points at the enemy, not hard
     /// left</b> — the aim tie-break, and it decides most of this bot's decisions.
     /// </summary>
     /// <remarks>
@@ -544,7 +544,7 @@ public sealed class RolloutSearchTests
     /// <b>0.929</b> (scout) of its decisions. <b>Its aiming was enumeration order,
     /// not scoring.</b>
     /// <para>
-    /// ⚠️ <b>Lexicographic, so damage stays the only objective.</b> The tie-break
+    /// <b>Lexicographic, so damage stays the only objective.</b> The tie-break
     /// is compared only when scores are exactly equal, so it cannot change a
     /// decision the score settles and cannot trade a hit for a bearing. That is
     /// why it was shippable where reordering the aim ladder was not: reordering
@@ -555,13 +555,13 @@ public sealed class RolloutSearchTests
     /// <b>Paired A/B, <c>ctf_2dfort</c> banded, tier 5, 60 duels a cell, same
     /// seeds:</b> scout <b>49-8-3 → 58-1-1</b> with hard-left share 0.892 →
     /// 0.137; soldier <b>42-5-13 → 42-6-12</b> with 0.967 → 0.048. No class
-    /// degrades. ✅ <b>And the blind fraction falls too</b> — scout 0.810 → 0.649,
+    /// degrades. <b>And the blind fraction falls too</b> — scout 0.810 → 0.649,
     /// soldier 0.902 → 0.841 — because better aim lands more shots inside the
     /// horizon. That is the signature <c>RolloutOptions.CommitTicks</c> was built
     /// to produce and failed to.
     /// </para>
     /// <para>
-    /// ⚠️ Asserted on a state where the search is INDIFFERENT, which is the only
+    /// Asserted on a state where the search is INDIFFERENT, which is the only
     /// state the tie-break can act in. A fresh soldier cannot fire inside its
     /// horizon, so every candidate scores zero — and the action taken must now be
     /// one that points at the enemy rather than candidate 0.
@@ -587,7 +587,7 @@ public sealed class RolloutSearchTests
 
         Assert.Single(distinct);
 
-        // ⚠️ Not hard left. Blue is due east of red and Reset-style facing is not
+        // Not hard left. Blue is due east of red and Reset-style facing is not
         // in play here, so "point at the enemy" is "do not turn".
         Assert.Equal(ActionDecoder.AimCentreBin, bot.LastAction.AimDelta);
     }

@@ -10,13 +10,13 @@ namespace Gg2.Env;
 /// per round trip, not from making one world faster — a decision step is
 /// microseconds of simulation and the cost that matters is the boundary.
 /// <para>
-/// ⚠️ <b>Each world owns everything it touches</b> — its own
+/// <b>Each world owns everything it touches</b> — its own
 /// <see cref="DuelEnv"/>, its own <c>CollisionWorld</c>, its own RNG stream and
 /// its own decoder. That is what makes the parallelism safe without a lock, and
 /// it is the same shape <c>MatchRunner</c> uses.
 /// </para>
 /// <para>
-/// ⚠️ <b>Results must not depend on the batch size or the thread count</b>, and
+/// <b>Results must not depend on the batch size or the thread count</b>, and
 /// that is gated by comparing whole arrays rather than a summary. A batch that
 /// produced the right multiset in the wrong order would pass a statistic and
 /// fail the thing a trainer actually relies on.
@@ -30,7 +30,7 @@ public sealed class EnvBatch
     private readonly uint _seed;
 
     /// <summary>
-    /// ⚠️ <b>Not <c>Environment.ProcessorCount</c> by default.</b> A default
+    /// <b>Not <c>Environment.ProcessorCount</c> by default.</b> A default
     /// that varied with the machine would make "the same however many threads"
     /// a claim nobody was testing on their own box. One thread unless asked.
     /// </summary>
@@ -68,7 +68,7 @@ public sealed class EnvBatch
     /// index.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The index is MIXED IN, not added.</b> <c>seed + index</c> makes
+    /// <b>The index is mixed in, not added.</b> <c>seed + index</c> makes
     /// batch <c>{seed 1, count 100}</c> and batch <c>{seed 2, count 100}</c>
     /// overlap in 99 of their 100 worlds, so two "independent" runs are almost
     /// the same experiment. <c>MatchRunner</c> already learned this; the odd
@@ -86,13 +86,12 @@ public sealed class EnvBatch
     /// <paramref name="index"/>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A pure function of (base seed, world, episode), and that is what
-    /// makes it correct.</b> The first draft derived the next episode's seed
-    /// from the finished episode's DECISION COUNT — so two consecutive episodes
-    /// that happened to last the same number of decisions got the same seed and
-    /// the world replayed one trajectory for ever, while looking busy. A batch
-    /// training on a single repeated episode is the kind of bug that produces a
-    /// falling loss and a useless policy.
+    /// <b>A pure function of (base seed, world, episode), and that is what
+    /// makes it correct.</b> Deriving the next episode's seed from the finished
+    /// episode's decision count instead would make two consecutive episodes
+    /// that happened to last the same number of decisions get the same seed,
+    /// replaying one trajectory forever while looking busy — a batch training on
+    /// a single repeated episode produces a falling loss and a useless policy.
     /// </remarks>
     public uint SeedForEpisode(int index, int episode) =>
         unchecked(SeedFor(index) + ((uint)episode * 40503u));
@@ -101,7 +100,7 @@ public sealed class EnvBatch
     /// Resets one world to a fresh first episode, on the spec this batch holds.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The spec lives here, so a caller must not reset a world directly.</b>
+    /// <b>The spec lives here, so a caller must not reset a world directly.</b>
     /// <c>DuelEnv.Reset</c> takes a spec, and passing a default one compiles and
     /// produces a world with no map and no classes.
     /// </remarks>
@@ -132,17 +131,17 @@ public sealed class EnvBatch
     /// <param name="redResults">Filled one per world.</param>
     /// <param name="blueResults">Filled one per world.</param>
     /// <remarks>
-    /// ⚠️ <b>A world whose episode ended is reset inside this call</b>, and the
+    /// <b>A world whose episode ended is reset inside this call</b>, and the
     /// results still carry the terminal components — <c>docs/ENV.md</c>'s
     /// auto-reset. Round-trip economy: without it a trainer would have to notice
     /// `done`, send a `Reset`, and wait, once per episode per world.
     /// <para>
-    /// ⚠️ <b>The reset happens AFTER the results are recorded.</b> Resetting
+    /// <b>The reset happens after the results are recorded.</b> Resetting
     /// first would hand back the fresh episode's zeros as though the terminal
     /// step earned nothing, which is the transition a policy most needs.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Its seed advances</b>, so the next episode in a world is not a
+    /// <b>Its seed advances</b>, so the next episode in a world is not a
     /// replay of the last. A batch whose worlds replayed one episode for ever
     /// would train on a single trajectory and look like it was learning.
     /// </para>
@@ -167,7 +166,7 @@ public sealed class EnvBatch
             return;
         }
 
-        // ⚠️ Copied out of the spans because a lambda cannot capture one, and
+        // Copied out of the spans because a lambda cannot capture one, and
         // written back by index rather than appended — the same rule
         // MatchRunner records: an appending runner gives the right multiset in
         // the wrong order.
@@ -194,9 +193,9 @@ public sealed class EnvBatch
 
         if (r.Done)
         {
-            // ⚠️ Seeded from THIS world's own episode counter, never from a
+            // Seeded from this world's own episode counter, never from a
             // shared one: a shared counter would make the next episode depend on
-            // how many OTHER worlds had finished, which is exactly the
+            // how many other worlds had finished, which is exactly the
             // batch-size dependence the gates forbid.
             _episodes[index]++;
             world.Reset(_spec, SeedForEpisode(index, _episodes[index]));

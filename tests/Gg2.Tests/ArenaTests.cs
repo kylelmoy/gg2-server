@@ -119,7 +119,7 @@ public sealed class ArenaTests
 
     /// <summary>The setup period runs down and the round proper begins.</summary>
     /// <remarks>
-    /// ⚠️ <b>The point's unlock counter is frozen during setup</b>
+    /// <b>The point's unlock counter is frozen during setup</b>
     /// (<c>if(state != ARENA_STATE_ROUND_SETUP and cpUnlock > 0)</c>) and is
     /// reset again when the round starts — so the minute before the point opens
     /// is a minute of the <em>round</em>, not of the setup.
@@ -135,7 +135,7 @@ public sealed class ArenaTests
         Assert.Equal(ArenaState.RoundSetup, state.ArenaState);
         Assert.Equal(Arena.UnlockTicks, state.ControlPointUnlock);
 
-        // Frozen through the whole setup. ⚠️ The counter is read and then
+        // Frozen through the whole setup. The counter is read and then
         // spent, so 299 more ticks leave one on it — the same off-by-one every
         // countdown in this codebase has.
         Tick(world, ref state, Arena.RoundSetupTicks - 1);
@@ -157,7 +157,7 @@ public sealed class ArenaTests
     /// <summary>Nobody respawns during the round proper.</summary>
     /// <remarks>
     /// <c>spawningAllowed()</c>, and it is the whole mode: without it there is
-    /// no such thing as eliminating a team. ⚠️ The alarm still fires and is
+    /// no such thing as eliminating a team. The alarm still fires and is
     /// still spent — the guard is inside <c>PlayerSpawn</c>.
     /// </remarks>
     [Theory]
@@ -249,7 +249,7 @@ public sealed class ArenaTests
     /// begins.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The map is not swept when a round ends.</b> The bodies, the
+    /// <b>The map is not swept when a round ends.</b> The bodies, the
     /// sentries and anything in the air stay for the whole scoreboard period —
     /// only the next restart clears them.
     /// </remarks>
@@ -314,7 +314,7 @@ public sealed class ArenaTests
         Assert.False(state.HasSentry[1]);
         Assert.Equal(0, state.LiveProjectileCount);
 
-        // ⚠️ Both respawned on *this* tick. `respawnEveryone()` calls
+        // Both respawned on *this* tick. `respawnEveryone()` calls
         // `PlayerSpawn()` directly rather than arming `alarm[5]`, and the alarm
         // stage has already run by the time a HUD's Step does — so arming it
         // would put everybody in a new round a tick late.
@@ -349,7 +349,7 @@ public sealed class ArenaTests
 
     /// <summary>Winning enough rounds wins the map.</summary>
     /// <remarks>
-    /// ⚠️ <b>Only ever checked at the end of a round</b>, so a running round
+    /// <b>Only ever checked at the end of a round</b>, so a running round
     /// always gets to finish — the reference's own summary says so.
     /// </remarks>
     [Fact]
@@ -374,7 +374,7 @@ public sealed class ArenaTests
     /// waiting.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <c>ARENA_STATE_WAITING</c> is the one place the map can end without a
+    /// <c>ARENA_STATE_WAITING</c> is the one place the map can end without a
     /// round finishing: an empty server whose clock runs out is a draw
     /// immediately.
     /// </remarks>
@@ -402,7 +402,7 @@ public sealed class ArenaTests
 
     /// <summary>The clock runs in every state, and overtime latches.</summary>
     /// <remarks>
-    /// ⚠️ Unlike the control-point modes', Arena's overtime is a latch: set once
+    /// Unlike the control-point modes', Arena's overtime is a latch: set once
     /// the clock is out and cleared only by a fresh round.
     /// </remarks>
     [Fact]
@@ -441,7 +441,7 @@ public sealed class ArenaTests
     /// The arena point is captured faster the fewer of the enemy are alive.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The teams are crossed</b>: blue's capping power is computed from
+    /// <b>The teams are crossed</b>: blue's capping power is computed from
     /// <em>red's</em> numbers. With every enemy alive it is 1 and with none it
     /// is <see cref="Arena.MaxCappingPower"/> — which is what stops a wiped-out
     /// team stalling a round by hiding. <c>max(1, reds)</c> keeps the division
@@ -462,12 +462,12 @@ public sealed class ArenaTests
     /// A capture on an arena map really runs at that rate.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Half the enemy team, not all of it</b> — wiping them out ends the
+    /// <b>Half the enemy team, not all of it</b> — wiping them out ends the
     /// round before a capture can matter, so the only reachable case is a
     /// partial one. Two blues with one alive gives
     /// <c>2 / (0.75×1 + 0.25×2) = 1.6</c>.
     /// <para>
-    /// ⚠️ And it applies from the <b>first</b> tick of a capture. The reference
+    /// And it applies from the <b>first</b> tick of a capture. The reference
     /// computes both teams' powers unconditionally and the capture branch reads
     /// the one belonging to the team it has just assigned — so a first pass that
     /// used 1 because nothing was being captured yet would be a tick short on
@@ -593,7 +593,7 @@ public sealed class ArenaTests
     /// shared scalars and the point.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Arena is the only mode whose HUD block differs between tiers: the
+    /// Arena is the only mode whose HUD block differs between tiers: the
     /// round scores, the state, the round winner and the scoreboard countdown
     /// ride on a <c>FULL_UPDATE</c> only. A reader that took them on a
     /// <c>CAPS_UPDATE</c> too would be six bytes out.
@@ -640,15 +640,11 @@ public sealed class ArenaTests
     /// <c>ARENA_ENDROUND</c> is not a bodyless message, and the framer knows it.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>It was framed as bodyless until phase 6's arena work</b>, which
-    /// would have lost the stream the first time a round ended. It carries the
-    /// winner, both MVP counts and both round scores, then five bytes per MVP —
-    /// so the counts have to be read to know how long the message is.
-    /// <para>
-    /// It survived because no recording has ever been made on an arena map. The
-    /// same reason the sentry <c>INPUTSTATE</c> bug survived six phases; see
-    /// docs/PROTOCOL.md.
-    /// </para>
+    /// <c>ARENA_ENDROUND</c> carries the winner, both MVP counts and both round
+    /// scores, then five bytes per MVP — so the counts have to be read to know
+    /// how long the message is, and framing it as bodyless loses the stream the
+    /// first time a round ends. No recording exists on an arena map, so this is
+    /// the only coverage; see docs/PROTOCOL.md.
     /// </remarks>
     [Theory]
     [InlineData(0, 0)]

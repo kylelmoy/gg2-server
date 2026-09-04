@@ -5,7 +5,7 @@ namespace Gg2.Bots;
 
 /// <summary>How much the aim solver is allowed to predict.</summary>
 /// <remarks>
-/// ⚠️ These are a <em>difficulty</em> knob, not an optimisation. A bot that
+/// These are a <em>difficulty</em> knob, not an optimisation. A bot that
 /// always solves the full ballistic intercept is a bot that never misses a
 /// moving target, which is neither fun nor human.
 /// </remarks>
@@ -27,7 +27,7 @@ public enum BotLeadMode
 /// </summary>
 /// <remarks>
 /// <b>An exact ballistic intercept solver, against an opponent model of
-/// "constant velocity plus gravity".</b> ⚠️ docs/BOTAI.md opens by saying that is
+/// "constant velocity plus gravity".</b> docs/BOTAI.md opens by saying that is
 /// the wrong model against a human who reacts to the shot being fired — it leads
 /// the mean of a distribution nothing in the codebase represents — and that
 /// GG2's slow projectiles make opponent <em>prediction</em>, not marksmanship,
@@ -41,7 +41,7 @@ public static class BotAim
     /// <c>botWeaponBallistics.gml</c>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>These are the bot's model of the weapon, not the weapon.</b> They are
+    /// <b>These are the bot's model of the weapon, not the weapon.</b> They are
     /// the numbers the aim solver flies, and they are deliberately simpler than
     /// the simulation's: a scattergun blast is six pellets with a spread and a
     /// per-pellet lifetime, and this calls it one projectile at 13 px/tick
@@ -49,13 +49,13 @@ public static class BotAim
     /// <c>Gg2.Simulation.Projectiles</c> — a bot that aims with the real numbers
     /// is a different bot, and every one of these was tuned against play.
     /// <para>
-    /// ⚠️ <b>A speed of zero means "do not lead at all"</b>, which is how the
+    /// <b>A speed of zero means "do not lead at all"</b>, which is how the
     /// hitscan and melee weapons — the Rifle, the knife, the Medigun — fall out
     /// of the model without a special case. <see cref="Solve"/> returns a
     /// straight line for them.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Drift is the shooter's own horizontal speed</b>, and only for the
+    /// <b>Drift is the shooter's own horizontal speed</b>, and only for the
     /// three weapons whose shots inherit it. It is <em>subtracted</em> from the
     /// target's velocity in the solver, because what matters is the relative
     /// motion of the muzzle and the target.
@@ -78,7 +78,7 @@ public static class BotAim
             _ => (0.0, 0.0),
         };
 
-        // ⚠️ Only the three whose shots carry the shooter's momentum: the
+        // Only the three whose shots carry the shooter's momentum: the
         // Scattergun, the Shotgun and the Minigun.
         var drift = character.Class is PlayerClass.Scout or PlayerClass.Engineer or PlayerClass.Heavy
             ? character.HSpeed
@@ -93,7 +93,7 @@ public static class BotAim
     /// </summary>
     /// <param name="floorY">
     /// The stand height of the surface under the target, so its predicted fall
-    /// can be clamped there. ⚠️ Without it the solver aims at where a falling
+    /// can be clamped there. Without it the solver aims at where a falling
     /// target <em>would</em> be if the floor were not there, which on a target
     /// standing still on the ground is straight down through it. Pass
     /// <see cref="NoFloor"/> when the graph does not know.
@@ -114,7 +114,7 @@ public static class BotAim
 
         if (lead == BotLeadMode.None)
         {
-            // ⚠️ Still through the solver, not a straight line: gravity is
+            // Still through the solver, not a straight line: gravity is
             // corrected for even when the target's motion is not. A rocket at
             // 400px drops several body heights.
             return Lead(character.X, character.Y, targetX, targetY, 0, 0, speed, gravity, drift, targetY);
@@ -155,7 +155,7 @@ public static class BotAim
     /// </summary>
     /// <remarks>
     /// The nav graph's answer, which is the only one available without walking
-    /// the mask: snap downward and take that node's stand height. ⚠️ Returns
+    /// the mask: snap downward and take that node's stand height. Returns
     /// <see cref="NoFloor"/> when nothing resolves, which disables the clamp —
     /// the right answer over a pit, and the reason the sentinel exists rather
     /// than a nullable.
@@ -176,18 +176,18 @@ public static class BotAim
     /// Fixed-point: guess the flight time from the straight-line distance, work
     /// out where the target will be then, re-measure, repeat.
     /// <c>BOT_AIM_ITERATIONS</c> passes, and then one more evaluation outside the
-    /// loop — ⚠️ that trailing repeat is not redundant, because the loop's last
+    /// loop — that trailing repeat is not redundant, because the loop's last
     /// action is to update <c>t</c> and the aim point has to be recomputed from
     /// it.
     /// <para>
-    /// ⚠️ <b>The projectile's own drop is <c>grav × t × (t + 1) / 2</c>, not
+    /// <b>The projectile's own drop is <c>grav × t × (t + 1) / 2</c>, not
     /// <c>grav × t² / 2</c>.</b> A projectile falls in discrete ticks, so after
     /// <c>t</c> ticks it has fallen the triangular number rather than the
     /// integral — and it is <em>subtracted</em> from the aim point, because
     /// aiming higher is how you compensate for a shot that drops.
     /// </para>
     /// <para>
-    /// ⚠️ <b>The flight time is clamped to at least one tick</b>, which matters
+    /// <b>The flight time is clamped to at least one tick</b>, which matters
     /// at point blank: a distance of zero gives a time of zero, and the whole
     /// prediction collapses to "aim at your own feet".
     /// </para>
@@ -222,13 +222,13 @@ public static class BotAim
     /// <c>botFallPredict.gml</c>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Two phases, because GG2 has a terminal velocity.</b> A target
+    /// <b>Two phases, because GG2 has a terminal velocity.</b> A target
     /// accelerates at <c>NAV_JUMP_GRAVITY</c> until it reaches
     /// <c>NAV_JUMP_TERM_VY</c> and then falls at a constant rate, so a single
     /// quadratic over-predicts a long fall badly — and the aim solver's whole job
     /// is long falls.
     /// <para>
-    /// ⚠️ And the result is clamped at the floor. Without that a target standing
+    /// And the result is clamped at the floor. Without that a target standing
     /// still on the ground is predicted to keep falling through it, and the bot
     /// aims below its feet.
     /// </para>

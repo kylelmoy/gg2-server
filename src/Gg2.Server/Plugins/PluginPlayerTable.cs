@@ -8,7 +8,7 @@ namespace Gg2.Server.Plugins;
 /// slot appears.
 /// </typeparam>
 /// <remarks>
-/// ⛔ <b>This type exists because a slot index is a roster index and removal
+/// <b>This type exists because a slot index is a roster index and removal
 /// COMPACTS.</b> In GML this problem does not arise: a plugin's per-player
 /// variables live on the <c>Player</c> instance and die with it. In C# the
 /// obvious shape — a <c>Dictionary&lt;int, T&gt;</c> or an array indexed by slot —
@@ -37,7 +37,7 @@ public sealed class PluginPlayerTable<T>(Func<T> factory)
     /// <paramref name="slot"/> is expected to be the table's current size.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The assertion is the point. A caller that adds out of order has
+    /// The assertion is the point. A caller that adds out of order has
     /// already lost the alignment this type exists to keep, and finding that out
     /// here is much cheaper than finding it out from a misattributed message.
     /// </remarks>

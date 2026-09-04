@@ -14,9 +14,9 @@ namespace Gg2.Bots;
 /// <b>re-parsing the nav cache</b> — 5.1 ms on <c>ctf_truefort</c>, of which
 /// 4.8 ms is the 2 MB nav text. An episode of 120 decisions is about 0.9 ms of
 /// simulation, so the reload cost several times more than the episode it
-/// started. Measured 2026-08-30; see <c>docs/ENV.md</c>, "the reset reload".
+/// started. See <c>docs/ENV.md</c>, "the reset reload".
 /// <para>
-/// ⚠️ <b>What is shared is exactly what is deeply immutable, and nothing
+/// <b>What is shared is exactly what is deeply immutable, and nothing
 /// else.</b> <see cref="LevelMap"/> is <c>init</c>-only throughout — its
 /// <see cref="Walkmask"/> is readonly words, its entities are <c>init</c>-only
 /// and its <c>GgonMap</c> is written only by the parser, whose <c>Add</c> is
@@ -25,15 +25,15 @@ namespace Gg2.Bots;
 /// lock.
 /// </para>
 /// <para>
-/// ⚠️ <b>The <c>CollisionWorld</c> is deliberately NOT cached</b>, even though a
+/// <b>The <c>CollisionWorld</c> is deliberately not cached</b>, even though a
 /// scenario never writes to one. <c>CollisionWorld.SetCaptureZones</c> makes it
 /// mutable in principle, and <c>MatchRunner</c> and <c>HeadlessMatch</c> already
 /// record "not shared, because SetCaptureZones writes to it". Building one is
-/// <b>0.009 ms</b> against the 5.1 ms this class removes, so sharing it would
-/// buy 0.2% in exchange for a rule that has to hold everywhere for ever.
+/// 0.009 ms against the 5.1 ms this class removes, so sharing it would buy 0.2%
+/// in exchange for a rule that has to hold everywhere for ever.
 /// </para>
 /// <para>
-/// ⚠️ <b>Never invalidated.</b> A map file that changes on disk mid-process is
+/// <b>Never invalidated.</b> A map file that changes on disk mid-process is
 /// not served again, which is the right trade for a trainer and a test run and
 /// would be the wrong one for a long-lived game server — which does not use this
 /// path. <see cref="ScenarioWorld.Load"/>'s uncached overload is still there for
@@ -47,7 +47,7 @@ public sealed class ScenarioResources
     /// default.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Process-wide rather than per-batch</b> so that the test suite and a
+    /// <b>Process-wide rather than per-batch</b> so that the test suite and a
     /// multi-batch tool get the win too. It is safe to be static only because
     /// what it holds cannot be written; see the type's own remarks. Bounded by
     /// the 22 shipped maps times their areas.
@@ -65,7 +65,7 @@ public sealed class ScenarioResources
     /// first ask.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The nav directory is part of the key.</b> Two callers asking for the
+    /// <b>The nav directory is part of the key.</b> Two callers asking for the
     /// same map with different nav directories want different graphs, and a
     /// caller passing null wants none — <c>gg2-nav-gen</c> edits the reference
     /// tree, so "the nav directory" is not a constant of the process.

@@ -8,18 +8,16 @@ namespace Gg2.Tests;
 /// The two hooks a gate needs to hand control to a <see cref="RolloutSearch"/>.
 /// </summary>
 /// <remarks>
-/// Added for `gg2-rl`'s arm 3 — a search-driven micro-controller behind the same
-/// 150px handover <c>PolicyBot</c> already implements — and both exist because a
-/// caller cannot do the job without them.
+/// For a search-driven micro-controller behind the same 150px handover <c>PolicyBot</c>
+/// already implements; both exist because a caller cannot do the job without them.
 /// <para>
-/// ⚠️ <b>The cadence had to have ONE owner and it had to be the search.</b> The
-/// alternative — <c>DecisionTicks: 1</c> with the gate holding the rhythm — is not
-/// available: <c>ActionDecoder</c> emits the jump bit only on the first tick of a
-/// decision, so the held ticks are a <em>different decode of the same action</em>
-/// rather than a repeat of one <c>PlayerInput</c>. A gate polling only on its own
-/// boundaries either starves the search of the held ticks or re-implements the
-/// edge logic somewhere else, which is CLAUDE.md's "GG2 jumps on the PRESSED
-/// edge" scar a second time.
+/// <b>The cadence has ONE owner and it is the search.</b> The alternative —
+/// <c>DecisionTicks: 1</c> with the gate holding the rhythm — is not available:
+/// <c>ActionDecoder</c> emits the jump bit only on the first tick of a decision, so
+/// the held ticks are a <em>different decode of the same action</em> rather than a
+/// repeat of one <c>PlayerInput</c>. A gate polling only on its own boundaries
+/// either starves the search of the held ticks or re-implements the edge logic
+/// somewhere else — GG2 jumps on the PRESSED edge, per CLAUDE.md.
 /// </para>
 /// </remarks>
 public sealed class SearchHandoverTests
@@ -62,7 +60,7 @@ public sealed class SearchHandoverTests
     }
 
     /// <summary>
-    /// ⚠️ A different slot is always a boundary, because <c>Poll</c> makes it one.
+    /// A different slot is always a boundary, because <c>Poll</c> makes it one.
     /// </summary>
     /// <remarks>
     /// The reason the hook takes a slot rather than being a property: a
@@ -83,11 +81,11 @@ public sealed class SearchHandoverTests
     }
 
     /// <summary>
-    /// ⛔ Without a resync, the first decision after a handover turns from a
+    /// Without a resync, the first decision after a handover turns from a
     /// bearing nobody is pointing at.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>This test demonstrates the BUG, not the method.</b> It moves the
+    /// <b>This test demonstrates the bug, not the method.</b> It moves the
     /// character's aim behind the search's back — which is exactly what the
     /// scripted layer does while it holds control, writing the bearing directly —
     /// and shows that the search's next decision is decoded from the stale value

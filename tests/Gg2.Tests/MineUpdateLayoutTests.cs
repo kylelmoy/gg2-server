@@ -9,8 +9,8 @@ namespace Gg2.Tests;
 /// A demoman's mines on the wire, written and read back.
 /// </summary>
 /// <remarks>
-/// <b>The bug this exists for shipped for four phases and was silent by
-/// construction.</b> <see cref="WeaponState"/> carried <em>two</em> fields for
+/// <b>The bug this exists for was silent by construction.</b>
+/// <see cref="WeaponState"/> carried <em>two</em> fields for
 /// one quantity: <c>Lobbed</c>, which the Minegun maintained, and
 /// <c>MinesLobbed</c>, which the serialiser read and which nothing ever wrote.
 /// So a demoman holding eight mines put a <b>0</b> on the wire and no mine
@@ -144,7 +144,7 @@ public sealed class MineUpdateLayoutTests
         Assert.Equal(1500, mines[0].X);
         Assert.Equal(2000, mines[0].Y);
 
-        // ⚠ Quantised by 5, not the character's 8.5.
+        // Quantised by 5, not the character's 8.5.
         Assert.Equal(10, mines[0].HSpeed);
         Assert.Equal(-15, mines[0].VSpeed);
         Assert.Equal(0, mines[0].Stickied);
@@ -189,7 +189,7 @@ public sealed class MineUpdateLayoutTests
         // Free the first mine and lob another, so the recycled pool slot holds
         // the newest mine while creation order puts it last.
         //
-        // ⚠ No manual decrement: WorldState's free path already lowers the
+        // No manual decrement: WorldState's free path already lowers the
         // owner's `lobbed` for a mine, exactly as Mine.events/Destroy.xml does.
         // Decrementing again here is how this test first went red.
         var first = state.LiveProjectileHandle(0);

@@ -114,7 +114,7 @@ public sealed class BladeTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The magazine is clamped at both ends every tick it replenishes</b>,
+    /// <b>The magazine is clamped at both ends every tick it replenishes</b>,
     /// so a Blade's tank rests at exactly 90 — where a pyro's rests at 201.8,
     /// because that guard is on the level and this one is on a flag.
     /// </summary>
@@ -144,7 +144,7 @@ public sealed class BladeTests
     }
 
     /// <summary>
-    /// ⚠️ <b>A Blade that is not replenishing does not climb at all</b> — the
+    /// <b>A Blade that is not replenishing does not climb at all</b> — the
     /// whole Begin Step is inside <c>if (replenishing)</c>.
     /// </summary>
     [Fact]
@@ -162,7 +162,7 @@ public sealed class BladeTests
     // --- the bubble, on the left click ---------------------------------------
 
     /// <summary>
-    /// ⚠️ <b>A bubble costs nothing.</b> No ammo clause and no ammo spend — the
+    /// <b>A bubble costs nothing.</b> No ammo clause and no ammo spend — the
     /// magazine is entirely the right click's.
     /// </summary>
     [Fact]
@@ -180,7 +180,7 @@ public sealed class BladeTests
     }
 
     /// <summary>
-    /// ⚠️ <b>Its refire is four ticks, not the weapon's five</b> — the left
+    /// <b>Its refire is four ticks, not the weapon's five</b> — the left
     /// click writes <c>bubbleRefireTime</c> and the right click writes
     /// <c>refireTime</c>.
     /// </summary>
@@ -253,7 +253,7 @@ public sealed class BladeTests
     }
 
     /// <summary>
-    /// ⚠️ <b>A bubble's box is <em>rotated</em> by the direction it was fired
+    /// <b>A bubble's box is <em>rotated</em> by the direction it was fired
     /// in</b>, because nothing ever overwrites the <c>image_angle</c>
     /// <c>createShot</c> gave it — a <c>Bubble</c> has no <c>with</c> block in
     /// <c>move_all_bullets</c> at all, and that is where every other projectile's
@@ -291,7 +291,7 @@ public sealed class BladeTests
     /// nothing). What is left is the aim pull and the drag: 0 + 2 = 2, then
     /// (2 + 2.2) × 0.6 = 2.52.
     /// <para>
-    /// ⚠️ The reference's own comment says the speed "should stay around 3.3",
+    /// The reference's own comment says the speed "should stay around 3.3",
     /// which is the fixed point of the drag line <em>alone</em>: s = (s+2.2)×0.6
     /// solves at 3.3. It is not what a bubble actually settles at, because the
     /// steering above the line keeps adding to the speed the line then shrinks.
@@ -320,7 +320,7 @@ public sealed class BladeTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The spring runs both ways.</b> Inside the ring it pushes out and
+    /// <b>The spring runs both ways.</b> Inside the ring it pushes out and
     /// outside it pulls in — the strength is <em>negated</em> and the direction
     /// is measured owner-to-bubble, which is easy to read backwards.
     /// </summary>
@@ -353,7 +353,7 @@ public sealed class BladeTests
 
     /// <summary>And a fifth of the owner's own velocity, as components.</summary>
     /// <remarks>
-    /// ⚠️ <b>The owner's position this reads is <c>X - HSpeed</c>, not
+    /// <b>The owner's position this reads is <c>X - HSpeed</c>, not
     /// <c>X</c></b> — during the Step stage the reference has every character
     /// back where its own Step left it, before GM8's movement pass. So the
     /// character below is displaced by exactly its velocity, which puts the
@@ -389,7 +389,7 @@ public sealed class BladeTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The leash is the whole reason a bubble ever leaves early</b>, and it
+    /// <b>The leash is the whole reason a bubble ever leaves early</b>, and it
     /// is 160 pixels of <c>distance_to_object</c> from its owner.
     /// </summary>
     [Fact]
@@ -411,7 +411,7 @@ public sealed class BladeTests
     }
 
     /// <summary>
-    /// ⚠️ <b>A bubble is NOT moved by <c>Projectiles.Move</c></b> — it has no
+    /// <b>A bubble is NOT moved by <c>Projectiles.Move</c></b> — it has no
     /// block in <c>move_all_bullets</c>, so the pellet pass must leave it exactly
     /// where it was.
     /// </summary>
@@ -474,7 +474,7 @@ public sealed class BladeTests
 
         Assert.Equal(2, CountOf(state, ProjectileKind.Bubble));
 
-        // ⚠️ Stacked well clear of both characters. Left at the muzzle they
+        // Stacked well clear of both characters. Left at the muzzle they
         // overlap the *other* Quote and pop on them instead, which made this
         // pass with the bubble-versus-bubble rule deleted.
         for (var i = 0; i < 2; i++)
@@ -511,9 +511,9 @@ public sealed class BladeTests
     }
 
     /// <summary>
-    /// ⚠️ <b>A perseverant pellet survives</b> — the one-in-three
-    /// <c>choose(0,0,1)</c> draw every pellet has made since phase 5 finally
-    /// means something — <b>and the bubble still pops.</b>
+    /// <b>A perseverant pellet survives</b> — the one-in-three
+    /// <c>choose(0,0,1)</c> draw every pellet makes — <b>and the bubble still
+    /// pops.</b>
     /// </summary>
     [Fact]
     public void APerseverantPelletPassesThroughAndStillPopsTheBubble()
@@ -532,7 +532,7 @@ public sealed class BladeTests
     }
 
     /// <summary>
-    /// ⚠️ <b>And a <em>friendly</em> perseverant pellet pops it too.</b> The
+    /// <b>And a <em>friendly</em> perseverant pellet pops it too.</b> The
     /// bubble's condition is <c>team != other.team or other.perseverant</c>,
     /// which is not the pellet's own — so a Quote's own team-mate can clear
     /// their screen by luck.
@@ -590,7 +590,7 @@ public sealed class BladeTests
     /// The whole pellet-versus-bubble truth table, from both creation orders.
     /// </summary>
     /// <remarks>
-    /// ✅ <b>Measured against the running game on 2026-08-27</b>, by putting a
+    /// <b>Measured against the running game</b>, by putting a
     /// real <c>Bubble</c> and a real <c>Shot</c> on the same point in open space
     /// and reading back which survived one frame later
     /// (<c>tools/probes/probe-bubble-pair.js</c>). All four rows agreed with
@@ -601,7 +601,7 @@ public sealed class BladeTests
     /// The alternative — the instance the stage reaches first wins and the other
     /// survives — is refuted by the enemy/ordinary row, where <em>both</em> die.
     /// <para>
-    /// ⚠️ <b>The two orders take different entry points.</b>
+    /// <b>The two orders take different entry points.</b>
     /// <c>Projectiles.Collide</c> walks in creation order, so a bubble fired
     /// first is reached through <c>BubbleHitProjectiles</c> and a pellet fired
     /// first through <c>HitBubble</c>. Every other test in this file creates the
@@ -659,7 +659,7 @@ public sealed class BladeTests
     }
 
     /// <summary>
-    /// ⚠️ <b>A mine is turned around rather than popped</b>, and the bubble
+    /// <b>A mine is turned around rather than popped</b>, and the bubble
     /// spends half its life doing it.
     /// </summary>
     [Fact]
@@ -697,7 +697,7 @@ public sealed class BladeTests
     }
 
     /// <summary>
-    /// ⚠️ <b>Only once.</b> The second bubble sees <c>bubbled</c> and lets the
+    /// <b>Only once.</b> The second bubble sees <c>bubbled</c> and lets the
     /// mine through, so a screen cannot pin one in mid-air.
     /// </summary>
     [Fact]
@@ -748,7 +748,7 @@ public sealed class BladeTests
     }
 
     /// <summary>
-    /// ⚠️ <b>And it does not reset <c>timeUnscathed</c></b>, which every other
+    /// <b>And it does not reset <c>timeUnscathed</c></b>, which every other
     /// damaging collision event in the game does — so bubbles cannot hold a
     /// medic's healing ramp down.
     /// </summary>
@@ -767,7 +767,7 @@ public sealed class BladeTests
     }
 
     /// <summary>
-    /// ⚠️ <b>A cloaked spy who could stab is invisible to bubbles</b> — the
+    /// <b>A cloaked spy who could stab is invisible to bubbles</b> — the
     /// event exits before the team test, so the bubble neither damages them nor
     /// pops on them.
     /// </summary>
@@ -813,7 +813,7 @@ public sealed class BladeTests
     // --- the thrown blade -----------------------------------------------------
 
     /// <summary>
-    /// ⚠️ <b>Throwing a blade costs nothing at the moment of the throw</b> — it
+    /// <b>Throwing a blade costs nothing at the moment of the throw</b> — it
     /// only stops the tank replenishing.
     /// </summary>
     [Fact]
@@ -847,7 +847,7 @@ public sealed class BladeTests
     }
 
     /// <summary>
-    /// ⚠️ <b>A blade's <c>image_angle</c> is forced to 0</b>, whichever way it
+    /// <b>A blade's <c>image_angle</c> is forced to 0</b>, whichever way it
     /// was thrown — the one projectile whose box does not follow its flight, for
     /// the reason the reference's own comment gives (GG2 issue #230).
     /// </summary>
@@ -866,7 +866,7 @@ public sealed class BladeTests
     }
 
     /// <summary>
-    /// ⚠️ <b>A blade does not fall.</b> Its <c>with</c> block in
+    /// <b>A blade does not fall.</b> Its <c>with</c> block in
     /// <c>move_all_bullets</c> has no gravity line, where a pellet's has 0.15
     /// and a needle's 0.2.
     /// </summary>
@@ -899,7 +899,7 @@ public sealed class BladeTests
         // Halfway between the thresholds is halfway between the damages.
         Assert.Equal(12.5, Weapons.BladeThrowDamage(45), 9);
 
-        // ⚠️ The boundaries are `>` and `<`, so exactly on a threshold takes the
+        // The boundaries are `>` and `<`, so exactly on a threshold takes the
         // interpolation arm rather than the flat one — which agrees with it at
         // both ends and is worth pinning anyway.
         Assert.Equal(17, Weapons.BladeThrowDamage(60), 9);
@@ -926,7 +926,7 @@ public sealed class BladeTests
     // --- what the blade costs -------------------------------------------------
 
     /// <summary>
-    /// ⚠️ <b>The blade bills its owner one unit a tick while it flies</b>, and
+    /// <b>The blade bills its owner one unit a tick while it flies</b>, and
     /// its owner's tank is frozen meanwhile — so the two do not cancel out.
     /// </summary>
     [Fact]
@@ -946,7 +946,7 @@ public sealed class BladeTests
     }
 
     /// <summary>
-    /// ⚠️ <b>A blade that comes home early is still charged the refire time.</b>
+    /// <b>A blade that comes home early is still charged the refire time.</b>
     /// One that hit something after two ticks has drained 2 and its Destroy
     /// event takes the other 3.
     /// </summary>
@@ -1036,7 +1036,7 @@ public sealed class BladeTests
     }
 
     /// <summary>
-    /// ⚠️ <b>An ubered enemy stops the blade and is still shoved</b>, taking no
+    /// <b>An ubered enemy stops the blade and is still shoved</b>, taking no
     /// damage — the shove and the destroy are outside the uber guard.
     /// </summary>
     [Fact]
@@ -1075,7 +1075,7 @@ public sealed class BladeTests
     }
 
     /// <summary>
-    /// ⚠️ <b>A Quote's own blade pops their own bubbles</b> — the condition is
+    /// <b>A Quote's own blade pops their own bubbles</b> — the condition is
     /// "an enemy's, or the same player's", so a team-mate Quote's screen is
     /// safe and their own is not.
     /// </summary>
@@ -1125,7 +1125,7 @@ public sealed class BladeTests
     // --- what dies with the weapon --------------------------------------------
 
     /// <summary>
-    /// ⚠️ <b>Bubbles and the blade die with their owner</b>, silently — the
+    /// <b>Bubbles and the blade die with their owner</b>, silently — the
     /// Blade's Destroy event takes both, the way the Minegun takes its mines.
     /// </summary>
     [Fact]
@@ -1163,7 +1163,7 @@ public sealed class BladeTests
     // --- what pops a bubble from outside --------------------------------------
 
     /// <summary>
-    /// ⚠️ <b>The three explosions that pop bubbles use three different
+    /// <b>The three explosions that pop bubbles use three different
     /// formulas.</b> A generator's reaches its whole 400-pixel radius where a
     /// rocket's reaches 0.66 of its own — so a bubble 200 pixels from a
     /// generator pops and one 200 pixels from a rocket does not.
@@ -1238,7 +1238,7 @@ public sealed class BladeTests
 
         // Behind the Quote, out of the blade's way: a Quote's own blade pops
         // their own bubbles, which is a different rule and has its own test.
-        // ⚠️ And clear of the wall at x = 2137: parked inside it, the obstacle
+        // And clear of the wall at x = 2137: parked inside it, the obstacle
         // response moved the bubble on its own and this test passed with
         // BubbleStep deleted.
         state.Projectiles[bubble.Index].X = ClearX - 100;
@@ -1263,7 +1263,7 @@ public sealed class BladeTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The drag's 0.6 is one of the five literals GM8 parses a ULP above
+    /// <b>The drag's 0.6 is one of the five literals GM8 parses a ULP above
     /// the IEEE nearest</b>, so it has to come from <see cref="Gml"/> — asserted
     /// to the last bit, because the difference is 5e-16 and any tolerance at all
     /// hides it.
@@ -1351,7 +1351,7 @@ public sealed class BladeTests
     }
 
     /// <summary>
-    /// ⚠️ And <c>global.mapchanging</c> opens it again — for a bullet a team
+    /// And <c>global.mapchanging</c> opens it again — for a bullet a team
     /// gate opens and an intel gate does not, which is the trap
     /// <see cref="SolidRect.IsSolidTo"/> records and which this reuses rather
     /// than restating.
@@ -1377,7 +1377,7 @@ public sealed class BladeTests
     }
 
     /// <summary>
-    /// ⚠️ <b>A wall stops a bubble rather than killing it</b> — the only
+    /// <b>A wall stops a bubble rather than killing it</b> — the only
     /// projectile in the game with a wall response instead of a wall death. It
     /// backs out along its own heading and loses the axis that is blocked.
     /// </summary>
@@ -1410,7 +1410,7 @@ public sealed class BladeTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The six-pixel nudge</b>: a bubble whose next step is blocked but
+    /// <b>The six-pixel nudge</b>: a bubble whose next step is blocked but
     /// whose next step six pixels lower is not drops under the corner and keeps
     /// its speed.
     /// </summary>
@@ -1448,7 +1448,7 @@ public sealed class BladeTests
     }
 
     /// <summary>
-    /// ⚠️ <b>Only the axis that is blocked is stopped</b>, and the three tests
+    /// <b>Only the axis that is blocked is stopped</b>, and the three tests
     /// are three statements rather than one decision — each reads what the ones
     /// above it left behind.
     /// </summary>
@@ -1503,7 +1503,7 @@ public sealed class BladeTests
     // --- what an explosion does to a screen -----------------------------------
 
     /// <summary>
-    /// ⚠️ <b>A rocket flies straight through a bubble that dies on it</b> — a
+    /// <b>A rocket flies straight through a bubble that dies on it</b> — a
     /// <c>Rocket</c> has no <c>Collision with Bubble</c> event of its own, so
     /// only one half of the pair exists.
     /// </summary>
@@ -1558,7 +1558,7 @@ public sealed class BladeTests
         state.Projectiles[near.Index].X = ClearX + 150;
         state.Projectiles[near.Index].Y = ClearY - 30;
 
-        // ⚠️ Sixty pixels straight up: a box gap of about 53, which is outside
+        // Sixty pixels straight up: a box gap of about 53, which is outside
         // the 0.66 sweep and *inside* the 65-pixel blast. A bubble parked far
         // away instead would survive whatever factor the sweep used.
         state.Projectiles[far.Index].X = ClearX + 120;
@@ -1574,7 +1574,7 @@ public sealed class BladeTests
     }
 
     /// <summary>
-    /// ⚠️ <b>A mine's sweep is centre-to-centre and <em>wider</em> than its own
+    /// <b>A mine's sweep is centre-to-centre and <em>wider</em> than its own
     /// blast</b>, by the bubble's four-pixel self-pop radius — so a bubble 42
     /// pixels from a mine pops where a character 42 pixels away takes nothing.
     /// </summary>
@@ -1630,7 +1630,7 @@ public sealed class BladeTests
         Weapons.FireStep(world, ref state, 1, ref events);
 
         var handle = state.LiveProjectileHandle(0);
-        // ⚠️ 330 rather than 200: two thirds of 400 is 264, so a bubble any
+        // 330 rather than 200: two thirds of 400 is 264, so a bubble any
         // closer would pop under a rocket-shaped sweep as well and the number
         // would not be gated at all.
         state.Projectiles[handle.Index].X = state.RedGenerator.X + 330;
@@ -1643,7 +1643,7 @@ public sealed class BladeTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The collision stage walks the projectiles that existed when it
+    /// <b>The collision stage walks the projectiles that existed when it
     /// began</b>, not a cursor over the live array — and an explosion that frees
     /// an <em>older</em> projectile is what tells the two apart.
     /// </summary>

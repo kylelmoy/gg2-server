@@ -22,15 +22,11 @@ namespace Gg2.Simulation;
 /// tell everybody.
 /// </para>
 /// <para>
-/// <b>Nothing of <c>Destroy.xml</c> is missing, as of phase 6.</b> Respawn is
+/// <b>Nothing of <c>Destroy.xml</c> is missing.</b> Respawn is
 /// here — <see cref="Kill"/> arms <see cref="PlayerState.RespawnTimer"/> and
 /// <see cref="Timers"/>' alarm-5 stage runs <c>PlayerSpawn</c> — and the
 /// carried-intel drop is in <see cref="WorldState.Clear"/>, where every way a
 /// character stops existing goes through it rather than only this one.
-/// ⚠️ <b>This paragraph said the drop was missing for three phases after it
-/// landed.</b> A "still missing" note is a claim about coverage, and the only
-/// thing that can falsify one is a reader acting on it; re-check before
-/// repeating it.
 /// </para>
 /// </remarks>
 public static class Deaths
@@ -108,7 +104,7 @@ public static class Deaths
     /// <c>currentWeapon</c>) and leaves the sentry and any projectile already in
     /// the air, which is the reference's own split.
     /// <para>
-    /// ⚠️ <b>The carried-intel drop is <see cref="WorldState.Clear"/>'s, not
+    /// <b>The carried-intel drop is <see cref="WorldState.Clear"/>'s, not
     /// this method's</b>, and that is deliberate rather than a gap: a death is
     /// only one of the ways a character stops existing, and putting
     /// <c>doEventDropIntel</c> here would leave a flag stuck to a player who
@@ -117,7 +113,7 @@ public static class Deaths
     /// </para>
     /// </remarks>
     /// <param name="world">
-    /// The map, for the spawn-room half of the respawn guard. ⚠️ <b>Null means
+    /// The map, for the spawn-room half of the respawn guard. <b>Null means
     /// "no spawn rooms"</b>, which is what a hand-built test world has and what
     /// every caller without a map wants — the same convention
     /// <see cref="MatchSimulation.Tick"/>'s spawn points use.
@@ -136,10 +132,10 @@ public static class Deaths
         var protection = state.Characters[slot].DeathmatchInvulnerable;
 
         // Character.events/Destroy.xml, inside `if (intel)` and below the
-        // implicit drop: ⚠️ **a carrier killed by one of the three map boxes
+        // implicit drop: **a carrier killed by one of the three map boxes
         // sends the briefcase home instead of leaving it in the pit.**
         //
-        // ⚠️ What decides it is the source the *box* wrote, and a box that
+        // What decides it is the source the *box* wrote, and a box that
         // handed the kill to somebody else wrote FINISHED_OFF — so a stolen box
         // kill leaves the flag in the pit. KillBoxTests has the control.
         //
@@ -149,7 +145,7 @@ public static class Deaths
         // keeps this correct if Resolve ever starts transforming the source, as
         // the reference's own kill log does for its own purposes.
         //
-        // ⚠️ Placed here rather than in WorldState.Clear, where the drop is,
+        // Placed here rather than in WorldState.Clear, where the drop is,
         // because the return is **broadcast** (sendEventReturnIntel) where the
         // drop deliberately is not — and only a death can carry one of these
         // three sources, since a box sets hp to 0 the moment it is touched.
@@ -192,12 +188,12 @@ public static class Deaths
 
         // Character.events/Destroy.xml:37-46.
         //
-        // ⚠️ A character that dies **while still invulnerable** comes back on
+        // A character that dies **while still invulnerable** comes back on
         // the *next tick* with whatever protection was left, rather than serving
         // the respawn time — so killing somebody through their spawn bubble buys
         // nothing at all.
         //
-        // ⚠️ **And so does one that dies inside a spawn room**, which is the
+        // **And so does one that dies inside a spawn room**, which is the
         // other arm of the same `or`. Note it is `place_meeting` — the box —
         // where the class-change swap on the *same object* uses
         // `collision_point`, the origin. See CollisionWorld.MeetsSpawnRoom.
@@ -227,13 +223,13 @@ public static class Deaths
     /// <c>doEventPlayerDeath.gml:307-317</c>: Team Deathmatch's scoreboard.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The kills go into the capture counters</b>,
+    /// <b>The kills go into the capture counters</b>,
     /// <c>global.redCaps</c>/<c>global.blueCaps</c> — Team Deathmatch has no
     /// score of its own, which is why the mode needs no per-player statistics to
     /// decide a round and why its HUD draws the counters where CTF draws
     /// captures.
     /// <para>
-    /// ⚠️ <b>Three guards, and each excludes a real case.</b>
+    /// <b>Three guards, and each excludes a real case.</b>
     /// <c>instance_exists(TeamDeathmatchHUD)</c> — no other mode counts;
     /// <c>killer</c>, which is GM8's <c>&gt; 0.5</c> truth test, so a death with
     /// no killer scores nothing; <c>killer != victim</c>, so a suicide scores

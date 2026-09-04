@@ -244,23 +244,17 @@ public static class StateUpdateReader
     /// <c>FULL_UPDATE</c> block.
     /// </summary>
     /// <remarks>
-    /// <b>Every class writes one, and this file and docs/PARITY.md both used to
-    /// say eight of them wrote nothing.</b> That was wrong, and it was wrong in
-    /// the direction that hides: no checked-in fixture contained a
-    /// <c>FULL_UPDATE</c> with a character in it, because the recorder joins
-    /// before the bots spawn, so nothing ever exercised the path.
-    /// <para>
-    /// The mistake was reading <c>Objects/Weapons/</c> and finding a
-    /// <c>User Event 12</c> only on <c>Medigun</c> and <c>Minegun</c>. GM8
+    /// <b>Every class writes one.</b> <c>Objects/Weapons/</c> defines a
+    /// <c>User Event 12</c> only on <c>Medigun</c> and <c>Minegun</c>, but GM8
     /// <b>inherits an event a child does not define</b>, and every weapon has
-    /// <c>&lt;parent&gt;Weapon&lt;/parent&gt;</c> — so the eight silent ones run
+    /// <c>&lt;parent&gt;Weapon&lt;/parent&gt;</c> — so the other eight run
     /// <c>Objects/InGameElements/Weapon.events/User Event 12.xml</c>, which
     /// writes <c>readyToShoot</c> and <c>alarm[0]</c>. The client's own
     /// <c>Weapon.events/User Event 13.xml</c> confirms it from the other side:
     /// <c>receiveCompleteMessage(..., 2, ...)</c>.
     /// </para>
     /// <para>
-    /// Measured on the running engine on 2026-08-25, by swapping
+    /// Measured on the running engine by swapping
     /// <c>global.serializeBuffer</c> for a fresh one and reading
     /// <c>buffer_size</c> either side of the call:
     /// </para>
@@ -326,7 +320,7 @@ public static class StateUpdateReader
     {
         var full = tier == MessageType.FullUpdate;
 
-        // ⚠️ An INPUTSTATE-tier update writes NOTHING AT ALL for a sentry, not
+        // An INPUTSTATE-tier update writes NOTHING AT ALL for a sentry, not
         // even its hp. Sentry.events/User Event 12.xml guards each group on the
         // tier and the guards between them cover only FULL_UPDATE and
         // QUICK_UPDATE, so on an INPUTSTATE every branch is skipped and the
@@ -337,10 +331,8 @@ public static class StateUpdateReader
         // byte per sentry, every tick that is not a quick update
         // (GameServerBeginStep.gml:99). It looks like an unknown message type
         // several hundred bytes later, which is nowhere near the cause.
-        //
-        // No fixture could see this before 2026-08-26: no recording had ever
-        // contained an engineer. docs/PARITY.md, "when adding a fixture, ask
-        // what state it cannot reach".
+        // docs/PARITY.md, "when adding a fixture, ask what state it cannot
+        // reach".
         var hasHp = tier is MessageType.QuickUpdate or MessageType.FullUpdate;
 
         sbyte startDirection = 0;
@@ -426,7 +418,7 @@ public static class StateUpdateReader
                 scalars.Add(reader.ReadUByte());
                 scalars.Add(reader.ReadUInt());
 
-                // ⚠️ Two fields per *surviving* generator, blue first — not two
+                // Two fields per *surviving* generator, blue first — not two
                 // per team. A destroyed one contributes nothing, so the count
                 // has to come from the shape and a consumer has to decrement it
                 // on GENERATOR_DESTROY. See WorldShape.GeneratorCount.

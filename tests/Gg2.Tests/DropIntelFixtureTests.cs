@@ -10,11 +10,10 @@ namespace Gg2.Tests;
 /// message the corpus could reach and did not.
 /// </summary>
 /// <remarks>
-/// <b>Recorded 2026-08-27</b>: six red scouts and no blue team on
-/// <c>ctf_2dfort</c>, steered to blue's briefcase, and the carrier then made to
-/// drop it.
+/// Six red scouts and no blue team on <c>ctf_2dfort</c>, steered to blue's
+/// briefcase, and the carrier then made to drop it.
 /// <para>
-/// ⚠️ <b>How, and why that is the reference's own behaviour rather than a
+/// <b>How, and why that is the reference's own behaviour rather than a
 /// contrivance.</b> <c>processClientCommands.gml:221-229</c> handles a client's
 /// <c>DROP_INTEL</c> with exactly two calls behind one guard —
 /// <c>sendEventDropIntel(player); doEventDropIntel(player);</c> — and those two
@@ -23,7 +22,7 @@ namespace Gg2.Tests;
 /// client-to-server half, and the recording is of the server's broadcast.
 /// </para>
 /// <para>
-/// ⚠️ <b>A death-caused drop is a different thing and broadcasts nothing.</b>
+/// <b>A death-caused drop is a different thing and broadcasts nothing.</b>
 /// <c>sendEventDropIntel.gml</c>'s own docstring says the event is skipped on
 /// death "to avoid issues with order of execution", and the client infers it from
 /// the <c>PLAYER_DEATH</c> it already has — which is why no earlier fixture had
@@ -76,17 +75,17 @@ public sealed class DropIntelFixtureTests
     }
 
     /// <summary>
-    /// ✅ <b>The port drops it too</b> — the injected client command reaches
+    /// <b>The port drops it too</b> — the injected client command reaches
     /// <c>Intel.Drop</c> and the briefcase leaves the carrier.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A <c>DROP_INTEL</c> has to be injected, like a <c>BUILD_SENTRY</c>
+    /// <b>A <c>DROP_INTEL</c> has to be injected, like a <c>BUILD_SENTRY</c>
     /// and a <c>PLAYER_SPAWN</c>.</b> It is a client command: nothing in an
     /// <c>INPUTSTATE</c> says the player pressed drop, so a replay cannot derive
     /// it and a port that ignored the message would carry the flag on for ever
     /// while the reference put it down.
     /// <para>
-    /// ⚠️ <b>And it is applied BEFORE the tick, not after</b> — the opposite of a
+    /// <b>And it is applied BEFORE the tick, not after</b> — the opposite of a
     /// grab. <c>processClientCommands</c> runs inside the server's Begin Step,
     /// ahead of <c>serializeState</c>, so the message lands in its <em>own</em>
     /// tick's block; a <c>GRAB_INTEL</c> comes out of the collision stage, after
@@ -122,7 +121,7 @@ public sealed class DropIntelFixtureTests
 
         Assert.DoesNotContain(watcher.NamedSlot, watcher.CarriersAfter);
 
-        // ⚠️ But SOMEBODY still is, and that is the reference's own behaviour
+        // But SOMEBODY still is, and that is the reference's own behaviour
         // rather than a failed drop. A flag taken off its base gives its carrier
         // a return timer of 0; a drop writes that straight into the new
         // instance's alarm[0], and the grab guard's `alarm[0] <= 1` arm means

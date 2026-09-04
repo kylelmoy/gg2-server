@@ -9,7 +9,7 @@ namespace Gg2.Tests;
 /// reaches — and, just as usefully, which it does not and why.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>"What state can no recording reach?" is the question that has found
+/// <b>"What state can no recording reach?" is the question that has found
 /// every framing bug in this project</b> — the sentry <c>INPUTSTATE</c> block,
 /// <c>ARENA_ENDROUND</c>, the generator HUD block and <c>BALANCE</c> were all
 /// wrong for phases and all survived because nothing recorded them. This makes
@@ -20,7 +20,7 @@ namespace Gg2.Tests;
 /// and <c>SERVER_KICK</c> (37) are declared in the reference's
 /// <c>Constants.xml</c> and referenced <b>nowhere</b> in its scripts or object
 /// events. They cannot appear on any wire, and no recording will ever reach
-/// them. Measured 2026-08-27 by grepping the reference tree.
+/// them, per a grep of the reference tree.
 /// </para>
 /// <para>
 /// Most of the rest are structural: the handshake (<c>HELLO</c>,
@@ -30,14 +30,14 @@ namespace Gg2.Tests;
 /// reward families need an operator, a plugin or the medal server.
 /// </para>
 /// <para>
-/// ⚠️ <b>Five are reachable and simply unreached, and they are the candidates
+/// <b>Five are reachable and simply unreached, and they are the candidates
 /// for the next fixture</b>: <c>DROP_INTEL</c> (an ubered carrier dropping, or a
 /// client's own drop command — a death-caused drop broadcasts nothing),
 /// <c>ARENA_WAIT_FOR_PLAYERS</c>, <c>CHAT_BUBBLE</c>, <c>MESSAGE_STRING</c> and
 /// <c>PLAYER_CHANGENAME</c>. Only the first two are gameplay.
 /// </para>
 /// <para>
-/// ⚠️ <b>Reaching a type is not the same as the harness doing anything with
+/// <b>Reaching a type is not the same as the harness doing anything with
 /// it, and this census cannot tell the difference.</b> <c>TOGGLE_ZOOM</c> and
 /// <c>OMNOMNOMNOM</c> sat in the Reached list below while
 /// <c>Replayer.ApplyEvents</c> silently dropped both — 31 and 4 messages the
@@ -50,8 +50,8 @@ namespace Gg2.Tests;
 public sealed class MessageCoverageTests
 {
     /// <summary>
-    /// Every message type at least one checked-in recording contains, measured
-    /// 2026-08-27 over 27 fixtures.
+    /// Every message type at least one checked-in recording contains, over 27
+    /// fixtures.
     /// </summary>
     private static readonly MessageType[] Reached =
     [
@@ -156,7 +156,7 @@ public sealed class MessageCoverageTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The four dead protocol constants stay unreachable.</b>
+    /// <b>The four dead protocol constants stay unreachable.</b>
     /// </summary>
     /// <remarks>
     /// <c>RED_TEAM_CAP</c>, <c>BLUE_TEAM_CAP</c>, <c>CP_CAPTURED</c> and
@@ -167,7 +167,7 @@ public sealed class MessageCoverageTests
     /// trying to record one, and so that a fixture somehow producing one is
     /// treated as the anomaly it would be.
     /// <para>
-    /// ⚠️ <c>CP_CAPTURED</c> is the one that looks most like an oversight: this
+    /// <c>CP_CAPTURED</c> is the one that looks most like an oversight: this
     /// corpus captures control points on <c>koth_valley</c>, <c>cp_egypt</c> and
     /// <c>dkoth_atalia</c> and none of them sends it. A capture reaches the wire
     /// as a <c>CAPS_UPDATE</c> and nothing else.

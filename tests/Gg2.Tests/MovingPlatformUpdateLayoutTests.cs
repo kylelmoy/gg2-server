@@ -18,7 +18,7 @@ namespace Gg2.Tests;
 /// and a disagreement desynchronises the stream permanently rather than showing
 /// up as a glitch — the same failure the generator block has.
 /// <para>
-/// ⚠️ <b>Nothing in the parity corpus reaches this</b>, because no shipped map
+/// <b>Nothing in the parity corpus reaches this</b>, because no shipped map
 /// places a platform. These round trips are the only check there is.
 /// </para>
 /// </remarks>
@@ -30,7 +30,7 @@ public sealed class MovingPlatformUpdateLayoutTests
     private const double Y = 500;
 
     /// <summary>
-    /// ⚠️ The duplicated ceiling in <see cref="StateUpdateWriter"/> against the
+    /// The duplicated ceiling in <see cref="StateUpdateWriter"/> against the
     /// real one.
     /// </summary>
     /// <remarks>

@@ -10,12 +10,11 @@ namespace Gg2.Tests;
 /// The first King of the Hill recording in the project.
 /// </summary>
 /// <remarks>
-/// <b>Recorded 2026-08-27: three scouts against three soldiers on
-/// <c>koth_valley</c></b>, spawn-anchored by the map-reload recipe. Every
-/// fixture before the 2026-08-27 batch was Capture the Flag, and until this one
-/// nothing had ever put a <b>control point</b> on the wire here.
+/// <b>Three scouts against three soldiers on <c>koth_valley</c></b>,
+/// spawn-anchored by the map-reload recipe. Every other fixture is Capture the
+/// Flag; this is the only one that puts a <b>control point</b> on the wire.
 /// <para>
-/// ✅ <b>The headline is that it frames cleanly to the last byte</b>, and that
+/// <b>The headline is that it frames cleanly to the last byte</b>, and that
 /// is a sharper negative than it looks. <b>The control-point block carries no
 /// count prefix</b> (docs/PROTOCOL.md, "The KotH HUD block") — a reader has to
 /// build the same points from the same map, in the same order, or every update
@@ -64,7 +63,7 @@ public sealed class KothFixtureTests
         Assert.Equal("koth_valley", trace.Header.Map);
         Assert.Equal(GameMode.KingOfTheHill, shape.GameMode);
 
-        // ⚠️ The number the framing depends on. One point on this map, and the
+        // The number the framing depends on. One point on this map, and the
         // reader gets it from the map rather than from the wire.
         Assert.Equal(1, shape.ControlPointCount);
 
@@ -76,7 +75,7 @@ public sealed class KothFixtureTests
     /// <c>UNLOCKCP</c>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b><c>UNLOCKCP</c> is contract, not decoration</b>: KotH always sends
+    /// <b><c>UNLOCKCP</c> is contract, not decoration</b>: KotH always sends
     /// it and Dual King of the Hill never does (docs/SIMULATION.md, "Settled:
     /// Dual King of the Hill"), so it is the one message that tells the two
     /// modes apart on the wire.
@@ -104,7 +103,7 @@ public sealed class KothFixtureTests
     /// map.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Note what this window is <em>not</em>.</b> It is trajectory, hp and
+    /// <b>Note what this window is <em>not</em>.</b> It is trajectory, hp and
     /// deaths — it says nothing whatever about the hill, because
     /// <b>no recording can</b>: see
     /// <see cref="TheHarnessCannotCompareAControlPointAtAll"/>.
@@ -133,13 +132,11 @@ public sealed class KothFixtureTests
 
         // 568 today, t409 to t977.
         //
-        // ⚠️ Raised 300 -> 550 on 2026-08-27, when the projectile-vs-MAP test
-        // moved from the bounding box to the rotated mask: 330 -> 568, the
-        // largest single jump any fixture in this project has had from one
-        // change. A hill map is full of walls and a bullet that stops a few
-        // pixels early stops in the wrong place, so this recording felt it where
-        // the combat fixtures did not. The floor moves with the measurement, so
-        // the gain cannot be lost silently.
+        // The floor tracks the projectile-vs-map collision precision: a hill map
+        // is full of walls, so a bullet that stops a few pixels early stops in
+        // the wrong place, and this recording feels that where the combat
+        // fixtures do not. The floor moves with the measurement, so a gain
+        // cannot be lost silently.
         Assert.True(
             exact >= 550,
             $"{Fixture}: exact for only {exact} ticks after the last spawn anchor (t{anchor})");
@@ -150,7 +147,7 @@ public sealed class KothFixtureTests
     /// see it.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A control point reaches the wire only on a <c>CAPS_UPDATE</c> or
+    /// <b>A control point reaches the wire only on a <c>CAPS_UPDATE</c> or
     /// the join <c>FULL_UPDATE</c></b> — <c>StateUpdateReader</c> returns before
     /// the HUD tail on any other tier — so a recording observes one a few dozen
     /// times in several thousand ticks, on no fixed cadence, and never on the
@@ -182,14 +179,14 @@ public sealed class KothFixtureTests
         Assert.Contains(states, s => s.Team == 0);
         Assert.Contains(states, s => s.CappingTeam == 1);
 
-        // ⚠️ The tick the point changed hands: owner set AND cappingTeam still
+        // The tick the point changed hands: owner set AND cappingTeam still
         // set, which only the next tick's `capping <= 0` clears.
         Assert.Contains(states, s => s.Team == 0 && s.CappingTeam == 0);
     }
 
     /// <summary>
-    /// ⚠️ <b>A replay had no control point at all until 2026-08-27</b>, and
-    /// nothing could have noticed.
+    /// <b>A replay had no control point at all</b>, and nothing could have
+    /// noticed.
     /// </summary>
     /// <remarks>
     /// Two bugs in <c>PortedSimulation.LoadMap</c>, both found the moment
@@ -199,7 +196,7 @@ public sealed class KothFixtureTests
     /// <c>ControlPoints.Place</c></b>, so a King of the Hill, Control Points or
     /// Arena replay ran with no points and no capture zones — a character
     /// standing on the hill was standing on nothing.</item>
-    /// <item>⚠️ <b>And fixing that alone was not enough</b>:
+    /// <item><b>And fixing that alone was not enough</b>:
     /// <c>ControlPoints.Place</c> switches on <c>state.GameMode</c> to decide
     /// which entity types are points, and a defaulted <c>WorldState</c> is
     /// Capture the Flag — which places <em>none</em> of a KotH map's. The mode
@@ -223,7 +220,7 @@ public sealed class KothFixtureTests
     }
 
     /// <summary>
-    /// ⚠️ <b>What this fixture still cannot gate, and why.</b>
+    /// <b>What this fixture still cannot gate, and why.</b>
     /// </summary>
     /// <remarks>
     /// <b>Every one of its nine post-anchor control-point observations falls

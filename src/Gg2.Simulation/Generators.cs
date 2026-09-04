@@ -12,7 +12,7 @@ namespace Gg2.Simulation;
 /// older than every character — that sits still, absorbs damage behind a
 /// regenerating shield, and ends the match when it runs out.
 /// <para>
-/// ⚠️ <b>No attribution at all.</b> <c>damageGenerator</c> ends at
+/// <b>No attribution at all.</b> <c>damageGenerator</c> ends at
 /// <c>dealDamage</c>, which is <c>hp -= damage</c> and a plugin hook; there is
 /// no <c>lastDamageDealer</c>, no assist window and no
 /// <c>DESTROY_GENERATOR</c>-style credit. Whoever fires the last shot gets
@@ -49,7 +49,7 @@ public struct GeneratorState
     /// <c>shieldHp</c>, out of <see cref="Generators.MaxShieldHp"/>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The shield halves damage rather than absorbing it.</b>
+    /// <b>The shield halves damage rather than absorbing it.</b>
     /// <c>damageGenerator.gml:13</c> is
     /// <c>dealDamage(..., damage * shieldResistance)</c> <em>and</em>
     /// <c>shieldHp -= damage</c> — so a shot that the shield covers still takes
@@ -63,7 +63,7 @@ public struct GeneratorState
     /// hit and the shield is coming back.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>It is also the rate.</b> <c>Step.xml:15</c> reads
+    /// <b>It is also the rate.</b> <c>Step.xml:15</c> reads
     /// <c>shieldHp + isShieldRegenerating*global.delta_factor</c>, and GM8's
     /// <c>true</c> is 1 — so the shield returns at one point a tick and a full
     /// 300 takes ten seconds. Not a typo to tidy: writing a named constant here
@@ -77,7 +77,7 @@ public struct GeneratorState
     /// </summary>
     /// <remarks>
     /// Re-armed to <see cref="Generators.RegenerationBuffer"/> by every hit, so
-    /// while a generator is under fire it never runs. ⚠️ <b>It is also read as
+    /// while a generator is under fire it never runs. <b>It is also read as
     /// a flag by the round</b>: <c>GeneratorHUD.events/Step.xml</c> breaks a
     /// stage tie at 0:00 by asking <c>alarm[0] &gt; -1</c>, which is "this
     /// generator has been hit in the last three seconds".
@@ -134,7 +134,7 @@ public static class Generators
     /// <c>left 2, top 14, right 43, bottom 41</c> with origin <c>(23, 21)</c>,
     /// which is <c>-21, -7, +20, +20</c> about that origin.
     /// <para>
-    /// ⚠️ <b>Read from the sprite XML, not measured against the running
+    /// <b>Read from the sprite XML, not measured against the running
     /// game</b> — the same standing as the briefcase's box, and the same
     /// caveat: a fixture cannot confirm it, because no recording has ever been
     /// made on a generator map. The one trap that would apply is checked: a
@@ -232,7 +232,7 @@ public static class Generators
     /// character accelerates. The damage that triggered it landed in last
     /// tick's collision stage.
     /// <para>
-    /// ⚠️ Red before blue, which is only observable if both reach zero on the
+    /// Red before blue, which is only observable if both reach zero on the
     /// same tick — the second one to go still ends the match, and
     /// <c>global.winners</c> keeps the first one's answer
     /// (<c>doEventGeneratorDestroy.gml:14</c> is <c>if(global.winners == -1)</c>).
@@ -311,13 +311,13 @@ public static class Generators
     /// What the weapon dealt, before the shield takes its cut.
     /// </param>
     /// <remarks>
-    /// ⚠️ <b>The shield is a discount, not a barrier.</b> A hit the shield
+    /// <b>The shield is a discount, not a barrier.</b> A hit the shield
     /// covers still costs the generator half the damage in real hp, and costs
     /// the shield the <em>full</em> amount; a hit that overruns the shield pays
     /// half on the covered part and full on the rest. So 300 points of shield
     /// buy 150 points of generator and nothing else.
     /// <para>
-    /// ⚠️ <b>Every hit re-arms the buffer</b>, so a generator under sustained
+    /// <b>Every hit re-arms the buffer</b>, so a generator under sustained
     /// fire never begins regenerating — and the round's stage tie-break reads
     /// that same alarm to decide whether a drawn match is still live.
     /// </para>
@@ -353,20 +353,20 @@ public static class Generators
     /// </summary>
     /// <param name="team">The team whose generator has been destroyed.</param>
     /// <remarks>
-    /// ⚠️ <b>The message names the loser, and its own docstring says
+    /// <b>The message names the loser, and its own docstring says
     /// otherwise.</b> <c>sendEventGeneratorDestroy.gml:2</c> reads "The team who
     /// destroyed the bomb", but its one caller passes the generator's <em>own</em>
     /// team and <c>doEventGeneratorDestroy</c> reads it as the team that lost
     /// one. The comment is the wrong half.
     /// <para>
-    /// ⚠️ <b>The explosion is indiscriminate.</b> The <c>with(Character)</c>
+    /// <b>The explosion is indiscriminate.</b> The <c>with(Character)</c>
     /// loop has no team test, no uber test and no line of sight: everything
     /// within 400 pixels of a dying generator takes 999 damage and a shove,
     /// including the team that just won. The same goes for the
     /// <c>with(Sentry)</c> loop.
     /// </para>
     /// <para>
-    /// ⚠️ <b>It writes <c>hp</c> directly rather than calling
+    /// <b>It writes <c>hp</c> directly rather than calling
     /// <c>damageSentry</c></b>, so a sentry caught in it does not take the
     /// permanent build-rate penalty on the way out. That only matters because
     /// the sentry survives the round.
@@ -374,13 +374,10 @@ public static class Generators
     /// <para>
     /// <b>Not modelled as loops</b>: the <c>DeadGuy</c>, <c>Gib</c> and
     /// <c>Bubble</c> <c>with()</c> blocks. The first two are client-side debris.
-    /// ⚠️ The third is a transcription note and <em>not</em> a gap — this remark
-    /// used to call the Bubble "Quote's unimplemented projectile", which stopped
-    /// being true when Quote landed. The bubble is
-    /// <c>ProjectileKind.Bubble</c>, and the explosion really does pop the ones
-    /// in its blast: <see cref="Explosions.PopBubblesByBox"/>, called below.
-    /// What is not transcribed is the GML loop, which is CLAUDE.md's rule rather
-    /// than an omission.
+    /// The bubble is <c>ProjectileKind.Bubble</c>, and the explosion really does
+    /// pop the ones in its blast: <see cref="Explosions.PopBubblesByBox"/>,
+    /// called below. What is not transcribed is the GML loop, which is
+    /// CLAUDE.md's rule rather than an omission.
     /// </para>
     /// </remarks>
     public static void Destroy(
@@ -527,7 +524,7 @@ public static class Generators
         }
 
         // `with(Bubble) if (distance_to_object(other) < other.blastRadius)` —
-        // ⚠️ the *whole* 400, where a rocket's own bubble sweep is scaled to
+        // the *whole* 400, where a rocket's own bubble sweep is scaled to
         // 0.66 of a much smaller radius. A generator going up clears every
         // bubble on the map short of the far corner.
         Explosions.PopBubblesByBox(ref state, box, BlastRadius);
@@ -538,12 +535,11 @@ public static class Generators
     /// null where there is no instance to serialise.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A destroyed generator writes nothing at all</b>, not a zeroed
+    /// <b>A destroyed generator writes nothing at all</b>, not a zeroed
     /// block: the HUD's <c>with GeneratorBlue event_user(12)</c> runs over
     /// however many instances there are, so the block is four bytes shorter for
     /// each one that has gone. Same shape as a carried briefcase's instance
-    /// count of zero, and the same shape as the <c>ARENA_ENDROUND</c> framing
-    /// this repo got wrong once already.
+    /// count of zero.
     /// </remarks>
     public static GeneratorBlock? ToBlock(in GeneratorState generator) =>
         generator.Exists

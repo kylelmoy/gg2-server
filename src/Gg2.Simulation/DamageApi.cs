@@ -7,8 +7,8 @@ namespace Gg2.Simulation;
 /// eventually goes through, and the one guard in front of it.
 /// </summary>
 /// <remarks>
-/// <b>Three lines of GML, and for six phases the port inlined them at seven call
-/// sites because the guard could not fire.</b> It reads
+/// <b>Three lines of GML, routed through one chokepoint rather than inlined at
+/// each call site.</b> The guard reads
 /// <c>variable_local_exists("deathmatch_invulnerable")</c> and then
 /// <c>!= 0</c> — false for a sentry and a generator, which have no such
 /// variable, and zero for every character outside Team Deathmatch
@@ -38,14 +38,14 @@ public static class DamageApi
     /// <c>dealDamage</c>, plus the per-tick accumulation `docs/ENV.md` needs.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The parameters are required rather than optional deliberately.</b>
+    /// <b>The parameters are required rather than optional deliberately.</b>
     /// This is the one chokepoint every character's damage passes through, and
     /// an overload without them would let a new call site accumulate nothing and
     /// nobody notice — the reward signal would simply be quietly incomplete,
     /// which is the hardest kind of bug to see in a trained policy. Making the
     /// compiler ask "who dealt this" at all eleven sites is the point.
     /// <para>
-    /// ⚠️ <b><paramref name="dealerSlot"/> may be <see cref="CharacterState.Nobody"/></b>
+    /// <b><paramref name="dealerSlot"/> may be <see cref="CharacterState.Nobody"/></b>
     /// — afterburn whose lighter has since left, for one — and then the damage
     /// is taken by somebody and dealt by no one. It must never default to 0:
     /// slot 0 is the server's own player and always exists.
@@ -63,7 +63,7 @@ public static class DamageApi
 
         events.DamageTaken[victimSlot] += amount;
 
-        // ⚠️ Self-damage is taken and not dealt. A rocket jump must not pay.
+        // Self-damage is taken and not dealt. A rocket jump must not pay.
         if (dealerSlot != victimSlot && dealerSlot != CharacterState.Nobody)
             events.DamageDealt[dealerSlot] += amount;
 
@@ -74,7 +74,7 @@ public static class DamageApi
     {
         // `if(argument1.deathmatch_invulnerable != 0) return 0;`
         //
-        // ⚠️ GML's `!=` is fuzzy like every other real comparison, so this is
+        // GML's `!=` is fuzzy like every other real comparison, so this is
         // `!Gml.Equal` and not `!=`. It rarely matters — End Step's clamp is
         // what normally makes the value an exact zero — but the clamp is fuzzy
         // for the same reason, and writing either of them raw leaves a

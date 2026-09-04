@@ -62,7 +62,7 @@ public sealed class CollisionWorld
     /// The same rectangles, as a span.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The tick path must use this and not <see cref="Rects"/>.</b> A
+    /// <b>The tick path must use this and not <see cref="Rects"/>.</b> A
     /// <c>foreach</c> over <c>IReadOnlyList&lt;T&gt;</c> boxes the enumerator,
     /// which is an allocation per character per tick — docs/BOTAI.md item 1's
     /// whole subject, and `BotAiConstraintsTests.ASteadyStateTickAllocatesNothing`
@@ -120,10 +120,10 @@ public sealed class CollisionWorld
     /// The map's <c>MovingPlatform</c> configuration, in level-data order.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A span, and the tick path must use it rather than a list</b> — the
+    /// <b>A span, and the tick path must use it rather than a list</b> — the
     /// same boxing-in-the-tick rule <see cref="RectSpan"/> carries.
     /// <para>
-    /// ⚠️ <b>Zero on all 22 shipped maps</b>, so everything downstream of this is
+    /// <b>Zero on all 22 shipped maps</b>, so everything downstream of this is
     /// reachable only from a custom map or a hand-built one. That is why
     /// <c>MovingPlatformTests</c> builds its entities rather than loading one.
     /// </para>
@@ -135,7 +135,7 @@ public sealed class CollisionWorld
     /// character's <em>origin</em> inside a spawn room?
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The point, not the box</b>, and the reference asks both ways about
+    /// <b>The point, not the box</b>, and the reference asks both ways about
     /// the same object — see <see cref="MeetsSpawnRoom"/>. This is the form a
     /// class change and a sentry build use, and it is the same
     /// <c>collision_point</c> a capture zone uses: the origin is at the
@@ -159,7 +159,7 @@ public sealed class CollisionWorld
     /// overlap a spawn room?
     /// </summary>
     /// <remarks>
-    /// ⚠️ The other half of the disagreement above. This is the form
+    /// The other half of the disagreement above. This is the form
     /// <c>Character.events/Destroy.xml:37</c> uses for the fast respawn, so the
     /// respawn is more generous than the class-change swap by exactly the height
     /// of a character.
@@ -240,7 +240,7 @@ public sealed class CollisionWorld
     /// one question at a time.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Exposed for observation extraction, not for the simulation.</b>
+    /// <b>Exposed for observation extraction, not for the simulation.</b>
     /// Nothing in the tick reads this — the tick asks <see cref="IsSolidAt"/> and
     /// <see cref="PlaceFree"/>, which are the questions GM8 asks. It exists so
     /// <c>ObservationWriter</c>'s ray fan can hoist the mask and use
@@ -307,9 +307,8 @@ public sealed class CollisionWorld
         var firstRow = CellOf(originY + box.Top);
         var lastRow = CellOf(originY + box.Bottom);
 
-        // ⚠️ One masked word read per row, not one test per cell — see
-        // Walkmask.AnySolidInBox, which is what the bitset layout was built for
-        // and what neither of these two overloads did until 2026-09-02.
+        // One masked word read per row, not one test per cell — see
+        // Walkmask.AnySolidInBox, which is what the bitset layout was built for.
         return !_mask.AnySolidInBox(firstColumn, lastColumn, firstRow, lastRow);
     }
 
@@ -325,7 +324,7 @@ public sealed class CollisionWorld
     /// <c>place_free</c> with one moving platform temporarily solid as well.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Only the carry passes a non-empty collider</b>, and only around the
+    /// <b>Only the carry passes a non-empty collider</b>, and only around the
     /// one <c>good_move_contact_solid</c> the reference wraps in
     /// <c>other.solid = true</c>. A platform is not part of the world's solid set
     /// — it holds people up through the dropdown path instead — so it is passed
@@ -353,7 +352,7 @@ public sealed class CollisionWorld
         var firstRow = CellOf(top);
         var lastRow = CellOf(bottom);
 
-        // ⚠️ One masked word read per row — Walkmask.AnySolidInBox. This is the
+        // One masked word read per row — Walkmask.AnySolidInBox. This is the
         // hottest of the four copies of this loop: the movement crawl asks it
         // once per pixel of travel.
         if (_mask.AnySolidInBox(firstColumn, lastColumn, firstRow, lastRow))
@@ -432,7 +431,7 @@ public sealed class CollisionWorld
         var firstRow = CellOf(box.Top);
         var lastRow = CellOf(box.Bottom);
 
-        // ⚠️ One masked word read per row — Walkmask.AnySolidInBox. This is the
+        // One masked word read per row — Walkmask.AnySolidInBox. This is the
         // hottest of the four copies of this loop: the movement crawl asks it
         // once per pixel of travel.
         if (_mask.AnySolidInBox(firstColumn, lastColumn, firstRow, lastRow))
@@ -498,7 +497,7 @@ public sealed class CollisionWorld
         /// <see cref="Walkmask.SafeSkipPixels"/>.
         /// </summary>
         /// <remarks>
-        /// ⚠️ <b>The bounds test cannot fire through <see cref="MapCollider"/>
+        /// <b>The bounds test cannot fire through <see cref="MapCollider"/>
         /// today and is kept anyway</b>, which was checked rather than assumed:
         /// that collider's mask box is <c>[0, Width - 1] × [0, Height - 1]</c>,
         /// exactly the walkmask's extent, and <c>CollisionLine.Walk</c> tests
@@ -579,9 +578,8 @@ public sealed class CollisionWorld
         var firstRow = CellOf(box.Top);
         var lastRow = CellOf(box.Bottom);
 
-        // ⚠️ One masked word read per row, not one test per cell — see
-        // Walkmask.AnySolidInBox, which is what the bitset layout was built for
-        // and what neither of these two overloads did until 2026-09-02.
+        // One masked word read per row, not one test per cell — see
+        // Walkmask.AnySolidInBox, which is what the bitset layout was built for.
         return !_mask.AnySolidInBox(firstColumn, lastColumn, firstRow, lastRow);
     }
 
@@ -601,8 +599,8 @@ public sealed class CollisionWorld
     /// <b>The rectangles were the part that had to be measured before it could
     /// be written.</b> A rectangle is an instance rather than map geometry, so
     /// it needs its own <see cref="LineCollider"/>, and building one means
-    /// claiming its sprite mask fills its bounding box. Measured 2026-08-25
-    /// against the running game: every point inside the reported box of all
+    /// claiming its sprite mask fills its bounding box. Measured against the
+    /// running game: every point inside the reported box of all
     /// eight solid level-entity types is solid to a precise
     /// <c>collision_point</c> — twenty instances at scales from 0.3 to 13,
     /// 100% filled in every case. See <see cref="LineCollider.ForSolidRect"/>.
@@ -632,18 +630,18 @@ public sealed class CollisionWorld
     /// a caller asking about many segments that share a bounding box.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>The body is the same one</b> — <see cref="RectBlocks"/> — so this
+    /// <b>The body is the same one</b> — <see cref="RectBlocks"/> — so this
     /// cannot answer differently from the overload above; it only asks fewer
     /// rects. Fill <paramref name="candidates"/> with
     /// <see cref="BulletRectsIn"/> over a box that contains every segment, and
     /// the answer is identical: a rect that can meet a segment must overlap any
     /// box the segment sits inside.
     /// <para>
-    /// ⚠️ <b>Worth it only for many segments.</b> <c>BotArc.Clear</c> asks about
-    /// ten segments of one parabola, so the rect set was being walked ten times
-    /// over — and building a <see cref="LineCollider"/> per rect per segment to
-    /// throw it away. Measured 2026-09-02: the rect half of a twelve-bot tick,
-    /// 0.60 µs, is almost all of it that.
+    /// <b>Worth it only for many segments.</b> <c>BotArc.Clear</c> asks about
+    /// ten segments of one parabola, so the rect set would otherwise be walked
+    /// ten times over — and a <see cref="LineCollider"/> built per rect per
+    /// segment only to be thrown away. Measured: the rect half of a twelve-bot
+    /// tick, 0.60 µs, is almost all of it that.
     /// </para>
     /// </remarks>
     public bool CollisionLineBlocksBullets(
@@ -663,7 +661,7 @@ public sealed class CollisionWorld
 
     /// <summary>One solid rect against one segment. The one body.</summary>
     /// <remarks>
-    /// ⚠️ The <see cref="CollisionLine.MightMeet"/> call is not redundant with
+    /// The <see cref="CollisionLine.MightMeet"/> call is not redundant with
     /// the one inside <see cref="CollisionLine.Hits"/>: it is the same test, made
     /// before a <see cref="LineCollider"/> is built for a rect on the far side of
     /// the map rather than after.
@@ -690,7 +688,7 @@ public sealed class CollisionWorld
     /// given bounds.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Conservative by construction and therefore exact</b>: a rect that can
+    /// <b>Conservative by construction and therefore exact</b>: a rect that can
     /// meet a segment must overlap any box that segment lies inside, so filtering
     /// on the enclosing box cannot drop a rect that would have blocked. The same
     /// <see cref="CollisionLine.MightMeet"/> body decides both.

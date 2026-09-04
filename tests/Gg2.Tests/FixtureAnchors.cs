@@ -7,17 +7,14 @@ namespace Gg2.Tests;
 /// derivation shared by every fixture test.
 /// </summary>
 /// <remarks>
-/// <b>Two derivations used to coexist and agreed only by luck.</b>
-/// <c>SupportClassFixtureTests</c> took the latest first-<c>PLAYER_SPAWN</c>
-/// over every slot ever observed holding a character, and returned null if any
-/// such slot never spawned; the closedcombat tests took "every spawn within
-/// 200 ticks of the first one" — a heuristic for the same map-reload wave. On
-/// the two checked-in closed fixtures they happen to give the same tick (917
-/// and 774), but the heuristic would silently include a respawn that landed
-/// within 200 ticks of the wave, and the strict rule refuses
-/// <c>closedcombat</c> outright: its slot 6 held a character before the map
-/// reload — last observed at <b>t21</b>, 781 ticks before the anchor — and
-/// never spawned inside the recording.
+/// The anchor is the latest first-<c>PLAYER_SPAWN</c> over every slot ever
+/// observed holding a character, returning null if any such slot never
+/// spawned. A looser heuristic — "every spawn within 200 ticks of the first
+/// one" — would silently include a respawn that landed within 200 ticks of
+/// the map-reload wave; the strict rule instead refuses <c>closedcombat</c>
+/// outright, because its slot 6 held a character before the map reload — last
+/// observed at <b>t21</b>, 781 ticks before the anchor — and never spawned
+/// inside the recording.
 /// <para>
 /// The unified rule: <b>the anchor is the latest first spawn, and a slot with
 /// no spawn only poisons it if that slot is still observed after it.</b> A

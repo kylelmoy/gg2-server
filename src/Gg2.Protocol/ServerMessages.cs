@@ -234,7 +234,7 @@ public static class ServerMessages
     /// put it down.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Never sent for a carrier who died.</b> The script's own comment:
+    /// <b>Never sent for a carrier who died.</b> The script's own comment:
     /// the drop would be a nested event inside the death and the client would
     /// error out dropping a flag for a character it has already destroyed. A
     /// client infers that drop from the <c>PLAYER_DEATH</c> instead.
@@ -275,7 +275,7 @@ public static class ServerMessages
     /// generator has been destroyed.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The body is the team that <em>lost</em> its generator</b>, and the
+    /// <b>The body is the team that <em>lost</em> its generator</b>, and the
     /// script's own docstring says "the team who destroyed the bomb". Its one
     /// caller — <c>Generator.events/Begin Step.xml:19</c> — passes the
     /// generator's own <c>team</c>, and <c>doEventGeneratorDestroy</c> awards
@@ -295,7 +295,7 @@ public static class ServerMessages
     /// <c>TOGGLE_ZOOM</c>: a sniper raised or lowered the scope.
     /// </summary>
     /// <remarks>
-    /// One byte of body, and ⚠️ <b>it says nothing about which way</b> — every
+    /// One byte of body, and <b>it says nothing about which way</b> — every
     /// client flips that player's own `zoomed` (`ClientBeginStep.gml:404-410`),
     /// so both sides must already agree. A client that missed one is inverted
     /// until the next one, and nothing in a state update corrects it: `zoomed`
@@ -311,7 +311,7 @@ public static class ServerMessages
     /// <c>OMNOMNOMNOM</c>: this heavy has started eating.
     /// </summary>
     /// <remarks>
-    /// One byte of body, the player id, and ⚠️ <b>the client does more with it
+    /// One byte of body, the player id, and <b>the client does more with it
     /// than start an animation</b>: <c>ClientBeginStep.gml:386-400</c> also puts
     /// the sandvich on cooldown itself, <c>if(hp &lt; 200)</c> — a hard 200
     /// rather than the character's <c>maxHp</c>, which happens to be the heavy's
@@ -329,7 +329,7 @@ public static class ServerMessages
     /// <c>BALANCE</c>: the teams are uneven and everybody should know.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>One body byte, not two.</b> The notice is
+    /// <b>One body byte, not two.</b> The notice is
     /// <c>BALANCE, 255</c> and stops there; a real switch
     /// (<see cref="BalanceSwitch"/>) adds the class. A reader that frames this
     /// at a fixed width loses the stream — see <see cref="ServerStream"/>.
@@ -344,7 +344,7 @@ public static class ServerMessages
     /// <c>BALANCE</c>: this player has been moved to the other team.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The message does not say which team.</b> The client flips the
+    /// <b>The message does not say which team.</b> The client flips the
     /// player's own <c>team</c> field (<c>ClientBeginStep.gml:260-264</c>), so
     /// the server and the client must already agree on where they were — and
     /// the class byte is sent because <c>checkClasslimits</c> may have changed
@@ -386,13 +386,13 @@ public static class ServerMessages
     /// <c>ARENA_ENDROUND</c>: somebody has won the round.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The one Arena message with a body, and it is variable-length.</b>
+    /// <b>The one Arena message with a body, and it is variable-length.</b>
     /// <c>serverArenaEndRound.gml</c> writes the winner, the two MVP counts and
     /// both round scores, then five bytes for each MVP — up to three a side. The
     /// client reads exactly that (<c>clientArenaEndRound.gml</c>), so the counts
     /// have to match the records that follow or the stream is lost from here on.
     /// <para>
-    /// ⚠️ <b>The two counts are written before either list</b>, so a caller
+    /// <b>The two counts are written before either list</b>, so a caller
     /// cannot stream the records and count as it goes — both lists have to be
     /// decided first. That is what makes a wrong count a lost stream rather than
     /// a wrong number.
@@ -514,12 +514,12 @@ public static class ServerMessages
     /// The 16-byte nonce a client signs to prove who it is.
     /// </summary>
     /// <remarks>
-    /// <c>processClientCommands.gml:320-325</c>. ⚠️ <b>Raw bytes with no length
+    /// <c>processClientCommands.gml:320-325</c>. <b>Raw bytes with no length
     /// prefix</b> — <c>write_binstring</c>, and the client reads exactly 16
     /// (<c>ClientBeginStep.gml:553-556</c>). Prefixing it would desynchronise
     /// that socket's stream permanently rather than fail visibly.
     /// <para>
-    /// ⚠️ <b>To the one socket, never the broadcast buffer.</b> A challenge is
+    /// <b>To the one socket, never the broadcast buffer.</b> A challenge is
     /// addressed to one client, and putting it on the shared stream would both
     /// leak it and hand every other client a message it cannot parse.
     /// </para>
@@ -550,7 +550,7 @@ public static class ServerMessages
     /// Echoes one player's <c>CLIENT_SETTINGS</c> to everybody.
     /// </summary>
     /// <remarks>
-    /// <c>processClientCommands.gml:364-371</c>. ⚠️ <b>This has to be a
+    /// <c>processClientCommands.gml:364-371</c>. <b>This has to be a
     /// broadcast rather than an acknowledgement to the one socket</b>: queued
     /// jumping changes when that character jumps, and every client re-simulates
     /// every character between position updates. A client that never hears
@@ -592,7 +592,7 @@ public static class ServerMessages
     /// <c>PluginPacketSendTo</c> builds identically.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The length covers the id byte as well as the data</b> —
+    /// <b>The length covers the id byte as well as the data</b> —
     /// <c>write_ushort(buffer_size(dataBuffer) + 1)</c> — and the client reads
     /// exactly that many bytes before parsing anything else
     /// (<c>ClientBeginStep.gml:614-626</c>). One off here desynchronises the

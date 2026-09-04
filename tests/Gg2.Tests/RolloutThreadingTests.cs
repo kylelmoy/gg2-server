@@ -9,22 +9,22 @@ namespace Gg2.Tests;
 /// <see cref="RolloutOptions.Threads"/> is a COST knob and changes no decision.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>This is the gate the whole threading change rests on</b>, and it compares
-/// the chosen ACTION and not only the score: the candidate loop's tie-break is
-/// lexicographic, 85.2% of non-blind decisions have their top two tied, and a
-/// parallel loop that reduced as it went would break exactly those and no others.
-/// A score-only comparison would pass while every tied decision flipped.
+/// This compares the chosen action and not only the score: the candidate loop's
+/// tie-break is lexicographic, a large share of non-blind decisions have their
+/// top two tied, and a parallel loop that reduced as it went would break
+/// exactly those and no others. A score-only comparison would pass while every
+/// tied decision flipped.
 /// <para>
-/// ⚠️ <b>Identity, not similarity.</b> There is no tolerance here on purpose —
-/// each candidate is simulated from the same baseline with the same inputs, so
-/// the two paths are the same arithmetic in a different order of execution, never
-/// a different order of arithmetic.
+/// Identity, not similarity: there is no tolerance here on purpose. Each
+/// candidate is simulated from the same baseline with the same inputs, so the
+/// two paths are the same arithmetic in a different order of execution, never a
+/// different order of arithmetic.
 /// </para>
 /// <para>
-/// ⚠️ <b>The run deliberately starts inside the spawn cooldown</b>, where no
-/// candidate can fire and every score is zero. Those are the decisions the aim
-/// tie-break alone settles, so they are the ones a broken reduction would flip
-/// first — skipping past them would test the easy half.
+/// The run deliberately starts inside the spawn cooldown, where no candidate
+/// can fire and every score is zero. Those are the decisions the aim tie-break
+/// alone settles, so they are the ones a broken reduction would flip first —
+/// skipping past them would test the easy half.
 /// </para>
 /// </remarks>
 public sealed class RolloutThreadingTests
@@ -91,7 +91,7 @@ public sealed class RolloutThreadingTests
     }
 
     /// <summary>
-    /// ⚠️ The gate above is worth nothing if the run it compares never searched
+    /// The gate above is worth nothing if the run it compares never searched
     /// anything interesting — a fixture where every decision is the same action
     /// would agree trivially, whatever the reduction did.
     /// </summary>
@@ -112,7 +112,7 @@ public sealed class RolloutThreadingTests
     }
 
     /// <summary>
-    /// ⛔ A threaded search with a policy continuation is refused, because
+    /// A threaded search with a policy continuation is refused, because
     /// <see cref="PolicyNetwork"/> forwards through shared scratch.
     /// </summary>
     [Fact]

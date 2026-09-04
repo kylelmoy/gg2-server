@@ -16,7 +16,7 @@ namespace Gg2.Tests;
 /// steered to blue's briefcase and then home again
 /// (<c>botGoalLocked</c> + <c>botSetGoal</c>).
 /// <para>
-/// ⚠️ <b>The one-sided roster is the design, exactly as it is for
+/// <b>The one-sided roster is the design, exactly as it is for
 /// <see cref="KothCaptureFixtureTests"/>.</b>
 /// <c>reference-ctf_2dfort-closedrespawn.trace</c> already held a
 /// <c>GRAB_INTEL</c> and the <c>SCORE_INTEL</c> that followed it — the first
@@ -27,7 +27,7 @@ namespace Gg2.Tests;
 /// mismatches at all, over its whole 4,934 ticks</b>.
 /// </para>
 /// <para>
-/// ⚠️ <b>Steering bots cannot invalidate a closed-loop fixture</b> — a replay
+/// <b>Steering bots cannot invalidate a closed-loop fixture</b> — a replay
 /// consumes the recorded <c>INPUTSTATE</c>s and simulates no bot AI, so
 /// <c>botSetGoal</c> changes what gets recorded and nothing about how it
 /// replays. A <em>teleport</em> would break the anchor; a goal does not.
@@ -101,7 +101,7 @@ public sealed class IntelCaptureFixtureTests
     }
 
     /// <summary>
-    /// ✅ <b>The whole recording replays exactly</b> — trajectory, hp and deaths,
+    /// <b>The whole recording replays exactly</b> — trajectory, hp and deaths,
     /// every tick of it.
     /// </summary>
     /// <remarks>
@@ -126,11 +126,11 @@ public sealed class IntelCaptureFixtureTests
     }
 
     /// <summary>
-    /// ✅ <b>The gate this fixture exists for: the port grabs and captures on the
+    /// <b>The gate this fixture exists for: the port grabs and captures on the
     /// reference's own ticks.</b>
     /// </summary>
     /// <remarks>
-    /// ⚠️ <c>Fields.Intel</c> compares the objective's <em>messages</em>, not any
+    /// <c>Fields.Intel</c> compares the objective's <em>messages</em>, not any
     /// state on the wire — a briefcase and a carrier's <c>intel</c> byte are
     /// <c>FULL_UPDATE</c>-only and a recording holds exactly one of those, on the
     /// join path before anything has happened. So this asserts that the port
@@ -182,7 +182,7 @@ public sealed class IntelCaptureFixtureTests
         Assert.True(grab > anchor, $"the grab at t{grab} is not inside the window (anchor t{anchor})");
         Assert.True(score > anchor, $"the capture at t{score} is not inside the window (anchor t{anchor})");
 
-        // ⚠️ And the comparison is alive, which the two assertions above do NOT
+        // And the comparison is alive, which the two assertions above do NOT
         // establish. "No mismatches" is satisfied just as well by a comparison
         // that never runs — measured: routing ReconcileIntel's output to a
         // discarded list failed nothing until this control existed, the same

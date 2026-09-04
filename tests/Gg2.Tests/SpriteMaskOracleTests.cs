@@ -14,20 +14,20 @@ namespace Gg2.Tests;
 /// <c>stringToResource.gml</c> loads one. Where this port and that file disagree,
 /// <b>the file is right.</b>
 /// <para>
-/// This is the test that turned three guesses into measurements on 2026-09-01:
+/// This test turns three claims into measurements:
 /// </para>
 /// <list type="bullet">
-/// <item>✅ <c>removeback</c> really does sample the <b>bottom-left</b> pixel —
-/// both PNGs matched to the pixel on the first run.</item>
-/// <item>✅ Scaling is exact replication: a 3x sprite has exactly 9x the solid
+/// <item><c>removeback</c> really does sample the <b>bottom-left</b> pixel —
+/// both PNGs match to the pixel.</item>
+/// <item>Scaling is exact replication: a 3x sprite has exactly 9x the solid
 /// pixels, so the room→source mapping is plain floor division.</item>
-/// <item>⚠️ A GIF's mask is the <b>union of every subimage</b>, each with
-/// <c>removeback</c> applied against <b>its own</b> bottom-left pixel. The first
-/// model (frame 1 only) was out by ten pixels and the second (union, one global
-/// background) by three.</item>
+/// <item>A GIF's mask is the <b>union of every subimage</b>, each with
+/// <c>removeback</c> applied against <b>its own</b> bottom-left pixel — not
+/// frame 1 alone, and not one global background pixel shared across
+/// subimages.</item>
 /// </list>
 /// <para>
-/// ⚠️ <b>Regenerating this needs the running game</b> — see the probe's header
+/// <b>Regenerating this needs the running game</b> — see the probe's header
 /// and <c>docs/PARALLEL.md</c> on holding the bridge. A failure here is a real
 /// disagreement with GM8, not a stale fixture: check the change was one you
 /// meant before re-recording.
@@ -84,7 +84,7 @@ public sealed class SpriteMaskOracleTests
     }
 
     /// <summary>
-    /// ⚠️ The bubble is the one that was wrong, so its exact count is pinned.
+    /// The bubble's exact solid-pixel count, pinned.
     /// </summary>
     /// <remarks>
     /// 586, not 576. The ten-pixel gap was every frame after the first, and the
@@ -106,7 +106,7 @@ public sealed class SpriteMaskOracleTests
     /// </summary>
     /// <remarks>
     /// The fact that makes the union necessary, recorded from the engine rather
-    /// than assumed. ⚠️ It also means <c>animationspeed</c> is decoration as far
+    /// than assumed. It also means <c>animationspeed</c> is decoration as far
     /// as collision goes: one mask serves every frame, so the platform's shape
     /// does not change as it animates.
     /// </remarks>

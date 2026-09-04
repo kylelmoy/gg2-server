@@ -8,10 +8,7 @@ namespace Gg2.Simulation;
 /// others.
 /// </summary>
 /// <remarks>
-/// <b>All four are stored, and none is derived on read.</b> docs/SIMULATION.md
-/// used to say <c>speed</c> and <c>direction</c> were "derived from
-/// <c>hspeed</c>/<c>vspeed</c>", which is true only for an instance that never
-/// writes them — which is every character in phase 4 and no projectile at all.
+/// <b>All four are stored, and none is derived on read.</b>
 /// A shot is created with <c>direction</c> and <c>speed</c>, then has
 /// <c>hspeed</c> added to it, then <c>speed</c> and <c>direction</c> adjusted
 /// again (<c>Objects/Weapons/Scattergun.events/User Event 3.xml</c>), so it
@@ -41,14 +38,12 @@ namespace Gg2.Simulation;
 /// <para>
 /// <b>Source and status.</b> Transcribed from OpenGMK's
 /// <c>gm8emulator/src/instance.rs</c> (<c>set_hspeed</c>, <c>set_direction</c>,
-/// <c>update_hvspeed</c>, <c>update_speed_direction</c>) and then <b>measured
-/// against the running game</b> — 399 write sequences and 27 angles, regenerate
-/// with <c>node tools/sample-motion.js</c>. The measurement moved the model: the
-/// transcription snapped <c>direction</c> and not <c>speed</c>, and the engine
-/// snaps both.
+/// <c>update_hvspeed</c>, <c>update_speed_direction</c>) and measured against
+/// the running game — 399 write sequences and 27 angles, regenerate with
+/// <c>node tools/sample-motion.js</c>.
 /// </para>
 /// <para>
-/// ⚠️ <b>This is the one primitive in the project that is not bit-exact, and it
+/// <b>This is the one primitive in the project that is not bit-exact, and it
 /// cannot be made so.</b> GM8 is a Delphi program and its motion conversions run
 /// on the x87 stack at 80-bit extended precision with Intel's <c>FSIN</c> and
 /// <c>FCOS</c>; the port runs on IEEE doubles. Eight spellings of
@@ -200,12 +195,11 @@ public struct Motion
     /// are snapped.
     /// </summary>
     /// <remarks>
-    /// This used to snap only <c>direction</c>, on the strength of the OpenGMK
-    /// transcription. The running game disagrees and it is not a last-bit
-    /// disagreement: writing <c>hspeed = 3.00005</c> with <c>vspeed</c> at zero
-    /// leaves <c>hspeed</c> alone and reports <c>speed</c> as exactly <b>3</b>,
-    /// and two components of 1e-15 report a speed of exactly <b>0</b>. Measured
-    /// — see tests/Gg2.Tests/MotionSampleTests.cs.
+    /// Not a last-bit correction: writing <c>hspeed = 3.00005</c> with
+    /// <c>vspeed</c> at zero leaves <c>hspeed</c> alone and reports
+    /// <c>speed</c> as exactly <b>3</b>, and two components of 1e-15 report a
+    /// speed of exactly <b>0</b>. Measured — see
+    /// tests/Gg2.Tests/MotionSampleTests.cs.
     /// </remarks>
     private void UpdateSpeedDirection()
     {

@@ -8,11 +8,11 @@ namespace Gg2.Server;
 /// third party.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>Constructed only when <c>--lobby</c> was passed.</b> The default is off,
+/// <b>Constructed only when <c>--lobby</c> was passed.</b> The default is off,
 /// per <c>docs/PROTOCOL.md</c>: a private server should not announce itself to a
 /// public list because somebody ran the binary.
 /// <para>
-/// ⚠️ <b>Every failure here is swallowed and logged, never thrown.</b> The lobby
+/// <b>Every failure here is swallowed and logged, never thrown.</b> The lobby
 /// is unreachable, DNS is down, the network is gone — none of that is a reason to
 /// interrupt a match in progress, and the reference does not stop for it either.
 /// A server that cannot be listed is still a server people can join by address.
@@ -41,7 +41,7 @@ public sealed class LobbyAnnouncer : IDisposable
     /// This server's lobby identity, stable for the life of the process.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Stable is the whole contract: the lobby keys its entry on this, so a
+    /// Stable is the whole contract: the lobby keys its entry on this, so a
     /// fresh id per registration would leave a stale listing behind every 30
     /// seconds rather than updating one.
     /// </remarks>

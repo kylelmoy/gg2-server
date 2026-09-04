@@ -9,7 +9,7 @@ namespace Gg2.Server.Plugins;
 /// <c>Scripts/Plugins/getpluginhashes.gml</c> does.
 /// </param>
 /// <remarks>
-/// ⚠️ <b><c>name@hash</c> is a port EXTENSION, not the reference's syntax.</b>
+/// <b><c>name@hash</c> is a port EXTENSION, not the reference's syntax.</b>
 /// The reference's <c>ServerPluginList</c> holds bare names and
 /// <c>checkpluginname</c> rejects an <c>@</c>; the hash is fetched from
 /// ganggarrison.com at startup. Pinning is here because this port implements a
@@ -31,7 +31,7 @@ public static class PluginNames
     /// <c>checkpluginname.gml</c>'s alphabet, character for character.
     /// </summary>
     /// <remarks>
-    /// ⚠️ No uppercase. The reference's own 404 message says so out loud
+    /// No uppercase. The reference's own 404 message says so out loud
     /// ("plugin names are always lowercase"), and the check runs on the server
     /// as well as the client — a capitalised name never reaches the network.
     /// </remarks>
@@ -45,7 +45,7 @@ public static class PluginNames
     /// (<c>game_init.gml:99</c>).
     /// </summary>
     /// <remarks>
-    /// ⚠️ Measured on the <b>configured</b> list, before hashes are attached —
+    /// Measured on the <b>configured</b> list, before hashes are attached —
     /// the hashed list has its own, much larger limit. Both are transcribed
     /// because a server that starts here and refuses to start on the reference
     /// is a configuration nobody can move.
@@ -92,7 +92,7 @@ public static class PluginNames
 
         var specs = new List<PluginSpec>();
 
-        // ⚠️ An empty or all-whitespace setting is "no plugins", not "one plugin
+        // An empty or all-whitespace setting is "no plugins", not "one plugin
         // called nothing". game_init.gml's own guard is string_length(...) != 0
         // around the whole block, so the split never sees the empty string.
         if (configured.Trim().Length == 0)
@@ -142,7 +142,7 @@ public static class PluginNames
     /// The greeting's <c>pluginList</c>: <c>name@md5</c> joined by commas.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Byte-for-byte what <c>getpluginhashes.gml:79-83</c> builds, because the
+    /// Byte-for-byte what <c>getpluginhashes.gml:79-83</c> builds, because the
     /// client splits it on <c>,</c> and then on <c>@</c> and derives each
     /// plugin's packet id from its <b>position</b>. A stray space would become
     /// part of a name and the download would 404.

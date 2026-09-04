@@ -6,14 +6,14 @@ namespace Gg2.Server;
 /// </summary>
 /// <remarks>
 /// <para>
-/// ⚠️ <b>Locked, unlike everything else the server owns.</b> Almost all logging
+/// <b>Locked, unlike everything else the server owns.</b> Almost all logging
 /// happens on the tick thread, but not all of it — <see cref="LobbyAnnouncer"/>
 /// and <see cref="RewardAuthClient"/> both log from their own — and a panel
 /// thread reads while any of them writes. This is the cheapest correct answer
 /// and logging is nowhere near a hot path.
 /// </para>
 /// <para>
-/// ⚠️ <b>Sequence numbers, not indices.</b> A browser polls "everything after
+/// <b>Sequence numbers, not indices.</b> A browser polls "everything after
 /// N"; if it asked by index it would silently skip lines whenever the ring
 /// wrapped between two polls, and the lines it lost would be exactly the ones a
 /// busy server produced. <see cref="Since"/> reports how many were dropped
@@ -66,7 +66,7 @@ public sealed class LogRing
     /// </param>
     /// <param name="dropped">
     /// How many lines fell out of the ring before the caller came back for them.
-    /// ⚠️ Reported rather than hidden: a gap the panel does not know about is a
+    /// Reported rather than hidden: a gap the panel does not know about is a
     /// panel quietly showing an incomplete log.
     /// </param>
     public IReadOnlyList<Entry> Since(long after, out long dropped)

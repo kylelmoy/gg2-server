@@ -4,26 +4,6 @@ using Gg2.Simulation;
 
 namespace Gg2.Bots;
 
-/// <summary>What <see cref="BotObjective"/> decided, ready to be issued as a goal.</summary>
-/// <param name="Found">Whether the mode cascade had anything to offer at all.</param>
-/// <param name="X">Where to walk, in world coordinates.</param>
-/// <param name="Y"><inheritdoc cref="X"/></param>
-/// <param name="IsSpot">
-/// Whether this came out of <see cref="BotGoalSpot"/> rather than being the
-/// objective itself. ⚠️ The caller has to know, because a spot is chosen without
-/// checking reachability and one that turns out to be in another component has to
-/// be given up on rather than retried for ever.
-/// </param>
-/// <param name="MustTouch">
-/// Whether this is a goal the bot has to physically occupy rather than cover — the
-/// intel, its home base, or a contested point. ⚠️ Recorded because it is what
-/// forbids both the per-class standoff and the lateral spread.
-/// </param>
-public readonly record struct BotGoal(bool Found, double X, double Y, bool IsSpot, bool MustTouch)
-{
-    public static BotGoal None => default;
-}
-
 /// <summary>
 /// <c>botObjectiveUpdate</c>: where a bot should be heading, given the game mode's
 /// objective.
@@ -32,7 +12,7 @@ public readonly record struct BotGoal(bool Found, double X, double Y, bool IsSpo
 /// The "where" that <c>ScriptedBot.SetGoal</c> only ever answered by hand. It
 /// mirrors the same <c>instance_exists</c> cascade <c>basicRoomSetup</c> uses to
 /// pick a mode, because in the reference the mode itself is never stored anywhere
-/// — ⚠️ <b>this port does store it (<c>WorldState.GameMode</c>) and still asks the
+/// — <b>this port does store it (<c>WorldState.GameMode</c>) and still asks the
 /// entities</b>, because a mode is not the same question as "what is on this map":
 /// <c>ScenarioWorld</c> is TeamDeathmatch with nothing placed, and a CTF map whose
 /// briefcase is being carried has no <c>Intelligence</c> instance either.
@@ -52,7 +32,7 @@ public readonly record struct BotGoal(bool Found, double X, double Y, bool IsSpo
 /// not converge on one pixel and stand in each other's line of fire).
 /// </para>
 /// <para>
-/// ⚠️ <b>The gate on the class opinion is "would standing off lose the round", and
+/// <b>The gate on the class opinion is "would standing off lose the round", and
 /// it is not decoration.</b> The objective in CTF is a thing to <em>pick up</em>: a
 /// class that stops 300px short of the enemy intel and waits never captures, and if
 /// a whole team happens to roll that class — <c>botPopulationUpdate</c> picks with
@@ -61,7 +41,7 @@ public readonly record struct BotGoal(bool Found, double X, double Y, bool IsSpo
 /// <em>is</em> reaching it (a scout at <c>capStrength</c> 2) have no spot mode.
 /// </para>
 /// <para>
-/// ⚠️ <b>The hold-ground trigger is a DISTANCE to the objective, not "have I
+/// <b>The hold-ground trigger is a DISTANCE to the objective, not "have I
 /// arrived", and that is not a detail.</b> Arrival is cleared by issuing a goal, so
 /// a trigger keyed to it flips off the moment it fires: bot arrives, takes high
 /// ground, arrival clears, next objective tick it no longer qualifies, walks back
@@ -70,13 +50,13 @@ public readonly record struct BotGoal(bool Found, double X, double Y, bool IsSpo
 /// inside the radius that chose it.
 /// </para>
 /// <para>
-/// ⚠️ <b>The medic's follow-goal goes FIRST and returns early</b>, ahead of the
+/// <b>The medic's follow-goal goes FIRST and returns early</b>, ahead of the
 /// whole mode cascade, because a medic following a team-mate is doing its job in
 /// every mode and the objective is that team-mate's problem. With nobody to follow
 /// it falls through and behaves like everyone else, which is the right thing to do
 /// with a medic that has spawned alone.
 /// <para>
-/// ⚠️ <b>Its goal is a moving INSTANCE rather than a world point at all</b>, which
+/// <b>Its goal is a moving INSTANCE rather than a world point at all</b>, which
 /// is why it does not feed the spread and spot machinery below — neither means
 /// anything against a target that walks. It is the same shape as the flag-carrier
 /// chase further down, and for the same reason.
@@ -103,7 +83,7 @@ public sealed class BotObjective
     /// </summary>
     /// <param name="role">Assigned once at join — see <see cref="BotRoles"/>.</param>
     /// <param name="spreadX">
-    /// This bot's constant lateral offset. ⚠️ Applied last and dropped entirely on a
+    /// This bot's constant lateral offset. Applied last and dropped entirely on a
     /// goal that has to be touched.
     /// </param>
     /// <param name="allowSpot">
@@ -132,18 +112,15 @@ public sealed class BotObjective
 
         // --- the medic's follow-goal -----------------------------------------
         //
-        // Before tier 3 this had zero references to the class, so a medic pathed to
-        // the enemy intel exactly like a soldier and healed whoever happened to be
-        // standing near the route it walked alone. A medic is the one class for
-        // which NEVER ENGAGING is correct play, and the thing it should be following
-        // is not a fixed world point at all.
+        // A medic is the one class for which NEVER ENGAGING is correct play, and
+        // the thing it should be following is not a fixed world point at all.
         //
-        // ⚠️ An intel carrier does not follow. There is exactly one thing to
+        // An intel carrier does not follow. There is exactly one thing to
         // do with an enemy flag and it is not "escort somebody else while holding
         // it" — the carry branch below owns that case.
         if (BotClassProfile.Follows(playerClass) && !self.CarryingIntel)
         {
-            // ⚠️ skipFollowers TRUE here and false in the combat half. Two
+            // skipFollowers TRUE here and false in the combat half. Two
             // medics who pick each other deadlock: each one's goal is where the
             // other is standing, both are already there, and neither ever leaves
             // spawn. The BEAM has no such problem, which is why it is an argument
@@ -157,14 +134,14 @@ public sealed class BotObjective
                 // Keep the ally between me and the enemy: step to the far side of
                 // them from whatever this bot is currently looking at.
                 //
-                // ⚠️ Horizontal only. The goal is a place to STAND, and
+                // Horizontal only. The goal is a place to STAND, and
                 // standing is a one-dimensional choice on a given surface.
                 var wantX = mate.X;
 
                 if (target is { } foe && world.IsAlive(foe))
                     wantX += world.Character(foe).X > mate.X ? -BotConstants.MedicOffset : BotConstants.MedicOffset;
 
-                // ⚠️ BOT_GOAL_RETARGET_DIST throttles the re-issue for free. A
+                // BOT_GOAL_RETARGET_DIST throttles the re-issue for free. A
                 // moving ally naturally trips the 48px test — which is exactly the
                 // case that check was written for — while one standing still does
                 // not, and the goal is left alone.
@@ -208,13 +185,8 @@ public sealed class BotObjective
         }
         else
         {
-            // ⚠️ Team Deathmatch, and the ONLY mode with nothing in the world to
-            // walk to. Until 2026-08-28 the cascade simply ended here and a TDM
-            // bot got BotGoal.None — no route, no movement, standing where it
-            // spawned until somebody wandered into its combat range. On
-            // tdm_mantic that was eight bots moving exactly ZERO pixels for 3,000
-            // ticks, with every test green, and it made `eval`'s tdm result
-            // measure nothing at all.
+            // Team Deathmatch, and the ONLY mode with nothing in the world to
+            // walk to.
             found = Deathmatch(
                 in world, slot, in self, playerClass, target,
                 ref wx, ref wy, ref anchorX, ref anchorY,
@@ -230,7 +202,7 @@ public sealed class BotObjective
         // an attacker whose team-mate beat it to the grab. Between them that is
         // most of a round's most interesting minute spent standing still.
         //
-        // ⚠️ The goal is a moving instance, so it returns here rather than feeding
+        // The goal is a moving instance, so it returns here rather than feeding
         // a world point into the spread and spot machinery below. Neither means
         // anything against a target that walks — a standoff band around a running
         // player is a bot orbiting it, and a spread is a deliberate miss of the one
@@ -300,7 +272,7 @@ public sealed class BotObjective
             };
         }
 
-        // ⚠️ A defender's class opinion does not survive a point being taken. A
+        // A defender's class opinion does not survive a point being taken. A
         // sniper perched 400px back and an engineer sat on a chokepoint are both
         // doing something useful right up until the thing they are covering is
         // being stood on by the enemy — at which point the only move that touches
@@ -310,7 +282,7 @@ public sealed class BotObjective
         if (contested && defending)
             classWants = false;
 
-        // ⚠️ A class with its own positioning opinion does not ALSO take the
+        // A class with its own positioning opinion does not ALSO take the
         // generic push. They are two answers to the same question, and applying
         // both silently anchors the class's answer on the other one's output: the
         // spy's flank came out measured from a point 400px advanced toward the
@@ -329,7 +301,7 @@ public sealed class BotObjective
 
             var length = Gml.PointDistance(0, 0, pushX, pushY);
 
-            // ⚠️ Capped on purpose: loitering outside an enemy spawn is a bad
+            // Capped on purpose: loitering outside an enemy spawn is a bad
             // strategy, not an aggressive one — players retreat inside, heal to
             // full and walk back out, while the bot has given up the thing it was
             // holding.
@@ -342,7 +314,7 @@ public sealed class BotObjective
 
         // --- the point is already ours: hold it, or push past it --------------
         //
-        // ⚠️ Arrival is a STATE, not a terminus. A capture zone never moves, so
+        // Arrival is a STATE, not a terminus. A capture zone never moves, so
         // without this a bot that reaches an already-held point freezes on it for
         // ever — the route ends and nothing re-tasks it. A random jitter stood in
         // for this once; what a player actually does is one of two things, split by
@@ -397,14 +369,14 @@ public sealed class BotObjective
                     break;
 
                 case BotSpotMode.Choke:
-                    // ⚠️ The ANCHOR moves, not the bot: a chokepoint is a place on
+                    // The ANCHOR moves, not the bot: a chokepoint is a place on
                     // the route between what is being guarded and where the attack
                     // comes from, so the sentry covers the approach instead of the
                     // thing itself.
                     anchorX += pushX;
                     anchorY += pushY;
 
-                    // ⚠️ ...and unlike every other anchor here, that one is a bare
+                    // ...and unlike every other anchor here, that one is a bare
                     // point on a route rather than an object. Asking for a sightline
                     // to it is asking the wrong question — nothing is going to be
                     // shot AT the chokepoint, the sentry covers whatever walks
@@ -441,7 +413,7 @@ public sealed class BotObjective
             // is what this did before the goal layer existed.
         }
 
-        // ⚠️ The spread never applies to a goal that has to be TOUCHED. Standing
+        // The spread never applies to a goal that has to be TOUCHED. Standing
         // 96px from a control point still captures it and standing 96px from a
         // generator still shoots it, which is what makes the spread free everywhere
         // else — but the intel is picked up by collision and the capture is scored
@@ -452,7 +424,7 @@ public sealed class BotObjective
         // there — no grab, no cap, 0-0 after a full round with both teams parked
         // around a flag neither would touch.
         //
-        // ⚠️ A contested point is the same rule for a sharper reason: a capture zone
+        // A contested point is the same rule for a sharper reason: a capture zone
         // is 125px wide on koth_valley, the spread is 96 either way and a defender
         // adds another 220 on top. Measured live, a defending sniper sent to contest
         // its own point stood at 2544 while the zone ended at 2393, contesting
@@ -470,14 +442,14 @@ public sealed class BotObjective
     /// Resolves a decided goal to a nav node's own stand position.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Every objective in the game is an OBJECT position, and map objects are
+    /// <b>Every objective in the game is an OBJECT position, and map objects are
     /// not anchored the way a character is</b> — a capture zone's marker can sit
     /// 70px above the floor it belongs to and there is no fixed offset that
     /// generalises. So the rule is: resolve the objective to a node, then re-derive
     /// the goal from <em>that node's own</em> canonical stand position, which
     /// guarantees the follower resolves it back to the same node later.
     /// <para>
-    /// ⚠️ <b>The objective's own node is resolved first and the spread only earns its
+    /// <b>The objective's own node is resolved first and the spread only earns its
     /// way in.</b> Getting that the other way round is a defect the reference shipped
     /// for one build: the snap searches DOWNWARD, so snapping an already-offset
     /// position can land on a floor several storeys below the objective — the offset
@@ -570,25 +542,19 @@ public sealed class BotObjective
                 return;
             }
 
-            // Our flag is not on the ground, so an enemy is carrying it. That is the
-            // single most urgent thing that happens to a defender in this mode, and
-            // before this it was the one thing that made it stop having a job at all
-            // — the flag it guards stops existing, nothing is found, and the bot
-            // stands at the empty stand until somebody else ends the round.
+            // Our flag is not on the ground, so an enemy is carrying it — the
+            // single most urgent thing that happens to a defender in this mode.
             chase = enemy;
             return;
         }
 
-        // ⚠️ Our own flag being carried OUTRANKS fetching theirs, and is tested
-        // first for that reason. Before this only a defender ever chased a thief —
-        // so on a team that happened to roll none (the role count runs down the
-        // roster, and a short team can land none) an enemy could stand in the open
-        // holding the flag with nobody on the map interested in them. Reported from
-        // play as "bots do not pursue the enemy holding the flag — no effort to kill
-        // me while I stand at 2676,582". Every role answers it now: an attacker
-        // halfway to the enemy base is still the closest thing our flag has to a
-        // defender, and a capture ends the round whatever else that attacker was
-        // about to achieve.
+        // Our own flag being carried OUTRANKS fetching theirs, and is tested
+        // first for that reason: every role answers it, not just a defender — a
+        // team that happens to roll no defenders (role count runs down the
+        // roster, a short team can land none) must still have somebody chase the
+        // thief. An attacker halfway to the enemy base is still the closest thing
+        // our flag has to a defender, and a capture ends the round whatever else
+        // that attacker was about to achieve.
         if (!ownIntel.OnField && ownIntel.HasBase)
         {
             chase = enemy;
@@ -626,7 +592,7 @@ public sealed class BotObjective
     /// that no mode without an objective has, and because a deathmatch's whole
     /// content is finding somebody.
     /// <para>
-    /// ⚠️ <b>A SPOT anchored on the enemy, never the enemy's own position.</b>
+    /// <b>A SPOT anchored on the enemy, never the enemy's own position.</b>
     /// That distinction is the entire difficulty and it was measured twice.
     /// <c>BotClassKeys</c> refuses to fire inside
     /// <see cref="BotTargeting.ClassMinBand"/> — "a rocket at that range kills the
@@ -641,13 +607,13 @@ public sealed class BotObjective
     /// The spot search is what fixes it, and it is the machinery that already
     /// exists: the band's floor is the class's own minimum, so a standoff can
     /// never put a bot inside its own splash radius, and it returns a real
-    /// walkable node rather than an offset that may be in mid-air. ⚠️ <b>Offsetting
+    /// walkable node rather than an offset that may be in mid-air. <b>Offsetting
     /// the enemy's position by the band was tried first and is worse</b> — the
     /// offset lands off whatever surface the target is standing on and A* refuses
     /// it, so the bot stops dead with no route at all.
     /// </para>
     /// <para>
-    /// ⚠️ <b>The combat target first, the nearest enemy second.</b> Preferring
+    /// <b>The combat target first, the nearest enemy second.</b> Preferring
     /// whatever the bot is already shooting at keeps the movement half and the
     /// firing half pointed at one player; picking independently makes a bot walk
     /// toward one enemy while shooting another, which is how it ends up in the
@@ -655,7 +621,7 @@ public sealed class BotObjective
     /// not acquired anything yet, and is what starts the hunt.
     /// </para>
     /// <para>
-    /// ⚠️ <b>No role split, and that is deliberate.</b> <see cref="BotRole"/>
+    /// <b>No role split, and that is deliberate.</b> <see cref="BotRole"/>
     /// divides a team into attack and defend, which means nothing when there is
     /// nothing to defend — a "defending" TDM bot is a bot told to guard empty
     /// ground. Both roles hunt.
@@ -674,7 +640,7 @@ public sealed class BotObjective
         }
         else
         {
-            // ⚠️ NearestEnemies is ordered, so the first live one is the nearest.
+            // NearestEnemies is ordered, so the first live one is the nearest.
             // It skips empty slots inside its own sweep, so this costs the same
             // whatever the population — see docs/ENV.md's extraction measurement.
             Span<int> nearest = stackalloc int[4];
@@ -690,7 +656,7 @@ public sealed class BotObjective
             }
         }
 
-        // ⚠️ Nobody to hunt is BotGoal.None, exactly as before. A bot alone on the
+        // Nobody to hunt is BotGoal.None, exactly as before. A bot alone on the
         // map should stand still rather than walk to where somebody used to be —
         // and this is the state every round starts in for one tick.
         if (foe < 0)
@@ -706,13 +672,13 @@ public sealed class BotObjective
 
         // The same band the generator's firing position uses, and for the same
         // reason: comfortably inside the weapon's reach rather than on the edge of
-        // it, where a target taking one step is out of range. ⚠️ The floor is the
+        // it, where a target taking one step is out of range. The floor is the
         // class's own minimum band — the line that stops this being the point-blank
         // standoff described above.
         spotMin = Math.Max(BotTargeting.ClassMinBand(playerClass), 1);
         spotMax = BotTargeting.ClassRange(playerClass) * BotConstants.SpotBand;
 
-        // ⚠️ Height is worth having here where it is not worth having against a
+        // Height is worth having here where it is not worth having against a
         // generator: a generator cannot shoot back. This is the one goal in the
         // cascade whose anchor is an opponent, so the class's own height
         // preference is exactly the right question to ask.
@@ -741,7 +707,7 @@ public sealed class BotObjective
         if (!generator.Exists)
             return false;
 
-        // ⚠️ A generator's origin is not its middle, and the middle is what range and
+        // A generator's origin is not its middle, and the middle is what range and
         // sight want to be measured to — the same correction the capture zones get.
         var box = Generators.BodyBox(in generator);
         wx = (box.Left + box.Right) / 2.0;
@@ -774,13 +740,13 @@ public sealed class BotObjective
         // naturally spreads bots across a multi-point map instead of everyone piling
         // onto the same one.
         //
-        // ⚠️ Every point is locked for the first 900 ticks of a KotH round and 1,800
-        // of an Arena one, during which this loop used to find nothing and leave the
-        // bot with no goal at all — a human walks out immediately to be standing on
-        // the point the moment it opens. So the nearest point is tracked regardless
-        // of lock state as a fallback, and used only once no unlocked one exists.
+        // Every point is locked for the first 900 ticks of a KotH round and 1,800
+        // of an Arena one; a bot should be standing on the point the moment it
+        // opens, the way a human walks out immediately. So the nearest point is
+        // tracked regardless of lock state as a fallback, and used only once no
+        // unlocked one exists.
         //
-        // ⚠️ A defender prefers a point its own team already holds — the same loop
+        // A defender prefers a point its own team already holds — the same loop
         // with everything that is NOT ours pushed 2,000px away, which is more than
         // any map is wide. Penalising the others rather than rewarding ours keeps
         // every distance >= 0, which is what lets -1 go on meaning "no point found"
@@ -819,15 +785,12 @@ public sealed class BotObjective
         if (target < 0)
             target = any;
 
-        // ⛔ DUAL KOTH IS WON BY HOLDING THE ENEMY'S HILL, and "nearest unlocked
-        // point" is always your own — so before this, every bot camped the hill
-        // that scored it nothing and neither team ever contested the other's.
-        // Measured 2026-09-01: zero decided matches on both dkoth maps at 5, 10,
-        // 20 and 40 minutes, hold clocks never advancing a single tick, and 34,200
-        // bot-ticks on each team's own hill against ZERO on the enemy's.
-        // docs/TRAPS-BOTS.md, "Dual King of the Hill is unwinnable by bots".
+        // DUAL KOTH IS WON BY HOLDING THE ENEMY'S HILL, and "nearest unlocked
+        // point" is always your own — so without this override an attacker never
+        // contests the enemy's hill at all. docs/TRAPS-BOTS.md, "Dual King of the
+        // Hill is unwinnable by bots".
         //
-        // ⚠️ THE ONE PLACE THIS FILE READS GameMode, and the reason is the one
+        // THE ONE PLACE THIS FILE READS GameMode, and the reason is the one
         // `gg2-rl` drew: entity identification works while the objective is a
         // property of the LAYOUT, and dkoth's is a property of the SCORING.
         // Two capture points is an identical entity signature to a two-point
@@ -835,13 +798,13 @@ public sealed class BotObjective
         // clock while the ENEMY's point is yours. No amount of looking at
         // entities can recover that, because the entities are the same.
         //
-        // ⚠️ Both entity-shaped alternatives were rejected for being right by
+        // Both entity-shaped alternatives were rejected for being right by
         // accident: "prefer a point we do not own" breaks single KotH, where
         // holding the hill IS the objective; and "chase whichever point is making
         // the enemy's clock run" has no signal in exactly the state these matches
         // sit in for ten minutes, where both clocks are stopped.
         //
-        // ⚠️ A DEFENDER still wants its own hill — losing it starts the enemy's
+        // A DEFENDER still wants its own hill — losing it starts the enemy's
         // clock — so this is the attacker's rule only, and the +2000 penalty above
         // already gives the defender the right answer.
         if (!defending
@@ -870,14 +833,14 @@ public sealed class BotObjective
     /// The middle of a point's capture zone.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The middle, not the origin.</b> A capture zone's origin is its top-left
+    /// <b>The middle, not the origin.</b> A capture zone's origin is its top-left
     /// corner, so aiming there asks the follower to stop on the exact boundary of the
     /// thing it is trying to stand in — and arrival is only accurate to
     /// <c>BOT_ARRIVE_TOL</c>. Measured in the reference on koth_valley: the bot
     /// climbed the whole four-jump chain, stopped 3px short of the zone's left edge,
     /// and captured nothing. The zone is 125px wide; its centre is not a near miss.
     /// <para>
-    /// ⚠️ <b>The zone is the only position this port has for a control point</b>, where
+    /// <b>The zone is the only position this port has for a control point</b>, where
     /// the reference has the point instance's own <c>x</c>/<c>y</c> as well and uses
     /// it to rank the nearest point before overriding it with the zone centre. Nothing
     /// stores a point's position here — <c>ControlPoints.Place</c> discards it once the
@@ -911,7 +874,7 @@ public sealed class BotObjective
     /// progress on it.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>PRESENCE is the signal that matters, not the capture meter.</b> Presence
+    /// <b>PRESENCE is the signal that matters, not the capture meter.</b> Presence
     /// is recomputed every step from the characters standing in the zone, so it is
     /// true on the frame an enemy steps inside — while the meter takes a second to
     /// become non-zero, and by the time it reads as a capture the point is a third
@@ -928,7 +891,7 @@ public sealed class BotObjective
     /// progress back for free.
     /// </para>
     /// <para>
-    /// ⚠️ A LOCKED point cannot be captured by anybody, so nothing about it is
+    /// A LOCKED point cannot be captured by anybody, so nothing about it is
     /// contested and a defender is better off where its own logic wants to be.
     /// </para>
     /// </remarks>

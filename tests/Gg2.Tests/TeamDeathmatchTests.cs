@@ -70,7 +70,7 @@ public sealed class TeamDeathmatchTests
     // --- the map ------------------------------------------------------------
 
     /// <summary>
-    /// ⚠️ Team Deathmatch is what a map with no objective <em>is</em>, not a
+    /// Team Deathmatch is what a map with no objective <em>is</em>, not a
     /// mode a map opts into.
     /// </summary>
     [Fact]
@@ -82,7 +82,7 @@ public sealed class TeamDeathmatchTests
     // --- the kill counters ---------------------------------------------------
 
     /// <summary>
-    /// ⚠️ A kill goes into the <em>capture</em> counters, which is why the mode
+    /// A kill goes into the <em>capture</em> counters, which is why the mode
     /// needs no score of its own.
     /// </summary>
     [Fact]
@@ -104,7 +104,7 @@ public sealed class TeamDeathmatchTests
     }
 
     /// <summary>
-    /// ⚠️ Three guards, and each of them excludes a case that really happens.
+    /// Three guards, and each of them excludes a case that really happens.
     /// </summary>
     [Theory]
     // A suicide scores nothing — `killer != victim`.
@@ -137,7 +137,7 @@ public sealed class TeamDeathmatchTests
     }
 
     /// <summary>
-    /// ⚠️ It reads the killer's <b>player</b>, not their character — so a trade
+    /// It reads the killer's <b>player</b>, not their character — so a trade
     /// in which both die still scores for the one who struck first.
     /// </summary>
     [Fact]
@@ -193,7 +193,7 @@ public sealed class TeamDeathmatchTests
     }
 
     /// <summary>
-    /// ⚠️ Reaching the kill limit decides the round on the <em>same</em> tick —
+    /// Reaching the kill limit decides the round on the <em>same</em> tick —
     /// the win condition is not in an <c>else</c>, unlike every other mode's.
     /// </summary>
     [Fact]
@@ -232,7 +232,7 @@ public sealed class TeamDeathmatchTests
     }
 
     /// <summary>
-    /// ⚠️ Both teams crossing the limit on one tick is a <b>draw</b>, not a win
+    /// Both teams crossing the limit on one tick is a <b>draw</b>, not a win
     /// for whoever triggered it — the three-way comparison runs whatever the
     /// trigger was.
     /// </summary>
@@ -265,7 +265,7 @@ public sealed class TeamDeathmatchTests
     }
 
     /// <summary>
-    /// ⚠️ Team Deathmatch is the one mode with no overtime at all: a capture
+    /// Team Deathmatch is the one mode with no overtime at all: a capture
     /// cannot be in progress, so there is nothing to hold a round open for.
     /// </summary>
     [Fact]
@@ -302,7 +302,7 @@ public sealed class TeamDeathmatchTests
     }
 
     /// <summary>
-    /// ⚠️ The guard is in <c>dealDamage</c>, so a hit still does everything
+    /// The guard is in <c>dealDamage</c>, so a hit still does everything
     /// <em>around</em> the hit points — the reference's own
     /// <c>damageCharacter</c> resets <c>timeUnscathed</c> on the line after.
     /// </summary>
@@ -321,7 +321,7 @@ public sealed class TeamDeathmatchTests
 
         Assert.Equal(hp, victim.Hp);
 
-        // ⚠️ Blocked damage accumulates NOTHING on either side — `docs/ENV.md`'s
+        // Blocked damage accumulates NOTHING on either side — `docs/ENV.md`'s
         // rule, and deliberately not the same rule as the line below it. The
         // reference resets `timeUnscathed` on a hit that did nothing; a reward
         // signal must not count an amount that never landed.
@@ -334,7 +334,7 @@ public sealed class TeamDeathmatchTests
     }
 
     /// <summary>
-    /// ⚠️ It really is spent at 0.2 a tick, so the configured <em>fifth</em> of
+    /// It really is spent at 0.2 a tick, so the configured <em>fifth</em> of
     /// the ticks buys the whole duration back.
     /// </summary>
     [Fact]
@@ -351,13 +351,13 @@ public sealed class TeamDeathmatchTests
 
         MatchSimulation.Tick(world, ref state, []);
 
-        // ⚠️ Exactly zero, not merely non-positive: dealDamage's guard is an
+        // Exactly zero, not merely non-positive: dealDamage's guard is an
         // exact `!= 0` and only End Step's clamp makes it safe.
         Assert.Equal(0, state.Characters[1].DeathmatchInvulnerable);
     }
 
     /// <summary>
-    /// ⚠️ Walking spends it five times as fast, and the rate is never lowered
+    /// Walking spends it five times as fast, and the rate is never lowered
     /// again — one step ends the slow decay for that whole life.
     /// </summary>
     [Fact]
@@ -383,7 +383,7 @@ public sealed class TeamDeathmatchTests
     }
 
     /// <summary>
-    /// ⚠️ Jumping raises the rate too, and it is a <em>separate</em> line from
+    /// Jumping raises the rate too, and it is a <em>separate</em> line from
     /// the walking one — a character that jumps straight up without pressing
     /// left or right never sets <c>controlling</c>.
     /// </summary>
@@ -412,7 +412,7 @@ public sealed class TeamDeathmatchTests
     }
 
     /// <summary>
-    /// ⚠️ Pulling the trigger ends protection outright — and it is the
+    /// Pulling the trigger ends protection outright — and it is the
     /// <em>key</em> that does it, not the shot.
     /// </summary>
     [Fact]
@@ -444,7 +444,7 @@ public sealed class TeamDeathmatchTests
     }
 
     /// <summary>
-    /// ⚠️ Dying <em>while still protected</em> respawns you next tick with what
+    /// Dying <em>while still protected</em> respawns you next tick with what
     /// was left, so killing somebody through their spawn bubble buys nothing.
     /// </summary>
     [Fact]
@@ -499,7 +499,7 @@ public sealed class TeamDeathmatchTests
     }
 
     /// <summary>
-    /// ⚠️ The unprotected arm <em>writes</em> the bypass rather than leaving it
+    /// The unprotected arm <em>writes</em> the bypass rather than leaving it
     /// — <c>player.deathmatch_respawn_bypass = 0</c> — so protection cannot be
     /// hoarded across a later, ordinary death.
     /// </summary>
@@ -534,7 +534,7 @@ public sealed class TeamDeathmatchTests
     /// the invulnerability at the head of a <c>FULL_UPDATE</c>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The invulnerability field <b>leads the message</b>, ahead of the
+    /// The invulnerability field <b>leads the message</b>, ahead of the
     /// player count, so it comes out of the objective lookup before anything
     /// else is written — see <c>StateUpdateWriter.Write</c>.
     /// </remarks>

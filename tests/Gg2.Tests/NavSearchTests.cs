@@ -31,7 +31,7 @@ public sealed class NavSearchTests
     /// Builds a graph from node and edge rows.
     /// </summary>
     /// <remarks>
-    /// ⚠️ The edges are sorted by from-node first, because the edge index assumes
+    /// The edges are sorted by from-node first, because the edge index assumes
     /// it and the cache guarantees it — a fixture that forgot would silently
     /// give a node a short neighbour list and every assertion here would be
     /// about the wrong graph.
@@ -51,7 +51,7 @@ public sealed class NavSearchTests
     /// Every edge costs at least the straight line it covers.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The property the heuristic's admissibility rests on, asserted about
+    /// <b>The property the heuristic's admissibility rests on, asserted about
     /// the fixtures rather than assumed.</b> <c>navFindPath.gml</c>: "the
     /// heuristic is straight-line distance between surface midpoints in mask
     /// cells; walk cost is also measured in cells, so the heuristic never
@@ -137,14 +137,13 @@ public sealed class NavSearchTests
     /// A closed node is re-opened when a cheaper route to it turns up.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>This is what makes the search optimal rather than merely fast.</b>
-    /// Skipping an already-closed neighbour — which the reference used to do — is
-    /// only sound when the heuristic is <em>consistent</em>, which is strictly
-    /// stronger than the admissibility straight-line distance gives. The
-    /// reference measured the difference on honest costs: the ctf_truefort blue
-    /// leg went from 68 nodes to 60 when the re-open went in.
+    /// <b>This is what makes the search optimal rather than merely fast.</b>
+    /// Skipping an already-closed neighbour is only sound when the heuristic is
+    /// <em>consistent</em>, which is strictly stronger than the admissibility
+    /// straight-line distance gives: on honest costs the re-open shortens the
+    /// ctf_truefort blue leg from 68 nodes to 60.
     /// <para>
-    /// ⚠️ <b>The fixture has to force the re-open to actually fire, and the first
+    /// <b>The fixture has to force the re-open to actually fire, and the first
     /// draft of this test did not.</b> It is not enough that a cheaper route
     /// exists — it has to arrive at a node that is <em>already closed</em>, which
     /// needs three things at once: N reached expensively but popped early
@@ -170,7 +169,7 @@ public sealed class NavSearchTests
     [Fact]
     public void AClosedNodeIsNotReopenedAndTheRouteIsTheWorseOne()
     {
-        // ⚠️ `admissible: false` on purpose, and it is the point of the fixture.
+        // `admissible: false` on purpose, and it is the point of the fixture.
         // A heuristic that never overestimates is not enough to make skipping a
         // closed node unsound — that needs *consistency*, which is strictly
         // stronger — and the cheapest way to construct an inconsistent one is a
@@ -199,17 +198,16 @@ public sealed class NavSearchTests
 
         Assert.True(search.Find(0, 3, new NavQuery(Team.Red), path));
 
-        // ⛔ [0, 2, 1, 3] costs 102 and is the OPTIMAL route. This search returns
+        // [0, 2, 1, 3] costs 102 and is the OPTIMAL route. This search returns
         // [0, 1, 3], which costs 140 — 37% worse — and that is the deliberate
         // trade, not a bug. N is closed at cost 40 before M re-prices it at 2,
         // and a closed node is never revisited.
         //
-        // ⚠️ This fixture used to assert the optimal answer and gate the re-open
-        // that produced it. It is kept, inverted, because the cost of the trade
-        // is worth having written down somewhere it cannot rot: an adversarial
-        // graph is where the loss is largest, and on the 25 shipped graphs the
-        // same change costs 0.6% of route cost on average. NavConstants.
-        // SearchWeight carries the whole measurement and the reason.
+        // The cost of the trade is worth having written down somewhere it
+        // cannot rot: an adversarial graph is where the loss is largest, and on
+        // the 25 shipped graphs the same change costs 0.6% of route cost on
+        // average. NavConstants.SearchWeight carries the whole measurement and
+        // the reason.
         Assert.Equal([0, 1, 3], path);
     }
 
@@ -218,7 +216,7 @@ public sealed class NavSearchTests
     /// </summary>
     /// <remarks>
     /// The property the whole nav layer is built on: one edge set serves every
-    /// bot, and who is asking is applied per query. ⚠️ <b>And carrying the intel
+    /// bot, and who is asking is applied per query. <b>And carrying the intel
     /// closes your own team's gate</b>, which is why a CTF return leg is a
     /// different query from the outbound one.
     /// </remarks>
@@ -240,7 +238,7 @@ public sealed class NavSearchTests
         Assert.Equal([0, 1, 2], Route(graph, 0, 2, new NavQuery(Team.Red)));
         Assert.Equal([0, 3, 2], Route(graph, 0, 2, new NavQuery(Team.Blue)));
 
-        // ⚠️ Red carrying the intel is refused its own gate and takes blue's
+        // Red carrying the intel is refused its own gate and takes blue's
         // route.
         Assert.Equal([0, 3, 2], Route(graph, 0, 2, new NavQuery(Team.Red, HasIntel: true)));
     }
@@ -250,7 +248,7 @@ public sealed class NavSearchTests
     /// refusing is the default.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The default matters more than the flag.</b> "The failure mode of the
+    /// <b>The default matters more than the flag.</b> "The failure mode of the
     /// opposite default is a Heavy routed over an arc it physically cannot fly",
     /// and a caller that has not been taught about these — a hand-issued query, a
     /// test — gets the conservative answer.
@@ -287,7 +285,7 @@ public sealed class NavSearchTests
     /// is strictly greater.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Not <c>&gt;=</c>: the damage is dealt before the bot lands, so equal
+    /// Not <c>&gt;=</c>: the damage is dealt before the bot lands, so equal
     /// health is a bot that dies in mid-air on an edge it was told to fly. There
     /// is no margin beyond that on purpose — "a rocket jump taken at 31hp is a
     /// real thing a player does, and the point of these edges is a bot that
@@ -305,7 +303,7 @@ public sealed class NavSearchTests
     /// A blacklisted edge is refused, and the route goes round it.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The anti-thrash half of the follower.</b> Without it a bot that
+    /// <b>The anti-thrash half of the follower.</b> Without it a bot that
     /// wedges in a doorway re-plans, is handed the same route it just failed, and
     /// wedges again for ever. It is a <em>set</em> rather than a cost multiplier
     /// because a multiplier would break the heuristic's admissibility.
@@ -322,7 +320,7 @@ public sealed class NavSearchTests
         var blocked = new HashSet<long> { NavGraph.EdgeKey(0, 1) };
         Assert.Equal([0, 2, 1], Route(graph, 0, 1, new NavQuery(Team.Red), blocked));
 
-        // ⚠️ Directed: blacklisting 0->1 says nothing about 1->0. The key packs
+        // Directed: blacklisting 0->1 says nothing about 1->0. The key packs
         // the endpoints in order, and a follower that failed one direction has
         // learnt nothing about the other.
         Assert.NotEqual(NavGraph.EdgeKey(0, 1), NavGraph.EdgeKey(1, 0));
@@ -333,8 +331,8 @@ public sealed class NavSearchTests
     /// route.
     /// </summary>
     /// <remarks>
-    /// The rate is <c>1 + BOT_OCCUPANCY_COST × count</c>. ⚠️ <b>A per-edge random
-    /// jitter is not a substitute and was deleted from the reference</b>: it is
+    /// The rate is <c>1 + BOT_OCCUPANCY_COST × count</c>. <b>A per-edge random
+    /// jitter is not a substitute</b>: it is
     /// mean-reverting, so over a long route every candidate inflates by about the
     /// same average and the ordering barely moves — on ctf_truefort all eight
     /// bots got the identical 68-node route. Occupancy works because it is
@@ -394,7 +392,7 @@ public sealed class NavSearchTests
     /// </summary>
     /// <remarks>
     /// The scratch arrays are sized to the graph and cleared per search rather
-    /// than reallocated, which is the whole reason this is an instance. ⚠️ A
+    /// than reallocated, which is the whole reason this is an instance. A
     /// missing clear does not throw — it leaks the previous frontier into the
     /// next answer, and the symptom is a route that was correct the first time a
     /// bot asked and wrong afterwards.

@@ -161,7 +161,7 @@ public struct CharacterState
     /// <c>yprevious</c>: the y this character finished the previous End Step at.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Written by <c>End Step</c> and read only by the dropdown-platform
+    /// <b>Written by <c>End Step</c> and read only by the dropdown-platform
     /// push-out</b>, which needs to know whether the character was already
     /// inside a platform before this tick's move. <c>End Step.xml:29-30</c>
     /// assigns <c>xprevious</c> and <c>yprevious</c> explicitly, straight after
@@ -244,14 +244,14 @@ public struct CharacterState
     /// cancel, and neither is redundant: <b>moving changes the rate and not the
     /// amount</b>.
     /// <para>
-    /// ⚠️ <b>The guard on it is an exact <c>!= 0</c></b>
+    /// <b>The guard on it is an exact <c>!= 0</c></b>
     /// (<c>dealDamage.gml:6</c>), which is safe only because End Step clamps it
     /// to exactly 0 the moment it goes non-positive
     /// (<c>Character.events/End Step.xml:134</c>). Without that clamp a
     /// character would be invulnerable for ever on a negative residue.
     /// </para>
     /// <para>
-    /// ⚠️ It also decides <em>how</em> its owner respawns — see
+    /// It also decides <em>how</em> its owner respawns — see
     /// <see cref="PlayerState.DeathmatchRespawnBypass"/>.
     /// </para>
     /// </remarks>
@@ -263,7 +263,7 @@ public struct CharacterState
     /// it is not a key in the input byte, which is why
     /// <c>serverToggleZoom.gml</c> exists as its own script for bots to call.
     /// <para>
-    /// ⚠️ <b>It is not serialised.</b> A client infers it from the charge byte
+    /// <b>It is not serialised.</b> A client infers it from the charge byte
     /// instead: <c>Character.events/User Event 13.xml:42</c> is
     /// <c>if(currentWeapon.t) zoomed = true; // Quick hack</c>. So a sniper who
     /// scopes and has not charged a single tick reads as unzoomed on every other
@@ -271,7 +271,7 @@ public struct CharacterState
     /// in step.
     /// </para>
     /// <para>
-    /// ⚠️ <b>It changes the physics</b>, which is the part that is easy to
+    /// <b>It changes the physics</b>, which is the part that is easy to
     /// miss: see <see cref="RunPower"/> and <see cref="JumpStrength"/>.
     /// </para>
     /// </remarks>
@@ -286,13 +286,13 @@ public struct CharacterState
     /// and <c>toggleZoom.gml</c> is the only reassignment in the game: a scoped
     /// sniper walks at <b>0.6</b> whatever their class value was.
     /// <para>
-    /// ⚠️ <b><c>basemaxspeed</c> is NOT recomputed.</b>
+    /// <b><c>basemaxspeed</c> is NOT recomputed.</b>
     /// <c>Create.xml:159</c> derives it from <c>baseRunPower</c> once and
     /// <c>toggleZoom</c> does not touch it, which is why
     /// <see cref="ClassStats.BaseMaxSpeed"/> stays on the class and this does
     /// not.
     /// <para>
-    /// ⚠️ <b>And it is an acceleration guard, not a speed cap</b> — easy to
+    /// <b>And it is an acceleration guard, not a speed cap</b> — easy to
     /// read backwards. A character's terminal speed comes from the friction
     /// balance, so a scoped sniper really does settle two thirds as fast
     /// (measured: 3.4 against 5.1). What not recomputing it changes is whether
@@ -302,7 +302,7 @@ public struct CharacterState
     /// </para>
     /// </para>
     /// <para>
-    /// ⚠️ <b>0.6 is one of the five decimal literals GM8 parses a ULP above
+    /// <b>0.6 is one of the five decimal literals GM8 parses a ULP above
     /// the IEEE nearest</b>, so the scoped value comes from
     /// <see cref="Gml.Gravity"/> and never from a C# <c>0.6</c>.
     /// </para>
@@ -323,7 +323,7 @@ public struct CharacterState
     /// GM8's instance id, near enough: which character was created first.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Slot order is NOT creation order, and the difference is
+    /// <b>Slot order is NOT creation order, and the difference is
     /// observable.</b> A slot whose player has died and respawned holds a
     /// character <em>younger</em> than the ones in higher slots that have not —
     /// so a loop walking slots 0..7 visits them in an order GM8 would not.
@@ -359,7 +359,7 @@ public struct CharacterState
     /// right (:270). So standing still keeps the protection five times as long
     /// as walking out of the spawn does.
     /// <para>
-    /// ⚠️ <b>It is never lowered again.</b> Nothing writes 0.2 outside the
+    /// <b>It is never lowered again.</b> Nothing writes 0.2 outside the
     /// Create event, so one step ends the slow decay for that whole life.
     /// </para>
     /// </remarks>
@@ -494,7 +494,7 @@ public struct CharacterState
     /// re-allow movement if there is another StabAnim for the same player"
     /// guard amounts to.
     /// <para>
-    /// ⚠️ <b>Its length is decided by a drawing variable</b>, which is why it
+    /// <b>Its length is decided by a drawing variable</b>, which is why it
     /// is a constant here rather than something derivable:
     /// <c>StabAnim.events/Step.xml</c> ends the animation on
     /// <c>image_index &gt;= 32</c> and then fades an <c>alpha</c> out at 0.1 a
@@ -519,7 +519,7 @@ public struct CharacterState
     /// things polling whether the character is on a medcabinet". Exactly one
     /// thing polls it: <c>serverBuildSentry.gml</c> refuses to build on one.
     /// <para>
-    /// ⚠️ <b>It is a tick behind by construction.</b> A build is a client
+    /// <b>It is a tick behind by construction.</b> A build is a client
     /// command, processed outside the tick, so it reads what the previous End
     /// Step left — which is the reference's own behaviour and not a shortcut
     /// here.
@@ -537,7 +537,7 @@ public struct CharacterState
     /// <remarks>
     /// A plain literal rather than a <see cref="Gml"/> constant — 0.05 is not
     /// one of the five decimal literals GM8 parses a ULP above the IEEE
-    /// nearest. ⚠️ Twenty subtractions of it from 1 leave <b>exactly</b> 0
+    /// nearest. Twenty subtractions of it from 1 leave <b>exactly</b> 0
     /// here rather than a residue, because the reference clamps with
     /// <c>max(cloakAlpha - 0.05, 0)</c> and not by comparison.
     /// </remarks>
@@ -587,13 +587,13 @@ public struct CharacterState
     /// Set by the taunt key on a fresh press
     /// (<c>Character.events/Begin Step.xml:102-107</c>) and cleared by
     /// <see cref="TauntIndex"/> reaching the end of the class's taunt sprite in
-    /// End Step. ⚠️ <b>It is observable simulation, not decoration</b>: it
+    /// End Step. <b>It is observable simulation, not decoration</b>: it
     /// suppresses acceleration, the attack, the right click and the cloak, and
     /// the stock client re-derives all of that from the same key bit — so a
     /// server that ignored the taunt key would keep walking a character the
     /// client has already stopped.
     /// <para>
-    /// ⚠️ <b>The jump is the exception, and only on the tick the taunt
+    /// <b>The jump is the exception, and only on the tick the taunt
     /// starts.</b> GML evaluates <c>if(!taunting and !omnomnomnom)</c> once, at
     /// the top of the block; the taunt is set inside it and the jump is tested
     /// further down the same block, so a press of taunt-and-jump together jumps.
@@ -614,7 +614,7 @@ public struct CharacterState
     /// duration is the class's taunt sprite frame count, and nothing else:
     /// <see cref="ClassStats.TauntFrames"/>.
     /// <para>
-    /// ⚠️ <b>Reset by the key even when the taunt does not start.</b> The
+    /// <b>Reset by the key even when the taunt does not start.</b> The
     /// reference sets <c>tauntindex = 0</c> outside the <c>!invisible and
     /// cloakAlpha == 1</c> test, so a cloaked spy pressing taunt rewinds the
     /// counter without taunting.
@@ -626,7 +626,7 @@ public struct CharacterState
     /// The heavy is eating: <c>omnomnomnom</c>, from <c>serverEatSandvich.gml</c>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>It suppresses movement, not just the attack.</b>
+    /// <b>It suppresses movement, not just the attack.</b>
     /// <c>Character.events/Begin Step.xml:237</c> wraps the entire movement
     /// block in <c>if(!taunting &amp;&amp; !omnomnomnom)</c>, so an eating heavy
     /// cannot accelerate left or right at all — and :86, :91 and :124 take the
@@ -640,7 +640,7 @@ public struct CharacterState
     /// eating stops.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A real, and the eat's whole duration lives in it.</b>
+    /// <b>A real, and the eat's whole duration lives in it.</b>
     /// <c>End Step.xml:85</c> adds <b>0.25</b> a tick and stops at
     /// <c>omnomnomnomend</c>, which <c>serverEatSandvich</c> sets to <b>32</b> —
     /// so eating lasts <b>128 ticks</b>, a little over four seconds, and it is
@@ -658,13 +658,13 @@ public struct CharacterState
     /// <c>alarm[6]</c>: ticks until <see cref="CanEat"/> comes back.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>45 seconds, not the 10 the reference's own comment claims.</b>
+    /// <b>45 seconds, not the 10 the reference's own comment claims.</b>
     /// <c>Create.xml:125</c> sets <c>eatCooldown = 1350</c> and the client's
     /// <c>OMNOMNOMNOM</c> case is commented "10 second cooldown" beside the line
     /// that uses the variable. The number is the specification; the comment is
     /// wrong in the reference and copying it would import the bug.
     /// <para>
-    /// ⚠️ <b>Re-armed every tick of the eat while hurt</b>, not once at the
+    /// <b>Re-armed every tick of the eat while hurt</b>, not once at the
     /// start — <c>End Step.xml:87-91</c>, whose own comment explains why: "this
     /// should prevent the 'ate and got hit but didn't refresh cooldown' bug". So
     /// a heavy damaged on the last tick of eating pays the full 45 seconds from
@@ -677,7 +677,7 @@ public struct CharacterState
     /// <c>xscale</c>: the facing captured when this heavy started eating.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Eating freezes which way you face, and that is not only cosmetic
+    /// <b>Eating freezes which way you face, and that is not only cosmetic
     /// here.</b> <c>End Step.xml:86</c> writes <c>image_xscale = xscale</c> on
     /// every tick of the eat, <em>after</em> the line that derives the facing
     /// from the aim — so an eating heavy keeps pointing where they were when
@@ -698,7 +698,7 @@ public struct CharacterState
     /// (<c>Character.events/Create.xml:113</c>).
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Written as the product, not as 0.3.</b> GM8 holds <c>3*0.1</c> and
+    /// <b>Written as the product, not as 0.3.</b> GM8 holds <c>3*0.1</c> and
     /// the literal <c>0.3</c> as different doubles, and <see cref="TauntIndex"/>
     /// accumulates this thirty to sixty times before being compared against an
     /// integer frame count — so which side of the comparison the last tick falls
@@ -731,7 +731,7 @@ public struct CharacterState
     /// <c>eatCooldown = 1350</c> — 45 seconds. <c>Create.xml:125</c>.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The reference's own comment beside the client's use of it says "10
+    /// <b>The reference's own comment beside the client's use of it says "10
     /// second cooldown" and is wrong.</b> 1350 ticks at 30 Hz is 45 seconds. The
     /// value is the specification.
     /// </remarks>
@@ -758,7 +758,7 @@ public struct CharacterState
     /// <c>global.mapchanging</c>, mirrored onto every character once a tick.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A copy of a world flag, and the only one on this struct.</b>
+    /// <b>A copy of a world flag, and the only one on this struct.</b>
     /// <c>charSetSolids</c> reads a global, and <see cref="Filter"/> has to
     /// answer for it — but the whole of <see cref="CharacterPhysics"/> takes a
     /// <c>ref CharacterState</c> and has no <see cref="WorldState"/> to ask.
@@ -812,11 +812,9 @@ public struct CharacterState
     /// and written by the same line.
     /// </summary>
     /// <remarks>
-    /// <c>global.setupTimer &gt; 0</c>. It had been permanently false since
-    /// phase 3 — the port had no setup timer to drive it — so every
-    /// <c>ControlPointSetupGate</c> on an Invasion or attack/defend map was open
-    /// from the first tick. Nothing noticed, because no fixture is on either
-    /// kind of map.
+    /// <c>global.setupTimer &gt; 0</c>. No fixture exercises an Invasion or
+    /// attack/defend map, so the <c>ControlPointSetupGate</c> path here is
+    /// unverified against either.
     /// </remarks>
     public bool SetupGatesClosed;
 
@@ -863,7 +861,7 @@ public struct CharacterState
     /// position is put on it.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>A zeroed <see cref="CharacterState"/> is not a valid character, and
+    /// <b>A zeroed <see cref="CharacterState"/> is not a valid character, and
     /// the ways it is invalid are all silent.</b> Six of these fields name a
     /// roster slot and their "nobody" is <see cref="Nobody"/> — <b>255</b> — so
     /// a default-constructed character claims that slot 0 last hurt it, assisted
@@ -873,15 +871,14 @@ public struct CharacterState
     /// <para>
     /// It exists so that the two places that make a character from nothing —
     /// <see cref="WorldState.Spawn"/> and the parity harness's anchor — cannot
-    /// drift apart. They did: the anchor built a bare <c>new CharacterState()</c>
-    /// and every character it created carried slot 0 in all six fields, which
-    /// surfaced as a <c>PLAYER_DEATH</c> naming an assistant the reference said
-    /// was nobody.
+    /// drift apart: a bare <c>new CharacterState()</c> would carry slot 0 in
+    /// all six fields, surfacing as a <c>PLAYER_DEATH</c> naming an assistant
+    /// the reference said was nobody.
     /// </para>
     /// </remarks>
     /// <remarks>
-    /// ⚠️ <b><see cref="RunPower"/> and <see cref="JumpStrength"/> joined this
-    /// list when the sniper's scope landed.</b> They are per-character in the
+    /// <b><see cref="RunPower"/> and <see cref="JumpStrength"/> are on this
+    /// list too.</b> They are per-character in the
     /// reference and a zeroed one stands still and never jumps, which is silent
     /// rather than loud — it looks like a physics bug, not a missing field.
     /// </remarks>

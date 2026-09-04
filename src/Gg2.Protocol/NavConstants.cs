@@ -86,38 +86,35 @@ public static class NavConstants
     /// How much A\* inflates its heuristic. 1.0 is an ordinary optimal search.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>This is a deliberate quality-for-speed trade and it has no reference
-    /// behind it</b> — <c>navFindPath.gml</c> searches at 1.0 and re-opens closed
-    /// nodes. CLAUDE.md puts the bot layer outside the "the reference is the
-    /// specification" rule, and the user asked for the speed.
+    /// <b>A deliberate quality-for-speed trade with no reference behind it</b> —
+    /// <c>navFindPath.gml</c> searches at 1.0 and re-opens closed nodes. CLAUDE.md
+    /// puts the bot layer outside the "the reference is the specification" rule.
     /// <para>
-    /// <b>Measured 2026-09-02</b>, twelve bots on <c>ctf_truefort</c>, against 1.0
-    /// with re-opening: the bots' whole <c>Poll</c> costs <b>−17.3%</b> and the
-    /// tick <b>−10.1%</b>, for graph routes <b>4.0% more expensive on average</b>
-    /// (worst seen 1.71×). ✅ <b>Every route that existed is still found</b> — the
-    /// found-counts over all 25 shipped graphs are identical, 19,468 routes.
+    /// Against 1.0 with re-opening, twelve bots on <c>ctf_truefort</c>: the bots'
+    /// whole <c>Poll</c> costs 17.3% less and the tick 10.1% less, for graph
+    /// routes 4.0% more expensive on average (worst seen 1.71x). Every route that
+    /// existed is still found — the found-counts over all 25 shipped graphs are
+    /// identical, 19,468 routes.
     /// </para>
     /// <para>
-    /// ⛔ <b>The statistic that chose 1.3 is the SUITE TOTAL, because every
-    /// per-leg number is noise.</b> Summed walking time over
-    /// <c>ScenarioSuiteTests</c>' fourteen legs: <b>6,259 ticks at 1.0 and 6,142
-    /// at 1.3</b>, with 6,261 / 6,234 / 6,255 / 6,306 at 1.0-skip / 1.05 / 1.1 /
-    /// 1.2 — a ±2% band that does not move in one direction — and <b>no leg fails
-    /// at any weight tried</b>. At <b>1.5 it is 6,416, +2.5%</b>, and that is
-    /// where it starts to cost.
+    /// <b>The statistic that chose 1.3 is the suite total, because every per-leg
+    /// number is noise.</b> Summed walking time over <c>ScenarioSuiteTests</c>'
+    /// fourteen legs: 6,259 ticks at 1.0 and 6,142 at 1.3, with 6,261 / 6,234 /
+    /// 6,255 / 6,306 at 1.0-skip / 1.05 / 1.1 / 1.2 — a ±2% band that does not
+    /// move in one direction — and no leg fails at any weight tried. At 1.5 it is
+    /// 6,416, +2.5%, and that is where it starts to cost.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Two single-leg pins disagree at 1.3 and both are inside that band</b>:
-    /// <c>BotObjectiveTests</c>' intel run got 6% FASTER (1,697 → 1,598) and
-    /// <c>PathFollowerFixtureTests</c>' leg 14% slower (1,572 → 1,786). **Do not
-    /// tune on either.** ⛔ Nor on the suite's rocket-jump count: it is 6 at 1.0,
+    /// Two single-leg pins disagree at 1.3 and both are inside that band:
+    /// <c>BotObjectiveTests</c>' intel run got 6% faster (1,697 → 1,598) and
+    /// <c>PathFollowerFixtureTests</c>' leg 14% slower (1,572 → 1,786). <b>Do not
+    /// tune on either.</b> Nor on the suite's rocket-jump count: it is 6 at 1.0,
     /// 7 at 1.2, 7 at 1.25, 6 again at 1.3, 7 at 1.35, then 9 at 1.4 — it wobbles
     /// inside a band before it steps, so a weight picked because it landed on 6
-    /// is fitted to noise. What the step at 1.4 is good for is staying clear of
-    /// it.
+    /// is fitted to noise.
     /// </para>
     /// <para>
-    /// ⚠️ <b>What would show this is wrong</b>: bots visibly detouring, or taking
+    /// <b>What would show this is wrong</b>: bots visibly detouring, or taking
     /// rocket jumps they do not need — the arcs cost hp, and an inflated heuristic
     /// commits to greedy-looking routes earlier. Lower it before looking anywhere
     /// else.
@@ -129,21 +126,15 @@ public static class NavConstants
     public const int RjPenalty = 10;   // NAV_RJ_PENALTY
     public const int RjSkipHops = 1;   // NAV_RJ_SKIP_HOPS
 
-    // ⚠️ The sticky-jump family, added to the fork by `gg2-nav-gen` on
-    // 2026-08-28. These are the values the FORK DECLARES, carried faithfully
-    // because ConstantsTests compares them against Constants.xml — they are not
-    // this port's opinion of them.
+    // The sticky-jump family: values the fork declares, carried faithfully
+    // because ConstantsTests compares them against Constants.xml — not this
+    // port's opinion of them.
     //
-    // ⚠️ SjImpulse WAS 10 UNTIL THIS PORT MEASURED IT. The generator derived it,
-    // said so, and asked for the launch velocity to be measured before the edges
-    // were trusted to a bot; MineJumpTests flew the manoeuvre here and read
-    // -14.460 px/tick, an apex of 193.6 px where 10 implies 18.3 and ~310. The
-    // fork was corrected to 6.16 the same day — 14.46 minus the 8.3 jump — and
-    // SjMaxTicks came down 130 to 100 with it.
-    //
-    // ⚠️ So this value now AGREES with the measurement, and that agreement is
-    // young. `StickyModel.Launch` is what the follower actually flies on, and it
-    // is the measured post-tick velocity rather than anything derived from this.
+    // SjImpulse is measured, not derived: MineJumpTests flies the manoeuvre and
+    // reads -14.460 px/tick, an apex of 193.6 px, which is 14.46 minus the 8.3
+    // jump. `StickyModel.Launch` is what the follower actually flies on, and it
+    // is that measured post-tick velocity rather than anything derived from
+    // this constant.
     public const double SjImpulse = 6.16;   // NAV_SJ_IMPULSE
     public const int SjDamage = 25;   // NAV_SJ_DAMAGE
     public const int SjMaxTicks = 100;   // NAV_SJ_MAX_TICKS

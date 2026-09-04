@@ -8,7 +8,7 @@ namespace Gg2.Server;
 /// </summary>
 /// <remarks>
 /// <para>
-/// ⛔ <b>This is the one surface in the project that is deliberately reachable
+/// <b>This is the one surface in the project that is deliberately reachable
 /// from the network.</b> The control port binds <see cref="IPAddress.Loopback"/>
 /// so that no configuration can expose it; this one takes a bind address
 /// precisely because "manage the server from somewhere else" is what it is for.
@@ -17,7 +17,7 @@ namespace Gg2.Server;
 /// <see cref="WebAdminServer"/>, and none of it is optional.
 /// </para>
 /// <para>
-/// ⚠️ <b><see cref="Password"/> empty does not mean "no password".</b> It means
+/// <b><see cref="Password"/> empty does not mean "no password".</b> It means
 /// "generate one and print it at startup". There is no way to configure an
 /// unauthenticated panel, which is a property of
 /// <see cref="WebAdminServer.Start"/> rather than of a check somebody can
@@ -27,7 +27,7 @@ namespace Gg2.Server;
 /// <param name="Enabled">Whether to host the panel at all.</param>
 /// <param name="Port">The port to bind. 0 asks the OS for a free one.</param>
 /// <param name="Bind">
-/// The address to bind. ⚠️ <b>Defaults to loopback</b>, so <c>--web 8191</c> on
+/// The address to bind. <b>Defaults to loopback</b>, so <c>--web 8191</c> on
 /// its own is not remotely reachable and turning it into a remote panel is a
 /// second, explicit decision (<c>--web-bind 0.0.0.0</c>).
 /// </param>
@@ -36,7 +36,7 @@ namespace Gg2.Server;
 /// </param>
 /// <param name="CertificatePath">
 /// A PKCS#12 (<c>.pfx</c>) certificate to serve HTTPS with, or empty for plain
-/// HTTP. ⚠️ <b>A password crosses the network on every login</b>, so a non-loopback
+/// HTTP. <b>A password crosses the network on every login</b>, so a non-loopback
 /// bind without one is warned about, loudly, every time the server starts.
 /// </param>
 /// <param name="CertificatePassword">The certificate's password, if it has one.</param>
@@ -63,7 +63,7 @@ public readonly record struct WebAdminOptions(
     /// give you.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Use this, never <c>new WebAdminOptions()</c>.</b> A zeroed one has a
+    /// <b>Use this, never <c>new WebAdminOptions()</c>.</b> A zeroed one has a
     /// null <see cref="Bind"/>, which throws inside
     /// <see cref="IPAddress.Parse(string)"/> at startup rather than at
     /// construction — the same trap <c>BotPopulationOptions.Default</c> exists

@@ -10,40 +10,34 @@ namespace Gg2.Tests;
 /// The recording that gives a sentry self-destruct a <b>broadcast cause</b>.
 /// </summary>
 /// <remarks>
-/// <b>Recorded 2026-08-28: six engineers, three a side on <c>ctf_truefort</c></b>,
+/// <b>Six engineers, three a side on <c>ctf_truefort</c></b>,
 /// spawn-anchored by the map-reload recipe, with two causes provoked deliberately
 /// over the bridge — an engineer's <b>team</b> switched and another's <b>class</b>
 /// switched, each with a sentry standing. Twelve sentries built, eight destroyed.
-/// <para>
-/// ⚠️ <b>Why it was recorded.</b> <c>closedsentrykill</c> holds two self-destructs
-/// whose cause is not on the wire at all — "a full dump of every non-INPUTSTATE,
-/// non-FULL_UPDATE message in t488-500 contains exactly two entries, the
-/// BUILD_SENTRY and the DESTROY_SENTRY" — so five sessions of inference could not
-/// settle what fired. This recording contains the causes.
-/// </para>
+/// <c>closedsentrykill</c> holds two self-destructs whose cause is not on the
+/// wire at all — a full dump of every non-INPUTSTATE, non-FULL_UPDATE message in
+/// t488-500 contains exactly the BUILD_SENTRY and the DESTROY_SENTRY — so this
+/// recording exists to contain the causes.
 /// <para>
 /// <b>The eight destructions are of four kinds</b>, and the port's score on them
 /// is the point of this file:
 /// <list type="bullet">
-/// <item><b>t1243, after a PLAYER_CHANGETEAM at t1242</b> — ✅ reproduced.</item>
-/// <item><b>t2007, after a PLAYER_CHANGECLASS at t2006</b> — ✅ reproduced.</item>
-/// <item><b>t2366, after a BALANCE switch at t2365</b> — ✅ reproduced, but only
+/// <item><b>t1243, after a PLAYER_CHANGETEAM at t1242</b> — reproduced.</item>
+/// <item><b>t2007, after a PLAYER_CHANGECLASS at t2006</b> — reproduced.</item>
+/// <item><b>t2366, after a BALANCE switch at t2365</b> — reproduced, but only
 /// once the replayer started injecting <c>BALANCE</c> at all; this fixture is
 /// what found that. See <see cref="ClientCommandInjectionTests"/>.</item>
-/// <item><b>Five of the shape "built at T, self-destructed at T+1"</b> — ✅
-/// reproduced since 2026-08-28, and this fixture is what explained them: every
-/// one was built inside a <c>TeamGate</c>, and the sentry's two gate collision
-/// events were missing from the port. See
+/// <item><b>Five of the shape "built at T, self-destructed at T+1"</b> —
+/// reproduced: every one was built inside a <c>TeamGate</c>, and the sentry's
+/// two gate collision events were missing from the port. See
 /// <see cref="Sentries.GateCollisionStep"/>.</item>
 /// </list>
 /// </para>
 /// <para>
-/// ⚠️ <b>What made it hard was a byte.</b> <c>cause 0</c> was read as proof of
-/// the Begin Step guard, the only site passing a literal 0 — but
-/// <c>lastDamageSource</c> is <c>-1</c> and <c>write_ubyte</c> puts that out as
-/// 0 too, so an End Step destruction with no dealer is indistinguishable on the
-/// wire. Five sessions of inference ran down the guard's three arms because of
-/// it.
+/// <c>cause 0</c> looks like proof of the Begin Step guard, the only site
+/// passing a literal 0 — but <c>lastDamageSource</c> is <c>-1</c> and
+/// <c>write_ubyte</c> puts that out as 0 too, so an End Step destruction with
+/// no dealer is indistinguishable on the wire from the guard's.
 /// </para>
 /// </remarks>
 public sealed class SentryCauseFixtureTests
@@ -81,7 +75,7 @@ public sealed class SentryCauseFixtureTests
     /// The recording holds the causes it was made to hold.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Asserted because the provocations are hand-driven: a re-recording where
+    /// Asserted because the provocations are hand-driven: a re-recording where
     /// the bridge calls silently did nothing would leave every test below passing
     /// on an ordinary engineer match.
     /// </remarks>
@@ -136,7 +130,7 @@ public sealed class SentryCauseFixtureTests
     }
 
     /// <summary>
-    /// ✅ <b>The port scraps the sentry when the owner's team, class or
+    /// <b>The port scraps the sentry when the owner's team, class or
     /// autobalance takes it away — on the tick, three times.</b>
     /// </summary>
     /// <remarks>
@@ -146,7 +140,7 @@ public sealed class SentryCauseFixtureTests
     /// recording none of them had ever been gated by a recording — only by unit
     /// tests over a hand-built world.
     /// <para>
-    /// ⚠️ <b>Reported against the preceding tick</b>, like a death: the guard runs
+    /// <b>Reported against the preceding tick</b>, like a death: the guard runs
     /// in Begin Step, before the server serialises the tick.
     /// </para>
     /// </remarks>
@@ -161,17 +155,15 @@ public sealed class SentryCauseFixtureTests
     }
 
     /// <summary>
-    /// ✅ <b>ANSWERED 2026-08-28. The five "built at T, destroyed at T+1"
-    /// sentries were built in a doorway</b> —
-    /// <c>Sentry.events/Collision with TeamGate.xml</c>, an event the port did
-    /// not have.
+    /// <b>The five "built at T, destroyed at T+1" sentries were built in a
+    /// doorway</b> — <c>Sentry.events/Collision with TeamGate.xml</c>, an event
+    /// the port did not have.
     /// </summary>
     /// <remarks>
-    /// The recording discriminates perfectly, which is why this fixture settled
-    /// in one pass what five sessions of inference could not. Taking each
-    /// <c>BUILD_SENTRY</c>'s broadcast coordinates and the sentry's own mask
-    /// box: <b>all five that die overlap a <c>TeamGate</c> rectangle, and all
-    /// seven that live overlap nothing.</b>
+    /// The recording discriminates perfectly. Taking each <c>BUILD_SENTRY</c>'s
+    /// broadcast coordinates and the sentry's own mask box: <b>all five that
+    /// die overlap a <c>TeamGate</c> rectangle, and all seven that live overlap
+    /// nothing.</b>
     /// <list type="table">
     /// <item><term>t280 slot 3</term><description>(1574.2, 474.4) — red gate [1578,444]-[1595,497] — died</description></item>
     /// <item><term>t326 slot 2</term><description>(3454.8, 474.4) — blue gate [3438,444]-[3455,497] — died</description></item>
@@ -181,16 +173,13 @@ public sealed class SentryCauseFixtureTests
     /// <item><term>t294, t338, t342, t790, t1482, t1612, t1646</term><description>no gate — all lived</description></item>
     /// </list>
     /// <para>
-    /// ⚠️ <b>The step that made this look impossible was the cause byte.</b>
-    /// "Cause 0 can only be the guard, because <c>lastDamageSource</c> is
-    /// <c>-1</c> and never 0" — true of the field, false on the wire.
-    /// <c>write_ubyte</c> puts <c>-1</c> out as <b>0</b>, so an End Step
-    /// destruction with no dealer is byte-identical to
-    /// <c>sendEventDestruction(ownerPlayer, noone, noone, 0)</c>. Every other
-    /// elimination in the old note stands and none of them mattered.
+    /// <c>lastDamageSource</c> of <c>-1</c> is never a literal 0, but
+    /// <c>write_ubyte</c> puts <c>-1</c> out as <b>0</b> too, so an End Step
+    /// destruction with no dealer is byte-identical on the wire to
+    /// <c>sendEventDestruction(ownerPlayer, noone, noone, 0)</c>.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Three of the five are a sentry in its <em>own</em> team's
+    /// <b>Three of the five are a sentry in its <em>own</em> team's
     /// doorway.</b> Neither gate event looks at <c>team</c>. See
     /// <see cref="Sentries.GateCollisionStep"/>.
     /// </para>
@@ -214,7 +203,7 @@ public sealed class SentryCauseFixtureTests
     /// really are not.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>This is the mutation control.</b> Deleting
+    /// <b>This is the mutation control.</b> Deleting
     /// <see cref="Sentries.GateCollisionStep"/> leaves this green and the test
     /// above red, which is the pair that says the fix is the reason the replay
     /// agrees rather than an accident of the comparison.

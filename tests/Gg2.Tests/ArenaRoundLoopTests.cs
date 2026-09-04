@@ -5,38 +5,27 @@ using Gg2.Simulation;
 namespace Gg2.Tests;
 
 /// <summary>
-/// ⚠️ <b>A live Arena round has people alive in it.</b> The gate that did not
-/// exist, and the bug it would have caught ran for two phases.
+/// <b>A live Arena round has people alive in it.</b>
 /// </summary>
 /// <remarks>
-/// <b>What was wrong.</b> <c>Player.events/Alarm 5.xml</c> is
-/// <c>if (spawningAllowed()) PlayerSpawn();</c> — the guard is on the
-/// <b>alarm</b>. This port had moved it inside <c>PlayerSpawn</c>, which reads
-/// like the same thing and is not: Arena's <c>respawnEveryone()</c> calls
-/// <c>PlayerSpawn()</c> <em>directly</em>, precisely so that it can spawn a
-/// whole round's worth of characters at a moment
+/// <c>Player.events/Alarm 5.xml</c> is <c>if (spawningAllowed()) PlayerSpawn();</c>
+/// — the guard belongs on the <b>alarm</b>, not inside <c>PlayerSpawn</c>: Arena's
+/// <c>respawnEveryone()</c> calls <c>PlayerSpawn()</c> <em>directly</em>, precisely
+/// so it can spawn a whole round's worth of characters at a moment
 /// <c>spawningAllowed()</c> refuses — <c>doEventArenaStartRound</c> sets the HUD
-/// to <c>ARENA_STATE_ROUND_PROPER</c> before it calls the sweep.
+/// to <c>ARENA_STATE_ROUND_PROPER</c> before it calls the sweep. Put the guard on
+/// <c>PlayerSpawn</c> instead and every Arena round begins with nobody alive: an
+/// empty team wins and the round ends on the tick after it started.
 /// <para>
-/// So every Arena round in this port began with <b>nobody alive</b>, an empty
-/// team is a win, and every round ended on the tick after it started: a
-/// 601-tick cycle of scoreboard, setup, and one tick of "round". A whole
-/// gamemode, silently, since phase 6.
+/// The arena fixtures gate the recording's framing and the port's trajectories,
+/// neither of which catches this. <c>eval</c> reports a match to a decision as a
+/// win regardless of how long the round lasted, so an instant round reaches a cap
+/// limit exactly like a real one — a match that ends is not a match that
+/// happened, and these tests ask how long a round lasted rather than how it ended.
 /// </para>
 /// <para>
-/// ⚠️ <b>Nothing caught it, and the reason is worth more than the bug.</b> The
-/// arena fixtures gate the <em>recording's</em> framing and the port's
-/// trajectories, both of which were fine. <c>eval</c> ran arena matches to a
-/// decision and reported them as wins, because five instant rounds reach a cap
-/// limit exactly like five real ones. **A match that ends is not a match that
-/// happened**, and no test asked how long a round lasted.
-/// </para>
-/// <para>
-/// ⚠️ It was found only because <c>ArenaReplayLoopTests</c>' artefact — real,
-/// and still real — was blamed for all of it. The replayed loop is degenerate
-/// for its own reason (a replay may only spawn characters the recording
-/// announced), and that masked a live bug sitting underneath. <b>Two causes with
-/// one symptom, and the first one found stopped the search.</b>
+/// <c>ArenaReplayLoopTests</c> covers a separate degeneracy: a replay may only
+/// spawn characters the recording announced, which is unrelated to this guard.
 /// </para>
 /// </remarks>
 public sealed class ArenaRoundLoopTests
@@ -63,8 +52,8 @@ public sealed class ArenaRoundLoopTests
     /// The recording this is measured against plays rounds of 561 and 591 ticks
     /// (<c>reference-arena_lumberyard-closedarena.trace</c>, ends at t1342,
     /// t2533 and t3601). The bound here is deliberately loose — a round is a
-    /// fight between bots and its length is not pinned — but <b>anything under a
-    /// hundred ticks is the bug</b>, which used to read as one.
+    /// fight between bots and its length is not pinned — but anything under a
+    /// hundred ticks is the bug.
     /// </remarks>
     [Fact]
     public void ARoundLastsHundredsOfTicksAndNotOne()
@@ -89,14 +78,12 @@ public sealed class ArenaRoundLoopTests
     }
 
     /// <summary>
-    /// ⚠️ <b>The direct assertion, and the one that names the cause:</b> on the
-    /// tick a round starts, every player has a character.
+    /// On the tick a round starts, every player has a character.
     /// </summary>
     /// <remarks>
-    /// This is what <c>respawnEveryone()</c> is for, and it is the line the
-    /// misplaced guard broke. Asserted on the tick rather than a few ticks
-    /// later, because <c>Timers.SpawnNow</c> exists precisely so that the
-    /// spawn is not one tick late.
+    /// This is what <c>respawnEveryone()</c> is for. Asserted on the tick rather
+    /// than a few ticks later, because <c>Timers.SpawnNow</c> exists precisely so
+    /// the spawn is not one tick late.
     /// </remarks>
     [Fact]
     public void EveryPlayerIsAliveOnTheTickTheRoundStarts()
@@ -139,10 +126,9 @@ public sealed class ArenaRoundLoopTests
     /// <b>alarm</b>, so nobody comes back mid-round.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Without this the fix would be "delete the guard", which is wrong in
-    /// the other direction</b> — Arena's whole shape is that a death is final
-    /// until the next round. The recording agrees: three deaths inside the round
-    /// at t1342 and zero spawns between its start and its end.
+    /// The fix is not "delete the guard": Arena's whole shape is that a death is
+    /// final until the next round. The recording agrees: three deaths inside the
+    /// round at t1342 and zero spawns between its start and its end.
     /// </remarks>
     [Fact]
     public void NobodyRespawnsInsideAnArenaRound()

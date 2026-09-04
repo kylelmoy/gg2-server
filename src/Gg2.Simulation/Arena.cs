@@ -36,7 +36,7 @@ public enum ArenaState : byte
 /// team has won <c>caplimit</c> rounds or the map timer runs out — and either
 /// way only after a round has finished, so a running round always gets to end.
 /// <para>
-/// ⚠️ <b>This is the only mode where nobody respawns.</b>
+/// <b>This is the only mode where nobody respawns.</b>
 /// <c>spawningAllowed()</c> is true only in <see cref="ArenaState.Waiting"/> and
 /// <see cref="ArenaState.RoundSetup"/>, so a death in the round proper is final
 /// until the next round — which is what makes elimination a win condition.
@@ -71,7 +71,7 @@ public static class Arena
     /// <code>
     /// cappingPower[BLUE] = max(1, reds) / ((1 - 1/4)*livereds + (1/4)*max(1, reds))
     /// </code>
-    /// ⚠️ <b>The teams are crossed.</b> Blue's capping power is computed from
+    /// <b>The teams are crossed.</b> Blue's capping power is computed from
     /// <em>red's</em> numbers: the fewer of the enemy are still alive, the
     /// faster you take the point. With every enemy alive it is 1; with none it
     /// is 4. That is what stops a wiped-out team stalling the round by hiding.
@@ -94,7 +94,7 @@ public static class Arena
     /// </summary>
     /// <remarks>
     /// <c>Scripts/Maps/Arena/spawningAllowed.gml</c>, and it returns true
-    /// unconditionally for every mode that is not Arena. ⚠️ The alarm still
+    /// unconditionally for every mode that is not Arena. The alarm still
     /// fires and is still spent when this is false — the guard is inside
     /// <c>PlayerSpawn</c>, the same shape as the map-changing one.
     /// </remarks>
@@ -125,7 +125,7 @@ public static class Arena
     /// <c>if(state != ARENA_STATE_ROUND_SETUP and cpUnlock > 0)</c> — so the
     /// minute before the point opens is a minute of the round proper.
     /// <para>
-    /// ⚠️ <b>The team head-counts have a scoping bug in the reference and the
+    /// <b>The team head-counts have a scoping bug in the reference and the
     /// port reproduces its effect.</b> The loop reads
     /// <c>if (player.object != -1 or alarm[5] != -1)</c>, and <c>alarm[5]</c>
     /// there is <em>the HUD's own</em> alarm, not the player's — a bare
@@ -174,7 +174,7 @@ public static class Arena
         if (state.RoundTimer > 0)
             state.RoundTimer--;
 
-        // ⚠️ Overtime latches here, unlike the control-point modes': it is set
+        // Overtime latches here, unlike the control-point modes': it is set
         // and never cleared within a round, and only a fresh round resets it.
         if (state.ArenaState is ArenaState.RoundSetup or ArenaState.RoundProper && state.RoundTimer <= 0)
             state.Overtime = true;
@@ -182,7 +182,7 @@ public static class Arena
         switch (state.ArenaState)
         {
             case ArenaState.Waiting:
-                // ⚠️ The one place a map can end without a round finishing: an
+                // The one place a map can end without a round finishing: an
                 // empty server whose clock runs out is a draw immediately.
                 if (state.TimeLimitMinutes > 0 && state.RoundTimer <= 0)
                     Rounds.Decide(ref state, Team.Spectator);
@@ -284,7 +284,7 @@ public static class Arena
     /// </summary>
     /// <remarks>
     /// The point goes neutral and locked, the map is swept, and everybody
-    /// respawns. ⚠️ <b><c>serverArenaRestart</c>'s team balance is not
+    /// respawns. <b><c>serverArenaRestart</c>'s team balance is not
     /// transcribed here</b>: it runs <em>before</em> everything below, and
     /// unlike the ordinary autobalance it loops until the gap is closed and does
     /// not wait for anybody to be dead. <see cref="TeamBalance.ArenaRestart"/>.
@@ -320,7 +320,7 @@ public static class Arena
     /// <c>doEventArenaStartRound.gml</c>: the round proper begins.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b><c>cpUnlock</c> is reset here as well as at the restart</b>, so the
+    /// <b><c>cpUnlock</c> is reset here as well as at the restart</b>, so the
     /// minute before the point opens is measured from the <em>start of the
     /// round</em> and not from the setup period. It is also the reason the
     /// counter is frozen during setup: it would otherwise be reset twice and
@@ -354,7 +354,7 @@ public static class Arena
     /// <c>doEventArenaEndRound.gml</c>: somebody has won the round.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>It does <em>not</em> sweep the map or respawn anybody.</b> The
+    /// <b>It does <em>not</em> sweep the map or respawn anybody.</b> The
     /// bodies, the sentries and anything in the air stay where they are for the
     /// ten seconds the scoreboard is up — which is what the losing team's
     /// humiliation is drawn over. Only the next restart clears them.
@@ -365,10 +365,10 @@ public static class Arena
     /// <c>humiliated</c>, which keeps them scrapped through the scoreboard.
     /// </para>
     /// <para>
-    /// <c>humiliated</c> is set on the losing team here, and it is real since
-    /// 2026-08-28: it costs them 0.2 of control, suppresses the attack, the
-    /// taunt, the right click, the cloak and the sandvich, and withholds the
-    /// round-end ammo refill everybody else gets.
+    /// <c>humiliated</c> is set on the losing team here: it costs them 0.2 of
+    /// control, suppresses the attack, the taunt, the right click, the cloak
+    /// and the sandvich, and withholds the round-end ammo refill everybody
+    /// else gets.
     /// </para>
     /// </remarks>
     private static void EndRound(ref WorldState state, Team winner, ref TickEvents events)
@@ -384,7 +384,7 @@ public static class Arena
         state.ArenaState = ArenaState.RoundEnd;
 
         // doEventArenaEndRound.gml:26 — `with Player if team != win humiliated
-        // = 1`. ⚠️ Every player, not every living character: it survives the
+        // = 1`. Every player, not every living character: it survives the
         // death that usually earns it, and a spectator is humiliated too,
         // because Team.Spectator is not the winner either. Cleared by the next
         // Restart or WaitForPlayers below.
@@ -397,10 +397,10 @@ public static class Arena
         // doEventArenaEndRound.gml:27 — `with Sentry if team != win
         // event_user(1)`.
         //
-        // ⚠️ That user event scraps the sentry's TURRET and sets the sentry's
-        // own `humiliated`. It does not destroy the sentry, and this loop did
-        // until 2026-08-28: the guns stay standing through the scoreboard, they
-        // simply cannot shoot. Only the next restart's sweep removes them.
+        // That user event scraps the sentry's TURRET and sets the sentry's
+        // own `humiliated`. It does not destroy the sentry: the guns stay
+        // standing through the scoreboard, they simply cannot shoot. Only the
+        // next restart's sweep removes them.
         for (var slot = 0; slot < WorldState.MaxSlots; slot++)
         {
             if (state.HasSentry[slot] && state.Sentries[slot].Team != winner)
@@ -471,7 +471,7 @@ public static class Arena
     /// <remarks>
     /// Everything in the air goes — sentries, rockets, pellets, flames, needles
     /// — and then every character is destroyed and immediately respawned.
-    /// ⚠️ <b>Destroyed, not merely moved</b>, so each one runs the whole Destroy
+    /// <b>Destroyed, not merely moved</b>, so each one runs the whole Destroy
     /// event: a carried briefcase is dropped, a demoman's mines go with their
     /// weapon, and a medic's beam is released. The respawn is
     /// <c>PlayerSpawn()</c> called directly rather than through the alarm, so it
@@ -492,7 +492,7 @@ public static class Arena
 
             state.Clear(slot);
 
-            // ⚠️ `PlayerSpawn()` on the spot, not `alarm[5] = 1`. The alarm
+            // `PlayerSpawn()` on the spot, not `alarm[5] = 1`. The alarm
             // stage has already run by the time a HUD's Step does, so arming it
             // would put every character in a new round one tick late — and the
             // round starts on this tick. A spectator's spawn does nothing, which

@@ -21,7 +21,7 @@ namespace Gg2.Server;
 /// count or the speed without an SSH session. That is a web page.
 /// </para>
 /// <para>
-/// ⛔ <b>THE THREADING RULE, and it is the whole design.</b> The simulation is
+/// <b>THE THREADING RULE, and it is the whole design.</b> The simulation is
 /// single-threaded and <c>WorldState</c> has no locks, so nothing on this class's
 /// socket threads may touch <see cref="GameServer"/>. Instead:
 /// <list type="bullet">
@@ -32,7 +32,7 @@ namespace Gg2.Server;
 /// <see cref="_snapshot"/>, an immutable JSON string the tick thread
 /// republishes.</item>
 /// </list>
-/// ⚠️ The control port's own approach — service the sockets inline — is
+/// The control port's own approach — service the sockets inline — is
 /// <em>wrong</em> here and that is the reason for the difference. A control-port
 /// client is on loopback and is a tool; a panel client is across a network and
 /// may be slow, hostile, or a phone that went into a tunnel mid-response.
@@ -40,13 +40,13 @@ namespace Gg2.Server;
 /// simulation for every player on the server by simply not reading.
 /// </para>
 /// <para>
-/// ⚠️ <b>It adds no verb of its own.</b> Everything it can do goes through
+/// <b>It adds no verb of its own.</b> Everything it can do goes through
 /// <see cref="ControlCommands"/>, which the control port also uses, so the two
 /// surfaces cannot drift apart. What is here is transport, authentication and
 /// the page.
 /// </para>
 /// <para>
-/// ⚠️ <b>Reachable from the network, which nothing else in this project is.</b>
+/// <b>Reachable from the network, which nothing else in this project is.</b>
 /// <see cref="WebAdminOptions"/> has the argument; the short version is that the
 /// password is mandatory, generated when unset, checked in constant time, and
 /// rate-limited, and that a non-loopback bind without TLS warns about the
@@ -59,11 +59,11 @@ public sealed class WebAdminServer : IDisposable
     /// Ticks between snapshots — 6, so 5 Hz on a 30 Hz server.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Fast enough to watch a fight, slow enough not to matter.</b> A
+    /// <b>Fast enough to watch a fight, slow enough not to matter.</b> A
     /// snapshot walks the roster and builds a string; at 30 Hz that would be a
     /// real per-tick cost for a page nobody can read that fast. It is also built
     /// <em>only while somebody is watching</em> — see <see cref="_watchers"/>.
-    /// ⚠️ On an idle server the tick rate itself drops to 2 Hz
+    /// On an idle server the tick rate itself drops to 2 Hz
     /// (<c>--no-idle-when-empty</c>), so the panel updates twice a second and
     /// says "idle" rather than looking stuck.
     /// </remarks>
@@ -102,11 +102,11 @@ public sealed class WebAdminServer : IDisposable
     private long _snapshotVersion;
     private long _sweptAtFrame;
     /// <remarks>
-    /// ⚠️ <b><see cref="_snapshotVersion"/> is 0 until the tick thread has
-    /// published a real one, and the event stream will not send this.</b> It did
-    /// once, and the panel's first act on connecting was to render a state object
-    /// with no fields in it and throw — an error a browser shows nowhere the
-    /// operator will look.
+    /// <b><see cref="_snapshotVersion"/> is 0 until the tick thread has
+    /// published a real one, and the event stream will not send this.</b>
+    /// Otherwise the panel's first act on connecting would be to render a
+    /// state object with no fields in it and throw — an error a browser shows
+    /// nowhere the operator will look.
     /// </remarks>
     private string _snapshot = "{\"ok\":false,\"error\":\"no snapshot yet\"}";
 
@@ -135,7 +135,7 @@ public sealed class WebAdminServer : IDisposable
 
     /// <summary>The password the panel will accept.</summary>
     /// <remarks>
-    /// ⚠️ Held in the clear here because the operator can be shown it, which is
+    /// Held in the clear here because the operator can be shown it, which is
     /// the point of <see cref="Generated"/>. <see cref="AdminSessions"/> keeps
     /// only a salted hash for the comparison.
     /// </remarks>
@@ -173,13 +173,13 @@ public sealed class WebAdminServer : IDisposable
 
         if (Generated)
         {
-            // ⛔ The only place this is ever printed. An operator who misses it
+            // The only place this is ever printed. An operator who misses it
             // restarts with --web-password; there is deliberately no endpoint
             // that hands it back.
             _log.Info($"web admin password (generated, changes on restart): {Password}");
         }
 
-        // ⚠️ Printed every start, not once, and phrased as what an attacker gets
+        // Printed every start, not once, and phrased as what an attacker gets
         // rather than as "consider using TLS". The failure it describes — the
         // admin password read off the wire — is silent and total.
         if (_options.IsRemote && !Secure)
@@ -199,7 +199,7 @@ public sealed class WebAdminServer : IDisposable
     /// reads.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Called from inside <see cref="GameServer.Tick"/> and nowhere
+    /// <b>Called from inside <see cref="GameServer.Tick"/> and nowhere
     /// else.</b> Everything it does touches the game, and nothing else in this
     /// class may.
     /// </remarks>
@@ -209,20 +209,20 @@ public sealed class WebAdminServer : IDisposable
         {
             Interlocked.Decrement(ref _queued);
 
-            // ⚠️ TrySetResult, not SetResult: the waiting request may already
+            // TrySetResult, not SetResult: the waiting request may already
             // have timed out and gone, and a command that lands after that is not
             // an error — it ran.
             pending.Result.TrySetResult(ControlCommands.Dispatch(_server, pending.Body));
         }
 
-        // ⚠️ Sampled whether or not anybody is watching, which is the OPPOSITE of
+        // Sampled whether or not anybody is watching, which is the OPPOSITE of
         // the snapshot below and is deliberate: an operator opens the panel
         // because something already happened, and a graph that started when they
         // arrived answers a question nobody has. The per-tick cost is the one
         // TickCount64 comparison inside Sample. See PerfHistory.
         _perf.Sample(_server);
 
-        // ⚠️ Only while a browser is actually watching. A server with the panel
+        // Only while a browser is actually watching. A server with the panel
         // enabled and nobody on it pays nothing per tick beyond this comparison,
         // which is the property that makes leaving --web on reasonable.
         if (Volatile.Read(ref _watchers) > 0 && frame % SnapshotIntervalTicks == 0)
@@ -292,7 +292,7 @@ public sealed class WebAdminServer : IDisposable
 
             try
             {
-                // ⚠️ Bounded. A keep-alive connection that is answered for ever
+                // Bounded. A keep-alive connection that is answered for ever
                 // is a connection slot held for ever, and there are only
                 // MaxConnections of them.
                 for (var served = 0; served < 200 && !token.IsCancellationRequested; served++)
@@ -361,7 +361,7 @@ public sealed class WebAdminServer : IDisposable
             case ("GET", "/favicon.svg"):
                 return await AssetAsync(stream, "favicon.svg", "image/svg+xml", token);
 
-            // ⚠️ The one endpoint that answers before sign-in, and it answers
+            // The one endpoint that answers before sign-in, and it answers
             // with as little as it can: whether this browser is signed in, and
             // whether the connection is encrypted. The server's name is not a
             // secret — it is on the wire to every game client and in the public
@@ -371,7 +371,7 @@ public sealed class WebAdminServer : IDisposable
                     $"\"authenticated\":{(session is not null ? "true" : "false")}",
                     $"\"secure\":{(Secure ? "true" : "false")}",
 
-                    // ⚠️ The CSRF token is re-issued to a browser that already
+                    // The CSRF token is re-issued to a browser that already
                     // holds a valid cookie, so a page reload does not mean
                     // signing in again. Safe here and only here: no CORS headers
                     // are sent, so only a page on this origin can read the reply,
@@ -391,7 +391,7 @@ public sealed class WebAdminServer : IDisposable
         if (session is null)
             return await JsonAsync(stream, 401, Error("sign in first"), token);
 
-        // ⛔ Every state-changing request must echo the token issued at sign-in.
+        // Every state-changing request must echo the token issued at sign-in.
         // The SameSite=Strict cookie already stops a cross-site post from
         // carrying credentials; this stops anything that gets past it, because a
         // page on another origin cannot read the token out of the login reply.
@@ -419,7 +419,7 @@ public sealed class WebAdminServer : IDisposable
             case ("GET", "/api/log"):
                 return await JsonAsync(stream, 200, LogSince(request.Q("after")), token);
 
-            // ⚠️ Answered on THIS thread, not through the queue: it touches the
+            // Answered on THIS thread, not through the queue: it touches the
             // OS and the runtime, never the game. It is the one route that does.
             case ("GET", "/api/system"):
                 return await JsonAsync(stream, 200, SystemInfo.ToJson(_server.Options), token);
@@ -474,7 +474,7 @@ public sealed class WebAdminServer : IDisposable
 
         if (session is null)
         {
-            // ⚠️ Paid on every failure, before the answer goes out. See
+            // Paid on every failure, before the answer goes out. See
             // AdminSessions.FailureDelay.
             await Task.Delay(AdminSessions.FailureDelay, token);
             _log.Info($"web admin: failed sign-in from {address}");
@@ -483,7 +483,7 @@ public sealed class WebAdminServer : IDisposable
 
         _log.Info($"web admin: signed in from {address}");
 
-        // ⚠️ HttpOnly so script cannot read it, SameSite=Strict so another site
+        // HttpOnly so script cannot read it, SameSite=Strict so another site
         // cannot make the browser send it, and Secure only under TLS — a Secure
         // cookie on plain HTTP is simply dropped, which would make the panel
         // impossible to sign in to rather than more secure.
@@ -503,7 +503,7 @@ public sealed class WebAdminServer : IDisposable
     /// The live stream the dashboard runs on: state snapshots and log lines.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Server-sent events rather than WebSockets</b>, because everything
+    /// <b>Server-sent events rather than WebSockets</b>, because everything
     /// here flows one way and SSE needs no handshake, no framing and no ping
     /// protocol — about forty lines against several hundred, over a transport
     /// that reconnects itself.
@@ -525,7 +525,7 @@ public sealed class WebAdminServer : IDisposable
             {
                 var version = Interlocked.Read(ref _snapshotVersion);
 
-                // ⚠️ `> 0` as well as "changed": zero means the tick thread has
+                // `> 0` as well as "changed": zero means the tick thread has
                 // not published yet, and the placeholder is not a state object.
                 if (version != seenVersion && version > 0)
                 {
@@ -534,7 +534,7 @@ public sealed class WebAdminServer : IDisposable
                     idle = 0;
                 }
 
-                // ⚠️ `> 0 &&`, and the sequence is read ONCE. Without the first
+                // `> 0 &&`, and the sequence is read ONCE. Without the first
                 // guard a ring with nothing in it compares unequal to the -1 this
                 // starts at on every pass, resets `idle` every 100 ms, and the
                 // keep-alive below never fires.
@@ -552,7 +552,7 @@ public sealed class WebAdminServer : IDisposable
                     }
                 }
 
-                // ⚠️ The backlog goes out on the FIRST pass too — seenPerf starts
+                // The backlog goes out on the FIRST pass too — seenPerf starts
                 // at -1 — so a browser that has just connected is handed the last
                 // five minutes in one event and draws a full graph immediately
                 // rather than an empty one that fills in over five minutes.
@@ -560,7 +560,7 @@ public sealed class WebAdminServer : IDisposable
 
                 if (perfSequence > 0 && perfSequence - 1 != seenPerf)
                 {
-                    // ⚠️ A sample can land between these two lines, in which case
+                    // A sample can land between these two lines, in which case
                     // it is sent again on the next pass. The panel keys on `seq`
                     // and ignores one it already has — a duplicate is cheaper
                     // than the lock this would otherwise need on the tick
@@ -572,7 +572,7 @@ public sealed class WebAdminServer : IDisposable
                     idle = 0;
                 }
 
-                // ⚠️ A comment line every ~15s. Without it a proxy or a NAT with
+                // A comment line every ~15s. Without it a proxy or a NAT with
                 // an idle timeout drops a quiet stream and the panel's only
                 // symptom is that it silently stops updating.
                 if (++idle >= 150)
@@ -604,7 +604,7 @@ public sealed class WebAdminServer : IDisposable
         string json,
         CancellationToken token)
     {
-        // ⚠️ The payload is one line of JSON with no newlines in it — every
+        // The payload is one line of JSON with no newlines in it — every
         // string in it went through JsonEncodedText — so it needs no folding into
         // several `data:` lines. A raw newline here would silently truncate the
         // event, which is why every producer of these strings escapes.
@@ -618,7 +618,7 @@ public sealed class WebAdminServer : IDisposable
     /// Queues a command for the tick thread and waits for its answer.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>The seam.</b> This is the only way anything on a socket thread
+    /// <b>The seam.</b> This is the only way anything on a socket thread
     /// reaches the game, and it is why nothing in this class needs a lock.
     /// </remarks>
     private async Task<string> ExecuteAsync(string body)
@@ -652,7 +652,7 @@ public sealed class WebAdminServer : IDisposable
     {
         var bytes = WebAssets.Read(name);
 
-        // ⚠️ no-store rather than a long cache: the page is a few kilobytes off
+        // no-store rather than a long cache: the page is a few kilobytes off
         // localhost or a LAN, and an operator who upgraded the server and got the
         // old panel out of a browser cache would have no way to tell.
         await HttpResponse.WriteAsync(stream, 200, contentType, bytes, token, NoStore);
@@ -663,7 +663,7 @@ public sealed class WebAdminServer : IDisposable
     {
         var name = request.Q("name") ?? string.Empty;
 
-        // ⛔ An allowlist of characters, not a check for "..". This path is
+        // An allowlist of characters, not a check for "..". This path is
         // joined to a directory and handed to the filesystem; a map name in this
         // game is [a-z0-9_] and anything else is somebody trying.
         if (name.Length is 0 or > 64 || !name.All(c => char.IsAsciiLetterOrDigit(c) || c == '_'))
@@ -674,7 +674,7 @@ public sealed class WebAdminServer : IDisposable
         if (!File.Exists(path))
             return await JsonAsync(stream, 404, Error($"no map '{name}'"), token);
 
-        // ⚠️ Read on this thread, not the tick thread. The map directory is
+        // Read on this thread, not the tick thread. The map directory is
         // read-only to the running server and the file is a few tens of KB.
         var bytes = await File.ReadAllBytesAsync(path, token);
 
@@ -689,7 +689,7 @@ public sealed class WebAdminServer : IDisposable
 
     /// <summary>The maps this server could be asked to change to.</summary>
     /// <remarks>
-    /// ⚠️ Read off disk rather than from a compiled-in list, so a server started
+    /// Read off disk rather than from a compiled-in list, so a server started
     /// with <c>--maps</c> pointing somewhere else offers what it can actually
     /// load. The rotation is listed separately so the panel can mark it.
     /// </remarks>

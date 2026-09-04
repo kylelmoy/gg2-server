@@ -24,7 +24,7 @@ public sealed record LoadedPlugin(string Name, string Md5, IServerPlugin? Implem
 /// plugin, so it does — the queue was scaffolding for the language, not part of
 /// the protocol.
 /// <para>
-/// ⚠️ <b>What IS part of the protocol is the id, and the id is the index.</b>
+/// <b>What IS part of the protocol is the id, and the id is the index.</b>
 /// <c>loadserverplugins.gml:184-206</c> keys the queues by loop counter and
 /// passes the same counter to the plugin, and the client builds its list from
 /// the same comma-separated string in the same order. So position is the whole
@@ -58,7 +58,7 @@ public sealed class ServerPlugins
     /// packet id.
     /// </summary>
     /// <remarks>
-    /// ⚠️ Startup only, and it can block on the network — see
+    /// Startup only, and it can block on the network — see
     /// <see cref="GanggarrisonPluginHashes"/>. Failing here fails the server's
     /// start, which is the reference's behaviour too
     /// (<c>GameServerCreate.gml:131-150</c> calls <c>game_end()</c>): a server
@@ -75,7 +75,7 @@ public sealed class ServerPlugins
         if (specs.Count == 0)
             return None;
 
-        // ⚠️ The reference's ceiling, and it is a real one: the packet id goes on
+        // The reference's ceiling, and it is a real one: the packet id goes on
         // the wire as a ubyte (PluginPacketSend.gml:42), so id 256 would alias
         // id 0 and cross-wire two plugins.
         if (specs.Count > 256)
@@ -100,7 +100,7 @@ public sealed class ServerPlugins
     /// the reference answers with <c>KICK_BAD_PLUGIN_PACKET</c>.
     /// </returns>
     /// <remarks>
-    /// ⚠️ A known id whose plugin has no C# implementation returns <b>true</b>
+    /// A known id whose plugin has no C# implementation returns <b>true</b>
     /// and discards the packet. That is deliberate and it is a divergence: the
     /// reference would have run the plugin's GML. The kick is reserved for an id
     /// the client made up, because kicking for a plugin the server itself asked

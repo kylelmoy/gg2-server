@@ -10,13 +10,12 @@ namespace Gg2.Tests;
 /// against the boxes the running engine reports.
 /// </summary>
 /// <remarks>
-/// Phases 5 and 6 landed four boxes without a live session, each with a comment
-/// saying so: <see cref="ProjectileSprites.Bubble"/> was derived from
+/// Four boxes were derived rather than measured, each documented as such:
+/// <see cref="ProjectileSprites.Bubble"/> from
 /// <c>BubbleS.xml</c>'s <c>mode="FULL"</c>, <see cref="ProjectileSprites.Stab"/>
-/// and the briefcase's box were read off the PNGs' alpha, and
-/// <see cref="Generators.Box"/> off <c>GeneratorRedS</c>. All four were asked of
-/// the engine on 2026-08-27 and all four were right; this is the gate that keeps
-/// them that way. Regenerate the fixture with
+/// and the briefcase's box from the PNGs' alpha, and
+/// <see cref="Generators.Box"/> from <c>GeneratorRedS</c>. This test asks the
+/// engine directly and pins all four to its answer. Regenerate the fixture with
 /// <c>node tools/probes/probe-sprite-boxes.js</c>.
 /// <para>
 /// The briefcase mattered most: <c>IntelTests</c> pins only
@@ -156,7 +155,7 @@ public sealed class SpriteBoxSampleTests
         Assert.Equal(Intel.BoxRight, red.Instance.Right);
         Assert.Equal(Intel.BoxBottom, red.Instance.Bottom);
 
-        // ⚠️ The bottom edge is +7 on a 22-tall sprite whose origin sits at 12:
+        // The bottom edge is +7 on a 22-tall sprite whose origin sits at 12:
         // the AUTO bound stops two rows short of the image, which is exactly
         // what reading a PNG's nominal height gets wrong.
         Assert.Equal(22, red.Height);
@@ -180,7 +179,7 @@ public sealed class SpriteBoxSampleTests
         Assert.Equal(Generators.Box.Right, red.Instance.Right);
         Assert.Equal(Generators.Box.Bottom, red.Instance.Bottom);
 
-        // ⚠️ Forty-eight frames and one bounding box. A GM8 sprite has a single
+        // Forty-eight frames and one bounding box. A GM8 sprite has a single
         // bbox however many sub-images it holds, which is why the generator
         // needs no mask_index override where the Sentry does.
         Assert.Equal(48, red.Frames);
@@ -202,7 +201,7 @@ public sealed class SpriteBoxSampleTests
     /// <em>then</em> pushes <c>bbox_left</c> two pixels further out.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>The mirror is the half <see cref="Aabb.ForCharacter"/> is allowed
+    /// <b>The mirror is the half <see cref="Aabb.ForCharacter"/> is allowed
     /// to skip, and only because every character mask is symmetric about its
     /// origin.</b> None of the four boxes here is: the briefcase runs -9..+10
     /// and mirrors to -10..+9. Nothing ever draws a briefcase or a generator
@@ -232,23 +231,19 @@ public sealed class SpriteBoxSampleTests
     }
 
     /// <summary>
-    /// ✅ <b>The dropdown platform's box, measured at last</b> — and the port's
-    /// inferred 60x6 bar is right.
+    /// <b>The dropdown platform's box</b> — the port's inferred 60x6 bar is right.
     /// </summary>
     /// <remarks>
-    /// <b>It was the last collider in the project that had never been asked of
-    /// the engine.</b> The collision oracle samples every rectangle the port
-    /// builds, but only for things that are <em>solid</em>, and
-    /// <c>SolidKind.DropdownPlatform</c> is never solid to anything — so the
-    /// platform fell through the one net that would have caught it. Measured
-    /// 2026-08-28 with <c>probe-sprite-boxes.js</c>'s <c>mask_index</c> trick,
-    /// which does not care about solidity because a bounding box is a property
-    /// of the sprite.
+    /// The collision oracle samples every rectangle the port builds, but only for
+    /// things that are <em>solid</em>, and <c>SolidKind.DropdownPlatform</c> is
+    /// never solid to anything — so the platform falls through the net that would
+    /// otherwise catch it. This test uses <c>probe-sprite-boxes.js</c>'s
+    /// <c>mask_index</c> trick instead, which does not care about solidity because
+    /// a bounding box is a property of the sprite.
     /// <para>
-    /// ⚠️ <b>The sprite has NINE sub-images</b>, which is worth knowing only
-    /// because it makes "one frame" a bad assumption to carry into the next
-    /// collider: the box is the same for all of them, but nothing here checked
-    /// that before.
+    /// <b>The sprite has NINE sub-images.</b> "One frame" is a bad assumption to
+    /// carry into the next collider: the box is the same for all of them, but
+    /// that has to be checked, not assumed.
     /// </para>
     /// </remarks>
     [Fact]
@@ -281,7 +276,7 @@ public sealed class SpriteBoxSampleTests
     }
 
     /// <summary>
-    /// ⚠️ <b>OPEN, latent: a collider placed with a negative scale gets an
+    /// <b>OPEN, latent: a collider placed with a negative scale gets an
     /// inverted rectangle.</b>
     /// </summary>
     /// <remarks>
@@ -293,10 +288,10 @@ public sealed class SpriteBoxSampleTests
     /// for this sprite <b>Left = x - 61, Right = x</b>, two pixels wider than
     /// the unflipped box rather than a mirror of it.
     /// <para>
-    /// ✅ <b>Unreachable with the shipped maps.</b> Not one entity in
+    /// <b>Unreachable with the shipped maps.</b> Not one entity in
     /// <c>maps.json</c> — every built-in map — has a negative scale, which is
-    /// why no fixture and no oracle has ever shown this. **A custom map can set
-    /// one**, and the server serves custom maps.
+    /// why no fixture and no oracle has ever shown this. A custom map can set
+    /// one, and the server serves custom maps.
     /// </para>
     /// <para>
     /// <b>This test pins the defect rather than the fix</b>, like
@@ -335,34 +330,30 @@ public sealed class SpriteBoxSampleTests
     }
 
     /// <summary>
-    /// ✅ <b>The four dropdown platforms the game actually places, against the
+    /// <b>The four dropdown platforms the game actually places, against the
     /// boxes the engine reports for them — and every one is SCALED.</b>
     /// </summary>
     /// <remarks>
-    /// <see cref="TheDropdownPlatformsBoxIsTheOneTheEngineReports"/> measured the
-    /// sprite and then checked the port at <b>scale 1</b>, which is the one case
-    /// that never occurs: all four dropdown platforms on all 22 shipped maps are
-    /// on <c>tdm_mantic</c>, and their x scales are <b>1.6, 0.5, 0.6 and
-    /// 1.2</b>. So the assertion that mattered — that
-    /// <c>Right = round(x + 60*xscale) - 1</c> is what the engine does at a
-    /// <em>fractional</em> scale — was never made.
+    /// <see cref="TheDropdownPlatformsBoxIsTheOneTheEngineReports"/> checks the
+    /// port at <b>scale 1</b>, which is the one case that never occurs: all four
+    /// dropdown platforms on all 22 shipped maps are on <c>tdm_mantic</c>, and
+    /// their x scales are <b>1.6, 0.5, 0.6 and 1.2</b>. So the assertion that
+    /// matters — that <c>Right = round(x + 60*xscale) - 1</c> is what the engine
+    /// does at a <em>fractional</em> scale — needs this test too.
     /// <para>
-    /// ⚠️ <b>All four scales agree under rounding and truncation, so this test
-    /// does NOT gate <c>FromEntity</c>'s rounding.</b> A first draft of this
-    /// remark claimed 0.6 would be a pixel short if the port truncated; that is
-    /// wrong — <c>60 * 0.6</c> lands on exactly 36.0 in <c>double</c>, and 1.6,
-    /// 0.5 and 1.2 land on integers too. Measured live 2026-08-28 against real
-    /// <c>DropdownPlatform</c> instances, which is also how the claim was caught.
+    /// <b>All four scales agree under rounding and truncation, so this test does
+    /// NOT gate <c>FromEntity</c>'s rounding.</b> <c>60 * 0.6</c> lands on exactly
+    /// 36.0 in <c>double</c>, and 1.6, 0.5 and 1.2 land on integers too.
     /// <b>The rounding is observable on the setup gates instead</b> — see
     /// <see cref="TheSevenSetupGatesThatDistinguishRoundingFromTruncationMatchTheEngine"/>.
     /// </para>
     /// <para>
-    /// ⚠️ <b>And the mask fills the scaled box</b>, which is a separate question
-    /// from the box and the one the whole rotated-mask episode was about:
-    /// <c>collision_point</c> at every column reports <b>36 of 36</b> hits at
-    /// scale 0.6 and <b>96 of 96</b> at scale 1.6, contiguous, with nothing
-    /// outside. <c>sprite44.xml</c> declares <c>&lt;shape&gt;RECTANGLE&lt;/shape&gt;</c>
-    /// with <c>mode="FULL"</c>, and it means it.
+    /// <b>And the mask fills the scaled box</b>, which is a separate question
+    /// from the box: <c>collision_point</c> at every column reports <b>36 of
+    /// 36</b> hits at scale 0.6 and <b>96 of 96</b> at scale 1.6, contiguous, with
+    /// nothing outside. <c>sprite44.xml</c> declares
+    /// <c>&lt;shape&gt;RECTANGLE&lt;/shape&gt;</c> with <c>mode="FULL"</c>, and it
+    /// means it.
     /// </para>
     /// <para>
     /// This goes through <see cref="LevelMap"/> rather than a synthetic entity,
@@ -385,8 +376,8 @@ public sealed class SpriteBoxSampleTests
         // scaled cases may have moved somewhere ungated.
         Assert.Equal(4, platforms.Count);
 
-        // x, xscale, and the engine's bbox_left..bbox_right, measured live
-        // 2026-08-28 by creating each instance and reading its bounding box.
+        // x, xscale, and the engine's bbox_left..bbox_right, measured by
+        // creating each instance and reading its bounding box.
         var expected = new (int X, double XScale, int Left, int Right)[]
         {
             (1164, 1.6, 1164, 1259),
@@ -410,15 +401,15 @@ public sealed class SpriteBoxSampleTests
     }
 
     /// <summary>
-    /// ✅ <b>The seven collider rectangles in the whole game whose edge depends on
+    /// <b>The seven collider rectangles in the whole game whose edge depends on
     /// <c>FromEntity</c> ROUNDING rather than truncating — and the engine rounds.</b>
     /// </summary>
     /// <remarks>
     /// <c>SolidRect.FromEntity</c> computes
-    /// <c>Right = RoundPosition(x + width * xScale) - 1</c>. ⚠️ <b>Replacing that
-    /// round with a truncation passed all 2,185 tests</b> when it was tried on
-    /// 2026-08-28 — including the dropdown-platform test above, whose four real
-    /// scales all land on exact integers. The rounding was ungated.
+    /// <c>Right = RoundPosition(x + width * xScale) - 1</c>. Replacing that round
+    /// with a truncation still passes the dropdown-platform test above, since its
+    /// four real scales all land on exact integers — the rounding needs its own
+    /// gate.
     /// <para>
     /// Scanned across all 22 shipped maps: <b>7 of 128 collider rectangles differ
     /// between rounding and truncating</b>, and every one of them is a
@@ -427,15 +418,15 @@ public sealed class SpriteBoxSampleTests
     /// one-pixel edge here is wire-visible geometry, not decoration.
     /// </para>
     /// <para>
-    /// Each row's <c>Right</c>/<c>Bottom</c> was measured live 2026-08-28 by
-    /// creating a <c>ControlPointSetupGate</c> at that position and scale and
-    /// reading <c>bbox_right</c>/<c>bbox_bottom</c>. ⚠️ <b>The scales were sent as
-    /// integer ratios</b> (<c>56/100</c>, not <c>0.56</c>): GM8's parser is a ULP
-    /// off on some decimal literals, which would have measured a neighbouring
-    /// rectangle and blamed the port.
+    /// Each row's <c>Right</c>/<c>Bottom</c> was measured by creating a
+    /// <c>ControlPointSetupGate</c> at that position and scale and reading
+    /// <c>bbox_right</c>/<c>bbox_bottom</c>. <b>The scales were sent as integer
+    /// ratios</b> (<c>56/100</c>, not <c>0.56</c>): GM8's parser is a ULP off on
+    /// some decimal literals, which would measure a neighbouring rectangle and
+    /// blame the port.
     /// </para>
     /// <para>
-    /// ⚠️ <b>Why the collision oracle missed them</b> is worth keeping: it
+    /// <b>Why the collision oracle misses them</b> is worth keeping: it
     /// enumerates what is <em>solid</em>, and a setup gate is only solid during
     /// setup. Same shape of hole as the dropdown platform, which is never solid
     /// at all.
