@@ -50,8 +50,10 @@ public enum NavMatch
 /// <para>
 /// The checked-in manifest is gated by <c>NavManifestTests</c>, which recomputes
 /// every line from <c>maps/</c> and rewrites the file when
-/// <c>GG2_UPDATE_NAV_MANIFEST=1</c> is set. Regenerating nav means regenerating
-/// this.
+/// <c>GG2_UPDATE_NAV_MANIFEST=1</c> is set. ✅ <b>Regenerating nav rewrites this
+/// in the same command</b> — <c>gg2-server navgen</c> — which is not a
+/// convenience: the previous workflow needed a separate step, and skipping it
+/// left the old pairing recorded and every new graph refused at run time.
 /// </para>
 /// </remarks>
 public sealed class NavManifest
@@ -268,7 +270,8 @@ public sealed class NavManifest
             "# Which map each nav graph in this directory was built against.",
             "# <map>_a<area><TAB><first 16 bytes of SHA-256 over the area's walkmask and entities>",
             "#",
-            "# Regenerate with: GG2_UPDATE_NAV_MANIFEST=1 dotnet test --filter NavManifestTests",
+            "# Written by: dotnet run --project src/Gg2.Host -- navgen",
+            "# Re-recorded by: GG2_UPDATE_NAV_MANIFEST=1 dotnet test --filter NavManifestTests",
             "# A graph with no line here is not checked. See NavManifest.",
         };
 

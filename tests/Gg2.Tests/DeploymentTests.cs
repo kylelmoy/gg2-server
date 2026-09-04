@@ -61,7 +61,8 @@ public class DeploymentTests
     }
 
     /// <summary>
-    /// A server told to run bots with no nav directory at all says so at startup.
+    /// A server told to run bots with no nav directory <em>and</em> no generator
+    /// says so at startup.
     /// </summary>
     /// <remarks>
     /// <b>The silent case, and the one a deployment hits.</b>
@@ -70,13 +71,42 @@ public class DeploymentTests
     /// EMPTY <c>NavCacheDirectory</c> never enters that branch, so the whole
     /// feature failing was quieter than one map failing.
     /// <para>
-    /// The state is reachable via an empty <c>GG2_NAVCACHE</c>, or a binary
-    /// copied without its <c>nav/</c> directory. docs/DEPLOY.md, "the nav
+    /// The state is reachable via an empty <c>GG2_NAVCACHE</c> or a binary copied
+    /// without its <c>nav/</c> directory, combined with <c>--no-navgen</c> —
+    /// with the generator on (the default), a server with no nav directory
+    /// builds each map's graph itself and the bots navigate anyway, so this test
+    /// needs both conditions to reach the warning. docs/DEPLOY.md, "the nav
     /// graphs".
     /// </para>
     /// </remarks>
     [Fact]
-    public void BotsWithNoNavDirectoryWarnAtStartup()
+    public void BotsWithNoNavDirectoryAndNoGeneratorWarnAtStartup()
+    {
+        using var harness = new ServerHarness(options =>
+        {
+            options.Bots = BotPopulationOptions.Default with { Enabled = true, MinHumans = 0 };
+            options.NavCacheDirectory = string.Empty;
+            options.NavGenerate = false;
+        });
+
+        Assert.True(
+            harness.Log.Contains("bots will fight but not navigate"),
+            "a server running bots with no nav directory and no generator started silently");
+    }
+
+    /// <summary>
+    /// ⛔ And with the generator on — the default — there is nothing to warn
+    /// about, because the bots navigate.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Both halves, because the warning going quiet is only right if the
+    /// thing it warned about really stopped.</b> Asserting only that the message
+    /// is absent would pass against a change that deleted the warning and left
+    /// the bots standing still, which is the same failure with the alarm turned
+    /// off — the shape CLAUDE.md keeps finding.
+    /// </remarks>
+    [Fact]
+    public void BotsWithNoNavDirectoryNavigateAnywayAndSayNothing()
     {
         using var harness = new ServerHarness(options =>
         {
@@ -84,9 +114,11 @@ public class DeploymentTests
             options.NavCacheDirectory = string.Empty;
         });
 
-        Assert.True(
+        Assert.False(
             harness.Log.Contains("bots will fight but not navigate"),
-            "a server running bots with no nav directory started silently");
+            "warned about bots that cannot navigate on a server whose bots can");
+
+        Assert.NotNull(harness.Server.Population?.Nav);
     }
 
     /// <summary>

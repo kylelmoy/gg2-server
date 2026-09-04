@@ -7,14 +7,15 @@ namespace Gg2.Bots;
 
 /// <summary>
 /// Reads a nav graph off disk — <c>botnav/&lt;map&gt;_a&lt;area&gt;.txt</c>,
-/// written by <c>gg2-nav-gen</c> and read by <c>navCacheLoad.gml</c>.
+/// written by <c>Gg2.Nav</c> and read by <c>navCacheLoad.gml</c>.
 /// </summary>
 /// <remarks>
-/// <b>Reading the cache is the whole job; generating one is not.</b> The
-/// generator moved out of the game into <c>gg2-nav-gen</c>, which builds every
-/// shipped map in under a second, and the files it writes are this format and
-/// this version. Moving generation into this project is a natural consolidation
-/// later; it is not this.
+/// ✅ <b>Generating one is <c>Gg2.Nav</c>'s job as of 2026-09-03</b>, and it
+/// writes exactly this format and this version — <c>NavGeneratorTests</c>
+/// rebuilds all 25 checked-in graphs and compares them character for character.
+/// ⚠️ The generator does not reference this assembly: it produces the file's
+/// TEXT and the caller hands that to <see cref="Parse"/>, so an on-the-fly graph
+/// and a file off disk are the same graph by construction. docs/NAVGEN.md.
 /// <para>
 /// The I/O lives here rather than on <see cref="NavGraph"/> so that a loaded
 /// graph is a pure in-memory object with no path and no stream in it — the same
@@ -37,7 +38,7 @@ public static class NavCache
     /// <summary>Where the caches live, relative to the reference build directory.</summary>
     public const string DirectoryName = "botnav";
 
-    /// <summary>What <c>gg2-nav-gen</c> writes.</summary>
+    /// <summary>The plain container, which the GML game reads.</summary>
     public const string Extension = ".txt";
 
     /// <summary>
@@ -45,7 +46,7 @@ public static class NavCache
     /// </summary>
     /// <remarks>
     /// <b>The compression is the container, not the format.</b> Decompressing
-    /// one of these gives back exactly the file <c>gg2-nav-gen</c> wrote, byte
+    /// one of these gives back exactly the file the generator wrote, byte
     /// for byte, and <see cref="Parse"/> never learns which it came from — so a
     /// generator that knows nothing about gzip stays a working generator and
     /// <c>NAV_CACHE_VERSION</c> does not move.
@@ -115,12 +116,14 @@ public static class NavCache
     /// plain one, or empty when neither is there.
     /// </summary>
     /// <remarks>
-    /// <b>PLAIN WINS.</b> <c>gg2-nav-gen</c> writes <c>&lt;key&gt;.txt</c> into
-    /// <c>../gg2-server/nav</c> by default, the very directory this repository
-    /// ships <c>.txt.gz</c> in, so the only way a <c>.txt</c> appears beside a
-    /// <c>.gz</c> is that somebody just ran the generator — <c>NavManifestTests</c>
-    /// hashes the MAPS, not the graph files, so a regeneration alone would not
-    /// otherwise be noticed. The rule: <b>the file somebody just wrote wins over
+    /// <b>PLAIN WINS.</b> A generator writes <c>&lt;key&gt;.txt</c> into the very
+    /// directory this repository ships <c>.txt.gz</c> in, so the only way a
+    /// <c>.txt</c> appears beside a <c>.gz</c> is that somebody just ran one —
+    /// <c>NavManifestTests</c> hashes the MAPS, not the graph files, so a
+    /// regeneration alone would not otherwise be noticed. <c>gg2-server navgen</c>
+    /// writes the shipped container directly and deletes the loser, but the rule
+    /// still matters for an external generator or a hand-written fixture. The
+    /// rule: <b>the file somebody just wrote wins over
     /// the file that shipped</b>. The shipped one is the default; a plain file
     /// next to it is a deliberate act.
     /// <para>

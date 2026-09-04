@@ -120,6 +120,12 @@ objectives.
 default is derived from measured per-decision costs but has never itself been
 tuned.
 
+Bots need a nav graph, and the graphs shipped with the repository cover the
+built-in maps. Anything else — a custom map, an edited one — gets one built at
+the map change, in well under a second, because everything a graph needs is in
+the map's own PNG. `--no-navgen` turns that off; `gg2-server navgen` builds them
+offline instead.
+
 The only trained checkpoint that ships was trained against an earlier build of
 the simulation, so it lives in the repository as a test fixture rather than
 something to run; the loader prints both simulation stamps and refuses the
@@ -157,7 +163,8 @@ every one of them at once.
 | `src/Gg2.Simulation` | `WorldState`, collision, the movement solver, the character update, weapons and gamemodes. Pure — no sockets, no clock, no files — enforced by project references. |
 | `src/Gg2.Bots` | Nav, A\*, the path follower, targeting, combat, objectives, population. A bot is an `IInputSource` like a socket; the simulation never special-cases one. |
 | `src/Gg2.Server` | Sockets, the join handshake, the roster, the 30 Hz broadcast, the tick that drives the simulation. The only I/O. |
-| `src/Gg2.Host` | `gg2-server`, the console entry point, and the `eval` subcommand. |
+| `src/Gg2.Host` | `gg2-server`, the console entry point, and the `eval` and `navgen` subcommands. |
+| `src/Gg2.Nav` | The bot nav-graph generator: turns a map's walkmask and entities into the graph the path follower routes on. |
 | `src/Gg2.Parity` | `gg2-parity`: a stream recorder, a byte diff, and a trace replayer with drift reporting. |
 | `src/Gg2.Env` | `gg2-env`: the batch-stepping environment seam for policy training. |
 
@@ -198,7 +205,7 @@ Two rules that are not negotiable, whatever you are changing:
 | `Gang-Garrison-2-upstream` | The reference implementation. Stock GG2 v2.9.2, cloned from [`Gang-Garrison-2/Gang-Garrison-2`](https://github.com/Gang-Garrison-2/Gang-Garrison-2). Read-only from here. |
 | `Gang-Garrison-2` | A bot fork of the above, and the checkout the live game is built from. Not the specification — this port's bots have diverged from its. Read-only from here. |
 | `gg2-agent` | Tooling for the GM8 game: build scripts, the agent bridge, the MCP server, nav analysis. |
-| `gg2-nav-gen` | Offline bot nav-graph generator; its output is what `nav/` holds. |
+| `gg2-nav-gen` | The original Node nav-graph generator. Superseded by `src/Gg2.Nav`, a C# port of it, but kept because it still works and has a worker pool. |
 | `gg2-rl` | Bot-policy trainer, on the other side of the `gg2-env` seam. |
 
 ## Reference version

@@ -24,6 +24,15 @@
       reference Gg2.Server, and that is untouched.
     -->
     <ProjectReference Include="..\Gg2.Bots\Gg2.Bots.csproj" />
+
+    <!--
+      The nav-graph generator, so a map with no checked-in graph still gets one
+      (BotPopulationService.MapChanged). Gg2.Nav does NOT reference Gg2.Bots:
+      it produces the cache file's text and NavCache.Parse turns that into a
+      NavGraph, which is the same call a file off disk gets. One direction, no
+      cycle, and an on-the-fly graph is the file's graph by construction.
+    -->
+    <ProjectReference Include="..\Gg2.Nav\Gg2.Nav.csproj" />
   </ItemGroup>
 
 

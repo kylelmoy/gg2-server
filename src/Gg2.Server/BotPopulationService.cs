@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using Gg2.Bots;
 using Gg2.Maps;
+using Gg2.Nav;
 using Gg2.Protocol;
 using Gg2.Simulation;
 
@@ -22,10 +23,16 @@ namespace Gg2.Server;
 /// up.
 /// </para>
 /// <para>
-/// <b>A bot with no nav graph is still a bot.</b> A map with no cache generated
-/// gets bots that fight whatever comes to them and never walk anywhere, which is
-/// the same degradation <c>NavCache.TryLoad</c> is built for — a server should
-/// keep serving a map it cannot route on rather than refuse to fill.
+/// <b>A bot with no nav graph is still a bot.</b> A map with no graph gets bots
+/// that fight whatever comes to them and never walk anywhere, which is the same
+/// degradation <c>NavCache.TryLoad</c> is built for — a server should keep serving
+/// a map it cannot route on rather than refuse to fill.
+/// <para>
+/// <b>It is also the last resort now rather than the ordinary outcome.</b>
+/// <see cref="Generate"/> builds a graph for a map that has none, so the
+/// degradation is reached only by <c>--no-navgen</c> or by a map the generator
+/// throws on.
+/// </para>
 /// </para>
 /// </remarks>
 public sealed class BotPopulationService
@@ -89,6 +96,12 @@ public sealed class BotPopulationService
         Spawns = new SpawnPoints(map);
         Nav = null;
 
+        // ⚠️ Whether the graph on disk was refused rather than absent. Both end
+        // with no graph, but only one of them means the file is wrong, and the
+        // generated replacement should be SAVED over a stale graph and merely held
+        // in memory when there was never one — see Generate.
+        var refused = false;
+
         if (navCacheDirectory is { Length: > 0 })
         {
             // The hash goes INTO TryLoad, which is what actually refuses a
@@ -103,14 +116,20 @@ public sealed class BotPopulationService
             if (NavManifest.Load(navCacheDirectory).Check(NavCache.Key(map.Name, area), fingerprint)
                 == NavMatch.Mismatch)
             {
+                refused = true;
+
                 _log.Info(
                     $"nav graph for {map.Name} area {area} was built against different geometry "
-                    + "and has been refused; bots on it will not navigate. Regenerate it with "
-                    + "gg2-nav-gen, or delete nav/manifest.tsv's line for it to load it anyway");
+                    + "and has been refused. Rebuild it with `gg2-server navgen --map "
+                    + $"{map.Name}`, or delete nav/manifest.tsv's line for it to load it anyway");
             }
             else if (!NavCache.TryLoad(navCacheDirectory, map.Name, area, out var graph, fingerprint))
             {
-                _log.Info($"no nav cache for {map.Name} area {area}; bots on it will not navigate");
+                // Quiet: Generate below is about to make one, and saying "no nav
+                // cache" a line before "built a nav graph" describes a problem the
+                // operator does not have. It stays loud when generation is off.
+                if (!_server.Options.NavGenerate)
+                    _log.Info($"no nav cache for {map.Name} area {area}; bots on it will not navigate");
             }
             else
             {
@@ -118,7 +137,7 @@ public sealed class BotPopulationService
 
                 // Both containers for one map means one of them is being
                 // ignored, and the loser is invisible from the outside. The
-                // usual cause is a gg2-nav-gen run into a directory that ships
+                // usual cause is an outside generator run into a directory that ships
                 // .txt.gz: the fresh .txt wins, which is what was wanted, but
                 // saying so is the difference between a regeneration that
                 // worked and one that only appeared to. NavCache.FindFile.
@@ -126,11 +145,19 @@ public sealed class BotPopulationService
                 {
                     _log.Info(
                         $"{map.Name} area {area} has both a .txt and a .txt.gz nav graph; "
-                        + "using the .txt. Delete one — tools/compress-nav.sh does it "
-                        + "the way the repository expects");
+                        + "using the .txt. Delete one — `gg2-server navgen` writes only "
+                        + "the container this repository ships");
                 }
             }
         }
+
+        // Everything a graph needs is in the map's own PNG, so a map with no
+        // graph is missing data nothing had to be missing. This is the whole of
+        // what makes a CUSTOM map navigable: without it a server serving anything
+        // outside the checked-in graphs has bots that fight whatever reaches them
+        // and walk nowhere, which reads as a broken bot layer.
+        if (Nav is null && _server.Options.NavGenerate)
+            Nav = Generate(map, area, navCacheDirectory, refused);
 
         // Hand every surviving bot the new graph BEFORE re-roling them. A
         // follower, a route and a blacklist are all node indices into one graph,
@@ -152,6 +179,126 @@ public sealed class BotPopulationService
         }
 
         Retarget();
+    }
+
+    /// <summary>
+    /// Builds the graph for a map that has none, and optionally saves it.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>It runs on the tick thread, at the map change, and it is not
+    /// free</b> — a few hundred milliseconds on the largest maps. That is
+    /// deliberate placement rather than an oversight: a map change is the one
+    /// moment nothing is being simulated and every client is loading, so a stall
+    /// there disturbs nothing, where a background build would have to hand a graph
+    /// to bots that had already planned routes without one. The elapsed time is
+    /// logged so an operator can see the cost instead of inferring it from a hitch.
+    /// <para>
+    /// ⚠️ <b>The text goes through <c>NavCache.Parse</c> rather than into a graph
+    /// directly.</b> That is the same call a file off disk gets, so a generated
+    /// graph and a generated file are the same graph by construction — and it is
+    /// why <c>Gg2.Nav</c> produces text and does not reference this assembly at
+    /// all.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>A refused graph is overwritten even when saving is off.</b> The file
+    /// on disk describes terrain that is not there; leaving it means every restart
+    /// refuses it again and rebuilds, and any other tool reading the directory
+    /// still gets the wrong graph. A map that simply had none is different — that
+    /// is not a fault to correct, and writing into an operator's directory
+    /// uninvited is a surprise, so it is held in memory unless
+    /// <see cref="ServerOptions.NavGenerateWrite"/> asks otherwise.
+    /// </para>
+    /// </remarks>
+    private NavGraph? Generate(LevelMap map, int area, string? navCacheDirectory, bool refused)
+    {
+        NavBuildResult built;
+
+        try
+        {
+            built = NavGenerator.Build(map, area);
+        }
+        catch (Exception e) when (e is ArgumentException or InvalidOperationException or IndexOutOfRangeException)
+        {
+            // ⚠️ A map this generator cannot handle must not take the server down
+            // with it. The degradation is the one NavCache.TryLoad already
+            // promises — bots that do not navigate — and it is strictly better
+            // than refusing to serve the map.
+            _log.Info($"could not build a nav graph for {map.Name} area {area}: {e.Message}");
+            return null;
+        }
+
+        NavGraph graph;
+
+        try
+        {
+            graph = NavCache.Parse(built.Text, map.Name, area);
+        }
+        catch (FormatException e)
+        {
+            _log.Info($"the nav graph built for {map.Name} area {area} did not parse: {e.Message}");
+            return null;
+        }
+
+        var saved = string.Empty;
+
+        if (navCacheDirectory is { Length: > 0 } && (_server.Options.NavGenerateWrite || refused))
+        {
+            try
+            {
+                NavCacheWriter.Write(navCacheDirectory, NavCache.Key(map.Name, area), built.Text, compress: true);
+
+                // The manifest with it: a graph with no line is a graph nothing
+                // checks against its map afterwards, which is the silent half of
+                // the failure the manifest exists to make loud.
+                RecordFingerprint(navCacheDirectory, NavCache.Key(map.Name, area), NavManifest.HashOf(map));
+                saved = $", saved to {navCacheDirectory}";
+            }
+            catch (IOException e)
+            {
+                // A read-only install directory is a perfectly reasonable thing to
+                // deploy into. The graph is already built and in memory.
+                _log.Info($"could not save the nav graph for {map.Name} area {area}: {e.Message}");
+            }
+            catch (UnauthorizedAccessException e)
+            {
+                _log.Info($"could not save the nav graph for {map.Name} area {area}: {e.Message}");
+            }
+        }
+
+        _log.Info(
+            $"built a nav graph for {map.Name} area {area} in "
+            + $"{built.Elapsed.TotalMilliseconds:F0}ms — {built.Nodes} nodes, {built.Edges} edges{saved}");
+
+        return graph;
+    }
+
+    /// <summary>
+    /// Adds or replaces one graph's line in a nav directory's manifest.
+    /// </summary>
+    /// <remarks>
+    /// Read-modify-write over the whole file, because <c>NavManifest.Write</c>
+    /// writes a whole file: a server that saved one generated graph must not drop
+    /// the other twenty-five lines on its way past.
+    /// </remarks>
+    private static void RecordFingerprint(string directory, string key, string hash)
+    {
+        var manifest = NavManifest.Load(directory);
+        var lines = new Dictionary<string, string>(StringComparer.Ordinal) { [key] = hash };
+
+        foreach (var (map, area) in NavCache.List(directory))
+        {
+            var other = NavCache.Key(map, area);
+
+            if (!string.Equals(other, key, StringComparison.Ordinal)
+                && manifest.HashFor(other) is { } existing)
+            {
+                lines[other] = existing;
+            }
+        }
+
+        NavManifest.Write(
+            Path.Combine(directory, NavManifest.FileName),
+            lines.Select(entry => (entry.Key, entry.Value)));
     }
 
     /// <summary>

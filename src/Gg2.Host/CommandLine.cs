@@ -385,6 +385,27 @@ internal static class CommandLine
                     options.NavCacheDirectory = cursor.Take();
                     break;
 
+                // ⚠️ Generation is ON by default and this turns it off, rather
+                // than the other way round. Everything a graph needs is in the
+                // map's own PNG, so a map with no graph was never missing
+                // anything that had to be missing — and the failure it caused,
+                // bots that fight whatever reaches them and walk nowhere, reads
+                // as a broken bot layer rather than as absent data. The opt-out
+                // is here for a server that would rather have a predictable map
+                // change than navigating bots on a custom map.
+                case "--no-navgen":
+                    options.NavGenerate = false;
+                    break;
+
+                // Worth having on a rotation that is mostly custom maps, where
+                // the alternative is rebuilding the same graphs every time round.
+                // Off by default because it writes files the operator did not ask
+                // for. ⚠️ A graph REFUSED by the manifest is rewritten either way
+                // — that file describes terrain that is not there.
+                case "--navgen-save":
+                    options.NavGenerateWrite = true;
+                    break;
+
                 // The [Bots] section. `--bots N` is the fill target, which is what
                 // the reference calls FillToPlayers — ⚠️ a total including humans,
                 // not a bot count, so a server filling to 8 drops a bot every time
@@ -919,6 +940,13 @@ internal static class CommandLine
                             policy controllers engage on, so pass it to make EVERY
                             bot the configuration the bench measured.
           --botnav <path>   override the bot nav graphs (default: nav/)
+          --no-navgen       do not build a nav graph for a map that has none.
+                            On by default, and it is what makes a CUSTOM map
+                            navigable: everything a graph needs is in the map
+                            PNG, so a missing one costs a few hundred ms at the
+                            map change rather than a round of motionless bots.
+          --navgen-save     save a graph built that way into --botnav, so the
+                            next map change reads it (default: memory only)
           --speed <n|max>   run at n times real time, or 'max' for unpaced
                             (default 1)
           --record <path>   write replayable .trace recordings of this server's

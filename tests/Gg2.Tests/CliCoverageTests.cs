@@ -82,6 +82,8 @@ public sealed class CliCoverageTests
         ("MapDownloadBytesPerSecond", ["--map-download-limit", "12345"], o => o.MapDownloadBytesPerSecond),
         ("MapDirectory", ["--maps", "some/other/maps"], o => o.MapDirectory),
         ("NavCacheDirectory", ["--botnav", "some/other/nav"], o => o.NavCacheDirectory),
+        ("NavGenerate", ["--no-navgen"], o => o.NavGenerate),
+        ("NavGenerateWrite", ["--navgen-save"], o => o.NavGenerateWrite),
         ("SpeedMultiplier", ["--speed", "max"], o => o.SpeedMultiplier),
         ("RecordingDirectory", ["--record", "some/traces"], o => o.RecordingDirectory),
         ("ControlPort", ["--control-port", "9001"], o => o.ControlPort),

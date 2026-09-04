@@ -43,6 +43,33 @@ internal static class Program
             }
         }
 
+        // `gg2-server navgen ...` builds the bot nav graphs instead of serving.
+        // A subcommand for the same reason `eval` is one: it shares almost none
+        // of the server's options, and the ones it looks like it shares (--maps,
+        // --botnav/--out) would have to mean the same thing in both.
+        if (args.Length > 0 && args[0] == "navgen")
+        {
+            var rest = args[1..];
+
+            if (rest.Contains("--help") || rest.Contains("-h"))
+            {
+                NavGen.PrintUsage();
+                return 0;
+            }
+
+            try
+            {
+                return NavGen.Run(rest);
+            }
+            catch (Exception e) when (e is ArgumentException or FormatException or IOException)
+            {
+                Console.Error.WriteLine(e.Message);
+                Console.Error.WriteLine();
+                NavGen.PrintUsage();
+                return 2;
+            }
+        }
+
         if (args.Contains("--help") || args.Contains("-h"))
         {
             CommandLine.PrintUsage();

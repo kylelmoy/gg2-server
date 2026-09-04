@@ -91,8 +91,9 @@ public static class ReferenceTree
 
              These are checked in, so a clone should have them — a missing nav/ means
              they were deleted, or {NavCacheEnvironmentVariable} points somewhere else.
-             Otherwise run gg2-nav-gen over the built-in maps and either copy its
-             output to that directory or point {NavCacheEnvironmentVariable} at it.
+             Otherwise rebuild them:
+
+                 dotnet run --project src/Gg2.Host -- navgen
              """);
 
     /// <summary>
