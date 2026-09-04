@@ -84,6 +84,8 @@ public sealed class CliCoverageTests
         ("NavCacheDirectory", ["--botnav", "some/other/nav"], o => o.NavCacheDirectory),
         ("NavGenerate", ["--no-navgen"], o => o.NavGenerate),
         ("NavGenerateWrite", ["--navgen-save"], o => o.NavGenerateWrite),
+        ("NavDistances", ["--nav-distances"], o => o.NavDistances),
+        ("BotOccupancy", ["--no-bot-occupancy"], o => o.BotOccupancy),
         ("SpeedMultiplier", ["--speed", "max"], o => o.SpeedMultiplier),
         ("RecordingDirectory", ["--record", "some/traces"], o => o.RecordingDirectory),
         ("ControlPort", ["--control-port", "9001"], o => o.ControlPort),

@@ -114,6 +114,14 @@ public static class BotRoles
     /// variety comes from a shared occupancy penalty instead.
     /// </para>
     /// <para>
+    /// ⚠️ <b>And widening THIS does not buy route variety either — measured, and
+    /// a dead end.</b> Scaling every bot's offset by 1.5, 2 and 3 moves a team's
+    /// match-level route dispersion 0.634 → 0.645 / 0.645 / 0.657: it saturates
+    /// almost at once, because the offset moves where a bot ends up
+    /// <em>standing</em> and not which corridor it walks there by.
+    /// <c>docs/TRAPS-BOTS.md</c>, "Route variety, scored".
+    /// </para>
+    /// <para>
     /// A bounds check alone (<c>abs(botSpreadX) &lt;= BOT_SPREAD_MAX</c>) is
     /// satisfied even if every bot's offset is silently 0, so the gate here
     /// asserts that the offsets actually differ.
@@ -121,4 +129,31 @@ public static class BotRoles
     /// </remarks>
     public static double SpreadX(int slot) =>
         (((slot % 2) * 2) - 1) * BotConstants.SpreadMax * ((slot * 7 % 11) / 10.0);
+
+    /// <summary>
+    /// Which of <paramref name="lanes"/> corridors this bot routes down —
+    /// <see cref="BotLanes"/>.
+    /// </summary>
+    /// <param name="placeInTeam">
+    /// <b>This bot's position among its OWN TEAM's bots</b>, in roster order —
+    /// not its slot. ⚠️ A slot would be a bug that hides: teams alternate down
+    /// the roster, so <c>slot % 4</c> hands red the even lanes and blue the odd
+    /// ones, and a team of six would use two of the four corridors while every
+    /// count and bound still looked right.
+    /// </param>
+    /// <param name="lanes">How many the graph was given. At least 1.</param>
+    /// <remarks>
+    /// <b>Counting rather than rolling, the same as <see cref="Assign"/>, and for
+    /// the same reason.</b> A die gives a team of four all-one-lane often enough
+    /// to matter, and "the split sometimes just does not happen" is not
+    /// debuggable from a screenshot. Straight modulo also guarantees the team is
+    /// divided as evenly as its size allows.
+    /// <para>
+    /// <b>Constant for the bot's life</b>, like the role and the spread: a bot
+    /// that re-lanes mid-route reads as one that cannot make up its mind, and the
+    /// value of the split is that it looks like team composition from outside.
+    /// </para>
+    /// </remarks>
+    public static int Lane(int placeInTeam, int lanes) =>
+        lanes <= 1 ? 0 : ((placeInTeam % lanes) + lanes) % lanes;
 }

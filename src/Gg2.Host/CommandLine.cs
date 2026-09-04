@@ -406,6 +406,23 @@ internal static class CommandLine
                     options.NavGenerateWrite = true;
                     break;
 
+                // ⛔ Buys about 8% of a twelve-bot tick and CHANGES EVERY ROUTE
+                // in return — the search is weighted, so its heuristic picks the
+                // route as well as the speed. Off by default for that reason, not
+                // for the map-change cost. ServerOptions.NavDistances.
+                case "--nav-distances":
+                    options.NavDistances = true;
+                    break;
+
+                // ⛔ A BEHAVIOUR switch, not a performance one. Off, a team's
+                // routes stop being pushed apart and match dispersion falls
+                // 0.785 -> 0.634 with nothing replacing it. What it buys is a
+                // live server that routes the way `eval` and every training
+                // rollout already do. ServerOptions.BotOccupancy.
+                case "--no-bot-occupancy":
+                    options.BotOccupancy = false;
+                    break;
+
                 // The [Bots] section. `--bots N` is the fill target, which is what
                 // the reference calls FillToPlayers — ⚠️ a total including humans,
                 // not a bot count, so a server filling to 8 drops a bot every time
@@ -947,6 +964,20 @@ internal static class CommandLine
                             map change rather than a round of motionless bots.
           --navgen-save     save a graph built that way into --botnav, so the
                             next map change reads it (default: memory only)
+          --no-bot-occupancy
+                            stop bots pricing edges their team-mates are walking
+                            above cost. ON by default and it is the biggest
+                            source of route variety there is - without it a team
+                            bunches up (dispersion 0.785 -> 0.634) and nothing
+                            replaces it. What it buys is a live server that
+                            routes exactly as eval and the training rollouts do.
+          --nav-distances   precompute exact node-to-node distances and give A*
+                            an exact heuristic instead of a straight-line guess.
+                            Worth about 8% of a twelve-bot tick. OFF by default
+                            because the search is WEIGHTED, so an exact heuristic
+                            changes which route comes back as well as how fast -
+                            a server run with this is not route-comparable to one
+                            without. Costs tens of ms and a few MB per map change.
           --speed <n|max>   run at n times real time, or 'max' for unpaced
                             (default 1)
           --record <path>   write replayable .trace recordings of this server's

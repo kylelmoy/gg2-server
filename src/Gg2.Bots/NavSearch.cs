@@ -88,6 +88,71 @@ public readonly record struct NavQuery(
 /// are wrong rather than slow.
 /// </para>
 /// </remarks>
+/// <summary>
+/// How a search spends a <see cref="NavDistances"/> table, when it has one.
+/// </summary>
+/// <remarks>
+/// <b>Both plans return the SAME route</b> — the optimal one under live costs —
+/// so what separates them is only what they spend proving it, and which is
+/// cheaper depends on how the costs have been perturbed. Measured over 22
+/// graphs, 500 pairs each, three repeats:
+/// <list type="table">
+/// <item><description>a crowd on the chains: <b><see cref="ChainOrSearch"/>
+/// costs 0.85-0.93x what <see cref="ChainBoundsSearch"/> does</b> — a ×1.25 hop
+/// barely moves the bound, so it prunes almost nothing and the per-expansion
+/// chain walk is close to pure overhead;</description></item>
+/// <item><description>no crowd: <b><see cref="ChainBoundsSearch"/> wins
+/// 1.12-1.24x</b> — what is left is gate and class perturbation, which is a +∞
+/// on a hop, and there the bound really does prune (<c>cp_egypt</c> 69
+/// expansions against 91).</description></item>
+/// </list>
+/// <c>docs/TRAPS-BOTS.md</c>, "Two ways to spend a next-hop table".
+/// </remarks>
+public enum NavPlan
+{
+    /// <summary>
+    /// Pick per query from whether anything is actually crowded — the shipped
+    /// behaviour, and the reason neither plan needs a flag.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Keyed on a crowd being PRESENT, not on the server having enabled
+    /// occupancy.</b> The two differ at the start of a round and after a
+    /// respawn wave, when the map is empty and <see cref="ChainBoundsSearch"/>
+    /// is the better plan on a server that has occupancy on. It also means
+    /// <c>--no-bot-occupancy</c>, <c>eval</c> and every training rollout reach
+    /// <see cref="ChainBoundsSearch"/> without anything being plumbed to them.
+    /// </remarks>
+    DecideByCrowd,
+
+    /// <summary>
+    /// <b>A perturbed chain still BOUNDS the search.</b> The chain priced at
+    /// live cost is an incumbent and an upper bound, and the search stops as
+    /// soon as the frontier's lower bound reaches it — so nothing the walk
+    /// learned is thrown away.
+    /// </summary>
+    /// <remarks>
+    /// This is <b>CPD-Search</b> as published: Bono, Gerevini, Harabor and
+    /// Stuckey, <em>Path Planning with CPD Heuristics</em>, IJCAI 2019. Named
+    /// for what it does rather than for the paper so the contrast with
+    /// <see cref="ChainOrSearch"/> is legible at the call site; the citation
+    /// lives here.
+    /// </remarks>
+    ChainBoundsSearch,
+
+    /// <summary>
+    /// <b>A pristine chain IS the answer; anything else is searched from
+    /// scratch.</b> The chain is verified once and, on any perturbation at all,
+    /// discarded — the search that follows is unbounded.
+    /// </summary>
+    /// <remarks>
+    /// <c>docs/PROPOSAL-ROUTE-TABLE.md</c>'s original design, and cheaper than
+    /// <see cref="ChainBoundsSearch"/> exactly where that plan's bound cannot
+    /// pay for itself: under a uniform mild crowd it skips a chain walk at every
+    /// expansion and spends a few more expansions instead.
+    /// </remarks>
+    ChainOrSearch,
+}
+
 public sealed class NavSearch
 {
     /// <summary>
@@ -96,11 +161,31 @@ public sealed class NavSearch
     /// </summary>
     private const int PopGuard = 100_000;
 
+    /// <summary>
+    /// How far below the incumbent's cost a frontier entry may sit and still
+    /// prove it, relative.
+    /// </summary>
+    /// <remarks>
+    /// The table's distances are floats rounded DOWN, so on a chain nothing has
+    /// perturbed the lower bound sits one float ULP (2^-23) under the live price
+    /// of the identical edges, and an exact test would expand the whole chain to
+    /// close a gap that is rounding. 1e-6 is an order above that ULP and three
+    /// orders below the smallest perturbation this layer makes — one ×1.25 hop
+    /// on a sixty-hop route is ~4e-3 — so it never accepts an incumbent a real
+    /// cost change should have displaced.
+    /// </remarks>
+    private const double IncumbentTolerance = 1e-6;
+
     private readonly NavGraph _graph;
     private readonly double[] _gScore;
     private readonly int[] _cameFrom;
     private readonly bool[] _closed;
     private readonly PriorityQueue<int, double> _open = new();
+
+    // CPD-Search scratch: the live-priced cost of the table's chain from each
+    // node (-1 = not walked this search), and the walk's own stack.
+    private readonly double[] _liveCost;
+    private readonly int[] _walk;
 
     public NavSearch(NavGraph graph)
     {
@@ -110,6 +195,8 @@ public sealed class NavSearch
         _gScore = new double[graph.NodeCount];
         _cameFrom = new int[graph.NodeCount];
         _closed = new bool[graph.NodeCount];
+        _liveCost = new double[graph.NodeCount];
+        _walk = new int[graph.NodeCount];
     }
 
     /// <summary>How many nodes the last search popped. Diagnostic only.</summary>
@@ -145,6 +232,26 @@ public sealed class NavSearch
     /// same for every bot asking at the same moment, and coarse.
     /// </para>
     /// </param>
+    /// <param name="laneCost">
+    /// One cost per edge, indexed as <see cref="NavGraph.Edges"/> is, or null to
+    /// use the graph's own. <b><see cref="BotLanes"/>' half of route variety</b>:
+    /// where <paramref name="occupancy"/> disperses a team by reacting to what
+    /// its members are walking this tick, a lane disperses it with a field fixed
+    /// for the graph's lifetime — the same dispersion, computable in advance.
+    /// <para>
+    /// A lane never removes an edge, so it cannot change what is reachable; the
+    /// route it returns is the cheapest one <em>under that lane's costs</em>.
+    /// </para>
+    /// </param>
+    /// <param name="distances">
+    /// A table matched to this asker's abilities, or null for the straight-line
+    /// heuristic. With one, this is CPD-Search: the table's distance is the
+    /// heuristic, unweighted, and its next-hop chain priced live is an incumbent
+    /// the search proves against — a chain nothing has perturbed comes back at
+    /// the first pop. ⚠️ The table must have been built for a SUPERSET of the
+    /// asker's arcs (<see cref="NavDistanceSet.For"/> picks one), or the
+    /// heuristic overestimates and the route is wrong rather than slow.
+    /// </param>
     /// <returns>Whether a route was found.</returns>
     public bool Find(
         int start,
@@ -152,7 +259,10 @@ public sealed class NavSearch
         in NavQuery query,
         List<int> path,
         IReadOnlySet<long>? blocked = null,
-        IReadOnlyDictionary<long, int>? occupancy = null)
+        IReadOnlyDictionary<long, int>? occupancy = null,
+        ReadOnlySpan<double> laneCost = default,
+        NavDistances? distances = null,
+        NavPlan plan = NavPlan.DecideByCrowd)
     {
         ArgumentNullException.ThrowIfNull(path);
 
@@ -181,6 +291,13 @@ public sealed class NavSearch
         var goalX = (_graph.Nodes[goal].X0 + _graph.Nodes[goal].X1) / 2.0;
         var goalY = (double)_graph.Nodes[goal].Row;
 
+        // The table's answer for the whole leg. Infinity means the FULLY
+        // PERMISSIVE graph cannot get there, so no query can — a single array
+        // read instead of expanding the entire reachable component to discover
+        // it. On cp_dirtbowl that is most pairs.
+        if (distances is not null && float.IsPositiveInfinity(distances.Between(start, goal)))
+            return false;
+
         // Hoisted out of the edge loop for real cost, not tidiness. Both
         // collections are usually EMPTY — a bot's blacklist averages about 0.15
         // entries a search over a match, and the occupancy map is null whenever
@@ -191,8 +308,63 @@ public sealed class NavSearch
         var hasBlocked = blocked is { Count: > 0 };
         var hasOccupancy = occupancy is { Count: > 0 };
 
+        // Hoisted for the same reason as the two above: an empty lane field is
+        // the common case (a bot with no lane, every scenario, every rollout) and
+        // the test would otherwise run on every edge the frontier touches.
+        var hasLanes = !laneCost.IsEmpty;
+
         _gScore[start] = 0;
-        _open.Enqueue(start, 0);
+
+        // CPD-Search (Bono et al., IJCAI 2019) whenever a table is present: the
+        // incumbent is the cheapest LIVE-priced next-hop chain seen so far and
+        // `bound` is its cost. Seeded from the start node, so a chain nothing
+        // has perturbed is returned at the first pop with no expansion at all.
+        // docs/TRAPS-BOTS.md, "CPD-Search: the next-hop table as the ANSWER".
+        var bound = double.PositiveInfinity;
+        var incumbent = -1;
+
+        if (distances is not null)
+        {
+            Array.Fill(_liveCost, -1);
+
+            var chain = LiveChainCost(start, goal, in query, blocked, occupancy, laneCost, distances);
+
+            if (plan == NavPlan.DecideByCrowd)
+                plan = hasOccupancy ? NavPlan.ChainOrSearch : NavPlan.ChainBoundsSearch;
+
+            if (plan == NavPlan.ChainOrSearch)
+            {
+                // ⛔ The whole verification, in one comparison. Every hop is
+                // priced at or above the static edge the table's Dijkstra used,
+                // so the chain's live cost can only EQUAL its static cost when no
+                // hop was gated, blacklisted, out of class, laned or crowded. And
+                // when it does, the chain is optimal under live costs: any rival
+                // is a path in the permissive graph, so costs at least the static
+                // optimum, which is exactly what this chain costs. Checking the
+                // hops one at a time would be the same test done longhand.
+                if (chain <= distances.Between(start, goal) * (1 + IncumbentTolerance))
+                    return ReconstructIncumbent(start, start, goal, path, distances);
+
+                // Perturbed, so this plan throws the chain away: `bound` stays
+                // infinite and `incumbent` stays -1, the pop test below can never
+                // fire, and what is left is a plain unweighted A* on the exact
+                // heuristic.
+            }
+            else
+            {
+                bound = chain;
+                incumbent = start;
+            }
+
+            // Priced at g + h so the incumbent test can fire on the first pop.
+            // Without a table the sole first entry's priority is irrelevant and
+            // stays 0, as the reference has it.
+            _open.Enqueue(start, distances.Between(start, goal));
+        }
+        else
+        {
+            _open.Enqueue(start, 0);
+        }
 
         var current = -1;
         var guard = 0;
@@ -202,7 +374,7 @@ public sealed class NavSearch
             if (++guard > PopGuard)
                 break;
 
-            current = _open.Dequeue();
+            _open.TryDequeue(out current, out var f);
             Pops++;
 
             // The goal test is on the POP. A node can be queued more than once
@@ -219,14 +391,29 @@ public sealed class NavSearch
             if (current == goal)
                 break;
 
+            // The incumbent is provably as cheap as anything still to come:
+            // every remaining entry's f is at least this one's, every f is a
+            // lower bound on a route through that node, and the incumbent is a
+            // real route at `bound`. Tested before the closed check on purpose —
+            // a stale entry's f bounds the rest of the frontier just as well.
+            if (f * (1 + IncumbentTolerance) >= bound)
+                return ReconstructIncumbent(start, incumbent, goal, path, distances!);
+
             // A stale copy of a node that has already been expanded.
             if (_closed[current])
                 continue;
 
             _closed[current] = true;
 
-            foreach (var edge in _graph.EdgesFrom(current))
+            // Indexed rather than a foreach because a lane's cost field is keyed
+            // by the edge's position in the flat array, which a slice cannot say.
+            var edgeStart = _graph.EdgeStart(current);
+            var edges = _graph.EdgesFrom(current);
+
+            for (var i = 0; i < edges.Length; i++)
             {
+                ref readonly var edge = ref edges[i];
+
                 var next = edge.To;
 
                 if ((uint)next >= (uint)_graph.NodeCount)
@@ -274,7 +461,7 @@ public sealed class NavSearch
                 if (!NavGraph.EdgeRoutable(in edge, in query))
                     continue;
 
-                var cost = edge.Cost;
+                var cost = hasLanes ? laneCost[edgeStart + i] : edge.Cost;
 
                 // The key is only built when somebody is going to look it up.
                 if (hasBlocked || hasOccupancy)
@@ -299,17 +486,63 @@ public sealed class NavSearch
                 _gScore[next] = tentative;
                 _cameFrom[next] = current;
 
-                var nextX = (_graph.Nodes[next].X0 + _graph.Nodes[next].X1) / 2.0;
-                var nextY = (double)_graph.Nodes[next].Row;
+                if (distances is null)
+                {
+                    var nextX = (_graph.Nodes[next].X0 + _graph.Nodes[next].X1) / 2.0;
+                    var nextY = (double)_graph.Nodes[next].Row;
 
-                // WEIGHTED. NavConstants.SearchWeight inflates the estimate,
-                // which makes the frontier commit to the goal's direction sooner
-                // and expand fewer nodes for a route that may be longer. The
-                // trade, and why it is 1.2 rather than more, is recorded there.
-                _open.Enqueue(
-                    next,
-                    tentative + (NavConstants.SearchWeight
-                        * Gml.PointDistance(nextX, nextY, goalX, goalY)));
+                    var estimate = Gml.PointDistance(nextX, nextY, goalX, goalY);
+
+                    // WEIGHTED. NavConstants.SearchWeight inflates the estimate,
+                    // which makes the frontier commit to the goal's direction
+                    // sooner and expand fewer nodes for a route that may be
+                    // longer. The trade, and why it is 1.3 rather than more, is
+                    // recorded there.
+                    _open.Enqueue(next, tentative + (NavConstants.SearchWeight * estimate));
+                }
+                else
+                {
+                    // The exact remaining cost on the table's graph — at or
+                    // below the true remainder for this asker, whatever the gates,
+                    // the blacklist and the crowd have done to it.
+                    var exact = distances.Between(next, goal);
+
+                    // Nothing reaches the goal from there, so nothing routed
+                    // through it ever can. The straight-line heuristic has no way
+                    // to know this and expands the dead end in full.
+                    if (float.IsPositiveInfinity(exact))
+                        continue;
+
+                    // UNWEIGHTED, and that is a decision. An exact relaxed
+                    // distance is consistent, so plain A* on it expands only what
+                    // lies within the perturbation of the cheapest route and the
+                    // closed-set skip above is sound rather than a licensed
+                    // shortcut. Carrying SearchWeight across would also let the
+                    // incumbent test below accept an UNPERTURBED chain the moment
+                    // it is within 30% — which every crowded chain is — and erase
+                    // the dispersion occupancy exists to buy. TRAPS-BOTS,
+                    // "CPD-Search", has the measurements.
+                    _open.Enqueue(next, tentative + exact);
+
+                    // The table's chain from here, priced at what this asker
+                    // would pay now, is a real route: the cheapest such is the
+                    // incumbent, and its cost is what the pop test proves
+                    // against. ⚠️ Skipped entirely under ChainOrSearch: the
+                    // chain walk is most of what maintaining the incumbent COSTS,
+                    // and that plan is chosen precisely when the bound does not
+                    // repay it.
+                    if (plan == NavPlan.ChainBoundsSearch)
+                    {
+                        var live = tentative
+                            + LiveChainCost(next, goal, in query, blocked, occupancy, laneCost, distances);
+
+                        if (live < bound)
+                        {
+                            bound = live;
+                            incumbent = next;
+                        }
+                    }
+                }
             }
         }
 
@@ -336,11 +569,11 @@ public sealed class NavSearch
     /// somewhere else, and the cost of the guard is one comparison.
     /// </para>
     /// </remarks>
-    private bool Reconstruct(int start, int goal, List<int> path)
+    private bool Reconstruct(int start, int end, List<int> path)
     {
-        path.Add(goal);
+        path.Add(end);
 
-        var at = goal;
+        var at = end;
         var guard = 0;
 
         while (at != start && guard < _graph.NodeCount + 2)
@@ -368,5 +601,163 @@ public sealed class NavSearch
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// The incumbent: the search's own route to <paramref name="node"/>, then
+    /// the table's chain from there to the goal.
+    /// </summary>
+    /// <remarks>
+    /// The chain priced finite when it became the incumbent, which means every
+    /// hop had a routable, unblocked edge at that moment — and nothing in a
+    /// search mutates the graph, the blacklist or the crowd — so the route
+    /// handed back is one the follower can take, hop for hop. A chain that does
+    /// not reach the goal is reported as no route at all, for the same reason
+    /// <see cref="Reconstruct"/> gives.
+    /// </remarks>
+    private bool ReconstructIncumbent(int start, int node, int goal, List<int> path, NavDistances distances)
+    {
+        if (!Reconstruct(start, node, path))
+            return false;
+
+        var at = node;
+        var guard = 0;
+
+        while (at != goal)
+        {
+            at = distances.NextHop(at, goal);
+
+            if (at < 0 || ++guard > _graph.NodeCount)
+            {
+                path.Clear();
+                return false;
+            }
+
+            path.Add(at);
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// The table's chain from <paramref name="node"/> to the goal, priced at
+    /// what THIS asker would pay for it now — or infinity if a hop is gated,
+    /// blacklisted or beyond the asker's class.
+    /// </summary>
+    /// <remarks>
+    /// Memoised per search in <c>_liveCost</c>, so a chain walked from one node
+    /// is not walked again from any node on it: the walking a search does is
+    /// bounded by the nodes its chains touch, not by hops × expansions.
+    /// Iterative where the paper recurses — a chain can be the whole graph long
+    /// and the stack is not the place for it.
+    /// <para>
+    /// <b>At or above <see cref="NavDistances.Between"/> by construction.</b>
+    /// Each hop is priced at the cheapest ROUTABLE edge between its endpoints
+    /// under live cost, which is at or above the cheapest in-table static edge
+    /// the Dijkstra used: routable ⊆ in-table, and live ≥ static. "Cheapest"
+    /// has to be said because two edges can join one pair of nodes — a walk and
+    /// a jump — and pricing the wrong one would hand back a route dearer than
+    /// the one the follower then flies.
+    /// </para>
+    /// </remarks>
+    private double LiveChainCost(
+        int node,
+        int goal,
+        in NavQuery query,
+        IReadOnlySet<long>? blocked,
+        IReadOnlyDictionary<long, int>? occupancy,
+        ReadOnlySpan<double> laneCost,
+        NavDistances distances)
+    {
+        if (node == goal)
+            return 0;
+
+        if (_liveCost[node] >= 0)
+            return _liveCost[node];
+
+        var depth = 0;
+        var at = node;
+
+        while (at != goal && at >= 0 && _liveCost[at] < 0 && depth < _walk.Length)
+        {
+            _walk[depth++] = at;
+            at = distances.NextHop(at, goal);
+        }
+
+        // What the rest costs from where the walk stopped: nothing at the goal,
+        // the memo at a node already walked, and infinity off the end of a
+        // broken chain — no hop, or a cycle. Neither can come out of Derive,
+        // and both are refused rather than trusted.
+        var tail = at == goal ? 0.0
+            : at >= 0 && _liveCost[at] >= 0 ? _liveCost[at]
+            : double.PositiveInfinity;
+
+        for (var i = depth - 1; i >= 0; i--)
+        {
+            var from = _walk[i];
+            var to = i + 1 < depth ? _walk[i + 1] : at;
+
+            tail += LiveEdgeCost(from, to, in query, blocked, occupancy, laneCost);
+            _liveCost[from] = tail;
+        }
+
+        return _liveCost[node];
+    }
+
+    /// <summary>
+    /// What this asker pays now for the cheapest routable edge from
+    /// <paramref name="from"/> to <paramref name="to"/>, or infinity.
+    /// </summary>
+    /// <remarks>
+    /// The same pricing the frontier loop in <see cref="Find"/> applies — gate
+    /// and class via <see cref="NavGraph.EdgeRoutable"/>, then the lane's cost
+    /// or the graph's, then the blacklist and the crowd by edge key. The two
+    /// drifting apart would make the incumbent's price a lie, which
+    /// <c>NavSearchTests</c> checks by re-pricing what comes back.
+    /// </remarks>
+    private double LiveEdgeCost(
+        int from,
+        int to,
+        in NavQuery query,
+        IReadOnlySet<long>? blocked,
+        IReadOnlyDictionary<long, int>? occupancy,
+        ReadOnlySpan<double> laneCost)
+    {
+        var crowd = 0;
+
+        if (blocked is { Count: > 0 } || occupancy is { Count: > 0 })
+        {
+            // One key covers every edge between the pair, so a blacklisted pair
+            // is refused whole and a crowded pair is priced whole.
+            var key = NavGraph.EdgeKey(from, to);
+
+            if (blocked is { Count: > 0 } && blocked.Contains(key))
+                return double.PositiveInfinity;
+
+            if (occupancy is { Count: > 0 })
+                occupancy.TryGetValue(key, out crowd);
+        }
+
+        var best = double.PositiveInfinity;
+        var edgeStart = _graph.EdgeStart(from);
+        var edges = _graph.EdgesFrom(from);
+
+        for (var i = 0; i < edges.Length; i++)
+        {
+            ref readonly var edge = ref edges[i];
+
+            if (edge.To != to || !NavGraph.EdgeRoutable(in edge, in query))
+                continue;
+
+            var cost = laneCost.IsEmpty ? edge.Cost : laneCost[edgeStart + i];
+
+            if (crowd > 0)
+                cost *= 1 + (BotConstants.OccupancyCost * crowd);
+
+            if (cost < best)
+                best = cost;
+        }
+
+        return best;
     }
 }

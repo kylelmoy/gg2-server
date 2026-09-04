@@ -168,6 +168,20 @@ public sealed class NavGraph
 
     public int EdgeCount => _edges.Length;
 
+    /// <summary>
+    /// Where <paramref name="node"/>'s outgoing edges begin in <see cref="Edges"/>,
+    /// or -1 if it has none.
+    /// </summary>
+    /// <remarks>
+    /// <b>The index a caller needs to key a per-edge side table.</b>
+    /// <see cref="EdgesFrom"/> hands back a slice with no way to say where in the
+    /// flat array it came from, so anything holding one value per edge — a lane's
+    /// cost field, a usage count — could not look its entry up. The i-th edge of
+    /// <c>EdgesFrom(node)</c> is <c>Edges[EdgeStart(node) + i]</c>.
+    /// </remarks>
+    public int EdgeStart(int node) =>
+        (uint)node >= (uint)_nodes.Length ? -1 : _edgeStart[node];
+
     /// <summary>The outgoing edges of <paramref name="node"/>, as a contiguous slice.</summary>
     public ReadOnlySpan<NavEdge> EdgesFrom(int node)
     {
