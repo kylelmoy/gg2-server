@@ -1762,13 +1762,50 @@ result gets mistaken for a pre-registered one.
 `Gg2.Bots.NavDistances`, `NavSearch.Find`'s `distances` argument, gated by
 `NavDistancesTests`. Measured 2026-09-04, Release.
 
-⛔ **Storing the ROUTES does not work, and the reason is `BotOccupancy`.** A
-stored route is still optimal only if it touches nothing contended — occupancy
-can only raise costs, so a route that avoids every occupied edge is unbeatable —
-and on realistic traffic (six team-mates, goals clustered on objectives) that
-holds for **0.7-20% of queries**, typically under 10%. A blended "table, else
-A\*" path measured **0.7x — slower than just searching**, because the miss pays
-for the walk, the per-edge cleanliness scan and the full search.
+⛔ **Storing the ROUTES does not work on a live server, and the reason is
+`BotOccupancy`.** A stored route is still the right answer only if nothing has
+made one of its own hops dearer or illegal since it was computed — occupancy
+raises an edge a team-mate is walking, and the blacklist removes one outright.
+Measured in real matches by
+`RouteDiversityMatchTests.HowOftenAStoredRouteWouldStillBeValid`, 21 maps × 3
+seeds × 12 bots, 24,289 installed routes:
+
+| | routes a stored answer would still serve |
+|---|---|
+| no occupancy (`eval`, every rollout) | **98.4%** |
+| occupancy on (the live `--bots` server) | **23.5%** |
+
+⚠️ **Two earlier scratch figures for this are SUPERSEDED and should not be
+quoted: "0.7-20% of queries, typically under 10%", and a blended "table else A\*"
+path at "0.7x".** Neither was ever in the repo — the same provenance as the
+2.19x that the in-repo 1.36x replaced. The conclusion survives; the number was
+pessimistic by roughly twice.
+
+⛔ **And occupancy is NOT the only invalidator, which the control caught.** This
+measurement first asserted its no-occupancy arm at an exact 100% and failed:
+the blacklist is per bot and runs in every arm, so **1.6% of routes are stale
+with no crowding mechanism at all.** So even the occupancy-free paths need the
+guard rather than being trivially safe — which is a real cost on the one idea
+that looked free.
+
+⚠️ **Per map it ranges from 9.4% (`ctf_classicwell`) to 75.3% (`tdm_mantic`).**
+Deathmatch scatters bots and contends little; a CTF map funnels a team down the
+same corridors. **A single average hides the case a route table would be built
+for.**
+
+⛔ **Size is NOT the objection, and assuming it is sends you down the wrong
+path.** A *next-hop* table — store one node per pair and follow it hop by hop —
+is N² like the distance table: on `ctf_truefort`'s 687 nodes that is 0.9 MB as
+`ushort` against the distance table's 1.9 MB as `float`. Storing whole paths
+would be tens of MB a profile, but nobody would. **The objection is validity,
+not memory.**
+
+⚠️ **A route table also needs dimensions the distance table does not.**
+Distances split on the three class arcs alone, because a team, an intel flag and
+a shut gate only ever REMOVE edges and gates-open stays a lower bound for
+everyone. An exact next-hop answer has no such slack: a route through a gate
+this asker cannot pass is *wrong*, so the table would need a copy per team and
+per gate state as well — roughly 16 tables where distances need 4.
 
 ✅ **Storing the DISTANCES does work, because a distance is only ever a lower
 bound.** Occupancy multiplies, the blacklist removes, a closed gate removes —

@@ -587,6 +587,161 @@ public sealed class RouteDiversityMatchTests(ITestOutputHelper output)
         output.WriteLine($"                inflation: none {noneInf / n:P1}, distances {distInf / n:P1}");
     }
 
+    /// <summary>
+    /// How often a PRECOMPUTED route would still have been the right answer.
+    /// </summary>
+    /// <remarks>
+    /// <b>The question behind "why store distances and not routes".</b> A stored
+    /// route is still optimal only if nothing has made one of its own hops dearer
+    /// or illegal since it was computed. Two things can:
+    /// <see cref="BotOccupancy"/> raises the cost of an edge a team-mate is
+    /// walking, and a bot's anti-thrash blacklist removes one outright. Either
+    /// means the stored answer may no longer be the cheapest, and a lookup that
+    /// returns a stale route is a bot walking a worse way for the rest of its leg.
+    /// <para>
+    /// ⚠️ <b>A bot's OWN route is in the occupancy counts</b> —
+    /// <c>BotOccupancy.Add</c> put it there — so "somebody else is on this hop"
+    /// is a count of two or more, not of one. Counting one would call every route
+    /// in the match contended and the answer would be a flat 0%.
+    /// </para>
+    /// <para>
+    /// ⛔ <b>The no-occupancy arm is the control, and it reads 98.4% rather than
+    /// 100% — which is the point.</b> This test first asserted an exact 100% and
+    /// FAILED, correctly: occupancy is not the only thing that can invalidate a
+    /// stored route. The blacklist is per bot and is live in every arm, so about
+    /// <b>1.6% of routes are stale even with no crowding mechanism at all</b> —
+    /// which means <c>eval</c> and the training rollouts would still need the
+    /// guard, not just the live server.
+    /// </para>
+    /// </remarks>
+    [Fact(Skip = Measurement)]
+    public void HowOftenAStoredRouteWouldStillBeValid()
+    {
+        ReferenceTree.RequireNavCache();
+
+        var maps = NavCache.List(ReferenceTree.NavCacheDirectory)
+            .Where(g => g.Area == 1 && !g.Map.StartsWith("gg_debug", StringComparison.Ordinal))
+            .Select(g => g.Map)
+            .ToArray();
+
+        output.WriteLine($"{"map",-22} {"no occupancy",13} {"with occupancy",15} {"routes",8}");
+
+        long controlClean = 0, controlAll = 0, liveClean = 0, liveAll = 0;
+
+        foreach (var map in maps)
+        {
+            long cc = 0, ca = 0, lc = 0, la = 0;
+
+            for (var seed = 1u; seed <= Seeds; seed++)
+            {
+                var (c1, a1) = StoredRouteValidity(map, seed, occupancyOn: false);
+                var (c2, a2) = StoredRouteValidity(map, seed, occupancyOn: true);
+
+                cc += c1;
+                ca += a1;
+                lc += c2;
+                la += a2;
+            }
+
+            controlClean += cc;
+            controlAll += ca;
+            liveClean += lc;
+            liveAll += la;
+
+            output.WriteLine(
+                $"{map,-22} {(ca == 0 ? 0 : (double)cc / ca),13:P1} "
+                + $"{(la == 0 ? 0 : (double)lc / la),15:P1} {la,8}");
+        }
+
+        output.WriteLine(string.Empty);
+        output.WriteLine(
+            $"OVER {maps.Length} maps  no occupancy {(double)controlClean / controlAll:P1} "
+            + $"({controlAll} routes), with occupancy {(double)liveClean / liveAll:P1} "
+            + $"({liveAll} routes)");
+
+        // The control, asserted rather than eyeballed. NOT an exact 100%: the
+        // blacklist runs in this arm too, and about 1.6% of routes carry a banned
+        // hop. What must hold is that the control is near-clean while the live arm
+        // is not — if both drifted together this would be measuring its own
+        // bookkeeping rather than contention.
+        Assert.True(
+            (double)controlClean / controlAll > 0.90,
+            $"control arm only {(double)controlClean / controlAll:P1} clean; "
+            + "with no occupancy running almost every route should still be valid");
+
+        Assert.True(
+            (double)liveClean / liveAll < (double)controlClean / controlAll,
+            "occupancy invalidated no more routes than the control did");
+    }
+
+    /// <summary>
+    /// Plays one match and counts installed routes that nothing has invalidated.
+    /// </summary>
+    private static (long Clean, long All) StoredRouteValidity(string map, uint seed, bool occupancyOn)
+    {
+        var options = HeadlessMatchOptions.Default with
+        {
+            Map = map,
+            Bots = Bots,
+            MaxTicks = Ticks,
+            Seed = seed,
+        };
+
+        var match = HeadlessMatch.Load(options, ReferenceTree.MapsDirectory, ReferenceTree.NavCacheDirectory);
+        var shared = occupancyOn ? new BotOccupancy() : null;
+
+        for (var slot = 1; slot < match.SlotCount; slot++)
+        {
+            if (ScriptedBot.Of(match.SourceOf(slot)) is { } b)
+                b.Occupancy = shared;
+        }
+
+        long clean = 0;
+        long all = 0;
+
+        for (var tick = 0; tick < Ticks; tick++)
+        {
+            match.Step();
+
+            if (tick % SampleEvery != 0)
+                continue;
+
+            for (var slot = 1; slot < match.SlotCount; slot++)
+            {
+                if (ScriptedBot.Of(match.SourceOf(slot)) is not { } bot || !bot.Path.HasPath)
+                    continue;
+
+                var route = bot.Path.Path;
+
+                if (route.Count < 2)
+                    continue;
+
+                var team = match.State.Players[slot].Team;
+                var counts = shared?.Counts(team);
+                var contended = false;
+
+                for (var i = 0; i + 1 < route.Count && !contended; i++)
+                {
+                    var key = NavGraph.EdgeKey(route[i], route[i + 1]);
+
+                    // Two or more, because this bot's own route is in the counts.
+                    if (counts is not null && counts.TryGetValue(key, out var crowd) && crowd >= 2)
+                        contended = true;
+
+                    if (bot.Path.Blacklist.Contains(key))
+                        contended = true;
+                }
+
+                all++;
+
+                if (!contended)
+                    clean++;
+            }
+        }
+
+        return (clean, all);
+    }
+
     /// <summary>Steps a prepared match, scoring each team's routes as it goes.</summary>
     /// <remarks>
     /// <b>Inflation is measured here and not on the scenario suite, because the
