@@ -6,8 +6,7 @@ the evidence that says so. `PLAN.md` is the plan and the exit criteria,
 
 ⚠️ **This is a record, not a log.** It carries the claims a reader might act on —
 "the trace replays with zero error", "the bots cost half a percent of a tick" —
-and each should say what would show it has gone stale. It was moved out of
-`README.md` on 2026-09-02, where it had grown into the whole document.
+and each should say what would show it has gone stale.
 
 **Phases 0 to 8 are done and every exit criterion is met. Phase 9 — a learned
 policy — is in progress.**
@@ -16,7 +15,7 @@ policy — is in progress.**
 |---|---|---|
 | 0–4 | protocol, maps, a joinable server, the parity harness, collision, character physics | exact against the running game |
 | 5 | every weapon, projectile, the sentry, the airblast | nine oracles measured; an 898-tick trace replays closed-loop with zero error |
-| 6 | all eight gamemodes, round after round, every `FULL_UPDATE` field real | closed — a stock client has survived four gamemode changes in one session (2026-09-03). ⚠️ It was ONE round until then; see below |
+| 6 | all eight gamemodes, round after round, every `FULL_UPDATE` field real | closed — a stock client has survived four gamemode changes in one session |
 | 7 | bots: the input seam, nav, A\*, the follower, combat, the objective layer, the population manager | closed, with a number |
 | 8 | unpaced ticking, the human-play recorder, the headless match runner, the control port | closed — 44 matches across all 22 maps in 3.3s, 3,548x real time |
 | 9 | a learned policy: `NpyFile`, `PolicyNetwork`, `HybridBot`, the `Gg2.Env` seam, `tools/bench/` | in progress — see below |
@@ -25,40 +24,26 @@ policy — is in progress.**
 beams, ubercharge, afterburn, the airblast, the sentry gun, the sniper's scope,
 Quote's bubble screen, the spy's cloak and backstab, the sandvich, and taunting.
 
-## The 2026-09-03 audit against stock upstream
+## The stock-upstream audit
 
-Mechanical, not a reading: the 61 message ids, the 15-entry client-command table,
-the 55 entity types `builder_init.gml` registers, the eight gamemodes, the
-weapons and projectiles, and each server-side script group in turn. **Five gaps,
-all now closed**, and what makes them worth recording is the shape they shared —
-*the port received the data and did not act on it*, which reads as done from
-every angle except the one that matters.
+Checked mechanically against stock upstream GG2: the 61 message ids, the
+15-entry client-command table, the 55 entity types `builder_init.gml`
+registers, the eight gamemodes, the weapons and projectiles, and each
+server-side script group. **Falsification condition: re-run this audit against
+upstream after any reference bump.**
 
 | Gap | What it cost | Gate |
 |---|---|---|
-| **Queued jumping** was never simulated | a client with the setting on desynced on every landing — observable simulation | `QueueJumpTests`, and `SimulationBehaviourVersion` 2 → 3 |
+| Queued jumping was not simulated | a client with the setting on desynced on every landing — observable simulation | `QueueJumpTests`, `SimulationBehaviourVersion` 2 → 3 |
 | `CLIENT_SETTINGS` was stored, never rebroadcast | other clients dead-reckoned that player on the wrong jump rule | `QueueJumpTests` |
 | `PLAYER_CHANGENAME` truncated instead of kicking, and had no throttle | an unbounded broadcast amplifier on one socket | `NameAndBubbleTests` |
 | The April Fools chat-bubble substitution was missing | wrong bubble on one day, a relayed bubble the reference drops on the other 364 | `NameAndBubbleTests` |
 | Rewards were answered with silence | nobody's badges, hats or capes rendered | `RewardAuthTests`, behind `--rewards` |
+| Every connected stock client died on a gamemode-changing rotation | `StateUpdateWriter` captured `MatchState` once at `Start` and kept writing the previous map's HUD block after a rotation | fixed; see `docs/PARITY.md` |
 
-⛔ **And a sixth, found the same day by driving a real client: every connected
-stock client died on any gamemode-changing rotation.** `StateUpdateWriter`
-captured its `MatchState` once at `Start`, so after a rotation it wrote the
-*previous* map's HUD block. `docs/PARITY.md` has the whole thing.
-⚠️ **It is why phase 6's row above now says ONE round.** "A stock client has
-played a round start to finish" was true and had been read as more than it said:
-nobody had watched a second round, and the rotation between them was broken from
-phase 6 until 2026-09-03. **A claim is only as strong as the thing that was
-actually done** — this one was exactly one round long.
-
-⚠️ **Four of the first five were "not modelled" or "silence" sentences in code
-comments, and two had a `docs/` claim contradicting them.** `docs/PLAN.md` said
-queued jumping had landed on the strength of the plumbing; `docs/PROTOCOL.md`
-justified the reward silence as the reference's own behaviour, which it is not.
-**The falsification condition for this table: re-run the audit against upstream
-after any reference bump.** It found five in an afternoon and the previous
-completeness claim had stood for two days.
+⚠️ **A claim is only as strong as the thing that was actually done.** "A stock
+client has played a round start to finish" was true of exactly one round; the
+rotation between rounds was broken until this audit found it.
 
 ---
 
@@ -72,9 +57,7 @@ the decoder that has itself been checked against the running game.
 A stock GM8 client joins this server and reaches the team-select screen,
 indistinguishably from one joining the reference. Recording both servers'
 broadcast streams with `gg2-parity` and diffing them gives 569 bytes each,
-**byte-identical**. (For a long time they differed by four bytes of CTF round
-timer — a value the port had no simulation to produce. Phase 6's round closed
-that.)
+**byte-identical**.
 
 ## Phase 2 — the parity harness
 
@@ -91,9 +74,9 @@ real character boxes. Gates and player walls are in, behind a `CollisionFilter`,
 with every bounding box checked against the game. `good_move_contact_solid`,
 `move_outside_solid` and `characterHitObstacle` are transcribed.
 
-✅ **Every collision box in the project is measured against the running game** as
-of 2026-08-27. ⚠️ Three of the briefcase's four edges were invisible to every
-checked-in trace: **a green fixture is not confirmation of a box.**
+✅ **Every collision box in the project is measured against the running game.**
+⚠️ Three of the briefcase's four edges were invisible to every checked-in
+trace: **a green fixture is not confirmation of a box.**
 
 ## Phase 4 — character physics
 
@@ -101,94 +84,86 @@ Exact on both kinds of evidence. Against the running engine, 64 trajectories
 driven inside the game itself and read back to the last bit are reproduced **bit
 for bit**. Against a recording, the 898-tick two-bot `ctf_truefort` trace replays
 **closed-loop — anchored once at tick 0 and never corrected — with zero error on
-both axes**, for all 898 ticks including its two deaths. There are no nudges or
-tolerances in that statement.
+both axes**, for all 898 ticks including its two deaths.
 
-Getting there turned up three things GM8 does that no amount of careful
-transcription would have predicted: it parses some decimal literals one ULP above
-the IEEE nearest (and they are the physics constants), its comparisons are fuzzy
-to `1e-13`, and subtracting `hspeed` and adding it back is not a no-op. The last
-wire unit of drift was none of those — it was **where a replayed character
-starts**. A `PLAYER_SPAWN` carries a spawn point id rather than a position, so
-resolving it against the map the way the client does starts the character on an
-exact integer instead of inside a fifth-of-a-pixel bin.
+Three GM8 behaviours transcription alone would not have predicted: some decimal
+literals parse one ULP above the IEEE nearest (and they are the physics
+constants), comparisons are fuzzy to `1e-13`, and subtracting `hspeed` and
+adding it back is not a no-op. The last wire unit of drift was none of those —
+it was where a replayed character starts: a `PLAYER_SPAWN` carries a spawn
+point id rather than a position, and resolving it against the map the way the
+client does starts the character on an exact integer instead of inside a
+fifth-of-a-pixel bin.
 
-A stock GM8 client confirms it: pointed at this server it joins, renders the whole
-CTF HUD, spawns at a real spawn point and walks around with no correction.
-Sampling the client's own position every frame against a wall shows a 0.094px
-wobble at the update cadence — which is the wire's `x*5` quantisation, not a
-disagreement. The server's recorded state replayed offline reproduces the client's
-trajectory bit for bit.
+A stock GM8 client confirms it: pointed at this server it joins, renders the
+whole CTF HUD, spawns at a real spawn point and walks around with no
+correction. Sampling the client's own position every frame against a wall
+shows a 0.094px wobble at the update cadence — the wire's `x*5` quantisation,
+not a disagreement.
 
 ## Phase 5 — combat
 
-Every class's weapon, projectiles, blast damage, fire, the airblast, death and its
-attribution, and the Engineer's sentry gun. The sharpest recording — six bots
-fighting on `ctf_truefort` — replays closed-loop with **exact damage for 1,204
-ticks** (forty seconds) and exact positions for 357. Both of the points where the
-exact window ends have been traced to a cause and neither is a bug: one is a
-position landing 0.0003px from a rounding boundary, the other a wall stopping a
-character 0.0087px early. [`PARITY.md`](PARITY.md) has both.
+Every class's weapon, projectiles, blast damage, fire, the airblast, death and
+its attribution, and the Engineer's sentry gun. The sharpest recording — six
+bots fighting on `ctf_truefort` — replays closed-loop with **exact damage for
+1,204 ticks** (forty seconds) and exact positions for 357. Both points where
+the exact position window ends have been traced to a rounding boundary rather
+than a bug; [`PARITY.md`](PARITY.md) has both.
 
 ## Phase 6 — game modes and rotation
 
-All eight: Capture the Flag (carrying, dropping, returning, capturing, the score),
-King of the Hill, Dual King of the Hill, both control-point arrangements,
-Invasion, Arena, Generator and Team Deathmatch — plus the round itself (clock, win
-conditions, the victory screen, the map rotation), respawn, class and team
-changes, the scoreboard, the domination table, autobalance and the class limits.
-Every gamemode has a recorded fixture.
+All eight: Capture the Flag (carrying, dropping, returning, capturing, the
+score), King of the Hill, Dual King of the Hill, both control-point
+arrangements, Invasion, Arena, Generator and Team Deathmatch — plus the round
+itself (clock, win conditions, the victory screen, the map rotation), respawn,
+class and team changes, the scoreboard, the domination table, autobalance and
+the class limits. Every gamemode has a recorded fixture.
 
-Implementing the modes that reach them turned up **four latent wire bugs**, each a
-message whose length depends on its own content and each invisible to every
-recording: the sentry's `INPUTSTATE` block, `ARENA_ENDROUND`, the generator HUD
-block and `BALANCE`. Any one of them would have desynchronised a real client the
-first time the game reached that state.
+Four latent wire bugs were found by implementing the modes that reach them,
+each a message whose length depends on its own content and each invisible to
+every recording: the sentry's `INPUTSTATE` block, `ARENA_ENDROUND`, the
+generator HUD block and `BALANCE`.
 
 The server runs the simulation: pick a team and you get a character at a real
-spawn point, advanced every tick and serialised to every client. The tick and the
-wire conversion have exactly one implementation each, shared with the parity
-replayer — two copies would let a recording pass every gate while the server
-shipped different bytes.
+spawn point, advanced every tick and serialised to every client. The tick and
+the wire conversion have exactly one implementation each, shared with the
+parity replayer.
 
 ## Phase 7 — bots
 
-The nav format and A\*, the path follower with its jump and rocket-jump branches,
-targeting and aim, the combat controller, the objective layer and the population
-manager. This was seeded by porting all 7,202 lines of a GG2 *fork's* bot layer;
-stock GG2 has none, and the two have since diverged, so the bots here are judged
-by measurement rather than by correspondence ([`BOTS.md`](BOTS.md)).
+The nav format and A\*, the path follower with its jump and rocket-jump
+branches, targeting and aim, the combat controller, the objective layer and
+the population manager. This was seeded by porting a GG2 *fork's* bot layer;
+stock GG2 has none, and the two have since diverged, so the bots here are
+judged by measurement rather than by correspondence ([`BOTS.md`](BOTS.md)).
 
 ⚠️ **The reference's bot layer is treated as INCOMPLETE rather than as a
-specification**, unlike every other phase. A bot's decisions are this project's
-own; the wire and the observable simulation are not.
+specification**, unlike every other phase. A bot's decisions are this
+project's own; the wire and the observable simulation are not.
 
-### The headroom number, and the two things always to say about it
+✅ **Twelve bots that walk, fight and play the objective cost 0.151ms of a
+33.3ms tick — 0.5% of the budget**, measured over 600 steady-state ticks of a
+real server with the whole simulation, the state serialiser and the broadcast
+in the loop. That is phase 7's exit criterion and the project's justification.
 
-✅ **Twelve bots that walk, fight and play the objective cost 0.151ms of a 33.3ms
-tick — 0.5% of the budget**, measured 2026-08-27 over 600 steady-state ticks of a
-real server with the whole simulation, the state serialiser and the broadcast in
-the loop. That is phase 7's exit criterion and the project's justification.
-
-⚠️ **Always say which build.** That is a **Release** figure. The same test in
-Debug reads **0.307ms, 0.9%** — twice the cost, and a re-measure that forgets to
-name its build looks exactly like a factor-of-two regression. A stale 0.20ms sat
-in four documents without one.
+⚠️ **Always say which build.** That is a **Release** figure; the same test in
+Debug reads **0.307ms, 0.9%** — twice the cost.
 
 ⚠️ **What is measured is this port's cost, not the ratio to GM8.** Nobody has
-benchmarked the reference's bot layer here, so "one to two orders of magnitude
-better" is a design intention. What the number establishes is that a bot can be
-made roughly two orders of magnitude heavier before the tick is at risk.
+benchmarked the reference's bot layer here. What the number establishes is
+that a bot can be made roughly two orders of magnitude heavier before the tick
+is at risk.
 
 ## Phase 8 — the fast loop
 
-Unpaced ticking, a human-play recorder, a headless match runner and a loopback
-control port. **44 matches across all 22 maps in 3.3 seconds, 3,548x real time.**
+Unpaced ticking, a human-play recorder, a headless match runner and a
+loopback control port. **44 matches across all 22 maps in 3.3 seconds, 3,548x
+real time.**
 
-⚠️ All four switches are off by default, and `--speed` and `--control-port` must
-stay off wherever a client is connected — clients pace themselves at 30 Hz and
-re-simulate between updates, so an unpaced server desynchronises every one at
-once.
+⚠️ All four switches are off by default, and `--speed` and `--control-port`
+must stay off wherever a client is connected — clients pace themselves at 30
+Hz and re-simulate between updates, so an unpaced server desynchronises every
+one at once.
 
 ⚠️ **A match that ends is not a match that happened.** `eval` reported broken
 Arena matches as wins for weeks, because five instant rounds reach a cap limit
@@ -197,57 +172,53 @@ like five real ones. `MatchActuallyHappensTests` makes that mechanical; any
 
 ## Phase 9 — a learned policy (in progress)
 
-`PolicyNetwork` runs a checkpoint trained by the sibling `gg2-rl` project in this
-process, gated logit-for-logit against that project's own numpy on 64 real states;
-`HybridBot` hands it the keys and aim inside a 150px engagement window while the
-scripted layer keeps movement, routing and objectives.
+`PolicyNetwork` runs a checkpoint trained by the sibling `gg2-rl` project in
+this process, gated logit-for-logit against that project's own numpy on 64
+real states; `HybridBot` hands it the keys and aim inside a 150px engagement
+window while the scripted layer keeps movement, routing and objectives.
 
-⛔ **The result nobody predicted: the policy is most valuable used sparingly.** At
-150px it holds about **7% of ticks** and beats the all-scripted bot — better death
-share on **21 of 21 maps** over 400 matches a map, sign test p = 4.8e-7. Widen the
-window and the combat gain keeps rising while the objective collapses faster: at
-450px on one map the policy wins **4 rounds to 133**.
+The one checkpoint that exists, at a 150px window, holds about **7% of ticks**
+and beats the all-scripted bot on death share on **21 of 21 maps** over 400
+matches a map (sign test p = 4.8e-7). Widening the window raises the combat
+gain while the objective collapses faster: at 450px on one map the policy wins
+4 rounds to 133.
 
-⚠️ **That claim is about one checkpoint, not about the method.** It licenses "the
-shipped artefact beats the scripted control" and not "a policy trained this way
-beats scripted" — training variance across seeds is larger than the effect.
-[`ENV.md`](ENV.md), "Phase 4 re-measured", has both tables, the scope statement
-and the two layers of censoring that made every earlier version of these numbers
-wrong.
+⚠️ **That result is about one checkpoint, not about the method** — training
+variance across seeds is larger than the effect.
 
-⛔ **All of that describes `SIM_UUID 7ff5940d97aa7bed`, and this build is
-`9e0d931e1106a1bf`** — the 2026-09-02 carry invalidated the only checkpoint that
-exists. **Treat every phase-4 behavioural number above as history**; re-measuring
-one needs a checkpoint trained against this head. The suite does not wait for
-that: the checkpoint is a test **fixture** now (real weights, a numpy oracle for
-the forward pass), and nothing here depends on `gg2-rl` doing anything.
-[`ENV.md`](ENV.md), "The checkpoint is a FIXTURE now"; [`BOTS.md`](BOTS.md), "a
-policy is DATED by the physics".
+⛔ **That checkpoint is stamped `SIM_UUID 7ff5940d97aa7bed`; this build is
+`9e0d931e1106a1bf`.** The 2026-09-02 physics carry invalidated the only
+checkpoint that exists, so every phase-9 behavioural number above is history
+until a checkpoint is trained against the current head — nobody is making one.
+The suite does not wait for that: the checkpoint is a test **fixture** (real
+weights, a numpy oracle for the forward pass), and nothing here depends on
+`gg2-rl` doing anything. [`ENV.md`](ENV.md), "The checkpoint is a fixture";
+[`BOTS.md`](BOTS.md), "a policy is dated by the physics".
 
 ---
 
 ## Why the project exists
 
-1. **Performance headroom for much heavier bot logic.** The bot layer this port
-   was seeded from is 7,202 lines of GML interpreted by Game Maker 8, running for
-   every bot every tick. That ceiling is the binding constraint on how good the
-   bots can get. The headroom number above says the budget is there.
+1. **Performance headroom for much heavier bot logic.** The bot layer this
+   port was seeded from is 7,202 lines of GML interpreted by Game Maker 8,
+   running for every bot every tick. That ceiling is the binding constraint on
+   how good the bots can get. The headroom number above says the budget is
+   there.
 2. **A faster loop for writing and testing that logic.** A pure, I/O-free
-   simulation can run thousands of ticks with no game, no rendering and no real
-   time elapsing — so a bot change is evaluated in seconds across every map,
-   instead of by watching a live server.
+   simulation can run thousands of ticks with no game, no rendering and no
+   real time elapsing — so a bot change is evaluated in seconds across every
+   map, instead of by watching a live server.
 
-Wire compatibility is a hard requirement throughout: stock clients must be able to
-connect and play without modification.
+Wire compatibility is a hard requirement throughout: stock clients must be
+able to connect and play without modification.
 
 ## What is not gated
 
-⚠️ **The parity fixtures are all recordings of the reference's own bots**, and no
-recording covers the gamemode work end to end. It is gated by the reference and by
-purpose-built tests instead; a recording on a control-point map is still worth
-capturing.
+⚠️ **The parity fixtures are all recordings of the reference's own bots**, and
+no recording covers the gamemode work end to end. It is gated by the
+reference and by purpose-built tests instead.
 
-⚠️ **If a number is quoted as a measurement anywhere in this repo, ask what would
-go red if it doubled.** On this project's evidence the answer was usually
-"nothing" — and two of the three pinned end-to-end measurements were hiding an
-error when they were finally gated.
+⚠️ **If a number is quoted as a measurement anywhere in this repo, ask what
+would go red if it doubled.** On this project's evidence the answer was
+usually "nothing" — and two of the three pinned end-to-end measurements were
+hiding an error when they were finally gated.

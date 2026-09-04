@@ -13,7 +13,7 @@ namespace Bench;
 /// process.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>The question is latency, not throughput</b>, and the two are different
+/// <b>The question is latency, not throughput</b>, and the two are different
 /// here. gg2-rl's training leaves the machine 91% idle — its env workers use 4%
 /// of a core each — so what its loop is waiting on is round trips, not
 /// simulation. A throughput benchmark cannot see that: it pipelines nothing and

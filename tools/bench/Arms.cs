@@ -9,12 +9,11 @@ namespace Bench;
 /// Arms 1, 2 and 3: all-scripted, policy hybrid, search hybrid.
 /// </summary>
 /// <remarks>
-/// `gg2-rl`'s arm-3 experiment. ⚠️ <b>A NEW mode rather than a third arm inside
-/// <see cref="PerMapEval"/></b>, deliberately: that mode produced phase 4's
-/// numbers and its two arms have to stay reproducible. Adding a third there would
-/// have put a new controller inside the instrument the old result is defined by.
+/// A separate mode rather than a third arm inside <see cref="PerMapEval"/>:
+/// that mode produced phase 4's numbers and its two arms have to stay
+/// reproducible, so a third controller does not go inside that instrument.
 /// <para>
-/// ⛔ <b>Two criteria, and the second is a GATE rather than a diagnostic.</b> Death
+/// <b>Two criteria, and the second is a GATE rather than a diagnostic.</b> Death
 /// share is the phase-4 criterion, unchanged. <b>Max tick time is co-primary</b>:
 /// the server is single-threaded at 30 Hz, one search decision is ~23% of a
 /// 33.3 ms tick at twelve characters, and handovers are correlated because several
@@ -24,7 +23,7 @@ namespace Bench;
 /// match and still reports a share.
 /// </para>
 /// <para>
-/// ⚠️ <b>Maximum, not mean.</b> `tools/bench` trap 6: if the units share a
+/// <b>Maximum, not mean.</b> `tools/bench` trap 6: if the units share a
 /// resource with a deadline, the mean is not the constraint. A mean tick time
 /// would be reassuring and useless.
 /// </para>
@@ -47,19 +46,15 @@ public static class ArmsEval
     /// One row per MATCH, so a later question does not need a re-run.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>This exists because the instrument twice lacked what the analysis wanted,
-    /// and each time it cost a full 21-map re-run.</b> First death COUNTS, without
-    /// which the aggregate could not be computed from its own output; then PER-MATCH
-    /// shares, without which a clustered-standard-error objection could not be
-    /// answered. Both were foreseeable only in the sense that "record the unit of
-    /// observation, not just the total" always is.
+    /// One row per match rather than only a running total, so the aggregate can be
+    /// recomputed from the file and a clustered-standard-error question can be
+    /// answered without re-playing every match.
     /// <para>
-    /// ⚠️ <b>A death is not an independent observation; a MATCH is closer to one.</b>
+    /// <b>A death is not an independent observation; a MATCH is closer to one.</b>
     /// ~40 deaths arrive together per match, so a test over pooled deaths treats
     /// clustered data as independent and overstates its own evidence. With per-match
     /// rows on disk that test can be redone by anybody without re-playing 2,520
-    /// matches. <c>gg2-rl</c> raised it; the fix is the file rather than a correction
-    /// factor nobody can estimate.
+    /// matches.
     /// </para>
     /// </remarks>
     private static StreamWriter? _rows;
@@ -71,7 +66,7 @@ public static class ArmsEval
         var focus = Environment.GetEnvironmentVariable("BENCH_FOCUS");
         var list = focus is { Length: > 0 } ? focus.Split(',') : PerMapEval.Maps;
 
-        // ⚠️ The search's own tuning, stated here rather than defaulted, because a
+        // The search's own tuning, stated here rather than defaulted, because a
         // reader has to know which search this arm ran. k is the candidate set,
         // which is per class and not set here; horizon 20 is the measured default.
         var search = new RolloutOptions(HorizonTicks: 20);
@@ -109,7 +104,7 @@ public static class ArmsEval
     }
 
     /// <summary>
-    /// ⛔ The whole table in one block, verdict and refutation inseparable.
+    /// The whole table in one block, verdict and refutation inseparable.
     /// </summary>
     /// <remarks>
     /// `tools/bench` trap 1 and its family: a conclusion and the thing that would
@@ -149,11 +144,10 @@ public static class ArmsEval
         }
 
         Console.WriteLine();
-        // ⛔ THE AGGREGATE, WITH ITS COUNTS. The per-map sign test is licensed only
-        // where each map’s effect clears the floor stability.py reports, and on this
+        // THE AGGREGATE, WITH ITS COUNTS. The per-map sign test is licensed only
+        // where each map's effect clears the floor stability.py reports, and on this
         // comparison 15 of 21 maps fall below it. So the aggregate is the statistic
-        // that survives - and a share without its denominator is trap 1, which this
-        // very method printed for a whole run before anybody noticed.
+        // that survives - and a share without its denominator is trap 1.
         long r1 = 0, b1 = 0, r2 = 0, b2 = 0, r3 = 0, b3 = 0;
 
         for (var i = 0; i < one.Count; i++)
@@ -175,7 +169,7 @@ public static class ArmsEval
             $"death share, arm 3 vs arm 2: better on {betterThanTwo} maps, worse on {worseThanTwo}");
         Console.WriteLine();
 
-        // ⛔ The gate. Stated as a verdict rather than a number, in the same block.
+        // The gate. Stated as a verdict rather than a number, in the same block.
         Console.WriteLine(
             worstTick <= 33.3
                 ? $"TICK GATE PASSED: arm 3's worst tick was {worstTick:0.00} ms against a 33.3 ms budget"
@@ -185,7 +179,7 @@ public static class ArmsEval
 
     /// <summary>Bots in the match. 8 keeps the death share comparable to phase 4.</summary>
     /// <remarks>
-    /// ⚠️ <b>The tick gate wants TWELVE and the death-share criterion wants EIGHT</b>,
+    /// <b>The tick gate wants TWELVE and the death-share criterion wants EIGHT</b>,
     /// and they are different questions. Eight is what phase 4 measured, so changing
     /// it silently would make arm 3 incomparable to the result it is being judged
     /// against. Twelve is the shipping configuration and the one whose tail matters.
@@ -230,7 +224,7 @@ public static class ArmsEval
 
             while (match.Outcome == MatchOutcome.Running)
             {
-                // ⚠️ The WHOLE tick, not the micro-controller's share of it. What a
+                // The WHOLE tick, not the micro-controller's share of it. What a
                 // 30 Hz server has to fit in 33.3 ms is every bot's decision plus the
                 // simulation, and the tail this gate exists for is several bots
                 // engaging at once - which only a whole-tick measurement can see.
@@ -238,14 +232,12 @@ public static class ArmsEval
                 match.Step();
                 tick.Stop();
 
-                // ⛔ DECOMPOSE the worst tick rather than only recording it. 92 ms against
+                // DECOMPOSE the worst tick rather than only recording it. 92 ms against
                 // a 7.64 ms mean decision is either ~12 coinciding decisions or a few
                 // expensive ones - and those pick DIFFERENT levers: a concurrency cap
                 // bounds coincidence, threading and per-class k attack cost. A sniper
-                // searches 120 candidates against everyone else’s 60, so it is roughly
-                // double the mean before any coincidence. gg2-rl asked for this rather
-                // than guess, having been wrong once today about a mean describing a
-                // distribution.
+                // searches 120 candidates against everyone else's 60, so it is roughly
+                // double the mean before any coincidence.
                 if (tick.Elapsed.TotalMilliseconds > maxTickMs)
                 {
                     worstDeciders = 0;
@@ -286,7 +278,7 @@ public static class ArmsEval
                 }
             }
 
-            // ⚠️ Written BEFORE the running totals absorb them, because the running
+            // Written BEFORE the running totals absorb them, because the running
             // totals are exactly what loses the unit of observation.
             _rows?.WriteLine(
                 $"{map},{arm},{i},{matchRed},{matchBlue},{matchTicks},{matchMaxMs:0.###}");
@@ -296,10 +288,8 @@ public static class ArmsEval
 
             for (var slot = 1; slot < WorldState.MaxSlots; slot++)
             {
-                // ⚠️ ONE accessor for every arm. This was two lines summing
-                // PolicyTicks and SearchTicks, with a comment that exactly one of
-                // them is always zero — an arity the wrapper split forced on every
-                // reader of this column.
+                // ONE accessor for every arm: exactly one of PolicyTicks and
+                // SearchTicks is always zero for a given bot.
                 microTicks += match.HybridBotFor(slot)?.MicroTicks ?? 0;
             }
         }

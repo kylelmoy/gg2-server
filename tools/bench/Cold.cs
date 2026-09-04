@@ -9,7 +9,7 @@ namespace Bench;
 /// gg2-rl rebuilds its whole pool every iteration.
 /// </summary>
 /// <remarks>
-/// ⚠️ Everything else in this bench warms up first and so measures steady state.
+/// Everything else in this bench warms up first and so measures steady state.
 /// A process that lives ~20 seconds and is then discarded never reaches steady
 /// state on its startup path, so this is the number that matters for bring-up.
 /// </remarks>

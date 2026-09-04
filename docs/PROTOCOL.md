@@ -1,10 +1,10 @@
 # The GG2 wire protocol
 
-Everything here was read out of the reference implementation in
-`D:\code\Gang-Garrison-2\Source\gg2` at GG2 v2.9.2 (`VERSION = 29200`). File
-references are to that tree. **The stock client is the specification.** Where
-this document and `Scripts/Client/ClientBeginStep.gml` disagree, the client is
-right and this file has a bug — fix it here.
+Extracted from the reference implementation at GG2 v2.9.2 (`VERSION = 29200`),
+`D:\code\Gang-Garrison-2-upstream\Source\gg2`. File references are to that tree.
+**The stock client is the specification.** Where this document and
+`Scripts/Client/ClientBeginStep.gml` disagree, the client is right and this file
+has a bug — fix it here.
 
 ## Transport
 
@@ -363,16 +363,9 @@ Demoman weapon block:
 ```
 
 ⚠️ **The count is a promise and the client reads the records positionally**, so
-the two must be produced by one walk. This repo shipped a version where they were
-not: `WeaponState` carried both a `Lobbed` the simulation maintained and a
-`MinesLobbed` the serialiser read, and nothing ever wrote the second. A demoman
-with eight mines out put a **0** and no records — self-consistent, so no client
-ever desynchronised and no framing error ever fired; every client simply drew no
-mines. It could not be caught by a recording either, because `gg2-parity record`
-joins immediately and no fixture holds a demoman with mines out in a full update.
-`tests/Gg2.Tests/MineUpdateLayoutTests.cs` round-trips the real writer through
-the real reader instead, which is the only way to see bytes that were never
-written.
+the two must be produced by one walk. `MineUpdateLayoutTests` round-trips the
+real writer through the real reader, which is the only way to catch a mismatch
+between a `WeaponState`'s tracked count and what actually gets written.
 
 Per sentry (`Objects/InGameElements/Sentry.events/User Event 12.xml`):
 
@@ -395,15 +388,9 @@ event guards each group on the tier and between them they cover only
 and the player's block ends at its `subobjects` byte with bit 1 still set. A
 reader that consumes the hp byte unconditionally slips one byte per sentry on
 every tick that is not a quick update (`GameServerBeginStep.gml:99`), which is
-most of them.
-
-**This shipped in the port and nothing could see it**, because no recording had
-ever contained an engineer — every fixture was scout, soldier, demoman and
-medic. It surfaced as "no framing for server message 0" several hundred bytes
-downstream, nowhere near the cause. `tests/Gg2.Tests/SentryUpdateLayoutTests.cs`
-is the gate on the arithmetic, `FixtureFramingTests` on the recordings, and
-`docs/PARITY.md`'s "when adding a fixture, ask what state it cannot reach" is
-the moral.
+most of them. No recorded fixture contains an engineer, so
+`SentryUpdateLayoutTests` round-trips the writer through the reader directly
+rather than relying on a recording; `FixtureFramingTests` gates the recordings.
 
 ⚠️ Note also that the trailing `vspeed` is **self-describing through bit 7 of
 the byte before it**: a built sentry has no `vspeed`, a falling one does. A
@@ -436,8 +423,7 @@ ushort  instance count       // 0 or 1
 `doEventGrabIntel` destroys the instance, so "carried" is a *shorter* message
 rather than a flagged one, and the client's `deserialize` destroys every
 instance it has and recreates exactly `count` of them. Writing a block anyway
-slips six bytes and surfaces hundreds of bytes later as a framing error — the
-same failure mode as the sentry's `INPUTSTATE` bytes above.
+slips six bytes and surfaces hundreds of bytes later as a framing error.
 `IntelUpdateLayoutTests` round-trips the real writer through the real reader.
 
 ### The KotH HUD block, and the control points
@@ -498,9 +484,8 @@ lead it on a `FULL_UPDATE` and are absent from a `CAPS_UPDATE`:
   ... then the one control point's block
 ```
 
-⚠️ **`ARENA_ENDROUND` is not a bodyless message**, and this port framed it as
-one until phase 6's arena work — which would have lost the stream the first time
-a round ended on an arena map. It carries five bytes and then five more per MVP:
+⚠️ **`ARENA_ENDROUND` is not a bodyless message.** It carries five bytes and
+then five more per MVP:
 
 ```
 ubyte   win
@@ -511,11 +496,9 @@ ubyte   redWins, ubyte blueWins
   }
 ```
 
-The counts have to be read to know how long the message is. It survived because
-no recording has ever been made on an arena map — the same reason the sentry
-`INPUTSTATE` bug survived six phases. The other three Arena messages
-(`ARENA_RESTART`, `ARENA_STARTROUND`, `ARENA_WAITFORPLAYERS`) really are
-bodyless.
+The counts have to be read to know how long the message is. The other three
+Arena messages (`ARENA_RESTART`, `ARENA_STARTROUND`, `ARENA_WAITFORPLAYERS`)
+really are bodyless.
 
 ⚠️ **Both counts are written before either list**, so a sender cannot stream
 the records and count as it goes — both lists have to be chosen first. The
@@ -539,18 +522,10 @@ BALANCE (18)  ubyte 255                       the "teams are uneven" notice
 BALANCE (18)  ubyte playerId, ubyte class     somebody was moved
 ```
 
-⚠️ **Not a fixed-width message, and this port framed it as one** — two body
-bytes — until phase 6's team balance. The client reads one byte and only then
+⚠️ **Not a fixed-width message.** The client reads one byte and only then
 decides whether to read a second (`ClientBeginStep.gml:244-253`), so a reader
 that always takes two is one byte ahead from the first notice onwards and never
 recovers.
-
-It never fired because autobalance needs one team two players larger than the
-other and every fixture is a balanced bot roster. **The fourth message in this
-project with a content-dependent length and no recording that reaches it**,
-after the sentry `INPUTSTATE` block, `ARENA_ENDROUND` and the generator HUD
-block — when adding a message, ask what makes its length change and whether any
-recording can get there.
 
 ⚠️ **The switch does not say which team.** The client flips the player's own
 `team` field, so both sides must already agree on where they were. The class
@@ -593,10 +568,8 @@ them*. See docs/SIMULATION.md, "Settled: the domination kill table".
 
 ⚠️ **No recording can see any of this.** The block is `FULL_UPDATE`-only and
 `gg2-parity record` joins immediately, so the one full update in a trace is the
-join's — sent before anybody has scored. A port that wrote eleven zeroes for
-ever replays every fixture identically, which is exactly what this one did until
-phase 6's scoreboard. `PlayerStatsLayoutTests` round-trips the real writer
-through the real reader instead.
+join's — sent before anybody has scored. `PlayerStatsLayoutTests` round-trips
+the real writer through the real reader instead.
 
 ### The Team Deathmatch HUD block
 
@@ -632,10 +605,7 @@ reaches each through a `with` (`GeneratorHUD.events/User Event 12.xml`), which
 visits no instances once a generator has been destroyed — so a
 `GENERATOR_DESTROY` shortens every later HUD block by four bytes. A reader that
 always takes two loses the stream, and surfaces hundreds of bytes later as "no
-framing for server message N". This is the third message in the project with
-that shape, after the sentry's `INPUTSTATE` block and `ARENA_ENDROUND`, and like
-both of those it is invisible to every recording: `gen_destroy` is the only
-shipped generator map and nothing has ever been recorded on it.
+framing for server message N".
 
 A client stays in step because it destroys its own instance on the message.
 `Gg2.Protocol.WorldShape.GeneratorCount` is how anything else does — it is the
@@ -663,9 +633,7 @@ Six of the eight gamemodes open their HUD block with exactly these two, and the
 client rebuilds `timeLimit = timeLimitMins*30*60` from the first and then runs
 its own copy of the second down between updates. ⚠️ **So a server that never
 advances the timer does not merely show a wrong number — it makes every client's
-clock jump backwards on each update it receives.** That is the one field
-docs/PARITY.md's phase-1 byte diff always disagreed on, and it is fixed since
-the round landed.
+clock jump backwards on each update it receives.**
 
 ⚠️ **`CAPS_UPDATE` is sent *in addition* to that tick's ordinary update**, not
 instead of it — `GameServerBeginStep.gml:88`, above the tier selection. A
@@ -674,12 +642,11 @@ next tick; there is also a `frame mod 3600` heartbeat. So a client can see two
 state messages on one tick, and `TraceParser` treats a `CAPS_UPDATE` as an
 event rather than a tick boundary for exactly that reason.
 
-## What a headless server can skip
+## What a headless server can skip, and what does not skip
 
-Not everything in the reference is load-bearing for a private headless server:
+Not everything in the reference is load-bearing for a private headless server.
 
-- ~~**Lobby registration**~~ ✅ **Implemented 2026-09-01, behind `--lobby`, which
-  defaults off** — the second half of what this entry asked for.
+- **Lobby registration** — implemented, behind `--lobby`, which defaults off.
   `LobbyRegistration` builds the two datagrams and `LobbyAnnouncer` sends them;
   all four of the reference's re-announce triggers are wired (the 30-second
   cadence, a map change, a join, and a leave that un-fills a full server), plus
@@ -698,15 +665,17 @@ Not everything in the reference is load-bearing for a private headless server:
   `getNumberOfOccupiedSlots`, which is humans, and the packet's own bot field is a
   hard zero in the reference. Transcribed rather than corrected — that field's
   meaning belongs to the lobby, not to us.
-- ~~**Reward/auth**~~ ✅ **Implemented 2026-09-03, behind `--rewards`, which
-  defaults off.** `RewardAuth` builds the packets, `RewardAuthClient` is the
-  socket, and `GameServer` answers `REWARD_REQUEST` with a challenge, relays the
-  response and broadcasts the `REWARD_UPDATE`. The string is kept on the roster
-  so a later joiner's `FULL_UPDATE` carries it too.
-  ⚠️ **The default is off and that is a DEPARTURE from the reference, not a
-  transcription of it** — see the corrected reason below. Turning it on makes
-  this server open outbound TCP to a third party carrying its players' user ids,
-  and a headless binary has no hosting menu in which somebody agreed to that.
+- **Reward/auth** — implemented, behind `--rewards`, which defaults off.
+  `RewardAuth` builds the packets, `RewardAuthClient` is the socket, and
+  `GameServer` answers `REWARD_REQUEST` with a challenge, relays the response and
+  broadcasts the `REWARD_UPDATE`. The string is kept on the roster so a later
+  joiner's `FULL_UPDATE` carries it too.
+  ⚠️ **The default is off, and that is a DEPARTURE from the reference, not a
+  transcription of it**: `processClientCommands.gml:320-325` mints a challenge
+  and replies to every `REWARD_REQUEST` unconditionally, with no server-side
+  opt-out in stock GG2. Turning it on makes this server open outbound TCP to a
+  third party carrying its players' user ids, and a headless binary has no
+  hosting menu in which somebody agreed to that.
   ⚠️ **`--auth-server host[:port]` overrides where it authenticates**, which is
   the only way the flow can be exercised: `ganggarrison.com:45022` is a third
   party and is not contacted from this repo. `RewardAuthTests` stands up a
@@ -715,83 +684,32 @@ Not everything in the reference is load-bearing for a private headless server:
   `GameServerCreate.gml:79-83` authenticates the host's own player with
   `ipCheck = false` and `hmac_md5(key, challenge)`. This port has no local player
   — slot 0 is a reserved spectator nobody plays — so there is nothing to
-  decorate, and reading `[Haxxy] RewardKey`/`RewardId` would send an operator's
-  own secret nowhere useful. **What being wrong costs:** a scoreboard entry for
-  slot 0 with no badges on it.
-  ⛔ **Assessed 2026-09-01 and the answer was "skip" — deliberately, not by
-  default.** The protocol is fully specified in the tree and would be
-  straightforward to write, so it was a decision rather than a blocker. Three
-  reasons were given, in order of weight; the first two are now addressed by the
-  flag and the override respectively, and the third is why it was safe to leave
-  so long:
-  1. **The game server would have to make outbound HTTP requests to
-     `ganggarrison.com` carrying player identities.** The flow is
-     `REWARD_REQUEST <user_id>` → server challenge → `hmac_md5(key, challenge +
-     serverIp)` → the *server* forwards it to the auth server and gets the user's
-     data back (`rewardAuthStart.gml`, `Scripts/Faucet HTTP/`). That is a
-     third-party dependency and a privacy consideration on behalf of users, and
-     it is not a thing to add unilaterally.
-  2. **It cannot be verified.** The auth server is not in the reference tree and
-     must not be contacted from here, so any implementation would ship as an
-     unverifiable claim — the failure mode this repo keeps recording.
-  3. **Every effect is cosmetic.** ⚠️ This one is worth stating because the call
-     sites look alarming: `hasReward`/`hasClassReward` are read from
-     `Character`'s Create, Begin Step and End Step, from `Weapon`'s Create and
-     from `Revolver`'s User Event 1 — all *simulation* events. They are still
-     decoration: `GoldTrail` changes a falling `LooseSheet`'s sprite,
-     `TauntMoney_` spawns a `Money` object during a taunt, `BH` adds a
-     bobble-head overlay to a stab. **And the `random`/`choose` draws inside
-     those branches do not perturb the observable stream** — particles are on
-     GM8's free-running generator, which `GmlRandom`'s remarks and
-     `docs/SIMULATION.md` already exclude from the seeded one. So a player with
-     rewards does not simulate differently.
-
-  ⛔ **That claim was FALSE and stood for two days: "silence is the reference's
-  own behaviour on a server with no auth configured".** There is no such
-  configuration. `processClientCommands.gml:320-325` mints a challenge and
-  replies to **every** `REWARD_REQUEST` unconditionally; the only server-side
-  reward setting in GG2 (`[Haxxy] RewardKey`/`RewardId`) governs the host's own
-  self-auth and nothing else. The *decision* to skip was sound and is unchanged
-  above — what was wrong was dressing it up as parity. ⚠️ **A deliberate
-  departure described as a transcription is the worst of both**: nobody
-  re-examines it, because it reads as already checked.
-- ~~**Plugins** (`PLUGIN_PACKET`, `pluginList`).~~ ✅ **Implemented 2026-09-03.
-  See `docs/PLUGINS.md`**, which is the whole subject: the greeting fields, the
+  decorate.
+  ⛔ **Deliberately skipped, not a gap**: making the game server issue outbound
+  HTTP requests to a third party carrying player identities is a decision, not a
+  transcription task, and it cannot be verified against the live auth service
+  from this repo. Every effect of rewards is cosmetic (gear, hats, particles) and
+  none of it perturbs the seeded RNG stream — particles run on GM8's
+  free-running generator, which is excluded from parity by `docs/SIMULATION.md`.
+- **Plugins** (`PLUGIN_PACKET`, `pluginList`) — implemented. See
+  `docs/PLUGINS.md`, which is the whole subject: the greeting fields, the
   container framing, the seam a server-half implementation plugs into, and how a
   plugin is ported. The default is still an empty list, so nothing changes for a
   server that does not ask for one.
-  ⛔ **This document said the opposite until 2026-09-03 — "NOT portable … do not
-  open this as a task" — and the argument for it was half right.** A GG2 plugin
-  is indeed a zip of GML the *client* downloads and runs inside Game Maker 8
-  (`loadserverplugins.gml`), and this port still cannot execute one. What the
-  argument missed is that **a plugin has two halves and only the client's half
-  has to be GML**: the host runs the same script's `global.isHost` branches, and
-  those can be re-written in C# that speaks the same packets. The client is
-  unchanged and cannot tell. `ChatV2Plugin` is that, for `chat_v2_pr`.
-  ⚠️ **The cost is that an implementation is pinned to one version of the
-  plugin.** The packets carry no version field, so if the site re-releases the
-  zip the client half moves and the C# half does not.
-  `ServerPluginCatalogue` pins the md5 each implementation was read from and
-  advertises it by default; `PluginHashes.Resolve` logs loudly when anything
-  overrides it. **Re-read the plugin's GML before changing an implementation, and
-  move the pin in the same commit.**
-  ⚠️ **A plugin packet is KICKED, not ignored — for an id outside the advertised
+  ⚠️ **A plugin packet is KICKED, not ignored, for an id outside the advertised
   list.** `processClientCommands.gml:338-362` calls `_PluginPacketPush`, which
   returns false for an id absent from `global.pluginPacketBuffers` — a map filled
   by `loadserverplugins` and keyed by each plugin's *position*. So a server with
   no plugins kicks every sender and a server with two kicks any id above 1.
   Unreachable from a stock client whose list matches the greeting's.
   `PluginPacketTests`, `PluginWireTests`.
-- ~~**Map download.**~~ ✅ **Implemented 2026-09-01.** A map that is not in
-  `Gg2.Maps.InternalMaps` is advertised with its MD5 and served on
-  `DOWNLOAD_MAP` as a `uint` length followed by the raw file, rate-limited across
-  ticks and shared between simultaneous downloaders
-  (`serviceJoiningPlayer.gml:8-24`, `:131-144`). Before this, a custom map could
-  only be played by people who already had the file.
+- **Map download** — implemented. A map that is not in `Gg2.Maps.InternalMaps`
+  is advertised with its MD5 and served on `DOWNLOAD_MAP` as a `uint` length
+  followed by the raw file, rate-limited across ticks and shared between
+  simultaneous downloaders (`serviceJoiningPlayer.gml:8-24`, `:131-144`).
   ⚠️ **The MD5 is 32 LOWERCASE hex characters, measured rather than assumed.**
-  `CustomMapGetMapMD5` calls the compiled `GG2DLL_compute_MD5`, so the GML does
-  not say — but the extension ships its source at
-  `Extensions/GG2DLL/GG2DLL/GG2DLL.cpp:485-516`, which formats with
+  `CustomMapGetMapMD5` calls the compiled `GG2DLL_compute_MD5`; the extension's
+  source, `Extensions/GG2DLL/GG2DLL/GG2DLL.cpp:485-516`, formats with
   `sprintf("%02x")`. Uppercase compares unequal on every client, and the symptom
   would be a download that completes and is then rejected.
   ⚠️ **`InternalMaps` carries five ALIASES** — `ctf_2dfort2`, `ctf_2dfortremix`,
@@ -804,56 +722,46 @@ Not everything in the reference is load-bearing for a private headless server:
   ⚠️ **The bandwidth limit is TOTAL, not per client** — a second downloader
   halves the first one's rate rather than doubling the server's outgoing traffic.
   `MapDownloadBytesPerSecond`, default 50000.
-- **UPnP port forwarding** (`GameServerCreate.gml:5-19`).
+- **UPnP port forwarding** (`GameServerCreate.gml:5-19`) — not ported.
 - **The loopback socket.** The reference server connects to itself over TCP so
   the host's local player is "just another client". A headless port has no local
   player: keep the roster slot, drop the socket.
 
-None of that is visible to a stock client beyond a server that has no rewards.
+None of the above is visible to a stock client beyond a server that has no
+rewards.
 
-### The census behind that list, 2026-09-01
+### Coverage against the full reference
 
-⚠️ **Done once against stock upstream GG2 so nobody re-derives it.** All 330
-scripts and 687 object-event files, against `src/`. The list above is what a
-headless server skips; this is what makes it a *complete* list rather than a
-plausible one.
-
-**Fully covered, checked rather than assumed:**
+Checked against all 330 scripts and 687 object-event files in the reference
+tree, so the list above is a *complete* accounting rather than a plausible one:
 
 - **All 15 client commands** in `processClientCommands.gml` reach
-  `GameServer.cs`'s switch. ⚠️ **Reaching the switch is not the same as being
-  handled, and this line implied it was.** Three of the fifteen were relays that
-  dropped the reference's own policy on the floor, all found on 2026-09-03 and
-  all now closed: `CLIENT_SETTINGS` was stored and never broadcast or simulated
-  (see `QueueJumpTests`), `PLAYER_CHANGENAME` truncated where the reference kicks
-  and had no throttle (`NameAndBubbleTests`), and `CHAT_BUBBLE` skipped the April
-  Fools substitution (same file).
-  ⚠️ `PLUGIN_PACKET` was on that list until 2026-09-03 and never
-  belonged on it — silence is what a *client* does with an unknown id; the
-  server kicks. It is now dispatched or kicked (`docs/PLUGINS.md`).
+  `GameServer.cs`'s switch, and are fully handled — not merely relayed: this
+  includes `CLIENT_SETTINGS` (stored, broadcast and simulated, see
+  `QueueJumpTests`), `PLAYER_CHANGENAME` (kicks and throttles exactly as the
+  reference does, `NameAndBubbleTests`), and `CHAT_BUBBLE` (applies the April
+  Fools substitution, same file). `PLUGIN_PACKET` is dispatched or kicked per
+  `docs/PLUGINS.md` — silence is what a *client* does with an unknown id; the
+  server kicks.
 - **Every map entity type** registered by `builder_init.gml`'s `addEntity` block
   is in `EntityTypes.cs`; every simulation-bearing object in `InGameElements`
   and `GameElements` has a home in `Gg2.Simulation`.
 - **All ten classes**, `Quote` included.
 
-**Client-only, so absent on purpose** — the three that look server-side and are
-not, each settled by grep rather than by reading:
+**Client-only, so absent on purpose**, each settled by grep from the
+definition outward rather than assumed from the name:
 
-- **Gear/hats** (613 lines, five `GEAR_*` constants). Grepped
-  `Objects/Networking`, `Scripts/GameServer`, `Scripts/Serialization` and
-  `Scripts/Events`: **gear never touches the wire.** It is a client draw derived
-  from reward state, which is why `ConstantsTests.NotCarried` can list the
-  constants as "rewards, out of scope" without a gap behind it.
-- **Holidays** (81 lines). `xmasTime.gml` is nothing but `sprite_assign` calls.
-  ⛔ **The other half of this line was WRONG**: `calculateAprilFools` does not set
-  "a global that only drawing code reads" — `processClientCommands.gml:194-206`
-  reads `global.aFirst` on the `CHAT_BUBBLE` command path, rewriting every bubble
-  but 45 on April 1st and dropping bubble 61 on every other day. That is server
-  behaviour deciding what goes on the wire, and it is ported as of 2026-09-03
-  (`ChatBubbles`). ⚠️ **The census settled this one "by grep" and the grep was of
-  `Scripts/GameServer` for the word `gear`** — the right method aimed at the
-  wrong symbol. A claim of the form "only X reads this" is a claim about every
-  reader, so it has to be checked from the *definition* outward.
+- **Gear/hats** (613 lines, five `GEAR_*` constants). Gear never touches the
+  wire — it is a client draw derived from reward state.
+  `ConstantsTests.NotCarried` lists the constants as "rewards, out of scope".
+- **Holidays** (81 lines). `xmasTime.gml` is nothing but `sprite_assign` calls
+  and stays client-only. `calculateAprilFools` is the exception:
+  `processClientCommands.gml:194-206` reads `global.aFirst` on the
+  `CHAT_BUBBLE` command path, rewriting every bubble but 45 on April 1st and
+  dropping bubble 61 on every other day — server behaviour deciding what goes
+  on the wire, and it is ported (`ChatBubbles`).
 - **Kill Log** (302 lines). Called from the `doEvent*` scripts, which run
   server-side too — but it builds a `ds_map` for `Objects/Overlays/KillLog`'s
   **Draw** event. A HUD list, not state.
+</content>
+</invoke>

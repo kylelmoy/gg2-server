@@ -49,7 +49,7 @@ public static class RayBench
         Time("V2 + mask local       ", () => V2(mask, sx, sy, outp));
         Time("V3 + clearance skip   ", () => V3(mask, clearance, sx, sy, outp));
 
-        // ⚠️ One position is not the workload. Duels place agents all over the
+        // One position is not the workload. Duels place agents all over the
         // map, and a ray fan in the open costs many times one in a corridor.
         var spots = Spots(mask, 512);
         Console.WriteLine($"  --- averaged over {spots.Length} reachable positions ---");

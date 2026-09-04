@@ -4,8 +4,8 @@ A browser console for a running server: who is on it, where they are, what the
 round is doing, six graphs of how the process is coping, and the operator
 controls — freeze, step, speed, bot count, map change, teleport, kick.
 
-Built 2026-09-03. It is the **only** surface in this project that is meant to be
-reachable from the network, and everything below follows from that.
+It is the **only** surface in this project that is meant to be reachable from
+the network, and everything below follows from that.
 
 ```powershell
 # local only, password printed at startup
@@ -28,9 +28,7 @@ gg2-server --web 8191 --web-bind 0.0.0.0 --web-password "$PANEL_PASSWORD" `
 
 ⚠️ **The four settings flags do not turn the panel on, and one given without
 `--web` is refused rather than ignored** — the rule `--policy` without a mode
-that consults it already follows. `--web-password` accepted, dropped on the
-floor, and indistinguishable from working until somebody needs the password is
-exactly the failure `CliCoverageTests` exists to catch.
+that consults it already follows. `CliCoverageTests` gates this.
 
 The same settings live in a config file's `[Web]` section (`--config`), which is
 where an admin password belongs rather than in a process listing:
@@ -71,11 +69,11 @@ promise, so it does not run there.
 ⚠️ **A queued command times out after 5 seconds** and says the server may have
 stopped ticking, rather than hanging the browser.
 
-### What it costs — measured, 2026-09-03
+### What it costs
 
-⚠️ **Release, 24 cores, `ctf_truefort`, against a 33,333 us budget.** Re-measure
-before repeating any of these; a number quoted without its build is how a stale
-0.20ms sat in four documents (CLAUDE.md, "the headroom number").
+⚠️ **Release, 24 cores, `ctf_truefort`, against a 33,333 us budget. Re-measure
+before repeating any of these** — a number quoted without its build is how a
+stale figure can sit in multiple documents unnoticed.
 
 | | Cost | Of a 33.3ms tick |
 |---|---|---|
@@ -88,11 +86,9 @@ before repeating any of these; a number quoted without its build is how a stale
 
 ⛔ **The tick-timing accumulators are the one part that is NOT behind `--web`.**
 Two `Stopwatch.Elapsed` reads and some field arithmetic run in `GameServer.Run`
-on every tick of every server, panel or no panel: 46 ns, which is 0.03% of the
-0.151ms twelve-bot tick and 0.00014% of its budget. It is left ungated because a
-branch would make the paced loop two loops for a saving smaller than the branch,
-but it is a real unconditional cost and this table is where it is written down
-rather than implied away.
+on every tick of every server, panel or no panel — a real unconditional cost,
+left ungated because a branch would make the paced loop two loops for a saving
+smaller than the branch.
 
 ⚠️ **Snapshot cost is per SNAPSHOT, not per watcher.** The string is built once by
 the tick thread and published; every stream then writes that same string from its
@@ -108,30 +104,27 @@ thread through the command queue, so a script polling it at 30 Hz would cost wha
 **Memory**: about 100 KB in total — 300 perf samples (~31 KB), 500 log lines
 (~50 KB) and the current snapshot string (3.5 KB at 13 players, 11 KB at 48).
 
-**End-to-end, as a check on the above**: `--web` on versus off, both unpaced with
-12 bots, run *simultaneously* on one machine and alternated between slots, came
-out at **-0.19% +/- 2.79%** — no effect resolvable, with the interval about a
-hundred times looser than the 20 ns/tick the table predicts. ⚠️ **The first
-attempt ran the arms sequentially and produced a confident-looking "5.1% cost"
-that was smaller than the 9.6% spread within a single arm** — the machine's load
-moving between runs, not a cost. A number that is not larger than the noise in
-one arm is not a number.
+**End-to-end**: `--web` on versus off, both unpaced with 12 bots, run
+simultaneously on one machine and alternated between slots: **-0.19% +/- 2.79%**
+— no effect resolvable, with the interval about a hundred times looser than the
+20 ns/tick the table predicts. ⚠️ **Measure arms simultaneously, not
+sequentially** — sequential runs are vulnerable to the machine's load moving
+between runs, which can produce a confident-looking cost number smaller than the
+spread within a single arm.
 
-The same instrument *can* see a watcher: 16.1% of unpaced throughput, arms not
-overlapping. ⚠️ That works out at 17 us a snapshot against the 10.6 us measured
-directly, because at 65,000 ticks/s the panel is also serialising ten thousand
-events a second and allocating 40 MB/s — neither of which happens at 30 Hz. Take
-the direct number; the unpaced one is an upper bound.
+The same instrument *can* see a watcher at unpaced speeds: 16.1% of unpaced
+throughput. ⚠️ That is an upper bound, not the real cost — at 65,000 ticks/s the
+panel is serialising ten thousand events a second and allocating 40 MB/s, neither
+of which happens at 30 Hz. Take the direct per-snapshot number above.
 
 ⚠️ **An idle server ticks at 2 Hz** (`--no-idle-when-empty` turns that off), so
 with nobody connected the panel updates twice a second. It says `idle` in the
 speed tile rather than looking stuck.
 
-`WebAdminTests.NobodyWatchingMeansNoSnapshots` gates the structural half of this,
-because "costs nothing when idle" is precisely the kind of claim CLAUDE.md records
-this project having been wrong about before. ⚠️ **What would show the table has
-gone stale**: a snapshot that stops being O(roster), a sampler moved off the 1 Hz
-cadence, or anything new added to `PerfHistory.Sample`'s once-a-second body.
+`WebAdminTests.NobodyWatchingMeansNoSnapshots` gates the structural half of this.
+⚠️ **What would show the table has gone stale**: a snapshot that stops being
+O(roster), a sampler moved off the 1 Hz cadence, or anything new added to
+`PerfHistory.Sample`'s once-a-second body.
 
 ## Authentication
 
@@ -227,9 +220,7 @@ other cannot. This is CLAUDE.md's "three places" rule one level up.
 ⚠️ **A verb added to `ControlCommands` needs a row in
 `WebAdminTests.EveryControlPortVerbIsReachableFromThePanel`.** What that test
 establishes is *reachability*, not equivalence: it asserts the reply is not
-`unknown cmd`. If somebody gives the panel its own switch statement it keeps
-passing until the two lists differ, which is the point at which it starts
-failing — and there is a negative control beside it so the assertion is known to
+`unknown cmd`. There is a negative control beside it so the assertion is known to
 be able to fail at all.
 
 `kick` is the one verb the panel added, and the control port gained it for free.
@@ -264,7 +255,7 @@ The panel wears **HeroUI v3's design language with none of HeroUI's code.** The
 token names, the OKLCH surface ladder, the `color-mix()` derivations and the
 radius scale in `app.css` are HeroUI's own, read out of `@heroui/styles@3.2.4`
 (`dist/themes/default/variables.css` and `dist/themes/shared/theme.css`) and
-re-hued to the theme the operator picked in HeroUI's builder:
+re-hued to the theme:
 
 ```
 lightness 0.77   chroma 0.13   hue 302.636371990466   radius small   base 0.0043
@@ -292,20 +283,19 @@ Three things that had to be derived rather than copied:
 - ⛔ **A light accent needs DARK text on it.** This accent is L 0.77, so `--snow`
   over it is **2.13:1** and `--eclipse` is **8.16:1** — measured, and the one
   thing a light-accent theme gets wrong. `--accent-foreground` is the dark one.
-- ⚠️ **`--radius: 0.375rem` is an inference.** The builder is a client-side app
-  and could not be read; HeroUI's default is `0.5rem` and "small" is a step
-  below. Every other radius is a `calc()` off that one line, so it is one line to
-  correct.
+- ⚠️ **`--radius: 0.375rem` is an inference**, not a value read off the builder
+  (which is a client-side app). HeroUI's default is `0.5rem` and "small" is a
+  step below. Every other radius is a `calc()` off that one line, so it is one
+  line to correct if that turns out wrong.
 
 ⚠️ **The chart series are NOT theme tokens and do not move with the accent.**
-They are the data-viz palette's dark steps, re-validated against the new, much
-darker `--surface` (`#19181a`): worst all-pairs CVD ΔE 9.4, worst normal-vision
-ΔE 24.6, all ≥ 3:1. Swapping violet for blue — to put daylight between the
-series and a purple accent — was tried and measured **worse** (tritan ΔE 4.0
-against 9.4), so violet stays; the two never appear as peers and every series is
-keyed in a legend. The one exception is **late ticks**, which uses the theme's
-`--warning`: that series means "something is wrong", the panel says that in one
-colour everywhere, and a single-series chart has no pair check to fail.
+They are the data-viz palette's dark steps, validated against `--surface`
+(`#19181a`): worst all-pairs CVD ΔE 9.4, worst normal-vision ΔE 24.6, all ≥ 3:1.
+Violet was kept over blue after measuring blue worse on this surface (tritan ΔE
+4.0 against 9.4); the two never appear as peers and every series is keyed in a
+legend. The one exception is **late ticks**, which uses the theme's `--warning`:
+that series means "something is wrong", the panel says that in one colour
+everywhere, and a single-series chart has no pair check to fail.
 
 ⚠️ **`<canvas>` cannot read a custom property**, so `app.js` resolves the ones it
 draws with through `token()` and caches them. That is what keeps the live map and
@@ -319,18 +309,17 @@ in the JS — is exactly how a theme drifts.
   coordinate system. A dot off by a constant factor is that number.
 - ⚠️ **Markers are sized in CSS pixels and converted back into world units.**
   `ctf_truefort` is 5,346 world pixels wide, so a 9-unit dot on a canvas scaled
-  to fit is **one screen pixel** — which read as "the panel cannot see the
-  players".
+  to fit is **one screen pixel**.
 - ⚠️ **Cap the map card's WIDTH, never its height.** A canvas stretches its
   bitmap to whatever box CSS gives it, so a `max-height` distorts the map and
   puts every dot in the wrong place. `cp_dirtbowl` is three areas stacked
   vertically and is the case that needs the cap at all.
 - ⚠️ **`IntelState.OnField` does not mean "dropped"** — it means the briefcase
   exists rather than being carried, which is also true of one sitting at home.
-  The state sends the home position as well so the two can be told apart;
-  without that the panel reported a CTF emergency on every quiet round.
+  The state sends the home position as well so the two can be told apart.
 - ⚠️ **A map change is a ten-second countdown, not an event.** The panel counts
-  it down in a banner; a toast would have looked like a button that did nothing.
+  it down in a banner rather than a toast, which would look like a button that
+  did nothing.
 - ⚠️ **Below `--bots-min-humans` the population target is ZERO rather than the
   fill**, so a bot count set on an empty server does nothing. The panel says
   which it is, because the default is 1 and the first thing anybody tries is
@@ -361,9 +350,7 @@ asymmetry are gated: `NobodyWatchingMeansNoSnapshots` and
 ⚠️ **The once-a-second body allocates nothing.** The sample is a struct written
 into a preallocated ring, and the bot count is taken from the same roster walk as
 the character count rather than from `GameServer.BotSlots`, which builds a
-`List<int>` on every access. Once a second is not the tick loop's hot path, but
-an allocation in there is the kind of thing that gets copied to somewhere it
-matters.
+`List<int>` on every access.
 
 ⚠️ **The samples go over the wire as arrays of bare numbers** against a `fields`
 list, because 300 samples × 15 named fields is 60 KB of repeated key names for
@@ -375,11 +362,11 @@ silently shifts every series after it onto the wrong chart.
 
 **Windows accounts process CPU at the 15.625 ms clock interrupt**, so a
 one-second delta of `Process.TotalProcessorTime` can only ever be a multiple of
-**1.56%**. Measured on this server: with ten bots it really uses about 0.4% of a
-core, and the per-second series was an alternating `0.00 / 1.56 / 0.00` sawtooth
-that read as spiking. Over a five-second trailing window the same quantum is
-0.31%, below what anybody reads off a graph. The series therefore lags a step
-change by up to five seconds, and the chart's caption says `5s`.
+**1.56%**. With ten bots (about 0.4% of a core), a per-second series is an
+alternating `0.00 / 1.56 / 0.00` sawtooth that reads as spiking. Over a
+five-second trailing window the same quantum is 0.31%, below what anybody reads
+off a graph. The series therefore lags a step change by up to five seconds, and
+the chart's caption says `5s`.
 
 ⚠️ **It is a percentage of ONE core, not of the machine.** The tick loop is a
 single thread, so "60% of one core" is the number that says how close it is to
@@ -418,10 +405,9 @@ it.
 - ⚠️ **One y-axis per chart, ever.** Working set and managed heap share a frame
   because they share a unit; tick time and CPU do not and never will. A second
   y-scale invents a correlation that is not in the data.
-- ⚠️ **`.seg-btn` is scoped to its own group.** The speed selector's handler was
-  bound to every `.seg-btn` on the page, so each of the charts' range buttons also
-  asked "change the tick rate?" — and the snapshot handler cleared their
-  selection once a tick. Found by clicking one.
+- ⚠️ **`.seg-btn` is scoped to its own group.** Each chart's range buttons and the
+  speed selector share the class name but have separate handlers, so clicking one
+  does not affect the other's selection state.
 
 ⛔ **None of these numbers is a benchmark number.** They are measured over
 whatever the server happened to be doing, map loads and GC included, on a machine
@@ -443,14 +429,13 @@ both uptimes, the thread count, the GC counters.
 ⛔ **The command line and the environment are never in it.** `--web-password` is
 in one and may be in the other, and this endpoint is read by a browser.
 `SystemNeverLeaksTheCommandLineOrTheEnvironment` looks for the actual password in
-the reply, so it fails on any future field that starts including either — which
-is a thing somebody would add meaning well.
+the reply, so it fails on any future field that starts including either.
 
 ### Where each number comes from, per platform
 
 | | Linux | Windows |
 |---|---|---|
-| CPU model, clock | `/proc/cpuinfo` — ⚠️ the **current** clock of core 0 | registry `CentralProcessor ` — ⚠️ the **nominal** clock at boot |
+| CPU model, clock | `/proc/cpuinfo` — ⚠️ the **current** clock of core 0 | registry `CentralProcessor ` — ⚠️ the **nominal** clock at boot |
 | Memory | cgroup v2 `memory.max`/`memory.current` where limited, else `/proc/meminfo` | `GlobalMemoryStatusEx` |
 | OS uptime | `/proc/uptime` | `Environment.TickCount64` |
 
@@ -473,13 +458,12 @@ needs to know which they are looking at.
 
 ## Running it on Linux
 
-⚠️ **Audited, cross-compiled, and NOT run.** There is no Linux machine in this
-project's development environment (no WSL, no Docker), so what follows is a
-source audit plus a `dotnet publish -c Release -r linux-x64` that builds clean
-with warnings-as-errors and the platform-compatibility analyser on — which is
-what catches an unguarded Windows API, and is how the `SystemInfo` guards were
-verified. **It is not the same as having run it.** The first real Linux run is
-the test, and this section is what to check against.
+⚠️ **Audited and cross-compiled, NOT run.** There is no Linux machine in this
+project's development environment, so what follows is a source audit plus a
+`dotnet publish -c Release -r linux-x64` that builds clean with
+warnings-as-errors and the platform-compatibility analyser on — which catches an
+unguarded Windows API. **That is not the same as having run it**, and the first
+real Linux run is the test this section should be checked against.
 
 - ✅ **One file in `src/` is Windows-only**: `TimerResolution` (a `winmm.dll`
   P/Invoke), already guarded by `OperatingSystem.IsWindows()` and a no-op
@@ -524,3 +508,4 @@ the test, and this section is what to check against.
 | `WebAdminTests` | over a real socket with a real HTTP client: every route refuses an unauthenticated request, the CSRF header is required, the map route takes a map name and nothing else, a command reaches the tick thread, every control-port verb is reachable, the page is served, the security headers are present, nobody watching means no snapshots but does mean a performance history, every sample row matches the declared fields, and an open stream gets both |
 | `AdminSessionTests` | the password, the tokens, both timeouts, the lockout and its ceiling, per-address isolation, the session cap, and the generated password's alphabet — all on an injected clock, so no test sleeps |
 | `CliCoverageTests` | every `--web-*` flag moves the option it names; a settings flag with no `--web` is refused; `--web` alone is not remote |
+</content>

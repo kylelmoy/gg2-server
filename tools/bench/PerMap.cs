@@ -9,7 +9,7 @@ namespace Bench;
 /// Phase 4's exit criterion, per map, on every shipped map.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>Three things this reports that an aggregate cannot.</b> `gg2-rl` named
+/// <b>Three things this reports that an aggregate cannot.</b> `gg2-rl` named
 /// all three: the criterion says MATCH WIN RATE and the earlier runs quoted
 /// capture share; "no map produces a stuck bot" is a per-map claim that an
 /// aggregate ratio hides one bad map inside; and "every shipped map" is 22, not
@@ -35,7 +35,7 @@ public static class PerMapEval
     {
         var policy = PolicyNetwork.Load(npz);
 
-        // ⛔ THE CENSORING. Every phase 4 number was taken at the 5-minute cap,
+        // THE CENSORING. Every phase 4 number was taken at the 5-minute cap,
         // and on gen_destroy the CONTROL arm decides 50% of matches there and
         // 97% at twenty minutes — so a third of both arms was cut off and the
         // win share was computed over the surviving subset. A win share over a
@@ -60,7 +60,7 @@ public static class PerMapEval
             control.Add(Play(map, maps, nav, null, perMap, cap));
         }
 
-        // ⚠️ ABSOLUTE COUNTS, not only percentages, and a z on each comparison.
+        // ABSOLUTE COUNTS, not only percentages, and a z on each comparison.
         // A per-map table invites per-map conclusions, and a bare "19.2% vs
         // 23.7%" reads as a result when at n=250 it is 1.2 sigma. A reader
         // cannot recompute that from the percentage — the counts are what make
@@ -111,7 +111,7 @@ public static class PerMapEval
     /// Two-proportion z of one share against another.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Printed beside every per-map comparison because the percentages
+    /// <b>Printed beside every per-map comparison because the percentages
     /// alone are not readable.</b> Over 21 maps with two arms each, several
     /// gaps of 4-5 points appear that are pure sampling noise at n≈250 —
     /// and a reader scanning the column has no way to tell them from the
@@ -170,7 +170,7 @@ public static class PerMapEval
             + $"   red win share {Pct(redWins, redWins + blueWins)}"
             + $"   death share {Pct(rd, rd + bd)}"
             + $"   score share {Pct(rs, rs + bs)}");
-        // ⚠️ A map with no score at all must not win "worst by score share".
+        // A map with no score at all must not win "worst by score share".
         // dkoth and koth have no capture counter, so the first version printed
         // "WORST MAP by score share:  200.0%" — an empty name and a sentinel —
         // which is a bug that looks like a formatting glitch and reads as data.

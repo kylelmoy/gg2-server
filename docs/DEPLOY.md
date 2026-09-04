@@ -8,20 +8,16 @@ deployment differs from a `dotnet run` out of the repository.
 
 ## ⚠️ What is verified and what is not
 
-**Read this before quoting anything below.** The distinction is the whole point
-of the section, and CLAUDE.md's rule about claims a repo makes about itself
-applies to this file more than to most.
-
 | Claim | How it is held up |
 |---|---|
-| It compiles and links for Linux | `dotnet publish -r linux-x64` produces an ELF 64-bit LSB PIE executable. Run 2026-09-03 |
+| It compiles and links for Linux | `dotnet publish -r linux-x64` produces an ELF 64-bit LSB PIE executable |
 | No unguarded native call | `PortabilityTests.EveryNativeCallIsAnnotatedWindowsOnly`, plus the exact-set pin below it |
 | No hard-coded Windows path | `PortabilityTests.NoShippedAssemblyHardCodesAWindowsPath`, over the metadata #US heap |
 | SIGTERM stops gracefully | `DeploymentTests.SigtermRequestsAGracefulStop` |
 | A nav-less deployment says so | `DeploymentTests.BotsWithNoNavDirectoryWarnAtStartup`, with both control arms |
-| Nav ships with a publish | Nothing mechanical. `dotnet publish` was run 2026-09-03 and the output carries `nav/`; **no test asserts it** — see "the nav graphs" |
+| Nav ships with a publish | Nothing mechanical checks this — `dotnet publish` was inspected by hand; see "the nav graphs" |
 | A nav graph matches its map | `NavManifestTests`, with a mutated-walkmask arm and an entities-only arm |
-| CPU and memory cost | Measured 2026-09-03, table below, **on Windows** |
+| CPU and memory cost | Measured on Windows, table below |
 
 ⛔ **NOBODY HAS RUN THE BINARY ON LINUX.** Every row above is a static check, a
 unit test, or a measurement taken on Windows. They are the checks that would
@@ -31,34 +27,31 @@ difference, or a `glibc`/`musl` problem.
 
 ⚠️ **What would make this section stale**: the first actual Linux run. When
 somebody does it, replace this box with what happened — including the boring
-answer — rather than deleting it. A "we checked once" that nobody dated is how
-the three entry-point sentences in `gg2-rl` outlived their measurements.
+answer — rather than deleting it.
 
 ---
 
 ## Hardware
 
-Measured 2026-09-03, **Release**, workstation GC (`DOTNET_gcServer=0`), the
-process **pinned to a single core** with `ProcessorAffinity` to stand in for a
-1-vCPU VPS. `ctf_truefort`, `--no-idle-when-empty`, no clients connected.
+Measured on **Release**, workstation GC (`DOTNET_gcServer=0`), the process
+**pinned to a single core** with `ProcessorAffinity` to stand in for a 1-vCPU
+VPS. `ctf_truefort`, `--no-idle-when-empty`, no clients connected.
 
 | Configuration | CPU per tick | % of one core | Working set |
 |---|---|---|---|
 | 12 bots, `--bot-mode scripted` | **0.156 ms** | **0.5%** | 55 MB |
 | 24 bots, 24 slots, `--bot-mode scripted` | **0.226 ms** | **0.7%** | 55 MB |
 
-⚠️ **The pacing numbers from the same runs are worthless and were discarded.**
-The box was running another lane's training — **70 python processes, 8.1 of 24
-cores**, measured during the run — so p99 read 100 ms and the worst tick 262 ms.
-Process CPU time and working set are unaffected by that; scheduling latency is
-nothing but that. `docs/BOTS.md`, "late ticks are a pacing measurement", is the
-long version, and the server's own late-tick line prints the verdict:
-`work 0.10ms, so: NOT this tick - the process was not scheduled`.
+⚠️ **Pacing numbers (p99, worst tick) are not reliable evidence of the
+server's own cost** — scheduling latency from other processes on the box can
+dominate them while process CPU time and working set stay unaffected.
+`docs/BOTS.md`, "late ticks are a pacing measurement", is the long version, and
+the server's own late-tick line prints a verdict alongside the number: `work
+0.10ms, so: NOT this tick - the process was not scheduled`.
 
 These agree with the two independently pinned figures — 0.151 ms for twelve bots
 (`docs/ARCHITECTURE.md`, `BotPopulationTests.TwelveBotsRunWellUnderTheTickBudget`)
-and 0.104 ms of process CPU (`docs/BOTS.md`) — which is the only reason to
-believe a number taken on a machine in that state.
+and 0.104 ms of process CPU (`docs/BOTS.md`).
 
 ### What to rent
 
@@ -69,8 +62,7 @@ configuration at up to ~24 bots. CPU is nowhere near the bound.
 
 ⚠️ **The thing that produces rubberbanding on a cheap VPS is steal time, not
 your tick.** A tick that does 0.2 ms of work and arrives 90 ms late is
-indistinguishable, from inside the game, from a tick that took 90 ms — and the
-measurement above is exactly that failure, reproduced accidentally. On a
+indistinguishable, from inside the game, from a tick that took 90 ms. On a
 burstable instance (t3/t4g-class, the cheaper OVH and Hetzner shared tiers) CPU
 credit exhaustion looks identical to a server bug and will be diagnosed as one.
 **Prefer a dedicated-CPU tier over a burstable one at the same price.** A second
@@ -78,8 +70,8 @@ core also keeps GC and socket work off the tick loop.
 
 **Disk**: ~7 MB of application, ~70 MB for a framework-dependent .NET 10 runtime
 (or ~75 MB self-contained), 1.2 MB of nav graphs. Under 100 MB all in — the
-published directory itself is **2.9 MB** (measured 2026-09-03), against 36 MB
-before the nav graphs were gzipped.
+published directory itself is **2.9 MB**, against 36 MB before the nav graphs
+were gzipped.
 
 **Network**: not measured. Size it after watching a real game rather than from a
 number in this file.
@@ -114,10 +106,7 @@ dotnet publish src/Gg2.Host/Gg2.Host.csproj \
 ```
 
 **No flags.** The output is 2.9 MB: the assemblies, `maps/` (23 PNGs) and `nav/`
-(25 graphs plus `manifest.tsv`). ⛔ **`-p:PublishNav=true` is gone** — it was
-required until 2026-09-03 and a build that still passes it will fail with an
-unknown-property warning at worst and be ignored at best. See "the nav graphs"
-below for why it existed and why it does not.
+(25 graphs plus `manifest.tsv`).
 
 Drop `-r linux-x64 --self-contained false` for a portable build that needs a
 .NET 10 runtime installed; add `--self-contained true` to carry one.
@@ -155,38 +144,18 @@ WantedBy=multi-user.target
 ```
 
 `KillSignal` is left at its default (SIGTERM) deliberately — the server handles
-it now.
+it.
 
 ---
 
 ## How a deployment differs from a checkout
 
-⚠️ **This was "the four ways" until 2026-09-03, when the first stopped being a
-difference at all** — nav now ships. The section keeps it as item 1 because the
-mistake is more instructive than the fix, and because a build script somewhere
-still passes the flag that used to be required.
+### 1. The nav graphs
 
-### 1. The nav graphs — they ship now, and the story is worth keeping
+✅ **`nav/` ships in every build and every publish, with no flag.** 25 graphs
+and `manifest.tsv`, 1.2 MB, beside `maps/`.
 
-✅ **`nav/` is in every build and every publish since 2026-09-03, with no flag.**
-25 graphs and `manifest.tsv`, 1.2 MB, beside `maps/`.
-
-⛔ **It used to be opt-in behind `-p:PublishNav=true`, and that was a mistake
-worth naming, because nothing in the repository could have caught it.** The
-justification was a real number — `nav/` was 34 MB — but it was the **working
-tree's** number being used as a shipping cost. The files are hex-encoded
-`ds_grid_write` blobs: **32 bytes of file per numeric value**, for values that
-are mostly small integers. Git had been storing about **1.1 MB** of them all
-along. Gzipping the container brought the disk figure to match what was already
-being stored, and the flag's entire reason evaporated.
-
-What the flag bought in the meantime was a **default deployment whose bots fight
-and never walk**. That is a far worse property than a large build directory, and
-it survived because nothing goes red when bots merely path badly — CLAUDE.md's
-"a claim the repo makes about itself", in its most expensive form: the trade-off
-was stated accurately and was measuring the wrong thing.
-
-**Measured 2026-09-03, Release, on all 25 graphs:**
+**Measured, on all 25 graphs:**
 
 | | working tree | compressed |
 |---|---|---|
@@ -196,10 +165,12 @@ was stated accurately and was measuring the wrong thing.
 
 ⚠️ **The third row is why there is no custom nav format.** A binary encoding
 shrinks the tree 8.8x and what actually ships by **0.1%** — everything it removes
-is redundancy deflate was already removing. It would cost a `NAV_CACHE_VERSION`
-bump coordinated with `gg2-nav-gen`, a new writer, a new reader and a new way for
-header and payload to disagree, to save 3 MB of disk and about 8 ms per map
-change. Do not re-propose it without a reason that is not size.
+is redundancy deflate was already removing, because the files are hex-encoded
+`ds_grid_write` blobs (32 bytes of file per numeric value, for values that are
+mostly small integers). It would cost a `NAV_CACHE_VERSION` bump coordinated with
+`gg2-nav-gen`, a new writer, a new reader and a new way for header and payload
+to disagree, to save 3 MB of disk and about 8 ms per map change. Do not
+re-propose it without a reason that is not size.
 
 **Decompression costs about a millisecond**, once per map change, against a
 33.3 ms tick: the largest map (`ctf_conflict`) loads in 9.14 ms plain and
@@ -207,23 +178,18 @@ change. Do not re-propose it without a reason that is not size.
 `BotPopulationService.MapChanged` does — re-measure before reusing it if nav ever
 loads per-round or eagerly for a rotation.
 
-#### Regenerating them — `gg2-nav-gen` needs no changes
+#### Regenerating them
 
-✅ **The generator writes `.txt` and that is fine; nothing about it had to
-change.** `NavCache` reads both containers.
+`gg2-nav-gen` writes plain `.txt`; `NavCache` reads both containers, so nothing
+about the generator itself needs to change.
 
-⛔ **But a plain `.txt` WINS over a shipped `.txt.gz`, and the reason matters.**
-`gg2-nav-gen` writes `<map>_a<area>.txt` into `../gg2-server/nav` by default —
-the same directory that holds the checked-in `.txt.gz`. So the only way a plain
-file appears beside a compressed one is that somebody just ran the generator, and
-the rule is **what somebody just wrote beats what shipped**. The first version of
-this preferred the compressed file, on the reasonable-sounding grounds that it is
-what shipped; that made a regeneration *silently do nothing*, and nothing caught
-it, because `NavManifestTests` hashes the **maps** — which a regeneration does not
-touch. `NavCache.FindFile`.
-
-⚠️ The server logs when it finds both, naming the one it used. One of the two is
-always being ignored, and which is not visible from outside.
+⚠️ **A plain `.txt` WINS over a shipped `.txt.gz`.** `gg2-nav-gen` writes
+`<map>_a<area>.txt` into the same `nav/` directory that holds the checked-in
+`.txt.gz`, so the only way a plain file appears beside a compressed one is that
+somebody just ran the generator — and the rule is that what was just written
+beats what shipped. `NavCache.FindFile` implements this; the server logs when it
+finds both, naming the one it used, because which one is in effect is otherwise
+invisible.
 
 The full cycle:
 
@@ -241,22 +207,16 @@ the maps moved** — skipping it leaves the old pairing recorded and the new gra
 refused at runtime.
 
 ✅ **`gzip -9 -n` is deterministic**, so decompressing and recompressing a
-checked-in graph reproduces it byte for byte (verified 2026-09-03). A
-regeneration that changed nothing produces no git diff; without `-n` the
-timestamp field would rewrite all 25 files every time.
-
-⚠️ **The alternative — teaching `gg2-nav-gen` to write `.txt.gz` — was not
-taken.** It is another repository and another lane (`docs/PARALLEL.md`), the
-reader has to accept `.txt` regardless for anyone running an older generator, and
-a two-line script here buys the same thing without a cross-repo version skew.
+checked-in graph reproduces it byte for byte. A regeneration that changed
+nothing produces no git diff; without `-n` the timestamp field would rewrite
+all 25 files every time.
 
 #### It can still fail, and it still says so
 
 Without a nav directory the server runs, serves rounds and fills with bots —
 **bots that fight whatever reaches them and never walk anywhere**. That
 degradation is intentional (`NavCache.TryLoad`'s contract, inherited from
-`navCacheLoad.gml`: a missing graph is not an error), which is what made it
-quiet. The startup warning:
+`navCacheLoad.gml`: a missing graph is not an error). The startup warning:
 
 ```
 no nav directory: bots will fight but not navigate. Pass --botnav <path> or set GG2_NAVCACHE
@@ -266,11 +226,11 @@ Three ways to satisfy it, in the order `ResolveNav` probes: `GG2_NAVCACHE`, a
 `nav/` directory beside the executable (what a publish produces), or one found by
 walking up from it. `--botnav <path>` sets it explicitly.
 
-⚠️ A **per-map** miss is a different and much older message — `no nav cache for
-<map> area <n>` — and means the directory was found but that one map has no
-graph generated. Both can appear in the same run.
+⚠️ A **per-map** miss is a different message — `no nav cache for <map> area <n>`
+— and means the directory was found but that one map has no graph generated.
+Both can appear in the same run.
 
-⚠️ **And a third, new one**, when a graph and its map have drifted apart:
+⚠️ **And a third, for a graph that has drifted from its map**:
 
 ```
 nav graph for <map> area <n> was built against different geometry and has been
@@ -281,19 +241,19 @@ nav/manifest.tsv's line for it to load it anyway
 #### `manifest.tsv` — which map each graph was built from
 
 ⚠️ **A nav graph is keyed on the map's NAME**, deliberately (`NavCache.Key`
-explains why the MD5 cannot be the key), so before this a graph built against an
-older version of a map loaded perfectly and handed bots terrain that was not
-there. The header's mask dimensions catch a resize and nothing else. The symptom
-is bots walking into walls, which reads as a bot bug and gets debugged as one.
+explains why the MD5 cannot be the key) — a graph built against an older version
+of a map would otherwise load perfectly and hand bots terrain that is not there.
+The header's mask dimensions catch a resize and nothing else; the symptom of a
+mismatch is bots walking into walls, which reads as a bot bug.
 
 `manifest.tsv` records, per graph, a hash of **the area's walkmask and its
 entities** — the inputs a graph is built from, so art edits and PNG re-encodings
 do not cry wolf. A mismatch refuses the graph; **a graph with no line is not
 checked**, which is what keeps an operator's own maps working.
 
-⚠️ **The entities are in the hash because the walkmask alone was measurably not
-enough**: `cp_dirtbowl`'s three areas share one mask and carry different graphs
-(835, 837 and 837 nodes), so a mask-only hash gave all three the same answer and
+⚠️ **The entities are in the hash because the walkmask alone is not enough**:
+`cp_dirtbowl`'s three areas share one mask and carry different graphs (835, 837
+and 837 nodes), so a mask-only hash would give all three the same answer and
 could not see a door or a gate move. `NavManifestTests.EntitiesAreInTheHash`.
 
 Regenerating nav means regenerating this:
@@ -307,19 +267,17 @@ be regenerated by a CI job that happened to have the variable set and be reporte
 as green. Re-run without it, check the diff is the change you meant, and say so
 in the commit.
 
-⛔ **What is NOT gated: that a publish actually carries `nav/`.** It was checked
-by hand on 2026-09-03 and there is no test. The csproj glob is
-`..\..\nav\*` rather than a per-extension one for that reason — a glob per
-container is how one of them silently stops shipping — but a reader who needs
-this to be true should run `dotnet publish` and look.
+⛔ **What is NOT gated: that a publish actually carries `nav/`.** There is no
+test for it; a reader who needs this to be true should run `dotnet publish` and
+look. The csproj glob is `..\..\nav\*` rather than a per-extension one, so a
+container is less likely to silently stop shipping — but that is not a
+substitute for a check.
 
 ### 2. SIGTERM, not Ctrl+C
 
 `Console.CancelKeyPress` covers SIGINT, which is what an operator watching a
 terminal sends. systemd's default `KillSignal` is **SIGTERM** and `docker stop`
-sends SIGTERM, and neither reaches it.
-
-✅ Handled since 2026-09-03 — `ShutdownSignals`, wired in `Program.Main`.
+sends SIGTERM; `ShutdownSignals`, wired in `Program.Main`, handles both.
 
 ⚠️ **Why it is worth handling rather than letting the process die.**
 `GameServer.Dispose` is reached only on the graceful path, and it does three
@@ -372,13 +330,12 @@ where a mis-cased entry has been working by accident.
 Server GC sizes its heaps per core and is tuned for throughput; the tick loop is
 single-threaded and latency-sensitive.
 
-⚠️ **`DOTNET_gcServer=0` is a precaution, not a measured win.** The measurements
-above used it, and working set differed by under 3 MB between the two modes
-(52.5 MB server GC / 54.9 MB workstation). **No pause-time difference was
-measured**, and the tick allocates approximately nothing anyway
-(`docs/BOTAI.md`) so gen2 collections should be rare either way. The csproj
-default is deliberately left alone because flipping it on an unmeasured hunch
-would contradict a documented decision.
+⚠️ **`DOTNET_gcServer=0` is a precaution, not a measured win.** Working set
+differed by under 3 MB between the two modes (52.5 MB server GC / 54.9 MB
+workstation) and no pause-time difference was measured; the tick allocates
+approximately nothing anyway (`docs/BOTAI.md`) so gen2 collections should be
+rare either way. The csproj default is deliberately left alone because flipping
+it on an unmeasured hunch would contradict a documented decision.
 
 ⚠️ **What would settle it**: `--tick-stats` on a real 1-2 vCPU box, with and
 without `DOTNET_gcServer=0`, looking for a bimodal tail that moves. If it does
@@ -406,3 +363,4 @@ deployed server has no dependency on a Gang Garrison 2 checkout of any kind.
 | why a late tick is usually not the server | `docs/BOTS.md`, "late ticks are a pacing measurement" |
 | the runtime settings and what the TFM bump proved | `docs/ARCHITECTURE.md`, "Runtime settings" |
 | every CLI flag | `gg2-server --help` |
+</content>

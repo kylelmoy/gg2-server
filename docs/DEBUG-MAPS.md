@@ -17,37 +17,30 @@ it ships with the game and is covered by the ordinary map gates.)
   on that set), because "no shipped map does X" is load-bearing and a
   port-authored map must not be able to move it. `GgDebug2MapTests` carries the
   map's own exact census instead.
-- **`gg_debug2` is the only built-in map that places `moving_platform`** —
-  five of them, since 2026-09-01, added for the moving-platforms work. ⚠️ The
-  first version of this file said a non-zero count would be "a framing break:
-  the writer never writes the blocks", and **that was false when written**:
-  `MatchState.BuildEntities` has fed `StateUpdateWriter`'s five-byte platform
-  blocks since phase 6. What was missing was the *motion* (the positions never
-  advanced), which is the moving-platforms lane's `MovingPlatforms.EndStep`.
-  The map is therefore wire-safe with or without that work merged.
+- **`gg_debug2` is the only built-in map that places `moving_platform`** — five
+  of them. `MatchState.BuildEntities` feeds `StateUpdateWriter`'s five-byte
+  platform blocks for all of them; motion is driven by
+  `MovingPlatforms.EndStep`. The map is wire-safe regardless.
   ⚠️ **Only the chamber raft can ever carry a character**: the carry needs the
   platform's collision mask, which arrives from an embedded sprite named by a
   `resource` property, and the raft is the one platform that names one (the
   other four deliberately never grow a shape — the census test pins that).
   ⚠️ **The raft narrows the moving-platforms `SIM_UUID` exemption rather than
-  voiding it** — see `SimulationStamp` and
-  `MovingPlatformTests`: the exemption's premise is now "no platform with a
-  shape is reachable in play", which the raft satisfies because it lives in
-  the sealed chamber, and the two lanes agreed that wording rather than either
-  quietly widening it. All five are nav-invisible — `gg2-nav-gen` skips the
-  type outright, and the nav graph is byte-identical with and without them
-  (measured).
-- ✅ **A stock client CAN join it**, as of the custom-map serving merge. This
-  bullet used to say the opposite and named its own expiry; the expiry has
-  arrived, so here is what replaced it. `gg_debug2` is not one of
-  `Gg2.Maps.InternalMaps`' 22 names, so the server advertises **its MD5** rather
-  than the empty string that means "built into the client", and answers
-  `DOWNLOAD_MAP` by streaming the file — a `uint` length then the bytes,
-  rate-limited across ticks and shared between simultaneous downloaders. The
-  client writes it to its own `Maps/`, re-hashes it, and joins.
-  ⚠️ **Nothing is published for that to work**: the map is served off this server
-  over the same socket, to whoever connects. `--lobby` is a different switch and
-  still defaults off.
+  voiding it** — see `SimulationStamp` and `MovingPlatformTests`: the
+  exemption's premise is "no platform with a shape is reachable in play",
+  which the raft satisfies because it lives in the sealed chamber. All five
+  are nav-invisible — `gg2-nav-gen` skips the type outright, and the nav graph
+  is byte-identical with and without them (measured).
+- ✅ **A stock client can join it.** `gg_debug2` is not one of
+  `Gg2.Maps.InternalMaps`' 22 names, so the server advertises **its MD5**
+  rather than the empty string that means "built into the client", and
+  answers `DOWNLOAD_MAP` by streaming the file — a `uint` length then the
+  bytes, rate-limited across ticks and shared between simultaneous
+  downloaders. The client writes it to its own `Maps/`, re-hashes it, and
+  joins.
+  ⚠️ **Nothing is published for that to work**: the map is served off this
+  server over the same socket, to whoever connects. `--lobby` is a different
+  switch and still defaults off.
 
 ## Regenerating
 
@@ -89,13 +82,9 @@ bot layer consumes** — walk, jump, fall, drop-through, double-jump, rocket-jum
 `APlainWalkerReachesTheEnemyIntelButNotTheEnemySpawn` gates pathability in both
 directions plus the gates' refusal.
 
-⚠️ **The bug its first cut shipped, kept because the shape generalises**: the
-team gates sat on the *outer* doors, so each intel was behind a gate solid to
-the enemy — no route to either objective existed for anybody, while every
-geometry test stayed green and bots milled around convincingly. Gates protect
-spawns, not objectives, and pathability is a claim about the *graph*, so it is
-gated on the graph rather than inferred from the mask. The second cut's intel
-pedestal repeated the lesson smaller: a 24px pedestal split the narrow intel
-zone into slivers under the nav clearance box and the zone lost its floor node.
+**Pathability is a claim about the graph, not the mask**: gates protect spawns,
+not objectives, and geometry tests staying green does not mean a route exists
+for anybody — a pedestal or gate placement can split a zone below the nav
+clearance box and cost it its floor node without any geometry test noticing.
 **After changing base geometry, re-run the nav build and the pathability test
 before believing the map.**

@@ -1,29 +1,12 @@
 # What the port must preserve for search-based and learned bots
 
-A set of constraints on the C# server, written while it was still specification.
-Each one is cheap early and expensive-to-impossible to retrofit once `WorldState`
-and the bot seam have shipped.
+A set of structural constraints on the C# server. Each one is cheap to hold now
+and expensive-to-impossible to retrofit once `WorldState` and the bot seam have
+shipped. `BotAiConstraintsTests` asserts the ones that are structural facts
+rather than design intent; each item below says which.
 
-⚠️ **Audited against the shipped code on 2026-08-27, and one of them was false.**
-`BotAiConstraintsTests` now asserts the five that are structural facts rather than
-design intent; each verdict is recorded against its item below. Item 9 was built on
-the audit's own finding, and items 3 and 8 were built the same day.
-
-✅ **Items 1-11 are all built as of 2026-08-28.** Item 10's `Gg2.Env` closed with
-its v0 exit criteria met, and item 7 closed with it: the accumulators
-`TickEvents.DamageDealt` / `DamageTaken` are credited in `DamageApi.Deal` and
-gated by `DamageAccumulatorTests`. ⚠️ **Item 7's own section said "half built"
-for a day after it was whole** — the third stale queue entry this week, and the
-reason the standing instruction is to `grep` for the missing thing before
-starting an item rather than trusting the prose.
-
-✅ **Item 12 — the rollout-search bot — landed 2026-08-28** (`13b5b75`),
-`Gg2.Bots.RolloutSearch`. It was `gg2-rl` phase 1's hard dependency and nothing
-else blocked on it. 2.94 ms a decision in Release and 11-0-1 against
-`ScriptedBot` over twelve duels; `docs/TRAPS-BOTS.md`, "Item 12", has the rest.
-
-None of this asks for a neural network to be built. It asks that the port not
-foreclose one.
+Items 1-12 are all built. None of this asks for a neural network to be built.
+It asks that the port not foreclose one.
 
 ## Why this document exists
 
@@ -55,7 +38,7 @@ nobody solves them twice:
 - `IInputSource` as the seam, with network clients and bots on the same
   interface - which is already true in the reference (`botInputUpdate.gml`
   writes `keyState`/`aimDirection` exactly as `processClientCommands.gml:267`
-  does for a socket). **Built** (2026-08-27): `Gg2.Simulation.IInputSource`,
+  does for a socket): `Gg2.Simulation.IInputSource`,
   `Gg2.Server.NetworkInputSource`, `GameServer.GatherInputs`. See
   docs/ARCHITECTURE.md, "Bots", for what it settled.
 - Determinism, independent `WorldState`s across cores, headless
@@ -84,28 +67,23 @@ event sink that owns memory. Map data and other read-only inputs are passed *to*
 **Retrofit cost.** Total. This is the one item on the list that cannot be added
 later without rewriting the simulation.
 
-✅ **Held, and asserted.** `WorldState` contains no reference anywhere in it —
+**Held, and asserted.** `WorldState` contains no reference anywhere in it —
 recursively, so a reference inside a struct inside an `[InlineArray]` slot buffer
 fails it too, which is exactly where one would be added without anybody noticing.
-⚠️ **The failure mode is not a broken test elsewhere**: putting a `List<>` or a
-logger in there breaks nothing that runs. The server still serves, every parity
-window holds, the whole suite stays green — and rollout search is dead months
-later for a reason nobody can find.
 `BotAiConstraintsTests.WorldStateHoldsNoReferenceAnywhereInIt`.
 
-❌ **The zero-allocation half was FALSE until the audit.** A steady-state tick
-allocated **32 bytes per live character, every tick** — about 384 B/tick on a
-twelve-bot server. The cause was `foreach` over an `IReadOnlyList<T>`: enumerating
-an *interface* allocates a boxed enumerator where enumerating the concrete array
-does not. `Cabinets.CollisionStep` walked its list once per live character;
-`KillBoxes`, `MoveBoxes` and `ControlPoints`' capture zones had the same pattern
-and were invisible only because no fixture map places any of those, and an
-**empty** array's enumerator is a cached singleton that measures zero. All four
-are indexed loops now.
-⚠️ **The rule worth carrying: inside `Gg2.Simulation`, a collection the tick walks
-must arrive as an array or a span, or be indexed — and a `foreach` that measures
-zero today may only be walking an empty list.**
-`BotAiConstraintsTests.ASteadyStateTickAllocatesNothing`.
+⚠️ **The failure mode is not a broken test elsewhere.** Putting a `List<>` or a
+logger in there breaks nothing that runs — the server still serves, every parity
+window holds, the whole suite stays green — and rollout search is dead months
+later for a reason nobody can find.
+
+⚠️ **Zero-allocation is easy to lose silently via `foreach` over an interface.**
+Enumerating an `IReadOnlyList<T>` via `foreach` allocates a boxed enumerator
+where enumerating the concrete array does not, and an **empty** collection's
+enumerator is a cached singleton that measures zero — so a `foreach` that
+measures zero today may only be walking an empty list on the fixture that
+exercised it. Inside `Gg2.Simulation`, a collection the tick walks must arrive as
+an array or a span, or be indexed. `BotAiConstraintsTests.ASteadyStateTickAllocatesNothing`.
 
 ## 2. Snapshot and restore, not just replay-from-start
 
@@ -120,18 +98,18 @@ replay one second before the drift instead of ten minutes before it.
 If item 1 is done properly this is nearly free: a copyable flat state is a
 serialisable one.
 
-✅ **Free, and demonstrated rather than assumed.** A whole match is **144,840
+**Free, and demonstrated rather than assumed.** A whole match is **144,840
 bytes** and round-trips through raw bytes bit-identically with no production code
 at all — the bytes *are* the state.
+
 ⚠️ **Restoring is not the claim; continuing is.** The gate steps the restored copy
 fifty ticks against a control that was never serialised and compares at the
 **end**, because the failure worth catching is a state that compares equal and
-then diverges: a cursor, a counter, an RNG stream left outside the struct.
-⚠️ And the snapshot is taken on a **condition**, not a tick count — a rocket's
-whole life is shorter than its refire, so most instants after firing have an empty
-pool, and a snapshot with nothing in the air never exercises the handles or the
-creation order.
-`BotAiConstraintsTests.AStateRoundTripsThroughBytesAndGoesOnTickingIdentically`.
+then diverges: a cursor, a counter, an RNG stream left outside the struct. And the
+snapshot is taken on a **condition**, not a tick count — a rocket's whole life is
+shorter than its refire, so most instants after firing have an empty pool, and a
+snapshot with nothing in the air never exercises the handles or the creation
+order. `BotAiConstraintsTests.AStateRoundTripsThroughBytesAndGoesOnTickingIdentically`.
 
 ## 3. The parity trace format is the training data format
 
@@ -147,67 +125,48 @@ That is a labelled dataset arriving for free, and it is the only source of
 yields `p(action | state)` for real players - precisely the opponent
 distribution that fixes the aim problem this document opens with.
 
-The point is that one recorder serves both purposes. Do not design a second
+The point is that one recorder serves both purposes: do not design a second
 logging path later; make the parity recorder switchable on in production and
 give it a bounded on-disk format.
 
-**Deadline.** This is the only item here with one. Data not collected during the
-port's first public games does not exist afterwards.
+**Built:** `gg2-server --record <dir>`, off by default. There was nothing extra
+to capture — the broadcast stream already carries every player's keys and aim
+every tick, so the recorder tees `GameServer.FlushBroadcast`, which is also why
+"do not design a second logging path" holds by construction. `gg2-parity census`
+reads a six-bot game as 27,989 messages, framed cleanly to the last byte.
 
-### ⬅️ TABLED by the user, 2026-08-28
+`Recorder` is a passive spectator client: it connects to any host and port,
+sends no `INPUTSTATE`, and writes down every byte
+(`src/Gg2.Parity/Recorder.cs:7-22`). So `gg2-parity record --host
+<public-server> --port <n>` captures human play on somebody else's GM8 server —
+the cheapest route to the *opponent* distribution this item wants, independent
+of whether this port has its own public game.
 
-**"There are zero active players of this game world wide."** The deadline assumed
-a first public game with strangers in it. There is no evidence such a game is
-coming, and an item whose precondition may never arrive should not go on being
-the one item with a clock on it.
+**The bar is lower than "a playerbase".** What the item wants is a distribution
+over players nobody scripted, not a large corpus. At 30 Hz one 8-player
+half-hour round is ~430,000 labelled player-ticks, and the thing being fitted is
+small: reaction-time and dodge-direction priors conditioned on a handful of
+local features, over an action space of one byte of keys and a quantised aim. A
+dozen recorded rounds clears it.
 
-**It is not critical, and this is the argument that it is not.** Item 3 serves
-exactly one thing — the opponent model in the aim problem this document opens
-with — and the fallback is already specified below: self-play, through items 8,
-10 and 11, all of which are built. What is lost is not the ability to train. It
-is that every behaviour the trainer ever sees will have been written by somebody
-in this repo, which is a *quality* cost rather than a blocker.
+### Tabled
 
-**What stays true, so that reopening is cheap:** the recorder is built, tested
-and off by default, and switching it on is a flag; the format question is settled
-and needs no revisiting; and the note below about recording somebody else's
-server still holds and is the cheapest route back in. **Nothing needs doing to
-keep the option open.**
+**"There are zero active players of this game world wide."** No public game
+with strangers is expected, so the deadline above (data not collected during
+the port's first public games does not exist afterwards) has no precondition to
+fire on, and no longer carries a clock. **Do not silently re-open this as a
+queue item** — a session about to spend time on human data is looking at a
+decision to put back to the user, not a gap to fill.
 
-⚠️ **Do not silently re-open this as a queue item.** A session that finds itself
-about to spend time on human data is looking at a decision to put back to the
-user, not a gap to fill.
-
-✅ **Built 2026-08-27**: `gg2-server --record <dir>`, off by default. ⚠️ **There
-was nothing to capture** — the broadcast stream already carries every player's
-keys and aim every tick, so the recorder tees `GameServer.FlushBroadcast` and
-this item's "do not design a second logging path" holds by construction. Verified
-end to end: `gg2-parity census` reads a six-bot game as 27,989 messages, framed
-cleanly to the last byte.
-
-⚠️ **The DEADLINE is not discharged by having built it** — it would have been
-discharged by switching it on before the first public game, and it is **tabled**
-instead. The reasoning is kept because it is what would make the item worth
-reopening: **one human is not the data it wants**. It asks for
-`p(action | state)` over real *opponents*, and a solo session is repeatable
-whenever; a game with strangers is not.
-
-⚠️ **The humans do not have to be on THIS server.** `Recorder` is a passive
-spectator client: it connects to any host and port, sends no `INPUTSTATE`, and
-writes down every byte (`src/Gg2.Parity/Recorder.cs:7-22`). So
-`gg2-parity record --host <public-server> --port <n>` captures human play on
-somebody else's GM8 server, and that is the cheapest route to the *opponent*
-distribution this item is actually after — available today rather than at this
-port's first public game.
-
-**And the bar is lower than "a playerbase".** What the item wants is a
-distribution over players nobody scripted, not a large corpus. At 30 Hz one
-8-player half-hour round is ~430,000 labelled player-ticks, and the thing being
-fitted is small: reaction-time and dodge-direction priors conditioned on a
-handful of local features, over an action space of one byte of keys and a
-quantised aim. A dozen recorded rounds clears it. **None are expected**, the item being tabled,
-so the fallback is self-play (items 8, 10 and 11) — which costs the opponent
-model its only source of behaviour nobody in this repo wrote.
+**It is not critical.** Item 3 serves exactly one thing — the opponent model in
+the aim problem this document opens with — and the fallback is self-play,
+through items 8, 10 and 11, all of which are built. What is lost is not the
+ability to train; it is that every behaviour the trainer ever sees will have
+been written by somebody in this repo, a *quality* cost rather than a blocker.
+Nothing needs doing to keep the option open: the recorder above already covers
+it, including the "record from any host" route. **One human is not the data it
+wants** — the item asks for `p(action | state)` over real *opponents*, and a
+solo session is repeatable whenever, while a game with strangers is not.
 
 ## 4. Keep the action space exactly the wire action
 
@@ -223,7 +182,7 @@ more precisely than a player can.
 
 The reference already works this way. Do not "improve" it.
 
-✅ **Asserted structurally**: every field of `PlayerInput` is a byte, a ushort or
+**Asserted structurally**: every field of `PlayerInput` is a byte, a ushort or
 an enum, so there is nowhere for a privileged float aim to live, and `FromAim`
 quantises the way *in* onto the same 65,536 steps — about 182 per degree.
 `BotAiConstraintsTests.TheActionSpaceIsExactlyTheWireAction`.
@@ -265,9 +224,8 @@ Adding it after every call site assumes per-slot polling is a wide change.
 **Satisfied, including the call site.** `IBatchInputSource : IInputSource`, and
 `GameServer.GatherInputs` groups slots by source *identity* and calls `PollMany`
 once with all of them — because the wide change this item warns about is the
-call site, not the declaration. Nothing implements it for real yet;
-`InputSourceTests.OnePolicyDrivingSeveralBotsIsAskedOnce` is the gate, with the
-per-slot fallback as its control.
+call site, not the declaration. `InputSourceTests.OnePolicyDrivingSeveralBotsIsAskedOnce`
+is the gate, with the per-slot fallback as its control.
 
 ## 6. `WorldView` must yield a feature vector cheaply
 
@@ -297,7 +255,7 @@ order the rest of the project already makes observable — a pool slot is recycl
 and says nothing about when anything was fired. The feature vector itself is
 still undesigned, which is what this item permits.
 
-✅ **Asserted**: `typeof(WorldView).IsByRefLike`, so the read-only guarantee is
+**Asserted**: `typeof(WorldView).IsByRefLike`, so the read-only guarantee is
 the compiler's rather than a convention
 (`BotAiConstraintsTests.WorldViewIsARefStruct`).
 
@@ -319,18 +277,12 @@ and it forces training code to duplicate game rules it should never know. The
 events are needed for the scoreboard regardless; the requirement is only that
 they carry the attributor and the amount rather than being presentation strings.
 
-✅ **Whole, 2026-08-28.** `TickEvents` carried kills, deaths, spawns and captures
-with attribution; the accumulators `docs/ENV.md` named as its first prerequisite
-landed with `Gg2.Env` step 1. `SlotBuffer<double> DamageDealt` / `DamageTaken`
-(`TickEvents.cs:374`), credited at application time in `DamageApi.Deal`
+**Whole.** `TickEvents` carries kills, deaths, spawns and captures with
+attribution; the accumulators `SlotBuffer<double> DamageDealt` / `DamageTaken`
+(`TickEvents.cs:374`) are credited at application time in `DamageApi.Deal`
 (`DamageApi.cs:68`), cleared by `ClearOutputs`, gated by `DamageAccumulatorTests`.
 Self-damage counts as taken and never as dealt; blocked damage accumulates
 nothing.
-
-⚠️ **This section read "half built" for a day after it was whole**, and so did
-this document's header. Two places, one fact, both stale — which is the failure
-mode the standing instruction exists for: `grep` for the thing an item says is
-missing before starting it.
 
 ## 8. A match runner with no sockets in it
 
@@ -346,12 +298,12 @@ all, and it is worth more day-to-day than any learned policy.
 `ARCHITECTURE.md`'s control surface is the interactive version of this; this is
 the batch version, and the two should share their hosting code.
 
-✅ **Built 2026-08-27**: `HeadlessMatch` (`Reset`/`Step`/`State`) with
-`MatchRunner` as a loop over it, and `gg2-server eval` on top. ⚠️ **Its results do
-not depend on the thread count**, and that is gated by comparing whole result
-arrays — digest included — rather than win rates, because every match owns its own
-`CollisionWorld`, `ScriptedBot`s and therefore its own `NavSearch`. 44 matches
-across all 22 maps in 3.3s, 3,548x real time.
+**Built.** `HeadlessMatch` (`Reset`/`Step`/`State`) with `MatchRunner` as a loop
+over it, and `gg2-server eval` on top. Its results do **not** depend on the
+thread count — gated by comparing whole result arrays, digest included, rather
+than win rates, because every match owns its own `CollisionWorld`,
+`ScriptedBot`s and therefore its own `NavSearch`. 44 matches across all 22 maps
+in 3.3s, 3,548x real time.
 
 ## 9. `SIM_UUID`, and refusing a policy that does not match it
 
@@ -374,10 +326,12 @@ invalidates every checkpoint. That is correct.
 **Where it lands.** Naturally with phase 4 in `PLAN.md`, since there is nothing
 to stamp before the physics exists. Do not defer it past that: a stamp added
 after the first checkpoints are trained cannot tell you which ones were valid.
+It in fact landed at the end of phase 7; nothing had been trained by then, so
+nothing was invalidated by the delay, but the stamp had to be derived from a
+larger surface than it would have been.
 
-✅ **Built** (2026-08-27): `Gg2.Simulation.SimulationStamp`, and
-`SimulationStampTests` is the gate. `Uuid` is `99b7ab3141e31fb4` over 213 entries
-and `Require` **throws** on a mismatch, naming both stamps so an operator can tell
+**Built.** `Gg2.Simulation.SimulationStamp`, gated by `SimulationStampTests`.
+`Require` **throws** on a mismatch, naming both stamps so an operator can tell
 which side is stale.
 
 ⚠️ **The surface is chosen, not swept.** In: the physics constants (which live on
@@ -386,14 +340,14 @@ and the blast tables, and the **three** hand-bumped version numbers. **Out:
 `GameConstants` — configuration and protocol.** A port number moving must not
 invalidate every checkpoint, because **a stamp that churns gets ignored**.
 
-⚠️ **The third of those is `SimulationBehaviourVersion`, and it exists because
-everything else on the surface is a CONSTANT.** `3bba987` changed control flow in
-`Movement.cs` — a line of physics — and the stamp could not move; `gg2-rl` asked
-for the gap to be closed on 2026-08-30 and it was, at the cost of the first bump
-that invalidated real checkpoints. **Bump it when you knowingly change what the
-simulation does**; do not bump it for a refactor, and exempt a change only when it
-has been *demonstrated* unobservable rather than argued to be. `docs/ENV.md`, "the
-third hand-bumped number", has the rule and the exemption that was used.
+⚠️ **The third hand-bumped number is `SimulationBehaviourVersion`, and it exists
+because everything else on the surface is a CONSTANT** — it is the escape hatch
+for a change to control flow (e.g. in `Movement.cs`) that is real physics but
+touches no constant, so nothing else on the stamp's surface would move for it.
+**Bump it when you knowingly change what the simulation does**; do not bump it
+for a refactor, and exempt a change only when it has been *demonstrated*
+unobservable rather than argued to be. `docs/ENV.md`, "the third hand-bumped
+number", has the rule and the exemption that was used.
 
 ⚠️ **Round-trip formatting, so a one-ULP change moves it** — `Gml.PointSix` and
 its four siblings *are* gravity and the friction factors, and fifteen digits
@@ -404,10 +358,6 @@ policy after a restart.
 ⚠️ **The digest is pinned in the test, and a change there is the bump rather than
 a broken test.** The question to answer before editing that line is which
 checkpoints it just invalidated.
-
-It arrives at the end of phase 7 rather than with phase 4 as this item asks.
-Nothing has been trained, so nothing is invalid; the cost paid is only that the
-stamp had to be derived from a larger surface than it would have been.
 
 ## 10. A `Gg2.Env` project
 
@@ -426,12 +376,12 @@ project living in this repo.
 Start with a local socket and length-prefixed binary frames. Shared memory is an
 optimisation to make once there is a measurement that justifies it.
 
-❌ **Not built, but scoped.** Items 1, 2 and 6 — its three hard preconditions —
-all hold. The scope call was made 2026-08-27 (duels only; v0 observation layout
-built to `gg2-rl/docs/DESIGN.md`'s sketch; action heads decoded server-side;
-rewards as components) and the design is **`docs/ENV.md`**. ⚠️ One gap found in
-the preconditions: item 7's damage half — `TickEvents` has no per-tick damage
-amounts, and `docs/ENV.md` makes the accumulators the first prerequisite.
+**Built and scoped.** Items 1, 2 and 6 — its three hard preconditions — all
+hold. Scope: duels only; v0 observation layout built to `gg2-rl/docs/DESIGN.md`'s
+sketch; action heads decoded server-side; rewards as components. Design is
+**`docs/ENV.md`**. Item 7's damage half — per-tick damage amounts via
+accumulators — was the one precondition gap found, and it is closed
+(see item 7).
 
 ## 11. Scenario construction without a gamemode
 
@@ -448,9 +398,9 @@ with an `IInputSource`, `Step`. A library type rather than a test fixture,
 because a self-play evaluator wants exactly this. ⚠️ **What makes it
 gamemode-less is the zeroed limits and placing no objective, not the `GameMode`
 field** — measured, by setting the mode three ways and watching nothing change.
-docs/TRAPS-BOTS.md, "the scenario harness", has the list of lines that do the work and
-the two (`TdmInvulnerabilityTicks`, `RespawnTime`) that are only observable at
-one instant each.
+docs/TRAPS-BOTS.md, "the scenario harness", has the list of lines that do the
+work and the two (`TdmInvulnerabilityTicks`, `RespawnTime`) that are only
+observable at one instant each.
 
 ## 12. The rollout-search bot
 
@@ -482,26 +432,30 @@ the same tick), item 6's `WorldView` queries, item 7's damage accumulators (the
 score), and item 11's `ScenarioWorld` (a fight, not a match). ⚠️ **Nothing new is
 required from the simulation.** This item is assembly, not capability.
 
+**Built.** `Gg2.Bots.RolloutSearch`. 2.94 ms a decision in Release and 11-0-1
+against `ScriptedBot` over twelve duels; `docs/TRAPS-BOTS.md`, "Item 12", has the
+rest.
+
 **The one open design question**, and it is the one that decides whether the
 search is worth imitating: **what the opponent is assumed to do during a
 rollout.** `botAimLead.gml` assumes constant velocity plus gravity, which is the
 assumption this whole programme exists because it is wrong. Self-play - rolling
 the opponent out with the same search - is the answer that needs no data.
 
-✅ **DECIDED 2026-08-28, and it is a named enum rather than a comment**:
-`RolloutOpponent.HoldLastInput` is the default — every other character holds the
-input it is already holding, read off `CharacterState`. `Idle` (presses nothing)
-is kept beside it as the comparison floor. Self-play is deliberately out of v0
-and its seam is a third member of that enum.
+**Decided, as a named enum rather than a comment**: `RolloutOpponent.HoldLastInput`
+is the default — every other character holds the input it is already holding,
+read off `CharacterState`. `Idle` (presses nothing) is kept beside it as the
+comparison floor. Self-play is deliberately out of v0 and its seam is a third
+member of that enum.
 
 ⚠️ **`HoldLastInput` is the same CLASS of assumption as `botAimLead`'s** — better,
 because it is right about momentum over a 20-tick horizon, and still an opponent
 who does not *react*, which is the thing this programme exists because of. So
-`gg2-rl` phase 1 will report the win rate under both models rather than one
+`gg2-rl` phase 1 should report the win rate under both models rather than one
 headline number: if they barely differ the search is not really using its
 opponent model and the horizon or the scoring is the binding constraint, and if
 they differ a lot that gap is the quantified argument for paying for nested
-rollouts. **That number is wanted before phase 2 distils anything**, because a
+rollouts. That number is wanted before phase 2 distils anything, because a
 policy inherits whatever the search assumed.
 
 ⚠️ **`RolloutOpponent.Idle` is therefore not dead code.** It looks like unused
@@ -513,42 +467,35 @@ expert iteration, and it arrives as weights behind a seam that already exists.
 
 ## Not asking for
 
-⚠️ **STATUS, 2026-09-01: this list is now partly HISTORY, and it reads as a
-standing scope.** Two of its four items have been crossed on the user's explicit
-call and one turned out to describe exactly what shipped. Marked rather than
-deleted, because the reasons are still the reasons.
-
-To keep the scope honest:
-
-- ⛔ ~~No ML runtime, tensor library, or ONNX dependency in this repo yet.~~
-  **BUILT.** `PolicyNetwork` runs a `gg2-rl` checkpoint in-process, loaded by
-  `NpyFile` from their own `.npz`. ✅ **The second half of the sentence held
-  exactly**: it loads as weights behind an `IInputSource` (`HybridBot` driving a
-  `PolicyController`), with no
-  tensor library and no dependency — a `Dense` loop and an argmax per head.
-- ✅ **No training loop, replay buffer, or environment API. Those live outside
-  the server.** STILL TRUE and still the rule. `src/Gg2.Env/` is a *seam* — a
-  socket and an observation writer — not a trainer; the loop is `gg2-rl`'s.
-- ✅ **No end-to-end learned bot. The realistic target is a hybrid**: the scripted
+- **No ML runtime, tensor library, or ONNX dependency required in this repo.**
+  What shipped stayed inside that rule: `PolicyNetwork` runs a `gg2-rl`
+  checkpoint in-process, loaded by `NpyFile` from their own `.npz`, as weights
+  behind an `IInputSource` (`HybridBot` driving a `PolicyController`) — a
+  `Dense` loop and an argmax per head, no tensor library and no dependency.
+- **No training loop, replay buffer, or environment API. Those live outside the
+  server.** `src/Gg2.Env/` is a *seam* — a socket and an observation writer —
+  not a trainer; the loop is `gg2-rl`'s.
+- **No end-to-end learned bot. The realistic target is a hybrid**: the scripted
   macro layer keeps objective selection, class choice and routing - roughly 2,000
   working lines in `botObjectiveUpdate.gml` and `botPathKeys.gml` - and only the
   ~1-second duel controller is searched or learned. Small observation space,
   dense reward, and it is exactly the part scripting is bad at.
-  ⛔ **This is what shipped, and the measurement went further than the
-  prediction**: the policy is most valuable holding about **7%** of ticks, and
-  widening its window past ~150px *loses the objective* while still improving
-  combat. **The narrow scope is not a cautious first step — it is the result.**
-  `docs/BOTS.md`, and `docs/ENV.md`, "Phase 4 re-measured".
+  This is what shipped, and the measurement went further than the prediction:
+  the policy is most valuable holding about **7%** of ticks, and widening its
+  window past ~150px *loses the objective* while still improving combat. **The
+  narrow scope is not a cautious first step — it is the result.** `docs/BOTS.md`,
+  and `docs/ENV.md`, "Phase 4 re-measured".
 - Nothing here changes the wire protocol or the simulation's observable
   behaviour. Every constraint above is on structure, not on what the game does.
 
 ## Where items 9-12 came from
 
 They are `gg2-rl/docs/CONTRACT.md`'s "What gg2-server does not yet promise" —
-9-11 as originally written, and **12 raised 2026-08-28** when that repo's phase 0
-started and phase 1's dependency turned out to be named nowhere: the search bot
-appeared in this document only as *motivation* for items 1, 2, 5 and 11, and in
-`docs/ENV.md` only as something v0 was not.
+9-11 as originally written, 12 added when that repo's phase 0 started and phase
+1's dependency turned out to be named nowhere: the search bot had appeared in
+this document only as *motivation* for items 1, 2, 5 and 11, and in `docs/ENV.md`
+only as something v0 was not.
+
 That repo is the trainer; this one owns the simulation, the env surface, the
 observation layout and the version stamp. The split is deliberate and the
 asymmetry is the point: anything needing `WorldState` internals, or needing to
@@ -558,6 +505,6 @@ this repo losing a feature.
 ## Reference
 
 Facts about the GM8 implementation cited above were read from the
-`Gang-Garrison-2` tree on 2026-08-24: `Source/gg2/Scripts/Bots/botAimLead.gml`,
+`Gang-Garrison-2` tree: `Source/gg2/Scripts/Bots/botAimLead.gml`,
 `Source/gg2/Scripts/Bots/botInputUpdate.gml`, and
 `Source/gg2/Scripts/GameServer/processClientCommands.gml`.

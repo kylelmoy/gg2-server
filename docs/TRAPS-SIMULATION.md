@@ -20,8 +20,7 @@ session spends a day arriving where it started.
   cell-for-cell against `gg2-agent/tools/walkmask.js`.
 - `Gg2.Server`, `Gg2.Host` — phase 1. A stock GM8 client joins and reaches the
   team-select screen; `gg2-parity` shows this server's broadcast stream is
-  byte-identical to the reference's. (That claim used to end "apart from the CTF
-  round timer" — the timer is simulated since phase 6's round.)
+  byte-identical to the reference's, including the CTF round timer.
 - `Gg2.Parity` — phase 2. Recorder, byte diff, stream framer, trace format,
   replayer and drift report. `gg2-parity replay <trace>` runs a recording
   against `EmptySimulation` and reports every divergence by tick, slot, field
@@ -36,9 +35,7 @@ session spends a day arriving where it started.
   the running engine **bit for bit** across 64 trajectories on two maps
   (`tests/Gg2.Tests/Fixtures/physics-samples.json`, regenerate with
   `node tools/sample-physics.js`), and replays the checked-in 898-tick bot trace
-  closed-loop with **zero** error on both axes. That used to stop at tick 393,
-  the first tick on which anything takes damage; phase 5's scattergun removed
-  the boundary and the whole 898 ticks are now exact, hp included. No nudges, no
+  closed-loop with **zero** error on both axes, hp included. No nudges, no
   tolerances.
 - ⚠️ **`Projectiles.Move` runs before the characters move, and `Projectiles.Collide`
 after.** `move_all_bullets` is a Step event and `Character.events/Step.xml` puts
@@ -57,10 +54,7 @@ jump deals 28.15385 instead of 30 with the pass in the wrong place.
   carries a spawn point id and a group rather than a position
   (`sendEventSpawn.gml`), so a replay resolves it against the map exactly as the
   client does and starts the character on an integer coordinate with both speeds
-  zero. Anchoring on a broadcast position instead costs a fifth of a pixel, and
-  that was the entire residual phase 4 spent its time chasing.
-- The phase-3 reassessment point came out well: collision matches the engine
-  exactly, so the risk it was guarding against did not materialise.
+  zero. Anchoring on a broadcast position instead costs a fifth of a pixel.
 
 ### Six roundings, and only one of them is different
 
@@ -189,10 +183,9 @@ with an old copy of the encoder** — there is no longer an old copy to reach fo
 ### The crawl that could not finish — 2026-08-30, and the only line in the physics the reference does not have
 
 ⛔ **`good_move_contact_solid` can loop for ever, and it is not a transcription
-bug — the reference loops too.** `gg2-rl` reported a `Step` that never returned,
-on `cp_dirtbowl`, killing roughly one long phase 3 run in two. Reproduced here
-at iteration 78 of the run its `docs/CONTRACT.md` names, and caught with a
-temporary iteration guard in `Movement.GoodMoveContactSolid`:
+bug — the reference loops too.** Reproduced at iteration 78 of the run
+`docs/CONTRACT.md` names, on `cp_dirtbowl`, and caught with a temporary
+iteration guard in `Movement.GoodMoveContactSolid`:
 
 ```
 x=2698.437089230609  y=3933.463891267056   dir=118.11026973845824
@@ -236,8 +229,8 @@ iteration that used to hang.
 ⚠️ **A non-terminating loop cannot be gated by calling it.**
 `MovementTests.TheCrawlStopsWhenAStepIsSmallerThanThePositionCanHold` replays
 the recorded state on a worker with a ten-second deadline, because a plain call
-wedges the whole test run instead of going red. It was watched failing before it
-was believed — reverting the one line turns it red in ten seconds.
+wedges the whole test run instead of going red. Reverting the one line turns it
+red in ten seconds.
 
 ⚠️ **The other crawls in the project were checked and are safe**, for reasons
 worth keeping: `Movement.MoveOutsideSolid` and `Projectiles.BackOutOfWalls` are
@@ -251,19 +244,16 @@ a coordinate back.**
 ### The alarm stage, now measured
 
 - **An alarm set to `n` fires `n` ticks later, and one set to `0` never fires.**
-  `Gg2.Simulation.Timers`, transcribed from OpenGMK and ✅ **measured against
-  the running game on 2026-08-27**. The stage runs between Begin Step and Step
-  and is **alarm-index major**: every instance's alarm 0 before any instance's
-  alarm 1.
+  `Gg2.Simulation.Timers`, transcribed from OpenGMK and measured against the
+  running game. The stage runs between Begin Step and Step and is
+  **alarm-index major**: every instance's alarm 0 before any instance's alarm 1.
   ⚠️ **A weapon fires in Begin Step, which is *before* this stage** — so a shot
   is tested against the refire counter last tick left behind, not one that has
-  already advanced this tick. `SIMULATION.md` and `MatchSimulation` both said
-  the reverse until stage 3.
+  already advanced this tick.
   ✅ **An alarm assigned a fractional number of ticks is rounded half to even**
-  (`Timers.SetAlarm`), or it would step past zero and never fire. Measured
-  2026-08-27 — `0.5 → 0`, `1.5 → 2`, `2.5 → 2`, `30.5 → 30`, `31.5 → 32` — so
-  the codebase's convention was right. Reachable: a scattergun pellet's lifetime
-  is `35` times a factor in `[0.5, 1]`.
+  (`Timers.SetAlarm`), or it would step past zero and never fire — `0.5 → 0`,
+  `1.5 → 2`, `2.5 → 2`, `30.5 → 30`, `31.5 → 32`. Reachable: a scattergun
+  pellet's lifetime is `35` times a factor in `[0.5, 1]`.
 
 ### Phase 5 stage 3: the Scattergun, and three things that had to be right
 
@@ -279,11 +269,9 @@ read.
   flight path.** `createShot` sets both and the Scattergun scatters only
   `direction` — but `move_all_bullets.gml` writes `image_angle = direction` on
   every pass including the first, which runs before any collision event. So each
-  pellet's box follows its own heading. This file said the reverse until the
-  script was read.
+  pellet's box follows its own heading.
 - ⚠️ **An instance created in Begin Step moves in the same frame.** GM8's
-  movement pass walks what exists when it runs. Measured by delaying it and
-  watching the trace fail at tick 393.
+  movement pass walks what exists when it runs.
 - **Eighteen draws per blast, in a fixed order** — `choose(0,0,1)` from the
   Shot's Create event, then the speed jitter, then the direction jitter, three
   per pellet. The count is contract: every client re-derives the blast from the
@@ -373,9 +361,9 @@ the full rules; these are the ones that will bite a change.
 - ⚠️ **The quarter-radius cutoff is a `continue` inside a `with`**, so the outer
   quarter gets no knockback either.
 - ✅ **A rocket jump costs its shooter exactly what the same blast costs an
-  enemy — GG2 has no self-damage reduction at all.** Confirmed 2026-08-28 by
-  reading `Rocket.events/User Event 5.xml` down through `damageCharacter.gml`
-  and `dealDamage.gml`: the damage expression
+  enemy — GG2 has no self-damage reduction at all.** Confirmed by reading
+  `Rocket.events/User Event 5.xml` down through `damageCharacter.gml` and
+  `dealDamage.gml`: the damage expression
   `explosionDamage*(1-(fake_distance/blastRadius))` sits on a single line reached
   by both arms of `(other.team != team) or (id==other.ownerPlayer.object)`, and
   nothing below it tests the owner. ⚠️ **The most natural "fix" for a self-kill
@@ -389,29 +377,25 @@ the full rules; these are the ones that will bite a change.
   `instance_destroy()` included — a rocket that reports its own shooter as the
   thing it struck neither explodes nor dies. **So the worst a rocket jump can
   cost a soldier is 30 of 160, and it takes SIX from full health to kill.**
-  ⚠️ 160/30 is 5.33, not 5 — this session's first draft asserted five and the
-  gate caught it, which is why the count is pinned rather than left in prose.
-  ⚠️ **Removing that outer guard was invisible to all 2,181 tests** until
-  `RocketTests.ARocketThatStruckItsOwnShooterNeitherExplodesNorDies` landed:
-  every other test in the file passes `CharacterState.Nobody` as the direct
-  victim, so nothing exercised the arm at all.
-- ⚠️ **"No gate" was half right, and the half that was wrong is the useful
-  half.** The handoff recorded rocket self-damage magnitude as ungated. Measured
-  by mutation on 2026-08-28: halving self-damage fails **seven parity fixtures**
-  (`PhysicsParityTests` ×2, `KothFixtureTests`, `CpDirtbowlFixtureTests`,
-  `GeneratorFixtureTests`, `AirblastFixtureTests`, `BotAiConstraintsTests`) —
-  real players rocket-jump in those recordings — but **not** the one unit test
-  named after it, which asserted only `Hp < before`. ⚠️ **A recording gating a
-  fact diffusely is not the same as a test naming it**: the fixtures say a window
-  shrank, not what changed.
+  ⚠️ 160/30 is 5.33, not 5, so the count is pinned rather than left in prose.
+  ⚠️ **Removing that outer guard is invisible to any test that passes
+  `CharacterState.Nobody` as the direct victim** — only
+  `RocketTests.ARocketThatStruckItsOwnShooterNeitherExplodesNorDies` exercises
+  the arm.
+- ⚠️ **Rocket self-damage magnitude is gated by mutation**: halving it fails
+  seven parity fixtures (`PhysicsParityTests` ×2, `KothFixtureTests`,
+  `CpDirtbowlFixtureTests`, `GeneratorFixtureTests`, `AirblastFixtureTests`,
+  `BotAiConstraintsTests` — real players rocket-jump in those recordings) but
+  **not** the unit test named after it, which asserts only `Hp < before`. ⚠️ **A
+  recording gating a fact diffusely is not the same as a test naming it**: the
+  fixtures say a window shrank, not what changed.
 - **A grounded team-mate who is not the shooter is exempt from the entire
   blast**; an airborne one is thrown and still takes no damage. `Obstacle` only,
   so a player wall does not count as ground.
 - **`blastRadius` and `explosionDamage` are per-kind lookups; `knockback` is
   per-instance** — the pyro's airblast changes the third and merely restores the
   second.
-- **Both of the things this stage left open are now measured** (2026-08-25,
-  against the running game; `docs/SIMULATION.md` has the tables):
+- **Measured against the running game** (`docs/SIMULATION.md` has the tables):
   **`move_contact_solid` does not move an instance already in collision**, so the
   rocket's contact reposition is exact; and **every solid a map places is a
   filled rectangle** on one of two runtime sprites with origin (0,0), so
@@ -432,11 +416,10 @@ is on **tick 647 of 748**, so 86% of it is character physics — implementing a
 weapon will not move its residual. A fixture that actually exercises combat early
 is still missing.
 
-It has still been worth its weight: it is the only fixture with a `PLAYER_LEAVE`
-in it and the only one where a key is pressed for a single tick, and each of
-those caught a harness bug that every other recording hid. **When adding a
-fixture, ask what state it cannot reach** — and `docs/PARITY.md` now has both
-findings written up.
+It is still worth its weight: it is the only fixture with a `PLAYER_LEAVE` in
+it and the only one where a key is pressed for a single tick, and each of those
+caught a harness bug that every other recording hid. **When adding a fixture,
+ask what state it cannot reach** — `docs/PARITY.md` has both findings.
 
 **`reference-ctf_truefort-closedcombat.trace` is the sharpest combat fixture.**
 Recorded with the recorder connected first and the map reloaded underneath it, so
@@ -476,8 +459,8 @@ work has ever been able to make. `docs/PARITY.md` has the recipe.
   `docs/PARITY.md`, "an exact window can also end on a threshold".
 
 **`reference-ctf_truefort-closedsupport.trace` and `-hotsupport.trace` are the
-medic/pyro/engineer fixtures** (2026-08-26), and the first recordings in the
-project containing any of those three classes. The closed one is **fully**
+medic/pyro/engineer fixtures**, the first recordings in the project containing
+any of those three classes. The closed one is **fully**
 spawn-anchored — all six bots, by t774, which `closedcombat` is not — and
 replays **closed-loop exactly for 412 ticks on trajectory** with none of those
 weapons implemented, which is the first evidence their run powers and boxes are
@@ -561,15 +544,14 @@ rocket", has the comparison table; these are the traps.
   Create event and broadcasts no seed** — its `7 + random(3)` comes off the
   global stream, like the Minigun's and the Blade's.
 
-⚠️ **A demoman's mine blocks are written from one walk, and for four phases
-they were not written at all.** `WeaponState` carried both a `Lobbed` the
-simulation maintained and a `MinesLobbed` the serialiser read, and nothing ever
-wrote the second — so a demoman with mines out put a **0** on the wire and no
-mine records. Self-consistent, therefore silent: no client desynchronised, no
-framing error fired, every client simply drew no mines. Fixed 2026-08-26; there
-is one field now, `CharacterWire.ToWeaponBlock(in WorldState, int)` fills the
-records from the projectile pool in creation order, and a mismatch between the
-count and the walk throws. `docs/PROTOCOL.md` has the layout;
+⚠️ **A demoman's mine blocks are written from one walk.** `WeaponState` has a
+single `Lobbed` field; `CharacterWire.ToWeaponBlock(in WorldState, int)` fills
+the mine records from the projectile pool in creation order, and a mismatch
+between the count and the walk throws. (A prior split between a `Lobbed` field
+the simulation maintained and a separate `MinesLobbed` the serialiser read was
+self-consistent yet silently wrote zero mine records — no framing error, no
+desync, just no mines drawn — which is why the walk now throws on mismatch
+instead of trusting a count.) `docs/PROTOCOL.md` has the layout;
 `MineUpdateLayoutTests` round-trips the real writer through the real reader,
 which is the only way to see bytes that were never written.
 
@@ -580,14 +562,13 @@ which is the only way to see bytes that were never written.
 `docs/SIMULATION.md`, "Settled: afterburn", has the full rules.
 
 - ⚠️ **A fired alarm rests at 0 for the rest of its own frame, and the port is
-  wrong about it.** Measured 2026-08-27 (`tools/probes/probe-alarm-image.js`):
-  the counter reads `…2, 1, 0, -1` on successive frames and the event runs on
-  the frame it reads **0**. `Timers.Advance` writes `Inactive` at the moment of
-  firing, one tick early. Invisible everywhere except
-  `Character.events/Begin Step.xml:67`, which gates the afterburn fade on
-  `alarm[0] == -1` **exactly** and runs *before* the alarm stage — so the port
-  starts every burn's intensity decay a tick early. **An open finding: the fix
-  belongs to whichever lane owns `src/Gg2.Simulation`.**
+  wrong about it.** Measured (`tools/probes/probe-alarm-image.js`): the counter
+  reads `…2, 1, 0, -1` on successive frames and the event runs on the frame it
+  reads **0**. `Timers.Advance` writes `Inactive` at the moment of firing, one
+  tick early. Invisible everywhere except `Character.events/Begin Step.xml:67`,
+  which gates the afterburn fade on `alarm[0] == -1` **exactly** and runs
+  *before* the alarm stage — so the port starts every burn's intensity decay a
+  tick early. **Open finding, not yet fixed.**
   `docs/SIMULATION.md`, "Settled: the alarm stage", has the table.
 - ⚠️ **GM8 does not count down an alarm index whose object has no event for
   it.** An `AgentSpare0` given `alarm[1] = 4` still read 4 sixty frames later.
@@ -734,14 +715,12 @@ has the full rules; these are the traps:
   real Flames owned by the *blasting* pyro at twice the rolled speed
   (`motion_add` of its own vector). `realnumflames` is End-Step state the port
   never held before (`CharacterState.RealNumFlames`).
-- ⚠️ ~~**No fixture moved and none can**~~ — **that was wrong, and it was wrong
-  about the fixtures rather than about the airblast.** The reflectable set is
-  `Rocket`, `Flare` and `Mine`, so a pyro with none of those in front of it
-  never presses the key — and `closedsupport`, the only fixture with pyros in
-  it, is medic/pyro/engineer and contains **no rockets and no mines at all**.
-  Its pyros could not airblast however long it ran.
-  ✅ **`reference-ctf_truefort-closedairblast.trace`** (2026-08-27, three pyros
-  against three soldiers) gates it hard: **1,266 exact trajectory ticks with the
+- ⚠️ **The reflectable set is `Rocket`, `Flare` and `Mine`**, so a pyro with
+  none of those in front of it never presses the key — `closedsupport`
+  (medic/pyro/engineer, no rockets or mines) cannot gate the airblast however
+  long it runs.
+  ✅ **`reference-ctf_truefort-closedairblast.trace`** (three pyros against
+  three soldiers) gates it hard: **1,266 exact trajectory ticks with the
   airblast, 286 with `Weapons.AirBlast` stubbed to a no-op.** `AirblastFixtureTests`.
 - ⚠️ **An unseeded Flamethrower caps an *hp* window, not a *trajectory* one.**
   `Projectiles.BurningHitCharacter` deals damage and calls no `motion_add`, so
@@ -778,10 +757,9 @@ of class or team", has the full rules; these are the traps:
   `Players[slot]`, so a sentry whose owner-slot has no engineer of its team
   dies on the first tick. `Sentries.Build` reads the owner's team from the
   player too.
-- ✅ **That "not modelled" list is empty now.** `checkClasslimits` and
-  `ServerBalanceTeams` landed with autobalance, the intel drop landed with the
-  objective, and the spawn room and the healing cabinet landed on 2026-08-26 —
-  see the section below.
+- ✅ **`checkClasslimits` and `ServerBalanceTeams` implement autobalance**; the
+  intel drop landed with the objective; the spawn room and healing cabinet are
+  implemented — see the section below.
 
 ### Phase 6: the intel, and the four events that move it
 
@@ -810,10 +788,9 @@ rules; these are the traps:
   `event_user(5)` on a `Character` that has no `User Event 5`. Both callers
   reach it with the instance already existing, so it never matters — do not
   model it.
-- ✅ **The briefcase's box is measured now** (2026-08-27) and was right:
-  `-9, -12, +10, +7` about the origin, an `AUTO` bound of `0, 0, 19, 19` on a
-  20x22 image with the origin at `9, 12`. It was the last unmeasured collision
-  box in the project. ⚠️ **No fixture can confirm it and none ever will**:
+- **The briefcase's box**: `-9, -12, +10, +7` about the origin, an `AUTO`
+  bound of `0, 0, 19, 19` on a 20x22 image with the origin at `9, 12`.
+  ⚠️ **No fixture can confirm it and none ever will**:
   by mutation, `closedsupport`'s recorded grab moves only when `BoxLeft` shifts
   two pixels, and `BoxRight`/`BoxTop`/`BoxBottom` can each move **sixteen** with
   every fixture still green. `SpriteBoxSampleTests` is the only gate that bites
@@ -835,12 +812,12 @@ before. Adding the whole of it moved none of the five windows by a tick.
 none anchors", has which of the four events can be gated and why the other two
 cannot.
 
-✅ **That is fixed: `reference-ctf_2dfort-uncontestedcap.trace`** (2026-08-27) —
-six red scouts, no blue team, bots steered to blue's briefcase and home again.
-**No mismatches at all over its whole 4,934 ticks**, the longest exact window
-here, with the `GRAB_INTEL` at t1355 and the `SCORE_INTEL` at t2867 against an
-anchor of t618. **The first fixture for which deleting the objective fails a
-test**; mutation-checked. `IntelCaptureFixtureTests`.
+✅ **`reference-ctf_2dfort-uncontestedcap.trace`** covers it — six red scouts,
+no blue team, bots steered to blue's briefcase and home again. **No mismatches
+at all over its whole 4,934 ticks**, the longest exact window here, with the
+`GRAB_INTEL` at t1355 and the `SCORE_INTEL` at t2867 against an anchor of
+t618. Deleting the objective fails the test; mutation-checked.
+`IntelCaptureFixtureTests`.
 ⚠️ **The recipe is the KotH one**: what ends a closed-loop window is weapon
 knockback, so **removing the enemy team** is how you buy one long enough to reach
 a slow objective — and it costs what it buys, because a long window on a quiet
@@ -926,29 +903,25 @@ point", has the full rules; these are the traps:
   `ctf_truefort`, so there has never been a KotH, CP or Arena trace in this
   project. `ControlPointTests` and `DualKothTests` are the whole gate.
 
-✅ **DKotH has a fixture now**: `reference-dkoth_atalia-closeddkoth.trace`
-(2026-08-27), three soldiers a side, framed cleanly with **two** control points.
-It gates the two things nothing else could — **DKotH never sends `UNLOCKCP`
-where KotH always does** (the one message that tells the modes apart, with the
-KotH fixture as the control), and **both hills start owned by their own team**.
-⚠️ **"Every gamemode has a fixture" was wrong when it was first written** and is
-right now.
+✅ **DKotH: `reference-dkoth_atalia-closeddkoth.trace`**, three soldiers a
+side, framed cleanly with **two** control points. It gates the two things
+nothing else could — **DKotH never sends `UNLOCKCP` where KotH always does**
+(the one message that tells the modes apart, with the KotH fixture as the
+control), and **both hills start owned by their own team**.
 
-✅ **Invasion has a fixture too: `reference-ctf_avanti-closedinvasion.trace`**
-(2026-08-27), framed cleanly, three captures. ⚠️ **The claim that Invasion had no
-shipped map was WRONG**, and instructively so: it came from grepping for `inv_*`.
-**Invasion is not a map-name prefix** — it is a CTF map that places a
-`ControlPointSetupGate` (`GameModes.HasSetupGate`), and the only shipped map that
-does is called **`ctf_avanti`**. **Classify a map by asking the code, never by
-reading its name.** `InvasionFixtureTests.ExactlyOneShippedMapPlaysInvasion`
-asserts the whole classification across all 22 maps so it cannot be got wrong
-again quietly.
+✅ **Invasion: `reference-ctf_avanti-closedinvasion.trace`**, framed cleanly,
+three captures. **Invasion is not a map-name prefix** — it is a CTF map that
+places a `ControlPointSetupGate` (`GameModes.HasSetupGate`), and the only
+shipped map that does is called **`ctf_avanti`**. **Classify a map by asking
+the code, never by reading its name.**
+`InvasionFixtureTests.ExactlyOneShippedMapPlaysInvasion` asserts the whole
+classification across all 22 maps.
 
 ⚠️ **`cp_egypt` is the symmetrical control-point map and `cp_dirtbowl` is the
 attack/defend one** — five points and no setup gate against two points and one —
 so the two CP arrangements are different rule sets.
-✅ **Both have a recording now**: `reference-cp_egypt-closedsymmetric.trace`
-(2026-08-27), framed cleanly with **five** points, the largest block anywhere.
+✅ **Both have a recording**: `reference-cp_egypt-closedsymmetric.trace`,
+framed cleanly with **five** points, the largest block anywhere.
 Measured live and pinned: **starting owners red, red, neutral, blue, blue**, and
 **`capTime` 210/420/630/420/210** — the `1,2,3,2,1 × 7 s` hill, against
 attack/defend's `5,4,3,2,1` on a six-second base.
@@ -958,45 +931,39 @@ not a gate on the port** — the ownership is asserted both against the recordin
 and by loading the map into `PortedSimulation` and asking it, and only the second
 bites.
 
-✅ **The "port starts the capture meter two ticks early" finding was the
-HARNESS, and it is fixed.** `Replayer` compared the control-point block **after**
-running the tick; the block was serialised in the server's Begin Step and
-describes the **end of the previous tick**, so the port's end-of-this-tick meter
-was held against the reference's end-of-last-tick one. **One tick of capture,
-read as a rule error** — `+2` on a soldier recording and `+4` on a scout one,
-which is one tick, not a rate.
+⚠️ **The control-point block is serialised in the server's Begin Step and
+describes the end of the *previous* tick.** `Replayer` must compare it against
+that, not against the end of the tick it just ran, or a real one-tick capture
+delta (`+2` on a soldier recording, `+4` on a scout one) reads as a rule error.
+**A control-point divergence has looked like a rule error and been the replay
+before — eliminate the harness first.**
 
 ⚠️ **The order is `inject unlock → compare → Advance`, and all three parts are
 measured.** The unlock injection must stay ahead of the comparison because it
-re-locks and zeroes the meter. ⚠️ **What nearly hid it: the wrong order made
-`koth_valley` exact** — one fixture agreeing is not evidence an ordering is
-right, and it took a second CP recording with a different `capStrength` to make
-the shape legible. `docs/PARITY.md`, "the capture meter was compared one tick
-late".
+re-locks and zeroes the meter. ⚠️ **A single fixture agreeing is not evidence an
+ordering is right** — the wrong order still made `koth_valley` exact; it took a
+second CP recording with a different `capStrength` to expose it.
+`docs/PARITY.md`, "the capture meter was compared one tick late".
 
-⚠️ **This is the second time a control-point divergence looked like a rule error
-and was the replay.** Before believing one, eliminate the harness.
+⚠️ **"No mismatches" is satisfied by a comparison that never runs.** Every
+comparison family in `Replayer` needs a **liveness control**: a second replay
+against a doctored trace asserting the comparison *does* report a difference,
+mutated two ways — shifted a tick, and deleted. `Fields.Ubers`,
+`Fields.Intel` and `Fields.ControlPoints` have all been found silently unwired
+this way (`Fields.Ubers` had existed since phase 5 with no test ever passing it
+to a `Replayer`). All five are gated now. **Write a liveness control beside
+every `Assert(mismatches.Length == 0)`** — this is a different hole from "the
+fixture never reaches the behaviour", and this project has fallen into both.
+`docs/PARITY.md`, "every comparison family is now pinned to its tick AND
+proved alive".
 
-⚠️ **"No mismatches" is satisfied by a comparison that never runs**, and auditing
-for that on 2026-08-27 found three holes at once. Every comparison family in
-`Replayer` was mutated two ways — shifted a tick, and deleted — and
-**`Fields.Ubers` survived both**: it had existed since phase 5 and **no test ever
-passed it to a `Replayer`**. `Fields.Intel` and `Fields.ControlPoints` survived
-deletion. All five are gated now, each with a **liveness control**: a second
-replay against a doctored trace asserting the comparison *does* report a
-difference. **Write one beside every `Assert(mismatches.Length == 0)`.**
-⚠️ And note it is a different hole from "the fixture never reaches the
-behaviour" — this project has fallen into both. `docs/PARITY.md`, "every
-comparison family is now pinned to its tick AND proved alive".
-
-⚠️ **CENSUS THE SEAMS — it has now paid twice.** Counting which members of
-`Fields` any test passes to a `Replayer` found `Ubers` unused, and a second pass
-found **`Ammo` and `Flags` unused too** — serialised since phase 1, never
-compared. Both were correct and are now gated: ammo on `closedcombat`
-(**1,325** exact ticks, and every weapon in it broadcasts a seed) and flags on
-`closedspy` (**1,829**, cloak bit included), each with a liveness control and
-each mutation-checked against a real regression. **A seam nothing calls is
-indistinguishable from one that is wrong.**
+⚠️ **CENSUS THE SEAMS.** Counting which members of `Fields` any test passes to
+a `Replayer` is how `Ammo` and `Flags` were found unused — serialised since
+phase 1, never compared. Both were correct and are now gated: ammo on
+`closedcombat` (**1,325** exact ticks, every weapon in it broadcasting a seed)
+and flags on `closedspy` (**1,829**, cloak bit included), each with a liveness
+control and mutation-checked against a real regression. **A seam nothing calls
+is indistinguishable from one that is wrong.**
 ⚠️ **Ammo is the third field to fall under the unseeded-weapon rule**, after hp
 and trajectory: `closedheavy` gives **ammo 760 against flags 1,744** on the same
 anchor, because the Minigun broadcasts no seed.
@@ -1012,8 +979,8 @@ hunting for a recording that sends `CP_CAPTURED`.
 ⚠️ **Grep the constant name from `Constants.xml`, not the port's C# member
 name** — `KICK_MULTI_CLIENT` and `ARENA_WAIT_FOR_PLAYERS` are live and a first
 pass called them dead on a spelling.
-✅ **`DROP_INTEL` is reached now** — `reference-ctf_2dfort-dropintel.trace`
-(2026-08-27). ⚠️ **It is a CLIENT COMMAND and must be injected**, like a
+✅ **`DROP_INTEL`: `reference-ctf_2dfort-dropintel.trace`**. ⚠️ **It is a CLIENT
+COMMAND and must be injected**, like a
 `BUILD_SENTRY`: nothing in an `INPUTSTATE` says the player pressed drop, so a
 replay cannot derive it. `ITraceSimulation.DropIntel` is the seam.
 ⚠️ **And it is applied BEFORE the tick, the opposite of a grab** —
@@ -1029,9 +996,9 @@ off its base has a return timer of 0, the drop writes it into the new instance's
 `alarm[0]`, and the grab guard's `alarm[0] <= 1` arm lets anyone take it at once.
 Measured — slot 5 dropped and slot 2 had it by the end of the same tick.
 **Assert on the named slot, not on the flag.**
-✅ **`ARENA_WAIT_FOR_PLAYERS` is reached too** —
-`reference-arena_lumberyard-waitforplayers.trace` (2026-08-27), and with it **no
-gameplay message the reference can send is unreached by the corpus**.
+✅ **`ARENA_WAIT_FOR_PLAYERS`: `reference-arena_lumberyard-waitforplayers.trace`**
+— with it, **no gameplay message the reference can send is unreached by the
+corpus**.
 ⚠️ **The branch needs a round to END with one team having no PLAYERS**, not
 merely no living characters — `ArenaHUD.events/Step.xml` tests
 `redteam == 0 or blueteam == 0` before falling through to
@@ -1111,9 +1078,9 @@ rules; these are the traps:
   first time a round ended. It survived because no recording had ever been made
   on an arena map — the sentry `INPUTSTATE` bug's twin. `docs/PROTOCOL.md`,
   "Arena".
-  ✅ **Reached at last: `reference-arena_lumberyard-closedarena.trace`**
-  (2026-08-27), three soldiers a side, **three round-ends and it frames to the
-  last byte**. Every payload's length is exactly `5 + 5 × (mvpsRed + mvpsBlue)`
+  ✅ **`reference-arena_lumberyard-closedarena.trace`**, three soldiers a side,
+  **three round-ends and it frames to the last byte**. Every payload's length
+  is exactly `5 + 5 × (mvpsRed + mvpsBlue)`
   re-derived from its own counts, and at least one carries MVP records — the
   control that matters, because all-empty lists would let a fixed-length reader
   frame it perfectly. ⚠️ **Its short trajectory window is by construction**:
@@ -1161,8 +1128,7 @@ the traps:
   in a new costume.
 - ⚠️ **Overtime reads the alarm of the generator about to *win*.** `redStage >
   blueStage && GeneratorRed.alarm[0] > -1`: the match stays open while the
-  *trailing* team is still pushing. The first draft of the port's test table had
-  it inverted and the implementation was right — the DKotH pattern exactly.
+  *trailing* team is still pushing — the DKotH pattern exactly.
 - ⚠️ **The clock is decided by damage *stage*, not hit points** (3/2/1 at two
   thirds and one third of 2,100), so a team 700 points behind can still draw.
   The one place the simulation cares what is drawn.
@@ -1195,9 +1161,9 @@ Deathmatch", has the full rules; these are the traps:
   `basicRoomSetup`'s chain ends with it. `gg_debug` is a TDM map and has been
   running as one since phase 0.
 - ⚠️ **The kills go into `redCaps`/`blueCaps`**, so the mode needs **no
-  per-player statistics** to decide a round. Two handoffs claimed the opposite;
-  the stats are still missing and still wanted by Arena's MVP lists and the two
-  balance routines, but nothing in TDM's round rules needs them.
+  per-player statistics** to decide a round — those are wanted by Arena's MVP
+  lists and the two balance routines, but nothing in TDM's round rules needs
+  them.
 - ⚠️ **`deathmatch_invulnerable` is a fifth of the ticks it buys**
   (`seconds * 30 * 0.2`), spent at **0.2** a tick — and moving raises the rate to
   1 and **never lowers it again**. The attack key and the right-click end it
@@ -1269,7 +1235,7 @@ traps:
   **fourth** message of that family, after the sentry `INPUTSTATE` block,
   `ARENA_ENDROUND` and the generator HUD block. **When adding a message, ask what
   makes its length change.**
-  ✅ **Reached 2026-08-27: `reference-ctf_2dfort-autobalance.trace`**, four
+  ✅ **`reference-ctf_2dfort-autobalance.trace`**, four
   soldiers against two — **three `BALANCE` messages, both shapes, framed to the
   last byte**, mutation-checked. Reaching it took three conditions at once: a
   team **two** players larger, **deaths** (the script runs only on a death, a
@@ -1420,7 +1386,7 @@ Blade", has the full rules; these are the traps:
   rocket `distance_to_object < blastRadius*0.66`, a generator
   `distance_to_object < blastRadius` (the whole 400), a mine `point_distance <
   blastRadius + 4`.
-- ✅ **`BubbleS` is sampled now** (2026-08-27): `0, 0, 11, 11` about origin
+- ✅ **`BubbleS` is sampled now**: `0, 0, 11, 11` about origin
   `6, 6`, exactly the `mode="FULL"` derivation. `SpriteBoxSampleTests`.
 
 ### The spy: a cloak on the right click, and a knife that arrives late
@@ -1442,7 +1408,7 @@ and the knife that arrives late", has the full rules; these are the traps:
 - ⚠️ **The freeze is 52 ticks and its length comes from two drawing
   variables** — `image_index >= 32` after a ten-tick delay, then an alpha
   falling 0.1 a tick that dies on the *tenth* subtraction (1.4e-16, the rocket's
-  fade again). ✅ **The tick that was unmeasured is measured** (2026-08-27):
+  fade again). ✅ **The tick that was unmeasured is measured**:
   **GM8 advances `image_index` after the whole Step stage**, so a Step reading it
   sees what the previous frame left, the threshold lands on tick **42**, and
   42 + 10 = 52 stands. `docs/SIMULATION.md`, "Settled: GM8 advances
@@ -1468,7 +1434,7 @@ and the knife that arrives late", has the full rules; these are the traps:
   click** — can only be *started* from `cloakAlpha == 1`, is refused to an intel
   carrier, and costs 25 ticks of intel grab when dropped. An `else if` freezes
   the fade while a hit has the cloak flickering.
-- ✅ **`StabMaskS`'s box is sampled now** (2026-08-27): `24, 13, 57, 55` about
+- ✅ **`StabMaskS`'s box is sampled now**: `24, 13, 57, 55` about
   origin `26, 37`, so -2 back and +31 forward — exactly what the PNG said.
   `SpriteBoxSampleTests`.
 
@@ -1555,8 +1521,7 @@ rules; these are the traps:
 - ⚠️ **Two stacked boxes can cancel exactly, and `tdm_mantic` has such a
   pair** — a character's box is 34 tall against the box's 42, so one standing
   in a lift can overlap a *down* box beside it and go nowhere. Five up plus
-  five down is zero. That looks exactly like the push never running, and cost
-  this session a test failure.
+  five down is zero. That looks exactly like the push never running.
 - **The collision-event interleaving with the killing boxes is not
   observable** — those write `hp`, these write the velocity pair, and two
   pushes compose by addition. So the port runs the family after them and the
@@ -1575,13 +1540,11 @@ counter armed in the wrong event or read in the wrong stage.
   character existing again are two different events an alarm stage apart, and
   only the second is what a client sees.
 - ✅ **A death inside a spawn room is answered on the very next tick — a gap of
-  1 against 150 outside.** Measured 2026-08-27;
-  `reference-ctf_truefort-spawnroomdeath.trace` was recorded to break the old
-  `NoRecordedDeathHappensInASpawnRoom` assertion, which existed to fail the day
-  such a recording appeared. The arm writes `player.alarm[5] = 1`, so it also
-  confirms the alarm rule end to end through the wire. The same recording holds
-  two ordinary 150-tick deaths as its control — without one, a gap of 1 is
-  equally well explained by a server whose respawn time *is* one tick.
+  1 against 150 outside.** `reference-ctf_truefort-spawnroomdeath.trace`. The
+  arm writes `player.alarm[5] = 1`, so it also confirms the alarm rule end to
+  end through the wire. The same recording holds two ordinary 150-tick deaths
+  as its control — without one, a gap of 1 is equally well explained by a
+  server whose respawn time *is* one tick.
 - ⚠️ **A character in a spawn room is on a healing cabinet, so `hp = 0` does
   not kill it.** The cabinet tops it back above zero before End Step tests
   `hp <= 0`. Forcing a spawn-room death needs a value the cabinet cannot undo in
@@ -1590,8 +1553,8 @@ counter armed in the wrong event or read in the wrong stage.
 
 ### A bound nobody re-measures decays into a formality
 
-✅ **Re-measured again 2026-08-27, all 25 fixtures, after the alarm-stage spawn
-seam.** **Thirteen of fourteen closed-loop windows unchanged to the tick**; the
+✅ **Re-measured across all 25 fixtures after the alarm-stage spawn seam.**
+**Thirteen of fourteen closed-loop windows unchanged to the tick**; the
 **heavy's moved 270 → 396**, attributed by measurement (switching the queueing
 off reproduces 270). `hotcombat`'s open-loop p99s improved from 11/30 to **2/2**
 while its maxima stayed at 77/75 — the maxima are single discrete events and the
@@ -1623,8 +1586,8 @@ is why it holds, and this test is what will say so if that changes.
 
 
 ⚠️ **Re-measure the parity bounds after any simulation change, not only when a
-window is expected to move.** Measured 2026-08-26: after four classes landed and
-the collision stage was rewritten, **all five closed-loop windows were unchanged**
+window is expected to move.** After four classes landed and the collision
+stage was rewritten, **all five closed-loop windows were unchanged**
 (357 / 1,204 / 756 / 489 / 328) — and two *open-loop* bounds nobody had re-run
 were a factor of three loose. `hotsupport` asserted p99 |dy| &lt; 60 against an
 actual of 17, and the cause was measured rather than guessed: **switching the
@@ -1645,10 +1608,10 @@ range is wider than a character.
 That is what `closedsupport`'s 328-tick hp window is: t1102 is a pyro being burnt
 by the other pyro, the port lands seven flames where the reference landed about
 six, and the window is **328 with the Flamethrower implemented and 328 with it
-stubbed out**. ⚠️ **Two sessions in a row read that bound as "waiting on the
-next weapon".** Before believing that, check the *sign* of the residual — the
-port was three hp **low**, which no missing weapon can explain — and check
-whether an unseeded weapon is in the recording at all.
+stubbed out**. ⚠️ **Before reading such a bound as "waiting on the next
+weapon", check the *sign* of the residual** — the port was three hp **low**,
+which no missing weapon can explain — and check whether an unseeded weapon is
+in the recording at all.
 
 **The fixture that carries the damage claim is `closedcombat`** (scout, soldier,
 demoman — all seeded): its **hp window is 1,204 ticks**, three and a half times
@@ -1661,22 +1624,22 @@ t1274 and the `place_free` threshold at t1673.
 cannot reach.
 
 ⚠️ **An unseeded weapon caps a *trajectory* window too, not only an hp one.**
-Measured 2026-08-27 on the four new class fixtures: the heavy's is **270** ticks
-and the sniper's **362**, against Quote's 1,756 and the spy's 1,829 — and the
+On the four new class fixtures: the heavy's is **270** ticks and the sniper's
+**362**, against Quote's 1,756 and the spy's 1,829 — and the
 short pair are short because the Minigun's spread cannot be reproduced, so the
 port shoves people somewhere else. Do not read a short trajectory window as a
 physics bug before checking whether an unseeded weapon is in the recording.
 
 ### Every class is now in a fixture, and all four new ones frame cleanly
 
-✅ **`reference-ctf_truefort-closed{heavy,sniper,quote,spy}.trace`**, recorded
-2026-08-27 — six of one class each, three a side, all spawn-anchored and
-closed-loop. `NewClassFixtureTests`; `docs/PARITY.md`, "the four recordings, and
-what they found", has the table.
+✅ **`reference-ctf_truefort-closed{heavy,sniper,quote,spy}.trace`** — six of
+one class each, three a side, all spawn-anchored and closed-loop.
+`NewClassFixtureTests`; `docs/PARITY.md`, "the four recordings, and what they
+found", has the table.
 
 **The result is a negative and that is the point: all four frame to the last
-byte.** No `INPUTSTATE`-style layout bug exists for the four classes that landed
-on 2026-08-26. They also carry four states no earlier recording could reach — a
+byte.** No `INPUTSTATE`-style layout bug exists for these four classes. They
+also carry four states no earlier recording could reach — a
 **cloaked spy** (bit 0 of the flags byte, never before read back from a real
 server), a **`TOGGLE_ZOOM`**, an **`OMNOMNOMNOM`** and a **`RETURN_INTEL`**.
 
@@ -1691,7 +1654,7 @@ server), a **`TOGGLE_ZOOM`**, an **`OMNOMNOMNOM`** and a **`RETURN_INTEL`**.
 
 ### A stock client has played a round on the C# server, start to finish
 
-✅ **2026-08-27, phase 6's owed exit criterion, on `ctf_truefort`.** A stock GM8
+✅ **Phase 6's owed exit criterion, on `ctf_truefort`.** A stock GM8
 client joined `gg2-server`, spawned at a real red marker **(1704, 474.40)**,
 played until the clock ran out (~1,124 frames), was told the round was a
 **draw** (`TEAM_SPECTATOR` = 2 — correct, nobody capped and both flags were
@@ -1717,8 +1680,8 @@ by the map change. **For a long session pass a large number.**
 `MapRotationTests.AZeroTimeLimitIsFlooredToOneMinuteRatherThanMeaningNoLimit`,
 with `ALimitAboveTheFloorIsNotFlooredToIt` as its control.
 
-✅ **`koth_valley` is done too, 2026-08-27 — the exit criterion is fully
-satisfied.** A stock GM8 client joined `gg2-server --map koth_valley`, walked to
+✅ **`koth_valley` is done too — the exit criterion is fully satisfied.** A
+stock GM8 client joined `gg2-server --map koth_valley`, walked to
 the hill at **(2344.40, 606.40)** (`collision_point` against the `CaptureZone`),
 captured it and held it while the port ran red's KotH clock **5400 → 0**. The
 server logged **`round over: Red wins`**, then **`now playing koth_valley`
@@ -1733,8 +1696,7 @@ mid-match was answered with a death and a respawn on the marker.
 
 ### Seven rectangles in the whole game depend on `FromEntity` rounding, and all seven are setup gates
 
-Measured live 2026-08-28, on a dedicated `ctf_truefort` server, while closing the
-dropdown platform.
+Measured live on a dedicated `ctf_truefort` server.
 
 `SolidRect.FromEntity` computes `Right = RoundPosition(x + width * xScale) - 1`.
 ⚠️ **Replacing that round with a truncation passed all 2,185 tests.** The rounding
@@ -1765,9 +1727,8 @@ it is ever solid at the moment the oracle samples.**
 ⚠️ **And the dropdown platform is not where this is visible**, though it looks like
 it should be: all four shipped platforms are scaled (**1.6, 0.5, 0.6, 1.2** — none
 at 1, which is the only case the pre-existing test covered), but `60 * s` lands on
-an exact integer for all four, so rounding and truncation agree. A first draft of
-that test claimed 0.6 would be a pixel short; **it is not — `60 * 0.6` is exactly
-36.0 in `double`**, and the mutation that was supposed to prove the point passed.
+an exact integer for all four, so rounding and truncation agree: `60 * 0.6` is
+exactly 36.0 in `double`.
 
 ✅ **The dropdown platform's mask is a filled rectangle and fills its scaled box**:
 `collision_point` reports 360 of 360 cells unscaled, 36 of 36 at scale 0.6 and 96
@@ -1776,12 +1737,11 @@ of 96 at scale 1.6, contiguous, nothing outside. `sprite44.xml` declares
 
 ### `tdm_mantic`'s move boxes: six of nine do nothing, and three hang in the air
 
-⚠️ **Three attempts, and the third one measured why the first two failed.** The
-map is the only shipped one with move boxes (fifteen) or pit falls (six), and
-**no recording of its move boxes is obtainable — by bots or by a driven client.**
-Do not spend another session on it without reading this.
+⚠️ **The map is the only shipped one with move boxes (fifteen) or pit falls
+(six), and no recording of its move boxes is obtainable — by bots or by a
+driven client.**
 
-Measured 2026-08-27 against the running game (`instance_find` over `MoveBoxUp`
+Measured against the running game (`instance_find` over `MoveBoxUp`
 and `MoveBoxDown`; the port's map layer agrees, `MoveBoxTests`):
 
 - ⚠️ **Six of the nine up boxes are cancelled by a down box at the same
@@ -1817,7 +1777,7 @@ would have had to derive and breaks the anchor.
 
 ### A mode change is invisible to a reader unless a HUD-bearing update follows
 
-✅ **`reference-gen_destroy-rotation.trace`** (2026-08-27) rotates `gen_destroy`
+✅ **`reference-gen_destroy-rotation.trace`** rotates `gen_destroy`
 → **`ctf_2dfort`** at t2622 with 669 ticks after it — the first fixture that
 changes to a different map **and mode** mid-stream.
 
@@ -1832,7 +1792,7 @@ updates after it read no HUD.
 **So the wrong-shape risk is real but latent**: it needs a caps or full update
 *after* a mode change — a capture, a join, or a scoreboard sync on the new map.
 
-✅ **Reached and fixed the same day.**
+✅ **Reached and fixed.**
 `reference-gen_destroy-rotationcaps.trace` forces one with
 `GameServer.syncTimer = 1` (what a capture does) and **does not frame** — a
 single shape stops at **byte 79,467 of 124,340**. `TraceParser.Parse` now takes
@@ -1854,7 +1814,7 @@ Two traps in arranging it:
 
 ### The generator block does not shorten, and probably cannot
 
-⚠️ **`reference-gen_destroy-closedgen.trace`** (2026-08-27) contradicts a
+⚠️ **`reference-gen_destroy-closedgen.trace`** contradicts a
 standing risk. docs/PROTOCOL.md says the HUD carries one record per *surviving*
 generator, so a destruction shortens later updates and a reader must decrement
 `WorldShape.GeneratorCount`. **Nothing in `ServerStream` decrements it, and it
@@ -1882,7 +1842,7 @@ mode would frame the rest wrongly. Unreached.
 
 ### The first multi-area fixture would not frame, and the readers were at fault
 
-⚠️ **`reference-cp_dirtbowl-closedcp.trace`** (2026-08-27) framed **458 of
+⚠️ **`reference-cp_dirtbowl-closedcp.trace`** framed **458 of
 138,406 bytes** on its first outing, silently dropping the rest. `cp_dirtbowl`
 writes **six** control points and plays **two**, the HUD block has **no count
 prefix**, and every *reader* was passing the un-narrowed map to
@@ -1907,7 +1867,7 @@ another costume. No recording reaches it yet.
 
 ### King of the Hill has a fixture, and a control point still cannot be compared
 
-✅ **`reference-koth_valley-closedkoth.trace`** (2026-08-27) — the first KotH
+✅ **`reference-koth_valley-closedkoth.trace`** — the first KotH
 recording, **framed cleanly**, 330 exact ticks on `Trajectory|Hp|Deaths`, the
 project's first `UNLOCKCP`, and 39 `CAPS_UPDATE`s against a CTF fixture's one or
 two.
@@ -1917,7 +1877,7 @@ the points from the map in the same order — and this is the only fixture that
 can catch getting it wrong. Proved by mutation: a wrong `ControlPointsFor` fails
 this fixture's framing and **no other fixture at all**.
 
-✅ **`Fields.ControlPoints` closed that gap** (2026-08-27) and found two harness
+✅ **`Fields.ControlPoints` closed that gap** and found two harness
 bugs on its first run:
 
 - **`PortedSimulation.LoadMap` never called `ControlPoints.Place`** — a replay
@@ -1946,9 +1906,9 @@ forcing the reference's early manufactures a mismatch rather than exposing one.
 ⚠️ **A third omission in `PortedSimulation.LoadMap`: it never called
 `Rounds.Start`**, which is what **locks** a KotH point before its unlock. Without
 it a replay's hill was capturable from tick one. `GameServer.OpenMap` calls it
-right after `Place`. Fixed 2026-08-27.
+right after `Place`. Fixed.
 
-✅ **And the cause is settled: a replay starts the round too early.**
+✅ **The cause: a replay starts the round too early.**
 `KothHUD.Create` sets `cpUnlock = 900` and its Step fires the unlock on the tick
 it reads 0, decrementing afterwards — **901 ticks after the HUD is created**,
 which is when the server restarts the room.
@@ -1960,13 +1920,13 @@ one, at **t0**, and unlock at t1236 and t1160 — two different offsets, neither
 > **unlock = (spawn wave − 150) + 901**
 
 where 150 is the ordinary respawn time. So **the port was right and the replay
-was early**. ✅ **Fixed 2026-08-27** — `Replayer` anchors `cpUnlock` from the
-wire, and the port now reproduces that recording's hill **exactly, zero
-mismatches**. **The capture arithmetic is gated against the engine for the first
-time**: halving a scout's `capStrength` shows up as `capping exp 30 got 20`,
-`exp 75 got 50`, `exp 225 got 150`.
+was early**. ✅ **Fixed** — `Replayer` anchors `cpUnlock` from the wire, and the
+port now reproduces that recording's hill **exactly, zero mismatches**. **The
+capture arithmetic is gated against the engine**: halving a scout's
+`capStrength` shows up as `capping exp 30 got 20`, `exp 75 got 50`,
+`exp 225 got 150`.
 
-Four traps, each of which cost an attempt:
+Four traps:
 
 - ⚠️ **The delay is not a constant to subtract** — 335 ticks in one recording,
   254 in the other.
@@ -1984,7 +1944,7 @@ Four traps, each of which cost an attempt:
 
 ### Team Deathmatch has fixtures now, and one of them gates nothing
 
-✅ **`reference-{tdm_mantic,gg_debug}-closedtdm.trace`** (2026-08-27) — the
+✅ **`reference-{tdm_mantic,gg_debug}-closedtdm.trace`** — the
 first non-CTF recordings in the project. **Both frame cleanly**, both report
 `TeamDeathmatch`, so there is no TDM framing bug. `gg_debug` is the **busiest
 fixture here** (52 deaths, 262 fires) and none of it is assertable, because its
@@ -1999,9 +1959,8 @@ map's features the bots actually touched.
 
 ### The first fixture on a second map lands 0.4 px low
 
-⚠️ **Every fixture in this project was `ctf_truefort` until 2026-08-27, and the
-first one that was not found a divergence in five ticks.**
-`reference-ctf_2dfort-closedrespawn.trace`: spawn points at `y = 894`, floor
+⚠️ **A fixture on a map other than `ctf_truefort` found a divergence in five
+ticks.** `reference-ctf_2dfort-closedrespawn.trace`: spawn points at `y = 894`, floor
 stopping a scout at `y = 900`, so every character drops six pixels on spawn. The
 reference lands on exactly **900**, the port on **900.4** — all six slots, same
 tick, and it stays there.
@@ -2016,7 +1975,7 @@ tick, and it stays there.
   replays **exactly for 3,043 ticks**. So it is not "any non-truefort map", not
   the mask, not dropdown platforms (`tdm_mantic` has four and is exact,
   `ctf_2dfort` has none and fails) and not player walls.
-- ✅ **ROOT CAUSE, 2026-08-27: a replay gives a spawning character one Begin
+- ✅ **ROOT CAUSE: a replay gives a spawning character one Begin
   Step too many.** The reference creates a character in the **alarm stage**
   (`player.alarm[5]` → `PlayerSpawn`, between Begin Step and Step), so on its
   spawn tick it gets a Step and an End Step but **no Begin Step** — and Begin
@@ -2030,7 +1989,7 @@ tick, and it stays there.
   ⚠️ **Which is why `ctf_truefort` never caught it** — its markers are
   **eighteen** pixels up, outside the six-pixel snap, so both sides genuinely
   fall and agree.
-  ✅ **FIXED 2026-08-27, in the harness — `ITraceSimulation.QueueSpawn`.** It
+  ✅ **FIXED in the harness — `ITraceSimulation.QueueSpawn`.** It
   arms `player.alarm[5]` so the tick itself builds the character, and forces the
   spawn-point draw by installing a seed: GM8's generator is invertible, so the
   seeds giving a wanted first result form one contiguous run and a whole spawn
@@ -2047,8 +2006,8 @@ tick, and it stays there.
 - **When a bound collapses on a new map, ask what that map makes a character do
   that no other one did.**
 
-✅ **And what was left on `gg_debug` was a different thing — the DROPDOWN
-PLATFORM, implemented 2026-08-27.** The map places **two**, at `438,216` and
+✅ **What was left on `gg_debug` was a different thing — the DROPDOWN
+PLATFORM.** The map places **two**, at `438,216` and
 `498,216`, and the residual was slots 1 and 3 at rest on `y = 192` in the
 reference while the port fell past. A soldier's origin sits 22.6 above its foot,
 so `192 + 22.6 = 214.6` is a character standing exactly on a platform whose top
@@ -2067,7 +2026,7 @@ port's counter is gated by unit tests alone.
 
 ### A sentry's fate was invisible to the harness, and now is not
 
-✅ **`Fields.Sentries`** (2026-08-27). `Replayer` *injected* `BUILD_SENTRY` like
+✅ **`Fields.Sentries`**. `Replayer` *injected* `BUILD_SENTRY` like
 a spawn and compared **no sentry state whatever**, so a port that destroyed the
 wrong sentry — or none — replayed every fixture without a murmur. The
 `Fields.Deaths` argument, only stronger: **a sentry writes no bytes at all on an
@@ -2076,7 +2035,7 @@ shows only an unset subobject bit that names nobody. `SentryRecord` mirrors
 `DeathRecord`; `TickEvents.SentryDestroyed` already existed and was never
 collected.
 
-⚠️ **It found a divergence on its first run.**
+⚠️ **It found a divergence on its first run:**
 `reference-ctf_truefort-closedsentrykill.trace` (three engineers vs three
 soldiers) holds three `DESTROY_SENTRY`s: one **weapon kill** (cause 9, killer 4)
 which the port reproduces **exactly, on the tick**, and two **self-destructs**
@@ -2136,11 +2095,10 @@ change trajectories rather than last digits:
 
 ### ✅ Taunting and the humiliation round, landed 2026-08-28
 
-The two features `CLAUDE.md` had been naming as absent since phase 5. Both are
-**observable simulation**, which is the reason they could not stay absent: the
-taunt key is a bit in `keyState`, so the stock client sets `taunting` from the
-same wire the server does, and a server that ignored it would keep walking a
-character the client has already stopped.
+Both are **observable simulation**: the taunt key is a bit in `keyState`, so
+the stock client sets `taunting` from the same wire the server does, and a
+server that ignored it would keep walking a character the client has already
+stopped.
 
 **What a taunt does** (`Character.events/Begin Step.xml:95-152`, `End Step.xml:90-94`):
 
@@ -2208,23 +2166,18 @@ reference's.
 
 #### ⚠️ The Arena round loop: a replay artefact, and a LIVE BUG hiding behind it
 
-⚠️ **This section said "an artefact of replay rather than of live simulation"
-and that was wrong.** It was written after checking the replay and *reasoning*
-that live play must be fine because the state machine is a faithful
-transcription. It is — and the spawn underneath it was not. **Two causes, one
-symptom, and finding the first stopped the search.** The live half is fixed
-below; the replay half is real and remains.
-
-Landing humiliation gave Arena's round-end state its first observable effect,
-and it immediately exposed something nothing had been checking: **the port's
-Arena loop is nowhere near the recording's.**
+⚠️ **The Arena round loop has two independent causes producing one symptom** —
+a live bug (fixed, below) and a separate replay artefact (still open). Checking
+only the replay and reasoning that live play must be fine, because the state
+machine is a faithful transcription, misses the live one: **the port's Arena
+loop is nowhere near the recording's.**
 
 | | rounds |
 |---|---|
 | `reference-arena_lumberyard-closedarena` | ends at t1342, t2533, t3601 — 561 and 591 ticks long, won by both teams |
 | the port, replaying it | ends **one tick after each start**, on a 601-tick cycle, **always Red** |
 
-**Cause 1, live, FIXED 2026-08-28.** `Player.events/Alarm 5.xml` is
+**Cause 1, live, FIXED.** `Player.events/Alarm 5.xml` is
 `if (spawningAllowed()) PlayerSpawn();` — **the guard is on the alarm.** This
 port had moved it inside `PlayerSpawn`, which reads like the same thing and is
 not: Arena's `respawnEveryone()` calls `PlayerSpawn()` *directly*, precisely so
@@ -2274,8 +2227,8 @@ pins the artefact in both directions, and
 
 ### t523's residue: the stop is a WALL, and the "+0.4865" was never a divergence
 
-**2026-08-28.** Three corrections and one new experiment. The residue itself is
-still open, but everything the last three sessions pointed at has moved.
+The residue itself is still open; several earlier candidate explanations have
+been ruled out (below).
 
 **The reproduction, with nothing in it.** Slot 4 at t383 is at (588, 168) on
 `gg_debug` holding RIGHT, and that is the whole of the interesting part. Placed
@@ -2293,9 +2246,8 @@ t17  x = 629.4972928249938   <- rest, and it never moves again
 
 ⚠️ **The stop is a WALL, not friction.** The recording holds key 0x20 — RIGHT,
 held — on every tick from t388 through t406, and `hspeed` goes to zero at t404
-anyway. The handoff's *"suspect ordinary walking and friction arithmetic"* was
-wrong, and it is what sent two sessions to the acceleration formula, which
-`PhysicsSampleTests` already measures exact over 64 engine scenarios.
+anyway. The acceleration formula is not the cause — `PhysicsSampleTests`
+already measures it exact over 64 engine scenarios.
 
 ⚠️ **The famous "+0.4865 residual, which grows while walking and then freezes"
 is not a measurement of anything.** It is `x*5 - 3147` for the port's own
@@ -2323,8 +2275,7 @@ fails and backs off a rung. Each tick gains one rung less than the last: 0.1717,
 then 0.0107 three times, then the smallest rung no longer fits.
 
 **Both simulations report `round(x*5) = 3147` from anywhere in [629.3, 629.5).**
-That is the whole reason no fixture can see this, and it is why the item has
-stalled three times.
+That is the whole reason no fixture can see this.
 
 #### ⬅️ The next step is one command, and it is decisive
 
@@ -2348,7 +2299,7 @@ have run.
 
 ### `gg_debug` stops on a rocket blast four pixels short
 
-✅ **Found and FIXED 2026-08-27 — three bugs, each behind the last.**
+✅ **Found and FIXED — three bugs, each behind the last.**
 `reference-gg_debug-closedtdm.trace` replayed exactly for 100 ticks after its
 spawn anchor at t381 and then diverged — not on a position, but because **slot 4
 survived a death the reference recorded**. It now runs to **135 on every
@@ -2431,7 +2382,7 @@ for a rotated sprite (1,008 boxes) and not what the overlap primitives **use**.
 **Ask what a fixture cannot reach**, the same rule as "when adding a fixture,
 ask what state it cannot reach".
 
-✅ **FIXED 2026-08-27** — `Gg2.Simulation.ProjectileMask`, wired into
+✅ **FIXED** — `Gg2.Simulation.ProjectileMask`, wired into
 `Projectiles.CollideOne` (characters, sentries, generators) and
 `BackOutOfCharacter`. The model inverse-rotates each candidate world pixel into
 sprite space, floors, and tests the sprite's own bbox rectangle, with the
@@ -2512,8 +2463,8 @@ every angle instead of at a few, and a tie is unreachable in play.
 
 ### Slot order is not creation order, and a respawn is where they part
 
-⚠️ **The third bug behind the `gg_debug` blast, found 2026-08-27**, and it had
-been wrong since the collision stage was written. `Projectiles.CollideOne`
+⚠️ **The third bug behind the `gg_debug` blast**, wrong since the collision
+stage was written. `Projectiles.CollideOne`
 walked characters in **slot** order, with a comment saying that is "the
 reference's instance order ... an id is issued at creation". It is — **until
 somebody respawns.** A slot whose player died and came back holds a character
@@ -2543,8 +2494,8 @@ fine** — its own comment already says why, and it is now half-true rather than
 wrong: nothing in the blast loop reads another character, so the order is not
 observable *there*. Move it the moment that stops being true.
 
-✅ **The rest of the first-hit-wins sites were audited on 2026-08-27 and all four
-now follow the rule.** None is contradicted by a fixture — re-measuring all 27
+✅ **The rest of the first-hit-wins sites were audited and all four now follow
+the rule.** None is contradicted by a fixture — re-measuring all 27
 after the change moved nothing — so they follow the rule the character case
 proved rather than a measurement of their own. **That distinction is recorded
 deliberately**, so a future session re-arguing one of them knows which evidence
@@ -2579,8 +2530,8 @@ number. Eight lines of duplication is the cheaper mistake.
 
 ### The GameServer is the OLDEST instance, so its flush is the FIRST End Step
 
-⛔ **Measured against the running game on 2026-09-02**, and it is the same
-instance-id rule as the section above pointed at a different object. `GameServer`
+⛔ **Measured against the running game**, and it is the same instance-id rule
+as the section above pointed at a different object. `GameServer`
 is created by `start_server.gml:7` and is `<persistent>true</persistent>`, so it
 predates every room object and every character. Under GM8's instance-id event
 order that means:
@@ -2673,8 +2624,8 @@ snapshot at most one tick stale in those six fields, corrected by the next
 
 ### The map test was the last place a projectile was still a box
 
-✅ **Closed 2026-08-27**, and it was worth more than the character path that
-found the rule. `MoveRocket` and its siblings asked
+✅ **Closed, and it was worth more than the character path that
+found the rule.** `MoveRocket` and its siblings asked
 `world.PlaceFree(projectile.Box, ...)` — the axis-aligned bound — while the same
 projectile had already become a rotated rectangle to characters and sentries.
 The map is a precise pixel mask, so GM8 tests where the two actually overlap.
@@ -2731,7 +2682,6 @@ broad phase in front of each one.
 
 ### A harness gate belongs where there is no drift
 
-⚠️ **2026-08-27, and it is a debt this session created and then paid.**
 `SupportClassFixtureTests.ThePortEmitsNoUberMessageTheReferenceDidNot` was the
 project's only check that `Fields.Ubers` is compared against the right tick, and
 it worked by finding an `UBER_CHARGED` **1,155 ticks past where its recording
@@ -2792,8 +2742,8 @@ misalignment does to it anyway, and the assertion is that
 
 ### Phase 2's scripted fixtures, and what they turned out to gate
 
-✅ **Recorded 2026-08-27**, the deliverable `docs/PLAN.md` has listed as open
-since phase 2: recordings of a **scripted** character rather than a bot's own
+✅ **Recorded**, the deliverable `docs/PLAN.md` has listed as open since
+phase 2: recordings of a **scripted** character rather than a bot's own
 judgement. `reference-gg_debug-scriptedwalk.trace` and
 `reference-gg_debug-scriptedjumps.trace`, one scout driven from the agent bridge
 against the reference server. **Both replay closed-loop to the last tick of
@@ -2849,8 +2799,8 @@ for actually uses.**
 
 ### Driving a client: a second `gg2_input press` did not take
 
-⚠️ **Observed twice on 2026-08-27, mechanism NOT established** — recorded as a
-symptom because it cost a whole recording and the workaround is cheap.
+⚠️ **Observed twice, mechanism NOT established** — recorded as a symptom
+because it cost a whole recording and the workaround is cheap.
 
 In both recordings the **first** input action took effect and every later
 `gg2_input press` did not: the character kept the first held direction until the
@@ -2874,10 +2824,10 @@ one `gg2_state` between phases: the character sat at the same x for 400 ticks.
 
 ### A human found in 100 seconds what three scripted routes could not
 
-✅ **2026-08-27.** After three scripted recordings reached
-`characterHitObstacle`'s step arms **zero** times, a human played `tdm_mantic`
-for a hundred seconds. `reference-tdm_mantic-humanmoves.trace`, 2,999 ticks,
-**1,161 exact** from its spawn anchor.
+✅ **After three scripted recordings reached `characterHitObstacle`'s step
+arms **zero** times, a human played `tdm_mantic` for a hundred seconds.**
+`reference-tdm_mantic-humanmoves.trace`, 2,999 ticks, **1,161 exact** from its
+spawn anchor.
 
 | branch | three scripted takes | one human take |
 |---|---|---|
@@ -2891,7 +2841,7 @@ walkmask profile taken with the **wrong collision filter**. A person wanders,
 changes direction mid-stride, and taps a key for five ticks and lets go.
 **A person is a better fuzzer than a plan.**
 
-⚠️ **Two mistakes of mine cost a whole take**, and both are avoidable:
+⚠️ **Two mistakes cost a whole take, and both are avoidable:**
 
 - **Do not teleport a character during a recording.** A `gg2_eval` teleport moves
   it server-side with no wire event, so the replay simulates the character
@@ -2927,7 +2877,7 @@ is the opposite direction. Pinned by
 
 ### The first two-human playtest: what it proved, and three reports from it
 
-✅ **2026-08-27, `koth_corinth`, two humans, ~12 minutes.** The first exercise of
+✅ **`koth_corinth`, two humans, ~12 minutes.** The first exercise of
 `--record` on a real multi-client game. Two segments, **both framed cleanly to
 the last byte** (13,811 and 9,522 messages), and rich where every scripted
 recording is thin: 22 deaths, 20 class changes, 185 weapon fires, a sentry built
@@ -3021,9 +2971,8 @@ trace rather than from memory.
 
 ### ✅ ANSWERED: the rubberbanding is physics drift, and it is ours
 
-**Measured 2026-08-28, against the reference server, with the same client.** The
-pacing fix above removed one cause and explicitly did not close report 1. This
-closes it, and the answer is the serious one.
+**Measured against the reference server, with the same client.** The pacing
+fix above removed one cause but did not close report 1. This closes it.
 
 **The instrument.** `Character.events/User Event 13.xml` **hard-assigns** `x`,
 `y`, `hspeed` and `vspeed` from the wire on every `QUICK_UPDATE` — no smoothing,
@@ -3062,34 +3011,19 @@ identical x — 3077.50 and 515.50 — so the terrain traversed was the same.**
 | walk left, this port | **0.1737 px** | **4.03 px** | 3.5× / 15× |
 | either, non-update floor | 0.0186–0.0202 px | ~5 px | the control |
 
-⚠️⚠️ **The first version of this table was WRONG in two ways, and both are worth
-more than the table.** It read 0.501 px / 23.10 px for the port's hop leg against
-0.0734 / 0.33 for the reference — 6.8× and **70×**. Neither number survived.
+⚠️⚠️ **A live measurement of this kind must be audited from its own recording
+before being trusted.** A contaminated run (a human firing a rocket launcher
+mid-"constant input" leg; the reference's own maximum varying 0.33 px to
+4.24 px run to run) inflates the mean and destroys any ratio built on a single
+run's maximum. The trace records every player's keys every tick, so count
+ATTACK ticks and distinct key masks inside the measurement window — a driven
+leg must be one constant mask and zero attacks. The port's own walk-left leg
+passes it: mask 64 held for 316 s, **zero** attack ticks.
 
-- ⚠️ **The port's leg had a human on the keyboard.** The user was firing a
-  rocket launcher on the very client being driven, and said so; the trace proves
-  it — **first ATTACK at tick 3381**, inside the measurement window, and the
-  driver's injected mask never contains bit 0x10. Rocket jumps in the middle of
-  a "constant input" leg inflated the mean by **2.4×**.
-- ⚠️ **And the reference's own maximum is not stable run to run**: the same
-  reference hop, same driver, same everything, gave **0.33 px** once and
-  **4.24 px** the next time. A ratio built on one run's maximum was never sound
-  in the first place.
-
-✅ **How to not repeat it.** The trace records every player's keys every tick, so
-**a live measurement can be audited afterwards from its own recording** — count
-ATTACK ticks and distinct key masks inside the window; a driven leg is one
-constant mask and zero attacks. That check is cheap, it is what caught this, and
-it should run before any live measurement is quoted. The port's own walk-left
-leg passes it: mask 64 held for 316 s, **zero** attack ticks.
-
-⚠️ **The conclusion survives; the magnitude and the pointer do not.** The port
-does drift more than the reference on both legs, with the non-update floor
-identical (0.0186 vs 0.0202) as a control. But it is **1.8–3.5× on the mean**,
-not 6.8×, and **the claim that the error is worst airborne is withdrawn** — on
-clean data the *walking* leg has the larger ratio (3.5× / 15×) than the hopping
-one (1.8× / 4.6×). Anyone told to "look at the vertical branches first" was being
-sent there by contaminated data.
+⚠️ **The port drifts more than the reference on both legs**, with the
+non-update floor identical (0.0186 vs 0.0202) as a control: **1.8–3.5× on the
+mean**. The *walking* leg has the larger ratio (3.5× / 15×) than the hopping
+one (1.8× / 4.6×) — it is not worst airborne.
 
 ⚠️ **Quantisation is ruled out by the reference's own column.** Position goes on
 the wire as `round(x*5)`, so a correction of up to 0.1 px is inherent — and the
@@ -3115,18 +3049,17 @@ being corrected. What diverges is small. **There is no reliable pointer to which
 branch yet** — see the withdrawal above — and the honest next step is more
 measurement, on more than one leg each, rather than a hunt aimed by one run.
 
-**How to repeat it**, in full, is `.claude/notes/` at the time and the recipe
-above; the whole run is four `gg2_eval` calls and two waits per server.
+**How to repeat it**: the whole run is four `gg2_eval` calls and two waits per
+server.
 
 ### The client-prediction gate, and what pinning it turned up
 
-**Built 2026-08-28** for the failure mode CLAUDE.md calls invisible — "there is
+Built for the failure mode CLAUDE.md calls invisible — "there is
 no test that fails when trajectories drift; the client just snaps".
 
-⚠️ **The claim that it had no test was wrong, and the correction is the useful
-part.** `ReplayMode.OpenLoop` has existed since phase 2, and
+⚠️ **`ReplayMode.OpenLoop` has existed since phase 2, and
 `PhysicsParityTests.OpenLoopPredictionErrorIsSubPixelOnATypicalTick` already
-gated it — at p99 ≤ 5 wire units on **one** fixture. What was missing was not
+gated it — at p99 ≤ 5 wire units on **one** fixture.** What was missing was not
 the instrument but the **pin**, and the breadth: a bound of 1 px passes
 comfortably at every error this port actually makes, so it could never have
 noticed a regression short of a catastrophe.
@@ -3169,8 +3102,8 @@ the heavy at 49 in x, the sniper at 25/20, `gg_debug-closedtdm` at 77 in y, and
 
 ### ✅ FIXED: the dropdown push-out's guard had the wrong sign
 
-**2026-08-28.** The port put a player back on a platform they had dropped
-through. One character, one sign, and it was worth more than its size.
+The port put a player back on a platform they had dropped through. One
+character, one sign, and it was worth more than its size.
 
 `Character.events/Step.xml`, inside `with(DropdownPlatform)`:
 
@@ -3223,8 +3156,8 @@ the drift item on this.
 
 ### ✅ IMPLEMENTED: the heavy's sandvich
 
-**2026-08-28**, from a player's report in the first two-human game — "heavy
-sandwich doesn't work" — not from any test.
+From a player's report in the first two-human game — "heavy sandwich doesn't
+work" — not from any test.
 
 ⚠️ **It had been absent for the whole port and was recorded only in four code
 comments.** CLAUDE.md said "✅ Every class is implemented" and the handoff said
@@ -3284,8 +3217,8 @@ running game.**
 
 ### ✅ DIAGNOSED: the rocket that "carried on past the scout it killed"
 
-**2026-08-28.** The third report from the first two-human game. **No server bug
-— and the mechanism is not the one the report points at.**
+The third report from the first two-human game. **No server bug — and the
+mechanism is not the one the report points at.**
 
 ⚠️ **A rocket is NEVER on the wire.** `WEAPON_FIRE` carries the shooter's
 position and velocity, quantised, plus the RNG seed — and nothing else. **The
@@ -3328,8 +3261,7 @@ stock GG2 and no amount of server-side work removes it.
 
 ### `gg_debug`'s t523 residue: narrowed, and the standing suspect was wrong
 
-**Measured 2026-08-28.** Still open, but it is no longer "one wire unit,
-undiagnosed", and the lead this project was carrying pointed the wrong way.
+Still open, but it is no longer "one wire unit, undiagnosed".
 
 **What diverges.** At t523, slot 4 only:
 
@@ -3386,7 +3318,7 @@ remember the wire's ×5. That is 22 px, not 110. **Divide before disbelieving.**
 
 ### ✅ The damage accumulators, and why the parameters are required
 
-**2026-08-28**, `docs/ENV.md`'s first prerequisite — the half of
+`docs/ENV.md`'s first prerequisite — the half of
 `docs/BOTAI.md` item 7 that was never built. `TickEvents` carried kills, deaths,
 spawns and captures with attribution and **no per-tick damage amounts**.
 
@@ -3545,7 +3477,7 @@ Falsified; do not retry it.
 
 ### ✅ Every character box measured — and the physics oracle was measuring the wrong one
 
-**2026-08-28**, `tools/probes/probe-character-boxes.js`. Chasing the `gg_debug`
+`tools/probes/probe-character-boxes.js`. Chasing the `gg_debug`
 t523 residue into the physics oracle turned up something bigger than the residue.
 
 ✅ **`CharacterBox.For` is exactly right for all ten classes, on both teams.**
@@ -3594,8 +3526,8 @@ not need the six-player recording reproduced.
 
 ### ✅ The physics oracle regenerated: correct boxes, a Soldier, and rest starts
 
-**2026-08-28.** The follow-up the box measurement left owing, and the port
-**matches every tick of it**.
+The follow-up the box measurement left owing, and the port **matches every
+tick of it**.
 
 `physics-samples.json` is now **64 scenarios × 48 ticks**, up from 48, and the
 three things it was missing are all in:
@@ -3634,7 +3566,7 @@ cannot tell two node tools apart.
 
 ### ✅ The sentry self-destruct: ANSWERED. It is the gate collision event
 
-**2026-08-28, and it was open for five sessions.** A sentry built inside a
+A sentry built inside a
 `TeamGate` or an `IntelGate` loses 999 hp to a collision event and dies in its
 own End Step, on the tick it was built. The port had no such event, so it kept
 every one of them.
@@ -3713,10 +3645,10 @@ fourteen destructions are a recording of the reference doing it.
 
 #### ⚠️ The live experiment that "eliminated position" tested nothing
 
-2026-08-28's live session built at the trace's exact coordinates, watched the
-sentry die, then built a control at a position the trace says works — and *that*
-died too, both of them to the server resetting a lone test player's roster entry
-to `TEAM_SPECTATOR` and firing the guard's second arm. It concluded **position is
+A live session built at the trace's exact coordinates, watched the sentry die,
+then built a control at a position the trace says works — and *that* died too,
+both of them to the server resetting a lone test player's roster entry to
+`TEAM_SPECTATOR` and firing the guard's second arm. It concluded **position is
 eliminated**, and wrote that into two files.
 
 The control did its job: it proved the experiment was contaminated. What it
@@ -3737,9 +3669,9 @@ when `Sentries.GateCollisionStep` is removed — measured, not assumed.
 Neutralised the whole function with an early return and ran the suite: **25
 failures before, 25 after, identical sets.** Not "weakly covered": zero.
 
-⚠️ **Re-measured on a GREEN suite, 2026-09-02**, because the original reading was
-taken while 25 tests were red for an unrelated reason and "the same 25" is a
-weaker statement than it looks. With the stamp red cleaned up (`PolicyFixture`)
+⚠️ **Re-measured on a GREEN suite**, because the original reading was taken
+while 25 tests were red for an unrelated reason and "the same 25" is a weaker
+statement than it looks. With the stamp red cleaned up (`PolicyFixture`)
 the suite is **2,572 passing, and 2,572 still pass with the carry neutralised.**
 The gap is unchanged and is now stated against a baseline of zero.
 ⚠️ **The mutation has to be opaque to the compiler** — a bare `return` at the top
@@ -3780,7 +3712,7 @@ set, and a new map with a `moving_platform` entity falsifies it silently.
 
 ### Moving platforms: the motion is ported, the carry cannot be
 
-Landed 2026-09-01. `MovingPlatforms`, `WorldState.MovingPlatforms`, and a stage
+`MovingPlatforms`, `WorldState.MovingPlatforms`, and a stage
 in `MatchSimulation.Tick`. Reference:
 `Objects/Map elements/Colliders/MovingPlatform.events` — Create for the defaults,
 User Event 1 for the map's overrides, End Step for the motion, User Events 10
@@ -3860,7 +3792,7 @@ platforms silently, the same shape as `MaxProjectiles`; raising it is the fix.
 
 #### What the map archive says about moving platforms — measured 2026-09-01
 
-⚠️ **The carry is NOT hypothetical, and "no shipped map places one" was hiding
+⚠️ **The carry is NOT hypothetical — "no shipped map places one" was hiding
 that.** Scanned all 2,348 maps in `D:\code\gg2-maps\maps` with this port's own
 `LevelMap.FromPng`: **1,838 parsed, and 8 of them place a moving platform.**
 
@@ -3921,7 +3853,7 @@ that it should not be assumed benign.
 `png_get_text`, which returns `tEXt`, `zTXt` and `iTXt` alike
 (`Extensions/GG2DLL/GG2DLL/GG2DLL.cpp:357-368`). GG2 *writes* `zTXt` (:288), so
 every map saved by the game itself worked and every map from another editor did
-not. Fixed 2026-09-01. ⚠️ **`gg2-nav-gen` had the identical bug in its own
+not. Fixed. ⚠️ **`gg2-nav-gen` had the identical bug in its own
 reader and found 438 affected maps; this port recovered 438 too** — two
 independent readers, same count, which is what makes it a diagnosis rather than a
 coincidence.
@@ -4062,10 +3994,9 @@ The engine says **586** solid for `bubble1`; this port said 576.
 ⚠️ **The bug that hid the frames is worth naming.** The LZW decoder returns the
 moment it sees the end code, leaving its cursor inside a sub-block — so following
 that cursor reads a length byte as a block type, the walk stops, and only frame 1
-is ever seen. **The same mistake was made twice in one session**, once in the
-throwaway analysis script and once in `GifSprite`, which is a good sign it is the
-natural way to write it. Decode from a copy of the offset and walk the sub-block
-chain separately.
+is ever seen. This mistake is easy to repeat (it appeared independently in both
+a throwaway analysis script and in `GifSprite`) — decode from a copy of the
+offset and walk the sub-block chain separately.
 
 ⚠️ **Still open: 4 (a real character box against a mask) and the `grem` sprite**,
 which decodes to 1.0% solid and has not been put in front of the engine. Phase C

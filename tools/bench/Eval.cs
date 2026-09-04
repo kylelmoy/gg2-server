@@ -10,16 +10,16 @@ namespace Bench;
 /// over whole CTF matches.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>Every match reports duration, deaths and the policy's share of control
+/// <b>Every match reports duration, deaths and the policy's share of control
 /// beside its winner.</b> "N matches completed" is satisfiable by a broken
 /// feature — this project's own <c>eval</c> called instant Arena rounds clean
-/// wins for two phases — and "the policy was wired in" is not "the policy drove".
+/// wins — and "the policy was wired in" is not "the policy drove".
 /// </remarks>
 public static class PolicyEval
 {
     public static void Run(string maps, string nav, string npz, int matchesPerMap)
     {
-        // ⚠️ BOTH ARMS. A stuck-bot number from the policy arm alone cannot say
+        // BOTH ARMS. A stuck-bot number from the policy arm alone cannot say
         // whether the policy caused it; the scripted bot has always been able to
         // get stuck and nobody was measuring. The control is the same matches
         // with Policy = null.
@@ -116,7 +116,7 @@ public static class PolicyEval
                         {
                             deaths++;
 
-                            // ⚠️ Deaths BY TEAM, which exists in every match
+                            // Deaths BY TEAM, which exists in every match
                             // whether or not it decides. 22 of 24 matches hit the
                             // time cap undecided, so a win rate over them is a
                             // statistic about the cap rather than about the bots.

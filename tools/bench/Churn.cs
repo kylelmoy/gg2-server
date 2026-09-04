@@ -8,14 +8,11 @@ namespace Bench;
 /// How often a bot CHANGES its input, which is what a client has to predict.
 /// </summary>
 /// <remarks>
-/// ⛔ <b>This exists because a playtester reported bots stuttering around jumps —
-/// "left/right even though the jump should move right" — and could not tell
-/// whether the bot was genuinely inputting that or the client was mispredicting
-/// it.</b> Those are opposite problems and the difference is measurable here:
-/// the server's own input stream either reverses often or it does not, and no
-/// client is involved in finding out.
+/// Distinguishes a bot genuinely reversing its input from a client
+/// mispredicting it: the server's own input stream either reverses often or it
+/// does not, and no client is involved in finding out.
 /// <para>
-/// ⚠️ <b>Input churn is a NETCODE quantity, not a style one.</b> The wire sends
+/// <b>Input churn is a NETCODE quantity, not a style one.</b> The wire sends
 /// keys and aim; between the position updates (every 7th tick —
 /// <c>GameServerBeginStep.gml:63</c>) every client dead-reckons each character
 /// forward from the last keys it heard. A character whose keys are stable
@@ -24,12 +21,12 @@ namespace Bench;
 /// the server is comfortably inside its budget.
 /// </para>
 /// <para>
-/// ⚠️ <b>The airborne rows are the ones to read.</b> A ground reversal is a step;
+/// <b>The airborne rows are the ones to read.</b> A ground reversal is a step;
 /// an AIRBORNE horizontal reversal changes a ballistic arc the client has already
-/// drawn, which is the specific thing that was reported.
+/// drawn.
 /// </para>
 /// <para>
-/// ⛔ <b>What this CANNOT tell you.</b> It measures the server's inputs only. If
+/// <b>What this CANNOT tell you.</b> It measures the server's inputs only. If
 /// churn comes back low, the stutter is the client mispredicting and this is the
 /// wrong instrument for it — a parity question, <c>docs/PARITY.md</c>. Say which
 /// half the number rules out rather than treating a low number as "no problem".
@@ -59,7 +56,7 @@ public static class ChurnBench
         var cap = int.Parse(Environment.GetEnvironmentVariable("BENCH_CAP") ?? "2");
         var bots = int.TryParse(Environment.GetEnvironmentVariable("BENCH_BOTS"), out var b) && b > 0 ? b : 8;
 
-        // ⚠️ The policy is loaded with the stamp check BYPASSED, because this asks
+        // The policy is loaded with the stamp check BYPASSED, because this asks
         // what the live server's bots do and the live server is running it that
         // way. A churn number measured on a configuration nobody is playing would
         // answer a question nobody asked.
@@ -108,7 +105,7 @@ public static class ChurnBench
             "the client cannot know about, and every one of those is a visible correction.");
         Console.WriteLine();
         Console.WriteLine(
-            "⚠️ Low churn does NOT clear the bots - it moves the question to whether the client");
+            "Low churn does NOT clear the bots - it moves the question to whether the client");
         Console.WriteLine(
             "   and server agree on the physics, which this cannot see. docs/PARITY.md.");
     }
@@ -173,7 +170,7 @@ public static class ChurnBench
                         {
                             tally.HorizontalChanges++;
 
-                            // ⚠️ A REVERSAL is left->right or right->left, not a
+                            // A REVERSAL is left->right or right->left, not a
                             // release. Releasing a key leaves the client's
                             // extrapolation merely too fast; reversing makes it
                             // point the wrong way, which is the visible one.

@@ -10,7 +10,7 @@ namespace Bench;
 /// the same inputs.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>Real states, not random floats.</b> A forward pass agrees on noise
+/// <b>Real states, not random floats.</b> A forward pass agrees on noise
 /// whatever its head offsets are; what has to agree is the ranking over the
 /// actions in states the bot will actually meet, which is where a wrong offset
 /// shows up as a plausible answer to the wrong question.

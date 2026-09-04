@@ -9,13 +9,13 @@ namespace Bench;
 /// Does decidedness fall as the policy's share of control rises?
 /// </summary>
 /// <remarks>
-/// ⛔ <b><c>gg2-rl</c>'s hypothesis, made separable.</b> The 21-map table showed
+/// <b><c>gg2-rl</c>'s hypothesis, made separable.</b> The 21-map table showed
 /// the policy arm deciding 54 fewer matches than the control across 19 maps —
 /// 0.7 points in aggregate, which reads as nothing — and <c>gen_destroy</c>
-/// losing <b>22%</b> of its decided matches on its own. Their framing: "matches
-/// get more violent and less decisive", showing up per map for the first time.
+/// losing <b>22%</b> of its decided matches on its own: "matches get more
+/// violent and less decisive."
 /// <para>
-/// ⚠️ <b>An A/B cannot separate that, and a sweep can.</b> Policy-vs-control is
+/// <b>An A/B cannot separate that, and a sweep can.</b> Policy-vs-control is
 /// one point against one point; if decidedness falls MONOTONICALLY as the
 /// engagement range (and with it the policy's share of ticks) rises, the policy's
 /// control is the cause. If it does not, something specific to that map is, and
@@ -24,7 +24,7 @@ namespace Bench;
 /// standing candidate.
 /// </para>
 /// <para>
-/// ⚠️ <b>Range 0 is not the control arm.</b> It is the hybrid with a gate that
+/// <b>Range 0 is not the control arm.</b> It is the hybrid with a gate that
 /// never opens, which costs a <c>ScriptedBot.Poll</c> and then discards nothing.
 /// The control arm is <c>Policy = null</c> and is printed separately, because
 /// "range 0 equals control" is an assumption worth being able to read off the
@@ -40,18 +40,17 @@ public static class RangeSweep
         var ranges = (Environment.GetEnvironmentVariable("BENCH_RANGES") ?? "0,80,150,220,300,450")
             .Split(',').Select(double.Parse).ToArray();
 
-        // ⛔ THE CAP TEST. `gg2-rl`'s alternative explanation for "less decisive",
-        // and it may dissolve the effect entirely: a capped match is an undecided
-        // match, so if the policy simply makes fights LONGER, decidedness falls
-        // with no separate mechanism at all. Raising the cap separates the two —
-        // if decidedness recovers, length is the whole story; if it does not,
+        // THE CAP TEST. An alternative explanation for "less decisive" that may
+        // dissolve the effect entirely: a capped match is an undecided match, so
+        // if the policy simply makes fights LONGER, decidedness falls with no
+        // separate mechanism at all. Raising the cap separates the two — if
+        // decidedness recovers, length is the whole story; if it does not,
         // matches are genuinely not resolving and length is not the mechanism.
         //
-        // ⚠️ Their own warning about the mean is why this exists rather than a
-        // comparison of mean durations: mean length rose 7.8% while decidedness
-        // fell from 40% to 20%, which a mean shift alone cannot produce. It works
-        // only if the distribution is already clustered at the cap — which is a
-        // claim about the distribution that the mean cannot support either way.
+        // This exists rather than a comparison of mean durations because a mean
+        // shift alone cannot show it: mean length can rise while decidedness
+        // falls sharply only if the distribution is already clustered at the
+        // cap, a claim about the distribution the mean cannot support either way.
         var cap = int.Parse(Environment.GetEnvironmentVariable("BENCH_CAP") ?? "5");
         var clock = Stopwatch.StartNew();
 
@@ -78,7 +77,7 @@ public static class RangeSweep
 
     /// <summary>Which rule actually ended the match.</summary>
     /// <remarks>
-    /// ⚠️ <b>Derived from the finished state, not from a field</b> — nothing in
+    /// <b>Derived from the finished state, not from a field</b> — nothing in
     /// <c>MatchResult</c> records it, and adding one would put a bench question
     /// into the simulation. Order matters: a match can satisfy more than one, and
     /// the cap is checked last because a match at the cap that also reached a
@@ -89,20 +88,15 @@ public static class RangeSweep
         if (result.Outcome != MatchOutcome.Decided)
             return "undecided";
 
-        // ⛔ TDM's kill counter IS RedCaps/BlueCaps — `Rounds.cs:565` compares the
+        // TDM's kill counter IS RedCaps/BlueCaps — `Rounds.cs:565` compares the
         // kill limit against exactly those two fields, so the same pair means
         // "captures" in CTF and "kills" in Team Deathmatch.
         //
-        // ⚠️ THE MODE HAS TO GATE IT, and checking "which limit was configured"
-        // is NOT enough — which is how the first version of this was wrong. Both
-        // limits are always configured, so with CapLimit = 1 every TDM match that
-        // saw a single kill was labelled `caplimit`, and `tdm_mantic` printed
-        // caplimit=200 in all five arms. It reads like a clean finding ("the kill
-        // limit always binds") and is an artefact of the aliasing.
-        //
-        // ⚠️ Worth recording that this trap was flagged to `gg2-rl` an hour
-        // before it was walked into here. Knowing a field is overloaded does not
-        // stop you reading it.
+        // THE MODE HAS TO GATE IT, and checking "which limit was configured" is
+        // NOT enough: both limits are always configured, so with CapLimit = 1
+        // every TDM match that saw a single kill would be labelled `caplimit`
+        // regardless of the kill limit — an aliasing artefact that reads like a
+        // clean finding ("the kill limit always binds").
         var kills = match.State.GameMode == GameMode.TeamDeathmatch;
 
         if (!kills && match.Options.CapLimit > 0
@@ -140,22 +134,23 @@ public static class RangeSweep
         var decided = 0;
         var capped = 0;
 
-        // ⛔ PER-MATCH, because the question `gg2-rl` asked cannot be answered
-        // from totals: stratify the cap-20 matches by whether they finished
-        // inside the OLD 300-second cap.
+        // PER-MATCH, because the question cannot be answered from totals:
+        // stratify the cap-20 matches by whether they finished inside the OLD
+        // 300-second cap.
         //
         //   - a longer-clock ARTEFACT predicts the newly-decided stratum favours
         //     the policy far more than the already-decided one — the advantage
         //     lives in matches that only exist because the clock grew;
         //   - a genuinely better policy predicts the two strata look ALIKE.
         //
-        // ⚠️ And WHY each match ended, which is the direct observation of the
+        // Also record WHY each match ended, the direct observation of the
         // mechanism rather than an inference about it. KillLimit and CapLimit are
         // unchanged when the clock grows, so a longer cap does not merely reveal
         // outcomes — it changes which limit binds. If the mix shifts from
         // CapLimit toward KillLimit in the policy arm, the instrument is
         // changing what the game rewards.
-        // ⛔ BOTH ESTIMATORS OF THE DEATH SHARE, because they trade defects and
+        //
+        // BOTH ESTIMATORS OF THE DEATH SHARE, because they trade defects and
         // arguing about which defect bites is worse than measuring it.
         //
         //   pooled ratio  -- sum(red) / sum(red+blue) over every match.
@@ -165,25 +160,20 @@ public static class RangeSweep
         //   mean of ratios -- the average of each match's own red share.
         //                    UNWEIGHTED but needs a denominator per match, so a
         //                    ZERO-DEATH match has no ratio and must be dropped,
-        //                    which reintroduces exactly the kind of filter the
-        //                    day was spent removing.
+        //                    which reintroduces exactly the kind of filter this
+        //                    is meant to avoid.
         //
         // Printing both plus the zero-death count makes the disagreement itself
         // the answer: agreement settles it by observation rather than by a
         // plausibility claim about whether death ratios vary with match length.
         //
-        // ⚠️ BUT THIS MEASURES THE BIAS RATHER THAN REMOVING IT, and do not read
-        // the two rows as meaning it is handled. `gg2-rl` hit the same family in
-        // its blind share on 2026-09-01 -- a rate whose denominator is itself an
-        // outcome of the arm -- and fixed it by TRUNCATING every duel at a common
-        // decision index, which removes the bias by construction. Where a common
-        // cut point exists that is strictly better, because instrumentation still
-        // has to be reasoned about correctly at every point of use, and this
-        // project's record is of correct reasoning failing exactly there.
-        //
-        // Not changed here because a match has no obvious common cut point the way
-        // a fixed-length duel does -- maps end on different limits. ⚠️ If one is
-        // ever found, prefer it to this.
+        // BUT THIS MEASURES THE BIAS RATHER THAN REMOVING IT — do not read the
+        // two rows as meaning it is handled. The stronger fix for a rate whose
+        // denominator is itself an outcome of the arm is TRUNCATING every run at
+        // a common decision index, which removes the bias by construction. Not
+        // done here because a match has no obvious common cut point the way a
+        // fixed-length duel does — maps end on different limits. If one is ever
+        // found, prefer it to this.
         var perMatchShare = 0.0;
         var perMatchCount = 0;
         var zeroDeath = 0;
@@ -197,7 +187,7 @@ public static class RangeSweep
 
         for (var i = 0; i < count; i++)
         {
-            // ⚠️ The SAME seeds as the 21-map table, so a row here is comparable
+            // The SAME seeds as the 21-map table, so a row here is comparable
             // to that row rather than to a fresh sample of the same map.
             var seed = (uint)(7000 + (map.Length * 131) + (i * 37));
 
@@ -211,7 +201,7 @@ public static class RangeSweep
                 KillLimit = 40,
                 MaxTicks = 30 * 60 * cap,
                 AllowedClasses = [.. PolicyController.TrainedClasses],
-                // ⚠️ The control arm carries NO brain, so the range it would have
+                // The control arm carries NO brain, so the range it would have
                 // used is not a question that arises — where this had to name the
                 // default explicitly to keep the two arms comparable.
                 Brain = policy is null
@@ -251,7 +241,7 @@ public static class RangeSweep
 
             ticks += match.Tick;
 
-            // ⚠️ This match's OWN death ratio, for the unweighted estimator.
+            // This match's OWN death ratio, for the unweighted estimator.
             // A zero-death match has no ratio and is counted separately rather
             // than silently skipped — the count IS the diagnostic, because it is
             // the size of the filter this estimator reintroduces.
@@ -268,7 +258,7 @@ public static class RangeSweep
             }
 
 
-            // ⚠️ How many matches reached the cap, printed rather than inferred.
+            // How many matches reached the cap, printed rather than inferred.
             // "undecided" and "hit the cap" are not the same thing — a match can
             // end undecided for other reasons — and the cap test's whole question
             // is which of the two is moving.
@@ -285,7 +275,7 @@ public static class RangeSweep
 
             decided++;
 
-            // ⚠️ 9,000 ticks is 300 seconds — the OLD cap exactly, so this
+            // 9,000 ticks is 300 seconds — the OLD cap exactly, so this
             // stratum is precisely the set of matches the five-minute runs could
             // see, and the other is precisely what the longer clock added.
             var early = match.Tick <= 30 * 60 * 5;

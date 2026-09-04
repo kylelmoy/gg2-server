@@ -87,30 +87,25 @@ struct CharacterState {
 `double` everywhere in the physics — see `SIMULATION.md`, "Float rules". A
 `float` is a bug, not an optimisation.
 
-The tick should allocate nothing. Pool the broadcast buffer, use `Span<byte>` for
-serialisation, keep projectiles in a free-list-backed array rather than a `List`
-of class instances. This matters less for 16 players than it will for whatever
-the bot layer eventually wants to do per tick, and retrofitting it is miserable.
+The tick allocates nothing. The broadcast buffer is pooled, serialisation uses
+`Span<byte>`, and projectiles live in a free-list-backed array rather than a
+`List` of class instances.
 
 ## Collision
 
-The single hottest call in the server is `placeFree`. Design it deliberately:
+The single hottest call in the server is `placeFree`:
 
 - The walkmask is a **bitset** — `ulong[]` with a row stride, one bit per mask
   cell, one cell per 6 × 6 world pixels. A character rectangle spans a handful of
-  cells; the test is a few masked word reads — `Walkmask.AnySolidInBox` — or,
-  for the shapes a character box actually produces, a single bit read from a
-  precomputed erosion table.
-  ⛔ **That last clause was aspirational until 2026-09-02.** The layout was always
-  the bitset; every consumer was a cell-by-cell loop calling `IsSolid`, in **four
-  separate copies**. Nothing could fail, because the loop was correct — see
-  "Where a tick actually goes" below.
+  cells; `Walkmask.AnySolidInBox` tests it with a few masked word reads, or, for
+  the shapes a character box actually produces, a single bit read from a
+  precomputed **erosion table** (below).
 - Solid rectangles (gates, player walls, platforms) are a small array of AABBs
   tested afterwards.
 - **Solidity is a query filter, not global state.** The reference toggles a
   `solid` flag on every obstacle before each check and clears it after
-  (`charSetSolids`/`charUnsetSolids`) because GML gave it no better option. Pass
-  a filter instead:
+  (`charSetSolids`/`charUnsetSolids`) because GML gave it no better option. The
+  port passes a filter instead:
 
 ```csharp
 readonly struct CollisionFilter {
@@ -126,842 +121,104 @@ This is both faster and clearer, and it makes gate semantics — which depend on
 the asking character's team *and* whether it carries intel — a parameter instead
 of a hidden mutation.
 
-## Where a tick actually goes
-
-**Measured 2026-09-02, Release, 24-core box, `ctf_truefort`, soldiers.** ⚠️ **A
-wall-clock figure on one machine — re-measure before quoting, and say which
-build.** The probe is a throwaway; what survives is the shape.
-⚠️ **These are the CURRENT figures, after both the word path and the erosion
-tables.** The two sections below give the before/after for each.
-⛔ **The tick row and the sweep under it come from a ScenarioWorld holding twelve
-LIVE characters that are standing still** — read it as the cost of twelve live
-characters, not of a match. A static scenario is not a workload; see the memo
-correction below.
-
-| | cost |
-|---|---|
-| `CollisionWorld.PlaceFree` (character box + filter) | **12.0 ns** |
-| `Walkmask.AnySolidInBox` alone | 7.0 ns |
-| `Movement.GoodMoveContactSolid`, a 10px fall | **145 ns** — about 13 `PlaceFree`s |
-| `MatchSimulation.Tick`, 12 live characters | **3.7 µs** |
-| `WorldState` whole-struct copy (156,624 bytes) | 2.2 µs |
-| a `RolloutSearch` decision, 60 candidates × horizon 20, population 12 | **4.8 ms** |
-
-### The three things this settles, because each one was assumed wrong first
-
-⛔ **1. The tick is per-CHARACTER, not per-slot.** Sweeping the population 2→32
-gives ~0.45 µs a live character and a fixed cost of **0.26 µs** — about 5% at
-twelve. The nine `for (slot = 0; slot < MaxSlots; slot++)` passes over 64 mostly
-empty slots are **not** worth compacting; that was the first hypothesis and it is
-wrong by an order of magnitude.
-
-⛔ **2. `PlaceFree` is the leaf, and the crawl is the multiplier.**
-`good_move_contact_solid` asks it **once per pixel of travel**, so a character
-moving ten pixels pays thirteen box tests on that axis alone. This is why
-`placeFree` is "the single hottest call in the server" and why the mask layout
-was chosen — the cost is the call count, not the call.
-
-⛔ **3. The `WorldState` copy is NOT where a search spends its time.** At
-population 12 a candidate is 2.2 µs of fork against 20 ticks at 3.7 µs — the fork
-is about **3%**. ⚠️ **`BENCH_SEARCH` prints a per-candidate intercept that was
-labelled "fork" and read 27 µs**, an order of magnitude above the actual copy,
-because the intercept also carries the zoom check, the decoder and the aim-error
-scan. **Shrinking `WorldState` buys ~3% of a candidate, not ~25%.** The label is
-corrected and `tools/bench/Search.cs` says so at the call site.
-
-### What the word path bought, and what it did not
-
-Switching all four cell loops to `Walkmask.AnySolidInBox`:
-
-| | before | after | |
-|---|---|---|---|
-| `PlaceFree` | 24.5 ns | 13.9 ns | **−43%** |
-| `GoodMoveContactSolid`, 10px | 310 ns | 177 ns | **−43%** |
-| `MatchSimulation.Tick` @ pop 12 | 4.57 µs | 3.74 µs | **−18%** |
-| search decision @ pop 12, h20 | 6,364 µs | 4,795 µs | **−25%** |
-
-⚠️ **The tick figure held across the whole population sweep** (2, 8, 12, 16, 24,
-32), all six in the same direction at 8–24%, and the search figure held across all
-five horizons — which is why these are quoted and the one below is not.
-
-⛔ **It is NOT measurable in the twelve-scripted-bot server tick, and that is
-reported rather than buried.** `TwelveBotsRunWellUnderTheTickBudget`, interleaved
-Release runs: **before 0.172–0.190 ms, after 0.151–0.178 ms.** The distributions
-overlap; a single before/after pair read 0.190 → 0.174 and would have been written
-down as −8%. **That figure is dominated by the scripted bot layer — nav, targeting,
-objectives — not by collision**, so a collision win is invisible in it by
-construction. ⚠️ **CLAUDE.md's 0.151 ms is inside this spread, so it is a sample
-from it rather than a number that moved.**
-
-### Why this is the lever for the bot layer
-
-A rollout search re-simulates every live character for every tick of every
-candidate, so **the simulation tick is multiplied by candidates × horizon** — 1,200
-at the shipped settings. **Anything taken off `MatchSimulation.Tick` is taken off a
-search decision at 1,200×**, which is the opposite of the scripted-bot case above,
-where the same saving disappears into the bot layer's own cost. That asymmetry is
-the whole reason to look here.
-
-⚠️ **The scripted case has its own lever and it is NOT the tick** — see "Where a
-headless bot match's tick goes" below. In a twelve-bot match the simulation is
-38% and one A\* search is 30%, so a saving on `MatchSimulation.Tick` pays a
-rollout search 1,200× and pays a scripted bot barely at all.
-
-### ⛔ Where `PlaceFree` calls actually come from — and why the crawl is not the target
-
-**Measured 2026-09-02 over 2,940 ticks of a real bot match** (`ctf_truefort`, 12
-bots, Release), attributed by calling method:
-
-| caller | share | what it asks |
-|---|---|---|
-| `CharacterPhysics.Step` | **28%** | the move target, and `y+1` |
-| `CharacterPhysics.BeginStepInput` | **28%** | stuck-in-wall at `(x,y)`, obstacle below at `y+1` |
-| `CharacterPhysics.UpdateSpinjump` | **14%** | rubbing a wall at `x±1` |
-| `CharacterPhysics.BeginStepAccelerate` | **14%** | `y-0.1`, the surf check |
-| `CharacterPhysics.EndStep` | **10.5%** | the stair climb — `y+6`, `y+7`, `y+12`, `y+13` |
-| **`Movement.GoodMoveContactSolid`** | **4.0%** | the crawl |
-| `CharacterHitObstacle.Resolve` | 1.6% | the four escapes |
-
-⛔ **The crawl is 4-7% of the calls, not the bulk**, and it averages **4.6-5.0
-`PlaceFree` calls** — not the ~13 a 10 px benchmark suggests, because a character
-moves a few pixels in a tick, not ten. **Eliminating the crawl entirely would buy
-under 7%.**
-
-⛔ **The other 84% are GM8's own per-character-per-tick probes, and they are the
-specification.** Each names a distinct position — `(x,y)`, `y+1`, `y-0.1`, `y+6`,
-`y+7`, `y+12`, `y+13`, `y-gravity`, `x±1`, `(x+hspeed, y+vspeed)` — so there is no
-redundancy to remove: they are different questions, and the reference asks all of
-them. ⚠️ **One exception, and it is small**: `UpdateSpinjump` re-asks `y+1`, which
-`BeginStepInput` already stored in `CharacterState.ObstacleBelow`. It sits behind
-an early return that only fires while spinjumping, so it is rare — and reusing the
-stored value would need proof that nothing moved the character between the two
-stages.
-
-### ✅ The erosion tables: precomputing the box test, because the SHAPE barely varies
-
-⛔ **`Walkmask.AnySolidInBox` is a table lookup for nine of the ten character
-classes now**, one bit read instead of a word scan per row.
-
-**The observation that makes it cheap.** A character box's *cell rectangle* is
-fixed by its pixel size and the sub-cell phase of its position, so each class
-produces at most **two widths and two heights** — enumerated over all 36 phases,
-13 px wide is ALWAYS 3 columns, 19 px is ALWAYS 4, and only 15 px varies. So a
-handful of shapes answers nearly every query. **Measured over 2,940 ticks of real
-bot matches: four shapes (3x6, 4x6, 3x7, 4x7) cover 86.7%, 88.4% and 94.5% of all
-mask queries on three maps**, with 0.02% off-map. Pyro's two (3x5, 4x5) were added
-so every class in the bot draw is covered; only Quote falls through.
-
-⛔ **At CELL resolution, which is the whole reason it fits.** One bit per possible
-top-left cell is the same footprint as the mask — **about 20 KB a shape, 120 KB
-for six** on `ctf_truefort`. **A per-PIXEL table would be 36x that**, would not
-stay in cache, and is the version of this idea that does not work.
-
-**Built by a separable sliding OR** — a horizontal pass over `w` columns, then a
-vertical pass over `h` rows of that — so it is linear in cells. ⚠️ **1.5 ms a map
-warm, 2.7 ms cold.** The first version re-scanned the whole window at every
-position and cost 6x that. `HeadlessMatch.Load` does NOT cache maps, so this is
-paid per match: ~2% of `eval`'s per-match budget.
-
-| measurement | word scan | erosion table | |
-|---|---|---|---|
-| `AnySolidInBox` | 8.9 ns | **7.0 ns** | −21% |
-| `PlaceFree` | 14.2 ns | **12.0 ns** | −16% |
-| `GoodMoveContactSolid`, 10 px | 180 ns | **145 ns** | −19% |
-| `MatchSimulation.Tick` @ 12 chars | 3.83 µs | **3.65 µs** | −5% |
-| **search decision, per-horizon slope** | **258.6 µs** | **234.8 µs** | **−9.2%** |
-
-⚠️ **Interleaved A/B in ONE binary behind a switch, ON/OFF/ON/OFF**, so machine
-drift lands on both arms — the mask, `PlaceFree` and crawl ranges do not overlap.
-⚠️ **The per-horizon SLOPE is the statistic to read for the search**, not the
-single horizon-20 reading: it is a regression over five horizons, where the
-one-point numbers overlap between arms.
-
-⛔ **A wrong bit here is a wrong collision answer** — a character through a wall,
-or stopped by nothing. The lookup is exact rather than conservative, so there is
-no "maybe" path to fall through to. `WalkmaskBoxTests` walks every tabulated shape
-across every legal position on three maps and **mutation-checks four ways**:
-horizontal window short (7 red), vertical window short (7), shape-index collision
-(3), bounds test missing an edge (3).
-
-⛔ **Equivalence alone cannot catch a table nothing reaches** — a set of shapes no
-query matches is green and slow. `IsTabulatedShape` is public for exactly that
-test, which asserts the shapes real boxes produce ARE the tabulated ones.
-
-⚠️ **The shape set was WRONG when it was reasoned about, and the test control
-caught it.** The first version excluded Heavy on a hand-derived claim that a 19 px
-box spans 4-5 columns; it spans exactly 4, so the control — "a class left out must
-not be fully covered" — failed. **Enumerate the phases; do not derive them by
-hand.**
-
-### ⛔ Binary search on the crawl is UNSOUND, and the hitscan analogy is where it breaks
-
-**The question comes up because `good_move_contact_solid` steps one pixel at a
-time and a sniper's hitscan does not.** The two are different queries:
-
-- A **hitscan** asks *"is anything solid on this segment?"* — **disjunctive**, no
-  ordering. A conservative skip (the `Walkmask.Clearance` field, which
-  `ObservationWriter`'s ray fan uses) can jump ahead by a distance proven to
-  contain nothing, and the answer is unchanged.
-- The **crawl** asks *"where is the FIRST obstruction?"* The free/blocked
-  predicate along the path is **not monotone** — a character can pass a pillar and
-  land in open space beyond it. ⛔ **A binary search assumes free-then-blocked and
-  would tunnel straight through.** That is not a parity risk; it is wrong.
-
-✅ **The sound member of that family was built and measured, and it is worthless.**
-A swept-AABB pre-test — the union of the start and end boxes, tested once — is
-conservative (a straight-line sweep of an AABB is contained in the AABB of its
-endpoints) and would be **bit-identical**, because the elision is
-`clear || PlaceFree(...)`: the loop's arithmetic never changes, only a predicate
-known to be true goes unevaluated. ⚠️ `RoundPosition` is half-to-even and
-`floor(v) <= round(v) <= ceil(v)`, so flooring and ceiling the endpoints brackets
-every rounded position with **no margin** — and a margin is not free, see below.
-
-⛔ **The swept path is clear on 0.9-3.3% of crawls.** Measured across three maps.
-That is worth **~0.1% of all `PlaceFree` calls**, and the reason is structural
-rather than incidental: **gravity puts the destination inside the floor.** A
-grounded character carries a downward velocity component every tick, so the end
-box overlaps the ground it is standing on — and stopping it there is exactly what
-the crawl is for. **A clear sweep means airborne with nothing nearby, which is the
-minority of ticks.**
-
-⚠️ **A 1-pixel safety margin took the clear rate from 3.3% to 2.9%** by pushing the
-swept box into the floor underfoot. Recorded because the margin looks free and is
-not.
-
-### ✅ Map data is decoded ONCE per process, and where it deliberately is not
-
-⛔ **`HeadlessMatch.Load` re-decoded the map and re-parsed the nav graph on every
-match.** Measured 2026-09-02: **18.0 ms against 283.5 ms to play a 9,000-tick
-match — 6% of every match**, paid again for bytes that had not changed. It goes
-through `ScenarioResources.Shared` now: **18.36 ms → 0.08 ms** on the second ask,
-a 230x cut.
-
-⚠️ **Most of the 18 ms is the NAV GRAPH, not the PNG.** A warm
-`LevelMap.FromPng` + `ForArea` is 2.78 ms; the rest is nav text. Anyone attacking
-load time should start there.
-
-**Holding everything in memory is cheap**, which is what makes this a
-non-question: **23 decoded maps are 9.0 MB** (about 400 KB each) and **23 nav
-graphs 5.7 MB** — call it 15 MB for every shipped map and its graph, against a
-156 KB `WorldState` per forked candidate.
-
-⛔ **Only the deeply immutable half is shared, and that division is the entire
-safety argument.** `LevelMap` and `NavGraph` are `init`-only throughout;
-**`CollisionWorld` is NOT** — `SetCaptureZones` writes to it — and neither is
-`SpawnPoints`. `HeadlessMatch.On` builds both per match, at 0.009 ms, so there is
-nothing to gain by widening the cache and a whole class of irreproducibility to
-lose. `SharedMapDataTests` gates the split in both directions: **sharing the
-`CollisionWorld` too fails it, and reverting to an uncached load fails it.**
-
-⚠️ **The cache is NEVER INVALIDATED**, so a map edited on disk mid-process is not
-served again. **That is right for a batch runner and wrong for a long-lived
-server** — and the server does not use this path. `GameServer` still calls
-`LevelMap.FromPng` on rotation, deliberately.
-
-⛔ **Do not assert on `ScenarioResources.Shared.Count` in a test.** It is
-process-wide, so whether an ask adds an entry depends on which tests ran first — a
-draft of `SharedMapDataTests` did, passed alone and failed in the suite, *including
-its control*. **Reference identity (`Assert.Same`) is the stronger claim anyway**
-and holds whatever else the process has done.
-
-⚠️ **Is the live server worth caching too?** It would save ~18 ms once per map
-rotation, which fits inside a single 33.3 ms tick and drops no frame — **no
-measured problem**, against giving up re-reading an edited map. The memory is not
-the obstacle; the absence of a symptom is. **What would change this: a rotation
-spike showing up in `--tick-stats`.**
-
-### ⛔ Where a headless bot MATCH's tick goes — and A\* is the biggest thing here
-
-**Measured 2026-09-02, Release, net10.0, 24-core box, `ctf_truefort`, twelve
-scripted bots, four headless matches of 9,000 ticks each.** In-process
-`Stopwatch` timers around named stages; the instrumentation is throwaway and its
-own overhead measured **0.05 µs of the 6 µs tick**, because `GetTimestamp` here
-is an rdtsc-backed read of about 3 ns.
-
-⚠️ **This is a different quantity from the sweep above**, which is twelve live
-characters standing still in a `ScenarioWorld`. This is a match: bots think,
-people die and respawn, projectiles fly.
-
-| | µs a tick | share |
-|---|---|---|
-| **the bots' `Poll`** | **9.24** | **61%** |
-| `PathFollower.Step` | 5.7 | 38% |
-| — of which **`NavSearch.Find`** | **4.5** | **30%** |
-| `BotCombat.Step` | 3.0 | 20% |
-| — of which `KeepOrDropTarget` + `LookForOne` | 0.87 | 6% |
-| `UpdateObjective` | 0.58 | 4% |
-| the rocket dodge, the query rebuild, the holds | 0.78 | 5% |
-| **`MatchSimulation.Tick`** | **5.72** | **38%** |
-| the Begin Step character loop (with `Generators.BeginStep`) | 1.67 | 11% |
-| the Step character loop (with `Rounds`/`Arena`) | 1.02 | 7% |
-| `Projectiles.Collide` | 1.01 | 7% |
-| `Projectiles.Move` | 0.65 | 4% |
-| `Timers.Advance` | 0.49 | 3% |
-| `MovingPlatforms.EndStep` + the End Step loop | 0.36 | 2% |
-| `Intel.CollisionStep`, `TickEvents.ClearOutputs`, cabinets, the rest | 0.62 | 4% |
-| the command drain, `_events = default` | 0.17 | 1% |
-| **total** | **15.13** | |
-
-⚠️ **These are the figures the analysis below rests on, and the total has since
-moved.** The shares are what matter here, and they are the shares *before* any of
-the work below. ✅ **Cumulatively, on the same probe and interleaved against
-`f25f86b`** — four alternations, arms completely non-overlapping:
-
-| | before | after | |
-|---|---|---|---|
-| the bots' `Poll` | 9.36 µs | 6.52 | **−30.3%** |
-| `MatchSimulation.Tick` | 5.83 | 5.57 | **−4.4%** |
-| the whole tick | 15.36 | 12.27 | **−20.1%** |
-| `eval`, serial, one thread | 1,830x real time | 2,098x | **+14.7%** |
-
-⚠️ **Release, net10.0, 24-core box, `ctf_truefort`, twelve bots** — and the build
-matters, as CLAUDE.md's headroom note says.
-
-⛔ **`NavSearch.Find` alone is 30% of the whole system** — more than every stage
-of the simulation put together bar the two character loops. **That is where a
-bot-layer performance question starts**, and nothing in this repo said so before
-2026-09-02: collision had been attacked four times over and the A\* underneath
-the path follower never once.
-
-**One search costs 15.2 µs and pops 203 nodes**, at 0.245 searches a tick — a bot
-re-plans every 45-89 ticks (`BotConstants.ReplanTicks` plus its own stagger) and
-each search expands about a third of a 687-node graph.
-
-⛔ **The heuristic is NOT wrongly scaled, which was the first guess.** Measured
-over a thousand searches: the straight-line estimate is **0.914 of the true path
-cost**. The units of `NavEdge.Cost` and the cell-space distance really do agree,
-and A\* was not degenerating into Dijkstra. **Do not go looking for a scale
-error.** ⚠️ It is now inflated *deliberately* — see "A\* gives up optimality on
-purpose" below — which is a different thing from a scale error and is measured as
-a trade rather than a fix.
-
-⛔ **A quarter of a search is the priority queue.** A faithful microbenchmark of
-exactly the heap traffic one search does — 475 enqueues and 425 dequeues on a
-`PriorityQueue<int, double>`, interleaved the way the frontier interleaves them —
-costs **6.84 µs against the search's 29 µs**. ⚠️ **Replacing it was tried and rejected** — see "The A\* priority queue" below:
-a hand-written 4-ary heap reproducing .NET's tie-breaking exactly is **7% faster
-than it**, which is half a percent of a tick.
-
-### ⛔ The bot poll BELOW the top level — the combat half is AT ITS FLOOR
-
-**Measured 2026-09-02, Release, net10.0, `ctf_truefort`, twelve scripted bots,
-twelve whole matches (162,000 ticks) with a probe-off control arm.** The tick
-this was taken on reads **13.18 µs** with the probe removed and 15.91 with it in,
-so the probe is not free — see the overhead note below — and the shares are what
-transfer, not the absolute microseconds.
-
-| | µs a tick | ns a call | calls a tick |
-|---|---|---|---|
-| **`BotCombat.Step`** | **3.22** | 298 | 10.8 |
-| `BotClassKeys.For` | 0.73 | 72 | 10.1 |
-| — of which **`BotArc.Clear`** | **0.47** | **654** | 0.9 |
-| `KeepOrDropTarget` | 0.40 | 37 | 10.8 |
-| — of which the perceive-cadence sightline | 0.10 | 219 | 0.46 |
-| `LookForOne` | 0.36 | 33 | 10.8 |
-| — of which `BotTargeting.Find` | 0.17 | 335 | 0.55 |
-| `SolveAim` | 0.38 | 144 | 2.7 |
-| — of which **`BotAim.FloorUnder`** | **0.19** | **267** | 0.68 |
-| — of which `BotAim.Solve` itself | 0.10 | 143 | 0.68 |
-| the medic's ally lookup | 0.18 | 17 | 10.8 |
-| `Perceive` | 0.05 | 18 | 2.7 |
-
-✅ **The three items the queue named reproduce**: `KeepOrDropTarget` 0.49 → 0.40,
-`LookForOne` 0.38 → 0.36, `SolveAim` 0.39 → 0.38. ⛔ **And there is nothing
-hiding under them.** Each is one callee plus a cadence test, the residual in
-`BotCombat.Step` after its six children is 1.13 µs against 1.34 µs of probe
-overhead for those children, and **`BotSuppress.Spot` never fires at all** in a
-twelve-bot `ctf_truefort` match — 0 calls in 162,000 ticks.
-
-⛔ **So the combat half has no large exact-equivalence win left**, and the three
-biggest things in it are each doing the work they exist for:
-
-- **`BotArc.Clear` at 654 ns** is 58% segment walk, 15% `BulletRectsIn`, 27%
-  laying out the samples. ⚠️ **The rect filter part 9 added has already done its
-  job** — it returns **0.05 rects a call** — so what is left is the mask walk
-  along the parabola, one sample a pixel, which is the test itself. Reordering
-  the ten segments to try the likeliest blocker first was **costed and
-  rejected**: 42% of calls are blocked, segment 10 is a third of those, and the
-  arithmetic comes to 7.74 → 7.50 segments walked a call (**3%**), because the
-  58% of calls that are CLEAR walk all ten whatever the order.
-- **`BotAim.FloorUnder` at 267 ns is twice `BotAim.Solve`'s 143.** It is
-  `NavGraph.SnapObjective`, and it costs **4.0 downward `NodeFromWorld` probes a
-  call**. The ballistic solver everyone would look at first is the cheaper half.
-- **`BotTargeting.Find` at 335 ns** scans all 64 roster slots twice — once for
-  characters, once for sentries — for a roster of about thirteen. ⚠️ **That
-  pattern is 75 loops across the repo and about 40 of them are in
-  `Gg2.Simulation`**, which is the other 40% of the tick; a roster high-water
-  bound in `WorldState` is one change that reaches all of them, and it is not
-  worth doing for `BotTargeting.Find` alone.
-
-⚠️ **Below about 100 ns a call, a `Stopwatch` stage timer is measuring itself.**
-`GetTimestamp` costs **14 ns** on this box (5,000,000 iterations, warm) and
-`Stopwatch.Frequency` is **10 MHz** — a 100 ns quantum, unbiased over many calls
-but not per call. A region timed at 17-45 ns a call, which is most of this table,
-is within the instrument. The rows to trust are the ones in the hundreds.
-
-⛔ **The claim above that the probe costs "0.05 µs of the 6 µs tick, because
-`GetTimestamp` is an rdtsc-backed read of about 3 ns" is WRONG and is left in
-place with this correction beside it.** Measured 2026-09-02: 14 ns a read, and a
-sixteen-bucket probe over a twelve-bot poll costs **2.3-2.7 µs of a 13 µs tick**
-— 20%, not 0.8%. Any attribution taken with one needs the probe-off control arm
-that `BENCH_COMBAT` runs, and the two numbers reported side by side.
-
-### ⛔ The A\* budget is owned by the OBJECTIVE layer, not by the re-plan cadence
-
-**Measured 2026-09-02, same configuration.** A twelve-bot `ctf_truefort` match
-runs **321.1 searches a thousand ticks** at 8.5 µs each — **2.79 µs of a 12.3 µs
-tick, 23%**. Where they come from:
-
-| | searches / 1000 ticks | share |
-|---|---|---|
-| **a goal reissue** (`SetGoal` arms `ReplanAt = 0`) | **181.1** | **56%** |
-| the re-plan timer expiring | 97.3 | 30% |
-| a lost route, a stuck bot, an unroutable edge | 42.7 | 13% |
-
-⛔ **`BotConstants.ReplanTicks` is therefore the smaller half, and raising it is
-REJECTED on measurement.** The ladder, each rung built and run round-robin
-against the others so a drift in the machine hits all of them:
-
-| `ReplanTicks` | searches / 1000t | `ScenarioSuiteTests` total | rocket jumps |
-|---|---|---|---|
-| **45 (shipping)** | **321.1** | **6,142** | **6** |
-| 60 | 304.7 (−5.1%) | 6,764 (**+10.1%**) | 9 |
-| 90 | 289.2 (−9.9%) | 7,157 (**+16.5%**) | 8 — and `gallery-pit-climb` FAILS |
-| 135 | 266.4 (−17.0%) | — | — |
-| 180 | 251.6 (−21.6%) | — | — |
-
-⚠️ **Quadrupling the interval removes only 22% of the searches**, because the
-objective layer keeps forcing them, and it buys that with walking time at
-roughly one-for-one. **The cadence is at a good value; do not spend a session
-tuning it.**
-
-⛔ **The reading that "the timer drives 75% of searches" is WRONG and is the
-trap here.** Every event-driven re-plan sets `ReplanAt = 0` rather than calling
-`Plan` directly, so the call site under `tick >= state.ReplanAt` counts the timer
-AND every event together — 278 a thousand ticks, of which only 97 are actually
-the timer. **Split them on whether `ReplanAt` was 0**, which is what
-`BotPathState.GoalsSet` now records permanently.
-
-⚠️ **The goal reissues are NOT oscillation, which was the next guess.** Only
-**5.5 a thousand ticks** land back within 48px of the goal before last. Of the
-114 that move from a goal the bot already had, 30% move 48-96px, 29% 96-144px and
-15% more than 336px — progressive retargeting, not jitter. The other 67 are bots
-with no goal at all. **So the lever left on this side is
-`BotConstants.GoalRetargetDist`, and it is a behaviour change that
-`ScenarioSuiteTests` CANNOT see** — every leg there has one fixed goal and calls
-`SetGoal` once. It needs `BotObjectiveTests`' intel run and `eval`.
-
-⛔ **AND THE SEARCH BUDGET IS CONSERVED — BOTH THROTTLES DISPLACE SEARCHES
-RATHER THAN REMOVING THEM.** `BotConstants.GoalRetargetDist`, laddered the same
-way, twelve bots on `ctf_truefort`:
-
-| `GoalRetargetDist` | goal reissues / 1000t | **searches / 1000t** |
-|---|---|---|
-| **48 (shipping)** | **181.1** | **321.1** |
-| 96 | 155.5 (−14.1%) | **321.2 (0.0%)** |
-| 144 | 127.8 (−29.4%) | 300.6 (−6.4%) |
-
-⚠️ **Cutting the reissues by a seventh removes NOTHING.** A bot given a staler
-goal goes off route or runs out of route instead, and re-plans from there: at 144
-the goal reissues are down 53 a thousand ticks and the timer-and-lost-route
-searches are up 33, so **about three fifths of every search removed at one
-throttle comes back at another.** Both counters are committed
-(`BotPathState.GoalsSet` beside `Replans`), so this is checkable without a probe.
-
-⛔ **So "fewer searches" is CLOSED as a lever.** The cadence costs walking time
-one-for-one, the retarget threshold buys nothing, and between them they are 86%
-of the budget. **What is left of the queue's item is a smaller graph**, which is
-the one thing here that changes the cost of a search rather than their number.
-
-⚠️ **And nothing in this repo could have seen a `GoalRetargetDist` REGRESSION
-even if the lever had worked** — a gate that cannot fire, in CLAUDE.md's sense.
-`ScenarioSuiteTests` gives every leg one fixed goal and calls `SetGoal` once;
-`BotObjectiveTests`' intel run chases a flag that does not move until it is
-grabbed; `eval` and `BENCH_PERMAP` change both teams at once and are blind to a
-symmetric one. **Measuring that knob honestly needs it to become per-bot first,
-so an arm can differ from its control** — and building that criterion is the
-item, not the tuning.
-
-⛔ **Clearing A\*'s three arrays is NOT the win it looks like.** `Array.Fill` on
-`_gScore` and `_cameFrom` plus `Array.Clear` on `_closed` is O(node count) a
-search whatever the search explores, which reads like a generation-stamp
-opportunity. Measured: **0.038 µs a tick — 1.4% of A\*, 0.3% of the tick.** A
-search pops about 100 nodes of `ctf_truefort`'s 687. Do not re-derive this.
-
-### ⛔ The .NET sampling profiler was wrong THREE times here. Use in-process timers.
-
-`dotnet-trace --providers Microsoft-DotNETCore-SampleProfiler` on this workload
-produced confident, large, wrong numbers, each then settled against a direct
-timer or an A/B:
-
-| the sampler said | it actually is | how it was settled |
-|---|---|---|
-| `Buffer.ZeroMemoryInternal` is **63%** of an `eval` run | every memset-shaped thing in the tick is **under 2%** | stage timers — `_events = default` on a 6,160-byte `TickEvents` is **0.067 µs** |
-| `Projectiles.Collide` is **27.6%** of the run | **6.7%** — 1.01 µs of a 15.13 µs tick | stage timers summing to what the outer timer reads |
-| `Reconstruct`'s memmove is **33%** of A\* | **1.2%** | removed the memmove entirely and re-measured |
-| `PriorityQueue.RemoveRootNode` is **0.87%** of A\* | the heap is **24%** | a microbenchmark of the same operation counts |
-
-⚠️ **Its ORDERING of managed methods was roughly right** — it put `NavSearch.Find`
-at 31% of an `eval` run against a measured 30%, and that is what pointed this
-session at A\* in the first place. **Its magnitudes below that were not.** The
-pattern is that leaf attribution lands on runtime helpers — `memset`, `memmove` —
-that are not where the time is.
-
-⛔ **So: use the sampler to pick the method, a `Stopwatch` around named stages to
-size it, and an A/B to confirm anything you change.** The check that makes a
-stage table trustworthy is cheap and was applied here: **the stages must sum to
-what an outer timer reads around the whole call** — 6.009 against 6.04 µs.
-⚠️ And the trap `3aa644e`'s memo number hit applies to any A\* bench too: a
-reading taken before the JIT has tiered up says **57-70 µs** for the same search
-that settles at **15.2**.
-
-### ✅ Two exact-equivalence wins in `NavSearch.Find`, and four things that measured nothing
-
-**Landed 2026-09-02.** Both are bit-identical by construction and gated by
-mutation: forcing `hasBlocked` false reddens 2 tests, `hasOccupancy` false
-reddens 1, and dropping the `Reverse()` reddens 41.
-
-- **The blacklist and occupancy lookups are hoisted out of the edge loop.** Both
-  collections are nearly always empty — a bot's blacklist averaged **0.15
-  entries** a search, and the occupancy map is null whenever one team fields the
-  bots — and an empty one still cost the key arithmetic plus an
-  interface-dispatched lookup on each of about 2,000 edges a search.
-- **`Reconstruct` appends and reverses** instead of `path.Insert(0, …)`, which
-  was quadratic in the route length: about two thousand element moves to produce
-  a sixty-node route.
-
-⚠️ **Interleaved A/B, both arms twice, Release**, over the same four 9,000-tick
-matches:
-
-| | HEAD | after | |
-|---|---|---|---|
-| one A\* search, 1,000-pair bench | 30.9 µs | 29.3 µs | **−5.0%** |
-| the bots' `Poll` | 9.24 µs | 8.90 µs | **−3.7%** |
-| the whole tick | 15.13 µs | 14.75 µs | **−2.5%** |
-
-✅ **The three pinned bot measurements did NOT move, and here that is the expected
-result rather than an absent alarm** — the change is meant to be bit-identical,
-and the A\* bench moving 5% is the independent evidence that the edited code is
-reached at all. CLAUDE.md's "a pin that does not move is equally an alarm" cuts
-that way only for a change meant to alter behaviour.
-
-⛔ **Four things measured and NOT taken**, each built and measured rather than
-reasoned about:
-
-- **A compact 16-byte search-side edge array** — A\* reads four of `NavEdge`'s
-  nine fields and the struct is 56 bytes. **~1%**, isolated by an interleaved A/B
-  against the other change. Rejected: a second representation of the edge set,
-  and a second place the routability rule could drift, for one percent.
-- **Precomputed per-node heuristic centres**, so a relaxation reads two doubles
-  instead of loading a `NavNode`: **0.0%**. Rejected.
-- **`Projectiles.Collide`'s `stackalloc ProjectileHandle[512]` sized to the live
-  count instead** — 4 KB of stack zeroed every tick, including the many ticks
-  with nothing in the air. It read as a 3% win on one pass and **did not survive
-  an interleaved A/B**: nine alternations put it inside the drift. Rejected, and
-  the code is unchanged.
-- **`BotTargeting.Find`'s two `stackalloc`s**, 1.5 KB a bot a tick. Shrunk to 8
-  entries as a measurement — wrong behaviour, right question — and the tick did
-  not move.
-
-⚠️ **The last two confirm the note below that the 512-element `stackalloc`s "look
-alarming and are not"**, and together with the sampler's three misses they have
-one shape: **zeroing is not where this program spends its time.**
-
-### ✅ The line walk skips open ground, which was the largest single win here
-
-**Landed 2026-09-02, after the A\* work above.** `CollisionLine.Walk` samples the
-mask **once per pixel of the segment**, which is GM8's own rule and is not
-negotiable — but *which* of those samples get asked is.
-<see cref="Walkmask.Clearance"/> already existed for the observation ray fan, and
-now the walk reads it too: a sample standing on a cell of clearance `c` may
-advance `6c - 7` pixels, because every pixel that close is known to be open.
-
-⛔ **The reason it is worth so much is `BotArc.Clear`.** A soldier or demoman with
-a target tests its ballistic arc for line of sight — ten segments spanning a
-rocket's whole flight, hundreds of pixels of mostly empty air. **Measured at
-1.25 µs a call and 1.06 calls a tick: 9% of the entire tick from one call**, and
-10.5 of the 10.5 `CollisionLineBlocksBullets` calls a tick were its. The mask
-walk was 71% of that; the solid-rect loop is the other 29% and is unchanged.
-
-⚠️ **Interleaved A/B, six alternations, Release**, twelve bots on `ctf_truefort`.
-**Every reading of one arm sits below every reading of the other**; the figures
-are the minima, and the means agree:
-
-| | before | after | |
-|---|---|---|---|
-| the bots' `Poll` | 8.89 µs | 8.11 µs | **−8.8%** |
-| `MatchSimulation.Tick` | 5.94 µs | 5.65 µs | **−4.9%** |
-| the whole tick | 15.01 µs | 13.96 µs | **−7.0%** |
-| `eval`, 16 serial matches | 8.30 s | 7.60 s | **+9.2% throughput** |
-
-✅ **The simulation gains too, which was not the target** — a sentry's line of
-sight and a hitscan weapon go through the same walk. It is a smaller share there
-because those lines are short.
-
-### ⛔ The gate: `CollisionLineSkipTests`, and why the parity fixtures are not it
-
-**113 parity fixtures pass and prove nothing about this.** A hitscan in a
-recorded trace is a short line between two people in a firefight; the skip only
-engages over open ground, and an over-long one would step over a thin ledge in
-the middle of a map no trace ever shoots across. **This is CLAUDE.md's "a green
-fixture is not confirmation of a box", and it applies to a whole optimisation
-rather than to one edge.**
-
-⚠️ **The control is the production walk with a mask that refuses to promise**, not
-a transcription of it — a struct answering `IsSolid` identically and `0` from
-`SafeSkipPixels`, which is the documented "walk pixel by pixel" answer. So the
-two runs differ in the skip and nothing else, and there is no second copy of the
-rounding, the major-axis choice or the cell mapping to go stale. 20,000 segments
-a map over three maps, endpoints swept across the whole map and 20% beyond it, at
-three reaches.
-
-⛔ **The witness is a PROBE COUNT, not a threshold.** Two runs that agree prove
-nothing if the fast one never skipped, so the counting control asserts the
-skipping walk probes the mask **less than half** as often. A first draft asserted
-"more than 10,000 of 20,000 segments could skip" and failed on `cp_dirtbowl` at
-8,603 — **the fix was to state the property rather than lower the bar**, which is
-the same trap as fitting a tick count until a death total passes.
-
-### ⚠️ Mutation-checking this found that three "obvious" mutations are SOUND
-
-⛔ **Do not read a passing mutation here as a hole in the test.** The bound has a
-deliberate pixel of slack (`6c - 7` where `6c - 6` is tight) *and* the loop gives
-another back (`i += skip - 1`), so the first two pixels of over-skip are still
-correct:
-
-| mutation | result | why |
-|---|---|---|
-| `6c - 5` | **green, and rightly** | still inside the tight bound |
-| `i += skip` | **green, and rightly** | skips to distance `6c - 7`, exactly what is promised |
-| off-mask promises 64 | **green** | unreachable — the walk bounds-checks first, see `WalkmaskLookup.SafeSkipPixels` |
-| **`6c - 4`** — the first genuinely unsafe value | **3 red** | |
-| `12c - 7` | **3 red** | |
-| **`i += skip + 2`** | **2 red** | |
-
-⚠️ **`ObservationWriter`'s own note says a `6c - 5` mutation once passed a test
-written to catch it.** That is the same phenomenon and not a coincidence: the
-constant has margin, so a mutation of ±1 is not a bug and a test that reddened on
-it would be wrong. **The mutation to reach for here is the first value that is
-actually unsound, and it has to be worked out rather than guessed.**
-
-⚠️ **The bound now has two readers and one body**, `Walkmask.SafeSkipPixels`.
-`ObservationWriter.SafeSkipPixels` forwards to it and a test asserts they agree
-across the whole clearance range — because the failure mode of two copies is one
-marcher stepping over a wall, which nothing else in this repo would notice.
-
-### ⛔ The A\* priority queue: replaced, measured, and REJECTED
-
-**The heap is 24% of a search** and was the last large A\* lever on the queue. A
-4-ary min-heap replicating `PriorityQueue<int, double>`'s exact sift semantics —
-same arity, same parent index, same first-minimal-child rule — was written and
-benchmarked on the traffic one search does (475 enqueues, 425 dequeues,
-interleaved as the frontier interleaves them):
-
-| | µs for one search's heap traffic |
-|---|---|
-| `PriorityQueue<int, double>` | 6.50 |
-| hand-written 4-ary | **6.03** |
-
-**−7% of the heap, which is −1.7% of a search and −0.5% of the tick. Not worth
-it.** ✅ **And the pop order was identical**, checksummed over 425,000 dequeues —
-so the semantics *can* be reproduced; there is simply nothing to win.
-⚠️ **.NET's `PriorityQueue` is already a 4-ary heap of 16-byte nodes at about
-7.6 ns an operation**, which is close to the floor for this shape. **Do not spend
-a session here.**
-
-### ✅ `NavRouteIdentityTests` — the gate the nav layer never had
-
-⛔ **Nothing pinned what routes A\* returns.** `NavSearchFixtureTests` asserts
-*properties* — a route is a walkable chain, it starts and ends where it was asked
-to, a team gate takes routes away — and **every one of them holds for a route
-that is not the route this port returns.** The three pinned bot measurements
-cover three legs. Everything else was unguarded.
-
-⚠️ **Equal-cost routes are the normal case here, not a corner case**: half the
-shipped maps are symmetric, so two mirror-image routes of identical cost are
-routine and which one comes back is decided by the order the frontier pops —
-today an implementation detail of `PriorityQueue`.
-
-**A digest of every route over all 25 shipped graphs**, 250 start/goal pairs per
-team per rocket-jump capability, folded into one FNV-1a per graph with the
-found-count beside it. ⛔ **Mutation-checked, and the result is the argument for
-it: expanding a node's edges in reverse order reddens exactly ONE test — this
-one.** The other 2,642 pass. **A failure here is a re-record, and a digest that
-does *not* move when the search was deliberately changed is the alarm.**
-
-### ✅ The solid rects are filtered once per ARC, not once per segment
-
-`CollisionLineBlocksBullets` walks every solid rect on the map and calls
-`CollisionLine.Hits`, which opens with a bounding-box rejection — **but only
-after a `LineCollider` has been built for the rect**, eight fields including two
-`Aabb`s, for a gate on the far side of the map. `BotArc.Clear` runs that loop
-**ten times a shot**, once per segment of the parabola, over the same rect set.
-
-⛔ **Two versions were built and only the second is worth having**, which is the
-part to remember:
-
-| | rect loop, µs a tick | the whole tick |
-|---|---|---|
-| before | 0.603 | — |
-| **hoist only** — reject before building the collider | 0.456 (**−24%**) | **could not be resolved** |
-| **filter once per arc** — `CollisionWorld.BulletRectsIn` | — | **poll −3.8%, tick −2.4%** |
-
-⚠️ **The hoist alone was rejected on the rule that a change the end-to-end A/B
-cannot see does not ship** — six alternations put the arms on top of each other.
-**The arc-level version measures, on the same probe and the same rule: six
-readings an arm, completely non-overlapping on the bot poll** (8.14-8.35 µs
-before, 7.78-7.94 after). The difference is that it removes nine tenths of the
-iterations rather than making each one cheaper.
-
-⛔ **One body throughout.** `CollisionWorld.RectBlocks` decides a rect against a
-segment for both overloads, and `CollisionLine.MightMeet` is the same overlap
-test `Hits` opens with. **The filter is exact because it is conservative**: a
-rect that can meet a segment must overlap any box the segment lies inside, so
-filtering on the box round the whole arc cannot drop a rect that would have
-blocked.
-
-### ⛔ Both of those needed a gate, and neither had one
-
-⚠️ **Mutating the hoist's private copy of the box interval to `bbox_right`
-instead of `bbox_right + 1` left all 2,643 tests GREEN.** A collision quietly
-refused at the edge of a gate is invisible to this suite. Calling
-`CollisionLine`'s own body took the same mutation to **4 red**, under
-`CollisionLineTests`' 9,014-segment oracle. **"One body" is not taste here: the
-duplicate was a drift risk with no test behind it.**
-
-⚠️ **And making `BulletRectsIn` keep only its first rect ALSO left all 2,643
-green.** A bot would shoot happily through a spawn gate, and no fixture covers
-it — the parity traces are recorded firefights, not arcs across a doorway.
-`BulletRectFilterTests` is the gate: 4,000 sampled parabolas a map over three
-maps, each segment asked both ways, with the production no-candidates overload as
-the control. Both mutations now redden it, and it asserts the sweep is not
-degenerate — some segment must be blocked by a **rect alone**, and the filter
-must actually be narrowing the set.
-
-### ✅ A\* gives up optimality on purpose — the largest win in the layer
-
-**Landed 2026-09-02**, and unlike everything above it this one **changes what the
-bots do**. It is allowed to: CLAUDE.md puts `src/Gg2.Bots/` outside "the
-reference is the specification", and the user asked for the speed.
-
-Two halves, and **they only work together**:
-
-- **A closed node is never revisited.** `navFindPath.gml` re-opens one when a
-  cheaper route arrives, because the straight-line heuristic is admissible but
-  not *consistent*. Skipping is what makes each node cost one expansion.
-- **The heuristic is inflated by `NavConstants.SearchWeight` = 1.3**, so the
-  frontier commits toward the goal sooner.
-
-⛔ **Inflating WITHOUT the closed-set skip makes the search SLOWER, which is the
-opposite of the textbook result.** Measured: at weight 1.5 it popped **636 nodes
-against 408** at weight 1.0. An inconsistent heuristic re-opens far more, and
-every re-open is a re-expansion — so the weight cannot be added on its own.
-
-| | before | after | |
-|---|---|---|---|
-| the bots' `Poll` | 7.97 µs | 6.46 | **−18.9%** |
-| the whole tick | 13.91 | 12.24 | **−12.0%** |
-
-### ⛔ How the operating point was chosen, and every instrument that could not choose it
-
-✅ **Completeness first, because it is the one property that must not move**: the
-found-counts over all 25 shipped graphs are **identical, 19,468 routes**. Nothing
-that had a route lost one. Only *which* route changed — 23 of the 25
-`NavRouteIdentityTests` digests moved.
-
-⛔ **The statistic that chose 1.3 is the SUITE TOTAL: summed walking time over
-`ScenarioSuiteTests`' fourteen legs.** It is the only aggregate available, and
-every per-leg number is noise around it:
-
-| weight | suite total, ticks | rocket jumps | legs failing |
-|---|---|---|---|
-| 1.0, re-opening (before) | 6,259 | 6 | 0 |
-| 1.0, closed-set skip | 6,261 | 6 | 0 |
-| 1.05 / 1.1 / 1.2 | 6,234 / 6,255 / 6,306 | 6 / 7 / 7 | 0 |
-| **1.3** | **6,142** | **6** | **0** |
-| 1.5 | 6,416 (**+2.5%**) | 9 | 0 |
-
-**A ±2% band that does not move in one direction, and no leg fails at any weight
-tried.** 1.5 is where it starts to cost.
-
-⚠️ **Three instruments were tried and are useless for choosing, which is worth
-more than the choice:**
-
-- **Two single-leg pins disagree at 1.3, in opposite directions.**
-  `BotObjectiveTests`' intel run got *better* on all three of its counters —
-  1,697 → 1,598 ticks, 48 → 32 re-plans, 18 → 10 off-route fires — while
-  `PathFollowerFixtureTests`' leg got *worse*: 1,572 → 1,786 ticks, 33 → 39
-  re-plans, 4 → 10 off-route. **Both are one leg. Neither is evidence.**
-- ⛔ **The suite's rocket-jump count is NOT MONOTONE in the weight**: 6 at 1.0,
-  **7 at 1.2, 7 at 1.25, 6 again at 1.3, 7 at 1.35**, then 9 at 1.4, 9 at 1.5, 12
-  at 1.7. It wobbles inside a band before it steps. **A weight picked because the
-  count landed on 6 is fitted to noise** — an early draft of this change picked
-  1.2 for exactly that reason, on a value never actually measured.
-- **`eval` over all 23 maps cannot separate any of it.** Unfinished matches 3 /
-  2 / 2 / 3 and drawn 28 / 30 / 31 / 28 at weights 1.0 / 1.0-skip / 1.3 / 2.0.
-  ⚠️ **That is not a clean bill of health** — both teams get the same nav, so a
-  change that made every bot worse is invisible to a symmetric outcome. It is
-  reported because "the outcome tests did not complain" is exactly the reasoning
-  CLAUDE.md warns about, and it is why 2.0 was rejected on route inflation
-  (**+18.8%** mean, worst 4.5×) rather than on anything `eval` said.
-
-⚠️ **`SIM_UUID` moved, `5dac8a5e7c37ce3a` → `9de9dc341dd95af9`, and that was
-correct at the time.** `NavConstants` was inside the stamp, so a policy trained
-against the old nav layer was dated by this.
-
-⛔ **That reasoning was REVERSED on 2026-09-03 and the stamp is now
-`9e0d931e1106a1bf`.** `gg2-rl` reported being stranded twice in two days by nav
-edits their own world fingerprint said had changed nothing, and they were right:
-nav constants change *which states a policy is asked about*, not *what any action
-does*. `NavConstants` moved to `SimulationStamp.RoutingUuid` — reported on every
-policy load and by `BENCH_CONST`, never gated. A distribution shift is a reason
-to re-measure, not a reason to refuse to run. `SimulationStamp`'s remarks carry
-the line, and `BotConstants` is arguably the same question and deliberately not
-moved. The only checkpoint that exists was
-already stamp-invalid and is a test fixture, so it costs nothing today.
-
-⚠️ **`NavSearchTests`' re-open fixture is kept and INVERTED** rather than deleted.
-On its adversarial graph the optimal route costs 102 and this search now returns
-one costing 140 — 37% worse. That is the largest loss the change can produce, and
-it is worth having written down next to the 0.6% it costs on the shipped graphs.
-
-### Still on the table, measured and not taken
-
-- **`PlaceFree`'s rect scan is fine.** It is a linear pass over every solid
-  rectangle, and the worst shipped map has **13** (`ctf_conflict`). The comment
-  claiming "small and rarely more than a dozen, so a linear scan beats any index"
-  is accurate — checked, not assumed.
-- **`stackalloc ProjectileHandle[512]` costs 18 ps a call** even zeroed, against a
-  3.7 µs tick. There is no `SkipLocalsInit` in this repo and it would buy nothing
-  here. ⚠️ Recorded so the next reader does not chase it: the four 512-element
-  stackallocs look alarming and are not.
-- ⛔ **`RolloutSearch`'s 64-slot opponent loop: MEASURED at 1.1%, and rejected.**
-  43.4 ns a simulated tick, so 52 µs of a 4,795 µs decision. ⚠️ Its share rises
-  slightly as the tick gets cheaper — re-measure before rejecting it a second time. ⚠️ **The safe version
-  saves less than that**, because skipping dead slots is *not* equivalent: today
-  they are written `PlayerInput.None` every tick, and a slot that dies mid-rollout
-  — or respawns inside the horizon — would otherwise keep its last live input.
-  Preserving that means clearing what just died, which costs about what the loop
-  costs. **1% is not worth a silent, rare divergence in what the search decides.**
-- ⛔ **Memoising the last mask query: 17-19% hit rate in a real match, rejected.**
-  ⚠️ **This said 43.9% for a day and that number was wrong** — it was taken on a
-  `ScenarioWorld` whose characters were standing still, which is not a workload.
-  Re-measured 2026-09-02 over 2,940 ticks of real bot matches: **19.2%**
-  (`ctf_truefort`), **17.3%** (`ctf_2dfort`), **18.6%** (`koth_valley`). At 8.8 ns
-  a mask test the gross ceiling is ~1.6 ns against a ~1 ns compare paid on every
-  call — **a wash.** ⚠️ **The thread-safety objection recorded with the old number
-  was also wrong**: a `[ThreadStatic]` memo keyed on the `Walkmask` reference is
-  sound across workers and across forks, because the mask is immutable and gates
-  live in `_rects`. The hit rate is the reason, not the threading.
-- **`WorldState` is 156,624 bytes against `ACloneStaysWithinItsBudget`'s 160 KB
-  ceiling — 98%.** ⛔ **One ordinary field away from red**, and worth knowing
-  before somebody adds one and reads the failure as a surprise.
+## Performance-sensitive design decisions
+
+These are current facts about where the tick's cost lives and the design
+choices that follow from it. ⚠️ **Any absolute number here is a wall-clock
+figure on one machine (Release, net10.0, 24-core box, `ctf_truefort`) and decays
+— re-measure with `tools/bench/` before quoting one; what survives is the
+shape.** `tools/bench/README.md` has the measurement traps.
+
+- **The tick cost is per live character, not per roster slot.** The population
+  loop iterates `MaxSlots` (64) mostly-empty entries; that is not worth
+  compacting — the fixed per-tick overhead is small next to the per-character
+  cost.
+- **`PlaceFree` is the leaf and the crawl is the multiplier.**
+  `Movement.GoodMoveContactSolid` (the GM8 "crawl") asks `PlaceFree` once per
+  pixel of travel, which is why the walkmask layout above was chosen: the cost
+  is the call count, not the call. `Movement.GoodMoveContactSolid` deliberately
+  stops when a step leaves both coordinates unchanged rather than looping
+  forever — see "Non-negotiables" in `CLAUDE.md` and `docs/TRAPS-SIMULATION.md`,
+  "the crawl that could not finish". A binary search on the crawl is unsound:
+  the free/blocked predicate along a path is not monotone (a character can pass
+  a pillar and land in open space beyond it), so only a *conservative* pre-test
+  is safe. A swept-AABB pre-test of this kind was built and is bit-identical,
+  but it clears only ~1-3% of crawls — gravity puts the destination inside the
+  floor on almost every grounded tick — so it is not worth carrying.
+- **`Walkmask.AnySolidInBox` is a table lookup for common character-box shapes**,
+  one bit read instead of a word scan per row. A character box's cell rectangle
+  is fixed by its pixel size and phase, so each class produces at most two
+  widths and two heights; a handful of tabulated shapes (3×6, 4×6, 3×7, 4×7,
+  plus Pyro's 3×5/4×5) covers the great majority of real-match mask queries.
+  The table is at **cell** resolution — the same footprint as the mask itself —
+  because a per-pixel table would not fit in cache. `WalkmaskBoxTests` mutation-
+  checks the tabulated shapes against every legal position on three maps, and
+  `IsTabulatedShape` is public so a test can assert the tabulated set matches
+  what real boxes actually produce (a table nothing reaches would otherwise be
+  green and slow).
+- **`CollisionLine.Walk` (the hitscan/line-of-sight walker) skips open ground.**
+  It samples the mask once per pixel of the segment (GM8's own rule, not
+  negotiable), but `Walkmask.Clearance` lets a sample standing on a cell of
+  clearance `c` advance `6c - 7` pixels, since every pixel that close is known
+  to be open. This matters most for `BotArc.Clear` (a soldier/demoman testing a
+  rocket's ballistic line of sight across mostly-empty air) and also speeds up
+  sentries and hitscan weapons. `CollisionLineSkipTests` is the gate — the
+  parity fixtures do not cover it, since a hitscan in a recorded trace is a
+  short line in a firefight and the skip only engages over open ground.
+- **`CollisionWorld.BulletRectsIn` filters solid rects once per ballistic arc**,
+  not once per segment, using a bounding box around the whole arc; `BotArc.Clear`
+  otherwise re-walks the full rect set for each of ten segments per shot. The
+  filter is exact because it is conservative: a rect that can meet a segment
+  must overlap the box around the whole arc. `BulletRectFilterTests` gates it —
+  the parity fixtures do not cover firing across a doorway.
+- **`ScenarioResources.Shared` caches decoded maps and parsed nav graphs by map
+  name, process-wide.** `LevelMap` and `NavGraph` are `init`-only and safe to
+  share; `CollisionWorld` and `SpawnPoints` are NOT shared and are rebuilt per
+  match (`CollisionWorld.SetCaptureZones` mutates it) — `SharedMapDataTests`
+  gates the split both ways. The cache is never invalidated, which is correct
+  for a batch runner (`HeadlessMatch`) and would be wrong for the live server;
+  `GameServer` does not use this path and calls `LevelMap.FromPng` on every map
+  rotation, deliberately, so an edited map on disk is picked up.
+- **A\* deliberately gives up optimality.** `NavSearch` never re-opens a closed
+  node (the reference's `navFindPath.gml` does, because the straight-line
+  heuristic is admissible but not consistent) and inflates the heuristic by
+  `NavConstants.SearchWeight = 1.3`, so the frontier commits toward the goal
+  sooner. The two only work together — inflating the heuristic without the
+  closed-set skip makes the search slower, not faster, because an inconsistent
+  heuristic re-opens far more nodes. This is a behaviour change (not just a
+  speed win) and is allowed: `CLAUDE.md` puts `src/Gg2.Bots/` outside "the
+  reference is the specification". Route *completeness* is unaffected (every
+  reachable goal still finds a route); only which equal-or-near-cost route comes
+  back can differ. `NavRouteIdentityTests` digests every route over all shipped
+  graphs to catch a routing regression, since `NavSearchFixtureTests`' property
+  assertions (walkable chain, correct endpoints, gate rules) hold for many
+  possible routes, not just the one this port returns. `NavConstants` (this
+  weight included) is part of `SimulationStamp.RoutingUuid`, tracked separately
+  from the physics `SIM_UUID`, because a nav change shifts *which states* a
+  policy is asked about without changing what any action does.
+- **The A\* priority queue is .NET's stock `PriorityQueue<int, double>`.** A
+  hand-written 4-ary heap replicating its exact sift semantics was built and
+  measured faster, but by an amount not worth a second implementation of the
+  routability rule.
+- **`WorldState` is a value type, sized close to its test ceiling.**
+  `ACloneStaysWithinItsBudget` caps a clone at 160 KB; the struct is currently
+  156,624 bytes. A `RolloutSearch` decision clones `WorldState` once per
+  candidate tick (candidates × horizon), so the struct's size is on the hot
+  path for search-based bots, though the simulation tick itself (not the clone)
+  dominates a rollout's cost.
+- **`dotnet-trace`'s sampling profiler is unreliable on this workload** and has
+  repeatedly misattributed cost to runtime helpers (`memset`/`memmove`-shaped
+  code) rather than to where the time actually is. Use it only to pick which
+  method to look at; size a change with in-process `Stopwatch` stage timers
+  (checked by summing to what an outer timer reads) and confirm any change with
+  an interleaved A/B, not a single before/after pair — machine drift is
+  otherwise indistinguishable from a real change of a few percent.
 
 ## Bots: the actual point of the project
 
 Bots are already, in the reference, just players whose `keyState` is written by
 code instead of arriving on a socket (`Scripts/Bots/botInputUpdate.gml`). That
-is the seam, and **it is built** (phase 7 item 1):
+is the seam, and it is built (phase 7 item 1):
 
 ```csharp
 public interface IInputSource {
@@ -973,7 +230,7 @@ public interface IInputSource {
 `Gg2.Server.NetworkInputSource`, `GameServer.GatherInputs` / `ServiceBots` /
 `AddBot` / `RemoveBot`. Gated by `InputSourceTests` and `WorldViewTests`.
 
-**It is a transcription of a shape the reference already has.**
+It is a transcription of a shape the reference already has:
 `GameServerBeginStep.gml:79-85` calls `botInputUpdate(player)` in exactly the
 position, and in the same roster loop, that it calls
 `processClientCommands(player, i)` for a socket. The port keeps that: one input
@@ -1014,10 +271,10 @@ gather over the whole roster, one set of command handlers, one roster.
 
 - **The batched shape is wired at the call site, not just declared.**
   `GatherInputs` groups slots by source *identity* and calls
-  `IBatchInputSource.PollMany` once with all of them. docs/BOTAI.md item 5 asks
-  for the interface; the grouping is here because that item's warning is about
-  the call site — "adding it after every call site assumes per-slot polling is a
-  wide change".
+  `IBatchInputSource.PollMany` once with all of them. `docs/BOTAI.md` item 5
+  asks for the interface; the grouping is here because that item's warning is
+  about the call site — "adding it after every call site assumes per-slot
+  polling is a wide change".
 
 ### Two divergences from the reference, both deliberate
 
@@ -1036,8 +293,7 @@ gather over the whole roster, one set of command handlers, one roster.
   replays an existing roster in, and then `alarm[5] = 1` for anything but a
   spectator.
 
-A network client and a bot are both an `IInputSource`. Consequences worth
-having, and now available:
+A network client and a bot are both an `IInputSource`. Consequences of that:
 
 - Bot logic is testable without a server, a socket or a client.
 - A bot can be swapped, A/B'd, or run at a different think-rate per slot.
@@ -1051,40 +307,31 @@ every bot every tick. Compiled C# on the same work should leave one to two
 orders of magnitude of budget, which is what buys real pathfinding, prediction
 and coordination instead of the current per-tick approximations.
 
-✅ **Measured 2026-08-27, and it is phase 7's exit criterion: twelve bots cost
-0.151ms of a 33.3ms tick — 0.5% of the budget.** 600 steady-state ticks of a real
-server on `ctf_truefort`, with the population manager, twelve policies each
-planning and fighting, the whole simulation, the state serialiser and the
-broadcast in the loop. `BotPopulationTests.TwelveBotsRunWellUnderTheTickBudget`.
-
-⚠️ **That is a Release measurement and the build matters: the same test in the
-default Debug build reads 0.307ms, 0.9%.** Twice the cost, so a re-measure that
-forgets to say which build it ran looks like a regression that is not one. The
-test's own bound is a quarter of the budget, which both builds clear comfortably,
-because the claim is an order of magnitude rather than a digit and a CI machine
-under load is not a benchmark.
+✅ **Phase 7's exit criterion: twelve bots cost 0.151ms of a 33.3ms tick — 0.5%
+of the budget** (Release; 0.307ms/0.9% in Debug — always say which build). 600
+steady-state ticks of a real server on `ctf_truefort`, with the population
+manager, twelve policies each planning and fighting, the whole simulation, the
+state serialiser and the broadcast in the loop.
+`BotPopulationTests.TwelveBotsRunWellUnderTheTickBudget`.
 
 ⚠️ **That measures this port's cost, not the ratio to GM8.** Nobody has
-benchmarked the reference's bot layer here, so the "one to two orders of
-magnitude" above is still a design intention — what the number establishes is
-that a bot can be made roughly two orders of magnitude heavier before the tick
-is at risk, which is the claim the project actually needs.
+benchmarked the reference's bot layer here, so "one to two orders of magnitude"
+above is a design intention — what the number establishes is that a bot can be
+made roughly two orders of magnitude heavier before the tick is at risk, which
+is the claim the project actually needs.
 
-Two things to carry over rather than reinvent:
+Two things carried over rather than reinvented:
 
-- **The nav graph generator already lives outside the game**, and the port
-  **reads its cache** (phase 7 item 2): `gg2-nav-gen` builds
-  `botnav/<map>_a<area>.txt` offline — kept in this repo's gitignored `nav/`
-  since 2026-09-01, previously in the reference tree — and `Gg2.Bots.NavCache` loads it
-  and `Gg2.Bots.NavGraph` is the model, with the coordinate conversions, the
-  node lookup, the gate rules and the two indices `navCacheLoad.gml` derives
-  rather than stores. Moving *generation* into `Gg2.Bots` is a natural
-  consolidation later; it is not done and is not needed.
-  ⚠️ `gg2-agent/tools/navgraph.js` documents the format and is right about it —
-  including the non-obvious `ds_grid_write` column-major layout with
-  sixteen-byte cells — but it **floors the feet row where the game rounds it**,
-  which is a whole row on stepped terrain. docs/TRAPS-BOTS.md, "the nav cache reader",
-  has that and the rest of the traps.
+- **The nav graph generator lives outside the game**, and the port **reads its
+  cache** (phase 7 item 2): `gg2-nav-gen` builds `botnav/<map>_a<area>.txt`
+  offline — checked into this repo's `nav/` (gzipped) — and `Gg2.Bots.NavCache`
+  loads it and `Gg2.Bots.NavGraph` is the model, with the coordinate
+  conversions, the node lookup, the gate rules and the two indices
+  `navCacheLoad.gml` derives rather than stores. Moving *generation* into
+  `Gg2.Bots` is a natural consolidation later; it is not done and is not
+  needed. `docs/TRAPS-BOTS.md`, "the nav cache reader", has the format traps
+  (including the column-major `ds_grid_write` layout and the feet-row rounding
+  direction).
 - **The `BOT_*` constants** in `Gang-Garrison-2/Source/gg2/Constants.xml` are a
   tuned set with real playtesting behind them. Port the values even if the
   algorithms get rewritten.
@@ -1102,8 +349,8 @@ Two things to carry over rather than reinvent:
 ⚠️ **`ServerGarbageCollection` is the wrong shape for a small VPS and is left on
 anyway.** Server GC sizes heaps per core for throughput; the tick loop is
 single-threaded and latency-sensitive, so `DOTNET_gcServer=0` is the plausible
-setting there. It stays on here because the difference was **measured and was
-not there** — under 3 MB of working set, no pause-time difference looked for or
+setting there. It stays on here because the difference was measured and was
+not there — under 3 MB of working set, no pause-time difference looked for or
 found. `docs/DEPLOY.md`, "Garbage collection", has the numbers and says what
 would settle it.
 
@@ -1111,52 +358,43 @@ Native AOT is attractive for startup and memory but not required; revisit once
 the thing runs. Do not enable any fast-math-equivalent switch — there isn't one
 in .NET, which is part of why C# is a reasonable choice here.
 
-### ⚠️ The TFM moved 9.0 → 10.0 on 2026-09-02, and what that proved
+### The target framework is net10.0
 
-**The whole suite was green on both** — 2,601 passing, including every parity
-fixture and all three pinned bot measurements. The absence of a fast-math switch
-is what makes a runtime bump defensible here at all.
+The machine-wide .NET install carries runtimes 6.0, 8.0 and 10.0 and **no
+9.0**, so a net9.0 build can only run from a user-local SDK that is not on
+`PATH` — both `dotnet test` and a directly launched `.exe` fail in ways that
+look like anything but a missing runtime. If those symptoms come back, check
+the TFM first.
 
-⚠️ **What it establishes is "no observable difference", not "bit-identical
-doubles".** The wire quantises position to 1/5 px and velocity to 1/8.5, so a
-*sub-quantum* floating-point change would not show in a closed-loop fixture at
-all. `ClientPredictionGateTests` pins p99 open-loop drift to exact integers over
-long windows and did not move either, which is the tightest instrument there is —
-but it is still a bound, not a proof.
+⚠️ **`SIM_UUID` does NOT cover the runtime.** `SimulationStamp.Lines()` digests
+constants and version numbers only, deliberately, so a stamp does not move
+between runtimes for nothing — which also means a runtime that *did* change the
+physics would go on asserting the same simulation. **The parity fixtures are
+the only thing that would catch that.** Re-run them on any runtime change; the
+stamp will not do it for you. The wire quantises position to 1/5 px and
+velocity to 1/8.5, so a sub-quantum floating-point difference between runtimes
+would not show in a closed-loop fixture at all — `ClientPredictionGateTests`,
+which pins p99 open-loop drift to exact integers over long windows, is the
+tightest instrument available, but it is still a bound, not a proof.
 
-⛔ **`SIM_UUID` does NOT cover the runtime.** `SimulationStamp.Lines()` digests
-constants and version numbers only, and deliberately so: its own comment says a
-stamp depending on reflection order "would move between runtimes for nothing". So
-a runtime that *did* change the physics would go on asserting the same
-simulation, and `gg2-rl`'s checkpoint guard would not notice. **The parity
-fixtures are the only thing that would.** Re-run them on any runtime change; the
-stamp will not do it for you.
+## The control surface
 
-⚠️ **The practical reason the move happened**: the machine-wide install carries
-runtimes 6.0, 8.0 and 10.0 and **no 9.0**, so a net9.0 build could only be run by
-a user-local SDK that is not on `PATH`. Both `dotnet test` and a directly
-launched `.exe` failed in ways that look like anything but a missing runtime.
+A C# server does not need injection the way `gg2-agent` needs one to drive the
+GM8 game: it exposes the same capabilities as a small local-only TCP/JSON
+control port, or an in-process API when hosting the sim from a test.
 
-## The control surface — built, 2026-08-27
+Available: read live state, step N ticks, run until a condition, set bot count,
+change map, teleport, freeze/resume, run faster than real time. That last one
+is nearly free here — the tick loop simply stops sleeping — and is the single
+biggest iteration win over the GM8 setup.
 
-`gg2-agent` drives the GM8 game through an injected bridge because there was no
-other way in. A C# server does not need injection: expose the same capabilities
-as a small local-only TCP/JSON control port, or an in-process API when hosting
-the sim from a test.
-
-Worth having, roughly in the order the existing tooling found them useful: read
-live state, step N ticks, run until a condition, set bot count, change map,
-teleport, freeze/resume, run faster than real time. That last one is nearly free
-here — the tick loop simply stops sleeping — and is the single biggest iteration
-win over the current setup.
-
-Keep it **loopback-only and off by default**, for the same reason the GM8 bridge
+It is **loopback-only and off by default**, for the same reason the GM8 bridge
 is: it executes commands against a live game.
 
-✅ **Built: `ControlPort`, behind `gg2-server --control-port <n>`.** One JSON
-object per line, answered by one per line — enough for `nc`, a test or a script,
-with no schema to negotiate. `ping`, `state`, `freeze`, `resume`, `step`,
-`speed`, `bots`, `map`, `teleport` and `command`.
+✅ **`ControlPort`, behind `gg2-server --control-port <n>`.** One JSON object
+per line, answered by one per line — enough for `nc`, a test or a script, with
+no schema to negotiate. `ping`, `state`, `freeze`, `resume`, `step`, `speed`,
+`bots`, `map`, `teleport` and `command`.
 
 ⚠️ **It binds `IPAddress.Loopback`, not `Any`.** There is no configuration in
 which it is reachable from the network, and that is a property of the bind
@@ -1173,8 +411,7 @@ around it keeps running.** A freeze that skipped the whole tick would stop
 servicing sockets, so a frozen server would drop the clients it was frozen to
 inspect and stop answering the port that froze it: the freeze would be permanent
 and would read as a hang. Gated by joining a client *while frozen*, which needs
-the accept, the joining state machine and the flush all still running — the
-weaker version of that test passed the mutation it claimed to catch.
+the accept, the joining state machine and the flush all still running.
 
 ⚠️ **Anything a client can also do goes through `Execute(RosterEntry,
 PlayerCommand)`** — the `command` verb — rather than being reimplemented.
@@ -1182,57 +419,52 @@ CLAUDE.md's "three places" rule, honoured by not adding a fourth. What is
 control-port-only is the operator actions no client can ask for: freeze, step,
 teleport, map change, bot count, speed.
 
-### Linux and containers — audited 2026-09-03, not yet run
+### Linux and containers
 
-⚠️ **This project has only ever been run on Windows.** The audit below is a
-source review plus a clean `dotnet publish -c Release -r linux-x64` — which,
-with warnings-as-errors and the platform-compatibility analyser, is what catches
-an unguarded Windows API. ⛔ **Compiling for a RID is not running on it.** Say so
-before quoting any of this as "Linux support".
+⚠️ **This project has only ever been run on Windows.** The audited baseline is
+a source review plus a clean `dotnet publish -c Release -r linux-x64` —
+warnings-as-errors and the platform-compatibility analyser catch an unguarded
+Windows API — but **compiling for a RID is not running on it**; say so before
+quoting any of this as "Linux support".
 
 - ✅ **Exactly one file in `src/` is Windows-only**: `TimerResolution`, a
   `winmm.dll` P/Invoke, already guarded by `OperatingSystem.IsWindows()` and a
   no-op elsewhere. `Web/SystemInfo.cs` adds two guarded branches (the CPU
   registry read and `GlobalMemoryStatusEx`) and nothing else in the tree
   P/Invokes at all.
-- ⚠️ **The pacing loop's behaviour is genuinely different and untested.** On
-  Windows it raises the timer to 1 ms because a wait rounds up to the 15.6 ms
-  quantum — measured: 15% of ticks arrived ~14 ms late without it. Linux has no
-  such knob; its granularity is the kernel's. The late-tick rate on Linux is
-  unknown and is the first thing to look at on a real run.
-- ✅ **`nav/` travels with a publish, since 2026-09-03.** `Gg2.Host.csproj`
-  copies `maps/*.png` and `nav/*` alike, and a published directory is 2.9 MB.
-  ⛔ **It did not until then**, behind a `-p:PublishNav=true` that a deployment
-  had to know to pass, so the default publish produced a server whose bots
-  **fight but do not walk**. The 35 MB that justified the flag was the working
-  tree's figure; git had been storing ~1.1 MB, and gzipping the container made
-  the two agree. docs/DEPLOY.md, "the nav graphs".
+- ⚠️ **The pacing loop's behaviour is genuinely different and untested on
+  Linux.** On Windows it raises the timer to 1 ms because a wait rounds up to
+  the 15.6 ms quantum — measured: 15% of ticks arrived ~14 ms late without it.
+  Linux has no such knob; its granularity is the kernel's. The late-tick rate
+  on Linux is unknown and is the first thing to look at on a real run.
+- ✅ **`nav/` travels with a publish.** `Gg2.Host.csproj` copies `maps/*.png`
+  and `nav/*` alike, with no flag needed; a published directory is 2.9 MB.
 - ⚠️ **Case-sensitive filesystems** make `MapExists` stricter than it is on
   Windows: a map name typed with the wrong case resolves there and not here.
 - ⚠️ **`Environment.TickCount64` is a monotonic clock, not the OS uptime.** On
   Linux it is `CLOCK_MONOTONIC` and does not count time suspended, which is why
   `SystemInfo` reads `/proc/uptime` where it exists.
 
-### And a second transport for it — built, 2026-09-03
+### A second transport: the web admin panel
 
 ✅ **`gg2-server --web <port>` hosts an admin panel in a browser**, and it is the
 only surface in this project meant to be reachable from the network.
 **`docs/WEBADMIN.md`** is the subject file: the flags, the auth model, the HTTP
 subset, the endpoints and what the panel deliberately does not do.
 
-⛔ **Every verb moved to `ControlCommands`, and both surfaces are now transport.**
-The control port and the panel cannot drift into two slightly different control
-surfaces because there is one dispatch, one set of replies and one set of error
-messages. `kick` is the one verb the panel added and the control port gained it
-for free.
+⛔ **Every verb goes through `ControlCommands`; both surfaces are transport
+only.** The control port and the panel cannot drift into two slightly different
+control surfaces because there is one dispatch, one set of replies and one set
+of error messages. `kick` is the one verb the panel added, and the control port
+gained it for free.
 
 ⚠️ **The panel does NOT service its sockets from inside `Tick`, and the
-difference from the control port is deliberate.** A control-port client is a tool
-on loopback; a panel client is across a network and may be slow, hostile, or a
-phone that went into a tunnel mid-reply, and writing to it from the tick thread
-would let it stall the simulation for every player on the server by not reading.
-Instead the socket threads touch nothing: commands are queued and drained by
-`Pump` on the tick thread, and reads are answered from a JSON snapshot the tick
-thread republishes — and only while a browser is actually watching, which
-`WebAdminTests.NobodyWatchingMeansNoSnapshots` gates rather than asserting in a
-comment.
+difference from the control port is deliberate.** A control-port client is a
+tool on loopback; a panel client is across a network and may be slow, hostile,
+or a phone that went into a tunnel mid-reply, and writing to it from the tick
+thread would let it stall the simulation for every player on the server by not
+reading. Instead the socket threads touch nothing: commands are queued and
+drained by `Pump` on the tick thread, and reads are answered from a JSON
+snapshot the tick thread republishes — and only while a browser is actually
+watching, which `WebAdminTests.NobodyWatchingMeansNoSnapshots` gates rather than
+asserting in a comment.

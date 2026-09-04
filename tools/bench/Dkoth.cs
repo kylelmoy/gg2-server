@@ -8,10 +8,10 @@ namespace Bench;
 /// Does dual King of the Hill decide at ANY limit?
 /// </summary>
 /// <remarks>
-/// ⚠️ Raised by `gg2-rl`: if two shipped modes never produce a decided match,
-/// that is a gg2-server finding independent of any policy — the same shape as the
-/// arena rounds that ended a tick after starting and reported clean wins for two
-/// phases. All-scripted on both sides, so nothing here is about the policy.
+/// If these two shipped modes never produce a decided match, that is a
+/// gg2-server finding independent of any policy — the same shape as an arena
+/// round ending a tick after starting and reporting a clean win. All-scripted
+/// on both sides, so nothing here is about the policy.
 /// </remarks>
 public static class DkothProbe
 {
@@ -45,8 +45,8 @@ public static class DkothProbe
                     if (match.Result.Outcome == MatchOutcome.Decided)
                         decided++;
 
-                    // How far either team got toward the 180s hold: the timers
-                    // count DOWN from KothHoldTicks.
+                    // How far either team got toward the hold: the timers count
+                    // DOWN from KothHoldTicks.
                     var held = Rounds.KothHoldTicks
                         - Math.Min(match.State.RedTimer, match.State.BlueTimer);
 

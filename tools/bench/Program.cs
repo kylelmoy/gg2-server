@@ -135,9 +135,9 @@ if (Environment.GetEnvironmentVariable("BENCH_CONST") == "1")
     Console.WriteLine($"ActionDecoder.AimBins   = {ActionDecoder.AimBins}");
     Console.WriteLine($"SimulationStamp.Uuid    = {Gg2.Simulation.SimulationStamp.Uuid}");
 
-    // ⚠️ The un-gated half. NavConstants left the gating surface 2026-09-03, so
-    // gg2-rl reads BOTH here: the first says whether a checkpoint is refused, the
-    // second says whether the world it was fitted to has moved underneath it.
+    // The un-gated half. gg2-rl reads BOTH here: the first says whether a
+    // checkpoint is refused, the second says whether the world it was fitted to
+    // has moved underneath it.
     Console.WriteLine(
         $"SimulationStamp.Routing = {Gg2.Simulation.SimulationStamp.RoutingUuid} (reported, not gated)");
     Console.WriteLine($"ActionEncodingVersion   = {Gg2.Simulation.SimulationStamp.ActionEncodingVersion}");
@@ -232,10 +232,10 @@ var stride = ObservationWriter.Length;
 var obs = new float[worlds * 2 * stride];
 var reply = new byte[1 + 4 + (obs.Length * 4) + (worlds * 2 * EnvProtocol.ComponentBytes)];
 
-// ⚠️ Warm to TIER-1, not just "a few iterations". .NET promotes at 30 calls but
-// the rejit is asynchronous: a 200-round warmup at one world measured 23 us a
-// tick where the same code at 64 worlds measured 2.8, because the small run
-// never left tier-0. Warm by world-steps, and give the background JIT a moment.
+// Warm to TIER-1, not just "a few iterations". .NET promotes at 30 calls but
+// the rejit is asynchronous: a 200-round warmup at one world measures 23 us a
+// tick where the same code at 64 worlds measures 2.8, because the small run
+// never leaves tier-0. Warm by world-steps, and give the background JIT a moment.
 var warmRounds = Math.Max(200, 60_000 / worlds);
 for (var w = 0; w < warmRounds; w++)
 {

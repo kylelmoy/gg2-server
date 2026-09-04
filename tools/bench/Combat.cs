@@ -11,32 +11,30 @@ namespace Bench;
 /// each other.
 /// </summary>
 /// <remarks>
-/// ⛔ <b>The first SECONDS of this process run 5-30x slow, and it is NOT the
+/// <b>The first SECONDS of this process run 5-30x slow, and it is NOT the
 /// JIT.</b> A settled match on this box is ~12 us a tick; the first ~15,000
 /// ticks read 50-260, with every region scaling together and the A* call count
-/// unchanged — a clock or scheduler ramp, reproducible across runs. The
-/// README's trap 3 (tier-1 promotion, ~200,000 iterations) and trap 8 (the
-/// first row of a ladder) do not cover it: this outlasts both by an order of
-/// magnitude in wall clock, and a mode that warmed by a tick count would report
-/// the ramp as its measurement. So the warm-up here is a <b>stability test on
+/// unchanged — a clock or scheduler ramp, reproducible across runs. This
+/// outlasts JIT tier-1 promotion (~200,000 iterations) by an order of
+/// magnitude in wall clock, so warming by a tick count would report the ramp
+/// as the measurement. The warm-up here is instead a <b>stability test on
 /// wall time</b> — whole matches until three consecutive ones agree within 8% —
 /// and <c>settled=</c> says whether it ever got there rather than assuming it.
-/// ⚠️ <b>A number from a run printing <c>settled=False</c> is the ramp.</b>
+/// <b>A number from a run printing <c>settled=False</c> is the ramp.</b>
 /// <para>
-/// ⚠️ <b>Report the MINIMUM across matches, not the mean.</b> Everything this
+/// <b>Report the MINIMUM across matches, not the mean.</b> Everything this
 /// mode competes with on the machine moves the number one way, so the mean is a
 /// measure of what else was running. The median is printed beside it so the two
 /// can be compared; when they disagree by more than a few percent the box was
 /// busy and the run should be repeated.
 /// </para>
 /// <para>
-/// ⛔ <b><c>searches</c> is the quantity to change, and <c>goals</c> says which
-/// half of it moved.</b> Measured 2026-09-02, twelve bots on
-/// <c>ctf_truefort</c>: 321 searches a thousand ticks, of which <b>181 are a
-/// goal reissue</b> (<see cref="BotPathState.GoalsSet"/> — <c>SetGoal</c> arms
-/// an immediate re-plan), 97 the re-plan timer and 43 a lost route. A change
-/// that moves the cadence and not the objective layer is working on the
-/// smaller half.
+/// <b><c>searches</c> is the quantity to change, and <c>goals</c> says which
+/// half of it moved.</b> On twelve bots on <c>ctf_truefort</c>: 321 searches a
+/// thousand ticks, of which <b>181 are a goal reissue</b>
+/// (<see cref="BotPathState.GoalsSet"/> — <c>SetGoal</c> arms an immediate
+/// re-plan), 97 the re-plan timer and 43 a lost route. A change that moves the
+/// cadence and not the objective layer is working on the smaller half.
 /// </para>
 /// </remarks>
 public static class CombatBench
@@ -70,7 +68,7 @@ public static class CombatBench
         var options = HeadlessMatchOptions.Default with { Map = map };
         var match = HeadlessMatch.Load(options, maps, nav);
 
-        // ⚠️ Whole matches, not ticks: a match is the unit whose cost is stable,
+        // Whole matches, not ticks: a match is the unit whose cost is stable,
         // and the ramp above is what makes a tick count the wrong warm-up.
         var recent = new double[3];
         var settled = false;

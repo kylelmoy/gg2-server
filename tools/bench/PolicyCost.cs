@@ -9,24 +9,22 @@ namespace Bench;
 /// What one policy forward pass costs in this process.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>Asked for by `gg2-rl` as a MEASUREMENT rather than an estimate</b>, so a
-/// cost they put in front of their user is real. Warmed past tier-1 promotion
-/// (30 calls) before the measured window, because a short warm-up measures
-/// tier-0 code — the trap that made a duel tick read 23 us at one world and
-/// 2.9 us at sixty-four.
+/// <b>A MEASUREMENT rather than an estimate</b>, so a cost put in front of a
+/// trainer is real. Warmed past tier-1 promotion (30 calls) before the measured
+/// window, because a short warm-up measures tier-0 code — the trap that makes a
+/// duel tick read 23 us at one world and 2.9 us at sixty-four.
 /// </remarks>
 public static class PolicyCost
 {
     public static void Run(string npz, string observations, string maps, string nav)
     {
-        // ⛔ The stamp check is BYPASSED, and for this mode that is not a
+        // The stamp check is BYPASSED, and for this mode that is not a
         // compromise. A forward pass is the same arithmetic whatever simulation
         // the weights were trained against — the shapes come from the checkpoint,
-        // the cost comes from the shapes, and nothing here reads a behaviour. The
-        // only checkpoint that exists is stamp-invalid for this build
-        // (docs/ENV.md, "The checkpoint is a FIXTURE now"), so without this the
-        // mode cannot run at all and the number it exists to produce is
-        // unobtainable. Churn.cs bypasses for a different reason and says so.
+        // the cost comes from the shapes, and nothing here reads a behaviour.
+        // Without this the mode cannot run at all against a stamp-invalid
+        // checkpoint (docs/ENV.md, "The checkpoint is a FIXTURE now"). Churn.cs
+        // bypasses for a different reason and says so.
         var policy = PolicyNetwork.Load(npz, ignoreSimulationStamp: true);
         var raw = File.ReadAllBytes(observations);
         var rows = BitConverter.ToInt32(raw, 0);
@@ -78,10 +76,10 @@ public static class PolicyCost
     /// What ONE observation extraction costs, measured on a real world.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>`gg2-rl`'s rollout cost model has inference at 40% of a
-    /// candidate-tick and observation extraction at 36%</b>, and the second was
-    /// an estimate. It matters more than the first: if extraction really is that
-    /// large, vectorising the forward pass buys much less than deleting a call.
+    /// <b>`gg2-rl`'s rollout cost model has inference at 40% of a
+    /// candidate-tick and observation extraction at 36%.</b> Extraction cost
+    /// matters more than inference: if it really is that large, vectorising the
+    /// forward pass buys much less than deleting a call.
     /// </remarks>
     public static void Observation(string maps, string nav)
     {

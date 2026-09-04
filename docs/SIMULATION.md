@@ -6,10 +6,9 @@ throw away.
 
 ## The state itself — what `WorldState` holds, and why
 
-⚠️ **Moved out of `CLAUDE.md` on 2026-09-01, verbatim.** The five rules that bite
-a session before it knows it is near them stayed there; this is the reference
-half, which is worth grepping when you change what the state holds and worth
-nothing to a session that is not going to. Nothing below was re-authored.
+⚠️ The five rules that bite a session before it knows it is near them are in
+`CLAUDE.md`; this is the reference half — grep it when you change what the
+state holds.
 
 `Gg2.Simulation.WorldState` is the flat, cheaply-copyable state `docs/BOTAI.md`
 item 1 asks for: a value type built on `[InlineArray]` slot buffers, holding no
@@ -46,25 +45,22 @@ does a rocket already in the air. That is the reference — a weapon is created 
 projectile's `ownerPlayer` is a player rather than a character, which is what
 lets it still credit a kill to somebody who died before it landed.
 
-⚠️ **A departure then destroys all of it anyway, and for four phases this port
-did none of that.** `Player.events/Destroy.xml` destroys the character — the
-*whole* Destroy event, not only the flag drop — and then sweeps every `Rocket`,
+⚠️ **A departure destroys all of it, not only the briefcase.**
+`Player.events/Destroy.xml` destroys the character — the *whole* Destroy
+event, not only the flag drop — and then sweeps every `Rocket`,
 `BurningProjectile`, `Shot`, `Needle` and `Sentry` the player owned. The rule
 runs the opposite way from the intuition: a rocket outlives its shooter's
 **death** precisely so it can still credit the kill, and is destroyed the moment
-that player is **gone**, because there is no longer anybody to credit. Until
-2026-08-26 `RemoveSlot` dropped the briefcase and nothing else, so a soldier
-could disconnect and still kill somebody a second later. `docs/SIMULATION.md`,
-"Settled: what a departure destroys"; `RemoveSlotTests`.
+that player is **gone**, because there is no longer anybody to credit.
+`docs/SIMULATION.md`, "Settled: what a departure destroys"; `RemoveSlotTests`.
 
-⚠️ **And that line is invisible to every code-extracting grep of the
-reference.** `if(object != -1) with(object) instance_destroy();` sits on the
-*same line* as the opening `<argument kind="STRING">` tag, so anything that
-strips lines beginning with a tag hands back a Destroy event that starts three
-lines in. **Third time this project has been caught by the event XML** after the
-`Bubble`'s `action_kill_object` events and the Revolver's `action_set_alarm` —
-the first two were drag-and-drop actions, this one is ordinary code. When an
-event looks like it is missing its first statement, read the raw XML.
+⚠️ **That line is invisible to every code-extracting grep of the reference.**
+`if(object != -1) with(object) instance_destroy();` sits on the *same line* as
+the opening `<argument kind="STRING">` tag, so anything that strips lines
+beginning with a tag hands back a Destroy event that starts three lines in
+(also seen in the `Bubble`'s `action_kill_object` events and the Revolver's
+`action_set_alarm`). When an event looks like it is missing its first
+statement, read the raw XML.
 
 **Projectiles are walked in creation order, not pool order.** Pool slots are
 recycled, so `WorldState.Projectiles` says nothing about when anything was
@@ -122,17 +118,17 @@ observable simulation; owe GM8 nothing else. Concretely:
 - Objects, events, `with()` blocks, alarms, user events, `instance_deactivate`.
   These are how GM8 expresses control flow; C# has better ones.
 - `ds_list` / `ds_grid` / `buffer_*` and the whole GM8 data-structure layer.
-- ~~The automatic-movement dance.~~ **This was wrong, and it is measured.** GM8
-  adds `hspeed`/`vspeed` to `x`/`y` between the Step and End Step events, so
-  `Character.events/Step.xml` ends with `x -= hspeed; y -= vspeed;` to cancel it
-  — but subtracting a double and adding it straight back **is not the identity**.
-  It loses a ULP whenever the intermediate needs more precision than the result:
-  `y = 511.490625` with `vspeed = -2.3000000000000034` comes back as
-  `511.49062499999997`, and the reference carries on from that value. Reproduce
-  the round trip; see "Settled: the automatic-movement round trip" below.
+- **The automatic-movement dance is NOT incidental.** GM8 adds `hspeed`/`vspeed`
+  to `x`/`y` between the Step and End Step events, so `Character.events/Step.xml`
+  ends with `x -= hspeed; y -= vspeed;` to cancel it — but subtracting a double
+  and adding it straight back **is not the identity**. It loses a ULP whenever
+  the intermediate needs more precision than the result: `y = 511.490625` with
+  `vspeed = -2.3000000000000034` comes back as `511.49062499999997`, and the
+  reference carries on from that value. Reproduce the round trip; see "Settled:
+  the automatic-movement round trip" below.
 - The loopback TCP socket the host uses to talk to itself.
 - Drawing, sprites, particles, sounds, the HUD, the view/camera.
-- ~~Server-side RNG.~~ **Mostly, but not all of it, and the exception is
+- **Server-side RNG is mostly free, but not all of it — the exception is
   weapons.** Spawn-point choice, spawn-team selection, chat bubbles and particle
   emission are free: the server decides and broadcasts the *result*, so the port
   may use any generator it likes for those.
@@ -431,24 +427,20 @@ recorded in `gg2-agent/GML.md`.
   fixed 30 fps they are plain tick counters. The firing rule is narrower than it
   looks — see "Settled: the alarm stage" below.
 - **All four of `hspeed`, `vspeed`, `direction` and `speed` are stored**, and
-  writing any of them rewrites the others. This bullet used to say `speed` and
-  `direction` were *derived*; that is true only of an instance which never
-  writes them, which is every character and no projectile. See "Settled: the
-  four motion variables" below.
+  writing any of them rewrites the others — true `speed`/`direction`-as-derived
+  only for an instance that never writes them, which is every character and no
+  projectile. See "Settled: the four motion variables" below.
 
 ## What is genuinely uncertain
 
 Be honest about these in the parity harness rather than assuming:
 
 1. **Instance ordering under heavy churn** (projectiles created and destroyed in
-   the same tick).
-
-~~2. How an alarm assigned a fractional number of ticks rounds.~~ **Measured
-2026-08-27: half to even**, which is what `Timers.SetAlarm` already did. See
-"Settled: the alarm stage" for the table.
-
-The one that is left is answerable with `gg2-agent`'s live bridge. Do that
-before building on a guess.
+   the same tick) — answerable with `gg2-agent`'s live bridge; do that before
+   building on a guess.
+2. How an alarm assigned a fractional number of ticks rounds is settled: **half
+   to even**, which is what `Timers.SetAlarm` already did. See "Settled: the
+   alarm stage" for the table.
 
 ### Settled: the collision boundary rule
 
@@ -623,10 +615,10 @@ holding on to:
 
 ### Settled: GM8's decimal literals are not always the nearest double
 
-Measured against the running game on 2026-08-25, by pulling the mantissa out of
-a live value a chunk at a time (`tools/sample-physics.js` has the encoder; the
-game's own `string_format` is only good to about sixteen significant digits and
-the seventeenth is noise, which is useless when the question is a single ULP).
+Measured by pulling the mantissa out of a live value a chunk at a time
+(`tools/sample-physics.js` has the encoder; the game's own `string_format` is
+only good to about sixteen significant digits and the seventeenth is noise,
+which is useless when the question is a single ULP).
 
 | GML text | GM8 holds | IEEE nearest | |
 |---|---|---|---|
@@ -638,14 +630,13 @@ the seventeenth is noise, which is useless when the question is a single ULP).
 | `1.75` | `1.7500000000000002` | `1.75` | **+1 ULP** |
 | `0.1` `0.2` `0.25` `0.45` `0.5` `0.54` `0.9` `1.05` `1.4` `8.3` `0.195` | same | same | |
 
-`1.75` was added on 2026-08-25 while measuring the RNG, and it is the entry that
-kills the tempting theory. `1.75` is **exactly representable** — it is 7/4 — so
-this is not a decimal that cannot be written in binary being rounded. GM8 gets a
-value one ULP above a number it could have parsed exactly. Whatever the parser
-is doing, "is the literal dyadic?" does not predict it, and neither does "how
-many decimal places". The only safe rule is the one already in force: **never
-write a physics constant as a plain C# decimal; measure it, and take it from
-`Gml`.**
+`1.75` is the entry that kills the tempting theory. It is **exactly
+representable** — it is 7/4 — so this is not a decimal that cannot be written
+in binary being rounded. GM8 gets a value one ULP above a number it could have
+parsed exactly. Whatever the parser is doing, "is the literal dyadic?" does not
+predict it, and neither does "how many decimal places". The only safe rule is:
+**never write a physics constant as a plain C# decimal; measure it, and take it
+from `Gml`.**
 
 Computing the same value instead of writing it — `3/5`, `23/20`, `17/20` — gives
 the IEEE-nearest double, so this is the literal parser and not the arithmetic.
@@ -718,10 +709,8 @@ it fails silently.
 `tests/Gg2.Tests/Fixtures/physics-samples.json` is 64 whole trajectories — four
 classes (Scout, Soldier, Pyro, Heavy), two maps, 48 ticks each, **32 of them
 started from rest** — driven inside the running game from start states chosen
-exactly, with position and velocity read back to the last bit. (It was 48 across
-three classes until 2026-08-28, when the Soldier and the rest starts were added
-to put item 1's residue-bearing state under the oracle.) The
-port reproduces every one of them **bit for bit**. Regenerate with
+exactly, with position and velocity read back to the last bit. The port
+reproduces every one of them **bit for bit**. Regenerate with
 `node tools/sample-physics.js` against a running dedicated server with bots.
 
 This is the gate phase 4 is actually held to, and it exists because a recorded
@@ -741,8 +730,8 @@ the amount the replay does, for exactly the same reason.
 
 ### Settled: the random number generator
 
-Measured on 2026-08-25, and the answer is short: **Game Maker 8 uses Delphi's
-`Random`**, which is what you would expect of a Delphi program.
+The answer is short: **Game Maker 8 uses Delphi's `Random`**, which is what you
+would expect of a Delphi program.
 
 ```
 seed'      = (seed * 0x08088405 + 1)  mod 2^32       // 134775813, Borland's
@@ -786,7 +775,7 @@ buys nothing.
 ### Settled: `distance_to_object`, `place_meeting`, and the one place facing matters
 
 Phase 3 pinned `place_free` and stopped there on purpose. Combat needs two more
-primitives, and both were measured on 2026-08-25 against the running game —
+primitives, both measured against the running game —
 `tools/sample-primitives.js` regenerates
 `tests/Gg2.Tests/Fixtures/primitive-samples.json`, which is a grid of offsets of
 a real `Rocket` and a real `Shot` around a real character, **with both bounding
@@ -827,11 +816,11 @@ facing when computing a splash distance; leave it out when testing an overlap.
 The inflation is `-2` on the left for every class, because every class's mask is
 symmetric about its origin. Derived from the sprite metadata — with
 `image_xscale = -1` GM8 computes `bbox_left = x - (spriteBboxRight - xoffset) - 2`
-and `bbox_right = x - (spriteBboxLeft - xoffset)` — and now **measured on six
-classes**: Scout, Soldier, Medic, Engineer, Pyro, and the two the derivation was
-least safe for, Heavy (the widest box at 19 px) and Quote (the one that ends at
-+11 where every other class ends at +23). All six shift `bbox_left` by exactly
--2 and leave the other three sides alone.
+and `bbox_right = x - (spriteBboxLeft - xoffset)` — and **measured on six
+classes**: Scout, Soldier, Medic, Engineer, Pyro, Heavy (the widest box at
+19 px), and Quote (the one that ends at +11 where every other class ends at
++23). All six shift `bbox_left` by exactly -2 and leave the other three sides
+alone.
 
 **2. Do not use .NET's `double.Hypot`.** It rescales its arguments to avoid
 overflow, and that changes the last bit. Against the same fixture,
@@ -1049,9 +1038,8 @@ discarded before `collision_line`'s walk was found; this is the same shape of
 trap, and here the answer is that the gap is in the FPU rather than in the
 formula.
 
-**One trap that cost this session an hour**, and which turned out to have two
-more inside it. The mantissa encoder was copy-pasted into four samplers and
-**three of the four copies were wrong**. It is one file now,
+⚠️ **The mantissa encoder must be a single shared implementation.** Copy-pasted
+into four samplers, three of the four copies were wrong. It is one file now,
 `tools/exact-double.js`, and `node tools/exact-double.js` self-tests it without
 a game — see "Settled: reading a GM8 double back to the last bit" below.
 
@@ -1122,14 +1110,12 @@ if alarm >= 0 { alarm -= 1; if alarm == 0 { run the event } }
 - After firing it rests at **0**, not -1, and is consumed on the following tick.
   That is what makes it fire once.
 
-✅ **Measured 2026-08-27** against the running game, and the pseudocode above is
-exactly right. `tools/probes/probe-alarm-image.js`; the witness is a `StabAnim`,
-whose Create sets `alarm[0] = 10` and whose `Alarm 0` sets `image_speed = 1`, so
-the frame the alarm fires is visible without any injected code. Watching
-`alarm[0]` and `image_speed` from `AgentBridge`'s Step event — that is, during
-the Step stage, after that frame's alarm stage — the counter reads
-`9, 8, 7, 6, 5, 4, 3, 2, 1, 0, -1` on successive frames and `image_speed`
-becomes 1 on the frame the counter reads **0**.
+✅ **Confirmed against the running game**: `tools/probes/probe-alarm-image.js`,
+witnessed with a `StabAnim` (Create sets `alarm[0] = 10`, `Alarm 0` sets
+`image_speed = 1`). Watching `alarm[0]` and `image_speed` from `AgentBridge`'s
+Step event — during the Step stage, after that frame's alarm stage — the
+counter reads `9, 8, 7, 6, 5, 4, 3, 2, 1, 0, -1` on successive frames and
+`image_speed` becomes 1 on the frame the counter reads **0**.
 
 ⚠️ **`Gg2.Simulation.Timers.Advance` writes -1 at the moment of firing, and the
 engine does not.** That is a real one-tick divergence, and it has exactly one
@@ -1149,8 +1135,8 @@ above already says. It is owed to whichever lane owns `src/Gg2.Simulation`; the
 measurement lane found it and does not apply it.
 
 ⚠️ **GM8 does not count down an alarm index the object has no event for.**
-Measured the same day: an `AgentSpare0` given `alarm[1] = 4` still read 4 sixty
-frames later. This is why `Character.events/Alarm 0.xml` exists at all — its
+Measured: an `AgentSpare0` given `alarm[1] = 4` still read 4 sixty frames later.
+This is why `Character.events/Alarm 0.xml` exists at all — its
 entire body is the comment `Afterburn intensity stuff`, and that empty event is
 **load-bearing**, because without it `alarm[0]` would never reach -1 and the
 afterburn intensity would never fade. Do not "tidy" an empty alarm event away
@@ -1175,16 +1161,15 @@ The stage sits between Begin Step and Step, which is where
 opposite direction to the obvious reading**: a weapon fires in *Begin Step*,
 which runs before this stage, so an input arriving this tick is tested against
 the refire counter **last tick left behind** and the decrement that may re-arm
-the weapon happens afterwards. This document said the reverse until phase 5
-stage 3.
+the weapon happens afterwards.
 
 An alarm assigned a *real* is stored as a whole number; see "What is genuinely
 uncertain" for the part of that which is not measured.
 
 ### Settled: GM8 advances `image_index` after the whole Step stage
 
-Measured 2026-08-27, `tools/probes/probe-alarm-image.js`, in the same trace as
-the alarm rule above.
+Measured with `tools/probes/probe-alarm-image.js`, in the same trace as the
+alarm rule above.
 
 **A Step event that reads `image_index` sees the value the end of the *previous*
 frame left.** The witness: a `StabAnim` is created with `image_speed = 0` and
@@ -1237,11 +1222,6 @@ path.** `createShot` sets both `image_angle` and `direction` to
 the pellet's first, and that pass runs in the Step stage while the pellet was
 created in Begin Step. So the aim angle is gone before any collision event can
 look at the box, and **each pellet of a blast carries its own box angle**.
-
-⚠️ **This document said the opposite for three phases** — that a blast's six
-pellets share one box shape — and the claim was wrong for the reason the whole
-section below is: it was read off `Objects/Projectiles/Shot.events/`, which has
-no Step event, without reading the script that does the work.
 
 **The seeded window costs exactly three RNG advances per pellet**, in this
 order:
@@ -1308,10 +1288,8 @@ are different stages and the port keeps them apart.
 and it is reached from `Objects/Networking/GameServer.events/Step.xml:16` — the
 networking controller's Step event, not the projectile's. `Shot` genuinely has
 no Step event; `Objects/Projectiles/Shot.events/` is a Create, an Alarm 0 and
-four collision events. Reading only the object is how this repo concluded for
-three phases that a pellet had no gravity, no wall test and a fixed
-`image_angle`, and shipped `Projectiles.Move` as two additions. All three
-conclusions were wrong.
+four collision events. Reading only the object misses the pellet's gravity,
+wall test and rotating `image_angle` entirely.
 
 The script is one `with` block per object and they are **not**
 interchangeable: a `Shot` falls, a `Rocket` accelerates and drags and tracks a
@@ -1489,8 +1467,8 @@ rocket's knockback is not a function of its age and cannot be derived from one.
 collision event, so the instance is **always** already inside the character it is
 backing out of — and the port transcribes only the second half.
 
-Measured 2026-08-25 against the running game, with a character-sized solid (a
-`Rocket` scaled to 24x34, `solid = true`) and a rocket-shaped probe inside it:
+Measured against the running game, with a character-sized solid (a `Rocket`
+scaled to 24x34, `solid = true`) and a rocket-shaped probe inside it:
 
 | Start | `move_contact_solid` | then `move_outside_solid(dir+180, 13)` |
 |---|---|---|
@@ -1521,7 +1499,7 @@ because a rectangle is an *instance* rather than map geometry and so needs its
 own `LineCollider` — and building one means claiming the sprite's mask fills its
 bounding box.
 
-Measured 2026-08-25 by walking every pixel of the reported box with a precise
+Measured by walking every pixel of the reported box with a precise
 `collision_point`:
 
 - `gg_debug`, all eight solid level-entity types — `BulletWall`,
@@ -1681,12 +1659,10 @@ pair to build a window that stops people but not shots, and the reverse.
 ⚠️ A `BulletWall` can also *open*: `BulletWall.events/Begin Step.xml` clears its
 mask while any character is within a `distance` property. The property defaults
 to -1 (never) and **no built-in map sets it** — checked across all 22 in
-`maps.json`; the maps that place bullet walls carry no properties at all.
-(That list used to be given here as "`arena_lumberyard` and `koth_harvest`", and
-it was short: **`gg_debug` places them too**, which is how the regenerated
-`collision-samples.json` gained two rectangles that map had never reported.) The port treats every bullet wall as
-permanently closed, which is exact for the shipped maps and wrong for a custom
-map that uses the trigger.
+`maps.json`, including `gg_debug`, `arena_lumberyard` and `koth_harvest`; the
+maps that place bullet walls carry no properties at all. The port treats every
+bullet wall as permanently closed, which is exact for the shipped maps and
+wrong for a custom map that uses the trigger.
 
 ### Settled: death, and who gets the credit
 
@@ -1741,14 +1717,11 @@ who died before it landed. `WorldState.Clear`, never `RemoveSlot`: a death is no
 a departure, the player keeps their roster index, and compacting would hand every
 slot above them to the wrong person.
 
-**Both landed in phase 6**, and this paragraph said they had not for three
-phases afterwards. `Destroy.xml` drops carried intel (`doEventDropIntel`) and
-arms the respawn on `player.alarm[5]`. The respawn is `Deaths.Kill` arming
-`PlayerState.RespawnTimer`, run by `Timers`' alarm-5 stage; the drop is in
-`WorldState.Clear` rather than in `Deaths`, because every way a character stops
-existing has to drop the flag and a death is only one of them.
-⚠️ **A "not implemented yet" sentence has no test behind it and nothing goes red
-when it comes true.** Grep before repeating one.
+`Destroy.xml` drops carried intel (`doEventDropIntel`) and arms the respawn on
+`player.alarm[5]`. The respawn is `Deaths.Kill` arming `PlayerState.RespawnTimer`,
+run by `Timers`' alarm-5 stage; the drop is in `WorldState.Clear` rather than in
+`Deaths`, because every way a character stops existing has to drop the flag and
+a death is only one of them.
 
 **Two other death paths exist and are not the hp check.**
 `processClientCommands.gml:80-115` and `:145-175` kill a character when its
@@ -1874,18 +1847,15 @@ branch of the tail this port transcribes so far. ⚠️ Its
 magazine, so every reload body in the game (`if ammoCount < maxAmmo`) does
 nothing and all that survives is the `alarm[5] = -1` after it.
 
-✅ **The `setup` clause LANDED 2026-09-03.** A map with a setup gate, during its
-setup timer, charges at the hurt rate (2.5) off a full-health patient rather than
-the healthy rate (1.75) — `Medigun.events/User Event 1.xml:92-101`, where `setup`
-is `instance_exists(ControlPointSetupGate) && areSetupGatesClosed()`. Here that is
+**The `setup` clause.** A map with a setup gate, during its setup timer, charges
+at the hurt rate (2.5) off a full-health patient rather than the healthy rate
+(1.75) — `Medigun.events/User Event 1.xml:92-101`, where `setup` is
+`instance_exists(ControlPointSetupGate) && areSetupGatesClosed()`. Here that is
 `state.AttackDefend && state.SetupTimer > 0`: the map entity is named `SetupGate`
 and `builder_init.gml:301` builds a `ControlPointSetupGate` from it, and
-`areSetupGatesClosed.gml` is nothing but `global.setupTimer > 0`.
-
-⚠️ **It was missing for three phases behind a comment claiming no mode here had a
-`ControlPointSetupGate`.** That was false from phase 6: `Rounds.Start` arms the
-timer for Invasion (`ctf_avanti`) and for attack/defend control points. The
-clause is the only way to build charge before the gates open — during setup
+`areSetupGatesClosed.gml` is nothing but `global.setupTimer > 0`. `Rounds.Start`
+arms the timer for Invasion (`ctf_avanti`) and for attack/defend control points.
+The clause is the only way to build charge before the gates open — during setup
 nobody has been shot yet, so every patient is at full health and the healthy rate
 means arriving at the first fight with 30% less meter than the reference gives.
 
@@ -1900,15 +1870,15 @@ sit at their `default(WorldState)` values and the branch is unreachable there, a
 Medic. ⚠️ **If an env or a duel ever arms a setup timer, or the policy is trained
 on Medic, that reasoning expires and the bump is owed.**
 
-✅ **No parity fixture moved and none of the three pinned bot measurements
-shifted** when it landed, which says no checked-in trace covers a medic healing a
+No parity fixture moved and none of the three pinned bot measurements shifted
+when it landed, which says no checked-in trace covers a medic healing a
 full-health patient during setup — a green fixture is not confirmation of a
 behaviour. `MedigunTests.SetupChargesAFullHealthPatientAtTheHurtRate` is the
 gate, with a control on each half of the conjunction.
 
-✅ **The stat counters landed and this entry did not say so.** `HEALING` is
-`Healing.cs:308`, `INVULNS` is `Weapons.cs:2410`, and `POINTS` is awarded from
-`Scoring`, `Intel`, `ControlPoints` and `Healing`.
+**Stat counters:** `HEALING` is `Healing.cs:308`, `INVULNS` is
+`Weapons.FireNeedleOrUber`, and `POINTS` is awarded from `Scoring`, `Intel`,
+`ControlPoints` and `Healing`.
 
 ### Settled: afterburn, and the flame that starts it
 
@@ -1930,14 +1900,13 @@ to `decayDelay` (90); when it finally fires, `Character.events/Alarm 0.xml`
 computes `intensityDecay = burnIntensity / decayDuration` (90) and only then does
 the Begin Step line start subtracting it.
 
-⚠️ **That one comparison forced a correction to the alarm stage.** GM8 writes -1
-to an alarm *before* running its event — which is the only way a handler that
-re-arms its own alarm can work, and `Medic.events/Alarm 11.xml` and
-`Scattergun.events/Alarm 5.xml` both do exactly that. This port used to leave a
-fired counter at 0 for one tick, which is indistinguishable everywhere else (a 0
-decrements to -1 without firing, and the wire clamps both to 0) but delayed every
-burn's fade by a tick. `Timers.Advance` now writes `Inactive`. **Inferred from
-the reference, not measured against the running engine.**
+⚠️ **GM8 writes -1 to an alarm *before* running its event** — the only way a
+handler that re-arms its own alarm can work, and `Medic.events/Alarm 11.xml` and
+`Scattergun.events/Alarm 5.xml` both do exactly that. A fired counter left at 0
+for one tick is indistinguishable everywhere else (a 0 decrements to -1 without
+firing, and the wire clamps both to 0) but delays a burn's fade by a tick, so
+`Timers.Advance` writes `Inactive` instead. **Inferred from the reference, not
+measured against the running engine.**
 
 ⚠️ **A fire on somebody already at zero hp deals no damage and takes no credit.**
 The reference cites its own bug number: "Don't count if someone else already
@@ -2053,11 +2022,10 @@ direction jitter — and the count is contract, not bookkeeping.
 
 ### Settled: the four boxes that were derived, and are not any more
 
-Measured 2026-08-27, `tools/probes/probe-sprite-boxes.js`, gated by
-`SpriteBoxSampleTests` against
-`tests/Gg2.Tests/Fixtures/sprite-box-samples.json`. Phases 5 and 6 landed four
-collision boxes without a live session, each with a comment saying so. **All
-four were right**, and none of them can drift silently again.
+Measured against the running game, `tools/probes/probe-sprite-boxes.js`, gated by
+`SpriteBoxSampleTests` against `tests/Gg2.Tests/Fixtures/sprite-box-samples.json`.
+Four collision boxes landed without a live session and were confirmed correct
+here; none of them can drift silently again.
 
 | Sprite | `sprite_get_bbox_*` | origin | about the origin | was |
 |---|---|---|---|---|
@@ -2071,12 +2039,12 @@ wears the `Sentry`'s `mask_index` override and the sprite's own bound is the
 answer. The generator's 48 sub-images share one bounding box, which is why it
 needs no override where the sentry does.
 
-- **The briefcase is the one that mattered.** It was the only collision box in
-  the project that had never been measured, and `docs/PARITY.md` records that
-  three of its four edges can each move **sixteen** pixels with every fixture
-  still green. Note `bbox_bottom` is 19 on a 22-tall image: the AUTO bound stops
-  two rows short of the art, which is exactly what reading a PNG's nominal size
-  gets wrong. It happened not to be wrong here.
+- **The briefcase was the one that mattered**: the only collision box in the
+  project that had never been measured, and `docs/PARITY.md` records that three
+  of its four edges can each move **sixteen** pixels with every fixture still
+  green. `bbox_bottom` is 19 on a 22-tall image: the AUTO bound stops two rows
+  short of the art, which is exactly what reading a PNG's nominal size gets
+  wrong, though it happened not to be wrong here.
 - **`mode="FULL"` really does mean the whole image**, confirmed directly rather
   than through `MineS` as a control.
 - **The generator's box is what its 400-pixel blast measures every distance
@@ -2093,7 +2061,7 @@ box some day and it will be quietly wrong.
 
 ### Settled: the sentry's collision box does not animate, and the turret's does
 
-Measured 2026-08-26 against the running game (`tools/probes/probe-sentry-mask.js`).
+Measured against the running game, `tools/probes/probe-sentry-mask.js`.
 
 ⚠️ **A sentry's drawn sprite grows out of a toolbox and its extent swings
 wildly; its hitbox does neither.** `SentryRed`/`SentryBlue` have **twelve**
@@ -2141,8 +2109,8 @@ through `Aabb.ForRotatedSprite`; measured at 0/45/90/135/180 degrees. At
 pixels on `bbox_left`.
 
 ⚠️ **The flip inflation is applied to the sprite edge *before* the rotation, not
-to the rotated box** — measured 2026-08-26 (`tools/probes/probe-airblast.js`;
-the port assumed the opposite for one session). At `image_xscale = -1` GM8's box
+to the rotated box** — measured (`tools/probes/probe-airblast.js`). At
+`image_xscale = -1` GM8's box
 is the rotated bound of the *mirrored sprite box with its mirrored-left edge
 extended two sprite pixels*, so at 45° the two pixels land partly on the
 `bbox_bottom`: the flipped turret at 45° is `-20, -14, 11, 16` where the
@@ -2159,10 +2127,9 @@ even when it looks like one.
 
 ### Settled: `collision_circle` is a plain Euclidean test, unlike `collision_line`
 
-Measured 2026-08-26 (`tools/probes/probe-circle.js`). **This is the good outcome:**
-`collision_line` turned out to be a clip-round-pixel-walk that three exact
-intersection tests failed to reproduce, so the reasonable fear was that
-`collision_circle` would be another one. It is not.
+Measured (`tools/probes/probe-circle.js`). Unlike `collision_line` — a
+clip-round-pixel-walk that three exact intersection tests failed to reproduce —
+`collision_circle` is a plain Euclidean distance test.
 
 ```
 collision_circle(cx, cy, r, obj, prec, notme) hits an instance iff the
@@ -2184,8 +2151,8 @@ Evidence, against a probe whose box is exactly `992..1007` by `993..1012`:
 - **Radius 0 on the corner pixel `(1007, 1012)` hits** and one pixel past it
   misses, so the box really is inclusive at both ends.
 
-**Second measurement, 2026-08-26 (`tools/probes/probe-airblast.js`,
-`probe-airblast2.js`), which closed the gaps the first left open:**
+**Second measurement (`tools/probes/probe-airblast.js`, `probe-airblast2.js`),
+closing the gaps the first left open:**
 
 - ⚠️ **The centre is floored per axis before the test.** The airblast centres
   the circle on the *victim's* real-valued position, and every fractional
@@ -2335,20 +2302,16 @@ right-click as the mine detonation (`Character.events/Begin Step.xml:120-126`).
 in `AirBlastBoxTests`. Each rule below was verified to bite by mutation or was
 measured directly.
 
-✅ **And a recording gates it too, since 2026-08-27** —
-`reference-ctf_truefort-closedairblast.trace`, three pyros against three
-soldiers. **1,266 exact trajectory ticks with the airblast implemented and 286
-with `Weapons.AirBlast` stubbed to a no-op.** `AirblastFixtureTests`.
-
-⚠️ **This file used to say "the Flamethrower is unseeded, so no recording can
-gate it", and that was a claim about the fixtures rather than about the
-airblast.** Two things were wrong with it:
+A recording gates it too — `reference-ctf_truefort-closedairblast.trace`, three
+pyros against three soldiers. **1,266 exact trajectory ticks with the airblast
+implemented and 286 with `Weapons.AirBlast` stubbed to a no-op.**
+`AirblastFixtureTests`.
 
 - **The reflectable set is `Rocket`, `Flare` and `Mine`.** A pyro with none of
-  those in front of it never presses the key. `closedsupport` is the only
-  earlier fixture with pyros in it and it is medic/pyro/engineer — **no rockets
-  and no mines at all** — so its pyros could not airblast however long it ran.
-  That is the whole reason implementing the airblast moved no bound.
+  those in front of it never presses the key. `closedsupport`, the only earlier
+  fixture with pyros, is medic/pyro/engineer — **no rockets and no mines at
+  all** — so its pyros could not airblast however long it ran; implementing the
+  airblast moved no bound there.
 - ⚠️ **An unseeded weapon caps an *hp* window, not necessarily a *trajectory*
   one.** `Projectiles.BurningHitCharacter` deals damage and calls no
   `motion_add`, so where the port's flames land cannot move anybody — where a
@@ -2496,14 +2459,12 @@ reference's own `PLAYER_SPAWN`s.
   names the bigger team (counting everyone but the requester) **or the team
   the player is already on. An "any" whose coin lands on the requester's own
   team is refused too**; that is the reference, not a port artifact.
-- **The sentry's Begin Step guard is whole again**: `ownerPlayer.class !=
-  CLASS_ENGINEER or team != ownerPlayer.team or collision_circle(...)`, firing
-  on the tick *after* a change — the old server/replayer seams fired it inside
-  the change, one tick early.
+- **The sentry's Begin Step guard**: `ownerPlayer.class != CLASS_ENGINEER or
+  team != ownerPlayer.team or collision_circle(...)`, firing on the tick
+  *after* a change.
 - **Message timing**: a spawn (like a fire or a death) is appended to the send
   buffer mid-tick and leaves on the *next* tick's flush, ahead of that tick's
-  update — the byte order `TraceParser` already assumes. The old direct spawn
-  path sent it one flush early.
+  update — the byte order `TraceParser` already assumes.
 - **Not modelled**, each documented at its site: `checkClasslimits` (no port
   path enforces class limits), `ServerBalanceTeams` (moves other players
   mid-round), and the spawn-room fast respawn. The intel drop in `Destroy.xml`
@@ -2579,27 +2540,24 @@ reference's own `PLAYER_SPAWN`s.
   heartbeat too; the third trigger, `global.setupTimer == 180`, waits on the
   setup timer being simulated.
 
-✅ **Settled 2026-08-27: the briefcase's box is `-9, -12, +10, +7` about the
-origin**, measured against the running game. `IntelligenceRedS`,
-`IntelligenceBlueS` and `IntelligenceBaseS` are all 20x22 with their origin at
-(9, 12) and a `RECTANGLE` mask on `AUTO` bounds; the engine reports every one of
-them as `sprite_get_bbox_* = 0, 0, 19, 19` — the bottom two rows of all three
-images are fully transparent — and none of the four objects that wear them
-declares a `<mask>` of its own, so one box serves the flags and the bases alike.
-A **live briefcase on `ctf_truefort` answers `bbox_* - x/y = -9, -12, 10, 7`
-directly**, at `image_xscale = image_yscale = 1` and `image_angle = 0`.
+✅ **The briefcase's box is `-9, -12, +10, +7` about the origin**, measured
+against the running game. `IntelligenceRedS`, `IntelligenceBlueS` and
+`IntelligenceBaseS` are all 20x22 with their origin at (9, 12) and a
+`RECTANGLE` mask on `AUTO` bounds; the engine reports every one of them as
+`sprite_get_bbox_* = 0, 0, 19, 19` — the bottom two rows of all three images are
+fully transparent — and none of the four objects that wear them declares a
+`<mask>` of its own, so one box serves the flags and the bases alike. A **live
+briefcase on `ctf_truefort` answers `bbox_* - x/y = -9, -12, 10, 7` directly**,
+at `image_xscale = image_yscale = 1` and `image_angle = 0`.
 `tools/sample-sprite-box.js` regenerates
 `tests/Gg2.Tests/Fixtures/sprite-box-samples.json`; `SpriteBoxSampleTests` is
 the gate.
 
-⚠️ **It was worth measuring precisely because no fixture could, and that is the
-lesson rather than the number.** The box had been derived from the PNGs and the
-sprite XML and it was right in every edge — but **the fixtures corroborate almost
-none of it**: measured by mutation against `closedsupport`'s recorded grab,
-`BoxLeft` has to move two pixels before the tick changes, and `BoxRight`,
-`BoxTop` and `BoxBottom` can each move **sixteen** unnoticed. A bot approaches
-from one side and never crosses the other three edges. **A green fixture is not
-confirmation of a box.**
+⚠️ **The fixtures corroborate almost none of this box.** Measured by mutation
+against `closedsupport`'s recorded grab: `BoxLeft` has to move two pixels
+before the tick changes, while `BoxRight`, `BoxTop` and `BoxBottom` can each
+move **sixteen** unnoticed — a bot approaches from one side and never crosses
+the other three edges. **A green fixture is not confirmation of a box.**
 
 **Not modelled**, each documented at its site: the `LooseSheet` particles a
 carrier sheds (they draw one or two `random(1)` per tick from the global
@@ -2841,9 +2799,8 @@ control points into its file and plays **two**.
   entity list makes it expect six blocks where an update carries two — and the
   stream then desynchronises hundreds of bytes later with no hint of the cause.
 
-**The port ignored areas entirely until phase 6's control points**, because
-`cp_dirtbowl` is the only shipped map with more than one — and it is also the
-only attack/defend map, so the mode could not be right without this.
+`cp_dirtbowl` is the only shipped map with more than one area, and it is also
+the only attack/defend map.
 
 ### Settled: the control points, attack/defend, and Invasion
 
@@ -3070,10 +3027,8 @@ Nine collision events, four of which the port has projectiles for.
   the flag it reads can never be set on a rocket.
 - **`SentryTurret` does not target generators**; its End Step calls `damageAuto`
   on a character it acquired. `Rifle`, `BladeB`, `StabMask` and `Bubble` have
-  generator events of their own. ⚠️ This line used to end "and belong to weapons
-  the port has not implemented", which was true when it was written and stopped
-  being true in phase 5 — every weapon is implemented, hitscan reaches a
-  generator through `Weapons.cs:812`, and the stab's generator multiplier is
+  generator events of their own: hitscan reaches a generator through
+  `Weapons.FireRifle`, and the stab's generator multiplier is
   `Weapons.StabGeneratorFactor`.
 
 #### The round
@@ -3119,10 +3074,9 @@ mode changed an existing server test.
 #### The round, and the kills it counts
 
 - ⚠️ **The kills go into `global.redCaps` and `global.blueCaps`.** Team
-  Deathmatch has no counter of its own, which is why **it needs no per-player
-  statistics at all** to decide a round — a claim two handoffs carried and which
-  turned out to be wrong. (The scoreboard's per-player stats are still missing,
-  and Arena's MVP lists and the two balance routines still want them.)
+  Deathmatch has no counter of its own, so it needs no per-player statistics to
+  decide a round — but the scoreboard's per-player stats are still missing, and
+  Arena's MVP lists and the two balance routines still want them.
 - ⚠️ **Three guards on a kill, and one of them is redundant.**
   `instance_exists(TeamDeathmatchHUD)`, then `killer` (GM8's `> 0.5`, so a death
   with no killer scores nothing), then `killer != victim`, then
@@ -3510,8 +3464,7 @@ unseeded weapon caps a fixture's hp window").
   nothing reaches that: a shot clears `isRefilling`, and the only thing that
   clears `readyToShoot` is a shot. Proved by mutation.
 - **`Alarm 5` is `isRefilling = true` and nothing else**, the same single line
-  the Flamethrower's is — and the port's alarm-5 switch had **no Minigun case at
-  all** until this landed, so the alarm fired and did nothing.
+  the Flamethrower's is. The alarm-5 switch carries a Minigun case for it.
 
 ⚠️ **`randomize()` is deliberately not transcribed.** It reseeds GM8's global
 stream from the clock; doing that to `WorldState.Random` would make a forked
@@ -3665,9 +3618,9 @@ the right click.
   other projectile's `image_angle = direction` lives. A 12x12 square turned 45
   degrees reports a box about 17 wide, so this decides who a bubble blocks.
 
-✅ **Settled 2026-08-27: `BubbleS` is `0, 0, 11, 11` about origin (6, 6)** — the
-whole 12x12 image, which is what `mode="FULL"` in the XML had always been read
-to mean. ⚠️ **It is not sampled the way the other projectile sprites are.**
+**`BubbleS` is `0, 0, 11, 11` about origin (6, 6)** — the whole 12x12 image,
+which is what `mode="FULL"` in the XML had always been read to mean.
+⚠️ **It is not sampled the way the other projectile sprites are.**
 `tools/sample-rotated-box.js` measures a projectile by creating one and reading
 its instance `bbox_*`, and a bubble is not something `createShot` can be handed;
 `tools/sample-sprite-box.js` asks `sprite_get_bbox_*` of the sprite resource
@@ -3820,11 +3773,10 @@ was created first, and for the commonest case (a screen older than the pellet
 flying into it) would leave every pellet alive and make `perseverant`
 meaningless. `Projectiles.ResolveBubblePair`.
 
-✅ **Measured 2026-08-27, and the port was right.**
-`tools/probes/probe-bubble-pair.js`: a real `Bubble` and a real `Shot` are
-created on the same point in open space — `place_meeting` between them checked,
-so the overlap is not assumed — and which of them still exists is read back one
-frame later. All four cells:
+**Measured**, via `tools/probes/probe-bubble-pair.js`: a real `Bubble` and a
+real `Shot` created on the same point in open space (`place_meeting` between
+them checked, so the overlap is not assumed), read back one frame later. All
+four cells:
 
 | bubble vs pellet | `perseverant` | bubble | pellet |
 |---|---|---|---|
@@ -3836,22 +3788,21 @@ frame later. All four cells:
 Exactly `bubblePops = enemy or perseverant` and `pelletDies = enemy and not
 perseverant` — each instance's own condition, both applied. The **enemy/ordinary
 row is the decisive one**: no single event can destroy both instances, so both
-must have run. It also refutes each single-sided alternative on its own — bubble
-only would leave the pellet alive in that row, pellet only would leave the bubble
+must have run — which refutes each single-sided alternative too: bubble-only
+would leave the pellet alive in that row, pellet-only would leave the bubble
 alive in the other three.
 
-⚠️ **So a projectile that destroys itself in its own collision event is still
-there for the other instance's**, which is the GM8 property the whole reading
-rested on. Whichever side the engine reaches first, the other still fires in the
-same frame. The measurement cannot say which side goes first, and nothing
-observable depends on it.
+⚠️ **A projectile that destroys itself in its own collision event is still
+there for the other instance's**, the GM8 property the whole reading rests on.
+Whichever side the engine reaches first, the other still fires in the same
+frame; the measurement cannot say which side goes first, and nothing observable
+depends on it.
 
 ⚠️ **The same-team row needs a short window to be honest.** A `Bubble`'s Step
 pushes it away from a stationary owner at about 3.3 px a tick and its Begin Step
 destroys it past `distance_to_object(owner) > 160`, so a "both survive" read
-taken a second later reports the bubble dead for a reason that has nothing to do
-with the pellet. Read the outcome within three frames. That confound cost this
-measurement one wrong answer before it was noticed.
+taken a second later reports the bubble dead for a reason unrelated to the
+pellet. Read the outcome within three frames.
 
 `BladeTests.ThePelletAndBubbleTableHoldsWhicheverWasFiredFirst` carries the
 table for both creation orders — the port reaches the pair through `HitBubble`
@@ -4045,7 +3996,7 @@ another StabAnim for the same player" guard amounts to.
 **The `StabMask`** is a real projectile, and an odd one:
 
 - ✅ **`StabMaskS` is 34×43 about the origin** — 2 pixels back, **31 forward**,
-  24 up and 18 down — the largest melee reach in the game. Measured 2026-08-27:
+  24 up and 18 down — the largest melee reach in the game.
   `sprite_get_bbox_* = 24, 13, 57, 55` about origin (26, 37) on a 64x64 image,
   `object_get_mask(StabMask) = -1`. ⚠️ **This is the one late-sampled box where
   the image and the collision box genuinely differ** — 64 wide against 34 — so
@@ -4120,18 +4071,17 @@ mC2 = floor(mN / 2^18);  mC3 = mN - mC2 * 2^18;
 and back: `sign * ((c1 << 36) + (c2 << 18) + c3) * 2^(e - 53)`, assembled with
 BigInt because the integer is up to 54 bits.
 
-⚠️ **This was four copies and three of them were wrong.** Each bug loses the
-last bit or the whole value, silently, in an *oracle* — so the port would have
-been held to a number the game never said.
+⚠️ **Three distinct bugs are possible in a naive port of this arithmetic, and
+each loses the last bit or the whole value silently in what is supposed to be
+an oracle** — so the port would be held to a number the game never said.
 
 1. ⚠️ **`if (v == 0)` is GML's fuzzy comparison**, true for anything under
-   1e-13. It reported a hard zero for `cos(degtorad(90))` = 6.1e-17 — which is
-   exactly the value a motion sampler exists to measure. Fixed by testing the
-   value scaled by 2^400, which puts any double a sampler can see far outside
-   the epsilon. The two `while` normalisation loops the same copies used are
-   fuzzy for the same reason and could exit with the mantissa outside [1, 2).
-2. ⚠️ **`a * power(2, 52 - floor(log2(a)))` is not always an integer**, and the
-   version written to fix (1) asserted in its own comment that it was.
+   1e-13. It reports a hard zero for `cos(degtorad(90))` = 6.1e-17 — exactly
+   the value a motion sampler exists to measure. Fixed by testing the value
+   scaled by 2^400, which puts any double a sampler can see far outside the
+   epsilon. The two `while` normalisation loops the same arithmetic uses are
+   fuzzy for the same reason and can exit with the mantissa outside [1, 2).
+2. ⚠️ **`a * power(2, 52 - floor(log2(a)))` is not always an integer.**
    `floor(log2(a))` **overshoots by one** whenever `a` sits close enough below a
    power of two that `log2` rounds up — `2^53 - 1` is the smallest case, where
    it returns 53 against a true exponent of 52 — and the scaled value is then
@@ -4144,22 +4094,18 @@ been held to a number the game never said.
    it: the first intermediate is always in [1, 2) and the second always in
    [2^53, 2^54).
 
-**Bugs (2) and (3) were found by writing the self-test, not by reading the
-code** — the comment above the arithmetic said it was exact in every case, and
-it was wrong. `node tools/exact-double.js` round-trips 20,000 swept values plus
-a battery of the residues, ULP-high literals and power-of-two boundaries this
-project cares about, and it **asserts that all three bugs still reproduce** in a
-faithful transcription of the old encoder, so a green run means something.
+`node tools/exact-double.js` round-trips 20,000 swept values plus a battery of
+the residues, ULP-high literals and power-of-two boundaries this project cares
+about, and **asserts that all three bugs still reproduce** in a faithful
+transcription of the naive encoder, so a green run means something.
 
 None of the checked-in fixtures is affected: every row of the three older ones
-was audited when (1) was found, and none holds a value that can reach (2) or
-(3). ⚠️ **But nothing may be regenerated with an old copy** — and there is no
-longer an old copy to reach for.
+was audited against (1), and none holds a value that can reach (2) or (3).
+⚠️ **Nothing may be regenerated with a pre-fix encoder.**
 
-**The lesson worth more than the bugs**: four copies of a twelve-line function
-drifted into three different states of wrong, and the one everybody trusted was
-the one whose comment claimed the most. A tool that produces an oracle needs a
-gate as much as the simulation does.
+A tool that produces an oracle needs a gate as much as the simulation does: the
+version everyone trusted was the one whose comment claimed the most, and the
+comment was wrong.
 
 ### Settled: the spawn room and the healing cabinet
 
@@ -4216,9 +4162,8 @@ and the `DEATHS` stat all happen. Only the timer changes.
 
 **The silent class swap.** `processClientCommands.gml:84`'s `else` arm is a bare
 `instance_destroy()` — ⚠️ **no `PLAYER_DEATH` at all**, no kill credit, no death
-stat. The Destroy event still runs, so the replacement is one tick away. **The
-port broadcast a death there for six phases**, and two server tests asserted it;
-both were wrong, and both now assert the swap.
+stat. The Destroy event still runs, so the replacement is one tick away; server
+tests assert the swap rather than a broadcast death.
 
 **`HealingCabinet`.** `sprite74` is 32x48, origin (0, 0), `AUTO` bounds — and
 its alpha covers the whole image, so AUTO and FULL agree and it is the same
@@ -4281,11 +4226,10 @@ shell counter the Revolver's alarm-5 body resets.
 `Deaths.Kill`. Gated by `KillBoxTests`.
 
 ⚠️ **What the shipped maps actually place, scanned across all 22**: `tdm_mantic`
-places **six pit falls**, and nothing else places anything at all. The project's
-notes carried this for several sessions as "six built-in maps place a
-`pitfall`" — it is six *boxes* on *one* map, and `OnlyTeamDeathmatchManticPlaces-
-AnyBoxes` asserts it so the claim cannot rot again. A `killbox` and a `fragbox`
-are reachable only on a custom map.
+places **six pit falls** — six *boxes* on *one* map — and nothing else places
+anything at all. `OnlyTeamDeathmatchManticPlacesAnyBoxes` asserts the count so
+the claim cannot rot. A `killbox` and a `fragbox` are reachable only on a
+custom map.
 
 **All three objects are empty**: no events, invisible, not solid, and all three
 on `sprite64` — the same 42x42 collider a `SpawnRoom` uses, origin (0, 0), FULL
@@ -4400,20 +4344,18 @@ and the three killing boxes use.
 
 ⚠️ **What the shipped maps actually place, scanned across all 22**: `tdm_mantic`
 alone, **nine up and six down**, none left or right and not one overriding the
-default power. The same map that places the six pit falls, and the only one that
-places anything of either family. `OnlyTeamDeathmatchManticPlacesAnyMoveBoxes`
-asserts the counts so the claim cannot rot — the killing boxes' equivalent claim
-had been wrong in this project's notes for several sessions. The left and right
-arms and the `speed` override are reachable only from a hand-built entity, which
-is what `MoveBoxes.Of` is a seam for.
+default power — the same map that places the six pit falls, and the only one
+that places anything of either family. `OnlyTeamDeathmatchManticPlacesAnyMove-
+Boxes` asserts the counts so the claim cannot rot. The left and right arms and
+the `speed` override are reachable only from a hand-built entity, which is what
+`MoveBoxes.Of` is a seam for.
 
 ⚠️ **Two boxes stacked can cancel each other exactly, and `tdm_mantic` has such
 a pair.** A character's box is 34 pixels tall against the box's 42, so one
 standing in the middle of a lift can overlap a *down* box beside it — five up
-plus five down is zero, not a lift. That is not a bug in either the map or the
-port; it is what `+=` composition means. It cost this session a test failure
-that looked exactly like the push never running, and
-`ATickLiftsWhoeverIsStandingInAnUpBox` now picks an unambiguous box on purpose.
+plus five down is zero, not a lift. That is what `+=` composition means, not a
+bug in either the map or the port; `ATickLiftsWhoeverIsStandingInAnUpBox` picks
+an unambiguous box on purpose to avoid it.
 
 **Where they sit in the collision stage.** The four object ids are 756, 758, 759
 and 761, which puts them between `FragBox` (509) and `PitFall` (794) in a
@@ -4445,11 +4387,10 @@ Destroy event that begins at `ds_map_destroy(rewards)`. The line is:
 if(object != -1) with(object) instance_destroy();
 ```
 
-That is the third time this project has been caught by the event XML — after a
-`Bubble`'s three `action_kill_object` events and the Revolver's
-`action_set_alarm(18, 2)`, both drag-and-drop actions. This one is ordinary
-code. **When an event looks like it is missing its first statement, read the raw
-XML.**
+A `Bubble`'s three `action_kill_object` events and the Revolver's
+`action_set_alarm(18, 2)` are the same trap via drag-and-drop actions instead;
+this one is ordinary code hidden by line placement. **When an event looks like
+it is missing its first statement, read the raw XML.**
 
 **So a departure is two rules, in this order:**
 
@@ -4469,13 +4410,13 @@ XML.**
    with(Sentry)            if(ownerPlayer == other.id) instance_destroy();
    ```
 
-⚠️ **This runs the opposite way from the intuition, and the port had it wrong
-for four phases.** A projectile's `ownerPlayer` is a *player* and not a
-character — which is exactly what lets a rocket outlive its shooter's **death**
-and still credit the kill. The moment the player is **gone** there is nobody
-left to credit, so the same rocket is destroyed. Until 2026-08-26 `RemoveSlot`
-dropped the briefcase and nothing else, so a soldier could disconnect and still
-kill somebody a second later, and a leaving demoman's mines stayed armed.
+⚠️ **This runs the opposite way from the intuition.** A projectile's
+`ownerPlayer` is a *player* and not a character — which is exactly what lets a
+rocket outlive its shooter's **death** and still credit the kill. The moment the
+player is **gone** there is nobody left to credit, so the same rocket is
+destroyed. `RemoveSlot` must sweep all five kinds, not just drop the briefcase —
+otherwise a disconnecting soldier could still kill somebody a second later, and
+a leaving demoman's mines would stay armed.
 
 **Which of the nine projectile kinds each path takes:**
 

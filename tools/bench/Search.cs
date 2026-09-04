@@ -10,29 +10,27 @@ namespace Bench;
 /// part that is per TICK, by sweeping the horizon.
 /// </summary>
 /// <remarks>
-/// The question is `gg2-rl`'s: if the policy prunes 60 candidates to k, can the
-/// freed budget be spent on depth? Cost is
+/// The question: if the policy prunes 60 candidates to k, can the freed budget
+/// be spent on depth? Cost is
 /// <c>candidates x (fork + horizon x tick)</c> — the per-candidate term does NOT
 /// scale with horizon, so pruning frees more than a naive
 /// candidates-times-horizon account suggests. A horizon sweep separates the two:
 /// the slope is candidates x tick, the intercept is candidates x everything else.
 /// <para>
-/// ⛔ <b>The column this prints as "fork" is the INTERCEPT, not the state copy,
-/// and the two differ by an order of magnitude.</b> It read 27.1 us a candidate at
-/// population 12 while the <c>WorldState</c> assignment itself measures
-/// <b>2.2 us</b> — the rest is the zoom check, the decoder, the aim-error scan and
-/// the per-candidate bookkeeping. This file said "the fork is a 145 KB WorldState
-/// copy per candidate" and a reader would have gone looking for 25 us of memcpy
-/// that is not there. <b>Shrinking <c>WorldState</c> buys about 3% of a
-/// candidate, not 25%.</b> Measured 2026-09-02; see <c>docs/ARCHITECTURE.md</c>,
-/// "Where a tick actually goes".
+/// <b>The column this prints as "fork" is the INTERCEPT, not the state copy,
+/// and the two differ by an order of magnitude.</b> It reads 27.1 us a candidate
+/// at population 12 while the <c>WorldState</c> assignment itself measures
+/// <b>2.2 us</b> — the rest is the zoom check, the decoder, the aim-error scan
+/// and the per-candidate bookkeeping. <b>Shrinking <c>WorldState</c> buys about
+/// 3% of a candidate, not 25%.</b> See <c>docs/ARCHITECTURE.md</c>, "Where a
+/// tick actually goes".
 /// </para>
 /// </remarks>
 public static class SearchBench
 {
     public static void Run(string maps, string? nav, string map)
     {
-        // ⚠️ DecisionTicks 1 so every Poll really searches — otherwise this measures
+        // DecisionTicks 1 so every Poll really searches — otherwise this measures
         // the search amortised over the ticks it is held for, and the intercept is
         // whatever fraction of polls happened to land on a decision boundary.
         var horizons = new[] { 20, 40, 80, 160, 320 };
@@ -48,7 +46,7 @@ public static class SearchBench
             var red = world.Place(cls, Team.Red, 600, 850);
             var blue = world.Place(PlayerClass.Soldier, Team.Blue, 760, 850);
 
-            // ⚠️ BENCH_POP: how many characters are ALIVE in the world, total.
+            // BENCH_POP: how many characters are ALIVE in the world, total.
             // A rollout re-simulates every one of them for every tick of every
             // candidate, so a decision measured in a 2-character duel is not the
             // decision a 12-bot match pays for. This is the term a duel number
@@ -112,8 +110,8 @@ public static class SearchBench
 
         Console.WriteLine();
         Console.WriteLine($"  fit: cost = {intercept:0.00} us + {slope:0.000} us x horizon");
-        // ⛔ "intercept", not "fork". It was labelled fork and it is not the state
-        // copy — that measures 2.2 us where this reads 27. See this class's remarks.
+        // "intercept", not "fork" — it is not the state copy, which measures
+        // 2.2 us where this reads 27. See this class's remarks.
         Console.WriteLine(
             $"  per candidate: intercept {intercept / candidates:0.000} us "
             + $"(NOT the state copy — see SearchBench remarks), tick {slope / candidates:0.000} us");
@@ -130,17 +128,16 @@ public static class SearchBench
             var tickK = slope / candidates * k;
             var affordable = (budget - forkK) / tickK;
 
-            // ⚠️ MEASURED, not estimated: BENCH_POLICYCOST=1 on 2026-09-01, Release,
-            // reads inference 3.67 us and observation extraction 2.92 us — 6.58 us
-            // per policy decision. This line held 4.7 us, which was an estimate and
-            // was 1.4x LOW, and it drives the (affordable)/(OVER) verdicts below.
+            // MEASURED, not estimated: BENCH_POLICYCOST=1 in Release reads inference
+            // 3.67 us and observation extraction 2.92 us — 6.58 us per policy
+            // decision. This drives the (affordable)/(OVER) verdicts below.
             //
-            // ⚠️ The cadence is what makes a continuation affordable, so it is a
+            // The cadence is what makes a continuation affordable, so it is a
             // parameter rather than a constant. At cadence 1 the continuation costs
             // 6.58 us EVERY tick and k=20 is over budget; at the search's own
             // DecisionTicks of 4 it is amortised to 1.65 us and k=20 fits twice over.
-            // Re-measure before quoting: this is a number, and it is older than the
-            // next change to ObservationWriter or PolicyNetwork.
+            // Re-measure before quoting: this number is older than the next change
+            // to ObservationWriter or PolicyNetwork.
             const double policyDecisionUs = 6.58;
             var cadence = double.TryParse(
                 Environment.GetEnvironmentVariable("BENCH_CADENCE"), out var c) && c >= 1 ? c : 4;

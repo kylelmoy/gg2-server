@@ -41,20 +41,14 @@ What it licenses, and what it does not:
 - ⚠️ **One uncontested seed in ten still carries for ~5,100 ticks** before the
   4,000-tick ceiling resolves it — a drop and a re-grab rather than a lock, so
   the flag does come back into play. Not chased.
-- ✅ **The jump branch of the follower IS ported** — item 4b-ii, landed in
-  `c34549b`, and the rocket jump in `55692be`. This bullet used to say it was not,
-  and so did the item's own section below it, **while that section documented the
-  implementation two hundred lines further down the same file**. Corrected
-  2026-08-28, after a session took the queue item it had spawned and found the
-  work done. ⚠️ **A stale "not done" costs a session exactly what a stale "done"
-  does**, which is the rule `CLAUDE.md` states for the sandvich in the other
-  direction. The only genuinely unhandled edge kind is `NavEdgeType.StickyJump`,
-  and **all 24 shipped nav graphs contain zero of them** (measured 2026-08-28:
-  Walk 18,785, Fall 11,558, Jump 67,013, DropThrough 5, DoubleJump 2,382,
+- ✅ **The jump branch of the follower is ported** (item 4b-ii, `c34549b`) and so
+  is the rocket jump (`55692be`). The only unhandled edge kind is
+  `NavEdgeType.StickyJump`, and **all 24 shipped nav graphs contain zero of them**
+  (Walk 18,785, Fall 11,558, Jump 67,013, DropThrough 5, DoubleJump 2,382,
   RocketJump 16,014, StickyJump 0, MoveBox 0).
-- ✅ **Team Deathmatch has a goal as of 2026-08-28** — `BotObjective.Deathmatch`,
-  a spot anchored on the nearest enemy. `tdm_mantic` went from eight bots moving
-  zero pixels to a real match, and team clumping went DOWN rather than up.
+- ✅ **Team Deathmatch has a goal** — `BotObjective.Deathmatch`, a spot anchored
+  on the nearest enemy. `tdm_mantic` runs a real match with eight bots moving,
+  and team clumping is down rather than up from the goal-less baseline.
 - ⚠️ **Conversion at 6v6 is 8%**, and nothing establishes whether that is
   *right*. There is no human baseline in this project.
 
@@ -112,11 +106,10 @@ PlayerCommandBuffer, ICommandSource}`, `Gg2.Server.NetworkInputSource`,
   the same event a socket is read in — so the seam is invisible to a trace by
   construction. `InputSourceTests` and `WorldViewTests` are the whole gate, and
   each of their four load-bearing claims was mutation-checked.
-- **Re-measured 2026-08-27, after the seam landed: all five closed-loop windows
-  unchanged** (357 / 1,204 / 756 / 489 / 328). Expected — the parity replayer
-  calls `MatchSimulation.Tick` directly and never goes through `GameServer` —
-  but checked rather than assumed, because "a window that moves here is a bug in
-  the seam" is the only early warning phase 7 has.
+- **All five closed-loop parity windows are unchanged by the seam** (357 /
+  1,204 / 756 / 489 / 328) — expected, since the parity replayer calls
+  `MatchSimulation.Tick` directly and never goes through `GameServer`, but
+  checked rather than assumed: a window that moves here is a bug in the seam.
 
 ### Phase 7 item 2: the nav cache reader, and a format that is not the obvious one
 
@@ -124,12 +117,11 @@ PlayerCommandBuffer, ICommandSource}`, `Gg2.Server.NetworkInputSource`,
 (built bytes) and `NavGraphFixtureTests` (all 24 real caches). The reference is
 `Scripts/BotNav/`; `gg2-agent/tools/navgraph.js` documents the format.
 
-- ✅ **The `NAV_*` and `BOT_*` constants were already ported** —
+- ✅ **The `NAV_*` and `BOT_*` constants are already ported** —
   `Gg2.Protocol.{NavConstants, BotConstants}`, pinned to `Constants.xml` by
-  `ConstantsTests`. This session nearly transcribed them a second time. **Check
-  `Gg2.Protocol` before transcribing anything from `Constants.xml`.** The one
-  number that is genuinely not there is the 23-pixel feet offset, which is a
-  literal in the GML; it lives on `NavGraph.FeetOffset`.
+  `ConstantsTests`. Check `Gg2.Protocol` before transcribing anything from
+  `Constants.xml`. The one number genuinely not there is the 23-pixel feet
+  offset, a literal in the GML; it lives on `NavGraph.FeetOffset`.
 - ⚠️ **A `ds_grid_write` string is not doubles packed end to end.** It is a
   12-byte header (uint32 601, uint32 width, uint32 height) then **column-major**
   cells of **sixteen** bytes each, with the double **four** bytes in. Cell
@@ -167,14 +159,13 @@ PlayerCommandBuffer, ICommandSource}`, `Gg2.Server.NetworkInputSource`,
   `cp_dirtbowl` has three graphs over one mask.
 - **A miss is a quiet `false`, not an error** (`NavCache.TryLoad`): a server with
   an ungenerated map in its rotation should keep serving it to humans.
-- ⚠️ **The caches live in this repo's gitignored `nav/`, or wherever
-  `GG2_NAVCACHE` points.** A fresh clone has none, so `NavGraphFixtureTests` says
-  that rather than failing as if the tree were missing
-  (`ReferenceTree.RequireNavCache`). All 24 present on this machine load.
-  ⚠️ **They were in the reference's `Source/build/botnav` until 2026-09-01** —
-  the GM8 build directory of whichever checkout `GG2_REFERENCE` named — which
-  made **188 tests** depend on having a fork that had run the in-game generator.
-  Moving them was what let the reference become stock upstream GG2.
+- ⚠️ **The 25 caches ship checked in at this repo's `nav/`** (gzipped), or
+  wherever `GG2_NAVCACHE` points. A fresh clone with none makes
+  `NavGraphFixtureTests` say so rather than failing as if the tree were missing
+  (`ReferenceTree.RequireNavCache`); **188 tests fail without them.** They no
+  longer live in the reference's GM8 build directory — that dependency on a
+  fork having run the in-game generator is gone, which is what let the
+  reference become stock upstream GG2.
 
 ### Phase 7 item 3: the scenario harness, and a world with no gamemode in it
 
@@ -271,119 +262,88 @@ flood; the census itself was a scratch diagnostic (this table is its record).
 reference is `Scripts/BotNav/navFindPath.gml`, whose header is the best
 documentation in the bot layer — read it before changing anything here.
 
-⛔ **This is the most expensive thing in the whole server, measured 2026-09-02:
-one search is 15.2 µs and the searches come to 30% of a twelve-bot match's
-tick** — more than any stage of the simulation. The cost breakdown, the two
-exact-equivalence wins taken, the four candidates that measured nothing, and the
-evidence that the heuristic is *not* the problem (it is 0.914 of the true cost)
-are in `docs/ARCHITECTURE.md`, "Where a headless bot match's tick goes".
-⛔ **A\* GIVES UP OPTIMALITY ON PURPOSE as of 2026-09-02** — a closed node is
-never revisited and the heuristic is inflated by `NavConstants.SearchWeight`
-(1.3). **Bot `Poll` −18.9%, tick −12.0%**, for routes 4% more expensive on
-average; every route that existed is still found (19,468 across all 25 graphs,
-unchanged). ⚠️ **The two halves only work together — inflating without the
-closed-set skip makes the search SLOWER**, 636 pops against 408, because an
-inconsistent heuristic re-opens more. The whole measurement, and the three
-instruments that could NOT choose the weight, are in `docs/ARCHITECTURE.md`.
+⛔ **The most expensive thing in the server**: one search is 15.2 µs, 30% of a
+twelve-bot tick. Breakdown, two exact-equivalence wins, four rejected
+candidates, and why the heuristic is not the problem (0.914 of true cost):
+`docs/ARCHITECTURE.md`, "Where a headless bot match's tick goes".
+⛔ **A\* gives up optimality on purpose**: a closed node is never revisited and
+the heuristic is inflated by `NavConstants.SearchWeight` (1.3) — **`Poll`
+−18.9%, tick −12.0%** for routes 4% costlier on average, every route still
+found (19,468/25 graphs unchanged). ⚠️ **The two halves only work together** —
+inflating without the closed-set skip is SLOWER (636 pops vs 408; an
+inconsistent heuristic re-opens more). Full measurement: `docs/ARCHITECTURE.md`.
 
-⛔ **THE SEARCH BUDGET IS OWNED BY THE OBJECTIVE LAYER, NOT BY THE CADENCE**
-— measured 2026-09-02 and the thing to know before touching any of it. A
-twelve-bot `ctf_truefort` match runs **321 searches a thousand ticks**, and
-**181 of them are a goal reissue**: `PathFollower.SetGoal` sets `ReplanAt = 0`,
-so every time `ScriptedBot.UpdateObjective` decides the goal has moved more than
-`BOT_GOAL_RETARGET_DIST` the bot buys a full A\* on its next follower tick. The
-re-plan timer is 97 and a lost route 43.
-⛔ **Raising `BotConstants.ReplanTicks` is REJECTED, measured**: 45 → 90 removes
-**9.9%** of the searches and costs **16.5%** of `ScenarioSuiteTests`' total
-walking time, with `gallery-pit-climb` failing outright; 45 → 60 is −5.1% for
-+10.1%. Quadrupling it to 180 removes only 22%, because the objective layer goes
-on forcing them. **Do not spend a session tuning the cadence.**
-⚠️ **And do not read the call-site counts as the timer's**: every event-driven
-re-plan sets `ReplanAt = 0` rather than calling `Plan`, so the site under
-`tick >= state.ReplanAt` fires 278 times a thousand ticks while the timer itself
-accounts for 97. `BotPathState.GoalsSet` is the split, recorded permanently, and
-`BENCH_COMBAT` prints it beside `Replans`.
-⛔ **AND THE BUDGET IS CONSERVED: `BOT_GOAL_RETARGET_DIST` BUYS NOTHING EITHER.**
-48 → 96 cuts goal reissues 14% and leaves the search count **exactly where it
-was** (321.1 → 321.2); 48 → 144 cuts them 29% for **6.4%** fewer searches. A bot
-with a staler goal goes off route or runs out of route and re-plans from there —
-about three fifths of every search removed at one throttle returns at another.
-⛔ **"Fewer searches" is therefore CLOSED as a lever**: the two throttles are 86%
-of the budget, one costs walking time one-for-one and the other buys nothing.
-A smaller graph is what is left.
-⚠️ **Also worth knowing before anyone tries: no criterion in this repo could see
-a `BOT_GOAL_RETARGET_DIST` regression** — the suite's legs have one fixed goal,
-the intel run's flag does not move until it is grabbed, and `eval` changes both
-teams at once. **The knob would have to become per-bot first**, so an arm can
-differ from its control.
+⛔ **The search budget is owned by the objective layer, not the cadence.**
+Twelve bots on `ctf_truefort`: **321 searches/1000 ticks**, **181 a goal
+reissue** — `PathFollower.SetGoal` sets `ReplanAt = 0`, so any
+`BOT_GOAL_RETARGET_DIST` move buys a full A\* next follower tick (re-plan
+timer 97, lost route 43).
+⛔ **Raising `BotConstants.ReplanTicks` is REJECTED, measured**: 45→90 removes
+9.9% of searches for 16.5% of `ScenarioSuiteTests`' walking time (and fails
+`gallery-pit-climb` outright); 45→60 is −5.1%/+10.1%; 180 removes only 22%,
+since the objective layer keeps forcing re-plans. **Do not spend a session
+tuning the cadence.**
+⚠️ Call-site counts (278/1000, `tick >= state.ReplanAt`) aren't the timer's
+own (97) — every event-driven re-plan sets `ReplanAt = 0` instead of calling
+`Plan`. `BotPathState.GoalsSet` records the split; `BENCH_COMBAT` prints it
+beside `Replans`.
+⛔ **`BOT_GOAL_RETARGET_DIST` BUYS NOTHING EITHER**: 48→96 cuts goal reissues
+14% and leaves search count unchanged (321.1→321.2); 48→144 cuts reissues 29%
+for 6.4% fewer searches — a staler goal just re-plans from off/out of route
+instead. ⛔ **"Fewer searches" is CLOSED as a lever**: the two throttles are
+86% of the budget and buy nothing net; a smaller graph is what's left.
+⚠️ **No criterion here could catch a `BOT_GOAL_RETARGET_DIST` regression**
+(fixed goals throughout, `eval` moves both teams) — the knob would need to
+become per-bot first.
 
-⚠️ **The reissues are progressive, not oscillation** — only 5.5 a thousand ticks
-come back within 48px of the goal before last — so the lever that is left is
-`BOT_GOAL_RETARGET_DIST`, and ⛔ **`ScenarioSuiteTests` cannot see it**: every leg
-there has one fixed goal and calls `SetGoal` once. That measurement needs
-`BotObjectiveTests`' intel run and `eval`.
+⚠️ Reissues are progressive, not oscillation (only 5.5/1000 return within
+48px of the prior goal); ⛔ `ScenarioSuiteTests` can't see this lever (one
+fixed goal per leg) — needs `BotObjectiveTests`' intel run and `eval`.
 
-⛔ **A quarter of a search is `PriorityQueue`, and replacing it is REJECTED** — a
-hand-written 4-ary heap reproducing .NET's tie-breaking exactly (checksummed
-identical over 425,000 pops) is 7% faster than it, half a percent of a tick.
-✅ **`NavRouteIdentityTests` pins the exact routes on all 25 shipped graphs now**,
-which nothing did before: every other nav test asserts properties that hold just
-as well for a different route, and expanding a node's edges in reverse order
-reddens that one test and no other.
+⛔ **A quarter of a search is `PriorityQueue`; replacing it is REJECTED** — a
+hand-written 4-ary heap matching .NET's tie-breaking exactly (425,000 pops
+checksummed identical) is only 7% faster, half a percent of a tick.
+✅ **`NavRouteIdentityTests` pins exact routes on all 25 graphs** — every other
+nav test tolerates a different route; reversing a node's edge-expansion order
+reddens only this one.
 
-- ⚠️ **A closed node is RE-OPENED when a cheaper route arrives, and that is what
-  makes the search optimal rather than merely fast.** Skipping an already-closed
-  neighbour is only sound when the heuristic is *consistent*, which is strictly
-  stronger than the admissibility straight-line distance gives. Measured in the
-  reference on honest costs: the ctf_truefort blue leg went 68 nodes → 60.
-- ⚠️ **The gate test is on the EDGE and never on the node it arrives at.** An
-  arc can cross a gate without landing on it and the generator stamps such an
-  edge. **Measured 2026-08-27 across all 24 graphs: 115,757 edges, 1,350 stamped,
-  148 gated nodes, and ZERO edges landing on a gated node unstamped** —
-  `NavSearchFixtureTests.NoEdgeLandsOnAGatedNodeUnstamped` is what notices if a
-  generator ever stops. ⚠️ `NavGraph.EdgePassable` checked the landing node too
-  until this landed, because it was written from
-  `gg2-agent/tools/navgraph.js`'s `reach`, which is an audit tool and
-  deliberately conservative. **The game is the specification.** The rule this
-  preserves: a bot standing inside a gate it may not pass still gets edges *out*.
-- ⚠️ **Refusing a class arc is the DEFAULT.** `CanDoubleJump`/`CanRocketJump`
-  default to false, so a hand-issued query gets the conservative answer — "the
-  failure mode of the opposite default is a Heavy routed over an arc it
-  physically cannot fly". ⚠️ `CanRocketJump` is **not a property of the class**:
-  it is the *weapon* plus an hp test (`hp > NAV_RJ_DAMAGE`, strictly greater,
-  because the damage lands before the bot does), so a soldier's routes shed their
-  rocket jumps on their own as it takes damage.
-- ⚠️ **The blacklist is a set, never a cost multiplier** — a multiplier would
-  break the heuristic's admissibility. It is per bot, which is why it is a
-  parameter rather than part of the graph.
-- ⚠️ **`occupancy` is the only safe way to perturb a cost, and a per-edge random
-  jitter is not.** The jitter was deleted from the reference: it is
-  mean-reverting, so over a sixty-edge route every candidate inflates by the same
-  average and on ctf_truefort all eight bots got the *identical* 68-node route.
-  Occupancy works because it is structured, shared and coarse. **Do not re-add
-  the jitter.**
-- ⚠️ **A fixture for a search must be admissible or it is a different search.**
-  `NavSearchTests.AssertAdmissible` checks every fixture edge costs at least the
-  straight line it covers, because a cheap edge to a distant node makes the
-  heuristic overestimate and "the cheapest route wins" then passes or fails for
-  reasons that have nothing to do with the code. Two fixtures in the first draft
-  violated it.
-- ⚠️ **And a re-open fixture has to make the re-open actually fire.** It is not
-  enough that a cheaper route exists — it must arrive at an *already closed*
-  node, which needs the near-goal node reached expensively but popped early, the
-  far node reached cheaply but popped late, and the goal expensive enough from
-  the first that the second pops before it. The first draft got the right answer
-  without the re-open and passed with it deleted. `NavSearch.Reopens` is now
-  asserted so it cannot silently stop exercising it.
-- **Two things are equivalent-by-construction and are recorded rather than
-  gated**, both checked by mutation: the goal test's position relative to the
-  closed test (the goal is never closed when first popped), and the
-  reconstruct's "did the chain reach the start" guard (every `cameFrom` write is
-  paired with a `gScore` write). Both are kept because the reference keeps them.
-- **`NavSearch` is an instance and its scratch is reused**; the reference
-  allocates four `ds_grid`s per query. ⚠️ **Not thread-safe on purpose** — one
-  search at a time per instance, or two frontiers interleave into one `gScore`
-  and produce routes that are wrong rather than slow.
+- ⚠️ **A closed node is RE-OPENED when a cheaper route arrives** — what makes
+  the search optimal, not merely fast; sound only for a *consistent*
+  heuristic, stronger than admissibility. ctf_truefort's blue leg: 68→60 nodes.
+- ⚠️ **The gate test is on the EDGE, never the node it lands on** — an arc can
+  cross a gate without landing on it. **2026-08-27, all 24 graphs: 115,757
+  edges, 1,350 stamped, 148 gated nodes, zero unstamped landings**
+  (`NavSearchFixtureTests.NoEdgeLandsOnAGatedNodeUnstamped` catches a
+  regression). `NavGraph.EdgePassable` checked the landing node too until this
+  landed, ported from `gg2-agent/tools/navgraph.js`'s deliberately
+  conservative `reach`. **The game is the specification**: a bot inside a gate
+  it may not pass still gets edges *out*.
+- ⚠️ **Refusing a class arc is the DEFAULT** — `CanDoubleJump`/`CanRocketJump`
+  default false, since the opposite routes a Heavy over an arc it can't fly.
+  `CanRocketJump` is **not a class property**: weapon plus `hp >
+  NAV_RJ_DAMAGE` (strictly greater — damage lands before the bot does), so a
+  soldier's routes shed rocket jumps as it takes damage.
+- ⚠️ **The blacklist is a set, never a cost multiplier** (would break
+  admissibility); per bot, hence a parameter, not part of the graph.
+- ⚠️ **`occupancy` is the only safe way to perturb a cost; per-edge jitter is
+  not.** Deleted from the reference — mean-reverting jitter inflates a
+  sixty-edge route's candidates by the same average, so all eight bots on
+  ctf_truefort got the identical 68-node route. **Do not re-add it.**
+- ⚠️ A fixture must be admissible (`NavSearchTests.AssertAdmissible`: every
+  edge ≥ the straight line it covers) or "cheapest wins" passes/fails for
+  unrelated reasons — two first-draft fixtures violated it.
+- ⚠️ A re-open fixture must make the re-open actually fire — a cheaper route
+  isn't enough; it must land on an *already closed* node (near-goal reached
+  expensively/popped early, far node cheaply/popped late, goal costly enough
+  the far node pops first). `NavSearch.Reopens` is asserted so this can't
+  silently stop firing.
+- **Two properties are equivalent-by-construction, recorded not gated**
+  (mutation-checked): the goal test vs. closed test ordering, and
+  reconstruct's `cameFrom`/`gScore` pairing. Kept because the reference keeps
+  them.
+- **`NavSearch` reuses scratch** (the reference allocates four `ds_grid`s per
+  query). ⚠️ **Not thread-safe on purpose** — two frontiers sharing a
+  `gScore` produce wrong, not slow, routes.
 
 ### Phase 7 item 4b-i: the path follower's spine, and the ground edges
 
@@ -392,79 +352,65 @@ physics taken out) and `PathFollowerFixtureTests` (a real leg walked on
 `ctf_truefort` through `ScenarioWorld`). The reference is `botPathKeys.gml`
 (1,014 lines, 394 of code) and `botPathPlan.gml`.
 
-✅ **The jump branch IS ported** — item 4b-ii, below in this file. This paragraph
-said the opposite until 2026-08-28, contradicting its own section.
+✅ **The jump branch is ported** — item 4b-ii, below in this file.
 
-✅ **`NavEdgeType.StickyJump` is handled**, landed 2026-08-28 — see "The
-sticky-jump follower arm" below. `FollowEdge`'s `default` arm now covers nothing
-the generator emits, and still counts rather than throws so a graph from a newer
-generator degrades into `BotPathState.UnsupportedEdgeTicks` instead of silently
-flying an arc nobody modelled. **Do not paper over a new kind with an approximate
-jump**: an arc the generator did not validate is exactly what the whole takeoff
-apparatus exists to prevent. ✅ **No shipped graph contains a type-7 edge** —
-measured across all 24 caches in `nav/` — and `NavSearch` refuses
-one to anybody without `NavQuery.CanStickyJump`, which the reference's own A*
+✅ **`NavEdgeType.StickyJump` is handled** — see "The sticky-jump follower arm"
+below. `FollowEdge`'s `default` arm covers nothing the generator emits but
+still counts rather than throws, so a newer generator's graph degrades into
+`BotPathState.UnsupportedEdgeTicks` instead of silently flying an unmodelled
+arc — **do not paper over a new kind with an approximate jump**. ✅ **No
+shipped graph contains a type-7 edge** (all 24 `nav/` caches), and `NavSearch`
+refuses one without `NavQuery.CanStickyJump`, which the reference's own A*
 cannot do.
 
-- ⚠️ **The route index advances only while the bot is ON THE GROUND**, and this
-  is the single most expensive bug in the reference's follower. `NodeFromWorld`
-  tolerates being a couple of cells off a surface, so an arc passing over its own
-  landing resolves ~15px before the feet arrive — and advancing there hands the
-  follower the *next* edge mid-air. Measured on ctf_truefort's two stacked jumps:
-  the bot took off, was switched onto the return leg at the apex, landed back
-  where it started, and did it again.
-- ⚠️ **Arrival needs the bot stopped, not merely close.** GG2 keeps horizontal
-  speed for ~10 ticks after the keys come off, so arriving on position and then
-  pressing nothing coasts 30-40px past the target. Inside the band the bot
-  *brakes* — a press against its own motion — and the speed floor of 1 is what
-  stops that becoming a press back the other way.
-- ⚠️ **Landing off the route re-plans IMMEDIATELY** rather than riding out
-  `BOT_OFFPATH_TICKS`: standing where the route does not go is a finished move
-  that went somewhere else, and waiting to admit it is how a bot walks somewhere
-  it cannot get back from. **Not knowing where you are at all** is the different
-  case and does get the timer.
-- ⚠️ **But the edge is blacklisted only on the SECOND consecutive miss.** A lot
-  of real edges are marginal and flown stochastically; banning one on its first
-  miss cost the reference ~250 frames to complete a 30-tick hop.
-- ⚠️ **A failed search KEEPS the old route**, and the search runs before the old
-  route is given up. This was the reference's "bots momentarily stop moving"
-  report, and it was structural rather than occasional. The failure then parks
-  the next search for a re-plan window, or every event-driven caller fires again
-  next tick — a full A* per bot per frame for a goal that is unreachable from a
-  pixel away too.
-- ⚠️ **A stale route never declares an arrival.** It ends where the bot was sent
-  *before*; declaring one would clear `HasGoal` and throw away the objective just
-  given.
-- ⚠️ **A fall reads its takeoff end off the edge and cannot re-derive it.** "The
-  column just past the run is inside the landing node" is true of BOTH ends
-  wherever the landing reaches under the whole run, and guessing picked the
-  right-hand end whenever it was ambiguous — which on ctf_avanti wedged a bot
-  against a solid block for ~1,100 ticks on a leg priced at 545. **And in the air
-  the plan is a straight vertical drop from that column**, which the bot holds;
-  without it a fall is the one edge kind flown with no plan at all.
-- ⚠️ **The moved test is half a pixel, not zero** — `good_move_contact_solid`
-  works at eighth-pixel precision, so a bot grinding a wall jitters without going
-  anywhere. And the stuck test is gated on having pressed something, or a bot
-  standing on its target waiting for a jump window reports itself stuck.
-- ⚠️ **A ban already imposed is not re-armed.** The reference exits on the
-  existence test, so a ban runs from when it was first imposed; without that a
-  bot failing the same edge repeatedly extends it indefinitely and the blacklist
-  stops being a delay.
-- **The anti-thrash check lives with the planner**, not the stuck detector: it
-  catches the bot that is technically moving — shuffling across a ledge — and
-  getting nowhere. ⚠️ It reads the edge in progress, which the follower
-  re-establishes every tick and a successful plan clears; a test that plans twice
-  without stepping finds nothing to blame.
+- ⚠️ **The route index advances only while the bot is ON THE GROUND** — the
+  single most expensive bug in the reference's follower: `NodeFromWorld`
+  tolerates a couple of cells off-surface, so an arc's landing resolves
+  ~15px before the feet arrive, handing the follower the *next* edge
+  mid-air. On ctf_truefort's two stacked jumps this switched the bot onto
+  the return leg at the apex, landing it back where it started, repeatedly.
+- ⚠️ **Arrival needs the bot stopped, not merely close** — GG2 keeps
+  horizontal speed ~10 ticks after keys release, so stopping cold coasts
+  30-40px past the target. Inside the band the bot *brakes* (presses against
+  its own motion), with a speed floor of 1 to prevent overshoot the other way.
+- ⚠️ **Landing off the route re-plans IMMEDIATELY**, not after riding out
+  `BOT_OFFPATH_TICKS`: a finished move that went wrong should not be waited
+  out. **Not knowing where you are at all** is the different case and does
+  get the timer.
+- ⚠️ **The edge is blacklisted only on the SECOND consecutive miss** — many
+  real edges are marginal and flown stochastically; banning on the first
+  miss cost the reference ~250 frames on a 30-tick hop.
+- ⚠️ **A failed search KEEPS the old route**, run before the old route is
+  given up — the reference's "bots momentarily stop moving" report,
+  structural rather than occasional. Failure parks the next search for a
+  re-plan window, or every event-driven caller re-fires next tick — a full
+  A* per bot per frame even for a goal unreachable from a pixel away.
+- ⚠️ **A stale route never declares an arrival** — it ends where the bot was
+  sent *before*; declaring one would clear `HasGoal` and drop the objective.
+- ⚠️ **A fall reads its takeoff end off the edge, can't re-derive it** — "the
+  column just past the run is inside the landing node" holds at both ends
+  when the landing spans the whole run, and guessing wrong wedged a bot on
+  ctf_avanti for ~1,100 ticks on a leg priced 545. **The plan is a straight
+  vertical drop from that column**; without it a fall flies with no plan.
+- ⚠️ **The moved test is half a pixel, not zero** (`good_move_contact_solid`
+  is eighth-pixel precision), or a bot grinding a wall jitters in place; the
+  stuck test is gated on having pressed something, or a bot waiting on target
+  for a jump window reports itself stuck.
+- ⚠️ **A ban already imposed is not re-armed** — runs from when first
+  imposed, or repeated failures on the same edge extend the ban indefinitely.
+- **The anti-thrash check lives with the planner**, catching a bot that's
+  technically moving (shuffling a ledge) but getting nowhere. ⚠️ It reads the
+  edge in progress, which a successful plan clears, so planning twice without
+  stepping finds nothing to blame.
 
-⚠️ **Two testing traps this cost, both worth knowing before writing a follower
-test.** A fixture where the bot can get *back* to its route makes a second
-consecutive off-route miss unreachable — the re-plan simply installs a route
-starting where it landed, which is correct behaviour and no gate. And "there
-exists a walk-only way there" is the wrong question for an end-to-end leg: the
-follower is handed `NavSearch`'s route, and the search costs a jump like anything
-else, so it prefers one across legs a bot could have walked.
-`PathFollowerFixtureTests.FindWalkableLeg` proposes candidates and accepts the
-first whose *planned* route is steerable end to end.
+⚠️ **Two testing traps.** A fixture where the bot can get back to its route
+makes a second consecutive off-route miss unreachable (the re-plan installs a
+correct route from the landing spot, not a gate). And "walk-only way there"
+is the wrong question end to end: the follower gets `NavSearch`'s route,
+which costs a jump like anything else and may prefer one over legs a bot
+could have walked. `PathFollowerFixtureTests.FindWalkableLeg` proposes
+candidates and accepts the first whose *planned* route is steerable end to
+end.
 
 ### Phase 7 item 4b-ii: the jump branch, and a budget that could not be spent
 
@@ -473,89 +419,74 @@ fields. Gated by `PathFollowerTests` and `PathFollowerFixtureTests`. The
 reference is `botPathKeys.gml:408-1014`, `botJumpReach.gml` and
 `botRunupCol.gml`.
 
-✅ **A bot now crosses `ctf_truefort` end to end.** Re-measured after item 4f:
-the longest steerable leg on the map is **137 nodes**, and the bot arrives at
-tick **1,786** with 39 re-plans, **0 stuck fires**, 10 off-route events and **0
-blacklists**. The reference quotes 2,200-2,500 ticks "with no blacklists now" for
-its own *shorter* `truefort-spawn-to-intel` leg, so this port is comfortably
-ahead of it on a longer route.
+✅ **A bot crosses `ctf_truefort` end to end.** Longest steerable leg **137
+nodes**; arrives at tick **1,786** with 39 re-plans, **0 stuck fires**, 10
+off-route events, **0 blacklists** (`PathFollowerFixtureTests`, pinned
+exactly) — beats the reference's own 2,200-2,500 ticks on its *shorter*
+`truefort-spawn-to-intel` leg.
+⚠️ **A subtly-wrong-everywhere behaviour layer means check what it's reading
+before tuning it** — a much worse early reading of this pin traced to a
+single `(int)` cast in `NavCache` truncating the velocity every arc is flown
+at (item 4f), not to the takeoff machinery it seemed to implicate.
 
-⚠️ **It read 2,655 / 76 / 34 / 9 when this section was written, and this file
-recorded that gap as "misses more marginal arcs — watch it when the takeoff
-machinery is next touched". It was not the takeoff machinery.** It was a single
-`(int)` cast in `NavCache` truncating the velocity every arc is flown at — see
-item 4f. **A behaviour layer that looks subtly wrong everywhere is a reason to
-check what it is reading before tuning it.**
+⚠️ **RocketJump is still not flown** — `NavQuery.CanRocketJump` defaults
+false; the follower counts any seen in `UnsupportedEdgeTicks`. Needs the
+combat half (`botRocketAim`/`botRocketFire`) and a live Rocketlauncher.
 
-⚠️ **RocketJump is still not flown.** `NavQuery.CanRocketJump` defaults false so
-the search does not offer one, and the follower counts it in
-`UnsupportedEdgeTicks` if it ever sees one. It needs the combat half
-(`botRocketAim`/`botRocketFire`) and a live loaded Rocketlauncher.
+- ⚠️ **BOT_TAKEOFF_PATIENCE (60) is unreachable at the default re-plan
+  stagger, unremarked in the reference.** A successful re-plan's
+  `botPathFree` sets `botEdgeFrom = -1`, and the change-of-edge test zeroes
+  the takeoff budget next tick — so the *re-plan interval* is a hard ceiling
+  on takeoff budget. `botPathPlan.gml:53`'s interval is `BOT_REPLAN_TICKS +
+  (player mod BOT_REPLAN_TICKS)`, **45 to 89**; at stagger 0 it's 45, so 60
+  is never reached and the escape hatch is dead, as it was before the
+  reference even incremented the counter. `BotPathState.ReplanStagger`
+  carries the offset, added not phased.
+- ⚠️ **`botPathFree` does NOT reset the takeoff budget** (only the run-up) —
+  the port briefly did, wrong, visible only because of the ceiling above.
+- ⚠️ **The takeoff column is carried ON THE EDGE, generator-searched** —
+  usually the run's end facing the landing, but where the landing surface
+  also ends the run (climbing a crate) only a few cells back stays flyable;
+  re-deriving it turns those edges back into fictions.
+- ⚠️ **An arc is flown as a TRAJECTORY, not a speed**: target
+  `takeoffX + dir × min(distance, needVx × airTicks)`, **clamped at the
+  arc's own distance** so a late bot keeps pressing toward the landing
+  rather than past it. Reference measurement: **12-19% of jumps landed on
+  the aimed-at node before, 100% after.**
+- ⚠️ **The gate's speed test is `JumpModel.Reach`, not "at the arc's
+  speed"** — `along >= 0` accepts a standstill, right for **91.9%** of jump
+  edges, catastrophic for the rest (**3,310/62,069 unflyable by a heavy**
+  from standstill; 96% of koth_corinth's heavy routes cross one). Demanding
+  full speed was tried and lost (647→868, 674→997 ticks, no more arrivals).
+  ⚠️ `Reach` is **not monotonic** in start speed (3.50 clears, 3.75/4.00
+  fail, 4.25 clears) since arriving ahead of schedule makes the tracker
+  brake — do not bisect for a threshold.
+- ⚠️ **The gate measures the gap from the takeoff COLUMN, never the bot's
+  x** — the tracker's ceiling is `needVx × flightTicks` from the anchor;
+  measuring from x (up to `BOT_JUMP_LEAD` cells further) asks for 22px an
+  arc can only deliver 12, refusing *silently* on every approach. Credit for
+  ground already covered inside the column is only ever a credit, clamped
+  to one cell.
+- ⚠️ **The run-up follows WALK edges through the GRAPH**, not the route or
+  node columns — clamping into a one-column node (a staircase's top step)
+  is a no-op, so the jump still happened from standstill. **3,310 unflyable
+  → 253, koth_gallery 105 → 0.**
+- ⚠️ **A run-up walks BACKWARDS along the route**, invisible to the
+  forward-only advance — the locate step suppresses off-route detection
+  while a run-up is live, and `PathAt` must NOT move.
+- ⚠️ **The second impulse is a PRESS, not a hold**, at the tick the
+  generator proved (`NAV_EDGE_REJUMP`), gated on `CanDoubleJump` even though
+  the search won't offer these edges elsewhere — a route outlives its plan.
+- ⚠️ **`CharacterPhysics.ControlAndFriction` is public now** since the reach
+  model reads it live: Begin Step sets it from `moveStatus`, **not**
+  `onground`, letting an in-flight tracker correct a slow takeoff.
 
-- ⚠️ **BOT_TAKEOFF_PATIENCE (60) is unreachable at the default re-plan stagger,
-  and nothing in the reference remarks on it.** A successful re-plan calls
-  `botPathFree`, which sets `botEdgeFrom = -1`; the follower's change-of-edge
-  test then zeroes the takeoff budget on the very next tick. So a bot's *re-plan
-  interval* is a hard ceiling on its takeoff budget — and
-  `botPathPlan.gml:53` makes that interval `BOT_REPLAN_TICKS + (player mod
-  BOT_REPLAN_TICKS)`, i.e. **45 to 89**. At a stagger of 0 the interval is 45,
-  60 is never reached, and the escape hatch is dead — exactly as it was dead
-  before the reference started incrementing the counter at all. **Found by the
-  test failing.** `BotPathState.ReplanStagger` carries the offset; it is added,
-  not phased.
-- ⚠️ **`botPathFree` does NOT reset the takeoff budget** (it resets the run-up).
-  The port briefly did and it is wrong — though only visibly so because of the
-  ceiling above.
-- ⚠️ **The takeoff column is carried ON THE EDGE because the generator searched
-  for it.** Usually the end of the run facing the landing — but where the landing
-  surface is also what ends the run (climbing onto a crate) the body is flush
-  against it there and the only flyable arcs start a few cells back. Re-deriving
-  it turns those edges back into fictions.
-- ⚠️ **An arc is flown as a TRAJECTORY, not as a speed.** The target is
-  `takeoffX + dir × min(distance, needVx × airTicks)` — an absolute world x, and
-  **clamped at the arc's own distance** so a late bot keeps pressing toward the
-  landing rather than aiming past it. Measured in the reference: **12-19% of
-  jumps landed on the node they were aimed at before, 100% after.**
-- ⚠️ **The gate's speed test is `JumpModel.Reach`, not "at the arc's speed".**
-  `along >= 0` accepts a standstill, which is right for **91.9% of jump edges**
-  and catastrophic for the rest: **3,310 of 62,069 are unflyable by a heavy**
-  from a standstill, and on koth_corinth 96% of a heavy's routes cross one.
-  Demanding full speed was tried and lost — 647→868 and 674→997 ticks on the
-  valley scenarios with no more arrivals.
-  ⚠️ **`Reach` is not monotonic in the start speed** (3.50 clears, 3.75 and 4.00
-  fail, 4.25 clears again) because arriving *ahead* of a constant-velocity
-  schedule makes the tracker brake. Do not bisect it for a threshold.
-- ⚠️ **The gate measures the gap from the takeoff COLUMN, never from the bot's
-  x.** The tracker clamps at `needVx × flightTicks` from the anchor, so that is a
-  ceiling on how far the bot can be steered; asking from x — up to
-  `BOT_JUMP_LEAD` cells further out — asks for 22px of an arc that can only
-  deliver 12, and refuses on every approach *silently*: nothing blacklisted,
-  nothing off route, because the bot is doing exactly what it was told.
-  The **credit** for ground already covered inside the column is only ever a
-  credit, never a debit, clamped to one cell.
-- ⚠️ **The run-up follows WALK edges through the GRAPH, not the route or the
-  node's own columns.** Clamping into the node's span is a no-op on a
-  one-column node — which is what the top step of a staircase is — so the jump
-  happened from a standstill anyway. **3,310 unflyable edges → 253, koth_gallery
-  105 → 0.**
-- ⚠️ **A run-up walks BACKWARDS along the route**, and the forward-only advance
-  cannot see it — so the locate step suppresses the off-route branch while a
-  run-up is live, and `PathAt` must NOT move.
-- ⚠️ **The second impulse is a PRESS, not a hold**, fired once at the tick the
-  generator proved (`NAV_EDGE_REJUMP`), and gated on `CanDoubleJump` **even
-  though the search will not offer these edges to anything else** — a route
-  outlives the plan that made it.
-- ⚠️ **`CharacterPhysics.ControlAndFriction` is public now** because the reach
-  model has to read it live: Begin Step sets it from `moveStatus` and **not**
-  from `onground`, which is the whole reason an in-flight tracker can correct a
-  slow takeoff.
-
-⚠️ **A testing trap this cost twice: a fixture arc must cover its own gap.** A
-generator would never emit `0.5 px/tick × 20 ticks` across an 18px gap, and the
-gate correctly refuses it — which looks exactly like the thing under test being
-broken. And a control that relies on the *search* refusing an edge never reaches
-the follower at all: the double-jump control passed with the `CanDoubleJump` test
-deleted until it was made to plan as a scout and fly as something else.
+⚠️ **A testing trap that cost this twice: a fixture arc must cover its own
+gap** — a generator would never emit `0.5 px/tick × 20 ticks` across an 18px
+gap, and the correct refusal looks like a broken test. And a control relying
+on the *search* refusing an edge never reaches the follower: the double-jump
+control passed with `CanDoubleJump` deleted until made to plan as a scout
+and fly as something else.
 
 ### Phase 7 item 4c-i: what to shoot at, and where to point
 
@@ -565,72 +496,64 @@ deleted until it was made to plan as a scout and fly as something else.
 `botAimSolve.gml`, `botAimLead.gml`, `botWeaponBallistics.gml` and
 `botFallPredict.gml`.
 
-⚠️ **`botCombatUpdate` is NOT ported** — 221 code lines of cadence, trigger and
-aim slew, and it is 4c-ii. So nothing fires yet: a bot picks a target and knows
-where to point, and no key is pressed.
+⚠️ **`botCombatUpdate` is NOT ported** — 221 lines of cadence, trigger and aim
+slew, that's 4c-ii — so nothing fires yet: a bot picks a target and knows
+where to point but presses no key.
 
-- ⚠️ **Threat is scored in PIXELS, and every term is comparable because of it.**
+- ⚠️ **Threat is scored in PIXELS, so every term is comparable**:
   `distance − 300×intel − 150×attacker − 120×medic − 60×engineer − 100×wounded
-  + range×inside the minimum band`. Taking the carrier means being willing to
-  walk 300px past someone harmless; a medic is worth 120 of that because leaving
-  one alive undoes everything else.
-- ⚠️ **The minimum-band penalty is a LOCK breaker, not a range rule.** A
-  soldier's band is 110-800px and it fires throughout — but with threat as pure
-  distance it always locked whoever was nearest, and the combat layer does not
-  look for a new target while it holds a valid one. An enemy that closes inside
-  `BOT_SPLASH_SAFE` therefore pins a soldier permanently. `+range` is always
-  enough to lose to anything inside the radius; the property is the point, not
-  the number.
-- ⚠️ **A blocked sightline does not mean there is nothing to fight**, and
-  treating it that way is the "bots walk straight past enemies" report. A
-  blocked search falls back to the nearest candidate inside `BOT_BLIND_RANGE`
-  with `Visible` false. The radius is short on purpose: a blind target across the
-  map is a bot aiming at scenery.
-- ⚠️ **Sentries and the enemy generator are candidates too**, and both are aimed
-  at by the **centre of the box** where a character is aimed at by its origin. A
-  sentry ranks `BOT_SENTRY_BONUS` ahead of a player at the same distance (a
-  player can be walked away from; a sentry covers its ground); a generator sits
-  at `BOT_GEN_THREAT` 4,000, far past any distance term, so it is only ever
-  chosen when nothing live is available.
-- ⚠️ **`AngleDelta` answers -180 for exactly opposite, not +180** — the range is
-  `[-180, 180)`. That decides which way a bot turns to face directly behind it.
-- ⚠️ **The ballistics table is the bot's MODEL of the weapon, not the weapon.** A
-  scattergun blast is six pellets with a spread; the aim model calls it one
-  projectile at 13 px/tick falling at 0.15. **Do not "fix" one to match
-  `Gg2.Simulation.Projectiles`** — every number was tuned against play, and a bot
-  that aims with the real ones is a different bot. A speed of **zero** means "do
-  not lead", which is how the Rifle and the Medigun fall out without a case.
-- ⚠️ **The projectile's own drop is `g·t·(t+1)/2`, not `g·t²/2`** — a projectile
-  falls in discrete ticks, so it is the triangular number and not the integral.
-  Two and a half pixels on a thirty-tick shot, and exactly the kind of line that
-  gets "simplified" by somebody who reads it as calculus.
-- ⚠️ **The fall model has two phases because GG2 has a terminal velocity**, and
-  the prediction is **clamped at the floor under the target**. Without the clamp
-  a target standing still on the ground is predicted to keep falling through it
-  and the bot aims below its feet. `BotAim.NoFloor` — "no map is this tall" — is
-  the reference's own sentinel and is right over a pit.
-- ⚠️ **The flight time is floored at one tick.** A distance of zero gives a time
-  of zero and the whole prediction collapses to "aim at your own feet";
-  `point_direction` of a point to itself is 0, so the bot aims dead right.
-- **Drift is the shooter's own speed**, subtracted from the target's, and only
-  for the Scattergun, the Shotgun and the Minigun.
+  + range×inside the minimum band`. Worth walking 300px past someone harmless
+  to take the carrier; a medic is worth 120 since leaving one alive undoes
+  everything else.
+- ⚠️ **The minimum-band penalty is a LOCK breaker, not a range rule** — a
+  soldier's 110-800px band fires throughout, but pure-distance threat always
+  locks the nearest enemy and combat won't retarget while holding a valid
+  one; without it, closing inside `BOT_SPLASH_SAFE` pins a soldier
+  permanently. `+range` always loses to anything inside the radius — the
+  property is the point, not the number.
+- ⚠️ **A blocked sightline doesn't mean nothing to fight** (the "bots walk
+  straight past enemies" report) — falls back to the nearest candidate
+  inside `BOT_BLIND_RANGE` with `Visible` false; the short radius keeps a
+  blind target across the map from being aimed at like scenery.
+- ⚠️ **Sentries and the enemy generator are candidates too**, aimed at by
+  the **centre of the box** vs. a character's origin. A sentry ranks
+  `BOT_SENTRY_BONUS` ahead of an equidistant player (unlike a player, it
+  can't be walked away from); a generator sits at `BOT_GEN_THREAT` 4,000,
+  chosen only when nothing live is available.
+- ⚠️ **`AngleDelta` answers -180 for exactly opposite, not +180** (range
+  `[-180, 180)`) — decides which way a bot turns to face directly behind it.
+- ⚠️ **The ballistics table is the bot's MODEL, not the weapon** — a
+  scattergun blast is six pellets with spread; the aim model calls it one
+  13 px/tick projectile falling at 0.15. **Do not "fix" it to match
+  `Gg2.Simulation.Projectiles`** — tuned against play, and real numbers make
+  a different bot. Speed **zero** means "do not lead" (Rifle, Medigun).
+- ⚠️ **Drop is `g·t·(t+1)/2`, not `g·t²/2`** — discrete ticks give the
+  triangular number, not the integral; 2.5px on a thirty-tick shot, exactly
+  what gets "simplified" by reading it as calculus.
+- ⚠️ **The fall model has two phases (GG2 has terminal velocity)**, clamped
+  at the floor under the target — else a stationary target is predicted to
+  fall through the ground. `BotAim.NoFloor` ("no map is this tall") is the
+  reference's own sentinel, right over a pit.
+- ⚠️ **Flight time is floored at one tick** — distance zero collapses the
+  prediction to "aim at your own feet" (`point_direction` of a point to
+  itself is 0), so the bot aims dead right.
+- **Drift is the shooter's own speed**, subtracted from the target's, only
+  for the Scattergun, Shotgun and Minigun.
 
-⚠️ **Three testing traps, all about the map and the angle convention:**
+⚠️ **Three testing traps, map and angle convention:**
 
-1. **Pick the open stretch by MEASUREMENT.** A first draft used (3400, 456) on
-   ctf_truefort, which looks like open floor and is not — four threat-bonus cases
-   failed because the *further* candidate, the one the bonus is supposed to lift,
-   was behind geometry. Sweeping for the widest unblocked horizontal sightline
-   found **(380, 268): clear for 1,000px, and blocked 80px straight down**, which
-   also gives the blind-fallback fixture a real blocked line.
-2. **Compare aim angles as SIGNED.** GM8 reports a direction in `[0, 360)`, so a
-   shot aimed twenty degrees below the horizontal comes back as 340 and a naive
-   `>` says the opposite of the truth. Go through `BotTargeting.AngleDelta`.
-3. **With `NoFloor` even a STATIONARY target is modelled as falling for ever**,
-   so "a still target is aimed at level" needs a floor — and a *rising* target
-   over a thirty-tick flight is back below where it started, so a rise is only
-   visible with the floor well below it. Both fixtures were wrong the obvious
-   way first.
+1. **Pick the open stretch by MEASUREMENT** — (3400, 456) on ctf_truefort
+   looks open and isn't (four threat-bonus cases failed, the further
+   candidate behind geometry); sweeping for the widest sightline found
+   **(380, 268): clear 1,000px, blocked 80px straight down**, also giving
+   the blind-fallback fixture a real blocked line.
+2. **Compare aim angles as SIGNED** — GM8 reports `[0, 360)`, so 20° below
+   horizontal comes back as 340 and a naive `>` inverts the truth. Go
+   through `BotTargeting.AngleDelta`.
+3. **With `NoFloor` a STATIONARY target falls forever** — needs a floor; a
+   *rising* target over a thirty-tick flight ends below its start, so a rise
+   is only visible with the floor well below it. Both fixtures were wrong
+   the obvious way first.
 
 ### Phase 7 item 4c-ii: the combat controller, and a bot that finally fires
 
@@ -642,92 +565,82 @@ Gated by `BotCombatTests`. The reference is `botCombatUpdate.gml`,
 ✅ **A bot now sees, acquires, aims and fires.** ⚠️ Nothing wires it to a server
 yet — that is 4d.
 
-⛔ **THE COMBAT HALF IS AT ITS FLOOR, measured 2026-09-02.** `BotCombat.Step` is
-**3.2 µs of a 13.2 µs twelve-bot tick (24%)**, and every part of it has now been
-attributed: `BotClassKeys.For` 0.73 (of which **`BotArc.Clear` 0.47 at 654 ns a
-call**), `KeepOrDropTarget` 0.40, `SolveAim` 0.38, `LookForOne` 0.36, the medic's
-ally lookup 0.18, `Perceive` 0.05. **There is no unattributed cost under any of
-them** — each is one callee plus a cadence test — and **there is no large
-exact-equivalence win left.** The table, and the three things measured and
-rejected, are in `docs/ARCHITECTURE.md`, "The bot poll BELOW the top level".
-The headlines, so nobody re-derives them:
+⛔ **The combat half is at its floor.** `BotCombat.Step` is **3.2 µs of a
+13.2 µs twelve-bot tick (24%)**, fully attributed: `BotClassKeys.For` 0.73
+(`BotArc.Clear` 0.47 at 654 ns/call), `KeepOrDropTarget` 0.40, `SolveAim`
+0.38, `LookForOne` 0.36, medic ally lookup 0.18, `Perceive` 0.05. **No
+unattributed cost, no large exact-equivalence win left.** Table and three
+rejected measurements: `docs/ARCHITECTURE.md`, "The bot poll BELOW the top
+level". Headlines:
 
-- ⚠️ **`BotAim.FloorUnder` (267 ns) is TWICE `BotAim.Solve` (143 ns).** The
-  ballistic solver is the cheap half; the expensive half is
-  `NavGraph.SnapObjective`, at 4.0 downward `NodeFromWorld` probes a call.
-- ⚠️ **`BotSuppress.Spot` never fires** in a twelve-bot `ctf_truefort` match —
-  0 calls in 162,000 ticks. Anything measured about it comes from a fixture.
-- ⚠️ **Reordering `BotArc.Clear`'s ten segments to try the likeliest blocker
-  first was costed and REJECTED** — 3%, because the 58% of calls that are clear
-  walk all ten whatever the order. Its rect filter already returns **0.05 rects a
-  call**, so what remains is the mask walk itself.
-- ⛔ **Below about 100 ns a call a `Stopwatch` stage timer measures itself**:
-  `GetTimestamp` is 14 ns here and `Stopwatch.Frequency` is 10 MHz. Most of the
-  combat rows are 17-45 ns a call. **Trust the rows in the hundreds and run the
-  probe-off control arm**, which is a fifth of the poll.
+- ⚠️ **`BotAim.FloorUnder` (267 ns) is TWICE `BotAim.Solve` (143 ns)** — the
+  ballistic solver is cheap; the expensive half is `NavGraph.SnapObjective`
+  (4.0 downward `NodeFromWorld` probes/call).
+- ⚠️ **`BotSuppress.Spot` never fires** in a twelve-bot `ctf_truefort` match
+  (0/162,000 ticks) — anything measured about it comes from a fixture.
+- ⚠️ **Reordering `BotArc.Clear`'s ten segments (likeliest blocker first)
+  was costed and REJECTED** (3%) — 58% of calls are clear and walk all ten
+  regardless; its rect filter already returns 0.05 rects/call, so the mask
+  walk is what remains.
+- ⛔ **Below ~100 ns/call a `Stopwatch` measures itself** (`GetTimestamp` 14
+  ns, `Frequency` 10 MHz); most combat rows are 17-45 ns/call. **Trust rows
+  in the hundreds; run the probe-off control arm** (a fifth of the poll).
 
-**The see → acquire → aim-settled → fire chain is the whole difficulty model.**
-Four gates, all off `BotSkill`:
+**The see → acquire → aim-settled → fire chain is the whole difficulty
+model.** Four gates, all off `BotSkill`:
 
-- ⚠️ **The acquire gate holds the AIM, not just the trigger** — the bot does not
-  even turn towards the target for `AcquireTicks`. That is the difference between
-  a bot that looks *slow* and one that looks blind, and a port that gated only
-  the trigger would have every tier turn at the same speed.
-- ⚠️ **SPECIAL is gated on acquisition but NOT on the fire delay**, because those
-  behaviours are reactive — a pyro's airblast, a demoman detonating under
-  somebody's feet — and a reaction a second and a half late is not a reaction.
-  **The medic is the one exception**, because its needle gun *is* the right
-  click.
-- ⚠️ **The fourth gate is not a clock.** Even with every delay expired the
-  trigger waits for the slew to settle within `BOT_AIM_SETTLE_DEG` × the class's
-  multiplier, or a weak bot with a slow turn rate sprays at the wall it was
-  facing when it acquired.
-- **There is no filter and no smoothing.** Tracking lag, overshoot and settling
-  are consequences of three numbers — perceive interval, aim interval, turn rate
-  — and of nothing else.
+- ⚠️ **The acquire gate holds the AIM, not just the trigger** — no turn
+  toward target for `AcquireTicks`, the difference between a bot that looks
+  *slow* and one that looks blind; gating only the trigger would make every
+  tier turn at the same speed.
+- ⚠️ **SPECIAL is gated on acquisition but NOT the fire delay** — reactive
+  behaviours (a pyro's airblast, a demoman under someone's feet) can't be a
+  second and a half late. **The medic is the exception**: its needle gun
+  *is* the right click.
+- ⚠️ **The fourth gate is not a clock** — even with every delay expired, the
+  trigger waits for slew to settle within `BOT_AIM_SETTLE_DEG` × the
+  class's multiplier, or a slow-turning bot sprays the wall it acquired on.
+- **No filter, no smoothing** — lag, overshoot and settling fall out of
+  three numbers alone: perceive interval, aim interval, turn rate.
 
-- ⚠️ **Aim error is UNIFORM on [-1, 1], not Gaussian.** Quake III's `crandom()`
-  is uniform and so is every term built on it. Two multipliers ride on top: the
-  moving-target scale, and **Quake III's close-range penalty, which makes every
-  tier worse at point blank**. That one is an anti-frustration measure rather
-  than a difficulty knob — without it bots are unbeatable in a brawl. ⚠️ The
-  close factor **divides** and is below 1 near the target, so reading it as a
-  multiplier inverts the whole intent.
-- ⚠️ **The hold-fire roll is once per AIM INTERVAL, not per tick**, so it
-  withholds a burst rather than stuttering the trigger.
-- ⚠️ **A target is kept for a memory window after the sightline breaks**, with
-  `Visible` false, and the snapshot is **only refreshed while visible** — so the
-  aim holds on the last known position and does not track through the wall. The
-  bot engages the moment the line opens instead of re-paying the acquire chain.
-- ⚠️ **A potshot target is kept inside the same widened band that let it be
-  picked.** Otherwise the shot is taken and the target dropped on the very next
-  tick, and no potshot ever leaves the barrel.
-- ⚠️ **With no target the aim follows the walk, above `BOT_REST_SPEED`** — GG2's
-  own "is it really moving" floor. A port using `> 0` turns a bot that is merely
-  coasting to a stop.
-- ⚠️ **`BotSkill.Lerp` is flat below 0.15 and above 0.95 and its three segments
-  are UNEVEN** — 0.15-0.45, 0.45-0.75, 0.75-0.95. The last is two thirds the
-  width, so the top tier moves further per point of skill. The five server tiers
-  land exactly on 0.15 … 0.95.
+- ⚠️ **Aim error is UNIFORM on [-1, 1], not Gaussian** (Quake III's
+  `crandom()`), with two multipliers: moving-target scale, and **Quake
+  III's close-range penalty** (every tier worse at point blank — an
+  anti-frustration measure, without which bots are unbeatable in a brawl).
+  ⚠️ It **divides** and is below 1 near the target — reading it as a
+  multiplier inverts the intent.
+- ⚠️ **The hold-fire roll is once per AIM INTERVAL, not per tick** — a
+  withheld burst, not a stuttering trigger.
+- ⚠️ **A target is kept for a memory window after the sightline breaks**
+  (`Visible` false, snapshot refreshed **only while visible**) — the bot
+  engages the instant the line reopens instead of re-paying acquire.
+- ⚠️ **A potshot target is kept inside the same widened band that picked
+  it** — else the shot is taken and the target dropped next tick, no
+  potshot ever leaving the barrel.
+- ⚠️ **With no target the aim follows the walk, above `BOT_REST_SPEED`**
+  (GG2's own "is it really moving" floor) — `> 0` would turn on mere coasting.
+- ⚠️ **`BotSkill.Lerp` is flat below 0.15/above 0.95, three UNEVEN
+  segments** (0.15-0.45, 0.45-0.75, 0.75-0.95 — the last two-thirds the
+  width, so the top tier gains more per skill point). Five server tiers
+  land exactly on 0.15…0.95.
 - ⚠️ **A medic presses SPECIAL to shoot**, a pyro holds fire beyond
-  `BOT_FLAME_REACH`, a soldier refuses inside its own splash-safe band, and a
-  scoped sniper waits for a charge **proportional to the range** because the
-  Rifle's damage *is* its range.
-- ⚠️ **The spy's toggle is `cloak == enemyNear`**, which reads as a typo: the spy
-  wants to be cloaked *without* company and uncloaked *with* it, so it presses
-  the key exactly when the two agree.
+  `BOT_FLAME_REACH`, a soldier refuses inside its splash-safe band, a
+  scoped sniper charges **proportional to range** since the Rifle's damage
+  *is* its range.
+- ⚠️ **The spy's toggle is `cloak == enemyNear`** — reads as a typo, but the
+  spy wants cloaked *without* company, uncloaked *with* it: presses the key
+  exactly when the two agree.
 
-**Deliberately not ported, each a single branch and each conservative when
-absent** — so a missing helper makes a bot shoot *less*, never wrongly:
-`botFindAlly` (a medic shoots needles rather than healing), `botSuppressSpot`
-(a heavy holds its aim on the last known position rather than a doorway),
-`botArcClear` (a soldier fires at a target behind cover it would have declined),
-`botIncomingProjectile` (a pyro never airblasts), `botStabWindow` (a spy never
-stabs), `botMinesArmed` (a demoman never detonates).
+**Deliberately not ported, each a single branch, each conservative when
+absent** — a missing helper makes a bot shoot *less*, never wrongly:
+`botFindAlly` (needles not heals), `botSuppressSpot` (aim holds last-known,
+not a doorway), `botArcClear` (fires through cover it would have declined),
+`botIncomingProjectile` (no airblast), `botStabWindow` (no stab),
+`botMinesArmed` (no detonation).
 
-⚠️ **A `WorldState` local costs ~160KB of stack, and four in one test method is a
-StackOverflowException rather than a failure.** The first draft of
-`BotCombatTests` held four and crashed the test host. Build one per helper call.
+⚠️ **A `WorldState` local costs ~160KB of stack; four in one test method is a
+StackOverflowException, not a failure** — the first `BotCombatTests` draft
+held four and crashed the test host. Build one per helper call.
 
 ### Phase 7 item 4d: the bot itself, and a stream that must not be the match's
 
@@ -741,54 +654,51 @@ it from a socket.
 - ⚠️ **The two halves are ORed and cannot conflict.** `BotCombat` owns ATTACK and
   SPECIAL; `PathFollower` owns LEFT / RIGHT / JUMP / DOWN. The aim comes from
   combat alone.
-- ⚠️ **A bot must NOT draw from `WorldState.Random`, and that is a rule.** The
-  match's stream is *observable simulation* — every seeded weapon puts its draw
-  on the wire and every client re-derives the spread from it — so a bot drawing
-  from it would make the stream's position depend on how many bots were
-  thinking. `ScriptedBot.Random` is its own, seeded from the stagger so two bots
-  roll differently and one bot rolls the same way every run. **It has to be part
-  of any snapshot** (docs/BOTAI.md item 2).
+- ⚠️ **A bot must NOT draw from `WorldState.Random` — a rule, not a preference.**
+  The match's stream is observable simulation (every seeded weapon puts its draw
+  on the wire), so a bot drawing from it would make the stream's position depend
+  on how many bots were thinking. `ScriptedBot.Random` is its own, seeded from
+  the stagger, and **has to be part of any snapshot** (docs/BOTAI.md item 2).
   ⚠️ A first draft copied `world.State.Random` into a local and passed it by
-  reference: the copy advanced, the world's did not, and **every tick drew the
-  same numbers** — an aim error that never changed and a hold-fire roll that
-  never varied. Silent, and it passes a determinism test.
+  reference: the copy advanced, the world's did not, so **every tick drew the
+  same numbers** — an aim error that never changed, a hold-fire roll that never
+  varied. Silent, and it passes a determinism test.
 - ⚠️ **The aim solver needs the floor under the TARGET, and a null nav graph
-  means no floor.** `BotAim.FallPredict` applies gravity whatever the target's
-  vertical speed is, so without the clamp a target standing perfectly still is
-  predicted to keep falling and the bot aims **below its feet, into the ground**.
-  A draft of `BotCombat` passed `NoFloor` on the reasoning that a grounded target
-  is snapshotted with zero vertical speed and so cannot move: that is wrong, and
-  the symptom was a soldier that acquired, fired, and never damaged anything.
+  means no floor.** `BotAim.FallPredict` applies gravity regardless of the
+  target's vertical speed, so without the clamp a stationary target is predicted
+  to keep falling and the bot aims **below its feet, into the ground**. A draft
+  of `BotCombat` passed `NoFloor`, reasoning a grounded target is snapshotted
+  with zero vertical speed and so cannot move — wrong, and the symptom was a
+  soldier that acquired, fired, and never damaged anything.
 - **Three behaviours live in `ScriptedBot` rather than in either half**, because
-  here is the only place that can see both — the regroup hold, the engage hold
-  and the back-off band. ⚠️ **All three are gated on being on the ground and not
-  part-way through a validated arc**: stripping LEFT/RIGHT during a jump is not a
-  pause, it is a different jump.
+  only it sees both: the regroup hold, the engage hold, the back-off band. ⚠️ **All
+  three are gated on being on the ground and not part-way through a validated
+  arc** — stripping LEFT/RIGHT during a jump is not a pause, it is a different jump.
 - ⚠️ **A held bot must have its stuck counter cleared.** The follower runs its
-  detector on the keys it *intends* to press and then returns them for the hold
-  to throw away — so a bot standing still on purpose looks to the detector like a
-  bot pressing a direction and going nowhere, and every `BOT_STUCK_TICKS` it
+  stuck detector on the keys it *intends* to press, then the hold throws them
+  away — so a bot standing still on purpose looks to the detector like a bot
+  pressing a direction and going nowhere, and every `BOT_STUCK_TICKS` it
   blacklists one of its own spawn room's exits.
-- ⚠️ **The engage hold means a bot with a distant goal STOPS walking to fight.**
-  That is the feature, not a bug: it exists because a bot with a live enemy in
-  front of it used to keep walking its route and fire sideways. Four things bound
-  it — a carrier never holds, a bot near its own goal keeps walking, the hold
-  expires `BOT_ENGAGE_TICKS` after the target was *acquired*, and a class with a
-  close-in distance walks at its target instead.
+- ⚠️ **The engage hold means a bot with a distant goal STOPS walking to fight** —
+  the feature, not a bug: without it a bot with a live enemy in front kept
+  walking its route and firing sideways. Bounded four ways: a carrier never
+  holds, a bot near its own goal keeps walking, the hold expires
+  `BOT_ENGAGE_TICKS` after the target was *acquired*, and a close-in class walks
+  at its target instead.
 
 **Not ported, each conservative when absent:** `botRocketDodge` (never hops away
 from an incoming rocket), `botStepSafe` (a pyro holds where the engage caught it
 rather than closing), and `botObjectiveUpdate` (a goal must be given from
 outside).
 
-⚠️ **Two map facts a bot test needs, and they are DIFFERENT points.** A clear
-sightline and a standing position are not the same thing on ctf_truefort:
-(380, 268) has 1,000px of clear line and is in the **air** — `NodeFromWorld`
-answers -1, so a follower cannot plan from it — and the floor below it has a
-**blocked** horizontal line at chest height, so two bots 60px apart cannot see
-each other. **Node 14 is both**: 97 cells wide, world x 3,282-3,864, stand
-position (3570, 325), 900px of clear sightline. Measured by sweeping every node;
-five test failures came from using the other one.
+⚠️ **Two map facts a bot test needs are DIFFERENT points.** A clear sightline and
+a standing position are not the same thing on ctf_truefort: (380, 268) has
+1,000px of clear line and is in the **air** — `NodeFromWorld` answers -1, so a
+follower cannot plan from it — while the floor below has a **blocked** horizontal
+line at chest height, so two bots 60px apart cannot see each other. **Node 14 is
+both**: 97 cells wide, world x 3,282-3,864, stand position (3570, 325), 900px of
+clear sightline. Measured by sweeping every node; five test failures came from
+using the other one.
 
 ⚠️ **The regroup hold's length is `random(BOT_REGROUP_TICKS)`** — uniform on
 0-90 — so a test must **set** it rather than let it roll. This bot's seed happens
@@ -801,61 +711,51 @@ of the time and fails occasionally.
 `ScenarioSuiteTests`. The reference is `gg2-agent/tools/botscenario.js`.
 
 ✅ **The fourteen scenarios are executable assertions now**, driven by
-`ScriptedBot`. **Eight pass; six do not**, and the six are asserted as an exact
-set in both directions — a leg that starts failing is a regression, a leg that
-starts passing means the list is a lie and its entry has to go.
+`ScriptedBot`. **Eight pass; six do not**, asserted as an exact set both ways — a
+leg that starts failing is a regression, one that starts passing means the list
+is a lie and its entry has to go.
 
-⚠️ **A run is bit-for-bit reproducible**, which is what makes that list mean
-anything. Everything that rolls is seeded: a fresh `WorldState.Random` starts at
-zero and `ScriptedBot.Random` comes off the stagger. `gallery-pit-climb`'s
-`Known` field is the reference's account of what the alternative costs — it
-measured 2/5 and then 1/6 on one unchanged build and was believed once, at the
-price of a wrong revert.
+⚠️ **A run is bit-for-bit reproducible**: `WorldState.Random` always starts at
+zero, `ScriptedBot.Random` comes off the stagger. `gallery-pit-climb`'s `Known`
+field is the reference's own account of what the alternative costs.
 
-- ⚠️ **The runner is what hands over the goal, because it is what snapped it.** A
-  subject never told where to go stands still and the run reports "did not
-  arrive" about a bot that was never asked — which reads as a broken follower and
-  is a broken harness. `IScenarioSubject` is the seam.
-  ⚠️ **Not implementing it is a legitimate answer and must NOT be an error.**
-  Throwing was tried and it broke the synthetic travel scenario that exists to
-  exercise the runner *without* a bot: a source holding one key needs no
-  destination and cannot be misled by the absence of one. The fact is reported
-  (`ScenarioResult.Steered`) and the suite asserts it about its own subjects,
-  which is the only place the silent standstill is reachable.
-- ⚠️ **`Satisfies` has to check arrival itself, and it did not.** Arrival is not
-  an expectation — `Scenario.Budget` already says a leg that takes longer is a
-  failure "even if it eventually arrives" — so a travel scenario with no `expect`
-  at all is still asserting something. Reading it off the expectations instead let
-  three legs that ended **737, 958 and 2,253px short** report themselves
-  satisfied. Found on the suite's first run.
+- ⚠️ **The runner hands over the goal, because it is what snapped it.** A subject
+  never told where to go stands still, and the run reports "did not arrive" about
+  a bot that was never asked — reads as a broken follower, is a broken harness.
+  `IScenarioSubject` is the seam.
+  ⚠️ **Not implementing it is legitimate and must NOT be an error.** Throwing was
+  tried and broke the synthetic travel scenario that exercises the runner
+  *without* a bot (a source holding one key needs no destination); the fact is
+  reported instead (`ScenarioResult.Steered`), asserted by the suite about its
+  own subjects.
+- ⚠️ **`Satisfies` has to check arrival itself — it did not.** `Scenario.Budget`
+  already treats a longer leg as a failure "even if it eventually arrives," so a
+  travel scenario with no `expect` is still asserting something; reading arrival
+  off the expectations let three legs that ended **737, 958 and 2,253px short**
+  report themselves satisfied.
 - ⚠️ **Acquisition is latched per tick, never read at the end.** A target clears
-  when it dies, so on the last tick a bot that fought and won is indistinguishable
-  from one that never saw anything. `ScenarioExpectations.Acquired` had been
-  carried unevaluated since the suite was ported, for want of this.
-- ⚠️ **A scenario world places the map's GENERATORS**, the one objective it does
-  place, and `soldier-shells-generator` measures nothing without it: the leg
-  places no enemy characters, so its damage figure is entirely the generator's and
-  a `MinDamage` of 50 is unreachable however well the bot shoots. It is inert for
-  the ordinary reason — `Rounds.StepGenerator` is reached only under
-  `GameMode.Generator` and the world is TeamDeathmatch. Measured: 510 damage over
-  600 ticks against the reference's 206 and 165.
-- **The subject is top tier with a fixed stagger of 1.** A scenario asks whether a
-  behaviour is *possible*, and `BotSkill`'s lower tiers are deliberate handicaps —
-  measuring against one measures the handicap. The stagger is what a server gives
-  the first non-reserved slot and is what makes a run reproducible.
+  when it dies, so a bot that fought and won looks the same on the last tick as
+  one that never saw anything. `ScenarioExpectations.Acquired` had been carried
+  unevaluated since the suite was ported, for want of this.
+- ⚠️ **A scenario world places the map's GENERATORS** — the one objective it does
+  place — so `soldier-shells-generator` measures nothing without it: no enemy
+  characters, so the damage figure is entirely the generator's and `MinDamage`
+  50 is unreachable however well the bot shoots (`Rounds.StepGenerator` only
+  runs under `GameMode.Generator`, and the world is TeamDeathmatch). Measured:
+  510 damage over 600 ticks against the reference's 206 and 165.
+- **The subject is top tier with a fixed stagger of 1.** A scenario asks whether
+  a behaviour is *possible*, and `BotSkill`'s lower tiers are deliberate
+  handicaps — measuring against one measures the handicap. The stagger is what a
+  server gives the first non-reserved slot, and what makes a run reproducible.
 
-⚠️ **Six of the fourteen failed when this landed and all six pass now** — the
-cause was `NAV_EDGE_BUCKET`, one layer down; see item 4f. What is worth keeping
-from that day is the shape of the diagnosis, because **it was right about every
-symptom and pointed at the wrong layer**: the run-up really was a round trip that
-arrived back at the takeoff column at 0.35 px/tick, the gate really did refuse
-every approach, and `BOT_TAKEOFF_PATIENCE` really was unreachable at a re-plan
-interval of 46. None of it was the cause.
+⚠️ **All fourteen now pass** — the six failures traced to `NAV_EDGE_BUCKET`, one
+layer down (item 4f). The symptoms (a run-up round trip, a takeoff gate refusing
+every approach, an unreachable `BOT_TAKEOFF_PATIENCE`) were all real and all
+pointed at the wrong layer.
 
-⚠️ **`ScenarioSuiteTests.Unmet` is empty and keeping it empty is the point.** It
-is asserted as an exact set in both directions, so a leg that starts failing is a
-regression *and* a leg recorded as unmet that starts passing fails the build with
-"delete its entry". It held six names for exactly one commit.
+⚠️ **`ScenarioSuiteTests.Unmet` is empty and keeping it empty is the point** —
+asserted as an exact set both ways, so a newly-failing leg is a regression and a
+newly-passing "unmet" leg fails the build with "delete its entry".
 
 ### Phase 7 item 4f: one cast, and the fourteen scenarios all pass
 
@@ -867,7 +767,7 @@ whole scenario suite.
 reference's own numbers.
 
 ⚠️ **`NAV_EDGE_BUCKET` is a horizontal VELOCITY in px/tick, and it is
-fractional.** It is not a bucket index, whatever the cache column is called:
+fractional** — not a bucket index, whatever the cache column is called:
 `navJumpTakeoff` proves an arc as a constant velocity applied from tick 0 and
 stores it — "leave the takeoff column, cover NAV_EDGE_BUCKET px of ground a tick,
 be over the landing when the arc comes back down", `botPathKeys.gml:436`. This
@@ -875,11 +775,11 @@ port declared it `int` and truncated it on load, from item 4b-i until now.
 
 Measured over the 24 cached graphs: **67,013 jump edges, 67,005 of them
 fractional, and 23,184 — 34.6% — truncate to ZERO.** A zero velocity makes the
-in-flight tracker steer for the takeoff column itself, so the bot is told to hang
-still in the air, and the takeoff gate then demands the whole gap from a reach of
-nothing. `ctf_truefort` 178 → 177 carries `1.9518072289156623`, giving the arc a
-54px budget for a 42px gap; read as `1` it is 27.7px and **the gate can never
-pass, on any approach, for ever**.
+in-flight tracker steer for the takeoff column itself — the bot hangs still in
+the air — and the takeoff gate then demands the whole gap from a reach of
+nothing. `ctf_truefort` 178 → 177 carries `1.9518072289156623`, a 54px budget for
+a 42px gap; read as `1` it is 27.7px and **the gate can never pass, on any
+approach, for ever**.
 
 | leg | truncated | corrected | reference |
 |---|---|---|---|
@@ -893,41 +793,32 @@ pass, on any approach, for ever**.
 | `gallery-pit-climb` | never | **216** | 271 |
 | `oldfort-perch-reroutes` | never (479 off-route) | **1,190** (0 off-route) | — |
 
-- ⚠️ **The three diagnoses in the previous session's handoff were all correct
-  about the symptom and all pointed at the wrong layer.** The run-up really was a
-  round trip, the takeoff gate really did refuse every approach, and
-  `BOT_TAKEOFF_PATIENCE` really was unreachable — and none of them was the cause.
-  **A behaviour layer that looks subtly wrong everywhere is a reason to check
-  what it is reading, before tuning it.** The tell in hindsight: the defect
-  appeared on *marginal* arcs of every kind on every map, which is what a lossy
-  read looks like and not what a control bug looks like.
+- ⚠️ **A behaviour layer that looks subtly wrong everywhere is a reason to check
+  what it is reading, before tuning it.** The tell: the defect appeared on
+  *marginal* arcs of every kind on every map — a lossy read's signature, not a
+  control bug's.
 - ⚠️ **`(int)` on a value read out of a `ds_grid` is a decision, not a
-  formality.** Every grid cell is a double. `EdgeTicks` and `EdgeCost` were
-  already read as reals and only `EdgeBucket` was cast; the node grid has no real
-  columns at all. Measured, per column, so the remaining casts are known-safe
-  rather than assumed.
+  formality.** Every grid cell is a double; `EdgeTicks` and `EdgeCost` were
+  already read as reals and only `EdgeBucket` was cast, and the node grid has no
+  real columns at all. Measured per column, so the remaining casts are
+  known-safe rather than assumed.
 - **The gate is two assertions plus two exact values.** No jump edge may read
-  zero (the 34.6%), better than 99.9% must be fractional (which notices an index),
-  and two named edges must carry their exact bits — `ctf_truefort` 178 → 177 at
-  `1.9518072289156623` and `koth_gallery` 86 → 58 at `0.6975139064871476`, the
-  arc the reference's own takeoff-gate comment quotes as "0.70 px/tick over 17.2
-  ticks against a 12px gap: exactly 12 for exactly 12". That second one is
-  corroboration that this port reads the same field the reference does.
+  zero (the 34.6%), better than 99.9% must be fractional (which notices an
+  index), and two named edges must carry their exact bits — `ctf_truefort`
+  178 → 177 at `1.9518072289156623` and `koth_gallery` 86 → 58 at
+  `0.6975139064871476`, the arc the reference's own takeoff-gate comment quotes
+  as "0.70 px/tick over 17.2 ticks against a 12px gap: exactly 12 for exactly
+  12" — corroboration this port reads the same field the reference does.
   ⚠️ **The scenario suite catches it too and that is not enough**: it is a map
-  load and 6,000 ticks away from the wrong line, and it reads as a follower
-  defect. Both distances are worth having.
+  load and 6,000 ticks away from the wrong line and reads as a follower defect.
 - ⚠️ **Eight of the 67,013 really do land on a whole number**, so "every one is
-  fractional" is false and the proportion is what is asserted. The first draft
+  fractional" is false; the proportion is what is asserted. The first draft
   claimed all of them and failed.
 
-⚠️ **The long `ctf_truefort` leg in `PathFollowerFixtureTests` went 2,655 → 1,572
-ticks, 76 → 33 re-plans, 34 → 4 off-route and 9 → 0 blacklists**, on a 137-node
-route where the reference quotes 2,200-2,500 for its own shorter one.
-⚠️ **It has since gone 1,572 → 1,786 / 39 / 0 / 10 / 0** under the A\* weight
-1.0 → 1.3, and is PINNED there — the numbers in this paragraph are the phase-7
-comparison, not the current reading. So **"this
-port misses more marginal arcs" is no longer true** — that note stood in item
-4b-ii and in the fixture, and it was the truncation the whole time.
+⚠️ **The long `ctf_truefort` leg in `PathFollowerFixtureTests` is pinned at
+1,786 ticks, 39 re-plans, 0 stuck fires, 10 off-route, 0 blacklists** on a
+137-node route (reference: 2,200-2,500 ticks on its own shorter one). This is
+the current, load-bearing reading — see item 4b-ii.
 
 ### Phase 7 item 4g: the objective layer, and a bot that plays the game
 
@@ -943,93 +834,93 @@ flies two stacked jumps, grabs, and re-decides for the run home, and nothing is
 told to it.
 
 - ⚠️ **The mode is read off the ENTITIES, not off `WorldState.GameMode`**, even
-  though this port stores it and the reference cannot. They are different
-  questions: `ScenarioWorld` is TeamDeathmatch with nothing placed, and a CTF map
-  whose briefcase is being carried has no `Intelligence` instance either. Reading
-  the field instead would retask every scenario's bot mid-run.
+  though this port stores it and the reference cannot: `ScenarioWorld` is
+  TeamDeathmatch with nothing placed, and a CTF map whose briefcase is being
+  carried has no `Intelligence` instance either. Reading the field instead would
+  retask every scenario's bot mid-run.
 - ⚠️ **The role split's class term is a PERIOD, not a veto.** "Engineers defend,
   scouts attack" breaks at both ends — a team of nine engineers has nobody
   attacking, and `botPopulationUpdate` rolls a class with `irandom(8)`, so it can
   produce one. Making the class choose *how often* keeps a split at every
-  composition. ⚠️ And the count is over the bot's **lean group** (engineer+heavy,
+  composition. ⚠️ The count is over the bot's **lean group** (engineer+heavy,
   scout+spy, everyone else), not the whole team: two engineers separated by four
-  scouts sit at team positions 0 and 5 and neither lands on a multiple of 2.
-- ⚠️ **`(place + 1) mod every`, so the first bot on a team always attacks.** A
-  rule keyed on `place mod every` makes the lone bot on a team a defender with
-  nothing to defend against.
+  scouts sit at team positions 0 and 5, and neither lands on a multiple of 2.
+- ⚠️ **`(place + 1) mod every`, so the first bot on a team always attacks** — a
+  rule keyed on plain `place mod every` makes the lone bot on a team a defender
+  with nothing to defend against.
 - ⚠️ **A defender is 220px BESIDE what it guards, even at a spread of zero** —
-  `if (spreadX >= 0) spreadX += BOT_DEFEND_RADIUS`. Two tests were written
-  asserting equality with the flag and failed by exactly 220.
+  `if (spreadX >= 0) spreadX += BOT_DEFEND_RADIUS`. Tests asserting equality with
+  the flag failed by exactly 220.
 - ⚠️ **Our own flag being carried outranks fetching theirs, and every role
-  chases.** Before that only defenders did, so a team that rolled none — the count
-  runs down the roster and a short team can land none — left an enemy standing in
+  chases.** Before that only defenders did, so a team that rolled none (the count
+  runs down the roster and a short team can land none) left an enemy standing in
   the open with our flag and nobody interested.
 - ⚠️ **A carried flag has no instance, so the whole cascade comes back empty.**
-  Everyone except the carrier had no goal: a defender whose flag was stolen, an
-  attacker whose team-mate beat it to the grab. Both chase, and the goal is the
-  moving carrier — returned early, because a standoff band around a running player
-  is a bot orbiting it and a spread is a deliberate miss of the one thing worth
+  Everyone except the carrier had no goal — a defender whose flag was stolen, an
+  attacker whose team-mate beat it to the grab. Both now chase the moving carrier
+  directly, returned early: a standoff band around a running player is a bot
+  orbiting it, and a spread is a deliberate miss of the one thing worth
   intercepting.
 - ⚠️ **A control point's goal is the MIDDLE of its capture zone.** The origin is
   the top-left corner, and arrival is only accurate to `BOT_ARRIVE_TOL`: measured
   in the reference on koth_valley, the bot climbed the whole four-jump chain,
   stopped 3px short of the zone's left edge, and captured nothing.
-  ⚠️ **The zone is the only position this port has for a point** — `ControlPoints.Place`
-  discards the marker's own coordinates once the zones are matched — where the
-  reference ranks by the marker and then overrides with the zone. Named
-  divergence; it can only reorder two nearly-equidistant points, and a capture
-  reads the zone and nothing else.
+  ⚠️ **The zone is the only position this port has for a point** —
+  `ControlPoints.Place` discards the marker's own coordinates once the zones are
+  matched, where the reference ranks by the marker and then overrides with the
+  zone. Named divergence; it can only reorder two nearly-equidistant points, and
+  a capture reads the zone and nothing else.
 - ⚠️ **A LOCKED point is still walked to.** Every point is locked for the first
-  900 ticks of a KotH round and 1,800 of an Arena one, during which the
-  nearest-unlocked loop finds nothing and leaves the bot standing frozen at spawn
-  while a human is already walking out.
-- ⚠️ **An enemy in the zone cancels every "stand somewhere better" behaviour**,
-  for attacker and defender alike — and it is read off **presence**, not the
-  capture meter. Presence is true on the frame an enemy steps inside; the meter
-  takes a second, and by the time it reads as a capture the point is a third gone.
+  900 ticks of a KotH round, 1,800 of an Arena one; the nearest-unlocked loop
+  finds nothing meanwhile and leaves the bot frozen at spawn while a human is
+  already walking out.
+- ⚠️ **An enemy in the zone cancels every "stand somewhere better" behaviour**
+  for attacker and defender alike, read off **presence**, not the capture meter:
+  presence is true the frame an enemy steps inside, the meter takes a second, and
+  by the time it reads as a capture the point is a third gone.
 - ⚠️ **The hold trigger is a DISTANCE, not "have I arrived".** Arrival is cleared
-  by issuing a goal, so a trigger keyed to it flips off the moment it fires and the
-  bot oscillates between the point and its overlook for ever at 30-tick intervals.
-- ⚠️ **The spread never applies to a goal that has to be TOUCHED.** Measured in
-  the reference on ctf_truefort: bots walked the whole map to the enemy flag,
-  stopped 37-67px short of it (arrival tolerance is 8, so they stopped *precisely*),
-  and stood there — 0-0 after a full round with both teams parked around a flag
-  neither would touch.
+  by issuing a goal, so a trigger keyed to it flips off the moment it fires and
+  the bot oscillates between the point and its overlook for ever at 30-tick
+  intervals.
+- ⚠️ **The spread never applies to a goal that has to be TOUCHED.** Measured on
+  ctf_truefort: bots walked the whole map to the enemy flag, stopped 37-67px
+  short of it (arrival tolerance is 8, so *precisely* stopped), and stood there —
+  0-0 after a full round with both teams parked around a flag neither would
+  touch.
 - ⚠️ **The objective's own node is resolved first and the spread only earns its
   way in.** The snap searches *downward*, so snapping an already-offset position
   falls off the platform the intel is on — swept across the shipped graphs, a 96px
-  spread at `ctf_orange` node 1 drops **636px**, most of the map. The guard is
-  "within a body's height", which is "the same level" rather than "the same
-  surface" so a spread can still cross a step.
-- ⚠️ **An unchanged objective is not reissued**, because issuing forces an
-  immediate re-plan and would fight the very timer the follower is built around.
-  Measured: deleting the throttle takes the end-to-end leg from 41 re-plans to 58
-  and 10 off-route events to 19 — and **the bot still arrives, slightly sooner**
-  (1,780 → 1,693), so a test that only watches arrival passes with it gone.
+  spread at `ctf_orange` node 1 drops **636px**, most of the map. The guard
+  ("within a body's height") means "same level" rather than "same surface", so a
+  spread can still cross a step.
+- ⚠️ **An unchanged objective is not reissued** — issuing forces an immediate
+  re-plan and would fight the follower's own timer. Deleting the throttle takes
+  the end-to-end leg from 41 re-plans to 58 and 10 off-route events to 19, and
+  **the bot still arrives, slightly sooner** (1,780 → 1,693) — a test that only
+  watches arrival passes with it gone.
 - ⚠️ **`BOT_SPOT_TRIES` is invisible on any search that succeeds** — bounded and
   unbounded pay the same number of tests, because both stop at the first pass. The
   gate is a search that *cannot* succeed: 12 of ctf_truefort's nodes sit where
   nothing in a 150-4,000px band has a clear line, found by sweeping.
 
 **Two things deliberately not ported, each conservative when absent:**
-`botFindAlly` and with it the medic's follow-goal — a medic falls through to the
-cascade and walks the objective like everyone else, which is exactly what the
-reference does with a medic that finds nobody to follow — and
-`botPopulationUpdate`, which is what fills a server with bots and is `GameServer`'s
-half of this.
+`botFindAlly` and with it the medic's follow-goal (a medic falls through to the
+cascade and walks the objective like everyone else — exactly what the reference
+does with a medic that finds nobody to follow), and `botPopulationUpdate`, which
+fills a server with bots and is `GameServer`'s half of this.
 
 ⚠️ **One branch is UNGATED and says so in its own comment**: the spot ban
-(`ScriptedBot.SpotBanUntil`). Deleting it leaves every test green. It needs a spot
-that resolves and cannot be reached, which needs a nav graph with two components,
-and every shipped graph is connected for the team that owns the ground. A
-synthetic two-component graph would gate it; nothing else will.
+(`ScriptedBot.SpotBanUntil`) — deleting it leaves every test green. It needs a
+spot that resolves and cannot be reached, which needs a nav graph with two
+components, and every shipped graph is connected for the team that owns the
+ground. Only a synthetic two-component graph would gate it.
 
 ⚠️ **The scenario suite does not exercise any of this and must not.** A scenario
 places no objective and `ScenarioRunner` hands the bot its goal directly, so
 `ScriptedBot.Objective` stays null there — the reference has the same escape
 (`botGoalLocked`). ⚠️ **But `ScenarioWorld` places generators now** (item 4e), so a
-bot given an objective in one *would* be retasked; that is why the objective layer
-is opt-in rather than on by default.
+bot given an objective in one *would* be retasked — why the objective layer is
+opt-in rather than on by default.
 
 ### Phase 7 item 4h: a server that fills itself, and the headroom number
 
@@ -1050,42 +941,42 @@ budget, because the claim is an order of magnitude rather than a digit and a CI
 machine under load is not a benchmark.
 
 ⚠️ **`Gg2.Server` references `Gg2.Bots` now, and that edge is deliberate.** The
-population manager is server-side in the reference — only the server has a roster,
-a config file and a socket to broadcast a join on. `Gg2.Bots` stays pure and gains
-nothing; docs/ARCHITECTURE.md's one hard rule (`Gg2.Simulation` must not reference
-`Gg2.Server`) is untouched. The `IInputSource` seam still means the *simulation*
-never special-cases a bot.
+population manager is server-side in the reference — only the server has a
+roster, a config file and a socket to broadcast a join on. `Gg2.Bots` stays pure
+and gains nothing; docs/ARCHITECTURE.md's one hard rule (`Gg2.Simulation` must
+not reference `Gg2.Server`) is untouched, and the `IInputSource` seam still means
+the *simulation* never special-cases a bot.
 
 - ⚠️ **`if(!global.botsEnabled) exit;` means DO NOTHING, not "the target is
   zero".** A bot added by hand on a server with the manager switched off must
-  survive; reading it as a target removes it on the very next tick. **Measured:
-  it took out seven of `InputSourceTests`' eight tests**, every one of which adds
-  a bot to a default server.
-- ⚠️ **The target is a FILL, including humans, not a bot count.** A server filling
-  to 8 with 3 people on it runs 5 bots and drops one every time somebody joins.
-  And the `MinHumans` floor answers **zero** rather than the fill, as the *first*
-  test rather than a clamp on the last: an empty server running eight bots against
-  each other looks full in the lobby list and is not.
+  survive; reading it as a target removes it next tick. **Measured: it took out
+  seven of `InputSourceTests`' eight tests**, every one of which adds a bot to a
+  default server.
+- ⚠️ **The target is a FILL, including humans, not a bot count.** A server
+  filling to 8 with 3 people on it runs 5 bots and drops one every time somebody
+  joins. `MinHumans` floors at **zero** rather than the fill, and is the *first*
+  test rather than a clamp on the last: an empty server running eight bots
+  against each other looks full in the lobby list and is not.
 - ⚠️ **`getNumberOfOccupiedSlots` counts a joiner that has merely RESERVED a
   slot**, and neither bots nor the server's own slot 0. All three matter: counting
   bots makes the target chase its own tail, and *not* counting a reserving joiner
-  means the bot it should displace is displaced a tick late.
+  displaces the bot it should replace a tick late.
   ⚠️ It also makes `HumanCount` the wrong detector for "the join completed" — it
-  went up on the reservation. `PlayerCount` is wrong too, because a bot displaced
-  by the joining human puts it straight back. `ServerHarness` counts humans on the
+  went up on the reservation. `PlayerCount` is wrong too: a bot displaced by the
+  joining human puts it straight back. `ServerHarness` counts humans on the
   roster, which is neither.
 - ⚠️ **A follower, a route and a blacklist are all node indices into ONE graph**,
   so a bot that crosses a map rotation carrying them holds numbers that now mean
-  somewhere else — and its `BotObjective` holds the old graph and the old map's
+  somewhere else, and its `BotObjective` holds the old graph and the old map's
   spawn points too. `ScriptedBot.SetMap` is the reference's `botNavRelease` and
-  `botReteamAll` in one, called from `OpenMap`, and **the bots are re-mapped before
+  `botReteamAll` in one, called from `OpenMap`; **the bots are re-mapped before
   they are re-roled**.
 - ⚠️ **The role assignment is a second pass over a FINISHED roster**, never inside
-  the loop that assigns teams. A role counts this bot's place among its team's bots
-  that share its class period, so assigning as you go gives every bot a count that
-  only includes the ones before it. It re-runs after every add and every removal as
-  well, because `RemoveSlot` compacts the roster and renumbers everyone above the
-  hole.
+  the loop that assigns teams: a role counts this bot's place among its team's
+  bots that share its class period, so assigning as you go would give every bot a
+  count that only includes the ones before it. It re-runs after every add and
+  removal too, because `RemoveSlot` compacts the roster and renumbers everyone
+  above the hole.
 - ⚠️ **The class the query carries is `checkClasslimits`' answer, not the one
   asked for.** The search's double-jump arcs are per class, and a scout routed as a
   heavy walks past every edge it could have flown.
@@ -1094,42 +985,42 @@ never special-cases a bot.
   pick sees blue smaller and feeds it, so the teams alternate around a permanent
   offset of one.
 - ⚠️ **`botPickClass` excludes the spy, and not because the spy's own code is
-  broken.** Almost everything a spy does is invisible to the rest of the bot model:
-  it spends most of its life cloaked, so target selection skips it and team-mates
-  route around a fight it is standing in; its whole value is a backstab, which is
-  one branch behind a range test; and a bot doing that badly is indistinguishable
-  from a bot that is broken. Quote is out because `irandom(8)` is nine classes and
-  stops short of it.
+  broken.** Almost everything a spy does is invisible to the rest of the bot
+  model — it spends most of its life cloaked, so target selection skips it and
+  team-mates route around a fight it is standing in, and its whole value is a
+  backstab (one branch behind a range test); a bot doing that badly is
+  indistinguishable from a bot that is broken. Quote is out too: `irandom(8)` is
+  nine classes and stops short of it.
 - ⚠️ **A record struct's primary-constructor defaults do NOT apply to
   `new T()`.** That form resolves to the implicit *zeroing* constructor, so a
-  "defaulted" `BotPopulationOptions` has a fill target of 0, a difficulty of 0 and
-  a **null** name prefix — every one of them silent. Measured by running the
-  thing: `--bots 12` named its bots "1".."12" instead of "[BOT] 1".."[BOT] 12",
-  and nothing in the suite noticed because every test that cared constructed its
-  options explicitly. `BotPopulationOptions.Default` is the factory, and
-  ⚠️ **its values are spelled out rather than delegating to `new()`** — writing
-  `new()` there makes the factory a no-op that reads exactly like a fix. Same
-  family as `CharacterState.Fresh` and `PlayerState.Fresh`: **in this codebase a
-  zeroed value type is routinely not a valid one.**
-- **Removal prefers a bot that is already dead.** The reference defers a removal on
-  a wall clock (`current_time`) so a body does not vanish mid-fight; a fixed-tick
-  server has no wall clock, and taking the dead first gets the same outcome. That
-  substitution is deliberate and is the one place this file is not a transcription.
-- **`GameServer.CurrentMap` is exposed now.** ⚠️ Not `ServerOptions.Map` — they are
-  the same string until the first rotation and different for ever after, which is
+  "defaulted" `BotPopulationOptions` has a fill target of 0, a difficulty of 0
+  and a **null** name prefix — every one silent. Measured by running the thing:
+  `--bots 12` named its bots "1".."12" instead of "[BOT] 1".."[BOT] 12", unnoticed
+  because every test that cared constructed its options explicitly.
+  `BotPopulationOptions.Default` is the factory, and ⚠️ **its values are spelled
+  out rather than delegating to `new()`** — writing `new()` there makes the
+  factory a no-op that reads exactly like a fix. Same family as
+  `CharacterState.Fresh` and `PlayerState.Fresh`: **in this codebase a zeroed
+  value type is routinely not a valid one.**
+- **Removal prefers a bot that is already dead.** The reference defers a removal
+  on a wall clock (`current_time`) so a body does not vanish mid-fight; a
+  fixed-tick server has no wall clock, and taking the dead first gets the same
+  outcome — deliberate, and the one place this file is not a transcription.
+- **`GameServer.CurrentMap` is exposed now.** ⚠️ Not `ServerOptions.Map` — they
+  are the same string until the first rotation and different for ever after,
   the bug `MapRotationTests` exists to catch.
 
 ⚠️ **Two testing traps, both about waiting for the wrong event.** A rotation
-announces itself **300 ticks before it happens** ("round over … koth_valley area 1
-in ten seconds"), so a log match exits the wait while the old map is still running
-and every assertion then reads the state the test says has changed. And a rotation
-test needs **nav state that actually exists** to invalidate — a bot re-spawned on
-the new map has no route either way, so the test plants a real route and a real
-blacklist entry first.
+announces itself **300 ticks before it happens** ("round over … koth_valley area
+1 in ten seconds"), so a log match exits the wait while the old map is still
+running and every assertion then reads state the test says has changed. And a
+rotation test needs **nav state that actually exists** to invalidate — a bot
+re-spawned on the new map has no route either way, so the test plants a real
+route and a real blacklist entry first.
 
 **Not ported:** the reference's deferred-removal timeout (above), and
-`botReteamAll`'s *re-classing* — this port re-teams and re-roles across a rotation
-but leaves each bot the class it had, which is a strictly smaller change and is
+`botReteamAll`'s *re-classing* — this port re-teams and re-roles across a
+rotation but leaves each bot the class it had, a strictly smaller change and
 what a human player would do.
 
 ### Phase 7 item 4i: the rocket jump, and a law with no friction under it
@@ -1147,85 +1038,77 @@ state every tick, the search offers the arcs, and the follower flies them.
 suite uses **6 rocket jumps** across its fourteen legs.
 
 - ⚠️ **`RocketModel.Reach` and `JumpModel.Reach` must not be merged: they differ
-  in BOTH terms of the motion law, not one.** `moveStatus` 1 —
-  "rocketing/mining myself" — is a different row of Begin Step's switch:
-  controlFactor **0.65** and frictionFactor **1**, against the default's 0.85 and
-  1.15. **A friction of 1 means horizontal speed does not bleed at all** for the
-  whole flight, which is around 69 ticks on a full-height jump.
-  Measured, and it is wrong in both directions at once:
+  in BOTH terms of the motion law.** `moveStatus` 1 — "rocketing/mining myself" —
+  uses controlFactor **0.65** and frictionFactor **1**, against the default's 0.85
+  and 1.15; **friction 1 means horizontal speed never bleeds** for the whole
+  flight (~69 ticks on a full-height jump). Wrong in both directions if merged:
   **a cold start on a fast arc** (needVx 6, v0 0, 30 ticks) reaches **136.9px**
-  under the rocket law against **119.5** under the ordinary one — so the ordinary
-  model *refuses arcs the bot flies easily*; **a hot start on a slow arc**
-  (needVx 2, v0 8) overshoots its own 60px schedule to **85.6px** where the
-  ordinary law lands at **59** — so the ordinary model *accepts arcs the bot sails
-  past*.
+  under the rocket law vs **119.5** under the ordinary one — the ordinary model
+  *refuses arcs the bot flies easily*; **a hot start on a slow arc** (needVx 2, v0
+  8) overshoots its own 60px schedule to **85.6px** where the ordinary law lands
+  at **59** — the ordinary model *accepts arcs the bot sails past*.
 - ⚠️ **The rocket law needs a SPEED GATE and the ordinary one must not grow one.**
-  With no friction under it, a press that has already reached the arc's vx gains
-  nothing and pressing on is what made the real tracker limit-cycle. Friction is
-  what bounds the ordinary law.
+  With no friction under it, pressing past the arc's vx gains nothing and is what
+  made the real tracker limit-cycle; friction is what bounds the ordinary law.
 - ⚠️ **The wait branch is BRAKING here where the reference writes
-  `targetCol = takeoffCol`, and the two are the same behaviour in two codebases
-  whose default steering differs.** The reference's default is a pure column
-  comparison, so aiming at the column the bot is already on presses nothing — which
-  its own comment relies on. **This port's default is a DIRECTION HINT rather than
-  a place to stop**: it presses on along the route even when the bot is exactly on
-  its target column, on purpose. Measured: aiming at the column pressed RIGHT for
-  twelve consecutive ticks and the stuck detector banned a perfectly good edge at
-  **tick 12**, forty-eight ticks before the patience budget it was meant to spend.
+  `targetCol = takeoffCol`** — the same behaviour in two codebases whose default
+  steering differs. The reference's default is a pure column comparison, so
+  aiming at the bot's own column presses nothing. **This port's default is a
+  DIRECTION HINT, not a place to stop**: it presses on along the route even on
+  its target column, deliberately. Measured: aiming at the column pressed RIGHT
+  for twelve consecutive ticks and the stuck detector banned a perfectly good edge
+  at **tick 12**, forty-eight ticks early.
 - ⚠️ **The mid-air bail is `return 0` from the whole script — no keys, not "no
-  steering".** Returning to the default steering leaves the bot walking toward the
-  takeoff column while it falls, which is a press on the very arc the branch exists
-  to stop steering. `Steering.Abandon`.
+  steering".** Falling back to default steering would press toward the takeoff
+  column, i.e. the very arc the branch exists to stop steering. `Steering.Abandon`.
 - ⚠️ **`AirTicks > 1`, not `>= 1`.** The blast lands in the same tick's simulation
-  as the takeoff press, so tick one is always `moveStatus` 0 and a stricter test
-  abandons every rocket jump on its first airborne tick.
+  as the takeoff press, so tick one is always `moveStatus` 0; `>= 1` abandons
+  every rocket jump on its first airborne tick.
 - ⚠️ **The escape hatch takes the EDGE away rather than shoving the bot off it**,
-  which is what it does for every other arc. Jumping without the rocket is the
-  worst available outcome — the arc rises 276px where an ordinary jump rises 57.
-  ⚠️ And it is **unreachable at any stagger below 15**, because a re-plan zeroes the
-  takeoff budget (item 4b-ii's ceiling) — which is very nearly always right, since
-  the launcher's refire is 30 ticks and its ammo comes back.
-- ⚠️ **The aim OVERRIDES combat's rather than being ORed with it**, and 270 is not
-  a simplification: `vectorfactor` in the rocket's blast is sqrt(sin⁴ + cos⁴),
-  which is 1 only when the impulse is axis-aligned and falls to 0.707 at 45°, so an
-  angled rocket jump throws away up to 30% of its impulse. It **snaps** rather than
-  slewing — the turn rate is 8°/tick and level-to-down is 90°, so honouring the
-  slew is eleven ticks of a bot staring at the floor before every jump.
-- ⚠️ **`CanRocketJump` is recomputed from LIVE state every tick, not held.** It is
-  the *weapon* plus `hp > NAV_RJ_DAMAGE` — strictly greater, because the damage
-  lands before the bot does — so a soldier's routes shed their rocket jumps on
-  their own as it takes damage.
-- **`PathFollower.Step` has a weaponless overload**, and it means **"this bot has
-  no rocket"** rather than "do not care": a rocket edge is then never taken off
-  from, which is the conservative answer and what every caller that does not model
-  a weapon wants.
+  unlike every other arc — jumping without the rocket is the worst available
+  outcome (the arc rises 276px where an ordinary jump rises 57). It is
+  **unreachable at any stagger below 15**, since a re-plan zeroes the takeoff
+  budget (item 4b-ii's ceiling) — almost always fine, as the launcher's refire is
+  30 ticks and ammo comes back.
+- ⚠️ **The aim OVERRIDES combat's rather than being ORed with it.** `vectorfactor`
+  in the rocket's blast is sqrt(sin⁴ + cos⁴) — 1 only when axis-aligned, 0.707 at
+  45° — so an angled rocket jump throws away up to 30% of its impulse. It
+  **snaps** rather than slewing: turn rate is 8°/tick and level-to-down is 90°, so
+  honouring the slew is eleven ticks staring at the floor before every jump.
+- ⚠️ **`CanRocketJump` is recomputed from LIVE state every tick, not held** — the
+  *weapon* plus `hp > NAV_RJ_DAMAGE` (strictly greater, since damage lands before
+  the bot does) — so a soldier's routes shed rocket jumps on their own as it
+  takes damage.
+- **`PathFollower.Step` has a weaponless overload** meaning **"this bot has no
+  rocket"**, not "do not care": a rocket edge is then never taken, the
+  conservative answer every unarmed caller wants.
 
 ⚠️ **The cost side, and it is real.** The end-to-end intel run went **1,780 → 1,748
-ticks** while its **re-plans went 41 → 49 and its off-route events 10 → 19**. That
-is what flying arcs that sometimes miss costs, and the scenario suite is the better
-signal on the trade — it improved across the board.
+ticks** while **re-plans went 41 → 49 and off-route events 10 → 19** — the cost of
+flying arcs that sometimes miss. The scenario suite is the better signal on the
+trade, improving across the board.
 
 ⚠️ **Three testing traps this cost, all "the test measures the wrong thing now":**
 
 1. **A fixture arc must cover its own gap** — the same trap the jump fixtures
-   record. The old stub asserted *refusal*, so its arc never had to be flyable;
-   reusing it asserted a takeoff that could not happen.
+   record. The old stub asserted *refusal*, so reusing it asserted an unflyable
+   takeoff.
 2. **The throttle test started measuring rocket churn.** A soldier's routes now
-   contain arcs that are blacklisted and re-planned around whenever the launcher is
-   not loaded, and with a soldier the *still* window re-planned seven times against
-   the moving window's five — inverting the comparison. It uses a heavy now, which
-   has neither special arc.
+   contain blacklisted arcs re-planned around whenever the launcher is unloaded,
+   inverting the still/moving comparison (7 re-plans vs 5). It uses a heavy now,
+   which has neither special arc.
 3. **The rotation test hit CTF OVERTIME.** A tie with a flag off its base at 0:00
-   is unbounded, and once bots reached the enemy flag more often some runs never
-   ended a round at all. It starts on a Team Deathmatch map now — **the only mode
-   with no overtime** — and is given its goal by hand, because TDM correctly
-   declines to invent one.
+   is unbounded; once bots reached the enemy flag more often, some runs never
+   ended. It starts on a Team Deathmatch map now — **the only mode with no
+   overtime** — with its goal given by hand, since TDM correctly declines to
+   invent one.
 
-⚠️ **Gating the two models is not gating that the GATE picks the right one.** Point
-the rocket branch at `JumpModel` and every other follower test still passes,
-because their arcs are flyable under either law. `TheTakeoffGateAsksTheRocketModelAboutARocketArc`
-is the fixture built to separate them — an arc flyable under one law and not the
-other, where the observable is whether the bot launches or starts a run-up.
+⚠️ **Gating the two models is not gating that the GATE picks the right one.**
+Pointing the rocket branch at `JumpModel` still passes every other follower test,
+since their arcs are flyable under either law.
+`TheTakeoffGateAsksTheRocketModelAboutARocketArc` is the fixture built to
+separate them — an arc flyable under one law and not the other, observable as
+launch vs. run-up.
 
 ### Phase 7 item 4j: the medic's ally, and one script with two callers
 
@@ -1237,82 +1120,70 @@ The reference is `botFindAlly.gml`, `botCombatUpdate.gml:175-198` and
 ✅ **A medic heals rather than shoots, and follows somebody.** Both halves came
 from one 70-line script, which is why it was deferred rather than half-wired.
 
-- ⚠️ **One script, two callers, and they pass DIFFERENT arguments.** The combat
-  half asks with `skipFollowers` false — a medic beaming another medic is correct
-  play — and the objective half asks with it true, because **two medics who pick
-  each other as a destination deadlock**: each one's goal is where the other is
-  standing, both are already there, and neither ever leaves spawn. Seen live on
+- ⚠️ **One script, two callers, passing DIFFERENT arguments.** The combat half
+  asks with `skipFollowers` false — a medic beaming another medic is correct play
+  — and the objective half asks with it true, because **two medics who pick each
+  other as a destination deadlock**: each one's goal is where the other is
+  standing, both are already there, neither leaves spawn. Seen live on
   koth_valley, two red medics parked at x=460 with the rest of their team at the
   point. **Making the exclusion a rule inside the search rather than an argument
   breaks healing to fix following.**
-- ⚠️ **Filtering during the search rather than rejecting the winner afterwards**
-  is what lets the second-best candidate win: a medic beside a wounded medic and a
-  healthy heavy still follows the heavy, instead of giving up on following at all.
-- **The score is `1000 * hp/maxHp + distance - maxHp`.** Anyone wounded outscores
-  anyone who is not by far more than distance can make up, and the `- maxHp` term
-  is what makes a heavy at half health beat a scout at half health: a medic's job
-  is to keep the biggest body in the fight alive, not to top up whoever is closest.
+- ⚠️ **Filtering during the search, not rejecting the winner afterwards**, lets
+  the second-best candidate win: a medic beside a wounded medic and a healthy
+  heavy still follows the heavy, rather than giving up on following entirely.
+- **The score is `1000 * hp/maxHp + distance - maxHp`.** Wounded outscores
+  healthy by far more than distance can make up, and `- maxHp` is what makes a
+  heavy at half health beat a scout at half health: keep the biggest body alive,
+  not top up whoever is closest.
 - ⚠️ **The sightline is `collision_line` against `Obstacle`, NOT
-  `collision_line_bulletblocking`.** A heal beam is stopped by walls the same way a
-  bullet is, but the two predicates are not the same object set — gates, player
-  walls and bullet walls are separate objects, so a medic can beam a team-mate
-  through their own gate — and the beam's is the one that decides whether the heal
-  connects. `CollisionWorld.CollisionLineHitsMask` is that call, and `Healing` uses
-  it for the real thing.
-- ⚠️ **The ally REPLACES the subject rather than adding to it**, and everything
-  downstream then treats it as the thing being aimed at. That is what makes a medic
-  stop shooting and start healing: the needle gun is on the RIGHT click and the
-  beam on the left, so the switch is two different keys.
+  `collision_line_bulletblocking`.** Gates, player walls and bullet walls are
+  separate object sets, so a medic can beam a team-mate through their own gate —
+  the beam's predicate is what decides. `CollisionWorld.CollisionLineHitsMask` is
+  that call; `Healing` uses it for real.
+- ⚠️ **The ally REPLACES the subject rather than adding to it**; everything
+  downstream then aims at it. That is what makes a medic stop shooting and start
+  healing — needle gun on RIGHT click, beam on left, two different keys.
 - ⚠️ **An ally is NOT acquired, and all four difficulty gates are bypassed** — the
-  acquire hold, the fire delay, the aim settle and the hold-fire roll. Every one is
-  about shooting a person who is trying not to be shot; a medic that made its own
-  team-mate wait a second and a half before pointing the beam at them would read as
-  broken rather than as bad.
-- ⚠️ **The beam is aimed STRAIGHT at them with no lead solve.** It has no travel
-  time — the lead solver exists to put a projectile where a target will be — and
-  leading a team-mate points the beam at empty air beside them.
-- ⚠️ **The medic exception is decided ABOVE the no-target early return**, because
-  an ally is a subject in its own right: a medic with a patient and no enemy
-  anywhere still beams, and deciding it after would make a medic heal only while
-  something was shooting at it.
+  acquire hold, fire delay, aim settle and hold-fire roll. All four exist to
+  make shooting a dodging target look human; a medic that made its own team-mate
+  wait 1.5s before healing would read as broken, not bad.
+- ⚠️ **The beam is aimed STRAIGHT at them with no lead solve** — it has no travel
+  time, so leading a team-mate points at empty air beside them.
+- ⚠️ **The medic exception is decided ABOVE the no-target early return**: an ally
+  is a subject in its own right, so a medic with a patient and no enemy anywhere
+  still beams; deciding it after would make healing conditional on being shot at.
 - ⚠️ **The follow-goal goes FIRST and returns early**, ahead of the whole mode
-  cascade, because a medic following a team-mate is doing its job in every mode and
-  the objective is that team-mate's problem. Its goal is a moving *instance*, so it
-  does not feed the spread and spot machinery — the same shape as the flag-carrier
-  chase, and for the same reason. With nobody to follow it falls through and walks
-  the objective like everyone else.
-- ⚠️ **The offset keeps the ally BETWEEN the medic and the enemy**, and it is
-  **horizontal only**: the goal is a place to *stand*, and standing is a
-  one-dimensional choice on a given surface. An intel carrier does not follow at
-  all.
+  cascade — following is the medic's job in every mode, and the objective is the
+  team-mate's problem. Its goal is a moving *instance*, so it skips the spread and
+  spot machinery, same shape as the flag-carrier chase. With nobody to follow it
+  falls through to the objective like everyone else.
+- ⚠️ **The offset keeps the ally BETWEEN the medic and the enemy, horizontal
+  only**: the goal is a place to *stand*, a one-dimensional choice on a given
+  surface. An intel carrier does not follow at all.
 
 ⚠️ **One named divergence: `skipFollowers` excludes the CLASS where the reference
 excludes `isBot and BOT_CP_FOLLOW`.** `WorldState` holds no "is this a bot" flag
-and must not grow one for a branch the tick never reads — docs/BOTAI.md's whole
-point is that read-only inputs are passed *to* `Tick` rather than held by it. What
-it costs is skipping a **human** medic as a follow target too, which the reference
-deliberately does not (a person walks somewhere on their own, so no cycle can
-form). The degradation is bounded and conservative: a bot medic whose only
-candidate is a human medic finds nobody and falls through to the objective, which
-is exactly what the reference does with a medic that finds nobody to follow.
+and must not grow one for a branch the tick never reads (docs/BOTAI.md). Cost:
+skipping a **human** medic as a follow target too, which the reference does not
+(a person walks on their own, so no cycle forms). Bounded and conservative: a bot
+medic whose only candidate is a human medic finds nobody and falls through to the
+objective — exactly what the reference does when a medic finds nobody to follow.
 
 ⚠️ **Three testing traps, all "the assertion is about the wrong thing":**
 
-1. **The follow-goal fires with or without an enemy** — the offset simply comes
-   off — so asking the medic with no target proves nothing about whether the mode
-   cascade is empty. That premise has to be shown with a **non-medic** in the same
-   world.
-2. **A medic's attention radius is 300px**, the shortest of any class bar the
-   engineer's 400. A fixture that put the enemy at 400 exercised none of the wiring
-   under test, silently.
+1. **The follow-goal fires with or without an enemy** (the offset comes off), so
+   testing a medic with no target proves nothing about the mode cascade — show
+   that premise with a **non-medic** instead.
+2. **A medic's attention radius is 300px**, shortest of any class bar the
+   engineer's 400; a fixture with the enemy at 400 silently exercised nothing.
 3. **The follow position is 60px from the ally, so a medic standing beside one
-   ARRIVES on the tick the goal is issued** — and arrival clears `HasGoal` and frees
-   the path together. `GoalX` is what survives, and it is what the claim is about.
+   ARRIVES on the tick the goal is issued** — arrival clears `HasGoal` and frees
+   the path together. `GoalX` is what survives and what the claim is about.
 
 ⚠️ **Gating the rule is not gating the wiring.** `BotObjective.Decide` takes the
-target as a parameter, so a test that calls it directly passes with `ScriptedBot`
-no longer passing one — checked by mutation, and closed by driving a real medic bot
-and reading which side of its ally the goal landed on.
+target as a parameter, so a test calling it directly passes even with
+`ScriptedBot` no longer passing one — checked by mutation, closed by driving a
+real medic bot and reading which side of its ally the goal landed on.
 
 ### Phase 7 item 4k: the airblast and the dodge, and two radius tests that were wrong
 
@@ -1330,76 +1201,70 @@ doing.
 - ⚠️ **The airblast's trigger volume is a BEAM, not a cone or a circle.** What
   gates a reflect is `collision_circle(projectile.x, projectile.y, 5, poof, false,
   true)` against an `AirBlastO` spawned 25px along the aim, whose mask is a narrow
-  rectangle. The reference used to ask "within 150px and 75° of the aim", and both
-  numbers were copied from the Flamethrower's own `blastDistance` and `blastAngle`,
-  **neither of which gates a reflect any more** — so the bot pressed SPECIAL for
-  rockets it could not possibly touch, over a volume about **ten times wider than
-  the weapon**. Reported from play as a pyro unable to deflect rockets even from a
-  distance.
-- ⚠️ **The press is not free**, which is why the volume has to be exact: it sets
-  `readyToBlast` false for 40 ticks whether or not anything was there, and a rocket
-  at 150px is ~12 ticks from impact — so the wasted blast is still on cooldown when
-  the one that was going to land arrives.
-- ⚠️ **The three constants are measured off the running exe, not off the sprite
-  file, which does not agree with it.** `AirBlastMaskS` is a 120×30 image but its
-  mask bounds are AUTO, so GM8 takes them from the opaque pixels: left 8, right 96,
-  top −13, bottom 14. Plus the 25px spawn offset and `collision_circle`'s 5px
-  radius: **near 28, reach 126, half-width 18**.
+  rectangle. The reference used to ask "within 150px and 75° of the aim", copied
+  from the Flamethrower's own `blastDistance`/`blastAngle`, **neither of which
+  gates a reflect any more** — so the bot pressed SPECIAL for rockets it could not
+  touch, over a volume about **ten times wider than the weapon**. Reported from
+  play as a pyro unable to deflect rockets even from a distance.
+- ⚠️ **The press is not free**, so the volume must be exact: it sets
+  `readyToBlast` false for 40 ticks regardless, and a rocket at 150px is ~12 ticks
+  from impact — the wasted blast is still on cooldown when the real one arrives.
+- ⚠️ **The three constants are measured off the running exe, not the sprite file,
+  which disagrees with it.** `AirBlastMaskS` is a 120×30 image whose mask bounds
+  are AUTO, taken from opaque pixels: left 8, right 96, top −13, bottom 14. Plus
+  the 25px spawn offset and `collision_circle`'s 5px radius: **near 28, reach
+  126, half-width 18**.
 - ⚠️ **There IS a near edge and it is not a rounding detail**: a rocket already at
-  the pyro's feet is UNDER the beam and cannot be blasted at all.
-- ⚠️ **`minTravel` is a DISTANCE, not an age.** The airblast has no delay of any
-  kind, so without it a rocket fired point-blank came back on the frame it was
-  born — confirmed inhuman. A distance says the thing directly and is frame-rate
-  independent. It is 60 rather than the 120 it was first set to *because of the
-  beam*: the window is 28-126px, so at 120 a shooter standing 130px away produced a
-  rocket that was never eligible at any point on its flight.
+  the pyro's feet is UNDER the beam and cannot be blasted.
+- ⚠️ **`minTravel` is a DISTANCE, not an age.** The airblast has no delay, so
+  without it a point-blank rocket came back on the frame it was born — confirmed
+  inhuman. A distance is frame-rate independent. It is 60, not the 120 first
+  tried, *because of the beam*: the window is 28-126px, so at 120 a shooter at
+  130px produced a rocket never eligible at any point of flight.
 - ⚠️ **The dodge's verdict is "the standing bot is hit at some tick AND the
-  jumping bot is hit at none".** The old test was "is an enemy projectile within
-  150px" and it was wrong in **both** directions: it jumped at rockets that were
-  never going to connect, and it jumped *into* ones fired over the bot's head — a
-  rocket passing above is exactly the case where rising 57px is what CREATES the
-  collision. **No proximity test can tell those apart**, because "would it hit" and
-  "does jumping help" have opposite answers depending on where the shot is aimed.
+  jumping bot is hit at none".** The old "enemy projectile within 150px" test was
+  wrong in **both** directions: it jumped at rockets that would never connect,
+  and jumped *into* ones fired over the bot's head, where rising 57px is exactly
+  what CREATES the collision. **No proximity test can tell those apart** — "would
+  it hit" and "does jumping help" invert depending on where the shot is aimed.
 - ⚠️ **Splash is deliberately not modelled.** A rocket detonating on the floor
-  under a jumping bot still catches it inside `blastRadius` 65, so counting splash
-  would refuse nearly every dodge. What the jump reliably avoids is the direct hit.
+  under a jumping bot still catches it inside `blastRadius` 65, so counting
+  splash would refuse nearly every dodge; the jump reliably avoids only the
+  direct hit.
 - ⚠️ **The dodge is grounded-only and never throttled** — grounded keeps it out of
-  every planned jump arc without knowing anything about that arc, and ORing is safe
-  because JUMP is edge-triggered in Begin Step. **It is the only thing that presses
-  JUMP outside the path follower**: the voluntary combat hops the reference used to
-  have there were removed, because between them they fired often enough — precisely
-  where the follower has arrived and returns no movement keys — that bots in a
-  firefight read as stuck in place jumping.
+  every planned jump arc for free, and ORing is safe because JUMP is
+  edge-triggered in Begin Step. **It is the only thing that presses JUMP outside
+  the path follower**: the reference's voluntary combat hops were removed because
+  together they fired often enough — right where the follower has arrived and
+  returns no keys — that bots in a firefight read as stuck jumping in place.
 
 ⚠️ **A gap this found: the class policy must run with NO TARGET, and in this port
 it did not.** `botCombatUpdate`'s no-subject branch still calls `botClassKeys` —
-"nothing to aim at is a state a class can still have an opinion about: a spy
-re-cloaks, an engineer builds, a heavy eats" — and only the aiming is skipped. This
-port returned no keys at all, so **a pyro with an empty screen could not deflect a
-rocket**. Fixed by running the policy there, which means **every branch that would
-otherwise fire at empty air now carries its own subject test**, exactly where the
-reference puts them. ⚠️ The pyro's flame needs one because `distance` is 0 with no
-target and 0 is inside the flame's reach — without it a pyro with nothing to shoot
-at holds the trigger for ever.
+a class can have an opinion with nothing to aim at (a spy re-cloaks, an engineer
+builds, a heavy eats) — only the aiming is skipped. This port returned no keys at
+all, so **a pyro with an empty screen could not deflect a rocket**. Fixed by
+running the policy there, so **every branch that would fire at empty air now
+carries its own subject test**, matching the reference. ⚠️ The pyro's flame needs
+one because `distance` is 0 with no target, inside the flame's reach — without it
+an idle pyro holds the trigger forever.
 
 ⚠️ **`readyToBlast` and `ammoCount >= 40` are checked FIRST and are not
-decoration** — they are much the cheapest of the three tests and gate the beam scan
-regardless of geometry.
+decoration** — the cheapest of the three tests, gating the beam scan regardless
+of geometry.
 
-⚠️ **One reference comment describes a case its own budget cannot reach, and this
-is measured rather than assumed.** `botRocketDodge` subtracts the rise rather than
-clamping it, "negative once the arc has come back down". With `NAV_JUMP_V0` 8.3 and
-`NAV_JUMP_GRAVITY` 0.6 the rise crosses zero at **t = 27.67** and `BOT_DODGE_TICKS`
-is **26** — one tick short. Over the whole walk the rise runs from 8.0 to 13.0 and
-never dips below 8, so **a clamp is a no-op**, checked by mutation. The subtraction
-is kept because widening the budget would make it matter.
+⚠️ **One reference comment describes a case its own budget cannot reach, measured
+not assumed.** `botRocketDodge` subtracts the rise rather than clamping it,
+"negative once the arc has come back down". With `NAV_JUMP_V0` 8.3 and
+`NAV_JUMP_GRAVITY` 0.6 the rise crosses zero at **t = 27.67**, one tick past
+`BOT_DODGE_TICKS` (**26**). Over the walk the rise runs 8.0 to 13.0 and never
+dips below 8, so **a clamp is a no-op**, checked by mutation; the subtraction is
+kept because widening the budget would make it matter.
 
 ⚠️ **A testing trap: the two obvious dodge fixtures do not gate the second half of
 the verdict.** A rocket at the chest and one over the head leave `!hitJumping`
-entirely ungated — the over-the-head one misses the *standing* bot too, so it fails
-the FIRST clause. What is needed is a rocket that hits **either way**: one tick out
-at +10, where the standing box spans −21..+31 and one tick of jump (8px) gives
-−29..+23.
+ungated — the over-the-head one misses the *standing* bot too, failing the FIRST
+clause. What's needed is a rocket that hits **either way**: one tick out at +10,
+where the standing box spans −21..+31 and one tick of jump (8px) gives −29..+23.
 
 ### Phase 7 item 4l: suppression, and a live flag that is not the target's
 
@@ -1410,72 +1275,68 @@ reference is `botSuppressSpot.gml` and `botCombatUpdate.gml:294-328`.
 ✅ **A heavy that loses sight of its target now denies the doorway it must come
 back through**, rather than shooting the wall it lost them behind.
 
-- ⚠️ **Worth building because the case is common, and that was measured before any
-  of it was written.** Twelve bots on koth_valley over 3,172 frames: **13,733
-  bot-ticks with a live target, 2,744 of them — 20% — with no line of sight**, and
-  for a heavy 1,432 of 6,442. About one tick in five of every engagement, and the
-  30-tick memory drop does not already eat most of it.
-- ⚠️ **A BOUNDED BREADTH-FIRST WALK, NOT AN A*, and that is a measurement rather
-  than a preference.** The design asked for a path search from there toward the
-  heavy's own node; built that way and timed at **8.13 ms a call on koth_valley's
-  270 nodes**. Nothing staggers the bots, so six heavies recomputing on one frame is
-  **48.8 ms against a 33.3 ms budget**, on the *smallest* interesting map —
-  ctf_truefort has 687 nodes. Breadth-first order is also the right order: fewest
-  hops from where they were is the soonest they could appear.
-- ⚠️ **The walk uses the ENEMY's gates, not ours.** It is their route, and a red bot
-  must not decide that a blue enemy will come out through a red spawn gate.
-  Observable on ctf_truefort: from node 8 a red traveller is walled in and a blue
-  one is not, and from node 74 it is the other way round.
-- ⚠️ **Never the node they were last seen on** — that one is behind cover by
-  construction, and shooting it is exactly the behaviour this replaces. It is also
-  the guard that stops a caller aiming at a wall when the enemy simply stood still.
-- ⚠️ **The velocity is zeroed when a spot is taken.** The velocity that came with
-  the snapshot belongs to a body that was moving when it was last seen; **a doorway
-  is not moving**, and leading a fixed point by a dead man's velocity is how a
-  suppression shot ends up in the far wall.
-- ⚠️ **On its own clock, not the aim interval.** The aim interval is 2 ticks at the
-  top tier, so asking there would be a graph walk per bot per two frames. The answer
-  is re-used between refreshes, which is honest about what it is: a place, not a
-  moving target.
-- **Opt-in per class** (`BOT_CP_SUPPRESS`, the heavy alone) because the walk is a
-  search, and **degrades to the stale snapshot with no graph** — a server whose map
-  has no nav cache still runs bots.
+- ⚠️ **Worth building because the case is common, measured before any of it was
+  written.** Twelve bots on koth_valley over 3,172 frames: **13,733 bot-ticks
+  with a live target, 2,744 of them — 20% — with no line of sight**; for a heavy
+  1,432 of 6,442. About one tick in five of every engagement, not already eaten
+  by the 30-tick memory drop.
+- ⚠️ **A BOUNDED BREADTH-FIRST WALK, NOT AN A*, and that is a measurement, not a
+  preference.** An A*-shaped search toward the heavy's own node timed at **8.13
+  ms a call on koth_valley's 270 nodes** — nothing staggers the bots, so six
+  heavies recomputing on one frame is **48.8 ms against a 33.3 ms budget**, on
+  the *smallest* interesting map (ctf_truefort has 687 nodes). Breadth-first
+  order is also the right order: fewest hops from where they were is soonest.
+- ⚠️ **The walk uses the ENEMY's gates, not ours** — it's their route, and a red
+  bot must not assume a blue enemy exits through a red spawn gate. Observable on
+  ctf_truefort: from node 8 a red traveller is walled in and blue is not; from
+  node 74, the reverse.
+- ⚠️ **Never the node they were last seen on** — behind cover by construction, and
+  shooting it is exactly the behaviour this replaces; also the guard against
+  aiming at a wall when the enemy simply stood still.
+- ⚠️ **The velocity is zeroed when a spot is taken.** The snapshotted velocity
+  belonged to a body that was moving when last seen; **a doorway is not moving**,
+  and leading a fixed point by a dead man's velocity sends the shot into the far
+  wall.
+- ⚠️ **On its own clock, not the aim interval** — the aim interval is 2 ticks at
+  the top tier, which would mean a graph walk per bot per two frames. The answer
+  is re-used between refreshes, honest about being a place, not a moving target.
+- **Opt-in per class** (`BOT_CP_SUPPRESS`, the heavy alone), since the walk is a
+  search, and **degrades to the stale snapshot with no graph** — a server with no
+  nav cache still runs bots.
 
-⚠️ **`state.Visible` is the LIVE flag and `state.Target.Visible` is not.** The first
-is maintained on the perceive cadence and is false exactly while the sightline is
-broken; the second is only what the search reported at acquisition and never changes
-again. The first draft read the target's, which made the whole branch fire on the
-acquisition tick and never afterwards. The reference is `!player.botVisible`.
+⚠️ **`state.Visible` is the LIVE flag and `state.Target.Visible` is not.** The
+first tracks the perceive cadence, false exactly while the sightline is broken;
+the second is only what the search reported at acquisition, fixed thereafter.
+The first draft read the target's, so the branch fired only on the acquisition
+tick. The reference is `!player.botVisible`.
 
-⚠️ **A target acquired while BLIND never gets a snapshot, and the aim then sits at
-(0, 0).** The perceive block is below the acquire hold's early return — in this port
-*and in the reference* (`if(!canAim) return 0;` sits above it in
-`botCombatUpdate`) — so a target that was never seen leaves `botSeeX/botSeeY` at
-whatever they held. On a fresh bot that is the map origin. **Faithful, not a
-defect**, and worth knowing because it decides what a test fixture has to look like.
+⚠️ **A target acquired while BLIND never gets a snapshot, so the aim sits at
+(0, 0).** The perceive block sits below the acquire hold's early return, in this
+port *and in the reference* (`if(!canAim) return 0;` in `botCombatUpdate`), so a
+never-seen target leaves `botSeeX/botSeeY` wherever they held — the map origin on
+a fresh bot. **Faithful, not a defect**, but it shapes what a test fixture needs.
 
-⚠️ **A suppression fixture must be SEEN AND THEN LOST, never acquired blind** — for
-exactly that reason. Three tests failed measuring the origin before this was
-understood. And two more things a fixture here needs:
+⚠️ **A suppression fixture must be SEEN AND THEN LOST, never acquired blind** —
+three tests failed measuring the origin before this was understood. Two more
+things a fixture here needs:
 
-- ⚠️ **Inside `BOT_BLIND_RANGE` (260).** A blind target further out is never held at
-  all, so the feature is unreachable. A first fixture put the pair 464px apart and
-  failed for that reason and no other.
-- ⚠️ **Moving when it is last seen.** An enemy that stands still is snapshotted at
-  zero velocity, and a port that forgot to clear the velocity looks identical —
-  checked by mutation, the zeroing survived until the fixture gave the enemy a
-  speed.
+- ⚠️ **Inside `BOT_BLIND_RANGE` (260)** — a blind target further out is never
+  held, so the feature is unreachable. A first fixture at 464px apart failed for
+  that reason alone.
+- ⚠️ **Moving when it is last seen** — a stationary enemy snapshots at zero
+  velocity, indistinguishable from a port that forgot to clear it; checked by
+  mutation, the zeroing survived only once the fixture gave the enemy speed.
 
-⚠️ **A permanently broken sightline drops the target every 30 ticks and re-acquires
-it on the next target period**, so a test that stops on a fixed tick lands in the
-gap about as often as not and reads as "the bot never acquired anything". Stop on
-the condition, and guard any window assertion with "still held and still blind" — a
-re-acquisition legitimately recomputes, and asserting through one measures the
-memory window instead.
+⚠️ **A permanently broken sightline drops the target every 30 ticks and
+re-acquires on the next target period**, so a test stopping on a fixed tick lands
+in the gap about as often as not, reading as "never acquired anything". Stop on
+the condition, and guard any window assertion with "still held and still blind"
+— a re-acquisition legitimately recomputes, and asserting through one measures
+the memory window instead.
 
-**The hop budget is a COST bound and is deliberately not gated.** What is gated is
-that the answer is a node the enemy can actually reach from where it was, which a
-broken edge index or a mis-read gate would break.
+**The hop budget is a COST bound and is deliberately not gated.** What is gated
+is that the answer is reachable from where the enemy was, which a broken edge
+index or a mis-read gate would break.
 
 ### Phase 7 item 4m: the arc, and a fixture that has to separate two questions
 
@@ -1487,67 +1348,61 @@ reference is `botArcClear.gml` and `botClassKeys.gml:47-68`.
 - ⚠️ **Nothing else in the bot layer ever checks a projectile's arc.** Target
   selection, the keep-target test and the spot search are all a straight
   chest-to-chest sightline, while the aim solver deliberately aims *above* the
-  target to compensate for drop — and the amount is large: **~178px of sag at 500px
-  for a Minegun round**, ~120px for a scattergun, none for a rocket. So a demoman
-  with a clear straight line to a target across a room is aiming a whole storey
-  above it. Indoors that is the reported "sometimes shooting at the ceiling",
-  stated as a mechanism rather than as a symptom.
+  target to compensate for drop — a large amount: **~178px of sag at 500px for a
+  Minegun round**, ~120px for a scattergun, none for a rocket. A demoman with a
+  clear straight line across a room is aiming a whole storey above it — the
+  mechanism behind the reported "sometimes shooting at the ceiling".
 - ⚠️ **Only the two classes whose shot kills them if it goes off next to them.**
-  Everyone else pays nothing: a scattergun round that clips a lintel costs ammo the
-  class has plenty of, and withholding would make a scout stop firing in exactly
-  the corridors it wants to be firing in.
-- ⚠️ **The last sample is the TARGET, not the parabola's own endpoint.** The flight
-  time is recovered from the horizontal offset and carries a tick or so of error,
-  and letting that error put the final sample a few pixels *into* the floor the
-  target is standing on would refuse every shot at a grounded enemy — the
-  commonest shot in the game. Ending on the aim point is also exactly what the
-  straight sight test does, so a flat weapon gets the answer it always did.
+  Everyone else pays nothing: a scattergun round clipping a lintel costs ammo the
+  class has plenty of, and withholding would stop a scout firing in exactly the
+  corridors it wants to fire in.
+- ⚠️ **The last sample is the TARGET, not the parabola's own endpoint.** Flight
+  time is recovered from the horizontal offset with a tick or so of error; letting
+  that put the final sample a few pixels *into* the floor a grounded target stands
+  on would refuse the commonest shot in the game. Ending on the aim point also
+  matches what the straight sight test does, so a flat weapon keeps its old answer.
 - ⚠️ **`t·(t+1)/2` is exact rather than a continuous approximation** — gravity is
-  added to `vspeed` *before* the move is applied, so the accumulated sag after t
-  ticks is the triangular number. Same law `BotAim.Solve` aims with, and gated
-  there rather than twice.
-- **Withholding rather than re-solving is deliberate.** A flatter solution
-  generally means closing the distance, which is a positioning decision the
-  objective layer owns.
+  added to `vspeed` *before* the move applies, so accumulated sag after t ticks is
+  the triangular number, the same law `BotAim.Solve` uses (gated there, not twice).
+- **Withholding rather than re-solving is deliberate** — a flatter solution
+  generally means closing distance, a positioning decision the objective layer
+  owns.
 
-⚠️ **A fixture for this has to separate `Clear(aim, g)` from `Clear(aim, 0)`, not
-merely from the chest-to-chest line — and only a handful of pairs on a real map
-do.** The first fixture was blocked by the **aim direction** rather than by
-gravity: the shot simply pointed into geometry, which a straight-line sampler
-answers identically. **Three mutations survived against it**, including "sample the
-arc as a straight line" — the one the whole feature is about. Sweeping ctf_truefort
-for pairs where gravity alone decides gave five; node 27 → node 136 is the one
-used.
+⚠️ **A fixture here must separate `Clear(aim, g)` from `Clear(aim, 0)`, not just
+from the chest-to-chest line — only a handful of real-map pairs do.** The first
+fixture was blocked by **aim direction**, not gravity: the shot pointed into
+geometry, which a straight-line sampler answers identically. **Three mutations
+survived against it**, including "sample the arc as a straight line" — the one
+the whole feature is about. Sweeping ctf_truefort for pairs where gravity alone
+decides gave five; node 27 → node 136 is the one used.
 
-⚠️ **And the sweep that chose that first fixture was itself wrong, for a reason
-CLAUDE.md already records.** It solved the aim with `BotAim.NoFloor`, so the solver
-predicted a stationary target falling for ever and aimed **below its feet, into the
-ground** — every arc it sampled was blocked, which reads as the feature refusing
+⚠️ **The sweep that chose that fixture was itself wrong, for a reason CLAUDE.md
+already records.** It solved the aim with `BotAim.NoFloor`, so the solver
+predicted a stationary target falling forever and aimed **below its feet, into
+the ground** — every arc it sampled was blocked, reading as the feature refusing
 everything. With a real floor the same sweep gives 8 blocked against 50 clear.
 **Any test that solves an aim must pass `BotAim.FloorUnder`.**
 
-⚠️ **One mutation survives and is recorded in the code rather than papered over:
-the upper flight-time clamp** (`BOT_AIM_MAX_TICKS`). It is a guard against an
-unreachable aim point walking a thousand ticks of parabola — a *cost* bound, like
-`BotSuppress`'s hop budget — and every real-map fixture that reaches it is blocked
+⚠️ **One surviving mutation is recorded in the code rather than papered over: the
+upper flight-time clamp** (`BOT_AIM_MAX_TICKS`), a guard against an unreachable
+aim point walking a thousand ticks of parabola — a *cost* bound, like
+`BotSuppress`'s hop budget — and every real-map fixture reaching it is blocked
 with or without it. The *lower* bound is reachable and is gated.
 
 ⚠️ **The soldier's own use of the gate survived too, and is closed now.** It stood
-ungated because a rocket flies flat, so its arc is very nearly the straight line
-the target search already cleared. What separates them is a **moving** target, and
-the fixture had to be swept for: across every node pair on `ctf_truefort`, twelve
-satisfy all three conditions at once — the chest-to-chest line clear, the
-still-aim arc clear, and the **led** arc blocked. Node 0 → 214 at 417px is the
-widest: the still aim is 319.7° and a target running at 6px/tick pulls it to
-300.8°, **nineteen degrees into a wall**. The angular separation is the whole
-fixture, so pick the widest rather than the first.
+ungated because a rocket flies flat, nearly the straight line the target search
+already cleared — a **moving** target is what separates them. Swept across
+ctf_truefort: twelve node pairs satisfy chest-to-chest clear, still-aim arc
+clear, and **led** arc blocked at once. Node 0 → 214 at 417px is the widest: the
+still aim is 319.7°, a target running at 6px/tick pulls it to 300.8° — **nineteen
+degrees into a wall**. The angular separation is the fixture, so pick the widest.
 
-⚠️ **A caller test here must ask `BotClassKeys.For` and not the whole combat
-step.** The trigger sits behind three other gates in `BotCombat` — the fire delay,
-the aim settle and the hold-fire roll — so driving the pipeline measures those too,
-and the hold-fire roll makes it intermittent. ⚠️ And the aim has to be **set on the
-character**, because the arc is sampled from its live `aimDirection`: a defaulted
-aim points right and the arc then has nothing to do with the target at all.
+⚠️ **A caller test here must ask `BotClassKeys.For`, not the whole combat step.**
+The trigger sits behind three other `BotCombat` gates — fire delay, aim settle,
+hold-fire roll — so driving the pipeline measures those too and the hold-fire
+roll makes it intermittent. ⚠️ The aim must also be **set on the character**: the
+arc samples its live `aimDirection`, and a defaulted aim (pointing right) makes
+the arc unrelated to the target.
 
 ### Phase 7 item 4n: the mined doorway, and a radius that is not the one on the tin
 
@@ -1556,41 +1411,37 @@ The reference is `botMinesArmed.gml` and `botClassKeys.gml:89-93`.
 
 ✅ **A demoman springs a mined doorway on whoever walks into it.**
 
-- ⚠️ **The question is never "is this mine worth it" but "is any of them".** The
+- ⚠️ **The question is never "is this mine worth it" but "is any of them"** — the
   Minegun detonates **every** mine the player owns at once, so one armed mine is
-  the whole trigger — which is exactly what a chokepoint full of them is for.
-- ⚠️ **`BOT_MINE_TRIGGER` is measured against the mine's *damage* radius, not its
-  affect radius, and that difference is the whole behaviour.**
-  `Mine.events/User Event 2.xml` damages through `blastRadius` **40**, not
-  `affectRadius` **65**. The reference's first version triggered at 60: the bot
-  detonated the moment an enemy came near, blew its whole stock and dealt
-  **nothing**. Reported from play as "detonates too early, doesn't damage
-  enemies", which was exactly right.
-- ⚠️ **A sentry and a generator are asked the same question with a different
-  metric, and it is not a refinement — it is the only reading that works.** The
-  reference's script scanned `with(Character)` and nothing else, so a demoman that
-  had chosen a **sentry** as its target (`BotTargeting` takes sentry and generator
-  targets, and `BotClassKeys` lobs at them) put its whole stock on that sentry and
-  then never pressed SPECIAL, because no character was ever standing next to them.
-  Reported from play as "shooting grenades at sentries, but not detonating".
-- ⚠️ **A character is measured centre to centre and the other two box to box, on
-  purpose.** It is the same 30 and needs no second constant: a character is ~6px
-  of box either side of its centre, while a sentry is a wide object whose centre
-  may be 30px from a mine sitting against its base. `distance_to_object` is what
-  the engine's own damage block uses on those two.
+  the whole trigger, exactly what a chokepoint full of them is for.
+- ⚠️ **`BOT_MINE_TRIGGER` is measured against the mine's *damage* radius
+  (`blastRadius` **40**), not its affect radius (`affectRadius` **65**,
+  `Mine.events/User Event 2.xml`) — that difference is the whole behaviour.** The
+  reference's first version triggered at 60: the bot blew its whole stock the
+  moment an enemy came near and dealt **nothing**, reported from play as
+  "detonates too early, doesn't damage enemies" — exactly right.
+- ⚠️ **A sentry/generator need a different metric than a character, and it's the
+  only reading that works.** The reference scanned `with(Character)` only, so a
+  demoman targeting a **sentry** (`BotTargeting`/`BotClassKeys` lob at sentry and
+  generator targets) put its whole stock on it and never pressed SPECIAL — no
+  character ever stood next to it. Reported as "shooting grenades at sentries,
+  but not detonating".
+- ⚠️ **A character is measured centre to centre, a sentry/generator box to box —
+  deliberately, same 30 constant either way**: a character is ~6px of box either
+  side of centre, a sentry's centre can be 30px from a mine at its base, and
+  `distance_to_object` is what the engine's own damage block uses on both.
 - ⚠️ **The detonation carries no `hasSubject` test**, alone among the firing
-  branches in `BotClassKeys`. A mined doorway is worth springing on whoever walks
-  into it, and that is very often not the thing this demoman is aiming at.
-- **A cloaked spy does not arm it.** Nothing else in the bot layer can see one —
-  target selection skips a cloaked candidate — so detonating on one would be the
-  single place a bot acted on information it does not have.
+  branches in `BotClassKeys` — a mined doorway is worth springing on whoever
+  walks into it, often not the thing the demoman is aiming at. **A cloaked spy
+  is the one exception**: target selection skips a cloaked candidate everywhere
+  else, and detonating on one would be the sole spot a bot acted on information
+  it does not have.
 
-⚠️ **Measured this session, and the reference's own comment is only half of it: a
-STUCK mine has no quarter-radius cutoff, so its "anything at 30 of box distance
-takes nothing at all" is true of a mine still in flight and false of one lying in
-a doorway.** The guard is `and other.splashThreshhold`, which the movement pass
-clears on landing (CLAUDE.md, stage 6). Measured on `ctf_truefort`, one mine
-against a scout, damage out of a full blast of 45:
+⚠️ **The reference's comment is only half true: a STUCK mine has no
+quarter-radius cutoff.** "Anything at 30 of box distance takes nothing" holds for
+a mine in flight but not one lying in a doorway — the guard is
+`and other.splashThreshhold`, cleared on landing (CLAUDE.md, stage 6). Measured
+on `ctf_truefort`, one mine against a scout, damage out of a full blast of 45:
 
 | centre gap | airborne | stuck |
 |---|---|---|
@@ -1599,17 +1450,16 @@ against a scout, damage out of a full blast of 45:
 | 45 | **0.0** | 3.4 |
 | 60 (the old trigger) | **0.0** | **0.0** |
 
-So the trigger is conservative in both forms — at 30 it still buys nearly half a
-blast — and at the 60 the reference started with, **both forms deal exactly
-zero**. `BotMinesTests` asserts the damage rather than the constant, so a mutation
-that puts the trigger back fails on what the number is *for*.
+The trigger is conservative in both forms — at 30 it still buys nearly half a
+blast — and at the reference's original 60, **both forms deal exactly zero**.
+`BotMinesTests` asserts the damage rather than the constant, so a mutation that
+restores 60 fails on what the number is *for*.
 
 ⚠️ **`ScenarioWorld.Place` snaps downward to a nav node, so a coordinate handed to
-it is a request rather than a position.** Every distance in a fixture here is
-measured from where the character ended up, and the **mine** is placed relative to
-that — a mine's position is the only one a test controls. The first draft measured
-from the requested coordinates and asserted a 45px gap that was really about 27,
-which read as the trigger being wrong.
+it is a request, not a position.** Fixture distances are measured from where the
+character actually landed, and the **mine** is placed relative to that. The first
+draft measured from the requested coordinates and asserted a 45px gap that was
+really ~27, misread as the trigger being wrong.
 
 **Eight mutations tried and all eight bite**: the trigger at 60 (7 failures), the
 sentry scan deleted, the generator scan deleted, the sentry measured centre to
@@ -1624,52 +1474,45 @@ the detonation made to wait for a target.
 
 ✅ **A pyro walks at its target instead of holding where the engage caught it.**
 
-- ⚠️ **This is the only place in the bot layer that presses a movement key
-  nothing validated.** Everything else that moves a bot sideways is either an
-  edge the nav generator proved or a single step of back-off inside its own blast
-  radius. A pyro closing on a target is neither, so it is walking on ground
-  nothing has checked — and `ctf_truefort` has a pit beside the route, so a bot
-  chasing an enemy across a gap walks into a hole it cannot climb out of and
-  stays there until it dies.
-- ⚠️ **Only the pyro, because only the pyro's weapon reaches a fraction of the
-  distance it can see.** `ClassRange` is 200 and `BOT_FLAME_REACH` is 165, so the
-  close-in step fires in a **35px band** — holding at acquisition range is holding
-  out of range for ever. Every other class has `BOT_CP_CLOSE_IN` 0 and stands
-  where the hold caught it.
+- ⚠️ **The only place in the bot layer that presses a movement key nothing
+  validated.** Everything else moving a bot sideways is either a nav-proven edge
+  or a single blast-radius back-off step; a pyro closing on a target is neither,
+  so it walks ground nothing has checked — on `ctf_truefort` a pit beside the
+  route traps a chasing pyro for good.
+- ⚠️ **Only the pyro, because only its weapon reaches a fraction of what it can
+  see.** `ClassRange` 200 vs `BOT_FLAME_REACH` 165 leaves a **35px band** where
+  the close-in step fires — holding at acquisition range would be holding out of
+  range for ever. Every other class has `BOT_CP_CLOSE_IN` 0 and stands where the
+  hold caught it.
 - ⚠️ **`place_meeting` against `Obstacle`, never `place_free`.** The reference's
-  own comment says why: `place_free` reads GM8's `solid` flag and the game toggles
-  that flag underneath itself — `gunSetSolids` brackets every hitscan trace — so
-  what it answers depends on where in the frame it is asked. This port has no
-  global flag to toggle, but the *object list* still has to be the right one, and
-  `CollisionFilter.ForSentry()` is this codebase's name for it (`wallSetSolid`,
-  Obstacle and nothing else). **A team gate is neither a wall worth refusing nor a
-  floor to stand on**, and using the character's own list makes a pyro refuse to
-  walk through its own team's gate.
-- ⚠️ **Two refusals, not one.** A wall ahead is *not unsafe* — there is floor
-  under it — but the press achieves nothing and the follower's stuck detector
-  counts it, so it is refused separately from the floor test.
-- ⚠️ **The drop tolerance is deliberately short and is not "can the bot get
-  there".** That is `navFindPath`'s question, answered against the graph; this one
-  is only "does the ground continue", so a step down to a lower ledge reads as
-  safe and a step over a pit does not. Without it a pyro on a raised slab can
-  never close on anything.
+  own comment explains why: `place_free` reads GM8's `solid` flag, which the game
+  toggles mid-frame (`gunSetSolids` brackets every hitscan trace), so the answer
+  depends on when in the frame it's asked. This port has no such flag, but the
+  *object list* still must be right: `CollisionFilter.ForSentry()`
+  (`wallSetSolid` — Obstacle only) is that list. **A team gate is neither a wall
+  to refuse nor a floor to stand on**, so using the character's own list lets a
+  pyro walk through its own team's gate. ⚠️ **Two refusals, not one**: a wall
+  ahead isn't unsafe (there's floor under it) but the press achieves nothing, so
+  it's refused separately from the floor test (the follower's stuck detector
+  counts it either way).
+- ⚠️ **The drop tolerance answers "does the ground continue," not "can the bot
+  get there" — that is `navFindPath`'s question, against the graph.** So a step
+  down to a lower ledge reads safe and a step over a pit does not; without it a
+  pyro on a raised slab can never close on anything.
 
-⚠️ **Every fixture here was swept for rather than chosen, and none of them is a
-nav node's own stand position.** The three cases look identical on a map
-screenshot — ground that continues, ground that stops, and a solid that is not
-ground at all. Swept across every floor row on `ctf_truefort`: **4,528 pit-edged
-spots, 4,157 wall-edged and 1,110 where the choice of solidity list changes the
-answer.** That last family is the only way to gate the filter and no fixture
-picked by eye would have been one; `(682, 325)` steps left onto a **TeamGate**
-with sound floor under it. `(1064, 325)` is the ledge — the pit beside it bottoms
-out **216px** down, which is asserted, so the refusal is a real gap rather than a
-near miss of the 28px tolerance.
-
-⚠️ **A sweep for a standing position must not test `place_free` one pixel down.**
-GG2 rests a character with its feet a pixel *above* the surface (the same fact
-`navNodeFromWorld`'s rounding turns on), so "free at y and solid at y+1" is true
-**nowhere on the map** — the first sweep found zero candidates of any kind and
-read as the primitive being broken. The right filter is "free at y and something
+⚠️ **Every fixture here was swept for, not chosen, and none is a nav node's own
+stand position.** Ground that continues, ground that stops, and a solid that
+isn't ground at all look identical on a map screenshot. Swept across every floor
+row on `ctf_truefort`: **4,528 pit-edged spots, 4,157 wall-edged, 1,110 where the
+solidity-list choice changes the answer** — the only family that gates the
+filter, and no fixture picked by eye would have hit one. `(682, 325)` steps onto
+a **TeamGate** with sound floor under it; `(1064, 325)` is the ledge — the pit
+beside it bottoms out **216px** down (asserted), a real gap rather than a
+near-miss of the 28px tolerance. ⚠️ **The sweep must not test `place_free` one
+pixel down**: GG2 rests a character with its feet a pixel *above* the surface
+(same fact `navNodeFromWorld`'s rounding turns on), so "free at y, solid at y+1"
+is true **nowhere on the map** — the first sweep found zero candidates and read
+as the primitive being broken. The right filter: "free at y and something
 within the drop tolerance".
 
 **Seven mutations tried and all seven bite**: the wall test deleted, the floor
@@ -1686,57 +1529,51 @@ flipped.
 ✅ **The last ungated branch in the bot layer is gated**, and no behaviour changed
 — this item is entirely a test.
 
-- ⚠️ **A spot is chosen without checking reachability.** `BotGoalSpot` ranks nodes
-  by distance, height and sightline and asks the graph nothing about whether a
-  route exists — deliberately, because a path search per candidate is a search per
-  bot per objective tick. So a spot in another component presents as a goal that
-  never plans, and the ban is the only place that can notice.
-- ⚠️ **The state is not reachable from any shipped map**, which is why the branch
-  stood ungated for four items and said so in its own comment: **all 24 cached
-  graphs are connected for the team that owns the ground.** A green suite was not
-  evidence it worked.
+- ⚠️ **A spot is chosen without checking reachability.** `BotGoalSpot` ranks
+  nodes by distance, height and sightline and never asks the graph whether a
+  route exists — deliberately, since a path search per candidate is a search per
+  bot per objective tick. A spot in another component presents as a goal that
+  never plans, and the ban is the only place that notices.
+- ⚠️ **The state is unreachable from any shipped map** — why the branch stood
+  ungated for four items, per its own comment: **all 24 cached graphs are
+  connected for the team that owns the ground.** A green suite was not evidence
+  it worked.
 - ⚠️ **The fixture is a real graph with one node's edges stripped**, rebuilt
-  through the real cache format and the real reader. Isolating one node is the
-  smallest two-component graph there is, and it keeps the spot search's candidate
-  set *identical* — so the route is the only thing that changed and "the spot
-  moved" cannot be mistaken for "the ban fired". `NavCacheTests.WriteCache` is
-  `internal` and was already the byte builder; going back through
-  `NavCache.Parse` matters because **both derived indices are bets on the
-  generator's output** (edges sorted by from-node, nodes by row then x) and a
-  graph assembled behind the parser could satisfy neither while looking right.
+  through the real cache format and reader — isolating one node is the smallest
+  two-component graph there is, and it keeps the spot search's candidate set
+  *identical*, so the route is the only thing that changed. `NavCacheTests.WriteCache`
+  is `internal` and already the byte builder; going back through `NavCache.Parse`
+  matters because **both derived indices are bets on the generator's output**
+  (edges sorted by from-node, nodes by row then x), which a graph assembled
+  behind the parser could satisfy neither of while looking right.
 - ⚠️ **The ban legitimately advances every tick between the goal being issued and
-  the next objective tick.** It fires on the goal's own `IsSpot`, which is only
-  rewritten when a goal is actually *issued* — so for those 30 ticks the goal is
-  still a spot and still unplannable. What must not advance is the window after
-  the replacement lands, and a test that measured too early reads a correct
-  implementation as a re-arming one. Measured: first ban at 301, settled at 330.
+  the next objective tick.** It fires on the goal's own `IsSpot`, rewritten only
+  when a goal is actually *issued* — so for those 30 ticks the goal is still a
+  spot and still unplannable. What must not advance is the window after the
+  replacement lands; measuring too early reads a correct implementation as a
+  re-arming one. Measured: first ban at 301, settled at 330.
 - ⚠️ **The ban is a delay, not a stop.** It lapses after 300 ticks and the bot
-  asks for another spot — on this fixture the second perch is unreachable too, so
-  the second ban is the evidence that a second spot was asked for at all
-  (measured: 301 → 990 over three windows).
-- ⚠️ **`HasGoal` is what separates "planning failed" from "arrived"**, since
-  arrival clears the goal and frees the path together. A ban keyed on `!HasPath`
-  alone punishes a bot for succeeding, and every later spot is then refused for
-  ten seconds after every arrival — most of a bot's life.
+  asks for another spot; on this fixture the second perch is also unreachable,
+  so the second ban is evidence a second spot was asked for (measured: 301 → 990
+  over three windows).
+- ⚠️ **`HasGoal` separates "planning failed" from "arrived"** — arrival clears
+  the goal and frees the path together. A ban keyed on `!HasPath` alone punishes
+  success, refusing every later spot for ten seconds after every arrival — most
+  of a bot's life.
 
-⚠️ **Four traps in writing this, and three of them are about the observation
-window rather than the code:**
-
-1. **Stop inside the first ban window.** Running past it watches the bot pick a
-   *second* unreachable perch and measures that. The first draft ran to 400
-   against a ban that ends at 301.
-2. **Assert the exact tick the ban lands on** (`1 + BOT_SPOT_BAN`), or moving the
-   check below the objective-period gate is invisible — every "a ban happened"
-   assertion still passes with it one period late.
-3. **Compare against the objective's own `allowSpot: false` answer, not against
-   the objective's coordinates.** The banned goal is not the point: it is the
-   point *snapped downward to a node*, 207px away on `koth_valley`. A test that
-   expected the raw point fails for a reason that has nothing to do with the ban.
-4. ⚠️ **A mutation that leaves a private field assigned-but-never-read does not
-   compile here** (warnings as errors), so "delete the `_goalIsSpot` clause" is
-   not a runnable mutation and reports a clean pass from a failed build. Mutate
-   the *data* instead — `_goalIsSpot = true` — which is the same claim and
-   compiles. Same family as the `if (false)`/CS0162 trap.
+⚠️ **Four traps writing this, three about the observation window rather than the
+code:** stop inside the first ban window — running past it measures a *second*
+unreachable perch instead, as the first draft did (ran to 400 against a ban that
+ends at 301); assert the exact tick the ban lands on (`1 + BOT_SPOT_BAN`), since
+a check below the objective-period gate passes one period late without erroring;
+compare against the objective's own `allowSpot: false` answer, not its
+coordinates — the banned goal is the point *snapped downward to a node*, 207px
+away on `koth_valley`, so a test expecting the raw point fails for an unrelated
+reason. ⚠️ And a mutation leaving a private field assigned-but-never-read
+**doesn't compile here** (warnings as errors), so "delete the `_goalIsSpot`
+clause" isn't a runnable mutation — mutate the *data* instead (`_goalIsSpot =
+true`), the same claim, which compiles. Same family as the `if (false)`/CS0162
+trap.
 
 **Five mutations tried and all five bite**: the ban deleted, the ban never
 consulted (`allowSpot: true`), every goal counted as a spot, the `HasGoal` clause
@@ -1754,74 +1591,71 @@ since item 4a and nothing filled it, so **a whole team planned the identical
 route**. Measured on `ctf_truefort` node 0 → 143: four bots asking in turn get
 **four distinct routes** with occupancy and **one** without.
 
-- ⚠️ **It is the only safe way to spread a team out, and a per-edge random jitter
-  is not.** The jitter was tried in the reference and deleted: it is
-  mean-reverting, so over a sixty-edge route every candidate inflates by the same
-  average and all eight bots got the identical route anyway. Occupancy works
-  because it is structured — what it makes expensive is precisely what is crowded
-  — shared, and coarse. **Do not re-add the jitter.**
-- ⚠️ **A bot's own route comes out of the counts before it searches, and that is
-  not an optimisation — it is what makes a route stable across re-plans.** A bot
-  that can see its own route is charged extra for the path it is already walking,
-  so every re-plan tries to move it and the whole team churns lanes every
-  `BOT_REPLAN_TICKS`. The reference measured it on this map: with self excluded, 2
-  of 16 re-plans changed a route; with a node-keyed penalty — which cannot exclude
-  self cleanly, since a bot stands on its own nodes — **15 of 16**.
-- ⚠️ **Per team, because the thing being spread out is a team.** A blue bot has no
-  reason to avoid the route red is walking. One shared map would have each team's
-  routes push the other's around for no reason anyone could see from the outside.
-- ⚠️ **A removal goes to the team the route was counted against, never the bot's
-  team now.** The two genuinely come apart: autobalance switches the
-  lowest-scoring player on the larger team mid-round and can pick a bot, and a
-  rotation re-teams every one of them. Reading the current team on the way out
-  subtracts from the map the bot has just joined and leaves the old team's counts
-  raised **for ever** — an edge nothing is walking that every future search on
-  that team pays extra for.
-- ⚠️ **A route is added in one place and removed in three** — the planner before
-  it searches, arrival and death, and the bot leaving or the map changing — so the
-  add is idempotent. ⚠️ **The negative-count danger is not what it looks like**:
-  `if (was <= 0) remove` means a count is never *stored* negative, so a lone bot's
-  double-decrement is invisible. What a double-decrement costs is **somebody
-  else's** count, and that is the case a fixture has to build.
+- ⚠️ **Occupancy is the only safe way to spread a team out; a per-edge random
+  jitter is not.** Tried and deleted in the reference: it is mean-reverting, so
+  over a sixty-edge route every candidate inflates by the same average and all
+  eight bots got the identical route anyway. Occupancy works because it is
+  structured, shared, and coarse — expensive exactly where crowded. **Do not
+  re-add the jitter.**
+- ⚠️ **A bot's own route is excluded from the counts before it searches — not an
+  optimisation, but what keeps a route stable across re-plans.** A bot that can
+  see its own route is charged extra for the path it is already walking, so every
+  re-plan tries to move it and the team churns lanes every `BOT_REPLAN_TICKS`.
+  Reference measurement on this map: self excluded, 2 of 16 re-plans changed a
+  route; node-keyed penalty (cannot exclude self cleanly — a bot stands on its
+  own nodes) — **15 of 16**.
+- ⚠️ **Per team — the thing being spread out is a team.** A blue bot has no
+  reason to avoid red's route; one shared map would have each team's routes push
+  the other's around for no visible reason.
+- ⚠️ **A removal charges the team the route was counted against, never the bot's
+  current team.** The two diverge: autobalance can move a bot to the larger team
+  mid-round, and a rotation re-teams every one. Reading the current team on the
+  way out subtracts from the map the bot just joined and leaves the old team's
+  counts raised **for ever** — an edge nothing walks that every future search on
+  that team overpays for.
+- ⚠️ **A route is added in one place and removed in three** (planner, arrival,
+  death/leave/map-change), so the add must be idempotent. ⚠️ **The
+  negative-count danger isn't what it looks like**: `if (was <= 0) remove` means
+  a count is never *stored* negative, so a lone bot's double-decrement is
+  invisible — what it costs is **somebody else's** count, which a fixture has to
+  build for.
 - ⚠️ **Keys are node indices, which only mean anything to one build of the
-  graph**, so both maps are dropped on a rotation — before the bots are handed the
-  new graph, since `ScriptedBot.SetMap` is what clears each bot's own bookkeeping.
+  graph**, so both maps are dropped on a rotation — before the bots are handed
+  the new graph, since `ScriptedBot.SetMap` clears each bot's own bookkeeping.
 
 ⚠️ **One named divergence: this port keeps ONE field where the reference keeps
-two.** `botOccupied` and `botOccupiedTeam` carry the same information and can
-disagree; here `OccupiedTeam` **is** the flag (`Team.Spectator` means "counted
-nowhere") and `Occupied` is derived from it. The reference's own
-`botOccupancyReset` has to clear both halves in step; here one call does both.
-**Found by mutation** — with two fields, deleting the flag guard in `Remove` left
-every test green, because the team sentinel was already carrying it. Two guards
-where either suffices is a guard that cannot be gated.
+two.** `botOccupied`/`botOccupiedTeam` carry the same information and can
+disagree; here `OccupiedTeam` **is** the flag (`Team.Spectator` = "counted
+nowhere") and `Occupied` is derived. The reference's `botOccupancyReset` clears
+both halves in step; here one call does both. **Found by mutation** — with two
+fields, deleting the flag guard in `Remove` left every test green, since the team
+sentinel already carried it. Two guards where either suffices is a guard that
+cannot be gated.
 
-⚠️ **A fixture for this has to be swept for.** Most legs have one sensible route
-and a 25% penalty on a few edges does not move them, so a leg picked by eye gates
-nothing. Swept across every seventh start and eleventh goal on two maps:
-`ctf_truefort` 0 → 143 goes from a 32-node route to a 14-node one with **one**
-node in common.
-
-⚠️ **And the two teams do not agree about a leg in the first place** — a gate is
-passable to the team that owns it — so the per-team test compares blue's crowded
-answer with **blue's own uncrowded** answer. Comparing it with red's fails on the
+⚠️ **A fixture for occupancy has to be swept for** — most legs have one sensible
+route and a 25% penalty on a few edges doesn't move them. Swept across every
+seventh start and eleventh goal on two maps: `ctf_truefort` 0 → 143 goes from a
+32-node route to a 14-node one with **one** node in common. ⚠️ **The two teams
+also don't agree about a leg in the first place** — a gate is passable only to
+the team that owns it — so the per-team test compares blue's crowded answer
+with **blue's own uncrowded** answer; comparing it with red's fails on the
 gates and says nothing about occupancy.
 
-⚠️ **Re-measured after this landed, because one dictionary lookup per edge per
-search is not free: twelve bots cost `0.154ms` a tick — 0.5% of the budget — so
-the headroom claim is untouched.** And a fact nobody had written down: **that
-number is configuration-dependent.** The same test in the default (Debug) build
-reads **0.369ms, 1.1%**. `README.md`, `docs/ARCHITECTURE.md`, `docs/PLAN.md` and this file's header all
-carry the figure with its build now; a re-measure that forgets to say which build
-it ran looks like a regression of a factor of two.
+⚠️ **Re-measured after this landed — one dictionary lookup per edge per search
+isn't free: twelve bots cost `0.154ms` a tick, 0.5% of the budget, so the
+headroom claim is untouched.** Configuration-dependent, previously unrecorded:
+the default (Debug) build reads **0.369ms, 1.1%**. `README.md`,
+`docs/ARCHITECTURE.md`, `docs/PLAN.md` and this file's header now all carry the
+figure with its build; a re-measure that omits which build ran looks like a 2x
+regression.
 
 **Nine mutations tried and all nine bite**: routes never counted, self not
 excluded before the search, the add not idempotent, the route left counted after
-removal, the removal reading the wrong team, zero counts left in the map, one map
+removal, removal reading the wrong team, zero counts left in the map, one map
 shared by both teams, a dead bot still crowding, and an arrival leaving its route
-counted. ⚠️ That last one needed a fixture that actually **arrives** — a bot
-placed on its goal, on the ground and stopped — and without it the branch was
-invisible: an arrived bot would leave its whole route crowded for ever.
+counted. ⚠️ That last one needed a fixture that actually **arrives** (placed on
+its goal, grounded, stopped) — without it the branch was invisible: an arrived
+bot would leave its whole route crowded for ever.
 
 ### Phase 7 item 4s: the stab window, and the last unported script
 
@@ -1835,66 +1669,60 @@ and was deleted on 2026-09-01: the reference is stock GG2, which has no bot
 layer, and this port's bots have diverged from the fork's. `docs/BOTS.md`.
 
 - ⚠️ **The obvious test — "the enemy is within `BOT_STAB_RANGE` right now" — is
-  aimed a full second early.** The press *freezes* the spy (`runPower` and
-  `jumpStrength` to 0) and arms `alarm[1] = 32`; that alarm creates the hitbox,
-  which lives `alarm[0] = 6` more ticks. So the damage window is **t+32 to t+38**
-  and the spy cannot move during it. Against anything moving the naive press is
-  close to a guaranteed miss, and it spends 38 frozen ticks in the open to take
-  it.
-- ⚠️ **The box is the sprite, not a radius.** `StabMaskS` is 64×64 with origin
-  (26, 37), and the mask's Step sets `image_xscale` from `direction` without ever
-  touching `image_angle` — so it is axis-aligned and merely **flipped**: 37px the
-  way the spy faces, 26px behind, 37px up, 26px down. `BOT_STAB_RANGE` therefore
-  stops being the trigger and stays what it always described, the reach.
+  aimed a full second early.** The press *freezes* the spy (`runPower`/
+  `jumpStrength` to 0) and arms `alarm[1] = 32`, which creates the hitbox that
+  lives `alarm[0] = 6` more ticks — so the damage window is **t+32 to t+38**,
+  immobile throughout. Against anything moving, the naive press is close to a
+  guaranteed miss and spends 38 frozen ticks in the open to make it.
+- ⚠️ **The box is the sprite, not a radius.** `StabMaskS` is 64×64, origin
+  (26, 37); its Step sets `image_xscale` from `direction` but never touches
+  `image_angle`, so it is axis-aligned and merely **flipped**: 37px the way the
+  spy faces, 26px behind, 37px up, 26px down. `BOT_STAB_RANGE` isn't the trigger
+  — it is just the reach.
 - ⚠️ **Facing is `aimDirection >= 90 and <= 270`, inclusive at BOTH ends**, so a
   spy aiming exactly straight up or straight down faces **left**. Either bound
   written exclusive sends the 37px reach the wrong way on a vertical aim.
 - ⚠️ **The target is grown by its own bounds rather than treated as a point**,
-  because the mask collides mask-to-mask: a character whose centre is outside the
-  box still overlaps it by a shoulder.
+  since the mask collides mask-to-mask — a target whose centre is outside the box
+  can still overlap it by a shoulder.
 - ⚠️ **The prediction is floored on the graph.** A target running off a ledge is
-  exactly the case a straight-line prediction gets wrong, and at knife range it is
-  common — over 32 ticks a falling body covers hundreds of pixels. `FloorUnder`
-  plus the same `FallPredict` the aim solver leads with; no node below is the same
-  as no floor.
+  exactly the case a straight-line prediction gets wrong, and it is common at
+  knife range — over 32 ticks a falling body covers hundreds of pixels.
+  `FloorUnder` plus the same `FallPredict` the aim solver uses; no node below
+  means no floor.
 - **`readyToStab` is tested in the class policy rather than inside the window**,
   because it is much the cheaper of the two and gates the press regardless of
   geometry.
 
-⚠️ **One clause is UNOBSERVABLE and is kept as a cost guard rather than a rule:
-the `Cloak` test in the stab condition.** A stab and a shot are the **same key** —
-the Revolver's `User Event 1` is an if/else on the cloak and there is no separate
-melee input — so an uncloaked spy taking the stab branch would press exactly what
-the shooting branch presses. Checked by mutation: deleting it leaves every test
-green, and no fixture can separate them. What it buys is not computing a 7-tick
-prediction and a graph walk for a spy that cannot use the answer. The reference's
-condition carries it too.
+⚠️ **One clause is UNOBSERVABLE, kept as a cost guard rather than a rule: the
+`Cloak` test in the stab condition.** A stab and a shot are the **same key** —
+the Revolver's `User Event 1` is an if/else on cloak, no separate melee input —
+so an uncloaked spy taking the stab branch would press exactly what the shooting
+branch presses. Deleting it by mutation leaves every test green; no fixture can
+separate them. It buys skipping a 7-tick prediction and graph walk for a spy that
+cannot use the answer. The reference's condition carries it too.
 
 **Seven mutations tried and six bite**: testing where the target is now, the box
 as a symmetric radius, facing exclusive at 90/270, the target as a point, no floor
 under the target, and `readyToStab` unchecked. The seventh is the clause above.
 
-⚠️ **`BotClassKeys.For` takes a `NavGraph?` now**, for this one branch. It is a
-parameter rather than something on `WorldView` because **the simulation must not
-know the nav graph exists** — `WorldView` is a view over `WorldState`, and
+⚠️ **`BotClassKeys.For` takes a `NavGraph?` now, for this one branch** — a
+parameter rather than something on `WorldView`, because **the simulation must
+not know the nav graph exists** (`WorldView` is a view over `WorldState`;
 docs/BOTAI.md's whole point is that read-only inputs are passed *to* the tick
-rather than held by it.
-
-⚠️ **`botPickClass` still excludes the spy**, so no bot on a live server is ever
-one and none of this runs there. It is ported because the alternative — declaring
-the layer complete with a hole in it — makes the coverage claim mean less than the
-work of closing it cost.
+rather than held by it). ⚠️ **`botPickClass` still excludes the spy**, so no bot
+on a live server is ever one and none of this runs there — ported anyway,
+because declaring the layer complete with a hole in it would make the coverage
+claim mean less than the work of closing it cost.
 
 ### Phase 7 item 4t: auditing docs/BOTAI.md against the shipped code
 
 `Gg2.Tests.BotAiConstraintsTests`, and the four indexed loops it forced in
 `SpawnRooms`, `KillBoxes`, `MoveBoxes` and `ControlPoints`.
 
-⚠️ **`docs/BOTAI.md` was written "while it is still specification" and its claims
-had never been checked against the code that shipped.** Most of it is prose about
-design intent, which no test can hold — but five are structural facts a single
-careless change destroys silently, and three of those are the ones the document
-marks as impossible to retrofit. They are asserted now.
+Most of `docs/BOTAI.md` is design-intent prose no test can hold, but five items
+are structural facts a single careless change destroys silently — three of them
+marked impossible to retrofit. They are asserted now.
 
 ✅ **Item 1's `memcpy` half holds.** `WorldState` contains no reference anywhere
 in it, recursively — including inside a struct inside an `[InlineArray]` slot
@@ -1975,17 +1803,15 @@ entries**, and `Require` throws on a mismatch.
   `GameConstants` — configuration and protocol.** A port number or a maximum name
   length moving must not invalidate every checkpoint; **a stamp that churns gets
   ignored.**
-- ⚠️ **`SimulationBehaviourVersion` is the third, added 2026-08-30, and the hole
-  it fills was real for as long as the stamp existed**: every other entry is a
-  constant, so `3bba987` changed a line of physics and the digest could not move.
-  `gg2-rl` found it and asked. **Bump it when you knowingly change what the
+- ⚠️ **`SimulationBehaviourVersion` is the third entry, and it fills a real
+  hole**: every other entry is a constant, so a code change to a line of physics
+  cannot move the digest on its own. **Bump it when you knowingly change what the
   simulation does** — a trajectory, a damage number, a projectile path, a stage's
   position in `MatchSimulation`. ⚠️ **Exempt a change only when it is
-  DEMONSTRATED unobservable**, the way `3bba987` was (two 90-iteration training
-  runs, per-iteration numbers identical to the digit over 1.66M agent-steps), not
-  when the argument for it merely sounds good. `SIM_UUID` `c526b96e34184138` →
-  `7ff5940d97aa7bed`, and ⛔ **this is the first bump that invalidated real
-  checkpoints** — a cost accepted in the ask rather than discovered afterwards.
+  DEMONSTRATED unobservable** (two 90-iteration training runs, per-iteration
+  numbers identical over 1.66M agent-steps, is the bar that was met once), not
+  when the argument for it merely sounds good. A stamp bump invalidates every
+  existing checkpoint — accept that cost in the ask, don't discover it after.
 - ⚠️ **`ClassStats` is where the PHYSICS constants live** — `Gravity`,
   `BaseControl`, `BaseFriction`, `TerminalVSpeed`, `RestSpeed`,
   `RocketJumpGravity` — and not only the per-class table. The first draft omitted
@@ -2034,11 +1860,11 @@ derived from a larger surface than it would have been.
 
 `ScenarioSuiteTests.Baseline` and `BaselineRocketJumps`.
 
-✅ **Re-measured 2026-08-27, after nine items landed** — the medic's ally, the
-projectile reflexes, suppression, the arc gate, the mine trigger, the close-in
-step, the stab window, occupancy and the per-tick allocation fix. **Every one of
-the fourteen legs is unchanged and the rocket-jump count is unchanged**, which is
-worth knowing precisely because so much moved underneath them.
+✅ **Every one of the fourteen legs and the rocket-jump count is unchanged**
+across the medic's ally, the projectile reflexes, suppression, the arc gate, the
+mine trigger, the close-in step, the stab window, occupancy and the per-tick
+allocation fix — none of those items touch pathing, so this is checked rather
+than assumed.
 
 - ⚠️ **A leg's BUDGET is not a gate on its cost.** Every budget was set before the
   arcs were flown, so they are loose by design: a bot that lost its rocket jumps
@@ -2067,12 +1893,9 @@ worth knowing precisely because so much moved underneath them.
 
 `BotObjectiveTests.ABotWithNothingButAMapTakesTheEnemyIntel`, pinned.
 
-⚠️ **The recorded figure was 1,747 and the test has printed 1,748 since the commit
-that wrote it.** Bisected across nine commits — item 4l, 4k, 4j and item 4i itself
-all read 1,748 — so it is a **transcription error rather than a drift**. It sat in
-the test's own comment, in this file and in the lane handoff, and nothing could
-have caught it: the assertion was `grabbedAt < 3000` against a leg that takes
-1,748, which is **71% of slack**.
+⚠️ **The intel-run leg pins at 1,748 ticks**, not 1,747 — an earlier transcription
+error sat uncorrected in three documents because the only gate was `grabbedAt <
+3000` against a leg that takes 1,748, 71% slack.
 
 - ⚠️ **A measurement quoted in three documents and gated by nothing does not get
   corrected by being read again.** It gets corrected by being asserted. This is
@@ -2094,15 +1917,13 @@ rocket jumps never offered, and the objective cadence nudged by one.
 to ask is what would go red if it doubled** — and on this evidence the answer is
 often "nothing".
 
-✅ **The rule was then swept across the whole lane**, which is the third and last
-of its end-to-end measurements: `PathFollowerFixtureTests`' longest steerable leg
-on `ctf_truefort`. **It had NOT drifted at the time** — 137 nodes, 1,572 ticks, 33 re-plans,
-0 stuck, 4 off-route, 0 blacklists, exactly as recorded — which is worth knowing
-only because it was checked. But its bound was `ArrivedAt < 2400` (already the
-*tightened* version, "half again on the measurement") and **three of its five
-numbers were asserted by nothing at all**. Measured: nudging `BOT_REPLAN_TICKS`
-by one takes that leg to **1,628 ticks and 5 off-route events**, which the old
-bound passes silently. All five are pinned now.
+✅ **The same pinning rule applies to the third end-to-end measurement**:
+`PathFollowerFixtureTests`' longest steerable leg on `ctf_truefort` — 137 nodes,
+current reading in item 4b-ii above. Its old bound, `ArrivedAt < 2400`, left
+three of its five numbers asserted by nothing: nudging `BOT_REPLAN_TICKS` by one
+moved the leg by 100+ ticks and 5 off-route events with the old bound passing
+silently. All five numbers (ticks, re-plans, stuck, off-route, blacklists) are
+pinned exactly now.
 
 ⚠️ **Zero blacklists is the load-bearing one of the five.** It read 9 before the
 `NAV_EDGE_BUCKET` truncation was found, and a bot that starts banning edges again
@@ -2116,9 +1937,8 @@ hiding something; the sweep is what established that the third was not.
 
 ### Item 12: the rollout-search bot, and the assumption it is built on
 
-`Gg2.Bots.RolloutSearch`, landed 2026-08-28 for `gg2-rl` phase 1, which was
-blocked on it. `docs/BOTAI.md` item 12 is the requirement; this is what it cost
-and what to know before touching it.
+`Gg2.Bots.RolloutSearch`, built for `gg2-rl` phase 1. `docs/BOTAI.md` item 12 is
+the requirement; this is what it cost and what to know before touching it.
 
 **What it is.** On each decision it copies the `WorldState`, plays every
 candidate action to a 20-tick horizon, scores each from `TickEvents.DamageDealt`
@@ -2259,12 +2079,11 @@ is standing on and A* refuses it, so the bot stops dead with no route at all.
 | furthest | 0 | **856 / 1,156 / 766 px** |
 | deaths | 0 | **4 / 7 / 4** (13 / 16 / 13 over 1,500 ticks) |
 
-#### ✅ The conga line was the wrong fear, and it is measured
+#### ✅ Bots do not conga-line
 
-This section used to record "walk at the nearest enemy is the obvious answer and
-is how you get eight bots in a conga line" as the reason not to do it. **It is the
-other way round.** Each bot picks its *own* nearest enemy and then a spot that
-prefers to walk less and rewards height, so they distribute rather than stack.
+"Walk at the nearest enemy" sounds like it produces eight bots in a line, but
+does not: each bot picks its *own* nearest enemy and then a spot that prefers to
+walk less and rewards height, so they distribute rather than stack.
 
 Fraction of live same-team pairs within 64px, sampled every 50 ticks, on
 `gg_debug` — the one-room map where piling up is easiest and where the original
@@ -2299,13 +2118,11 @@ decisions**, with a live 15-node route to a proper standoff spot it never walks.
 ⚠️ **The obvious cause is not the cause.** `ScriptedBot.ApplyHolds`'s engage hold
 — "stand and fight instead of walking past" — has exceptions for carrying intel,
 being near the goal, expiry and the pyro's close-in, and **none for "the target is
-inside my own minimum band"**. Adding one is the exact mirror of the pyro's rule
-and was **tried on 2026-08-28 and reverted**: it changed *nothing* measurable —
-not the scenario suite's exact tick costs, not the intel run, and not the case it
-was written for. **Something else pins the bot**, and until that is found the
-condition would be an ungated change to shipped behaviour with no demonstrated
-effect. Finding it is the next step, and `gg_debug` idle-vs-scripted is the
-repro.
+inside my own minimum band"**. Adding one, the exact mirror of the pyro's rule,
+was tried and reverted: it changed *nothing* measurable — not the scenario
+suite's exact tick costs, not the intel run, and not the case it was written for.
+**Something else pins the bot**, not yet found. `gg_debug` idle-vs-scripted is
+the repro.
 
 | map | mode | what 8 bots do in 1,500 ticks |
 |---|---|---|
@@ -2338,12 +2155,12 @@ not one of them asked whether a match had anything in it.
 
 ### ⚠️ The sticky jump's envelope is 194 px, not 310 — measured before the arm was built
 
-**2026-08-28.** `gg2-nav-gen` shipped a sticky-jump edge fan (6,497 edges across
-24 graphs, ~1,600 node-openings) and flagged one thing to do before trusting it:
-**`NAV_SJ_IMPULSE = 10` is derived, not measured.** Its own reason for the
-warning is the best argument for taking it seriously — the rocket jump's derived
-number promised 276 px, delivered 206, and *"every offline check stayed green
-while the follower blacklisted the edges."*
+`gg2-nav-gen` ships a sticky-jump edge fan (6,497 edges across 24 graphs,
+~1,600 node-openings) built from a derived, not measured, constant:
+**`NAV_SJ_IMPULSE = 10`**. The rocket jump's own derived number promised 276 px
+and delivered 206 while every offline check stayed green and the follower
+blacklisted the edges — the same failure mode was worth ruling out here before
+trusting the fan.
 
 ✅ **It did not need the live game.** This port's mine and explosion physics are
 measured exact against the engine (phase 5, nine oracles), so the manoeuvre can
@@ -2386,8 +2203,7 @@ free.
 
 ### The sticky-jump follower arm, and the one thing it does differently
 
-**Landed 2026-08-28**, after the measurement above. `NavEdgeType.StickyJump` was
-the last unhandled edge kind; it now steers.
+`NavEdgeType.StickyJump` was the last unhandled edge kind; it now steers.
 
 **The pieces**: `NavQuery.CanStickyJump` and a refusal in `NavSearch` beside the
 double-jump and rocket-jump ones; `StickyModel` for the launch, the readiness
@@ -2454,20 +2270,7 @@ irrelevant once the mine is on the ground.
 `TheCountdownSurvivesTheLauncherGoingColdAfterThePlacement` hands the follower a
 weapon that goes cold the moment the mine is placed, and goes red without it.
 
-#### ✅ ANSWERED — the arm was never asked, and the fault was not the arm's
-
-**Closed 2026-08-28**, after six hypotheses had been eliminated by measurement
-and every one of them turned out to be correct. They were all asking whether the
-arm *refused*. It was never *called* for a sticky edge at all.
-
-| checked before the answer | result |
-|---|---|
-| `StickyModel.Reach` vs its `flyDistanceRocket` at v0 = 0 | **identical** — 191.10 vs 191.1, 31.2, 11.7, 12.4, 37.7 |
-| `need` (near edge of the landing run) vs its recomputation | **identical** on all six — 192, 18, 12, 12, 12, 36 |
-| the takeoff-gate arithmetic `reach + JumpReachTol >= need` | **passes on all six** |
-| `SnapObjective` on the landing run's midpoint | returns the intended node on all six |
-| the flight harness's start position | resolves to the from-node every time |
-| the dispatch switch | `UnsupportedEdgeTicks` zero, so the type is seen |
+#### ✅ The sticky arm was never called for a sticky edge
 
 ⚠️ **The cause is `PathFollower.TryFindEdge`, and it is not a sticky-jump bug.**
 A route is a list of **nodes**, so the follower re-derives which edge each hop
@@ -2477,13 +2280,11 @@ node pairs** and a double jump beside one on **1,124 more**, and the rocket jump
 is what the index yields first. A demoman carries a Minegun, so
 `RocketModel.Ready` was false, the gate never opened, and the bot stood on the
 takeoff column waiting for a launcher it does not have. **`StickyModel.Ready` was
-never consulted once.**
-
-**Instrumenting which edge the follower believed it was on** — the one question
-nobody had asked — showed hop `25->1 RocketJump` for a demoman on a sticky
-route, in the first minute of looking. ⚠️ **Every one of the six earlier
-measurements was consistent with that**, because each of them was computed from
-the sticky edge by hand rather than read out of the follower.
+never consulted once** — every symptom that looked like a sticky-model refusal
+(reach, `need`, the gate arithmetic, `SnapObjective`, the flight harness's start
+position, the dispatch switch) was consistent with the arm because none of them
+was ever exercised; each had been computed from the sticky edge by hand rather
+than read out of the follower.
 
 ✅ **After the fix, 4 of 4 real sticky edges on `ctf_2dfort` are flown and
 arrive** (was 1 of 4 — the one where no parallel edge existed). Reproduce with a
@@ -2496,25 +2297,19 @@ lane's build output and is not gated here, which is why the checked-in gate is
 the harness rather than the arm**: `koth_harvest` arrives 4 of 4 by walking
 because A* costs a jump the same as anything else. **A flight harness that does
 not check its own start against the edge it means to fly measures a different
-edge**, which is worth fixing before the next sticky measurement rather than
-during it.
+edge.**
 
-⚠️ **The second half of that paragraph used to name a cause, and it was wrong.**
-It said that "on `ctf_truefort` and `cp_egypt` the takeoff column does not
-resolve to the from-node so the route starts somewhere else entirely". Measured
-2026-08-28 over every arc edge in every cache: **the takeoff column resolves to
-its own from-node 18,396 times out of 18,396** on the shipped graphs, and 4,132
-of 4,132 on the sticky one. `EdgeFlightTests.EveryArcEdgeResolvesFromItsOwnNodeAndFromItsTakeoffColumn` is the gate. Whatever that hand-rolled harness started
-from, it was not the takeoff column either — and **the correction is the ordinary
-one: a plausible mechanism was written down beside a real symptom, and nothing in
-the repo could contradict it** (CLAUDE.md, "a claim the repo makes about
-itself").
+⚠️ **The takeoff column resolves to its own from-node 18,396 times out of
+18,396** on the shipped graphs, and 4,132 of 4,132 on the sticky one
+(`EdgeFlightTests.EveryArcEdgeResolvesFromItsOwnNodeAndFromItsTakeoffColumn`) —
+so a "the column doesn't resolve to the from-node" theory for any remaining
+flight anomaly is ruled out; look elsewhere.
 
 ### ✅ The flight harness — `EdgeFlights`, and the honest number
 
-**2026-08-28.** `src/Gg2.Bots/EdgeFlights.cs` is the harness that paragraph asked
-for, in the library beside `ScenarioWorld` rather than in a test, because the
-lane that generates a cache is the one that wants to sweep it:
+`src/Gg2.Bots/EdgeFlights.cs` is a sweep harness, in the library beside
+`ScenarioWorld` rather than in a test, because the lane that generates a cache
+is the one that wants to sweep it:
 
 ```csharp
 EdgeFlights.Sweep(() => ScenarioWorld.Load(map, area, maps, nav), NavEdgeType.StickyJump);
@@ -2621,9 +2416,7 @@ an assumption **every offline checker shared**, so no check could catch it. Both
 are the same shape: the thing that would have failed was not representable in the
 apparatus.
 
-### ⚠️ NO BOT CAN ZOOM, so every bot sniper plays at half its weapon
-
-**2026-08-29, found chasing `gg2-rl`'s sniper hole and NOT the cause of it.**
+### ✅ Bot zoom, `EnvAction`'s sixth head, and `ScenarioWorld`'s missing poll
 
 `toggleZoom` is not a key. `PlayerCommands.ToggleZoom` says so in as many words —
 *"Zoom is not a key. It is its own client command"* — and a bot's entire output is
@@ -2631,41 +2424,23 @@ apparatus.
 port can zoom**: not `ScriptedBot`, not `RolloutSearch`, and not a learned policy,
 because `EnvAction`'s five heads have no zoom either.
 
-What that costs, from `Weapons.RifleBeginStep`:
+Reference damage, from `Weapons.RifleBeginStep`: unscoped
+(`RifleUnscopedDamage`) **35**, scoped uncharged (`RifleBaseDamage`) 45, scoped
+full charge (`RifleMaxDamage`) **75**. ⚠️ **A bot that never zooms fires at 35
+for ever**, against a weapon that reaches 75, and `BotClassKeys`' sniper branch
+reads `self.Zoomed` (always false for a non-zooming bot) — so this is the
+mirror of CLAUDE.md's standing rule ("a bot must not do something a client
+cannot") in the other direction: a client could do something a bot could not.
 
-| | damage |
-|---|---|
-| unscoped (`RifleUnscopedDamage`) | **35** |
-| scoped, uncharged (`RifleBaseDamage`) | 45 |
-| scoped, full charge (`RifleMaxDamage`) | **75** |
+✅ **Closed.** `ICommandSource` already existed (phase 7, `ScriptedBot`); two
+things were missing:
 
-**Every bot sniper in this port fires at 35 for ever**, against a weapon that
-reaches 75. And `BotClassKeys`' sniper branch reads `self.Zoomed`, which is always
-false for a bot — so its charge-proportional-to-range arm, and the comment
-explaining it, are **unreachable code**.
-
-⚠️ **This is the mirror of CLAUDE.md's standing rule and the rule does not cover
-it.** That rule says a bot must not be able to do something a client cannot. Here
-a **client can do something a bot cannot**, which is just as much a gap in the
-seam — and it is invisible to every test, because nothing asserts a bot can
-express the whole action space.
-
-✅ **CLOSED 2026-08-29**, on the user's call, with `gg2-rl` holding phase 2 so
-the bump landed before any checkpoint existed to invalidate. What it took:
-
-⚠️ **The seam already had the channel, and my first write-up of this was wrong
-about the cause.** `ICommandSource` has existed since phase 7 and `ScriptedBot`
-already implemented it. Two things were actually missing, and the second is the
-one nobody would have guessed:
-
-1. **Nothing ever pushed `ToggleZoom`.** `ScriptedBot.WantsZoom` does now — an
-   edge, not a level, because `PlayerCommands.ToggleZoom` *flips*: pushing it
-   every tick a sniper has a target scopes and unscopes at 30 Hz and holds a
-   charge of zero for ever, which is a worse sniper than the unscoped one.
-2. ⚠️ **`ScenarioWorld` did not poll `ICommandSource` at all**, so a duel or a
-   scenario **dropped every command a bot emitted**. `GameServer` and
-   `HeadlessMatch` both poll it; the harness where this gets measured did not.
-   Even a bot that asked to zoom would have been ignored.
+1. **`ScriptedBot.WantsZoom` pushes `ToggleZoom` as an edge, not a level** —
+   `PlayerCommands.ToggleZoom` *flips*, so pushing it every tick a sniper has a
+   target would scope/unscope at 30 Hz and hold a charge of zero for ever.
+2. ⚠️ **`ScenarioWorld` must poll `ICommandSource`**, or a duel or scenario
+   drops every command a bot emits (`GameServer` and `HeadlessMatch` both poll
+   it already).
 
 **And the policy half**: `EnvAction` gains a sixth head, `Zoom`, moving
 `ActionEncodingVersion` 1 → 2, `SIM_UUID` `61edbca3899d1b07` →
@@ -2677,11 +2452,9 @@ one nobody would have guessed:
 policy needs no memory of its own scope. A toggle-shaped head would turn one
 dropped or duplicated action into a permanently inverted sniper.
 
-#### ⚠️⚠️ KNOWN ISSUE: the search's AIM is decided by its tie-break, not its scoring
+#### ⚠️⚠️ The search's aim was decided by its tie-break, not its scoring — fixed
 
-**2026-08-29, and it is the largest unexamined thing in `RolloutSearch`.**
-`gg2-rl`'s corpus analysis — possible only once `ab78c9d` put the candidate
-actions on the wire — measured, on rows that are **not** blind:
+`gg2-rl`'s corpus analysis measured, on rows that are **not** blind:
 
 | | |
 |---|---|
@@ -2704,7 +2477,7 @@ corrections.** That is not a strategy, it is enumeration order showing through �
 and it is the same signature as the blind tie-break, reaching decisions that are
 *not* blind.
 
-##### ✅ FIXED 2026-08-29 — a lexicographic aim tie-break
+##### ✅ Fix: a lexicographic aim tie-break
 
 Among candidates whose scores are **exactly equal**, prefer the one that leaves
 the searcher pointing closest to its nearest live enemy. ⚠️ **Damage stays the
@@ -2762,8 +2535,6 @@ chosen well.
 
 ##### ❌ The obvious fix, which does NOT win
 
-
-
 Putting no-turn first (`[7, 3, 11, 0, 14]` — same candidate set, different order,
 so ties resolve to *not turning*) removes the bias completely: hard-left share
 0.966 → **0.004**. Win rate, 24 duels a cell:
@@ -2798,10 +2569,9 @@ more effort goes into distilling it** — a scoring function that discriminated
 among today's ties would change what there is to learn. That is a bigger question
 than a tie-break order and it is not answered here.
 
-#### ⚠️⚠️ KNOWN ISSUE: the scope makes the scripted sniper WORSE, by about 10%
+#### ⚠️⚠️ Known issue: the scope makes the scripted sniper WORSE, by about 10%
 
-**2026-08-29. Reported by `gg2-rl`, reproduced here independently, and both of us
-predicted the opposite.** Giving the bot a capability cost it damage.
+Giving the bot the zoom capability costs it damage, against expectation.
 
 24 banded sniper duels against `RolloutSearch` on `ctf_2dfort`, 2,400 ticks, tier
 5 — same map, band, cap and classes, only the command channel differing:
@@ -2821,12 +2591,11 @@ unchanged, so it is not that a 0.6-run-power sniper positions worse. It is
 `RifleChargeTime * min(1, distance / ClassRange)` before every shot, and at duel
 range that wait costs more than the charge buys.
 
-⚠️ **`gg2-rl`'s framing, and it is the right one: a rule that has never executed
-against live play is not a tuned rule, it is an untested one.** This port prefers
-the `BOT_*` constants because they have real playtesting behind them — but this
-arm **could not have been played, by construction**, for eight phases, because
-`self.Zoomed` was always false for a bot. It is new code that has just met its
-first opponent.
+⚠️ **A rule that has never executed against live play is not a tuned rule, it is
+an untested one.** This port prefers the `BOT_*` constants because they have
+real playtesting behind them — but the scope-charge rule could not have been
+played, by construction, until a bot could zoom at all. It is new code that has
+just met its first opponent.
 
 ##### ⚠️ Why it is NOT tuned: the obvious model contradicts the measurement
 
@@ -2861,11 +2630,11 @@ gates the **mechanism** (damage a hit up, hits down — both pinned) and
 deliberately does **not** assert the net direction, because that sample does not
 carry it. **Anyone re-tuning this rule from a short run will read noise.**
 
-#### ⚠️⚠️ The search does NOT use the new head at its default horizon
+#### ⚠️⚠️ The search does NOT use the zoom head at its default horizon
 
-**Raised by `gg2-rl` before the change landed, and it was right.** `ScriptedBot`
-uses the scope immediately — its rule is "have a target, be scoped".
-`RolloutSearch` only uses what pays inside its horizon, and **the rifle's 40-tick
+`ScriptedBot` uses the scope immediately — its rule is "have a target, be
+scoped". `RolloutSearch` only uses what pays inside its horizon, and **the
+rifle's 40-tick
 refire is double the 20-tick default**, so the whole candidate set scores exactly
 zero, the tie goes to the first candidate, and the first candidate is unscoped.
 
@@ -2896,37 +2665,16 @@ unlearnable, which is worse.
 
 ### ⚠️ A horizon shorter than the refire: measured per class, and it is the SOLDIER
 
-`RolloutSearch`'s own remark has always said a horizon shorter than a refire timer
-makes every candidate score zero, so the tie goes to the first and the bot stands
-still. **The rifle's refire is 40 ticks against a 20-tick horizon — the longest in
-the game, and the only one at double it** (rocket launcher 30, minegun 26,
-revolver 18, the rest under 6). That made a tidy hypothesis for `gg2-rl`'s
-sniper-v-sniper hole.
-
-⚠️ **It is wrong, and the measurement says so.** `ctf_2dfort` banded 150-350px,
-12 mirror duels, 900 ticks, tier 5:
-
-| class | horizon 20 | horizon 45 |
-|---|---|---|
-| Sniper (refire 40) | 0-2-10 | **0-5-7** — worse |
-| Soldier (refire 30) | 0-0-12 | **3-1-8** — much better |
-| Scout (refire 8) | 4-0-8 | 5-2-5 |
-
-**Lengthening the horizon past the rifle's refire made the sniper worse.** So the
-blindness is real and the sniper hole survives it.
-
-#### ❌ RETRACTED 2026-08-29: "much better for the soldier" does NOT reproduce
-
-⚠️ **Twelve duels a cell was not enough to read a direction from, and this section
-said so at the time and then read one anyway.** `gg2-rl` re-ran at **80 duels a
-cell**: the soldier goes **93.8% to 78.8% at horizon 45** — worse, not better. The
-sniper's direction survives; the soldier's inverts.
-
-⚠️ **The retraction matters more than the number.** That row was quoted into
-`RolloutSearch`'s remarks, `DuelSpec.RedHorizonTicks`' remarks and a peer's
-planning notes before anybody re-measured, and every one of them said "12 duels"
-honestly. **Labelling a sample size does not make a direction read off it safe to
-propagate.**
+A horizon shorter than a refire timer makes every candidate score zero, so the
+tie goes to the first candidate and the bot stands still. **The rifle's refire
+is 40 ticks against a 20-tick horizon — the longest in the game, and the only
+one at double it** (rocket launcher 30, minegun 26, revolver 18, the rest under
+6). Lengthening the horizon past the rifle's refire makes the sniper *worse*
+(win rate falls as horizon rises — see the table below), so the blindness is
+real and survives a longer horizon. ⚠️ **Direction claims here need at least 80
+duels a cell** — a 12-duel sample read the soldier's row as "much better" at a
+longer horizon and inverted at 80 duels (93.8% → 78.8%); only the sniper's
+direction held up at the larger sample.
 
 #### ⚠️⚠️ BOTH CURVES OPPOSE, MONOTONICALLY, FOR EVERY CLASS
 
@@ -3022,47 +2770,18 @@ reasons:
 It is excellent at what phase 0 uses it for — determinism, throughput, exact tick
 counts. Evaluate on `ctf_2dfort`.
 
-### ⚠️ A CHECK THAT CANNOT DISAGREE — the same bug in four places now
+### ⚠️ A check that cannot disagree is not a measurement
 
-**2026-08-29, and a fourth the next day.** Four defects were one shape:
-**something compared against a copy of itself.**
-
-| where | the comparison |
-|---|---|
-| `EnvProtocol.Version` | the wire's layout checked against the constant that described it, both edited by the same hand |
-| `HelloAgreesOnTheVersionsAndTheShape` | the advertised head count asserted against a **literal 5** — the advertisement checked against a copy of the advertisement |
-| a check *this repo proposed* to `gg2-rl` | the policy's per-head argmax compared against "its highest-probability action under the full joint implied by the marginals" |
-| ⛔ `gg2-rl`'s `scripts/fingerprint.py`, **2026-08-30** | the tool written to catch a bump that was supposed to change nothing, hashing `batch.observations` **without ever calling step** |
-
-⛔ **The fourth is the one worth the most.** Asked whether `3bba987` moved the
-world, it answered "OBSERVATIONS IDENTICAL: the world did not move under this
-bump" — and **it could not have said anything else**, because it hashed where each
-duel *starts* and nothing that happens afterwards. It reported a true conclusion
-for a reason that had nothing to do with the question, and it is the instrument
-built specifically to catch this class of error; its own docstring already
-confessed to committing it once, on the zoom bump. ✅ That lane fixed it with a
-separate `motion` hash over stepped decisions and **falsified the instrument
-before believing it** — identical against itself, `PHYSICS MOVED` under a
-deliberately perturbed trajectory. ⚠️ **A verification tool is not exempt from
-the shape it exists to catch, and "it agreed with me" is the least informative
-outcome a check can have.**
-
-⚠️ **The third is the purest and it was mine.** The joint implied by independent
-marginals **is their product**, and the argmax of a product of independent
-marginals **is** the per-head argmax. Over a full cross-product candidate set the
-two objects are identical by construction and would agree **100% of the time on
-every state**. It would have looked like strong evidence against the coupling
-hypothesis and been evidence of nothing. `gg2-rl` worked that out rather than
-running it.
-
-- ⚠️ **Before running a check, ask what result would falsify it.** If no input
-  produces disagreement, it is not a measurement.
-- ⚠️ **The dangerous version agrees for a REASON that is not the one you want.**
-  All three of these would have passed happily and been reported as confirmation.
-- ✅ The vacuous-pass audit run earlier the same day is the same instinct applied
-  to the test suite, and it needed **three attempts** before the detector was shown
-  to see anything — twice reporting a clean bill from a script that had matched no
-  files at all.
+Rule, established from four defects of one shape (something compared against a
+copy of itself — the wire's layout checked against the constant that described
+it, an advertised head count checked against a literal copy of itself, a
+policy's per-head argmax compared against a quantity identical to it by
+construction, and a fingerprinting tool that hashed only where a duel *starts*
+and so could not detect any change that happens afterward): **before running a
+check, ask what result would falsify it.** If no input can produce disagreement,
+it is not a measurement, and "it agreed with me" is the least informative
+outcome a check can have — a verification tool is not exempt from the shape it
+exists to catch.
 
 #### ✅ What the meaningful version measured: the architecture is NOT the ceiling
 
@@ -3094,39 +2813,18 @@ invented one.**
 rate above is ONE training run a side". The conclusion it supports survives the
 noise by fifty points; the 7.2 itself lives inside it.
 
-### ⚠️ A CORRECTION IS A CLAIM TOO, and I published one on an unexamined number
+### ⚠️ A correction is a claim too
 
-**2026-08-29, and it is the sharpest process lesson of the day.** `docs/ENV.md`
-asserted compounding error as the shadow slot's rationale. When `gg2-rl` reported
-a distance measurement suggesting the policy was *not* off-distribution, that
-claim was **marked wrong and the correction committed** — and the correction was
-built on **raw Euclidean distance over the unnormalised 209-float observation**,
-which weights every column equally where a policy does not.
-
-⚠️ **The operational measure said the opposite**: label-transfer from
-policy-visited states to their nearest control state retains **36%** (0.204 →
-0.074). The states **are** meaningfully uncovered. **So the retraction was wrong,
-not just the original claim.**
-
-⚠️ **The same shape as the twelve-duel horizon figure, with the roles reversed.**
-There, a direction was read off a small sample of this repo's own and propagated
-into three documents and a peer's notes. Here, a *peer's* unexamined number was
-propagated into this repo's docs **as a correction**, which is the form least
-likely to be re-questioned — a retraction reads as the careful thing and gets less
-scrutiny than the assertion it replaces.
-
-- ⚠️ **A correction inherits the burden of proof, it does not discharge it.**
-- ⚠️ **Ask which space a distance was computed in.** That one question is the only
-  reason this was caught, and it is worth asking of any "these two sets are close"
-  claim over a feature vector nobody normalised.
-- ✅ **Both lanes flagged their own error to the other unprompted.** That is what
-  made two rounds of correction cheaper than one round of drift.
-- ⚠️ **The operative rule is narrower than "scrutinise corrections"**, and it is
-  `gg2-rl`'s sharpening: **a correction sourced from the other repo deserves the
-  same interrogation as a feature request from it.** A feature request gets
-  questioned as a matter of course; a correction arrives wearing the costume of
-  care. ⚠️ **Both lanes failed this in the same exchange** — that one took this
-  repo's cross-product fact at face value, and it happened to be right.
+Label-transfer from policy-visited states to their nearest control state
+retains **36%** (0.204 → 0.074): the states genuinely are meaningfully
+uncovered — the shadow slot's compounding-error rationale in `docs/ENV.md`
+stands. An earlier retraction of that claim, based on raw Euclidean distance
+over the unnormalised 209-float observation (which weights every column
+equally where a policy does not), was itself wrong. **A correction inherits the
+burden of proof, it does not discharge it** — ask which space a distance was
+computed in before trusting a "these two sets are close" claim over an
+unnormalised feature vector, and give a correction sourced from outside this
+repo the same interrogation as a feature request from it, not less.
 
 ### ⚠️ A route is a list of NODES, and re-deriving its edges was wrong for eight phases
 
@@ -3215,7 +2913,7 @@ which arc is being flown halfway along it.
 | `truefort-spawn-to-intel` | 1,717 | **1,667** — re-plans 57→48, **blacklist 1→0** |
 | `avanti-ramp-pocket-to-intel` | 175 | **217** |
 | the suite's rocket-jump total | 6 | **6** |
-| `PathFollowerFixtureTests`' longest leg | 1,786/39/0/10/0 (was 1,572/33/0/4/0) | moved by the A\* weight 1.0 → 1.3, and PINNED since 2026-09-02 |
+| `PathFollowerFixtureTests`' longest leg | pinned at 1,786/39/0/10/0 (item 4b-ii) | moved by the A\* weight 1.0 → 1.3 |
 
 ⚠️ **`avanti` got 42 ticks slower on purpose, and the trade is worth stating.**
 Its node pair 231→168 carries a double jump beside a rocket jump; the bot used to
@@ -3244,8 +2942,8 @@ the bot is not flying *more* arcs, it is flying the ones it was routed over.
 
 ## ⛔ Dual King of the Hill is unwinnable by bots, on both shipped maps
 
-**Found 2026-09-01 while evaluating phase 4, and it is not about the policy** —
-it reproduces with the scripted bot on both sides.
+✅ **Fixed** (below). This reproduces with the scripted bot on both sides, not
+just a learned policy.
 
 `dkoth_atalia` and `dkoth_sixties` produce **zero decided matches** at every time
 limit tried — 5, 10, 20 and 40 minutes, 20 matches each — and the hold clocks

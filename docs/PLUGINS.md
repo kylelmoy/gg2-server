@@ -1,22 +1,7 @@
 # Server-sent plugins
 
-**Status: implemented 2026-09-03.** Off by default — a server with no
-`--plugins` advertises an empty list and behaves exactly as it did before.
-
-✅ **Verified against two real GM8 clients on 2026-09-03**, not only against the
-test harness. Both downloaded `chat_v2_pr` from ganggarrison.com, ran it, chatted
-through this server, and saw each other's messages; team chat did not cross
-teams; the second client — which had the same `PlayerName` — was renamed
-`Player2` by the server and every client saw it. How to repeat it is at the
-bottom of this file, because the harness cannot prove the client half loaded at
-all.
-
-✅ **The chat commands landed 2026-09-03 too** — `/votekick`, `/votemute`,
-`/votemap`, `/votescramble`, `/votenextround`, `/party` and `/help`, ported from
-five of Lorgan3's server-side plugins and baked into the same implementation.
-⚠️ **Those extend a different chat plugin from the one this server advertises**,
-which has a vote dialog `chat_v2_pr` does not, so the vote is text here. See
-"The chat commands" below before assuming anything about how they look.
+Off by default — a server with no `--plugins` advertises an empty list and
+behaves exactly as a server with no plugin support.
 
 This document is the whole subject: what the reference does, what half of it a
 C# server can do, the seam an implementation plugs into, and how a plugin gets
@@ -32,17 +17,16 @@ plugins it wants in `ServerPluginList`; each client downloads the zip, checks it
 md5, unpacks it and `execute_file`s the GML inside a fresh `PluginEnvironment`
 instance (`Scripts/Plugins/loadserverplugins.gml`).
 
-⛔ **The critical fact, and the one this repo got wrong for eight phases: a
-plugin is ONE script that runs on both sides.** It is full of `if (global.isHost)`
-branches. The client's copy draws the UI and sends packets; the host's copy
-receives them, decides things and sends replies. There is no separate
-"server plugin" artefact.
+⛔ **The critical fact: a plugin is ONE script that runs on both sides.** It is
+full of `if (global.isHost)` branches. The client's copy draws the UI and sends
+packets; the host's copy receives them, decides things and sends replies. There
+is no separate "server plugin" artefact.
 
-That is why plugins are portable at all. **This port cannot execute GML and never
-will** — but it does not have to. It only has to reproduce the `global.isHost`
-branches in C#, and speak the same packets. The client half is untouched: it is
-still the site's GML, still downloaded by the client, still run by Game Maker 8.
-A stock client cannot tell.
+That is why plugins are portable at all. **This port cannot execute GML and
+never will** — but it does not have to. It only has to reproduce the
+`global.isHost` branches in C#, and speak the same packets. The client half is
+untouched: it is still the site's GML, still downloaded by the client, still
+run by Game Maker 8. A stock client cannot tell.
 
 ⚠️ **What this costs, stated plainly:** the two halves are now separate
 artefacts, and the packets carry no version field. If the site re-releases a
@@ -260,15 +244,14 @@ reference produces, even though it calls `socket_send` immediately.
 6. **Test at two levels.** The plugin against a fake `IPluginHost`
    (`ChatV2PluginTests`) for what it decides; the server over a real socket
    (`PluginWireTests`) for the framing. ⚠️ **Then mutate** — break the routing,
-   the framing and the compaction on purpose and check each goes red. Three of
-   this layer's gates were confirmed that way and it is the cheapest check there
-   is.
+   the framing and the compaction on purpose and check each goes red. It is the
+   cheapest way to confirm a gate actually gates something.
 
 ---
 
 ## `chat_v2_pr` — the one that is ported
 
-`ChatV2Plugin`, from `plugin.gml` dated 2017-04-10 inside
+`ChatV2Plugin`, from `plugin.gml` inside
 `chat_v2_pr@46d0937c9206dcf27e036100d1ea8685.zip`.
 
 **Client to server:** a kind byte, then for a chat message a `ubyte` length and
@@ -457,15 +440,11 @@ that is not negotiable.
 
 ### Testing this
 
-`ChatV2CommandTests`, against `FakePluginHost`.
-
-⛔ **Three of those tests were hollow and mutation found all three**, after they
-had been written, read and passed. Two voted unanimously to test a threshold —
-which passes at *every* threshold — and one asserted a scramble moved nobody,
-which is also true when a two-player scramble deals them the teams they already
-had. **A threshold needs a row on each side of it**, and an effect under test has
-to be one that cannot happen by luck. The fixed tests say so in their own remarks
-so the lesson survives the diff.
+`ChatV2CommandTests`, against `FakePluginHost`. ⛔ **A threshold needs a row on
+each side of it, and an effect under test has to be one that cannot happen by
+luck.** A test that votes unanimously on a threshold passes at every threshold;
+a scramble test needs more than two players or "moved nobody" is also true of a
+correct scramble.
 
 ---
 
@@ -480,10 +459,9 @@ after any change to the wire fields or to a plugin implementation.
 `docs/TRAPS-LIVEGAME.md` and the `gg2-playtest` skill are the general rules —
 **exactly one session holds the live game**, and the bridge serves one TCP client.
 
-⛔ **Before you blame your change for a client dying: read the last section of
-this file.** A rotation kills every connected client on a server with bots, it
-has nothing to do with plugins, and the server log says only
-`ConnectionReset`.
+⛔ **Before you blame your change for a client dying: read the section below.**
+A rotation kills every connected client on a server with bots, it has nothing to
+do with plugins, and the server log says only `ConnectionReset`.
 
 1. **Two ini keys, or every launch stops on a modal.** In
    `D:/code/Gang-Garrison-2/Source/build/gg2.ini`, under `[Settings]`:
@@ -491,40 +469,32 @@ has nothing to do with plugins, and the server log says only
    dialog and the bridge stops answering) and `RestartPrompt=0` (else
    `pluginscleanup` raises one on disconnect). ⚠️ **Back the file up and restore
    it** — it is the live game's own config, not this repo's.
-2. `gg2-server --port 8190 --plugins chat_v2_pr --bots 2`
-3. Point a client at it, rather than at a GG2 server:
-   `cd D:/Code/gg2-agent && node run-agent.js --port 17778 --name client1 --role client --keep -- -server 127.0.0.1 -port 8190`
-4. `tail agent_launcher_17778.log` — a clean run has no `E|` or `M|` lines after
-   the launch. A plugin that failed to load shows up there and nowhere else.
-5. `gg2_evalx` on the client: `global.serverPluginsInUse` is 1,
+2. `gg2-server --port 8190 --plugins chat_v2_pr --bots 2`, then point a client at
+   it via `gg2-agent`'s `run-agent.js --role client -- -server 127.0.0.1 -port
+   8190`. `tail`ing its launcher log shows any load failure — nothing else does.
+3. `gg2_evalx` on the client: `global.serverPluginsInUse` is 1,
    `global.chatPacketID` is 0, and `global.chatLog` holds the server's reply.
    ⚠️ **`chatLog` is the assertion, not a screenshot** — the window fades after
-   four seconds (`alarm[0]`), so a screenshot taken a moment late shows nothing
-   and looks like a failure.
-6. Send as the client would, without needing keyboard focus:
+   four seconds (`alarm[0]`), so a screenshot taken a moment late shows nothing.
+4. Send as the client would, without needing keyboard focus:
    `with(global.chatWindow) { _message = "..."; _team = 0; event_user(3); }`
    — `_team` here is the client's *boolean*, 0 global and 1 team. See the
    off-by-one warning above.
-7. A second client with the same `PlayerName` exercises the de-duplication, and
+5. A second client with the same `PlayerName` exercises the de-duplication, and
    two clients on different teams exercise the routing.
 
 ⚠️ **`--bots N` is worth having on**, because the roster then compacts under you:
 the population manager drops a bot to make room for each human, so the first
 client's slot moves between its join and its first message. That is exactly the
-path `PluginPlayerTable` exists for, and it is free to exercise here.
+path `PluginPlayerTable` exists for.
+
 ---
 
-## ⛔ A rotation kills every connected client, and it needs bots
-
-**Found 2026-09-03 while live-testing `/votenextround`. NOT caused by the plugin
-layer — reproduced with `--plugins` off — and NOT fixed. It is written here
-because this is the file that sent somebody to drive a real client, and the bug
-is invisible from the test suite.**
-
-### What happens
+## ⛔ Known issue: a rotation kills every connected client, and it needs bots
 
 A stock GM8 client connected to this server dies with a GM8 fatal error about
-**twenty-five seconds after any map rotation**:
+**twenty-five seconds after any map rotation** — not a plugin bug; it reproduces
+with `--plugins` off too:
 
 ```
 FATAL ERROR in action number 1 of Create Event for object Character:
@@ -541,32 +511,26 @@ server did.
 The server sees only `ConnectionReset` and refills the empty slot with a bot, so
 **nothing in the server log says anything went wrong.**
 
-### The two narrowing runs, both against a real client
+### What reproduces it, and what does not
 
-| Run | Rotation | Bots | Client |
-|---|---|---|---|
-| plugins on, `/votenextround` | ctf_truefort → koth_valley | 4 | ⛔ died, 25s after the change |
-| **plugins off**, `--time-limit 1` | ctf_truefort → koth_valley | 4 | ⛔ died, 25s after the change |
-| plugins off, `--time-limit 1` | ctf_truefort → koth_valley | **0** | ✅ survived, clean launcher log |
+| Rotation | Bots | Client |
+|---|---|---|
+| ctf_truefort → koth_valley, `--time-limit 1` | 4 | dies, 25s after the change |
+| ctf_truefort → koth_valley, `--time-limit 1` | 0 | survives, clean launcher log |
 
-So: **an ordinary time-limit rotation is enough, and bots are required.**
+So: **an ordinary time-limit rotation is enough, and bots are required.** Not
+caused by the plugin layer, by `/votenextround`/`RequestRoundEnd` specifically
+(an ordinary clock rotation reproduces it too), or by the server spawning a
+spectator directly (that guard is correct).
 
-### What was ruled out, and what was not
-
-Ruled out:
-
-- The plugin layer. The middle run has none.
-- `/votenextround` and `RequestRoundEnd`. The middle run rotates on the clock.
-- The server spawning a spectator. The guard is there and is correct.
-
-Not yet established — **do not treat any of this as diagnosed**:
+### Not yet established — do not treat any of this as diagnosed
 
 - Where the team desync is introduced. `Rounds.ResetForNewMap` sets every player
   to spectator on the server and the client does the same for itself
   (`ClientBeginStep.gml:543`, inside `global.currentMapArea == 1`), so the reset
   itself looks symmetric.
-- Why 25 seconds, twice, to the second. Something periodic, and nothing in the
-  server log fires at that cadence.
+- Why 25 seconds, to the second. Something periodic, and nothing in the server
+  log fires at that cadence.
 - ⚠️ **A separate suspicion worth checking first, because it may be the same
   bug:** `BotPopulationService.Service` returns early when `bots == target`, and
   nothing else re-teams a bot. After a rotation every bot has been set to
@@ -593,27 +557,17 @@ tail D:/code/Gang-Garrison-2/Source/build/agent_launcher_17778.log
 shows a `ConnectionReset` and nothing else, which is indistinguishable from a
 player closing the game.
 
-### Why no test caught it
+### Why no test catches it
 
 ⛔ **Every rotation test in the suite is the server talking to itself.** The
 server's own state stays perfectly consistent across a rotation — the desync
 exists only in what a *client* was told, and the only thing that reads that is a
-client. `MapRotationTests` and `MatchActuallyHappensTests` are both green.
+client. `MapRotationTests` and `MatchActuallyHappensTests` are both green
+despite the bug.
 
-⛔ **This is an instance of a category, not a one-off, and the category is
-written up in `docs/PARITY.md`, "The gap in every tier above: nothing compares
-what a client was TOLD".** Read that rather than this: it names the second
-instance found the same day by a different route (`CLIENT_SETTINGS` never being
-rebroadcast), why none of the three automated tiers can see either, and what
-would close it — a harness client that keeps its own roster from the broadcast.
-⚠️ **Do not restate the argument here.** Two write-ups of one claim in two files
-is how they come apart.
-
-⚠️ That section arrives with the gg2-server lane's `audit-gaps-2026-09-03`
-(`a8d5ecd`). If the pointer dangles, that branch has not merged yet — the
-argument is in its commit message either way.
-
-⚠️ **The bug is the evidence for that gate, not the reason for it.** Build the
-harness client even if this turns out to be a one-line fix in
-`BotPopulationService`; a one-line fix would leave the whole surface exactly as
-uncovered as it was this morning.
+⛔ **This is an instance of a category, written up in `docs/PARITY.md`, "The gap
+in every tier above: nothing compares what a client was TOLD".** Read that for
+the general argument — why none of the three automated tiers can see this class
+of bug, and what would close it (a harness client that keeps its own roster from
+the broadcast). Do not restate the argument here.
+</content>

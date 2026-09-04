@@ -119,7 +119,7 @@ across `Player`, `Character`, weapons, `MovingPlatform` and `HUD`.
 | Design notes | `Documentation/Bots.md` |
 
 ⚠️ **This whole section is about the bot FORK (`D:\code\Gang-Garrison-2`), not
-the reference.** Stock GG2 — which is what `GG2_REFERENCE` now points at — has no
+the reference.** Stock GG2 — which is what `GG2_REFERENCE` points at — has no
 `Scripts/Bots/`, no `Scripts/BotNav/`, no `BOT_*` or `NAV_*` constants and no
 `Documentation/Bots.md`. This port's bot layer has diverged from the fork's, so
 nothing here is a specification for anything; it is a map of where the ideas came
