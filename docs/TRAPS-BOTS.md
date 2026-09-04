@@ -1749,6 +1749,64 @@ penalty falls where it changes a decision — addresses the identified mechanism
 Not attempted, deliberately: chasing variants until one wins is how a post-hoc
 result gets mistaken for a pre-registered one.
 
+### Precomputing Dijkstra: the routes cannot be stored, the distances can
+
+`Gg2.Bots.NavDistances`, `NavSearch.Find`'s `distances` argument, gated by
+`NavDistancesTests`. Measured 2026-09-04, Release.
+
+⛔ **Storing the ROUTES does not work, and the reason is `BotOccupancy`.** A
+stored route is still optimal only if it touches nothing contended — occupancy
+can only raise costs, so a route that avoids every occupied edge is unbeatable —
+and on realistic traffic (six team-mates, goals clustered on objectives) that
+holds for **0.7-20% of queries**, typically under 10%. A blended "table, else
+A\*" path measured **0.7x — slower than just searching**, because the miss pays
+for the walk, the per-edge cleanliness scan and the full search.
+
+✅ **Storing the DISTANCES does work, because a distance is only ever a lower
+bound.** Occupancy multiplies, the blacklist removes, a closed gate removes —
+all of them only make a route dearer — so a cost measured on a more permissive
+graph is admissible for every asker. `NavSearch` still reads the live occupancy
+map on every edge; the table only says which way to look.
+
+⚠️ **A table is admissible only for askers whose edges are a SUBSET of the ones
+it was built with**, and this is where most of the value is:
+
+| heuristic | mean µs | speedup |
+|---|---|---|
+| straight line (shipped) | 23.35 | — |
+| table built with every arc | 22.11 | 1.06x |
+| table matched to the asker's class | **17.20** | **1.36x** |
+
+⛔ **The permissive table is nearly worthless — 1.06x — and that is not
+obvious.** Rocket jumps are 14% of the shipped edges and they are *shortcuts*,
+so a table that includes them badly understates a walker's real distance and the
+bound goes slack exactly where it was supposed to bite. Gates can stay open in
+every table (a gate only removes edges, so gates-open is still a lower bound);
+the jump arcs cannot.
+
+⚠️ **Pops fall further than time does, and the gap is the table itself.** A
+random read into an N² array is a cache miss where `Gml.PointDistance` is a few
+flops on data already in registers — `ctf_waterway` 285→85 pops for 2.15x,
+`koth_gallery` 78→28 for 2.89x, `ctf_truefort` 564→541 for 1.00x. **Do not
+predict this change's value from a pop count.**
+
+⚠️ **An earlier scratch-probe number of 2.19x for the same idea is SUPERSEDED
+by the 1.36x above.** The probe filtered its pairs differently and is not in the
+repo; it should not be quoted.
+
+✅ **Free as a reachability oracle.** An infinite entry on the permissive graph
+means no query can make the trip, so the search returns without a single pop
+instead of expanding the whole reachable component — 3,316 such pairs on
+`cp_dirtbowl` alone.
+
+**Cost, and why this is not yet wired in:** 0.2-2.7 MB a table and 3-94 ms to
+build one, times a table per ability profile, at every map change. Against A\*'s
+~26% of a twelve-bot tick, 1.36x is about 7% of the tick — real, modest, and it
+would move every route, so `NavRouteIdentityTests`' 25 digests and the three
+pinned bot measurements would all need re-recording. **The argument is a
+judgement call and has not been made.** `distances` defaults to null, nothing
+in the shipped path passes it, and the route digests are untouched.
+
 ### Phase 7 item 4s: the stab window, and the last unported script
 
 `Gg2.Bots.BotStab`, the stab branch in `BotClassKeys.SpyKeys`. Gated by

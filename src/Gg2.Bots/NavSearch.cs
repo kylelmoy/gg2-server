@@ -164,7 +164,8 @@ public sealed class NavSearch
         List<int> path,
         IReadOnlySet<long>? blocked = null,
         IReadOnlyDictionary<long, int>? occupancy = null,
-        ReadOnlySpan<double> laneCost = default)
+        ReadOnlySpan<double> laneCost = default,
+        NavDistances? distances = null)
     {
         ArgumentNullException.ThrowIfNull(path);
 
@@ -192,6 +193,13 @@ public sealed class NavSearch
         // prove that.
         var goalX = (_graph.Nodes[goal].X0 + _graph.Nodes[goal].X1) / 2.0;
         var goalY = (double)_graph.Nodes[goal].Row;
+
+        // The table's answer for the whole leg. Infinity means the FULLY
+        // PERMISSIVE graph cannot get there, so no query can — a single array
+        // read instead of expanding the entire reachable component to discover
+        // it. On cp_dirtbowl that is most pairs.
+        if (distances is not null && float.IsPositiveInfinity(distances.Between(start, goal)))
+            return false;
 
         // Hoisted out of the edge loop for real cost, not tidiness. Both
         // collections are usually EMPTY — a bot's blacklist averages about 0.15
@@ -323,17 +331,36 @@ public sealed class NavSearch
                 _gScore[next] = tentative;
                 _cameFrom[next] = current;
 
-                var nextX = (_graph.Nodes[next].X0 + _graph.Nodes[next].X1) / 2.0;
-                var nextY = (double)_graph.Nodes[next].Row;
+                double estimate;
+
+                if (distances is null)
+                {
+                    var nextX = (_graph.Nodes[next].X0 + _graph.Nodes[next].X1) / 2.0;
+                    var nextY = (double)_graph.Nodes[next].Row;
+
+                    estimate = Gml.PointDistance(nextX, nextY, goalX, goalY);
+                }
+                else
+                {
+                    // The exact remaining cost on the permissive graph — at or
+                    // below the true remainder for this asker, whatever the gates,
+                    // the blacklist and the crowd have done to it.
+                    var exact = distances.Between(next, goal);
+
+                    // Nothing reaches the goal from there, so nothing routed
+                    // through it ever can. The straight-line heuristic has no way
+                    // to know this and expands the dead end in full.
+                    if (float.IsPositiveInfinity(exact))
+                        continue;
+
+                    estimate = exact;
+                }
 
                 // WEIGHTED. NavConstants.SearchWeight inflates the estimate,
                 // which makes the frontier commit to the goal's direction sooner
                 // and expand fewer nodes for a route that may be longer. The
                 // trade, and why it is 1.2 rather than more, is recorded there.
-                _open.Enqueue(
-                    next,
-                    tentative + (NavConstants.SearchWeight
-                        * Gml.PointDistance(nextX, nextY, goalX, goalY)));
+                _open.Enqueue(next, tentative + (NavConstants.SearchWeight * estimate));
             }
         }
 
