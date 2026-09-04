@@ -114,6 +114,14 @@ public static class BotRoles
     /// variety comes from a shared occupancy penalty instead.
     /// </para>
     /// <para>
+    /// ⚠️ <b>And widening THIS does not buy route variety either — measured, and
+    /// a dead end.</b> Scaling every bot's offset by 1.5, 2 and 3 moves a team's
+    /// match-level route dispersion 0.634 → 0.645 / 0.645 / 0.657: it saturates
+    /// almost at once, because the offset moves where a bot ends up
+    /// <em>standing</em> and not which corridor it walks there by.
+    /// <c>docs/TRAPS-BOTS.md</c>, "Route variety, scored".
+    /// </para>
+    /// <para>
     /// A bounds check alone (<c>abs(botSpreadX) &lt;= BOT_SPREAD_MAX</c>) is
     /// satisfied even if every bot's offset is silently 0, so the gate here
     /// asserts that the offsets actually differ.

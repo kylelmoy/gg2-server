@@ -1657,6 +1657,98 @@ counted. ⚠️ That last one needed a fixture that actually **arrives** (placed
 its goal, grounded, stopped) — without it the branch was invisible: an arrived
 bot would leave its whole route crowded for ever.
 
+### Route variety, scored: what occupancy is worth and why lanes do not replace it
+
+`Gg2.Tests.RouteDiversity`, `RouteDiversityTests`, `RouteDiversityMatchTests`,
+`LaneWalkingTimeTests`, `Gg2.Bots.BotLanes`, `BotLanesTests`. Measured
+2026-09-04 against `fa9e87a`, Release.
+
+⛔ **Everything that checked route variety before this tested the MECHANISM, not
+the outcome** — a crowded edge costs more, four bots on one swept leg disagree,
+a three-node toy graph flips. A mechanism that fired and achieved nothing passed
+all of them, which is exactly how the deleted per-edge jitter survived long
+enough to be caught by hand. `RouteDiversity.Spread` scores the outcome: mean
+pairwise Jaccard distance over routes' edge sets, 0 single file, 1 disjoint. It
+reproduces item 4q's recorded measurement before being trusted for anything new.
+
+⚠️ **`ScriptedBot.Occupancy` is set in ONE place in the repo** —
+`BotPopulationService`, the live `--bots` server. `HeadlessMatch`, `MatchRunner`
+and every rollout leave it null, so **`eval` and all training have always run
+with no route-variety mechanism at all.** That is the real baseline, not a
+thought experiment.
+
+⛔ **Occupancy's leg-level capability is not its match contribution, and quoting
+the first for the second overstates it about fourfold.** Four bots forced onto
+the identical leg is item 4q's setup and does not occur in play: `BotRoles.Assign`,
+`BotRoles.SpreadX` and `BotGoalSpot` have already given a team different goals.
+
+| | spread | route inflation |
+|---|---|---|
+| no mechanism (what `eval` runs) | 0.634 | 103.2% |
+| occupancy | **0.785** | **105.5%** |
+| lanes, 4 @ 1.75 | 0.766 | 110.0% |
+
+21 maps, 3 seeds, 12 bots, 3,000 ticks. Inflation prices each installed route
+against the cheapest route between its **own** endpoints on the untouched graph.
+
+- ⚠️ **Widening `SpreadX` does NOT buy route variety and is a dead end.**
+  ×1.5/×2.0/×3.0 give 0.645/0.645/0.657 against 0.634 — it saturates almost
+  immediately. It moves where a bot ends up **standing**, not which corridor it
+  walks, and the statistic is dominated by the long shared middle. **Do not
+  retry it.**
+- ⛔ **`BotLanes` works and is still the wrong trade.** Static per-edge cost
+  fields, derived by iterative penalisation of corridors an earlier lane's swept
+  routes used — structured, shared, coarse, and unlike occupancy precomputable,
+  which was the whole point. Occupancy buys **0.066 of spread per point of
+  inflation; lanes buy 0.019.** A static field cannot know where the crowd is,
+  so it diverts every route through a corridor whether anyone is on it or not.
+  No setting closes the gap: the sweep over {2,3,4} lanes × {1.20,1.35,1.75}
+  penalty is monotone in both dials.
+- ⚠️ **Three or more lanes lose a scenario leg at every penalty, always lane
+  index 2**, while `BotLanesTests` still shows every lane reaching what lane 0
+  reaches — so the **follower** cannot execute a route the **search** returned.
+  Undiagnosed; it is why the arrival-safe frontier stops at two lanes.
+- ⚠️ **A route's edge-cost sum understates what a lane costs by about 4
+  points** — 102.2% proxy against 106.0% walking time at 4 lanes @ 1.20. The sum
+  misses what the follower spends steering, jumping and recovering off-route.
+  **Price a routing change in walking time, not in cost.**
+- ⚠️ **`ctf_avanti` runs at 146.9% inflation with no mechanism at all**, against
+  ~101% everywhere else. Not a lane effect and not explained. Its installed
+  routes are half again the cheapest route between their own endpoints whatever
+  is running.
+
+✅ **The lane plumbing is inert in the shipped configuration** and
+`NavRouteIdentityTests` is untouched: `NavSearch`'s `laneCost` is empty
+everywhere, lane 0 is a copy of the graph's costs (asserted exactly), and a bot
+given no lane routes as before. ⚠️ **A lane is indexed by edge position**, so
+`ScriptedBot.SetMap` drops it exactly as it drops the route and the occupancy
+flag — a field held across a map change prices the new graph with the old one's
+numbers.
+
+⚠️ **Assign a lane by a bot's place among its OWN TEAM, never by slot**
+(`BotRoles.Lane`). Teams alternate down the roster, so `slot % 4` hands red the
+even lanes and blue the odd ones — a team of six would use two of four corridors
+while every count and bound still looked right.
+
+⛔ **These measurements are `Skip`ped and must stay that way.** Left in the
+default run they added about eighty seconds of CPU-saturating match simulation
+alongside `ServerPacingTests`, `TickPacingTests` and `TimerResolutionTests`,
+which measure the wall clock — **one full-suite run in four failed and three
+re-runs did not reproduce it**, the signature of load rather than of a bug.
+(The failing test's identity was never captured, so this is a diagnosis and not
+a proof.) With them skipped the suite is stable at 31s across three consecutive
+runs. ⚠️ **A measurement that makes a timing gate flaky is worse than a slow
+one**, because the next session cannot tell a real failure from it — and this
+is `docs/BOTS.md`'s "pacing measures the machine" arriving from the other
+direction, as something a test can *cause* rather than suffer.
+
+**Untested, and recorded so it is not lost:** lanes are inefficient because the
+penalty lands on whole corridors including stretches with no alternative. A
+*sparse* lane — charging only edges that have a comparable alternative, so the
+penalty falls where it changes a decision — addresses the identified mechanism.
+Not attempted, deliberately: chasing variants until one wins is how a post-hoc
+result gets mistaken for a pre-registered one.
+
 ### Phase 7 item 4s: the stab window, and the last unported script
 
 `Gg2.Bots.BotStab`, the stab branch in `BotClassKeys.SpyKeys`. Gated by

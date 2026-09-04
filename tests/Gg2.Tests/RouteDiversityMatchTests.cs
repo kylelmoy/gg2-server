@@ -37,6 +37,34 @@ namespace Gg2.Tests;
 /// </remarks>
 public sealed class RouteDiversityMatchTests(ITestOutputHelper output)
 {
+    /// <summary>
+    /// Why every measurement in this file is skipped by default.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>These are measurements, not gates, and leaving them in the default
+    /// run made the suite flake.</b> Each one plays dozens of 3,000-tick matches;
+    /// together they added about eighty seconds of CPU-saturating simulation
+    /// running in parallel with <c>ServerPacingTests</c>,
+    /// <c>TickPacingTests</c> and <c>TimerResolutionTests</c>, which measure the
+    /// wall clock. One full-suite run in four failed, and the failure was not
+    /// reproduced in the next three — the signature of load, not of a bug.
+    /// <para>
+    /// That is this repo's own warning arriving from the other direction:
+    /// <c>docs/BOTS.md</c>, "late ticks are a pacing measurement, and pacing
+    /// measures the machine". A measurement that makes a timing gate flaky is
+    /// worse than a slow one, because the next session cannot tell a real
+    /// failure from this.
+    /// </para>
+    /// <para>
+    /// The numbers live in <c>docs/TRAPS-BOTS.md</c>, "Route variety, scored",
+    /// which is where this repo keeps a measured fact. Remove the Skip to
+    /// re-take one, and run it alone.
+    /// </para>
+    /// </remarks>
+    private const string Measurement =
+        "Measurement, not a gate: ~80s of matches, and it makes the pacing tests flake. "
+        + "Remove the Skip and run it alone. Numbers in docs/TRAPS-BOTS.md.";
+
     private const int Ticks = 3000;
 
     private const int SampleEvery = 60;
@@ -127,7 +155,7 @@ public sealed class RouteDiversityMatchTests(ITestOutputHelper output)
     /// <summary>
     /// Occupancy's marginal contribution to route dispersion, per map.
     /// </summary>
-    [Fact]
+    [Fact(Skip = Measurement)]
     public void HowMuchDispersionOccupancyAddsInAMatch()
     {
         ReferenceTree.RequireNavCache();
@@ -203,7 +231,7 @@ public sealed class RouteDiversityMatchTests(ITestOutputHelper output)
     /// single-leg pins are for.
     /// </para>
     /// </remarks>
-    [Fact]
+    [Fact(Skip = Measurement)]
     public void DispersionAgainstTheGoalSpreadWithNoOccupancy()
     {
         ReferenceTree.RequireNavCache();
@@ -261,7 +289,7 @@ public sealed class RouteDiversityMatchTests(ITestOutputHelper output)
     /// match occupancy to replace it on the live server.
     /// </para>
     /// </remarks>
-    [Fact]
+    [Fact(Skip = Measurement)]
     public void LanesAgainstOccupancyInMatches()
     {
         ReferenceTree.RequireNavCache();
@@ -343,7 +371,7 @@ public sealed class RouteDiversityMatchTests(ITestOutputHelper output)
     /// while giving the route cost back.
     /// </para>
     /// </remarks>
-    [Fact]
+    [Fact(Skip = Measurement)]
     public void WhatTheLanePenaltyBuysAndWhatItCosts()
     {
         ReferenceTree.RequireNavCache();

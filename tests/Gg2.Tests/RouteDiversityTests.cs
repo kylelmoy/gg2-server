@@ -237,7 +237,7 @@ public sealed class RouteDiversityTests(ITestOutputHelper output)
     /// <see cref="RouteDiversity"/> cannot tell the two apart and this column
     /// can.
     /// </remarks>
-    [Fact]
+    [Fact(Skip = "Measurement, not a gate. Numbers in docs/TRAPS-BOTS.md, \"Route variety, scored\".")]
     public void LanesAgainstOccupancyOnTheSameLegs()
     {
         ReferenceTree.RequireNavCache();
