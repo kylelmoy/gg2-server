@@ -15,11 +15,14 @@ namespace Gg2.Tests;
 /// from this repo (CLAUDE.md).
 /// </para>
 /// <para>
-/// <b>The default is stock upstream GG2, not the bot fork.</b> The fork at
-/// <c>D:\code\Gang-Garrison-2</c> carries its own bot and nav work, which this
-/// port's bot layer has diverged from — there is no reason to check anything
-/// against it. Stock GG2 is the thing a stock client runs, and that is the only
-/// thing this port owes compatibility to.
+/// <b>The default is stock upstream GG2.</b> <c>D:\code\Gang-Garrison-2</c>
+/// held a bot fork until 2026-09-05; that fork was deleted locally and now
+/// lives only at <c>github.com/kylelmoy/Gang-Garrison-2</c> (branch
+/// <c>bot-route-variety</c>), and this path was renamed from
+/// <c>Gang-Garrison-2-upstream</c> to take its place. This port's bot layer has
+/// diverged from the fork's, so there is no reason to check anything against
+/// it. Stock GG2 is the thing a stock client runs, and that is the only thing
+/// this port owes compatibility to.
 /// </para>
 /// </remarks>
 public static class ReferenceTree
@@ -43,7 +46,7 @@ public static class ReferenceTree
 
     public const string NavCacheEnvironmentVariable = "GG2_NAVCACHE";
 
-    private const string DefaultPath = @"D:\code\Gang-Garrison-2-upstream";
+    private const string DefaultPath = @"D:\code\Gang-Garrison-2";
 
     /// <summary>Root of the checkout, whether or not it exists.</summary>
     public static string Root =>

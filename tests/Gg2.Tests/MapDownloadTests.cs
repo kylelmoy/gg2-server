@@ -166,6 +166,100 @@ public sealed class MapDownloadTests : IDisposable
     }
 
     /// <summary>
+    /// The JOIN BURST's <c>CHANGE_MAP</c> carries the same hash the greeting
+    /// advertised — on a custom map, a non-empty one.
+    /// </summary>
+    /// <remarks>
+    /// <b>This is the message that makes a joining client load the map</b>
+    /// (<c>ServerJoinUpdate.gml:8</c>: <c>ServerChangeMap(global.currentMap,
+    /// global.currentMapMD5, socket)</c>), and it is NOT the greeting — the two
+    /// are separate messages carrying the same pair.
+    /// <para>
+    /// ⛔ <b>An empty MD5 is not "no hash handy", it means INTERNAL MAP.</b>
+    /// <c>ClientBeginStep.gml:476</c> branches on <c>currentMapMD5 == ""</c> and
+    /// calls <c>findInternalMapName</c>; a custom map is not in that list, so the
+    /// client shows <c>"Server went to invalid internal map: &lt;name&gt;#Exiting."</c>
+    /// and drops to the menu. It can never join.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>The port hardcoded <c>string.Empty</c> here until 2026-09-05</b>, so
+    /// every custom map was unjoinable by a stock client — measured live on
+    /// <c>gg_debug2</c>, two clients, both killed on arrival with that exact
+    /// dialog. Every test in this file passed throughout, because they all check
+    /// the <em>greeting</em>, which was always right. Nothing read the burst.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void TheJoinBurstCarriesTheMapHashAndNotAnEmptyOne()
+    {
+        var map = CustomMap("ctf_joinhash");
+
+        using var harness = new ServerHarness(options =>
+        {
+            options.MapDirectory = _directory;
+            options.Map = "ctf_joinhash";
+            options.MapRotation = ["ctf_joinhash"];
+        });
+
+        var client = harness.Connect();
+
+        client.SendHello();
+        harness.TickUntil(() => client.Received.Count > 0, "the greeting");
+
+        Assert.Equal(MessageType.Hello, client.TakeMessageType());
+        client.TakeString1();                                   // server name
+        Assert.Equal("ctf_joinhash", client.TakeString1());
+        var advertised = client.TakeString1();
+        Assert.Equal(MapDownload.Md5Of(map), advertised);
+        Assert.NotEqual(string.Empty, advertised);
+        client.TakeByte();                                      // pluginsRequired
+        client.TakeString2();                                   // plugin list
+
+        client.SendReserveSlot("joiner");
+        harness.TickUntil(() => client.Received.Count > 0, "the slot reservation");
+        Assert.Equal(MessageType.ReserveSlot, client.TakeMessageType());
+
+        var before = harness.Server.RosterCount;
+        client.SendPlayerJoin();
+        harness.TickUntil(() => harness.Server.RosterCount > before, "the join to complete");
+
+        // The burst opens with JOIN_UPDATE, then the CHANGE_MAP under test.
+        Assert.Equal(MessageType.JoinUpdate, client.TakeMessageType());
+        client.TakeByte();                                      // player id
+        client.TakeByte();                                      // map area
+
+        Assert.Equal(MessageType.ChangeMap, client.TakeMessageType());
+        Assert.Equal("ctf_joinhash", client.TakeString1());
+        Assert.Equal(advertised, client.TakeString1());
+    }
+
+    /// <summary>
+    /// And on a BUILT-IN map the same burst carries an empty hash, because there
+    /// the empty string is the correct answer.
+    /// </summary>
+    /// <remarks>
+    /// The control for the test above: without it, "carries the hash" would be
+    /// satisfied by a server that always sent something non-empty, which would
+    /// send every client off to download a map it already has — under a name
+    /// <c>findInternalMapName</c> would then resolve, so it would fail as a
+    /// pointless transfer rather than loudly.
+    /// </remarks>
+    [Fact]
+    public void TheJoinBurstOnABuiltInMapCarriesAnEmptyHash()
+    {
+        using var harness = new ServerHarness();
+        var client = harness.JoinClient("joiner");
+
+        Assert.Equal(MessageType.JoinUpdate, client.TakeMessageType());
+        client.TakeByte();
+        client.TakeByte();
+
+        Assert.Equal(MessageType.ChangeMap, client.TakeMessageType());
+        Assert.Equal("ctf_truefort", client.TakeString1());
+        Assert.Equal(string.Empty, client.TakeString1());
+    }
+
+    /// <summary>
     /// The transfer is rate-limited, and the limit is real rather than
     /// nominal.
     /// </summary>

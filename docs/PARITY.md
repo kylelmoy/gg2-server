@@ -1009,6 +1009,40 @@ scoreboard heartbeat and asserts a `CAPS_UPDATE` arrived, in both directions
 (CTF→KotH and KotH→CTF are different stale pairings). No trace fixture could
 have caught this either — no recording in the corpus contains a map rotation.
 
+### Fixed: every custom map was unjoinable by a stock client
+
+`WriteJoinBurst` sent `CHANGE_MAP` with a **hardcoded empty MD5**.
+`ServerJoinUpdate.gml:8` passes `global.currentMapMD5` there, and an empty MD5
+is not "no hash handy" — to a client it means **internal map**
+(`ClientBeginStep.gml:476`). A custom map is not in `findInternalMapName`'s
+list, so every joining client showed
+`Server went to invalid internal map: <name>#Exiting.` and dropped to the menu.
+**It could never join at all.**
+
+⚠️ **The whole custom-map feature was dead on a real client** — `--maps`,
+`MapDownload`, `--map-download-limit`, the map-change navgen — while
+`MapDownloadTests` was green throughout. Every test in that file checks the
+**HELLO**, which always carried the right hash; nothing read the **join
+burst**, which is the message that actually makes a client load the map. The
+two are separate messages carrying the same pair, and only one of them was
+tested. `EveryShippedMapIsInternal` could not catch it either: it asserts every
+*reference-shipped* map is internal, and the only custom map in the repo is the
+port-authored `gg_debug2`, which that census deliberately excludes.
+
+Found by serving `gg_debug2` to two stock clients on 2026-09-05: both died on
+arrival with that dialog, and the server then logged `0 client(s)`. Fixed by
+passing `_currentMapMd5`; gated by
+`MapDownloadTests.TheJoinBurstCarriesTheMapHashAndNotAnEmptyOne` with
+`TheJoinBurstOnABuiltInMapCarriesAnEmptyHash` as the other direction, both
+mutation-checked. **Verified live afterwards**: a stock client with an empty
+`Maps/` directory downloaded `gg_debug2.png` from the port, rejoined, and
+played in `CustomMapRoom` — the server logging `Player joined as player 4`.
+
+⚠️ **`MirrorClient` is blind to this by construction** and it is a clean example
+of the blind spot above: the mirror frames with the port's own `ServerStream`,
+which reads an empty MD5 quite happily. Only the *stock client's* reader treats
+it as a claim about the map being built in.
+
 ### Multi-area maps: one bug fixed, one intermittent client fatal still open
 
 `cp_dirtbowl` is the only shipped map with more than one area (three, sharing
@@ -1021,6 +1055,21 @@ an advance that should keep them. Fixed and gated by `MultiAreaMapTests`
 decision observed (defenders holding rotates away; red winning the last area
 rotates rather than advancing, since `3 < 3` is false).
 
+⚠️ **`3 < 3` was NOT what the code evaluated until 2026-09-05** — it evaluated
+`3 < 2`. `OpenMap` narrowed the map with `ForArea` and then counted the
+*slice's* `NextAreaO` markers, giving `TotalMapAreas` 2/3/2 on areas 1/2/3
+where `basicRoomSetup.gml:7` computes 3 on all three (it runs *before* the
+loop at `:9-25` destroys the other areas' entities). All three of
+`cp_dirtbowl`'s advance decisions come out the same either way — 1<2, 2<3,
+3<2 against 1<3, 2<3, 3<3 — so no behavioural test on the only shipped
+multi-area map could see it, and the sentence above recorded a correct outcome
+with a false reason. Found by reading the control port's `areas` field against
+the reference, not by a failing test. Fixed in `OpenMap` (the count now comes
+from the unnarrowed map) and gated by
+`MultiAreaMapTests.TheServedAreaCountIsTheMapsNotTheSlices`, which pins the
+slice counts too so the gate cannot go vacuous. **A custom four-area map has
+no such coincidence to rely on.**
+
 ⛔ **Still open — an intermittent client fatal, seen once and not reproduced.**
 One six-bot run driven 1→2→3 killed the client one second after reaching area
 3 with the same symptom as the fixed `MatchState` bug (`unknown team ID: 2`,
@@ -1031,6 +1080,38 @@ intermittent, meaning timing- or state-dependent, and **not confirmed to share
 a cause** with the fixed bug (only the symptom, which is generic to any framing
 slip a client reads a subobject bit against). To chase it: run `cp_dirtbowl`
 with six-plus bots, drive 1→2→3 repeatedly with `--record` on, until it fires.
+
+⚠️ **2026-09-05 — the CAUSE is now known, and the sprite error is only the
+symptom.** The launcher saved a screenshot of the "unreadable `show_message`"
+that preceded each death. It reads:
+
+```
+Wrong number of players while deserializing state
+```
+
+That is `deserializeState.gml:11-13`: the client compares the state update's
+declared player count against its own `global.players` list and, on a mismatch,
+**shows a message and carries on deserialising anyway**. From that point the
+read is misaligned, and a character bit eventually lands on a slot the client
+holds as a spectator — `Character`'s Create event then calls
+`getCharacterSpriteId`, which accepts team 0 and 1 only, and kills the client
+with `unknown team ID: 2`. So the chain is: roster-count disagreement →
+misframed read → character for a spectator → fatal.
+
+⚠️ **It fired TWICE, not once** — `agent_launcher_17800.log` (105 s after
+launch) and `17801.log` (**6 s** after launch, a different server). A
+six-second death is at or near JOIN, not after an area advance, so the
+"driven 1→2→3" framing above is too narrow: at least one of the two was a
+join-time desync.
+
+⛔ **`MirrorClient` could not see any of this, by construction.**
+`StateUpdateReader` takes the player count off the wire and reads exactly that
+many blocks; unlike the stock client it never compares that count against the
+roster it holds. **Fixed 2026-09-05**: the mirror now makes the same comparison
+`deserializeState.gml` does and records a mismatch in `Impossible`, so every
+test that uses it checks this for free. The whole suite stays green with the
+check armed — and it is mutation-checked: writing `Roster.Count - 1` in
+`StateUpdateWriter` turns five transition tests red.
 
 `GamemodeRotationTests` generalises the gamemode-change gate: it rotates a
 client through one shipped map of every gamemode (seven of eight have one),

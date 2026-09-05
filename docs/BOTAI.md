@@ -504,7 +504,8 @@ this repo losing a feature.
 
 ## Reference
 
-Facts about the GM8 implementation cited above were read from the
-`Gang-Garrison-2` tree: `Source/gg2/Scripts/Bots/botAimLead.gml`,
+Facts about the GM8 implementation cited above were read from the **bot fork**
+— `github.com/kylelmoy/Gang-Garrison-2` (branch `bot-route-variety`), not the local
+stock tree, which has no `Scripts/Bots/`: `Source/gg2/Scripts/Bots/botAimLead.gml`,
 `Source/gg2/Scripts/Bots/botInputUpdate.gml`, and
 `Source/gg2/Scripts/GameServer/processClientCommands.gml`.

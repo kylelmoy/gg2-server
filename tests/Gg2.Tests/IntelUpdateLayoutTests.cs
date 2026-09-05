@@ -35,7 +35,7 @@ public sealed class IntelUpdateLayoutTests
     {
         var map = LevelMap.FromPng(Map, ReferenceTree.ReadMap(Map));
         var roster = new Roster("server");
-        var match = new MatchState(map, roster, new ServerOptions());
+        var match = new MatchState(map, roster, new ServerOptions(), GameModes.TotalAreas(map));
 
         var captured = state;
 

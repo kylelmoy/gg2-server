@@ -190,6 +190,19 @@ public sealed partial class GameServer
         && _world.IsAlive(slot)
         && _world.Characters[slot].CarryingIntel;
 
+    /// <summary>Whether the character in <paramref name="slot"/> is mid-taunt.</summary>
+    /// <remarks>
+    /// A taunt is observable simulation rather than decoration: it freezes the
+    /// character where it stands, and the client derives that from the same key
+    /// bit (<c>docs/TRAPS-SIMULATION.md</c>, "Taunting and the humiliation
+    /// round"). Exposed for the same reason as <see cref="IsCarryingIntel"/> —
+    /// a diagnostic read of a state a transition has to clean up.
+    /// </remarks>
+    public bool IsTaunting(int slot) =>
+        slot >= 0 && slot < WorldState.MaxSlots
+        && _world.IsAlive(slot)
+        && _world.Characters[slot].Taunting;
+
     /// <summary>One roster entry's scoreboard, as the wire's stats block.</summary>
     public PlayerStatsBlock StatisticsOf(int slot) => Statistics(slot);
 

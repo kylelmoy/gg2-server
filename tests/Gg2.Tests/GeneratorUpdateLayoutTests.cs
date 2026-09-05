@@ -44,7 +44,7 @@ public sealed class GeneratorUpdateLayoutTests
     {
         var map = Level();
         var roster = new Roster("server");
-        var match = new MatchState(map, roster, new ServerOptions());
+        var match = new MatchState(map, roster, new ServerOptions(), GameModes.TotalAreas(map));
 
         var captured = state;
 
@@ -137,7 +137,7 @@ public sealed class GeneratorUpdateLayoutTests
 
         var map = Level();
         var roster = new Roster("server");
-        var match = new MatchState(map, roster, new ServerOptions());
+        var match = new MatchState(map, roster, new ServerOptions(), GameModes.TotalAreas(map));
         var captured = state;
 
         ObjectiveBlock Objective() => new(

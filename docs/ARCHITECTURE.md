@@ -332,7 +332,8 @@ Two things carried over rather than reinvented:
   needed. `docs/TRAPS-BOTS.md`, "the nav cache reader", has the format traps
   (including the column-major `ds_grid_write` layout and the feet-row rounding
   direction).
-- **The `BOT_*` constants** in `Gang-Garrison-2/Source/gg2/Constants.xml` are a
+- **The `BOT_*` constants** — in the bot fork's `Source/gg2/Constants.xml`, at
+  `github.com/kylelmoy/Gang-Garrison-2` (branch `bot-route-variety`), **not** in the local stock tree — are a
   tuned set with real playtesting behind them. Port the values even if the
   algorithms get rewritten.
 

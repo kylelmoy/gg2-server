@@ -184,7 +184,7 @@ dotnet test Gg2.sln
 
 The test suite needs a stock GG2 source checkout for `Constants.xml` and the
 scripts — only the maps and nav graphs are decoupled. It defaults to
-`D:\code\Gang-Garrison-2-upstream`; override with `GG2_REFERENCE`.
+`D:\code\Gang-Garrison-2`; override with `GG2_REFERENCE`.
 
 Two rules that are not negotiable, whatever you are changing:
 
@@ -202,10 +202,8 @@ Two rules that are not negotiable, whatever you are changing:
 
 | Repo | What |
 |---|---|
-| `Gang-Garrison-2-upstream` | The reference implementation. Stock GG2 v2.9.2, cloned from [`Gang-Garrison-2/Gang-Garrison-2`](https://github.com/Gang-Garrison-2/Gang-Garrison-2). Read-only from here. |
-| `Gang-Garrison-2` | A bot fork of the above, and the checkout the live game is built from. Not the specification — this port's bots have diverged from its. Read-only from here. |
+| `Gang-Garrison-2` | The reference implementation. Stock GG2 v2.9.2, cloned from [`Gang-Garrison-2/Gang-Garrison-2`](https://github.com/Gang-Garrison-2/Gang-Garrison-2). Read-only from here. |
 | `gg2-agent` | Tooling for the GM8 game: build scripts, the agent bridge, the MCP server, nav analysis. |
-| `gg2-nav-gen` | The original Node nav-graph generator. Superseded by `src/Gg2.Nav`, a C# port of it, but kept because it still works and has a worker pool. |
 | `gg2-rl` | Bot-policy trainer, on the other side of the `gg2-env` seam. |
 
 ## Reference version

@@ -54,6 +54,69 @@ public sealed class MultiAreaMapTests
     }
 
     /// <summary>
+    /// The served area count is the MAP's, on every area — never the slice's.
+    /// </summary>
+    /// <remarks>
+    /// <c>basicRoomSetup.gml:7</c> sets <c>global.totalMapAreas =
+    /// 1+instance_number(NextAreaO)</c> <em>before</em> the loop at <c>:9-25</c>
+    /// destroys the other areas' entities, so the reference's count is the whole
+    /// map's and does not depend on which area is being played.
+    /// <para>
+    /// <b>Counting the narrowed map instead is the bug this pins</b>, and it is
+    /// not hypothetical: <c>OpenMap</c> did exactly that, giving 2/3/2 for areas
+    /// 1/2/3 against the reference's 3/3/3. It was invisible because those three
+    /// wrong values happen to decide all three of <c>cp_dirtbowl</c>'s advances
+    /// the same way as the right ones —
+    /// <c>GameServerBeginStep.gml:74</c>'s <c>currentMapArea &lt;
+    /// totalMapAreas</c> is 1&lt;2, 2&lt;3, 3&lt;2 instead of 1&lt;3, 2&lt;3,
+    /// 3&lt;3 — so no behavioural test could see it on the only shipped
+    /// multi-area map. A custom four-area map has no such guarantee.
+    /// </para>
+    /// <para>
+    /// The slice counts are asserted too, so this fails if someone "simplifies"
+    /// the fix away by making <c>ForArea</c> keep every marker: that would make
+    /// the two quantities equal and this test vacuous.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void TheServedAreaCountIsTheMapsNotTheSlices()
+    {
+        var full = Load(Map);
+        Assert.Equal(3, GameModes.TotalAreas(full));
+
+        // The slice really is a different quantity — otherwise the rest is vacuous.
+        Assert.Equal([2, 3, 2],
+            new[] { 1, 2, 3 }.Select(a => GameModes.TotalAreas(full.ForArea(a))).ToArray());
+
+        using var harness = new ServerHarness(options =>
+        {
+            options.Map = Map;
+            options.MapRotation = [Map];
+            options.ShuffleRotation = ShuffleMode.None;
+        });
+
+        // Area 1 is where the server opened, so it is asserted in place; asking
+        // for the area it is already on would leave a map change pending and get
+        // the next request refused.
+        Assert.Equal(1, harness.Server.CurrentMapArea);
+        Assert.Equal(3, harness.Server.TotalMapAreas);
+
+        for (var area = 2; area <= 3; area++)
+        {
+            Assert.True(
+                harness.Server.RequestMapChange(Map, area),
+                $"the change to area {area} was refused");
+
+            harness.TickUntil(
+                () => harness.Server.CurrentMapArea == area,
+                $"the server to reach area {area}",
+                maxTicks: 600);
+
+            Assert.Equal(3, harness.Server.TotalMapAreas);
+        }
+    }
+
+    /// <summary>
     /// Pushing through every area keeps the roster, the teams and the stream.
     /// </summary>
     /// <remarks>

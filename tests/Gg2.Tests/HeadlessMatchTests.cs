@@ -207,6 +207,70 @@ public sealed class HeadlessMatchTests
     }
 
     /// <summary>
+    /// A crowded match never DROPS a projectile spawn.
+    /// </summary>
+    /// <remarks>
+    /// <c>WorldState.SpawnProjectile</c> returns <c>ProjectileHandle.None</c>
+    /// when the 512-slot pool is full, and every one of its call sites ignores
+    /// the handle — so before <c>WorldState.ProjectilePoolDrops</c> existed a
+    /// full pool silently deleted a shot the reference would have fired, with
+    /// nothing counting it and nothing that could go red.
+    /// <para>
+    /// <b>The demomen are the point.</b> The pool is only reachable by classes
+    /// that leave projectiles lying about — a demoman's mines persist until they
+    /// are detonated or their owner dies, so a team of them is the densest
+    /// shipped way to fill it. A test on the default class mix would assert zero
+    /// against a world that never came close, and pass for ever without
+    /// establishing anything.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>This is a ceiling check, not a physics gate.</b> If it ever fails,
+    /// the fix is to raise <c>MaxProjectiles</c> — not to handle the drop
+    /// gracefully, which would be choosing a divergence.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Measured 2026-09-05: the peak was 11 projectiles in the air, of a
+    /// 512 ceiling.</b> So this test does NOT establish that the ceiling is
+    /// safe — it is 46x above anything twelve demomen reached in 2,000 ticks,
+    /// and the honest reading is that exhaustion is remote rather than proven
+    /// impossible. What it does establish is that the counter is wired into a
+    /// real match and reads zero there. The gate that proves the counter can
+    /// actually fire is
+    /// <c>WorldStateTests.ExhaustingTheProjectilePoolCountsADrop</c> — without
+    /// it this assertion would be unfalsifiable.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ACrowdedMatchNeverDropsAProjectileSpawn()
+    {
+        ReferenceTree.RequireAvailable();
+
+        var (map, nav) = Navigable();
+        var options = HeadlessMatchOptions.Default with { Bots = 12, MaxTicks = 2000 };
+        var match = HeadlessMatch.On(options, map, nav);
+
+        for (var slot = 1; slot <= options.Bots; slot++)
+            match.State.Players[slot].Class = PlayerClass.Demoman;
+
+        var peak = 0;
+
+        for (var tick = 0; tick < 2000; tick++)
+        {
+            match.Step();
+            peak = Math.Max(peak, match.State.LiveProjectileCount);
+        }
+
+        // Asserted so the test says what it actually reached: a run that never
+        // put a projectile in the air would satisfy the drop check vacuously.
+        // Asserted so the test says what it actually reached: a run that never
+        // put a projectile in the air would satisfy the drop check vacuously.
+        // Measured 2026-09-05: peak=11.
+        Assert.True(peak > 0, "no projectile was ever in the air, so the pool was never exercised");
+
+        Assert.Equal(0, match.State.ProjectilePoolDrops);
+    }
+
+    /// <summary>
     /// A match with no nav cache still runs — the bots simply do not walk
     /// anywhere.
     /// </summary>

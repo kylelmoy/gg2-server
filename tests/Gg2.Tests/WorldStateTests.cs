@@ -35,6 +35,47 @@ public sealed class WorldStateTests
 
     // --- the projectile pool -------------------------------------------------
 
+    /// <summary>
+    /// Filling the pool and asking for one more counts a DROP and hands back
+    /// <see cref="ProjectileHandle.None"/>.
+    /// </summary>
+    /// <remarks>
+    /// <b>This is the gate that proves <c>ProjectilePoolDrops</c> can fire.</b>
+    /// A real match never comes close — measured 2026-09-05, twelve demomen over
+    /// 2,000 ticks peaked at 11 projectiles of 512
+    /// (<c>HeadlessMatchTests.ACrowdedMatchNeverDropsAProjectileSpawn</c>) — so
+    /// the counter's zero there is unfalsifiable on its own. Exhaustion is
+    /// reachable only by filling the pool directly, which is what this does.
+    /// <para>
+    /// ⚠️ A drop is a <b>divergence</b>, not degradation: the shot the reference
+    /// would have fired does not exist. The counter is a diagnostic for a
+    /// capacity bug, never a condition to handle — see
+    /// <c>WorldState.ProjectilePoolDrops</c>.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ExhaustingTheProjectilePoolCountsADrop()
+    {
+        var state = default(WorldState);
+
+        for (var i = 0; i < WorldState.MaxProjectiles; i++)
+            Assert.False(state.SpawnProjectile(Shot(1)).IsNone, $"the pool refused slot {i}");
+
+        Assert.Equal(WorldState.MaxProjectiles, state.LiveProjectileCount);
+        Assert.Equal(0, state.ProjectilePoolDrops);
+
+        // The one past the ceiling.
+        Assert.True(state.SpawnProjectile(Shot(1)).IsNone);
+        Assert.Equal(1, state.ProjectilePoolDrops);
+
+        // And it counts every one, rather than latching at the first.
+        Assert.True(state.SpawnProjectile(Shot(1)).IsNone);
+        Assert.Equal(2, state.ProjectilePoolDrops);
+
+        // The pool is unchanged by a refused spawn — no slot was consumed.
+        Assert.Equal(WorldState.MaxProjectiles, state.LiveProjectileCount);
+    }
+
     [Fact]
     public void SpawnedProjectilesResolveThroughTheirHandles()
     {

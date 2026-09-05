@@ -347,7 +347,7 @@ public sealed class DominationTests
         var roster = new Roster("server");
         roster.Add(new RosterEntry { Name = "a", Team = Team.Red, Class = PlayerClass.Soldier });
         roster.Add(new RosterEntry { Name = "b", Team = Team.Blue, Class = PlayerClass.Soldier });
-        var match = new MatchState(map, roster, new ServerOptions());
+        var match = new MatchState(map, roster, new ServerOptions(), GameModes.TotalAreas(map));
 
         var state = default(WorldState);
         for (var slot = 0; slot < 3; slot++)
@@ -398,7 +398,7 @@ public sealed class DominationTests
         var map = LevelMap.FromPng(Map, ReferenceTree.ReadMap(Map));
         var roster = new Roster("server");
         roster.Add(new RosterEntry { Name = "a", Team = Team.Red, Class = PlayerClass.Soldier });
-        var match = new MatchState(map, roster, new ServerOptions());
+        var match = new MatchState(map, roster, new ServerOptions(), GameModes.TotalAreas(map));
 
         static bool NoCharacters(int slot, out CharacterBlock character, out WeaponBlock weapon)
         {

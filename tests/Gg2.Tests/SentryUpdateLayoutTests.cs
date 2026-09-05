@@ -153,7 +153,7 @@ public sealed class SentryUpdateLayoutTests
         var map = LevelMap.FromPng("ctf_truefort", ReferenceTree.ReadMap("ctf_truefort"));
         var roster = new Roster("server");
         roster.Add(new RosterEntry { Name = "engie", Team = Team.Red, Class = PlayerClass.Engineer });
-        var match = new MatchState(map, roster, new ServerOptions());
+        var match = new MatchState(map, roster, new ServerOptions(), GameModes.TotalAreas(map));
 
         var state = default(WorldState);
         var character = CharacterState.Fresh(PlayerClass.Engineer, Team.Red);

@@ -22,7 +22,7 @@ Common to most modes:
 
 | variable | meaning |
 |---|---|
-| `GG2_REFERENCE` | the reference checkout (default `D:\code\Gang-Garrison-2-upstream` — stock GG2, **not** the bot fork) |
+| `GG2_REFERENCE` | the reference checkout (default `D:\code\Gang-Garrison-2` — stock GG2 v2.9.2) |
 | `GG2_NAV` | the bot nav cache directory — normally `<repo>/nav`. ⚠️ Not the same name as the test suite's `GG2_NAVCACHE`, and required here rather than defaulted |
 | `NPZ` | a `gg2-rl` policy checkpoint |
 | `BENCH_MAP`, `BENCH_FOCUS` | which map, or a comma-separated list |

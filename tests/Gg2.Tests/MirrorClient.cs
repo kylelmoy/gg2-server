@@ -136,6 +136,28 @@ public sealed class MirrorClient : IDisposable
         if (message.State is not { } state)
             return;
 
+        // deserializeState.gml:11-13 — the client compares the update's declared
+        // player count against its OWN roster and shows "Wrong number of players
+        // while deserializing state" when they differ.
+        //
+        // ⛔ THE PORT'S READER DOES NOT MAKE THAT COMPARISON. StateUpdateReader
+        // takes the count off the wire and reads exactly that many blocks, so a
+        // disagreement is invisible to it — and therefore invisible to every
+        // test that reads through this mirror. That is the blind spot
+        // docs/PARITY.md describes, and it sits on a live bug: the stock client
+        // only *warns* here and then keeps deserialising, now misaligned, until
+        // a character bit lands on a slot it holds as a spectator and
+        // Character's Create event kills it with "unknown team ID: 2".
+        //
+        // Both 2026-09-03 client deaths were preceded by exactly this dialog, so
+        // the count mismatch is the cause and the sprite error is the symptom.
+        if (state.PlayerCount != _stream.PlayerCount)
+        {
+            _impossible.Add(
+                $"{message.Type}: declares {state.PlayerCount} players, "
+                + $"this client holds {_stream.PlayerCount}");
+        }
+
         for (var slot = 0; slot < state.Players.Length; slot++)
         {
             if (state.Players[slot].Character is null)

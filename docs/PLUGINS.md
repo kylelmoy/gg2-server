@@ -464,7 +464,8 @@ A rotation kills every connected client on a server with bots, it has nothing to
 do with plugins, and the server log says only `ConnectionReset`.
 
 1. **Two ini keys, or every launch stops on a modal.** In
-   `D:/code/Gang-Garrison-2/Source/build/gg2.ini`, under `[Settings]`:
+   `D:/code/Gang-Garrison-2/Source/build/gg2.ini`, under `[Settings]`
+   (⚠️ that path is the deleted bot fork's — see `docs/TRAPS-LIVEGAME.md`):
    `ServerPluginsPrompt=0` (else the client raises the "download these plugins?"
    dialog and the bridge stops answering) and `RestartPrompt=0` (else
    `pluginscleanup` raises one on disconnect). ⚠️ **Back the file up and restore

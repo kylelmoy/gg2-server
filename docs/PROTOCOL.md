@@ -1,7 +1,7 @@
 # The GG2 wire protocol
 
 Extracted from the reference implementation at GG2 v2.9.2 (`VERSION = 29200`),
-`D:\code\Gang-Garrison-2-upstream\Source\gg2`. File references are to that tree.
+`D:\code\Gang-Garrison-2\Source\gg2`. File references are to that tree.
 **The stock client is the specification.** Where this document and
 `Scripts/Client/ClientBeginStep.gml` disagree, the client is right and this file
 has a bug — fix it here.

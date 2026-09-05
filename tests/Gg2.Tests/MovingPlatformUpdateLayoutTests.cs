@@ -134,7 +134,7 @@ public sealed class MovingPlatformUpdateLayoutTests
     {
         var map = Level();
         var roster = new Roster("server");
-        var match = new MatchState(map, roster, new ServerOptions());
+        var match = new MatchState(map, roster, new ServerOptions(), GameModes.TotalAreas(map));
 
         static bool NoCharacters(int slot, out CharacterBlock character, out WeaponBlock weapon)
         {

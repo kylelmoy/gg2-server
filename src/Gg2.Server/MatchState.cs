@@ -32,12 +32,18 @@ public sealed class ControlPointState
 /// </remarks>
 public sealed class MatchState
 {
-    public MatchState(LevelMap map, Roster roster, ServerOptions options)
+    /// <param name="totalMapAreas">
+    /// The area count of the <b>unnarrowed</b> map — <c>global.totalMapAreas</c>,
+    /// which <c>basicRoomSetup.gml:7</c> computes before it destroys the other
+    /// areas' entities. Counting <paramref name="map"/> instead would count one
+    /// slice's <c>NextAreaO</c> markers, which is a different quantity.
+    /// </param>
+    public MatchState(LevelMap map, Roster roster, ServerOptions options, int totalMapAreas)
     {
         Map = map;
         Roster = roster;
         GameMode = GameModes.Of(map);
-        TotalMapAreas = GameModes.TotalAreas(map);
+        TotalMapAreas = totalMapAreas;
         CurrentMapArea = 1;
 
         CapLimit = options.CapLimit;

@@ -197,7 +197,17 @@ public sealed partial class GameServer
         // that makes a joining client load the map — so a stale name here means
         // every player who joins after the first round plays a different map
         // from everybody else.
-        ServerMessages.ChangeMap(writer, _currentMap, string.Empty);
+        //
+        // ⚠️ _currentMapMd5, NOT string.Empty. `ServerJoinUpdate.gml:8` passes
+        // `global.currentMapMD5` here, and an empty MD5 does not mean "no hash
+        // handy" to a client — it means "this is an INTERNAL map"
+        // (`ClientBeginStep.gml:476`). On a custom map the joiner then fails
+        // `findInternalMapName`, shows "Server went to invalid internal map:
+        // <name>#Exiting." and drops to the menu, so it can never join at all.
+        // Measured live 2026-09-05 on gg_debug2: two stock clients, both killed
+        // on arrival. The HELLO already carried the right hash, which is why the
+        // handshake tests passed throughout.
+        ServerMessages.ChangeMap(writer, _currentMap, _currentMapMd5);
 
         for (var i = 0; i < _roster.Count; i++)
         {

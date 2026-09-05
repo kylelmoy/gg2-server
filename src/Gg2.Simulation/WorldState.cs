@@ -275,6 +275,33 @@ public struct WorldState
     /// <summary>How many projectiles are in the air.</summary>
     public int LiveProjectileCount;
 
+    /// <summary>
+    /// How many spawns this world has DROPPED because the pool was full.
+    /// </summary>
+    /// <remarks>
+    /// <b>Any value but zero is a divergence, not a statistic.</b>
+    /// <see cref="SpawnProjectile"/> returns <see cref="ProjectileHandle.None"/>
+    /// when <see cref="MaxProjectiles"/> is reached, and the shot the reference
+    /// would have fired then does not exist — no trajectory, no damage, and
+    /// nothing on the wire for a client to re-simulate. GG2 itself has no such
+    /// ceiling, so there is no reference behaviour to match here.
+    /// <para>
+    /// ⚠️ <b>It was silent until 2026-09-05.</b> All fourteen
+    /// <c>SpawnProjectile</c> call sites ignore the returned handle, so a full
+    /// pool dropped shots with nothing counting them and nothing that could go
+    /// red — the exact shape of a divergence no test can catch. This counter
+    /// exists so the question "does it ever actually happen?" has an answer that
+    /// is read rather than assumed; <c>MicroBudgetTests</c> and the headless
+    /// match runner assert it stays zero.
+    /// </para>
+    /// <para>
+    /// It is deliberately NOT on <see cref="SimulationStamp"/>'s surface: it is a
+    /// diagnostic, it cannot change a policy's behaviour, and a checkpoint must
+    /// not be invalidated by it. It is also not on the wire.
+    /// </para>
+    /// </remarks>
+    public int ProjectilePoolDrops;
+
     // --- the objective -------------------------------------------------------
 
     /// <summary>
@@ -1265,7 +1292,13 @@ public struct WorldState
 
         var slot = FindFreeProjectileSlot();
         if (slot < 0)
+        {
+            // Counted rather than thrown: this runs inside the tick, and a throw
+            // here would take down a live server for what is a capacity bug.
+            // See ProjectilePoolDrops — a non-zero value is a divergence.
+            ProjectilePoolDrops++;
             return ProjectileHandle.None;
+        }
 
         Projectiles[slot] = projectile;
 

@@ -87,7 +87,7 @@ public sealed class MineUpdateLayoutTests
         var map = LevelMap.FromPng(Map, ReferenceTree.ReadMap(Map));
         var roster = new Roster("server");
         roster.Add(new RosterEntry { Name = "demo", Team = Team.Red, Class = PlayerClass.Demoman });
-        var match = new MatchState(map, roster, new ServerOptions());
+        var match = new MatchState(map, roster, new ServerOptions(), GameModes.TotalAreas(map));
 
         var captured = state;
 

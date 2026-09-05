@@ -152,6 +152,89 @@ public sealed class HandshakeTests
     }
 
     /// <summary>
+    /// A client that reserves a seat and then vanishes GIVES THE SEAT BACK —
+    /// without waiting out the thirty-second idle timeout.
+    /// </summary>
+    /// <remarks>
+    /// <c>RESERVE_SLOT</c> takes a seat before <c>PLAYER_JOIN</c> does anything
+    /// (<c>OccupiesSlot</c>, counted by <c>OccupiedSlots</c>), so a connection
+    /// abandoned in that window is holding one. <c>JoiningConnection.Service</c>
+    /// answers <c>Finished</c> on a closed socket and
+    /// <c>ServiceJoiningConnections</c> drops it — but nothing was checking that
+    /// the seat came back.
+    /// <para>
+    /// ⚠️ <b>The failure would be silent and cumulative.</b> Every abandoned
+    /// handshake — a player who closes the window on the class screen, a
+    /// flaky connection, a port scanner — would cost a seat permanently, and a
+    /// long-running server would drift towards refusing real players with
+    /// <c>SERVER_FULL</c> while looking empty. That is a production-only,
+    /// intermittent symptom, which is exactly the kind this suite cannot
+    /// otherwise reach.
+    /// </para>
+    /// <para>
+    /// ⛔ <see cref="AnAbandonedReservationWouldOtherwiseHaveFilledTheServer"/>
+    /// is the control: with the ghost still connected the same second client
+    /// IS refused, so this test cannot pass merely because the limit never bit.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void AnAbandonedReservationGivesTheSeatBack()
+    {
+        using var harness = new ServerHarness(o => o.PlayerLimit = 1);
+
+        var ghost = harness.Connect();
+        ghost.SendHello();
+        harness.TickUntil(() => ghost.Received.Count > 0, "the greeting");
+        ghost.Take(ghost.Received.Count);
+
+        ghost.SendReserveSlot("ghost");
+        harness.TickUntil(() => ghost.Received.Count > 0, "the slot reservation");
+        Assert.Equal(MessageType.ReserveSlot, ghost.TakeMessageType());
+
+        // It never sends PLAYER_JOIN — it just goes away holding the seat.
+        ghost.Dispose();
+        harness.Tick(30);
+
+        // The only seat must be available again.
+        harness.JoinClient("real");
+        Assert.Equal(Team.Spectator, harness.Server.TeamOf(harness.Server.RosterCount - 1));
+    }
+
+    /// <summary>
+    /// The control: while the ghost is still connected, that seat really is
+    /// taken.
+    /// </summary>
+    /// <remarks>
+    /// Without this, <see cref="AnAbandonedReservationGivesTheSeatBack"/> passes
+    /// on a server whose <c>PlayerLimit</c> was never enforced at all.
+    /// </remarks>
+    [Fact]
+    public void AnAbandonedReservationWouldOtherwiseHaveFilledTheServer()
+    {
+        using var harness = new ServerHarness(o => o.PlayerLimit = 1);
+
+        var ghost = harness.Connect();
+        ghost.SendHello();
+        harness.TickUntil(() => ghost.Received.Count > 0, "the greeting");
+        ghost.Take(ghost.Received.Count);
+
+        ghost.SendReserveSlot("ghost");
+        harness.TickUntil(() => ghost.Received.Count > 0, "the slot reservation");
+        Assert.Equal(MessageType.ReserveSlot, ghost.TakeMessageType());
+
+        // Still connected, still holding the seat.
+        var second = harness.Connect();
+        second.SendHello();
+        harness.TickUntil(() => second.Received.Count > 0, "the greeting");
+        second.Take(second.Received.Count);
+
+        second.SendReserveSlot("second");
+        harness.TickUntil(() => second.Received.Count > 0, "the refusal");
+
+        Assert.Equal(MessageType.ServerFull, second.TakeMessageType());
+    }
+
+    /// <summary>
     /// Slot 0 is the server's own reserved entry
     /// (<c>GameServerCreate.gml:36-40</c>) and does not count against the player
     /// limit in dedicated mode (<c>getNumberOfOccupiedSlots</c>). Get either

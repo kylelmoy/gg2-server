@@ -1,5 +1,12 @@
 # Driving the live game
 
+⚠️ **The local bot fork was deleted on 2026-09-05, and `D:\code\Gang-Garrison-2` now holds stock upstream GG2 instead.** The GM8 game was built and run
+from that fork's `Source/build/`, so **nothing in this document runs as written
+until you re-clone it** (`git clone https://github.com/kylelmoy/Gang-Garrison-2.git`,
+`git checkout bot-route-variety`, then rebuild `Source/build/`). The paths below
+still name `D:\code\Gang-Garrison-2`, which today resolves to stock GG2 — a tree
+with no `Source/build/`, no bots and no bridge.
+
 The traps that only bite a session holding the running Game Maker 8 game —
 recording a trace, driving a stock client from the outside, and writing a
 probe that measures the engine rather than measuring itself.
@@ -121,6 +128,37 @@ gg2_eval: with(PlayerControl) { afktimeout = 999999; afktimer = 999999; }
 ⚠️ A spectating client disconnects itself after **exactly five minutes**
 (`Spectator.events/Create.xml`, `afktimeout = 9000`). It does that to the
 reference server too — do not go looking for a server-side bug.
+
+### A client-side watchdog latch, and how to prove it can fire
+
+`gg2_watch` samples up to eight expressions **every frame** and logs only what
+*changes*, which is the shape a long unattended run needs: a sticky latch logs
+one line when it trips and nothing for the hours either side. `execute_string`
+makes a watch expression run statements, so the whole check can be one watch
+that scans the roster and writes `global.wdCode`, with a second watch reading
+that global back. Measured 2026-09-05: a full `Player`-plus-`Character` scan
+every frame cost **no observable fps** on a six-bot `cp_dirtbowl` client
+(27 fps before, 27 after; room speed 30).
+
+⚠️ **Give the checker a self-test input — a gate that cannot fire is worse than
+no gate.** A spare global (`global.wdTest`) that forces the latch is enough:
+set it, confirm the latch trips within a frame, reset it. That proves the
+watch is running, the sticky write works and the log records it, all without
+touching game state.
+
+⛔ **Do NOT prove it by corrupting the roster.** Pointing a spectator
+`Player.object` at a live instance to manufacture the condition **hung the
+client** — GM8 stopped servicing the bridge entirely, with no dialog for the
+launcher to dismiss and nothing in any log. `Player.object` is dereferenced as
+a `Character` by code that never checks, so anything else there is a wedge, not
+an error. The self-test global costs nothing and is safe.
+
+The invariant worth latching on is narrower than it looks. `TEAM_SPECTATOR` is
+**2**, and `getCharacterSpriteId.gml:20` accepts only team 0 and 1 — so the
+`unknown team ID: 2` fatal is not a framing slip producing a garbage value, it
+is `Character.events/Create.xml:69` making a character for a player the client
+holds as a **spectator**. It fires at *create*, so the state never survives to
+be observed: watch the roster's transitions leading in, not the aftermath.
 
 ### Writing a probe against the live game
 

@@ -34,11 +34,20 @@ public sealed partial class GameServer
         // LevelMap.ForArea. cp_dirtbowl is the only shipped map it affects, and
         // it is also the only attack/defend map, so the control-point work
         // depends on this.
-        var map = LoadMap(name).ForArea(area);
+        // ⚠️ The AREA COUNT is taken from the unnarrowed map, and that is not a
+        // nicety: `basicRoomSetup.gml:7` sets global.totalMapAreas =
+        // 1+instance_number(NextAreaO) BEFORE the loop at :9-25 destroys the
+        // other areas' entities, so the reference's count is always the map's,
+        // never the slice's. Counting the slice instead gives cp_dirtbowl
+        // 2/3/2 for areas 1/2/3 where the reference says 3/3/3 — which happens
+        // to decide all three of this map's advances the same way, and is
+        // still the wrong operand to compare CurrentMapArea against.
+        var full = LoadMap(name);
+        var map = full.ForArea(area);
 
         _collision = new CollisionWorld(map);
         _spawnPoints = new SpawnPoints(map);
-        _match = new MatchState(map, _roster, _options)
+        _match = new MatchState(map, _roster, _options, GameModes.TotalAreas(full))
         {
             CurrentMapArea = (byte)area,
         };
