@@ -1,4 +1,5 @@
 using System.Text;
+using Gg2.Protocol;
 
 namespace Gg2.Bots;
 
@@ -38,13 +39,29 @@ public sealed record PolicyMicroSpec(PolicyNetwork Policy) : MicroControllerSpec
 }
 
 /// <summary>A rollout search driving keys and aim. <c>docs/BOTS.md</c>'s arm 3.</summary>
+/// <param name="TrainedClasses">
+/// Which set to restrict to. ⛔ <b>Null takes
+/// <see cref="PolicyNetwork.DefaultTrainedClasses"/>, which is only right when
+/// there is no checkpoint in the comparison.</b> A bench arming this search
+/// against a policy arm must pass THAT checkpoint's set: since 2026-09-06 the set
+/// is a property of the file, and the two shipping families outside the default
+/// differ from it by two members and — for <c>rest3</c> — by ALL of them. Two arms
+/// restricted to disjoint class sets are not a comparison; the restriction exists
+/// to hold class coverage still and would be the thing varying it.
+/// </param>
 public sealed record SearchMicroSpec(
-    RolloutOptions Options, bool RestrictToTrainedClasses = true) : MicroControllerSpec
+    RolloutOptions Options,
+    bool RestrictToTrainedClasses = true,
+    PlayerClass[]? TrainedClasses = null) : MicroControllerSpec
 {
     public override string Name => "search";
 
     public override IMicroController Create() =>
-        new SearchController(Options) { RestrictToTrainedClasses = RestrictToTrainedClasses };
+        new SearchController(Options)
+        {
+            RestrictToTrainedClasses = RestrictToTrainedClasses,
+            TrainedClasses = TrainedClasses ?? PolicyNetwork.DefaultTrainedClasses.ToArray(),
+        };
 }
 
 /// <summary>

@@ -624,12 +624,20 @@ internal static class CommandLine
                     break;
 
                 // ⚠️ SEPARATE from --search-bots and --policy on purpose. Both
-                // shipped controllers engage only on the four classes the policy was
-                // trained for, so a server drawing all eight runs a MIX of the hybrid
+                // shipped controllers engage only on the classes the policy was
+                // trained for, so a server drawing all nine runs a MIX of the hybrid
                 // arm and the all-scripted one, and a playtester cannot tell which bot
                 // they just fought. "trained" is the shorthand for making every bot
                 // the configuration that was actually measured -- at the cost of a
-                // roster missing five classes. Say which you ran.
+                // roster missing the rest. Say which you ran.
+                //
+                // ⛔ "trained" is the DEFAULT set, not the loaded checkpoint's, and
+                // since 2026-09-06 those can differ. It cannot be otherwise here:
+                // flags are parsed before any --policy is loaded, and argument order
+                // is not guaranteed. So with a checkpoint outside the default family
+                // this shorthand gives a roster the policy does NOT drive, which is
+                // the all-scripted arm wearing the hybrid one's name. Pass the
+                // classes explicitly when running such a checkpoint.
                 case "--bot-classes":
                 {
                     var text = cursor.Take();

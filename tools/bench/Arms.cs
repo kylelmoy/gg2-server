@@ -89,9 +89,23 @@ public static class ArmsEval
 
         foreach (var map in list)
         {
-            one.Add(Play(map, maps, nav, null, perMap, cap, "1"));
-            two.Add(Play(map, maps, nav, BotBrainSpec.Of(new PolicyMicroSpec(policy)), perMap, cap, "2"));
-            three.Add(Play(map, maps, nav, BotBrainSpec.Of(new SearchMicroSpec(search)), perMap, cap, "3"));
+            // ⛔ The SAME set for all three arms, and it is the checkpoint's. A
+            // comparison whose arms are populated with different classes is not
+            // one; before 2026-09-06 this read a constant, which was right only
+            // for a checkpoint that happened to train those four.
+            PlayerClass[] allowed = [.. policy.TrainedClasses];
+
+            one.Add(Play(map, maps, nav, null, perMap, cap, "1", allowed));
+            two.Add(Play(map, maps, nav, BotBrainSpec.Of(new PolicyMicroSpec(policy)), perMap, cap, "2", allowed));
+            // ⛔ The POLICY's set, not the default. Arm 2 drives the classes this
+            // checkpoint trained; arm 3 has to engage on the same ones or the two
+            // differ on class coverage as well as on the controller — and for a
+            // checkpoint like rest3 the default and the file's set are disjoint,
+            // so the arms would share no class at all.
+            three.Add(Play(
+                map, maps, nav,
+                BotBrainSpec.Of(new SearchMicroSpec(search, TrainedClasses: allowed)),
+                perMap, cap, "3", allowed));
 
             Console.WriteLine($"  {map,-18} done  {clock.Elapsed.TotalSeconds,6:0}s");
         }
@@ -192,7 +206,7 @@ public static class ArmsEval
 
     private static Row Play(
         string map, string maps, string nav,
-        BotBrainSpec? brain, int count, int cap, string arm)
+        BotBrainSpec? brain, int count, int cap, string arm, PlayerClass[]? allowedClasses = null)
     {
         long redDeaths = 0, blueDeaths = 0, microTicks = 0, totalTicks = 0;
         var capped = 0;
@@ -202,6 +216,11 @@ public static class ArmsEval
 
         for (var i = 0; i < count; i++)
         {
+            // ⚠️ The classes the match is POPULATED with, which has to be the
+            // checkpoint's own set: filling a match with classes the policy never
+            // trained measures the fallback to scripted, not the policy.
+            var allowed = allowedClasses ?? [.. PolicyNetwork.DefaultTrainedClasses];
+
             var options = HeadlessMatchOptions.Default with
             {
                 Map = map,
@@ -211,7 +230,7 @@ public static class ArmsEval
                 TimeLimitMinutes = cap,
                 KillLimit = 40,
                 MaxTicks = 30 * 60 * cap,
-                AllowedClasses = [.. PolicyNetwork.DefaultTrainedClasses],
+                AllowedClasses = allowed,
                 Brain = brain,
                 HybridTeam = Team.Red,
             };

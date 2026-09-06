@@ -222,6 +222,10 @@ public static class ThreadsBench
             TimeLimitMinutes = cap,
             KillLimit = 40,
             MaxTicks = 30 * 60 * cap,
+            // ⚠️ The default is CORRECT here and is the only one of these modes
+            // where it is: this mode loads no checkpoint — it measures the
+            // search's throughput against thread count — so there is no
+            // checkpoint set to prefer and it just needs a stable roster.
             AllowedClasses = [.. PolicyNetwork.DefaultTrainedClasses],
             Brain = BotBrainSpec.Of(new SearchMicroSpec(new RolloutOptions(Threads: threads))),
             HybridTeam = Team.Red,

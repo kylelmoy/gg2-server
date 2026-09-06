@@ -72,6 +72,12 @@ public static class ChurnBench
             $"{"map",-16} {"arm",-4} {"horiz/s",9} {"reversal/s",11} "
             + $"{"AIR rev/s",10} {"aim chg/s",10} {"deg/chg",8}");
 
+        // ⛔ The SAME set for all three arms, and it is the checkpoint's. Arms
+        // populated with different classes are not a comparison, and arm 3's
+        // search has to engage on the classes arm 2's policy trained — for a
+        // checkpoint outside the default family those two sets can be disjoint.
+        PlayerClass[] allowed = [.. policy.TrainedClasses];
+
         foreach (var map in list)
         {
             for (var arm = 1; arm <= 3; arm++)
@@ -81,9 +87,11 @@ public static class ChurnBench
                     arm switch
                     {
                         2 => BotBrainSpec.Of(new PolicyMicroSpec(policy)),
-                        3 => BotBrainSpec.Of(new SearchMicroSpec(new RolloutOptions(Threads: 4))),
+                        3 => BotBrainSpec.Of(new SearchMicroSpec(
+                            new RolloutOptions(Threads: 4), TrainedClasses: allowed)),
                         _ => null,
-                    });
+                    },
+                    allowed);
 
                 Console.WriteLine(
                     $"{map,-16} {arm,-4} {tally.PerSecond(tally.HorizontalChanges),9:0.00} "
@@ -112,7 +120,7 @@ public static class ChurnBench
 
     private static Tally Measure(
         string map, string maps, string nav, int count, int cap, int bots,
-        BotBrainSpec? brain)
+        BotBrainSpec? brain, PlayerClass[] allowed)
     {
         var tally = new Tally();
 
@@ -127,7 +135,10 @@ public static class ChurnBench
                 TimeLimitMinutes = cap,
                 KillLimit = 40,
                 MaxTicks = 30 * 60 * cap,
-                AllowedClasses = [.. PolicyNetwork.DefaultTrainedClasses],
+                // ⛔ The checkpoint's own set, not the default: populating a
+                // match with classes this policy never trained measures the
+                // fallback to scripted rather than the policy.
+                AllowedClasses = allowed,
                 Brain = brain,
                 HybridTeam = Team.Red,
             };

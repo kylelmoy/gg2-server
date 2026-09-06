@@ -428,11 +428,28 @@ Gated by `TrainedClassesTests`, on three real `Policy.save` checkpoints:
 regression gate and the two-controllers test, and leaves the no-op control and
 the fallback test passing — which is what a control should do.
 
-⚠️ **`SearchController.TrainedClasses` is now an ASSUMPTION about the other arm.**
-It holds no checkpoint and restricts to the policy's classes only so two arms of
-a comparison engage on the same ones, so a comparison against a checkpoint whose
-set is not the default has to pass it in — or the arms differ on the axis the
-restriction exists to hold still.
+### ⛔ Every arm of a comparison takes the CHECKPOINT's set
+
+`SearchController.TrainedClasses` and `SearchMicroSpec.TrainedClasses` exist
+because the search holds no checkpoint: it restricts to the policy's classes only
+so both arms engage on the same ones. Defaulting that to
+`DefaultTrainedClasses` is an **assumption about the other arm**, and for a
+checkpoint outside the default family it is wrong — the training lane confirmed
+that for their `rest3` family the two sets are **disjoint**, so a three-arm bench
+would compare arms sharing no class at all.
+
+✅ Fixed at the five bench modes that load a checkpoint: `BENCH_ARMS`,
+`BENCH_CHURN`, `BENCH_EVAL`, `BENCH_PERMAP` and the range sweep now take
+`AllowedClasses` — and arm 3's search restriction — from `policy.TrainedClasses`.
+⚠️ **`BENCH_THREADS` keeps the default and is the only one where that is right**:
+it loads no checkpoint, measuring the search's throughput against thread count, so
+it just needs a stable roster.
+
+⛔ **`--bot-classes trained` is the one place that CANNOT ask the file**, and it
+says so at the flag: options are parsed before `--policy` is loaded and argument
+order is not guaranteed. With a checkpoint outside the default family that
+shorthand gives a roster the policy does not drive — the all-scripted arm wearing
+the hybrid one's name. Pass the classes explicitly for such a checkpoint.
 
 ## The checkpoint is a FIXTURE, not a policy
 

@@ -52,7 +52,14 @@ public static class PolicyEval
             "ctf_classicwell", "ctf_eiger",
         ];
 
-        var trained = PolicyNetwork.DefaultTrainedClasses.ToArray();
+        // ⛔ The checkpoint's own set when there is one. `usePolicy` false is the
+        // scripted arm, which has no checkpoint to ask and takes the default so the
+        // two arms are populated alike — the moment a policy is loaded, the classes
+        // it never trained are not a harder test of it, they are a test of the
+        // fallback to scripted.
+        var trained = policy is null
+            ? PolicyNetwork.DefaultTrainedClasses.ToArray()
+            : policy.TrainedClasses.ToArray();
         var clock = Stopwatch.StartNew();
 
         var redWins = 0;

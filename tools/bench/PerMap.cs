@@ -211,7 +211,10 @@ public static class PerMapEval
                 TimeLimitMinutes = cap,
                 KillLimit = 40,
                 MaxTicks = 30 * 60 * cap,
-                AllowedClasses = [.. PolicyNetwork.DefaultTrainedClasses],
+                // ⛔ The checkpoint's own set, not the default: populating a
+                // match with classes this policy never trained measures the
+                // fallback to scripted rather than the policy.
+                AllowedClasses = [.. policy.TrainedClasses],
                 Brain = policy is null ? null : BotBrainSpec.Of(new PolicyMicroSpec(policy)),
                 HybridTeam = Team.Red,
             };
