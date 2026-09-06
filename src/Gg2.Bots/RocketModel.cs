@@ -159,8 +159,42 @@ public static class RocketModel
     /// </para>
     /// </remarks>
     public static bool Ready(in CharacterState character, in WeaponState weapon) =>
+        Capable(in character, in weapon) && weapon.ReadyToShoot;
+
+    /// <summary>
+    /// Is this character the KIND of traveller a rocket-jump edge is for — the
+    /// question a ROUTE asks, as against <see cref="Ready"/>'s "can it fire this
+    /// tick".
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b><see cref="Ready"/> is a takeoff test and was being used as a routing
+    /// test, and the difference is not academic.</b> <c>ReadyToShoot</c> is the
+    /// 30-tick refire flag, so a soldier that has just fired — at anything, at an
+    /// enemy — answered "I cannot rocket jump" for a second, and the query is
+    /// rebuilt from live state EVERY TICK. <c>NavGraph.EdgeRoutable</c> then
+    /// refused every rocket edge on the map, <c>TryFindEdge</c> found no usable
+    /// edge for the hop it was flying, and the follower re-planned a route with no
+    /// rocket jump anywhere in it. The bot walks the long way round and arrives,
+    /// so nothing looks broken.
+    /// <para>
+    /// <b>Measured on the corpus sweep</b> (`BENCH_FLIGHT`, the cold-launcher arm
+    /// a freshly spawned bot is in): arrivals that never steered the edge they were
+    /// credited to — <c>EdgeFlight.Diverted</c> — were <b>2,128</b>, and rocket
+    /// arcs the follower genuinely flew were 1,116 of 3,536 measured. Warming the
+    /// launcher at placement took those to <b>48</b> and <b>3,214</b>. The sweep
+    /// was not posing its own question on two thirds of the rocket edges it
+    /// counted.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>The hp and ammo tests stay.</b> Those are what the query rebuild was
+    /// FOR — a soldier's routes shedding their rocket jumps as it takes damage —
+    /// and they are durable properties of the traveller rather than of this tick.
+    /// The refire belongs to the takeoff gate, which already waits it out and
+    /// counts the wait (<c>BotPathState.GateColdWeapon</c>).
+    /// </para>
+    /// </remarks>
+    public static bool Capable(in CharacterState character, in WeaponState weapon) =>
         character.Hp > NavConstants.RjDamage
         && WeaponStats.KindFor(character.Class) == WeaponKind.Rocketlauncher
-        && weapon.ReadyToShoot
         && weapon.AmmoCount > 0;
 }

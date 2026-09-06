@@ -259,19 +259,19 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
             new EdgeFlightTally(
                 Candidates: 116_316,
                 Measured: 32_055,
-                Arrived: 31_433,
-                Flown: 1_735,
-                Stranded: 622,
+                Arrived: 31_519,
+                Flown: 3_626,
+                Stranded: 536,
                 RoutedAround: 72_926,
                 Shadowed: 10_869,
                 NoRoute: 466,
                 StartUnresolved: 0,
                 GoalUnresolved: 0,
-                Ticks: 1_535_714,
-                Blacklists: 4_967,
+                Ticks: 1_476_150,
+                Blacklists: 7_980,
                 StartBlocked: 0,
                 TeamSwapped: 178,
-                Diverted: 2_128),
+                Diverted: 33),
             tally);
     }
 
@@ -318,19 +318,19 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
             new EdgeFlightTally(
                 Candidates: 116_316,
                 Measured: 37_787,
-                Arrived: 37_161,
-                Flown: 2_297,
-                Stranded: 626,
+                Arrived: 37_208,
+                Flown: 5_530,
+                Stranded: 579,
                 RoutedAround: 67_194,
                 Shadowed: 10_869,
                 NoRoute: 466,
                 StartUnresolved: 0,
                 GoalUnresolved: 0,
-                Ticks: 1_999_561,
-                Blacklists: 5_973,
+                Ticks: 1_942_432,
+                Blacklists: 10_089,
                 StartBlocked: 0,
                 TeamSwapped: 206,
-                Diverted: 3_837),
+                Diverted: 16),
             plain);
     }
 
@@ -479,24 +479,40 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
         Assert.Equal(67, flights.Count);
         Assert.Equal(21, measured);
         Assert.Equal(21, arrived);
-        Assert.Equal(12, flown);
+        Assert.Equal(20, flown);
 
-        // TWO, and pinning the real number rather than a hoped-for zero is the
-        // point. Both are one arc each: 28->30 fires once, goes off route, and the
-        // retry arrives; 30->12 fires twice and takes 166 ticks against the 74-97
-        // every other arc on this map needs. That is the off-route machinery doing
-        // exactly what it is for — one retry, then a ban — so it is a cost rather
-        // than a fault, but it is a cost worth watching. PathFollowerFixtureTests
-        // pins zero over a 137-node leg and this pins two over twenty single-hop
-        // arcs; a bot that starts banning edges still arrives, just slowly, inside
-        // any budget, with the route quality gone and nothing red.
-        Assert.Equal(2, blacklists);
+        // FIFTEEN, and pinning the real number rather than a hoped-for zero is the
+        // point. ⚠️ It was TWO until RocketModel.Capable stopped a cold launcher
+        // unplanning the route (2026-09-06), and the rise is the honest price of
+        // the fix rather than a regression hiding inside it: the bot used to route
+        // AROUND eight of these arcs while its launcher cooled — twelve of twenty
+        // arrivals were flights — and now attempts all twenty-one, so the
+        // off-route machinery's one-retry-then-ban runs on arcs that were
+        // previously never tried.
+        //
+        // ⛔ **It is the SWEEP's spawn, not the bot's play.** EdgeFlights places a
+        // freshly spawned character on the from-node and asks for the arc at once,
+        // and a fresh weapon is ~45 ticks from firing (Weapon.events/Create.xml);
+        // a bot that has been alive in a match is not. The control says so
+        // exactly: with BENCH_FLIGHT_WARM the corpus blacklists are 4,667 against
+        // the cold arm's 7,980 and the pre-fix 4,967 — LOWER than before the fix
+        // once the spawn artefact is taken out. docs/TRAPS-BOTS.md, "A cold
+        // launcher unplanned the route".
+        //
+        // All twenty-one still arrive, so this is a cost rather than a fault —
+        // but it is the cost worth watching. PathFollowerFixtureTests pins zero
+        // over a 137-node leg; a bot that starts banning edges still arrives, just
+        // slowly, inside any budget, with the route quality gone and nothing red.
+        Assert.Equal(15, blacklists);
     }
 
     /// <summary>A scout flies real air-jump arcs off the shipped cache.</summary>
     /// <remarks>
-    /// The kind with no weapon in its gate, which is why nine of ten arrivals are
-    /// flights here against twelve of twenty for the rocket: nothing can be cold.
+    /// The kind with no weapon in its gate — nothing can be cold, so this arm was
+    /// the one the launcher's refire never touched. ⚠️ It used to read "nine of ten
+    /// here against twelve of twenty for the rocket"; since RocketModel.Capable the
+    /// rocket is twenty of twenty-one and the contrast is gone, which is the point
+    /// of the fix rather than a loss.
     /// </remarks>
     [Fact]
     public void RealDoubleJumpArcsAreFlown()

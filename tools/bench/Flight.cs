@@ -67,6 +67,10 @@ public static class FlightBench
     /// <summary>The per-edge census.</summary>
     public static void Run(string maps, string nav, int budget, bool distances, int threads, string? csv, string? focus)
     {
+        // ⛔ A different ARM, not a faster run: it changes what the bot can do on
+        // the tick it reaches the takeoff column. See EdgeFlights.Fly's remark.
+        var warm = Environment.GetEnvironmentVariable("BENCH_FLIGHT_WARM") == "1";
+
         var types = Enum.GetValues<NavEdgeType>();
         var perType = new Dictionary<NavEdgeType, EdgeFlightTally>();
         var perMap = new List<(string Key, EdgeFlightTally Tally)>();
@@ -75,6 +79,7 @@ public static class FlightBench
 
         Console.WriteLine(
             $"BENCH_FLIGHT budget={budget} distances={(distances ? "ON (the shipping arm)" : "off")} "
+            + (warm ? "weapon=WARM (a different arm) " : string.Empty)
             + $"threads={(threads <= 0 ? Environment.ProcessorCount : threads)}"
             + (only.Count == 0 ? string.Empty : $" maps={string.Join(',', only)}"));
         Console.WriteLine();
@@ -84,6 +89,7 @@ public static class FlightBench
         var flights = EdgeFlights.SweepAll(
             maps, nav, types, Team.Red, budget, distances, threads,
             include: only.Count == 0 ? null : (map, _) => only.Contains(map),
+            warmWeapon: warm,
             onGraph: (map, area, graph) =>
             {
                 // ⚠️ Ticks rather than milliseconds. onGraph runs after the
@@ -710,7 +716,9 @@ public static class FlightBench
             using var writer = new StreamWriter(csv);
             writer.WriteLine(
                 "arm,map,area,edge,from,to,launched,vlaunch,rise,riseneed,reach,reachneed,reached,mindist,"
-                + "arrived,flew,cground,chspeed,cstale,chops,bandticks,bandmin");
+                + "arrived,flew,cground,chspeed,cstale,chops,bandticks,bandmin,"
+                + "steerticks,takeoffs,duds,offroute,blacklists,unroutable,replans,stuck,"
+                + "airabandon,landselse");
 
             foreach (var (arm, map, r) in rows.OrderBy(r => r.Arm).ThenBy(r => r.Map).ThenBy(r => r.R.Edge))
             {
@@ -732,7 +740,10 @@ public static class FlightBench
                         r.ClosestStale ? "1" : "0",
                         r.ClosestHopsLeft.ToString(CultureInfo.InvariantCulture),
                         r.BandTicks.ToString(CultureInfo.InvariantCulture),
-                        r.BandMinHSpeed.ToString("0.##", CultureInfo.InvariantCulture)));
+                        r.BandMinHSpeed.ToString("0.##", CultureInfo.InvariantCulture),
+                        r.SteerTicks, r.Takeoffs, r.Duds, r.OffRoute,
+                        r.Blacklists, r.Unroutable, r.Replans, r.Stuck,
+                        r.AirAbandons, r.AirLandsElsewhere));
             }
 
             Console.WriteLine();
@@ -767,6 +778,30 @@ public static class FlightBench
     /// <c>Closest*</c> readings above cannot separate those two: the tick nearest
     /// the goal is usually not the tick the arrival would fire on.
     /// </param>
+    /// <param name="SteerTicks">
+    /// Ticks spent steering this edge, and <paramref name="Takeoffs"/> the rocket
+    /// launches asked for — both SUMMED over the six attempts, as are every
+    /// counter after them. ⚠️ <b>The unit is "per arc over six attempts"</b>, which
+    /// is only comparable because both arms get the same six. It is not a rate and
+    /// not a per-attempt average.
+    /// <para>
+    /// ⛔ <b>What they are for.</b> An arc the follower ARRIVES at without ever
+    /// flying is either one it never planned as an arc — <c>SteerTicks</c> 0, A*
+    /// preferring to walk from the takeoff column — or one it committed to and
+    /// abandoned, which is <c>OffRoute</c> and <c>Blacklists</c>. Those are
+    /// different repairs and the arrival cannot tell them apart.
+    /// </para>
+    /// </param>
+    /// <param name="AirAbandons">
+    /// Times the follower stopped naming this edge WHILE THE BODY WAS STILL
+    /// AIRBORNE on it, and <paramref name="AirLandsElsewhere"/> times it stayed on
+    /// the edge all the way down and landed on something that was not the
+    /// to-node. ⛔ <b>These are the two ways a flight that leaves the ground
+    /// correctly still fails</b>, and they want opposite repairs: the first is the
+    /// follower changing its mind mid-arc, the second is the arc itself missing.
+    /// An <c>OffRouteFires</c> count cannot separate them — it fires after the
+    /// landing in both.
+    /// </param>
     /// <param name="Flew">
     /// Some ONE attempt both arrived and steered this edge — the oracle's own
     /// bar. ⛔ <paramref name="Arrived"/> without this is the <c>Diverted</c>
@@ -793,7 +828,17 @@ public static class FlightBench
         int ClosestHopsLeft,
         int Area,
         int BandTicks,
-        double BandMinHSpeed);
+        double BandMinHSpeed,
+        int SteerTicks,
+        int Takeoffs,
+        int Duds,
+        int OffRoute,
+        int Blacklists,
+        int Unroutable,
+        int Replans,
+        int Stuck,
+        int AirAbandons,
+        int AirLandsElsewhere);
 
     /// <summary>
     /// Flies one arc from the takeoff column at each swept speed and keeps the
@@ -838,6 +883,16 @@ public static class FlightBench
         var closestHops = -1;
         var bandTicks = 0;
         var bandMin = double.MaxValue;
+        var steerTicks = 0;
+        var takeoffs = 0;
+        var duds = 0;
+        var offRoute = 0;
+        var blacklists = 0;
+        var unroutable = 0;
+        var replans = 0;
+        var stuck = 0;
+        var airAbandons = 0;
+        var landsElsewhere = 0;
 
         foreach (var speed in (ReadOnlySpan<double>)[0, 2.0, 3.0, 4.0, 4.5, 5.1])
         {
@@ -863,6 +918,7 @@ public static class FlightBench
             var attemptStale = false;
             var attemptHops = -1;
             var attemptBand = 0;
+            var onThisEdgeAirborne = false;
             var attemptBandMin = double.MaxValue;
             var blast = false;
 
@@ -910,6 +966,28 @@ public static class FlightBench
                 if (graph.NodeFromWorld(self.X, self.Y) == e.To)
                     attemptReached = true;
 
+                // The three states of one takeoff, read in the order they can
+                // happen: leaving the ground on this edge arms the watch; the edge
+                // changing under the body while it is still up is an in-air
+                // abandonment; touching down disarms it and adjudicates where.
+                var onEdge = state.EdgeFrom == e.From && state.EdgeTo == e.To;
+
+                if (!self.OnGround && onEdge)
+                    onThisEdgeAirborne = true;
+                else if (!self.OnGround && onThisEdgeAirborne)
+                {
+                    airAbandons++;
+                    onThisEdgeAirborne = false;
+                }
+                else if (self.OnGround && onThisEdgeAirborne)
+                {
+                    if (graph.NodeFromWorld(self.X, self.Y) != e.To)
+                        landsElsewhere++;
+
+                    onThisEdgeAirborne = false;
+                }
+
+
                 // ⚠️ The node test as well as the column. `reachNeeded` is under
                 // 8px on some arcs — a rocket jump straight up onto a ledge — so a
                 // body still standing on the FROM node is already inside the goal
@@ -947,6 +1025,15 @@ public static class FlightBench
             // what one arbitrary takeoff speed managed.
             bandTicks = Math.Max(bandTicks, attemptBand);
             bandMin = Math.Min(bandMin, attemptBandMin);
+
+            steerTicks += attemptSteered;
+            takeoffs += state.RocketJumps;
+            duds += state.RocketDuds;
+            offRoute += state.OffRouteFires;
+            blacklists += state.BlacklistFires;
+            unroutable += state.EdgeUnroutableFires;
+            replans += state.Replans;
+            stuck += state.StuckFires;
             // ⛔ Per ATTEMPT, not per arc. Arriving at one takeoff speed and
             // steering the edge at a different one is not the same event, and
             // summing the two across the sweep credited 44 arcs where the oracle
@@ -959,7 +1046,9 @@ public static class FlightBench
             flight.Edge, e.From, e.To, launched, vLaunch, rise, riseNeeded, reach, reachNeeded,
             reached, minDist == double.MaxValue ? -1 : minDist, arrived, flew,
             closestGround, closestHSpeed, closestStale, closestHops, area,
-            bandTicks, bandMin == double.MaxValue ? -1 : bandMin);
+            bandTicks, bandMin == double.MaxValue ? -1 : bandMin,
+            steerTicks, takeoffs, duds, offRoute, blacklists, unroutable, replans, stuck,
+            airAbandons, landsElsewhere);
     }
 
     private static double Median(IEnumerable<double> values)
@@ -971,6 +1060,135 @@ public static class FlightBench
             : sorted.Length % 2 == 1
                 ? sorted[sorted.Length / 2]
                 : (sorted[(sorted.Length / 2) - 1] + sorted[sorted.Length / 2]) / 2;
+    }
+
+    /// <summary>One arc, one tick per line, from the takeoff column.</summary>
+    /// <remarks>
+    /// <b>The instrument of last resort, and it exists because the aggregates ran
+    /// out.</b> The launch readings say the failures and the successes are
+    /// indistinguishable in blast, height and reach, and the counters say the bot
+    /// barely steers the edge at all — neither of which names a mechanism. This
+    /// prints what the follower and the body were doing on every tick so one arc
+    /// can be read rather than summarised.
+    /// <para>
+    /// ⚠️ <b>Same setup as <see cref="Assisted"/> and <see cref="Deliver"/></b> —
+    /// the takeoff column, the same six speeds, the same query — so what it shows
+    /// is what those two measured, not a fresh arrangement that might differ.
+    /// </para>
+    /// </remarks>
+    public static void Trace(string maps, string nav, bool distances, string spec, int ticks)
+    {
+        var parts = spec.Split(':');
+
+        if (parts.Length != 3)
+        {
+            Console.WriteLine("BENCH_FLIGHT_TRACE wants map:area:edge, e.g. ctf_eiger:1:1960");
+            return;
+        }
+
+        var map = parts[0];
+        var area = int.Parse(parts[1]);
+        var edgeIndex = int.Parse(parts[2]);
+
+        var world0 = ScenarioWorld.Load(map, area, maps, nav);
+        var graph = world0.Nav!;
+        var e = graph.Edges[edgeIndex];
+        var takeoff = e.Takeoff >= 0
+            ? NavGraph.ColumnWorldX(e.Takeoff)
+            : NavGraph.ColumnWorldX((graph.Nodes[e.From].X0 + graph.Nodes[e.From].X1) / 2);
+        var toMid = NavGraph.ColumnWorldX((graph.Nodes[e.To].X0 + graph.Nodes[e.To].X1) / 2);
+        var direction = toMid >= takeoff ? 1 : -1;
+        var startY = EdgeFlights.StandingY(graph, e.From);
+        var toY = EdgeFlights.StandingY(graph, e.To);
+        var query = EdgeFlights.QueryFor(e.Type, Team.Red);
+        var set = distances ? NavDistanceSet.LoadOrDerive(nav, map, area, graph, out _) : null;
+
+        Console.WriteLine(
+            $"{map} a{area} e{edgeIndex} {e.Type} {e.From}->{e.To} "
+            + $"takeoff=x{takeoff:0.#} y{startY:0.#}  goal=x{toMid:0.#} y{toY:0.#}  "
+            + $"bucket={e.Bucket:0.##} ticks={e.Ticks} rejump={e.Rejump}");
+        Console.WriteLine();
+
+        foreach (var speed in (ReadOnlySpan<double>)[0, 2.0, 3.0, 4.0, 4.5, 5.1])
+        {
+            var world = ScenarioWorld.Load(map, area, maps, nav);
+            var follower = new PathFollower(graph) { Distances = set, Collision = world.Collision };
+            var state = new BotPathState();
+
+            if (!follower.SetGoal(state, toMid, graph.StandY(e.To)))
+            {
+                Console.WriteLine($"speed {speed}: SetGoal refused");
+                continue;
+            }
+
+            var slot = world.Place(EdgeFlights.ClassFor(e.Type), Team.Red, takeoff, startY);
+            world.State.Characters[slot].HSpeed = speed * direction;
+
+            if (Environment.GetEnvironmentVariable("BENCH_FLIGHT_WARM") == "1")
+            {
+                world.State.Weapons[slot].ReadyToShoot = true;
+                world.State.Weapons[slot].RefireTimer = 0;
+            }
+
+            world.Drive(slot, new RoutePilot(follower, state, query));
+
+            Console.WriteLine($"--- takeoff speed {speed:0.0} ---");
+            Console.WriteLine("    t      x       y   hspd   vspd  gnd ms  air  edge      node  hop  off bl  keys");
+
+            var lastLine = string.Empty;
+            var repeats = 0;
+
+            for (var t = 0; t < ticks && !state.Arrived; t++)
+            {
+                var beforeOff = state.OffRouteFires;
+                var beforeBl = state.BlacklistFires;
+
+                world.Step();
+
+                if (!world.State.IsAlive(slot))
+                {
+                    Console.WriteLine($"  {t,4}  DIED");
+                    break;
+                }
+
+                ref readonly var self = ref world.State.Characters[slot];
+                var node = graph.NodeFromWorld(self.X, self.Y);
+                var hop = state.HasGoal ? state.Path.Count - 1 - state.PathAt : -1;
+
+                var line =
+                    $"{self.X,7:0.#} {self.Y,7:0.#} {self.HSpeed,6:0.##} {self.VSpeed,6:0.##} "
+                    + $"{(self.OnGround ? "  Y" : "  .")} {self.MoveStatus,2} {state.AirTicks,4}  "
+                    + $"{state.EdgeFrom,4}->{state.EdgeTo,-4} {node,5} {hop,4} "
+                    + $"{(state.OffRouteFires > beforeOff ? " OFF" : "    ")}"
+                    + $"{(state.BlacklistFires > beforeBl ? " BL" : "   ")}";
+
+                // Consecutive identical body-and-plan lines are collapsed: a bot
+                // standing at a gate for eighty ticks is one fact, and eighty
+                // copies of it push the tick that matters off the screen.
+                if (line == lastLine)
+                {
+                    repeats++;
+                    continue;
+                }
+
+                if (repeats > 0)
+                    Console.WriteLine($"         ... {repeats} more like the line above");
+
+                repeats = 0;
+                lastLine = line;
+                Console.WriteLine($"  {t,4} {line}");
+            }
+
+            if (repeats > 0)
+                Console.WriteLine($"         ... {repeats} more like the line above");
+
+            Console.WriteLine(
+                $"  => arrived={state.Arrived} takeoffs={state.RocketJumps} duds={state.RocketDuds} "
+                + $"offroute={state.OffRouteFires} bl={state.BlacklistFires} replans={state.Replans} "
+                + $"stuck={state.StuckFires} gate(cold={state.GateColdWeapon} fast={state.GateTooFast} "
+                + $"back={state.GateBackwards} short={state.GateShort})");
+            Console.WriteLine();
+        }
     }
 
     private static double Rate(int hits, int n) => n == 0 ? 0 : 100.0 * hits / n;
@@ -1055,7 +1273,7 @@ public static class FlightBench
             _query = _query with
             {
                 CanDoubleJump = BotClassProfile.AirJump(self.Class),
-                CanRocketJump = RocketModel.Ready(in self, in world.Weapon(slot)),
+                CanRocketJump = RocketModel.Capable(in self, in world.Weapon(slot)),
             };
 
             var keys = follower.Step(state, in self, in world.Weapon(slot), tick, _query);

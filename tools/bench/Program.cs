@@ -39,6 +39,17 @@ static bool FlightDistances() => Environment.GetEnvironmentVariable("BENCH_FLIGH
 static string? FlightFocus() =>
     Environment.GetEnvironmentVariable("BENCH_FOCUS") ?? Environment.GetEnvironmentVariable("BENCH_MAP");
 
+if (Environment.GetEnvironmentVariable("BENCH_FLIGHT_TRACE") is { } traceSpec)
+{
+    Bench.FlightBench.Trace(
+        Bench.FlightBench.ResolveMaps(maps),
+        FlightNav(),
+        FlightDistances(),
+        traceSpec,
+        int.Parse(Environment.GetEnvironmentVariable("BENCH_FLIGHT_BUDGET") ?? "400"));
+    return;
+}
+
 if (Environment.GetEnvironmentVariable("BENCH_FLIGHT_LAUNCH") is { } launchControl)
 {
     Bench.FlightBench.Launches(

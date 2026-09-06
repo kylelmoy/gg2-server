@@ -433,7 +433,8 @@ public static class EdgeFlights
         int edgeIndex,
         Team team = Team.Red,
         int budget = DefaultBudget,
-        NavDistanceSet? distances = null)
+        NavDistanceSet? distances = null,
+        bool warmWeapon = false)
     {
         ArgumentNullException.ThrowIfNull(world);
 
@@ -508,6 +509,20 @@ public static class EdgeFlights
         follower.SetGoal(flightState, Midpoint(graph, edge.To), graph.StandY(edge.To));
 
         var slot = world.Place(ClassFor(edge.Type), flying, startX, startY);
+
+        // ⛔ OFF by default, and the default is the pinned arm. `ScenarioWorld.Place`
+        // spawns a character, and `Weapon.events/Create.xml` starts a fresh weapon
+        // with ReadyToShoot FALSE and the refire alarm already running — so every
+        // rocket-jump flight in this sweep begins with a launcher that is roughly
+        // 45 ticks from being able to fire, which a bot that has been alive in a
+        // match for any time at all is not. Whether that costs the corpus anything
+        // is a MEASUREMENT and not an assumption, which is what this switch is for.
+        if (warmWeapon)
+        {
+            world.State.Weapons[slot].ReadyToShoot = true;
+            world.State.Weapons[slot].RefireTimer = 0;
+        }
+
         world.Drive(slot, new Pilot(follower, flightState, query));
 
         var ticks = 0;
@@ -657,7 +672,8 @@ public static class EdgeFlights
         bool distances = false,
         int threads = 1,
         Func<string, int, bool>? include = null,
-        Action<string, int, IReadOnlyList<EdgeFlight>>? onGraph = null)
+        Action<string, int, IReadOnlyList<EdgeFlight>>? onGraph = null,
+        bool warmWeapon = false)
     {
         ArgumentNullException.ThrowIfNull(mapDirectory);
         ArgumentNullException.ThrowIfNull(navDirectory);
@@ -716,7 +732,7 @@ public static class EdgeFlights
         {
             var (graphIndex, edgeIndex) = work[i];
             var graph = graphs[graphIndex];
-            flights[i] = Fly(graph.World(), edgeIndex, team, budget, graph.Distances);
+            flights[i] = Fly(graph.World(), edgeIndex, team, budget, graph.Distances, warmWeapon);
         });
 
         if (onGraph is not null)
@@ -867,7 +883,7 @@ public static class EdgeFlights
             _query = _query with
             {
                 CanDoubleJump = BotClassProfile.AirJump(self.Class),
-                CanRocketJump = RocketModel.Ready(in self, in world.Weapon(slot)),
+                CanRocketJump = RocketModel.Capable(in self, in world.Weapon(slot)),
             };
 
             var keys = follower.Step(state, in self, in world.Weapon(slot), tick, _query);

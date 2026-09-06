@@ -491,7 +491,7 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
         Query = Query with
         {
             CanDoubleJump = BotClassProfile.AirJump(self.Class),
-            CanRocketJump = RocketModel.Ready(in self, in world.Weapon(slot)),
+            CanRocketJump = RocketModel.Capable(in self, in world.Weapon(slot)),
         };
 
         var navKeys = _graph is null

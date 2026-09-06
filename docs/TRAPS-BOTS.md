@@ -3341,6 +3341,16 @@ had no part in. One `ctf_orange` rocket-jump flight posed as 63→36 went off ro
 re-planned, and flew **59→36** instead; `cp_dirtbowl`'s 626→563 walked
 `626→621→586→569→566`.
 
+⛔⛔ **THE CAUSE NAMED IN THIS SECTION WAS WRONG, and the counter it added is
+what eventually caught it.** "The follower re-plans while it flies" describes the
+symptom correctly and the mechanism not at all: measured 2026-09-06, in-air
+abandonment is **0.0–1.1 per arc over six attempts in every bucket, highest in the
+arcs that succeed**. What actually re-planned the route was the launcher's refire
+flag being asked as a routing question — see "A cold launcher unplanned the route"
+below, where fixing it takes `Diverted` from **2,128 to 33** with nothing else
+changed. Kept rather than rewritten because the counter and the harness rule are
+still right; only the diagnosis beside them was not.
+
 ⛔ **This is `RoutedAround`'s shape arriving a second time, from inside the flight
 rather than from the plan** — which is exactly why it could not live with the
 other premises, and why nothing caught it for a day. `EdgeFlight.RanEdge` counts
@@ -3805,17 +3815,114 @@ were nothing of the kind).
 
 #### What this does NOT establish
 
-- **Nothing here is a repair**, and no pin moved: the corpus sweep is 622/1,735/
-  1,535,714 ticks/4,967 blacklists, identical to the digit.
-- **The 44 diverted are unexplained.** The body reaches the destination and the
-  follower arrives, having abandoned the arc for another route — 38.3% against the
-  control's 8.6%. Whether that is the same overshoot seen one replan earlier, or a
-  separate impatience, is not measured.
+- **Nothing here is a repair**, and no pin moved when it was written: the corpus
+  sweep was 622/1,735/1,535,714 ticks/4,967 blacklists, identical to the digit.
+  ⚠️ **Those are pre-`Capable` figures** and every count in this whole section is —
+  the fix below landed after it and moved all of them.
+- ~~**The 44 diverted are unexplained.**~~ ✅ **Explained and fixed** — they were
+  the cold launcher unplanning the route. See "A cold launcher unplanned the
+  route" below; the corpus's `Diverted` went 2,128 → 33 and every number in the
+  two tables above is from before that fix.
 - **The 8 are 6% of the 125** and a repair worth ~8 arcs is not obviously worth a
   change to the arrival test, which every edge kind and every live bot goes
   through. ⚠️ The falsification: if a widened band or a stronger brake shipped and
   the corpus sweep's `stranded` did not fall by roughly that many, the mechanism
   above is not what is costing those arcs.
+
+### ⛔ A cold launcher unplanned the route — `RocketModel.Ready` vs `Capable`
+
+**The largest single defect found in the bot layer since the nav lanes merged, and
+it had been there for as long as the query rebuild has.** Found 2026-09-06 by
+tracing one arc after every aggregate had failed to name a mechanism.
+
+#### The bug
+
+`ScriptedBot` and `EdgeFlights`' pilot both rebuild the search query from live
+state on every tick — deliberately, and the reason recorded beside it is sound: a
+soldier's routes should shed their rocket jumps as its hp drops, because a route
+planned at 160hp is still installed at 35. But the test they used was
+`RocketModel.Ready`, and `Ready` includes **`weapon.ReadyToShoot`** — the 30-tick
+refire flag.
+
+So a soldier that had just fired, at anything, answered *"I cannot rocket jump"*
+for a second. `NavGraph.EdgeRoutable` then refused **every rocket edge on the
+map**, `TryFindEdge` found no usable edge for the hop it was already flying, and
+"no usable edge is a re-plan" did exactly what it says — the follower re-planned a
+route with no rocket jump anywhere in it and walked the long way round.
+
+⚠️ **Nothing looked broken.** The bot arrives. It is slower and it takes a
+different route, and no gate in this repository asked whether a bot that arrived
+had used the arcs it was routed over — which is the failure mode CLAUDE.md
+describes as "a match that ends is not a match that happened", arriving in a place
+nobody had thought to look.
+
+#### The fix
+
+`RocketModel.Capable` — hp, class and ammo, the durable properties of the
+traveller — is what the two query rebuilds ask now. `Ready` keeps `ReadyToShoot`
+and keeps its job: the **takeoff gate**, which already waits a cold launcher out
+and counts the wait in `BotPathState.GateColdWeapon`. One test split in two, each
+used where it belongs.
+
+#### Measured, on the corpus sweep, with a control
+
+| arm | stranded | rocket stranded | flown | rocket flown | diverted | ticks | blacklists |
+|---|---|---|---|---|---|---|---|
+| before | 622 | 291 | 1,735 | 1,116 | 2,128 | 1,535,714 | 4,967 |
+| **after** | **536** | **203** | **3,626** | **3,007** | **33** | **1,476,150** | 7,980 |
+| after, warm launcher | 508 | 181 | 3,844 | 3,225 | 48 | 1,351,181 | 4,667 |
+
+⛔ **`flown` more than DOUBLING is the finding, not `stranded` falling.** The sweep
+exists to ask whether the graph is followable, and it was posing that question on
+only 1,116 of the 3,536 rocket edges it *measured* — 32%. It is now 3,007, 85%.
+A stranding count that improves 14% understates what changed here by a lot.
+
+✅ The same on the no-tables arm, which is a different corpus and so an independent
+check: stranded 626 → 579, flown 2,297 → **5,530**, `Diverted` 3,837 → **16**.
+
+✅ `ScenarioSuiteTests`: rocket jumps over the fourteen legs **6 → 10**, one leg 29
+ticks faster (`valley-shaft-floor-to-point` 161 → 132), one 3 ticks slower
+(`avanti-ramp-pocket-to-intel` 217 → 220), twelve unchanged, **no leg regressed**.
+That pin exists precisely to catch the search quietly ceasing to offer these arcs,
+and it moved the way it is meant to when the opposite happens.
+
+⚠️ **`SeparationBandTests`' three duel-damage pins moved and NOT all one way**
+(`arena_lumberyard` 1,216.7 → 1,241.4, `koth_harvest` 877.6 → 791.1, `ctf_2dfort`
+1,425.1 → 1,313.3). Soldiers take rocket routes they used to abandon, so they
+arrive at different places at different times; a duel's damage total is not a
+quality measure and a mixed sign here is what a routing change looks like rather
+than a regression.
+
+#### ⚠️ The one number that got worse, and why it is the harness
+
+Corpus blacklists **4,967 → 7,980** (+61%), and on `gg_debug` 2 → 15 over
+twenty-one arcs. The bot now *attempts* arcs it used to route around, and the
+off-route machinery's one-retry-then-ban runs on all of them.
+
+⛔ **But the control settles where it comes from**: with `BENCH_FLIGHT_WARM` the
+figure is **4,667 — lower than the 4,967 before the fix.** `EdgeFlights` spawns a
+character on the from-node and asks for the arc at once, and
+`Weapon.events/Create.xml` starts a fresh weapon with `ReadyToShoot` false and the
+refire alarm running — roughly 45 ticks from being able to fire. A bot that has
+been alive in a match for any time at all is not in that state. So the rise is the
+sweep's own spawn showing through, now that the bot waits at the gate for the
+launcher instead of routing away from it, and `BotConstants.TakeoffPatience` (60
+ticks) is what eventually bans the edge.
+
+⚠️ **Falsification:** if `TakeoffPatience` were raised and the cold arm's
+blacklists did not fall towards the warm arm's, the spawn is not what is producing
+them and this attribution is wrong.
+
+#### What found it, after four instruments did not
+
+The launch readings said the failures and the successes were indistinguishable in
+blast, height and reach; the counters said the bot barely steered the edge at all;
+the in-air abandonment counter came back ~0 in every bucket. **None of those names
+a mechanism.** `BENCH_FLIGHT_TRACE` prints one arc a tick at a time, and the first
+one showed a bot standing still for 45 ticks and then flying a *different* edge
+from the node it had slid onto. ⚠️ **An aggregate can only rank hypotheses you
+already have.** Four rounds of slicing produced smaller and smaller buckets and no
+cause; one trace produced the cause in a minute.
 
 ### The route sample: the 68% the per-edge sweep cannot reach
 

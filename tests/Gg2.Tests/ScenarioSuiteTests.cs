@@ -75,10 +75,10 @@ public sealed class ScenarioSuiteTests(ITestOutputHelper output)
         ["valley-spawn-to-point"] = 523,
         ["valley-point-to-spawn"] = 438,
         ["valley-shaft-crate-to-point"] = 95,
-        ["valley-shaft-floor-to-point"] = 161,
+        ["valley-shaft-floor-to-point"] = 132,
         ["truefort-spawn-to-intel"] = 1568,
         ["truefort-blue-spawn-exit-west"] = 53,
-        ["avanti-ramp-pocket-to-intel"] = 217,
+        ["avanti-ramp-pocket-to-intel"] = 220,
         ["gallery-pit-climb"] = 216,
         ["soldier-shells-generator"] = 600,
         ["soldier-holds-and-fires"] = 400,
@@ -95,7 +95,7 @@ public sealed class ScenarioSuiteTests(ITestOutputHelper output)
     /// where it used to offer six is a regression that a presence test cannot see,
     /// and the count is quoted as fact in `docs/TRAPS-BOTS.md`.
     /// </remarks>
-    private const int BaselineRocketJumps = 6;
+    private const int BaselineRocketJumps = 10;
 
     private static ScenarioWorld Load(Scenario s) =>
         ScenarioWorld.Load(s.Map, s.Area, ReferenceTree.IncludedFiles, ReferenceTree.NavCacheDirectory);
