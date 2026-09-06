@@ -348,6 +348,36 @@ concurrent floods cost about **4% of one tick** and **4 MB**, and no player on
 the server would have seen a thing. The limits work where they were supposed to:
 the connections never become the simulation's problem.
 
+### And what they cost when nothing is attacking
+
+⚠️ **The defences are on the tick path, so the question is whether they moved
+the project's headroom number.** They did not, measured as a diff rather than
+quoted as an absolute — which is the only form CLAUDE.md accepts, and the reason
+this was done against a clean `master` worktree on the same machine, back to
+back:
+
+| Build | 12 bots, steady state |
+|---|---|
+| `master` (b6aba7c) | median **0.112 ms**, range 0.086–0.222 |
+| `server-hardening` (e85d3f7) | median **0.101 ms**, range 0.075–0.225 |
+
+Within noise, and the branch reads marginally *lower*. ⚠️ `master` was sampled
+first, so any warm-up bias worked against the branch and it still came out
+level — which is what makes "no regression" the safe reading rather than a
+hopeful one.
+
+⛔ **Neither figure is a benchmark number and neither replaces the 0.151 ms in
+`CLAUDE.md`.** `tickMs` is an exponential moving average over whatever the
+server was doing; `tools/bench/` is where a per-tick cost comes from. This is a
+*comparison* and is only good for one claim: the hardening work did not make the
+tick more expensive. It is cheap to redo — `tools/abuse/`'s control-port
+sampling is the same mechanism.
+
+The reason to expect this is that almost none of the new work is per-tick: the
+ban and rate-limit checks are per *accept*, the fault guards cost a `try` that
+does not throw, and the ban sweep and saturation check ride the existing
+30-second block.
+
 ⚠️ **The theoretical ceiling is arithmetic, not a measurement.** 48 players ×
 (1 MB send + 256 KB receive) plus 128 joining × 256 KB is about **95 MB** worst
 case, on top of ~11 MB of nav tables per map and the runtime. Nothing has been
