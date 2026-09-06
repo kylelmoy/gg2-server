@@ -158,7 +158,7 @@ public sealed class LateTickMonitor
         _worstOverrunMs = overrunMs;
         _worstTick = tick;
 
-        return $"WARNING late tick {tick}: took {intervalMs + overrunMs:0.0}ms against a "
+        return $"late tick {tick}: took {intervalMs + overrunMs:0.0}ms against a "
             + $"{intervalMs:0.0}ms budget ({overrunMs:0.0}ms over) — {Describe(context, intervalMs)}";
     }
 
@@ -178,7 +178,7 @@ public sealed class LateTickMonitor
 
         // Reports the WORST, not the last. A window's worst tick is the one
         // worth chasing, and the last is an accident of where the window fell.
-        return $"WARNING {_suppressed} more late tick(s) in the last {_windowTicks} ticks; "
+        return $"{_suppressed} more late tick(s) in the last {_windowTicks} ticks; "
             + $"worst was tick {_worstTick} at {_worstOverrunMs:0.0}ms over";
     }
 
@@ -196,7 +196,7 @@ public sealed class LateTickMonitor
         if (_suppressed == 0)
             return null;
 
-        return $"WARNING {_suppressed} more late tick(s) before shutdown; "
+        return $"{_suppressed} more late tick(s) before shutdown; "
             + $"worst was tick {_worstTick} at {_worstOverrunMs:0.0}ms over";
     }
 

@@ -282,8 +282,13 @@ public sealed partial class GameServer
                 }
             }
 
+            // ⚠️ Warn, matching the individual lines above. It used to be Info,
+            // so the per-tick warnings went to stderr and the SUMMARY of the
+            // ones they suppressed went to stdout — an operator filtering on
+            // stderr saw the samples and not the count, which is the half that
+            // says how bad it is.
             if (late.Poll(_frame) is { } summary)
-                _log.Info(summary);
+                _log.Warn(summary);
 
             // ⚠️ AFTER the late check and BEFORE the wait, so it sees this tick's
             // pressure and the next tick runs on the adjusted budget.
@@ -317,7 +322,7 @@ public sealed partial class GameServer
         }
 
         if (late.Flush() is { } pending)
-            _log.Info(pending);
+            _log.Warn(pending);
 
         if (stats is not null)
             _log.Info(stats.Report());

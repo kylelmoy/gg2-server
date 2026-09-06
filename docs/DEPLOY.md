@@ -147,6 +147,13 @@ WantedBy=multi-user.target
 `KillSignal` is left at its default (SIGTERM) deliberately — the server handles
 it.
 
+⛔ **This unit is the LAN/trusted-network shape.** For a server on the open
+internet, `docs/HARDENING.md` has what to add and why: `Restart=on-failure`
+rather than `always` (the server exits **3** when its tick loop has failed
+repeatedly, and `always` hides an operator stopping it on purpose), a
+`MemoryMax` backstop, the sandboxing directives, and the firewall and kernel
+settings that this process cannot do for itself.
+
 ---
 
 ## How a deployment differs from a checkout
@@ -433,6 +440,7 @@ deployed server has no dependency on a Gang Garrison 2 checkout of any kind.
 
 | For | Read |
 |---|---|
+| running it where anybody can reach it | `docs/HARDENING.md` |
 | what the switches do and why two are dangerous | `CLAUDE.md`, "Phase 8's four switches" |
 | bot cost, the arbiter, the budget controller | `docs/BOTS.md` |
 | why a late tick is usually not the server | `docs/BOTS.md`, "late ticks are a pacing measurement" |
