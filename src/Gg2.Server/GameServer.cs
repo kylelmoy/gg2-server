@@ -394,6 +394,36 @@ public sealed partial class GameServer : IDisposable, IPluginHost
     private readonly LogThrottle _churnLog = new(burst: 30, per: TimeSpan.FromSeconds(10));
 
     /// <summary>
+    /// How many ticks have failed, and whether that is still survivable.
+    /// </summary>
+    /// <remarks>
+    /// Read by <c>Run</c> and reported by <see cref="TickFaults"/>. A healthy
+    /// server's count is zero for its whole life.
+    /// </remarks>
+    private readonly TickFaultBudget _faults = new();
+
+    /// <summary>
+    /// Ticks that threw and were absorbed, since start.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Anything other than zero is a bug that has already happened.</b>
+    /// The server carried on, which is the right behaviour for the players on it
+    /// and is not the same as nothing being wrong — the stack trace is in the
+    /// log at error level, and this is the number that says to go and look.
+    /// </remarks>
+    public int TickFaults => _faults.Total;
+
+    /// <summary>
+    /// Bots whose decision code threw this tick, to be removed after the pass.
+    /// </summary>
+    /// <remarks>
+    /// A field rather than a local so the common case — which is every tick of
+    /// every healthy server — allocates nothing. Cleared by
+    /// <c>ServiceBots</c> after it has drained it.
+    /// </remarks>
+    private readonly List<RosterEntry> _faultedBots = [];
+
+    /// <summary>
     /// The minimum gap between one player's accepted <c>PLAYER_CHANGENAME</c>
     /// commands.
     /// </summary>

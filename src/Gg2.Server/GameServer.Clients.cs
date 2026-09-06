@@ -34,7 +34,35 @@ public sealed partial class GameServer
                 continue;
             }
 
-            ProcessCommands(client);
+            // ⚠️ THE CONTAINMENT THAT MATTERS, and it is here rather than around
+            // the tick because here is where the blast radius can be made
+            // one connection wide. Everything below this call is driven by bytes
+            // one client chose: a payload the framer sized from a length the
+            // client sent, a plugin's own parser, an index derived from a value
+            // in the packet. A throw from any of it used to take the whole tick,
+            // and Run had no guard at all — so one client could end the process
+            // for everybody on the server.
+            //
+            // Dropping the client is the least-bad answer, not a good one. The
+            // command was applied part-way, so WorldState may have a half-made
+            // change in it; the alternative is losing every player rather than
+            // one. Run's TickFaultBudget is what catches the case where this
+            // keeps happening.
+            //
+            // ⛔ Logged at error, never swallowed. A fault here is a bug in the
+            // port or a client doing something nobody has seen, and both are
+            // things to go and read the trace of.
+            try
+            {
+                ProcessCommands(client);
+            }
+            catch (Exception e)
+            {
+                _log.Error(
+                    $"dropping {LogText.Safe(client.Entry.Name)}: their commands faulted the server", e);
+
+                client.Connection.Close("their commands faulted the server");
+            }
 
             if (client.Connection.IsClosed)
                 RemoveClient(i, client.Connection.CloseReason ?? "disconnected");
@@ -73,7 +101,28 @@ public sealed partial class GameServer
                 continue;
 
             _commands.Clear();
-            source.PollCommands(new WorldView(in _world, _collision), slot, (int)_frame, ref _commands);
+
+            // Same containment as ServiceClients, one layer in. A bot is this
+            // project's own code rather than an attacker's, so a fault here is a
+            // bug rather than an attack — but the consequence of not catching it
+            // is identical: every human on the server loses their game because
+            // one bot's decision code threw. The bot is removed rather than
+            // retried, because a bot that faulted once on this world state will
+            // fault again on the next tick's, and a log line every 33 ms is the
+            // second outage.
+            //
+            // ⛔ Logged at error and never swallowed: an unhandled exception out
+            // of the bot layer is a bug to go and read the trace of.
+            try
+            {
+                source.PollCommands(new WorldView(in _world, _collision), slot, (int)_frame, ref _commands);
+            }
+            catch (Exception e)
+            {
+                _log.Error($"removing bot {LogText.Safe(entry.Name)} in slot {slot}: it faulted", e);
+                _faultedBots.Add(entry);
+                continue;
+            }
 
             for (var i = 0; i < _commands.Count; i++)
             {
@@ -88,6 +137,24 @@ public sealed partial class GameServer
                 // IdOf for the slot rather than trusting one captured here.
             }
         }
+
+        // ⚠️ AFTER the loop, not inside it. RemoveBot compacts the roster and
+        // renumbers every slot above the hole, so removing mid-pass would hand
+        // the next iteration a different player than the index it holds — the
+        // same trap WorldState.RemoveSlot carries, one layer out. The entries
+        // are resolved back to slots here because they have not moved yet.
+        if (_faultedBots.Count == 0)
+            return;
+
+        foreach (var entry in _faultedBots)
+        {
+            var slot = _roster.IndexOf(entry);
+
+            if (slot > 0)
+                RemoveBot(slot);
+        }
+
+        _faultedBots.Clear();
     }
 
     /// <summary>

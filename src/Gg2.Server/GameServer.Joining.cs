@@ -167,7 +167,24 @@ public sealed partial class GameServer
         {
             var joining = _joining[i];
 
-            switch (joining.Service(context, now))
+            JoinOutcome outcome;
+
+            // Same containment as ServiceClients, and for the same reason: a
+            // handshake is driven entirely by bytes the peer chose, and this one
+            // runs BEFORE the peer is a player — so it is reachable by anything
+            // that can open a socket, with no password and no protocol
+            // handshake completed. A fault here must cost one connection.
+            try
+            {
+                outcome = joining.Service(context, now);
+            }
+            catch (Exception e)
+            {
+                _log.Error($"dropping a handshake from {joining.Connection.RemoteAddress}: it faulted", e);
+                outcome = JoinOutcome.Finished;
+            }
+
+            switch (outcome)
             {
                 case JoinOutcome.Pending:
                     joining.Connection.Flush();

@@ -170,7 +170,46 @@ public sealed partial class GameServer
             // server is too slow" from "this machine is busy" — see
             // LateTickContext.
             var workStart = Stopwatch.GetTimestamp();
-            Tick();
+
+            // ⚠️ THE LAST NET, and before this there was none: an exception
+            // anywhere inside a tick reached Main and killed the process. On a
+            // server nobody is sitting in front of, that is the difference
+            // between a bad minute and an outage until somebody notices.
+            //
+            // ⛔ It is a net, not a fix. The stages below it guard themselves
+            // where the blast radius can be made smaller — ServiceClients drops
+            // the one client whose bytes caused a fault, which is the containment
+            // that actually preserves the game for everybody else. Reaching HERE
+            // means the fault was not attributable to one connection, so the
+            // simulation may be part-way through a stage and this tick's
+            // broadcast may be half written.
+            //
+            // Which is why it does not simply swallow. TickFaultBudget says what
+            // "carrying on" is allowed to mean: absorb a fault, refuse to absorb
+            // a pattern. A server that catches everything for ever is up, listed
+            // in the lobby, accepting players and simulating nothing.
+            try
+            {
+                Tick();
+            }
+            catch (Exception e)
+            {
+                _log.Error($"tick {_frame} failed", e);
+
+                if (!_faults.RecordAndContinue(_nowMs))
+                {
+                    _log.Error(
+                        $"{TickFaultBudget.Allowance} ticks failed within "
+                        + $"{TickFaultBudget.Window.TotalSeconds:0}s ({_faults.Total} in total); stopping. "
+                        + "A supervisor with Restart=on-failure will bring back a clean process — "
+                        + "see docs/HARDENING.md.");
+
+                    throw new TickFaultException(
+                        $"the server stopped after {_faults.Total} failed tick(s); the last one is the inner exception",
+                        e);
+                }
+            }
+
             var workMs = Stopwatch.GetElapsedTime(workStart).TotalMilliseconds;
 
             // ⛔ NOT a benchmark number: an EMA over whatever the server was

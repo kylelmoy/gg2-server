@@ -183,7 +183,28 @@ internal static class Program
         // path reaches it. docs/DEPLOY.md.
         using var sigterm = ShutdownSignals.Handle(PosixSignal.SIGTERM, stopping, log);
 
-        server.Run(stopping.Token);
+        try
+        {
+            server.Run(stopping.Token);
+        }
+        catch (TickFaultException e)
+        {
+            // ⚠️ NON-ZERO, and that is the whole point of catching it here. The
+            // server has already logged every fault and its own decision to
+            // stop; what this adds is the exit code, which is the only part a
+            // supervisor reads. `Restart=on-failure` in the unit file
+            // (docs/DEPLOY.md) brings back a clean process — which is the one
+            // thing that reliably clears a corrupted in-memory state — and
+            // leaves an ordinary shutdown alone, because that exits 0.
+            //
+            // Caught rather than left to the runtime so the operator gets one
+            // sentence instead of an unhandled-exception dump, and so Dispose
+            // runs: without it the lobby keeps advertising a server that is not
+            // there, and an in-flight --record segment stays a .part file.
+            log.Error("stopped: the tick loop failed repeatedly", e.InnerException);
+            return 3;
+        }
+
         return 0;
     }
 }
