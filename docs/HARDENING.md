@@ -316,10 +316,43 @@ on purpose — an unrecorded decision gets retried.
   *throw* to one connection; it does nothing about a plugin that corrupts state
   quietly. `docs/PLUGINS.md`, and the pinned zip hash, are the whole of the
   answer.
-- **Whether the shipped defaults are right for a small machine.** They were
-  chosen against what the protocol needs and what a stock client sends — the
-  ratio for each is in `ConnectionLimits` — not measured against a real server
-  under a real flood. **Nobody has run a flood at this.**
+- **Anything beyond one machine.** The defaults have now been run at (see
+  below), on loopback, in one configuration, for eight seconds an attack. That
+  is not a load test and says nothing about a thousand connections a second from
+  a thousand addresses.
+
+---
+
+## What the defences actually cost, measured
+
+`tools/abuse/` runs the attacks at a running server and reads the damage off the
+control port. ⚠️ **Read its README before quoting any of this** — two of the
+five attacks cannot reach their limit over loopback at all, and the README says
+which and why rather than letting a "not dropped" read as a pass.
+
+2026-09-06, Windows 11, Release, `--bots 8 --players 16 --handshake-deadline 60`:
+
+| Attack | Result | Against |
+|---|---|---|
+| connect-flood | 1500 sockets opened; the server held exactly **128** | `MaxJoiningConnections` |
+| garbage | dropped after **5120 bytes** | `MaxInvalidCommandBytes` (4096) |
+| send-flood | dropped after **231 KB** | `MaxReceiveBufferBytes` (256 KB) |
+| slot-squat | seats released after **60s** | `--handshake-deadline 60` |
+| deaf-client | not dropped — loopback absorbs it; see the README | `MaxSendBacklogBytes` |
+
+Throughout all of it: **worst tick work 1.379 ms of a 33.3 ms budget, peak
+managed heap 17.5 MB, zero late ticks, zero tick faults.**
+
+That is the number worth keeping. A fifteen-hundred-connection flood plus four
+concurrent floods cost about **4% of one tick** and **4 MB**, and no player on
+the server would have seen a thing. The limits work where they were supposed to:
+the connections never become the simulation's problem.
+
+⚠️ **The theoretical ceiling is arithmetic, not a measurement.** 48 players ×
+(1 MB send + 256 KB receive) plus 128 joining × 256 KB is about **95 MB** worst
+case, on top of ~11 MB of nav tables per map and the runtime. Nothing has been
+run that reaches it — the measured peak above is 17.5 MB — so treat it as the
+bound the limits *permit*, not a figure anybody has seen.
 
 ### What would show this has gone stale
 
@@ -335,3 +368,6 @@ on purpose — an unrecorded decision gets retried.
   goes red if a default drops below it.
 - **A new client-driven log line.** Anything a client can cause the server to
   log needs a throttle, or it is the next amplifier.
+- **`tools/abuse/` reporting a limit at a different number.** Each row above
+  names the limit it is testing; a garbage flood surviving past 4096 bytes means
+  the framer changed, not that the harness is wrong.

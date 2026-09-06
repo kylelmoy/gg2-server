@@ -511,6 +511,7 @@ deployed server has no dependency on a Gang Garrison 2 checkout of any kind.
 | For | Read |
 |---|---|
 | running it where anybody can reach it | `docs/HARDENING.md` |
+| running the attacks at it yourself | `tools/abuse/README.md` |
 | what the switches do and why two are dangerous | `CLAUDE.md`, "Phase 8's four switches" |
 | bot cost, the arbiter, the budget controller | `docs/BOTS.md` |
 | why a late tick is usually not the server | `docs/BOTS.md`, "late ticks are a pacing measurement" |

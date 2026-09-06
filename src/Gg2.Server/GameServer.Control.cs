@@ -219,6 +219,17 @@ public sealed partial class GameServer
     /// </remarks>
     public bool IsBot(int slot) => _roster[slot].IsBot;
 
+    /// <summary>
+    /// Connections part-way through the handshake.
+    /// </summary>
+    /// <remarks>
+    /// For an operator surface and for <c>tools/abuse/</c>. ⚠️ This is the
+    /// number a connection flood moves and the roster does not — a flood that
+    /// never completes a handshake leaves <c>PlayerCount</c> flat while this
+    /// climbs to <c>ConnectionLimits.MaxJoiningConnections</c> and stops.
+    /// </remarks>
+    public int JoiningCount => _joining.Count;
+
     /// <summary>Whether this slot is a network client rather than a bot or slot 0.</summary>
     public bool IsConnected(int slot) => _roster[slot].Connection is { IsClosed: false };
 

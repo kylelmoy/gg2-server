@@ -338,6 +338,21 @@ public static class ControlCommands
         json.Append(",\"worstOverrunMs\":")
             .Append(Number(Math.Round(server.WorstOverrunMilliseconds, 1)));
         json.Append(",\"bytesSent\":").Append(server.BytesSent);
+
+        // ⚠️ Zero on a healthy server for its whole life. Anything else is a bug
+        // that has already happened and been absorbed — the server carried on,
+        // which is not the same as nothing being wrong. GameServer.TickFaults.
+        json.Append(",\"tickFaults\":").Append(server.TickFaults);
+
+        // The managed heap, which is what the connection limits actually bound.
+        // ⛔ NOT the process's working set: that includes the runtime, the JIT
+        // and the nav tables, so it neither moves the way a connection flood
+        // moves nor sits still when one stops. tools/abuse/ reads this.
+        json.Append(",\"heapMb\":")
+            .Append(Number(Math.Round(GC.GetTotalMemory(forceFullCollection: false) / 1048576.0, 1)));
+
+        json.Append(",\"joining\":").Append(server.JoiningCount);
+        json.Append(",\"bansActive\":").Append(server.Bans.Entries.Count);
         json.Append(",\"botFill\":").Append(server.Options.Bots.FillToPlayers);
 
         // Sent because it is the reason a bot count set from the panel can
