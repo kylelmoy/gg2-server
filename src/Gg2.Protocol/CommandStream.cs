@@ -60,6 +60,28 @@ public sealed class CommandStream
     public int ExpectedBytes => _expected;
 
     /// <summary>
+    /// Unrecognised command bytes skipped over the life of this stream.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Counted rather than acted on here, because the framer is not the
+    /// layer that gets to decide.</b> Skipping is the reference's behaviour and
+    /// this class reproduces it (see the type's remarks): a stray byte is
+    /// ignored, the stream is not resynchronised, the client is not kicked, and
+    /// it does not spend one of the ten commands a tick allows.
+    /// <para>
+    /// That last clause is the problem this counter exists for. Skipping is the
+    /// one path through the framer that consumes buffered bytes without
+    /// producing a command, so the reference's own flood control does not
+    /// rate-limit it at all — a client sending nothing but garbage makes the
+    /// server scan every byte of it, every tick, for free. A stock client sends
+    /// exactly zero of these in a session, so a total this high is a statement
+    /// about the client rather than about the network.
+    /// <c>ConnectionLimits.MaxInvalidCommandBytes</c> is where it is enforced.
+    /// </para>
+    /// </remarks>
+    public long InvalidBytesSkipped { get; private set; }
+
+    /// <summary>
     /// Pulls the next complete command out of <paramref name="source"/>,
     /// skipping any invalid command bytes in the way. Returns false when more
     /// bytes are needed.
@@ -77,6 +99,7 @@ public sealed class CommandStream
                     {
                         case CommandLength.Invalid:
                             // Ignore it and wait for another command byte.
+                            InvalidBytesSkipped++;
                             continue;
                         case CommandLength.Prefixed1:
                             _state = State.Length1;

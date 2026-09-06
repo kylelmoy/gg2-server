@@ -47,3 +47,4 @@ traces/
 # They used to be read out of the reference tree's GM8 build directory, which
 # coupled the test suite to one particular checkout of a fork.
 # ReferenceTree.NavCacheDirectory looks at nav/, or at GG2_NAVCACHE.
+TestResults/

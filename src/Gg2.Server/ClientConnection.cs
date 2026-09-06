@@ -18,22 +18,31 @@ public sealed class ClientConnection : IDisposable
 {
     private readonly Socket _socket;
     private readonly byte[] _receiveScratch = new byte[8192];
+    private readonly ConnectionLimits _limits;
 
     // Bytes written but not yet accepted by the kernel. Almost always empty: a
-    // client that cannot keep up with a 30 Hz broadcast has bigger problems.
+    // client that cannot keep up with a 30 Hz broadcast has bigger problems —
+    // but "almost always" is not "always", and a client that simply stops
+    // reading grows this on purpose. _limits.MaxSendBacklogBytes is the ceiling.
     private byte[] _pending = new byte[4096];
     private int _pendingStart;
     private int _pendingEnd;
 
-    public ClientConnection(Socket socket)
+    public ClientConnection(Socket socket, ConnectionLimits? limits = null)
     {
         _socket = socket;
+        _limits = limits ?? ConnectionLimits.Default;
         _socket.Blocking = false;
         _socket.NoDelay = true;
         RemoteAddress = (socket.RemoteEndPoint as IPEndPoint)?.Address ?? IPAddress.None;
+
+        ConfigureKeepAlive();
     }
 
     public IPAddress RemoteAddress { get; }
+
+    /// <summary>The limits this connection is held to.</summary>
+    public ConnectionLimits Limits => _limits;
 
     /// <summary>
     /// The connection is finished and should be dropped after whatever is
@@ -70,19 +79,55 @@ public sealed class ClientConnection : IDisposable
     public long BytesSent { get; private set; }
 
     /// <summary>
-    /// Drains whatever the kernel has, appending it to
-    /// <paramref name="destination"/>. Returns the byte count.
+    /// Moves what the kernel has into <paramref name="destination"/>, up to this
+    /// tick's allowance. Returns the byte count.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ⚠️ <b>Two ceilings, and they answer different questions.</b>
+    /// <see cref="ConnectionLimits.MaxReceiveBytesPerTick"/> bounds how much of
+    /// the tick one socket can spend — this runs on the thread every other
+    /// player's physics runs on, and a drain-until-empty loop lets whoever has
+    /// the fastest link decide how long the tick takes.
+    /// <see cref="ConnectionLimits.MaxReceiveBufferBytes"/> bounds how much the
+    /// server will hold for a client that sends faster than the
+    /// ten-commands-a-tick budget drains, which is unbounded growth for as long
+    /// as it keeps sending.
+    /// </para>
+    /// <para>
+    /// <b>Overflowing the buffer is a disconnect, not a discard.</b> Dropping
+    /// bytes out of the middle of a command stream would leave the framer
+    /// reading a payload as a command byte for ever after — a silently
+    /// desynchronised client is worse than a disconnected one, and it would look
+    /// exactly like a port bug.
+    /// </para>
+    /// </remarks>
     public int Receive(ReceiveBuffer destination)
     {
+        ArgumentNullException.ThrowIfNull(destination);
+
         var total = 0;
 
-        while (!IsFaulted && !IsClosed)
+        while (!IsFaulted && !IsClosed && total < _limits.MaxReceiveBytesPerTick)
         {
+            var room = _limits.MaxReceiveBufferBytes - destination.Count;
+
+            if (room <= 0)
+            {
+                Fault($"receive buffer full at {_limits.MaxReceiveBufferBytes} bytes");
+                break;
+            }
+
+            // Never ask for more than there is room to keep, so a read cannot
+            // overshoot the buffer's ceiling and have to be thrown away.
+            var want = Math.Min(
+                _receiveScratch.Length,
+                Math.Min(room, _limits.MaxReceiveBytesPerTick - total));
+
             int read;
             try
             {
-                read = _socket.Receive(_receiveScratch, SocketFlags.None);
+                read = _socket.Receive(_receiveScratch, 0, want, SocketFlags.None);
             }
             catch (SocketException e) when (e.SocketErrorCode == SocketError.WouldBlock)
             {
@@ -114,10 +159,31 @@ public sealed class ClientConnection : IDisposable
     }
 
     /// <summary>Queues bytes for this client. Nothing reaches the socket until <see cref="Flush"/>.</summary>
+    /// <remarks>
+    /// ⚠️ <b>A queue that has outgrown
+    /// <see cref="ConnectionLimits.MaxSendBacklogBytes"/> faults the
+    /// connection.</b> That backlog has exactly one cause — the client is not
+    /// reading — and it is the cheapest denial of service against this server
+    /// there is: connect, join, call <c>recv</c> never, and every tick's
+    /// broadcast accumulates here until the process is killed. No malformed byte
+    /// is involved and the client is legal as far as TCP is concerned, which is
+    /// why nothing else on the path notices it.
+    /// <para>
+    /// The bytes that overflowed are not queued, deliberately: this connection is
+    /// over, so writing them would buy one more allocation for a socket about to
+    /// be disposed.
+    /// </para>
+    /// </remarks>
     public void Send(ReadOnlySpan<byte> bytes)
     {
         if (IsFaulted || bytes.IsEmpty)
             return;
+
+        if (PendingSendBytes + bytes.Length > _limits.MaxSendBacklogBytes)
+        {
+            Fault($"send backlog over {_limits.MaxSendBacklogBytes} bytes; the client is not reading");
+            return;
+        }
 
         EnsureRoom(bytes.Length);
         bytes.CopyTo(_pending.AsSpan(_pendingEnd));
@@ -195,6 +261,51 @@ public sealed class ClientConnection : IDisposable
         }
 
         _socket.Dispose();
+    }
+
+    /// <summary>
+    /// Asks TCP to notice a peer that went away without saying so.
+    /// </summary>
+    /// <remarks>
+    /// <b>Best effort, and silence on failure is correct.</b> The three interval
+    /// options are not available on every platform this can run on, and a server
+    /// that refused a client because it could not tune a keepalive timer would
+    /// be trading a real outage for a hypothetical one.
+    /// <see cref="SocketOptionName.KeepAlive"/> itself is universal; the tuning
+    /// narrows detection from the system default — two hours on most stacks — to
+    /// about a minute.
+    /// </remarks>
+    private void ConfigureKeepAlive()
+    {
+        if (!_limits.TcpKeepAlive)
+            return;
+
+        try
+        {
+            _socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
+        }
+        catch (Exception e) when (e is SocketException or ObjectDisposedException)
+        {
+            return;
+        }
+
+        Tune(SocketOptionName.TcpKeepAliveTime, _limits.KeepAliveIdleSeconds);
+        Tune(SocketOptionName.TcpKeepAliveInterval, _limits.KeepAliveIntervalSeconds);
+        Tune(SocketOptionName.TcpKeepAliveRetryCount, _limits.KeepAliveProbeCount);
+
+        void Tune(SocketOptionName option, int value)
+        {
+            try
+            {
+                _socket.SetSocketOption(SocketOptionLevel.Tcp, option, value);
+            }
+            catch (Exception e)
+                when (e is SocketException or ObjectDisposedException or PlatformNotSupportedException)
+            {
+                // The platform keeps its own default. Still better than nothing:
+                // KeepAlive itself is on.
+            }
+        }
     }
 
     private void EnsureRoom(int count)

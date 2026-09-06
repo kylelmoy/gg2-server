@@ -214,6 +214,21 @@ public sealed partial class GameServer
             if (client.Connection.IsClosed)
                 return;
         }
+
+        // ⚠️ The gap the ten-command budget leaves open. An UNRECOGNISED command
+        // byte is skipped rather than kicked — the reference's behaviour, kept
+        // deliberately (ClientCommands) — and skipping does not spend one of the
+        // ten, so garbage is the one thing a client can send that the
+        // reference's own flood control does not rate-limit at all. It makes the
+        // server scan every byte, every tick, for nothing.
+        //
+        // A stock client sends zero of these in a whole session, so the
+        // threshold is unreachable by accident and a stray byte is still free.
+        if (client.Commands.InvalidBytesSkipped > _limits.MaxInvalidCommandBytes)
+        {
+            client.Connection.Close(
+                $"{client.Commands.InvalidBytesSkipped} unrecognised command bytes");
+        }
     }
 
     private void Handle(ClientPlayer client, in ClientCommand command)

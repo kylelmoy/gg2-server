@@ -97,6 +97,24 @@ public sealed class CliCoverageTests
         ("TickStats", ["--tick-stats"], o => o.TickStats),
         ("Bots", ["--bots", "8"], o => o.Bots),
 
+        // One row per LIMITS FLAG, for the reason the Web rows below give: a
+        // single row would leave four of the five ungated, and a flag that
+        // parses and then does nothing is exactly what this class exists to
+        // catch. ConnectionLimits is a record, so the comparison is structural.
+        //
+        // ⚠️ The rest of ConnectionLimits deliberately has no flag:
+        // MaxReceiveBytesPerTick, MaxAcceptsPerTick, MaxInvalidCommandBytes and
+        // the three keepalive intervals are tuning against the 33 ms tick and
+        // the protocol's own shape, not against anything an operator knows about
+        // their machine. Nothing gates that decision, because this test's unit
+        // is the ServerOptions property and Limits is one property — so it is
+        // written here instead.
+        ("Limits", ["--max-send-backlog", "2097152"], o => o.Limits),
+        ("Limits", ["--max-receive-buffer", "524288"], o => o.Limits.MaxReceiveBufferBytes),
+        ("Limits", ["--max-joining", "64"], o => o.Limits.MaxJoiningConnections),
+        ("Limits", ["--handshake-deadline", "120"], o => o.Limits.MaxHandshakeDuration),
+        ("Limits", ["--no-tcp-keepalive"], o => o.Limits.TcpKeepAlive),
+
         // One row per WEB FLAG, not one per property, and they all name the
         // same property. Web is a record so its structural equality makes the
         // comparison real, but a single row would leave four of the five flags

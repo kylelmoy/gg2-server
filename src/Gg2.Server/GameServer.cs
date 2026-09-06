@@ -352,6 +352,48 @@ public sealed partial class GameServer : IDisposable, IPluginHost
     private long _nowMs;
 
     /// <summary>
+    /// The bounds one socket is held to, lifted out of the options once.
+    /// </summary>
+    /// <remarks>
+    /// Read on every accept and handed to every connection, so it is a field
+    /// rather than an <c>_options.Limits</c> walk. Immutable, which is why one
+    /// instance is shared by every connection rather than copied per client.
+    /// </remarks>
+    private ConnectionLimits _limits = ConnectionLimits.Default;
+
+    /// <summary>
+    /// Rate limit on the "refused a connection" line.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>A refusal is a CLIENT-driven event, so its log rate is chosen by
+    /// whoever is connecting.</b> One line per refused connection is a flood
+    /// that arrives on the tick thread, where writing it is synchronous — the
+    /// defence would become the outage. <see cref="LogThrottle"/> keeps the
+    /// count so the burst is still visible.
+    /// </remarks>
+    private readonly LogThrottle _refusalLog = new(burst: 5, per: TimeSpan.FromSeconds(10));
+
+    /// <summary>
+    /// Rate limit on the join and leave lines.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Connection churn is client-driven too, and a refusal is not the
+    /// only way to make the server write a line per connection.</b> A client can
+    /// join properly, get dropped for breaking a limit, reconnect and repeat;
+    /// that path produces two lines a cycle and is bounded only by
+    /// <see cref="ConnectionLimits.MaxAcceptsPerTick"/> — around a thousand
+    /// lines a second.
+    /// <para>
+    /// The burst is sized so ordinary play never reaches it: thirty lines per
+    /// ten seconds passes a whole server emptying and refilling, twice over.
+    /// Separate from <see cref="_refusalLog"/> so a flood of one never hides the
+    /// other — they are different attacks, and an operator seeing only the
+    /// louder one would be missing half of what is happening.
+    /// </para>
+    /// </remarks>
+    private readonly LogThrottle _churnLog = new(burst: 30, per: TimeSpan.FromSeconds(10));
+
+    /// <summary>
     /// The minimum gap between one player's accepted <c>PLAYER_CHANGENAME</c>
     /// commands.
     /// </summary>
@@ -605,6 +647,10 @@ public sealed partial class GameServer : IDisposable, IPluginHost
             MovingPlatformBlocks);
 
         _startedUtc = DateTime.UtcNow;
+
+        // Before the listener: every connection accepted below is constructed
+        // with these, and ServerOptions.Validate has already checked them.
+        _limits = _options.Limits;
 
         _listener = new TcpListener(IPAddress.Any, _options.Port);
         _listener.Server.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, false);

@@ -21,26 +21,91 @@ public sealed partial class GameServer
         Debug.Assert(_listener is not null, "Start() must run before Tick()");
 
         // The reference accepts one per tick because GML gave it no reason not
-        // to. Accepting everything pending is not observable and avoids making a
-        // burst of joins take a second.
-        while (_listener.Pending())
+        // to. Accepting several is not observable and avoids making a burst of
+        // joins take a second.
+        //
+        // ⚠️ BOUNDED, unlike the loop this replaced. Each accept allocates a
+        // connection and walks every existing one for the per-address check, so
+        // draining the whole backlog is quadratic work on the thread that owes
+        // every player already on the server a tick every 33 ms. What does not
+        // fit stays in the kernel's own accept backlog, which is where a
+        // connection flood is supposed to be absorbed and where it can be
+        // dropped far more cheaply than here.
+        var accepted = 0;
+
+        while (accepted < _limits.MaxAcceptsPerTick && _listener.Pending())
         {
+            accepted++;
+
             var socket = _listener.AcceptSocket();
-            var connection = new ClientConnection(socket);
+            var connection = new ClientConnection(socket, _limits);
 
-            if (ExceedsMultiClientLimit(connection))
+            // ⚠️ Before the per-address check, because this is the one an
+            // attacker with many addresses does not trip. MultiClientLimit is
+            // the reference's answer to a household behind one NAT — three
+            // connections per address — and a hundred addresses is three hundred
+            // sockets, each with a receive buffer and an 8 KB scratch array, all
+            // held for as long as the handshake allows.
+            if (_joining.Count >= _limits.MaxJoiningConnections)
             {
-                var writer = new NetWriter(2);
-                ServerMessages.Kick(writer, KickReason.MultiClient);
-                connection.Send(writer.WrittenSpan);
-                connection.Flush();
-                connection.Dispose();
-
-                _log.Warn($"refused {connection.RemoteAddress}: too many connections from that address");
+                // SERVER_FULL rather than a KICK: it is the message that already
+                // means "there is no room for you", and the client's answer to
+                // it is "The server is full." — which is what has happened, from
+                // the point of view of somebody trying to get in.
+                var full = new NetWriter(2);
+                ServerMessages.ServerFull(full);
+                Refuse(connection, full.WrittenSpan, "the joining queue is full");
                 continue;
             }
 
-            _joining.Add(new JoiningConnection(connection, now));
+            if (ExceedsMultiClientLimit(connection))
+            {
+                var kick = new NetWriter(2);
+                ServerMessages.Kick(kick, KickReason.MultiClient);
+                Refuse(connection, kick.WrittenSpan, "too many connections from that address");
+                continue;
+            }
+
+            _joining.Add(new JoiningConnection(connection, now, _limits));
+        }
+    }
+
+    /// <summary>
+    /// Tells a connection why it is not being served, and drops it.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Flush BEFORE Dispose.</b> The reason byte is queued, not written, so
+    /// disposing first throws away the very message being sent — and the client
+    /// then shows an unexplained disconnect instead of "server full". The same
+    /// requirement bites in <c>GameServer.Clients</c>'s plugin-packet kick.
+    /// <para>
+    /// Logged at warning, and rate-limited by <see cref="_refusalLog"/>: a
+    /// refusal is the server declining work, which is worth an operator seeing
+    /// — and a connection flood is precisely the case where writing one line per
+    /// refusal turns the log into the denial of service. Console output is
+    /// synchronous and happens on the tick thread.
+    /// </para>
+    /// </remarks>
+    /// <summary>
+    /// What a throttled log line says about the ones that did not get written.
+    /// </summary>
+    /// <remarks>
+    /// Empty when nothing was held back, so an ordinary line stays an ordinary
+    /// line — the note appears only when there is something to note, which is
+    /// what makes it worth reading when it does.
+    /// </remarks>
+    private static string Suffix(int suppressed) =>
+        suppressed == 0 ? string.Empty : $" (+{suppressed} similar lines not logged)";
+
+    private void Refuse(ClientConnection connection, ReadOnlySpan<byte> message, string why)
+    {
+        connection.Send(message);
+        connection.Flush();
+        connection.Dispose();
+
+        if (_refusalLog.ShouldLog(_nowMs, out var suppressed))
+        {
+            _log.Warn($"refused {connection.RemoteAddress}: {why}{Suffix(suppressed)}");
         }
     }
 
@@ -251,11 +316,16 @@ public sealed partial class GameServer
         }
 
         connection.Flush();
+
         // The joiner's id is its roster index, which is the count before it was
         // added — the same value WriteJoinBurst put in the JOIN_UPDATE.
-        _log.Info(
-            $"{LogText.Safe(entry.Name)} joined as player {_roster.Count - 1}; "
-            + $"{_roster.Count - 1} of {_options.PlayerLimit} slots used");
+        if (_churnLog.ShouldLog(_nowMs, out var suppressed))
+        {
+            _log.Info(
+                $"{LogText.Safe(entry.Name)} joined as player {_roster.Count - 1}; "
+                + $"{_roster.Count - 1} of {_options.PlayerLimit} slots used"
+                + Suffix(suppressed));
+        }
 
         // serviceJoiningPlayer.gml:171 — tell the lobby the player count moved,
         // rather than letting the list show a stale one for up to 30 seconds.

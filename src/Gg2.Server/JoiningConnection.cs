@@ -67,10 +67,13 @@ public enum JoinOutcome
 /// connection's own send queue, because the join path is the one place the
 /// server sends per-client bytes rather than the shared broadcast stream.
 /// </remarks>
-public sealed class JoiningConnection(ClientConnection connection, DateTime now)
+public sealed class JoiningConnection(
+    ClientConnection connection, DateTime now, ConnectionLimits? limits = null)
 {
     private readonly ReceiveBuffer _received = new();
     private readonly NetWriter _out = new(256);
+    private readonly ConnectionLimits _limits = limits ?? ConnectionLimits.Default;
+    private readonly DateTime _startedAt = now;
 
     /// <summary>The map advertised to THIS client, latched at the greeting.</summary>
     private byte[]? _mapFile;
@@ -102,6 +105,9 @@ public sealed class JoiningConnection(ClientConnection connection, DateTime now)
     /// </summary>
     public static readonly TimeSpan Timeout = TimeSpan.FromMilliseconds(30000);
 
+    /// <summary>When this connection was accepted. The deadline counts from here.</summary>
+    public DateTime StartedAt => _startedAt;
+
     /// <summary>
     /// Advances the handshake as far as the bytes available allow.
     /// </summary>
@@ -120,6 +126,25 @@ public sealed class JoiningConnection(ClientConnection connection, DateTime now)
         if (now - LastContact > Timeout)
         {
             Connection.Close("handshake timed out");
+            return JoinOutcome.Finished;
+        }
+
+        // ⚠️ THE SECOND CLOCK, and it does not reset. The one above is the
+        // reference's and it is an IDLE timeout: every byte received refreshes
+        // LastContact (serviceJoiningPlayer.gml:1, and :10 for a download). PING
+        // is a legal command in ExpectCommand and costs the client one byte, so
+        // a connection that pings every twenty seconds is never idle and never
+        // times out — while holding a seat, because OccupiesSlot is set by
+        // RESERVE_SLOT and OccupiedSlots counts it against the player limit. A
+        // handful of those advertise the server as full and keep real players
+        // out, indefinitely, using a stock command at a trivial rate.
+        //
+        // A deadline on the whole handshake is the only thing that catches it:
+        // no amount of activity moves it. See ConnectionLimits for why ten
+        // minutes clears the slowest real handshake by orders of magnitude.
+        if (now - _startedAt > _limits.MaxHandshakeDuration)
+        {
+            Connection.Close("handshake took too long");
             return JoinOutcome.Finished;
         }
 

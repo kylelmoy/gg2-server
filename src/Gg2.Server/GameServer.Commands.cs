@@ -452,9 +452,13 @@ public sealed partial class GameServer
             BroadcastTeamBalance();
         }
 
-        _log.Info(
-            $"{LogText.Safe(client.Entry.Name)} left ({LogText.Safe(reason)}); "
-            + $"{_roster.Count - 1} of {_options.PlayerLimit} slots used");
+        if (_churnLog.ShouldLog(_nowMs, out var suppressed))
+        {
+            _log.Info(
+                $"{LogText.Safe(client.Entry.Name)} left ({LogText.Safe(reason)}); "
+                + $"{_roster.Count - 1} of {_options.PlayerLimit} slots used"
+                + Suffix(suppressed));
+        }
         client.Connection.Dispose();
 
         if (wasFull)

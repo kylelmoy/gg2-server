@@ -353,6 +353,43 @@ internal static class CommandLine
                     options.MultiClientLimit = cursor.TakeInt();
                     break;
 
+                // The bounds that make this safe to expose to the internet.
+                // ⚠️ Every default is orders of magnitude above what a stock
+                // client uses — ConnectionLimits states the ratio for each — so
+                // raising one is not generosity towards real players, it is room
+                // for an attacker. They are flags because the right value
+                // depends on how much memory the machine has, which this cannot
+                // know; the rest of ConnectionLimits has no flag on purpose, and
+                // CliCoverageTests records why.
+                case "--max-send-backlog":
+                    options.Limits = options.Limits with { MaxSendBacklogBytes = cursor.TakeInt() };
+                    break;
+
+                case "--max-receive-buffer":
+                    options.Limits = options.Limits with { MaxReceiveBufferBytes = cursor.TakeInt() };
+                    break;
+
+                case "--max-joining":
+                    options.Limits = options.Limits with { MaxJoiningConnections = cursor.TakeInt() };
+                    break;
+
+                case "--handshake-deadline":
+                    options.Limits = options.Limits with
+                    {
+                        MaxHandshakeDuration = TimeSpan.FromSeconds(cursor.TakeInt()),
+                    };
+                    break;
+
+                // ⚠️ Off is a REGRESSION, not a tuning choice: without keepalives
+                // a client whose machine loses power holds a roster slot until
+                // TCP's own retransmit gives up, which is around fifteen minutes
+                // on Linux. It exists because a network that filters keepalives,
+                // or a platform where the socket option fails, is a thing that
+                // happens — not because anybody should want it.
+                case "--no-tcp-keepalive":
+                    options.Limits = options.Limits with { TcpKeepAlive = false };
+                    break;
+
                 // ⚠️ TOTAL across every download in flight, not per client — a
                 // second downloader halves the first one's rate.
                 case "--map-download-limit":
@@ -857,6 +894,23 @@ internal static class CommandLine
           --multi-client-limit <n>
                             connections allowed from one address (default 3);
                             loopback is exempt
+          --max-send-backlog <bytes>
+                            queued bytes one client may leave unread before it is
+                            dropped (default 1048576). This is the bound on what a
+                            client that stops reading can make the server hold.
+          --max-receive-buffer <bytes>
+                            unread bytes one client may have buffered before it is
+                            dropped (default 262144)
+          --max-joining <n> half-finished handshakes held at once (default 128)
+          --handshake-deadline <seconds>
+                            longest a connection may take to finish joining,
+                            however active it is (default 600). Separate from the
+                            30s idle timeout, which activity resets and this does
+                            not.
+          --no-tcp-keepalive
+                            do not probe for peers that vanished. A REGRESSION:
+                            without it a client whose machine dies holds a roster
+                            slot until TCP gives up, ~15 minutes on Linux.
           --maps <path>     override the built-in map PNGs (default: maps/)
           --map-download-limit <n>
                             TOTAL bytes/second across all custom-map downloads

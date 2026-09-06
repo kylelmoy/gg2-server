@@ -91,6 +91,21 @@ public sealed class ServerOptions
     public int MultiClientLimit { get; set; } = 3;
 
     /// <summary>
+    /// What one socket may make the server hold and do.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>These are the bounds that make the server safe to expose to the
+    /// internet, and the defaults are the supported configuration.</b> Every
+    /// field is orders of magnitude above what a stock client uses — see
+    /// <see cref="ConnectionLimits"/>, which states the ratio for each — so
+    /// raising one is not a way to be more generous to real players, it is a way
+    /// to give an attacker more room. Lower them on a machine with less memory
+    /// than a bounded worst case needs; do not raise them because a client hit
+    /// one, until you have established which client and why.
+    /// </remarks>
+    public ConnectionLimits Limits { get; set; } = ConnectionLimits.Default;
+
+    /// <summary>
     /// Which built-in map to serve first. <b>Empty means "the first entry of
     /// <see cref="MapRotation"/> after the shuffle"</b>, and falls back to
     /// <c>ctf_truefort</c> when the rotation is empty too.
@@ -629,6 +644,8 @@ public sealed class ServerOptions
 
         // The reference clamps at 48 (game_init.gml:152). Beyond 255 the roster
         // index stops fitting in the ubyte every message uses to name a player.
+        Limits.Validate();
+
         if (PlayerLimit is < 1 or > 48)
             throw new ArgumentOutOfRangeException(nameof(PlayerLimit), PlayerLimit, "player limit must be 1..48");
 
