@@ -60,6 +60,8 @@ near them", has the state rules that apply to everyone, bot work included.
 | the tables **on disk** — `nav/<key>.dist.gz`, next-hop only, cost rebuilt on load | `NavDistanceFile.cs`, `NavDistances.FromNextHops` | `NavDistanceFileTests` |
 | route dispersion: occupancy (on) and static lanes (measured, not adopted), `--no-bot-occupancy` | `BotLanes.cs`, `BotRoles.cs`, `ScriptedBot.cs` | `BotLanesTests`, `BotOccupancyFlagTests`, `RouteDiversityTests` |
 | the training environment seam | `src/Gg2.Env/` | `EnvProtocolTests` |
+| **is the nav graph followable** — every edge of every shipped graph flown by a real bot, and whole routes sampled | `EdgeFlights.SweepAll`, `BENCH_FLIGHT` | `EdgeFlightTests` — the corpus tally pinned on **both** routing arms, plus the node census |
+| **can a body be where a node says** — 66.6% of nodes overlap the floor at `StandY`; all are free one pixel up | `EdgeFlights.StandingY` | `EdgeFlightTests.EveryShippedNodeCanHoldACharacter` |
 | the measurement instrument | `tools/bench/` | not in `Gg2.sln`; build explicitly |
 
 ⚠️ **There is nothing to be "ported" against.** Stock GG2 ships no bots; this
@@ -431,7 +433,9 @@ not invalidate a checkpoint, and a change to what an observation *means* does.
 | anything in `src/Gg2.Bots/` | `docs/TRAPS-BOTS.md` — one section per phase-7 item, by name |
 | adding or swapping a bot implementation | "Swapping the bot logic out" above — `IMicroController` and nothing else |
 | the nav format, A\*, the path follower | same, items 2, 4a, 4b-i, 4b-ii |
-| a route table, the A\* heuristic, route dispersion | same — "Shipping the tables", "CPD-Search", "Two ways to spend a next-hop table", "Route variety, scored". ⚠️ **Both ship ON now.** ⛔ The pinned measurements and the 25 digests do NOT exercise the tables — `ScenarioWorld` sets no `Distances` — so a green suite says nothing about the arm a server runs; see "The gates measure a DIFFERENT ARM" |
+| a route table, the A\* heuristic, route dispersion | same — "Shipping the tables", "CPD-Search", "Two ways to spend a next-hop table", "Route variety, scored". ⚠️ **Both ship ON now.** ⛔ The three pinned measurements and the 25 digests do NOT exercise the tables — `ScenarioWorld` sets no `Distances` — so those say nothing about the arm a server runs; see "The gates measure a DIFFERENT ARM". ✅ **`EdgeFlightTests`' corpus sweep is the one gate that does**, and pins both arms so the difference is visible |
+| a rocket jump that leaves the ground and does nothing | same — "The rocket that does not go off". ✅ **Fixed**: the blast tilts back along the run when the terrain says nothing is under the muzzle (`PathFollower.LipAimDegrees`) |
+| whether a bot can actually follow the graph | same — "The corpus sweep" and "The route sample". ⛔ **28% of edges is the ceiling for a per-edge sweep**: A\* routes around the rest, and driving them anyway credits a walk to an arm that did nothing |
 | targeting, aim, the combat controller | same, items 4c-i, 4c-ii |
 | the objective layer | same, item 4g, plus "Dual King of the Hill is unwinnable by bots" |
 | the env, the observation, the action space | `docs/ENV.md` |

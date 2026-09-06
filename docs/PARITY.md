@@ -1043,6 +1043,122 @@ of the blind spot above: the mirror frames with the port's own `ServerStream`,
 which reads an empty MD5 quite happily. Only the *stock client's* reader treats
 it as a claim about the map being built in.
 
+### Fixed: a joiner was sent the tick it had already been given
+
+**A client joining on the tick somebody died was sent that death, on top of a
+`FULL_UPDATE` that had already buried the victim.** A stock client then runs
+`doEventPlayerDeath` against a slot whose `object` is `-1` and dies on
+`doEventPlayerDeath.gml:41`, `victim.object.currentWeapon.object_index` —
+GM8's "Unknown variable currentWeapon". Four of exactly that were logged live
+on 2026-09-05 by a client that joined while bots were fighting; the client
+survived with warnings, which is why it had never been chased.
+
+**Where the tick puts the two halves.** The burst is written at the very bottom
+of the tick, in `ServiceJoiningConnections` (`GameServer.cs:822`), so its
+`FULL_UPDATE` carries the world as `AdvanceSimulation` (`:797`) left it —
+that tick's deaths included. The broadcast buffer the joiner then inherits was
+filled *between* the flush (`:802`) and that point, by `BroadcastEndStepEvents`
+(`:807`) and by the control port and web admin executing against the live game
+(`:812-814`). The joiner got the state *after* the events and the events as
+well.
+
+⚠️ **The reference does not have to solve this, because its burst PREDATES the
+events** — not because it sends them safely. `GameServerEndStep.gml:18-20`
+services a joining player in the GameServer's End Step, which is the *first*
+End Step of the frame, so `Character.events/End Step.xml:43`'s
+`doEventPlayerDeath` has not run yet and the dying character is still in the
+`serializeState` the joiner is handed. The port fuses Step and End Step into
+one `MatchSimulation.Tick` and cannot serialise between them, so it closes the
+gap from the other end: `ClientPlayer.SkipBroadcastBytes` records the buffer
+length standing when the burst was written, and that client's next flush skips
+it. One consistent story either way; the port tells the other one.
+
+Everything droppable is state-carrying and therefore already in the
+`FULL_UPDATE`: `PLAYER_DEATH`, `RETURN_INTEL`, `DESTROY_SENTRY` and `BALANCE`
+from `BroadcastEndStepEvents`. The mark is taken **before** the joiner's own
+`PLAYER_JOIN` is appended, so the joiner still learns about itself — without
+that, a stock client never binds `global.myself`
+(`ClientBeginStep.gml:205-208`) and is broken for the rest of the session with
+nothing on the server to show for it.
+
+⚠️ **An earlier version of this list ended "…and a control-port or web-admin
+`kick`'s `PLAYER_LEAVE`". That was wrong, and the correction matters more than
+the fix does** — see "Nothing moves a roster count inside the join window"
+below.
+
+Gated by `JoinDuringDeathTests`, and both halves are mutation-checked: sending
+the whole buffer again produces one blind death per exercised race (five of
+five, three runs), and overshooting the mark past the joiner's own
+`PLAYER_JOIN` turns the self-join assertion red.
+
+✅ **Verified live, which is the half a green suite cannot supply here.** A
+stock GM8 client joined a `--bots 8` server on `ctf_truefort` and came up with
+`playerID=8`, a nine-entry roster, `global.myself` bound to its own `Player`,
+and **zero** GML errors over several minutes — so the skip did not eat the
+joiner's own `PLAYER_JOIN`, which is the one way this change could have broken
+every join at once. The join went through the bot-displacement race as well
+(`bot [BOT] 8 removed from player 8` immediately followed by `Player joined as
+player 8`), and the client's roster still matched the server's.
+⚠️ **That run needed `Music=3` first** — see `docs/TRAPS-LIVEGAME.md`,
+"`Music=1` truncates every client's room setup on a machine with no audio";
+with music on, an ignored audio dialog abandons `basicRoomSetup` two thirds of
+the way through and buries any real finding under a thousand `CTFHUD` errors.
+
+⛔ **The test's second assertion is the load-bearing one.** "No blind death
+arrived" is satisfied just as well by a run where no join ever landed on a
+death tick, so the test counts the races it actually exercised, from the
+server, and fails if it saw fewer than five. Two traps were paid for here:
+bots piled on a *single* point produce **zero** deaths — splash weapons are not
+fired at zero range — so the two teams are teleported to piles 90px apart; and
+the race must be detected with the bot population held FLAT (`FillToPlayers`
+far above `MaxBots`), because a displaced bot compacts the roster and every
+slot above the departure then reads as a death.
+
+⚠️ **What this does NOT explain.** The live capture that found it also held 17
+`global.myself.object` errors and, separately, the `Wrong number of players
+while deserializing state` dialog behind the open `cp_dirtbowl` fatal below.
+Neither follows from this bug: a roster-count disagreement needs a
+`PLAYER_JOIN` or `PLAYER_LEAVE` inside that window. The `global.myself` half is
+now settled and is **not a port bug at all** — `docs/TRAPS-LIVEGAME.md`, "the
+frame a joining client does not know itself". The count half is still open, and
+the window is a narrower suspect than this section used to say.
+
+### Nothing moves a roster count inside the join window
+
+**Established 2026-09-05 by reading every writer, after the fix above was
+already in.** The window is `GameServer.cs:802`→`:822` and exactly three things
+can append to `_broadcast` inside it: `BroadcastEndStepEvents` (`:807`), the
+control port (`:812`) and the web admin (`:814`). **None of the three can change
+`_roster.Count`**, and that includes the two verbs this document previously
+named as the ones that could:
+
+- ⛔ **A `kick` is not a writer here.** `GameServer.Control.cs:255-276`
+  (`KickPlayer`) sends `SERVER_KICK` on that one socket and calls
+  `Connection.Close` — it appends **nothing** to the broadcast. The
+  `PLAYER_LEAVE` is written by `RemoveClient` (`GameServer.Commands.cs:445`),
+  reached from `ServiceClients` at `:697` — *above* the flush, on the following
+  tick. Gated by `ClientIdentityTests.AKickInFlightDoesNotCostAJoinerItsIdentity`.
+- ⛔ **A control-port or web-admin `bots` is not a writer here either.**
+  `SetBotFill` (`GameServer.Control.cs:466`) only moves `ServerOptions.Bots`;
+  the population manager converges at `_population.Service()` (`:715`), above
+  the flush.
+- The web admin reaches the same verbs — `WebAdminServer.Pump` dispatches
+  through `ControlCommands`, so it has no extra surface.
+- `AcceptConnections` and `ServiceJoiningConnections` write to the joining
+  socket alone, except `CompleteJoin`'s own `PLAYER_JOIN`, which is appended
+  *after* that joiner's mark by construction.
+
+⛔ **So "the join window moved the count" is no longer a live hypothesis for the
+`cp_dirtbowl` fatal, and the `SkipBroadcastBytes` fix cannot have closed it.**
+The remaining candidates are elsewhere: a message whose byte length the port and
+a stock client disagree about (the class that produced the `MAP_END` area byte
+and the empty-MD5 bugs), which misaligns the stream and makes
+`deserializeState.gml:12` read a garbage byte as the count.
+**What would falsify this section**: any `PLAYER_JOIN` or `PLAYER_LEAVE`
+appended to `_broadcast` from code reachable between those two line numbers. If
+one is ever added, the mark still covers it — the claim being made here is about
+the hunt, not about safety.
+
 ### Multi-area maps: one bug fixed, one intermittent client fatal still open
 
 `cp_dirtbowl` is the only shipped map with more than one area (three, sharing
@@ -1069,6 +1185,115 @@ from the unnarrowed map) and gated by
 `MultiAreaMapTests.TheServedAreaCountIsTheMapsNotTheSlices`, which pins the
 slice counts too so the gate cannot go vacuous. **A custom four-area map has
 no such coincidence to rely on.**
+
+### The message-width audit against the GML — done, and clean
+
+**Every server-to-client message the port writes was checked against the width
+the stock client reads, message type by message type, on 2026-09-05.** It was
+the leading hypothesis for the count dialog ("a message whose byte length the
+port and a stock client disagree about") and it came back **clean**. Do not
+redo it from scratch; this is the record.
+
+The oracle is the pair `Scripts/Client/ClientBeginStep.gml`'s
+`receiveCompleteMessage(socket, N, ...)` sizes and the `write_*` calls behind
+them, against `src/Gg2.Protocol/ServerMessages.cs` and
+`src/Gg2.Server/StateUpdateWriter.cs`. Checked and agreeing:
+
+- **Every fixed-width message.** `HELLO`, `JOIN_UPDATE` (2), `PLAYER_JOIN`,
+  `PLAYER_LEAVE` (1), `PLAYER_DEATH` (4), `BALANCE` (1, or 1+1 on a switch),
+  `PLAYER_CHANGETEAM`/`CHANGECLASS`/`CLIENT_SETTINGS` (2), `PLAYER_SPAWN` (3),
+  `CHAT_BUBBLE` (2), `BUILD_SENTRY` (6), `SENTRY_POSITION` (5),
+  `DESTROY_SENTRY` (4), `WEAPON_FIRE` (9), the five one-byte intel/uber/zoom
+  messages, `KICK` (1), `REWARD_CHALLENGE_CODE` (16), `MAP_END` (string + 2),
+  `CHANGE_MAP` (two strings), `PLUGIN_PACKET` (ushort length then that many).
+- **Every variable-length block**, which is where the probability was:
+  the per-player stats + `unparseRewards` string + the domination row of
+  `roster - 1` bytes (`Player.events/User Event 12`); the subobject byte and
+  its three tiers of character block; `Minegun`'s `lobbed` count and its
+  seven-byte mine records; `Medigun` overriding `User Event 12` with no
+  inherited action, so a medic's weapon block is the heal target alone; the
+  uncounted `MovingPlatform` and control-point runs; both intel counts.
+- **Every gamemode HUD block.** CTF (1+4), Invasion (1+4+2), TDM (1+4+2),
+  Generator (1+4 then blue-before-red), KotH and DKotH (6 + points), Arena
+  (6 more on `FULL_UPDATE` only, then 8 + points), ControlPoints (1+4+2 +
+  4 per point). `basicRoomSetup.gml:36-71` creates exactly one HUD, and the
+  port's `GameModes.Of` walks the same if/else chain in the same order over the
+  **narrowed** map, which is what the client sees.
+
+⚠️ **`Gg2Text` is 1:1 Latin-1 and throws rather than substituting**, so a name
+cannot desynchronise a length prefix from its payload; `WriteString1`/`2`
+range-check the prefix. That closes the classic UTF-8-bytes-versus-char-count
+slip by construction.
+
+⚠️ **One reachable gap, and it is not on a shipped map.** `ControlPointHUD`'s
+`User Event 12` walks `global.cp[i]` for `i = 1..instance_number(ControlPoint)`,
+so a map whose control points are numbered **non-contiguously within one area**
+(a `controlPoint2` with no `controlPoint1`) makes the reference write fewer
+blocks than its own loop count while the port writes exactly
+`ControlPointCount`. Every shipped map numbers contiguously. Worth knowing
+before anybody authors one.
+
+### Fixed: a joiner in the map-change countdown was told the wrong area
+
+**`GameServerBeginStep.gml:74-92` moves `global.currentMapArea` when the
+countdown OPENS, ten seconds before the map changes** — `+= 1` on an area
+advance, `= 1` on a rotation — and only then writes the `MAP_END` that carries
+it. The port left `_match.CurrentMapArea` on the area being played until
+`OpenMap` ran at the end of the countdown, and `WriteJoinBurst`
+(`GameServer.Joining.cs:192`) hands that value to every joiner as its
+`JOIN_UPDATE` area. So a client that joined inside those ten seconds was told
+the area the server was **leaving**.
+
+⚠️ **`JOIN_UPDATE` and `MAP_END` are the only two places the wire ever states
+the area**, and this joiner is by definition too late for the `MAP_END`. Its
+`global.currentMapArea` is then frozen wrong for as long as it stays connected —
+there is no later message that corrects it. Two things read it:
+
+- `basicRoomSetup.gml:16-25` narrows the map to that area's entities, so the
+  client plays different geometry from the server.
+- `ClientBeginStep.gml:511-544` wipes every player's stats and team to
+  `TEAM_SPECTATOR` on `global.currentMapArea == 1` — a rule the server applies
+  to the area it is going **to** (`Rounds.ResetForNewMap(firstArea:)` and
+  `GameServer.Maps.cs`'s roster wipe).
+
+**Stale at 1 across an advance, the joiner wipes teams the server keeps**, then
+reads a character for a slot it now holds as a spectator, and `Character`'s
+Create kills it with `unknown team ID: 2`. That is the open fatal's symptom
+exactly, and it is now reproduced in-process: with the fix reverted,
+`MultiAreaMapTests.AJoinerInTheMapChangeCountdownIsToldTheAreaItIsAboutToLoad`
+collects `InputState: slot 1 has a character, and this client has them as
+Spectator` from `MirrorClient.Impossible`. The inverse — stale at 3 across a
+rotation — keeps teams the server has cleared, which corrupts the scoreboard
+rather than killing anyone.
+
+Fixed by `GameServer.Maps.cs`'s `BeginMapChange`, which both doors now go
+through: `ServeRoundEnd` (the one production reaches) and `RequestMapChange`
+(the control port and the web admin). They were separate bodies, which is why
+the fix needs two gates:
+
+- `AJoinerInTheMapChangeCountdownIsToldTheAreaItIsAboutToLoad` — the control
+  door, an advance, and the fatal direction.
+- `ARoundEndingInTheCountdownTellsAJoinerTheAreaItRotatesTo` — the round-end
+  door, a rotation off area 3, and the wipe in the other direction.
+
+Both mutation-checked, one door at a time: dropping the assignment from
+`BeginMapChange` fails exactly the first, and restoring the old area after the
+round-end call fails exactly the second. `TheServedAreaCountIsTheMapsNotTheSlices`
+was tightened in the same change — its wait was `CurrentMapArea == area`, which
+now comes true on the tick the change is *requested*, so it waits for `NextMap`
+to empty as well.
+
+⛔ **This does NOT close the count dialog, and it is not a framing bug.**
+Measured: `GameModes.ShapeOf(cp_dirtbowl.ForArea(a))` is `ControlPoints`,
+2 control points, 0 platforms, 0 generators, setup gate present — **identical
+for a = 1, 2 and 3**. A joiner narrowed to the wrong area therefore frames every
+state update at exactly the right width, so this bug cannot produce "Wrong
+number of players while deserializing state". It is a **second, independent
+producer of the same fatal**, reached without any misalignment at all. The
+consequence for the note below: `unknown team ID: 2` in live evidence is no
+longer evidence of a count mismatch, and the two have to be attributed
+separately. **A custom multi-area map whose areas differ in control-point count
+would have had both at once**, which is what makes this easy to have mis-read.
 
 ⛔ **Still open — an intermittent client fatal, seen once and not reproduced.**
 One six-bot run driven 1→2→3 killed the client one second after reaching area
@@ -1098,11 +1323,33 @@ holds as a spectator — `Character`'s Create event then calls
 with `unknown team ID: 2`. So the chain is: roster-count disagreement →
 misframed read → character for a spectator → fatal.
 
+⚠️ **2026-09-05, later — that last sentence is one chain, not the only one.**
+The join-window area bug above reaches `character for a spectator → fatal`
+with **no** count disagreement and **no** misframed read, and it is reproducible
+where this is not. So a live `unknown team ID: 2` does not by itself imply the
+dialog fired: the dialog is evidence of a count mismatch, the sprite error is
+not. What is still unattributed is the **dialog** — the screenshots are real,
+and nothing found since moves a roster count.
+
 ⚠️ **It fired TWICE, not once** — `agent_launcher_17800.log` (105 s after
 launch) and `17801.log` (**6 s** after launch, a different server). A
 six-second death is at or near JOIN, not after an area advance, so the
 "driven 1→2→3" framing above is too narrow: at least one of the two was a
 join-time desync.
+
+⚠️ **A join-window bug WAS found and fixed on 2026-09-05, and it is not this
+one** — see "Fixed: a joiner was sent the tick it had already been given"
+above. It put a duplicate `PLAYER_DEATH` in front of a joiner and accounts
+exactly for the four live `doEventPlayerDeath.gml:41` errors, but it cannot
+move a roster count, so it does not produce this dialog. Do not read that fix
+as closing this. What would: a `PLAYER_JOIN` or `PLAYER_LEAVE` landing between
+the flush (`GameServer.cs:802`) and the join burst (`:822`) — and 2026-09-05
+established that **nothing can**, not even a `kick` (see "Nothing moves a roster
+count inside the join window" above). So the writer that moved the count has
+still not been identified, and the join window is no longer where to look for
+it: the live candidate now is a message whose byte length the port and a stock
+client disagree about, which misaligns the stream and makes
+`deserializeState.gml:12` read a garbage byte as the count.
 
 ⛔ **`MirrorClient` could not see any of this, by construction.**
 `StateUpdateReader` takes the player count off the wire and reads exactly that
@@ -1118,6 +1365,53 @@ client through one shipped map of every gamemode (seven of eight have one),
 waiting for a `CAPS_UPDATE` after each so the HUD block is actually written,
 and checks the roster still adds up (mutation-checked: a single-capture writer
 fails so hard the client never sees the next `CHANGE_MAP` at all).
+
+## ⚠️ KNOWN ISSUE: the phase gate's own recording has an unexplained outlier
+
+`InputLagSweepTests.ThisServersOwnRecordingIsInPhase` records a 900-tick bot
+match and grades it by a **99th-percentile** trajectory error at five input lags.
+Until 2026-09-06 it recorded a *different* match every run — `GameServer.Start`
+seeds `WorldState.Random` from the clock, which is the reference's `randomize()`
+and correct for a live server — so the gate was sampling a fresh random match and
+asserting a tail statistic on it. It failed roughly **once in twenty-five**, and
+the message it printed accused the broadcast of publishing a different tick's
+input than it simulated, which is close to the worst thing this repository can say
+about itself.
+
+`ServerOptions.RandomSeed` now fixes the match. Six runs give one distinct curve,
+so the gate is reproducible.
+
+⛔ **But the seed does not explain what the flake was, and this section exists so
+that is not quietly forgotten.** Measured before the fix:
+
+| | lag −1 | **lag 0** | lag +1 |
+|---|---|---|---|
+| 40 healthy random matches | 63–239 | **3–36** | 62–287 |
+| 72 fixed seeds, 1…72 | 63–212 | **3–73** (worst is seed 40) | 62–287 |
+| the two observed failures | 229, 255 | **154, 129** | 83, 106 |
+
+⚠️ **The failures are an outlier MODE, not the tail of the healthy
+distribution.** Lag 0's error is normally single digits and in a failing run it is
+about **twenty times** that — while lag +1 simultaneously drops below its own
+normal range. **A whole-trace shift does not fit either**: a cleanly shifted trace
+would put single digits at +1, and the failures never get below 83 at any lag. It
+looks like part of a recording being out of phase rather than all of it.
+
+⛔ **Not reproduced on any of 72 fixed seeds**, so there is no fixture for it and
+the mechanism is unknown. What it is NOT: it is not the `RocketModel.Capable`
+change (24/24 pass at `9ae1151`, immediately before it, is weak evidence, but the
+flake also occurred on trees without it), and it is not the join-race work (it
+reproduced with that stashed, 23/24).
+
+**How to chase it, and why nothing will stumble on it now.** The seeded gate no
+longer samples the mode at all, so it has to be hunted deliberately: run
+`RecordABotMatch` in a loop under clock seeding, keep the trace whenever
+`curve[0]` exceeds ~50, and replay that trace looking for which ticks carry the
+p99 error. A single kept trace turns this from a rumour into a fixture.
+⚠️ **The falsification for the "it is not the broadcast" reading**: if a kept
+trace shows the error concentrated on the ticks after a rocket-jump launch, the
+recorder and the simulation disagree about which tick a launch belongs to, and
+that IS the wire.
 
 ## Which flush a message rides
 

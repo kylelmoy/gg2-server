@@ -16,6 +16,46 @@ public sealed partial class GameServer
         public ReceiveBuffer Received { get; } = new();
 
         public CommandStream Commands { get; } = new();
+
+        /// <summary>
+        /// Bytes already standing in the broadcast buffer when this client
+        /// joined, which its next flush must skip.
+        /// </summary>
+        /// <remarks>
+        /// ⚠️ <b>Everything appended between a tick's flush and its join burst
+        /// is ALREADY IN that burst's <c>FULL_UPDATE</c>, so sending it as well
+        /// tells the joiner the same thing twice.</b> The burst is written at
+        /// the very bottom of the tick (<c>ServiceJoiningConnections</c>), while
+        /// the buffer it would otherwise inherit was filled above it by
+        /// <c>BroadcastEndStepEvents</c> and by the control port and web admin
+        /// executing against the live game. Those messages describe a world the
+        /// burst has already serialised.
+        /// <para>
+        /// The two costs of not skipping, both measured against a real client:
+        /// a <c>PLAYER_DEATH</c> for a character the joiner never had makes
+        /// <c>doEventPlayerDeath</c> dereference <c>victim.object.currentWeapon</c>
+        /// on <c>-1</c> (<c>Scripts/Events/doEventPlayerDeath.gml:41</c>), and a
+        /// <c>PLAYER_JOIN</c> or <c>PLAYER_LEAVE</c> from a kick moves a roster
+        /// the burst already replayed — which is the roster-count disagreement
+        /// <c>deserializeState.gml:11-13</c> only warns about before
+        /// deserialising misaligned. docs/PARITY.md, "A joiner was sent the tick
+        /// it had already been given".
+        /// </para>
+        /// <para>
+        /// ⚠️ <b>The reference does not need this because its burst predates
+        /// those events</b>, not because it sends them safely:
+        /// <c>GameServerEndStep.gml:18-20</c> services a joining player in the
+        /// GameServer's End Step, which is the FIRST End Step of the frame, so
+        /// <c>Character.events/End Step.xml:43</c>'s <c>doEventPlayerDeath</c>
+        /// has not run yet and the dying character is still in the
+        /// <c>serializeState</c> the joiner is handed. The port fuses Step and
+        /// End Step into <c>AdvanceSimulation</c>, so it cannot serialise
+        /// between them and closes the gap from the other end instead: one
+        /// consistent story rather than the state from after the events and the
+        /// events as well.
+        /// </para>
+        /// </remarks>
+        public int SkipBroadcastBytes { get; set; }
     }
 
     private void ServiceClients()

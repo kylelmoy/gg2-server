@@ -80,6 +80,18 @@ public sealed partial class PathFollower
     public const double RocketAimDegrees = 270;
 
     /// <summary>
+    /// How far off vertical to tilt a rocket whose muzzle overhangs the lip of
+    /// the run it is taking off from.
+    /// </summary>
+    /// <remarks>
+    /// The muzzle is 20px out, so this puts it about 8px back along the run and
+    /// 18px down — past the lip that the straight-down shot falls off, while
+    /// keeping <c>vectorfactor</c> at about 0.85 rather than the 0.707 a 45°
+    /// blast would cost. See <see cref="BotPathState.RocketAim"/>.
+    /// </remarks>
+    public const double LipAimDegrees = 24;
+
+    /// <summary>
     /// Applies the follower's launch requests to a bot's outgoing keys and aim —
     /// the one place a route reaches the trigger.
     /// </summary>
@@ -119,9 +131,11 @@ public sealed partial class PathFollower
 
         if (state.RocketFire || state.MineFire)
         {
-            // Straight down for both: a mine that lands at the feet is the whole
-            // geometry StickyModel.Launch's measured -14.46 assumes.
-            aimDegrees = RocketAimDegrees;
+            // ⚠️ Straight down for a MINE, whatever the rocket is doing: a mine
+            // that lands at the feet is the whole geometry StickyModel.Launch's
+            // measured -14.46 assumes, and it is dropped rather than fired so the
+            // lip problem below does not apply to it.
+            aimDegrees = state.MineFire ? RocketAimDegrees : state.RocketAim;
             keys |= PlayerKeys.Attack;
         }
 
@@ -195,6 +209,26 @@ public sealed partial class PathFollower
     /// one build of a graph.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// The terrain, for the one decision that cannot be made from the graph.
+    /// </summary>
+    /// <remarks>
+    /// <b>Optional, and null behaves exactly as before.</b> A rocket jump is the
+    /// only thing here that needs to know where the floor actually is: the blast is
+    /// created 20px along the aim, so aimed down it spawns at the body's centre,
+    /// and at a takeoff column the body usually overhangs the lip of its run. The
+    /// nav graph cannot answer this — a node's span ends for gates and walls as
+    /// well as for edges, so "the takeoff column is the node's last" is true of
+    /// most arcs and was measured to be far too broad a test (it made the corpus
+    /// sweep 38% worse when used as one).
+    /// <para>
+    /// ⚠️ <b>Read-only, and it does not make the follower stateful.</b> It is the
+    /// same <see cref="CollisionWorld"/> the tick already passes around; the
+    /// follower asks it a question and stores nothing.
+    /// </para>
+    /// </remarks>
+    public CollisionWorld? Collision { get; set; }
+
     public NavDistanceSet? Distances { get; set; }
 
     /// <summary>

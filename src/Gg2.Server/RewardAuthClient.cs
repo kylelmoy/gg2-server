@@ -62,7 +62,15 @@ public sealed class RewardAuthClient : IDisposable
     /// connection would park the serial pump for ever and silently swallow every
     /// later request.
     /// </remarks>
-    private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(20);
+    /// <remarks>
+    /// ⚠️ <b>Public because a test that waits on this component has to wait
+    /// LONGER than it does, and a magic number in the test cannot know that.</b>
+    /// <c>RewardAuthTests</c> hardcoded fifteen seconds against this twenty and
+    /// so reported "the auth never came back" for a relay that was still
+    /// perfectly well inside its own deadline — a failure that accuses the
+    /// server of losing the response when nothing had gone wrong yet.
+    /// </remarks>
+    public static readonly TimeSpan Timeout = TimeSpan.FromSeconds(20);
 
     private readonly IServerLog _log;
     private readonly string _host;

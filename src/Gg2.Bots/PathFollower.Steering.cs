@@ -210,6 +210,14 @@ public sealed partial class PathFollower
                 && state.AirTicks > 1
                 && character.MoveStatus != 1)
             {
+                // ⚠️ Once per attempt, not once per tick. AirTicks > 1 is the
+                // condition above, so tick two is the first that can see a dud and
+                // counting only there makes this a count of ARCS rather than of
+                // ticks spent in one — the mistake that made the first reading of
+                // this counter say "1036% of takeoffs".
+                if (state.AirTicks == 2)
+                    state.RocketDuds++;
+
                 steer.Abandon = true;
                 return;
             }
@@ -412,6 +420,24 @@ public sealed partial class PathFollower
 
         var isRocket = edge.Type == NavEdgeType.RocketJump;
 
+        // ⚠️ Below the arc's own takeoff speed. The gate accepts this — `along >= 0`
+        // admits a standstill and the reach model is what decides whether the
+        // tracker can make it up — so this is not a refusal, it is a record of how
+        // often the arc is being flown on the model's word rather than on speed.
+        var underspeed = along < needVx - BotConstants.JumpVtol;
+
+        // ⚠️ Asked of the TERRAIN, not of the graph. A node's span ends for gates
+        // and walls as well as for the edge of a run, so "the takeoff column is the
+        // node's last column" is true of most arcs — used as the test it made the
+        // corpus sweep 38% worse, because it re-aimed the arcs that already worked.
+        // What matters is only whether the blast has anything to go off against:
+        // the rocket is created 20px along the aim, so aimed down it spawns at the
+        // body's centre, and at the lip of a run there is nothing under it.
+        var rocketAim = RocketAimDegrees;
+
+        if (isRocket && Collision is { } terrain && !FloorUnder(terrain, character.X, character.Y))
+            rocketAim = RocketAimDegrees - (jumpDir * LipAimDegrees);
+
         // ⚠️ WHICH reach model, and it is not a detail. A rocket-jumping character
         // is under moveStatus 1, where Begin Step's switch gives controlFactor 0.65
         // and frictionFactor 1 — and a friction of 1 means horizontal speed does not
@@ -496,7 +522,12 @@ public sealed partial class PathFollower
                     // its jump branch before its right-click branch, so the
                     // blast's motion_add lands on top of `vspeed = -jumpStrength`.
                     // A tick later would throw the jump away.
-                    Launch(state, ref steer);
+                    state.Launches++;
+
+                    if (underspeed)
+                        state.LaunchesUnderspeed++;
+
+                    Launch(state, ref steer, rocket: false);
                     steer.MineDetonate = true;
                     state.StickySetup = -1;
                     state.StickyJumps++;
@@ -505,22 +536,12 @@ public sealed partial class PathFollower
                 return;
             }
 
-            Launch(state, ref steer);
+            state.Launches++;
 
-            // The hand-off: ScriptedBot applies this after the combat half has run,
-            // which is the only place that can see both. ⚠️ Straight down is not a
-            // simplification of a richer choice — `vectorfactor` in the rocket's
-            // blast is sqrt(sin⁴ + cos⁴), which is 1 only when the impulse is
-            // axis-aligned and falls to 0.707 at 45°, so an angled rocket jump
-            // throws away up to 30% of its impulse. Down is also the one direction
-            // with guaranteed geometry to detonate against: there is a floor under
-            // the takeoff column by construction, and there may be nothing at all
-            // down-and-left of it.
-            if (isRocket)
-            {
-                steer.RocketFire = true;
-                state.RocketJumps++;
-            }
+            if (underspeed)
+                state.LaunchesUnderspeed++;
+
+            Launch(state, ref steer, isRocket, rocketAim);
         }
         else if (isSticky && state.StickySetup >= 0)
         {
@@ -573,6 +594,7 @@ public sealed partial class PathFollower
             // own motion, and press nothing once still. A bot that has drifted off
             // the column stops here and is walked back by Approach on the next tick,
             // once it is more than BOT_JUMP_LEAD cells away.
+            state.GateColdWeapon++;
             steer.Braking = true;
         }
         else if (along > needVx + BotConstants.JumpVtol)
@@ -581,10 +603,19 @@ public sealed partial class PathFollower
             // tracker can correct it: with no key held GG2 sheds horizontal speed
             // by only about 13% a tick, so a bot arriving at 9 is still over 3
             // some eight ticks later.
+            state.GateTooFast++;
             steer.Braking = true;
         }
         else
         {
+            // Split for the diagnostic only — the answer below is the same one
+            // either way, but "leaving backwards" and "cannot reach" are different
+            // faults and the repair for them is not the same.
+            if (along < 0)
+                state.GateBackwards++;
+            else
+                state.GateShort++;
+
             // Moving away from the jump, or too slow for this arc. ⚠️ Backing up
             // is the only answer that works: pressing forward from here would walk
             // the bot off the end of the run it is standing on, which is usually a
@@ -631,15 +662,81 @@ public sealed partial class PathFollower
                 return;
             }
 
+            state.Launches++;
+
+            if (underspeed)
+                state.LaunchesUnderspeed++;
+
             steer.Braking = false;
-            Launch(state, ref steer);
+
+            // ⚠️⚠️ WITH the rocket, and this line is a bug fix rather than a
+            // tidy-up. The hand-off used to live at the gate-open call site only,
+            // so a rocket arc whose launcher was READY but whose speed clause
+            // refused for two seconds left the ground here with no rocket — an
+            // ordinary 57px jump on an arc that rises 276, which this method's own
+            // remarks call the worst available outcome and which the cold-launcher
+            // branch above exists to prevent. Measured on cp_dirtbowl e583: the bot
+            // jumped at moveStatus 0, rose 56px against the 101 the arc needed, took
+            // no self-damage, landed back where it started, and did it again.
+            Launch(state, ref steer, isRocket, rocketAim);
         }
     }
 
+    /// <summary>
+    /// Is there anything under the muzzle for a straight-down blast to hit?
+    /// </summary>
+    /// <remarks>
+    /// The muzzle is <c>RocketMuzzleOffset</c> (20px) below the origin when the aim
+    /// is straight down, and the floor a grounded character stands on is about 24px
+    /// below it — so the scan starts at the muzzle and runs a little past the feet.
+    /// ⚠️ It asks at the body's own x because that is where the rocket is created;
+    /// asking at the anchor column would answer for a point the blast never
+    /// occupies, which is the whole of this bug.
+    /// </remarks>
+    private static bool FloorUnder(CollisionWorld terrain, double x, double y)
+    {
+        var column = (int)Gml.Round(x);
+
+        for (var below = 20; below <= 32; below++)
+        {
+            if (terrain.IsSolidAt(column, (int)Gml.Round(y) + below))
+                return true;
+        }
+
+        return false;
+    }
+
     /// <summary>Commits to the arc: ask for the press and reset the per-arc state.</summary>
-    private static void Launch(BotPathState state, ref Steering steer)
+    /// <param name="rocket">
+    /// Ask for the rocket as well. ⛔ <b>Not optional, and it is a parameter rather
+    /// than the caller's business precisely because it used to be.</b> Two call
+    /// sites launched — the gate opening and the patience hatch — and only the
+    /// first fired; the second flew rocket arcs as ordinary jumps for as long as
+    /// the code has existed.
+    /// </param>
+    /// <remarks>
+    /// ⚠️ Straight down is not a simplification of a richer choice —
+    /// <c>vectorfactor</c> in the rocket's blast is sqrt(sin⁴ + cos⁴), which is 1
+    /// only when the impulse is axis-aligned and falls to 0.707 at 45°, so an
+    /// angled rocket jump throws away up to 30% of its impulse. Down is also the
+    /// one direction with guaranteed geometry to detonate against: there is a
+    /// floor under the takeoff column by construction, and there may be nothing at
+    /// all down-and-left of it. The aim itself is applied by
+    /// <see cref="PathFollower.ApplyLaunch"/>, which is the hand-off
+    /// <c>ScriptedBot</c> runs after its combat half — the only place that can see
+    /// both.
+    /// </remarks>
+    private static void Launch(BotPathState state, ref Steering steer, bool rocket, double aim = RocketAimDegrees)
     {
         steer.WantJump = true;
+
+        if (rocket)
+        {
+            steer.RocketFire = true;
+            state.RocketAim = aim;
+            state.RocketJumps++;
+        }
+
         state.AirTicks = 0;
         state.TakeoffTicks = 0;
         state.RunupAt = -1;

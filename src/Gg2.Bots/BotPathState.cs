@@ -321,6 +321,27 @@ public sealed class BotPathState
     /// the takeoff gate cannot leave last tick's request standing.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// Where the launch's rocket is aimed, in GM8 degrees. 270 is straight down.
+    /// </summary>
+    /// <remarks>
+    /// <b>Straight down is right whenever there is floor under the muzzle, and
+    /// there often is not.</b> A rocket is created at the weapon plus 20px of
+    /// <c>lengthdir</c>, so aimed down it spawns at the character's own x — and at
+    /// a takeoff column, which is the last column of the run, the body already
+    /// overhangs the lip. Measured: 125 of the 165 rocket-jump arcs the follower
+    /// cannot fly drop a standing character off that column, against 22 of 150 for
+    /// the arcs it flies. The rocket then falls past the ledge and the arc silently
+    /// becomes a 57px ordinary jump.
+    /// <para>
+    /// ⚠️ Set per launch rather than read from a constant, because the correction
+    /// is conditional: tilting the blast costs impulse (<c>vectorfactor</c> is
+    /// sqrt(sin⁴+cos⁴), 1 only axis-aligned) and the arcs that already work must
+    /// keep the aim they were proved with.
+    /// </para>
+    /// </remarks>
+    public double RocketAim { get; set; } = PathFollower.RocketAimDegrees;
+
     public bool RocketFire { get; set; }
 
     /// <summary>
@@ -401,6 +422,64 @@ public sealed class BotPathState
     /// otherwise burn a full A* per bot per frame in silence.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// Why the takeoff gate refused, split by clause. Diagnostic only.
+    /// </summary>
+    /// <remarks>
+    /// <b>The gate is a conjunction and a refusal count without its reason is not
+    /// actionable.</b> "A third of the corpus's strandings are the approach rather
+    /// than the arc" (docs/TRAPS-BOTS.md, "Attributing the 429") is only a repair
+    /// once somebody can say which clause is doing the refusing — and the four
+    /// have entirely different fixes: a cold weapon is waited out, a hot approach
+    /// is braked, backwards momentum needs a run-up, and short reach may be an arc
+    /// this class cannot fly at all.
+    /// <para>
+    /// ⚠️ <b>Counted per TICK at the gate, not per attempt.</b> A bot sits on the
+    /// takeoff column for many ticks refusing for the same reason, so these are
+    /// proportions to read against each other rather than counts of anything.
+    /// </para>
+    /// </remarks>
+    /// <summary>
+    /// Takeoffs committed, and how many of those left at less than the arc's own
+    /// speed. Diagnostic only.
+    /// </summary>
+    /// <remarks>
+    /// <b>The question the four gate counters cannot answer.</b> Those are per
+    /// tick, so a run-up walking backwards THROUGH the takeoff column inflates
+    /// <see cref="GateBackwards"/> without anything being wrong. This pair is per
+    /// commitment: how often the bot actually left the ground, and how often it
+    /// did so below the speed the arc was proved at — which is what the patience
+    /// escape hatch produces when the run-up cannot deliver.
+    /// </remarks>
+    /// <summary>
+    /// Arcs abandoned in the air because the rocket never went off. Diagnostic.
+    /// </summary>
+    /// <remarks>
+    /// <b>The rocket key was pressed, the launcher was ready, and the character is
+    /// still under <c>moveStatus</c> 0</b> — so the blast found nothing to detonate
+    /// against and the arc silently became an ordinary jump. Measured on
+    /// <c>cp_dirtbowl</c> e583: the takeoff column is the last column of the node,
+    /// the bot is already off the ledge on the tick it fires, and a rocket aimed
+    /// straight down falls past the floor it was meant to bounce off.
+    /// </remarks>
+    public int RocketDuds { get; set; }
+
+    public int Launches { get; set; }
+
+    /// <inheritdoc cref="Launches"/>
+    public int LaunchesUnderspeed { get; set; }
+
+    public int GateColdWeapon { get; set; }
+
+    /// <inheritdoc cref="GateColdWeapon"/>
+    public int GateTooFast { get; set; }
+
+    /// <inheritdoc cref="GateColdWeapon"/>
+    public int GateBackwards { get; set; }
+
+    /// <inheritdoc cref="GateColdWeapon"/>
+    public int GateShort { get; set; }
+
     public int EdgeUnroutableFires { get; set; }
 
     /// <summary>

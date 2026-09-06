@@ -157,9 +157,15 @@ public sealed partial class GameServer : IDisposable, IPluginHost
     // seeds — only the parity replayer does — so it stays a pure output here.
     private TickEvents _events;
 
-    // Which spawn point a player gets. Server-side RNG the port is explicitly
-    // free about (docs/PARITY.md) — the choice is broadcast in PLAYER_SPAWN, so
-    // clients and a replay follow it rather than reproducing it.
+    // Seeds the simulation's stream once, in Start, and is read nowhere else —
+    // ⚠️ its name and its old comment both said "which spawn point a player gets",
+    // which it has not decided for as long as `git log -S` can see. Server-side
+    // RNG is territory the port is explicitly free about (docs/PARITY.md): the
+    // choice is broadcast in PLAYER_SPAWN, so clients and a replay follow it
+    // rather than reproducing it.
+    // ⛔ Unseeded ON PURPOSE — the reference's randomize(). ServerOptions.RandomSeed
+    // is how a test opts out; see the remark there for why a test that asserts on
+    // a tail statistic of a random match is a test that flakes.
     private readonly Random _spawnRandom = new();
 
     // Reused every tick; see AdvanceSimulation.
@@ -642,7 +648,7 @@ public sealed partial class GameServer : IDisposable, IPluginHost
         // bot rollout and wrong for a live match — every server would then
         // scatter its first blast identically. Seeding it here keeps the clock
         // out of Gg2.Simulation, where it does not belong.
-        _world.Random = new GmlRandom((uint)_spawnRandom.Next());
+        _world.Random = new GmlRandom((uint)(_options.RandomSeed ?? _spawnRandom.Next()));
 
         // game_init.gml: Server_Respawntime is the ini's seconds times the tick
         // rate, floored at one tick — the reference special-cases zero seconds

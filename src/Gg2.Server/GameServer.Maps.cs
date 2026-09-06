@@ -134,6 +134,51 @@ public sealed partial class GameServer
     }
 
     /// <summary>
+    /// Opens the ten-second countdown to a map change: the announcement, the
+    /// timer, and the area moving to the one about to be served.
+    /// </summary>
+    /// <remarks>
+    /// <b>Both doors go through this one body</b> — a round ending
+    /// (<see cref="ServeRoundEnd"/>) and an operator asking
+    /// (<see cref="RequestMapChange"/>) — because the third line below is easy
+    /// to have in one and not the other, and the failure it causes is silent on
+    /// the server and fatal on a client.
+    /// <para>
+    /// ⚠️ <b><c>_match.CurrentMapArea</c> moves NOW, ten seconds before the map
+    /// does.</b> <c>GameServerBeginStep.gml:74-92</c> assigns
+    /// <c>global.currentMapArea</c> (<c>+= 1</c> on an advance, <c>= 1</c> on a
+    /// rotation) and only then writes the MAP_END that carries it, so a joiner
+    /// inside the countdown reads the NEXT area out of
+    /// <c>ServerJoinUpdate.gml:6</c>. It has to: MAP_END is the only other place
+    /// the wire ever states the area, this joiner missed it, and its
+    /// <c>global.currentMapArea</c> is then frozen for as long as it stays
+    /// connected. Stale at 1 across an advance, the joiner runs
+    /// <c>ClientBeginStep.gml:511-544</c>'s team wipe that the server does not,
+    /// reads a character for a slot it now holds as a spectator, and dies in
+    /// <c>Character</c>'s Create with <c>unknown team ID: 2</c>.
+    /// <c>MultiAreaMapTests.AJoinerInTheMapChangeCountdownIsToldTheAreaItIsAboutToLoad</c>
+    /// is the gate; <c>docs/PARITY.md</c>, "Multi-area maps".
+    /// </para>
+    /// <para>
+    /// Safe against the advance decision above re-running on it:
+    /// <c>_world.MapChanging</c> is set here and gates that whole block until
+    /// <see cref="Rounds.ResetForNewMap"/> clears it, by which point
+    /// <see cref="OpenMap"/> has replaced <c>_match</c> outright.
+    /// </para>
+    /// </remarks>
+    private void BeginMapChange(string map, int area)
+    {
+        _nextMap = map;
+        _nextArea = area;
+        _match.CurrentMapArea = (byte)area;
+
+        Rounds.BeginMapChange(ref _world);
+        _mapChangeCountdown = Rounds.MapChangeDelay;
+
+        ServerMessages.MapEnd(_broadcast, _nextMap, _world.Winner, (byte)_nextArea);
+    }
+
+    /// <summary>
     /// <c>GameServerBeginStep.gml:102-131</c>: the round is over, so tell
     /// everybody, then change the map ten seconds later.
     /// </summary>
@@ -156,21 +201,21 @@ public sealed partial class GameServer
             // global.totalMapAreas)` — red pushing through an Invasion map's
             // areas replays the same map with the next area; anything else
             // rotates and goes back to area 1.
+            string nextMap;
+            int nextArea;
+
             if (_world.Winner == Team.Red && _match.CurrentMapArea < _match.TotalMapAreas)
             {
-                _nextArea = _match.CurrentMapArea + 1;
-                _nextMap = _currentMap;
+                nextArea = _match.CurrentMapArea + 1;
+                nextMap = _currentMap;
             }
             else
             {
-                _nextArea = 1;
-                _nextMap = TakeNextMapOverride() ?? NextMapInRotation();
+                nextArea = 1;
+                nextMap = TakeNextMapOverride() ?? NextMapInRotation();
             }
 
-            Rounds.BeginMapChange(ref _world);
-            _mapChangeCountdown = Rounds.MapChangeDelay;
-
-            ServerMessages.MapEnd(_broadcast, _nextMap, _world.Winner, (byte)_nextArea);
+            BeginMapChange(nextMap, nextArea);
             _log.Info($"round over: {_world.Winner} wins; {_nextMap} area {_nextArea} in ten seconds");
         }
 

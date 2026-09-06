@@ -3091,8 +3091,12 @@ flights**.
 
 ⚠️ **Arriving is not flying, and the gap is a third.** `EdgeFlight.Manoeuvres`
 counts what the takeoff gate *asked* for; `Flown` is an arrival with at least one
-of them. `gg_debug`: 20 arrivals, 12 flights. `ctf_truefort`: 328 arrivals, 214
-flights. The other arrivals are node pairs the bot could simply walk between, and
+of them. `gg_debug`: 21 arrivals, 12 flights. `ctf_truefort`: 377 arrivals, 219
+flights. ⚠️ **The `ctf_truefort` pair read 328 and 214 when this was written and
+nothing went red when it stopped** — no gate flew a real map, so the doc drifted
+while the code moved under it (re-measured 2026-09-05, no tables; with the tables
+it is 290 and 209, a different arm). That is what the corpus gate below exists to
+stop. The other arrivals are node pairs the bot could simply walk between, and
 a gate on arrivals alone stays green with the arm deleted.
 
 ⚠️ **`Manoeuvres` does not count shots fired.** Measured by ripping the ATTACK
@@ -3168,6 +3172,845 @@ cold was a test that could not fail; there a run-up credit copied between fans w
 an assumption **every offline checker shared**, so no check could catch it. Both
 are the same shape: the thing that would have failed was not representable in the
 apparatus.
+
+### ✅ The corpus sweep: every edge of every shipped graph, and it is a GATE (2026-09-05)
+
+`EdgeFlights.SweepAll` flies every edge of every graph in a nav directory;
+`EdgeFlightTests.EveryEdgeOfEveryShippedGraphIsFlownOnTheShippingArm` pins its
+tally and `BENCH_FLIGHT` prints its detail. **One implementation, two callers**,
+because a number a gate pins and a bench reports must not be computed twice.
+
+⚠️ **The cost claim this replaces was wrong by two orders of magnitude.**
+`Sweep`'s own docstring said "a whole cache is minutes rather than seconds" and
+`EdgeFlightTests` said `ctf_truefort`'s 878 rocket jumps were "eight seconds,
+which is a measurement rather than a gate". Measured 2026-09-05, Release, warmed:
+**that map is 102 ms and the entire 25-graph corpus is 5.0 s serial, 3.1 s across
+24 cores** — `ScenarioResources` caches the decoded map and the graph, so a flight
+is a collision world plus ~55 ticks. Both comments predated that cache and neither
+had been re-run. **An affordability claim ages exactly as badly as a measurement,
+and nothing goes red when it does.**
+
+#### The corpus, both arms (budget 400, `Team.Red`, all six edge kinds)
+
+| | tables ON (**what a server runs**) | no tables (what every other gate runs) |
+|---|---|---|
+| candidates | 116,316 | 116,316 |
+| **measured** | **32,055** | **37,787** |
+| arrived | 31,352 | 37,044 |
+| flown | 2,403 | 3,380 |
+| **stranded** | **703** | **743** |
+| routed around | 72,926 | 67,194 |
+| shadowed | 10,869 | 10,869 |
+| no route | 466 | 466 |
+| team swapped | 178 | 206 |
+| simulated ticks | 1,556,749 | 2,029,939 |
+
+⚠️ **These are the numbers AFTER the three harness faults below were fixed.** The
+first sweep read 970 and 1,022 stranded; 267 of those were the harness and not
+the edge. Re-recorded 2026-09-05 and again 2026-09-06.
+
+⛔ **`flown` is 1,686 against 31,352 arrivals, and the third clause is why.**
+`EdgeFlight.Flown` requires an arrival, a manoeuvre, **and that the bot actually
+steered this edge** — see "the arrival that flew a different edge" below. Adding
+that last clause took `flown` 2,403 → 1,686 with `arrived` and `stranded`
+unmoved.
+
+⛔ **`measured` is 28% of `candidates`, and that is the ceiling rather than a
+defect.** A\* costs a jump the same as a walk, so it prefers to route around
+72,806 of these edges — and an edge A\* routes around **cannot be posed as a
+one-hop question at all**. **A sweep of every edge is not a check of every edge.**
+The complement is `BENCH_FLIGHT_ROUTES`, which flies whole routes and so exercises
+edges in the context they are actually used in.
+
+⛔ **The two columns are not two runs of one measurement.** The exact heuristic is
+a different arm (`CLAUDE.md`, `--no-nav-distances`), and here is what that costs
+in coverage: it routes around **5,741 more** single hops, and **measurable rocket
+jumps fall 5,659 → 3,537 — a 37% loss over the one edge kind whose arm nothing
+else exercises.** `shadowed` and `no route` are identical across the arms, which
+is the control: neither depends on the heuristic.
+
+✅ **This is the FIRST gate in the repository that runs with the tables on.** The
+three pinned bot measurements and the 25 digests still run without them — see "The
+gates measure a DIFFERENT ARM", which is deliberately unchanged. A new gate gets to
+start on the right arm; an existing pin moving is a decision about what its alarm
+means.
+
+#### What it found, and the two numbers to act on
+
+| kind | measured | stranded @400 | | stranded @4000 | |
+|---|---|---|---|---|---|
+| Walk | 14,832 | 40 | 0.3% | 28 | 0.2% |
+| Fall | 6,136 | 74 | 1.2% | 62 | 1.0% |
+| Jump | 6,829 | 143 | 2.1% | 97 | 1.4% |
+| DropThrough | 8 | 0 | — | 0 | — |
+| **DoubleJump** | 714 | **77** | **10.8%** | **47** | **6.6%** |
+| **RocketJump** | 3,536 | **369** | **10.4%** | **195** | **5.5%** |
+| **all** | **32,055** | **703** | **2.2%** | **429** | **1.3%** |
+
+The two arc kinds are where the failures live, by a factor of five over walking.
+`BENCH_FLIGHT_CSV` writes one row per stranded edge — map, area, edge index, kind,
+from, to, ticks, miss — which is the half a tally cannot carry.
+
+⚠️ **A stranding is relative to its budget and the two are quoted together or
+neither is.** 400 → 1,600 ticks takes 703 to 453, and 1,600 → 4,000 takes it to
+**429** — so **274 of the 703 were slow rather than impossible**, and 429 is where
+it stops falling. ⚠️ Blacklist fires go the other way and violently: 5,140 at 400,
+76,177 at 1,600, 297,166 at 4,000, because a stranded bot keeps banning edges for
+as long as you let it. **The budget that measures followability is not the budget
+that measures cost.**
+
+`cp_dirtbowl` holds 131 of the 429 across its three areas — nearly a third of every
+hard failure on the corpus, and the place to start looking.
+
+#### ✅ Mutation-checked, and note which half moves
+
+Ripping the ATTACK half out of `PathFollower.ApplyLaunch` — the documented
+mutation — moves the shipping-arm gate:
+
+| | intact | ATTACK removed |
+|---|---|---|
+| measured | 32,048 | 32,048 |
+| arrived | 31,078 | **29,086** |
+| flown | 2,355 | **828** |
+| stranded | 970 | **2,962** |
+
+⚠️ **`measured` does not move, and that is structural rather than luck**: it is
+decided at planning time, before a key is pressed. So a change that breaks the
+*flying* and leaves the *routing* alone shows up in three of the twelve pinned
+numbers and not in the others — which is the point of pinning the whole tally
+rather than a headline.
+
+#### ⚠️⚠️ Two of the harness's own faults were inside the first stranding count
+
+**267 of the first sweep's 970 strandings were the harness.** Both were found by
+re-flying every stranded edge with the per-tick state recorded, and both are the
+same shape: **the harness put a body somewhere the game never puts one, and then
+reported what the body could not do there.**
+
+**1. The start was one pixel inside the floor (123 flights).**
+`NavGraph.StandY` is `FloorY - 23` and a character's box bottom is `+23`, both
+inclusive — so a character placed at `StandY` has its last row on the floor's
+first solid row. ⛔ **7,541 of the 11,327 nodes on the shipped graphs (66.6%) fail
+`PlaceFreeInMask` at `StandY`, and every single one is free exactly one pixel
+up** — nothing is still blocked, on any map. An overlapping character **cannot
+move at all**: every candidate step keeps the overlap, `good_move_contact_solid`
+refuses each one, and gravity has nothing to resolve. Those flights stood still
+for the whole budget.
+
+✅ Dropping a soldier onto a node and letting it settle rests it at
+**`StandY - 0.55`**, so one pixel up is also where the simulation actually puts a
+body. `EdgeFlights.StandingY` is that pixel; `EveryShippedNodeCanHoldACharacter`
+is the census, and it pins **both** halves — the 7,541 overlaps and the zero
+still-blocked — so a graph that starts emitting nodes no body can occupy says so
+here rather than as drift in a stranding count.
+
+⚠️ **`StandY` is not wrong; it is a GOAL.** `navSetGoalNode` is where it comes
+from and a goal is a coordinate, not a body. The harness was the thing treating
+it as a place to stand.
+
+**2. Every edge was flown as Red, and 148 of them start inside blue's gate.**
+A team gate is solid to the other team, so a node inside one is a place that team
+can never be. Measured: those 148 flights had `from=TeamBlue to=None edge=None`
+on **every single one**, a red bot could not move a pixel in either direction for
+the whole budget, and **all 148 are free for a blue bot** — which walks off them
+in both directions. `EdgeFlights.Fly` now flies an edge as a team that can
+actually stand on it, records which (`EdgeFlight.TeamSwapped`, 178 on the
+shipping arm) and keeps `StartBlocked` for a start **neither** team can occupy,
+which no shipped graph currently produces.
+
+⚠️ **This one also moved `no-route`, 618 → 466**, because a bot that can be on
+the node can also be routed off it. A premise that is wrong does not stay inside
+the outcome it is a premise for.
+
+⛔ **Note what neither fault touched.** `Measured` moved by 7 and `Shadowed` by
+25; the sweep's *coverage* is decided by the graph and the plan, not by the body,
+so the before and after are comparable as measurements of the same thing. That is
+exactly what is NOT true of the two routing arms, and it is why one pair of
+numbers may be diffed and the other may not.
+
+#### ⚠️⚠️ The third fault: the arrival that flew a DIFFERENT EDGE
+
+**2,099 of the corpus's 31,352 arrivals never steered the edge they were credited
+to** — 6.7%, and among arc edges alone it is 19.8%.
+
+The premises are checked before the bot moves: the plan IS the single hop, and
+`TryResolveHop` yields this edge. ⛔ **But the follower re-plans while it flies.**
+An off-route event or a stuck timer replaces that one hop with a multi-hop walk
+to the same node, the bot walks there, and the arc is credited with an arrival it
+had no part in. One `ctf_orange` rocket-jump flight posed as 63→36 went off route,
+re-planned, and flew **59→36** instead; `cp_dirtbowl`'s 626→563 walked
+`626→621→586→569→566`.
+
+⛔⛔ **THE CAUSE NAMED IN THIS SECTION WAS WRONG, and the counter it added is
+what eventually caught it.** "The follower re-plans while it flies" describes the
+symptom correctly and the mechanism not at all: measured 2026-09-06, in-air
+abandonment is **0.0–1.1 per arc over six attempts in every bucket, highest in the
+arcs that succeed**. What actually re-planned the route was the launcher's refire
+flag being asked as a routing question — see "A cold launcher unplanned the route"
+below, where fixing it takes `Diverted` from **2,128 to 33** with nothing else
+changed. Kept rather than rewritten because the counter and the harness rule are
+still right; only the diagnosis beside them was not.
+
+⛔ **This is `RoutedAround`'s shape arriving a second time, from inside the flight
+rather than from the plan** — which is exactly why it could not live with the
+other premises, and why nothing caught it for a day. `EdgeFlight.RanEdge` counts
+the ticks the follower spent steering the posed edge; `Flown` now requires it and
+`EdgeFlightTally.Diverted` counts the arrivals that fail it.
+
+⚠️ **Rocket jumps carry nearly all of it** — `flown` went 1,784 → 1,067 for that
+kind alone, against 619 → 619 for the air jump. A rocket jump is the arc the
+follower is most likely to give up on and walk around, and it was the arc whose
+success was most overstated.
+
+✅ **`gg_debug`'s twelve flown rocket jumps are untouched**, so the small-map pins
+in `EdgeFlightTests` did not move — the fault lives in the long routes of real
+maps, which is where nothing had been pinned.
+
+#### What the 429 hard failures are, mechanically
+
+Every stranded flight re-flown with per-tick state, at the 400-tick budget
+(703 flights). The classes are what a stranding actually *is*:
+
+| | count | what it means |
+|---|---|---|
+| never got near the goal | 181 | the arc or the route genuinely fails |
+| reached the goal COLUMN, never the node | 368 | undershot — usually under the target ledge |
+| reached the node, then left it and fell | 75 | **overshoot**: the arrival brake ran out of ledge |
+| reached the node, not credited | 68 | mostly budget — arriving on the last few ticks |
+| never moved a pixel | 4 | was 166 before the two fixes above |
+| died en route | 7 | a rocket jump costs 30 hp and these took it three times |
+
+⚠️ **"Reached the node, then fell off it" is a real follower defect, not a
+harness one.** `WalkToGoal` brakes inside the tolerance band rather than coasting,
+but braking is not instant: on `dkoth_atalia`'s edge 415 the bot crossed the goal
+at 3.14 px/tick, decelerated to 1.07 — one tick above the `|hSpeed| < 1` the
+arrival test wants — and by then it was off the ledge and fell 456 px into a pit
+it could not climb out of. **A goal node within about two pixels of a surface's
+edge can be overshot by the brake itself.** It is bounded and it is real: a bot
+sent to a ledge-edge node in a match does the same thing.
+
+⚠️ **A rocket-jump flight can kill the bot.** Each attempt costs 30 hp and the
+follower will retry; seven flights ended with a dead bot. `EdgeFlights` does not
+check aliveness — a dead bot simply stops arriving — so those read as strandings
+rather than as anything more specific.
+
+#### The sweep is parallel, and that is what makes it a gate
+
+Serial in Debug it is 55 s (tables) and 68 s (no tables); across cores the whole
+`EdgeFlightTests` class runs in **12 s**. A flight owns its world, its follower and
+its state, reads a graph and a map nothing writes, and draws from no shared stream,
+so the work is embarrassingly parallel — and the only shared thing it touches,
+`ScenarioResources.Shared`, is a `ConcurrentDictionary` over entries nobody writes.
+⛔ **`TheSweepIsTheSameHoweverManyThreads` gates that flight-for-flight rather than
+on the tally**, because two orderings that differ can produce identical counts. The
+moment the answer depends on the thread count, every number above becomes a
+property of the machine that recorded it.
+
+### Attributing the 429: what was ruled out, and the one bound that holds
+
+**The question:** a stranding says the follower did not fly the edge. It does not
+say the edge can be flown. Which of the 429 are the follower's fault and which are
+arcs the generator should not have emitted?
+
+⚠️ **Not settled. Here is what is, so nobody re-runs the parts that failed.**
+
+#### ⛔ RULED OUT: the run-up that cannot exist. It does not repeat here.
+
+The obvious hypothesis, and the one with form — "What the flights did buy" above
+records 333 sticky arcs that leaned on a run-up credit the arm could never have.
+So: does an arc's recorded takeoff speed (`NAV_EDGE_BUCKET`) exceed what a body
+can actually be doing as it crosses the takeoff column?
+
+Measured by simulation rather than by arithmetic — walk backwards from the takeoff
+column as far as the floor goes, then run forwards and read the speed on the way
+past (`BENCH_FLIGHT` has no mode for this; it was a one-off, and the method is
+written here because the result is a negative):
+
+| kind | arm | n | short of the takeoff speed | median need | median achievable |
+|---|---|---|---|---|---|
+| Jump | arrived | 6,732 | 49.9% | 2.79 | 2.24 |
+| Jump | **stranded** | 97 | **48.5%** | 2.48 | 2.24 |
+| DoubleJump | arrived | 667 | 48.4% | 2.65 | 2.79 |
+| DoubleJump | **stranded** | 47 | **44.7%** | 4.01 | 3.49 |
+| RocketJump | arrived | 3,341 | 56.4% | 3.12 | 2.24 |
+| RocketJump | **stranded** | 195 | **60.0%** | 3.81 | 2.24 |
+
+⛔ **Half of every arc is "short", including the ones the follower flies, and the
+two arms are within a few points of each other.** So `BUCKET` is not a speed the
+ground has to supply and a shortfall against it predicts nothing. **Do not
+re-derive this.** The control is what killed it: run only the stranded column and
+"48% of failing arcs demand more speed than the node affords" reads as a finding.
+
+#### ✅ ESTABLISHED: the failures sit at the margin of what the generator emits
+
+Joining each arc's recorded parameters to its outcome (`BENCH_FLIGHT_CSV` writes
+the arrivals too, which is what makes this possible):
+
+| kind | base failure | top decile by takeoff speed | top decile by flight time |
+|---|---|---|---|
+| Jump | 1.4% | 1.0% | 1.4% |
+| DoubleJump | 6.6% | 9.7% | 7.6% |
+| RocketJump | 5.5% | **11.2%** | **16.1%** |
+
+A rocket jump in the longest tenth by flight time fails **three times** as often as
+one in the middle, and median stranded takeoff speed is 3.8 against 3.1 for
+arrivals (4.0 against 2.6 for the air jump). ⚠️ **It is a margin effect and not a
+mechanism** — the run-up table above is what rules out the obvious mechanism for
+it.
+
+#### ✅ ESTABLISHED: about a third of the strandings are the APPROACH, not the arc
+
+`BENCH_FLIGHT_ORACLE` runs two instruments over the same two arms, and **the
+control arm is arcs the follower demonstrably FLEW** (`Flown`, all three clauses)
+rather than merely arrived at — an "arrived" control includes the diverted
+arrivals above and asks the instrument to fly arcs nobody flew.
+
+| instrument | stranded (n=339) | flown control (n=400) |
+|---|---|---|
+| open-loop input search | 76 (**22.4%**) | 134 (**33.5%** — its recall) |
+| **the real follower, put ON the takeoff column** | 109 (**32.2%**) | 354 (**88.5%** — its recall) |
+
+⛔ **Only the second instrument's negatives mean anything**, and that is entirely
+because of its recall. The open-loop grid misses two thirds of arcs the follower
+actually flies, so its "not flyable" remainder is noise; the assisted probe misses
+one in nine.
+
+✅ **The result: 109 of 339 stranded arcs (32.2%) are flown by the same follower
+when it is simply placed on the takeoff column.** Correcting for the 88.5% recall
+puts it near **36%**. So about a third of the residual is the **approach** — the
+bot cannot get itself to the takeoff column in a fit state — and roughly 218 arcs
+are ones this follower cannot fly even from a perfect start.
+
+⚠️ **"Cannot fly from a perfect start" is still not "the arc is impossible."** It
+bounds the follower's reach, not the generator's honesty; the open-loop search
+found 76 of the strandings flyable by *some* input sequence, and 33 of those are
+arcs the assisted probe misses. **The generator's share is bounded above by ~218
+and has never been measured directly.**
+
+⚠️ **Two candidate axes turned out to matter more than the parameters they sweep.**
+Dropping the tick-0 jump on the theory that a body one pixel above the floor is
+airborne and cannot jump cost 16 of 118 control hits — the physics **queues** a
+jump pressed in the air (`CharacterState.QueueJump`) and fires it on landing, so
+it is a real technique rather than a wasted press. And the first control used
+`Arrived` instead of `Flown`, which *flattered* the instrument by 5 points.
+**Both were caught by the control moving in the direction that made the instrument
+look worse**, which is the only direction worth trusting.
+
+### The 109 approach failures: a narrow takeoff window, and a repair that is refuted
+
+The actionable half of the attribution above — arcs the same follower flies when
+it is simply placed on the takeoff column, so the arc is real and getting there is
+what fails. `BENCH_FLIGHT_ORACLE` with `BENCH_FLIGHT_CSV` writes them
+(`approach=1`).
+
+#### ✅ The discriminator: how WIDE the band of working takeoff speeds is
+
+Sweeping nine takeoff speeds (0 … 5.1 px/tick) at the takeoff column and counting
+how many fly the arc, against a control of arcs the follower genuinely flies:
+
+| arm | n | median working speeds of 9 | fly at all nine |
+|---|---|---|---|
+| the 109 approach failures | 109 | **5** | 9 (8%) |
+| arcs genuinely flown | 140 | **8** | 69 (49%) |
+
+⛔ **The arcs a bot fails to approach are the ones with a narrow window, and the
+ones it flies have a wide one.** That is why the same follower makes them from a
+standing start on the column and not from a walk-up: the gate's acceptance band is
+wide — `along >= 0` up to `needVx + JumpVtol`, plus the reach model — so on a
+wide-window arc anything in the band works and the bot leaves once (**median 1
+takeoff**), while on a narrow-window arc the band admits speeds that do not, the
+bot commits, falls short, goes off route and tries again (**median 6 takeoffs**,
+median 15 off-route fires, 58 of 109 blacklisting something).
+
+✅ `BotPathState.GateColdWeapon/GateTooFast/GateBackwards/GateShort` and
+`Launches/LaunchesUnderspeed` were added for this and are kept: a gate that can
+refuse for four different reasons is not diagnosable from a refusal count.
+⚠️ **The four are per TICK**, so a run-up walking backwards through the takeoff
+column inflates `GateBackwards` without anything being wrong — read them against
+each other, not as counts of attempts.
+
+#### ⛔ REFUTED: demanding the arc's own takeoff speed
+
+The repair the finding suggests — make the gate symmetric,
+`along >= needVx - JumpVtol` instead of `along >= 0`:
+
+| | stranded | rocket-jump stranded | ticks |
+|---|---|---|---|
+| as shipped | **703** | 369 | 1,556,749 |
+| symmetric gate | **924** | 493 | 1,777,554 |
+
+⛔ **It is 31% worse.** `Gate`'s own remarks already record this from the valley
+scenarios ("costs a lot for nothing — 647 → 868 and 674 → 997 ticks, with no more
+arrivals"); the corpus says the same thing about arrivals rather than about time,
+which is the stronger statement and the one that was missing. **Do not re-try
+it.** A repair would have to tighten the band only for narrow-window arcs, and
+nothing in the graph identifies those at runtime.
+
+#### ⛔ Three more hypotheses, measured and dead
+
+Each looked right, and each died against the control. **All three are listed
+because a rejection nobody wrote down gets retried.**
+
+| hypothesis | treatment | control | verdict |
+|---|---|---|---|
+| the arcs demand more takeoff speed than the ground can supply | 48–60% short | 48–56% short | no difference |
+| the bot commits below the arc's speed | 22.4% of takeoffs | 25.6% | no difference |
+| the reach model over-promises on these arcs | 54% over by >4px | 49% | no difference |
+
+⚠️ **The reach-model row is the weakest of the three and is quoted only to close
+the question**: the `need` it compares against was re-derived outside `Gate`
+rather than read out of it, so the absolute numbers are not trustworthy — only
+the absence of a gap between the arms is.
+
+### ⚠️⚠️ The rocket that does not go off: a rocket-jump arc degrading to a 57px hop
+
+**The largest single bucket in the residual.** Rocket jumps are 11% of the measured
+corpus and **195 of the 429 hard failures (45%)**, and unlike the other arc kinds
+they are almost never an approach problem: only **15.4%** are flown by the same
+follower placed on the takeoff column, against 57.7% for the plain jump and 48.9%
+for the air jump.
+
+#### The mechanism, traced
+
+`cp_dirtbowl` e583, `RocketJump` 43→5 — takeoff column 2982, which is the **last
+column of the from-node** (span 2766..2982); the arc needs 101px of rise.
+
+```
+[poll t45] keys=Attack, Right, Jump aim=270 rocketFireFlag=True weaponReady=True hp=160
+   t45  x=2980.6 y=396.0  vsp=-7.70 gnd=0 ms=0 hp=160
+   t56  x=2988.1 y=339.6  vsp=-1.10 gnd=0 ms=0 hp=160     <- peak: 56px of rise
+```
+
+⛔ **The rocket key is pressed, the launcher is ready, and nothing happens.**
+`moveStatus` stays 0, hp never moves, and the bot flies a **57px ordinary jump on
+an arc that needed 101** — the outcome `Gate`'s own remarks call the worst
+available one. The blast is aimed straight down (correct: `vectorfactor` is 1 only
+axis-aligned) and the comment justifying it says "there is a floor under the
+takeoff column by construction" — **but the bot has already left that floor on
+the tick it fires.** At the last column of a run there is nothing under it to
+detonate against, and the rocket falls into the void.
+
+#### Measured, with a control
+
+`BotPathState.RocketDuds` counts arcs abandoned in the air with `moveStatus` still
+0 — the follower already had the branch, it just had no counter.
+
+| arm | edges | takeoffs | rockets that never went off | edges affected |
+|---|---|---|---|---|
+| the 165 rocket-jump hard failures | 165 | 810 | **194 (24.0%)** | 95 (58%) |
+| rocket arcs the follower flies | 215 | 368 | 31 (8.4%) | 26 (12%) |
+
+**Three times the rate on the arcs that fail.** ⚠️ Counted once per airborne
+attempt (`AirTicks == 2`); the first version counted per tick and read "1036% of
+takeoffs", which is the third time in this investigation a per-tick counter has
+had to be corrected to a per-event one. **If a counter's rate can exceed 100%,
+that is the bug and not the finding.**
+
+#### ✅ Fixed while here: two launch sites that disagreed
+
+`Launch` now takes the rocket hand-off rather than leaving it to the caller.
+⛔ **The gate-open site fired the rocket and the patience hatch did not**, so a
+rocket arc whose launcher was ready but whose speed clause refused for two seconds
+left the ground with no rocket — the same 57px hop, from a different cause. The
+cold-launcher case was handled (it blacklists); the ready-launcher case fell
+through.
+
+⚠️ **This moved NOTHING measurable — the corpus sweep is identical to the digit
+before and after** — so either the hatch never reaches a ready rocket on the
+shipped graphs or its effect is nil. **It is kept as a structural fix, not as a
+measured improvement**, and it is recorded that way so nobody quotes it as one. A
+branch nothing reaches is a claim nothing checks; that this one now cannot
+disagree with its twin is the whole of the argument for it.
+
+#### ⛔ The root cause: the takeoff column is the LIP of the run, and the muzzle hangs off it
+
+The rocket is created at the weapon plus 20px of `lengthdir` in the aim direction
+(`Weapons.Launchers.cs`, `RocketMuzzleOffset`) — straight down, so at the
+**character's own x**. And the character's x at the takeoff column is not over the
+floor.
+
+`cp_dirtbowl` e583, probed pixel by pixel: the ledge is three rows thick and its
+solid run **ends at x≈2975**, while the takeoff column puts the character's centre
+at **2980.6** — the body box (13 wide) overhangs the lip with about a pixel of
+floor under its left edge. The rocket spawns at 2980, misses the ledge entirely,
+and falls: y 428.9, 441.6, 454.3 … 612.7, still going.
+
+**Measured over both arms** — placed at rest on the takeoff column, does the
+character stay up:
+
+| arm | edges | takeoff column drops a standing character |
+|---|---|---|
+| the 165 rocket-jump hard failures | 165 | **125 (75.8%)** |
+| arcs the follower flies | 150 | 22 (14.7%) |
+
+⛔ **And it is directional, because the body box is.** The node's span is in
+**anchor columns — the box's left edge** — so on a rightward arc the takeoff
+column is the run's last and the box hangs 6px past it, while on a leftward arc
+the box hangs back *onto* the floor:
+
+| direction | failures | arcs the follower flies |
+|---|---|---|
+| rightward (+1) | **93.8%** fall | 25.4% |
+| leftward (−1) | 37.7% fall | 6.1% |
+
+⚠️ **105 of the 125 stand again two pixels back.** This is a lip, not a gap.
+
+#### ⛔ REFUTED: taking off one cell earlier on a rocket arc
+
+The obvious repair, and it is 39% worse: stranded **703 → 981**, rocket-jump
+stranded 369 → 573. `SteerJump`'s own remarks say why — *"the takeoff column is
+carried ON THE EDGE because the generator SEARCHED for it… re-deriving it from the
+node's own columns would jump from a column the build already rejected"* — and a
+cell back is a column the build rejected. **Do not re-try it.** That is the second
+refuted repair in this area; the first was demanding the arc's own takeoff speed.
+
+⚠️ **So the fault is not obviously the follower's to fix.** The arc works from that
+column and the blast does not, which makes it a constraint the GENERATOR does not
+apply: a rocket-jump takeoff column needs floor under the *muzzle*, not merely
+support for the *anchor*. Acting on that means regenerating all 25 graphs, moving
+`NAV_CACHE_VERSION`, `NavGeneratorTests`' character-for-character rebuild and
+`nav/manifest.tsv` — the nav lane's change, not this one's, and the corpus sweep is
+the gate that would show whether it worked.
+
+#### ✅ FIXED 2026-09-06: tilt the blast when the muzzle has nothing under it
+
+The third option, made and measured. `PathFollower.LipAimDegrees` is 24°, so the
+muzzle moves about 8px back along the run and 18px down — past the lip a
+straight-down shot falls off — while `vectorfactor` stays near **0.85** rather than
+the 0.707 a 45° blast would cost.
+
+| | stranded | rocket-jump stranded | flown | hard failures (budget 4,000) |
+|---|---|---|---|---|
+| before | 703 | 369 | 1,686 | 429 (rocket 195) |
+| **after** | **622** | **291** | **1,735** | **355 (rocket 125)** |
+
+Blacklists 5,140 → 4,967 and ticks 1,556,749 → 1,535,714: the bot stops paying for
+attempts that could not work. The rocket jump's stranding rate goes 10.4% → 8.2% at
+the gate's budget and 5.5% → 3.5% at 4,000.
+
+✅ **Verified on the case it was diagnosed from.** `cp_dirtbowl` e583 now fires at
+aim 246 rather than 270, enters `moveStatus` 1, takes its 30 self-damage and leaves
+at vspeed −13.12 against the −7.70 of the ordinary jump it used to fly.
+
+⛔ **The condition is asked of the TERRAIN and that is the whole of it.**
+`PathFollower.Collision` is a new optional read-only reference for exactly this one
+question. The graph cannot answer it: a node's span ends for gates and walls as
+well as for the edge of a run, so "the takeoff column is the node's last column" is
+true of most arcs — **used as the test it made the sweep 38% worse (703 → 968),
+because it re-aimed the arcs that already worked.** That failed attempt is why the
+plumbing exists.
+
+⚠️ **The three pinned end-to-end bot measurements did not move**, which is what
+makes this a targeted fix rather than a change of behaviour everywhere. Null
+`Collision` behaves exactly as before, so anything driving a follower without one
+keeps the old aim.
+
+⚠️ **355 hard failures remain, 125 of them rocket jumps.** The lip is not the only
+thing wrong with them and this fix does not claim to be the end of it.
+
+#### ⛔ `cp_dirtbowl` is NOT special — that lead is closed
+
+It holds 131 of the 429, but that is size: three areas at ~2,445 measured edges
+each is 23% of the corpus. Its per-area **rate** is 1.7-1.9% against a corpus mean
+of 1.34%, and five maps are worse (`gg_debug2` 3.32%, `gg_debug` 3.25%,
+`tdm_mantic` 3.05%, `ctf_oldfort` 2.56%, `ctf_orange` 2.44%). **The concentration
+is the edge KIND, not the map.**
+
+#### ⚠️ And one more instrument bug, found by tracing rather than by reading
+
+The assisted probe places a bot on the takeoff column at the arc's speed. Since
+the takeoff column is usually the **last** column of the run, that walks it off the
+ledge on tick 0, before the follower has had a poll. Starting behind the column
+instead took the rocket-jump recovery from 10 to 21 of 165 — real, but small, so
+the finding above survives it. **The probe was measuring its own start position
+for 11 arcs and nobody would have known from the aggregate.**
+
+### What a rocket jump delivers: the residual is the LANDING, not the arc
+
+`BENCH_FLIGHT_LAUNCH`, added 2026-09-06 after the lip tilt shipped. The section
+above closed the largest failure bucket and left **125 rocket-jump hard failures**
+at a 4,000-tick budget (of 355 overall). `BENCH_FLIGHT_ORACLE` says 28 of those are
+the approach and the other 97 are arcs "this follower cannot fly from a perfect
+start" — and that sentence names no mechanism. It does not say whether the blast,
+the height or the reach was missing, so nothing could be done with it.
+
+⛔ **A first harness fault, and it made the oracle measure the WRONG FOLLOWER.**
+`PathFollower.Collision` is what the lip tilt asks the terrain through, and both
+probes in `tools/bench/Flight.cs` built their follower without it — so from the
+day the tilt shipped, the oracle reported the pre-tilt follower's reach under the
+current follower's name. A null `Collision` is *silent* by design (it restores the
+old behaviour exactly), which is what let it survive a session. Fixed;
+**it moves 6 of 266 verdicts, 3 each way, and the totals do not move** (stranded
+107, control 351 → 354). Recorded as structural, not as an improvement.
+⚠️ The surprise in that diff is a **`Jump`** edge changing verdict, and it is not a
+bug: `EdgeFlights.ClassFor(Jump)` is a Soldier and `RoutePilot` rebuilds
+`CanRocketJump` from the live character every tick, so a jump-arc probe routes over
+rocket edges like any soldier would.
+
+#### ✅ The launch is not the problem, and neither is the envelope
+
+Each arc flown from its takeoff column at the same six speeds the assisted probe
+uses, keeping the best body the manoeuvre produced, against the same control of
+arcs the follower demonstrably **flew**:
+
+| arm | n | no blast | median launch | short of HEIGHT | short of REACH | median rise / need |
+|---|---|---|---|---|---|---|
+| stranded | 125 | 10 (8.0%) | **−14.40** | 9 (7.8%) | 5 (4.3%) | 200.3 / 108.0 |
+| flown | 400 | 15 (3.8%) | **−14.40** | 9 (2.3%) | 32 (8.3%) | 206.7 / 120.0 |
+
+⛔ **The launch is −14.40 in both arms — `NavRocketJumpModel.ForRocket`'s own
+number to the digit.** The blast is not weak on the arcs that fail. Height is short
+on 9 of 115, reach on 5 — and the control is *worse* on reach (8.3%), so neither is
+the mechanism. The median arc rises **200 px for a need of 108**.
+
+#### ✅ 87.8% of the failures put the body inside the destination
+
+Asking `NavGraph.NodeFromWorld` every tick (±3 mask rows, ±2 columns — so a landing
+or a close airborne pass, not "somewhere overhead"), and the follower's own verdict
+beside it:
+
+| where the flight ended | stranded (115 that blast) | flown control (385) |
+|---|---|---|
+| body never resolves to the to-node | 14 (12.2%) | 10 (2.6%) |
+| **reaches it and never arrives** | **29 (25.2%)** | 3 (0.8%) |
+| **arrives, but by DIVERTING off the arc** | **44 (38.3%)** | 33 (8.6%) |
+| flies the arc — the approach was the fault | 28 (24.3%) | 339 (88.1%) |
+
+⛔ **Only 24 of 125 (19%) are arcs where the manoeuvre fails to happen** — 10 that
+never blast plus 14 whose body never gets to the destination. Median closest
+approach to the goal for the rest is **1.0 px**. The rocket-jump residual is
+overwhelmingly about what happens at the far end.
+
+⚠️ **`arrived` and `steered` must be read PER ATTEMPT.** Summing them over the
+speed sweep credited 44 arcs where the oracle credits 28, because arriving at one
+takeoff speed and steering the edge at another is not one event. That mistake is
+the reason the bottom row now reconciles with `BENCH_FLIGHT_ORACLE` exactly.
+
+#### ✅ The 29 split into two mechanisms, and the arrival test names both
+
+`PathFollower.WalkToGoal` arrives on `onGround && |hspeed| < 1` inside
+`BotConstants.ArriveTol` (8 px) of the goal column, with a brake inside the band.
+Counting ticks that satisfy the first and third clauses, and the slowest the body
+ever got while there:
+
+| | n | never stands on the to-node | stands there | and never gets under 1 px/tick |
+|---|---|---|---|---|
+| the 29 | 29 | **21** | 8 | **8 of 8** |
+| flown control | 372 | 0 | 372 | **0 of 372** |
+
+⛔ **Bimodal, with nothing in between.** The control's band minimum is at most
+**0.81** across 372 arcs; the 8 sit at **1.04–2.53** after 3–9 ticks in the band.
+These are not arcs that are slightly too fast — they enter the band at ~3 px/tick
+off a rocket landing and the brake cannot take that to under 1 before they cross
+8 px. **That is the ledge-overshoot defect, measured against the arrival test's own
+clause rather than inferred from a miss distance.** The other 21 never land on the
+destination at all: the arc grazes within a pixel of the standing spot *airborne*
+and carries on.
+
+⚠️ **The band test needs the NODE as well as the column.** Some rocket arcs need
+under 8 px of reach — straight up onto a ledge — so a body still standing on the
+FROM node is already inside the goal column's tolerance, and a band measured on x
+alone counted the takeoff as an arrival opportunity (29 arcs read as "in band" that
+were nothing of the kind).
+
+#### What this does NOT establish
+
+- **Nothing here is a repair**, and no pin moved when it was written: the corpus
+  sweep was 622/1,735/1,535,714 ticks/4,967 blacklists, identical to the digit.
+  ⚠️ **Those are pre-`Capable` figures** and every count in this whole section is —
+  the fix below landed after it and moved all of them.
+- ~~**The 44 diverted are unexplained.**~~ ✅ **Explained and fixed** — they were
+  the cold launcher unplanning the route. See "A cold launcher unplanned the
+  route" below; the corpus's `Diverted` went 2,128 → 33 and every number in the
+  two tables above is from before that fix.
+- **The 8 are 6% of the 125** and a repair worth ~8 arcs is not obviously worth a
+  change to the arrival test, which every edge kind and every live bot goes
+  through. ⚠️ The falsification: if a widened band or a stronger brake shipped and
+  the corpus sweep's `stranded` did not fall by roughly that many, the mechanism
+  above is not what is costing those arcs.
+
+### ⛔ A cold launcher unplanned the route — `RocketModel.Ready` vs `Capable`
+
+**The largest single defect found in the bot layer since the nav lanes merged, and
+it had been there for as long as the query rebuild has.** Found 2026-09-06 by
+tracing one arc after every aggregate had failed to name a mechanism.
+
+#### The bug
+
+`ScriptedBot` and `EdgeFlights`' pilot both rebuild the search query from live
+state on every tick — deliberately, and the reason recorded beside it is sound: a
+soldier's routes should shed their rocket jumps as its hp drops, because a route
+planned at 160hp is still installed at 35. But the test they used was
+`RocketModel.Ready`, and `Ready` includes **`weapon.ReadyToShoot`** — the 30-tick
+refire flag.
+
+So a soldier that had just fired, at anything, answered *"I cannot rocket jump"*
+for a second. `NavGraph.EdgeRoutable` then refused **every rocket edge on the
+map**, `TryFindEdge` found no usable edge for the hop it was already flying, and
+"no usable edge is a re-plan" did exactly what it says — the follower re-planned a
+route with no rocket jump anywhere in it and walked the long way round.
+
+⚠️ **Nothing looked broken.** The bot arrives. It is slower and it takes a
+different route, and no gate in this repository asked whether a bot that arrived
+had used the arcs it was routed over — which is the failure mode CLAUDE.md
+describes as "a match that ends is not a match that happened", arriving in a place
+nobody had thought to look.
+
+#### The fix
+
+`RocketModel.Capable` — hp, class and ammo, the durable properties of the
+traveller — is what the two query rebuilds ask now. `Ready` keeps `ReadyToShoot`
+and keeps its job: the **takeoff gate**, which already waits a cold launcher out
+and counts the wait in `BotPathState.GateColdWeapon`. One test split in two, each
+used where it belongs.
+
+#### Measured, on the corpus sweep, with a control
+
+| arm | stranded | rocket stranded | flown | rocket flown | diverted | ticks | blacklists |
+|---|---|---|---|---|---|---|---|
+| before | 622 | 291 | 1,735 | 1,116 | 2,128 | 1,535,714 | 4,967 |
+| **after** | **536** | **203** | **3,626** | **3,007** | **33** | **1,476,150** | 7,980 |
+| after, warm launcher | 508 | 181 | 3,844 | 3,225 | 48 | 1,351,181 | 4,667 |
+
+⛔ **`flown` more than DOUBLING is the finding, not `stranded` falling.** The sweep
+exists to ask whether the graph is followable, and it was posing that question on
+only 1,116 of the 3,536 rocket edges it *measured* — 32%. It is now 3,007, 85%.
+A stranding count that improves 14% understates what changed here by a lot.
+
+✅ The same on the no-tables arm, which is a different corpus and so an independent
+check: stranded 626 → 579, flown 2,297 → **5,530**, `Diverted` 3,837 → **16**.
+
+✅ `ScenarioSuiteTests`: rocket jumps over the fourteen legs **6 → 10**, one leg 29
+ticks faster (`valley-shaft-floor-to-point` 161 → 132), one 3 ticks slower
+(`avanti-ramp-pocket-to-intel` 217 → 220), twelve unchanged, **no leg regressed**.
+That pin exists precisely to catch the search quietly ceasing to offer these arcs,
+and it moved the way it is meant to when the opposite happens.
+
+⚠️ **`SeparationBandTests`' three duel-damage pins moved and NOT all one way**
+(`arena_lumberyard` 1,216.7 → 1,241.4, `koth_harvest` 877.6 → 791.1, `ctf_2dfort`
+1,425.1 → 1,313.3). Soldiers take rocket routes they used to abandon, so they
+arrive at different places at different times; a duel's damage total is not a
+quality measure and a mixed sign here is what a routing change looks like rather
+than a regression.
+
+#### ⚠️ The one number that got worse, and why it is the harness
+
+Corpus blacklists **4,967 → 7,980** (+61%), and on `gg_debug` 2 → 15 over
+twenty-one arcs. The bot now *attempts* arcs it used to route around, and the
+off-route machinery's one-retry-then-ban runs on all of them.
+
+⛔ **But the control settles where it comes from**: with `BENCH_FLIGHT_WARM` the
+figure is **4,667 — lower than the 4,967 before the fix.** `EdgeFlights` spawns a
+character on the from-node and asks for the arc at once, and
+`Weapon.events/Create.xml` starts a fresh weapon with `ReadyToShoot` false and the
+refire alarm running — roughly 45 ticks from being able to fire. A bot that has
+been alive in a match for any time at all is not in that state. So the rise is the
+sweep's own spawn showing through, now that the bot waits at the gate for the
+launcher instead of routing away from it, and `BotConstants.TakeoffPatience` (60
+ticks) is what eventually bans the edge.
+
+⚠️ **Falsification:** if `TakeoffPatience` were raised and the cold arm's
+blacklists did not fall towards the warm arm's, the spawn is not what is producing
+them and this attribution is wrong.
+
+#### What found it, after four instruments did not
+
+The launch readings said the failures and the successes were indistinguishable in
+blast, height and reach; the counters said the bot barely steered the edge at all;
+the in-air abandonment counter came back ~0 in every bucket. **None of those names
+a mechanism.** `BENCH_FLIGHT_TRACE` prints one arc a tick at a time, and the first
+one showed a bot standing still for 45 ticks and then flying a *different* edge
+from the node it had slid onto. ⚠️ **An aggregate can only rank hypotheses you
+already have.** Four rounds of slicing produced smaller and smaller buckets and no
+cause; one trace produced the cause in a minute.
+
+### The residual after `Capable`, re-measured — and it is now the APPROACH
+
+⛔ **Everything in the two sections above this one was measured against the broken
+follower and none of it survived the fix.** Re-run 2026-09-06 immediately after,
+because a stale attribution is worse than none: it names buckets that no longer
+exist and sends the next session after them.
+
+| | before `Capable` | after |
+|---|---|---|
+| hard failures @4,000 ticks | 355 | **344** |
+| of them rocket jumps | 125 | **111** |
+| assisted instrument's RECALL | 88.5% | **97.5%** |
+| stranded arcs the approach explains | 109 of 339 (32.2%) | **150 of 254 (59.1%)** |
+| rocket arcs the approach explains | 28 of 125 (22.4%) | **74 of 111 (66.7%)** |
+| rocket arcs unflyable from a perfect start | 97 | **37** |
+
+⛔ **The instrument had the bug too**, which is why its recall jumped nine points
+and why 60 of the 97 "arcs this follower cannot fly from a perfect start" simply
+evaporated: the probe's own bot was unplanning its route whenever its launcher was
+cold, exactly like the bot in the sweep. **A probe that drives the real follower
+inherits the real follower's bugs**, and its recall is the only thing that shows
+it — the treatment rate alone moved in a perfectly plausible direction.
+
+✅ **The residual is now the approach, by a clear majority**: 59% overall and 67%
+of rocket jumps, against a control recall of 97.5%. The landing buckets that
+iteration produced are correspondingly smaller — the `Diverted` bucket is **gone
+from both arms**, the arcs that stand on the goal and cannot brake under 1 px/tick
+are **5** (was 8), those that graze it airborne **10** (was 21).
+
+⚠️ **The "narrow takeoff window" analysis of the approach failures is itself
+pre-`Capable`** and has not been re-run.
+
+#### ⛔ `TakeoffPatience`'s ban is INERT on this corpus, and the sweep cannot price one
+
+The falsification written beside the `gg_debug` blacklist pin, run:
+
+| `BotConstants.TakeoffPatience` | blacklists | stranded | flown | arrived | diverted | ticks |
+|---|---|---|---|---|---|---|
+| 60 (shipped) | 7,980 | 536 | 3,626 | 31,519 | 33 | 1,476,150 |
+| 120 | 6,683 | 536 | 3,626 | 31,519 | 33 | 1,476,150 |
+| 400 | 5,594 | 536 | 3,626 | 31,519 | 33 | 1,476,150 |
+
+⛔ **Only the blacklist column moves. Every other number is bit-identical.** So the
+gate's cold-launcher ban fires exclusively on flights whose outcome and duration it
+does not change, and the blacklist rise the `Capable` fix brought with it is
+bookkeeping rather than a cost. ⚠️ **This also means a blacklist count from
+`BENCH_FLIGHT` is a diagnostic and not a price**: a single-hop flight ends before a
+ban can have a consequence. Where 7,980 lands: 3,161 on the 536 stranded flights
+(5.9 each — thrashing) and 4,819 across 3,380 of the 31,519 arrivals.
+
+#### ✅ What the fix is worth where a ban DOES matter
+
+`BENCH_FLIGHT_ROUTES=200` flies whole routes, so a banned edge changes the rest of
+the journey. Same seed, two binaries differing only in `Ready` vs `Capable`:
+
+| | routes posed | arrived | simulated ticks |
+|---|---|---|---|
+| `Ready` (the bug) | 3,866 | 3,722 (96.3%) | 2,042,402 |
+| `Capable` | 3,866 | **3,729 (96.5%)** | **2,001,641 (−2.0%)** |
+
+⛔ **Quote this beside the doubling, not instead of it, and never the doubling
+alone.** `flown` 1,735 → 3,626 is a statement about what the per-edge sweep was
+managing to ASK — it was posing its own question on 32% of the rocket edges it
+counted and now poses it on 85%. It is not a claim that bots get around twice as
+well: over whole routes the same fix is worth 2% of travel time and two tenths of a
+point of arrivals, because A* has alternatives and rocket jumps are a small
+fraction of a long route's hops.
+
+### The route sample: the 68% the per-edge sweep cannot reach
+
+`BENCH_FLIGHT_ROUTES=<n>` plans between `n` random node pairs a map and flies the
+whole route. Measured on `ctf_truefort` (500 pairs, budget 3000, no tables,
+2026-09-05): **2.8 ms a route, 56 hops average, 368 of 400 posed routes arrive**.
+
+⚠️ **`noroute` is not a failure and is large** — 100 of 500 pairs on
+`ctf_truefort`, 96 of 200 on `gg_debug`. A nav graph describes the terrain, so it
+carries nodes no route reaches; see "Island nodes" above.
+
+⛔ **It is a sample, and all-pairs is affordable but is not a gate.** The 25
+graphs hold 11,327 nodes — **6,546,185 ordered pairs, about 5 core-hours** at the
+measured rate, or ~13 minutes across 24 cores. That is a nightly or on-demand run.
+A 1% sample is three core-minutes.
+
+⛔ **Neither mode is a match, and every absence arrives as a legal-looking zero.**
+A flight is one bot in an empty world: no enemies, no projectiles, no sentry, no
+crowd for occupancy to push routes apart. `docs/BOTS.md`, "A duel does not contain
+what a match contains".
 
 ### ✅ Bot zoom, `EnvAction`'s sixth head, and `ScenarioWorld`'s missing poll
 

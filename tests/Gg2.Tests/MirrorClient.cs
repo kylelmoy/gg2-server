@@ -61,6 +61,19 @@ public sealed class MirrorClient : IDisposable
     public string? CurrentMap => _stream.CurrentMap;
 
     /// <summary>
+    /// The roster index this client believes it occupies — the stock client's
+    /// <c>global.playerID</c>, which moves down when a lower slot leaves.
+    /// </summary>
+    public byte? OwnPlayerId => _stream.OwnPlayerId;
+
+    /// <summary>
+    /// Whether this client ever worked out which player it is — the stock
+    /// client's <c>global.myself</c>. See <see cref="ServerStream.SelfBound"/>
+    /// for the one frame in which false is legitimate.
+    /// </summary>
+    public bool SelfBound => _stream.SelfBound;
+
+    /// <summary>
     /// The map area this client believes it is playing, 1-based.
     /// </summary>
     /// <remarks>
@@ -157,6 +170,26 @@ public sealed class MirrorClient : IDisposable
                 $"{message.Type}: declares {state.PlayerCount} players, "
                 + $"this client holds {_stream.PlayerCount}");
         }
+
+        // ClientBeginStep.gml:206-208 — the client binds global.myself on the one
+        // PLAYER_JOIN that lands at its own id, and never retries. Unbound is
+        // legitimate for the single frame between a joiner's burst and the
+        // broadcast that carries its own PLAYER_JOIN, so the question is asked
+        // only once the roster has grown past that id: at that point every stock
+        // client either knows which player it is or never will.
+        //
+        // Live on 2026-09-05 this is Spectator's End Step and AmmoCounter's Draw
+        // failing on `global.myself.object` with "Unknown variable object" every
+        // frame — the same -1 ClientCreate.gml:20 set.
+        if (_stream.OwnPlayerId is { } own && !_stream.SelfBound && _stream.PlayerCount > own)
+        {
+            _impossible.Add(
+                $"{message.Type}: this client holds {_stream.PlayerCount} players and was "
+                + $"told it is player {own}, but no PLAYER_JOIN ever landed there");
+        }
+
+        if (_stream.SelfDestroyed)
+            _impossible.Add($"{message.Type}: this client was sent its own PLAYER_LEAVE");
 
         for (var slot = 0; slot < state.Players.Length; slot++)
         {

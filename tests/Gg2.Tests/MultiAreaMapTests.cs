@@ -107,8 +107,15 @@ public sealed class MultiAreaMapTests
                 harness.Server.RequestMapChange(Map, area),
                 $"the change to area {area} was refused");
 
+            // ⚠️ Waits for the change to COMPLETE, not merely to be announced.
+            // CurrentMapArea moves the moment the countdown opens — that is the
+            // reference's timing and what a joiner in the window is told — so
+            // testing it alone would return on the same tick as the request and
+            // assert TotalMapAreas against the map the server had not left yet.
+            // NextMap is non-empty exactly while a change is pending.
             harness.TickUntil(
-                () => harness.Server.CurrentMapArea == area,
+                () => string.IsNullOrEmpty(harness.Server.NextMap)
+                      && harness.Server.CurrentMapArea == area,
                 $"the server to reach area {area}",
                 maxTicks: 600);
 
@@ -234,6 +241,199 @@ public sealed class MultiAreaMapTests
 
         // Rotated, not advanced.
         Assert.Equal(1, mirror.CurrentMapArea);
+    }
+
+    /// <summary>
+    /// A client that joins inside the ten-second countdown is told the area it
+    /// is about to load, not the one being played out.
+    /// </summary>
+    /// <remarks>
+    /// <b>The reference moves <c>global.currentMapArea</c> at MAP_END time</b>,
+    /// ten seconds before the change itself:
+    /// <c>GameServerBeginStep.gml:74-92</c> assigns it (<c>+= 1</c> on an
+    /// advance, <c>= 1</c> on a rotation) and only then writes the MAP_END that
+    /// carries it. So <c>ServerJoinUpdate.gml:6</c>, which reads the same global,
+    /// hands a joiner in that window the <em>next</em> area — and it has to,
+    /// because MAP_END is the only other place the wire ever states the area and
+    /// this joiner missed it. Its <c>global.currentMapArea</c> is frozen at
+    /// whatever the JOIN_UPDATE said for as long as it stays connected.
+    /// <para>
+    /// Two things read it on the client and both are wrong if it is stale:
+    /// <c>basicRoomSetup.gml:16-25</c> narrows the map to the wrong area's
+    /// entities, and <c>ClientBeginStep.gml:511-544</c> wipes every team to
+    /// <c>TEAM_SPECTATOR</c> on <c>global.currentMapArea == 1</c> — a rule the
+    /// server applies to the area it is going TO. Stale at 1 across an advance,
+    /// the joiner wipes teams the server keeps; it then reads a character for a
+    /// slot it holds as a spectator and <c>Character</c>'s Create kills it with
+    /// <c>unknown team ID: 2</c>. That is the open <c>cp_dirtbowl</c> fatal's
+    /// shape exactly, and <see cref="MirrorClient.Impossible"/> asks the same
+    /// question the client's own code does.
+    /// </para>
+    /// <para>
+    /// The incumbent is not decoration: without a player who is on a team and
+    /// holds a character, the wipe has nothing to disagree about and the test
+    /// goes vacuously green.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void AJoinerInTheMapChangeCountdownIsToldTheAreaItIsAboutToLoad()
+    {
+        using var harness = new ServerHarness(options =>
+        {
+            options.Map = Map;
+            options.MapRotation = [Map];
+            options.ShuffleRotation = ShuffleMode.None;
+        });
+
+        var incumbent = harness.JoinClient("incumbent");
+        using var incumbentMirror = new MirrorClient(incumbent, Load, Map);
+
+        harness.Tick(10);
+        incumbent.SendChangeTeam(Team.Red);
+        harness.TickUntil(
+            () =>
+            {
+                incumbentMirror.Pump();
+                return harness.Server.TeamOf(harness.Server.RosterCount - 1) == Team.Red;
+            },
+            "the incumbent to reach red");
+
+        // The advance, and then a join INSIDE the countdown it opened.
+        Assert.True(harness.Server.RequestMapChange(Map, 2), "the change to area 2 was refused");
+
+        var latecomer = harness.JoinClient("latecomer");
+        using var mirror = new MirrorClient(latecomer, Load, Map);
+        mirror.Pump();
+
+        // NextMap is empty unless a change is pending, so this is the guard that
+        // stops the test going vacuous if the join ever grows slower than the
+        // ten-second countdown.
+        Assert.False(
+            string.IsNullOrEmpty(harness.Server.NextMap),
+            "the join outlasted the countdown, so this test never reached the window it is about");
+
+        Assert.Equal(2, mirror.CurrentMapArea);
+
+        // Through the change, and far enough past it for the incumbent to
+        // respawn — a character for a slot the joiner wiped to spectator is the
+        // crash itself.
+        harness.TickUntil(
+            () =>
+            {
+                mirror.Pump();
+                incumbentMirror.Pump();
+                return mirror.Of(MessageType.ChangeMap).Count > 1;
+            },
+            "the area change to reach the latecomer",
+            maxTicks: Rounds.MapChangeDelay + 200);
+
+        for (var i = 0; i < 200; i++)
+        {
+            harness.Tick(1);
+            mirror.Pump();
+            incumbentMirror.Pump();
+        }
+
+        Assert.Empty(mirror.Impossible);
+        Assert.Empty(incumbentMirror.Impossible);
+
+        // The area advance keeps teams, on the server and on both clients.
+        Assert.Equal(Team.Red, harness.Server.TeamOf(1));
+        Assert.Equal(Team.Red, mirror.Teams[1]);
+        Assert.Equal(Team.Red, incumbentMirror.Teams[1]);
+    }
+
+    /// <summary>
+    /// The same rule down the ROUND-END door, and in the other direction: a
+    /// rotation off area 3 tells a joiner in the countdown area 1.
+    /// </summary>
+    /// <remarks>
+    /// <b>Two doors open the countdown</b> — <see cref="GameServer.RequestMapChange"/>
+    /// (the control port and the web admin) and <see cref="GameServer.ServeRoundEnd"/>
+    /// (a round ending, which is the one that fires in production) — and they
+    /// went through separate bodies until 2026-09-05. A gate on one says nothing
+    /// about the other, and this is the half a real server actually reaches.
+    /// <para>
+    /// It also runs the wipe the other way round. A rotation resets
+    /// <c>global.currentMapArea</c> to 1, so the server drops everyone to
+    /// spectator (<c>GameServerBeginStep.gml:107-138</c>) and a client told 1
+    /// does the same to itself. Told a stale 3, the joiner would <em>keep</em>
+    /// the teams the server has just cleared — the inverse disagreement, which
+    /// puts a spectator on a team in the scoreboard rather than killing the
+    /// client, and would survive until each player happened to re-pick.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ARoundEndingInTheCountdownTellsAJoinerTheAreaItRotatesTo()
+    {
+        using var harness = new ServerHarness(options =>
+        {
+            options.Map = Map;
+            options.MapRotation = [Map];
+            options.ShuffleRotation = ShuffleMode.None;
+        });
+
+        // Onto the last area, so "the area being played" and "the area a
+        // rotation goes to" are different numbers. Without this the test cannot
+        // tell a stale value from a correct one.
+        Assert.True(harness.Server.RequestMapChange(Map, 3), "the change to area 3 was refused");
+        harness.TickUntil(
+            () => string.IsNullOrEmpty(harness.Server.NextMap)
+                  && harness.Server.CurrentMapArea == 3,
+            "the server to reach area 3",
+            maxTicks: 600);
+
+        var incumbent = harness.JoinClient("incumbent");
+        using var incumbentMirror = new MirrorClient(incumbent, Load, Map);
+        harness.Tick(10);
+        incumbent.SendChangeTeam(Team.Blue);
+        harness.TickUntil(
+            () =>
+            {
+                incumbentMirror.Pump();
+                return harness.Server.TeamOf(harness.Server.RosterCount - 1) == Team.Blue;
+            },
+            "the incumbent to reach blue");
+
+        // The production door: a decided round, picked up by ServeRoundEnd on
+        // the next tick. Nobody wins, so it rotates rather than advancing.
+        Assert.True(harness.Server.RequestRoundEnd(), "the round end was refused");
+        harness.Tick(2);
+
+        var latecomer = harness.JoinClient("latecomer");
+        using var mirror = new MirrorClient(latecomer, Load, Map);
+        mirror.Pump();
+
+        Assert.False(
+            string.IsNullOrEmpty(harness.Server.NextMap),
+            "the join outlasted the countdown, so this test never reached the window it is about");
+
+        Assert.Equal(1, mirror.CurrentMapArea);
+
+        harness.TickUntil(
+            () =>
+            {
+                mirror.Pump();
+                incumbentMirror.Pump();
+                return mirror.Of(MessageType.ChangeMap).Count > 1;
+            },
+            "the rotation to reach the latecomer",
+            maxTicks: Rounds.MapChangeDelay + 200);
+
+        for (var i = 0; i < 100; i++)
+        {
+            harness.Tick(1);
+            mirror.Pump();
+            incumbentMirror.Pump();
+        }
+
+        Assert.Empty(mirror.Impossible);
+        Assert.Empty(incumbentMirror.Impossible);
+
+        // A rotation wipes teams, and both clients have to have done it too.
+        Assert.Equal(Team.Spectator, harness.Server.TeamOf(1));
+        Assert.Equal(Team.Spectator, mirror.Teams[1]);
+        Assert.Equal(Team.Spectator, incumbentMirror.Teams[1]);
     }
 
     /// <summary>
