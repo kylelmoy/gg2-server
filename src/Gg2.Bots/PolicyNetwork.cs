@@ -114,8 +114,22 @@ public sealed class PolicyNetwork
 
         var meta = NpyFile.ReadStrings(metaBytes);
 
+        // ⛔ `< 7`, NOT `!= 7`, and another repository now depends on that.
+        // ⚠️ Do not tighten this to an equality check. `gg2-rl` writes an eighth
+        // field — the class set a checkpoint was trained on — from 2026-09-06, and
+        // has migrated its 256 existing checkpoints to carry it. This build ignores
+        // the field (everything below reads by index), which is exactly what lets
+        // that land before this side reads it. An equality check here would refuse
+        // every checkpoint they now produce, and the refusal would look like a
+        // corrupt file rather than a version skew.
+        // ⚠️ The gate for this is NOT here yet: `meta` is a pickled object array,
+        // so a synthetic eight-field checkpoint would test a pickle this session
+        // hand-rolled rather than one the trainer writes. It belongs with the
+        // change that reads field 7, using one of their real migrated files.
+        // docs/ENV.md; the ask is in gg2-rl's docs/CONTRACT.md, "AN ASK RAISED
+        // 2026-09-06".
         if (meta.Length < 7)
-            throw new InvalidDataException($"the metadata has {meta.Length} fields, expected 7");
+            throw new InvalidDataException($"the metadata has {meta.Length} fields, expected at least 7");
 
         // The order gg2-rl's Policy.save writes: policy version, simulation uuid,
         // action encoding, observation layout, head shape, observation length,
