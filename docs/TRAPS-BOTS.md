@@ -3924,6 +3924,74 @@ from the node it had slid onto. ⚠️ **An aggregate can only rank hypotheses y
 already have.** Four rounds of slicing produced smaller and smaller buckets and no
 cause; one trace produced the cause in a minute.
 
+### The residual after `Capable`, re-measured — and it is now the APPROACH
+
+⛔ **Everything in the two sections above this one was measured against the broken
+follower and none of it survived the fix.** Re-run 2026-09-06 immediately after,
+because a stale attribution is worse than none: it names buckets that no longer
+exist and sends the next session after them.
+
+| | before `Capable` | after |
+|---|---|---|
+| hard failures @4,000 ticks | 355 | **344** |
+| of them rocket jumps | 125 | **111** |
+| assisted instrument's RECALL | 88.5% | **97.5%** |
+| stranded arcs the approach explains | 109 of 339 (32.2%) | **150 of 254 (59.1%)** |
+| rocket arcs the approach explains | 28 of 125 (22.4%) | **74 of 111 (66.7%)** |
+| rocket arcs unflyable from a perfect start | 97 | **37** |
+
+⛔ **The instrument had the bug too**, which is why its recall jumped nine points
+and why 60 of the 97 "arcs this follower cannot fly from a perfect start" simply
+evaporated: the probe's own bot was unplanning its route whenever its launcher was
+cold, exactly like the bot in the sweep. **A probe that drives the real follower
+inherits the real follower's bugs**, and its recall is the only thing that shows
+it — the treatment rate alone moved in a perfectly plausible direction.
+
+✅ **The residual is now the approach, by a clear majority**: 59% overall and 67%
+of rocket jumps, against a control recall of 97.5%. The landing buckets that
+iteration produced are correspondingly smaller — the `Diverted` bucket is **gone
+from both arms**, the arcs that stand on the goal and cannot brake under 1 px/tick
+are **5** (was 8), those that graze it airborne **10** (was 21).
+
+⚠️ **The "narrow takeoff window" analysis of the approach failures is itself
+pre-`Capable`** and has not been re-run.
+
+#### ⛔ `TakeoffPatience`'s ban is INERT on this corpus, and the sweep cannot price one
+
+The falsification written beside the `gg_debug` blacklist pin, run:
+
+| `BotConstants.TakeoffPatience` | blacklists | stranded | flown | arrived | diverted | ticks |
+|---|---|---|---|---|---|---|
+| 60 (shipped) | 7,980 | 536 | 3,626 | 31,519 | 33 | 1,476,150 |
+| 120 | 6,683 | 536 | 3,626 | 31,519 | 33 | 1,476,150 |
+| 400 | 5,594 | 536 | 3,626 | 31,519 | 33 | 1,476,150 |
+
+⛔ **Only the blacklist column moves. Every other number is bit-identical.** So the
+gate's cold-launcher ban fires exclusively on flights whose outcome and duration it
+does not change, and the blacklist rise the `Capable` fix brought with it is
+bookkeeping rather than a cost. ⚠️ **This also means a blacklist count from
+`BENCH_FLIGHT` is a diagnostic and not a price**: a single-hop flight ends before a
+ban can have a consequence. Where 7,980 lands: 3,161 on the 536 stranded flights
+(5.9 each — thrashing) and 4,819 across 3,380 of the 31,519 arrivals.
+
+#### ✅ What the fix is worth where a ban DOES matter
+
+`BENCH_FLIGHT_ROUTES=200` flies whole routes, so a banned edge changes the rest of
+the journey. Same seed, two binaries differing only in `Ready` vs `Capable`:
+
+| | routes posed | arrived | simulated ticks |
+|---|---|---|---|
+| `Ready` (the bug) | 3,866 | 3,722 (96.3%) | 2,042,402 |
+| `Capable` | 3,866 | **3,729 (96.5%)** | **2,001,641 (−2.0%)** |
+
+⛔ **Quote this beside the doubling, not instead of it, and never the doubling
+alone.** `flown` 1,735 → 3,626 is a statement about what the per-edge sweep was
+managing to ASK — it was posing its own question on 32% of the rocket edges it
+counted and now poses it on 85%. It is not a claim that bots get around twice as
+well: over whole routes the same fix is worth 2% of travel time and two tenths of a
+point of arrivals, because A* has alternatives and rocket jumps are a small
+fraction of a long route's hops.
+
 ### The route sample: the 68% the per-edge sweep cannot reach
 
 `BENCH_FLIGHT_ROUTES=<n>` plans between `n` random node pairs a map and flies the

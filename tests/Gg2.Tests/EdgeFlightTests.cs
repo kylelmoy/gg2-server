@@ -499,10 +499,16 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
         // once the spawn artefact is taken out. docs/TRAPS-BOTS.md, "A cold
         // launcher unplanned the route".
         //
-        // All twenty-one still arrive, so this is a cost rather than a fault —
-        // but it is the cost worth watching. PathFollowerFixtureTests pins zero
-        // over a 137-node leg; a bot that starts banning edges still arrives, just
-        // slowly, inside any budget, with the route quality gone and nothing red.
+        // ⛔ **And this sweep cannot price a blacklist, so read it as a diagnostic
+        // rather than as a cost.** A single-hop flight ends before a ban has any
+        // downstream consequence, and the experiment says so: raising
+        // BotConstants.TakeoffPatience 60 -> 120 -> 400 moves the corpus blacklists
+        // 7,980 -> 6,683 -> 5,594 and leaves stranded, flown, arrived, diverted and
+        // ticks BIT-IDENTICAL. What does price it is BENCH_FLIGHT_ROUTES, where a
+        // ban changes the rest of the route: 2,042,402 -> 2,001,641 ticks across
+        // 3,866 routes for the Capable fix, and 3,722 -> 3,729 arrivals.
+        // PathFollowerFixtureTests pins zero over a 137-node leg, which is the
+        // other end of the same question.
         Assert.Equal(15, blacklists);
     }
 
