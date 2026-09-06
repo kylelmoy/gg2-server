@@ -67,7 +67,7 @@ public sealed class LobbyAnnouncer : IDisposable
             // Logged at info rather than warn: an unreachable lobby is an
             // ordinary condition for a server on a private network, and a
             // warning every 30 seconds would train everyone to ignore the log.
-            _log.Info($"lobby {what} failed: {e.Message}");
+            _log.Warn($"lobby {what} failed: {e.Message}");
         }
     }
 

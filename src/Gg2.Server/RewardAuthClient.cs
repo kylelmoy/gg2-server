@@ -110,7 +110,7 @@ public sealed class RewardAuthClient : IDisposable
     public void Enqueue(RosterEntry player, byte[] request)
     {
         if (!_queue.TryAdd((player, request)))
-            _log.Info($"reward auth for {player.Name} dropped: {RewardAuth.MaxQueued} already queued");
+            _log.Warn($"reward auth for {LogText.Safe(player.Name)} dropped: {RewardAuth.MaxQueued} already queued");
     }
 
     /// <summary>
@@ -165,7 +165,7 @@ public sealed class RewardAuthClient : IDisposable
         {
             // Info rather than warn: a server on a private network with no route
             // to the auth service would otherwise warn once per joining player.
-            _log.Info($"reward auth for {who} failed: {e.Message}");
+            _log.Warn($"reward auth for {LogText.Safe(who)} failed: {e.Message}");
             return null;
         }
     }

@@ -239,7 +239,7 @@ public sealed partial class GameServer
                 if (late.Record(_frame, overrunMs, tickLength.TotalMilliseconds, LateContext(workMs))
                     is { } warning)
                 {
-                    _log.Info(warning);
+                    _log.Warn(warning);
                 }
             }
 
@@ -272,7 +272,7 @@ public sealed partial class GameServer
             {
                 // Far enough behind that catching up tick-by-tick would only dig
                 // deeper. Give up the debt rather than spiral.
-                _log.Info($"dropped {-wait.TotalMilliseconds:0}ms of tick backlog");
+                _log.Warn($"dropped {-wait.TotalMilliseconds:0}ms of tick backlog");
                 nextTick = clock.Elapsed;
             }
         }

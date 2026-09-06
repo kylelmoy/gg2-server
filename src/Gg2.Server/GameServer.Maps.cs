@@ -270,7 +270,7 @@ public sealed partial class GameServer
             return candidate;
         }
 
-        _log.Info($"no loadable map in the rotation; staying on {_currentMap}");
+        _log.Warn($"no loadable map in the rotation; staying on {_currentMap}");
         return _currentMap;
     }
 

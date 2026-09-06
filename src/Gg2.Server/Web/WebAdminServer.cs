@@ -329,7 +329,7 @@ public sealed class WebAdminServer : IDisposable
         }
         catch (Exception e)
         {
-            _log.Info($"web admin: unhandled {e.GetType().Name} serving a request: {e.Message}");
+            _log.Error("web admin: unhandled exception serving a request", e);
         }
         finally
         {
@@ -477,7 +477,7 @@ public sealed class WebAdminServer : IDisposable
             // Paid on every failure, before the answer goes out. See
             // AdminSessions.FailureDelay.
             await Task.Delay(AdminSessions.FailureDelay, token);
-            _log.Info($"web admin: failed sign-in from {address}");
+            _log.Warn($"web admin: failed sign-in from {address}");
             return await JsonAsync(stream, 401, Error("wrong password"), token);
         }
 

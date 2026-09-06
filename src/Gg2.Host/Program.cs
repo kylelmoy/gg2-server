@@ -8,10 +8,46 @@ namespace Gg2.Host;
 
 internal static class Program
 {
+    /// <summary>
+    /// The console sink: one line per event, timestamped, with warnings and
+    /// errors on stderr.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>A full date, not <c>HH:mm:ss</c>.</b> This process is expected to run
+    /// for weeks, so a bare time of day makes every line in the journal
+    /// ambiguous the moment it is read the next morning. ISO-8601 with the
+    /// offset sorts lexicographically, survives a timezone change and is what
+    /// every log tool already parses.
+    /// </para>
+    /// <para>
+    /// <b>Warnings and errors go to stderr.</b> That is what makes them
+    /// separable without a log parser: <c>2&gt;</c> in a shell, a
+    /// <c>StandardError</c> redirect in a unit file, and <c>journalctl -p warning</c>
+    /// under systemd all key off the stream rather than the text. Under a
+    /// terminal the two are interleaved as usual, so nothing is lost
+    /// interactively either.
+    /// </para>
+    /// </remarks>
     private sealed class ConsoleLog : IServerLog
     {
-        public void Info(string message) =>
-            Console.WriteLine($"{DateTime.Now:HH:mm:ss} {message}");
+        public void Info(string message) => Console.WriteLine(Line("info ", message));
+
+        public void Warn(string message) => Console.Error.WriteLine(Line("warn ", message));
+
+        public void Error(string message, Exception? error = null)
+        {
+            Console.Error.WriteLine(Line("error", message));
+
+            // The stack trace, on the stream the message went to, and only for
+            // Error. It is the difference between a bug report that can be acted
+            // on and one that says "it crashed".
+            if (error is not null)
+                Console.Error.WriteLine(error.ToString());
+        }
+
+        private static string Line(string level, string message) =>
+            $"{DateTimeOffset.Now:yyyy-MM-ddTHH:mm:ss.fffzzz} {level} {message}";
     }
 
     private static int Main(string[] args)

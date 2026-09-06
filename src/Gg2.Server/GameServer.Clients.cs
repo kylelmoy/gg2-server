@@ -159,7 +159,7 @@ public sealed partial class GameServer
         if (team != Team.Spectator)
             _world.Players[slot].RespawnTimer = 1;
 
-        _log.Info($"bot {name} added as player {slot} ({team}, {allowed})");
+        _log.Info($"bot {LogText.Safe(name)} added as player {slot} ({team}, {allowed})");
         return slot;
     }
 
@@ -197,7 +197,7 @@ public sealed partial class GameServer
         TeamBalance.Check(ref _world, ref _events);
         BroadcastTeamBalance();
 
-        _log.Info($"bot {name} removed from player {slot}");
+        _log.Info($"bot {LogText.Safe(name)} removed from player {slot}");
     }
 
     private void ProcessCommands(ClientPlayer client)
@@ -321,8 +321,8 @@ public sealed partial class GameServer
                 client.Connection.Flush();
                 client.Connection.Close("unrecognised plugin packet id");
 
-                _log.Info(
-                    $"kicked {entry.Name}: plugin packet id "
+                _log.Warn(
+                    $"kicked {LogText.Safe(entry.Name)}: plugin packet id "
                     + (command.Payload.Length >= 1 ? command.Payload[0].ToString() : "(empty)")
                     + $", but this server advertises {_plugins.Count} plugin(s)");
                 break;

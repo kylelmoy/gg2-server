@@ -151,7 +151,7 @@ public sealed class BotPopulationService
                 // cache" a line before "built a nav graph" describes a problem the
                 // operator does not have. It stays loud when generation is off.
                 if (!_server.Options.NavGenerate)
-                    _log.Info($"no nav cache for {map.Name} area {area}; bots on it will not navigate");
+                    _log.Warn($"no nav cache for {map.Name} area {area}; bots on it will not navigate");
             }
             else
             {
@@ -329,7 +329,7 @@ public sealed class BotPopulationService
             // with it. The degradation is the one NavCache.TryLoad already
             // promises — bots that do not navigate — and it is strictly better
             // than refusing to serve the map.
-            _log.Info($"could not build a nav graph for {map.Name} area {area}: {e.Message}");
+            _log.Warn($"could not build a nav graph for {map.Name} area {area}: {e.Message}");
             return null;
         }
 
@@ -341,7 +341,7 @@ public sealed class BotPopulationService
         }
         catch (FormatException e)
         {
-            _log.Info($"the nav graph built for {map.Name} area {area} did not parse: {e.Message}");
+            _log.Warn($"the nav graph built for {map.Name} area {area} did not parse: {e.Message}");
             return null;
         }
 
@@ -363,11 +363,11 @@ public sealed class BotPopulationService
             {
                 // A read-only install directory is a perfectly reasonable thing to
                 // deploy into. The graph is already built and in memory.
-                _log.Info($"could not save the nav graph for {map.Name} area {area}: {e.Message}");
+                _log.Warn($"could not save the nav graph for {map.Name} area {area}: {e.Message}");
             }
             catch (UnauthorizedAccessException e)
             {
-                _log.Info($"could not save the nav graph for {map.Name} area {area}: {e.Message}");
+                _log.Warn($"could not save the nav graph for {map.Name} area {area}: {e.Message}");
             }
         }
 

@@ -133,14 +133,41 @@ public sealed class ServerHarness : IDisposable
 }
 
 /// <summary>Keeps the server's log lines so a test can assert on them.</summary>
+/// <remarks>
+/// ⚠️ <b><see cref="Lines"/> is every level flattened, deliberately.</b> Dozens
+/// of existing tests assert on it, and re-levelling a line should not make one
+/// of them stop seeing a message it still expects. A test that cares about
+/// severity asks <see cref="Warnings"/> or <see cref="Errors"/>, which are the
+/// same lines filtered rather than a second recording.
+/// </remarks>
 public sealed class RecordingLog : IServerLog
 {
-    private readonly List<string> _lines = [];
+    private readonly List<(LogLevel Level, string Text)> _lines = [];
 
-    public IReadOnlyList<string> Lines => _lines;
+    public IReadOnlyList<string> Lines => _lines.Select(line => line.Text).ToList();
 
-    public void Info(string message) => _lines.Add(message);
+    public IReadOnlyList<string> Warnings => AtLeast(LogLevel.Warning);
+
+    public IReadOnlyList<string> Errors => AtLeast(LogLevel.Error);
+
+    /// <summary>The exceptions handed to <see cref="Error"/>, in order.</summary>
+    public List<Exception> Exceptions { get; } = [];
+
+    public void Info(string message) => _lines.Add((LogLevel.Info, message));
+
+    public void Warn(string message) => _lines.Add((LogLevel.Warning, message));
+
+    public void Error(string message, Exception? error = null)
+    {
+        _lines.Add((LogLevel.Error, message));
+
+        if (error is not null)
+            Exceptions.Add(error);
+    }
 
     public bool Contains(string fragment) =>
-        _lines.Any(line => line.Contains(fragment, StringComparison.Ordinal));
+        _lines.Any(line => line.Text.Contains(fragment, StringComparison.Ordinal));
+
+    private IReadOnlyList<string> AtLeast(LogLevel level) =>
+        _lines.Where(line => line.Level >= level).Select(line => line.Text).ToList();
 }

@@ -36,7 +36,7 @@ public sealed partial class GameServer
                 connection.Flush();
                 connection.Dispose();
 
-                _log.Info($"refused {connection.RemoteAddress}: too many connections from that address");
+                _log.Warn($"refused {connection.RemoteAddress}: too many connections from that address");
                 continue;
             }
 
@@ -254,7 +254,7 @@ public sealed partial class GameServer
         // The joiner's id is its roster index, which is the count before it was
         // added — the same value WriteJoinBurst put in the JOIN_UPDATE.
         _log.Info(
-            $"{entry.Name} joined as player {_roster.Count - 1}; "
+            $"{LogText.Safe(entry.Name)} joined as player {_roster.Count - 1}; "
             + $"{_roster.Count - 1} of {_options.PlayerLimit} slots used");
 
         // serviceJoiningPlayer.gml:171 — tell the lobby the player count moved,

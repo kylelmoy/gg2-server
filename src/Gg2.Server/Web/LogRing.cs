@@ -103,4 +103,27 @@ public sealed class TeeLog(IServerLog first, LogRing second) : IServerLog
         first.Info(message);
         second.Add(message);
     }
+
+    // ⚠️ Both levels are forwarded EXPLICITLY rather than left to the interface's
+    // defaults. A default would call this type's own Info, which tees correctly
+    // — but it would tee the *folded* text, so the console would print
+    // "[error] x" instead of reaching its own Error override and its stack
+    // trace. Forwarding keeps the inner sink's own rendering.
+    public void Warn(string message)
+    {
+        first.Warn(message);
+        second.Add($"[warn] {message}");
+    }
+
+    public void Error(string message, Exception? error = null)
+    {
+        first.Error(message, error);
+
+        // The panel gets the message and the exception's type and text, never
+        // the stack trace: the ring is 500 lines and one trace would be a
+        // meaningful fraction of the operator's scrollback.
+        second.Add(
+            $"[error] {message}"
+            + (error is null ? string.Empty : $" — {error.GetType().Name}: {error.Message}"));
+    }
 }

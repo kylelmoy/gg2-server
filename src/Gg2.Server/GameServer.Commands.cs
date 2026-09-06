@@ -211,7 +211,7 @@ public sealed partial class GameServer
             client.Connection.Flush();
             client.Connection.Close("name longer than the protocol allows");
 
-            _log.Info($"kicked {entry.Name}: PLAYER_CHANGENAME of {payload.Length} bytes");
+            _log.Warn($"kicked {LogText.Safe(entry.Name)}: PLAYER_CHANGENAME of {payload.Length} bytes");
             return;
         }
 
@@ -332,7 +332,7 @@ public sealed partial class GameServer
             result.Player.Rewards = result.Rewards;
 
             ServerMessages.RewardUpdate(_broadcast, (byte)slot, result.Rewards);
-            _log.Info($"rewards for {result.Player.Name} authenticated");
+            _log.Info($"rewards for {LogText.Safe(result.Player.Name)} authenticated");
         }
     }
 
@@ -452,7 +452,9 @@ public sealed partial class GameServer
             BroadcastTeamBalance();
         }
 
-        _log.Info($"{client.Entry.Name} left ({reason}); {_roster.Count - 1} of {_options.PlayerLimit} slots used");
+        _log.Info(
+            $"{LogText.Safe(client.Entry.Name)} left ({LogText.Safe(reason)}); "
+            + $"{_roster.Count - 1} of {_options.PlayerLimit} slots used");
         client.Connection.Dispose();
 
         if (wasFull)
