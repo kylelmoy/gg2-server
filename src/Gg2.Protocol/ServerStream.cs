@@ -90,8 +90,56 @@ public sealed class ServerStream
     /// <summary>The map named by the most recent <c>CHANGE_MAP</c>.</summary>
     public string? CurrentMap { get; private set; }
 
-    /// <summary>This reader's own roster index, from <c>JOIN_UPDATE</c>.</summary>
+    /// <summary>
+    /// This reader's own roster index — the client's <c>global.playerID</c>.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>It is not fixed at <c>JOIN_UPDATE</c>.</b> Both sides compact on a
+    /// departure, so a <c>PLAYER_LEAVE</c> naming a slot <em>below</em> this one
+    /// moves it down: <c>ClientBeginStep.gml:218-220</c> is
+    /// <c>if(playerID &lt; global.playerID) global.playerID -= 1</c>. Holding the
+    /// joined-at value would make this reader name a different player from every
+    /// stock client the moment anybody underneath it left.
+    /// </remarks>
     public byte? OwnPlayerId { get; private set; }
+
+    /// <summary>
+    /// Whether a <c>PLAYER_JOIN</c> has landed on <see cref="OwnPlayerId"/> —
+    /// the client's <c>global.myself</c> being bound.
+    /// </summary>
+    /// <remarks>
+    /// <c>ClientBeginStep.gml:206-208</c> binds <c>global.myself</c> on exactly
+    /// one condition: the <c>PLAYER_JOIN</c> being processed lands at
+    /// <c>ds_list_size(global.players)-1 == global.playerID</c>. It is not
+    /// retried, so a client whose roster is out of step at that moment leaves
+    /// <c>global.myself</c> at the <c>-1</c> <c>ClientCreate.gml:20</c> gave it
+    /// <b>for the rest of the session</b>.
+    /// <para>
+    /// ⚠️ <b>It is legitimately false for one frame at every join</b>, on this
+    /// port and on the reference alike: the burst is written on the joining
+    /// socket while the joiner's own <c>PLAYER_JOIN</c> goes into the shared
+    /// broadcast, which is flushed at the TOP of the next tick
+    /// (<c>GameServerEndStep.gml:7-10</c> flushes, <c>:18-20</c> then services
+    /// joins). <see cref="PlayerCount"/> is what distinguishes the two: a roster
+    /// that has grown past <see cref="OwnPlayerId"/> and still has this false is
+    /// a client that will never know which player it is.
+    /// docs/TRAPS-LIVEGAME.md, "the frame a joining client does not know itself".
+    /// </para>
+    /// </remarks>
+    public bool SelfBound { get; private set; }
+
+    /// <summary>
+    /// Whether a <c>PLAYER_LEAVE</c> has named this reader's own slot after
+    /// <see cref="SelfBound"/>.
+    /// </summary>
+    /// <remarks>
+    /// The stock client does not special-case it: <c>removePlayer</c> destroys
+    /// the instance <c>global.myself</c> points at and leaves the global pointing
+    /// at the corpse, so every later <c>global.myself.object</c> is a GM8 error.
+    /// A server has no reason to send a client its own departure, which is
+    /// exactly why nothing would notice if one started to.
+    /// </remarks>
+    public bool SelfDestroyed { get; private set; }
 
     public byte CurrentMapArea { get; private set; } = 1;
 
@@ -194,6 +242,11 @@ public sealed class ServerStream
                 _names.Add(name);
                 _classes.Add(PlayerClass.Scout);
 
+                // ClientBeginStep.gml:206-208. The bind is tested once, on the
+                // join that happens to land at this index, and never again.
+                if (_names.Count - 1 == OwnPlayerId)
+                    SelfBound = true;
+
                 // ServerPlayerJoin carries only the name. A joining player is a
                 // spectator until a PLAYER_CHANGETEAM says otherwise, which is
                 // what Player.events/Create leaves them as.
@@ -214,6 +267,17 @@ public sealed class ServerStream
                     _names.RemoveAt(id);
                     _classes.RemoveAt(id);
                     _teams.RemoveAt(id);
+                }
+
+                // ClientBeginStep.gml:218-220 — and it is the client's OWN index
+                // that moves, not just the roster. Strictly below: a leave naming
+                // this reader destroys its player rather than renumbering it.
+                if (OwnPlayerId is { } own)
+                {
+                    if (id < own)
+                        OwnPlayerId = (byte)(own - 1);
+                    else if (id == own && SelfBound)
+                        SelfDestroyed = true;
                 }
 
                 return Done(type, ref reader, start, playerId: id);

@@ -795,15 +795,47 @@ public sealed partial class GameServer
     private void FlushBroadcast()
     {
         if (_broadcast.IsEmpty)
+        {
+            // ⚠️ THE MARKS DIE WITH THE BUFFER THEY INDEX. A mark is a length in
+            // the buffer that was standing when a joiner's burst was written; if
+            // this tick had nothing to send, carrying it to the next tick would
+            // skip that many bytes of genuine news instead. Nothing observed
+            // reaches here with a mark set — WriteStateUpdate appends every tick,
+            // frozen or not — which is exactly why it would rot unnoticed.
+            foreach (var client in _clients)
+                client.SkipBroadcastBytes = 0;
+
             return;
+        }
 
         _flushes++;
 
         // One identical byte stream to every client: one serialisation, N sends.
         // Keep it that way — it is why the send path is nearly free.
         var bytes = _broadcast.WrittenSpan;
+
         foreach (var client in _clients)
-            client.Connection.Send(bytes);
+        {
+            // A client that joined during the PREVIOUS tick skips whatever was
+            // already in this buffer when its join burst was written, because
+            // the burst's FULL_UPDATE already carries the world those messages
+            // describe. Zero for every client on every other tick, so the common
+            // path is still the whole span with no slicing.
+            // ClientPlayer.SkipBroadcastBytes has the why and the reference's
+            // line numbers.
+            if (client.SkipBroadcastBytes == 0)
+            {
+                client.Connection.Send(bytes);
+                continue;
+            }
+
+            // Clamped rather than trusted. The mark cannot exceed this buffer
+            // while the invariant above holds, and a live server must degrade to
+            // "send the rest" rather than throw if it ever does.
+            var skip = Math.Min(client.SkipBroadcastBytes, bytes.Length);
+            client.SkipBroadcastBytes = 0;
+            client.Connection.Send(bytes[skip..]);
+        }
 
         // ⚠️ The recording tees HERE and nowhere else, which is what makes it
         // exactly what the clients saw rather than a reconstruction of it.

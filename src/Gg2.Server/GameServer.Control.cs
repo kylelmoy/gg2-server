@@ -353,13 +353,10 @@ public sealed partial class GameServer
         if (!MapExists(map) || _world.MapChanging)
             return false;
 
-        _nextMap = map;
-        _nextArea = Math.Max(1, area);
-
-        Rounds.BeginMapChange(ref _world);
-        _mapChangeCountdown = Rounds.MapChangeDelay;
-
-        ServerMessages.MapEnd(_broadcast, _nextMap, _world.Winner, (byte)_nextArea);
+        // ⛔ The shared body, not a second copy — it also moves
+        // _match.CurrentMapArea, and a joiner inside the countdown that is told
+        // the wrong area dies on the other side of the change. See BeginMapChange.
+        BeginMapChange(map, Math.Max(1, area));
         _log.Info($"control: {_nextMap} area {_nextArea} in ten seconds");
 
         return true;

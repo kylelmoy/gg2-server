@@ -235,7 +235,22 @@ public sealed partial class GameServer
         var entry = new RosterEntry { Name = joining.Name, Connection = connection };
         _roster.Add(entry);
         _world.AddPlayer(_roster.Count - 1);
-        _clients.Add(new ClientPlayer { Connection = connection, Entry = entry });
+
+        // ⚠️ TAKEN BEFORE THE PLAYER_JOIN BELOW, and that is the whole point of
+        // the mark: everything standing in the broadcast buffer right now was
+        // appended ABOVE this call in the same tick — BroadcastEndStepEvents,
+        // and anything the control port or the web admin executed — and the
+        // burst just written already carries the world all of it describes.
+        // Everything appended from here on, starting with this player's own
+        // PLAYER_JOIN, is news the joiner has to have.
+        // ClientPlayer.SkipBroadcastBytes has the two failures this prevents.
+        _clients.Add(new ClientPlayer
+        {
+            Connection = connection,
+            Entry = entry,
+            SkipBroadcastBytes = _broadcast.WrittenSpan.Length,
+        });
+
         _plugins.PlayerAdded(_roster.Count - 1);
 
         // 3. Broadcast to everyone *including* the joiner, which is how the

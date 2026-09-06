@@ -160,6 +160,107 @@ is `Character.events/Create.xml:69` making a character for a player the client
 holds as a **spectator**. It fires at *create*, so the state never survives to
 be observed: watch the roster's transitions leading in, not the aftermath.
 
+### ⛔ `Music=1` truncates every client's room setup on a machine with no audio
+
+**Measured 2026-09-05, and it invalidates client observations rather than
+merely adding noise.** A GG2 client launched here with `Music=1` in
+`Source/build/gg2.ini` throws inside `basicRoomSetup`:
+
+```
+EXECUTION ERROR in creation code of room CustomMapRoom
+In script basicRoomSetup: In script AudioControlPlaySong:
+  if(AudioControl.currentSong != -1) sound_stop(AudioControl.currentSong);
+  at position 18: Unknown variable currentSong
+```
+
+`AudioControl` has no `currentSong` when there is no audio device — the same
+situation `launcher.js`'s own header calls routine over RDP. The launcher
+presses **Ignore**, and GM8's Ignore abandons the rest of the script. The call
+is `basicRoomSetup.gml:80`, so **everything from line 82 down never runs**:
+
+- `instance_create(..., Spectator)` (`:82`) — **there is no `Spectator`**.
+- `global.redCaps`, `global.blueCaps`, `global.winners` (`:84-86`) — never
+  initialised, so `CTFHUD`'s Step throws `Unknown variable winners` **every
+  frame**: 962 errors in 25 s, 1755 in another run.
+- Whatever `:88` onward does, including the MOTD.
+
+⚠️ **The visible symptom points at the wrong thing.** A thousand `CTFHUD`
+errors reads like a HUD or gamemode bug in the port; it is one dismissed audio
+dialog upstream. The port was innocent — the identical run against a server
+built without the change under test produced the identical errors, which is
+the only reason it was not written up as a regression. **Bisect a client error
+storm against an unmodified server before believing it is yours.**
+
+⚠️ **What it invalidates**: anything that reads `global.winners`,
+`global.redCaps`/`blueCaps`, or `Spectator` — including
+`Spectator.afktimeout`, the five-minute spectator disconnect, and any
+`wdWins`-style counter in the watchdog latch. All of them silently measure a
+client whose room setup stopped two thirds of the way through.
+
+**The fix is one line and it is in a runtime file, not the reference source.**
+`Source/build/gg2.ini`, `Music=3` (`MUSIC_NONE`, `Constants.xml:127`) — then
+`basicRoomSetup.gml:79`'s guard skips the call and the script completes.
+Verified immediately: **zero** GML errors over several minutes of a joined
+client, `winners=-1`, `spectators=1`. It was set to `3` on 2026-09-05 and
+should stay there; `gg2.ini` is a gitignored build artifact that the tooling
+already rewrites, so this is not a reference-tree edit. ⚠️ If a future client
+log fills with `Unknown variable winners`, check this setting first — something
+restored the file.
+
+### The frame a joining client does not know itself, and the errors it prints
+
+**Settled 2026-09-05 by reading the reference, not by another soak.** A stock
+client that has just joined prints, for a handful of frames and then never
+again:
+
+```
+ERROR in ... of End Step Event for object Spectator:
+Error in code at line 4: if(global.myself.object != -1)
+at position 19: Unknown variable object
+```
+
+…plus the same thing from `AmmoCounter`'s Draw (line 8) and Begin Step
+(line 1). ⛔ **This is stock GG2 behaviour and not a port bug.** Do not spend a
+soak on it.
+
+- `ClientCreate.gml:20` sets `global.myself = -1`.
+- `Spectator.events/End Step.xml` guards its *first* read with
+  `if (global.myself != -1)` and then dereferences `global.myself.object` on
+  line 4 **unguarded**. `AmmoCounter` has the same shape.
+- `global.myself` is bound in exactly one place —
+  `ClientBeginStep.gml:206-208`, on the `PLAYER_JOIN` that lands at
+  `ds_list_size(global.players)-1 == global.playerID`.
+- The joiner's own `PLAYER_JOIN` is **one frame later than its burst**, on the
+  reference as much as on the port: `GameServerEndStep.gml:7-10` flushes
+  `global.sendBuffer` and *then* `:18-20` services joining players, so the
+  `ServerPlayerJoin` appended at `serviceJoiningPlayer.gml:124` waits for the
+  next frame's flush.
+- Meanwhile the burst's `CHANGE_MAP` sets `roomchange` and **stops the client's
+  message loop** (`ClientBeginStep.gml`'s `do … until(roomchange)`), so the room
+  — and `basicRoomSetup.gml:82`'s `Spectator` — exists before the rest of the
+  burst is read.
+
+So there is a real window in which a `Spectator` is running its End Step while
+`global.myself` is still `-1`, and whether a given join lands inside it is a
+race between the client's 30 Hz frame and the server's. **That is why two
+clients joined the same way seconds apart produce 21 errors and zero** — the
+2026-09-05 `c1`/`c2` asymmetry recorded as "the strongest lead of the session"
+in `.claude/notes/evidence-0905-joinrace/`. It heals on the frame the client's
+own `PLAYER_JOIN` arrives.
+
+⚠️ **What it is NOT**: it is not the `cp_dirtbowl` fatal's precondition, and it
+does not move a roster count. `docs/PARITY.md`, "Nothing moves a roster count
+inside the join window".
+
+⛔ **The dangerous cousin is the same error that never heals.** The bind is
+positional and tried once, so a client whose roster is off by one at that
+instant keeps `global.myself = -1` for the whole session and errors on *every*
+frame rather than a handful. **Count the errors and check whether they stop**
+before reading a client log as evidence of anything: a burst of them at join is
+stock, a stream of them is a real desync. In-process that distinction is
+`ServerStream.SelfBound` and `MirrorClient.Impossible`
+(`ClientIdentityTests`).
+
 ### Writing a probe against the live game
 
 Both oracles work by driving the running engine from a state chosen exactly
