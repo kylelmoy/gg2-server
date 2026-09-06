@@ -210,6 +210,14 @@ public sealed partial class PathFollower
                 && state.AirTicks > 1
                 && character.MoveStatus != 1)
             {
+                // ⚠️ Once per attempt, not once per tick. AirTicks > 1 is the
+                // condition above, so tick two is the first that can see a dud and
+                // counting only there makes this a count of ARCS rather than of
+                // ticks spent in one — the mistake that made the first reading of
+                // this counter say "1036% of takeoffs".
+                if (state.AirTicks == 2)
+                    state.RocketDuds++;
+
                 steer.Abandon = true;
                 return;
             }
@@ -507,7 +515,7 @@ public sealed partial class PathFollower
                     if (underspeed)
                         state.LaunchesUnderspeed++;
 
-                    Launch(state, ref steer);
+                    Launch(state, ref steer, rocket: false);
                     steer.MineDetonate = true;
                     state.StickySetup = -1;
                     state.StickyJumps++;
@@ -521,22 +529,7 @@ public sealed partial class PathFollower
             if (underspeed)
                 state.LaunchesUnderspeed++;
 
-            Launch(state, ref steer);
-
-            // The hand-off: ScriptedBot applies this after the combat half has run,
-            // which is the only place that can see both. ⚠️ Straight down is not a
-            // simplification of a richer choice — `vectorfactor` in the rocket's
-            // blast is sqrt(sin⁴ + cos⁴), which is 1 only when the impulse is
-            // axis-aligned and falls to 0.707 at 45°, so an angled rocket jump
-            // throws away up to 30% of its impulse. Down is also the one direction
-            // with guaranteed geometry to detonate against: there is a floor under
-            // the takeoff column by construction, and there may be nothing at all
-            // down-and-left of it.
-            if (isRocket)
-            {
-                steer.RocketFire = true;
-                state.RocketJumps++;
-            }
+            Launch(state, ref steer, isRocket);
         }
         else if (isSticky && state.StickySetup >= 0)
         {
@@ -663,14 +656,50 @@ public sealed partial class PathFollower
                 state.LaunchesUnderspeed++;
 
             steer.Braking = false;
-            Launch(state, ref steer);
+
+            // ⚠️⚠️ WITH the rocket, and this line is a bug fix rather than a
+            // tidy-up. The hand-off used to live at the gate-open call site only,
+            // so a rocket arc whose launcher was READY but whose speed clause
+            // refused for two seconds left the ground here with no rocket — an
+            // ordinary 57px jump on an arc that rises 276, which this method's own
+            // remarks call the worst available outcome and which the cold-launcher
+            // branch above exists to prevent. Measured on cp_dirtbowl e583: the bot
+            // jumped at moveStatus 0, rose 56px against the 101 the arc needed, took
+            // no self-damage, landed back where it started, and did it again.
+            Launch(state, ref steer, isRocket);
         }
     }
 
     /// <summary>Commits to the arc: ask for the press and reset the per-arc state.</summary>
-    private static void Launch(BotPathState state, ref Steering steer)
+    /// <param name="rocket">
+    /// Ask for the rocket as well. ⛔ <b>Not optional, and it is a parameter rather
+    /// than the caller's business precisely because it used to be.</b> Two call
+    /// sites launched — the gate opening and the patience hatch — and only the
+    /// first fired; the second flew rocket arcs as ordinary jumps for as long as
+    /// the code has existed.
+    /// </param>
+    /// <remarks>
+    /// ⚠️ Straight down is not a simplification of a richer choice —
+    /// <c>vectorfactor</c> in the rocket's blast is sqrt(sin⁴ + cos⁴), which is 1
+    /// only when the impulse is axis-aligned and falls to 0.707 at 45°, so an
+    /// angled rocket jump throws away up to 30% of its impulse. Down is also the
+    /// one direction with guaranteed geometry to detonate against: there is a
+    /// floor under the takeoff column by construction, and there may be nothing at
+    /// all down-and-left of it. The aim itself is applied by
+    /// <see cref="PathFollower.ApplyLaunch"/>, which is the hand-off
+    /// <c>ScriptedBot</c> runs after its combat half — the only place that can see
+    /// both.
+    /// </remarks>
+    private static void Launch(BotPathState state, ref Steering steer, bool rocket)
     {
         steer.WantJump = true;
+
+        if (rocket)
+        {
+            steer.RocketFire = true;
+            state.RocketJumps++;
+        }
+
         state.AirTicks = 0;
         state.TakeoffTicks = 0;
         state.RunupAt = -1;

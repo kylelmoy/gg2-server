@@ -3552,6 +3552,83 @@ the question**: the `need` it compares against was re-derived outside `Gate`
 rather than read out of it, so the absolute numbers are not trustworthy — only
 the absence of a gap between the arms is.
 
+### ⚠️⚠️ The rocket that does not go off: a rocket-jump arc degrading to a 57px hop
+
+**The largest single bucket in the residual.** Rocket jumps are 11% of the measured
+corpus and **195 of the 429 hard failures (45%)**, and unlike the other arc kinds
+they are almost never an approach problem: only **15.4%** are flown by the same
+follower placed on the takeoff column, against 57.7% for the plain jump and 48.9%
+for the air jump.
+
+#### The mechanism, traced
+
+`cp_dirtbowl` e583, `RocketJump` 43→5 — takeoff column 2982, which is the **last
+column of the from-node** (span 2766..2982); the arc needs 101px of rise.
+
+```
+[poll t45] keys=Attack, Right, Jump aim=270 rocketFireFlag=True weaponReady=True hp=160
+   t45  x=2980.6 y=396.0  vsp=-7.70 gnd=0 ms=0 hp=160
+   t56  x=2988.1 y=339.6  vsp=-1.10 gnd=0 ms=0 hp=160     <- peak: 56px of rise
+```
+
+⛔ **The rocket key is pressed, the launcher is ready, and nothing happens.**
+`moveStatus` stays 0, hp never moves, and the bot flies a **57px ordinary jump on
+an arc that needed 101** — the outcome `Gate`'s own remarks call the worst
+available one. The blast is aimed straight down (correct: `vectorfactor` is 1 only
+axis-aligned) and the comment justifying it says "there is a floor under the
+takeoff column by construction" — **but the bot has already left that floor on
+the tick it fires.** At the last column of a run there is nothing under it to
+detonate against, and the rocket falls into the void.
+
+#### Measured, with a control
+
+`BotPathState.RocketDuds` counts arcs abandoned in the air with `moveStatus` still
+0 — the follower already had the branch, it just had no counter.
+
+| arm | edges | takeoffs | rockets that never went off | edges affected |
+|---|---|---|---|---|
+| the 165 rocket-jump hard failures | 165 | 810 | **194 (24.0%)** | 95 (58%) |
+| rocket arcs the follower flies | 215 | 368 | 31 (8.4%) | 26 (12%) |
+
+**Three times the rate on the arcs that fail.** ⚠️ Counted once per airborne
+attempt (`AirTicks == 2`); the first version counted per tick and read "1036% of
+takeoffs", which is the third time in this investigation a per-tick counter has
+had to be corrected to a per-event one. **If a counter's rate can exceed 100%,
+that is the bug and not the finding.**
+
+#### ✅ Fixed while here: two launch sites that disagreed
+
+`Launch` now takes the rocket hand-off rather than leaving it to the caller.
+⛔ **The gate-open site fired the rocket and the patience hatch did not**, so a
+rocket arc whose launcher was ready but whose speed clause refused for two seconds
+left the ground with no rocket — the same 57px hop, from a different cause. The
+cold-launcher case was handled (it blacklists); the ready-launcher case fell
+through.
+
+⚠️ **This moved NOTHING measurable — the corpus sweep is identical to the digit
+before and after** — so either the hatch never reaches a ready rocket on the
+shipped graphs or its effect is nil. **It is kept as a structural fix, not as a
+measured improvement**, and it is recorded that way so nobody quotes it as one. A
+branch nothing reaches is a claim nothing checks; that this one now cannot
+disagree with its twin is the whole of the argument for it.
+
+#### ⛔ `cp_dirtbowl` is NOT special — that lead is closed
+
+It holds 131 of the 429, but that is size: three areas at ~2,445 measured edges
+each is 23% of the corpus. Its per-area **rate** is 1.7-1.9% against a corpus mean
+of 1.34%, and five maps are worse (`gg_debug2` 3.32%, `gg_debug` 3.25%,
+`tdm_mantic` 3.05%, `ctf_oldfort` 2.56%, `ctf_orange` 2.44%). **The concentration
+is the edge KIND, not the map.**
+
+#### ⚠️ And one more instrument bug, found by tracing rather than by reading
+
+The assisted probe places a bot on the takeoff column at the arc's speed. Since
+the takeoff column is usually the **last** column of the run, that walks it off the
+ledge on tick 0, before the follower has had a poll. Starting behind the column
+instead took the rocket-jump recovery from 10 to 21 of 165 — real, but small, so
+the finding above survives it. **The probe was measuring its own start position
+for 11 arcs and nobody would have known from the aggregate.**
+
 ### The route sample: the 68% the per-edge sweep cannot reach
 
 `BENCH_FLIGHT_ROUTES=<n>` plans between `n` random node pairs a map and flies the

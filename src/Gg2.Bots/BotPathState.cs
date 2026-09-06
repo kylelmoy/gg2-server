@@ -430,6 +430,19 @@ public sealed class BotPathState
     /// did so below the speed the arc was proved at — which is what the patience
     /// escape hatch produces when the run-up cannot deliver.
     /// </remarks>
+    /// <summary>
+    /// Arcs abandoned in the air because the rocket never went off. Diagnostic.
+    /// </summary>
+    /// <remarks>
+    /// <b>The rocket key was pressed, the launcher was ready, and the character is
+    /// still under <c>moveStatus</c> 0</b> — so the blast found nothing to detonate
+    /// against and the arc silently became an ordinary jump. Measured on
+    /// <c>cp_dirtbowl</c> e583: the takeoff column is the last column of the node,
+    /// the bot is already off the ledge on the tick it fires, and a rocket aimed
+    /// straight down falls past the floor it was meant to bounce off.
+    /// </remarks>
+    public int RocketDuds { get; set; }
+
     public int Launches { get; set; }
 
     /// <inheritdoc cref="Launches"/>
