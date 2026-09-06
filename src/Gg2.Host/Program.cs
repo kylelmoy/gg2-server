@@ -134,7 +134,34 @@ internal static class Program
             return 2;
         }
 
-        var log = new ConsoleLog();
+        // ⚠️ The console sink is ALWAYS the base, and --log-file wraps it
+        // rather than replacing it. A file log that silently became the only
+        // log would fail exactly when it mattered — when the disk is what has
+        // broken. FileLog says the rest.
+        IServerLog log = new ConsoleLog();
+        FileLog? fileLog = null;
+
+        if (options.LogFile.Length != 0)
+        {
+            try
+            {
+                log = fileLog = new FileLog(log, options.LogFile, options.LogMaxBytes, options.LogKeep);
+                log.Info($"logging to {Path.GetFullPath(options.LogFile)}");
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
+            {
+                // Refused at startup rather than absorbed. A path that cannot be
+                // opened at all is a typo in the command line, and starting
+                // anyway would give the operator a server that is running and a
+                // log they will go looking for and never find. Failures AFTER
+                // this point are absorbed instead — see FileLog — because by
+                // then a working server is worth more than its log.
+                Console.Error.WriteLine($"unable to open --log-file {options.LogFile}: {e.Message}");
+                return 2;
+            }
+        }
+
+        using var ownedFileLog = fileLog;
 
         // INSIDE the try: ServerOptions.Validate runs in the GameServer
         // constructor, so an invalid option would otherwise reach an unhandled

@@ -115,6 +115,10 @@ public sealed class CliCoverageTests
         ("Limits", ["--handshake-deadline", "120"], o => o.Limits.MaxHandshakeDuration),
         ("Limits", ["--no-tcp-keepalive"], o => o.Limits.TcpKeepAlive),
 
+        ("LogFile", ["--log-file", "logs/server.log"], o => o.LogFile),
+        ("LogMaxBytes", ["--log-max-bytes", "1048576"], o => o.LogMaxBytes),
+        ("LogKeep", ["--log-keep", "9"], o => o.LogKeep),
+
         // One row per WEB FLAG, not one per property, and they all name the
         // same property. Web is a record so its structural equality makes the
         // comparison real, but a single row would leave four of the five flags

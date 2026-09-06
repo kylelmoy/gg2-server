@@ -390,6 +390,21 @@ internal static class CommandLine
                     options.Limits = options.Limits with { TcpKeepAlive = false };
                     break;
 
+                // ⚠️ Not needed under systemd or Docker — both already capture
+                // stdout and stderr and already rotate. This is for a
+                // deployment with neither. It tees rather than replaces.
+                case "--log-file":
+                    options.LogFile = cursor.Take();
+                    break;
+
+                case "--log-max-bytes":
+                    options.LogMaxBytes = cursor.TakeInt();
+                    break;
+
+                case "--log-keep":
+                    options.LogKeep = cursor.TakeInt();
+                    break;
+
                 // ⚠️ TOTAL across every download in flight, not per client — a
                 // second downloader halves the first one's rate.
                 case "--map-download-limit":
@@ -911,6 +926,14 @@ internal static class CommandLine
                             do not probe for peers that vanished. A REGRESSION:
                             without it a client whose machine dies holds a roster
                             slot until TCP gives up, ~15 minutes on Linux.
+          --log-file <path> ALSO write the log to this file, rotating it by size.
+                            Not needed under systemd or Docker, which capture
+                            stdout/stderr and rotate already. The console sink
+                            stays on either way.
+          --log-max-bytes <n>
+                            rotate --log-file past this size (default 16777216)
+          --log-keep <n>    rotated files kept beside the live one (default 5);
+                            0 rotates by deleting
           --maps <path>     override the built-in map PNGs (default: maps/)
           --map-download-limit <n>
                             TOTAL bytes/second across all custom-map downloads

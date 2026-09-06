@@ -106,6 +106,28 @@ public sealed class ServerOptions
     public ConnectionLimits Limits { get; set; } = ConnectionLimits.Default;
 
     /// <summary>
+    /// A file to tee the log into, or empty for none.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Not needed under systemd or Docker</b>, which capture stdout and
+    /// stderr, rotate on their own, and let an operator filter by stream —
+    /// which is what the log levels are for. This is for a deployment with
+    /// neither, where the alternative is no log at all once the terminal
+    /// scrolls. It <em>tees</em>: the console sink stays wired, because the
+    /// console is the record an operator has when the thing that has broken is
+    /// the disk. <see cref="FileLog"/>.
+    /// </remarks>
+    public string LogFile { get; set; } = string.Empty;
+
+    /// <summary>Size at which <see cref="LogFile"/> is rotated.</summary>
+    public long LogMaxBytes { get; set; } = FileLog.DefaultMaxBytes;
+
+    /// <summary>
+    /// Rotated log files kept beside the live one. Zero rotates by deleting.
+    /// </summary>
+    public int LogKeep { get; set; } = FileLog.DefaultKeep;
+
+    /// <summary>
     /// Which built-in map to serve first. <b>Empty means "the first entry of
     /// <see cref="MapRotation"/> after the shuffle"</b>, and falls back to
     /// <c>ctf_truefort</c> when the rotation is empty too.
@@ -645,6 +667,15 @@ public sealed class ServerOptions
         // The reference clamps at 48 (game_init.gml:152). Beyond 255 the roster
         // index stops fitting in the ubyte every message uses to name a player.
         Limits.Validate();
+
+        if (LogMaxBytes < 1024)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(LogMaxBytes), LogMaxBytes, "must be at least 1024 bytes; a file that rotates every line is not a log");
+        }
+
+        if (LogKeep is < 0 or > 1000)
+            throw new ArgumentOutOfRangeException(nameof(LogKeep), LogKeep, "must be 0..1000");
 
         if (PlayerLimit is < 1 or > 48)
             throw new ArgumentOutOfRangeException(nameof(PlayerLimit), PlayerLimit, "player limit must be 1..48");

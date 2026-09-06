@@ -130,15 +130,45 @@ User=gg2
 WorkingDirectory=/opt/gg2-server
 ExecStart=/opt/gg2-server/gg2-server --bots 8 --players 12
 
-# ⚠️ Restart, not RestartSec=0: a listening port with connections in TIME_WAIT
-# refuses to rebind for up to 60s. See "restarting" below.
-Restart=always
+# ⚠️ on-failure, NOT always, and the difference is the exit code. The server
+# exits 3 when its tick loop has failed repeatedly (TickFaultBudget), which is
+# the case a restart actually fixes — a fresh process is the only thing that
+# reliably clears corrupted in-memory state. An ordinary shutdown exits 0, and
+# `always` would restart that too, so an operator stopping the server on
+# purpose would be silently undone.
+Restart=on-failure
+
+# ⚠️ Not RestartSec=0: a listening port with connections in TIME_WAIT refuses
+# to rebind for up to 60s. See "restarting" below.
 RestartSec=5
 
 # The tick loop is latency-sensitive and single-threaded; server GC is tuned for
 # many-core throughput. See "garbage collection" below - this is a precaution,
 # not a measured win.
 Environment=DOTNET_gcServer=0
+
+# A backstop, not the bound. ConnectionLimits is what actually caps what a
+# client can make the server hold (~95 MB worst case at 48 players — the
+# arithmetic is in docs/HARDENING.md). This is for when something else is
+# wrong, and it makes the OOM killer pick this process rather than whatever
+# else is on the box.
+MemoryMax=2G
+
+# Sandboxing. None of it changes what the server does; all of it narrows what a
+# bug in it could reach.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+RestrictAddressFamilies=AF_INET AF_INET6
+
+# ⚠️ ProtectSystem=strict makes the WHOLE filesystem read-only, so every path
+# the server writes has to be listed or it starts fine and fails later — the
+# worst of both. There are three, and two are easy to forget:
+#   nav/     a graph built at a map change for a custom map (--no-navgen off)
+#   traces/  --record segments
+#   logs/    --log-file, if you use it rather than journald
+ReadWritePaths=/opt/gg2-server/nav /opt/gg2-server/traces /opt/gg2-server/logs
 
 [Install]
 WantedBy=multi-user.target
@@ -147,12 +177,15 @@ WantedBy=multi-user.target
 `KillSignal` is left at its default (SIGTERM) deliberately — the server handles
 it.
 
-⛔ **This unit is the LAN/trusted-network shape.** For a server on the open
-internet, `docs/HARDENING.md` has what to add and why: `Restart=on-failure`
-rather than `always` (the server exits **3** when its tick loop has failed
-repeatedly, and `always` hides an operator stopping it on purpose), a
-`MemoryMax` backstop, the sandboxing directives, and the firewall and kernel
-settings that this process cannot do for itself.
+⛔ **The firewall and kernel settings are not in this file and this process
+cannot do them.** `docs/HARDENING.md` has them, along with what is deliberately
+not defended against.
+
+**Logging goes to journald** with no configuration: info on stdout, warnings and
+errors on **stderr**, so `journalctl -u gg2 -p warning` is the whole of the
+alerting story and needs no parser. `--log-file` exists for a copy that survives
+independently of the journal — see "a log file, if you want one" below — and is
+not needed under systemd.
 
 ---
 
@@ -400,6 +433,43 @@ names the full path it looked for, which is enough to diagnose it.
 
 The case to watch is a `gg2.ini` or rotation file **copied off a Windows host**,
 where a mis-cased entry has been working by accident.
+
+---
+
+### A log file, if you want one
+
+⛔ **You do not want one under systemd or Docker.** Both already capture stdout
+and stderr, both already rotate, and the level split — info on stdout, warnings
+and errors on **stderr** — is what makes `journalctl -u gg2 -p warning` work
+with no parser. Turning on a second copy buys nothing and costs a write per
+line.
+
+`--log-file /opt/gg2-server/logs/server.log` is for the deployments with
+neither: a bare console, a Windows service, a `screen` session. It **tees** —
+the console sink stays wired, because the console is the record you have when
+the thing that has broken is the disk.
+
+```
+--log-file <path>       also write here, rotating by size
+--log-max-bytes <n>     rotate past this (default 16777216)
+--log-keep <n>          rotated files kept (default 5); 0 rotates by deleting
+```
+
+Three behaviours worth knowing, all of them tested:
+
+- **It appends across restarts.** The log of why the last process stopped is
+  the log most worth having, and truncating on open would delete it at the
+  exact moment a supervisor restarted the server to recover from whatever wrote
+  it.
+- **A path that cannot be opened at all fails the start** (exit 2). That is a
+  typo in the command line, and starting anyway leaves you with a running
+  server and a log you will go looking for and never find.
+- **A failure after that is swallowed**, with one warning to the console and no
+  more. A full disk is not a reason to take a game server down, and a log sink
+  that can throw is a log sink that can kill the tick.
+
+⚠️ Under `ProtectSystem=strict` the log directory has to be in
+`ReadWritePaths` or the server starts and fails on the first write.
 
 ---
 
