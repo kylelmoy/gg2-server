@@ -3612,6 +3612,61 @@ measured improvement**, and it is recorded that way so nobody quotes it as one. 
 branch nothing reaches is a claim nothing checks; that this one now cannot
 disagree with its twin is the whole of the argument for it.
 
+#### ⛔ The root cause: the takeoff column is the LIP of the run, and the muzzle hangs off it
+
+The rocket is created at the weapon plus 20px of `lengthdir` in the aim direction
+(`Weapons.Launchers.cs`, `RocketMuzzleOffset`) — straight down, so at the
+**character's own x**. And the character's x at the takeoff column is not over the
+floor.
+
+`cp_dirtbowl` e583, probed pixel by pixel: the ledge is three rows thick and its
+solid run **ends at x≈2975**, while the takeoff column puts the character's centre
+at **2980.6** — the body box (13 wide) overhangs the lip with about a pixel of
+floor under its left edge. The rocket spawns at 2980, misses the ledge entirely,
+and falls: y 428.9, 441.6, 454.3 … 612.7, still going.
+
+**Measured over both arms** — placed at rest on the takeoff column, does the
+character stay up:
+
+| arm | edges | takeoff column drops a standing character |
+|---|---|---|
+| the 165 rocket-jump hard failures | 165 | **125 (75.8%)** |
+| arcs the follower flies | 150 | 22 (14.7%) |
+
+⛔ **And it is directional, because the body box is.** The node's span is in
+**anchor columns — the box's left edge** — so on a rightward arc the takeoff
+column is the run's last and the box hangs 6px past it, while on a leftward arc
+the box hangs back *onto* the floor:
+
+| direction | failures | arcs the follower flies |
+|---|---|---|
+| rightward (+1) | **93.8%** fall | 25.4% |
+| leftward (−1) | 37.7% fall | 6.1% |
+
+⚠️ **105 of the 125 stand again two pixels back.** This is a lip, not a gap.
+
+#### ⛔ REFUTED: taking off one cell earlier on a rocket arc
+
+The obvious repair, and it is 39% worse: stranded **703 → 981**, rocket-jump
+stranded 369 → 573. `SteerJump`'s own remarks say why — *"the takeoff column is
+carried ON THE EDGE because the generator SEARCHED for it… re-deriving it from the
+node's own columns would jump from a column the build already rejected"* — and a
+cell back is a column the build rejected. **Do not re-try it.** That is the second
+refuted repair in this area; the first was demanding the arc's own takeoff speed.
+
+⚠️ **So the fault is not obviously the follower's to fix.** The arc works from that
+column and the blast does not, which makes it a constraint the GENERATOR does not
+apply: a rocket-jump takeoff column needs floor under the *muzzle*, not merely
+support for the *anchor*. Acting on that means regenerating all 25 graphs, moving
+`NAV_CACHE_VERSION`, `NavGeneratorTests`' character-for-character rebuild and
+`nav/manifest.tsv` — the nav lane's change, not this one's, and the corpus sweep is
+the gate that would show whether it worked.
+
+⚠️ **The untested third option** is to aim the blast down-and-back when the muzzle
+has no floor under it: `vectorfactor` costs up to 30% of the impulse at 45°, but
+70% of a blast beats none. It changes the arc the generator proved, so it is a
+measurement rather than a fix, and it has not been made.
+
 #### ⛔ `cp_dirtbowl` is NOT special — that lead is closed
 
 It holds 131 of the 429, but that is size: three areas at ~2,445 measured edges
