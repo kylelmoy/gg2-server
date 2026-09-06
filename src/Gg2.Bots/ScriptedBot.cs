@@ -459,6 +459,18 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
 
         ref readonly var self = ref world.Character(slot);
 
+        // The follower needs the terrain for one decision — whether a rocket aimed
+        // straight down has anything under it to go off against. Handed over here
+        // rather than at construction because the world outlives neither the bot
+        // nor a map change, and this is the only place that has it.
+        // ⚠️ Through a local: the field is `null!` on a graphless bot, so testing
+        // it directly teaches the compiler it can be null and every later use in
+        // this method turns into a warning-as-error.
+        var follower = _follower;
+
+        if (follower is not null)
+            follower.Collision = world.Collision;
+
         TrackCarrierProgress(in self, tick);
 
         // A fresh life starts a fresh regroup hold, randomised so a whole team

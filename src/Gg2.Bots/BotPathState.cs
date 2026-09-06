@@ -321,6 +321,27 @@ public sealed class BotPathState
     /// the takeoff gate cannot leave last tick's request standing.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// Where the launch's rocket is aimed, in GM8 degrees. 270 is straight down.
+    /// </summary>
+    /// <remarks>
+    /// <b>Straight down is right whenever there is floor under the muzzle, and
+    /// there often is not.</b> A rocket is created at the weapon plus 20px of
+    /// <c>lengthdir</c>, so aimed down it spawns at the character's own x — and at
+    /// a takeoff column, which is the last column of the run, the body already
+    /// overhangs the lip. Measured: 125 of the 165 rocket-jump arcs the follower
+    /// cannot fly drop a standing character off that column, against 22 of 150 for
+    /// the arcs it flies. The rocket then falls past the ledge and the arc silently
+    /// becomes a 57px ordinary jump.
+    /// <para>
+    /// ⚠️ Set per launch rather than read from a constant, because the correction
+    /// is conditional: tilting the blast costs impulse (<c>vectorfactor</c> is
+    /// sqrt(sin⁴+cos⁴), 1 only axis-aligned) and the arcs that already work must
+    /// keep the aim they were proved with.
+    /// </para>
+    /// </remarks>
+    public double RocketAim { get; set; } = PathFollower.RocketAimDegrees;
+
     public bool RocketFire { get; set; }
 
     /// <summary>

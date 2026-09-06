@@ -426,6 +426,18 @@ public sealed partial class PathFollower
         // often the arc is being flown on the model's word rather than on speed.
         var underspeed = along < needVx - BotConstants.JumpVtol;
 
+        // ⚠️ Asked of the TERRAIN, not of the graph. A node's span ends for gates
+        // and walls as well as for the edge of a run, so "the takeoff column is the
+        // node's last column" is true of most arcs — used as the test it made the
+        // corpus sweep 38% worse, because it re-aimed the arcs that already worked.
+        // What matters is only whether the blast has anything to go off against:
+        // the rocket is created 20px along the aim, so aimed down it spawns at the
+        // body's centre, and at the lip of a run there is nothing under it.
+        var rocketAim = RocketAimDegrees;
+
+        if (isRocket && Collision is { } terrain && !FloorUnder(terrain, character.X, character.Y))
+            rocketAim = RocketAimDegrees - (jumpDir * LipAimDegrees);
+
         // ⚠️ WHICH reach model, and it is not a detail. A rocket-jumping character
         // is under moveStatus 1, where Begin Step's switch gives controlFactor 0.65
         // and frictionFactor 1 — and a friction of 1 means horizontal speed does not
@@ -529,7 +541,7 @@ public sealed partial class PathFollower
             if (underspeed)
                 state.LaunchesUnderspeed++;
 
-            Launch(state, ref steer, isRocket);
+            Launch(state, ref steer, isRocket, rocketAim);
         }
         else if (isSticky && state.StickySetup >= 0)
         {
@@ -666,8 +678,32 @@ public sealed partial class PathFollower
             // branch above exists to prevent. Measured on cp_dirtbowl e583: the bot
             // jumped at moveStatus 0, rose 56px against the 101 the arc needed, took
             // no self-damage, landed back where it started, and did it again.
-            Launch(state, ref steer, isRocket);
+            Launch(state, ref steer, isRocket, rocketAim);
         }
+    }
+
+    /// <summary>
+    /// Is there anything under the muzzle for a straight-down blast to hit?
+    /// </summary>
+    /// <remarks>
+    /// The muzzle is <c>RocketMuzzleOffset</c> (20px) below the origin when the aim
+    /// is straight down, and the floor a grounded character stands on is about 24px
+    /// below it — so the scan starts at the muzzle and runs a little past the feet.
+    /// ⚠️ It asks at the body's own x because that is where the rocket is created;
+    /// asking at the anchor column would answer for a point the blast never
+    /// occupies, which is the whole of this bug.
+    /// </remarks>
+    private static bool FloorUnder(CollisionWorld terrain, double x, double y)
+    {
+        var column = (int)Gml.Round(x);
+
+        for (var below = 20; below <= 32; below++)
+        {
+            if (terrain.IsSolidAt(column, (int)Gml.Round(y) + below))
+                return true;
+        }
+
+        return false;
     }
 
     /// <summary>Commits to the arc: ask for the press and reset the per-arc state.</summary>
@@ -690,13 +726,14 @@ public sealed partial class PathFollower
     /// <c>ScriptedBot</c> runs after its combat half — the only place that can see
     /// both.
     /// </remarks>
-    private static void Launch(BotPathState state, ref Steering steer, bool rocket)
+    private static void Launch(BotPathState state, ref Steering steer, bool rocket, double aim = RocketAimDegrees)
     {
         steer.WantJump = true;
 
         if (rocket)
         {
             steer.RocketFire = true;
+            state.RocketAim = aim;
             state.RocketJumps++;
         }
 

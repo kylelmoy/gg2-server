@@ -441,7 +441,7 @@ public static class EdgeFlights
             ?? throw new InvalidOperationException("a flight needs a nav graph; this world has none");
 
         var edge = graph.Edges[edgeIndex];
-        var follower = new PathFollower(graph) { Distances = distances };
+        var follower = new PathFollower(graph) { Distances = distances, Collision = world.Collision };
         var state = new BotPathState();
 
         EdgeFlight Skipped(EdgeFlightOutcome outcome) =>

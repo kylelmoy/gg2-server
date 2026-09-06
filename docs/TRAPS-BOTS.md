@@ -3662,10 +3662,41 @@ support for the *anchor*. Acting on that means regenerating all 25 graphs, movin
 `nav/manifest.tsv` — the nav lane's change, not this one's, and the corpus sweep is
 the gate that would show whether it worked.
 
-⚠️ **The untested third option** is to aim the blast down-and-back when the muzzle
-has no floor under it: `vectorfactor` costs up to 30% of the impulse at 45°, but
-70% of a blast beats none. It changes the arc the generator proved, so it is a
-measurement rather than a fix, and it has not been made.
+#### ✅ FIXED 2026-09-06: tilt the blast when the muzzle has nothing under it
+
+The third option, made and measured. `PathFollower.LipAimDegrees` is 24°, so the
+muzzle moves about 8px back along the run and 18px down — past the lip a
+straight-down shot falls off — while `vectorfactor` stays near **0.85** rather than
+the 0.707 a 45° blast would cost.
+
+| | stranded | rocket-jump stranded | flown | hard failures (budget 4,000) |
+|---|---|---|---|---|
+| before | 703 | 369 | 1,686 | 429 (rocket 195) |
+| **after** | **622** | **291** | **1,735** | **355 (rocket 125)** |
+
+Blacklists 5,140 → 4,967 and ticks 1,556,749 → 1,535,714: the bot stops paying for
+attempts that could not work. The rocket jump's stranding rate goes 10.4% → 8.2% at
+the gate's budget and 5.5% → 3.5% at 4,000.
+
+✅ **Verified on the case it was diagnosed from.** `cp_dirtbowl` e583 now fires at
+aim 246 rather than 270, enters `moveStatus` 1, takes its 30 self-damage and leaves
+at vspeed −13.12 against the −7.70 of the ordinary jump it used to fly.
+
+⛔ **The condition is asked of the TERRAIN and that is the whole of it.**
+`PathFollower.Collision` is a new optional read-only reference for exactly this one
+question. The graph cannot answer it: a node's span ends for gates and walls as
+well as for the edge of a run, so "the takeoff column is the node's last column" is
+true of most arcs — **used as the test it made the sweep 38% worse (703 → 968),
+because it re-aimed the arcs that already worked.** That failed attempt is why the
+plumbing exists.
+
+⚠️ **The three pinned end-to-end bot measurements did not move**, which is what
+makes this a targeted fix rather than a change of behaviour everywhere. Null
+`Collision` behaves exactly as before, so anything driving a follower without one
+keeps the old aim.
+
+⚠️ **355 hard failures remain, 125 of them rocket jumps.** The lip is not the only
+thing wrong with them and this fix does not claim to be the end of it.
 
 #### ⛔ `cp_dirtbowl` is NOT special — that lead is closed
 

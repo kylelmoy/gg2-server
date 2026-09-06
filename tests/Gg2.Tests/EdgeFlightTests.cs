@@ -199,7 +199,20 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
     /// edge.
     /// </para>
     /// <para>
-    /// ✅ <b>Re-recorded twice more, 2026-09-06.</b> Flying an edge as a team that
+    /// ✅ <b>Re-recorded again 2026-09-06, and this one is a FIX rather than a
+    /// harness correction.</b> A rocket aimed straight down spawns at the body's
+    /// centre, and at a takeoff column the body overhangs the lip of its run, so
+    /// the blast fell past the ledge and the arc became a 57px ordinary jump.
+    /// Tilting the shot back along the run when — and only when — the terrain says
+    /// there is nothing under the muzzle
+    /// (<see cref="PathFollower.LipAimDegrees"/>): <b>stranded 703 → 622, rocket-jump
+    /// stranded 369 → 291, flown 1,686 → 1,735</b>, blacklists and ticks both down.
+    /// At a 4,000-tick budget the hard failures go 429 → 355 and the rocket jump's
+    /// share of them 195 → 125. ⚠️ The three pinned end-to-end bot measurements did
+    /// NOT move, which is what makes it a targeted fix rather than a change of
+    /// behaviour everywhere.
+    /// <para>
+    /// ✅ <b>Re-recorded twice before that, 2026-09-06.</b> Flying an edge as a team that
     /// can stand on it (<see cref="EdgeFlightOutcome.StartBlocked"/>) took stranded
     /// 847 → 703 and no-route 618 → 466. Then <see cref="EdgeFlight.RanEdge"/>
     /// landed: <b>flown 2,403 → 1,686 with arrived and stranded UNMOVED</b>, because
@@ -246,19 +259,19 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
             new EdgeFlightTally(
                 Candidates: 116_316,
                 Measured: 32_055,
-                Arrived: 31_352,
-                Flown: 1_686,
-                Stranded: 703,
+                Arrived: 31_433,
+                Flown: 1_735,
+                Stranded: 622,
                 RoutedAround: 72_926,
                 Shadowed: 10_869,
                 NoRoute: 466,
                 StartUnresolved: 0,
                 GoalUnresolved: 0,
-                Ticks: 1_556_749,
-                Blacklists: 5_140,
+                Ticks: 1_535_714,
+                Blacklists: 4_967,
                 StartBlocked: 0,
                 TeamSwapped: 178,
-                Diverted: 2_099),
+                Diverted: 2_128),
             tally);
     }
 
@@ -305,19 +318,19 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
             new EdgeFlightTally(
                 Candidates: 116_316,
                 Measured: 37_787,
-                Arrived: 37_044,
-                Flown: 2_243,
-                Stranded: 743,
+                Arrived: 37_161,
+                Flown: 2_297,
+                Stranded: 626,
                 RoutedAround: 67_194,
                 Shadowed: 10_869,
                 NoRoute: 466,
                 StartUnresolved: 0,
                 GoalUnresolved: 0,
-                Ticks: 2_029_939,
-                Blacklists: 6_202,
+                Ticks: 1_999_561,
+                Blacklists: 5_973,
                 StartBlocked: 0,
                 TeamSwapped: 206,
-                Diverted: 3_778),
+                Diverted: 3_837),
             plain);
     }
 
