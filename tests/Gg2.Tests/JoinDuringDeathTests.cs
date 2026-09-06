@@ -77,6 +77,19 @@ public sealed class JoinDuringDeathTests
             options.ShuffleRotation = ShuffleMode.None;
             options.PlayerLimit = 40;
 
+            // ⛔ Seeded, because the vacuity guard at the bottom is a MEASUREMENT
+            // of this match and not a property of the code. Whether five joins
+            // land on a death tick inside 400 attempts depends on whether the
+            // bots kill each other, which depends on the simulation's random
+            // stream — and GameServer.Start seeds that from the clock. Measured:
+            // one full-suite run in three ended with "only 0 join(s) landed on a
+            // tick somebody died", which is the guard correctly refusing to
+            // report a pass it had not earned, on a run where nothing was wrong.
+            // ⚠️ A seed is not a licence to relax the guard: the point is that
+            // the same match runs every time and either exercises the race or
+            // visibly does not.
+            options.RandomSeed = 20260906;
+
             // ⚠️ FillToPlayers far above MaxBots ON PURPOSE, rather than
             // SetBotFill(12). SetBotFill makes the two equal, so every arriving
             // human DISPLACES a bot — and a bot removal compacts the roster, which

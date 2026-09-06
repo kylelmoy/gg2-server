@@ -82,7 +82,7 @@ public sealed class RewardAuthClient : IDisposable
     private readonly ConcurrentQueue<RewardAuthResult> _completed = new();
 
     private readonly CancellationTokenSource _shutdown = new();
-    private readonly Task _pump;
+    private readonly Thread _pump;
 
     public RewardAuthClient(IServerLog log, string host, int port)
     {
@@ -92,18 +92,36 @@ public sealed class RewardAuthClient : IDisposable
         _host = host;
         _port = port;
 
-        // LongRunning, so this gets a dedicated thread rather than a pool
-        // slot. The pump spends its life parked on a blocking queue take and
-        // then on network I/O, which is exactly what starves on a busy pool —
-        // observed as an intermittent failure of the end-to-end test under the
-        // full suite, where hundreds of other tests were saturating it. A relay
-        // whose latency depends on unrelated CPU load is a real defect, not
-        // only a flaky test.
-        _pump = Task.Factory.StartNew(
-            PumpAsync,
-            CancellationToken.None,
-            TaskCreationOptions.LongRunning,
-            TaskScheduler.Default).Unwrap();
+        // ⛔ A REAL THREAD, and synchronous I/O on it, because the obvious
+        // spelling of this does not do what it says.
+        //
+        // This was `Task.Factory.StartNew(PumpAsync, …, TaskCreationOptions.
+        // LongRunning, …).Unwrap()`, with a comment claiming the pump got a
+        // dedicated thread and so could not be starved by a busy pool. ⚠️ It did
+        // not. `LongRunning` gives a dedicated thread to the SYNCHRONOUS PREFIX
+        // of an async method — everything up to the first `await`. After that the
+        // continuations are scheduled on TaskScheduler.Default, which is the
+        // thread pool, and the awaits here are the whole body: connect, write,
+        // read. So the part that was supposed to be immune was the part that
+        // never ran there.
+        //
+        // Measured: under a full-suite run the end-to-end test waited 47 seconds
+        // — past this class's own 20-second deadline — and the reward never came
+        // back at all. The pool grows by roughly a thread a second once it is
+        // saturated, so a burst of blocked pool work stalls a continuation for
+        // far longer than the deadline it was supposed to be bounded by, and the
+        // check then times out and returns null for ever.
+        //
+        // A thread has no such failure mode: nothing about this pump's latency
+        // depends on unrelated CPU load any more, which is the property the old
+        // comment claimed and this one can keep.
+        _pump = new Thread(Pump)
+        {
+            IsBackground = true,
+            Name = "reward-auth",
+        };
+
+        _pump.Start();
     }
 
     /// <summary>
@@ -131,15 +149,12 @@ public sealed class RewardAuthClient : IDisposable
     /// </remarks>
     public bool TryTakeResult(out RewardAuthResult result) => _completed.TryDequeue(out result);
 
-    private async Task PumpAsync()
+    private void Pump()
     {
         try
         {
             foreach (var (player, request) in _queue.GetConsumingEnumerable(_shutdown.Token))
-            {
-                var rewards = await CheckAsync(request, player.Name).ConfigureAwait(false);
-                _completed.Enqueue(new RewardAuthResult(player, rewards));
-            }
+                _completed.Enqueue(new RewardAuthResult(player, Check(request, player.Name)));
         }
         catch (OperationCanceledException)
         {
@@ -147,29 +162,48 @@ public sealed class RewardAuthClient : IDisposable
         }
     }
 
-    private async Task<string?> CheckAsync(byte[] request, string who)
+    /// <summary>One check, start to finish, on the pump thread.</summary>
+    /// <remarks>
+    /// ⚠️ <b>Synchronous on purpose.</b> Socket timeouts bound this without any
+    /// scheduler underneath it — see the constructor for what the async spelling
+    /// cost. <see cref="Timeout"/> is the budget for the WHOLE exchange, so each
+    /// step gets what is left of it rather than a fresh copy; three fresh copies
+    /// would make the real ceiling sixty seconds and this class's one public
+    /// promise a third of the truth.
+    /// </remarks>
+    private string? Check(byte[] request, string who)
     {
-        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token);
-        deadline.CancelAfter(Timeout);
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+
+        int Remaining()
+        {
+            var left = (int)(Timeout - clock.Elapsed).TotalMilliseconds;
+
+            return left > 0 ? left : throw new SocketException((int)SocketError.TimedOut);
+        }
 
         try
         {
-            using var socket = new TcpClient();
-            await socket.ConnectAsync(_host, _port, deadline.Token).ConfigureAwait(false);
+            using var client = new TcpClient();
 
-            var stream = socket.GetStream();
-            await stream.WriteAsync(request, deadline.Token).ConfigureAwait(false);
+            Connect(client.Client, Remaining());
+
+            client.SendTimeout = Remaining();
+            client.ReceiveTimeout = Remaining();
+
+            var stream = client.GetStream();
+            stream.Write(request);
 
             // The auth server answers by writing a body and CLOSING — there is
             // no length and no status code, so end-of-stream is the only
             // terminator there is. Reading a fixed number of bytes instead would
             // either truncate a long reward list or hang for ever on a short one.
             using var body = new MemoryStream();
-            await stream.CopyToAsync(body, deadline.Token).ConfigureAwait(false);
+            stream.CopyTo(body);
 
             return RewardAuth.ReadAuthResponse(body.GetBuffer().AsSpan(0, (int)body.Length));
         }
-        catch (Exception e) when (e is SocketException or IOException or OperationCanceledException)
+        catch (Exception e) when (e is SocketException or IOException or ObjectDisposedException)
         {
             // Info rather than warn: a server on a private network with no route
             // to the auth service would otherwise warn once per joining player.
@@ -178,21 +212,63 @@ public sealed class RewardAuthClient : IDisposable
         }
     }
 
+    /// <summary>Connects, bounded by <paramref name="timeoutMs"/>.</summary>
+    /// <remarks>
+    /// ⛔ <b>A non-blocking connect and a Poll, because a blocking one cannot be
+    /// bounded and every async one needs a scheduler.</b> <c>Socket.Connect</c>
+    /// runs to the OS's own limit — tens of seconds to a routed host that never
+    /// answers — and that is the case a deadline exists for. <c>ConnectAsync</c>
+    /// with a token would bound it and put this back on the thread pool, which is
+    /// the bug the constructor describes.
+    /// <para>
+    /// ⚠️ <c>SelectWrite</c> alone is not the answer: a REFUSED connection also
+    /// makes the socket selectable, so the error state has to be read afterwards
+    /// or a refusal reads as a success and the write fails confusingly later.
+    /// </para>
+    /// </remarks>
+    private void Connect(Socket socket, int timeoutMs)
+    {
+        socket.Blocking = false;
+
+        try
+        {
+            socket.Connect(_host, _port);
+        }
+        catch (SocketException e) when (e.SocketErrorCode is SocketError.WouldBlock or SocketError.InProgress)
+        {
+            // Expected: the connect is now in flight and Poll is what waits.
+        }
+        finally
+        {
+            socket.Blocking = true;
+        }
+
+        if (socket.Connected)
+            return;
+
+        // Poll takes MICROSECONDS, and its int overflows at about 35 minutes —
+        // far above any Timeout this class would accept, but the units are the
+        // kind of thing that gets copied wrong.
+        if (!socket.Poll(timeoutMs * 1000, SelectMode.SelectWrite))
+            throw new SocketException((int)SocketError.TimedOut);
+
+        // GetSocketOption's object overload is documented to return the int for
+        // SocketOptionName.Error, but its signature is `object?` — a null here
+        // would mean the platform answered nothing, which is not a failure.
+        if (socket.GetSocketOption(SocketOptionLevel.Socket, SocketOptionName.Error) is int code and not 0)
+            throw new SocketException(code);
+    }
+
     public void Dispose()
     {
         _shutdown.Cancel();
         _queue.CompleteAdding();
 
         // Best effort on the way out. The pump is cancelled, so this is bounded
-        // by whatever syscall it is parked in rather than by Timeout.
-        try
-        {
-            _pump.Wait(TimeSpan.FromSeconds(1));
-        }
-        catch (AggregateException)
-        {
-            // A cancelled pump faulting on the way down is not worth reporting.
-        }
+        // by whatever syscall it is parked in rather than by Timeout — and the
+        // thread is a background one, so a pump still parked in a read cannot
+        // hold the process open past it.
+        _pump.Join(TimeSpan.FromSeconds(1));
 
         _queue.Dispose();
         _shutdown.Dispose();

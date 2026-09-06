@@ -1366,52 +1366,72 @@ waiting for a `CAPS_UPDATE` after each so the HUD block is actually written,
 and checks the roster still adds up (mutation-checked: a single-capture writer
 fails so hard the client never sees the next `CHANGE_MAP` at all).
 
-## ⚠️ KNOWN ISSUE: the phase gate's own recording has an unexplained outlier
+## ⚠️ KNOWN ISSUE: the phase gate's outlier is a STUCK SLOT, not a phase error
 
 `InputLagSweepTests.ThisServersOwnRecordingIsInPhase` records a 900-tick bot
 match and grades it by a **99th-percentile** trajectory error at five input lags.
-Until 2026-09-06 it recorded a *different* match every run — `GameServer.Start`
-seeds `WorldState.Random` from the clock, which is the reference's `randomize()`
-and correct for a live server — so the gate was sampling a fresh random match and
-asserting a tail statistic on it. It failed roughly **once in twenty-five**, and
-the message it printed accused the broadcast of publishing a different tick's
-input than it simulated, which is close to the worst thing this repository can say
-about itself.
+It used to record a *different* match every run — `GameServer.Start` seeds
+`WorldState.Random` from the clock, the reference's `randomize()` — so the gate
+sampled a fresh random match and asserted a tail statistic on it. It failed about
+once in twenty-five, and the message it printed accused the broadcast of
+publishing a different tick's input than it simulated.
 
-`ServerOptions.RandomSeed` now fixes the match. Six runs give one distinct curve,
-so the gate is reproducible.
+`ServerOptions.RandomSeed` now fixes the match; six runs give one curve.
 
-⛔ **But the seed does not explain what the flake was, and this section exists so
-that is not quietly forgotten.** Measured before the fix:
+### ✅ The alarming reading is WRONG, and here is what it actually is
 
-| | lag −1 | **lag 0** | lag +1 |
-|---|---|---|---|
-| 40 healthy random matches | 63–239 | **3–36** | 62–287 |
-| 72 fixed seeds, 1…72 | 63–212 | **3–73** (worst is seed 40) | 62–287 |
-| the two observed failures | 229, 255 | **154, 129** | 83, 106 |
+`OutlierHuntTests` (both tools skipped, in the suite) caught **eight** outlier
+traces. Replaying one at lag 0:
 
-⚠️ **The failures are an outlier MODE, not the tail of the healthy
-distribution.** Lag 0's error is normally single digits and in a failing run it is
-about **twenty times** that — while lag +1 simultaneously drops below its own
-normal range. **A whole-trace shift does not fit either**: a cleanly shifted trace
-would put single digits at +1, and the failures never get below 83 at any lag. It
-looks like part of a recording being out of phase rather than all of it.
+```
+901 ticks, 671 comparisons, 416 mismatches, p99 x=9 y=120
+  t=20    slot=3 x  expected=2761  actual=2760  delta=-1
+  …ordinary ±1-2px open-loop rounding drift through t=251…
+  t=349   slot=3 y  expected=1082  actual=962   delta=-120
+  t=356   slot=3 y  expected=1082  actual=962   delta=-120
+  …identical to the pixel every 7 ticks, to t=599 and beyond…
+```
 
-⛔ **Not reproduced on any of 72 fixed seeds**, so there is no fixture for it and
-the mechanism is unknown. What it is NOT: it is not the `RocketModel.Capable`
-change (24/24 pass at `9ae1151`, immediately before it, is weak evidence, but the
-flake also occurred on trees without it), and it is not the join-race work (it
-reproduced with that stashed, 23/24).
+⛔ **One slot, one axis, a CONSTANT −120 px, for 250+ ticks, that never
+re-anchors.** Every other slot's worst error in that trace is 2–47 px and looks
+like ordinary drift. **A phase error does not look like this**: being a tick out
+makes the error grow and shrink with the motion, and it applies to every moving
+character at once. This is one character parked in one place in the replay and in
+a different place in the recording, both stationary.
 
-**How to chase it, and why nothing will stumble on it now.** The seeded gate no
-longer samples the mode at all, so it has to be hunted deliberately: run
-`RecordABotMatch` in a loop under clock seeding, keep the trace whenever
-`curve[0]` exceeds ~50, and replay that trace looking for which ticks carry the
-p99 error. A single kept trace turns this from a rumour into a fixture.
-⚠️ **The falsification for the "it is not the broadcast" reading**: if a kept
-trace shows the error concentrated on the ticks after a rocket-jump launch, the
-recorder and the simulation disagree about which tick a launch belongs to, and
-that IS the wire.
+⚠️ **So the p99 is being set by a single stuck character, not by the stream's
+phase**, and the sentence the gate prints on failure is a misdiagnosis. That is
+the more important half of this entry: the gate is right that something is wrong
+and wrong about what.
+
+### What is NOT yet established
+
+- **Which side is stuck.** The trace says y=1082 and the replay says y=962. It
+  starts around t=349 with no drift beforehand, which is the shape of a death, a
+  respawn or a teleport that one side applied and the other did not.
+- **Whether it is the port or the instrument.** Open-loop replay is documented to
+  re-anchor from the trace at every position-bearing tick, and there ARE
+  comparisons every 7 ticks in that window — so either the anchor is not applied
+  through whatever happened to slot 3, or the two sides disagree about which
+  player slot 3 IS. ⚠️ **Roster indices are positional and shift on
+  `PLAYER_LEAVE`** (CLAUDE.md), and a bot population that changes mid-match is
+  exactly what varies between these random matches.
+- **Why load matters.** Sixty matches on an idle machine caught nothing; sixty
+  alongside a full suite run caught eight in four runs. For a simulation that is
+  supposed to be deterministic given its seed, a load-dependent outcome is itself
+  a finding and is not explained.
+
+### How to carry it on
+
+`OutlierHuntTests.Hunt` (remove the `Skip`) runs matches under clock seeding and
+keeps any whose lag-0 error exceeds a threshold; `Analyse` grades a kept trace and
+prints the worst mismatches, the per-slot counts and the tick clusters. **Start by
+answering which player slot 3 is on each side** — if they are different players,
+this is roster compaction and not physics at all.
+
+⚠️ **The falsification for "it is not the wire":** if a kept trace ever shows the
+error spread across several slots and growing with their speed rather than parked
+on one, the phase reading was right after all and this entry is wrong.
 
 ## Which flush a message rides
 
