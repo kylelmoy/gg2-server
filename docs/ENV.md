@@ -380,6 +380,17 @@ relocation from a redefinition.
   is a pickled object array, so a synthetic eight-field checkpoint would exercise
   a pickle this repository wrote rather than one the trainer writes and would pass
   whether or not the two agree.
+  ⛔ **That test asserts "not a metadata refusal", NOT "it loads", and the
+  difference is what stops it rotting.** `Load` checks five version surfaces after
+  the metadata parse — stamp, action encoding, observation layout, observation
+  length, head shape — so asserting a load couples a metadata test to all five,
+  and the next `SIM_UUID` bump would turn it red talking about stamps under a name
+  about the eighth field. The two exception types split on exactly that line:
+  `InvalidDataException` is archive and metadata structure,
+  `InvalidOperationException` is version skew. ⚠️ `ignoreSimulationStamp` is not a
+  substitute — it bypasses the stamp and leaves the other four. Both directions
+  were checked: `!= 7` fails the test, and a deliberately staled fixture still
+  passes it.
   ⚠️ **This is a shape check, not a behaviour one.** Nothing here reads the class
   set; `PolicyController.TrainedClasses` is still a compile-time static, which is
   the open ask in `gg2-rl`'s `docs/CONTRACT.md`, "AN ASK RAISED 2026-09-06".

@@ -276,6 +276,31 @@ public sealed class PolicyNetworkTests
     /// different test against <c>control_s0_iter12000.npz</c>, whose set differs
     /// from today's hardcoded four by exactly two members.
     /// </para>
+    /// <para>
+    /// ⛔ <b>"Not a metadata refusal" rather than "loads", and the difference is
+    /// what stops this test rotting.</b> <see cref="PolicyNetwork.Load"/> checks
+    /// five version surfaces AFTER the metadata parse — stamp, action encoding,
+    /// observation layout, observation length, head shape — and this fixture
+    /// carries a particular value of every one. Asserting that it loads couples a
+    /// metadata-length test to all five: the next <c>SIM_UUID</c> bump would turn
+    /// this red with a message about simulation stamps, under a name that sends
+    /// the reader looking at the eighth field, which would be fine. ⚠️ <b>Not
+    /// hypothetical</b> — the observation layout went v1 → v2 on 2026-09-03 and
+    /// retired every checkpoint in existence, and the stamp has moved at least
+    /// four times (<c>7ff5940d</c>, <c>5dac8a5e</c>, <c>9e0d931e</c>,
+    /// <c>698913b5</c>). <c>legacy7field_long8h_s0.npz</c> is what this fixture
+    /// becomes one bump from now, and it is refused on its stamp and then its
+    /// layout — never on metadata length.
+    /// <para>
+    /// The two exception types split along exactly the line this test cares
+    /// about: <see cref="InvalidDataException"/> is archive and metadata
+    /// structure, <see cref="InvalidOperationException"/> is version skew. So
+    /// after a bump the throw changes type and this still passes, while
+    /// tightening the guard to <c>!= 7</c> still fails it. ⚠️
+    /// <c>ignoreSimulationStamp</c> would not do instead: it bypasses the stamp
+    /// and leaves the other four.
+    /// </para>
+    /// </para>
     /// </remarks>
     [Fact]
     public void AnEighthMetadataFieldIsIgnoredRatherThanRefused()
@@ -284,17 +309,16 @@ public sealed class PolicyNetworkTests
             NpyFile.ReadArchive(File.OpenRead(PolicyFixture.EightFieldCheckpoint))["meta"]);
 
         // The premise, asserted rather than assumed: a fixture that quietly lost
-        // its eighth field would make the rest of this test vacuous.
+        // its eighth field would make the rest of this test vacuous. Both reads
+        // are NpyFile only, so neither depends on a version surface.
         Assert.Equal(8, meta.Length);
         Assert.Equal("ENGINEER,SPY,PYRO", meta[7]);
 
         using var stream = File.OpenRead(PolicyFixture.EightFieldCheckpoint);
 
-        // No ignoreSimulationStamp: this goes through the ordinary accept path,
-        // so it also says the file is stamped for this build.
-        var network = PolicyNetwork.Load(stream);
+        var failure = Record.Exception(() => PolicyNetwork.Load(stream));
 
-        Assert.Equal(PolicyFixture.Load().ObservationLength, network.ObservationLength);
+        Assert.IsNotType<InvalidDataException>(failure);
     }
 
     [Fact]
