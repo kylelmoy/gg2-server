@@ -40,6 +40,58 @@ public sealed partial class GameServer
             var socket = _listener.AcceptSocket();
             var connection = new ClientConnection(socket, _limits);
 
+            // ⚠️ FIRST, and with no message written back. An operator's ban is
+            // the one refusal where the peer is not owed an explanation, and
+            // telling them which of several addresses is banned is free
+            // reconnaissance. It is also the cheapest check, so a banned
+            // flooder costs the least of any refused connection.
+            if (_bans.Find(connection.RemoteAddress, now) is { } ban)
+            {
+                connection.Dispose();
+
+                if (_refusalLog.ShouldLog(_nowMs, out var banSuppressed))
+                {
+                    _log.Warn(
+                        $"refused {connection.RemoteAddress}: banned ({LogText.Safe(ban.Reason)})"
+                        + Suffix(banSuppressed));
+                }
+
+                continue;
+            }
+
+            // ⚠️ Then the RATE, which is not MultiClientLimit. That one bounds
+            // how many connections an address holds at once; this bounds how
+            // fast it opens them — connect, get refused, reconnect, repeat, with
+            // the concurrent count never above one and every cycle costing an
+            // accept, an allocation and a roster walk.
+            // ⚠️ Loopback is exempt, exactly as it is from MultiClientLimit and
+            // for the reference's own reason: it is how a host runs a client
+            // beside its own server, and how a test drives several at once.
+            // Rate-limiting the operator's own machine protects nothing — a
+            // flood from 127.0.0.1 is already inside the box.
+            //
+            // ⛔ A BAN is not exempt, deliberately. An operator who bans
+            // loopback meant it; the exemption above is about a limit nobody
+            // asked for, not about overriding one somebody did.
+            if (_connectionRate is not null
+                && !IPAddress.IsLoopback(connection.RemoteAddress)
+                && !_connectionRate.Allow(connection.RemoteAddress, _nowMs))
+            {
+                // Closed without a message, like a ban: a client being told
+                // "slow down" would reconnect to read it, which is the loop
+                // being damped.
+                connection.Dispose();
+
+                if (_refusalLog.ShouldLog(_nowMs, out var rateSuppressed))
+                {
+                    _log.Warn(
+                        $"refused {connection.RemoteAddress}: connecting too fast"
+                        + Suffix(rateSuppressed));
+                }
+
+                continue;
+            }
+
             // ⚠️ Before the per-address check, because this is the one an
             // attacker with many addresses does not trip. MultiClientLimit is
             // the reference's answer to a household behind one NAT — three

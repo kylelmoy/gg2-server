@@ -1,3 +1,4 @@
+using System.Net;
 using Gg2.Protocol;
 using Gg2.Simulation;
 
@@ -522,4 +523,74 @@ public sealed partial class GameServer
         Execute(_roster[slot], command);
         return true;
     }
+
+    // --- bans ----------------------------------------------------------------
+
+    /// <summary>
+    /// Bans an address or block, and disconnects anybody already on from it.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The kick is not optional and is the whole reason this is a server
+    /// method rather than a call straight into <see cref="BanList"/>.</b> A ban
+    /// that only refuses future connections leaves the person it was aimed at
+    /// sitting on the server until they choose to leave, which is exactly not
+    /// what an operator pressing it means.
+    /// <para>
+    /// ⛔ An address is not a person — <see cref="BanList"/> says why this is a
+    /// moderation tool and not a security control, and why nothing calls it
+    /// automatically.
+    /// </para>
+    /// </remarks>
+    /// <returns>How many connected players were disconnected by it.</returns>
+    public int BanAddress(IpRange range, TimeSpan? duration, string reason)
+    {
+        if (range.IsEmpty)
+            throw new ArgumentException("not an address or CIDR block", nameof(range));
+
+        var entry = _bans.Add(range, duration, reason, DateTime.UtcNow);
+        var kicked = 0;
+
+        // ⚠️ Backwards, because KickPlayer removes the roster entry and compacts
+        // every index above it — walking forwards would skip the player after
+        // each one it disconnected, which on a banned /24 is half of them.
+        for (var slot = _roster.Count - 1; slot > 0; slot--)
+        {
+            if (_roster[slot].Connection is not { } connection
+                || !range.Contains(connection.RemoteAddress))
+            {
+                continue;
+            }
+
+            if (KickPlayer(slot, "banned") == KickOutcome.Kicked)
+                kicked++;
+        }
+
+        _log.Warn(
+            $"banned {range} {(entry.ExpiresUtc is null ? "permanently" : $"until {entry.ExpiresUtc:u}")}"
+            + $" ({LogText.Safe(entry.Reason)}); {kicked} player(s) disconnected");
+
+        // ⚠️ Said here rather than at startup, because at startup nobody has
+        // asked for a ban yet and a warning about an unused feature is noise.
+        // An operator finding out that bans evaporate by having the same person
+        // come back after a restart is the failure this one line prevents.
+        if (!_bans.IsPersistent)
+        {
+            _log.Warn(
+                "this ban is in memory only and will be lost on restart; "
+                + "set --ban-file to keep it");
+        }
+
+        return kicked;
+    }
+
+    /// <summary>Lifts a ban on exactly this range. False if there was none.</summary>
+    public bool UnbanAddress(IpRange range)
+    {
+        if (!_bans.Remove(range))
+            return false;
+
+        _log.Info($"unbanned {range}");
+        return true;
+    }
+
 }

@@ -117,8 +117,128 @@ public static class ControlCommands
 
         "command" => Command(server, request),
 
+        // Operator moderation. Like "kick" these have no client equivalent, so
+        // they do not go through Execute — but they live HERE rather than in
+        // either transport, which is the rule the control port and the panel
+        // both depend on: one verb table, so the two surfaces cannot drift into
+        // slightly different servers.
+        "ban" => Ban(server, request),
+
+        "unban" => Unban(server, request),
+
+        "bans" => Bans(server),
+
         _ => Error($"unknown cmd \"{cmd}\""),
     };
+
+    /// <summary>
+    /// <c>ban</c>: by <c>address</c> (an address or CIDR) or by <c>slot</c>.
+    /// </summary>
+    /// <remarks>
+    /// <b>By slot is the one an operator actually uses</b> — they are watching
+    /// the panel and know who is being a nuisance by their name, not by their
+    /// address — so the slot is resolved to an address here. By address is for
+    /// somebody who is not currently connected.
+    /// <para>
+    /// ⛔ <c>minutes</c> is optional and omitting it means <b>permanent</b>.
+    /// That is the right default for a deliberate operator action, and
+    /// <see cref="BanList"/> is where the case against leaning on any of this
+    /// is written down: an address is not a person.
+    /// </para>
+    /// </remarks>
+    private static string Ban(GameServer server, JsonElement request)
+    {
+        var text = Optional(request, "address");
+
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            var slot = Int(request, "slot", -1);
+            text = slot > 0 ? server.AddressOf(slot) : string.Empty;
+
+            if (string.IsNullOrEmpty(text))
+            {
+                return Error(
+                    $"slot {slot} is not a connected player; ban by \"address\" instead, "
+                    + "or use \"state\" to find the slot");
+            }
+        }
+
+        if (!IpRange.TryParse(text, out var range))
+            return Error($"\"{text}\" is not an address or CIDR block");
+
+        var minutes = Int(request, "minutes", 0);
+
+        if (minutes < 0)
+            return Error("\"minutes\" must not be negative; omit it for a permanent ban");
+
+        var kicked = server.BanAddress(
+            range,
+            minutes > 0 ? TimeSpan.FromMinutes(minutes) : null,
+            Optional(request, "reason") ?? string.Empty);
+
+        return Ok($"\"range\":\"{Escape(range.ToString())}\",\"kicked\":{kicked}");
+    }
+
+    /// <summary>
+    /// <c>unban</c>: lifts the ban on exactly this range.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Exact, not "whatever covers this address".</b> Unbanning
+    /// <c>1.2.3.4</c> must not silently delete a <c>1.2.3.0/24</c> somebody put
+    /// there on purpose — the message names what is actually in the list so an
+    /// operator can see what to type instead.
+    /// </remarks>
+    private static string Unban(GameServer server, JsonElement request)
+    {
+        var text = Text(request, "address");
+
+        if (!IpRange.TryParse(text, out var range))
+            return Error($"\"{text}\" is not an address or CIDR block");
+
+        if (server.UnbanAddress(range))
+            return Ok();
+
+        var covering = server.Bans.Entries
+            .Where(entry => entry.Range != range && !entry.Range.IsSingleAddress)
+            .Select(entry => entry.Range.ToString())
+            .ToArray();
+
+        return Error(
+            $"{range} is not banned"
+            + (covering.Length == 0
+                ? string.Empty
+                : $"; these blocks are, and have to be lifted by name: {string.Join(", ", covering)}"));
+    }
+
+    private static string Bans(GameServer server)
+    {
+        var json = new StringBuilder(256);
+        json.Append("\"persistent\":").Append(server.Bans.IsPersistent ? "true" : "false");
+        json.Append(",\"bans\":[");
+
+        var first = true;
+
+        foreach (var entry in server.Bans.Entries)
+        {
+            if (!first)
+                json.Append(',');
+
+            first = false;
+
+            json.Append("{\"range\":\"").Append(Escape(entry.Range.ToString())).Append('"');
+            json.Append(",\"expires\":");
+
+            if (entry.ExpiresUtc is { } expiry)
+                json.Append('"').Append(expiry.ToString("o", CultureInfo.InvariantCulture)).Append('"');
+            else
+                json.Append("null");
+
+            json.Append(",\"reason\":\"").Append(Escape(entry.Reason)).Append("\"}");
+        }
+
+        json.Append(']');
+        return Ok(json.ToString());
+    }
 
     private static string Do(Action action)
     {

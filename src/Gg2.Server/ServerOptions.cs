@@ -119,6 +119,23 @@ public sealed class ServerOptions
     /// </remarks>
     public string LogFile { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Where the ban list is kept, or empty to hold bans in memory only.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Empty means bans do not survive a restart</b>, and a 24/7 server
+    /// restarts — for an update, for a crash, for a reboot. The server says so
+    /// the first time a ban is added without one, rather than letting an
+    /// operator find out by having the same person come back.
+    /// <para>
+    /// ⛔ <b>An address is not a person.</b> Before using this at all, read
+    /// <see cref="BanList"/>: the protocol has no durable identity, so a ban
+    /// keys on the address and is wrong in both directions — it catches
+    /// everybody behind a shared one and nobody whose address changes.
+    /// </para>
+    /// </remarks>
+    public string BanFile { get; set; } = string.Empty;
+
     /// <summary>Size at which <see cref="LogFile"/> is rotated.</summary>
     public long LogMaxBytes { get; set; } = FileLog.DefaultMaxBytes;
 

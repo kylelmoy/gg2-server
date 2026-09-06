@@ -53,6 +53,7 @@ Every buffer in the transport had the same shape: grow on demand, for ever.
 
 | What | Was | Now |
 |---|---|---|
+| how fast one address may connect | unbounded; only concurrent connections were capped | `--connect-rate` (10/min), loopback exempt |
 | a client that stops reading | `_pending` doubled until the process died | faulted at `MaxSendBacklogBytes` (1 MB) |
 | a client that sends faster than it is drained | unbounded, and the reference's own ten-commands-a-tick limit is what *guaranteed* the growth | faulted at `MaxReceiveBufferBytes` (256 KB) |
 | one socket's share of a tick | `Receive` drained until the kernel would block | `MaxReceiveBytesPerTick` (64 KB) |
@@ -155,6 +156,59 @@ that quietly omits the evidence during the incident being investigated makes a
 flood look like a handful of connections, which is worse than a long log because
 it is wrong rather than merely long.
 
+### Connection rate — `src/Gg2.Server/ConnectionRateLimiter.cs`
+
+⚠️ **`--multi-client-limit` is not this and the two get confused.** That is the
+reference's answer to a household behind one NAT: how many connections one
+address holds *at once*, default 3. It does nothing about how *fast* an address
+opens them — connect, get refused, reconnect, repeat, with the concurrent count
+never above one and every cycle costing an accept, an allocation, a roster walk
+and (before the throttle) a log line.
+
+`--connect-rate` is a token bucket per address, ten per minute by default, which
+is far above a player whose game crashed and far below a script. **Loopback is
+exempt**, exactly as it is from `--multi-client-limit` and for the reference's
+own reason: it is how a host runs a client beside its own server, and a flood
+from `127.0.0.1` is already inside the box.
+
+⛔ **It fails OPEN when its table is full, and that is deliberate.** The table
+has a ceiling — an unbounded per-address dictionary is the same growth bug one
+layer up. Past `MaxTracked` (4096) a new address is *allowed* rather than
+refused, because failing closed would let an attacker with enough addresses lock
+out every legitimate player by filling the table, turning the rate limiter into
+the denial of service. Saturation is logged once per episode, because a limiter
+that has quietly stopped limiting is worse than one that was never on: the
+configuration still says it is on.
+
+### Bans — `src/Gg2.Server/BanList.cs`
+
+⛔ **Read this before relying on it: an address is not a person.** The protocol
+has no account and no durable identity — a name is twenty bytes the client
+chooses — so the only thing a ban can key on is the address, and that is wrong
+in both directions. It catches everybody behind a shared address or a carrier
+NAT, and it catches nobody whose address changes between connections, which on a
+mobile network is most people. **It is a moderation tool for somebody being a
+nuisance from one place. It is not a security control.**
+
+Which is why **nothing adds to it automatically**. Every entry comes from an
+operator — `ban`/`unban`/`bans` on the control port and the panel, or the file —
+and the rate limiter above is what answers a machine, because that lapses on its
+own and this does not. An automatic ban is how a shared address gets a whole
+school locked out of a server nobody was even attacking.
+
+- Address or CIDR (`1.2.3.0/24`), optional expiry, a reason for the operator.
+- Banning **disconnects whoever is already on** from that address. A ban that
+  only refused future connections would leave the person it was aimed at sitting
+  there until they chose to leave.
+- ⚠️ **Unbanning is exact.** Lifting `1.2.3.4` does not delete a `1.2.3.0/24`
+  somebody put there on purpose; the error names the blocks that are in force.
+- ⚠️ **Without `--ban-file` a ban is memory-only and dies with the process.**
+  The server says so the first time one is added, rather than letting an
+  operator find out by having the same person come back after a restart.
+- A ban is refused at accept with **no message written back** — the peer is not
+  owed an explanation, and naming which address is banned is free
+  reconnaissance.
+
 ### Broadcast amplification — `GameServer.ExecuteChatBubble`
 
 ⚠️ **A deliberate departure from the reference, and the only one a client could
@@ -241,16 +295,10 @@ on purpose — an unrecorded decision gets retried.
 - **A distributed flood.** Nothing in a single process answers this. The limits
   above bound what *one* connection costs; they do not bound how many
   connections arrive.
-- **Per-address rate limiting beyond `--multi-client-limit` (3).** That limit is
-  the reference's answer to a household behind one NAT, not a defence: an
-  attacker with a hundred addresses gets three hundred connections. Bounded now
-  by `MaxJoiningConnections`, but not *attributed* — the server cannot tell a
-  botnet from a LAN party. This belongs in the firewall.
-- **A ban list.** There is none, and no persistent identity to hang one on: the
-  protocol has no account, and a name is twenty bytes a client chooses. The web
-  panel and control port can kick, which is a live-moderation tool and not a
-  ban. Anything durable would have to key on the address, which is wrong for a
-  shared one and useless against a changing one.
+- **Attributing a distributed flood.** `--connect-rate` (below) limits one
+  address, and `MaxJoiningConnections` bounds the total, but neither can tell a
+  botnet from a LAN party. Past `ConnectionRateLimiter.MaxTracked` addresses the
+  limiter **fails open** — see below — and the answer is the firewall.
 - **Cheating.** The client re-simulates physics itself and the server does not
   re-check what it is told about aim. That is the protocol's design and cannot
   be changed without breaking the stock client, which is this project's whole

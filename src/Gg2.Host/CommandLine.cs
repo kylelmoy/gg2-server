@@ -397,6 +397,27 @@ internal static class CommandLine
                     options.LogFile = cursor.Take();
                     break;
 
+                // ⛔ An address is not a person — see BanList. This keeps an
+                // operator's bans across a restart, which a 24/7 server does
+                // often enough that losing them silently is the default worth
+                // avoiding.
+                case "--ban-file":
+                    options.BanFile = cursor.Take();
+                    break;
+
+                // ⚠️ NOT --multi-client-limit. That bounds how many connections
+                // one address holds at once; this bounds how fast it opens them.
+                case "--connect-rate":
+                    options.Limits = options.Limits with { ConnectionBurstPerAddress = cursor.TakeInt() };
+                    break;
+
+                case "--connect-rate-window":
+                    options.Limits = options.Limits with
+                    {
+                        ConnectionBurstWindow = TimeSpan.FromSeconds(cursor.TakeInt()),
+                    };
+                    break;
+
                 case "--log-max-bytes":
                     options.LogMaxBytes = cursor.TakeInt();
                     break;
@@ -926,6 +947,17 @@ internal static class CommandLine
                             do not probe for peers that vanished. A REGRESSION:
                             without it a client whose machine dies holds a roster
                             slot until TCP gives up, ~15 minutes on Linux.
+          --ban-file <path> keep operator bans here, so they survive a restart.
+                            Without it a ban is in memory only. An address is
+                            NOT a person - see docs/HARDENING.md before relying
+                            on bans at all.
+          --connect-rate <n>
+                            connections one address may open back to back before
+                            it waits (default 10, 0 disables). NOT
+                            --multi-client-limit, which is how many it holds AT
+                            ONCE; this is how fast it opens them.
+          --connect-rate-window <seconds>
+                            how long refilling --connect-rate takes (default 60)
           --log-file <path> ALSO write the log to this file, rotating it by size.
                             Not needed under systemd or Docker, which capture
                             stdout/stderr and rotate already. The console sink

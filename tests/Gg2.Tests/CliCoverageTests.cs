@@ -115,6 +115,9 @@ public sealed class CliCoverageTests
         ("Limits", ["--handshake-deadline", "120"], o => o.Limits.MaxHandshakeDuration),
         ("Limits", ["--no-tcp-keepalive"], o => o.Limits.TcpKeepAlive),
 
+        ("BanFile", ["--ban-file", "bans.txt"], o => o.BanFile),
+        ("Limits", ["--connect-rate", "3"], o => o.Limits.ConnectionBurstPerAddress),
+        ("Limits", ["--connect-rate-window", "30"], o => o.Limits.ConnectionBurstWindow),
         ("LogFile", ["--log-file", "logs/server.log"], o => o.LogFile),
         ("LogMaxBytes", ["--log-max-bytes", "1048576"], o => o.LogMaxBytes),
         ("LogKeep", ["--log-keep", "9"], o => o.LogKeep),

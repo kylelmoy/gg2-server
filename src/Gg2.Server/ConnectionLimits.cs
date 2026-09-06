@@ -186,6 +186,27 @@ public sealed record ConnectionLimits
     public TimeSpan MaxHandshakeDuration { get; init; } = TimeSpan.FromMinutes(10);
 
     /// <summary>
+    /// Connections one address may open back to back before it has to wait.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Not the same as <c>ServerOptions.MultiClientLimit</c>.</b> That
+    /// bounds how many connections one address holds AT ONCE — the reference's
+    /// answer to a household behind one NAT. This bounds how FAST it opens
+    /// them, which nothing else catches: connect, get refused, reconnect,
+    /// repeat, with the concurrent count never above one and every cycle
+    /// costing an accept, an allocation and a roster walk.
+    /// <para>
+    /// Ten in a minute is far above real behaviour — a player whose game
+    /// crashed reconnects once, and even a bad connection retrying is a handful
+    /// — and far below what a script does. Zero turns it off.
+    /// </para>
+    /// </remarks>
+    public int ConnectionBurstPerAddress { get; init; } = 10;
+
+    /// <summary>How long refilling <see cref="ConnectionBurstPerAddress"/> takes.</summary>
+    public TimeSpan ConnectionBurstWindow { get; init; } = TimeSpan.FromMinutes(1);
+
+    /// <summary>
     /// The shortest gap between one player's relayed chat bubbles.
     /// </summary>
     /// <remarks>
@@ -275,6 +296,18 @@ public sealed record ConnectionLimits
                 nameof(MaxSendBacklogBytes),
                 MaxSendBacklogBytes,
                 $"must be at least {largestLegalMessage}, the largest message the protocol allows");
+        }
+
+        if (ConnectionBurstPerAddress < 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(ConnectionBurstPerAddress), ConnectionBurstPerAddress, "must not be negative; zero means no limit");
+        }
+
+        if (ConnectionBurstPerAddress > 0 && ConnectionBurstWindow <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(ConnectionBurstWindow), ConnectionBurstWindow, "must be positive when a burst is set");
         }
 
         if (ChatBubbleIntervalMs < 0)

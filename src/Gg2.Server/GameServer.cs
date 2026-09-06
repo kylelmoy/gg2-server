@@ -394,6 +394,23 @@ public sealed partial class GameServer : IDisposable, IPluginHost
     private readonly LogThrottle _churnLog = new(burst: 30, per: TimeSpan.FromSeconds(10));
 
     /// <summary>
+    /// Addresses an operator has refused. Empty unless somebody put one in.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ Nothing adds to this automatically — see <see cref="BanList"/> for why
+    /// an automatic ban on a shared address is how a whole school gets locked
+    /// out of a server nobody was attacking. <see cref="_connectionRate"/> is
+    /// what answers a machine, because it lapses on its own.
+    /// </remarks>
+    private BanList _bans = null!;
+
+    /// <summary>How fast one address may open connections, or null when off.</summary>
+    private ConnectionRateLimiter? _connectionRate;
+
+    /// <summary>The ban list, for the control surfaces.</summary>
+    public BanList Bans => _bans;
+
+    /// <summary>
     /// How many ticks have failed, and whether that is still survivable.
     /// </summary>
     /// <remarks>
@@ -445,6 +462,12 @@ public sealed partial class GameServer : IDisposable, IPluginHost
         // log begins after startup is missing the half an operator most wants.
         _webLog = options.Web.Enabled ? new LogRing() : null;
         _log = _webLog is null ? log : new TeeLog(log, _webLog);
+
+        // ⚠️ Here as well as in Start, because a caller can reach Bans before
+        // Start has run — the control surfaces are constructed against a
+        // GameServer, and a test drives Tick directly. Start replaces it with
+        // one that has read the file.
+        _bans = new BanList(options.BanFile, _log);
 
         // Once up front as well as on the cadence, so the first thirty seconds
         // of a server started on April 1st are not the odd ones out.
@@ -682,6 +705,13 @@ public sealed partial class GameServer : IDisposable, IPluginHost
         // with these, and ServerOptions.Validate has already checked them.
         _limits = _options.Limits;
 
+        _bans = new BanList(_options.BanFile, _log);
+        _bans.Load();
+
+        _connectionRate = _limits.ConnectionBurstPerAddress > 0
+            ? new ConnectionRateLimiter(_limits.ConnectionBurstPerAddress, _limits.ConnectionBurstWindow)
+            : null;
+
         _listener = new TcpListener(IPAddress.Any, _options.Port);
         _listener.Server.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, false);
         _listener.Start();
@@ -764,6 +794,25 @@ public sealed partial class GameServer : IDisposable, IPluginHost
                 AnnounceToLobby();
 
             _aprilFools = ChatBubbles.IsAprilFools(LocalClock());
+
+            // On the same thirty-second cadence, because both are housekeeping
+            // nothing is waiting on. A lapsed ban that lingers for half a minute
+            // is not a bug; checking on every accept would be.
+            if (_bans.Sweep(now) is var swept and > 0)
+                _log.Info($"{swept} ban(s) expired");
+
+            // ⚠️ Said once per episode, and it matters: a rate limiter whose
+            // table is full has quietly stopped limiting, which is worse than
+            // one that was never on because the configuration still says it is.
+            // ConnectionRateLimiter explains why failing open is nonetheless the
+            // right answer.
+            if (_connectionRate?.ShouldWarnSaturated() == true)
+            {
+                _log.Warn(
+                    $"the per-address connection limiter is tracking its maximum "
+                    + $"{ConnectionRateLimiter.MaxTracked} addresses and is letting new ones through; "
+                    + "this is a distributed connection flood and belongs in the firewall - docs/HARDENING.md");
+            }
         }
 
         // GML's current_time, held still for the tick so two plugins asked in
