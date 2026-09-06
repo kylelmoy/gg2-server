@@ -73,6 +73,36 @@ internal static class PolicyFixture
     internal static string EightFieldCheckpoint =>
         Path.Combine(AppContext.BaseDirectory, "Fixtures", "policy", "rest3_s1_iter12000.npz");
 
+    /// <summary>
+    /// A real <c>gg2-rl</c> checkpoint whose class set differs from
+    /// <see cref="PolicyNetwork.DefaultTrainedClasses"/> by exactly two members.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>THE REGRESSION GATE for the whole per-checkpoint class set.</b> Its
+    /// set is <c>SCOUT,SOLDIER,SNIPER,HEAVY</c>; the default is
+    /// <c>SCOUT,SOLDIER,DEMOMAN,HEAVY</c>. Under the compile-time static this file
+    /// would have DRIVEN its untrained demoman and REFUSED its trained sniper —
+    /// the training lane measured those two cells at mirror 36.08% and 89.08%
+    /// against a 50% null — with no stamp moving and no test failing. A test that
+    /// loads this and asserts <c>IsTrained(Sniper)</c> is the one that would have
+    /// caught it.
+    /// </remarks>
+    internal static string SniperTrainedCheckpoint =>
+        Path.Combine(AppContext.BaseDirectory, "Fixtures", "policy", "control_s0_iter12000.npz");
+
+    /// <summary>
+    /// A real <c>gg2-rl</c> checkpoint whose class set EQUALS the default.
+    /// </summary>
+    /// <remarks>
+    /// <b>The no-op control.</b> Reading the field must give exactly what
+    /// assuming the default gave, so if this one's behaviour ever differs from
+    /// <see cref="PolicyNetwork.DefaultTrainedClasses"/> the change is wrong
+    /// rather than the fixture. It is the arm that says the mechanism did not move
+    /// anything it was not supposed to.
+    /// </remarks>
+    internal static string DefaultSetCheckpoint =>
+        Path.Combine(AppContext.BaseDirectory, "Fixtures", "policy", "combat4_s2_iter12000.npz");
+
     /// <summary>The fixture's directory, which also holds the numpy oracle.</summary>
     internal static string Directory =>
         Path.Combine(AppContext.BaseDirectory, "Fixtures", "policy");

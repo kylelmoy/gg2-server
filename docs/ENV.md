@@ -391,9 +391,48 @@ relocation from a redefinition.
   substitute — it bypasses the stamp and leaves the other four. Both directions
   were checked: `!= 7` fails the test, and a deliberately staled fixture still
   passes it.
-  ⚠️ **This is a shape check, not a behaviour one.** Nothing here reads the class
-  set; `PolicyController.TrainedClasses` is still a compile-time static, which is
-  the open ask in `gg2-rl`'s `docs/CONTRACT.md`, "AN ASK RAISED 2026-09-06".
+  ✅ **Field 7 is now READ** — see below. The shape check above remains the gate
+  for the tolerance itself.
+
+## The trained class set belongs to the CHECKPOINT (2026-09-06)
+
+`PolicyNetwork.TrainedClasses` is read from `meta[7]`, comma-separated
+`PlayerClass` names, and `PolicyController.Drives` asks the network it holds.
+`PolicyNetwork.DefaultTrainedClasses` is the fallback for a file that does not
+say — every checkpoint before 2026-09-06, and any whose field is empty, which is
+what the trainer writes for "no set recorded".
+
+⛔ **What the compile-time static cost, measured by the training lane before this
+landed.** Three shipping checkpoint families train three different sets. Under
+the static, a `control`-family file **drives its untrained demoman** (mirror
+36.08% against a 50% null) and **refuses its trained sniper** (89.08%) — with no
+stamp moving, no handshake field disagreeing and no test failing. **The same
+failure class as `SIM_UUID` not covering the bot layer**: the information that
+would catch it was real, known, and on no surface the loader read.
+
+⚠️ **A differing set is a ROUTING fact, not a safety one, and it is deliberately
+NOT on the stamp surface.** A policy trained on other classes is not invalid, it
+is differently applicable; refusing it would be wrong. Nothing refuses over the
+class set, and nothing should.
+
+Gated by `TrainedClassesTests`, on three real `Policy.save` checkpoints:
+
+| fixture | set | what it is for |
+|---|---|---|
+| `rest3_s1_iter12000.npz` | `ENGINEER,SPY,PYRO` (5, 7, 8) | non-prefix, non-contiguous, different length — catches "the first N", a fixed count, a contiguous range |
+| `control_s0_iter12000.npz` | `SCOUT,SOLDIER,SNIPER,HEAVY` | ⛔ **the regression gate** — differs from the default by exactly two members, in both directions |
+| `combat4_s2_iter12000.npz` | `SCOUT,SOLDIER,DEMOMAN,HEAVY` | the no-op control: equals the default, so if it moves the change is wrong |
+| `ppo_final.npz` (7 fields) | *absent* | the fallback path every pre-2026-09-06 checkpoint takes |
+
+✅ **Checked the gate fires**: reverting `Drives` to the default set fails the
+regression gate and the two-controllers test, and leaves the no-op control and
+the fallback test passing — which is what a control should do.
+
+⚠️ **`SearchController.TrainedClasses` is now an ASSUMPTION about the other arm.**
+It holds no checkpoint and restricts to the policy's classes only so two arms of
+a comparison engage on the same ones, so a comparison against a checkpoint whose
+set is not the default has to pass it in — or the arms differ on the axis the
+restriction exists to hold still.
 
 ## The checkpoint is a FIXTURE, not a policy
 

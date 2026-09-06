@@ -1,4 +1,5 @@
 using System.Globalization;
+using Gg2.Protocol;
 using Gg2.Simulation;
 
 namespace Gg2.Bots;
@@ -34,6 +35,7 @@ public sealed class PolicyNetwork
     private readonly float[] _hiddenA;
     private readonly float[] _hiddenB;
     private readonly float[] _output;
+    private readonly PlayerClass[] _trainedClasses;
 
     private PolicyNetwork(
         float[][] weights,
@@ -42,8 +44,10 @@ public sealed class PolicyNetwork
         int observationLength,
         int[] headShape,
         int actionRepeat,
-        string simulationUuid)
+        string simulationUuid,
+        PlayerClass[] trainedClasses)
     {
+        _trainedClasses = trainedClasses;
         _weights = weights;
         _biases = biases;
         _widths = widths;
@@ -61,6 +65,79 @@ public sealed class PolicyNetwork
         _hiddenA = new float[widest];
         _hiddenB = new float[widest];
         _output = new float[widths[^1]];
+    }
+
+    /// <summary>
+    /// What a checkpoint is assumed to have trained on when it does not say.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>This is a FALLBACK for a checkpoint written before the class set was
+    /// recorded, not a description of any policy you hold.</b> Ask the network you
+    /// loaded — <see cref="TrainedClasses"/> — unless you genuinely have no
+    /// checkpoint in hand.
+    /// <para>
+    /// <b>Five of the nine class columns are constant zero for every decision of
+    /// every training run</b>, self block and enemy block, so their first-layer
+    /// weights are still the random draw. Driving a class outside the set does not
+    /// tell the policy which class it is; it injects untrained noise.
+    /// </para>
+    /// <para>
+    /// <b>The set is not a prefix.</b> Demoman is <see cref="PlayerClass"/> index 3
+    /// and Heavy is 6, so the untrained columns here are 2, 4, 5, 7 and 8 —
+    /// interleaved. Anything that assumes "the first four" is wrong, and
+    /// <c>rest3_s1_iter12000.npz</c> (5, 7, 8) is the fixture that proves it.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Sniper was DROPPED from this set on 2026-09-03</b> and demoman added,
+    /// at the <c>gg2-rl</c> lane's request. A checkpoint trained before that date
+    /// learned a sniper and did not learn a demoman — which is exactly what no
+    /// stamp can express and what <see cref="TrainedClasses"/> now carries.
+    /// </para>
+    /// </remarks>
+    public static ReadOnlySpan<PlayerClass> DefaultTrainedClasses =>
+        [PlayerClass.Scout, PlayerClass.Soldier, PlayerClass.Demoman, PlayerClass.Heavy];
+
+    /// <summary>The classes THIS checkpoint was trained on, and may drive.</summary>
+    /// <remarks>
+    /// <b>A property of the file, because it always was one.</b> It is
+    /// <c>meta[7]</c>, written by <c>gg2-rl</c>'s <c>Policy.save</c> from
+    /// 2026-09-06 as comma-separated <see cref="PlayerClass"/> names.
+    /// <para>
+    /// ⛔ <b>What a compile-time constant cost, measured by the training lane
+    /// before this landed.</b> Its three shipping checkpoint families train three
+    /// different sets. Under the old static, a <c>control</c>-family checkpoint
+    /// would have DRIVEN its untrained demoman (mirror 36.08%) and REFUSED its
+    /// trained sniper (89.08%) — with no stamp moving, no handshake field
+    /// disagreeing and no test failing. The same failure class as
+    /// <c>SIM_UUID</c> not covering the bot layer: the information that would
+    /// catch it was real, known, and on no surface the loader read.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>A set that differs is a ROUTING fact, not a safety one.</b> This is
+    /// deliberately not on the stamp surface: a policy trained on other classes is
+    /// not invalid, it is differently applicable, and refusing to load it would be
+    /// wrong. That is why the loader records it and nothing refuses over it.
+    /// </para>
+    /// <para>
+    /// An absent field — every checkpoint written before 2026-09-06 — and an empty
+    /// one both fall back to <see cref="DefaultTrainedClasses"/>. The trainer
+    /// writes the field unconditionally and uses the empty string for "no set
+    /// recorded", so the two cases stay distinguishable in the FILE even though
+    /// this build treats them alike.
+    /// </para>
+    /// </remarks>
+    public ReadOnlySpan<PlayerClass> TrainedClasses => _trainedClasses;
+
+    /// <summary>Whether this checkpoint was trained on <paramref name="playerClass"/>.</summary>
+    public bool IsTrained(PlayerClass playerClass)
+    {
+        foreach (var trained in _trainedClasses)
+        {
+            if (trained == playerClass)
+                return true;
+        }
+
+        return false;
     }
 
     /// <summary>Floats this policy expects, which must be <c>ObservationWriter.Length</c>.</summary>
@@ -143,6 +220,14 @@ public sealed class PolicyNetwork
             .ToArray();
         var observationLength = int.Parse(meta[5], CultureInfo.InvariantCulture);
         var actionRepeat = int.Parse(meta[6], CultureInfo.InvariantCulture);
+
+        // ⚠️ Optional, and the fallback is what lets the trainer ship the field
+        // before this side read it. Absent is every checkpoint before 2026-09-06;
+        // empty is the trainer saying "no set recorded" for one it migrated
+        // without knowing. Neither is an error and both mean the old assumption.
+        var trainedClasses = meta.Length > 7 && meta[7].Length > 0
+            ? ParseTrainedClasses(meta[7])
+            : DefaultTrainedClasses.ToArray();
 
         if (!string.Equals(simulationUuid, SimulationStamp.Uuid, StringComparison.Ordinal))
         {
@@ -231,7 +316,36 @@ public sealed class PolicyNetwork
         }
 
         return new PolicyNetwork(
-            [.. weights], [.. biases], [.. widths], observationLength, headShape, actionRepeat, simulationUuid);
+            [.. weights], [.. biases], [.. widths], observationLength, headShape, actionRepeat, simulationUuid,
+            trainedClasses);
+    }
+
+    /// <summary>Reads <c>meta[7]</c>: comma-separated <see cref="PlayerClass"/> names.</summary>
+    /// <remarks>
+    /// ⚠️ <b>An unparseable name is refused, and refused as METADATA.</b> A
+    /// checkpoint naming a class this build does not have is a corrupt or
+    /// mistaken field rather than a version skew — the nine classes are fixed by
+    /// the protocol and do not grow — so it belongs with the other
+    /// <see cref="InvalidDataException"/>s and not with the stamp's
+    /// <see cref="InvalidOperationException"/>s.
+    /// </remarks>
+    private static PlayerClass[] ParseTrainedClasses(string field)
+    {
+        var names = field.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var classes = new PlayerClass[names.Length];
+
+        for (var i = 0; i < names.Length; i++)
+        {
+            if (!Enum.TryParse(names[i], ignoreCase: true, out PlayerClass parsed))
+            {
+                throw new InvalidDataException(
+                    $"the checkpoint says it was trained on '{names[i]}', which is not a class this build has");
+            }
+
+            classes[i] = parsed;
+        }
+
+        return classes;
     }
 
     /// <summary>Loads a checkpoint from a path.</summary>

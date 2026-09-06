@@ -63,48 +63,23 @@ public sealed class PolicyController : IMicroController
 
     public bool DecidedThisPoll { get; private set; }
 
-    /// <summary>
-    /// The classes the policy was trained on, and therefore the only ones it may
-    /// drive.
-    /// </summary>
+    /// <summary>Whether this class is one THIS policy was trained on.</summary>
     /// <remarks>
-    /// <b>Five of the nine class columns are constant zero for every decision of
-    /// every training run</b>, self block and enemy block, so their first-layer
-    /// weights are still the random draw. Driving a sniper, medic, engineer, spy
-    /// or pyro does not tell the policy which class it is; it injects untrained
-    /// noise.
+    /// ⛔ <b>Asks the network, not a constant, and that is the whole point of the
+    /// change that landed here on 2026-09-06.</b> The class set is a property of
+    /// the checkpoint: the training lane ships three families that train three
+    /// different sets, and under the compile-time static a <c>control</c>-family
+    /// file would have driven its untrained demoman and refused its trained
+    /// sniper, silently. <see cref="PolicyNetwork.TrainedClasses"/> has the
+    /// measurement and the reasoning.
     /// <para>
-    /// <b>The trained set is not a prefix.</b> Demoman is <c>PlayerClass</c>
-    /// index 3 and Heavy is 6, so the untrained columns are 2, 4, 5, 7 and 8 —
-    /// interleaved. Anything that assumes "the first four" is wrong.
-    /// </para>
-    /// <para>
-    /// <b>Sniper was DROPPED from the set on 2026-09-03</b> and demoman added, at
-    /// the <c>gg2-rl</c> lane's request. The mirror evidence is why: the policy's
-    /// sniper already beat the charge-seeing scripted sniper 65.5% at the
-    /// <c>(0, 300)</c> band, so the charge column that
-    /// <see cref="ObservationWriter"/> still declines to encode was never what
-    /// held that class back. ⚠️ <b>A checkpoint trained before this date learned
-    /// a sniper and did not learn a demoman</b>, which no stamp can express —
-    /// the class set is not on the stamp surface.
+    /// ⚠️ <b>Two controllers over two checkpoints now legitimately disagree</b>,
+    /// which is what <see cref="HybridBot"/>'s per-class tier eligibility was
+    /// built for and could not exercise while this read a static.
     /// </para>
     /// </remarks>
-    public static ReadOnlySpan<PlayerClass> TrainedClasses =>
-        [PlayerClass.Scout, PlayerClass.Soldier, PlayerClass.Demoman, PlayerClass.Heavy];
+    public bool Drives(PlayerClass playerClass) => _policy.IsTrained(playerClass);
 
-    /// <summary>Whether this class is one the policy was trained on.</summary>
-    public static bool IsTrained(PlayerClass playerClass)
-    {
-        foreach (var trained in TrainedClasses)
-        {
-            if (trained == playerClass)
-                return true;
-        }
-
-        return false;
-    }
-
-    public bool Drives(PlayerClass playerClass) => IsTrained(playerClass);
 
     public bool AtDecisionBoundary(int slot) => slot != _slot || _ticksLeftInDecision <= 0;
 

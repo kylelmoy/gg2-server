@@ -52,7 +52,7 @@ public static class PolicyEval
             "ctf_classicwell", "ctf_eiger",
         ];
 
-        var trained = PolicyController.TrainedClasses.ToArray();
+        var trained = PolicyNetwork.DefaultTrainedClasses.ToArray();
         var clock = Stopwatch.StartNew();
 
         var redWins = 0;

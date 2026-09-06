@@ -30,10 +30,15 @@ public sealed class PolicyMatchTests
     private static PolicyNetwork Policy() => PolicyFixture.Load();
 
     /// <summary>
-    /// The four classes the policy was trained on. Everything else is untrained
+    /// The classes THE FIXTURE was trained on. Everything else is untrained
     /// input, not a class it plays badly.
     /// </summary>
-    private static PlayerClass[] Trained => [.. PolicyController.TrainedClasses];
+    /// <remarks>
+    /// ⚠️ Read off the checkpoint rather than a constant since 2026-09-06: the set
+    /// is a property of the file, and asking a constant here would test a
+    /// different policy from the one the match is driven by.
+    /// </remarks>
+    private static PlayerClass[] Trained => [.. Policy().TrainedClasses];
 
     private static HeadlessMatchOptions Options(string map, uint seed, PlayerClass[]? classes, PolicyNetwork? policy) =>
         HeadlessMatchOptions.Default with
@@ -201,7 +206,7 @@ public sealed class PolicyMatchTests
                 continue;
 
             Assert.True(
-                PolicyController.IsTrained(match.State.Players[slot].Class),
+                Policy().IsTrained(match.State.Players[slot].Class),
                 $"slot {slot} is a {match.State.Players[slot].Class}, which the policy was not trained on");
 
             counted++;
@@ -236,7 +241,7 @@ public sealed class PolicyMatchTests
 
                 total++;
 
-                if (!PolicyController.IsTrained(match.State.Players[slot].Class))
+                if (!Policy().IsTrained(match.State.Players[slot].Class))
                     untrained++;
             }
         }
@@ -261,9 +266,11 @@ public sealed class PolicyMatchTests
     /// asserting that a <em>trained</em> class is never driven by the policy, and
     /// failed. It could not report that at the time because the fixture
     /// checkpoint was unloadable and this test was red for that unrelated reason.
-    /// A hard-coded class list is a copy of <c>TrainedClasses</c> that nothing
+    /// A hard-coded class list is a copy of the checkpoint's own set that nothing
     /// keeps in step, so the guard below fails loudly on the next change instead
-    /// of quietly testing the wrong thing.
+    /// of quietly testing the wrong thing. ⚠️ Since 2026-09-06 that set comes off
+    /// the fixture rather than a constant, so swapping the fixture for one trained
+    /// differently trips the guard rather than silently changing what is asserted.
     /// </para>
     /// </remarks>
     [Fact]
@@ -274,9 +281,9 @@ public sealed class PolicyMatchTests
         foreach (var playerClass in untrained)
         {
             Assert.False(
-                PolicyController.IsTrained(playerClass),
-                $"{playerClass} is in TrainedClasses now, so this test's premise is gone — "
-                + "pick classes that are actually untrained rather than deleting the assertion");
+                Policy().IsTrained(playerClass),
+                $"{playerClass} is in the FIXTURE's trained set now, so this test's premise is "
+                + "gone — pick classes it actually did not train rather than deleting the assertion");
         }
 
         var match = HeadlessMatch.Load(

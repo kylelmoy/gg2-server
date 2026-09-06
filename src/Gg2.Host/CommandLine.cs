@@ -637,7 +637,7 @@ internal static class CommandLine
                     options.Bots = options.Bots with
                     {
                         AllowedClasses = string.Equals(text, "trained", StringComparison.OrdinalIgnoreCase)
-                            ? [.. PolicyController.TrainedClasses]
+                            ? [.. PolicyNetwork.DefaultTrainedClasses]
                             : ParseClasses(name, text),
                     };
 

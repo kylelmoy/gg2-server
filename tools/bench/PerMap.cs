@@ -211,7 +211,7 @@ public static class PerMapEval
                 TimeLimitMinutes = cap,
                 KillLimit = 40,
                 MaxTicks = 30 * 60 * cap,
-                AllowedClasses = [.. PolicyController.TrainedClasses],
+                AllowedClasses = [.. PolicyNetwork.DefaultTrainedClasses],
                 Brain = policy is null ? null : BotBrainSpec.Of(new PolicyMicroSpec(policy)),
                 HybridTeam = Team.Red,
             };

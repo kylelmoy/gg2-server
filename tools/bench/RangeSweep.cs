@@ -200,7 +200,7 @@ public static class RangeSweep
                 TimeLimitMinutes = cap,
                 KillLimit = 40,
                 MaxTicks = 30 * 60 * cap,
-                AllowedClasses = [.. PolicyController.TrainedClasses],
+                AllowedClasses = [.. PolicyNetwork.DefaultTrainedClasses],
                 // The control arm carries NO brain, so the range it would have
                 // used is not a question that arises — where this had to name the
                 // default explicitly to keep the two arms comparable.

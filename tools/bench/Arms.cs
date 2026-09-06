@@ -211,7 +211,7 @@ public static class ArmsEval
                 TimeLimitMinutes = cap,
                 KillLimit = 40,
                 MaxTicks = 30 * 60 * cap,
-                AllowedClasses = [.. PolicyController.TrainedClasses],
+                AllowedClasses = [.. PolicyNetwork.DefaultTrainedClasses],
                 Brain = brain,
                 HybridTeam = Team.Red,
             };

@@ -140,8 +140,23 @@ public sealed class SearchController : IMicroController
     /// </remarks>
     public bool RestrictToTrainedClasses { get; init; } = true;
 
+    /// <summary>
+    /// Which set to restrict to, when <see cref="RestrictToTrainedClasses"/> is on.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Defaults to <see cref="PolicyNetwork.DefaultTrainedClasses"/> and
+    /// that is now an ASSUMPTION about the other arm rather than a fact.</b> This
+    /// controller holds no checkpoint — it restricts to the policy's classes only
+    /// so the two arms of a comparison engage on the same ones. Since 2026-09-06
+    /// the set is a property of the checkpoint, so a comparison against one whose
+    /// set is not the default has to say so here, or the arms differ on the axis
+    /// the restriction exists to hold still.
+    /// </remarks>
+    public ReadOnlyMemory<PlayerClass> TrainedClasses { get; init; } =
+        PolicyNetwork.DefaultTrainedClasses.ToArray();
+
     public bool Drives(PlayerClass playerClass) =>
-        !RestrictToTrainedClasses || PolicyController.IsTrained(playerClass);
+        !RestrictToTrainedClasses || TrainedClasses.Span.Contains(playerClass);
 
     public bool AtDecisionBoundary(int slot) => _search.AtDecisionBoundary(slot);
 

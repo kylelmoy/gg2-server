@@ -222,7 +222,7 @@ public static class ThreadsBench
             TimeLimitMinutes = cap,
             KillLimit = 40,
             MaxTicks = 30 * 60 * cap,
-            AllowedClasses = [.. PolicyController.TrainedClasses],
+            AllowedClasses = [.. PolicyNetwork.DefaultTrainedClasses],
             Brain = BotBrainSpec.Of(new SearchMicroSpec(new RolloutOptions(Threads: threads))),
             HybridTeam = Team.Red,
         };
