@@ -367,6 +367,22 @@ relocation from a redefinition.
 - A version bump refuses an old client loudly at `Hello` rather than
   tolerating it; a length-check failure inside a later message is a symptom
   of a missed bump, not a substitute for one.
+- ⛔ **A checkpoint's metadata is a MINIMUM, not an exact count, and that is
+  load-bearing.** `PolicyNetwork.Load` refuses fewer than seven fields and reads
+  the seven by index, so an eighth is ignored. That tolerance is what lets
+  `gg2-rl` ship a new field before this side reads it — it writes the trained
+  class set as `meta[7]` from 2026-09-06 and has migrated its existing
+  checkpoints to carry it. **Tightening the guard to `!= 7` would refuse every
+  checkpoint it now produces**, with a message reading as a corrupt file rather
+  than a version skew.
+  ✅ Gated by `PolicyNetworkTests.AnEighthMetadataFieldIsIgnoredRatherThanRefused`
+  against `rest3_s1_iter12000.npz`, **real `Policy.save` output** — the metadata
+  is a pickled object array, so a synthetic eight-field checkpoint would exercise
+  a pickle this repository wrote rather than one the trainer writes and would pass
+  whether or not the two agree.
+  ⚠️ **This is a shape check, not a behaviour one.** Nothing here reads the class
+  set; `PolicyController.TrainedClasses` is still a compile-time static, which is
+  the open ask in `gg2-rl`'s `docs/CONTRACT.md`, "AN ASK RAISED 2026-09-06".
 
 ## The checkpoint is a FIXTURE, not a policy
 

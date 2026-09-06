@@ -257,6 +257,46 @@ public sealed class PolicyNetworkTests
         Assert.Contains("trained against simulation", refusal.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// A checkpoint carrying an eighth metadata field loads, and is unchanged by
+    /// carrying it.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>The guard in <see cref="PolicyNetwork.Load"/> is <c>&lt; 7</c>, not
+    /// <c>!= 7</c>, and this is what stops somebody tidying that into an equality
+    /// check.</b> <c>gg2-rl</c> writes the trained class set as <c>meta[7]</c> from
+    /// 2026-09-06 and has migrated its checkpoints to carry it. This build does not
+    /// read the field yet; ignoring it is what lets their side ship first. An
+    /// equality check would refuse every checkpoint they now produce, and the
+    /// refusal would read as a corrupt file rather than a version skew.
+    /// <para>
+    /// ⚠️ <b>It asserts the field is IGNORED, not that it is understood.</b> When
+    /// this build learns to read field 7 this test still holds — it says the
+    /// loader accepts the shape — and the behavioural gate for the class set is a
+    /// different test against <c>control_s0_iter12000.npz</c>, whose set differs
+    /// from today's hardcoded four by exactly two members.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void AnEighthMetadataFieldIsIgnoredRatherThanRefused()
+    {
+        var meta = NpyFile.ReadStrings(
+            NpyFile.ReadArchive(File.OpenRead(PolicyFixture.EightFieldCheckpoint))["meta"]);
+
+        // The premise, asserted rather than assumed: a fixture that quietly lost
+        // its eighth field would make the rest of this test vacuous.
+        Assert.Equal(8, meta.Length);
+        Assert.Equal("ENGINEER,SPY,PYRO", meta[7]);
+
+        using var stream = File.OpenRead(PolicyFixture.EightFieldCheckpoint);
+
+        // No ignoreSimulationStamp: this goes through the ordinary accept path,
+        // so it also says the file is stamped for this build.
+        var network = PolicyNetwork.Load(stream);
+
+        Assert.Equal(PolicyFixture.Load().ObservationLength, network.ObservationLength);
+    }
+
     [Fact]
     public void ACheckpointWithoutMetadataIsRefused()
     {
