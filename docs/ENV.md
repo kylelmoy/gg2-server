@@ -445,6 +445,12 @@ would compare arms sharing no class at all.
 it loads no checkpoint, measuring the search's throughput against thread count, so
 it just needs a stable roster.
 
+✅ **Gated by `TrainedClassesTests`** — that `SearchMicroSpec` carries the set to
+the controller (checked: dropping it fails that test and only it), that naming no
+set keeps the default, and that turning the restriction off still drives every
+class. ⚠️ **The bench is not in `Gg2.sln` and has no tests**, so the seam is the
+only part of this a suite can hold; the five call sites are held by review.
+
 ⛔ **`--bot-classes trained` is the one place that CANNOT ask the file**, and it
 says so at the flag: options are parsed before `--policy` is loaded and argument
 order is not guaranteed. With a checkpoint outside the default family that

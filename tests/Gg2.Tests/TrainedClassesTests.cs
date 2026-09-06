@@ -150,6 +150,83 @@ public sealed class TrainedClassesTests
         Assert.True(demomanTrained.Drives(PlayerClass.Demoman));
     }
 
+    /// <summary>
+    /// The search arm is restricted by the set it is GIVEN, and the spec carries
+    /// it there.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>This gates the wiring, which is the part a refactor drops.</b>
+    /// <see cref="SearchController"/> holds no checkpoint: it restricts to the
+    /// policy's classes only so both arms of a comparison engage on the same ones.
+    /// If <see cref="SearchMicroSpec"/> stopped passing the set through, every arm
+    /// would silently fall back to
+    /// <see cref="PolicyNetwork.DefaultTrainedClasses"/> and nothing else here
+    /// would notice.
+    /// <para>
+    /// ⚠️ <b>What that costs is a number, not a crash.</b> A three-arm bench
+    /// against a checkpoint like <c>rest3</c> — whose set is DISJOINT from the
+    /// default — would compare arms sharing no class at all, every bot would fall
+    /// back to scripted, and the instrument would report the scripted arm twice
+    /// while labelling one of them the policy. A clean, plausible null with no
+    /// tell. The classes below are that exact case.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void TheSearchArmIsRestrictedByTheSetTheSpecGivesIt()
+    {
+        PlayerClass[] set = [PlayerClass.Engineer, PlayerClass.Spy, PlayerClass.Pyro];
+
+        var controller = Assert.IsType<SearchController>(
+            new SearchMicroSpec(new RolloutOptions(HorizonTicks: 20), TrainedClasses: set).Create());
+
+        foreach (var playerClass in set)
+            Assert.True(controller.Drives(playerClass), $"the spec named {playerClass}");
+
+        // The default's own members, none of which this set contains — so a spec
+        // that dropped the set on the floor would fail here rather than look right.
+        foreach (var playerClass in PolicyNetwork.DefaultTrainedClasses)
+            Assert.False(controller.Drives(playerClass), $"the spec did not name {playerClass}");
+    }
+
+    /// <summary>Naming no set is the default set, unchanged.</summary>
+    /// <remarks>
+    /// The no-op control for the wiring above: a spec that names nothing has to
+    /// behave exactly as it did before the set was threaded through, or the change
+    /// moved something it was not supposed to.
+    /// </remarks>
+    [Fact]
+    public void ASearchSpecThatNamesNoSetKeepsTheDefault()
+    {
+        var controller = Assert.IsType<SearchController>(
+            new SearchMicroSpec(new RolloutOptions(HorizonTicks: 20)).Create());
+
+        foreach (var playerClass in Enum.GetValues<PlayerClass>())
+        {
+            Assert.Equal(
+                PolicyNetwork.DefaultTrainedClasses.Contains(playerClass),
+                controller.Drives(playerClass));
+        }
+    }
+
+    /// <summary>Turning the restriction off still drives everything.</summary>
+    /// <remarks>
+    /// The escape hatch is a measurement axis — <c>SearchController</c>'s own
+    /// remarks call it "a separate and favourable axis" — so threading a set
+    /// through must not quietly make it conditional on one.
+    /// </remarks>
+    [Fact]
+    public void AnUnrestrictedSearchDrivesEveryClassWhateverSetItWasGiven()
+    {
+        var controller = Assert.IsType<SearchController>(
+            new SearchMicroSpec(
+                new RolloutOptions(HorizonTicks: 20),
+                RestrictToTrainedClasses: false,
+                TrainedClasses: [PlayerClass.Engineer]).Create());
+
+        foreach (var playerClass in Enum.GetValues<PlayerClass>())
+            Assert.True(controller.Drives(playerClass), $"{playerClass} with the restriction off");
+    }
+
     /// <summary>A class name this build does not have is refused as metadata.</summary>
     /// <remarks>
     /// ⚠️ <b><see cref="InvalidDataException"/>, not
