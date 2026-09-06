@@ -301,6 +301,15 @@ public static class FlightBench
 
         var world = ScenarioWorld.Load(map, area, maps, nav);
         var state = new BotPathState();
+
+        // ⛔ The terrain, or this probe flies a DIFFERENT follower from the one
+        // that ships. `PathFollower.Collision` answers one question — has the
+        // rocket's muzzle anything under it — and a null reference silently
+        // restores the pre-tilt behaviour, so a probe that omits it reports the
+        // old follower's reach under the new follower's name. `ScriptedBot` hands
+        // it over on every poll; a probe that drives the follower directly is the
+        // only other place that has to.
+        follower.Collision = world.Collision;
         follower.SetGoal(state, X(to), graph.StandY(to));
 
         var slot = world.Place(EdgeFlights.ClassFor(NavEdgeType.RocketJump), Team.Red, X(from), graph.StandY(from));
@@ -501,7 +510,11 @@ public static class FlightBench
         foreach (var speed in (ReadOnlySpan<double>)[0, 2.0, 3.0, 4.0, 4.5, 5.1])
         {
             var world = ScenarioWorld.Load(map, area, maps, nav);
-            var follower = new PathFollower(graph) { Distances = set };
+
+            // ⛔ `Collision` or this instrument measures the follower as it was
+            // before the lip tilt shipped — see FlyRoute above for why a null
+            // reference is silent rather than loud.
+            var follower = new PathFollower(graph) { Distances = set, Collision = world.Collision };
             var state = new BotPathState();
 
             if (!follower.SetGoal(state, toMid, graph.StandY(e.To)))
@@ -591,6 +604,373 @@ public static class FlightBench
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// What a rocket-jump takeoff actually DELIVERS, against what the arc was
+    /// costed to need.
+    /// </summary>
+    /// <remarks>
+    /// <b>The question the attribution could not reach.</b> <see cref="Oracle"/>
+    /// splits a stranding into "the approach failed" and "the arc did", and the
+    /// second half has never been opened: "this follower cannot fly it from a
+    /// perfect start" says nothing about <em>which</em> of the three things an arc
+    /// needs — a blast, height, reach — was missing.
+    /// <para>
+    /// So this puts the follower on the takeoff column exactly as
+    /// <see cref="Assisted"/> does and watches the BODY rather than the verdict:
+    /// did <c>moveStatus</c> ever reach 1 (the blast went off at all), what was the
+    /// most negative <c>vspeed</c> it reached, how far did it rise against
+    /// <c>StandY(from) - StandY(to)</c>, and how far across against the takeoff
+    /// column to the to-node.
+    /// </para>
+    /// <para>
+    /// ⛔ <b>The control arm is arcs the follower demonstrably FLEW</b>, for the
+    /// reason the oracle records: each of these numbers has a perfectly ordinary
+    /// distribution on its own and only says something beside the same number on
+    /// arcs that work.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Best-over-the-sweep, per arc.</b> Six takeoff speeds are tried and the
+    /// row keeps the deepest launch and the highest rise, because the question is
+    /// what the manoeuvre can deliver here rather than what one arbitrary speed
+    /// did. A per-attempt average would be a measurement of the speed list.
+    /// </para>
+    /// </remarks>
+    public static void Launches(
+        string maps, string nav, int budget, bool distances, int threads, int control, int seed, string? csv)
+    {
+        Console.WriteLine(
+            $"BENCH_FLIGHT_LAUNCH budget={budget} distances={(distances ? "ON" : "off")} control={control}");
+        Console.WriteLine();
+
+        var located = new List<(string Map, int Area, EdgeFlight Flight)>();
+
+        EdgeFlights.SweepAll(
+            maps, nav, [NavEdgeType.RocketJump], Team.Red, budget, distances, threads,
+            onGraph: (map, area, graph) =>
+            {
+                foreach (var flight in graph)
+                    located.Add((map, area, flight));
+            });
+
+        var stranded = located.Where(f => f.Flight.Outcome == EdgeFlightOutcome.Stranded).ToList();
+        var flown = located.Where(f => f.Flight.Flown).ToList();
+        var rng = new Random(seed);
+        var sample = control <= 0 || control >= flown.Count
+            ? flown
+            : [.. flown.OrderBy(_ => rng.Next()).Take(control)];
+
+        var rows = new System.Collections.Concurrent.ConcurrentBag<(string Arm, string Map, LaunchReading R)>();
+
+        void Measure(string arm, IReadOnlyList<(string Map, int Area, EdgeFlight Flight)> arcs) =>
+            Parallel.ForEach(arcs, row =>
+            {
+                var world = ScenarioWorld.Load(row.Map, row.Area, maps, nav);
+
+                rows.Add((arm, row.Map, Deliver(row.Map, row.Area, maps, nav, world.Nav!, row.Flight, distances)));
+            });
+
+        Measure("stranded", stranded);
+        Measure("flown", sample);
+
+        Console.WriteLine(
+            "  arm          n    no blast    median launch    short of HEIGHT    short of REACH    "
+            + "median rise/need    OVER the to-node    median closest    ARRIVED   diverted");
+        Console.WriteLine(
+            "  ---------------------------------------------------------------------------------------------"
+            + "-------------------------------------------------");
+
+        foreach (var arm in (ReadOnlySpan<string>)["stranded", "flown"])
+        {
+            var arc = rows.Where(r => r.Arm == arm).Select(r => r.R).ToList();
+
+            if (arc.Count == 0)
+                continue;
+
+            var blasted = arc.Where(r => r.Launched).ToList();
+            var dud = arc.Count - blasted.Count;
+            var shortHeight = blasted.Count(r => r.RiseAchieved + 1e-9 < r.RiseNeeded);
+            var shortReach = blasted.Count(r => r.ReachAchieved + 1e-9 < r.ReachNeeded);
+
+            Console.WriteLine(
+                $"  {arm,-9} {arc.Count,4}   {dud,4} ({Rate(dud, arc.Count),4:0.0}%)   "
+                + $"{Median(blasted.Select(r => r.LaunchVSpeed)),13:0.00}    "
+                + $"{shortHeight,6} ({Rate(shortHeight, blasted.Count),4:0.0}%)    "
+                + $"{shortReach,6} ({Rate(shortReach, blasted.Count),4:0.0}%)    "
+                + $"{Median(blasted.Select(r => r.RiseAchieved)),6:0.0} / {Median(blasted.Select(r => r.RiseNeeded)),-6:0.0}    "
+                + $"{blasted.Count(r => r.Reached),6} ({Rate(blasted.Count(r => r.Reached), blasted.Count),4:0.0}%)    "
+                + $"{Median(blasted.Select(r => r.MinDist)),9:0.0}px    "
+                + $"{blasted.Count(r => r.Arrived),6} ({Rate(blasted.Count(r => r.Arrived), blasted.Count),4:0.0}%)    "
+                + $"{blasted.Count(r => r.Arrived && !r.Flew),6}");
+        }
+
+        if (csv is not null)
+        {
+            using var writer = new StreamWriter(csv);
+            writer.WriteLine(
+                "arm,map,area,edge,from,to,launched,vlaunch,rise,riseneed,reach,reachneed,reached,mindist,"
+                + "arrived,flew,cground,chspeed,cstale,chops,bandticks,bandmin");
+
+            foreach (var (arm, map, r) in rows.OrderBy(r => r.Arm).ThenBy(r => r.Map).ThenBy(r => r.R.Edge))
+            {
+                writer.WriteLine(
+                    string.Join(
+                        ',',
+                        arm, map, r.Area, r.Edge, r.From, r.To, r.Launched ? 1 : 0,
+                        r.LaunchVSpeed.ToString("0.###", CultureInfo.InvariantCulture),
+                        r.RiseAchieved.ToString("0.#", CultureInfo.InvariantCulture),
+                        r.RiseNeeded.ToString("0.#", CultureInfo.InvariantCulture),
+                        r.ReachAchieved.ToString("0.#", CultureInfo.InvariantCulture),
+                        r.ReachNeeded.ToString("0.#", CultureInfo.InvariantCulture),
+                        r.Reached ? "1" : "0",
+                        r.MinDist.ToString("0.#", CultureInfo.InvariantCulture),
+                        r.Arrived ? "1" : "0",
+                        r.Flew ? "1" : "0",
+                        r.ClosestOnGround ? "1" : "0",
+                        r.ClosestHSpeed.ToString("0.##", CultureInfo.InvariantCulture),
+                        r.ClosestStale ? "1" : "0",
+                        r.ClosestHopsLeft.ToString(CultureInfo.InvariantCulture),
+                        r.BandTicks.ToString(CultureInfo.InvariantCulture),
+                        r.BandMinHSpeed.ToString("0.##", CultureInfo.InvariantCulture)));
+            }
+
+            Console.WriteLine();
+            Console.WriteLine($"{rows.Count} rows written to {csv}");
+        }
+    }
+
+    /// <summary>One arc's best takeoff over the speed sweep.</summary>
+    /// <param name="Reached">
+    /// The body was inside the to-node's own footprint at some tick of the flight.
+    /// <b>Not an arrival</b>: passing through the destination and carrying on past
+    /// it is exactly the failure this column exists to make visible, and an
+    /// arrival count cannot distinguish it from never getting there.
+    /// </param>
+    /// <param name="MinDist">Closest the body ever came to the to-node's standing spot.</param>
+    /// <param name="Arrived">The follower's own verdict fired.</param>
+    /// <param name="ClosestOnGround">
+    /// The four <c>Closest*</c> readings are the follower's own state at the tick
+    /// the body came NEAREST the goal — the clauses of the arrival test, read
+    /// where the arrival should have fired. ⛔ <b>Not an average over the
+    /// flight</b>: a clause that holds for 390 of 400 ticks and fails at the one
+    /// tick that mattered is exactly the failure, and an average hides it.
+    /// </param>
+    /// <param name="BandTicks">
+    /// Ticks the body spent ON THE GROUND inside the arrival tolerance around the
+    /// goal column, and <paramref name="BandMinHSpeed"/> the slowest it ever got
+    /// while there. ⛔ <b>This is the arrival test's own question</b>: it fires on
+    /// <c>onGround &amp;&amp; |hspeed| &lt; 1</c> inside that band, so a flight
+    /// with band ticks and a minimum that never falls under 1 is a bot that stood
+    /// where it was sent and was refused for still moving — and one with zero band
+    /// ticks never got there on the ground at all. The
+    /// <c>Closest*</c> readings above cannot separate those two: the tick nearest
+    /// the goal is usually not the tick the arrival would fire on.
+    /// </param>
+    /// <param name="Flew">
+    /// Some ONE attempt both arrived and steered this edge — the oracle's own
+    /// bar. ⛔ <paramref name="Arrived"/> without this is the <c>Diverted</c>
+    /// shape: the body got to the destination by walking some other way, which is
+    /// not this arc being flown.
+    /// </param>
+    private readonly record struct LaunchReading(
+        int Edge,
+        int From,
+        int To,
+        bool Launched,
+        double LaunchVSpeed,
+        double RiseAchieved,
+        double RiseNeeded,
+        double ReachAchieved,
+        double ReachNeeded,
+        bool Reached,
+        double MinDist,
+        bool Arrived,
+        bool Flew,
+        bool ClosestOnGround,
+        double ClosestHSpeed,
+        bool ClosestStale,
+        int ClosestHopsLeft,
+        int Area,
+        int BandTicks,
+        double BandMinHSpeed);
+
+    /// <summary>
+    /// Flies one arc from the takeoff column at each swept speed and keeps the
+    /// best body the manoeuvre produced.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The rise is measured body-to-body, not goal-to-goal.</b>
+    /// <see cref="EdgeFlights.StandingY"/> starts a body one pixel above the floor
+    /// and <see cref="NavGraph.StandY"/> is a goal rather than a body position, so
+    /// a "needed rise" taken between the two goals and an "achieved rise" taken
+    /// between two bodies would differ by a pixel that has nothing to do with the
+    /// arc.
+    /// </remarks>
+    private static LaunchReading Deliver(
+        string map, int area, string maps, string nav, NavGraph graph, EdgeFlight flight, bool distances)
+    {
+        var e = graph.Edges[flight.Edge];
+        var takeoff = e.Takeoff >= 0
+            ? NavGraph.ColumnWorldX(e.Takeoff)
+            : NavGraph.ColumnWorldX((graph.Nodes[e.From].X0 + graph.Nodes[e.From].X1) / 2);
+        var toMid = NavGraph.ColumnWorldX((graph.Nodes[e.To].X0 + graph.Nodes[e.To].X1) / 2);
+        var direction = toMid >= takeoff ? 1 : -1;
+        var startY = EdgeFlights.StandingY(graph, e.From);
+        var query = EdgeFlights.QueryFor(e.Type, flight.Team);
+        var set = distances ? NavDistanceSet.LoadOrDerive(nav, map, area, graph, out _) : null;
+
+        var riseNeeded = startY - EdgeFlights.StandingY(graph, e.To);
+        var reachNeeded = Math.Abs(toMid - takeoff);
+
+        var toY = EdgeFlights.StandingY(graph, e.To);
+        var launched = false;
+        var vLaunch = 0.0;
+        var rise = 0.0;
+        var reach = 0.0;
+        var reached = false;
+        var minDist = double.MaxValue;
+        var arrived = false;
+        var flew = false;
+        var closestGround = false;
+        var closestHSpeed = 0.0;
+        var closestStale = false;
+        var closestHops = -1;
+        var bandTicks = 0;
+        var bandMin = double.MaxValue;
+
+        foreach (var speed in (ReadOnlySpan<double>)[0, 2.0, 3.0, 4.0, 4.5, 5.1])
+        {
+            var world = ScenarioWorld.Load(map, area, maps, nav);
+            var follower = new PathFollower(graph) { Distances = set, Collision = world.Collision };
+            var state = new BotPathState();
+
+            if (!follower.SetGoal(state, toMid, graph.StandY(e.To)))
+                continue;
+
+            var slot = world.Place(EdgeFlights.ClassFor(e.Type), flight.Team, takeoff, startY);
+            world.State.Characters[slot].HSpeed = speed * direction;
+            world.Drive(slot, new RoutePilot(follower, state, query));
+
+            var attemptV = 0.0;
+            var attemptRise = 0.0;
+            var attemptReach = 0.0;
+            var attemptDist = double.MaxValue;
+            var attemptReached = false;
+            var attemptSteered = 0;
+            var attemptGround = false;
+            var attemptHSpeed = 0.0;
+            var attemptStale = false;
+            var attemptHops = -1;
+            var attemptBand = 0;
+            var attemptBandMin = double.MaxValue;
+            var blast = false;
+
+            for (var t = 0; t < 400 && !state.Arrived; t++)
+            {
+                world.Step();
+
+                if (state.EdgeFrom == e.From && state.EdgeTo == e.To)
+                    attemptSteered++;
+
+                if (!world.State.IsAlive(slot))
+                    break;
+
+                ref readonly var self = ref world.State.Characters[slot];
+
+                // ⚠️ moveStatus 1 is the blast's own signature — Rocket/User Event
+                // 5 sets it on the owner — so it is the one reading that separates
+                // a rocket jump from the ordinary jump the same press produces when
+                // the rocket does not go off.
+                if (self.MoveStatus == 1)
+                {
+                    blast = true;
+                    attemptV = Math.Min(attemptV, self.VSpeed);
+                }
+
+                if (!blast)
+                    continue;
+
+                attemptRise = Math.Max(attemptRise, startY - self.Y);
+                attemptReach = Math.Max(attemptReach, Math.Abs(self.X - takeoff));
+                var here = Math.Sqrt(((self.X - toMid) * (self.X - toMid)) + ((self.Y - toY) * (self.Y - toY)));
+
+                if (here < attemptDist)
+                {
+                    attemptDist = here;
+                    attemptGround = self.OnGround;
+                    attemptHSpeed = Math.Abs(self.HSpeed);
+                    attemptStale = state.PathStale;
+                    attemptHops = state.HasGoal ? state.Path.Count - 1 - state.PathAt : -1;
+                }
+
+                // ⚠️ Asked every tick, airborne included. The question is whether
+                // the arc PUT the body over its destination, which a landing test
+                // would answer only for the flights that already worked.
+                if (graph.NodeFromWorld(self.X, self.Y) == e.To)
+                    attemptReached = true;
+
+                // ⚠️ The node test as well as the column. `reachNeeded` is under
+                // 8px on some arcs — a rocket jump straight up onto a ledge — so a
+                // body still standing on the FROM node is already inside the goal
+                // column's tolerance, and a band measured on x alone counted the
+                // takeoff as an arrival opportunity.
+                if (self.OnGround
+                    && Math.Abs(self.X - toMid) <= BotConstants.ArriveTol
+                    && graph.NodeFromWorld(self.X, self.Y) == e.To)
+                {
+                    attemptBand++;
+                    attemptBandMin = Math.Min(attemptBandMin, Math.Abs(self.HSpeed));
+                }
+            }
+
+            if (!blast)
+                continue;
+
+            launched = true;
+            vLaunch = Math.Min(vLaunch, attemptV);
+            rise = Math.Max(rise, attemptRise);
+            reach = Math.Max(reach, attemptReach);
+            reached |= attemptReached;
+
+            if (attemptDist < minDist)
+            {
+                minDist = attemptDist;
+                closestGround = attemptGround;
+                closestHSpeed = attemptHSpeed;
+                closestStale = attemptStale;
+                closestHops = attemptHops;
+            }
+
+            // Best over the sweep, like every other column: the question is
+            // whether the manoeuvre can ever put the body still on the goal, not
+            // what one arbitrary takeoff speed managed.
+            bandTicks = Math.Max(bandTicks, attemptBand);
+            bandMin = Math.Min(bandMin, attemptBandMin);
+            // ⛔ Per ATTEMPT, not per arc. Arriving at one takeoff speed and
+            // steering the edge at a different one is not the same event, and
+            // summing the two across the sweep credited 44 arcs where the oracle
+            // — which asks both of one attempt — credits 28.
+            arrived |= state.Arrived;
+            flew |= state.Arrived && attemptSteered > 0;
+        }
+
+        return new LaunchReading(
+            flight.Edge, e.From, e.To, launched, vLaunch, rise, riseNeeded, reach, reachNeeded,
+            reached, minDist == double.MaxValue ? -1 : minDist, arrived, flew,
+            closestGround, closestHSpeed, closestStale, closestHops, area,
+            bandTicks, bandMin == double.MaxValue ? -1 : bandMin);
+    }
+
+    private static double Median(IEnumerable<double> values)
+    {
+        var sorted = values.OrderBy(v => v).ToArray();
+
+        return sorted.Length == 0
+            ? 0
+            : sorted.Length % 2 == 1
+                ? sorted[sorted.Length / 2]
+                : (sorted[(sorted.Length / 2) - 1] + sorted[sorted.Length / 2]) / 2;
     }
 
     private static double Rate(int hits, int n) => n == 0 ? 0 : 100.0 * hits / n;

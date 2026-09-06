@@ -39,6 +39,20 @@ static bool FlightDistances() => Environment.GetEnvironmentVariable("BENCH_FLIGH
 static string? FlightFocus() =>
     Environment.GetEnvironmentVariable("BENCH_FOCUS") ?? Environment.GetEnvironmentVariable("BENCH_MAP");
 
+if (Environment.GetEnvironmentVariable("BENCH_FLIGHT_LAUNCH") is { } launchControl)
+{
+    Bench.FlightBench.Launches(
+        Bench.FlightBench.ResolveMaps(maps),
+        FlightNav(),
+        int.Parse(Environment.GetEnvironmentVariable("BENCH_FLIGHT_BUDGET") ?? "4000"),
+        FlightDistances(),
+        int.Parse(Environment.GetEnvironmentVariable("BENCH_FLIGHT_THREADS") ?? "0"),
+        int.Parse(launchControl),
+        int.Parse(Environment.GetEnvironmentVariable("BENCH_FLIGHT_SEED") ?? "20260905"),
+        Environment.GetEnvironmentVariable("BENCH_FLIGHT_CSV"));
+    return;
+}
+
 if (Environment.GetEnvironmentVariable("BENCH_FLIGHT_ORACLE") is { } oracleControl)
 {
     Bench.FlightBench.Oracle(

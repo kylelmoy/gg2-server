@@ -3715,6 +3715,108 @@ instead took the rocket-jump recovery from 10 to 21 of 165 — real, but small, 
 the finding above survives it. **The probe was measuring its own start position
 for 11 arcs and nobody would have known from the aggregate.**
 
+### What a rocket jump delivers: the residual is the LANDING, not the arc
+
+`BENCH_FLIGHT_LAUNCH`, added 2026-09-06 after the lip tilt shipped. The section
+above closed the largest failure bucket and left **125 rocket-jump hard failures**
+at a 4,000-tick budget (of 355 overall). `BENCH_FLIGHT_ORACLE` says 28 of those are
+the approach and the other 97 are arcs "this follower cannot fly from a perfect
+start" — and that sentence names no mechanism. It does not say whether the blast,
+the height or the reach was missing, so nothing could be done with it.
+
+⛔ **A first harness fault, and it made the oracle measure the WRONG FOLLOWER.**
+`PathFollower.Collision` is what the lip tilt asks the terrain through, and both
+probes in `tools/bench/Flight.cs` built their follower without it — so from the
+day the tilt shipped, the oracle reported the pre-tilt follower's reach under the
+current follower's name. A null `Collision` is *silent* by design (it restores the
+old behaviour exactly), which is what let it survive a session. Fixed;
+**it moves 6 of 266 verdicts, 3 each way, and the totals do not move** (stranded
+107, control 351 → 354). Recorded as structural, not as an improvement.
+⚠️ The surprise in that diff is a **`Jump`** edge changing verdict, and it is not a
+bug: `EdgeFlights.ClassFor(Jump)` is a Soldier and `RoutePilot` rebuilds
+`CanRocketJump` from the live character every tick, so a jump-arc probe routes over
+rocket edges like any soldier would.
+
+#### ✅ The launch is not the problem, and neither is the envelope
+
+Each arc flown from its takeoff column at the same six speeds the assisted probe
+uses, keeping the best body the manoeuvre produced, against the same control of
+arcs the follower demonstrably **flew**:
+
+| arm | n | no blast | median launch | short of HEIGHT | short of REACH | median rise / need |
+|---|---|---|---|---|---|---|
+| stranded | 125 | 10 (8.0%) | **−14.40** | 9 (7.8%) | 5 (4.3%) | 200.3 / 108.0 |
+| flown | 400 | 15 (3.8%) | **−14.40** | 9 (2.3%) | 32 (8.3%) | 206.7 / 120.0 |
+
+⛔ **The launch is −14.40 in both arms — `NavRocketJumpModel.ForRocket`'s own
+number to the digit.** The blast is not weak on the arcs that fail. Height is short
+on 9 of 115, reach on 5 — and the control is *worse* on reach (8.3%), so neither is
+the mechanism. The median arc rises **200 px for a need of 108**.
+
+#### ✅ 87.8% of the failures put the body inside the destination
+
+Asking `NavGraph.NodeFromWorld` every tick (±3 mask rows, ±2 columns — so a landing
+or a close airborne pass, not "somewhere overhead"), and the follower's own verdict
+beside it:
+
+| where the flight ended | stranded (115 that blast) | flown control (385) |
+|---|---|---|
+| body never resolves to the to-node | 14 (12.2%) | 10 (2.6%) |
+| **reaches it and never arrives** | **29 (25.2%)** | 3 (0.8%) |
+| **arrives, but by DIVERTING off the arc** | **44 (38.3%)** | 33 (8.6%) |
+| flies the arc — the approach was the fault | 28 (24.3%) | 339 (88.1%) |
+
+⛔ **Only 24 of 125 (19%) are arcs where the manoeuvre fails to happen** — 10 that
+never blast plus 14 whose body never gets to the destination. Median closest
+approach to the goal for the rest is **1.0 px**. The rocket-jump residual is
+overwhelmingly about what happens at the far end.
+
+⚠️ **`arrived` and `steered` must be read PER ATTEMPT.** Summing them over the
+speed sweep credited 44 arcs where the oracle credits 28, because arriving at one
+takeoff speed and steering the edge at another is not one event. That mistake is
+the reason the bottom row now reconciles with `BENCH_FLIGHT_ORACLE` exactly.
+
+#### ✅ The 29 split into two mechanisms, and the arrival test names both
+
+`PathFollower.WalkToGoal` arrives on `onGround && |hspeed| < 1` inside
+`BotConstants.ArriveTol` (8 px) of the goal column, with a brake inside the band.
+Counting ticks that satisfy the first and third clauses, and the slowest the body
+ever got while there:
+
+| | n | never stands on the to-node | stands there | and never gets under 1 px/tick |
+|---|---|---|---|---|
+| the 29 | 29 | **21** | 8 | **8 of 8** |
+| flown control | 372 | 0 | 372 | **0 of 372** |
+
+⛔ **Bimodal, with nothing in between.** The control's band minimum is at most
+**0.81** across 372 arcs; the 8 sit at **1.04–2.53** after 3–9 ticks in the band.
+These are not arcs that are slightly too fast — they enter the band at ~3 px/tick
+off a rocket landing and the brake cannot take that to under 1 before they cross
+8 px. **That is the ledge-overshoot defect, measured against the arrival test's own
+clause rather than inferred from a miss distance.** The other 21 never land on the
+destination at all: the arc grazes within a pixel of the standing spot *airborne*
+and carries on.
+
+⚠️ **The band test needs the NODE as well as the column.** Some rocket arcs need
+under 8 px of reach — straight up onto a ledge — so a body still standing on the
+FROM node is already inside the goal column's tolerance, and a band measured on x
+alone counted the takeoff as an arrival opportunity (29 arcs read as "in band" that
+were nothing of the kind).
+
+#### What this does NOT establish
+
+- **Nothing here is a repair**, and no pin moved: the corpus sweep is 622/1,735/
+  1,535,714 ticks/4,967 blacklists, identical to the digit.
+- **The 44 diverted are unexplained.** The body reaches the destination and the
+  follower arrives, having abandoned the arc for another route — 38.3% against the
+  control's 8.6%. Whether that is the same overshoot seen one replan earlier, or a
+  separate impatience, is not measured.
+- **The 8 are 6% of the 125** and a repair worth ~8 arcs is not obviously worth a
+  change to the arrival test, which every edge kind and every live bot goes
+  through. ⚠️ The falsification: if a widened band or a stronger brake shipped and
+  the corpus sweep's `stranded` did not fall by roughly that many, the mechanism
+  above is not what is costing those arcs.
+
 ### The route sample: the 68% the per-edge sweep cannot reach
 
 `BENCH_FLIGHT_ROUTES=<n>` plans between `n` random node pairs a map and flies the
