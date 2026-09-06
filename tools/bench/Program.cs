@@ -21,6 +21,64 @@ var spec = new DuelSpec
     ActionRepeat = 2,
 };
 
+// Both flight modes want a nav directory and are meaningless without one, so
+// they resolve it the loud way rather than falling back to "no graph, no edges,
+// zero of zero flown" — which is a pass.
+static string FlightNav()
+{
+    var dir = Environment.GetEnvironmentVariable("GG2_NAV");
+
+    if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir))
+        throw new InvalidOperationException("BENCH_FLIGHT needs GG2_NAV pointing at a nav directory");
+
+    return dir;
+}
+
+static bool FlightDistances() => Environment.GetEnvironmentVariable("BENCH_FLIGHT_NODIST") != "1";
+
+static string? FlightFocus() =>
+    Environment.GetEnvironmentVariable("BENCH_FOCUS") ?? Environment.GetEnvironmentVariable("BENCH_MAP");
+
+if (Environment.GetEnvironmentVariable("BENCH_FLIGHT_ORACLE") is { } oracleControl)
+{
+    Bench.FlightBench.Oracle(
+        Bench.FlightBench.ResolveMaps(maps),
+        FlightNav(),
+        int.Parse(Environment.GetEnvironmentVariable("BENCH_FLIGHT_BUDGET") ?? "4000"),
+        FlightDistances(),
+        int.Parse(Environment.GetEnvironmentVariable("BENCH_FLIGHT_THREADS") ?? "0"),
+        int.Parse(oracleControl),
+        int.Parse(Environment.GetEnvironmentVariable("BENCH_FLIGHT_SEED") ?? "20260905"),
+        Environment.GetEnvironmentVariable("BENCH_FLIGHT_CSV"));
+    return;
+}
+
+if (Environment.GetEnvironmentVariable("BENCH_FLIGHT_ROUTES") is { } routeN)
+{
+    Bench.FlightBench.Routes(
+        Bench.FlightBench.ResolveMaps(maps),
+        FlightNav(),
+        int.Parse(routeN),
+        int.Parse(Environment.GetEnvironmentVariable("BENCH_FLIGHT_BUDGET") ?? "3000"),
+        FlightDistances(),
+        int.Parse(Environment.GetEnvironmentVariable("BENCH_FLIGHT_SEED") ?? "20260905"),
+        FlightFocus());
+    return;
+}
+
+if (Environment.GetEnvironmentVariable("BENCH_FLIGHT") == "1")
+{
+    Bench.FlightBench.Run(
+        Bench.FlightBench.ResolveMaps(maps),
+        FlightNav(),
+        int.Parse(Environment.GetEnvironmentVariable("BENCH_FLIGHT_BUDGET") ?? "400"),
+        FlightDistances(),
+        int.Parse(Environment.GetEnvironmentVariable("BENCH_FLIGHT_THREADS") ?? "0"),
+        Environment.GetEnvironmentVariable("BENCH_FLIGHT_CSV"),
+        FlightFocus());
+    return;
+}
+
 if (Environment.GetEnvironmentVariable("BENCH_COMBAT") is { } combatTicks)
 {
     var cnd = Environment.GetEnvironmentVariable("GG2_NAV");

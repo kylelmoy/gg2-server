@@ -1,5 +1,6 @@
 using Gg2.Bots;
 using Gg2.Protocol;
+using Gg2.Simulation;
 
 namespace Gg2.Tests;
 
@@ -32,11 +33,35 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
     /// <remarks>
     /// <c>gg_debug</c> rather than a real map because it is small enough that a
     /// whole edge kind is a sweep of tens rather than hundreds — 67 rocket jumps
-    /// and 23 air jumps, in about 120ms and 50ms. The same call on
-    /// <c>ctf_truefort</c>'s 878 rocket jumps is eight seconds, which is a
-    /// measurement rather than a gate.
+    /// and 23 air jumps, in about 120ms and 50ms.
+    /// <para>
+    /// ⚠️ <b>This used to say a sweep of <c>ctf_truefort</c>'s 878 rocket jumps
+    /// was "eight seconds, which is a measurement rather than a gate". Measured
+    /// 2026-09-05 it is 102 ms</b>, and the whole 25-graph corpus is 5.0 s serial
+    /// in Release — <see cref="ScenarioResources"/> caches what used to be
+    /// re-decoded per flight. The small map is kept for the per-kind pins because
+    /// their <em>numbers</em> are small enough to read; affordability stopped being
+    /// the reason, and
+    /// <see cref="EveryEdgeOfEveryShippedGraphIsFlownOnTheShippingArm"/> now flies
+    /// the corpus.
+    /// </para>
     /// </remarks>
     private const string Map = "gg_debug";
+
+    /// <summary>
+    /// How many cores the corpus sweeps may take.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Not all of them, and this is a suite-wide fact rather than a
+    /// preference.</b> xunit runs test classes in parallel, so a sweep that takes
+    /// every core starves whatever is running beside it — with
+    /// <c>ProcessorCount</c> threads,
+    /// <c>RewardAuthTests.TheHandshakeReachesEveryClientAndSticks</c> went from 3 s
+    /// alone to 31 s in the suite and timed out, which reads as an unrelated
+    /// network flake and is not one. Two cores of headroom costs this file about a
+    /// second and buys every socket-timing test in the suite its scheduler.
+    /// </remarks>
+    private static int SweepThreads => Math.Max(1, Environment.ProcessorCount - 2);
 
     private static Func<ScenarioWorld> World(string map = Map)
     {
@@ -69,6 +94,272 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
         }
 
         return (measured, arrived, flown, blacklists);
+    }
+
+    /// <summary>
+    /// Every node of every shipped graph can actually hold a character.
+    /// </summary>
+    /// <remarks>
+    /// <b>A nav node is a claim about where a body can be, and until this ran
+    /// nothing checked it.</b> Two thirds of them do not admit one at
+    /// <see cref="NavGraph.StandY"/>: the box's bottom offset is +23 and
+    /// <c>StandY</c> is <c>FloorY - 23</c>, both inclusive, so the body's last
+    /// row is the floor's first solid row. <b>Every one of those is free exactly
+    /// one pixel up</b> — that is what <see cref="EdgeFlights.StandingY"/> is,
+    /// and this is the census it rests on.
+    /// <para>
+    /// ⛔ <b>Both halves are the gate.</b> The second assertion is what would
+    /// notice a generator emitting a node in a crawlspace or inside terrain — a
+    /// node no body can occupy, which the graph has no other way of reporting.
+    /// The first is what would notice the +23 relationship changing under
+    /// <c>StandingY</c>: if nodes stopped overlapping at <c>StandY</c>, the
+    /// one-pixel lift would be papering over something that had moved.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>The soldier's box is used for all of them, and it is not the widest
+    /// class.</b> Widths run 6, 7 and 9 and tops run -6 to -12
+    /// (<see cref="CharacterBox"/>), so this clears the class the sweep flies
+    /// with rather than every class. A per-class census is a bigger claim than
+    /// this file needs and would be a different number.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void EveryShippedNodeCanHoldACharacter()
+    {
+        ReferenceTree.RequireNavCache();
+
+        var box = CharacterBox.For(PlayerClass.Soldier);
+        var nodes = 0;
+        var overlapAtStandY = 0;
+        var blockedAtStandingY = new List<string>();
+
+        foreach (var (map, area) in NavCache.List(ReferenceTree.NavCacheDirectory))
+        {
+            var world = ScenarioWorld.Load(map, area, ReferenceTree.MapsDirectory, ReferenceTree.NavCacheDirectory);
+            var graph = world.Nav!;
+
+            for (var n = 0; n < graph.Nodes.Length; n++)
+            {
+                var node = graph.Nodes[n];
+                var mid = NavGraph.ColumnWorldX((node.X0 + node.X1) / 2);
+
+                nodes++;
+
+                if (!world.Collision.PlaceFreeInMask(box, mid, graph.StandY(n)))
+                    overlapAtStandY++;
+
+                if (!world.Collision.PlaceFreeInMask(box, mid, EdgeFlights.StandingY(graph, n)))
+                    blockedAtStandingY.Add($"{map}_a{area} node {n}");
+            }
+        }
+
+        output.WriteLine(
+            $"{nodes} nodes; {overlapAtStandY} overlap the floor at StandY, "
+            + $"{blockedAtStandingY.Count} still blocked one pixel up");
+
+        Assert.Equal(11_327, nodes);
+        Assert.Equal(7_541, overlapAtStandY);
+        Assert.Empty(blockedAtStandingY);
+    }
+
+    /// <summary>
+    /// <b>Every edge of every shipped graph, flown — on the arm a server runs.</b>
+    /// </summary>
+    /// <remarks>
+    /// <b>What this is for.</b> The rest of this file flies one edge kind on one
+    /// tiny map. This flies all 116,316 edges of all 25 shipped graphs, which is
+    /// the only check that would notice a generator emitting arcs the follower
+    /// cannot traverse — a nav graph is only worth what a bot can actually walk.
+    /// <para>
+    /// ⛔ <b>It runs with the next-hop tables ON, and it is the FIRST gate in this
+    /// repository that does.</b> docs/TRAPS-BOTS.md, "The gates measure a
+    /// DIFFERENT ARM", records that <see cref="ScenarioWorld"/> sets no
+    /// <c>Distances</c>, so the three pinned bot measurements and all 25 route
+    /// digests exercise the weighted straight-line heuristic while a live server
+    /// and <c>eval</c> exercise the exact one. Those are left alone deliberately —
+    /// re-recording them would be a decision about what those alarms mean. This
+    /// gate is new, so it gets to start on the right arm, and
+    /// <see cref="TheTwoRoutingArmsDisagreeAboutWhichEdgesAreEvenTestable"/> pins
+    /// what the difference costs.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b><c>Measured</c> is 28% of <c>Candidates</c>, and that is the ceiling
+    /// rather than a defect.</b> A* costs a jump the same as a walk, so 72,806 of
+    /// these edges are ones it prefers to route around; those cannot be posed as a
+    /// single-hop question at all. <b>A sweep of every edge is not a check of
+    /// every edge</b>, and pretending otherwise is what
+    /// <see cref="EdgeFlightOutcome.RoutedAround"/> exists to prevent. The
+    /// complement — an edge in the context A* actually uses it in — is what
+    /// <c>BENCH_FLIGHT_ROUTES</c> samples.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b><c>Stranded</c> is relative to the 400-tick budget and must never be
+    /// quoted without it.</b> At 1,600 ticks the no-tables arm's 1,022 strandings
+    /// fall to 733, so about a quarter of them are the budget rather than the
+    /// edge.
+    /// </para>
+    /// <para>
+    /// ✅ <b>Re-recorded twice more, 2026-09-06.</b> Flying an edge as a team that
+    /// can stand on it (<see cref="EdgeFlightOutcome.StartBlocked"/>) took stranded
+    /// 847 → 703 and no-route 618 → 466. Then <see cref="EdgeFlight.RanEdge"/>
+    /// landed: <b>flown 2,403 → 1,686 with arrived and stranded UNMOVED</b>, because
+    /// 2,099 arrivals never steered the edge they were credited to — the follower
+    /// re-plans mid-flight and can walk to the same node another way. Rocket jumps
+    /// carry almost all of it (flown 1,784 → 1,067); <c>gg_debug</c>'s twelve are
+    /// untouched, so the small-map pins in this file did not move.
+    /// <para>
+    /// ✅ <b>Re-recorded once before that, 2026-09-05, and here is the diff.</b> The harness
+    /// was starting the bot at <see cref="NavGraph.StandY"/>, which puts one row
+    /// of its box inside the floor on 66.6% of nodes; it now starts at
+    /// <see cref="EdgeFlights.StandingY"/>, one pixel up. <b>Stranded 970 → 847,
+    /// arrived 31,078 → 31,201, flown 2,355 → 2,400</b>, and
+    /// <c>Measured</c>/<c>RoutedAround</c>/<c>Shadowed</c>/<c>NoRoute</c> did not
+    /// move at all — the premises are asked of the graph and the plan, not of the
+    /// body, so the before and after are comparable. The 123 edges that changed
+    /// side were flights that never moved a pixel:
+    /// <see cref="EveryShippedNodeCanHoldACharacter"/>.
+    /// </para>
+    /// <para>
+    /// ⛔ <b>A failure here is the RE-RECORD, not a broken test</b> — the same
+    /// discipline as the three pinned end-to-end measurements. Check the change is
+    /// one you meant, check it went the way you meant, update the row, say so in
+    /// the commit. <b>And the reverse:</b> a nav-graph or follower change that
+    /// leaves all twelve numbers untouched has not done what it looked like it
+    /// did.
+    /// </para>
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void EveryEdgeOfEveryShippedGraphIsFlownOnTheShippingArm()
+    {
+        ReferenceTree.RequireNavCache();
+
+        var tally = EdgeFlightTally.Of(EdgeFlights.SweepAll(
+            ReferenceTree.MapsDirectory,
+            ReferenceTree.NavCacheDirectory,
+            distances: true,
+            threads: SweepThreads));
+
+        output.WriteLine($"shipping arm (tables ON): {tally}");
+
+        Assert.Equal(
+            new EdgeFlightTally(
+                Candidates: 116_316,
+                Measured: 32_055,
+                Arrived: 31_352,
+                Flown: 1_686,
+                Stranded: 703,
+                RoutedAround: 72_926,
+                Shadowed: 10_869,
+                NoRoute: 466,
+                StartUnresolved: 0,
+                GoalUnresolved: 0,
+                Ticks: 1_556_749,
+                Blacklists: 5_140,
+                StartBlocked: 0,
+                TeamSwapped: 178,
+                Diverted: 2_099),
+            tally);
+    }
+
+    /// <summary>
+    /// The two routing arms do not measure the same corpus, and the gap is a
+    /// third of the arcs.
+    /// </summary>
+    /// <remarks>
+    /// <b>The exact heuristic is not a faster search, it is a different one</b>
+    /// (<c>CLAUDE.md</c>, <c>--no-nav-distances</c>: "a different arm, not a
+    /// slower one"), and this is that stated in edges. With the tables A* goes
+    /// round <b>5,741 more</b> single hops, so the corpus a per-edge sweep can even
+    /// pose shrinks from 37,789 to 32,048 — and measurable rocket jumps fall from
+    /// 5,659 to 3,537, a 37% loss of coverage over the one edge kind whose arm
+    /// nothing else exercises.
+    /// <para>
+    /// ⛔ <b>So the two tallies are not two runs of one measurement</b>, and a
+    /// stranding count from one cannot be compared with the other's. Both are
+    /// pinned because the DIFFERENCE is what would move if the tables, the edge
+    /// costs or the heuristic changed — and neither number alone would say which.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b><c>Shadowed</c> and <c>NoRoute</c> are identical across the arms
+    /// (10,844 and 618), and that is the control</b>: neither depends on the
+    /// heuristic — one is the follower's cost tie-break and the other is
+    /// connectivity. A change that moved those two along with the rest did not do
+    /// it through the routing arm.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void TheTwoRoutingArmsDisagreeAboutWhichEdgesAreEvenTestable()
+    {
+        ReferenceTree.RequireNavCache();
+
+        var plain = EdgeFlightTally.Of(EdgeFlights.SweepAll(
+            ReferenceTree.MapsDirectory,
+            ReferenceTree.NavCacheDirectory,
+            distances: false,
+            threads: SweepThreads));
+
+        output.WriteLine($"no tables (what every other gate measures): {plain}");
+
+        Assert.Equal(
+            new EdgeFlightTally(
+                Candidates: 116_316,
+                Measured: 37_787,
+                Arrived: 37_044,
+                Flown: 2_243,
+                Stranded: 743,
+                RoutedAround: 67_194,
+                Shadowed: 10_869,
+                NoRoute: 466,
+                StartUnresolved: 0,
+                GoalUnresolved: 0,
+                Ticks: 2_029_939,
+                Blacklists: 6_202,
+                StartBlocked: 0,
+                TeamSwapped: 206,
+                Diverted: 3_778),
+            plain);
+    }
+
+    /// <summary>The sweep is the same however many threads run it.</summary>
+    /// <remarks>
+    /// <b>Why this is load-bearing rather than a formality.</b> The corpus sweep
+    /// is only affordable as a gate because it is parallel — 55 s serial in Debug
+    /// against a few seconds across cores — and <b>the moment a measurement's
+    /// answer depends on its thread count, every number pinned above becomes a
+    /// property of the machine that recorded it.</b> This repository gates that
+    /// same property for <c>eval</c> and for the rollout search
+    /// (<c>RolloutThreadingTests</c>), for this reason.
+    /// <para>
+    /// Asserted flight-for-flight rather than on the tally: two orderings that
+    /// differ can produce identical counts, and the ordering is what a caller
+    /// reading a flight back against a graph's edge list depends on.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>One map, because the property is structural</b> — a flight owns its
+    /// world, its follower and its state, and draws from no shared stream. A wider
+    /// sweep would buy confidence in the same argument at 25x the cost.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void TheSweepIsTheSameHoweverManyThreads()
+    {
+        ReferenceTree.RequireNavCache();
+
+        static bool OnlyDebugMap(string map, int area) => map == Map;
+
+        var serial = EdgeFlights.SweepAll(
+            ReferenceTree.MapsDirectory, ReferenceTree.NavCacheDirectory,
+            distances: true, threads: 1, include: OnlyDebugMap);
+
+        var parallel = EdgeFlights.SweepAll(
+            ReferenceTree.MapsDirectory, ReferenceTree.NavCacheDirectory,
+            distances: true, threads: 8, include: OnlyDebugMap);
+
+        // Not vacuous: a filter matching nothing would make the comparison below
+        // pass over two empty lists.
+        Assert.Equal(495, serial.Count);
+        Assert.Equal(serial, parallel);
     }
 
     /// <summary>
@@ -143,9 +434,16 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
     /// arrivals are not it.</b> Twenty of <c>gg_debug</c>'s 67 rocket jumps can be
     /// posed as a route, all twenty arrive, and only twelve of those arrivals
     /// involved a rocket — the other eight are node pairs close enough that the
-    /// bot simply got there. On <c>ctf_truefort</c> the same split is 328 arrivals
-    /// against 214 flights. A gate on arrivals alone would stay green with the arm
+    /// bot simply got there. On <c>ctf_truefort</c> the same split is 377 arrivals
+    /// against 219 flights. A gate on arrivals alone would stay green with the arm
     /// deleted.
+    /// <para>
+    /// ⚠️ <b>Those two were 328 and 214 when written and nothing went red when
+    /// they stopped being</b> — no test pinned a real map, so the number drifted
+    /// in the docs while the code moved under it. That is the whole argument for
+    /// <see cref="EveryEdgeOfEveryShippedGraphIsFlownOnTheShippingArm"/>: a
+    /// measurement nobody pins is a measurement that quietly goes stale.
+    /// </para>
     /// <para>
     /// Which is exactly what makes this the control the synthetic tests could
     /// not be. <b>Mutation-checked</b>: rip the ATTACK half out of
@@ -199,7 +497,13 @@ public sealed class EdgeFlightTests(Xunit.Abstractions.ITestOutputHelper output)
         Assert.Equal(11, measured);
         Assert.Equal(11, arrived);
         Assert.Equal(10, flown);
-        Assert.Equal(0, blacklists);
+
+        // ONE, re-recorded 2026-09-05 from zero when the start moved a pixel out
+        // of the floor (EdgeFlights.StandingY). Every other number on this map is
+        // unchanged, on both arc kinds — a pixel of start height is enough to cost
+        // one arc a retry, which is worth knowing about the margins these arcs are
+        // flown on rather than smoothing over.
+        Assert.Equal(1, blacklists);
     }
 
     /// <summary>

@@ -401,6 +401,51 @@ public sealed class BotPathState
     /// otherwise burn a full A* per bot per frame in silence.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// Why the takeoff gate refused, split by clause. Diagnostic only.
+    /// </summary>
+    /// <remarks>
+    /// <b>The gate is a conjunction and a refusal count without its reason is not
+    /// actionable.</b> "A third of the corpus's strandings are the approach rather
+    /// than the arc" (docs/TRAPS-BOTS.md, "Attributing the 429") is only a repair
+    /// once somebody can say which clause is doing the refusing — and the four
+    /// have entirely different fixes: a cold weapon is waited out, a hot approach
+    /// is braked, backwards momentum needs a run-up, and short reach may be an arc
+    /// this class cannot fly at all.
+    /// <para>
+    /// ⚠️ <b>Counted per TICK at the gate, not per attempt.</b> A bot sits on the
+    /// takeoff column for many ticks refusing for the same reason, so these are
+    /// proportions to read against each other rather than counts of anything.
+    /// </para>
+    /// </remarks>
+    /// <summary>
+    /// Takeoffs committed, and how many of those left at less than the arc's own
+    /// speed. Diagnostic only.
+    /// </summary>
+    /// <remarks>
+    /// <b>The question the four gate counters cannot answer.</b> Those are per
+    /// tick, so a run-up walking backwards THROUGH the takeoff column inflates
+    /// <see cref="GateBackwards"/> without anything being wrong. This pair is per
+    /// commitment: how often the bot actually left the ground, and how often it
+    /// did so below the speed the arc was proved at — which is what the patience
+    /// escape hatch produces when the run-up cannot deliver.
+    /// </remarks>
+    public int Launches { get; set; }
+
+    /// <inheritdoc cref="Launches"/>
+    public int LaunchesUnderspeed { get; set; }
+
+    public int GateColdWeapon { get; set; }
+
+    /// <inheritdoc cref="GateColdWeapon"/>
+    public int GateTooFast { get; set; }
+
+    /// <inheritdoc cref="GateColdWeapon"/>
+    public int GateBackwards { get; set; }
+
+    /// <inheritdoc cref="GateColdWeapon"/>
+    public int GateShort { get; set; }
+
     public int EdgeUnroutableFires { get; set; }
 
     /// <summary>

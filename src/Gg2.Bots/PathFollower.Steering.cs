@@ -412,6 +412,12 @@ public sealed partial class PathFollower
 
         var isRocket = edge.Type == NavEdgeType.RocketJump;
 
+        // ⚠️ Below the arc's own takeoff speed. The gate accepts this — `along >= 0`
+        // admits a standstill and the reach model is what decides whether the
+        // tracker can make it up — so this is not a refusal, it is a record of how
+        // often the arc is being flown on the model's word rather than on speed.
+        var underspeed = along < needVx - BotConstants.JumpVtol;
+
         // ⚠️ WHICH reach model, and it is not a detail. A rocket-jumping character
         // is under moveStatus 1, where Begin Step's switch gives controlFactor 0.65
         // and frictionFactor 1 — and a friction of 1 means horizontal speed does not
@@ -496,6 +502,11 @@ public sealed partial class PathFollower
                     // its jump branch before its right-click branch, so the
                     // blast's motion_add lands on top of `vspeed = -jumpStrength`.
                     // A tick later would throw the jump away.
+                    state.Launches++;
+
+                    if (underspeed)
+                        state.LaunchesUnderspeed++;
+
                     Launch(state, ref steer);
                     steer.MineDetonate = true;
                     state.StickySetup = -1;
@@ -504,6 +515,11 @@ public sealed partial class PathFollower
 
                 return;
             }
+
+            state.Launches++;
+
+            if (underspeed)
+                state.LaunchesUnderspeed++;
 
             Launch(state, ref steer);
 
@@ -573,6 +589,7 @@ public sealed partial class PathFollower
             // own motion, and press nothing once still. A bot that has drifted off
             // the column stops here and is walked back by Approach on the next tick,
             // once it is more than BOT_JUMP_LEAD cells away.
+            state.GateColdWeapon++;
             steer.Braking = true;
         }
         else if (along > needVx + BotConstants.JumpVtol)
@@ -581,10 +598,19 @@ public sealed partial class PathFollower
             // tracker can correct it: with no key held GG2 sheds horizontal speed
             // by only about 13% a tick, so a bot arriving at 9 is still over 3
             // some eight ticks later.
+            state.GateTooFast++;
             steer.Braking = true;
         }
         else
         {
+            // Split for the diagnostic only — the answer below is the same one
+            // either way, but "leaving backwards" and "cannot reach" are different
+            // faults and the repair for them is not the same.
+            if (along < 0)
+                state.GateBackwards++;
+            else
+                state.GateShort++;
+
             // Moving away from the jump, or too slow for this arc. ⚠️ Backing up
             // is the only answer that works: pressing forward from here would walk
             // the bot off the end of the run it is standing on, which is usually a
@@ -630,6 +656,11 @@ public sealed partial class PathFollower
                 Plan(state, character.X, character.Y, tick, query, occupancy);
                 return;
             }
+
+            state.Launches++;
+
+            if (underspeed)
+                state.LaunchesUnderspeed++;
 
             steer.Braking = false;
             Launch(state, ref steer);
