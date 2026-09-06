@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using Gg2.Protocol;
@@ -171,11 +172,10 @@ public sealed class RewardAuthTests
         var challenge = entry.RewardChallenge!;
         Assert.Equal(RewardAuth.ChallengeBytes, challenge.Length);
 
-        var stream = player.Take(player.Received.Count);
-
-        Assert.True(
-            IndexOfSequence(stream, [(byte)MessageType.RewardChallengeCode, .. challenge]) >= 0,
-            "the challenge never reached the client");
+        TakeUntilSequence(
+            harness, player,
+            [(byte)MessageType.RewardChallengeCode, .. challenge],
+            "the challenge to reach the client");
 
         // The client's answer. A real one is hmac_md5(key, challenge + serverIp);
         // this server cannot tell the difference and is not supposed to be able
@@ -199,14 +199,11 @@ public sealed class RewardAuthTests
         // What the other client saw. The whole message is matched as a sequence
         // — type, slot, length, string — so a stray 47 in a position update
         // cannot stand in for it.
-        harness.Tick(2);
-
         var expected = new NetWriter();
         ServerMessages.RewardUpdate(expected, (byte)slot, "Badge_Dev:GoldSc");
 
-        Assert.True(
-            IndexOfSequence(watcher.Take(watcher.Received.Count), expected.WrittenSpan.ToArray()) >= 0,
-            "the other client was never told");
+        TakeUntilSequence(
+            harness, watcher, expected.WrittenSpan.ToArray(), "the other client to be told");
 
         // And it is remembered, so a client joining later is told too.
         Assert.Equal("Badge_Dev:GoldSc", entry.Rewards);
@@ -278,10 +275,27 @@ public sealed class RewardAuthTests
     /// time than the thread pool takes to schedule the pump task at all. The auth
     /// relay is deliberately asynchronous, so a test of it has to wait the way
     /// the outside world does.
+    /// <para>
+    /// ⛔ <b>And it has to wait LONGER THAN THE COMPONENT'S OWN DEADLINE, which is
+    /// why the budget is read from <see cref="RewardAuthClient.Timeout"/> rather
+    /// than written here.</b> It used to be a hardcoded fifteen seconds against
+    /// the client's twenty, so a relay that was slow but entirely healthy — the
+    /// full suite is thousands of tests and every core is busy — was reported as
+    /// "the auth never came back". ⚠️ A test that gives up first cannot tell a
+    /// lost response from a slow one, and the message it prints accuses the
+    /// server of the first.
+    /// </para>
     /// </remarks>
     private static void WaitFor(ServerHarness harness, Func<bool> condition, string what)
     {
-        for (var i = 0; i < 1500; i++)
+        // The component's deadline plus a margin for the thread that has to
+        // notice it expired. Ten milliseconds a turn, so the count is the budget
+        // in hundredths.
+        var budget = RewardAuthClient.Timeout + TimeSpan.FromSeconds(10);
+        var turns = (int)(budget.TotalMilliseconds / 10);
+        var clock = Stopwatch.StartNew();
+
+        for (var i = 0; i < turns; i++)
         {
             harness.Tick(1);
 
@@ -291,7 +305,57 @@ public sealed class RewardAuthTests
             Thread.Sleep(10);
         }
 
-        Assert.Fail($"gave up after fifteen seconds waiting for {what}");
+        Assert.Fail(
+            $"gave up after {clock.Elapsed.TotalSeconds:0}s waiting for {what} "
+            + $"(the client's own deadline is {RewardAuthClient.Timeout.TotalSeconds:0}s, "
+            + "so this is a real failure and not an impatient test)");
+    }
+
+    /// <summary>
+    /// Ticks until <paramref name="needle"/> has actually ARRIVED at
+    /// <paramref name="client"/>, then drains the stream.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>Waiting on the server's state and then reading the client's bytes is a
+    /// race, and it is the one that made this test flaky.</b> The two halves of
+    /// that pattern look complementary and are not: <c>TickUntil</c> and
+    /// <see cref="WaitFor"/> watch a field on the server, which is set the moment
+    /// the message is WRITTEN, while <c>LoopbackClient.Poll</c> is non-blocking and
+    /// returns on <c>WouldBlock</c> — so it collects only what the kernel has
+    /// already handed over. Between the write and the delivery there is a gap that
+    /// belongs to the operating system, and a fixed <c>Tick(2)</c> after it is a
+    /// guess about how long the gap is. Under a full-suite run — thousands of tests
+    /// and every core busy — the guess is occasionally wrong, and the failure reads
+    /// as "the other client was never told" rather than as a scheduling hiccup.
+    /// <para>
+    /// ⚠️ <b>It waits for the SEQUENCE, not for a byte count or a message type</b>,
+    /// which is what keeps <see cref="IndexOfSequence"/>'s reason intact: the
+    /// reward messages share this stream with an <c>INPUTSTATE</c> every tick, so a
+    /// wait that stopped at the first plausible type byte would be satisfied by
+    /// somebody's position data and then assert against noise. Waiting for every
+    /// byte of the expected message cannot be.
+    /// </para>
+    /// <para>
+    /// ⚠️ It also fixes a second, rarer fault the old spelling had: a message split
+    /// across two <c>Poll</c> calls could be half-present at the moment of the
+    /// assert. This keeps polling until the whole of it is there.
+    /// </para>
+    /// </remarks>
+    private static void TakeUntilSequence(
+        ServerHarness harness, LoopbackClient client, byte[] needle, string what)
+    {
+        for (var i = 0; i < 200; i++)
+        {
+            if (IndexOfSequence([.. client.Received], needle) >= 0)
+            {
+                client.Take(client.Received.Count);
+                return;
+            }
+
+            harness.Tick();
+        }
+
+        Assert.Fail($"gave up after 200 ticks waiting for {what}");
     }
 
     private static void SendRewardRequest(LoopbackClient client, string id) =>

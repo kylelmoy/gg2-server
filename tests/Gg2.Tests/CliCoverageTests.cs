@@ -36,10 +36,19 @@ public sealed class CliCoverageTests
     /// Settable options that deliberately have no flag, and why.
     /// </summary>
     /// <remarks>
-    /// Empty today. It exists so the next person with a good reason has
-    /// somewhere to write it down, rather than deleting a row from the table.
+    /// ⚠️ <b>A row here is a decision, not an exemption to reach for.</b> The bar
+    /// is that the option would be WRONG to expose, not merely that nobody has
+    /// wired it up yet — an option a user cannot set is what this test exists to
+    /// catch, and a row here that means "not done" turns the gate off silently.
     /// </remarks>
-    private static readonly Dictionary<string, string> NotOnTheCommandLine = [];
+    private static readonly Dictionary<string, string> NotOnTheCommandLine = new()
+    {
+        ["RandomSeed"] =
+            "forces the simulation's random stream, which a live server must never do — the "
+            + "reference's randomize() is what stops every server on a machine scattering its "
+            + "first blast identically. It exists for tests that have to record the same match "
+            + "twice; a flag would invite somebody to run a real server with it.",
+    };
 
     /// <summary>
     /// One row per option: the flags that set it, and how to read it back.

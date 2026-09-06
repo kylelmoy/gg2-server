@@ -1366,6 +1366,53 @@ waiting for a `CAPS_UPDATE` after each so the HUD block is actually written,
 and checks the roster still adds up (mutation-checked: a single-capture writer
 fails so hard the client never sees the next `CHANGE_MAP` at all).
 
+## ⚠️ KNOWN ISSUE: the phase gate's own recording has an unexplained outlier
+
+`InputLagSweepTests.ThisServersOwnRecordingIsInPhase` records a 900-tick bot
+match and grades it by a **99th-percentile** trajectory error at five input lags.
+Until 2026-09-06 it recorded a *different* match every run — `GameServer.Start`
+seeds `WorldState.Random` from the clock, which is the reference's `randomize()`
+and correct for a live server — so the gate was sampling a fresh random match and
+asserting a tail statistic on it. It failed roughly **once in twenty-five**, and
+the message it printed accused the broadcast of publishing a different tick's
+input than it simulated, which is close to the worst thing this repository can say
+about itself.
+
+`ServerOptions.RandomSeed` now fixes the match. Six runs give one distinct curve,
+so the gate is reproducible.
+
+⛔ **But the seed does not explain what the flake was, and this section exists so
+that is not quietly forgotten.** Measured before the fix:
+
+| | lag −1 | **lag 0** | lag +1 |
+|---|---|---|---|
+| 40 healthy random matches | 63–239 | **3–36** | 62–287 |
+| 72 fixed seeds, 1…72 | 63–212 | **3–73** (worst is seed 40) | 62–287 |
+| the two observed failures | 229, 255 | **154, 129** | 83, 106 |
+
+⚠️ **The failures are an outlier MODE, not the tail of the healthy
+distribution.** Lag 0's error is normally single digits and in a failing run it is
+about **twenty times** that — while lag +1 simultaneously drops below its own
+normal range. **A whole-trace shift does not fit either**: a cleanly shifted trace
+would put single digits at +1, and the failures never get below 83 at any lag. It
+looks like part of a recording being out of phase rather than all of it.
+
+⛔ **Not reproduced on any of 72 fixed seeds**, so there is no fixture for it and
+the mechanism is unknown. What it is NOT: it is not the `RocketModel.Capable`
+change (24/24 pass at `9ae1151`, immediately before it, is weak evidence, but the
+flake also occurred on trees without it), and it is not the join-race work (it
+reproduced with that stashed, 23/24).
+
+**How to chase it, and why nothing will stumble on it now.** The seeded gate no
+longer samples the mode at all, so it has to be hunted deliberately: run
+`RecordABotMatch` in a loop under clock seeding, keep the trace whenever
+`curve[0]` exceeds ~50, and replay that trace looking for which ticks carry the
+p99 error. A single kept trace turns this from a rumour into a fixture.
+⚠️ **The falsification for the "it is not the broadcast" reading**: if a kept
+trace shows the error concentrated on the ticks after a rocket-jump launch, the
+recorder and the simulation disagree about which tick a launch belongs to, and
+that IS the wire.
+
 ## Which flush a message rides
 
 **The bug class this section exists for: a value or message on the wrong side

@@ -471,6 +471,34 @@ public sealed class ServerOptions
     public string RecordingDirectory { get; set; } = string.Empty;
 
     /// <summary>
+    /// Forces the simulation's random stream, instead of seeding it from the
+    /// clock. Null — the default — is the live behaviour.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>For a TEST or a rollout that has to be reproducible, and for nothing
+    /// else.</b> <c>GameServer.Start</c> otherwise seeds <c>WorldState.Random</c>
+    /// from an unseeded <c>Random</c>, which is the reference's <c>randomize()</c>
+    /// and is right for a live server: without it every server on a machine would
+    /// scatter its first blast identically.
+    /// <para>
+    /// ⚠️ <b>What it is for.</b> A test that runs a bot match and then asserts on a
+    /// TAIL statistic of it — <c>InputLagSweepTests.ThisServersOwnRecordingIsInPhase</c>
+    /// takes a 99th-percentile trajectory error — is measuring a fresh random
+    /// sample on every run, so it fails intermittently and reproduces on nobody's
+    /// machine. Seeding it makes the gate answer the same question every time:
+    /// if it fails it fails always, which is the only kind of failure anybody
+    /// investigates.
+    /// </para>
+    /// <para>
+    /// ⛔ <b>It does not make the seed a free choice.</b> A seed picked because it
+    /// passes is a gate that proves nothing; the seed here has to be one whose
+    /// curve is healthy for the reason the test states, and the vacuity half of
+    /// that test is what keeps it honest.
+    /// </para>
+    /// </remarks>
+    public int? RandomSeed { get; set; }
+
+    /// <summary>
     /// The loopback control port, when <see cref="ControlPortEnabled"/> is set.
     /// Zero asks the OS for a free port, which is what tests want.
     /// </summary>
