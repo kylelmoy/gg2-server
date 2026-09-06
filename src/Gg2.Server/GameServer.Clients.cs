@@ -332,12 +332,8 @@ public sealed partial class GameServer
             }
 
             case MessageType.ChatBubble:
-            {
-                if (ChatBubbles.Rewrite(reader.ReadUByte(), _aprilFools, out var image))
-                    ServerMessages.ChatBubble(_broadcast, IdOf(entry), image);
-
+                ExecuteChatBubble(entry, reader.ReadUByte());
                 break;
-            }
 
             case MessageType.ClientSettings:
                 ExecuteClientSettings(entry, reader.ReadUByte() != 0);

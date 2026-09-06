@@ -228,6 +228,50 @@ public sealed partial class GameServer
     }
 
     /// <summary>
+    /// <c>CHAT_BUBBLE</c>: rewrite it if the calendar says so, then relay — at
+    /// most one per player per <see cref="ConnectionLimits.ChatBubbleIntervalMs"/>.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The throttle is a DELIBERATE DEPARTURE.</b>
+    /// <c>processClientCommands.gml:194-206</c> relays every bubble it is sent,
+    /// and this drops some of them. The reasoning is the reference's own, applied
+    /// one case further: it throttles <c>PLAYER_CHANGENAME</c> because "every
+    /// accepted rename is an unbounded broadcast to every connected client" —
+    /// which is equally true of the bubble in the case beside it, and equally
+    /// exploitable, since <c>ClientCommands.PerTickLimit</c> lets one socket send
+    /// ten a tick. On a LAN with friends it never came up.
+    /// <para>
+    /// ⚠️ <b>The throttled bubble is DROPPED, not deferred</b> — the same shape
+    /// as the rename above, and for the same reason: queueing would move the
+    /// flood rather than end it, and a bubble that appears two seconds after the
+    /// keypress is worse than one that never appears.
+    /// </para>
+    /// <para>
+    /// The April Fools rewrite still runs first, so the two behaviours compose
+    /// the way they read: what is relayed is what the reference would have
+    /// relayed, only less often. <c>ChatBubbleIntervalMs = 0</c> restores the
+    /// reference exactly.
+    /// </para>
+    /// </remarks>
+    private void ExecuteChatBubble(RosterEntry entry, byte requested)
+    {
+        if (!ChatBubbles.Rewrite(requested, _aprilFools, out var image))
+            return;
+
+        var interval = _limits.ChatBubbleIntervalMs;
+
+        if (interval > 0
+            && entry.LastChatBubbleMs is { } last
+            && _nowMs - last < interval)
+        {
+            return;
+        }
+
+        entry.LastChatBubbleMs = _nowMs;
+        ServerMessages.ChatBubble(_broadcast, IdOf(entry), image);
+    }
+
+    /// <summary>
     /// <c>REWARD_REQUEST</c>: mint a nonce and challenge the client.
     /// </summary>
     /// <remarks>

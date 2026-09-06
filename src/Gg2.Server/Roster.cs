@@ -85,6 +85,20 @@ public sealed class RosterEntry
     public long? LastNameChangeMs { get; set; }
 
     /// <summary>
+    /// When this player's last relayed <c>CHAT_BUBBLE</c> went out, on the
+    /// server's monotonic clock. Null until they have sent one.
+    /// </summary>
+    /// <remarks>
+    /// The same shape as <see cref="LastNameChangeMs"/> and for the same reason
+    /// the reference gives that one: every accepted bubble is a broadcast to
+    /// every connected client, so without a throttle one socket decides how much
+    /// the server sends. See <c>GameServer.ExecuteChatBubble</c> — ⚠️ the
+    /// reference throttles the rename and does NOT throttle this, so the
+    /// departure is deliberate and is written down there.
+    /// </remarks>
+    public long? LastChatBubbleMs { get; set; }
+
+    /// <summary>
     /// The user id this client asked to authenticate as, or null if it never
     /// sent a <c>REWARD_REQUEST</c>.
     /// </summary>

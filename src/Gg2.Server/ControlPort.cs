@@ -61,6 +61,25 @@ public sealed class ControlPort : IDisposable
         public StringBuilder Pending { get; } = new();
     }
 
+    /// <summary>
+    /// The longest command line this will assemble before giving up on a client.
+    /// </summary>
+    /// <remarks>
+    /// <b>Loopback-only and off by default, so this is hygiene rather than a
+    /// defence</b> — anything that can reach this port can already run code as
+    /// the operator. It is here because the two shapes it fixes are the ones
+    /// that turn a typo into a hang rather than an error: <c>Pending</c> grew
+    /// without bound for a client that never sent a newline, and the framing
+    /// loop below calls <c>ToString()</c> on the whole of it once per pass,
+    /// which is quadratic in what has arrived. A process that pipes a large file
+    /// at this port by mistake should get a refusal, not a stalled server.
+    /// <para>
+    /// Every verb is a short JSON object; 64 KB is thousands of times the
+    /// longest one <see cref="ControlCommands"/> accepts.
+    /// </para>
+    /// </remarks>
+    public const int MaxLineBytes = 64 * 1024;
+
     public ControlPort(GameServer server, IServerLog log)
     {
         _server = server;
@@ -142,7 +161,20 @@ public sealed class ControlPort : IDisposable
             var newline = text.IndexOf('\n');
 
             if (newline < 0)
+            {
+                // ⚠️ Bounded, or a client that never sends a newline grows this
+                // for ever and is re-copied by the ToString above on every pass.
+                if (client.Pending.Length > MaxLineBytes)
+                {
+                    _log.Warn(
+                        $"control port: dropping a client that sent {client.Pending.Length} bytes "
+                        + $"with no newline (limit {MaxLineBytes})");
+
+                    return false;
+                }
+
                 break;
+            }
 
             var line = text[..newline].Trim();
             client.Pending.Remove(0, newline + 1);

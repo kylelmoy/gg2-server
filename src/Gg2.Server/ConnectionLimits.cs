@@ -186,6 +186,35 @@ public sealed record ConnectionLimits
     public TimeSpan MaxHandshakeDuration { get; init; } = TimeSpan.FromMinutes(10);
 
     /// <summary>
+    /// The shortest gap between one player's relayed chat bubbles.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>A DELIBERATE DEPARTURE from the reference, and the only one in this
+    /// type that a client could notice.</b> Everything else here bounds what the
+    /// server holds; this drops a message the reference would have relayed.
+    /// <para>
+    /// <b>Why.</b> A chat bubble is broadcast to every connected client, and
+    /// <c>ClientCommands.PerTickLimit</c> allows ten commands a player a tick —
+    /// so one socket can make the server emit three hundred broadcasts a second
+    /// to everybody, which on a full server is thousands of messages a second
+    /// and a screen of bubbles nobody can play through. The reference throttles
+    /// <c>PLAYER_CHANGENAME</c> to once a second for exactly this reason
+    /// (<c>processClientCommands.gml:293-296</c>) — "every accepted rename is an
+    /// unbounded broadcast" — and simply does not apply the same reasoning to
+    /// the bubble beside it. That looks like an oversight rather than a
+    /// decision, and on a LAN it never mattered.
+    /// </para>
+    /// <para>
+    /// <b>250 ms, not the rename's 1000.</b> A bubble is a keypress and a human
+    /// sends a few in a burst; a second would be felt. Four a second is above
+    /// anything a person does with a keyboard and cuts the flood by 75×.
+    /// Set to zero to relay every bubble, which is the reference's behaviour
+    /// exactly.
+    /// </para>
+    /// </remarks>
+    public int ChatBubbleIntervalMs { get; init; } = 250;
+
+    /// <summary>
     /// Whether to ask TCP to notice a peer that has silently gone away.
     /// </summary>
     /// <remarks>
@@ -246,6 +275,12 @@ public sealed record ConnectionLimits
                 nameof(MaxSendBacklogBytes),
                 MaxSendBacklogBytes,
                 $"must be at least {largestLegalMessage}, the largest message the protocol allows");
+        }
+
+        if (ChatBubbleIntervalMs < 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(ChatBubbleIntervalMs), ChatBubbleIntervalMs, "must not be negative; zero means no throttle");
         }
 
         if (MaxInvalidCommandBytes < 1)
