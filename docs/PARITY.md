@@ -1366,7 +1366,7 @@ waiting for a `CAPS_UPDATE` after each so the HUD block is actually written,
 and checks the roster still adds up (mutation-checked: a single-capture writer
 fails so hard the client never sees the next `CHANGE_MAP` at all).
 
-## ⚠️ KNOWN ISSUE: the phase gate's outlier is a STUCK SLOT, not a phase error
+## ✅ SOLVED: the phase gate's outlier was a STUCK SLOT, not a phase error
 
 `InputLagSweepTests.ThisServersOwnRecordingIsInPhase` records a 900-tick bot
 match and grades it by a **99th-percentile** trajectory error at five input lags.
@@ -1442,36 +1442,79 @@ constant error with a stationary body means **the anchor is not moving y**.
 ✅ The anchor is not being skipped wholesale: hp goes 64 → 9 across t=342/343 and
 x lands within 2 of the trace's, so `SetCharacter` demonstrably runs for this slot.
 
-### ⛔ THE NEXT QUESTION IS UNITS, AND IT MUST BE MEASURED, NOT READ
+### ✅ SOLVED 2026-09-06: a stale `yprevious`, and the units theory was WRONG
 
-Inspection could not settle it and two readings each fit half the evidence:
+**`PortedSimulation.SetCharacter` anchored the position and left
+`CharacterState.YPrevious` alone.**
 
-- `CharacterBlock.X/Y` are documented as **wire** units — `x * 5`, `y * 5` — and
-  `PortedSimulation.SetCharacter` divides by 5 accordingly.
-- But the mismatch prints `expected=1082`, which is the RAW wire `Y`, against
-  `actual=962`, which is the replay's WORLD y. And the anchored x lands at 2534
-  against a trace `X` of 2536 — equal in the same units, which the ÷5 would not
-  produce.
+An anchor installs an **end-of-tick** state, and `End Step`'s last act is
+`yprevious = y` (`CharacterPhysics.cs`; `End Step.xml:29-30`), so the only value
+consistent with the position being installed is that position. The stale one was
+whatever the replay's own copy last finished a tick at, somewhere else entirely.
 
-⚠️ **Do not resolve this by reading `SetCharacter` and `Reconcile` again.** Three
-faults on 2026-09-06 were each found by running rather than reading, and one was
-"verified" by inspection first. Print, for one slot on one tick, the trace's raw
-`Observed.Y`, the value `SetCharacter` computes, and the value `Reconcile`
-compares — all three, together, once. **If Reconcile grades in wire units while
-Anchor writes world (or vice versa), the p99 outlier is an INSTRUMENT bug and the
-phase gate has never been failing about the wire at all.**
+⛔ **It does not blur a number, it flips a collision answer.** The
+dropdown-platform push-out (`Character.events/Step.xml:90-107`) decides whether a
+character was *already inside* a platform before this tick's move by testing the
+platform shifted down by `round(y - yprevious)`. Anchored onto a stale
+`yprevious`, that dy is the gap to wherever the replay's copy had been — so a
+character the recording is falling THROUGH is read as newly arriving and gets
+**lifted out on top of the platform**. It then rests there, hspeed and vspeed
+zero, and every following anchor re-seats it. Hence a constant error, on one
+axis, on one slot, with both bodies stationary.
 
-### How to carry it on
+With `yprevious == y` the dy is 0, so a character overlapping a platform also
+overlaps the shifted platform, is correctly read as already inside, and falls
+through as the reference does.
+
+**Measured across the eleven traces `Hunt` caught under load** (p99 y, lag 0):
+
+| before | 90 | 90 | 90 | 90 | 90 | 120 | 120 | 60 | 180 | 48 | 74 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| after | 2 | 2 | 2 | 2 | 2 | 3 | 2 | 3 | 16 | 48 | 74 |
+
+⚠️ **Two did not move, so the outlier had more than one cause and this closes
+one of them.** The 48 and the 74 are still open, and the residual on the traces
+that did collapse is now a single tick at the moment of the drop (`t=545 slot=3
+y −80, vspeed −39`) rather than a run of hundreds — the onset, not the stick.
+
+⛔ **THE UNITS THEORY THAT STOOD HERE WAS WRONG.** `Reconcile` grades wire
+against wire: `actual` comes from `TryGetCharacter`, which converts world → wire
+through `CharacterWire.ToBlock`, and `expected` is the trace's wire block. The
+two sides are symmetric and always were. The "anchored x equals the trace's x
+undivided" reading that motivated it was a misreading of a wire-side value.
+**Recorded because an unrecorded rejection gets retried** — do not re-open it.
+
+✅ **Gated, both directions checked** (`AnchorYPreviousTests`): the invariant
+(`yprevious == y` after an anchor, including the second anchor onto a live
+character, which is the case that broke) and the behaviour, on
+`port-gg_debug-anchoronplatform.trace` — this server's own recording, checked in
+at 34 KB, asserting p99 y < 20 where the stale value scored 90. Reverting the fix
+fails both and only those.
+⚠️ **Both gate the REPLAYER, not the simulation.** The trace is the port's
+recording replayed by the port, so green means the harness anchors correctly; it
+is not a parity claim against the reference. Nothing in `Gg2.Simulation` changed,
+no `SIM_UUID` moved, and no existing fixture moved — **which is the reason this
+survived: no checked-in fixture ever anchors onto a dropdown platform.**
+
+### Why nothing was red
+
+The phase gate's own message accused the broadcast of publishing a different
+tick's input than it simulated, and that sentence was a misdiagnosis for as long
+as it stood. The seeded gate does not sample the mode at all
+(`ServerOptions.RandomSeed` fixed the match), so after the seeding fix nothing in
+the suite could reach it — the hunt tools existed precisely because no gate did.
+
+### How to carry on with the two that did not move
 
 `OutlierHuntTests.Hunt` (remove the `Skip`) runs matches under clock seeding and
-keeps any whose lag-0 error exceeds a threshold; `Analyse` grades a kept trace and
-prints the worst mismatches, the per-slot counts and the tick clusters. **Start by
-answering which player slot 3 is on each side** — if they are different players,
-this is roster compaction and not physics at all.
+keeps any whose lag-0 error exceeds a threshold; `Analyse` grades a kept trace.
+⚠️ **The hunt needs LOAD** — 60 rounds idle caught nothing; 300 rounds alongside
+a full suite run caught 11.
 
 ⚠️ **The falsification for "it is not the wire":** if a kept trace ever shows the
 error spread across several slots and growing with their speed rather than parked
-on one, the phase reading was right after all and this entry is wrong.
+on one, the phase reading was right after all and this entry is wrong. That
+remains the test for the 48 and the 74.
 
 ## Which flush a message rides
 

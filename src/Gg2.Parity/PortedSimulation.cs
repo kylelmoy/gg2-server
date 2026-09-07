@@ -214,6 +214,23 @@ public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSim
         var nudge = Nudges.GetValueOrDefault(slot);
         character.X = observed.X / 5.0 + nudge.X;
         character.Y = observed.Y / 5.0 + nudge.Y;
+
+        // yprevious travels WITH the anchor, and leaving it stale is what made
+        // a slot stick for hundreds of ticks (docs/PARITY.md, "the stuck slot").
+        // An anchor is an END-OF-TICK state, and End Step's last act is
+        // `yprevious = y` (CharacterPhysics.cs, End Step.xml:29-30) — so the
+        // only value consistent with the position being installed is the
+        // position itself.
+        //
+        // A stale one is not merely inaccurate, it changes the SIGN of a
+        // collision answer: the dropdown-platform push-out tests
+        // `round(y - yprevious)` to decide whether the character was already
+        // inside the platform before this tick's move. Anchored onto a stale
+        // yprevious, that dy is the gap to wherever the replay's copy happened
+        // to be, so a character the reference is falling THROUGH gets lifted
+        // out on top of the platform — and then sits there, hspeed and vspeed
+        // zero, re-seated by every subsequent anchor.
+        character.YPrevious = character.Y;
         character.HSpeed = observed.HSpeed / 8.5 + nudge.HSpeed;
         character.VSpeed = observed.VSpeed / 8.5 + nudge.VSpeed;
         character.Hp = observed.Hp;

@@ -131,6 +131,13 @@ public sealed class ClientCommandInjectionTests
     /// <c>MessageCoverageTests</c> warns for whole message families. A
     /// re-recording that changes these counts should change this list
     /// deliberately.
+    /// <para>
+    /// ⚠️ <b>ADDING a trace to <c>Fixtures/</c> moves these too</b>, because the
+    /// corpus is a glob rather than a list — 2026-09-06,
+    /// <c>port-gg_debug-anchoronplatform.trace</c> took zooms 31 → 46 on its own.
+    /// That is the pin doing its job: a new fixture silently enrols itself in
+    /// every corpus test, and this is the one that says so out loud.
+    /// </para>
     /// </remarks>
     [Fact]
     public void TheCorpusStillContainsTheCommandsThisFileGates()
@@ -155,7 +162,7 @@ public sealed class ClientCommandInjectionTests
             }
         }
 
-        Assert.Equal(31, zooms);
+        Assert.Equal(46, zooms);
         Assert.Equal(26, eats);
     }
 }

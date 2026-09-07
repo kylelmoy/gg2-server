@@ -8,15 +8,18 @@ using Xunit.Abstractions;
 namespace Gg2.Tests;
 
 /// <summary>
-/// The two tools that caught and localised the outlier in <c>docs/PARITY.md</c>,
-/// "the phase gate's own recording has an unexplained outlier".
+/// The two tools that caught, localised and finally SOLVED the outlier in
+/// <c>docs/PARITY.md</c>, "the phase gate's outlier was a STUCK SLOT".
 /// </summary>
 /// <remarks>
 /// ⛔ <b>Both are SKIPPED, because neither is a gate.</b> <see cref="Hunt"/> runs
 /// dozens of full bot matches and keeps the ones that misbehave; <see cref="Analyse"/>
 /// grades a kept one. Kept in the suite rather than thrown away because the
-/// outlier is not fixed, is rare, and cost a session to catch once — the next
-/// person to look at it should not have to write this again.
+/// outlier is rare, cost a session to catch once, and is only PARTLY fixed —
+/// the stale-yprevious cause is closed and gated (<c>AnchorYPreviousTests</c>),
+/// but two of the eleven traces caught on 2026-09-06 did not move at all
+/// (p99 y 48 and 74), so at least one more cause is live and these are how to
+/// go after it.
 /// <para>
 /// ⚠️ <b>The hunt needs LOAD.</b> Sixty matches on an idle machine caught nothing;
 /// the same sixty alongside a full suite run caught eight in four runs. Whatever

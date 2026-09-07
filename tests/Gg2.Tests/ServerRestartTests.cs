@@ -112,7 +112,17 @@ public sealed class ServerRestartTests : IDisposable
 
         using var stopping = new CancellationTokenSource();
 
-        var loop = Task.Run(() => server.Run(stopping.Token));
+        // ⛔ NOT Task.Run: GameServer.Run is a blocking tick loop, and on the
+        // pool a saturated one can leave it unstarted past the wait below —
+        // measured, this test timed out at 13s against its own 10s deadline
+        // while a full suite ran alongside it. LongRunning is the right tool
+        // *here* precisely because Run is synchronous (`void Run(...)`), so the
+        // dedicated thread covers the whole body; the RewardAuthClient bug was
+        // LongRunning on an ASYNC method, where it covers only the synchronous
+        // prefix and every continuation goes back to the pool.
+        var loop = Task.Factory.StartNew(
+            () => server.Run(stopping.Token),
+            TaskCreationOptions.LongRunning);
 
         Assert.True(Run(server, """{"cmd":"restart"}""").GetProperty("ok").GetBoolean());
         await loop.WaitAsync(TimeSpan.FromSeconds(10));
@@ -137,7 +147,17 @@ public sealed class ServerRestartTests : IDisposable
         using var server = Start("[Server]\nServerName=frozen\n");
 
         using var stopping = new CancellationTokenSource();
-        var loop = Task.Run(() => server.Run(stopping.Token));
+        // ⛔ NOT Task.Run: GameServer.Run is a blocking tick loop, and on the
+        // pool a saturated one can leave it unstarted past the wait below —
+        // measured, this test timed out at 13s against its own 10s deadline
+        // while a full suite ran alongside it. LongRunning is the right tool
+        // *here* precisely because Run is synchronous (`void Run(...)`), so the
+        // dedicated thread covers the whole body; the RewardAuthClient bug was
+        // LongRunning on an ASYNC method, where it covers only the synchronous
+        // prefix and every continuation goes back to the pool.
+        var loop = Task.Factory.StartNew(
+            () => server.Run(stopping.Token),
+            TaskCreationOptions.LongRunning);
 
         Run(server, """{"cmd":"freeze"}""");
         Run(server, """{"cmd":"restart"}""");
