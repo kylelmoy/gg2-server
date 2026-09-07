@@ -161,19 +161,36 @@ world state and has no equivalent blind spot.
 `PolicyNetwork` carries weights fit to one simulation version;
 `SimulationStamp.Require` refuses a checkpoint whose stamp does not match the
 current build. `RolloutSearch` carries no weights and re-derives from the
-simulation every decision, so it absorbs a physics change for free. **Current
-state: NO trained checkpoint exists for this build.** The layout v2 bump on
-2026-09-03 retired the last one, and what ships in
-`tests/Gg2.Tests/Fixtures/policy/` is an **untrained** fixture minted against
-this build — it loads with no override, and its weights are a He-normal draw
-kept for `PolicyNetwork`'s forward-pass arithmetic and nothing else
+simulation every decision, so it absorbs a physics change for free.
+
+**Current state, verified 2026-09-06 at `6126b34`: trained checkpoints for
+this build EXIST.** All four files in `tests/Gg2.Tests/Fixtures/policy/` carry
+`SIM_UUID 698913b5ea547d60`, which is exactly what `SimulationStampTests`
+pins this build's stamp to, and `rest3_s1_iter12000.npz` loads through
+`PolicyNetwork.Load` with **no** `ignoreSimulationStamp` (`TrainedClassesTests`,
+green at `6126b34`).
+⚠️ **This paragraph asserted the opposite until 2026-09-06.** The layout v2
+bump on 2026-09-03 did retire the last one, and `gg2-rl` minted new ones
+against the bumped stamp three days later — checked in here as fixtures — with
+nothing in this repo noticing. **A stale "none exists" costs what a stale
+"done" does**: it tells the next session a behavioural re-measure is blocked
+when it is not. What would show this has gone stale in the other direction is
+`SimulationStampTests`' pin moving without the fixture files being re-minted.
+
+⚠️ **`ppo_final.npz` is still the UNTRAINED forward-pass fixture** — its
+weights are a He-normal draw kept for `PolicyNetwork`'s arithmetic and nothing
+else, and it records no class set (seven metadata fields)
 (`tests/Gg2.Tests/PolicyFixture.cs`; `docs/ENV.md`, "The checkpoint is a
-FIXTURE, not a policy"). ⛔ **A checkpoint loading cleanly is therefore not
+FIXTURE, not a policy"). ⛔ **A checkpoint loading cleanly is still not
 evidence that it plays**, which is the opposite of the reassurance a green
-stamp usually gives. Nothing in the suite depends on `gg2-rl` producing
-anything, and every phase-4 behavioural number — including the 21-of-21
-death-share result — describes a superseded simulation. Re-measuring it needs
-a checkpoint trained against the current head; none exists.
+stamp usually gives, and nothing in the suite depends on `gg2-rl` producing
+anything.
+
+⚠️ **Every phase-4 behavioural number — including the 21-of-21 death-share
+result — still describes a superseded simulation** (`7ff5940d97aa7bed`) and is
+history. What changed is only that re-measuring is no longer blocked for want
+of a checkpoint; `docs/TRAPS-BOTS.md`, "the first policy to improve deaths and
+the objective at once", is the match-level re-measure the training lane ran.
 
 ### ⚠️ A duel does not contain what a match contains
 

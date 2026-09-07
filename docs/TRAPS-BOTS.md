@@ -4847,3 +4847,159 @@ is a stale copy waiting to happen.**
 
 ✅ The 36 micro-ticks were also the only positive evidence the class switch took
 effect at all — every other check was a negative.
+
+
+### ✅ The first policy to improve deaths AND the objective at once
+
+**2026-09-06, measured by the `gg2-rl` lane, pinned at `c434229`.** 168
+map-runs, **67,200 matches**: 21 maps × 200 an arm, four seeds a family, 150px
+engagement window. The roster of each run was read off all eight runs rather
+than assumed.
+
+**Cleared to `6126b34` over the whole dependency closure, not the stamp** (see
+the next section for why the stamp is not enough): `src/Gg2.Bots` has **0
+non-comment changed lines** across the range; `Gg2.Env`, `Gg2.Maps`, `Gg2.Nav`,
+`nav/` and `maps/` do not appear in the diff at all; `tools/bench`'s only
+non-comment change is the new `Smoke.cs` plus an 8-line `BENCH_SMOKE` guard
+that returns early. **Q21 ran `BENCH_SWEEP` → `RangeSweep.Run`** (`Program.cs`
+line 178; `BENCH_PERMAP` is a different mode it never invoked), and
+`RangeSweep.cs` is untouched across the range. The 64 non-comment lines in
+`src/Gg2.Server/BotBrain.cs` are **unreachable from the bench**: the project
+graph is `bench → {Gg2.Env, Gg2.Bots, Gg2.Simulation} → {Gg2.Protocol,
+Gg2.Maps} → Gg2.Protocol → nothing`, so no path reaches `Gg2.Server`.
+⚠️ Verified **to the leaves**, not at the first edge — "bench.csproj does not
+reference `Gg2.Server`" is a statement about one file, and a closure is a
+graph.
+
+| checkpoint | policy ticks | death share | Δ | 2·SE | t | round wins | Δ | 2·SE | t |
+|---|---|---|---|---|---|---|---|---|---|
+| `rest3` | 5.4–6.1% | 50.63 → 47.77/46.85/48.28/48.33 | **−2.82** | 0.69 | **−8.22** | 53.19 → 56.09/59.04/53.85/55.84 | **+3.02** | 2.14 | **+2.83** |
+| `control` | 4.1–4.4% | 49.90 → 50.44/48.72/49.72/48.91 | −0.45 | 0.79 | −1.15 | 59.70 → 57.56/58.44/56.60/58.39 | **−1.95** | 0.86 | **−4.51** |
+
+`rest3` passes both criteria with **all four seeds agreeing in sign on both
+measures**. The failure mode of the 450px widening — combat improving while the
+objective collapses — is simply absent at 150px and 5–6% of ticks.
+⛔ **`control` fails, and worse than a trade**: Q14's widening at least bought
+combat for objective. This is an objective loss with no purchase, all four seeds
+negative on wins, and one seed's death share *above* its own control.
+
+✅ **A free determinism check came with it**: within each family all four runs
+report the CONTROL arm to the digit (49.90/59.70 and 50.63/53.19), across a day
+in which the bench was rewritten three times. That is what allowed the one
+surprising cell (`control`'s mixed death share) to be attributed to the
+checkpoint rather than to the harness — the instrument is a candidate before the
+policy.
+
+⚠️ **THE TWO FAMILIES ARE NOT COMPARABLE TO EACH OTHER, and their control arms
+differ for a structural reason** (50.63/53.19 against 49.90/59.70). The roster
+follows the trained set, so a `rest3` run is a three-class match and a `control`
+run a four-class one — different matches, not two arms of one. **Each family is
+only ever judged against its own control**; ranking `rest3` above `control` from
+these numbers is not a comparison this instrument can make.
+
+### ⛔ "Should drive" cannot be priced by this bench — it is structural
+
+⚠️ **`AllowedClasses` and `PolicyController.Drives` read the SAME set**, so the
+roster on the field and the classes actually driven cannot be varied
+independently. Dropping engineer from `rest3`'s set to price its inclusion would
+also **remove engineers from the match** — a different match, not a cleaner
+comparison.
+
+Three consequences, all measured-by-implication rather than open questions:
+
+- The engineer question this repo raised (`rest3` mirrors 50.67% against a 50%
+  null, 2·SE 1.74 — nothing to choose against the scripted engineer) is
+  **unanswerable by this instrument**, and that is the answer. Absence of a
+  price, not evidence that inclusion is free.
+- **A single tier's contribution inside a mixed nine-class match is
+  unmeasurable** for the same reason, and so is a three-tier union, since the
+  bench loads one checkpoint.
+- Therefore **a should-drive field could not be justified by a match number
+  today**, whatever one's view of whether it should exist. The training lane
+  states it is *not* asking for the seam change that would be needed.
+
+⛔ **This is a statement of what the instrument can do, not a complaint about
+it**: the bench was built to compare one policy against scripted, and it does
+that well — see the section above, which is exactly that comparison.
+
+⚠️ **Two registered predictions were WRONG here, and both being visible is why
+the result is usable.** The training lane registered that `control`'s tier was
+"sniper alone within a four-class roster" — but `Drives` reads the whole trained
+set, so it drove scout, soldier, sniper AND heavy; the loss belongs to any of the
+four and **says nothing about a sniper tier**. It also registered that `rest3`'s
+win share might be degenerate for want of a flag-runner in its roster; over 21
+maps it is not — the arena and koth maps score, and the co-primary resolved at
+t +2.83. **Being wrong there was worth more than being right**: it means the
+objective was visible, so a null would have been a real null rather than an
+instrument floor.
+
+
+### ⛔ A stamp chain is not a clearance: `SIM_UUID` is blind to `Gg2.Bots`
+
+**2026-09-06.** Clearing a `gg2-rl` number to a newer commit, this repo checked
+`git diff c434229..6126b34 -- src/Gg2.Simulation src/Gg2.Env/ObservationWriter.cs`,
+found it empty, and concluded the number described the current build. The
+conclusion was right and **the evidence did not cover the question**: the bot
+layer had moved in that range (`PolicyController.cs` +9, `PolicyNetwork.cs`
++20) and the check never looked there.
+
+⚠️ **`SIM_UUID` deliberately does not cover `src/Gg2.Bots`** — a policy is a
+bot and this project's bots are its own — so **no stamp agreement can clear a
+bot-layer change**, and a clean `Gg2.Simulation` diff says nothing about it.
+That is the same coverage gap that made `RocketModel.Capable` need a re-score
+with no stamp moving.
+
+✅ **In this instance nothing was owed**: every changed line in both files is a
+comment, so no executable line moved. **But that was established by filtering
+the diff, not by characterising it.** "Probably just the comment I added" is
+the reasoning both lanes lost time to on the same day.
+
+⛔ **The counterfactual is the whole value of the check.** Had those twenty
+lines been code, the check as originally run would have returned empty *on the
+paths it looked at* and cleared a number it should not have — and the
+conclusion would have been stated with exactly the same confidence. **An
+incomplete check and a sufficient one are indistinguishable from their
+output**; only the closure they cover tells them apart.
+
+**The rule, in order.** Widen to the layer the stamp cannot see — for a bench
+number that is `Gg2.Bots`, `Gg2.Env`, the maps and nav, and the bench mode
+itself, plus a check that anything else which moved is not in the instrument's
+project closure. Then **read** the diff rather than characterise it. Named by
+the `gg2-rl` lane, which caught it in this repo's own clearance.
+
+⛔ **It took THREE passes to state that rule, and each pass was a strict subset
+of the next — which is the section's real content.** This repo checked what the
+SIMULATION runs on. `gg2-rl` widened to what the POLICY runs against
+(`Gg2.Bots`) and stopped, never looking at `tools/bench` — **the thing that
+actually produced the number**. This repo then widened to the instrument but
+named the wrong mode in the write-up (`PerMap`; Q21 ran `BENCH_SWEEP` →
+`RangeSweep`), a wrong supporting sentence under a right conclusion, sending
+any reader who followed it to get a clean answer about a mode the number never
+used. **The settled form: for a number produced by an instrument, the closure
+is the INSTRUMENT'S project graph — not the stamp surface, and not one layer
+past it.**
+
+⚠️ **A textual match is not a dependency, in that direction too.** Checking the
+closure by `grep -l "Gg2.Server"` over the csproj files hits three of them —
+all XML comments stating the dependency is *deliberately absent*. A grep that
+would have reported the opposite of the truth, caught only by reading the
+lines. Same rule as reading the diff, pointing the other way.
+
+### ⚠️ A stale "impossible" is worse than a stale "done", and nothing falsifies it
+
+The two stale claims Q21 broke ("NO trained checkpoint exists for this build",
+"nobody is making one") were stale in the **blocking** direction, and that is
+the more expensive one.
+
+**A stale "done" gets falsified the moment somebody tries the thing.** A stale
+"impossible" never does — nobody tries, so no contact with reality is ever
+made, and the claim can sit for as long as the project lasts getting more
+confident-looking with age. Here it sat three days telling every session that a
+behavioural re-measure was blocked when the checkpoints had already been minted
+and checked in *to this repo* as fixtures.
+
+⚠️ So `CLAUDE.md`'s "grep before writing a claim about what exists" applies
+**hardest to the claims that close work off**, not to the ones that advertise
+it. When writing "none exists", "not possible here" or "nobody is doing this",
+ask what would ever bring somebody into contact with the fact — and if the
+honest answer is nothing, check it by hand before writing it down.

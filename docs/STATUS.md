@@ -177,23 +177,34 @@ this process, gated logit-for-logit against that project's own numpy on 64
 real states; `HybridBot` hands it the keys and aim inside a 150px engagement
 window while the scripted layer keeps movement, routing and objectives.
 
-The one checkpoint that exists, at a 150px window, holds about **7% of ticks**
-and beats the all-scripted bot on death share on **21 of 21 maps** over 400
-matches a map (sign test p = 4.8e-7). Widening the window raises the combat
-gain while the objective collapses faster: at 450px on one map the policy wins
-4 rounds to 133.
+An earlier checkpoint, at a 150px window, held about **7% of ticks** and beat
+the all-scripted bot on death share on **21 of 21 maps** over 400 matches a map
+(sign test p = 4.8e-7). Widening the window raises the combat gain while the
+objective collapses faster: at 450px on one map the policy wins 4 rounds to 133.
 
 ⚠️ **That result is about one checkpoint, not about the method** — training
 variance across seeds is larger than the effect.
+⛔ **It is stamped `SIM_UUID 7ff5940d97aa7bed` and is HISTORY**: the 2026-09-02
+physics carry invalidated it, and this build is `698913b5ea547d60`.
 
-⛔ **That checkpoint is stamped `SIM_UUID 7ff5940d97aa7bed`; this build is
-`9e0d931e1106a1bf`.** The 2026-09-02 physics carry invalidated the only
-checkpoint that exists, so every phase-9 behavioural number above is history
-until a checkpoint is trained against the current head — nobody is making one.
-The suite does not wait for that: the checkpoint is a test **fixture** (real
-weights, a numpy oracle for the forward pass), and nothing here depends on
-`gg2-rl` doing anything. [`ENV.md`](ENV.md), "The checkpoint is a fixture";
-[`BOTS.md`](BOTS.md), "a policy is dated by the physics".
+✅ **Re-measured against the current build on 2026-09-06** by the training lane
+(`gg2-rl`, pinned at `c434229`, cleared to master over the whole dependency
+closure — `src/Gg2.Bots` included, because `SIM_UUID` cannot see it; see
+`TRAPS-BOTS.md`, "a stamp chain is not a clearance"). 21 maps × 200 matches an arm, four seeds, 150px window, 67,200
+matches: the `rest3` checkpoint improves death share by **−2.82 points**
+(2·SE 0.69, t −8.22) **and** round wins by **+3.02** (2·SE 2.14, t +2.83), all
+four seeds agreeing in sign on both. **That is the first time a policy here has
+improved combat and the objective at once.** A `control`-family checkpoint on
+the same instrument fails both. ⚠️ **The two families are not comparable to each
+other** — the roster follows the trained set, so they play different matches;
+each is only judged against its own control. `TRAPS-BOTS.md`, "the first policy
+to improve deaths and the objective at once".
+
+The suite never waited for any of this: the shipped `ppo_final.npz` is a test
+**fixture** (real structure, a numpy oracle for the forward pass, untrained
+weights), and nothing here depends on `gg2-rl` doing anything.
+[`ENV.md`](ENV.md), "The checkpoint is a fixture"; [`BOTS.md`](BOTS.md), "a
+policy is dated by the physics".
 
 ---
 

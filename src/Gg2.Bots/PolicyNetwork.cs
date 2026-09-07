@@ -142,6 +142,18 @@ public sealed class PolicyNetwork
     /// training lane owns, since it comes from their gate and not from anything
     /// this build can see.
     /// </para>
+    /// <para>
+    /// ⛔ <b>Do not try to price a class's inclusion with the match bench — it is
+    /// structurally unable to answer.</b> <c>AllowedClasses</c> and
+    /// <see cref="PolicyController.Drives"/> read the SAME set, so the roster on
+    /// the field and the classes driven cannot be varied independently: dropping
+    /// engineer to price it also removes engineers from the match, which is a
+    /// different match rather than a cleaner comparison. The same limit makes one
+    /// tier's contribution inside a mixed match, and a multi-tier union,
+    /// unmeasurable while the bench loads one checkpoint. Established by the
+    /// training lane on 2026-09-06 over 67,200 matches; see
+    /// <c>docs/TRAPS-BOTS.md</c>, "should drive" cannot be priced by this bench.
+    /// </para>
     /// </para>
     /// </remarks>
     public ReadOnlySpan<PlayerClass> TrainedClasses => _trainedClasses;
