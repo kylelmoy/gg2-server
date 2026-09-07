@@ -1,8 +1,9 @@
 # The web admin panel — `gg2-server --web`
 
 A browser console for a running server: who is on it, where they are, what the
-round is doing, six graphs of how the process is coping, and the operator
-controls — freeze, step, speed, bot count, map change, teleport, kick.
+round is doing, six graphs of how the process is coping, the operator controls —
+freeze, step, speed, bot count, map change, teleport, kick, ban — and a settings
+page that edits the config file, with a restart button that applies it.
 
 It is the **only** surface in this project that is meant to be reachable from
 the network, and everything below follows from that.
@@ -195,7 +196,8 @@ All JSON, all under the session cookie except the first four.
 | `POST /api/logout` | — | clears it |
 | `GET /api/state` | — | one fresh state object, run on the tick thread |
 | `GET /api/events` | — | server-sent events: `state` snapshots, `log` lines and `perf` samples |
-| `POST /api/command` | a control-port command | freeze, resume, step, speed, bots, map, teleport, kick, command |
+| `POST /api/command` | a control-port command | freeze, resume, step, speed, bots, map, teleport, kick, command, ban, unban, bans, config-set, restart |
+| `GET /api/config` | — | every setting, its value **in the config file**, and which are pinned or pending |
 | `GET /api/maps` | — | what this server could change to, plus its rotation |
 | `GET /api/map.png?name=` | — | a map's PNG, for the live map |
 | `GET /api/log?after=` | — | the scrollback, by sequence number |
@@ -327,6 +329,104 @@ in the JS — is exactly how a theme drifts.
 - ⚠️ **A player's name is whatever they typed into their own client.** It reaches
   the DOM through `textContent`, never `innerHTML`, and the CSP is the second
   net.
+
+## The settings page
+
+**Settings** in the top bar opens a modal over the dashboard: every key
+`docs/CONFIG.md` documents, grouped by section, filterable, with the help text
+beside each field. It renders `ServerSettings.All`, so **adding a setting needs
+no change here at all** — a new row appears on the page the day it is added to
+the table.
+
+⛔ **It edits the FILE, not the running server, and that is a decision rather
+than a gap.** Every subsystem reads its options exactly once, at
+`GameServer.Start`: the listener has bound its port, `BanList` has opened its
+file, the plugin list has been served to everyone connected, `WebAdminServer` has
+hashed its own password. Writing new values into a running server's options
+object would apply some of them and not others with **nothing telling an operator
+which**. So a save writes the file and says plainly that the restart is what
+applies it. The three things that *can* change on a live server — the map, the
+bot count, the speed — have had their own `ControlCommands` verbs since phase 8
+and are still their own controls.
+
+### The four things it had to be told
+
+- ⛔ **A secret is never sent to the browser.** Five settings are marked
+  `Secret` — the game password, the admin password, the certificate's — and each
+  is reported as `"set": true|false` with **no `value` field at all**. Two of
+  them are this panel's own credentials, so an endpoint that echoed them would
+  turn one stolen session cookie into the credential itself. The field is
+  write-only: it renders empty with a placeholder saying whether one is set, and
+  ⚠️ **an empty secret field is not submitted** — or opening the page and
+  pressing save would erase the admin password.
+- ⚠️ **A flag beats the file, so a pinned setting can be saved correctly and do
+  nothing.** `overridden` names those and the field is badged **pinned**. It
+  stays editable, because saving it is still the right thing to do before the
+  flag is removed. `ServerOptions.CommandLineOverrides` computes the list by
+  diffing what `Parse` built against what the file alone would produce — a diff
+  rather than a record of which flags were seen, because `--rotation` with no
+  `--map` silently empties `Map` and no per-flag record would notice.
+- ⚠️ **A saved setting the server has not picked up yet is badged `restart
+  pending`.** ⛔ **`pending` and `overridden` are mutually exclusive by
+  construction**: a flag makes the file and the running value differ *for ever*
+  and a restart will not reconcile them, so marking one "restart pending" would
+  leave a badge that no action clears next to the badge that actually explains
+  it.
+- ⛔ **The values shown are the FILE's, not the running server's.** Measured in a
+  browser, not reasoned about: with the running server's values, a successful
+  save re-read the page and showed the operator the **old** value back, with a
+  "saved" toast beside it — every save looked discarded. What the fields edit is
+  what the next start will use.
+
+⚠️ **Validated before anything is written**, so a rejected value leaves the file
+exactly as it was. That is what makes "Save & restart" safe to offer: a config
+that would stop the server coming back up never reaches the disk.
+
+⚠️ **This does file I/O on the tick thread**, as every `ControlCommands` verb
+runs there. It is a few kilobytes, once, when an operator presses a button —
+against a 33.3 ms budget and beside a map load that does far more. It must not
+become something that happens per tick.
+
+## The restart button
+
+**Restart** in the top bar, and **Save & restart** in the settings footer, both
+reach `ControlCommands`'s `restart` verb. `GameServer.RequestRestart` ends
+`Run()`; `Program.Main` disposes the server, re-parses the command line — which
+re-reads `--config` — and builds a new one **in the same process**.
+
+⛔ **A restart, not a reload.** The whole thing is torn down and rebuilt, which
+is the one operation whose result an operator can predict from the config file
+alone.
+
+- ⚠️ **Every client is disconnected and the round is lost.** The panel says so
+  before it asks.
+- **`Dispose` still runs**, so the lobby listing comes down, an in-flight
+  `--record` segment is closed into a readable trace, and every client gets a
+  clean socket shutdown rather than a hang until TCP gives up.
+- ⚠️ **The flag/file precedence survives it.** The *whole* command line is
+  re-applied over the file, so a flag still beats the file after a restart — a
+  restart that quietly became a different server would be worse than no restart.
+- ⚠️ **It resumes a frozen server first.** A frozen server is exactly the state
+  an operator reaches for the restart button in, and "works unless you froze it"
+  is a gap nobody finds until they need it.
+- ⛔ **A generated admin password is CARRIED across it.** `--web` with no
+  `--web-password` prints a generated one to the **console**, which an operator
+  who just pressed restart in a browser on another machine cannot see — so
+  without the carry the restart button would lock out whoever used it. It is
+  carried only within this process, only while no password is configured, and it
+  is logged when it happens. A new process generates a new one.
+- ⚠️ **The admin SESSION does not survive.** The new `AdminSessions` has a fresh
+  salt, so the browser returns to the login card and signs in again with the same
+  password. The event stream drops and `EventSource` reconnects on its own; the
+  panel shows "reconnecting" in the meantime.
+- ⛔ **A `TickFaultException` is NOT restarted here**, however much the loop
+  looks like it would. A tick loop that failed repeatedly is exactly the state a
+  fresh *process* clears and a fresh `GameServer` may not, and looping would turn
+  a supervisor's restart budget into an unsupervised spin. It still exits 3.
+- ⚠️ **If the re-parse fails, the process exits 2** and says so: the old server
+  has already stopped and there is nothing to fall back to. `config-set`
+  validates before it writes, so reaching that state means the file was changed
+  some other way between the save and the restart.
 
 ## The performance graphs
 
@@ -491,9 +591,10 @@ real Linux run is the test this section should be checked against.
   a game client could not would break CLAUDE.md's rule that the simulation never
   special-cases anybody. If chat is wanted, it goes through `PlayerCommandKind`
   and the socket switch first, and the panel gets it for free.
-- **No config editing.** Everything it changes is something `ControlCommands`
-  already exposes and a restart forgets. A panel that could rewrite the ini would
-  need to be trusted with the file the password is in.
+- **No LIVE config editing.** The settings page writes the config file and the
+  restart button applies it; nothing is pushed into a running server. See "The
+  settings page" above for why, and for what the panel is trusted with as a
+  result.
 - **No user accounts.** One password, one role. An operator console with a
   permission model is a different product.
 - **No metrics history.** The tick figure is an EMA for a human watching, and
@@ -534,5 +635,7 @@ and the per-connection serve second.
 |---|---|
 | `WebAdminTests` | over a real socket with a real HTTP client: every route refuses an unauthenticated request, the CSRF header is required, the map route takes a map name and nothing else, a command reaches the tick thread, every control-port verb is reachable, the page is served, the security headers are present, nobody watching means no snapshots but does mean a performance history, every sample row matches the declared fields, and an open stream gets both |
 | `AdminSessionTests` | the password, the tokens, both timeouts, the lockout and its ceiling, per-address isolation, the session cap, and the generated password's alphabet — all on an injected clock, so no test sleeps |
-| `CliCoverageTests` | every `--web-*` flag moves the option it names; a settings flag with no `--web` is refused; `--web` alone is not remote |
+| `CliCoverageTests` | every `--web-*` flag moves the option it names; a settings flag with no `--web` is refused; `--web` alone is not remote; a config file alone overrides nothing and a flag beside it overrides exactly what it names |
+| `ServerRestartTests` | over a real `GameServer`: a saved setting is in the file and a rebuilt server reads it, `restart` ends `Run` and is not a shutdown, a restart works on a frozen server, saving with no `--config` is refused by name, an invalid value is refused and the file is untouched, saving does not promote the command line's overrides into the file, `config` reports the file and flags what is waiting for a restart, a pinned setting is never also pending, no secret's value is in the reply, a secret can still be written, and a generated admin password is carried while a configured one is not |
+| `ConfigFileCoverageTests` | `docs/CONFIG.md`'s gates: every setting is reachable from a file, every row moves the option it names, every setting survives a write and a re-read, and the vacuity control beside it |
 </content>

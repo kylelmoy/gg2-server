@@ -316,8 +316,77 @@ public sealed partial class GameServer
     /// </remarks>
     internal long WebSnapshotCount => _web?.SnapshotCount ?? 0;
 
+    /// <summary>
+    /// The admin password this server GENERATED, or null when one was configured
+    /// or no panel is hosted.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ⚠️ <b>Exists for exactly one caller: the host's restart loop.</b> A
+    /// generated password is printed to the console at startup and nowhere else —
+    /// there is deliberately no endpoint that hands it back — so an operator who
+    /// restarts from the panel in a browser on another machine would be locked out
+    /// by the new one. <c>Program.Main</c> carries this into the next start.
+    /// </para>
+    /// <para>
+    /// ⛔ <b>Null when the password was CONFIGURED</b>, so nothing can use this as
+    /// a way to read an operator's own password back out of a running server.
+    /// </para>
+    /// </remarks>
+    public string? GeneratedWebPassword => _web is { Generated: true } web ? web.Password : null;
+
     /// <summary>Whether the simulation is frozen.</summary>
     public bool IsFrozen => _frozen;
+
+    /// <summary>
+    /// Whether an operator has asked for a restart, so <see cref="Run"/> should
+    /// return and the host should build a fresh server.
+    /// </summary>
+    /// <remarks>
+    /// <b>Read by <c>Program.Main</c> after <see cref="Run"/> returns</b>, which is
+    /// the one caller that can act on it. Every other caller drives ticks itself
+    /// and never enters the loop.
+    /// </remarks>
+    public bool RestartRequested => _restartRequested;
+
+    /// <summary>
+    /// Ends <see cref="Run"/> and asks the host to start again from a re-read
+    /// configuration.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ⛔ <b>A RESTART, not a reload, and the difference is the point.</b> Every
+    /// subsystem reads its options exactly once, at <see cref="Start"/>: the
+    /// listener has bound its port, <c>BanList</c> has opened its file, the plugin
+    /// list has been served to everyone connected, <c>WebAdminServer</c> has
+    /// hashed its password. Pushing new options into a running server would apply
+    /// some of them and not others, with nothing telling an operator which — so
+    /// this tears the whole thing down and builds it again, which is the one
+    /// operation whose result an operator can predict from the config file alone.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Every client is disconnected and the round is lost.</b> That is what
+    /// a restart is; the panel says so before it asks. <see cref="Dispose"/> still
+    /// runs, so the lobby listing comes down, an in-flight recording is closed
+    /// into a readable trace, and every client gets a clean socket shutdown rather
+    /// than a hang until TCP gives up.
+    /// </para>
+    /// <para>
+    /// <b>It is not a kill.</b> The process survives, which is what makes this
+    /// usable on a deployment with no supervisor — and on one WITH a supervisor it
+    /// avoids the restart budget that would otherwise be spent on a deliberate
+    /// action. <c>docs/DEPLOY.md</c>.
+    /// </para>
+    /// </remarks>
+    public void RequestRestart()
+    {
+        _restartRequested = true;
+
+        // Resumed first, or a server frozen from the panel would sit in the tick
+        // loop's freeze branch and never reach the loop condition that reads the
+        // flag. A restart is not something to have to un-freeze for.
+        Resume();
+    }
 
     /// <summary>Stops advancing the simulation. The network keeps running.</summary>
     public void Freeze()

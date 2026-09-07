@@ -77,7 +77,7 @@ want:
 | `--map <name>` | `ctf_truefort` | Built-in map to serve; the rotation takes over from there. |
 | `--rotation <list\|path>` | | Map rotation: comma-separated names, or a rotation file. Without `--map`, the server opens on its first entry. |
 | `--shuffle <mode>` | `none` | `arena-last` shuffles but will not open on an arena map; `any` takes whatever comes out. |
-| `--config <path>` | | Read a reference-format `gg2.ini`. Applied before every flag, so a flag always wins. Never written back. |
+| `--config <path>` | | Read a reference-format `gg2.ini`. **Every** server setting can be set from it — `docs/CONFIG.md` has the key table. Applied before every flag, so a flag always wins. Only written back when the admin panel saves. |
 | `--name <text>` | | Server name shown to clients. |
 | `--welcome <text>` | | Message sent to each joiner. |
 | `--plugins <list>` | | Server-sent plugins clients are asked to load, comma-separated (e.g. `chat_v2_pr`). An entry may be pinned as `name@md5`. |
@@ -143,7 +143,7 @@ every one of them at once.
 | `--speed <n\|max>` | Run at n times real time, or unpaced. Pacing only: every duration in the game is counted in ticks, so the simulation is identical at any speed. |
 | `--control-port <n>` | A line-of-JSON control surface on 127.0.0.1 only — read state, freeze, step N ticks, change map, teleport, set the bot count. It executes commands against a live game. |
 | `--record <dir>` | Write replayable `.trace` recordings of the broadcast stream. Contains every player's keys and aim on every tick, so it is training data as well as a parity fixture. |
-| `--web <n>` | An admin panel in a browser: the roster, a live map, the round, performance graphs (tick time, CPU, memory, late ticks, bandwidth, load), the log, and the same operator controls the control port has, plus `kick`. The only surface here meant to be reachable from the network. It binds `127.0.0.1` unless `--web-bind` says otherwise, the password cannot be turned off (one is generated and printed if you give none), and a non-loopback bind without `--web-tls` is warned about at every startup. |
+| `--web <n>` | An admin panel in a browser: the roster, a live map, the round, performance graphs (tick time, CPU, memory, late ticks, bandwidth, load), the log, the same operator controls the control port has plus `kick`, and a settings page that edits every key of the `--config` file with a restart button that applies it. The only surface here meant to be reachable from the network. It binds `127.0.0.1` unless `--web-bind` says otherwise, the password cannot be turned off (one is generated and printed if you give none), and a non-loopback bind without `--web-tls` is warned about at every startup. |
 | `eval` | A subcommand, not a switch: plays bot matches across maps and reports the results. `gg2-server eval --help`. |
 
 ## Other executables

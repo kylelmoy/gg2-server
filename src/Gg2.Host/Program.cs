@@ -163,35 +163,6 @@ internal static class Program
 
         using var ownedFileLog = fileLog;
 
-        // INSIDE the try: ServerOptions.Validate runs in the GameServer
-        // constructor, so an invalid option would otherwise reach an unhandled
-        // exception past the usage text. Parse also validates; this is the
-        // second net, for a caller that builds options some other way.
-        using var server = new GameServer(options, log);
-
-        try
-        {
-            server.Start();
-        }
-        catch (Exception e) when (e is IOException
-                                      or FileNotFoundException
-                                      or ArgumentException
-                                      or InvalidOperationException
-                                      or System.Net.Sockets.SocketException)
-        {
-            // InvalidOperationException is here for the plugin loader, whose
-            // failures are all operator errors — a name the site does not have, a
-            // hash it will not serve, a list too long for the greeting. Its message
-            // is the useful half: it names the URL and says plugin names are
-            // lowercase.
-
-            // SocketException is NOT an IOException, so it needs its own catch —
-            // there are two listeners that can collide (the game port and --web),
-            // and a stack trace is the least useful way to be told about either.
-            Console.Error.WriteLine($"unable to start: {e.Message}");
-            return 1;
-        }
-
         using var stopping = new CancellationTokenSource();
         Console.CancelKeyPress += (_, e) =>
         {
@@ -208,30 +179,134 @@ internal static class Program
         // .part file that never becomes a readable trace, and no client gets a
         // clean socket shutdown. Dispose does all three, and only the graceful
         // path reaches it. docs/DEPLOY.md.
+        //
+        // ⚠️ Registered ONCE, outside the restart loop below. Re-registering per
+        // restart would leave one live handler per generation on a process that
+        // is meant to run for weeks, and CancelKeyPress has no way to remove the
+        // old ones.
         using var sigterm = ShutdownSignals.Handle(PosixSignal.SIGTERM, stopping, log);
 
-        try
-        {
-            server.Run(stopping.Token);
-        }
-        catch (TickFaultException e)
-        {
-            // ⚠️ NON-ZERO, and that is the whole point of catching it here. The
-            // server has already logged every fault and its own decision to
-            // stop; what this adds is the exit code, which is the only part a
-            // supervisor reads. `Restart=on-failure` in the unit file
-            // (docs/DEPLOY.md) brings back a clean process — which is the one
-            // thing that reliably clears a corrupted in-memory state — and
-            // leaves an ordinary shutdown alone, because that exits 0.
-            //
-            // Caught rather than left to the runtime so the operator gets one
-            // sentence instead of an unhandled-exception dump, and so Dispose
-            // runs: without it the lobby keeps advertising a server that is not
-            // there, and an in-flight --record segment stays a .part file.
-            log.Error("stopped: the tick loop failed repeatedly", e.InnerException);
-            return 3;
-        }
+        // ⚠️ The GENERATED admin password, carried across a restart.
+        // WebAdminServer generates one when none is configured and prints it at
+        // startup — to the console, which an operator who just pressed "restart"
+        // in a browser on another machine cannot see. Without this, a restart
+        // from the panel locks that operator out of the panel, which is the one
+        // failure a restart button must not have. It is carried only within this
+        // process, only while no password is configured, and it is logged when it
+        // happens so nobody has to infer it.
+        string? carriedWebPassword = null;
 
-        return 0;
+        while (true)
+        {
+            if (carriedWebPassword is not null
+                && options.Web.Enabled
+                && options.Web.Password.Length == 0)
+            {
+                options.Web = options.Web with { Password = carriedWebPassword };
+
+                log.Info(
+                    "web admin: keeping the generated password across this restart, so "
+                    + "whoever asked for it is not locked out. Set [Web] Password or "
+                    + "--web-password to choose one instead.");
+            }
+
+            // INSIDE the try: ServerOptions.Validate runs in the GameServer
+            // constructor, so an invalid option would otherwise reach an unhandled
+            // exception past the usage text. Parse also validates; this is the
+            // second net, for a caller that builds options some other way.
+            var server = new GameServer(options, log);
+
+            try
+            {
+                server.Start();
+            }
+            catch (Exception e) when (e is IOException
+                                          or FileNotFoundException
+                                          or ArgumentException
+                                          or InvalidOperationException
+                                          or System.Net.Sockets.SocketException)
+            {
+                // InvalidOperationException is here for the plugin loader, whose
+                // failures are all operator errors — a name the site does not have, a
+                // hash it will not serve, a list too long for the greeting. Its message
+                // is the useful half: it names the URL and says plugin names are
+                // lowercase.
+
+                // SocketException is NOT an IOException, so it needs its own catch —
+                // there are two listeners that can collide (the game port and --web),
+                // and a stack trace is the least useful way to be told about either.
+                Console.Error.WriteLine($"unable to start: {e.Message}");
+                server.Dispose();
+                return 1;
+            }
+
+            carriedWebPassword = server.GeneratedWebPassword;
+
+            try
+            {
+                server.Run(stopping.Token);
+            }
+            catch (TickFaultException e)
+            {
+                // ⚠️ NON-ZERO, and that is the whole point of catching it here. The
+                // server has already logged every fault and its own decision to
+                // stop; what this adds is the exit code, which is the only part a
+                // supervisor reads. `Restart=on-failure` in the unit file
+                // (docs/DEPLOY.md) brings back a clean process — which is the one
+                // thing that reliably clears a corrupted in-memory state — and
+                // leaves an ordinary shutdown alone, because that exits 0.
+                //
+                // ⛔ NOT a restart, however much this loop looks like one. A tick
+                // loop that failed repeatedly is exactly the state a fresh PROCESS
+                // clears and a fresh GameServer may not, and looping here would
+                // turn a supervisor's restart budget into an unsupervised spin.
+                //
+                // Caught rather than left to the runtime so the operator gets one
+                // sentence instead of an unhandled-exception dump, and so Dispose
+                // runs: without it the lobby keeps advertising a server that is not
+                // there, and an in-flight --record segment stays a .part file.
+                log.Error("stopped: the tick loop failed repeatedly", e.InnerException);
+                server.Dispose();
+                return 3;
+            }
+
+            var restarting = server.RestartRequested;
+
+            // ⛔ Disposed BEFORE the next Start, which is why this is not a
+            // `using`: a `using` inside the loop releases at the closing brace,
+            // after the next iteration has already tried to bind the same game
+            // port and the same --web port. It is also what takes the lobby
+            // listing down and closes an in-flight recording into a readable
+            // trace, both of which a restart owes the operator as much as a
+            // shutdown does.
+            server.Dispose();
+
+            if (!restarting)
+                return 0;
+
+            log.Info("restarting: re-reading the configuration and rebuilding the server");
+
+            try
+            {
+                // ⚠️ The whole command line again, not just the config file: a flag
+                // beats the file before a restart and must keep beating it after
+                // one, or a restart would quietly become a different server.
+                // ServerOptions.CommandLineOverrides is how the panel says which.
+                options = CommandLine.Parse(args);
+            }
+            catch (Exception e) when (e is ArgumentException or FormatException or IOException)
+            {
+                // ⛔ The one place a bad configuration is FATAL rather than a usage
+                // error: the server this process was running has already stopped,
+                // so there is nothing to fall back to. Naming the key is all that
+                // is left to do — and ControlCommands validates before it writes,
+                // so reaching here means the file was changed some other way
+                // between the save and the restart.
+                Console.Error.WriteLine(
+                    $"restart failed and the old server has already stopped: {e.Message}");
+
+                return 2;
+            }
+        }
     }
 }

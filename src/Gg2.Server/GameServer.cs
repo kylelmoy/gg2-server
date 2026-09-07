@@ -108,6 +108,19 @@ public sealed partial class GameServer : IDisposable, IPluginHost
     /// </summary>
     private bool _frozen;
 
+    /// <summary>
+    /// Set by <see cref="RequestRestart"/>, read by <see cref="Run"/>'s loop
+    /// condition.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b><c>volatile</c>, because the two are not always the same thread.</b>
+    /// A control-port restart is serviced inside <c>Tick</c> and so is on the tick
+    /// thread; the web panel's is too, through its queue. But nothing structurally
+    /// enforces that for a future caller, and a torn read here is a restart button
+    /// that works most of the time.
+    /// </remarks>
+    private volatile bool _restartRequested;
+
     /// <summary>Simulation steps still owed to a <c>step</c> while frozen.</summary>
     private int _stepsOwed;
     private readonly NetWriter _broadcast = new(8192);

@@ -140,7 +140,12 @@ public sealed partial class GameServer
                 step: MicroBudgetController.DefaultStepUnits,
                 windowTicks: LateTickMonitor.WindowTicks);
 
-        while (!cancellation.IsCancellationRequested)
+        // ⚠️ The restart flag is checked HERE, beside the cancellation token,
+        // rather than by cancelling that token: the token is the HOST's — a
+        // Ctrl-C or a SIGTERM — and cancelling it would make an operator's
+        // restart indistinguishable from a shutdown, which is exactly the
+        // distinction Program.Main has to make when this returns.
+        while (!cancellation.IsCancellationRequested && !_restartRequested)
         {
             if (stats is not null)
             {

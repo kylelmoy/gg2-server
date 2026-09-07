@@ -64,6 +64,8 @@ function describe(body) {
     case 'map': return `Changing map to ${body.name}`;
     case 'kick': return 'Kicked';
     case 'teleport': return 'Teleported';
+    case 'config-set': return 'Settings saved';
+    case 'restart': return 'Restarting';
     default: return 'Done';
   }
 }
@@ -1306,6 +1308,308 @@ function duration(seconds) {
   return `${Math.floor(s / 86400)}d ${Math.floor((s % 86400) / 3600)}h`;
 }
 
+/* ---------- settings -------------------------------------------------------- */
+
+/*
+ * The config-file editor.
+ *
+ * Three things this had to be told, none of them obvious from the endpoint:
+ *
+ *   1. ⚠️ It edits the FILE, not the running server. Every subsystem reads its
+ *      options once, at startup — the listener has bound its port, the ban list
+ *      has opened its file, this panel has hashed its own password — so there is
+ *      no honest way to apply half of them live. The footer says so, and the
+ *      "Save & restart" button is the one that makes a change real.
+ *
+ *   2. ⚠️ A flag beats the file, so a setting pinned on the command line can be
+ *      saved correctly and still do nothing. The server sends `overridden` and
+ *      those rows are marked, because "I changed it and nothing happened" with
+ *      no explanation is the worst outcome this page can produce.
+ *
+ *   3. ⛔ A secret is never sent back. Its field is empty with a placeholder
+ *      saying whether one is set, and an empty secret field is NOT submitted —
+ *      or opening the page and pressing save would erase the admin password.
+ */
+
+let settings = [];
+let overridden = new Set();
+let settingsWritable = false;
+
+/** The edited value of each field, keyed by setting id, or absent if untouched. */
+function edits() {
+  const changed = {};
+
+  for (const setting of settings) {
+    const field = document.getElementById(`set:${setting.id}`);
+    if (!field) continue;
+
+    const value = setting.kind === 'boolean' ? (field.checked ? '1' : '0') : field.value;
+
+    // ⛔ An empty secret means "leave it alone", never "set it to empty". The
+    // server does not send a secret back, so the field starts empty on every
+    // open — and treating that as a value would clear the admin password the
+    // first time anybody saved anything at all.
+    if (setting.secret && value === '') continue;
+
+    if (value !== (setting.secret ? '' : setting.value)) changed[setting.id] = value;
+  }
+
+  return changed;
+}
+
+function settingsDirty() {
+  const count = Object.keys(edits()).length;
+  const blocked = !settingsWritable;
+  const waiting = settings.filter((s) => s.pending).length;
+
+  $('settings-save').disabled = blocked || count === 0;
+  $('settings-revert').disabled = count === 0;
+
+  // ⚠️ "Save & restart" stays live with nothing edited when a saved change is
+  // still waiting for one. The whole point of that state is that the restart is
+  // the missing step, and disabling the button that performs it would leave an
+  // operator staring at a warning with no way to act on it.
+  $('settings-save-restart').disabled = blocked || (count === 0 && waiting === 0);
+
+  const parts = [];
+
+  if (count > 0) parts.push(`${count} change${count === 1 ? '' : 's'} not saved.`);
+
+  if (waiting > 0) {
+    parts.push(
+      `${waiting} saved setting${waiting === 1 ? '' : 's'} `
+      + `${waiting === 1 ? 'is' : 'are'} waiting for a restart.`);
+  }
+
+  if (parts.length === 0) parts.push('The file and the running server agree.');
+  else parts.push('Settings take effect when the server restarts.');
+
+  $('settings-status').textContent = parts.join(' ');
+}
+
+async function openSettings() {
+  $('settings').showModal();
+  $('settings-body').innerHTML = '<p class="sheet-empty">Loading…</p>';
+
+  let config;
+
+  try {
+    const reply = await fetch('/api/config');
+    if (reply.status === 401) { $('settings').close(); showLogin(); return; }
+    config = await reply.json();
+  } catch {
+    $('settings-body').innerHTML = '<p class="sheet-empty">The server did not answer.</p>';
+    return;
+  }
+
+  if (!config.ok) {
+    $('settings-body').innerHTML = '';
+    $('settings-body').appendChild(Object.assign(
+      document.createElement('p'), { className: 'sheet-empty', textContent: config.error }));
+    return;
+  }
+
+  settings = config.settings;
+  overridden = new Set(config.overridden || []);
+  settingsWritable = config.writable;
+
+  $('settings-file').textContent = config.writable
+    ? config.file
+    : 'no config file — started without --config';
+
+  const readonly = $('settings-readonly');
+  readonly.hidden = config.writable;
+
+  if (!config.writable) {
+    readonly.textContent =
+      'This server was started without --config, so there is nowhere to save to. '
+      + 'Restart it with --config <path> — the file does not have to exist yet — and '
+      + 'these fields become editable.';
+  }
+
+  renderSettings();
+}
+
+function renderSettings() {
+  const filter = $('settings-filter').value.trim().toLowerCase();
+  const body = $('settings-body');
+  body.innerHTML = '';
+
+  let section = null;
+  let list = null;
+  let shown = 0;
+
+  for (const setting of settings) {
+    // Matched against the id and the help text, so "password" finds the three
+    // that are one and "keepalive" finds the four that mention it.
+    if (filter && !`${setting.id} ${setting.help}`.toLowerCase().includes(filter)) continue;
+
+    if (setting.section !== section) {
+      section = setting.section;
+
+      const group = document.createElement('section');
+      group.className = 'sheet-group';
+
+      const title = document.createElement('h4');
+      title.textContent = section;
+      group.appendChild(title);
+
+      list = document.createElement('div');
+      list.className = 'sheet-fields';
+      group.appendChild(list);
+      body.appendChild(group);
+    }
+
+    list.appendChild(field(setting));
+    shown++;
+  }
+
+  if (shown === 0) {
+    body.appendChild(Object.assign(
+      document.createElement('p'),
+      { className: 'sheet-empty', textContent: 'Nothing matches that filter.' }));
+  }
+
+  settingsDirty();
+}
+
+function field(setting) {
+  const wrap = document.createElement('div');
+  wrap.className = 'sheet-field';
+
+  const label = document.createElement('label');
+  label.htmlFor = `set:${setting.id}`;
+  label.textContent = setting.key;
+  wrap.appendChild(label);
+
+  const input = control(setting);
+  input.id = `set:${setting.id}`;
+  input.disabled = !settingsWritable;
+  input.addEventListener('input', settingsDirty);
+  input.addEventListener('change', settingsDirty);
+  wrap.appendChild(input);
+
+  if (setting.help) {
+    wrap.appendChild(Object.assign(
+      document.createElement('p'), { className: 'hint', textContent: setting.help }));
+  }
+
+  // ⚠️ The warning that stops this page lying. A flag beats the config file, so
+  // a value saved here will be overwritten at the next start by the command
+  // line — the field stays editable, because saving it is still the right thing
+  // to do before removing the flag, but the page says what will happen.
+  if (overridden.has(setting.id)) {
+    wrap.classList.add('is-overridden');
+    wrap.appendChild(Object.assign(document.createElement('p'), {
+      className: 'hint warn',
+      textContent: 'Pinned on the command line: this server will keep using the flag’s '
+        + 'value after a restart, whatever is saved here.',
+    }));
+  }
+
+  // Saved into the file and not yet applied. Marked per field rather than only
+  // counted in the footer, because "which one have I not restarted for" is the
+  // question an operator actually has when they come back to this page.
+  if (setting.pending) wrap.classList.add('is-pending');
+
+  return wrap;
+}
+
+function control(setting) {
+  if (setting.kind === 'boolean') {
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.className = 'sheet-check';
+    box.checked = setting.value === '1';
+    return box;
+  }
+
+  if (setting.kind === 'choice') {
+    const select = document.createElement('select');
+
+    for (const choice of setting.choices || []) {
+      const option = document.createElement('option');
+      option.value = choice;
+      option.textContent = choice;
+      option.selected = choice === setting.value;
+      select.appendChild(option);
+    }
+
+    return select;
+  }
+
+  const input = document.createElement('input');
+
+  if (setting.secret) {
+    input.type = 'password';
+    input.autocomplete = 'new-password';
+    input.value = '';
+
+    // ⛔ Whether one is SET, never what it is. The server does not send a
+    // secret's value at all, so there is nothing here to leak into a screenshot,
+    // a browser's password manager or a cached page.
+    input.placeholder = setting.set ? 'set — type to replace' : 'not set';
+  } else {
+    input.type = setting.kind === 'integer' ? 'number' : 'text';
+    input.value = setting.value;
+    input.spellcheck = false;
+
+    if (setting.kind === 'list') input.placeholder = 'comma,separated';
+  }
+
+  return input;
+}
+
+/**
+ * Saves the edited settings. Returns true when the file was written.
+ *
+ * ⚠️ The server VALIDATES before it writes, so a rejected value leaves the file
+ * exactly as it was — which is what makes "Save & restart" safe to offer at all:
+ * a config that would stop the server coming back up never reaches the disk.
+ */
+async function saveSettings() {
+  const changed = edits();
+  if (Object.keys(changed).length === 0) return true;
+
+  const reply = await send({ cmd: 'config-set', settings: changed }, true);
+  if (!reply.ok) return false;
+
+  toast(`Saved ${reply.saved} setting${reply.saved === 1 ? '' : 's'}`, 'good');
+
+  // Named individually rather than counted: the operator has to know WHICH of
+  // the things they just saved the command line will keep overriding.
+  if (reply.shadowed && reply.shadowed.length > 0) {
+    toast(`Still pinned on the command line: ${reply.shadowed.join(', ')}`, 'bad');
+  }
+
+  await openSettings();
+  return true;
+}
+
+/**
+ * The restart itself, behind a confirmation that says what it costs.
+ *
+ * ⚠️ The stream will drop — the panel goes to "reconnecting" and comes back on
+ * its own once the new server is listening. EventSource's own retry does the
+ * work; connect()'s backoff covers the case where it does not come back.
+ */
+async function restartServer(extra) {
+  if (!await ask(
+    'Restart the server?',
+    `${extra}Every player is disconnected and the round in progress is lost. The `
+    + 'process stays up and comes back with the configuration file as it is now.')) {
+    return;
+  }
+
+  await send({ cmd: 'restart' }, true);
+  toast('Restarting — the panel reconnects on its own', 'good');
+
+  // 'lost' rather than a new state: the stream is about to drop and this is the
+  // same reconnecting badge every other drop shows. Inventing a fourth state
+  // would mean a fourth thing for live() to know about for one second of it.
+  live('lost');
+}
+
 /* ---------- wiring ---------------------------------------------------------- */
 
 function showLogin() {
@@ -1370,6 +1674,27 @@ $('login-form').addEventListener('submit', async (event) => {
     button.disabled = false;
   }
 });
+
+$('settings-open').addEventListener('click', openSettings);
+$('settings-close').addEventListener('click', () => $('settings').close());
+$('settings-filter').addEventListener('input', renderSettings);
+
+// Revert is a re-fetch rather than a form reset, so it also picks up anything
+// another operator changed while this dialog was open.
+$('settings-revert').addEventListener('click', openSettings);
+
+$('settings-save').addEventListener('click', saveSettings);
+
+$('settings-save-restart').addEventListener('click', async () => {
+  // ⛔ Saved FIRST, and only restarted if the save succeeded. A restart on a
+  // refused save would throw the change away and end the round for nothing.
+  if (!await saveSettings()) return;
+
+  $('settings').close();
+  await restartServer('The settings you just saved will be applied. ');
+});
+
+$('restart').addEventListener('click', () => restartServer(''));
 
 $('logout').addEventListener('click', async () => {
   await fetch('/api/logout', { method: 'POST', headers: { 'X-CSRF-Token': csrf } });
@@ -1499,7 +1824,11 @@ document.addEventListener('keydown', (event) => {
   if ($('app').hidden) return;
 
   const tag = document.activeElement && document.activeElement.tagName;
-  if (tag === 'INPUT' || tag === 'TEXTAREA' || $('confirm').open) return;
+  // ⚠️ The settings sheet is in the guard as well as the confirm dialog. It is
+  // full of fields, and a space pressed with focus on one of its buttons or
+  // selects would otherwise freeze the server from a page nobody thinks of as a
+  // simulation control.
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || $('confirm').open || $('settings').open) return;
 
   if (event.code === 'Space') {
     event.preventDefault();

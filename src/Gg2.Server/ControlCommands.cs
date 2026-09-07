@@ -75,7 +75,17 @@ public static class ControlCommands
         {
             return Execute(server, cmd, request);
         }
-        catch (Exception e) when (e is ArgumentException or FormatException or InvalidOperationException)
+        // ⚠️ IOException and UnauthorizedAccessException are here for "config-set",
+        // which is the only verb that touches the disk. A config file on a
+        // read-only mount, or one another process is holding, is an operator
+        // problem with a clear message — and this runs on the TICK THREAD, where
+        // an escaping exception is a tick fault charged against
+        // TickFaultBudget rather than a reply anybody reads.
+        catch (Exception e) when (e is ArgumentException
+                                      or FormatException
+                                      or InvalidOperationException
+                                      or IOException
+                                      or UnauthorizedAccessException)
         {
             return Error(e.Message);
         }
@@ -127,6 +137,15 @@ public static class ControlCommands
         "unban" => Unban(server, request),
 
         "bans" => Bans(server),
+
+        // The configuration verbs. Like "kick" they have no client equivalent,
+        // and like every verb here they live in ONE place so the control port and
+        // the panel cannot drift into slightly different servers.
+        "config" => Config(server),
+
+        "config-set" => ConfigSet(server, request),
+
+        "restart" => Do(server.RequestRestart),
 
         _ => Error($"unknown cmd \"{cmd}\""),
     };
@@ -234,6 +253,258 @@ public static class ControlCommands
                 json.Append("null");
 
             json.Append(",\"reason\":\"").Append(Escape(entry.Reason)).Append("\"}");
+        }
+
+        json.Append(']');
+        return Ok(json.ToString());
+    }
+
+    /// <summary>
+    /// <c>config</c>: every setting, its current value, and where it is written.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ⛔ <b>A secret's VALUE is never in this reply.</b> Five settings are marked
+    /// <see cref="ServerSetting.Secret"/> — the game password, the admin
+    /// password, the certificate's — and each is reported as <c>"set": true</c> or
+    /// <c>false</c> with no <c>value</c> at all. The panel is the one surface here
+    /// meant to be reachable from the network, so an endpoint that echoed the
+    /// admin password would turn a stolen session cookie into the credential
+    /// itself. <c>WebAdminTests.TheConfigEndpointNeverEchoesASecret</c>.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b><c>overridden</c> is the field that stops the settings page from
+    /// lying.</b> A flag beats the config file, so a setting pinned on the command
+    /// line can be edited, saved and restarted with nothing changing — see
+    /// <see cref="ServerOptions.CommandLineOverrides"/>.
+    /// </para>
+    /// </remarks>
+    private static string Config(GameServer server)
+    {
+        var running = server.Options;
+        var writable = running.ConfigFile.Length != 0;
+
+        // ⚠️ THE VALUES ARE THE FILE'S, NOT THE RUNNING SERVER'S, and getting this
+        // backwards is a settings page that appears to throw every save away:
+        // nothing is applied live, so a page that re-read the running options
+        // after a successful save showed the operator the OLD value back — with a
+        // "saved" toast beside it. Measured in a browser, not reasoned about.
+        // What the fields edit is what the next start will use.
+        //
+        // With no config file there is nothing to read, and the page is read-only
+        // anyway, so the running options are shown instead of a screen of defaults
+        // that describe no server at all.
+        var shown = running;
+
+        if (writable && File.Exists(running.ConfigFile))
+        {
+            try
+            {
+                var fromFile = ServerOptions.CreateDefault();
+                ServerConfigFile.Apply(fromFile, running.ConfigFile);
+                shown = fromFile;
+            }
+            catch (Exception e) when (e is IOException or FormatException)
+            {
+                // A file that has been hand-edited into something unreadable since
+                // startup. Falling back to the running options is better than
+                // refusing to open the page, and the operator is about to see the
+                // same message from any save they attempt.
+                shown = running;
+            }
+        }
+
+        var json = new StringBuilder(12288);
+
+        json.Append("{\"ok\":true");
+        json.Append(",\"file\":\"").Append(Escape(running.ConfigFile)).Append('"');
+
+        // Whether a save is possible at all. A server started with no --config has
+        // nowhere to write, and the page has to say that BEFORE somebody types
+        // into thirty fields — not after they press save.
+        json.Append(",\"writable\":").Append(writable ? "true" : "false");
+
+        json.Append(",\"overridden\":[");
+
+        for (var i = 0; i < running.CommandLineOverrides.Count; i++)
+        {
+            if (i > 0)
+                json.Append(',');
+
+            json.Append('"').Append(Escape(running.CommandLineOverrides[i])).Append('"');
+        }
+
+        json.Append(']');
+        json.Append(",\"settings\":[");
+
+        var first = true;
+
+        foreach (var setting in ServerSettings.All)
+        {
+            if (!first)
+                json.Append(',');
+
+            first = false;
+
+            json.Append("{\"id\":\"").Append(Escape(setting.Id)).Append('"');
+            json.Append(",\"section\":\"").Append(Escape(setting.Section)).Append('"');
+            json.Append(",\"key\":\"").Append(Escape(setting.Key)).Append('"');
+            json.Append(",\"kind\":\"").Append(setting.Kind.ToString().ToLowerInvariant()).Append('"');
+            json.Append(",\"help\":\"").Append(Escape(setting.Help)).Append('"');
+            json.Append(",\"secret\":").Append(setting.Secret ? "true" : "false");
+
+            if (setting.Secret)
+            {
+                json.Append(",\"set\":")
+                    .Append(setting.Get(shown).Length != 0 ? "true" : "false");
+            }
+            else
+            {
+                json.Append(",\"value\":\"").Append(Escape(setting.Get(shown))).Append('"');
+            }
+
+            // ⚠️ Whether the FILE and the RUNNING server disagree — which is what
+            // "a restart is pending" means, and the only honest way to say it.
+            // Reported for a secret too: that two passwords differ is not either
+            // password, and an operator who saved one needs to know it has not
+            // taken effect yet.
+            //
+            // ⛔ EXCEPT where a flag pinned it, and leaving that out was a false
+            // alarm that could never be cleared: a --web-password server's file
+            // and running value differ for ever, a restart will not reconcile
+            // them, and the page would have shown a permanent "restart pending"
+            // on a setting whose real problem is the flag. That is what
+            // "overridden" above says, and saying both would say neither.
+            if (setting.Get(shown) != setting.Get(running)
+                && !running.CommandLineOverrides.Contains(setting.Id, StringComparer.Ordinal))
+            {
+                json.Append(",\"pending\":true");
+            }
+
+            if (setting.Choices.Count != 0)
+            {
+                json.Append(",\"choices\":[");
+
+                for (var i = 0; i < setting.Choices.Count; i++)
+                {
+                    if (i > 0)
+                        json.Append(',');
+
+                    json.Append('"').Append(Escape(setting.Choices[i])).Append('"');
+                }
+
+                json.Append(']');
+            }
+
+            json.Append('}');
+        }
+
+        json.Append("]}");
+        return json.ToString();
+    }
+
+    /// <summary>
+    /// <c>config-set</c>: applies settings to the config FILE, not to the running
+    /// server.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ⛔ <b>It changes the file and nothing else, and that is the design rather
+    /// than a limitation.</b> Every subsystem reads its options once, at
+    /// <see cref="GameServer.Start"/> — the listener has bound its port, the ban
+    /// list has opened its file, the panel has hashed its password — so writing
+    /// new values into a running server's options object would apply some of them
+    /// and not others with nothing telling an operator which. The reply says
+    /// <c>"restartRequired": true</c> and <c>restart</c> is the verb that applies
+    /// it. The three things that CAN change on a live server — the map, the bot
+    /// count, the speed — have had their own verbs since phase 8.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>The candidate is built from the FILE, not from the running options.</b>
+    /// The running options carry command-line overrides, and writing those back
+    /// would silently promote every flag on the command line into the config file
+    /// the first time anybody saved anything.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Validated before anything is written.</b> A rejected setting leaves
+    /// the file exactly as it was, so a typo cannot produce a config that stops
+    /// the server coming back up — which, for a restart button, is the failure
+    /// that matters.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>This does file I/O on the tick thread</b>, as every verb here runs
+    /// there. It is a few kilobytes, once, when an operator presses a button —
+    /// against a 33.3 ms budget and beside a map load that does far more. It must
+    /// not become something that happens per tick.
+    /// </para>
+    /// </remarks>
+    private static string ConfigSet(GameServer server, JsonElement request)
+    {
+        var path = server.Options.ConfigFile;
+
+        if (path.Length == 0)
+        {
+            return Error(
+                "this server was started without --config, so there is no file to save to. "
+                + "Restart it with --config <path> — the file does not have to exist yet.");
+        }
+
+        if (!request.TryGetProperty("settings", out var changes)
+            || changes.ValueKind != JsonValueKind.Object)
+        {
+            return Error("\"settings\" must be an object of id -> value");
+        }
+
+        // ⚠️ Read the file fresh rather than reusing whatever was parsed at
+        // startup: another operator, or a hand edit, may have changed it since,
+        // and saving one field must not silently revert theirs.
+        var candidate = ServerOptions.CreateDefault();
+
+        if (File.Exists(path))
+            ServerConfigFile.Apply(candidate, path);
+
+        var applied = new List<string>();
+
+        foreach (var change in changes.EnumerateObject())
+        {
+            var setting = ServerSettings.Find(change.Name);
+
+            if (setting is null)
+                return Error($"unknown setting \"{change.Name}\"");
+
+            if (change.Value.ValueKind != JsonValueKind.String)
+                return Error($"\"{change.Name}\" must be a string; every value here is ini text");
+
+            setting.Set(candidate, change.Value.GetString()!);
+            applied.Add(setting.Id);
+        }
+
+        // Before the write, so a configuration the server could not start on never
+        // reaches the disk. Validate throws ArgumentException and friends, which
+        // Dispatch turns into an error reply naming the option.
+        candidate.Validate();
+
+        ServerConfigFile.Write(candidate, path);
+
+        // Which of the just-saved settings the command line will still beat. The
+        // page greys these out, but an operator can also reach this verb from the
+        // control port, where there is nothing to grey.
+        var shadowed = applied
+            .Where(id => server.Options.CommandLineOverrides.Contains(id, StringComparer.Ordinal))
+            .ToArray();
+
+        var json = new StringBuilder(256);
+        json.Append("\"file\":\"").Append(Escape(Path.GetFullPath(path))).Append('"');
+        json.Append(",\"saved\":").Append(applied.Count);
+        json.Append(",\"restartRequired\":true");
+        json.Append(",\"shadowed\":[");
+
+        for (var i = 0; i < shadowed.Length; i++)
+        {
+            if (i > 0)
+                json.Append(',');
+
+            json.Append('"').Append(Escape(shadowed[i])).Append('"');
         }
 
         json.Append(']');
