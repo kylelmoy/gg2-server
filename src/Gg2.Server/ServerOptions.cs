@@ -734,14 +734,24 @@ public sealed class ServerOptions
     public BotMode BotMode { get; set; } = BotMode.Scripted;
 
     /// <summary>
-    /// The <c>gg2-rl</c> checkpoint a policy-driven mode loads — <c>--policy</c>.
-    /// Empty is the all-scripted arm.
+    /// The <c>gg2-rl</c> checkpoints a policy-driven mode loads — <c>--policy</c>,
+    /// repeatable. Empty is the all-scripted arm.
     /// </summary>
     /// <remarks>
     /// ⚠️ <b>A policy checkpoint is DATED by the simulation it was trained
     /// against</b> — <c>docs/BOTS.md</c>, "a policy is DATED by the physics".
+    /// <para>
+    /// ⛔ <b>A LIST since 2026-09-07, because the shipped bundle is two tiers.</b>
+    /// One checkpoint drives one set of classes, and the set is a property of the
+    /// file (<c>PolicyNetwork.TrainedClasses</c>) — so covering five classes with
+    /// two families of weights needs two checkpoints loaded at once, one
+    /// <c>PolicyMicroSpec</c> each. Order is <see cref="BotBrainSpec.Tiers"/>'
+    /// order, most capable first; with DISJOINT class sets it cannot matter,
+    /// because exactly one tier is ever eligible. <c>docs/BOTS.md</c>, "the
+    /// shipped bundle".
+    /// </para>
     /// </remarks>
-    public string PolicyPath { get; set; } = string.Empty;
+    public IReadOnlyList<string> PolicyPaths { get; set; } = [];
 
     /// <summary>
     /// ⛔ Load a checkpoint whose <c>SIM_UUID</c> does not match this build —

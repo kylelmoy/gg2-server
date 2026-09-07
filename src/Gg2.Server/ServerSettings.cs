@@ -636,11 +636,19 @@ public static class ServerSettings
             "Which of the four shipped brains runs. search is the better bot and the "
             + "far more expensive one."));
 
-        settings.Add(PathRow(
-            "Bots", "Policy", nameof(ServerOptions.PolicyPath),
-            o => o.PolicyPath, (o, v) => o.PolicyPath = v, "checkpoints/policy.npz",
-            "The gg2-rl checkpoint policy and tiered modes load. A checkpoint is DATED "
-            + "by the simulation it was trained against."));
+        // ⚠️ A LIST, not a path, since 2026-09-07 — the shipped bundle is two
+        // checkpoints driving disjoint class sets, and one file cannot express two
+        // sets. ⛔ Which means a checkpoint whose path contains a COMMA cannot be
+        // named here; the flag can still name it, and nothing on this side can
+        // round-trip it. Said out loud because a config file silently truncating a
+        // path is exactly the failure this table exists to prevent.
+        settings.Add(ListRow(
+            "Bots", "Policy", nameof(ServerOptions.PolicyPaths),
+            o => o.PolicyPaths, (o, v) => o.PolicyPaths = v,
+            "checkpoints/tier0_combat4_s2.npz,checkpoints/tier2_pyro_rest3_s0.npz",
+            "The gg2-rl checkpoints policy and tiered modes load, one tier each. A "
+            + "checkpoint is DATED by the simulation it was trained against, and the "
+            + "classes it drives are read off the file."));
 
         settings.Add(BoolRow(
             "Bots", "PolicyIgnoreStamp", nameof(ServerOptions.PolicyIgnoreStamp),

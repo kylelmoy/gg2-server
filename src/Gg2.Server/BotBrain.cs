@@ -1,4 +1,6 @@
+using System.Text;
 using Gg2.Bots;
+using Gg2.Protocol;
 using Gg2.Simulation;
 
 namespace Gg2.Server;
@@ -60,9 +62,9 @@ public static class BotBrain
         ArgumentNullException.ThrowIfNull(options);
 
         var mode = options.BotMode;
-        var policyPath = options.PolicyPath.Length == 0 ? null : options.PolicyPath;
+        var policyPaths = options.PolicyPaths;
 
-        if (mode.UsesPolicy() && policyPath is null)
+        if (mode.UsesPolicy() && policyPaths.Count == 0)
         {
             throw new ArgumentException(
                 $"bot mode '{mode.ToString().ToLowerInvariant()}' drives bots with a trained "
@@ -70,7 +72,7 @@ public static class BotBrain
                 + "or use bot mode scripted or search.");
         }
 
-        if (!mode.UsesPolicy() && policyPath is not null)
+        if (!mode.UsesPolicy() && policyPaths.Count > 0)
         {
             throw new ArgumentException(
                 $"a policy checkpoint was given but bot mode '{mode.ToString().ToLowerInvariant()}' "
@@ -100,31 +102,71 @@ public static class BotBrain
 
         if (mode.UsesPolicy())
         {
-            var policy = PolicyNetwork.Load(policyPath!, options.PolicyIgnoreStamp);
+            // Which tier already claimed each class, so an OVERLAP is named rather
+            // than silently resolved by list order.
+            var claimedBy = new Dictionary<PlayerClass, string>();
 
-            // ⛔ ALWAYS reported, not only when overridden. A run whose stamps
-            // agree says so; a run that bypassed the guard says THAT, loudly, on
-            // the same line. A bypassed guard that leaves no trace in the output is
-            // worse than no guard, because the next reader cannot tell it happened.
-            report?.Invoke(
-                $"policy {Path.GetFileName(policyPath!)}: trained against {policy.SimulationUuid}, "
-                + $"this build is {SimulationStamp.Uuid}"
+            foreach (var policyPath in policyPaths)
+            {
+                var policy = PolicyNetwork.Load(policyPath, options.PolicyIgnoreStamp);
+                var label = Path.GetFileNameWithoutExtension(policyPath);
 
-                // ⚠️ Reported, never compared. NavConstants left the gating surface
-                // on 2026-09-03 so a nav edit stops stranding checkpoints — but
-                // removing it from the GATE must not remove it from the RECORD, or
-                // "the bots play differently and the stamp matches" becomes
-                // unattributable.
-                + $", routing {SimulationStamp.RoutingUuid}"
-                + (policy.SimulationUuid == SimulationStamp.Uuid
-                    ? " (match)"
-                    : "  <-- STAMP MISMATCH, BYPASSED. Everything this policy decides was "
-                      + "learned on a different simulation."));
+                // ⛔ ALWAYS reported, not only when overridden. A run whose stamps
+                // agree says so; a run that bypassed the guard says THAT, loudly, on
+                // the same line. A bypassed guard that leaves no trace in the output
+                // is worse than no guard, because the next reader cannot tell it
+                // happened.
+                //
+                // ⚠️ The CLASS SET is on the same line, and it has to be. Since
+                // 2026-09-06 the set is a property of the FILE, and since 2026-09-07
+                // a shipped checkpoint may name a should-drive set NARROWER than what
+                // it trained on — so the only half either repo can check is what this
+                // server will actually drive, and that is what is printed.
+                report?.Invoke(
+                    $"policy {Path.GetFileName(policyPath)}: trained against "
+                    + $"{policy.SimulationUuid}, this build is {SimulationStamp.Uuid}"
 
-            // ⚠️ AFTER the search, so tier 0 is the more expensive controller and an
-            // arbiter under pressure drops to the policy before it drops to the
-            // scripted layer. Ordering is the arbiter's whole input — HybridBot.
-            tiers.Add(new PolicyMicroSpec(policy));
+                    // ⚠️ Reported, never compared. NavConstants left the gating
+                    // surface on 2026-09-03 so a nav edit stops stranding checkpoints
+                    // — but removing it from the GATE must not remove it from the
+                    // RECORD, or "the bots play differently and the stamp matches"
+                    // becomes unattributable.
+                    + $", routing {SimulationStamp.RoutingUuid}"
+                    + (policy.SimulationUuid == SimulationStamp.Uuid
+                        ? " (match)"
+                        : "  <-- STAMP MISMATCH, BYPASSED. Everything this policy decides was "
+                          + "learned on a different simulation.")
+                    + $", drives {Classes(policy.TrainedClasses)}");
+
+                foreach (var playerClass in policy.TrainedClasses)
+                {
+                    // ⛔ Reported, NOT refused. Two tiers overlapping is a legitimate
+                    // fallback ladder — the arbiter drops to the later one under
+                    // pressure — but it is also the only thing that makes the ORDER
+                    // they were given in change behaviour, and the shipped bundle's
+                    // whole claim is that its two sets are disjoint so order cannot.
+                    // An operator who overlaps them by accident has to be told which
+                    // class and which two files, because nothing downstream ever
+                    // mentions it again.
+                    if (claimedBy.TryGetValue(playerClass, out var owner))
+                    {
+                        report?.Invoke(
+                            $"WARNING: {playerClass} is driven by both {owner} and {label}. "
+                            + $"{owner} is the earlier tier and takes it whenever the arbiter "
+                            + "admits it, so the order these were given in now changes what "
+                            + "the server plays.");
+                    }
+                    else
+                    {
+                        claimedBy[playerClass] = label;
+                    }
+                }
+
+                // ⚠️ AFTER the search, so tier 0 is the more expensive controller and
+                // an arbiter under pressure drops to the policy before it drops to the
+                // scripted layer. Ordering is the arbiter's whole input — HybridBot.
+                tiers.Add(new PolicyMicroSpec(policy, label));
+            }
         }
 
         // ⛔ Unreachable from the settings now — NeedsArbiter defaults the budget
@@ -132,6 +174,13 @@ public static class BotBrain
         // was. If a fifth mode arrives with two tiers and no default, this is what
         // stops it shipping a controller that is configured, reported and never
         // consulted.
+        //
+        // ⚠️ "The rest are dead weight" is the WORST case, not the only one, since
+        // several policy tiers became possible on 2026-09-07: with DISJOINT class
+        // sets HybridBot.Choose picks the most capable ELIGIBLE tier, so an
+        // arbiter-less pair would both drive, each on its own classes. The refusal
+        // stays because nothing here checks disjointness, and the overlapping case
+        // — the one this sentence describes — is still silent without it.
         if (tiers.Count > 1 && arbiterUnits is null)
         {
             throw new ArgumentException(
@@ -163,5 +212,28 @@ public static class BotBrain
                     Arbiter = arbiterUnits is { } units ? new DecisionQuotaArbiter(units) : null,
                 },
         };
+    }
+
+    /// <summary>
+    /// A checkpoint's class set, for the stamp line.
+    /// </summary>
+    /// <remarks>
+    /// Comma-separated, the same shape the <c>Bots.Classes</c> config key takes, so
+    /// the line can be pasted into a file when an operator wants a roster matching
+    /// what the checkpoints drive. <c>ReadOnlySpan</c> in, so no LINQ and no copy.
+    /// </remarks>
+    private static string Classes(ReadOnlySpan<PlayerClass> classes)
+    {
+        var text = new StringBuilder();
+
+        foreach (var playerClass in classes)
+        {
+            if (text.Length > 0)
+                text.Append(',');
+
+            text.Append(playerClass);
+        }
+
+        return text.Length == 0 ? "nothing" : text.ToString();
     }
 }

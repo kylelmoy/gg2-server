@@ -120,7 +120,18 @@ public sealed class CliCoverageTests
         // built inside Parse. PolicyFixture's is real and carries this build's
         // stamp, so it takes the ordinary accept path.
         ("BotMode", ["--bot-mode", "search"], o => o.BotMode),
-        ("PolicyPath", ["--policy", PolicyFixture.Checkpoint], o => o.PolicyPath),
+        ("PolicyPaths", ["--policy", PolicyFixture.Checkpoint],
+            o => string.Join(',', o.PolicyPaths)),
+
+        // ⛔ The SECOND --policy, which appends rather than replacing. A row of its
+        // own because the one above passes either way: a flag that kept overwriting
+        // would leave one path in the list and still differ from the empty default,
+        // so nothing here would go red for the shipped two-tier bundle collapsing to
+        // one tier. The two fixtures' class sets are DISJOINT on purpose — an
+        // overlap is legal but warns, and a warning is not what this row is about.
+        ("PolicyPaths",
+            ["--policy", PolicyFixture.Checkpoint, "--policy", PolicyFixture.EightFieldCheckpoint],
+            o => string.Join(',', o.PolicyPaths)),
         ("PolicyIgnoreStamp",
             ["--policy", PolicyFixture.Checkpoint, "--policy-ignore-stamp"],
             o => o.PolicyIgnoreStamp),

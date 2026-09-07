@@ -61,4 +61,31 @@
              CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <!--
+    The shipped policy checkpoints, for the same reason as the two above: the
+    command README.md and docs/BOTS.md both print names a checkpoint as
+    `checkpoints/tier0_combat4_s2.npz`, and a relative path resolves
+    against the working directory. Without this it works from the repo — where
+    the file happens to be one level up from bin/ — and fails on a published
+    deployment, which is the failure mode the maps comment above describes.
+
+    ⚠️ 160 KB, and unlike maps/ and nav/ there is NO fallback: a missing map
+    directory is searched for and a missing nav graph is generated, but
+    PolicyNetwork.Load on a path that is not there is a refusal with the path in
+    it. Which is the right failure — it just has to be one nobody meets by
+    publishing.
+
+    ⚠️ The whole directory, README.md included, for the reason the nav glob
+    gives: what ships is a directory, and a per-extension glob is how one file in
+    it silently stops travelling. checkpoints/README.md is where the numbers
+    behind these weights are written down, and it is worth more beside them on a
+    server than it is in the repository alone.
+  -->
+  <ItemGroup>
+    <Content Include="..\..\checkpoints\*"
+             Link="checkpoints\%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

@@ -126,10 +126,20 @@ the map change, in well under a second, because everything a graph needs is in
 the map's own PNG. `--no-navgen` turns that off; `gg2-server navgen` builds them
 offline instead.
 
-The only trained checkpoint that ships was trained against an earlier build of
-the simulation, so it lives in the repository as a test fixture rather than
-something to run; the loader prints both simulation stamps and refuses the
-mismatch unless told otherwise.
+A trained policy ships in `checkpoints/`, as two tiers covering five of the nine
+classes between them — the other four stay scripted. `--policy` is repeatable and
+appends, one tier per checkpoint:
+
+```
+gg2-server --map ctf_truefort --bots 12 --bot-mode policy \
+  --policy checkpoints/tier0_combat4_s2.npz \
+  --policy checkpoints/tier2_pyro_rest3_s0.npz
+```
+
+A checkpoint is dated by the simulation it was trained against: the loader prints
+both stamps and refuses a mismatch unless told otherwise. Read
+`checkpoints/README.md` before quoting any number off these — what has a match
+number and what does not is not obvious from the files.
 
 ### Offline tooling
 

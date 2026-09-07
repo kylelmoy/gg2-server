@@ -26,14 +26,26 @@ public abstract record MicroControllerSpec
 }
 
 /// <summary>A trained checkpoint driving keys and aim. <c>docs/BOTS.md</c>'s arm 2.</summary>
+/// <param name="Policy">The loaded weights, SHARED by every bot — see the base type.</param>
+/// <param name="Label">
+/// What to call this tier in a result table, or null for the bare word
+/// <c>policy</c>. ⚠️ <b>Set it whenever more than one of these is in the same
+/// brain</b>, which has been possible since 2026-09-07: <see cref="BotBrainSpec.Name"/>
+/// exists so an arm can be named in a table, and two unlabelled policy tiers
+/// print <c>policy+policy</c> — the exact defect that type's remarks describe.
+/// The host passes the checkpoint's file name.
+/// </param>
 /// <remarks>
-/// <b>The only checkpoint that exists is stamp-invalid for this build</b> and is
-/// a test fixture; <c>PolicyNetwork.Load</c> refuses a foreign stamp by design.
-/// <c>docs/ENV.md</c>, "The checkpoint is a FIXTURE now".
+/// ⚠️ <b>Trained checkpoints for this build EXIST</b> — this sentence asserted the
+/// opposite until 2026-09-07, and by then it had been false for a day.
+/// <c>docs/BOTS.md</c>, "the shipped bundle", has what ships and what each file's
+/// numbers do and do not cover; <c>PolicyNetwork.Load</c> still refuses a foreign
+/// stamp by design.
 /// </remarks>
-public sealed record PolicyMicroSpec(PolicyNetwork Policy) : MicroControllerSpec
+public sealed record PolicyMicroSpec(PolicyNetwork Policy, string? Label = null)
+    : MicroControllerSpec
 {
-    public override string Name => "policy";
+    public override string Name => Label is null ? "policy" : "policy:" + Label;
 
     public override IMicroController Create() => new PolicyController(Policy);
 }

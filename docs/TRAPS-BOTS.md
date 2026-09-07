@@ -5003,3 +5003,113 @@ and checked in *to this repo* as fixtures.
 it. When writing "none exists", "not possible here" or "nobody is doing this",
 ask what would ever bring somebody into contact with the fact — and if the
 honest answer is nothing, check it by hand before writing it down.
+
+
+## ⛔ The two-tier ship bundle — received 2026-09-07
+
+The `gg2-rl` lane handed over two checkpoints and this repo learned to load more
+than one. What ships, how to run it, and every number behind it is
+`checkpoints/README.md`; `docs/BOTS.md`, "the shipped bundle", is the front door.
+What follows is the part that is a **trap** rather than a fact.
+
+### ⛔ A should-drive set in a trained-on field, and nothing can tell them apart
+
+`tier2_pyro_rest3_s0.npz` carries `meta[7] = PYRO`. **The run trained
+`ENGINEER,SPY,PYRO`.** `gg2-rl`'s `scripts/ship_tier.py` minted it from
+`rest3_s0/ppo_iter12000.npz` with the weights byte-identical and only the
+metadata narrowed.
+
+⚠️ **This is the conflation the two lanes documented together as a known
+limitation, now deliberately exercised.** There is one field and it now carries
+two meanings:
+
+| meaning | what the field says | true? |
+|---|---|---|
+| what this policy may DRIVE | `PYRO` | ✅ yes |
+| what this policy LEARNED | `PYRO` | ⛔ no — it learned three |
+
+`PolicyNetwork.TrainedClasses` and `PolicyController.Drives` read the same set,
+which is also why the should-drive question is unmeasurable on that bench (the
+section above). So the file is **true about what it may drive and incomplete
+about what it learned, and nothing in either repository can distinguish the
+two.**
+
+⛔ **The one guard is that `ship_tier.py` refuses to WIDEN a set** — a
+should-drive set may only ever narrow a trained one — so the convention cannot be
+used to make a policy claim a class it never trained. That refusal lives entirely
+in the producing repo. Nothing here can check it, and this side should not
+pretend otherwise: `ShippedCheckpointTests` pins what the file says it drives,
+which is the only half that is checkable from here.
+
+**What would show this has gone stale**: a second metadata field arriving on the
+`gg2-rl` side. `PolicyNetwork` should then read both, and this section should be
+**deleted rather than edited**. The training lane has not asked for it and has
+said so twice.
+
+### ⚠️ Death share alone would have chosen the wrong engagement width — a third time
+
+Q22, 21 maps × 100 matches × four widths × four seeds, on the shipped family:
+
+| | 80px | **150px** | 220px | 300px |
+|---|---|---|---|---|
+| death share Δ | −1.29 | −2.73 | ⛔ **−2.86** | −2.24 |
+| win share Δ | +0.52 | ✅ **+1.34** | −2.39 | ⛔ −10.23 |
+| ticks driven | 2.0% | 5.5% | 10.1% | 16.0% |
+
+⛔ **220px is the best death share and costs 3.73 points of win share against
+150px.** Third reproduction of this on the third checkpoint family, and the first
+time it would have changed a decision that had already been made.
+
+⚠️ **The generalisation is not "prefer wins".** It is that *combat quality and
+match outcome are separate axes*, and a controller that holds the wheel longer
+buys the first with the second — the macro layer is what plays the objective, and
+every tick the policy holds is a tick it does not. Any future width, gate or
+handover-rule change has to be read on both axes or it is not being read.
+
+### ⚠️ What "five of nine classes" is actually resting on
+
+Three of the five are on evidence that would not survive being restated as a
+result:
+
+- **Soldier ships UNDECIDED** — mirror 46.47, 2·SE 12.13, *below* the 50% null
+  and not clearing. It drives because *undecided means status quo*, not because
+  it measured well, and `combat4_s2` is the worst soldier of its four seeds in
+  two independent samples. ⚠️ **This is the first place to look if a playtest
+  makes a soldier look wrong**, and it will not be a surprise.
+- **Pyro as shipped has no match number at all.** Q21 and Q22 measured `rest3`
+  driving all three classes it trained; the shipped artefact drives pyro alone,
+  and the bench cannot produce a number for a narrower set. What supports it is
+  pyro's own mirror (74.90, 2·SE 3.66) and its nine-opponent row (82.70).
+- **Sniper and spy were dropped without a refutation** — 89.08 and 88.22, both
+  clearing. Sniper on a judgement about an attributable loss, spy on the user's
+  call.
+
+⛔ **So "five classes are on the policy" is a shipping decision with mixed
+support, not five independent wins.** Quoting it as the latter is the failure
+`CLAUDE.md` describes: a claim the repo makes about itself that nothing inside
+the repo can contradict.
+
+### ✅ What this side actually gates
+
+`tests/Gg2.Tests/ShippedCheckpointTests.cs` and
+`tests/Gg2.Tests/PolicyTierWiringTests.cs`, added with the handover:
+
+- both files present and **byte-identical to what was handed over** (md5s pinned
+  from the bundle's own README);
+- both load through `PolicyNetwork.Load` with **no stamp bypass**, so a
+  `SIM_UUID` move retires them on the run that moved it;
+- each drives exactly its claimed classes, **asserted in both directions across
+  all nine** — a checkpoint that drove nothing would otherwise be invisible,
+  because `HybridBot` falls back to a complete scripted bot;
+- the two sets are **disjoint**, which is what makes registration order moot;
+- `tier0` is byte-identical to the fixture `combat4_s2_iter12000.npz`, the
+  `MapCopyTests`-shaped guard on a deliberate duplicate;
+- **a real match per tier**, class-restricted so `MicroTicks > 0` attributes to
+  one tier, establishing the weights reach the wheel;
+- and the wiring: a second `--policy` **appends**, a config file's `Policy` list
+  reaches the brain, a flag **replaces** the file's whole list, every checkpoint
+  reports its own stamp line and class set, and an overlap **warns per class**
+  naming both files rather than being silently resolved by list order.
+
+⛔ **None of that is evidence a checkpoint plays well**, and no threshold in
+either file should ever be read as if it were.

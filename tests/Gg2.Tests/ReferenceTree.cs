@@ -108,7 +108,7 @@ public static class ReferenceTree
     /// <c>Fixtures/</c> is copied — would put 34 MB through every build, twice
     /// over for Debug and Release.
     /// </remarks>
-    private static string RepositoryRoot
+    public static string RepositoryRoot
     {
         get
         {

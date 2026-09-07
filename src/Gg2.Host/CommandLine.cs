@@ -229,7 +229,7 @@ internal static class CommandLine
         BotMode? botMode = null;
 
         // Whether --policy appeared on the COMMAND LINE, which is not the same as
-        // options.PolicyPath being set: a config file's [Bots] Policy is a
+        // options.PolicyPaths being non-empty: a config file's [Bots] Policy is a
         // checkpoint named beside a mode in the same file, and inferring a mode
         // from it would silently overrule the Mode key sitting two lines above it.
         var policyOnCommandLine = false;
@@ -613,10 +613,25 @@ internal static class CommandLine
 
                 // docs/BOTS.md's arm 2: gg2-rl's trained checkpoint driving keys and
                 // aim inside the same engagement window --search-bots uses.
+                //
+                // ⛔ REPEATABLE, and the second one APPENDS rather than replacing —
+                // one checkpoint is one tier, and the shipped bundle is two of them
+                // covering five classes between them. ⚠️ The first --policy on the
+                // command line CLEARS whatever a config file named, so `--config
+                // gg2.ini --policy x.npz` runs x.npz alone rather than x.npz appended
+                // to the file's list: a flag beats the file, and a flag that ADDED to
+                // it would be the one setting here that cannot override.
                 case "--policy":
-                    options.PolicyPath = cursor.Take();
+                {
+                    var checkpoint = cursor.Take();
+
+                    options.PolicyPaths = policyOnCommandLine
+                        ? [.. options.PolicyPaths, checkpoint]
+                        : [checkpoint];
+
                     policyOnCommandLine = true;
                     break;
+                }
 
                 // ⛔ BYPASSES THE SIMULATION STAMP, which exists to stop a policy
                 // running against a simulation it was not trained on. It is honest
@@ -813,7 +828,7 @@ internal static class CommandLine
         // explicit one always wins, and a --policy it cannot use is refused by
         // BotBrain.Build rather than quietly ignored.
         //
-        // ⚠️ It reads policyOnCommandLine, NOT options.PolicyPath. A checkpoint
+        // ⚠️ It reads policyOnCommandLine, NOT options.PolicyPaths. A checkpoint
         // named by the config file sits beside that file's own Mode key, and
         // inferring a mode from it would overrule the line two above it.
         options.BotMode = botMode

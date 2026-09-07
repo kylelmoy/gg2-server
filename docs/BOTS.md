@@ -163,6 +163,48 @@ world state and has no equivalent blind spot.
 current build. `RolloutSearch` carries no weights and re-derives from the
 simulation every decision, so it absorbs a physics change for free.
 
+### The shipped bundle — `checkpoints/`, received 2026-09-07
+
+⛔ **A trained policy SHIPS from this repository as of 2026-09-07**, at the
+user's instruction, handed over by the `gg2-rl` lane. Two `IMicroController`
+tiers over `HybridBot`, 150px, `HandoverRule.MacroTask`, **five of the nine
+classes on the policy and the other four scripted**:
+
+| file | drives |
+|---|---|
+| `checkpoints/tier0_combat4_s2.npz` | scout, soldier, demoman, heavy |
+| `checkpoints/tier2_pyro_rest3_s0.npz` | pyro |
+| — | *sniper, spy, engineer, medic → scripted* |
+
+```powershell
+dotnet run --project src/Gg2.Host -- --map ctf_truefort --bots 12 --bot-mode policy `
+  --policy checkpoints/tier0_combat4_s2.npz --policy checkpoints/tier2_pyro_rest3_s0.npz
+```
+
+`--policy` is repeatable and **appends**, one tier per checkpoint; `[Bots]
+Policy` takes the same list comma-separated. A checkpoint's class set is a
+property of the FILE, so two files is how five classes get covered by two
+families of weights. ⛔ **Do not pass `--bot-classes trained` with this
+bundle** — that shorthand is the *default* four-class set, resolved before any
+checkpoint is loaded, so it silently drops pyro; name the five explicitly.
+
+⛔ **`checkpoints/README.md` before quoting any number off these.** What has a
+match number and what does not is not obvious: the pyro tier as shipped —
+driving pyro alone — has none of its own and cannot be given one by that bench,
+soldier ships *undecided* with a mirror below its null, and sniper and spy were
+dropped on judgement rather than on refutation. `docs/TRAPS-BOTS.md`, "a
+should-drive set in a trained-on field", has the metadata trap that comes with
+tier 2.
+
+⚠️ **This repository gates presence and routing, not quality.**
+`ShippedCheckpointTests` pins both files' md5s, loads them through the ordinary
+stamp gate with no bypass, asserts each drives exactly its claimed classes in
+both directions across all nine, asserts the two sets are disjoint (which is
+what makes their registration order moot), and plays a real match per tier to
+establish the weights actually take the wheel. **It says nothing about whether
+either checkpoint plays well** — that evidence is the training lane's and is
+quoted, with its limits, in `checkpoints/README.md`.
+
 **Current state, verified 2026-09-06 at `6126b34`: trained checkpoints for
 this build EXIST.** All four files in `tests/Gg2.Tests/Fixtures/policy/` carry
 `SIM_UUID 698913b5ea547d60`, which is exactly what `SimulationStampTests`
