@@ -115,7 +115,18 @@ public sealed class ChatBubbleThrottleTests
         {
             socket.Send([(byte)MessageType.ChatBubble, 1]);
             harness.Tick(2);
-            Thread.Sleep(5);
+
+            // ⚠️ 25ms against a 1ms interval, and the margin is the point. The
+            // clock here is Environment.TickCount64, which a test cannot move, so
+            // this test's verdict depends on the OS scheduler — a participant it
+            // does not control. At 5ms it failed under a full-suite run ("only 3
+            // of 5 bubbles got through", 2026-09-24), because a sleep that
+            // returns late is a window that has not opened yet. Twenty-five needs
+            // a 25x scheduling delay to fail rather than a 5x one.
+            // ⛔ It is still wall-clock and therefore still not deterministic. The
+            // real fix is an injectable clock on the throttle; this buys margin,
+            // not certainty, and should not be read as having made it a gate.
+            Thread.Sleep(25);
         }
 
         harness.Tick(2);

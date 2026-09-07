@@ -1421,6 +1421,46 @@ and wrong about what.
   supposed to be deterministic given its seed, a load-dependent outcome is itself
   a finding and is not explained.
 
+### ✅ Narrowed further: the replay's copy is STATIONARY and the anchor is not moving it
+
+`OutlierHuntTests.Analyse` gained a per-tick dump (`ANALYSE_DUMP_SLOT`) and a
+column showing what the TRACE holds for the same slot. On
+`outlier-129`, slot 3 across the divergence:
+
+```
+replay          tick 349 * x 2525 y 962 hspeed 0 vspeed 0 moveStatus 0 hp 9
+                tick 350   x 2522 y 962 hspeed 0 vspeed 0 moveStatus 0 hp 9
+trace           tick 349 * x 2523 y 1082 hp 9
+                tick 350   no character in the trace   (positions ride every 7th tick)
+```
+
+⛔ **The replay's copy is not drifting — it is parked**, hspeed and vspeed zero
+for hundreds of ticks. So the earlier reading ("it re-diverges by 120px between
+anchors") is WRONG: `Reconcile` compares and `Anchor` snaps on the same tick, so a
+constant error with a stationary body means **the anchor is not moving y**.
+
+✅ The anchor is not being skipped wholesale: hp goes 64 → 9 across t=342/343 and
+x lands within 2 of the trace's, so `SetCharacter` demonstrably runs for this slot.
+
+### ⛔ THE NEXT QUESTION IS UNITS, AND IT MUST BE MEASURED, NOT READ
+
+Inspection could not settle it and two readings each fit half the evidence:
+
+- `CharacterBlock.X/Y` are documented as **wire** units — `x * 5`, `y * 5` — and
+  `PortedSimulation.SetCharacter` divides by 5 accordingly.
+- But the mismatch prints `expected=1082`, which is the RAW wire `Y`, against
+  `actual=962`, which is the replay's WORLD y. And the anchored x lands at 2534
+  against a trace `X` of 2536 — equal in the same units, which the ÷5 would not
+  produce.
+
+⚠️ **Do not resolve this by reading `SetCharacter` and `Reconcile` again.** Three
+faults on 2026-09-06 were each found by running rather than reading, and one was
+"verified" by inspection first. Print, for one slot on one tick, the trace's raw
+`Observed.Y`, the value `SetCharacter` computes, and the value `Reconcile`
+compares — all three, together, once. **If Reconcile grades in wire units while
+Anchor writes world (or vice versa), the p99 outlier is an INSTRUMENT bug and the
+phase gate has never been failing about the wire at all.**
+
 ### How to carry it on
 
 `OutlierHuntTests.Hunt` (remove the `Skip`) runs matches under clock seeding and
