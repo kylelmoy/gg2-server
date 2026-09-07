@@ -60,6 +60,13 @@ public sealed partial class GameServer
                 ExecuteChangeTeam(entry, command.AsTeam);
                 break;
 
+            // The same body the socket switch reaches, so the April Fools
+            // rewrite and the per-player throttle apply to a bot's bubble
+            // exactly as they do to a person's.
+            case PlayerCommandKind.ChatBubble:
+                ExecuteChatBubble(entry, command.Argument);
+                break;
+
             case PlayerCommandKind.None:
             default:
                 break;

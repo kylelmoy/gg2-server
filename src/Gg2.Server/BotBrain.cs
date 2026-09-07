@@ -378,6 +378,10 @@ public static class BotBrain
                         ? EngageOpponents.Anyone
                         : EngageOpponents.HumansOnly,
 
+                    // A debugging aid, and the only setting here that changes
+                    // nothing a bot decides — see ServerOptions.
+                    Bubbles = options.BotHandoverBubbles,
+
                     // ⛔ ONE arbiter for the whole server, shared by every bot. A
                     // per-bot one cannot see the coinciding decisions that make the
                     // tick tail, which is the only reason it exists.

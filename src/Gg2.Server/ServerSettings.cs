@@ -642,6 +642,16 @@ public static class ServerSettings
             "Run the expensive micro-controller in bot-vs-bot fights too. It does not "
             + "make the bots better; it makes those fights cost more."));
 
+        // A DEBUGGING aid and the one Bots row that changes nothing a bot
+        // decides. Every bubble is a broadcast to every connected client, which
+        // is why it is off by default rather than merely quiet.
+        settings.Add(BoolRow(
+            "Bots", "HandoverBubbles", nameof(ServerOptions.BotHandoverBubbles),
+            o => o.BotHandoverBubbles, (o, v) => o.BotHandoverBubbles = v,
+            "Bots put up a chat bubble whenever their brain changes hands: z1 a policy "
+            + "took the wheel, z3 the search did, z2 the scripted layer took it back. "
+            + "For debugging; every bubble is a broadcast."));
+
         settings.Add(BoolRow(
             "Bots", "AdaptiveBudget", nameof(ServerOptions.AdaptiveBotBudget),
             o => o.AdaptiveBotBudget, (o, v) => o.AdaptiveBotBudget = v,

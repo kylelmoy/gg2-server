@@ -303,6 +303,47 @@ result that looks like a finding rather than a mistake.
 guards this. **What the human-only default buys is cost, not skill** — cheaper
 bot-vs-bot fights that are very slightly worse.
 
+### Watching a handover from inside the game
+
+`--bot-handover-bubbles` (or `[Bots] HandoverBubbles`) makes every bot put up a
+chat bubble when the wheel changes hands. The panel's Bots card answers "which
+brain and how often" in aggregate; this answers "which bot, right now, and
+where it was standing" — the question a screenshot has to answer.
+
+| Bubble | Index | When |
+|---|---|---|
+| `z1` | 20 | a policy tier took the wheel |
+| `z2` | 21 | the scripted layer took it back |
+| `z3` | 22 | the rollout search took the wheel |
+
+The indices are the client's own `z` menu
+(`Objects/Overlays/Interfaces/BubbleMenuZ.events/Key {1,2,3} pressed.xml`), so an
+operator reads them as the bubbles they already know.
+
+**Off by default because a bubble is a broadcast.** Eight bots handing over is
+eight extra messages a tick to every connected client and a screen full of
+speech balloons; it is for a server being debugged, not one people are playing
+on.
+
+**It cannot change what a bot does.** A bubble is a broadcast and a client-side
+sprite — unlike a taunt it neither freezes the character nor touches its keys —
+and it travels as a `PlayerCommand` through the same `ExecuteChatBubble` a socket
+reaches, so the April Fools rewrite and the per-player throttle bound a bot's
+exactly as they bound a person's. Two consequences worth knowing: on April 1st
+every one of them becomes bubble 61 and the aid is useless for the day, and a
+burst of handovers inside the throttle window shows as one bubble.
+
+**A handover is decided in `Poll` and sent from `PollCommands`, which
+`GameServer.Tick` calls first**, so each bubble is one tick behind the handover
+that asked for it.
+
+`HandoverBubbleTests` gates the mapping, the wrapper's transitions, the
+off-by-default control, and — the claim nothing inside `Gg2.Bots` could make —
+that the bubble reaches the wire, by decoding the server's own broadcast.
+Confirmed against a stock GM8 client: a pyro driven by the policy tier put up
+bubble 20 and a search-driven bot put up 22 and 21, and all three draw as
+distinct sprites.
+
 ### The controller budget calibrates itself to the machine
 
 Two things decide whether a bot may spend an expensive decision: what the

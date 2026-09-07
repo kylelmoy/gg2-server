@@ -143,6 +143,17 @@ public sealed record BotBrainSpec
     /// <summary>Whether the scripted layer keeps the wheel while carrying the intel.</summary>
     public bool ScriptedCarriesIntel { get; init; } = true;
 
+    /// <summary>
+    /// Whether every bot puts up a chat bubble when the wheel changes hands.
+    /// </summary>
+    /// <remarks>
+    /// <b>A debugging aid, off by default in every arm.</b> See
+    /// <see cref="HandoverBubble"/>. It is on the spec rather than passed to
+    /// <see cref="Wrap"/> so that one server-wide setting reaches every bot
+    /// through the one field a caller already sets to change what a bot is.
+    /// </remarks>
+    public bool Bubbles { get; init; }
+
     /// <summary>One tier, default gate. The shape almost every caller wants.</summary>
     public static BotBrainSpec Of(params MicroControllerSpec[] tiers) =>
         new() { Tiers = tiers };
@@ -196,6 +207,7 @@ public sealed record BotBrainSpec
             Range = Range,
             Engage = Engage,
             ScriptedCarriesIntel = ScriptedCarriesIntel,
+            Bubbles = Bubbles,
         };
     }
 }

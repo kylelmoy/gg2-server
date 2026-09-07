@@ -87,6 +87,7 @@ public sealed class CliCoverageTests
         ("ShuffleRotation", ["--shuffle", "any"], o => o.ShuffleRotation),
         ("Autobalance", ["--no-autobalance"], o => o.Autobalance),
         ("BotEngagesBotsToo", ["--bot-engages-bots"], o => o.BotEngagesBotsToo),
+        ("BotHandoverBubbles", ["--bot-handover-bubbles"], o => o.BotHandoverBubbles),
         ("IdleWhenEmpty", ["--no-idle-when-empty"], o => o.IdleWhenEmpty),
         ("AdaptiveBotBudget", ["--fixed-bot-budget"], o => o.AdaptiveBotBudget),
         ("AnnounceToLobby", ["--lobby"], o => o.AnnounceToLobby),

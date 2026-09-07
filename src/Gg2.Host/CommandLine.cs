@@ -560,6 +560,15 @@ internal static class CommandLine
                     options.BotEngagesBotsToo = true;
                     break;
 
+                // A debugging aid: watch a brain change hands from inside the
+                // game rather than off the panel. Accepted under every bot mode,
+                // including one with no controller to hand over to — it is
+                // diagnostic, and refusing it would make flipping between modes
+                // mean editing the command line twice.
+                case "--bot-handover-bubbles":
+                    options.BotHandoverBubbles = true;
+                    break;
+
                 // How many HUMANS must be connected before any bot is spawned.
                 // ⚠️ Below it the target is ZERO rather than the fill, so 1 is
                 // "only ever run bots when somebody is actually playing" -- which
@@ -1088,6 +1097,12 @@ internal static class CommandLine
                             no bots drops to 2Hz until someone arrives, which
                             also slows its round clock. An explicit --speed
                             always wins over idling.
+          --bot-handover-bubbles
+                            bots put up a chat bubble whenever their brain
+                            changes hands: z1 a policy took the wheel, z3 the
+                            search did, z2 the scripted layer took it back. A
+                            DEBUGGING aid -- every bubble is a broadcast to every
+                            client, and it changes nothing a bot decides.
           --bot-engages-bots
                             let bots run their expensive micro-controller against
                             each other too. Without this a bot only hands the

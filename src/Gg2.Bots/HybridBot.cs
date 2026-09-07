@@ -85,6 +85,21 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
     /// <summary>Index into <c>_tiers</c> of whoever holds the wheel, or -1.</summary>
     private int _driving = -1;
 
+    /// <summary>
+    /// The bubble the last handover asked for, waiting for
+    /// <see cref="PollCommands"/>. Null when there is nothing to send.
+    /// </summary>
+    /// <remarks>
+    /// <b>A field rather than a command pushed where the handover happens,
+    /// because the two are polled separately and in the wrong order.</b>
+    /// <c>GameServer.Tick</c> runs <c>ServiceBots</c> — which is
+    /// <see cref="PollCommands"/> — before <c>GatherInputs</c>, which is
+    /// <see cref="Poll"/>, so a handover decided in a poll reaches the wire on
+    /// the NEXT tick. One tick of lag on a debugging aid, said out loud so
+    /// nobody reads a 33 ms offset as a bug.
+    /// </remarks>
+    private byte? _bubble;
+
     public HybridBot(IMicroController micro, ScriptedBot scripted, IMicroArbiter? arbiter = null)
         : this([micro], scripted, arbiter)
     {
@@ -198,6 +213,16 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
     /// </remarks>
     public bool ScriptedCarriesIntel { get; init; } = true;
 
+    /// <summary>
+    /// Whether this bot puts up a chat bubble every time the wheel changes hands.
+    /// </summary>
+    /// <remarks>
+    /// <b>A debugging aid, off by default</b> — see <see cref="HandoverBubble"/>
+    /// for the three bubbles, why it is off, and why turning it on cannot change
+    /// what a bot does.
+    /// </remarks>
+    public bool Bubbles { get; init; }
+
     /// <summary>Whether a controller drove the tick just polled.</summary>
     public bool MicroDrove { get; private set; }
 
@@ -245,8 +270,18 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
     /// objective term, by its user's decision — a bot that runs past you to tap the
     /// intel is optimal and unpleasant. The macro layer owns objectives entirely.
     /// </remarks>
-    public void PollCommands(in WorldView world, int slot, int tick, ref PlayerCommandBuffer commands) =>
+    public void PollCommands(in WorldView world, int slot, int tick, ref PlayerCommandBuffer commands)
+    {
         _scripted.PollCommands(in world, slot, tick, ref commands);
+
+        // ⛔ AFTER the macro layer, never before. The buffer has a ceiling —
+        // ClientCommands.PerTickLimit, the same one a socket gets — and Push
+        // silently fails at it, so a debugging aid pushed first could displace a
+        // real objective command. Dropping the bubble instead is the right way
+        // round: nothing that matters is lost, and the aid is only ever an aid.
+        if (_bubble is { } image && commands.Push(PlayerCommand.ChatBubble(image)))
+            _bubble = null;
+    }
 
     public PlayerInput Poll(in WorldView world, int slot, int tick)
     {
@@ -254,6 +289,11 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
         {
             _slot = slot;
             ReleaseWheel();
+
+            // ⛔ After ReleaseWheel, which sets one. This wrapper is now driving
+            // a different roster slot, and a bubble decided for the previous one
+            // would be put up over whoever is in this one.
+            _bubble = null;
         }
 
         ref readonly var self = ref world.Character(slot);
@@ -351,6 +391,7 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
             if (_driving >= 0)
                 _tiers[_driving].OnHandoverOut();
 
+            NoteHandover(chosen);
             _driving = chosen;
         }
 
@@ -422,6 +463,7 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
         if (_driving >= 0)
             _tiers[_driving].OnHandoverOut();
 
+        NoteHandover(chosen);
         _driving = chosen;
 
         // Resync absolute aim on every handover IN. The scripted layer writes
@@ -437,7 +479,34 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
             return;
 
         _tiers[_driving].OnHandoverOut();
+        NoteHandover(-1);
         _driving = -1;
+    }
+
+    /// <summary>
+    /// Remembers the bubble a handover asks for, for the next
+    /// <see cref="PollCommands"/> to send.
+    /// </summary>
+    /// <remarks>
+    /// <b>Called at every site that moves <c>_driving</c>, before it moves</b> —
+    /// the three are <see cref="TakeWheel"/>, <see cref="ReleaseWheel"/> and
+    /// <see cref="HeadSplit"/>'s own switch, and a site that grew without a call
+    /// here would be a handover the aid cannot see.
+    /// <para>
+    /// ⚠️ <b>The pending bubble is overwritten, not queued.</b> Two handovers
+    /// inside one tick — possible only under <see cref="HandoverRule.HeadSplit"/>
+    /// — send the second, which is the one describing the state the bot is
+    /// actually in. A queue would put the aid permanently behind the thing it is
+    /// describing.
+    /// </para>
+    /// </remarks>
+    private void NoteHandover(int next)
+    {
+        if (!Bubbles)
+            return;
+
+        if (HandoverBubble.For(next < 0 ? null : _tiers[next]) is { } image)
+            _bubble = image;
     }
 
     private PlayerInput MicroInput(int tier, in WorldView world, int slot, int tick)

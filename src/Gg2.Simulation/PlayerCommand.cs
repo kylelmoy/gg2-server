@@ -53,6 +53,19 @@ public enum PlayerCommandKind : byte
 
     /// <summary><c>OMNOMNOMNOM</c>. A live heavy, off cooldown, not already eating.</summary>
     EatSandvich,
+
+    /// <summary>
+    /// <c>CHAT_BUBBLE</c>; the argument is the image index into <c>BubbleS</c>.
+    /// </summary>
+    /// <remarks>
+    /// <b>Here so a bot can put one up, and subject to everything a client's
+    /// is.</b> The server's April Fools rewrite and its per-player throttle both
+    /// live in the one <c>ExecuteChatBubble</c> this reaches, which is the whole
+    /// point of routing it through a command rather than broadcasting from the
+    /// bot layer: a bot that could relay an unthrottled bubble would be doing
+    /// something no client can.
+    /// </remarks>
+    ChatBubble,
 }
 
 /// <summary>One command and its one byte of argument.</summary>
@@ -78,6 +91,15 @@ public readonly record struct PlayerCommand(PlayerCommandKind Kind, byte Argumen
 
     public static PlayerCommand ChangeTeam(Team team) =>
         new(PlayerCommandKind.ChangeTeam, (byte)team);
+
+    /// <param name="image">
+    /// The index into <c>BubbleS</c>. <b>Unvalidated, exactly as the reference
+    /// leaves it</b> — <c>processClientCommands.gml:194-206</c> reads the byte
+    /// and relays it without checking the range, so what a given index depicts is
+    /// a client-side question.
+    /// </param>
+    public static PlayerCommand ChatBubble(byte image) =>
+        new(PlayerCommandKind.ChatBubble, image);
 
     /// <summary>The argument read as a class. Meaningless for any other kind.</summary>
     public PlayerClass AsClass => (PlayerClass)Argument;

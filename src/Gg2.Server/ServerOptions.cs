@@ -616,6 +616,35 @@ public sealed class ServerOptions
     public bool BotEngagesBotsToo { get; set; }
 
     /// <summary>
+    /// Whether every bot puts up a chat bubble when its brain changes hands.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>A debugging aid for watching a brain from inside the game</b> —
+    /// <c>z1</c> when a policy takes the wheel, <c>z3</c> when the search does,
+    /// <c>z2</c> when the scripted layer takes it back. <see cref="HandoverBubble"/>
+    /// has the indices and the reference they come from.
+    /// </para>
+    /// <para>
+    /// <b>Off by default because a bubble is a broadcast.</b> Eight bots handing
+    /// over is eight extra messages a tick to every connected client and a screen
+    /// full of speech balloons; it is for a server you are debugging, not one
+    /// people are playing on. It does nothing under bot mode <c>scripted</c>,
+    /// where there is no wheel to change hands — accepted rather than refused,
+    /// because it is diagnostic and an operator flipping between modes should not
+    /// have to remove it.
+    /// </para>
+    /// <para>
+    /// <b>It cannot change what a bot does.</b> A bubble is a broadcast and a
+    /// client-side sprite; unlike a taunt it neither freezes the character nor
+    /// touches its keys. It travels as a <c>PlayerCommand</c> through the same
+    /// <c>ExecuteChatBubble</c> a socket reaches, so the per-player throttle
+    /// bounds it exactly as it bounds a person.
+    /// </para>
+    /// </remarks>
+    public bool BotHandoverBubbles { get; set; }
+
+    /// <summary>
     /// Drop to a slow tick when nobody is connected and no bots are running.
     /// </summary>
     /// <remarks>
