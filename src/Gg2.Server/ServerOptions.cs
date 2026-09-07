@@ -754,6 +754,33 @@ public sealed class ServerOptions
     public IReadOnlyList<string> PolicyPaths { get; set; } = [];
 
     /// <summary>
+    /// Which controller drives which class — <c>--bot-class-policy</c>, repeatable.
+    /// Entries are <c>Class=label</c> or <c>Class=scripted</c>.
+    /// </summary>
+    /// <remarks>
+    /// <b>A label is a checkpoint's file name without its extension</b>, which is
+    /// what the stamp line prints and what a result table calls the tier. Anything
+    /// not named here keeps the default: whichever loaded checkpoint's own class
+    /// set claims it, and the scripted layer if none does.
+    /// <para>
+    /// ⛔ <b>This is the OPERATOR's answer to a question the file cannot be asked.</b>
+    /// A checkpoint carries one class set doing two jobs — what the run trained and
+    /// what its author intends it to drive — and the ship bundle narrows the second
+    /// into the first, which destroys the record of what else was trained. Naming a
+    /// class the file does not list is therefore legal and <b>warned about</b>: the
+    /// warning cannot tell "the run never saw this class" from "the author narrowed
+    /// it out", and neither can anything else in either repository.
+    /// <c>docs/TRAPS-BOTS.md</c>, "a should-drive set in a trained-on field".
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Separate from <c>Bots.Classes</c> on purpose.</b> That one restricts
+    /// which classes bots PLAY; this one decides who drives a class that is played.
+    /// The two were one knob until 2026-09-07 and the entanglement shipped a bug.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyList<string> BotClassPolicies { get; set; } = [];
+
+    /// <summary>
     /// ⛔ Load a checkpoint whose <c>SIM_UUID</c> does not match this build —
     /// <c>--policy-ignore-stamp</c>.
     /// </summary>

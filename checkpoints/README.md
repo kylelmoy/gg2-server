@@ -44,16 +44,22 @@ dotnet run --project src/Gg2.Host -- `
 
 `--policy` is repeatable and **appends**; a config file says the same thing as
 `[Bots] Policy = a.npz,b.npz`. The server prints one line per checkpoint carrying
-its stamp, this build's, and the classes it will drive.
+its stamp, this build's, and the classes it will drive. **Each checkpoint drives
+the classes its own file claims, so nothing above needs configuring.**
 
-⛔ **Do not pass `--bot-classes trained` with this bundle.** That shorthand is the
-*default* four-class set, resolved before any checkpoint is loaded — flags are
-parsed before `--policy` opens a file, and argument order is not guaranteed — so
-it silently drops pyro, and the pyro tier never drives. Name the five explicitly:
+Two settings adjust it, and they answer different questions:
 
-```
---bot-classes Scout,Soldier,Demoman,Heavy,Pyro
-```
+- `--bot-class-policy Soldier=scripted` — **who drives a class.** The value is a
+  checkpoint's file name without its extension, or `scripted`. Repeatable, and it
+  only has to name the classes being overridden.
+- `--bot-classes driven` — **which classes bots play.** Restricts the draw to
+  whatever the loaded policies drive (here: the five above, following any
+  `ClassPolicy` overrides), so every bot is the configuration under test rather
+  than a mix of that and the all-scripted arm.
+
+⚠️ **`--bot-classes trained` used to be the way to do the second and it was
+wrong**: it named a compile-time four-class set, so on this bundle it dropped
+pyro and the pyro tier never drove. It is still accepted and now means `driven`.
 
 ## ⛔⛔ `tier2_pyro_rest3_s0.npz` carries a SHOULD-DRIVE set in a TRAINED-ON field
 
@@ -69,6 +75,13 @@ question is unmeasurable on that bench (`docs/TRAPS-BOTS.md`). ⛔ `ship_tier.py
 refuses to WIDEN a set — a should-drive set may only ever narrow a trained one —
 so it cannot make a policy claim a class it never trained. That refusal is the
 only thing standing between this convention and a checkpoint that lies.
+
+✅ **The information the narrowing destroyed can be put back from the server
+side**, by whoever knows it: `--bot-class-policy Engineer=tier2_pyro_rest3_s0`
+drives engineer with weights that did train it. The server **warns** when a class
+is assigned to a checkpoint that does not list it — it cannot tell "never
+trained" from "narrowed out", and neither can anything else here — so the warning
+is expected in exactly this case, and reading it as an error would be wrong.
 
 **What would show this has gone stale**: a second metadata field arriving on the
 `gg2-rl` side, at which point `PolicyNetwork` should read both and this section
@@ -96,6 +109,8 @@ against a 50% null, and its nine-opponent row is **82.70**, second only to heavy
   quo, **not because it measured well**, and `combat4_s2` is the worst soldier of
   its four seeds in two independent samples. If a playtest ever makes a soldier
   look wrong, this is the first place to look and it will not be a surprise.
+  ✅ **Turning exactly that off costs one setting**: `--bot-class-policy
+  Soldier=scripted`, and the other three keep driving.
 - ⛔ **SNIPER was dropped on a JUDGEMENT, not a refutation.** A `control`
   checkpoint's sniper mirror is 89.08. The only match number for that checkpoint
   had it driving all four of its classes and lost 1.95 points of win share, which

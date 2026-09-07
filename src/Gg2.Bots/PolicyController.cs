@@ -14,15 +14,17 @@ namespace Gg2.Bots;
 /// baselines are what say it does not.
 /// <para>
 /// <b>A policy is DATED BY THE PHYSICS it was trained against</b> — see
-/// <c>docs/BOTS.md</c>. The only checkpoint that exists is stamp-invalid for this
-/// build and is a test fixture, so this class ships with nothing to run: it is
-/// here for the next checkpoint, and <c>PolicyNetwork.Load</c>'s stamp refusal is
-/// what stops an old one being run by accident.
+/// <c>docs/BOTS.md</c>. Two checkpoints for this build ship in
+/// <c>checkpoints/</c> as of 2026-09-07 and <c>PolicyNetwork.Load</c>'s stamp
+/// refusal is what stops a retired one being run by accident. ⚠️ This paragraph
+/// said the opposite — "nothing to run" — for a day after that stopped being
+/// true.
 /// </para>
 /// </remarks>
 public sealed class PolicyController : IMicroController
 {
     private readonly PolicyNetwork _policy;
+    private readonly PlayerClass[]? _drives;
     private readonly ActionDecoder _decoder = new();
     private readonly float[] _observation;
     private readonly int[] _heads;
@@ -31,11 +33,42 @@ public sealed class PolicyController : IMicroController
     private int _ticksLeftInDecision;
     private int _slot = -1;
 
+    /// <summary>The checkpoint driving the classes it was trained on.</summary>
     public PolicyController(PolicyNetwork policy)
+        : this(policy, drives: null)
+    {
+    }
+
+    /// <summary>The checkpoint driving an explicitly configured set of classes.</summary>
+    /// <param name="policy">The loaded weights.</param>
+    /// <param name="drives">
+    /// Which classes this controller answers <see cref="Drives"/> for, or null to
+    /// ask the checkpoint. ⛔ <b>An empty array is not null</b>: it means this
+    /// controller drives NOTHING, which is what an operator asking for every one
+    /// of its classes to stay scripted has asked for, and it must not silently
+    /// fall back to the file's own set.
+    /// </param>
+    /// <remarks>
+    /// ⚠️ <b>The set became configurable on 2026-09-07, and the two sources answer
+    /// different questions.</b> The checkpoint's field says what the training run
+    /// covered — narrowed, since the ship bundle, to what its author intends it to
+    /// drive. This parameter is the OPERATOR's answer to the second question, and
+    /// it is the only one that can name a class the file does not: a should-drive
+    /// set narrowed on the producing side destroys the information that the run
+    /// also trained the classes it dropped, and nothing but a person who knows
+    /// that can put one back. <c>BotBrain.Build</c> warns when it happens.
+    /// </remarks>
+    public PolicyController(PolicyNetwork policy, PlayerClass[]? drives)
     {
         ArgumentNullException.ThrowIfNull(policy);
 
         _policy = policy;
+
+        // Copied, not aliased: a spec is shared by every bot on the server and a
+        // caller that later mutated its array would change what a controller
+        // already built drives, at an arbitrary tick.
+        _drives = drives is null ? null : [.. drives];
+
         _observation = new float[policy.ObservationLength];
         _heads = new int[ActionDecoder.HeadShape.Length];
     }
@@ -78,16 +111,34 @@ public sealed class PolicyController : IMicroController
     /// built for and could not exercise while this read a static.
     /// </para>
     /// <para>
-    /// ⚠️⚠️ <b>This equates "trained on" with "should drive", and the training
-    /// lane has a measured case where they differ</b> — see
+    /// ⚠️⚠️ <b>The checkpoint's field equates "trained on" with "should drive",
+    /// and the training lane has a measured case where they differ</b> — see
     /// <see cref="PolicyNetwork.TrainedClasses"/>. A class can be trained and
     /// still mirror indistinguishably from the scripted bot it would replace, in
     /// which case driving it buys nothing and costs the policy's decision budget.
-    /// Known and deliberately not modelled: a should-drive set is a second field
-    /// and their judgement, not a redefinition of the one the file carries.
+    /// </para>
+    /// <para>
+    /// ✅ <b>Since 2026-09-07 an operator can answer that second question here</b>,
+    /// by configuring the set through the constructor rather than accepting the
+    /// file's — <c>[Bots] ClassPolicy</c> and <c>--bot-class-policy</c> are what
+    /// reach it. When nothing is configured this still asks the checkpoint, which
+    /// is the right default: the file's set is its author's own statement of what
+    /// it should drive.
     /// </para>
     /// </remarks>
-    public bool Drives(PlayerClass playerClass) => _policy.IsTrained(playerClass);
+    public bool Drives(PlayerClass playerClass)
+    {
+        if (_drives is null)
+            return _policy.IsTrained(playerClass);
+
+        foreach (var driven in _drives)
+        {
+            if (driven == playerClass)
+                return true;
+        }
+
+        return false;
+    }
 
 
     public bool AtDecisionBoundary(int slot) => slot != _slot || _ticksLeftInDecision <= 0;

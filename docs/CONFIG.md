@@ -314,7 +314,8 @@ a way to give an attacker more room.
 | `MinHumans` | integer | `1` | Humans that must be connected before **any** bot is spawned. ⚠️ Below it the target is **zero**, not the fill — an empty server full of bots looks full in the lobby list and is not. |
 | `Difficulty` | integer | `5` | 1 to 5. 5 is "as good as the layer gets"; the lower tiers are a deliberate handicap ladder. |
 | `NamePrefix` | text | `[BOT] ` | What a bot's name starts with. ⚠️ The trailing space is real — see the quoting rule above. |
-| `Classes` | list | *(empty)* | Restrict the class draw. Empty draws all nine, which runs a **mix** of the hybrid arm and the all-scripted one, because the controllers only engage on the trained classes. `trained` is shorthand for the **default** four, ⛔ not for whatever `Policy` loaded — the two differ for the shipped bundle, and `trained` there silently drops pyro. Name the classes when running a checkpoint outside the default family. |
+| `Classes` | list | *(empty)* | Restrict which classes bots **play**. Empty draws all nine, which runs a **mix** of the hybrid arm and the all-scripted one, because a controller only engages on the classes it drives. `driven` is shorthand for whatever the loaded policies drive, ✅ **resolved at startup from the loaded checkpoints** rather than from a constant. `trained` is accepted as the old spelling and reads back as `driven`. |
+| `ClassPolicy` | list | *(empty)* | Which controller **drives** each class — `Class=name` entries, where name is a checkpoint's file name without its extension or `scripted`. Anything not named keeps the default: whichever loaded checkpoint's own class set claims it, scripted if none does. ⚠️ Naming a class the file does not list is legal and **warned about** — the file cannot say whether the run never trained it or a narrowed should-drive set dropped it. |
 | `Occupancy` | boolean | `1` | Price an edge a team-mate is already walking above its honest cost, so a squad fans out. ⛔ A **behaviour** switch: off, match dispersion falls 0.785 → 0.634 and nothing replaces it. |
 | `EngageBots` | boolean | `0` | Run the expensive micro-controller in bot-vs-bot fights too. It does not make the bots better; it makes those fights cost more. |
 | `AdaptiveBudget` | boolean | `1` | Let the server walk the controller budget down when ticks crowd their deadline. `Arbiter` stays an upper bound. |
@@ -324,12 +325,29 @@ a way to give an attacker more room.
 | `Arbiter` | integer | *(empty)* | **Microseconds** of bot-controller work per tick, against a 33,300 µs tick. Empty lets the mode pick its default. |
 | `SearchThreads` | integer | *(cores/3, 1..8)* | Threads the rollout search uses. Threads change **no** decision, so this is a pure cost knob. |
 
-⚠️ **`Mode`, `Policy`, `PolicyIgnoreStamp`, `Arbiter` and `SearchThreads` are
-INPUTS to the brain, not the brain.** `BotBrain.Build` is the one place they
-become a `BotBrainSpec`, shared by the config file and the command line. They
-exist as settings because a `BotBrainSpec` holds a loaded `PolicyNetwork` —
-megabytes of weights with no textual form — so it cannot round-trip and the
-inputs can.
+⚠️ **`Mode`, `Policy`, `PolicyIgnoreStamp`, `ClassPolicy`, `Arbiter` and
+`SearchThreads` are INPUTS to the brain, not the brain.** `BotBrain.Build` is the
+one place they become a `BotBrainSpec`, shared by the config file and the command
+line. They exist as settings because a `BotBrainSpec` holds a loaded
+`PolicyNetwork` — megabytes of weights with no textual form — so it cannot
+round-trip and the inputs can.
+
+⛔ **`Classes` and `ClassPolicy` answer DIFFERENT questions, and were one key
+until 2026-09-07.** `Classes` says which classes bots **play**; `ClassPolicy`
+says who **drives** one that is played. Sharing a key shipped a real bug:
+`Classes` took the word `trained`, that word named a compile-time four-class set,
+and the set had stopped being any loaded checkpoint's — so on the shipped
+two-tier bundle it drew a plausible four-class roster on a server whose fifth
+tier then never drove. **A smaller-but-plausible roster is the worst shape of
+wrong**, because every bot it does draw is driven correctly and nothing looks
+broken.
+
+⚠️ **`Classes = driven` is resolved at STARTUP, not where the key is read** —
+options are parsed before any checkpoint is opened — and it reads back as
+`driven` rather than as the classes it resolved to. Deliberate: a save from the
+settings page must not silently pin today's answer into the file for ever. The
+startup log prints the resolved list, and one line per checkpoint saying which
+classes that checkpoint will drive.
 
 ### `[Web]`
 

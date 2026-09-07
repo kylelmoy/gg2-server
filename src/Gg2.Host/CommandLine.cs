@@ -182,7 +182,7 @@ internal static class CommandLine
                 throw new ArgumentException(
                     $"{flag}: '{names[i]}' is not a class a bot can be. "
                     + "Scout, Pyro, Soldier, Heavy, Demoman, Medic, Engineer, Spy, Sniper, "
-                    + "or 'trained' for the four the policy was trained on.");
+                    + "or 'driven' for whatever the loaded policies drive.");
             }
 
             picked[i] = playerClass;
@@ -648,34 +648,56 @@ internal static class CommandLine
                     options.PolicyIgnoreStamp = true;
                     break;
 
-                // ⚠️ SEPARATE from --search-bots and --policy on purpose. Both
-                // shipped controllers engage only on the classes the policy was
-                // trained for, so a server drawing all nine runs a MIX of the hybrid
-                // arm and the all-scripted one, and a playtester cannot tell which bot
-                // they just fought. "trained" is the shorthand for making every bot
-                // the configuration that was actually measured -- at the cost of a
-                // roster missing the rest. Say which you ran.
+                // ⚠️ WHICH CLASSES BOTS PLAY, and SEPARATE from which controller
+                // drives one — that is --bot-class-policy below. A controller engages
+                // only on the classes it drives, so a server drawing all nine runs a
+                // MIX of the hybrid arm and the all-scripted one and a playtester
+                // cannot tell which bot they just fought. Restricting the draw is what
+                // makes every bot the configuration under test. Say which you ran.
                 //
-                // ⛔ "trained" is the DEFAULT set, not the loaded checkpoint's, and
-                // since 2026-09-06 those can differ. It cannot be otherwise here:
-                // flags are parsed before any --policy is loaded, and argument order
-                // is not guaranteed. So with a checkpoint outside the default family
-                // this shorthand gives a roster the policy does NOT drive, which is
-                // the all-scripted arm wearing the hybrid one's name. Pass the
-                // classes explicitly when running such a checkpoint.
+                // ⛔ "driven" is RESOLVED IN BotBrain.Build, not here, because here
+                // the answer does not exist yet: flags are parsed before any --policy
+                // is opened and argument order is not guaranteed. That deferral is the
+                // fix for a real bug — the word used to be "trained" and used to mean
+                // a compile-time set, which on the shipped bundle silently dropped
+                // pyro and left its tier never driving. "trained" is still accepted.
                 case "--bot-classes":
                 {
                     var text = cursor.Take();
 
+                    var followsPolicy =
+                        string.Equals(text, ServerSettings.DrivenClasses, StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(text, "trained", StringComparison.OrdinalIgnoreCase);
+
                     options.Bots = options.Bots with
                     {
-                        AllowedClasses = string.Equals(text, "trained", StringComparison.OrdinalIgnoreCase)
-                            ? [.. PolicyNetwork.DefaultTrainedClasses]
-                            : ParseClasses(name, text),
+                        AllowedClasses = followsPolicy ? null : ParseClasses(name, text),
+                        ClassDrawFollowsPolicy = followsPolicy,
                     };
 
                     break;
                 }
+
+                // ⛔ WHICH CONTROLLER DRIVES A CLASS: Class=name, where name is a
+                // checkpoint's file name without its extension, or "scripted".
+                // Repeatable and APPENDS, so a class per flag reads the way an
+                // operator thinks about it; a single flag may also carry a
+                // comma-separated list, because the config key is one line.
+                //
+                // ⚠️ It does not need to name every class. Anything unmentioned keeps
+                // the default — whichever loaded checkpoint's own set claims it — so
+                // this only ever has to be written to OVERRIDE one, which is what
+                // keeps "the policies drive their intended classes" the thing that
+                // happens when nobody configures anything.
+                case "--bot-class-policy":
+                    options.BotClassPolicies =
+                    [
+                        .. options.BotClassPolicies,
+                        .. cursor.Take().Split(
+                            ',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+                    ];
+
+                    break;
 
                 case "--bot-difficulty":
                     options.Bots = options.Bots with { Difficulty = cursor.TakeInt() };
@@ -1073,12 +1095,20 @@ internal static class CommandLine
                             a bot-vs-bot fight stays scripted, which is a COST
                             saving and not a skill one. Every recorded arm
                             measurement was taken with this behaviour.
-          --bot-classes <list|trained>
-                            restrict the bot class draw (default: the reference's
-                            own draw of eight). 'trained' is Scout, Soldier,
-                            Sniper and Heavy - the only classes the search and
-                            policy controllers engage on, so pass it to make EVERY
-                            bot the configuration the bench measured.
+          --bot-classes <list|driven>
+                            restrict which classes bots PLAY (default: the
+                            reference's own draw of eight). 'driven' is whatever
+                            the loaded policies drive, resolved at startup - pass
+                            it to make EVERY bot the configuration under test
+                            rather than a mix of that and the all-scripted arm.
+                            'trained' is accepted as the old spelling.
+          --bot-class-policy <Class=name,...>
+                            choose who drives a class: a checkpoint's file name
+                            without its extension, or 'scripted'. Repeatable, and
+                            it only has to name the ones you are OVERRIDING -
+                            anything unmentioned is driven by whichever loaded
+                            checkpoint's own class set claims it, and is scripted
+                            if none does. e.g. --bot-class-policy Soldier=scripted
           --botnav <path>   override the bot nav graphs (default: nav/)
           --no-navgen       do not build a nav graph for a map that has none.
                             On by default, and it is what makes a CUSTOM map

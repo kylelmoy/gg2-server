@@ -587,23 +587,44 @@ public static class ServerSettings
             "What a bot's name starts with."));
 
         // ⛔ 'trained' is the DEFAULT trained set, not the loaded checkpoint's, and
-        // since 2026-09-06 those can differ. Pass the classes explicitly when
-        // running a checkpoint outside the default family.
+        // ⛔ WHICH CLASSES BOTS PLAY. Which controller drives one is ClassPolicy
+        // below, and the two were one knob until 2026-09-07 — see DrivenClasses for
+        // the bug that cost.
+        //
+        // ⚠️ ClassDrawFollowsPolicy wins the read-back, so a server started with
+        // 'driven' reads back as 'driven' rather than as the classes it resolved to
+        // this time. Otherwise a save from the settings page would quietly pin
+        // today's answer into the file for ever.
         settings.Add(new ServerSetting
         {
             Section = "Bots",
             Key = "Classes",
             Property = "Bots",
             Kind = SettingKind.List,
-            Get = o => o.Bots.AllowedClasses is { } classes
-                ? string.Join(',', classes.Select(c => c.ToString()))
-                : string.Empty,
-            Set = (o, v) => o.Bots = o.Bots with { AllowedClasses = Classes(v) },
+            Get = o => o.Bots.ClassDrawFollowsPolicy
+                ? DrivenClasses
+                : o.Bots.AllowedClasses is { } classes
+                    ? string.Join(',', classes.Select(c => c.ToString()))
+                    : string.Empty,
+            Set = (o, v) => o.Bots = Classes(o.Bots, v),
             Probe = "Scout,Soldier",
-            Help = "Restrict the class draw. Empty draws all nine, which runs a MIX of "
-                + "the hybrid arm and the all-scripted one because the controllers only "
-                + "engage on the trained classes. 'trained' is shorthand for that set.",
+            Help = "Restrict which classes bots PLAY. Empty draws all nine, which runs a "
+                + "MIX of the hybrid arm and the all-scripted one because a controller only "
+                + $"engages on the classes it drives. '{DrivenClasses}' is shorthand for "
+                + "whatever the loaded policies drive, resolved at startup.",
         });
+
+        // ⛔ WHICH CONTROLLER DRIVES A CLASS — the other half, and a different
+        // question from the row above. Default is every checkpoint's own set, so
+        // this only ever has to be written to override one.
+        settings.Add(ListRow(
+            "Bots", "ClassPolicy", nameof(ServerOptions.BotClassPolicies),
+            o => o.BotClassPolicies, (o, v) => o.BotClassPolicies = v,
+            "Sniper=scripted,Pyro=tier2_pyro_rest3_s0",
+            "Class=name entries deciding who drives each class, where name is a "
+                + $"checkpoint's file name without its extension or '{BotBrain.Scripted}'. "
+                + "Anything not named here keeps the default: whichever loaded checkpoint's "
+                + "own class set claims it, scripted if none does."));
 
         // ⛔ A BEHAVIOUR switch, not a performance one. Off, a team's routes stop
         // being pushed apart and match dispersion falls 0.785 -> 0.634 with nothing
@@ -980,15 +1001,42 @@ public static class ServerSettings
     /// <summary>
     /// The bot class draw: names, the word <c>trained</c>, or empty for all nine.
     /// </summary>
-    private static PlayerClass[]? Classes(string value)
+    /// <summary>
+    /// The word <c>Bots.Classes</c> and <c>--bot-classes</c> both accept for
+    /// "whatever the loaded policies drive".
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>It used to be spelled <c>trained</c> and it used to mean
+    /// <c>PolicyNetwork.DefaultTrainedClasses</c> — a compile-time set.</b> That
+    /// stopped being any loaded checkpoint's set on 2026-09-06, when the class set
+    /// became a property of the file, and on the ship bundle it silently dropped
+    /// pyro: a plausible four-class roster on a server whose fifth tier then never
+    /// drove. The word is now <c>driven</c>, it is resolved in
+    /// <see cref="BotBrain.Build"/> where the checkpoints are actually open, and it
+    /// asks the loaded tiers rather than a constant.
+    /// <para>
+    /// <c>trained</c> is still accepted as the old spelling, and deliberately reads
+    /// back as <c>driven</c>: a file written from a running server should say what
+    /// the setting now means.
+    /// </para>
+    /// </remarks>
+    public const string DrivenClasses = "driven";
+
+    private static BotPopulationOptions Classes(BotPopulationOptions bots, string value)
     {
         var text = value.Trim();
 
         if (text.Length == 0)
-            return null;
+            return bots with { AllowedClasses = null, ClassDrawFollowsPolicy = false };
 
-        if (text.Equals("trained", StringComparison.OrdinalIgnoreCase))
-            return [.. PolicyNetwork.DefaultTrainedClasses];
+        if (text.Equals(DrivenClasses, StringComparison.OrdinalIgnoreCase)
+
+            // The 2026-09-06 spelling, kept working. It named a set that no longer
+            // exists as a constant, so mapping it here is the only reading left.
+            || text.Equals("trained", StringComparison.OrdinalIgnoreCase))
+        {
+            return bots with { AllowedClasses = null, ClassDrawFollowsPolicy = true };
+        }
 
         var names = Split(text);
         var picked = new PlayerClass[names.Length];
@@ -1001,13 +1049,13 @@ public static class ServerSettings
                 throw new FormatException(
                     $"Bots.Classes: '{names[i]}' is not a class a bot can be. "
                     + "Scout, Pyro, Soldier, Heavy, Demoman, Medic, Engineer, Spy, Sniper, "
-                    + "or 'trained' for the four the policy was trained on.");
+                    + $"or '{DrivenClasses}' for whatever the loaded policies drive.");
             }
 
             picked[i] = playerClass;
         }
 
-        return picked;
+        return bots with { AllowedClasses = picked, ClassDrawFollowsPolicy = false };
     }
 
     /// <summary>A number, or the word <c>max</c> — the same grammar <c>--speed</c> takes.</summary>

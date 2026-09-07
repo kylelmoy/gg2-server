@@ -34,14 +34,34 @@ namespace Gg2.Bots;
 /// draw to it.
 /// </param>
 /// <remarks>
-/// <b>Restricting classes and configuring a <c>Brain</c> are SEPARATE decisions
-/// and this keeps them separate.</b> The shipped controllers engage only on the
-/// four classes the policy was trained for
-/// (<see cref="PolicyController.TrainedClasses"/>), so a server drawing all eight
-/// runs a mix of the hybrid arm and the all-scripted one and a playtester cannot
-/// tell which bot they just fought. Restricting the draw makes every bot the
-/// measured configuration — at the cost of a roster missing five classes. <b>Say
-/// which you ran.</b>
+/// <b>Restricting the class DRAW and choosing which controller drives a class are
+/// SEPARATE decisions, and keeping them separate is the whole point of this
+/// field.</b> A <c>Brain</c>'s tiers each answer
+/// <see cref="IMicroController.Drives"/> per class, so a server drawing all nine
+/// runs a MIX of the hybrid arm and the all-scripted one — which is a perfectly
+/// good live server and a useless measurement, because a playtester cannot tell
+/// which bot they just fought. Restricting the draw is what makes every bot the
+/// configuration under test. <b>Say which you ran.</b>
+/// <para>
+/// ⚠️ <b>The two were entangled until 2026-09-07 and it caused a real bug.</b>
+/// <c>--bot-classes trained</c> named a compile-time set that had stopped being
+/// any loaded checkpoint's, so it silently dropped a class the shipped bundle
+/// drives. The draw restriction is now resolved from the loaded tiers
+/// (<c>ClassDrawFollowsPolicy</c>), and which tier drives a class is configured
+/// separately by <c>[Bots] ClassPolicy</c>.
+/// </para>
+/// </remarks>
+/// <param name="ClassDrawFollowsPolicy">
+/// Draw only the classes the configured <see cref="Brain"/> actually drives —
+/// <c>--bot-classes driven</c>.
+/// </param>
+/// <remarks>
+/// ⛔ <b>A DEFERRED <see cref="AllowedClasses"/>, not a second restriction.</b> It
+/// exists because the answer is not known when the flag or the config key is read:
+/// options are parsed before any checkpoint is opened, and which classes a tier
+/// drives is a property of the file plus the operator's per-class configuration.
+/// <c>BotBrain.Build</c> resolves it into <see cref="AllowedClasses"/> at the end
+/// of parsing and this goes back to false, so nothing downstream ever sees it set.
 /// </remarks>
 /// <param name="Brain">
 /// Non-null gives every bot the micro-controllers in it inside its engagement
@@ -73,7 +93,8 @@ public readonly record struct BotPopulationOptions(
     int Difficulty = 5,
     string NamePrefix = "[BOT] ",
     PlayerClass[]? AllowedClasses = null,
-    BotBrainSpec? Brain = null)
+    BotBrainSpec? Brain = null,
+    bool ClassDrawFollowsPolicy = false)
 {
     /// <summary>
     /// The reference's own <c>[Bots]</c> defaults.
@@ -108,7 +129,8 @@ public readonly record struct BotPopulationOptions(
         Difficulty: 5,
         NamePrefix: "[BOT] ",
         AllowedClasses: null,
-        Brain: null);
+        Brain: null,
+        ClassDrawFollowsPolicy: false);
 }
 
 /// <summary>

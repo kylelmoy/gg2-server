@@ -184,9 +184,29 @@ dotnet run --project src/Gg2.Host -- --map ctf_truefort --bots 12 --bot-mode pol
 `--policy` is repeatable and **appends**, one tier per checkpoint; `[Bots]
 Policy` takes the same list comma-separated. A checkpoint's class set is a
 property of the FILE, so two files is how five classes get covered by two
-families of weights. ⛔ **Do not pass `--bot-classes trained` with this
-bundle** — that shorthand is the *default* four-class set, resolved before any
-checkpoint is loaded, so it silently drops pyro; name the five explicitly.
+families of weights, and **each drives the classes its own file claims with
+nothing further configured**.
+
+#### Two settings, two questions — and they were one knob until 2026-09-07
+
+| setting | question |
+|---|---|
+| `--bot-class-policy Class=name` / `[Bots] ClassPolicy` | **who drives a class**: a checkpoint's file name without its extension, or `scripted`. Only has to name what you are overriding. |
+| `--bot-classes driven` / `[Bots] Classes` | **which classes bots play**: restricts the draw to whatever the loaded policies drive, so every bot is the configuration under test rather than a mix of that and the all-scripted arm. |
+
+⛔ **Sharing one knob shipped a bug worth knowing about.** `--bot-classes
+trained` named a compile-time four-class set that had stopped being any loaded
+checkpoint's, so on this bundle it drew a plausible four-class roster and the
+pyro tier never drove. **A smaller-but-plausible roster is the worst shape of
+wrong** — every bot it does draw is driven correctly, so nothing looks broken.
+`driven` is now resolved in `BotBrain.Build`, where the checkpoints are open;
+`trained` still parses and means the same thing.
+
+⚠️ **`ClassPolicy` may name a class the file does not list, and it warns rather
+than refusing.** It has to: `tier2_pyro` trained engineer and spy and no longer
+says so, and refusing would make putting them back impossible. The warning
+cannot tell "never trained" from "narrowed out" — nothing in either repository
+can. `docs/TRAPS-BOTS.md`, "a should-drive set in a trained-on field".
 
 ⛔ **`checkpoints/README.md` before quoting any number off these.** What has a
 match number and what does not is not obvious: the pyro tier as shipped —

@@ -5113,3 +5113,69 @@ the repo can contradict.
 
 ⛔ **None of that is evidence a checkpoint plays well**, and no threshold in
 either file should ever be read as if it were.
+
+### ⛔ Two questions, one knob: `--bot-classes trained` was silently wrong
+
+**2026-09-07, the user's call after the bundle landed.** Which classes bots
+**play** and which controller **drives** a class are different questions, and
+until this they shared one setting.
+
+`--bot-classes trained` meant `PolicyNetwork.DefaultTrainedClasses` — a
+**compile-time** four-class set. That set stopped being any loaded checkpoint's
+on 2026-09-06, when the class set became a property of the file. On the shipped
+bundle the shorthand therefore drew scout, soldier, demoman and heavy, and
+**pyro never appeared, so the pyro tier never drove.**
+
+⚠️ **A smaller-but-plausible roster is the worst shape of wrong.** Every bot it
+does draw *is* driven correctly. There is no error, no missing class in any log
+line, no failing test, and no visible difference from a correctly configured
+server except that one of the two tiers is inert. Compare the failures this
+file already carries: a stranded bot is visible, a wrong-hill bot is visible.
+**This one is only visible if you count.**
+
+Why it could not be fixed where it was read: **options are parsed before any
+`--policy` is opened**, and argument order is not guaranteed. The word could not
+be resolved at the point it was written, so it was resolved against a constant
+instead — which is the shape of the bug, not an accident of it.
+
+#### What replaced it
+
+| setting | question | resolved |
+|---|---|---|
+| `[Bots] Classes` / `--bot-classes` | which classes bots PLAY | `driven` is deferred to `BotBrain.Build`, where the checkpoints are open |
+| `[Bots] ClassPolicy` / `--bot-class-policy` | who DRIVES a class | `Class=<label>` or `Class=scripted`; default is every checkpoint's own set |
+
+- ✅ **The default is "every checkpoint drives what its file claims"**, so a
+  server that configures nothing gets the intended behaviour. `ClassPolicy` only
+  ever has to name what is being overridden.
+- ⛔ **An explicit assignment beats the file in BOTH directions** — including
+  `Class=scripted`, which is the only way to drop a class a checkpoint claims
+  without re-minting the file. Soldier is the case that motivated it: it ships
+  driving on a mirror *below* its null.
+- ⛔ **Assigning a class the file does not list is legal and WARNS.** It has to
+  be legal: `tier2_pyro` trained engineer and spy and no longer says so, and
+  refusing would make putting them back impossible. The warning **cannot** say
+  which of the two cases it is — nothing in either repository can.
+- ✅ **An explicit assignment also resolves a tier overlap**, because the class
+  leaves every tier but the one named. So the overlap warning can only fire for
+  classes nobody assigned, and this setting is the *answer* to it rather than
+  another source of one.
+- ⚠️ **A tier left driving nothing warns** — loaded, stamp-checked, reported and
+  never consulted is the defect the arbiter invariant refuses in its own case.
+  Not refused here, because turning a tier off to see what the rest do is a real
+  experiment.
+- ⛔ **`driven` with nothing driving is REFUSED, not "all nine".** The empty set
+  would read as no restriction, which is the exact inversion of what was asked
+  for.
+- ⚠️ **`Classes` reads back as `driven`, not as the classes it resolved to.**
+  Otherwise a save from the settings page silently pins today's answer into the
+  file for ever. The resolved list goes in the startup log instead.
+
+#### The generalisation
+
+⛔ **A setting that cannot be resolved where it is read must defer, not
+approximate.** The constant was a stand-in for an answer that did not exist yet,
+and a stand-in for an unavailable answer decays silently — nothing goes red when
+the real answer moves away from it. `docs/BOTS.md`'s "the shipped bundle" has the
+operator-facing version; `BotPopulationOptions.ClassDrawFollowsPolicy` is the
+deferral itself.

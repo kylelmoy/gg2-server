@@ -35,6 +35,14 @@ public abstract record MicroControllerSpec
 /// print <c>policy+policy</c> — the exact defect that type's remarks describe.
 /// The host passes the checkpoint's file name.
 /// </param>
+/// <param name="Drives">
+/// Which classes this tier drives, or null to ask the checkpoint. ⛔ <b>An EMPTY
+/// array is not null</b> — it is a tier an operator has configured to drive
+/// nothing, and falling back to the file's set there would silently re-enable
+/// every class they turned off. <c>BotBrain.Build</c> computes this from
+/// <c>[Bots] ClassPolicy</c>; see <see cref="PolicyController"/>'s two-argument
+/// constructor for why an operator gets an answer the file cannot give.
+/// </param>
 /// <remarks>
 /// ⚠️ <b>Trained checkpoints for this build EXIST</b> — this sentence asserted the
 /// opposite until 2026-09-07, and by then it had been false for a day.
@@ -42,12 +50,13 @@ public abstract record MicroControllerSpec
 /// numbers do and do not cover; <c>PolicyNetwork.Load</c> still refuses a foreign
 /// stamp by design.
 /// </remarks>
-public sealed record PolicyMicroSpec(PolicyNetwork Policy, string? Label = null)
+public sealed record PolicyMicroSpec(
+    PolicyNetwork Policy, string? Label = null, PlayerClass[]? Drives = null)
     : MicroControllerSpec
 {
     public override string Name => Label is null ? "policy" : "policy:" + Label;
 
-    public override IMicroController Create() => new PolicyController(Policy);
+    public override IMicroController Create() => new PolicyController(Policy, Drives);
 }
 
 /// <summary>A rollout search driving keys and aim. <c>docs/BOTS.md</c>'s arm 3.</summary>

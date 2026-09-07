@@ -136,10 +136,19 @@ gg2-server --map ctf_truefort --bots 12 --bot-mode policy \
   --policy checkpoints/tier2_pyro_rest3_s0.npz
 ```
 
+Each checkpoint drives the classes its own file claims, so that command needs no
+further configuration. Two settings adjust it, and they answer different
+questions:
+
+| | |
+|---|---|
+| `--bot-class-policy Soldier=scripted` | **who drives a class.** A checkpoint's file name without its extension, or `scripted`. Repeatable, and it only has to name the classes you are overriding. |
+| `--bot-classes driven` | **which classes bots play.** Restricts the draw to whatever the loaded policies drive, so every bot is the configuration under test rather than a mix of that and the all-scripted arm. |
+
 A checkpoint is dated by the simulation it was trained against: the loader prints
-both stamps and refuses a mismatch unless told otherwise. Read
-`checkpoints/README.md` before quoting any number off these — what has a match
-number and what does not is not obvious from the files.
+both stamps, the classes each will drive, and refuses a mismatch unless told
+otherwise. Read `checkpoints/README.md` before quoting any number off these —
+what has a match number and what does not is not obvious from the files.
 
 ### Offline tooling
 

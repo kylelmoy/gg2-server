@@ -135,6 +135,23 @@ public sealed class CliCoverageTests
         ("PolicyIgnoreStamp",
             ["--policy", PolicyFixture.Checkpoint, "--policy-ignore-stamp"],
             o => o.PolicyIgnoreStamp),
+        // WHICH CONTROLLER DRIVES A CLASS. Sniper=scripted is a no-op against this
+        // checkpoint's own set — deliberately, because this row is about the flag
+        // reaching the option; BotClassPolicyTests is where the resolution lives.
+        ("BotClassPolicies",
+            ["--bot-mode", "policy", "--policy", PolicyFixture.Checkpoint,
+             "--bot-class-policy", "Sniper=scripted"],
+            o => string.Join(',', o.BotClassPolicies)),
+
+        // WHICH CLASSES BOTS PLAY, in its deferred form. A row of its own because
+        // `driven` takes a different branch from a class list and is the one that
+        // was silently wrong: it needs a checkpoint loaded, since Build refuses to
+        // let it mean "all nine" when nothing drives anything.
+        ("Bots",
+            ["--bot-mode", "policy", "--policy", PolicyFixture.Checkpoint,
+             "--bot-classes", "driven"],
+            o => o.Bots.AllowedClasses is null ? "" : string.Join(',', o.Bots.AllowedClasses)),
+
         ("BotArbiterMicroseconds",
             ["--bot-mode", "search", "--bot-arbiter", "7500"],
             o => o.BotArbiterMicroseconds),

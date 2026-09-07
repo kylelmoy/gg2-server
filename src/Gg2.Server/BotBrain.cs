@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Text;
 using Gg2.Bots;
 using Gg2.Protocol;
@@ -100,16 +101,100 @@ public static class BotBrain
         if (mode.UsesSearch())
             tiers.Add(new SearchMicroSpec(new RolloutOptions(Threads: options.SearchThreads)));
 
+        // The operator's per-class assignments, parsed and validated before a
+        // single checkpoint is opened so a typo costs no file I/O and, more to the
+        // point, so the error names the setting rather than a load failure.
+        var assigned = ParseClassPolicies(options.BotClassPolicies);
+        var driven = new List<PlayerClass>();
+
         if (mode.UsesPolicy())
         {
             // Which tier already claimed each class, so an OVERLAP is named rather
             // than silently resolved by list order.
             var claimedBy = new Dictionary<PlayerClass, string>();
+            var labels = new List<string>();
 
             foreach (var policyPath in policyPaths)
             {
                 var policy = PolicyNetwork.Load(policyPath, options.PolicyIgnoreStamp);
                 var label = Path.GetFileNameWithoutExtension(policyPath);
+
+                labels.Add(label);
+
+                // ⛔ THE RESOLUTION, and the ORDER of the two halves is the whole
+                // design. An explicit assignment wins outright — including the
+                // negative one, `Class=scripted`, which is why membership in
+                // `assigned` and not its value is what excludes a class from the
+                // file's own set. The file's set then fills in every class the
+                // operator did not mention, which is what makes "the policies drive
+                // their intended classes" the default rather than something that
+                // has to be configured.
+                //
+                // ⚠️ A consequence worth knowing: naming a class explicitly also
+                // resolves an overlap, because the class is then in `assigned` and
+                // every other tier drops it. The overlap warning below can only
+                // fire for classes nobody assigned.
+                var drives = new List<PlayerClass>();
+
+                foreach (var playerClass in policy.TrainedClasses)
+                {
+                    if (!assigned.ContainsKey(playerClass))
+                        drives.Add(playerClass);
+                }
+
+                // ⚠️ Collected rather than printed here, so every warning lands AFTER
+                // the stamp line it is about. A warning naming a tier the reader has
+                // not been introduced to yet is one they have to re-read.
+                var warnings = new List<string>();
+
+                foreach (var (playerClass, target) in assigned)
+                {
+                    if (!string.Equals(target, label, StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    drives.Add(playerClass);
+
+                    // ⛔ Warned, not refused, and the warning cannot say which of two
+                    // things happened. A checkpoint's one class set does two jobs —
+                    // what the run trained and what its author intends it to drive —
+                    // and the ship bundle narrows the second into the first, which
+                    // destroys the record of what else was trained. So "the file does
+                    // not list this class" means EITHER the run never saw it (driving
+                    // it is untrained input arriving as a legal-looking observation)
+                    // OR the author narrowed it out and the operator is putting back
+                    // something real. Nothing in either repository can tell those
+                    // apart; a person who knows the checkpoint can.
+                    if (!policy.IsTrained(playerClass))
+                    {
+                        warnings.Add(
+                            $"WARNING: {label} is configured to drive {playerClass}, which its "
+                            + "own class set does not list. That is either a class it never "
+                            + "trained on, or one a narrowed should-drive set dropped — the "
+                            + "file cannot say which. docs/TRAPS-BOTS.md, 'a should-drive set "
+                            + "in a trained-on field'.");
+                    }
+                }
+
+                // ⛔ A tier driving NOTHING is loaded, reported and never consulted —
+                // the thing the arbiter invariant below refuses in its own case. Not
+                // refused here, because turning one tier off to see what the rest do
+                // is a legitimate experiment and it should not need the file removed;
+                // but it is megabytes of weights and a stamp check bought for no
+                // behaviour, and an operator who did it by accident would otherwise
+                // see a completely ordinary startup.
+                if (drives.Count == 0)
+                {
+                    warnings.Add(
+                        $"WARNING: {label} drives no classes at all, so it is loaded and never "
+                        + "consulted. Every class its file claims was assigned elsewhere by "
+                        + "Bots.ClassPolicy — drop the checkpoint if that was deliberate.");
+                }
+
+                // Stable and readable rather than insertion-ordered: the assigned
+                // half above arrives in dictionary order, and a stamp line whose
+                // class list reshuffles between runs is a diff nobody can read.
+                drives.Sort((left, right) => ((int)left).CompareTo((int)right));
+                driven.AddRange(drives);
 
                 // ⛔ ALWAYS reported, not only when overridden. A run whose stamps
                 // agree says so; a run that bypassed the guard says THAT, loudly, on
@@ -136,9 +221,20 @@ public static class BotBrain
                         ? " (match)"
                         : "  <-- STAMP MISMATCH, BYPASSED. Everything this policy decides was "
                           + "learned on a different simulation.")
-                    + $", drives {Classes(policy.TrainedClasses)}");
+                    + $", drives {Classes(CollectionsMarshal.AsSpan(drives))}"
 
-                foreach (var playerClass in policy.TrainedClasses)
+                    // ⚠️ Only when the two differ, so the ordinary line stays short
+                    // and the configured one is visibly the exception. Without it a
+                    // ClassPolicy typo that silenced a tier would print a plausible
+                    // line naming a smaller set and look like the file's own.
+                    + (Classes(CollectionsMarshal.AsSpan(drives)) == Classes(policy.TrainedClasses)
+                        ? string.Empty
+                        : $" (CONFIGURED; the file says {Classes(policy.TrainedClasses)})"));
+
+                foreach (var warning in warnings)
+                    report?.Invoke(warning);
+
+                foreach (var playerClass in drives)
                 {
                     // ⛔ Reported, NOT refused. Two tiers overlapping is a legitimate
                     // fallback ladder — the arbiter drops to the later one under
@@ -165,8 +261,38 @@ public static class BotBrain
                 // ⚠️ AFTER the search, so tier 0 is the more expensive controller and
                 // an arbiter under pressure drops to the policy before it drops to the
                 // scripted layer. Ordering is the arbiter's whole input — HybridBot.
-                tiers.Add(new PolicyMicroSpec(policy, label));
+                //
+                // ⛔ The set is passed EXPLICITLY even when it equals the file's, so
+                // there is exactly one place a tier's class set is decided. A spec
+                // that sometimes carried null and sometimes a set would have two, and
+                // the null branch would be the one nothing configured ever exercises.
+                tiers.Add(new PolicyMicroSpec(policy, label, [.. drives]));
             }
+
+            // ⛔ AFTER the loop, so the message can name the labels that DO exist.
+            // A typo here is the failure mode this whole setting invites: it looks
+            // like a working server whose bots are quietly all scripted.
+            foreach (var (playerClass, target) in assigned)
+            {
+                if (target is Scripted || labels.Contains(target, StringComparer.OrdinalIgnoreCase))
+                    continue;
+
+                throw new ArgumentException(
+                    $"bot class policy '{playerClass}={target}': no checkpoint is loaded under "
+                    + $"that name. A name is a checkpoint's file name without its extension — "
+                    + $"loaded: {(labels.Count == 0 ? "none" : string.Join(", ", labels))} — or "
+                    + $"'{Scripted}' to leave the class to the scripted layer.");
+            }
+        }
+        else if (assigned.Count > 0)
+        {
+            // Same argument as the checkpoint-with-no-policy-mode refusal above: a
+            // setting that is read, validated and then cannot possibly apply is a
+            // server saying it is doing something it is not.
+            throw new ArgumentException(
+                $"bot class policies were configured but bot mode "
+                + $"'{mode.ToString().ToLowerInvariant()}' runs no policy; use bot mode policy "
+                + "or tiered, or drop them.");
         }
 
         // ⛔ Unreachable from the settings now — NeedsArbiter defaults the budget
@@ -188,12 +314,58 @@ public static class BotBrain
                 + "without one the first tier always drives and the rest are dead weight");
         }
 
+        // ⛔ THE DEFERRED ROSTER, resolved here because here is the first place the
+        // answer exists: options are parsed before any checkpoint is opened, so
+        // `--bot-classes driven` cannot be answered where it is read.
+        //
+        // ⚠️ This is the bug that made the setting necessary. Until 2026-09-07 the
+        // word was `trained` and it meant PolicyNetwork.DefaultTrainedClasses — a
+        // compile-time set that had stopped being any loaded checkpoint's, so on
+        // the shipped bundle it silently dropped pyro and the pyro tier never
+        // drove. A roster that is a smaller-but-plausible subset is the worst kind
+        // of wrong: every bot it does draw is driven correctly, so nothing looks
+        // broken.
+        var allowedClasses = options.Bots.AllowedClasses;
+
+        if (options.Bots.ClassDrawFollowsPolicy)
+        {
+            // ⛔ Refused rather than silently meaning "all nine". An operator asking
+            // for the driven classes on a server that drives none has asked for
+            // something impossible, and the empty set would read as no restriction
+            // — the exact inversion of what they wrote.
+            if (driven.Count == 0)
+            {
+                throw new ArgumentException(
+                    "bot classes 'driven' restricts the draw to the classes a policy drives, "
+                    + $"and bot mode '{mode.ToString().ToLowerInvariant()}' drives none; name "
+                    + "the classes, drop the setting, or use bot mode policy or tiered with a "
+                    + "checkpoint.");
+            }
+
+            // Distinct and ordered: two tiers may overlap (it warns, it does not
+            // refuse), and a roster listing a class twice would weight the draw
+            // towards it.
+            allowedClasses = [.. driven.Distinct().OrderBy(playerClass => (int)playerClass)];
+
+            report?.Invoke($"bot classes: drawing {Classes(allowedClasses)} — the driven set");
+        }
+
         // ⚠️ CLEARED when there is no controller, not left alone. Reconciling twice
         // — which a restart does — must be idempotent, and a brain left over from a
         // previous mode is a server running a controller its own settings say it is
         // not.
         options.Bots = options.Bots with
         {
+            AllowedClasses = allowedClasses,
+
+            // ⛔ KEPT set, not cleared, and the difference is visible to an
+            // operator. It is what `Bots.Classes` reads back as, so a settings page
+            // shows `driven` — the request — rather than the five class names it
+            // resolved to this time, and saving from that page does not silently
+            // pin today's answer into the file for ever. Re-resolving on a second
+            // Build (a panel restart does one) is correct rather than merely
+            // harmless: if the checkpoints changed, the roster should change with
+            // them.
             Brain = tiers.Count == 0
                 ? null
                 : new BotBrainSpec
@@ -212,6 +384,79 @@ public static class BotBrain
                     Arbiter = arbiterUnits is { } units ? new DecisionQuotaArbiter(units) : null,
                 },
         };
+    }
+
+    /// <summary>
+    /// The reserved target that means "no controller — leave it to the scripted
+    /// layer".
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>It is reserved, so a checkpoint file called <c>scripted.npz</c> cannot
+    /// be named per class.</b> Said out loud rather than left to be discovered: the
+    /// failure would be a class silently going scripted when the operator asked for
+    /// weights, which is the one outcome this whole setting exists to make visible.
+    /// Rename the file.
+    /// </remarks>
+    public const string Scripted = "scripted";
+
+    /// <summary>
+    /// <c>Class=target</c> entries into a map, refusing what cannot be applied.
+    /// </summary>
+    /// <remarks>
+    /// <b>Class names only, never a number.</b> <c>--class-limit</c> takes a bare
+    /// integer as "every class", and a reader who assumed the same shape here would
+    /// write something that parses somewhere else. There is no bare form.
+    /// <para>
+    /// ⛔ <b>A class named twice is refused, not last-wins.</b> Two lines assigning
+    /// one class to two different tiers have no defensible resolution, and
+    /// last-wins would make the file's line ORDER decide which weights play a
+    /// class — the exact property the disjointness of the shipped bundle exists to
+    /// avoid needing.
+    /// </para>
+    /// </remarks>
+    private static Dictionary<PlayerClass, string> ParseClassPolicies(
+        IReadOnlyList<string> entries)
+    {
+        var assigned = new Dictionary<PlayerClass, string>();
+
+        foreach (var entry in entries)
+        {
+            var separator = entry.IndexOf('=', StringComparison.Ordinal);
+
+            if (separator <= 0 || separator == entry.Length - 1)
+            {
+                throw new ArgumentException(
+                    $"bot class policy '{entry}': expected Class=name, where name is a "
+                    + $"checkpoint's file name without its extension or '{Scripted}'.");
+            }
+
+            var name = entry[..separator].Trim();
+            var target = entry[(separator + 1)..].Trim();
+
+            // ⚠️ The same class ceiling ParseClasses uses: PlayerClass runs past
+            // Pyro into values no bot can be, and Enum.TryParse accepts them.
+            if (!Enum.TryParse(name, ignoreCase: true, out PlayerClass playerClass)
+                || playerClass > PlayerClass.Pyro)
+            {
+                throw new ArgumentException(
+                    $"bot class policy '{entry}': '{name}' is not a class a bot can be. "
+                    + "Scout, Pyro, Soldier, Heavy, Demoman, Medic, Engineer, Spy or Sniper.");
+            }
+
+            if (assigned.TryGetValue(playerClass, out var already))
+            {
+                throw new ArgumentException(
+                    $"bot class policy '{entry}': {playerClass} is already assigned to "
+                    + $"'{already}'. One class, one controller — assigning it twice would make "
+                    + "the order these were written in decide which weights play it.");
+            }
+
+            assigned[playerClass] = string.Equals(target, Scripted, StringComparison.OrdinalIgnoreCase)
+                ? Scripted
+                : target;
+        }
+
+        return assigned;
     }
 
     /// <summary>
