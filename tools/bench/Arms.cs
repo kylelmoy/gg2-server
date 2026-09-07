@@ -73,6 +73,7 @@ public static class ArmsEval
 
         Console.WriteLine(
             $"{list.Length} maps, {perMap} matches an arm, THREE arms, {cap}-minute cap, {Bots} bots");
+        Roster.Announce([.. policy.TrainedClasses], fromCheckpoint: true);
         Console.WriteLine("arm 1 all-scripted   arm 2 policy hybrid   arm 3 search hybrid");
         Console.WriteLine();
 

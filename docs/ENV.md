@@ -445,6 +445,19 @@ would compare arms sharing no class at all.
 it loads no checkpoint, measuring the search's throughput against thread count, so
 it just needs a stable roster.
 
+✅ **Every mode prints the roster it is about to use** (`Bench.Roster.Announce`),
+naming where the set came from — "the checkpoint's own" against "the default, no
+checkpoint". ⛔ **That line is the ONLY place the failure is visible**: a run that
+silently populated the default would report the scripted arm twice with one of
+them labelled the policy, which is a clean and entirely plausible null. Read it
+against the checkpoint's set on a first run against a new family.
+
+⚠️ **Both arms of every comparison take the CHECKPOINT's roster, including the
+control arm that does not drive with it.** The control is "the same matches with
+Policy = null" — the same matches, so the same classes. Deciding the roster by
+whether an arm drives moves two things between the arms at once, which
+`BENCH_EVAL` did for one commit.
+
 ✅ **Gated by `TrainedClassesTests`** — that `SearchMicroSpec` carries the set to
 the controller (checked: dropping it fails that test and only it), that naming no
 set keeps the default, and that turning the restriction off still drives every

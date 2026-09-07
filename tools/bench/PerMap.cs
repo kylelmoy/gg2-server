@@ -48,6 +48,10 @@ public static class PerMapEval
         var list = focus is { Length: > 0 } ? focus.Split(',') : Maps;
 
         Console.WriteLine($"{list.Length} maps, {perMap} matches each, two arms, {cap}-minute cap");
+        // ⛔ Handed to BOTH arms below. The control has no policy to ask.
+        PlayerClass[] allowed = [.. policy.TrainedClasses];
+
+        Roster.Announce(allowed, fromCheckpoint: true);
         Console.WriteLine();
 
         var withPolicy = new List<Row>();
@@ -56,8 +60,12 @@ public static class PerMapEval
 
         foreach (var map in list)
         {
-            withPolicy.Add(Play(map, maps, nav, policy, perMap, cap));
-            control.Add(Play(map, maps, nav, null, perMap, cap));
+            // ⛔ The SAME roster for both arms, and it is the checkpoint's. The
+            // control arm has no policy — that is what makes it the control — so it
+            // cannot be asked for a set and must be HANDED one, or the two arms are
+            // populated differently and the comparison is not one.
+            withPolicy.Add(Play(map, maps, nav, policy, perMap, cap, allowed));
+            control.Add(Play(map, maps, nav, null, perMap, cap, allowed));
         }
 
         // ABSOLUTE COUNTS, not only percentages, and a z on each comparison.
@@ -186,7 +194,9 @@ public static class PerMapEval
             $"{"",8} totals: wins {redWins}-{blueWins}   deaths {rd}-{bd}   score {rs}-{bs}");
     }
 
-    private static Row Play(string map, string maps, string nav, PolicyNetwork? policy, int count, int cap)
+    private static Row Play(
+        string map, string maps, string nav, PolicyNetwork? policy, int count, int cap,
+        PlayerClass[] allowed)
     {
         var decided = 0;
         var capped = 0;
@@ -214,7 +224,7 @@ public static class PerMapEval
                 // ⛔ The checkpoint's own set, not the default: populating a
                 // match with classes this policy never trained measures the
                 // fallback to scripted rather than the policy.
-                AllowedClasses = [.. policy.TrainedClasses],
+                AllowedClasses = allowed,
                 Brain = policy is null ? null : BotBrainSpec.Of(new PolicyMicroSpec(policy)),
                 HybridTeam = Team.Red,
             };

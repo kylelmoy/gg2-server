@@ -147,6 +147,8 @@ public static class ThreadsBench
         var cap = int.Parse(Environment.GetEnvironmentVariable("BENCH_CAP") ?? "5");
         var ladder = Ladder;
 
+        Roster.Announce([.. PolicyNetwork.DefaultTrainedClasses], fromCheckpoint: false);
+
         Console.WriteLine(
             $"arm 3 only, {Bots} bots, {perMap} matches a map, cap {cap} min, "
             + $"threads {string.Join('/', ladder)}, rungs INTERLEAVED per match");

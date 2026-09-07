@@ -52,6 +52,11 @@ public static class RangeSweep
         // falls sharply only if the distribution is already clustered at the
         // cap, a claim about the distribution the mean cannot support either way.
         var cap = int.Parse(Environment.GetEnvironmentVariable("BENCH_CAP") ?? "5");
+        // ⛔ Handed to BOTH arms below. The control has no policy to ask.
+        PlayerClass[] allowed = [.. policy.TrainedClasses];
+
+        Roster.Announce(allowed, fromCheckpoint: true);
+
         var clock = Stopwatch.StartNew();
 
         foreach (var map in mapList)
@@ -61,10 +66,10 @@ public static class RangeSweep
                 $"{"arm",-14} {"decided",9} {"rate",7} {"ctl%",7} {"deaths",13} {"share",7} "
                 + $"{"wins",9} {"share",7} {"len(s)",7} {"capped",7}");
 
-            Row(map, maps, nav, null, 0, count, cap, "CONTROL");
+            Row(map, maps, nav, null, 0, count, cap, "CONTROL", allowed);
 
             foreach (var range in ranges)
-                Row(map, maps, nav, policy, range, count, cap, $"policy {range:0}px");
+                Row(map, maps, nav, policy, range, count, cap, $"policy {range:0}px", allowed);
 
             Console.WriteLine();
         }
@@ -129,7 +134,8 @@ public static class RangeSweep
     private static string Share(int a, int total) => total == 0 ? "  -   " : $"{a / (double)total:0.0%}";
 
     private static void Row(
-        string map, string maps, string nav, PolicyNetwork? policy, double range, int count, int cap, string label)
+        string map, string maps, string nav, PolicyNetwork? policy, double range, int count, int cap, string label,
+        PlayerClass[] allowed)
     {
         var decided = 0;
         var capped = 0;
@@ -203,7 +209,7 @@ public static class RangeSweep
                 // ⛔ The checkpoint's own set, not the default: populating a
                 // match with classes this policy never trained measures the
                 // fallback to scripted rather than the policy.
-                AllowedClasses = [.. policy.TrainedClasses],
+                AllowedClasses = allowed,
                 // The control arm carries NO brain, so the range it would have
                 // used is not a question that arises — where this had to name the
                 // default explicitly to keep the two arms comparable.

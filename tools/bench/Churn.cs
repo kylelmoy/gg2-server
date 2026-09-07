@@ -64,6 +64,7 @@ public static class ChurnBench
 
         Console.WriteLine(
             $"input churn per bot-second, {bots} bots, {perMap} matches a map, cap {cap} min");
+        Roster.Announce([.. policy.TrainedClasses], fromCheckpoint: true);
         Console.WriteLine(
             "arm 1 all-scripted   arm 2 policy hybrid   arm 3 search hybrid");
         Console.WriteLine();

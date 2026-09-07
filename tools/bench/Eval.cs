@@ -45,21 +45,27 @@ public static class PolicyEval
     private static void Measure(
         string maps, string nav, string npz, int matchesPerMap, bool usePolicy, HandoverRule rule, double range)
     {
-        var policy = usePolicy ? PolicyNetwork.Load(npz) : null;
+        // ⛔ Loaded even for the control arm, which does not DRIVE with it. The
+        // control is "the same matches with Policy = null" — the same MATCHES, so
+        // it has to be populated with the same classes, and those come from the
+        // checkpoint. Deciding the roster by whether this arm drives would move
+        // two things between the arms at once.
+        var loaded = PolicyNetwork.Load(npz);
+        var policy = usePolicy ? loaded : null;
         string[] mapNames =
         [
             "ctf_truefort", "ctf_2dfort", "ctf_orange", "ctf_conflict",
             "ctf_classicwell", "ctf_eiger",
         ];
 
-        // ⛔ The checkpoint's own set when there is one. `usePolicy` false is the
-        // scripted arm, which has no checkpoint to ask and takes the default so the
-        // two arms are populated alike — the moment a policy is loaded, the classes
-        // it never trained are not a harder test of it, they are a test of the
-        // fallback to scripted.
-        var trained = policy is null
-            ? PolicyNetwork.DefaultTrainedClasses.ToArray()
-            : policy.TrainedClasses.ToArray();
+        // ⚠️ The checkpoint's set for BOTH arms. This first read the default when
+        // `usePolicy` was false, with a comment claiming that kept the arms alike;
+        // it did the opposite the moment a checkpoint's set was not the default —
+        // the control would have played Scout/Soldier/Demoman/Heavy against a
+        // policy arm playing Engineer/Spy/Pyro.
+        var trained = loaded.TrainedClasses.ToArray();
+        Roster.Announce(trained, fromCheckpoint: true);
+
         var clock = Stopwatch.StartNew();
 
         var redWins = 0;
