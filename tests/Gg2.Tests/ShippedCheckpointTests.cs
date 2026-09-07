@@ -218,11 +218,20 @@ public sealed class ShippedCheckpointTests
     /// what a server plays. A copy that can go stale is only safe if something
     /// says so when it does.
     /// <para>
-    /// ⚠️ <b>If this ever legitimately diverges — a new tier 0 ships while the
-    /// fixture stays put — delete this test rather than weakening it</b>, and say
-    /// in <c>checkpoints/README.md</c> that the two are no longer the same file.
-    /// A test asserting a relationship that has been deliberately broken is worse
-    /// than no test.
+    /// ⚠️ <b>WHEN this diverges — not if — delete this test rather than weakening
+    /// it</b>, and say in <c>checkpoints/README.md</c> that the two are no longer
+    /// the same file. A test asserting a relationship that has been deliberately
+    /// broken is worse than no test.
+    /// </para>
+    /// <para>
+    /// ⛔ <b>"When" is the training lane's correction to this comment, and it is
+    /// right.</b> The two files' goals separate the moment tier 0 improves: a
+    /// FIXTURE wants to be a stable test input, and a SHIPPED ARTEFACT wants to be
+    /// the best available policy. So this fails on a ROUTINE event — the next
+    /// tier-0 change — rather than on an exceptional one, and a red run here is
+    /// the expected outcome of ordinary progress, not a signal that something went
+    /// wrong. Read it as a prompt to re-record, the way a pinned bot measurement
+    /// is. It is quiet only because <c>gg2-rl</c>'s tier 0 is currently stable.
     /// </para>
     /// </remarks>
     [Fact]

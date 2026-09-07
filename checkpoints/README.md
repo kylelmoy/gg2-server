@@ -125,8 +125,13 @@ the first.
   duplicated deliberately, because they have different lifecycles: the fixture is
   a no-op control for `TrainedClassesTests`, this is what a server plays.
   `ShippedCheckpointTests.TheShippedTierZeroIsTheSameFileAsTheDefaultSetFixture`
-  is the `MapCopyTests`-shaped guard on the copy. If they ever legitimately
-  diverge, **delete that test and say so here** rather than weakening it.
+  is the `MapCopyTests`-shaped guard on the copy.
+  ⛔ **They will diverge — "when", not "if".** A fixture wants to be a stable
+  test input and a shipped artefact wants to be the best available policy, and
+  those goals separate the moment tier 0 improves. So that test fails on a
+  ROUTINE event, and a red run there is ordinary progress rather than a fault:
+  **delete the test and say so here**, rather than weakening it. It is quiet
+  today only because `gg2-rl`'s tier 0 is stable.
 - ⚠️ **A policy is DATED by the physics.** A `SIM_UUID` move retires both of
   these; `PolicyNetwork.Load` refuses a foreign stamp and
   `ShippedCheckpointTests` deliberately does not bypass it, so the retirement
