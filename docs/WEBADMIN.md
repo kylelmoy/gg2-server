@@ -358,10 +358,11 @@ this at startup; the card is where it stays visible afterwards.
 ⛔ **`bots.engage` is the gate every tier is behind and it is stated as
 configuration, never as a prediction.** A live server hands a controller the
 wheel for a HUMAN enemy only (`--bot-engages-bots` opens it to bot fights), so an
-operator reading a low share wants to know that first. It does not say the bots
-will not drive, because as of 2026-09-07 they do:
-`docs/TRAPS-SIMULATION.md`, "a respawn rebuilds the whole player", has the
-`IsBot` field a spawn drops and what it costs.
+operator reading a low share wants to know that first. **It states the
+configuration and never predicts that the bots will not drive** — the share is
+the measurement, and it is the one to believe. What the gate rests on is
+`PlayerState.IsBot` surviving a respawn: `docs/TRAPS-SIMULATION.md`, "a respawn
+replaces the character and leaves the player alone".
 
 ## The settings page
 

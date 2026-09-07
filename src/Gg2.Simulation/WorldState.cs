@@ -1127,18 +1127,53 @@ public struct WorldState
         if (!spawnPoints.TryGet(team, group, spawnpointId, out var x, out var y))
             return false;
 
+        // ⛔ THE PLAYER IS UPDATED IN PLACE, NEVER REBUILT, and the difference is
+        // four silent regressions. `doEventSpawn.gml:30-38` destroys
+        // `spawner.object` and creates a new CHARACTER into it; the `Player`
+        // instance beside it is untouched, and is created once on a join
+        // (`serviceJoiningPlayer.gml:117`) and never again. So everything a
+        // Player owns outlives a respawn:
+        //
+        //   - `Stats` and `RoundStats`. Assigning a fresh struct here zeroed the
+        //     scoreboard on every spawn, which made `Deaths` read 0 for
+        //     everybody for ever (the death awards it, the respawn wipes it) and
+        //     `Kills` survive only until their owner next died. Arena resets
+        //     `RoundStats` through `resetRoundStats.gml`, which is the
+        //     reference's own mechanism and only makes sense because a spawn is
+        //     not one.
+        //   - `Humiliated`. It is a player flag precisely so it survives the
+        //     death that usually earns it; only `doEventArenaRestart`,
+        //     `doEventArenaWaitForPlayers` and `basicRoomSetup` clear it.
+        //   - `QueueJump`. A CLIENT_SETTINGS preference, sent once, and
+        //     observable simulation — every client re-simulating this character
+        //     reads it on every landing, so losing it at the first death is a
+        //     dead-reckoning divergence rather than a cosmetic one.
+        //   - `IsBot`. This port's own mirror, and what
+        //     `Handover.ShouldEngage` reads: losing it turned
+        //     `EngageOpponents.HumansOnly` — the live server's default — into
+        //     `Anyone`, so `--bot-engages-bots` did nothing at all.
+        //
+        // ⚠️ `PlayerState.Fresh` first when there is no player yet, so a slot
+        // that never had one still starts from a spectator scout at rest rather
+        // than from whatever a previous occupant left behind.
+        if (!HasPlayer[slot])
+            Players[slot] = PlayerState.Fresh;
+
+        ref var player = ref Players[slot];
+
         // Write-through to the player: a spawn is always *of* this slot's
         // player, so the class and team passed in become the player's. Keeps
         // every pre-phase-6 caller — which held these beside the state —
         // consistent with the one copy the simulation now reads.
-        var timer = HasPlayer[slot] ? Players[slot].RespawnTimer : Timers.Inactive;
+        player.Team = team;
+        player.Class = playerClass;
 
-        // Read before the player is rebuilt, and deliberately not carried into
-        // the new one: the bypass is spent by the spawn it feeds, and the next
+        // Read and SPENT in the same breath — the one field a spawn really does
+        // consume. The bypass is spent by the spawn it feeds, and the next
         // protected death sets it again.
-        var bypass = HasPlayer[slot] ? Players[slot].DeathmatchRespawnBypass : 0;
+        var bypass = player.DeathmatchRespawnBypass;
+        player.DeathmatchRespawnBypass = 0;
 
-        Players[slot] = new PlayerState { Team = team, Class = playerClass, RespawnTimer = timer };
         HasPlayer[slot] = true;
 
         // Every sentinel this needs is in CharacterState.Fresh, which the parity

@@ -321,10 +321,9 @@ function brains(s) {
     // controller the wheel for a HUMAN enemy only.
     //
     // ⚠️ Stated as the CONFIGURATION, never as a prediction that they will not
-    // drive. The share beside each tier above is the measurement, and it is the
-    // one to believe: as of 2026-09-07 the gate does not hold, because
-    // WorldState.Spawn rebuilds PlayerState and drops IsBot on the first
-    // respawn. See docs/TRAPS-SIMULATION.md, "a spawn rebuilds the player".
+    // drive. The share beside each tier above is the measurement and it is the
+    // one to believe — the gate rests on PlayerState.IsBot surviving a respawn,
+    // which is a simulation property this page cannot check.
     parts.push('Controllers take the wheel against a human enemy only '
       + '(--bot-engages-bots opens them to bot fights).');
   }
