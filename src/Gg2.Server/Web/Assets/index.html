@@ -56,6 +56,8 @@
 
     <div class="topbar-right">
       <span class="live" id="live" data-state="connecting"><span class="live-dot"></span><span id="live-text">connecting</span></span>
+      <button class="btn btn-quiet" id="settings-open" type="button">Settings</button>
+      <button class="btn btn-quiet btn-warn" id="restart" type="button">Restart</button>
       <button class="btn btn-quiet" id="logout" type="button">Sign out</button>
     </div>
   </header>
@@ -281,6 +283,43 @@
 </div>
 
 <div class="toasts" id="toasts" aria-live="polite"></div>
+
+<!--
+  The settings editor. Every key the config file has, read from /api/config and
+  written back through the control port's own "config-set" verb.
+
+  ⚠️ It edits the FILE, not the running server: every subsystem reads its options
+  once, at startup, so a half-applied change is a server nobody can reason about.
+  The footer says so and the restart button beside it is what applies them.
+-->
+<dialog class="sheet" id="settings" aria-labelledby="settings-title">
+  <header class="sheet-head">
+    <div>
+      <h3 id="settings-title">Settings</h3>
+      <p class="sheet-sub" id="settings-file">—</p>
+    </div>
+    <div class="sheet-tools">
+      <input type="search" id="settings-filter" placeholder="Filter settings"
+             spellcheck="false" autocomplete="off" aria-label="Filter settings">
+      <button class="btn btn-quiet" id="settings-close" type="button" aria-label="Close">Close</button>
+    </div>
+  </header>
+
+  <p class="sheet-note warn" id="settings-readonly" hidden></p>
+
+  <div class="sheet-body" id="settings-body"></div>
+
+  <footer class="sheet-foot">
+    <p class="hint" id="settings-status">
+      Saved settings take effect when the server restarts.
+    </p>
+    <div class="btn-row btn-row-end">
+      <button class="btn" id="settings-revert" type="button" disabled>Revert</button>
+      <button class="btn btn-primary" id="settings-save" type="button" disabled>Save</button>
+      <button class="btn btn-warn" id="settings-save-restart" type="button" disabled>Save &amp; restart</button>
+    </div>
+  </footer>
+</dialog>
 
 <dialog class="confirm" id="confirm">
   <h3 id="confirm-title">Are you sure?</h3>

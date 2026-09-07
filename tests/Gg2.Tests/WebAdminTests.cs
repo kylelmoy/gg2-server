@@ -113,6 +113,7 @@ public sealed class WebAdminTests : IDisposable
     [InlineData("/api/map.png?name=ctf_truefort")]
     [InlineData("/api/perf")]
     [InlineData("/api/system")]
+    [InlineData("/api/config")]
     public async Task EveryApiRouteRefusesAnUnauthenticatedRequest(string path)
     {
         var reply = await _http.GetAsync(path);
@@ -312,6 +313,17 @@ public sealed class WebAdminTests : IDisposable
     [InlineData("""{"cmd":"ban","address":"198.51.100.7","minutes":1}""")]
     [InlineData("""{"cmd":"unban","address":"198.51.100.7"}""")]
     [InlineData("""{"cmd":"bans"}""")]
+    [InlineData("""{"cmd":"config"}""")]
+
+    // ⚠️ Reachability only, as the whole theory is. The harness starts without
+    // --config, so this one is REFUSED — "no file to save to" — which is exactly
+    // the assertion: refused is fine, "unknown cmd" is not. What the verb actually
+    // does is gated by ServerRestartTests, which owns a config file.
+    [InlineData("""{"cmd":"config-set","settings":{"Server.ServerName":"x"}}""")]
+
+    // ⛔ NOT in this theory: "restart" tears the server down, and the harness is
+    // running it. It is gated by RestartTests instead, which owns a server it is
+    // allowed to stop.
     public async Task EveryControlPortVerbIsReachableFromThePanel(string body)
     {
         var csrf = await SignedInAsync();

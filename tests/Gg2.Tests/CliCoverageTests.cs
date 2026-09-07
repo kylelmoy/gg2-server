@@ -43,6 +43,11 @@ public sealed class CliCoverageTests
     /// </remarks>
     private static readonly Dictionary<string, string> NotOnTheCommandLine = new()
     {
+        ["CommandLineOverrides"] =
+            "is what Parse itself computes about the command line — which settings a flag "
+            + "pinned to something the config file does not say, so the admin panel can grey "
+            + "them out. A flag that set it would be the command line describing itself.",
+
         ["RandomSeed"] =
             "forces the simulation's random stream, which a live server must never do — the "
             + "reference's randomize() is what stops every server on a machine scattering its "
@@ -106,6 +111,24 @@ public sealed class CliCoverageTests
         ("TickStats", ["--tick-stats"], o => o.TickStats),
         ("Bots", ["--bots", "8"], o => o.Bots),
 
+        // The five brain INPUTS. They became ServerOptions properties when
+        // BotBrain.Build was pulled out of this file so a config file could reach
+        // the same reconcile — see ServerOptions.BotMode for why the inputs rather
+        // than the BotBrainSpec are the configuration.
+        //
+        // ⚠️ --policy needs a checkpoint that actually LOADS, because the brain is
+        // built inside Parse. PolicyFixture's is real and carries this build's
+        // stamp, so it takes the ordinary accept path.
+        ("BotMode", ["--bot-mode", "search"], o => o.BotMode),
+        ("PolicyPath", ["--policy", PolicyFixture.Checkpoint], o => o.PolicyPath),
+        ("PolicyIgnoreStamp",
+            ["--policy", PolicyFixture.Checkpoint, "--policy-ignore-stamp"],
+            o => o.PolicyIgnoreStamp),
+        ("BotArbiterMicroseconds",
+            ["--bot-mode", "search", "--bot-arbiter", "7500"],
+            o => o.BotArbiterMicroseconds),
+        ("SearchThreads", ["--search-threads", "2"], o => o.SearchThreads),
+
         // One row per LIMITS FLAG, for the reason the Web rows below give: a
         // single row would leave four of the five ungated, and a flag that
         // parses and then does nothing is exactly what this class exists to
@@ -125,6 +148,14 @@ public sealed class CliCoverageTests
         ("Limits", ["--no-tcp-keepalive"], o => o.Limits.TcpKeepAlive),
 
         ("BanFile", ["--ban-file", "bans.txt"], o => o.BanFile),
+
+        // ⚠️ The flag that REMEMBERS its own argument rather than consuming it.
+        // The panel's settings page writes back to this path, so a --config that
+        // parsed the file and forgot where it came from would leave every saved
+        // change in memory until the process ended. It needs a real file, because
+        // Parse reads it.
+        ("ConfigFile", ["--config", WriteConfig("[Server]\nServerName=named\n")],
+            o => o.ConfigFile),
         ("Limits", ["--connect-rate", "3"], o => o.Limits.ConnectionBurstPerAddress),
         ("Limits", ["--connect-rate-window", "30"], o => o.Limits.ConnectionBurstWindow),
         ("LogFile", ["--log-file", "logs/server.log"], o => o.LogFile),
@@ -367,6 +398,43 @@ public sealed class CliCoverageTests
         // No rotation at all leaves the default rather than emptying it, or a
         // bare `gg2-server` would have no map to open.
         Assert.Equal(ServerOptions.DefaultMap, CommandLine.Parse([]).Map);
+    }
+
+    /// <summary>
+    /// A config file on its own overrides NOTHING, and a flag beside it overrides
+    /// exactly what it names.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="ServerOptions.CommandLineOverrides"/> is what the admin panel's
+    /// settings page marks a field with, so a false positive here is the page
+    /// telling an operator their edit will not take when it will. The empty case
+    /// is the one that catches those: <b>it was not empty when this was written</b>
+    /// — <c>--rotation</c>'s "no <c>--map</c> means open on the rotation" rule runs
+    /// in <c>Parse</c> and not in the baseline, so a bare <c>--config</c> reported
+    /// <c>Server.Map</c> as pinned on a command line that never mentioned a map.
+    /// </para>
+    /// <para>
+    /// ⚠️ The two halves have to stay together. Without the first, the list could
+    /// name everything and still pass the second; without the second, an empty
+    /// list would pass the first.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void OnlyTheFlagsOverrideTheConfigFile()
+    {
+        var config = WriteConfig(
+            """
+            [Server]
+            ServerName=from the file
+            CapLimit=9
+            """);
+
+        Assert.Empty(CommandLine.Parse(["--config", config]).CommandLineOverrides);
+
+        var pinned = CommandLine.Parse(["--config", config, "--players", "24"]);
+
+        Assert.Equal(["Settings.PlayerLimit"], pinned.CommandLineOverrides);
     }
 
     /// <summary>A missing config file says which file, without the usage dump.</summary>

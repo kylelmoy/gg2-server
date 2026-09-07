@@ -694,6 +694,124 @@ public sealed class ServerOptions
     /// </remarks>
     public BotPopulationOptions Bots { get; set; } = BotPopulationOptions.Default;
 
+    /// <summary>
+    /// The <c>--config</c> file these options were read from, or empty when none
+    /// was given.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Remembered rather than consumed, and that is what makes the panel's
+    /// settings page possible</b>: a change an operator makes in the browser is
+    /// written back here and re-read by the next start, so it survives the
+    /// restart that applies it. With no path there is nowhere to write, and
+    /// <c>ControlCommands</c>'s <c>config-set</c> refuses by name rather than
+    /// silently keeping the change in memory until the process ends.
+    /// </para>
+    /// <para>
+    /// ⛔ <b>Not itself readable from a config file.</b> A file naming another
+    /// file is a redirect with a cycle in it and no rule about which wins;
+    /// <c>ConfigFileCoverageTests.NotInTheConfigFile</c> records the decision.
+    /// </para>
+    /// </remarks>
+    public string ConfigFile { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Which of the four shipped bot brains this server runs — <c>--bot-mode</c>.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>An INPUT to <see cref="BotPopulationOptions.Brain"/>, not a copy of
+    /// it.</b> <see cref="BotBrain.Build"/> is the one place these five inputs
+    /// become a <see cref="BotBrainSpec"/>, and it is called once at the end of
+    /// parsing — so setting this afterwards changes nothing, which is why nothing
+    /// outside the two parsers writes it.
+    /// <para>
+    /// It is an option rather than a local in <c>CommandLine</c> because the
+    /// brain cannot be written back to a config file: a <see cref="BotBrainSpec"/>
+    /// holds a loaded <c>PolicyNetwork</c>, megabytes of weights with no textual
+    /// form. The inputs have one, so the inputs are what round-trips.
+    /// </para>
+    /// </remarks>
+    public BotMode BotMode { get; set; } = BotMode.Scripted;
+
+    /// <summary>
+    /// The <c>gg2-rl</c> checkpoint a policy-driven mode loads — <c>--policy</c>.
+    /// Empty is the all-scripted arm.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>A policy checkpoint is DATED by the simulation it was trained
+    /// against</b> — <c>docs/BOTS.md</c>, "a policy is DATED by the physics".
+    /// </remarks>
+    public string PolicyPath { get; set; } = string.Empty;
+
+    /// <summary>
+    /// ⛔ Load a checkpoint whose <c>SIM_UUID</c> does not match this build —
+    /// <c>--policy-ignore-stamp</c>.
+    /// </summary>
+    public bool PolicyIgnoreStamp { get; set; }
+
+    /// <summary>
+    /// Microseconds of bot-controller work per tick — <c>--bot-arbiter</c>. Null
+    /// lets <see cref="BotModes.NeedsArbiter"/> supply the default.
+    /// </summary>
+    public int? BotArbiterMicroseconds { get; set; }
+
+    /// <summary>
+    /// Threads the search controller's rollouts use — <c>--search-threads</c>.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Threads change NO decision</b> — <c>RolloutThreadingTests</c> gates
+    /// that at 2, 4 and 8 — so this is a pure cost knob.
+    /// </remarks>
+    public int SearchThreads { get; set; } = BotBrain.DefaultSearchThreads;
+
+    /// <summary>
+    /// The <see cref="ServerSetting.Id"/>s the command line set to something the
+    /// config file does not say, so an editor can warn that saving them will not
+    /// take.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ⚠️ <b>DERIVED, not configured</b> — which is why both coverage gates name
+    /// it as deliberately absent from their tables rather than growing a row for
+    /// it. <c>CommandLine.Parse</c> computes it by diffing the options it built
+    /// against the ones the config file alone would have produced.
+    /// </para>
+    /// <para>
+    /// <b>The failure it prevents is a settings page that appears to work.</b> A
+    /// flag always beats the file — deliberately, and
+    /// <c>CliCoverageTests.AFlagBeatsTheConfigFileInEitherOrder</c> pins it — so a
+    /// server started with <c>--players 24</c> will still have 24 seats after an
+    /// operator edits <c>PlayerLimit</c> in the panel, saves, and restarts. The
+    /// value is written, the file is correct, and nothing happens. Naming the
+    /// setting is the difference between that and a mystery.
+    /// </para>
+    /// <para>
+    /// ⛔ <b>Setting IDs only, never values.</b> This is read by the admin panel;
+    /// <c>--web-password</c> is on the command line and
+    /// <c>SystemNeverLeaksTheCommandLineOrTheEnvironment</c> is the rule it must
+    /// not break. <c>Web.Password</c> as a name is not a secret.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyList<string> CommandLineOverrides { get; set; } = [];
+
+    /// <summary>
+    /// A fresh options object carrying this codebase's defaults, including the
+    /// two that are resolved from disk rather than written down.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Use this, never <c>new ServerOptions()</c>, wherever a config file is
+    /// about to be applied over the result.</b> A bare one has an empty
+    /// <see cref="MapDirectory"/>, which <see cref="Validate"/> refuses — so the
+    /// panel's own "read the file, apply the change, check it, save it" path
+    /// would fail on a server that is running perfectly. The checked-in
+    /// <c>maps/</c> and <c>nav/</c> are what these two resolve to in a clone.
+    /// </remarks>
+    public static ServerOptions CreateDefault() => new()
+    {
+        MapDirectory = Server.MapDirectory.Resolve(),
+        NavCacheDirectory = Server.MapDirectory.ResolveNav(),
+    };
+
     public void Validate()
     {
         // First, because it is the one that can be reachable from the network:

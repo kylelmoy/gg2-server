@@ -996,6 +996,158 @@ kbd {
 }
 
 .confirm::backdrop { background: var(--backdrop); backdrop-filter: blur(3px); }
+
+/* ---------- the settings sheet -------------------------------------------- */
+
+/*
+ * A modal <dialog> rather than a route or a card in the grid. The panel is a
+ * live dashboard and the settings are neither live nor a dashboard; putting them
+ * in the grid would push the graphs down the page for something an operator
+ * opens twice a month.
+ *
+ * ⚠️ The body scrolls, the head and foot do not. There are sixty-odd fields, and
+ * a save button that scrolls off the bottom is a save button people do not find.
+ */
+.sheet {
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-3xl);
+  background: var(--overlay);
+  color: var(--foreground);
+  padding: 0;
+  width: min(880px, calc(100vw - 32px));
+  max-width: none;
+
+  /* Capped rather than fixed, so a filter that leaves three fields does not
+     produce a tall dialog mostly made of nothing. */
+  max-height: min(860px, calc(100vh - 48px));
+  box-shadow: var(--float-shadow);
+  overflow: hidden;
+}
+
+.sheet::backdrop { background: var(--backdrop); backdrop-filter: blur(3px); }
+
+.sheet[open] { display: flex; flex-direction: column; }
+
+.sheet-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 24px 16px;
+  border-bottom: var(--border-width) solid var(--separator);
+}
+
+.sheet-head h3 { font-size: var(--text-medium); margin: 0 0 4px; }
+
+.sheet-sub {
+  margin: 0;
+  font: var(--text-tiny) var(--font-mono);
+  color: var(--muted);
+  word-break: break-all;
+}
+
+.sheet-tools { display: flex; gap: 8px; align-items: center; flex: none; }
+.sheet-tools input { width: 180px; }
+
+.sheet-note {
+  margin: 0;
+  padding: 12px 24px;
+  font-size: var(--text-tiny);
+  line-height: 1.5;
+  border-bottom: var(--border-width) solid var(--separator);
+}
+
+.sheet-note.warn { color: var(--warning); background: color-mix(in oklab, var(--warning) 8%, transparent); }
+
+.sheet-body { overflow-y: auto; padding: 4px 24px 20px; flex: 1; }
+
+.sheet-empty { color: var(--muted); font-size: var(--text-small); padding: 24px 0; text-align: center; }
+
+.sheet-group { padding-top: 20px; }
+
+.sheet-group h4 {
+  font: var(--label);
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 12px;
+  position: sticky;
+  top: 0;
+
+  /* Sticky section headings need an opaque ground or the fields scroll through
+     them. --overlay is the sheet's own background, not the page's. */
+  background: var(--overlay);
+  padding: 8px 0;
+  z-index: 1;
+}
+
+/* Two columns where there is room. A settings list one field wide is a very long
+   scroll; three columns makes the help text unreadably narrow. */
+.sheet-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 20px; }
+
+.sheet-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+
+.sheet-field > label {
+  font-size: var(--text-small);
+  font-weight: 500;
+  color: var(--foreground);
+}
+
+.sheet-field input:not([type='checkbox']),
+.sheet-field select { width: 100%; }
+
+.sheet-check { width: 18px; height: 18px; accent-color: var(--accent); align-self: flex-start; }
+
+/* A setting the command line has pinned. Marked rather than disabled: saving it
+   is still the right thing to do before the flag is removed, and a field that
+   simply did not respond would read as a broken page. */
+.sheet-field.is-overridden > label::after {
+  content: 'pinned';
+  margin-left: 8px;
+  font: var(--label);
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
+  color: var(--warning);
+}
+
+/* Saved into the file and not yet applied. The accent rather than --warning:
+   nothing is wrong, a step is outstanding — and the two must not look the same,
+   because "pinned" means the save will never take and this means it has not yet. */
+.sheet-field.is-pending > label::before {
+  content: 'restart pending';
+  float: right;
+  font: var(--label);
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.sheet-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 24px;
+  border-top: var(--border-width) solid var(--separator);
+  background: var(--overlay);
+}
+
+.sheet-foot .btn-row { margin: 0; flex: none; }
+
+/* The restart pair. Not --danger, which this page uses for kicks and bans —
+   a restart is disruptive rather than destructive, and colouring the two the
+   same makes neither mean anything. */
+.btn-warn { background: var(--warning); color: var(--warning-foreground); font-weight: 600; }
+.btn-warn:hover:not(:disabled) { background: color-mix(in oklab, var(--warning) 88%, black); }
+.btn-quiet.btn-warn { background: transparent; color: var(--warning); font-weight: 500; }
+.btn-quiet.btn-warn:hover:not(:disabled) { background: color-mix(in oklab, var(--warning) 14%, transparent); }
+
+@media (max-width: 720px) {
+  .sheet-fields { grid-template-columns: minmax(0, 1fr); }
+  .sheet-head { flex-direction: column; }
+  .sheet-tools input { width: 100%; }
+  .sheet-foot { flex-direction: column; align-items: stretch; }
+}
 .confirm h3 { font-size: var(--text-medium); margin-bottom: 10px; }
 .confirm p { margin: 0; color: var(--muted); font-size: var(--text-small); line-height: 1.5; }
 

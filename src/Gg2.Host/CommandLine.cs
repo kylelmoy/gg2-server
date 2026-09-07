@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using Gg2.Bots;
 using Gg2.Protocol;
 using Gg2.Server;
@@ -203,33 +203,36 @@ internal static class CommandLine
     /// </remarks>
     internal static ServerOptions Parse(string[] args)
     {
-        var options = new ServerOptions
-        {
-            // ⚠️ The built-in maps are CHECKED IN at maps/ since 2026-09-01, so a
-            // clone serves a round with no reference checkout and no arguments.
-            // This used to hard-code one machine's path to a fork. MapDirectory.
-            MapDirectory = MapDirectory.Resolve(),
+        // ⚠️ The built-in maps are CHECKED IN at maps/ since 2026-09-01, so a
+        // clone serves a round with no reference checkout and no arguments; the
+        // nav graphs likewise, so bots navigate out of the box. ServerOptions.
+        // CreateDefault resolves both, and the panel's save path uses the same
+        // factory so the two agree about what "the defaults" are.
+        var options = ServerOptions.CreateDefault();
 
-            // ⚠️ The nav graphs are checked in at nav/ since 2026-09-01, so bots
-            // navigate out of the box in a clone. Empty stays legal: a server
-            // with no graphs runs bots that fight but do not walk.
-            NavCacheDirectory = MapDirectory.ResolveNav(),
-        };
-
-        // ⚠️ Every bot-controller flag is COLLECTED here and reconciled once,
-        // after the switch. A flag whose effect depends on argument order is the
-        // kind of thing nobody notices until a measurement is wrong, and
-        // --search-threads before --search-bots was exactly that.
-        var searchThreads = Math.Clamp(Environment.ProcessorCount / 3, 1, 8);
+        // ⚠️ Every bot-controller flag is COLLECTED into ServerOptions here and
+        // reconciled once, after the switch, by BotBrain.Build. A flag whose
+        // effect depends on argument order is the kind of thing nobody notices
+        // until a measurement is wrong, and --search-threads before
+        // --search-bots was exactly that.
 
         // The last --web-* settings flag seen, so one given without --web can be
         // refused by name after the loop rather than silently doing nothing.
         string? webSetting = null;
 
-        string? policyPath = null;
-        var ignoreStamp = false;
+        // ⚠️ Only --bot-mode's "was it given" survives as a local: the ONE
+        // inference below — a --policy with no mode means policy mode — has to be
+        // able to tell "not given" from "given as scripted", and
+        // ServerOptions.BotMode cannot carry that. Everything else the brain
+        // needs is now an option, because a config file has to be able to set it
+        // and a settings page has to be able to write it back.
         BotMode? botMode = null;
-        int? arbiterUnits = null;
+
+        // Whether --policy appeared on the COMMAND LINE, which is not the same as
+        // options.PolicyPath being set: a config file's [Bots] Policy is a
+        // checkpoint named beside a mode in the same file, and inferring a mode
+        // from it would silently overrule the Mode key sitting two lines above it.
+        var policyOnCommandLine = false;
 
         // ⛔ --config is applied BEFORE the loop, in its own pass, so a flag
         // always beats the file no matter which side of it the flag appears on.
@@ -240,7 +243,13 @@ internal static class CommandLine
         var configPath = ValueOf(args, "--config");
 
         if (configPath is not null)
+        {
             ServerConfigFile.Apply(options, configPath);
+
+            // Remembered, so the panel's settings page has somewhere to write
+            // back to and a restart re-reads the same file. ServerOptions.ConfigFile.
+            options.ConfigFile = configPath;
+        }
 
         // ⚠️ Latched before the loop for the same reason OpeningMap needs it: a
         // rotation with no --map opens on the rotation, and "no --map" has to
@@ -583,7 +592,7 @@ internal static class CommandLine
                 // the process's: a burst inside a tick takes cores from nothing else
                 // here, but it is not free on a shared machine.
                 case "--search-threads":
-                    searchThreads = cursor.TakeInt();
+                    options.SearchThreads = cursor.TakeInt();
                     break;
 
                 // MICROSECONDS of controller work per tick. ⛔ REQUIRED when more
@@ -599,13 +608,14 @@ internal static class CommandLine
                 // ⛔ The arbiter reads the TICK, never a clock: a match with one in
                 // it still replays from its seed. See IMicroArbiter.
                 case "--bot-arbiter":
-                    arbiterUnits = cursor.TakeInt();
+                    options.BotArbiterMicroseconds = cursor.TakeInt();
                     break;
 
                 // docs/BOTS.md's arm 2: gg2-rl's trained checkpoint driving keys and
                 // aim inside the same engagement window --search-bots uses.
                 case "--policy":
-                    policyPath = cursor.Take();
+                    options.PolicyPath = cursor.Take();
+                    policyOnCommandLine = true;
                     break;
 
                 // ⛔ BYPASSES THE SIMULATION STAMP, which exists to stop a policy
@@ -620,7 +630,7 @@ internal static class CommandLine
                 // because a bypassed guard that leaves no trace is worse than no
                 // guard: the next reader cannot tell the run was overridden.
                 case "--policy-ignore-stamp":
-                    ignoreStamp = true;
+                    options.PolicyIgnoreStamp = true;
                     break;
 
                 // ⚠️ SEPARATE from --search-bots and --policy on purpose. Both
@@ -788,7 +798,8 @@ internal static class CommandLine
         if (botsMinHumans is { } minHumans)
             options.Bots = options.Bots with { MinHumans = minHumans };
 
-        // ⛔ ONE PLACE BUILDS THE BRAIN, at the end, from flags collected above.
+        // ⛔ ONE PLACE BUILDS THE BRAIN, at the end, from settings collected
+        // above -- and that place is BotBrain.Build, shared with the config file.
         // The flag handlers used to write BotPopulationOptions.SearchMicro
         // directly, which made --search-threads order-dependent: given BEFORE
         // --search-bots it was picked up, given after it had to re-write the
@@ -798,111 +809,25 @@ internal static class CommandLine
         // ⚠️ THE ONE INFERENCE, and it exists to keep `--policy <path>` working on
         // its own the way docs/BOTS.md documents it: a --policy with no --bot-mode
         // means policy mode. It is order-independent because both were collected
-        // before this line, and it applies ONLY when no mode was given -- an
-        // explicit --bot-mode always wins, and a --policy it cannot use is refused
-        // below rather than quietly ignored.
-        var mode = botMode ?? (policyPath is not null ? BotMode.Policy : BotMode.Scripted);
+        // before this line, and it applies ONLY when no --bot-mode was given -- an
+        // explicit one always wins, and a --policy it cannot use is refused by
+        // BotBrain.Build rather than quietly ignored.
+        //
+        // ⚠️ It reads policyOnCommandLine, NOT options.PolicyPath. A checkpoint
+        // named by the config file sits beside that file's own Mode key, and
+        // inferring a mode from it would overrule the line two above it.
+        options.BotMode = botMode
+            ?? (policyOnCommandLine ? BotMode.Policy : options.BotMode);
 
-        if (mode.UsesPolicy() && policyPath is null)
-        {
-            throw new ArgumentException(
-                $"--bot-mode {mode.ToString().ToLowerInvariant()} drives bots with a trained "
-                + "checkpoint and none was given; add --policy <path>, or use "
-                + "--bot-mode scripted or search.");
-        }
+        BotBrain.Build(options, Console.WriteLine);
 
-        if (!mode.UsesPolicy() && policyPath is not null)
-        {
-            // ⛔ Refused rather than ignored, the same rule the multi-tier case
-            // has always applied: a checkpoint loaded, printed and never consulted
-            // is a server saying it is doing something it is not.
-            throw new ArgumentException(
-                $"--policy was given but --bot-mode {mode.ToString().ToLowerInvariant()} never "
-                + "consults a checkpoint; use --bot-mode policy or tiered, or drop --policy.");
-        }
-
-        // ⚠️ Tiered DEFAULTS its budget rather than refusing without one. Refusing
-        // made the mode unreachable without a number nobody has tuned, which is a
-        // worse default than a stated guess -- see the constant, which says what
-        // would show it is wrong.
-        // ⚠️ EVERY mode with a controller gets a budget, not just tiered. The Q2
-        // reasoning that "one tier has nothing to choose between, so an arbiter is
-        // pure cost" was wrong: an arbiter's second job is to GATE, and with one
-        // tier it still returns -1 and drops the bot to the scripted layer once
-        // the budget is spent. Without one, `--bot-mode search` let all twelve
-        // bots search on the same tick -- 12 x ~4,800 us against a 33,300 us tick,
-        // which is over budget before the simulation runs at all.
-        if (mode.NeedsArbiter())
-            arbiterUnits ??= DecisionQuotaArbiter.DefaultTieredBudgetMicroseconds;
-
-        var tiers = new List<MicroControllerSpec>();
-
-        if (mode.UsesSearch())
-            tiers.Add(new SearchMicroSpec(new RolloutOptions(Threads: searchThreads)));
-
-        if (mode.UsesPolicy())
-        {
-            var policy = PolicyNetwork.Load(policyPath!, ignoreStamp);
-
-            // ⛔ ALWAYS printed, not only when overridden. A run whose stamps agree
-            // says so; a run that bypassed the guard says THAT, loudly, on the same
-            // line. A bypassed guard that leaves no trace in the output is worse
-            // than no guard, because the next reader cannot tell it happened.
-            Console.WriteLine(
-                $"policy {Path.GetFileName(policyPath!)}: trained against {policy.SimulationUuid}, "
-                + $"this build is {SimulationStamp.Uuid}"
-
-                // ⚠️ Reported, never compared. NavConstants left the gating
-                // surface on 2026-09-03 so a nav edit stops stranding
-                // checkpoints — but removing it from the GATE must not remove it
-                // from the RECORD, or "the bots play differently and the stamp
-                // matches" becomes unattributable. No checkpoint carries one to
-                // compare against yet; SimulationStamp.RoutingUuid says what to
-                // do when one does.
-                + $", routing {SimulationStamp.RoutingUuid}"
-                + (policy.SimulationUuid == SimulationStamp.Uuid
-                    ? " (match)"
-                    : "  <-- STAMP MISMATCH, BYPASSED by --policy-ignore-stamp. Everything this "
-                      + "policy decides was learned on a different simulation."));
-
-            // ⚠️ AFTER the search, so tier 0 is the more expensive controller and
-            // an arbiter under pressure drops to the policy before it drops to the
-            // scripted layer. Ordering is the arbiter's whole input — HybridBot.
-            tiers.Add(new PolicyMicroSpec(policy));
-        }
-
-        // ⛔ Unreachable from the flags now -- NeedsArbiter defaults the budget for
-        // the only multi-tier mode -- and kept as the invariant it always was. If a
-        // fifth mode arrives with two tiers and no default, this is what stops it
-        // shipping a controller that is configured, reported and never consulted.
-        if (tiers.Count > 1 && arbiterUnits is null)
-        {
-            throw new ArgumentException(
-                $"{tiers.Count} bot controllers were configured but no --bot-arbiter <units>; "
-                + "without one the first tier always drives and the rest are dead weight");
-        }
-
-        if (tiers.Count > 0)
-        {
-            options.Bots = options.Bots with
-            {
-                Brain = new BotBrainSpec
-                {
-                    Tiers = tiers,
-
-                    // ⛔ The server's default is the OPPOSITE of BotBrainSpec's,
-                    // deliberately -- see ServerOptions.BotEngagesBotsToo.
-                    Engage = options.BotEngagesBotsToo
-                        ? EngageOpponents.Anyone
-                        : EngageOpponents.HumansOnly,
-
-                    // ⛔ ONE arbiter for the whole server, shared by every bot. A
-                    // per-bot one cannot see the coinciding decisions that make the
-                    // tick tail, which is the only reason it exists.
-                    Arbiter = arbiterUnits is { } units ? new DecisionQuotaArbiter(units) : null,
-                },
-            };
-        }
+        // ⚠️ Which settings a save from the admin panel will NOT be able to change,
+        // computed by diffing what was built against what the file alone would
+        // have produced. A flag beats the file — deliberately — so without this
+        // the panel would accept an edit to a flag-pinned setting, write it
+        // correctly, restart, and change nothing.
+        // ServerOptions.CommandLineOverrides has the argument.
+        options.CommandLineOverrides = OverriddenSettings(options, configPath);
 
         // ⛔ HERE, not only in the GameServer constructor. Validate throws
         // ArgumentOutOfRangeException, and construction happens after this
@@ -914,6 +839,62 @@ internal static class CommandLine
         options.Validate();
 
         return options;
+    }
+
+    /// <summary>
+    /// The settings whose final value differs from what
+    /// <paramref name="configPath"/> alone would have given.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>A diff rather than a record of which flags were seen</b>, because the
+    /// two are not the same set and the diff is the one that matters: a flag
+    /// given the value the file already had changes nothing and should not be
+    /// warned about, and <c>--rotation</c> with no <c>--map</c> silently empties
+    /// <see cref="ServerOptions.Map"/>, which no per-flag record would notice.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Compared through <see cref="ServerSettings"/>'s own text form</b>, so
+    /// it asks exactly the question the settings page asks: would saving this
+    /// value and restarting produce a different server. Anything not in that
+    /// table cannot be edited from the page and so cannot be shadowed on it.
+    /// </para>
+    /// </remarks>
+    private static IReadOnlyList<string> OverriddenSettings(
+        ServerOptions options, string? configPath)
+    {
+        var fromFile = ServerOptions.CreateDefault();
+
+        if (configPath is not null)
+        {
+            try
+            {
+                ServerConfigFile.Apply(fromFile, configPath);
+            }
+            catch (Exception e) when (e is IOException or FormatException)
+            {
+                // Unreachable: the same file was applied without complaint at the
+                // top of Parse. Answering "nothing is overridden" rather than
+                // failing the start keeps a diagnostic from being the thing that
+                // stops a server booting.
+                return [];
+            }
+        }
+
+        // ⚠️ The baseline needs no rotation fix-up of its own: it is "what this
+        // server would be with ONLY --config", that server has no --map, and
+        // ServerConfigFile.Apply already empties Map for a file that carries a
+        // rotation and no Map key. A --rotation FLAG that empties it here is a
+        // genuine override and is meant to be reported as one.
+        var overridden = new List<string>();
+
+        foreach (var setting in ServerSettings.All)
+        {
+            if (setting.Get(fromFile) != setting.Get(options))
+                overridden.Add(setting.Id);
+        }
+
+        return overridden;
     }
 
     internal static void PrintUsage() => Console.WriteLine(
@@ -978,11 +959,13 @@ internal static class CommandLine
           --map-download-limit <n>
                             TOTAL bytes/second across all custom-map downloads
                             in flight, not per client (default 50000)
-          --config <path>   read a reference-format gg2.ini: its [Settings],
-                            [Server], [Maps] and [Classlimits] sections, plus the
-                            rotation file its MapRotation key names. Applied
-                            BEFORE every flag, so a flag always wins wherever it
-                            appears. The file is never written back.
+          --config <path>   read a reference-format gg2.ini. EVERY setting this
+                            server has can be set from it — the reference's
+                            [Settings], [Server], [Maps] and [Classlimits], plus
+                            [Limits], [Log], [Nav], [Bots], [Web] and [Runtime];
+                            see docs/CONFIG.md. Applied BEFORE every flag, so a
+                            flag always wins wherever it appears. Written back
+                            only when the --web admin panel saves.
           --rotation <list|path>
                             the map rotation: comma-separated names, or the path
                             of a rotation file (one map per line, # comments).

@@ -176,7 +176,14 @@ public sealed class WebAdminServer : IDisposable
             // The only place this is ever printed. An operator who misses it
             // restarts with --web-password; there is deliberately no endpoint
             // that hands it back.
-            _log.Info($"web admin password (generated, changes on restart): {Password}");
+            //
+            // ⚠️ "this process" rather than "changes on restart", and the
+            // distinction is load-bearing: a restart asked for from the PANEL
+            // carries this password into the new server — Program.Main, and
+            // GameServer.GeneratedWebPassword — precisely so it does not lock out
+            // the operator who pressed the button. A new process generates a new
+            // one, and only that.
+            _log.Info($"web admin password (generated, lasts as long as this process): {Password}");
         }
 
         // Printed every start, not once, and phrased as what an attacker gets
@@ -430,6 +437,14 @@ public sealed class WebAdminServer : IDisposable
                     200,
                     _perf.ToJson(long.TryParse(request.Q("after"), out var after) ? after : -1),
                     token);
+
+            // ⚠️ Through the QUEUE like every other mutating request, even though
+            // "config" only reads: it reads GameServer.Options, and reading that
+            // from a socket thread while the tick thread is between stages is the
+            // race this whole class is shaped to avoid. It is not on a timer —
+            // the settings page fetches it when it is opened.
+            case ("GET", "/api/config"):
+                return await JsonAsync(stream, 200, await ExecuteAsync("{\"cmd\":\"config\"}"), token);
 
             case ("POST", "/api/command"):
                 return await JsonAsync(stream, 200, await ExecuteAsync(request.Body), token);
