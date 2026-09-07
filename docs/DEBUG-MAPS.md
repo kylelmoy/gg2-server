@@ -21,24 +21,24 @@ it ships with the game and is covered by the ordinary map gates.)
   of them. `MatchState.BuildEntities` feeds `StateUpdateWriter`'s five-byte
   platform blocks for all of them; motion is driven by
   `MovingPlatforms.EndStep`. The map is wire-safe regardless.
-  ⚠️ **Only the chamber raft can ever carry a character**: the carry needs the
+  **Only the chamber raft can ever carry a character**: the carry needs the
   platform's collision mask, which arrives from an embedded sprite named by a
   `resource` property, and the raft is the one platform that names one (the
   other four deliberately never grow a shape — the census test pins that).
-  ⚠️ **The raft narrows the moving-platforms `SIM_UUID` exemption rather than
+  **The raft narrows the moving-platforms `SIM_UUID` exemption rather than
   voiding it** — see `SimulationStamp` and `MovingPlatformTests`: the
   exemption's premise is "no platform with a shape is reachable in play",
   which the raft satisfies because it lives in the sealed chamber. All five
   are nav-invisible — `gg2-nav-gen` skips the type outright, and the nav graph
   is byte-identical with and without them (measured).
-- ✅ **A stock client can join it.** `gg_debug2` is not one of
+- **A stock client can join it.** `gg_debug2` is not one of
   `Gg2.Maps.InternalMaps`' 22 names, so the server advertises **its MD5**
   rather than the empty string that means "built into the client", and
   answers `DOWNLOAD_MAP` by streaming the file — a `uint` length then the
   bytes, rate-limited across ticks and shared between simultaneous
   downloaders. The client writes it to its own `Maps/`, re-hashes it, and
   joins.
-  ⚠️ **Nothing is published for that to work**: the map is served off this
+  **Nothing is published for that to work**: the map is served off this
   server over the same socket, to whoever connects. `--lobby` is a different
   switch and still defaults off.
 
@@ -53,7 +53,7 @@ node <gg2-nav-gen>/bin/gg2navgen.js build maps/gg_debug2.png --md5 none --out na
 rule); without it gg2navgen treats a by-path map as a custom map and suffixes
 the file's MD5, and `NavCache.TryLoad` never finds it.
 
-⚠️ **A generator change moves pinned numbers, deliberately.** `GgDebug2MapTests`
+**A generator change moves pinned numbers, deliberately.** `GgDebug2MapTests`
 pins the map's census and nav properties, and the whole-cache pins in
 `EdgeFlightTests` and `NavGraphFixtureTests.ParallelEdgesAreCommonAndCarryMoreThanOneType`
 sum over every graph in `nav/`, this one included. A failure there after a

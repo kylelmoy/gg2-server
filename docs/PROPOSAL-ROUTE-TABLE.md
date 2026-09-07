@@ -1,6 +1,6 @@
 # Proposal: verified precomputed routes
 
-⚠️ **The prior-art search this document asked for has been run, and the answer
+**The prior-art search this document asked for has been run, and the answer
 is below under "Decision".** Sections 1-7 are kept as written — the record of
 what was known and what was guessed before the search — and are not updated to
 match the decision. The implementation is `NavSearch.Find`'s CPD branch and

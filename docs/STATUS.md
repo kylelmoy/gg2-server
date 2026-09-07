@@ -4,7 +4,7 @@ The phase-by-phase record: what each phase of [`PLAN.md`](PLAN.md) landed, and
 the evidence that says so. `PLAN.md` is the plan and the exit criteria,
 [`PARITY.md`](PARITY.md) is the method, and this file is the result.
 
-⚠️ **This is a record, not a log.** It carries the claims a reader might act on —
+**This is a record, not a log.** It carries the claims a reader might act on —
 "the trace replays with zero error", "the bots cost half a percent of a tick" —
 and each should say what would show it has gone stale.
 
@@ -20,7 +20,7 @@ policy — is in progress.**
 | 8 | unpaced ticking, the human-play recorder, the headless match runner, the control port | closed — 44 matches across all 22 maps in 3.3s, 3,548x real time |
 | 9 | a learned policy: `NpyFile`, `PolicyNetwork`, `HybridBot`, the `Gg2.Env` seam, `tools/bench/` | in progress — see below |
 
-✅ **Every class is implemented.** All ten are armed: rockets, mines, healing
+**Every class is implemented.** All ten are armed: rockets, mines, healing
 beams, ubercharge, afterburn, the airblast, the sentry gun, the sniper's scope,
 Quote's bubble screen, the spy's cloak and backstab, the sandvich, and taunting.
 
@@ -41,7 +41,7 @@ upstream after any reference bump.**
 | Rewards were answered with silence | nobody's badges, hats or capes rendered | `RewardAuthTests`, behind `--rewards` |
 | Every connected stock client died on a gamemode-changing rotation | `StateUpdateWriter` captured `MatchState` once at `Start` and kept writing the previous map's HUD block after a rotation | fixed; see `docs/PARITY.md` |
 
-⚠️ **A claim is only as strong as the thing that was actually done.** "A stock
+**A claim is only as strong as the thing that was actually done.** "A stock
 client has played a round start to finish" was true of exactly one round; the
 rotation between rounds was broken until this audit found it.
 
@@ -74,8 +74,8 @@ real character boxes. Gates and player walls are in, behind a `CollisionFilter`,
 with every bounding box checked against the game. `good_move_contact_solid`,
 `move_outside_solid` and `characterHitObstacle` are transcribed.
 
-✅ **Every collision box in the project is measured against the running game.**
-⚠️ Three of the briefcase's four edges were invisible to every checked-in
+**Every collision box in the project is measured against the running game.**
+Three of the briefcase's four edges were invisible to every checked-in
 trace: **a green fixture is not confirmation of a box.**
 
 ## Phase 4 — character physics
@@ -137,19 +137,19 @@ the population manager. This was seeded by porting a GG2 *fork's* bot layer;
 stock GG2 has none, and the two have since diverged, so the bots here are
 judged by measurement rather than by correspondence ([`BOTS.md`](BOTS.md)).
 
-⚠️ **The reference's bot layer is treated as INCOMPLETE rather than as a
+**The reference's bot layer is treated as INCOMPLETE rather than as a
 specification**, unlike every other phase. A bot's decisions are this
 project's own; the wire and the observable simulation are not.
 
-✅ **Twelve bots that walk, fight and play the objective cost 0.151ms of a
+**Twelve bots that walk, fight and play the objective cost 0.151ms of a
 33.3ms tick — 0.5% of the budget**, measured over 600 steady-state ticks of a
 real server with the whole simulation, the state serialiser and the broadcast
 in the loop. That is phase 7's exit criterion and the project's justification.
 
-⚠️ **Always say which build.** That is a **Release** figure; the same test in
+**Always say which build.** That is a **Release** figure; the same test in
 Debug reads **0.307ms, 0.9%** — twice the cost.
 
-⚠️ **What is measured is this port's cost, not the ratio to GM8.** Nobody has
+**What is measured is this port's cost, not the ratio to GM8.** Nobody has
 benchmarked the reference's bot layer here. What the number establishes is
 that a bot can be made roughly two orders of magnitude heavier before the tick
 is at risk.
@@ -160,12 +160,12 @@ Unpaced ticking, a human-play recorder, a headless match runner and a
 loopback control port. **44 matches across all 22 maps in 3.3 seconds, 3,548x
 real time.**
 
-⚠️ All four switches are off by default, and `--speed` and `--control-port`
+All four switches are off by default, and `--speed` and `--control-port`
 must stay off wherever a client is connected — clients pace themselves at 30
 Hz and re-simulate between updates, so an unpaced server desynchronises every
 one at once.
 
-⚠️ **A match that ends is not a match that happened.** `eval` reported broken
+**A match that ends is not a match that happened.** `eval` reported broken
 Arena matches as wins for weeks, because five instant rounds reach a cap limit
 like five real ones. `MatchActuallyHappensTests` makes that mechanical; any
 "N completed" criterion without it is satisfiable by a broken feature.
@@ -182,12 +182,12 @@ the all-scripted bot on death share on **21 of 21 maps** over 400 matches a map
 (sign test p = 4.8e-7). Widening the window raises the combat gain while the
 objective collapses faster: at 450px on one map the policy wins 4 rounds to 133.
 
-⚠️ **That result is about one checkpoint, not about the method** — training
+**That result is about one checkpoint, not about the method** — training
 variance across seeds is larger than the effect.
-⛔ **It is stamped `SIM_UUID 7ff5940d97aa7bed` and is HISTORY**: the 2026-09-02
+**It is stamped `SIM_UUID 7ff5940d97aa7bed` and is HISTORY**: the 2026-09-02
 physics carry invalidated it, and this build is `698913b5ea547d60`.
 
-✅ **Re-measured against the current build on 2026-09-06** by the training lane
+**Re-measured against the current build on 2026-09-06** by the training lane
 (`gg2-rl`, pinned at `c434229`, cleared to master over the whole dependency
 closure — `src/Gg2.Bots` included, because `SIM_UUID` cannot see it; see
 `TRAPS-BOTS.md`, "a stamp chain is not a clearance"). 21 maps × 200 matches an arm, four seeds, 150px window, 67,200
@@ -195,7 +195,7 @@ matches: the `rest3` checkpoint improves death share by **−2.82 points**
 (2·SE 0.69, t −8.22) **and** round wins by **+3.02** (2·SE 2.14, t +2.83), all
 four seeds agreeing in sign on both. **That is the first time a policy here has
 improved combat and the objective at once.** A `control`-family checkpoint on
-the same instrument fails both. ⚠️ **The two families are not comparable to each
+the same instrument fails both. **The two families are not comparable to each
 other** — the roster follows the trained set, so they play different matches;
 each is only judged against its own control. `TRAPS-BOTS.md`, "the first policy
 to improve deaths and the objective at once".
@@ -225,11 +225,11 @@ able to connect and play without modification.
 
 ## What is not gated
 
-⚠️ **The parity fixtures are all recordings of the reference's own bots**, and
+**The parity fixtures are all recordings of the reference's own bots**, and
 no recording covers the gamemode work end to end. It is gated by the
 reference and by purpose-built tests instead.
 
-⚠️ **If a number is quoted as a measurement anywhere in this repo, ask what
+**If a number is quoted as a measurement anywhere in this repo, ask what
 would go red if it doubled.** On this project's evidence the answer was
 usually "nothing" — and two of the three pinned end-to-end measurements were
 hiding an error when they were finally gated.

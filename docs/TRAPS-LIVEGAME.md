@@ -1,20 +1,18 @@
 # Driving the live game
 
-⚠️ **The local bot fork was deleted on 2026-09-05, and `D:\code\Gang-Garrison-2` now holds stock upstream GG2 instead.** The GM8 game was built and run
-from that fork's `Source/build/`, so **nothing in this document runs as written
-until you re-clone it** (`git clone https://github.com/kylelmoy/Gang-Garrison-2.git`,
-`git checkout bot-route-variety`, then rebuild `Source/build/`). The paths below
-still name `D:\code\Gang-Garrison-2`, which today resolves to stock GG2 — a tree
-with no `Source/build/`, no bots and no bridge.
+**`D:\code\Gang-Garrison-2` holds stock upstream GG2, not the bot fork the running game was built and driven from.** Nothing below runs until the fork is
+re-cloned (`git clone https://github.com/kylelmoy/Gang-Garrison-2.git`,
+`git checkout bot-route-variety`, then rebuild `Source/build/`). Stock upstream
+has no `Source/build/`, no bots and no bridge.
 
 The traps that only bite a session holding the running Game Maker 8 game —
 recording a trace, driving a stock client from the outside, and writing a
 probe that measures the engine rather than measuring itself.
 
-⛔ Most of these look identical to a broken bridge from the outside — the
+Most of these look identical to a broken bridge from the outside — the
 failure mode is never an error message, it is a character that does not move.
 
-⚠️ **Read `docs/PARALLEL.md` first if more than one session is running.** The
+**Read `docs/PARALLEL.md` first if more than one session is running.** The
 bridge serves ONE TCP client and exactly one lane may hold it, and restoring
 `gg2.ini` empties another lane's roster mid-measurement.
 
@@ -88,30 +86,30 @@ gg2_watch add drive
 
 That one line is a bunny-hop with an automatic stop. Both halves matter:
 
-- ⚠️ **GG2 jumps on the PRESSED edge, so a held jump fires once.** `press jump`
+- **GG2 jumps on the PRESSED edge, so a held jump fires once.** `press jump`
   climbs exactly one step and then the character sits there looking wedged.
   Toggling bit 128 every frame is a jump every other frame, and
   **bunny-hopping climbs terrain a single jump cannot**.
-- ⚠️ **Write the mask absolutely, never with `|`.** `heldMask = heldMask | 32`
+- **Write the mask absolutely, never with `|`.** `heldMask = heldMask | 32`
   leaves an earlier `left` bit set and the character walks the wrong way.
   `160 - (heldMask & 128)` alternates exactly 160/32 (jump+right, right) and
   clears everything else.
 - **`gg2_input`'s bits: right = 32, jump = 128** (`keyState` 160 is both).
 
-⚠️ **Probing `place_free` from a client needs `with(CustomMapO) solid = true`
+**Probing `place_free` from a client needs `with(CustomMapO) solid = true`
 first.** The map instance is not flagged solid at the moment the bridge's Step
 runs, so an unprepared scan answers "free" at every point of every column and
 looks like a broken query rather than an empty room. With it, a column scan
 recording each free→solid transition is the cheapest way to read a map's
 walkable structure — far better than reading a walkmask screenshot by eye.
 
-⚠️ **A client returning to spectator is usually NOT the AFK timer.** With
+**A client returning to spectator is usually NOT the AFK timer.** With
 `afktimer` pinned high and `TeamSelectController.afk = 0`, a revert can still
 come from the **server**, which sets every roster entry to `Team.Spectator` on
 a map change (`GameServer.cs`, citing the reference's `with(Player) ... team =
 TEAM_SPECTATOR`). Check `PlayerControl.afktimer` before blaming AFK.
 
-⚠️ **A driven client goes AFK after 60 seconds and un-picks its team.**
+**A driven client goes AFK after 60 seconds and un-picks its team.**
 `PlayerControl.events/End Step.xml` counts `afktimeout = 60*30` frames down and
 then forces the team-select screen, which sends `PLAYER_CHANGETEAM(spectator)`
 and destroys the character. Once the timer has already expired every *later*
@@ -125,9 +123,9 @@ Turn it off before driving anything:
 gg2_eval: with(PlayerControl) { afktimeout = 999999; afktimer = 999999; }
 ```
 
-⚠️ A spectating client disconnects itself after **exactly five minutes**
+A spectating client disconnects itself after **exactly five minutes**
 (`Spectator.events/Create.xml`, `afktimeout = 9000`). It does that to the
-reference server too — do not go looking for a server-side bug.
+reference server too — this is not a server-side bug.
 
 ### A client-side watchdog latch, and how to prove it can fire
 
@@ -136,19 +134,19 @@ reference server too — do not go looking for a server-side bug.
 one line when it trips and nothing for the hours either side. `execute_string`
 makes a watch expression run statements, so the whole check can be one watch
 that scans the roster and writes `global.wdCode`, with a second watch reading
-that global back. Measured 2026-09-05: a full `Player`-plus-`Character` scan
-every frame cost **no observable fps** on a six-bot `cp_dirtbowl` client
-(27 fps before, 27 after; room speed 30).
+that global back. A full `Player`-plus-`Character` scan every frame costs no
+observable fps: 27 fps before and after on a six-bot `cp_dirtbowl` client
+(room speed 30).
 
-⚠️ **Give the checker a self-test input — a gate that cannot fire is worse than
+**Give the checker a self-test input — a gate that cannot fire is worse than
 no gate.** A spare global (`global.wdTest`) that forces the latch is enough:
 set it, confirm the latch trips within a frame, reset it. That proves the
 watch is running, the sticky write works and the log records it, all without
 touching game state.
 
-⛔ **Do NOT prove it by corrupting the roster.** Pointing a spectator
-`Player.object` at a live instance to manufacture the condition **hung the
-client** — GM8 stopped servicing the bridge entirely, with no dialog for the
+**Do NOT prove it by corrupting the roster.** Pointing a spectator
+`Player.object` at a live instance to manufacture the condition hangs the
+client — GM8 stops servicing the bridge entirely, with no dialog for the
 launcher to dismiss and nothing in any log. `Player.object` is dereferenced as
 a `Character` by code that never checks, so anything else there is a wedge, not
 an error. The self-test global costs nothing and is safe.
@@ -160,11 +158,11 @@ is `Character.events/Create.xml:69` making a character for a player the client
 holds as a **spectator**. It fires at *create*, so the state never survives to
 be observed: watch the roster's transitions leading in, not the aftermath.
 
-### ⛔ `Music=1` truncates every client's room setup on a machine with no audio
+### `Music=1` truncates every client's room setup on a machine with no audio
 
-**Measured 2026-09-05, and it invalidates client observations rather than
-merely adding noise.** A GG2 client launched here with `Music=1` in
-`Source/build/gg2.ini` throws inside `basicRoomSetup`:
+**This invalidates client observations rather than merely adding noise.** A
+GG2 client launched on a machine with no audio device, with `Music=1` in
+`Source/build/gg2.ini`, throws inside `basicRoomSetup`:
 
 ```
 EXECUTION ERROR in creation code of room CustomMapRoom
@@ -174,24 +172,22 @@ In script basicRoomSetup: In script AudioControlPlaySong:
 ```
 
 `AudioControl` has no `currentSong` when there is no audio device — the same
-situation `launcher.js`'s own header calls routine over RDP. The launcher
+situation `launcher.js`'s own header calls routine hits over RDP. The launcher
 presses **Ignore**, and GM8's Ignore abandons the rest of the script. The call
 is `basicRoomSetup.gml:80`, so **everything from line 82 down never runs**:
 
 - `instance_create(..., Spectator)` (`:82`) — **there is no `Spectator`**.
 - `global.redCaps`, `global.blueCaps`, `global.winners` (`:84-86`) — never
   initialised, so `CTFHUD`'s Step throws `Unknown variable winners` **every
-  frame**: 962 errors in 25 s, 1755 in another run.
+  frame**.
 - Whatever `:88` onward does, including the MOTD.
 
-⚠️ **The visible symptom points at the wrong thing.** A thousand `CTFHUD`
-errors reads like a HUD or gamemode bug in the port; it is one dismissed audio
-dialog upstream. The port was innocent — the identical run against a server
-built without the change under test produced the identical errors, which is
-the only reason it was not written up as a regression. **Bisect a client error
-storm against an unmodified server before believing it is yours.**
+**The visible symptom points at the wrong thing.** A flood of `CTFHUD` errors
+reads like a HUD or gamemode bug in the port; it is one dismissed audio dialog
+upstream. **Bisect a client error storm against an unmodified server before
+believing it is yours.**
 
-⚠️ **What it invalidates**: anything that reads `global.winners`,
+**What it invalidates**: anything that reads `global.winners`,
 `global.redCaps`/`blueCaps`, or `Spectator` — including
 `Spectator.afktimeout`, the five-minute spectator disconnect, and any
 `wdWins`-style counter in the watchdog latch. All of them silently measure a
@@ -199,19 +195,17 @@ client whose room setup stopped two thirds of the way through.
 
 **The fix is one line and it is in a runtime file, not the reference source.**
 `Source/build/gg2.ini`, `Music=3` (`MUSIC_NONE`, `Constants.xml:127`) — then
-`basicRoomSetup.gml:79`'s guard skips the call and the script completes.
-Verified immediately: **zero** GML errors over several minutes of a joined
-client, `winners=-1`, `spectators=1`. It was set to `3` on 2026-09-05 and
-should stay there; `gg2.ini` is a gitignored build artifact that the tooling
-already rewrites, so this is not a reference-tree edit. ⚠️ If a future client
-log fills with `Unknown variable winners`, check this setting first — something
-restored the file.
+`basicRoomSetup.gml:79`'s guard skips the call and the script completes,
+giving zero GML errors over a joined client's session (`winners=-1`,
+`spectators=1`). `gg2.ini` is a gitignored build artifact the tooling already
+rewrites, so this is not a reference-tree edit. If a client log fills with
+`Unknown variable winners`, check this setting first — something restored the
+file.
 
 ### The frame a joining client does not know itself, and the errors it prints
 
-**Settled 2026-09-05 by reading the reference, not by another soak.** A stock
-client that has just joined prints, for a handful of frames and then never
-again:
+A stock client that has just joined prints, for a handful of frames and then
+never again:
 
 ```
 ERROR in ... of End Step Event for object Spectator:
@@ -220,7 +214,7 @@ at position 19: Unknown variable object
 ```
 
 …plus the same thing from `AmmoCounter`'s Draw (line 8) and Begin Step
-(line 1). ⛔ **This is stock GG2 behaviour and not a port bug.** Do not spend a
+(line 1). **This is stock GG2 behaviour and not a port bug** — do not spend a
 soak on it.
 
 - `ClientCreate.gml:20` sets `global.myself = -1`.
@@ -242,17 +236,16 @@ soak on it.
 
 So there is a real window in which a `Spectator` is running its End Step while
 `global.myself` is still `-1`, and whether a given join lands inside it is a
-race between the client's 30 Hz frame and the server's. **That is why two
-clients joined the same way seconds apart produce 21 errors and zero** — the
-2026-09-05 `c1`/`c2` asymmetry recorded as "the strongest lead of the session"
-in `.claude/notes/evidence-0905-joinrace/`. It heals on the frame the client's
+race between the client's 30 Hz frame and the server's. Two clients joined the
+same way seconds apart can land on opposite sides of that race, one with a
+handful of these errors and one with none. It heals on the frame the client's
 own `PLAYER_JOIN` arrives.
 
-⚠️ **What it is NOT**: it is not the `cp_dirtbowl` fatal's precondition, and it
+**What it is NOT**: it is not the `cp_dirtbowl` fatal's precondition, and it
 does not move a roster count. `docs/PARITY.md`, "Nothing moves a roster count
 inside the join window".
 
-⛔ **The dangerous cousin is the same error that never heals.** The bind is
+**The dangerous cousin is the same error that never heals.** The bind is
 positional and tried once, so a client whose roster is off by one at that
 instant keeps `global.myself = -1` for the whole session and errors on *every*
 frame rather than a handful. **Count the errors and check whether they stop**
@@ -308,16 +301,15 @@ each records what it cost to get right.
 `gg_debug` as well as `arena_lumberyard` and `koth_harvest`; `CollisionSampleTests`
 compares every rectangle the port builds against it.
 
-⚠️ **The bridge serves one TCP client at a time and the MCP server process
-holds it.** Once a session has called any `gg2_*` tool, a
-`node tools/sample-*.js` run times out on its first call — even `gg2_ping` —
-even though the game is fine. Hand the socket over deliberately: stop the
-game, restart it with
+**The bridge serves one TCP client at a time and the MCP server process holds
+it.** Once a session has called any `gg2_*` tool, a `node tools/sample-*.js`
+run times out on its first call — even `gg2_ping` — even though the game is
+fine. Hand the socket over deliberately: stop the game, restart it with
 `node D:/code/gg2-agent/run-agent.js --port 17777 --name server --role server -- -dedicated -map ctf_truefort`,
 and do not touch `gg2_*` until the tool has finished. The other direction is
 free, because each CLI run exits and releases.
 
-⚠️ **Restoring `gg2.ini` empties the running server's roster.** The dedicated
+**Restoring `gg2.ini` empties the running server's roster.** The dedicated
 server re-reads it, so putting the bots setting back mid-session removes every
 bot and the next probe measures nothing at all. Restore it last.
 

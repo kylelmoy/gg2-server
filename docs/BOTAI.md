@@ -72,12 +72,12 @@ recursively, so a reference inside a struct inside an `[InlineArray]` slot buffe
 fails it too, which is exactly where one would be added without anybody noticing.
 `BotAiConstraintsTests.WorldStateHoldsNoReferenceAnywhereInIt`.
 
-⚠️ **The failure mode is not a broken test elsewhere.** Putting a `List<>` or a
+**The failure mode is not a broken test elsewhere.** Putting a `List<>` or a
 logger in there breaks nothing that runs — the server still serves, every parity
 window holds, the whole suite stays green — and rollout search is dead months
 later for a reason nobody can find.
 
-⚠️ **Zero-allocation is easy to lose silently via `foreach` over an interface.**
+**Zero-allocation is easy to lose silently via `foreach` over an interface.**
 Enumerating an `IReadOnlyList<T>` via `foreach` allocates a boxed enumerator
 where enumerating the concrete array does not, and an **empty** collection's
 enumerator is a cached singleton that measures zero — so a `foreach` that
@@ -102,7 +102,7 @@ serialisable one.
 bytes** and round-trips through raw bytes bit-identically with no production code
 at all — the bytes *are* the state.
 
-⚠️ **Restoring is not the claim; continuing is.** The gate steps the restored copy
+**Restoring is not the claim; continuing is.** The gate steps the restored copy
 fifty ticks against a control that was never serialised and compares at the
 **end**, because the failure worth catching is a state that compares equal and
 then diverges: a cursor, a counter, an RNG stream left outside the struct. And the
@@ -326,21 +326,18 @@ invalidates every checkpoint. That is correct.
 **Where it lands.** Naturally with phase 4 in `PLAN.md`, since there is nothing
 to stamp before the physics exists. Do not defer it past that: a stamp added
 after the first checkpoints are trained cannot tell you which ones were valid.
-It in fact landed at the end of phase 7; nothing had been trained by then, so
-nothing was invalidated by the delay, but the stamp had to be derived from a
-larger surface than it would have been.
 
 **Built.** `Gg2.Simulation.SimulationStamp`, gated by `SimulationStampTests`.
 `Require` **throws** on a mismatch, naming both stamps so an operator can tell
 which side is stale.
 
-⚠️ **The surface is chosen, not swept.** In: the physics constants (which live on
+**The surface is chosen, not swept.** In: the physics constants (which live on
 `ClassStats`, not only `Gml`), the `BOT_*` and `NAV_*` blocks, the per-class table
 and the blast tables, and the **three** hand-bumped version numbers. **Out:
 `GameConstants` — configuration and protocol.** A port number moving must not
 invalidate every checkpoint, because **a stamp that churns gets ignored**.
 
-⚠️ **The third hand-bumped number is `SimulationBehaviourVersion`, and it exists
+**The third hand-bumped number is `SimulationBehaviourVersion`, and it exists
 because everything else on the surface is a CONSTANT** — it is the escape hatch
 for a change to control flow (e.g. in `Movement.cs`) that is real physics but
 touches no constant, so nothing else on the stamp's surface would move for it.
@@ -349,13 +346,13 @@ for a refactor, and exempt a change only when it has been *demonstrated*
 unobservable rather than argued to be. `docs/ENV.md`, "the third hand-bumped
 number", has the rule and the exemption that was used.
 
-⚠️ **Round-trip formatting, so a one-ULP change moves it** — `Gml.PointSix` and
+**Round-trip formatting, so a one-ULP change moves it** — `Gml.PointSix` and
 its four siblings *are* gravity and the friction factors, and fifteen digits
 cannot tell them from the plain literals. And **FNV-1a rather than
 `string.GetHashCode()`**, which is randomised per process and would refuse every
 policy after a restart.
 
-⚠️ **The digest is pinned in the test, and a change there is the bump rather than
+**The digest is pinned in the test, and a change there is the bump rather than
 a broken test.** The question to answer before editing that line is which
 checkpoints it just invalidated.
 
@@ -411,7 +408,7 @@ best sequence - replanning next decision rather than committing to the plan. Its
 action space is the same `EnvAction` heads `Gg2.Env` decodes, so a decision it
 logs is valid data for a policy and vice versa.
 
-**Why it is here and not in `gg2-rl`.** ⚠️ **It is a bot in its own right.** It
+**Why it is here and not in `gg2-rl`.** **It is a bot in its own right.** It
 is a better bot than this repo currently ships, it is the permanent evaluation
 baseline every later policy is measured against, and it is useful with `gg2-rl`
 deleted. It also wants `WorldState` internals and has to be fast in the tick
@@ -429,7 +426,7 @@ test of whether the whole learning programme is worth continuing.
 **What it needs that already exists.** Item 2's snapshot/restore (the fork), item
 5's `IBatchInputSource` (amortising forked worlds across every bot deciding on
 the same tick), item 6's `WorldView` queries, item 7's damage accumulators (the
-score), and item 11's `ScenarioWorld` (a fight, not a match). ⚠️ **Nothing new is
+score), and item 11's `ScenarioWorld` (a fight, not a match). **Nothing new is
 required from the simulation.** This item is assembly, not capability.
 
 **Built.** `Gg2.Bots.RolloutSearch`. 2.94 ms a decision in Release and 11-0-1
@@ -448,7 +445,7 @@ read off `CharacterState`. `Idle` (presses nothing) is kept beside it as the
 comparison floor. Self-play is deliberately out of v0 and its seam is a third
 member of that enum.
 
-⚠️ **`HoldLastInput` is the same CLASS of assumption as `botAimLead`'s** — better,
+**`HoldLastInput` is the same CLASS of assumption as `botAimLead`'s** — better,
 because it is right about momentum over a 20-tick horizon, and still an opponent
 who does not *react*, which is the thing this programme exists because of. So
 `gg2-rl` phase 1 should report the win rate under both models rather than one
@@ -458,7 +455,7 @@ they differ a lot that gap is the quantified argument for paying for nested
 rollouts. That number is wanted before phase 2 distils anything, because a
 policy inherits whatever the search assumed.
 
-⚠️ **`RolloutOpponent.Idle` is therefore not dead code.** It looks like unused
+**`RolloutOpponent.Idle` is therefore not dead code.** It looks like unused
 surface area and it is the control that makes the paragraph above measurable.
 `docs/TRAPS-BOTS.md`, "Item 12", and `gg2-rl/docs/PLAN.md` phase 1.
 
@@ -490,12 +487,7 @@ expert iteration, and it arrives as weights behind a seam that already exists.
 
 ## Where items 9-12 came from
 
-They are `gg2-rl/docs/CONTRACT.md`'s "What gg2-server does not yet promise" —
-9-11 as originally written, 12 added when that repo's phase 0 started and phase
-1's dependency turned out to be named nowhere: the search bot had appeared in
-this document only as *motivation* for items 1, 2, 5 and 11, and in `docs/ENV.md`
-only as something v0 was not.
-
+They are `gg2-rl/docs/CONTRACT.md`'s "What gg2-server does not yet promise".
 That repo is the trainer; this one owns the simulation, the env surface, the
 observation layout and the version stamp. The split is deliberate and the
 asymmetry is the point: anything needing `WorldState` internals, or needing to

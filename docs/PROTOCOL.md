@@ -108,7 +108,7 @@ headless server serving only built-in maps should always send `""` here, which
 removes the entire map-download path from scope.
 
 `pluginList` is `name@md5` per plugin, joined by **bare commas**, and empty when
-the server asks for none — which is the default. ⚠️ **The client derives each
+the server asks for none — which is the default. **The client derives each
 plugin's packet id from this string's ORDER** and nothing on the wire names a
 plugin again, so it is never re-sorted and never spaced. `pluginsRequired` picks
 which dialog the client shows and is not enforced by either side. Both fields,
@@ -651,17 +651,17 @@ Not everything in the reference is load-bearing for a private headless server.
   all four of the reference's re-announce triggers are wired (the 30-second
   cadence, a map change, a join, and a leave that un-fills a full server), plus
   the unregister at shutdown.
-  ⚠️ **The packet is BIG-endian** — `set_little_endian(lobbyBuffer, false)` — so
+  **The packet is BIG-endian** — `set_little_endian(lobbyBuffer, false)` — so
   it is the one thing in this project not written through `NetWriter`. A
   little-endian packet is not rejected loudly; the server just never appears,
   which looks exactly like the flag being off.
-  ⚠️ **Verified against the GML, NOT against the live service.**
+  **Verified against the GML, NOT against the live service.**
   `ganggarrison.com:29944` is a third party, is not in the reference tree, and
   was not contacted — `LobbyRegistrationTests` asserts this port agrees with
   `sendLobbyRegistration.gml`, which is a different claim from "the lobby accepts
   it". If a `--lobby` server never appears in the browser, check the service
   before re-deriving the layout.
-  ⚠️ **A server full of bots advertises as empty**: the count is
+  **A server full of bots advertises as empty**: the count is
   `getNumberOfOccupiedSlots`, which is humans, and the packet's own bot field is a
   hard zero in the reference. Transcribed rather than corrected — that field's
   meaning belongs to the lobby, not to us.
@@ -670,22 +670,22 @@ Not everything in the reference is load-bearing for a private headless server.
   `GameServer` answers `REWARD_REQUEST` with a challenge, relays the response and
   broadcasts the `REWARD_UPDATE`. The string is kept on the roster so a later
   joiner's `FULL_UPDATE` carries it too.
-  ⚠️ **The default is off, and that is a DEPARTURE from the reference, not a
+  **The default is off, and that is a DEPARTURE from the reference, not a
   transcription of it**: `processClientCommands.gml:320-325` mints a challenge
   and replies to every `REWARD_REQUEST` unconditionally, with no server-side
   opt-out in stock GG2. Turning it on makes this server open outbound TCP to a
   third party carrying its players' user ids, and a headless binary has no
   hosting menu in which somebody agreed to that.
-  ⚠️ **`--auth-server host[:port]` overrides where it authenticates**, which is
+  **`--auth-server host[:port]` overrides where it authenticates**, which is
   the only way the flow can be exercised: `ganggarrison.com:45022` is a third
   party and is not contacted from this repo. `RewardAuthTests` stands up a
   loopback listener instead.
-  ⛔ **The HOST self-auth is deliberately NOT ported.**
+  **The HOST self-auth is deliberately NOT ported.**
   `GameServerCreate.gml:79-83` authenticates the host's own player with
   `ipCheck = false` and `hmac_md5(key, challenge)`. This port has no local player
   — slot 0 is a reserved spectator nobody plays — so there is nothing to
   decorate.
-  ⛔ **Deliberately skipped, not a gap**: making the game server issue outbound
+  **Deliberately skipped, not a gap**: making the game server issue outbound
   HTTP requests to a third party carrying player identities is a decision, not a
   transcription task, and it cannot be verified against the live auth service
   from this repo. Every effect of rewards is cosmetic (gear, hats, particles) and
@@ -696,7 +696,7 @@ Not everything in the reference is load-bearing for a private headless server.
   container framing, the seam a server-half implementation plugs into, and how a
   plugin is ported. The default is still an empty list, so nothing changes for a
   server that does not ask for one.
-  ⚠️ **A plugin packet is KICKED, not ignored, for an id outside the advertised
+  **A plugin packet is KICKED, not ignored, for an id outside the advertised
   list.** `processClientCommands.gml:338-362` calls `_PluginPacketPush`, which
   returns false for an id absent from `global.pluginPacketBuffers` — a map filled
   by `loadserverplugins` and keyed by each plugin's *position*. So a server with
@@ -707,19 +707,19 @@ Not everything in the reference is load-bearing for a private headless server.
   is advertised with its MD5 and served on `DOWNLOAD_MAP` as a `uint` length
   followed by the raw file, rate-limited across ticks and shared between
   simultaneous downloaders (`serviceJoiningPlayer.gml:8-24`, `:131-144`).
-  ⚠️ **The MD5 is 32 LOWERCASE hex characters, measured rather than assumed.**
+  **The MD5 is 32 LOWERCASE hex characters, measured rather than assumed.**
   `CustomMapGetMapMD5` calls the compiled `GG2DLL_compute_MD5`; the extension's
   source, `Extensions/GG2DLL/GG2DLL/GG2DLL.cpp:485-516`, formats with
   `sprintf("%02x")`. Uppercase compares unequal on every client, and the symptom
   would be a download that completes and is then rejected.
-  ⚠️ **`InternalMaps` carries five ALIASES** — `ctf_2dfort2`, `ctf_2dfortremix`,
+  **`InternalMaps` carries five ALIASES** — `ctf_2dfort2`, `ctf_2dfortremix`,
   `dkoth_60s`, `ctf_2dfort1` and `ctf_2dfort[0]` (brackets verbatim, and almost
   certainly a typo in the reference that the client nonetheless matches). Missing
   one makes every client re-download a map it already has, under a name it then
   cannot find. `MapDownloadTests.EveryShippedMapIsInternal` gates the list
   against what is on disk, because the two are independent and a mismatch is
   silent.
-  ⚠️ **The bandwidth limit is TOTAL, not per client** — a second downloader
+  **The bandwidth limit is TOTAL, not per client** — a second downloader
   halves the first one's rate rather than doubling the server's outgoing traffic.
   `MapDownloadBytesPerSecond`, default 50000.
 - **UPnP port forwarding** (`GameServerCreate.gml:5-19`) — not ported.
@@ -763,5 +763,3 @@ definition outward rather than assumed from the name:
 - **Kill Log** (302 lines). Called from the `doEvent*` scripts, which run
   server-side too — but it builds a `ds_map` for `Objects/Overlays/KillLog`'s
   **Draw** event. A HUD list, not state.
-</content>
-</invoke>

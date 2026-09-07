@@ -12,16 +12,15 @@ dotnet run --project src/Gg2.Host -- --map ctf_truefort   # a server, which buil
 
 ## Why it exists here
 
-The generator used to live in the game, in `Source/gg2/Scripts/BotNav/*.gml`,
-running on a server tick; then in `gg2-nav-gen`, a Node program that had to sit
-next to a Game Maker checkout to read `Constants.xml` and the sprite sizes. This
-repository consumed its output — 25 files in `nav/` — and could not produce one.
-
-⚠️ **What that cost was not the inconvenience.** It was that
-`nav/` covers the 22 shipped maps plus `gg_debug`/`gg_debug2`, and **anything
-else had no graph**: a map an operator added, a map edited since its graph was
+Nav graphs for the shipped maps are also produced by `gg2-nav-gen`, a standalone
+Node tool that reads a Game Maker checkout for `Constants.xml` and the sprite
+sizes, and originally by GML running inside the game itself
+(`Source/gg2/Scripts/BotNav/*.gml`). Neither can run inside this repository, so
+without a generator here, `nav/`'s 25 files are the only navigable maps:
+`nav/` covers the 22 shipped maps plus `gg_debug`/`gg_debug2`, and anything
+else has no graph — a map an operator added, a map edited since its graph was
 built, a stage of a multi-area map nobody generated. A bot with no graph fights
-whatever reaches it and walks nowhere — which on a full-size map means the two
+whatever reaches it and walks nowhere, which on a full-size map means the two
 teams never meet, every match ends 0-0 and unfinished, and it reads as a broken
 bot layer rather than as absent data. Everything a graph needs is in the map's
 own PNG (the walkmask and the entity list, deflated into a zTXt chunk, the same
@@ -29,25 +28,25 @@ input `CustomMapInit.gml` reads), so it was never data that had to be missing.
 
 ## The claim, and what backs it
 
-⛔ **This is a port, not a reimplementation, and unlike its predecessor it has an
-oracle.** `NavGeneratorTests.RebuildsEveryShippedGraphExactly` rebuilds all 25
-checked-in graphs from the map PNGs and compares them **character for character**
-against `nav/`. Those files were produced by `gg2-nav-gen`; they are what the bot
-layer's pinned end-to-end measurements were taken against. A generator that
-reproduces them exactly is provably the same generator.
+**This is a port, and it has an oracle.** `NavGeneratorTests.RebuildsEveryShippedGraphExactly`
+rebuilds all 25 checked-in graphs from the map PNGs and compares them
+**character for character** against `nav/`. Those files were produced by
+`gg2-nav-gen`; they are what the bot layer's pinned end-to-end measurements were
+taken against. A generator that reproduces them exactly is provably the same
+generator.
 
-⚠️ **That test is load-bearing for a design decision, not just for correctness.**
-`gg2-nav-gen` keeps **three** copies of the arc machinery — one per manoeuvre —
-because it could not check a change to its single-jump path against anything
-(the GML generator it was ported from had been deleted), so it kept unverifiable
-edits off the hot path of every ordinary jump. Here there is one
+**That test is load-bearing for a design decision, not just for correctness.**
+`gg2-nav-gen` keeps three copies of the arc machinery, one per manoeuvre, because
+it has no oracle of its own to check a change to its single-jump path against
+(the GML generator it was ported from no longer exists), so it keeps
+unverifiable edits off the hot path of every ordinary jump. Here there is one
 `NavArcModel` with three subclasses, because the comparison catches what the
-duplication was defending against. ⛔ **If that test is ever deleted or relaxed to
+duplication was defending against. **If that test is ever deleted or relaxed to
 counts or to a tolerance, the consolidation has to be undone with it.**
 
-⚠️ **Counts are not enough and a tolerance is not enough.** Each of the traps
-below produced a graph with a plausible node and edge count that was *different*
-on 22 of 23 maps:
+**Counts are not enough and a tolerance is not enough.** Each of the traps below
+produced a graph with a plausible node and edge count that was *different* on 22
+of 23 maps:
 
 1. **`round()` in GM8 is banker's rounding.** Delphi's `Round` is
    round-half-to-even: `round(0.5)` is 0, `round(2.5)` is 2. The arc sampler
@@ -115,18 +114,17 @@ built up over the ramp. `basemaxspeed` runs from Heavy's 4.53 px/tick to Scout's
 7.93 over **one shared graph**, so an arc is only honest if the slowest class
 asked to fly it can.
 
-⚠️ **The run-up is a property of the MAP.** A one-column perch — the kind
-`ExtractNodes` emits wherever a character can stand three-quarters off a ledge —
-offers no run-up at all in the direction it overhangs, so every arc off it starts
-from a standstill. `ctf_oldfort`'s n41 is one, and the graph used to offer it a
-102 px arc; a standing Heavy covers 75 px of it.
+**The run-up is a property of the map.** A one-column perch — the kind
+`ExtractNodes` emits wherever a character can stand three-quarters off a
+ledge — offers no run-up at all in the direction it overhangs, so every arc off
+it starts from a standstill; `ctf_oldfort`'s n41 is one, and a standing Heavy
+covers 75 px of its arc.
 
 The double-jump fan is written for a Scout and the rocket-jump fan for a healthy
 Soldier, because the search refuses those edges to every other class — so the
-slowest class that can fly one is the only class that can. ⚠️ **The arc GEOMETRY
-still uses `NAV_JUMP_VX` in all three**: that constant is also the per-sample
-catch-up budget in the clearance walk, and raising it changes the half that was
-learned from broken maps.
+slowest class that can fly one is the only class that can. The arc geometry
+still uses `NAV_JUMP_VX` in all three: that constant is also the per-sample
+catch-up budget in the clearance walk.
 
 ### The three later fans are purely additive, and must stay that way
 
@@ -137,7 +135,7 @@ perform. Hence: each of the double-jump, rocket-jump and sticky-jump fans runs
 after the ones before it, keeps its own quota, and reads an adjacency snapshot
 taken **before any of the three started**.
 
-⚠️ **The rocket fan's filter is INVERTED against the double jump's, deliberately.
+**The rocket fan's filter is inverted against the double jump's, deliberately.
 Do not harmonise them.** The double jump exists to reach what is otherwise
 unreachable, so it skips anything already joined within `NAV_DJ_SKIP_HOPS` (3) and
 prices itself out of ordinary routes at `NAV_DJ_PENALTY` 40. Rocket jumping is a
@@ -158,31 +156,29 @@ dotnet run --project src/Gg2.Host -- navgen --map cp_dirtbowl --area 2
 dotnet run --project src/Gg2.Host -- navgen --check        # did anything I changed move a graph?
 ```
 
-✅ **One command does the whole cycle**: it writes the shipped `.txt.gz`
+**One command does the whole cycle**: it writes the shipped `.txt.gz`
 container, deletes the plain `.txt` if one is there, writes the `<key>.dist.gz`
 next-hop tables the exact A\* heuristic reads, and rewrites `nav/manifest.tsv`.
-The previous workflow needed three steps and skipping the last left the old
-pairing recorded and the new graphs refused at run time.
 
-⚠️ **The tables are written by default and a graph change invalidates them.**
+**The tables are written by default and a graph change invalidates them.**
 They are keyed to a hash of the graph's own nodes and edges, so regenerating a
 graph without its table leaves a file the server refuses at load — it then
 derives instead, which costs 377 ms rather than 62 ms at the map change and is
 logged. `--no-distances` skips them deliberately; `--check` reports
 `tables STALE` per map. `docs/TRAPS-BOTS.md`, "Shipping the tables".
 
-✅ **A graph identical to the one already on disk is not rewritten**, so
+**A graph identical to the one already on disk is not rewritten**, so
 `git status` after a run names the graphs a source edit actually moved — which is
 the question a regeneration is asked to answer. `--check` answers it without
 writing at all, and exits 1 when something differs.
 
-⚠️ **`--out` defaults to the nearest `nav/` at or above the working directory**,
+**`--out` defaults to the nearest `nav/` at or above the working directory**,
 not to the server's own `ResolveNav`. That probe walks up from the *executable*,
 and `nav/` is copied into the build output — so the server's answer would write
 graphs into `bin/Debug/net10.0/nav`, leave the checked-in ones untouched, and
 report success. `GG2_NAVCACHE` overrides both.
 
-⚠️ **`--sticky` writes `NAV_EDGE_STICKYJUMP` (type 7) edges and the Game Maker
+**`--sticky` writes `NAV_EDGE_STICKYJUMP` (type 7) edges and the Game Maker
 game must never load them.** Its `navFindPath` takes `canDouble` and `canRocket`
 and has **no `canSticky`** — a type-7 edge in its cache routes every class over an
 arc only a Demoman can fly, forever. This port's `NavGraph.EdgeRoutable` refuses
@@ -192,7 +188,7 @@ off is what keeps a file generated here safe to hand to the game.
 
 ### What it costs
 
-**Measured 2026-09-03, Release, on this machine.** ⚠️ Say which build: Debug is
+Measured 2026-09-03, Release, on this machine. Say which build: Debug is
 roughly 2x.
 
 | | |
@@ -207,7 +203,7 @@ roughly 2x.
 `BotPopulationService.MapChanged` builds a graph for a map that has none. **On by
 default**; `--no-navgen` turns it off.
 
-⚠️ **It runs on the tick thread, at the map change.** That is deliberate
+**It runs on the tick thread, at the map change.** That is deliberate
 placement: a map change is the one moment nothing is being simulated and every
 client is loading, so a 20–190 ms stall disturbs nothing — where a background
 build would have to hand a graph to bots that had already planned routes without
@@ -218,13 +214,13 @@ a hitch:
 built a nav graph for mymap area 1 in 86ms — 687 nodes, 6747 edges
 ```
 
-⚠️ **The graph is held in memory and not written anywhere**, unless
+**The graph is held in memory and not written anywhere**, unless
 `--navgen-save` says so. A server putting files in an operator's install
 directory because it rotated onto a map is a surprise; paying the build once a
 rotation is not. `--navgen-save` is worth it on a rotation that is mostly custom
 maps.
 
-⛔ **One asymmetry, and it is the interesting half.** A graph **refused by the
+**One asymmetry, and it is the interesting half.** A graph **refused by the
 manifest** — one built against different geometry — is rewritten *even with
 saving off*. That file describes terrain that is not there: leaving it means every
 restart refuses it and rebuilds, and any other tool reading the directory still
@@ -232,17 +228,17 @@ gets the wrong graph. A map that simply never had a graph is not a fault to
 correct, so its generated graph stays in memory.
 `NavGenerateOnMapChangeTests.OverwritesAGraphThatNoLongerFitsItsMap`.
 
-⚠️ **A build failure is not fatal.** A map this generator cannot handle logs and
+**A build failure is not fatal.** A map this generator cannot handle logs and
 falls back to the degradation `NavCache.TryLoad` already promises — bots that do
 not navigate — because that is strictly better than refusing to serve the map.
 
 ### `eval` does it too, and there it matters more
 
-`gg2-server eval` is where a bot change is **measured**, so "the map had no graph"
+`gg2-server eval` is where a bot change is measured, so "the map had no graph"
 is the one thing it must not quietly be measuring. It builds a missing graph the
 same way and the nav column says `built` rather than `ok`.
 
-⛔ **Measured 2026-09-03**, two custom CTF maps (`ctf_atalia`, `ctf_doublecross`),
+Measured 2026-09-03, two custom CTF maps (`ctf_atalia`, `ctf_doublecross`),
 4 matches each, 12 bots, the default 36000-tick ceiling:
 
 | | red | blue | drew | unfinished |
@@ -250,7 +246,7 @@ same way and the nav column says `built` rather than `ok`.
 | `--no-navgen` (no graph) | 0 | 0 | **8** | 0 |
 | graph built | 3 | 1 | 4 | 0 |
 
-⛔ **Look at the "unfinished" column.** With no graph every match is a 0-0 draw at
+**Look at the "unfinished" column.** With no graph every match is a 0-0 draw at
 the time limit — a **finished** match, so any "N completed" criterion is satisfied
 by a map on which nothing happened. That is CLAUDE.md's "a match that ends is not
 a match that happened", and it is why the nav column exists at all.
@@ -258,7 +254,7 @@ a match that happened", and it is why the nav column exists at all.
 ## Staying in step
 
 - **The constants are `NavConstants` and `BotConstants`**, transcribed from
-  `Constants.xml` and pinned by `ConstantsTests`. `gg2-nav-gen` read the XML at
+  `Constants.xml` and pinned by `ConstantsTests`. `gg2-nav-gen` reads the XML at
   run time; this cannot, because it ships without a checkout — the test is what
   replaces that.
 - **Three of them are `BOT_*` rather than `NAV_*`**: `BOT_RUNUP_CELLS`,
@@ -274,9 +270,9 @@ a match that happened", and it is why the nav column exists at all.
 - **The field layout is versioned.** `NAV_CACHE_VERSION` is 15; `NavCache.Parse`
   refuses a file that declares anything else rather than reading columns that mean
   something else. Bump it whenever a field moves.
-- ⚠️ **`Gg2.Nav` does not reference `Gg2.Bots`.** Its product is the cache file's
-  **text**, and the caller turns that into a `NavGraph` with `NavCache.Parse` —
-  the same call a file off disk gets. So an on-the-fly graph and a generated file
+- **`Gg2.Nav` does not reference `Gg2.Bots`.** Its product is the cache file's
+  text, and the caller turns that into a `NavGraph` with `NavCache.Parse` — the
+  same call a file off disk gets. So an on-the-fly graph and a generated file
   are the same graph by construction rather than by two code paths agreeing.
 
 ## What is still in `gg2-nav-gen`
@@ -291,20 +287,20 @@ there and not here:
   `NavCache.Key` has always done on the reading side;
 - reading `Constants.xml` at run time rather than through `ConstantsTests`.
 
-⚠️ **`tools/compress-nav.sh` is only for that generator's output now.**
+**`tools/compress-nav.sh` is only for that generator's output now.**
 `navgen` writes the shipped container itself.
 
 ## One thing that was measured on the way in
 
-⚠️ **`gg2-nav-gen` derived a collider's bounding box from the raw entity
+**`gg2-nav-gen` derives a collider's bounding box from the raw entity
 coordinates; GM8 rounds an instance's position first**, and so does this port's
 own `SolidRect.FromEntity`. The two differ by up to a pixel on a *fractional*
 scale — a 60x6 bar at yscale 0.3 ends at 607.8, not 608 — which can put a wall in
 a different nav cell from the one the physics puts it in.
 
-✅ **Measured 2026-09-03: rounding changes nothing on any of the 25 shipped
-graphs**, so the two were free to differ and did. `NavInstances` rounds, because
-that is what the reference's own `navMarkInstances` read (it ran inside GM8,
-against live instances) and because it means a custom map cannot have the graph
-and the physics disagreeing about where a wall is. `NavInstanceTests` pins the
+Measured 2026-09-03: rounding changes nothing on any of the 25 shipped graphs,
+so the two were free to differ and did. `NavInstances` rounds, because that is
+what the reference's own `navMarkInstances` read (it ran inside GM8, against
+live instances) and because it means a custom map cannot have the graph and the
+physics disagreeing about where a wall is. `NavInstanceTests` pins the
 agreement.

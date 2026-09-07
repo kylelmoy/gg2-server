@@ -107,8 +107,8 @@ Do not re-derive any of them.
   `CollisionWorld.CollisionLineHitsMask` is the map's side of it and
   `LineCollider.ForCharacter` is a character's; the map is reached through
   `Obstacle`, because `CustomMapO` descends from it.
-  ✅ **The walk SKIPS open ground as of 2026-09-02 and the answer is identical
-  rather than approximate** — `Walkmask.Clearance` says how far the next solid
+  ✅ **The walk SKIPS open ground and the answer is identical rather than
+  approximate** — `Walkmask.Clearance` says how far the next solid
   cell is, so the samples jumped over cannot be the first solid one. It is worth
   −7% of a twelve-bot tick, almost all of it a soldier's ballistic line-of-sight
   test. ⛔ **The parity fixtures do not gate it and cannot**: a recorded hitscan
@@ -175,12 +175,11 @@ whole value:
    same normalise-then-scale keeps every intermediate inside [1, 2) and
    [2^53, 2^54).
 
-The checked-in fixtures were all generated before this and were audited when (1)
-was found: none of them took the fuzzy branch, and none holds a value that could
-reach (2) or (3). **They are sound as they stand and must not be regenerated
-with an old copy of the encoder** — there is no longer an old copy to reach for.
+None of the checked-in fixtures take the fuzzy branch or hold a value that
+could reach (2) or (3). **They are sound as they stand and must not be
+regenerated with an encoder that lacks this fix.**
 
-### The crawl that could not finish — 2026-08-30, and the only line in the physics the reference does not have
+### The crawl that could not finish
 
 ⛔ **`good_move_contact_solid` can loop for ever, and it is not a transcription
 bug — the reference loops too.** Reproduced at iteration 78 of the run
@@ -854,13 +853,11 @@ these are the traps:
   `move_all_bullets` and the characters' Steps, which is where `CTFHUD` sits in
   instance order and is observable — the gates open for the characters moving
   immediately below it.
-- ⚠️ **The join path used to name `ServerOptions.Map`, not the map now
-  loaded.** Both the `HELLO` and the join block's `CHANGE_MAP` did, and they are
-  the same string until the first rotation and different for ever after — so
-  every player joining after round one loaded the wrong map and then simulated a
-  different world, silently. Found by writing `MapRotationTests`; the fix is
-  `_currentMap`, and `OpenMap` exists so `Start` and a rotation cannot drift
-  apart again.
+- ⚠️ **The join path names `_currentMap`, never `ServerOptions.Map`.** The
+  option and the current map are the same string until the first rotation and
+  different for ever after, so naming the option would join a player after
+  round one to the wrong map, silently. `OpenMap` is what keeps `Start` and a
+  rotation from drifting apart; `MapRotationTests` gates it.
 - **No recording can gate any of this.** The shortest round the reference
   permits is a minute and the longest fixture is eighty seconds, so no
   checked-in trace holds a `MAP_END`, a `CHANGE_MAP` or one tick of
@@ -2093,7 +2090,7 @@ change trajectories rather than last digits:
   `Gml.Greater`, `Gml.Sign` and friends. A raw `!= 0` on a value that ordinary
   cancellation left at `-2.7e-14` moves a character six pixels.
 
-### ✅ Taunting and the humiliation round, landed 2026-08-28
+### Taunting and the humiliation round
 
 Both are **observable simulation**: the taunt key is a bit in `keyState`, so
 the stock client sets `taunting` from the same wire the server does, and a
@@ -2549,10 +2546,9 @@ frame's flush and ships on the next tick**. Three messages are in that position:
 | sentry `DESTRUCTION` | `Sentry.events/End Step.xml`, the `hp<=0` block |
 | `BALANCE` | `with(GameServer) ServerBalanceTeams()`, `Character.events/End Step.xml:42-44` |
 
-⚠️ **`docs/PARITY.md` and `FlushShapeTests` both used to say the flush happens
-"after everything that frame has been appended". It does not**, and both have been
-corrected. The state update is not the last thing written for its tick either —
-every Begin Step event appends after it.
+⚠️ **The flush does not happen after everything that frame has been appended.**
+The state update is not the last thing written for its tick either — every
+Begin Step event appends after it.
 
 #### The probe, because no trace can settle this
 
@@ -3367,19 +3363,19 @@ drive a simulation entry point and do not care what it announced. A convenience
 overload in the simulation would have been tidier and would have put the hole
 straight back, because production code could reach it too.
 
-### Live session 2026-08-28: the platform's box, and where a mask hangs
+### The platform's box, and where a mask hangs
 
-Two of the open live-game questions, settled with a dedicated server on
-`gg_debug` and **no `gg2.ini` edit at all** — neither probe needs a character,
-so the bots setting was never touched and the reference tree never changed.
+Two live-game questions, settled with a dedicated server on `gg_debug` and
+**no `gg2.ini` edit at all** — neither probe needs a character, so the bots
+setting is untouched and the reference tree is unchanged.
 
-#### ✅ The dropdown platform's box: 60 × 6, and the port was right
+#### The dropdown platform's box: 60 × 6, and the port is right
 
 `sprite44`, via `probe-sprite-boxes.js`'s `mask_index` trick — a `Shot` wearing
 the sprite, which works because **a bounding box is a property of the sprite and
-solidity is not**. That is the whole reason this one was still open: the
-collision oracle samples every rectangle the port builds, but only for things
-that are *solid*, and a dropdown platform is never solid to anything.
+solidity is not**. The collision oracle samples every rectangle the port
+builds, but only for things that are *solid*, and a dropdown platform is never
+solid to anything — so this box needed its own probe.
 
 Measured: **width 60, height 6, origin (0,0), sprite bbox 0,0..59,5**, instance
 box `[0..59] × [0..5]`, **nine sub-images**. `ColliderSprites`' inferred
@@ -3662,7 +3658,7 @@ gate geometry straight off the map and needs no simulation),
 `SentryKillFixtureTests` and two unit tests in `SentryTests`. All four go red
 when `Sentries.GateCollisionStep` is removed — measured, not assumed.
 
-### ⛔ The carry LANDED, and NOTHING IN THE SUITE COVERS IT (2026-09-02)
+### ⛔ The carry LANDED, and NOTHING IN THE SUITE COVERS IT
 
 `MovingPlatforms.Carry` — 362 lines, and the reason `SIM_UUID` moved from
 `7ff5940d97aa7bed` to `5dac8a5e7c37ce3a` — **is not exercised by a single test**.
@@ -3686,14 +3682,13 @@ inclusive and that position rounds half to even — all real, all about
 keeps getting caught by**: the thing named is genuinely tested and is not the
 thing claimed.
 
-⛔ **This was found by trying to USE the merge, not by reviewing it.** The
-question asked was "can a stamp-mismatched policy run on `ctf_2dfort`", and the
-A/B that answered it came back identical on 23 maps — which is only evidence if
-the comparison can detect the carry at all. It cannot. **An A/B with no
-demonstrated sensitivity is not a null result, it is no result**, and chasing
-that is what turned up the coverage gap.
+⛔ **An A/B that cannot detect the thing it is testing for is not a null
+result, it is no result.** A stamp-mismatched policy A/B run on `ctf_2dfort`
+came back identical on 23 maps — evidence only if the comparison can detect
+the carry at all, which it cannot, since no bot stands on a moving platform on
+any of them.
 
-### ✅ NO SHIPPED MAP CONTAINS A MOVING PLATFORM (2026-09-02)
+### NO SHIPPED MAP CONTAINS A MOVING PLATFORM
 
 `MovingPlatforms.Build` reads exactly one entity type, `EntityTypes.MovingPlatform`
 = `"moving_platform"`. Counted across the checked-in oracle

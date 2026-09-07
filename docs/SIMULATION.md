@@ -6,7 +6,7 @@ throw away.
 
 ## The state itself — what `WorldState` holds, and why
 
-⚠️ The five rules that bite a session before it knows it is near them are in
+The five rules that bite a session before it knows it is near them are in
 `CLAUDE.md`; this is the reference half — grep it when you change what the
 state holds.
 
@@ -45,7 +45,7 @@ does a rocket already in the air. That is the reference — a weapon is created 
 projectile's `ownerPlayer` is a player rather than a character, which is what
 lets it still credit a kill to somebody who died before it landed.
 
-⚠️ **A departure destroys all of it, not only the briefcase.**
+**A departure destroys all of it, not only the briefcase.**
 `Player.events/Destroy.xml` destroys the character — the *whole* Destroy
 event, not only the flag drop — and then sweeps every `Rocket`,
 `BurningProjectile`, `Shot`, `Needle` and `Sentry` the player owned. The rule
@@ -54,7 +54,7 @@ runs the opposite way from the intuition: a rocket outlives its shooter's
 that player is **gone**, because there is no longer anybody to credit.
 `docs/SIMULATION.md`, "Settled: what a departure destroys"; `RemoveSlotTests`.
 
-⚠️ **That line is invisible to every code-extracting grep of the reference.**
+**That line is invisible to every code-extracting grep of the reference.**
 `if(object != -1) with(object) instance_destroy();` sits on the *same line* as
 the opening `<argument kind="STRING">` tag, so anything that strips lines
 beginning with a tag hands back a Destroy event that starts three lines in
@@ -73,8 +73,8 @@ stale one.
 the `LevelMap` and `NavGraph` are decoded once per map and shared by every world
 and every test in the process — both are deeply immutable, and the
 `CollisionWorld` is still per-world because `SetCaptureZones` writes to one.
-⚠️ **A map edited on disk mid-process is not re-read** (`resources: null` forces a
-decode), and ⚠️ **a shared cache makes first-call properties order-dependent** —
+**A map edited on disk mid-process is not re-read** (`resources: null` forces a
+decode), and **a shared cache makes first-call properties order-dependent** —
 it turned `ObservationWriter`'s zero-allocation gate into a coin flip.
 `docs/ENV.md`, "the reset reload".
 
@@ -336,7 +336,7 @@ because the built-in was buggy. It crawls forward in `1/8`-pixel steps. That
 means it is a specification you transcribe, not behaviour you reverse-engineer —
 the single luckiest fact in this port.
 
-⚠️ **It is transcribed with exactly one line added, and that line is the only
+**It is transcribed with exactly one line added, and that line is the only
 deliberate departure in the physics.** The crawl's `while` can reach a fixed
 point: when what is left to travel is above GML's `1e-13` comparison fuzz but
 below half a ULP of the position — which needs a coordinate in the thousands,
@@ -681,7 +681,7 @@ cancellation. GML calls that zero and skips the wall check entirely. C#'s
 a sloping ceiling — one tick of input turning into a visible teleport, from a
 difference of 3e-14.
 
-⚠️ **What it costs when you do reproduce it.** The epsilon is *absolute*, so it
+**What it costs when you do reproduce it.** The epsilon is *absolute*, so it
 does not scale with the numbers it is comparing, and a ULP of a coordinate in the
 thousands is `4.5e-13` — bigger than the epsilon. A distance that is
 "still remaining" by GML's rule can therefore be too small for the position to
@@ -1038,7 +1038,7 @@ discarded before `collision_line`'s walk was found; this is the same shape of
 trap, and here the answer is that the gap is in the FPU rather than in the
 formula.
 
-⚠️ **The mantissa encoder must be a single shared implementation.** Copy-pasted
+**The mantissa encoder must be a single shared implementation.** Copy-pasted
 into four samplers, three of the four copies were wrong. It is one file now,
 `tools/exact-double.js`, and `node tools/exact-double.js` self-tests it without
 a game — see "Settled: reading a GM8 double back to the last bit" below.
@@ -1110,14 +1110,14 @@ if alarm >= 0 { alarm -= 1; if alarm == 0 { run the event } }
 - After firing it rests at **0**, not -1, and is consumed on the following tick.
   That is what makes it fire once.
 
-✅ **Confirmed against the running game**: `tools/probes/probe-alarm-image.js`,
+**Confirmed against the running game**: `tools/probes/probe-alarm-image.js`,
 witnessed with a `StabAnim` (Create sets `alarm[0] = 10`, `Alarm 0` sets
 `image_speed = 1`). Watching `alarm[0]` and `image_speed` from `AgentBridge`'s
 Step event — during the Step stage, after that frame's alarm stage — the
 counter reads `9, 8, 7, 6, 5, 4, 3, 2, 1, 0, -1` on successive frames and
 `image_speed` becomes 1 on the frame the counter reads **0**.
 
-⚠️ **`Gg2.Simulation.Timers.Advance` writes -1 at the moment of firing, and the
+**`Gg2.Simulation.Timers.Advance` writes -1 at the moment of firing, and the
 engine does not.** That is a real one-tick divergence, and it has exactly one
 observable site — the one the change was made for.
 `Character.events/Begin Step.xml:67` gates the afterburn intensity fade on
@@ -1134,7 +1134,7 @@ tick's decrement carry the counter from 0 to -1 — which is what the pseudocode
 above already says. It is owed to whichever lane owns `src/Gg2.Simulation`; the
 measurement lane found it and does not apply it.
 
-⚠️ **GM8 does not count down an alarm index the object has no event for.**
+**GM8 does not count down an alarm index the object has no event for.**
 Measured: an `AgentSpare0` given `alarm[1] = 4` still read 4 sixty frames later.
 This is why `Character.events/Alarm 0.xml` exists at all — its
 entire body is the comment `Afterburn intensity stuff`, and that empty event is
@@ -1142,7 +1142,7 @@ entire body is the comment `Afterburn intensity stuff`, and that empty event is
 afterburn intensity would never fade. Do not "tidy" an empty alarm event away
 when reading the reference, and do not expect a bare probe instance to count.
 
-✅ **How a fractional alarm rounds is measured too**, and it is **half to even** —
+**How a fractional alarm rounds is measured too**, and it is **half to even** —
 GML's own `round()`, which is what `Timers.SetAlarm` already used. Assigning and
 reading back in the same frame: `0.5 → 0`, `1.5 → 2`, `2.5 → 2`, `3.5 → 4`,
 `30.5 → 30`, `31.5 → 32`, `17.5 → 18`, `26.25 → 26`, `26.75 → 27`, `30.4 → 30`.
@@ -1187,11 +1187,11 @@ favour of the number already in the port:
 - Its `alpha` then falls 0.1 a tick from 1 and the instance destroys itself on
   the **tenth** subtraction, because 1 - 10x0.1 is 1.4e-16 and GML's `>` is fuzzy
   to 1e-13 — the rocket's fade again.
-- 42 + 10 = **52**, which is `Weapons.StabFreezeTicks`. ✅ Confirmed end to end
+- 42 + 10 = **52**, which is `Weapons.StabFreezeTicks`. Confirmed end to end
   in the same run: the owner's `stabbing` went back to 0 when the `StabAnim`
   destroyed itself.
 
-⚠️ **The read point is what makes any of this measurable.** `gg2_eval` and
+**The read point is what makes any of this measurable.** `gg2_eval` and
 `gg2_watch` are both serviced from `AgentBridge`'s **Step** event
 (`payload/Scripts/AgentBridge/agentBridgeStep.gml` calls `agentBridgeWatchTick`
 at the top), so a watch samples during the Step stage — after that frame's alarm
@@ -1859,7 +1859,7 @@ The clause is the only way to build charge before the gates open — during setu
 nobody has been shot yet, so every patient is at full health and the healthy rate
 means arriving at the first fight with 30% less meter than the reference gives.
 
-⛔ **Landed WITHOUT a `SimulationBehaviourVersion` bump, deliberately, and the
+**Landed WITHOUT a `SimulationBehaviourVersion` bump, deliberately, and the
 reasoning has an expiry.** The stamp would not have caught it either way — its
 surface is chosen rather than swept, constants and tables rather than branch
 conditions — so the bump would have been a hand-made claim that every existing
@@ -1867,7 +1867,7 @@ checkpoint is now dated. It was skipped because **the change cannot reach
 training**: nothing in `src/Gg2.Env` sets `SetupTimer` or `AttackDefend`, so both
 sit at their `default(WorldState)` values and the branch is unreachable there, and
 `PolicyController.TrainedClasses` (Scout, Soldier, Sniper, Heavy) contains no
-Medic. ⚠️ **If an env or a duel ever arms a setup timer, or the policy is trained
+Medic. **If an env or a duel ever arms a setup timer, or the policy is trained
 on Medic, that reasoning expires and the bump is owed.**
 
 No parity fixture moved and none of the three pinned bot measurements shifted
@@ -1900,7 +1900,7 @@ to `decayDelay` (90); when it finally fires, `Character.events/Alarm 0.xml`
 computes `intensityDecay = burnIntensity / decayDuration` (90) and only then does
 the Begin Step line start subtracting it.
 
-⚠️ **GM8 writes -1 to an alarm *before* running its event** — the only way a
+**GM8 writes -1 to an alarm *before* running its event** — the only way a
 handler that re-arms its own alarm can work, and `Medic.events/Alarm 11.xml` and
 `Scattergun.events/Alarm 5.xml` both do exactly that. A fired counter left at 0
 for one tick is indistinguishable everywhere else (a 0 decrements to -1 without
@@ -2050,7 +2050,7 @@ needs no override where the sentry does.
 - **The generator's box is what its 400-pixel blast measures every distance
   from**, so measuring the box measured the reach.
 
-⚠️ **The flipped readings show the mirror that `Aabb.ForCharacter` skips.** At
+**The flipped readings show the mirror that `Aabb.ForCharacter` skips.** At
 `image_xscale = -1` the engine reports `[-right - 2, -left]` about the origin —
 the box mirrored, *then* `bbox_left` pushed two pixels out. `ForCharacter`
 applies only the two pixels, and that is correct **only because every character
@@ -2108,7 +2108,7 @@ through `Aabb.ForRotatedSprite`; measured at 0/45/90/135/180 degrees. At
 `image_xscale = -1` it reports `-20, -8, 12, 3`, again the mirror plus two
 pixels on `bbox_left`.
 
-⚠️ **The flip inflation is applied to the sprite edge *before* the rotation, not
+**The flip inflation is applied to the sprite edge *before* the rotation, not
 to the rotated box** — measured (`tools/probes/probe-airblast.js`). At
 `image_xscale = -1` GM8's box
 is the rotated bound of the *mirrored sprite box with its mirrored-left edge

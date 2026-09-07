@@ -118,23 +118,21 @@ across `Player`, `Character`, weapons, `MovingPlatform` and `HUD`.
 | Tuning constants | `Constants.xml`, the `BOT_*` block |
 | Design notes | `Documentation/Bots.md` |
 
-⚠️ **The local bot fork was deleted on 2026-09-05, and `D:\code\Gang-Garrison-2` now holds stock upstream GG2 instead.** The paths in this
-section resolve **only** in that fork, now at
-`github.com/kylelmoy/Gang-Garrison-2` (branch `bot-route-variety`) — stock GG2 has no
-`Scripts/Bots/`, no `Scripts/BotNav/`, no `BOT_*` or `NAV_*` constants and no
-`Documentation/Bots.md`. Every other section of this file indexes the stock tree
-and is still accurate. This port's bot layer has diverged from the fork's, so
-nothing here is a specification for anything; it is a map of where the ideas came
-from.
+**The paths in this section resolve only in the bot fork**, at
+`github.com/kylelmoy/Gang-Garrison-2` (branch `bot-route-variety`) — the local
+`D:\code\Gang-Garrison-2` is stock upstream GG2 and has none of `Scripts/Bots/`,
+`Scripts/BotNav/`, the `BOT_*`/`NAV_*` constants, or `Documentation/Bots.md`. See
+CLAUDE.md, "Reading the reference", for the full picture. This port's bot layer
+has since diverged from the fork's, so nothing here is a specification; it is a
+map of where the ideas came from. Every other section of this file indexes the
+stock tree and is accurate.
 
 **Nav graph generation is no longer in the game.** It lives in this repo's
-`src/Gg2.Nav` (`gg2-server navgen`). The Node generator `D:\code\gg2-nav-gen`
-was deleted on 2026-09-05 — recover it from `D:\code\_archive\gg2-nav-gen.bundle`
-if you need it. Either writes `botnav/<map>_a<area>.txt`, which this repo
-keeps in its gitignored `nav/` (or wherever `GG2_NAVCACHE` points). The
-cache format is documented in `D:\code\gg2-agent\tools\navgraph.js` — it is
-`ds_grid_write`'s column-major layout with sixteen-byte cells and the double four
-bytes in, which is not the obvious format. Do not re-derive it by hand.
+`src/Gg2.Nav` (`gg2-server navgen`), which writes `botnav/<map>_a<area>.txt`
+into `nav/` (or wherever `GG2_NAVCACHE` points). The cache format is documented
+in `D:\code\gg2-agent\tools\navgraph.js` — it is `ds_grid_write`'s column-major
+layout with sixteen-byte cells and the double four bytes in, which is not the
+obvious format. Do not re-derive it by hand.
 
 ## Tooling worth borrowing from `gg2-agent`
 

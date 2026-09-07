@@ -9,7 +9,7 @@ what the process now defends against, what it deliberately does not, and what is
 left to the machine it runs on. `docs/DEPLOY.md` is how to run it;
 `docs/WEBADMIN.md` is the admin panel in detail.
 
-⚠️ **Nothing here is a claim that the server is secure.** It is a record of
+**Nothing here is a claim that the server is secure.** It is a record of
 which specific failures were found, fixed and tested, so the next reader can
 tell what was checked from what was never looked at. The last section is the
 second list and it is the more useful one.
@@ -61,14 +61,14 @@ Every buffer in the transport had the same shape: grow on demand, for ever.
 | accepts | drained the whole backlog, quadratically | `MaxAcceptsPerTick` (32) |
 | half-finished handshakes | unbounded list | `MaxJoiningConnections` (128) |
 
-⚠️ **Overflowing the receive buffer is a disconnect, not a discard.** Losing
+**Overflowing the receive buffer is a disconnect, not a discard.** Losing
 bytes out of the middle of a command stream would leave the framer reading a
 payload as a command byte for ever after. A silently desynchronised client is
 worse than a disconnected one, and it looks exactly like a port bug.
 
 ### Slot squatting — `src/Gg2.Server/JoiningConnection.cs`
 
-⚠️ **The reference's 30-second handshake timeout is an IDLE timeout, and
+**The reference's 30-second handshake timeout is an IDLE timeout, and
 `PING` resets it.** `serviceJoiningPlayer.gml:1` drops a connection when
 `current_time - lastContact > 30000`, and every byte received refreshes
 `lastContact`. `PING` is legal in the `ExpectCommand` state and costs one byte.
@@ -87,7 +87,7 @@ connection dropped mid-handshake — in thirty seconds rather than ten minutes.
 
 A client whose machine loses power sends no FIN and no RST.
 
-⚠️ **A receive-idle timeout would be wrong here**, and this is the trap worth
+**A receive-idle timeout would be wrong here**, and this is the trap worth
 writing down: a **spectator legitimately sends nothing at all**. Only
 `PlayerControl` sends `INPUTSTATE` every tick, and a spectator takes the other
 branch of that event entirely (`PlayerControl.events/Begin Step.xml`). Any
@@ -117,7 +117,7 @@ Three layers, narrowest first — the useful question is not "did it survive" bu
   removed rather than retried: a source that threw on this world state will
   throw on the next, and a stack trace every 33 ms is the second outage.
 
-⛔ **`Run`'s net does not simply swallow.** `TickFaultBudget` absorbs a fault
+**`Run`'s net does not simply swallow.** `TickFaultBudget` absorbs a fault
 and refuses to absorb a pattern: past three in a rolling minute the server stops
 and the host exits **3**. A server that catches everything for ever is up,
 listed in the lobby, accepting players and simulating nothing — nobody is paged
@@ -125,7 +125,7 @@ for that, the players just leave. `Restart=on-failure` is what turns exit 3 into
 a clean process, and it is the only thing that reliably clears corrupted
 in-memory state.
 
-`GameServer.TickFaults` is the count. ⚠️ **Anything other than zero is a bug
+`GameServer.TickFaults` is the count. **Anything other than zero is a bug
 that has already happened**, even though the server carried on; the stack trace
 is in the log at error level.
 
@@ -137,7 +137,7 @@ reference does not and the bytes must reach the wire intact. Interpolated into a
 log line, that lets a player write log lines the server never wrote, or drive
 the operator's terminal.
 
-⛔ **Rendering only.** The name in the roster, on the wire and in a
+**Rendering only.** The name in the roster, on the wire and in a
 `FULL_UPDATE` stays byte-for-byte what the client sent. Sanitising there would
 desynchronise every other client's roster. The web panel needed nothing — every
 string it emits goes through `JsonEncodedText` under a `default-src 'self'` CSP.
@@ -151,14 +151,14 @@ have no natural rate: one line per refused connection during a connection flood
 makes the defence the outage.
 
 Refusals and connection churn go through token buckets sized so ordinary play
-never reaches them. ⚠️ **What is held back is counted and reported** — a log
+never reaches them. **What is held back is counted and reported** — a log
 that quietly omits the evidence during the incident being investigated makes a
 flood look like a handful of connections, which is worse than a long log because
 it is wrong rather than merely long.
 
 ### Connection rate — `src/Gg2.Server/ConnectionRateLimiter.cs`
 
-⚠️ **`--multi-client-limit` is not this and the two get confused.** That is the
+**`--multi-client-limit` is not this and the two get confused.** That is the
 reference's answer to a household behind one NAT: how many connections one
 address holds *at once*, default 3. It does nothing about how *fast* an address
 opens them — connect, get refused, reconnect, repeat, with the concurrent count
@@ -171,7 +171,7 @@ exempt**, exactly as it is from `--multi-client-limit` and for the reference's
 own reason: it is how a host runs a client beside its own server, and a flood
 from `127.0.0.1` is already inside the box.
 
-⛔ **It fails OPEN when its table is full, and that is deliberate.** The table
+**It fails OPEN when its table is full, and that is deliberate.** The table
 has a ceiling — an unbounded per-address dictionary is the same growth bug one
 layer up. Past `MaxTracked` (4096) a new address is *allowed* rather than
 refused, because failing closed would let an attacker with enough addresses lock
@@ -182,7 +182,7 @@ configuration still says it is on.
 
 ### Bans — `src/Gg2.Server/BanList.cs`
 
-⛔ **Read this before relying on it: an address is not a person.** The protocol
+**Read this before relying on it: an address is not a person.** The protocol
 has no account and no durable identity — a name is twenty bytes the client
 chooses — so the only thing a ban can key on is the address, and that is wrong
 in both directions. It catches everybody behind a shared address or a carrier
@@ -200,9 +200,9 @@ school locked out of a server nobody was even attacking.
 - Banning **disconnects whoever is already on** from that address. A ban that
   only refused future connections would leave the person it was aimed at sitting
   there until they chose to leave.
-- ⚠️ **Unbanning is exact.** Lifting `1.2.3.4` does not delete a `1.2.3.0/24`
+- **Unbanning is exact.** Lifting `1.2.3.4` does not delete a `1.2.3.0/24`
   somebody put there on purpose; the error names the blocks that are in force.
-- ⚠️ **Without `--ban-file` a ban is memory-only and dies with the process.**
+- **Without `--ban-file` a ban is memory-only and dies with the process.**
   The server says so the first time one is added, rather than letting an
   operator find out by having the same person come back after a restart.
 - A ban is refused at accept with **no message written back** — the peer is not
@@ -211,7 +211,7 @@ school locked out of a server nobody was even attacking.
 
 ### Broadcast amplification — `GameServer.ExecuteChatBubble`
 
-⚠️ **A deliberate departure from the reference, and the only one a client could
+**A deliberate departure from the reference, and the only one a client could
 notice.** The reference throttles `PLAYER_CHANGENAME` to once a second because
 "every accepted rename is an unbounded broadcast to every connected client", and
 does not apply the same reasoning to the `CHAT_BUBBLE` case beside it. Ten
@@ -224,7 +224,7 @@ a few in a burst. `ChatBubbleIntervalMs = 0` restores the reference exactly.
 
 ## What is left to the machine
 
-⚠️ **None of the below is done for you, and the process cannot do it.** A
+**None of the below is done for you, and the process cannot do it.** A
 volumetric flood is absorbed before a packet reaches this code or it is not
 absorbed at all.
 
@@ -269,7 +269,7 @@ ReadWritePaths=/opt/gg2-server/nav /opt/gg2-server/traces
 RestrictAddressFamilies=AF_INET AF_INET6
 ```
 
-⚠️ **`ProtectSystem=strict` needs `ReadWritePaths` for anything the server
+**`ProtectSystem=strict` needs `ReadWritePaths` for anything the server
 writes**, and it writes in two places that are easy to forget: `navgen` output
 for a custom map (`--no-navgen` turns that off) and `--record` segments. Without
 them the server starts and fails later, which is the worst of both.
@@ -306,7 +306,7 @@ on purpose — an unrecorded decision gets retried.
 - **The chat/name content itself.** Names and bubbles are relayed as the client
   sent them, modulo the length limit the reference already enforces. There is no
   filter, and adding one would be a policy decision rather than a security one.
-- **The reward relay.** ⛔ **This server verifies nothing and cannot** — it does
+- **The reward relay.** **This server verifies nothing and cannot** — it does
   not have the client's key and is not meant to. It mints a nonce, relays the
   HMAC and broadcasts whatever the auth server returns. That is the design, not
   a weakness in the port; do not add a local check, there is nothing to check
@@ -316,17 +316,17 @@ on purpose — an unrecorded decision gets retried.
   *throw* to one connection; it does nothing about a plugin that corrupts state
   quietly. `docs/PLUGINS.md`, and the pinned zip hash, are the whole of the
   answer.
-- **Anything beyond one machine.** The defaults have now been run at (see
-  below), on loopback, in one configuration, for eight seconds an attack. That
-  is not a load test and says nothing about a thousand connections a second from
-  a thousand addresses.
+- **Anything beyond one machine.** The measurements below cover one
+  configuration, on loopback, eight seconds per attack. That is not a load
+  test and says nothing about a thousand connections a second from a thousand
+  addresses.
 
 ---
 
 ## What the defences actually cost, measured
 
 `tools/abuse/` runs the attacks at a running server and reads the damage off the
-control port. ⚠️ **Read its README before quoting any of this** — two of the
+control port. **Read its README before quoting any of this** — two of the
 five attacks cannot reach their limit over loopback at all, and the README says
 which and why rather than letting a "not dropped" read as a pass.
 
@@ -350,7 +350,7 @@ the connections never become the simulation's problem.
 
 ### And what they cost when nothing is attacking
 
-⚠️ **The defences are on the tick path, so the question is whether they moved
+**The defences are on the tick path, so the question is whether they moved
 the project's headroom number.** They did not, measured as a diff rather than
 quoted as an absolute — which is the only form CLAUDE.md accepts, and the reason
 this was done against a clean `master` worktree on the same machine, back to
@@ -361,12 +361,12 @@ back:
 | `master` (b6aba7c) | median **0.112 ms**, range 0.086–0.222 |
 | `server-hardening` (e85d3f7) | median **0.101 ms**, range 0.075–0.225 |
 
-Within noise, and the branch reads marginally *lower*. ⚠️ `master` was sampled
+Within noise, and the branch reads marginally *lower*. `master` was sampled
 first, so any warm-up bias worked against the branch and it still came out
 level — which is what makes "no regression" the safe reading rather than a
 hopeful one.
 
-⛔ **Neither figure is a benchmark number and neither replaces the 0.151 ms in
+**Neither figure is a benchmark number and neither replaces the 0.151 ms in
 `CLAUDE.md`.** `tickMs` is an exponential moving average over whatever the
 server was doing; `tools/bench/` is where a per-tick cost comes from. This is a
 *comparison* and is only good for one claim: the hardening work did not make the
@@ -378,7 +378,7 @@ ban and rate-limit checks are per *accept*, the fault guards cost a `try` that
 does not throw, and the ban sweep and saturation check ride the existing
 30-second block.
 
-⚠️ **The theoretical ceiling is arithmetic, not a measurement.** 48 players ×
+**The theoretical ceiling is arithmetic, not a measurement.** 48 players ×
 (1 MB send + 256 KB receive) plus 128 joining × 256 KB is about **95 MB** worst
 case, on top of ~11 MB of nav tables per map and the runtime. Nothing has been
 run that reaches it — the measured peak above is 17.5 MB — so treat it as the

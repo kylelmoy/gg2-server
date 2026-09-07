@@ -3,7 +3,7 @@
 `docs/HARDENING.md` says what the server defends against. This is what proves
 it, against a running process rather than a socket pair in a unit test.
 
-⚠️ **Read the traps below before quoting a number out of this.** Two of the five
+**Read the traps below before quoting a number out of this.** Two of the five
 attacks cannot reach their limit over loopback at all, and both report so rather
 than reporting a pass — a harness whose "not dropped" reads like a failure is
 how a real regression gets waved through next time.
@@ -29,7 +29,7 @@ a given set of limits holds.
 --only NAME     one of: connect-flood, deaf-client, garbage, send-flood, slot-squat
 ```
 
-⛔ **The only hard gate is `tickFaults`.** Everything else is a number to read.
+**The only hard gate is `tickFaults`.** Everything else is a number to read.
 A non-zero fault count means the server absorbed an exception during the run,
 which is a bug whose stack trace is in the log — the harness exits 1 for it and
 for nothing else.
@@ -61,7 +61,7 @@ concurrent floods cost about **4% of one tick's budget** and **4 MB of heap**,
 and not one tick ran late. The limits are doing the work in the place they were
 supposed to: the connections never become the server's problem.
 
-⚠️ **What this does not establish.** One machine, loopback, one configuration,
+**What this does not establish.** One machine, loopback, one configuration,
 eight seconds. It is not a load test, there is no distributed component, and
 nothing here says what happens at a thousand connections a second from a
 thousand addresses — which `docs/HARDENING.md` names as out of scope for a
@@ -96,7 +96,7 @@ cost the server no tick time and no unbounded heap while they sit there.
 "still held" — which is correct behaviour, not a failure. Run the server with
 `--handshake-deadline 60` and the harness with `--seconds 75` to see it lapse.
 
-⚠️ Do not "fix" this by lowering the shipped default. Ten minutes is sized
+Do not "fix" this by lowering the shipped default. Ten minutes is sized
 against the slowest real handshake, which is a custom map download; a deadline a
 real client can hit is an outage the operator has to debug.
 

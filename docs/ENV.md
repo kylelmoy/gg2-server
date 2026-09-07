@@ -367,162 +367,114 @@ relocation from a redefinition.
 - A version bump refuses an old client loudly at `Hello` rather than
   tolerating it; a length-check failure inside a later message is a symptom
   of a missed bump, not a substitute for one.
-- ⛔ **A checkpoint's metadata is a MINIMUM, not an exact count, and that is
-  load-bearing.** `PolicyNetwork.Load` refuses fewer than seven fields and reads
-  the seven by index, so an eighth is ignored. That tolerance is what lets
-  `gg2-rl` ship a new field before this side reads it — it writes the trained
-  class set as `meta[7]` from 2026-09-06 and has migrated its existing
-  checkpoints to carry it. **Tightening the guard to `!= 7` would refuse every
-  checkpoint it now produces**, with a message reading as a corrupt file rather
-  than a version skew.
-  ✅ Gated by `PolicyNetworkTests.AnEighthMetadataFieldIsIgnoredRatherThanRefused`
-  against `rest3_s1_iter12000.npz`, **real `Policy.save` output** — the metadata
-  is a pickled object array, so a synthetic eight-field checkpoint would exercise
-  a pickle this repository wrote rather than one the trainer writes and would pass
-  whether or not the two agree.
-  ⛔ **That test asserts "not a metadata refusal", NOT "it loads", and the
-  difference is what stops it rotting.** `Load` checks five version surfaces after
+- `PolicyNetwork.Load` treats a checkpoint's metadata array as a minimum: it
+  refuses fewer than seven fields and reads the seven by index, so an eighth
+  field is ignored rather than rejected. That tolerance is what lets `gg2-rl`
+  ship a new field before this side reads it — the trained class set at
+  `meta[7]`. Gated by
+  `PolicyNetworkTests.AnEighthMetadataFieldIsIgnoredRatherThanRefused` against
+  `rest3_s1_iter12000.npz`, real `Policy.save` output (the metadata is a
+  pickled object array, so a synthetic fixture would exercise this repo's own
+  pickle rather than the trainer's). That test asserts "not a metadata
+  refusal", not "it loads": `Load` checks five separate version surfaces after
   the metadata parse — stamp, action encoding, observation layout, observation
-  length, head shape — so asserting a load couples a metadata test to all five,
-  and the next `SIM_UUID` bump would turn it red talking about stamps under a name
-  about the eighth field. The two exception types split on exactly that line:
-  `InvalidDataException` is archive and metadata structure,
-  `InvalidOperationException` is version skew. ⚠️ `ignoreSimulationStamp` is not a
-  substitute — it bypasses the stamp and leaves the other four. Both directions
-  were checked: `!= 7` fails the test, and a deliberately staled fixture still
-  passes it.
-  ✅ **Field 7 is now READ** — see below. The shape check above remains the gate
-  for the tolerance itself.
+  length, head shape — and asserting a load would couple this test to all
+  five. `InvalidDataException` marks archive/metadata structure;
+  `InvalidOperationException` marks version skew, and `ignoreSimulationStamp`
+  bypasses only the stamp, not the other four. Tightening the check to `!= 7`
+  fails this test; a deliberately staled fixture still passes it. Field 7 is
+  now read (below); this test gates the tolerance itself.
 
-## The trained class set belongs to the CHECKPOINT (2026-09-06)
+## The trained class set belongs to the checkpoint
 
-`PolicyNetwork.TrainedClasses` is read from `meta[7]`, comma-separated
-`PlayerClass` names, and `PolicyController.Drives` asks the network it holds.
-`PolicyNetwork.DefaultTrainedClasses` is the fallback for a file that does not
-say — every checkpoint before 2026-09-06, and any whose field is empty, which is
-what the trainer writes for "no set recorded".
+`PolicyNetwork.TrainedClasses` reads `meta[7]`, comma-separated `PlayerClass`
+names; `PolicyController.Drives` asks the network it holds.
+`PolicyNetwork.DefaultTrainedClasses` is the fallback for a checkpoint that
+predates the field or leaves it empty.
 
-⛔ **What the compile-time static cost, measured by the training lane before this
-landed.** Three shipping checkpoint families train three different sets. Under
-the static, a `control`-family file **drives its untrained demoman** (mirror
-36.08% against a 50% null) and **refuses its trained sniper** (89.08%) — with no
-stamp moving, no handshake field disagreeing and no test failing. **The same
-failure class as `SIM_UUID` not covering the bot layer**: the information that
-would catch it was real, known, and on no surface the loader read.
+A checkpoint's trained set is not automatically its should-drive set — a class
+can appear in `meta[7]` and still be worth routing to the scripted controller
+instead, which is the training lane's judgement to record rather than
+something this repo narrows on its own. A differing trained set is a routing
+fact, not a safety one, and stays off the stamp surface deliberately: a policy
+trained on other classes is not invalid, only differently applicable, so
+nothing refuses over the class set.
 
-⚠️⚠️ **"Trained on" is not "should drive", and `Drives` equates them.** Measured
-by the training lane 2026-09-06: `rest3` records `ENGINEER,SPY,PYRO`, and its
-engineer mirrors at **50.67% against a 50% null with a 2·SE of 1.74** — nothing to
-choose against the scripted engineer it would replace. The set they would SHIP is
-`{pyro, spy}`, a strict subset of what the file records. ⛔ **Known and
-deliberately not modelled**: "what it trained on" is the honest content of
-`meta[7]`, and a should-drive set is a SECOND field and the training lane's
-judgement, not a narrowing this build should apply on its own.
+Gated by `TrainedClassesTests` against three real `Policy.save` checkpoints:
 
-⚠️ **A differing set is a ROUTING fact, not a safety one, and it is deliberately
-NOT on the stamp surface.** A policy trained on other classes is not invalid, it
-is differently applicable; refusing it would be wrong. Nothing refuses over the
-class set, and nothing should.
-
-Gated by `TrainedClassesTests`, on three real `Policy.save` checkpoints:
-
-| fixture | set | what it is for |
+| fixture | set | covers |
 |---|---|---|
-| `rest3_s1_iter12000.npz` | `ENGINEER,SPY,PYRO` (5, 7, 8) | non-prefix, non-contiguous, different length — catches "the first N", a fixed count, a contiguous range |
-| `control_s0_iter12000.npz` | `SCOUT,SOLDIER,SNIPER,HEAVY` | ⛔ **the regression gate** — differs from the default by exactly two members, in both directions |
-| `combat4_s2_iter12000.npz` | `SCOUT,SOLDIER,DEMOMAN,HEAVY` | the no-op control: equals the default, so if it moves the change is wrong |
-| `ppo_final.npz` (7 fields) | *absent* | the fallback path every pre-2026-09-06 checkpoint takes |
+| `rest3_s1_iter12000.npz` | `ENGINEER,SPY,PYRO` (indices 5, 7, 8) | non-prefix, non-contiguous, different length |
+| `control_s0_iter12000.npz` | `SCOUT,SOLDIER,SNIPER,HEAVY` | the regression gate — differs from the default by exactly two members, in both directions |
+| `combat4_s2_iter12000.npz` | `SCOUT,SOLDIER,DEMOMAN,HEAVY` | no-op control: equals the default |
+| `ppo_final.npz` (7 fields) | absent | the fallback path every checkpoint without the field takes |
 
-✅ **Checked the gate fires**: reverting `Drives` to the default set fails the
-regression gate and the two-controllers test, and leaves the no-op control and
-the fallback test passing — which is what a control should do.
+Checked: reverting `Drives` to the default set fails the regression gate and
+the two-controllers test while leaving the no-op control and the fallback
+test passing.
 
-### ⛔ Every arm of a comparison takes the CHECKPOINT's set
+### Every arm of a comparison takes the checkpoint's set
 
 `SearchController.TrainedClasses` and `SearchMicroSpec.TrainedClasses` exist
-because the search holds no checkpoint: it restricts to the policy's classes only
-so both arms engage on the same ones. Defaulting that to
-`DefaultTrainedClasses` is an **assumption about the other arm**, and for a
-checkpoint outside the default family it is wrong — the training lane confirmed
-that for their `rest3` family the two sets are **disjoint**, so a three-arm bench
-would compare arms sharing no class at all.
+because the search holds no checkpoint: restricting to the policy's classes
+keeps both arms engaging on the same ones rather than defaulting to
+`DefaultTrainedClasses`, which is wrong whenever a checkpoint's trained set
+differs from the default — the two can be disjoint.
 
-✅ Fixed at the five bench modes that load a checkpoint: `BENCH_ARMS`,
-`BENCH_CHURN`, `BENCH_EVAL`, `BENCH_PERMAP` and the range sweep now take
-`AllowedClasses` — and arm 3's search restriction — from `policy.TrainedClasses`.
-⚠️ **`BENCH_THREADS` keeps the default and is the only one where that is right**:
-it loads no checkpoint, measuring the search's throughput against thread count, so
-it just needs a stable roster.
+The five bench modes that load a checkpoint — `BENCH_ARMS`, `BENCH_CHURN`,
+`BENCH_EVAL`, `BENCH_PERMAP`, and the range sweep — take `AllowedClasses`, and
+arm 3's search restriction, from `policy.TrainedClasses`. `BENCH_THREADS`
+keeps the default because it loads no checkpoint at all, measuring the
+search's throughput against thread count.
 
-✅ **Every mode prints the roster it is about to use** (`Bench.Roster.Announce`),
-naming where the set came from — "the checkpoint's own" against "the default, no
-checkpoint". ⛔ **That line is the ONLY place the failure is visible**: a run that
-silently populated the default would report the scripted arm twice with one of
-them labelled the policy, which is a clean and entirely plausible null. Read it
-against the checkpoint's set on a first run against a new family.
+Every mode prints the roster it is about to use (`Bench.Roster.Announce`),
+naming whether it came from the checkpoint or the default — the only place a
+silently-defaulted roster would be visible, since it would otherwise report
+the scripted arm twice with one labelled the policy.
 
-⚠️ **Both arms of every comparison take the CHECKPOINT's roster, including the
-control arm that does not drive with it.** The control is "the same matches with
-Policy = null" — the same matches, so the same classes. Deciding the roster by
-whether an arm drives moves two things between the arms at once, which
-`BENCH_EVAL` did for one commit.
+Both arms of every comparison take the checkpoint's roster, including the
+control arm that does not drive with it: the control is "the same matches
+with `Policy = null`", so it needs the same classes.
 
-✅ **Gated by `TrainedClassesTests`** — that `SearchMicroSpec` carries the set to
-the controller (checked: dropping it fails that test and only it), that naming no
-set keeps the default, and that turning the restriction off still drives every
-class. ⚠️ **The bench is not in `Gg2.sln` and has no tests**, so the seam is the
-only part of this a suite can hold; the five call sites are held by review.
+Gated by `TrainedClassesTests`: `SearchMicroSpec` carries the set to the
+controller, naming no set keeps the default, and turning the restriction off
+still drives every class. The bench is not in `Gg2.sln` and has no tests of
+its own, so this seam is the only part a suite can hold; the five call sites
+are held by review.
 
-⛔ **`--bot-classes trained` is the one place that CANNOT ask the file**, and it
-says so at the flag: options are parsed before `--policy` is loaded and argument
-order is not guaranteed. With a checkpoint outside the default family that
-shorthand gives a roster the policy does not drive — the all-scripted arm wearing
-the hybrid one's name. Pass the classes explicitly for such a checkpoint.
+`--bot-classes trained` cannot ask the file: options are parsed before
+`--policy` is loaded and argument order is not guaranteed. For a checkpoint
+outside the default family that shorthand names a roster the policy does not
+actually drive; pass the classes explicitly instead.
 
-## The checkpoint is a FIXTURE, not a policy
-
-⚠️ **This section described the exact opposite until 2026-09-03, and the
-inversion is the point.** For most of phase 9 the shipped checkpoint was the one
-trained artefact that had ever existed, stamped for a *superseded* simulation,
-refused by `PolicyNetwork.Load`, and reconciled with a green suite by two
-non-interchangeable accessors on `PolicyFixture`. The layout v2 bump retired that
-checkpoint for good, and `gg2-rl` minted a replacement **against this build**.
+## The checkpoint is a fixture, not a policy
 
 The shipped file (`tests/Gg2.Tests/Fixtures/policy/ppo_final.npz`, 19,483
-parameters, action repeat 4, **layout v2, encoding v2, 211 floats**) now carries
-**this build's** `SIM_UUID` and takes `Load`'s ordinary accept path with **no
-override of any kind**. ⚠️ **Read the current stamp from `BENCH_CONST=1` rather
-than from any number written down here** — restating one would just be another
-stale number.
+parameters, action repeat 4, layout v2, encoding v2, 211 floats) carries this
+build's `SIM_UUID` and loads through `PolicyNetwork.Load`'s ordinary accept
+path, with no override. Read the current stamp from `BENCH_CONST=1` rather
+than from any number written down here.
 
-**Its weights are an untrained He-normal draw.** That is deliberate and it is
-adequate: `TheForwardPassAgreesWithTheTrainer` compares C# against an independent
-numpy oracle, and the arithmetic is the arithmetic — random weights exercise it
-at least as well as trained ones, since smooth trained weights can mask an
-indexing bug.
+Its weights are an untrained He-normal draw. That is deliberate:
+`TheForwardPassAgreesWithTheTrainer` compares C# against an independent numpy
+oracle, and random weights exercise the arithmetic at least as well as
+trained ones — smooth trained weights can mask an indexing bug.
 
-⛔ **Nothing here may read a behavioural result off it.** An untrained network
-emits near-uniform noise, so any test asserting a pinned action, a pinned duel
-outcome or a quality threshold against this fixture would be measuring the draw.
-The behavioural tests that *do* load it (`PolicyMatchTests`, `ContinuationTests`)
-survive only because `HybridBot`'s scripted layer owns movement and routing — the
-policy holds keys and aim inside a bounded engagement window, so noise cannot pin
-a team. **That is a property of the bot layer, not a licence to assert quality.**
+Nothing here may read a behavioural result off it. An untrained network emits
+near-uniform noise, so any test asserting a pinned action, a pinned duel
+outcome, or a quality threshold against this fixture would be measuring the
+draw rather than the policy. The behavioural tests that do load it
+(`PolicyMatchTests`, `ContinuationTests`) survive only because `HybridBot`'s
+scripted layer owns movement and routing — the policy holds keys and aim
+inside a bounded engagement window, so noise cannot pin a team. That is a
+property of the bot layer, not a licence to assert quality.
 
-`PolicyFixture` is now one accessor rather than two. `Load()` passes **no**
+`PolicyFixture` is a single accessor: `Load()` passes no
 `ignoreSimulationStamp`, so every caller goes through the same refusal
-`EnvServer.LoadPolicy` performs, and the suite exercises the guard instead of
-routinely bypassing it. The minted-copy machinery, the hard-coded `TrainedStamp`
-and the test asserting the shipped file was *refused* were **deleted rather than
-updated**: their premise had gone, not merely changed. Refusal coverage lives in
+`EnvServer.LoadPolicy` performs. Refusal coverage lives in
 `PolicyNetworkTests.AForeignStampIsRefused`, which corrupts one character of a
-valid checkpoint's stamp instead of relying on the shipped file happening to be
+valid checkpoint's stamp rather than relying on a fixture happening to be
 stale.
-
-⚠️ **A stale fixture is loud on its own now.** The hard-coded stamp existed so
-that swapping the file re-opened the question; `Load` refusing it in
-`PolicyNetwork` itself, naming both stamps, is a better signal and cannot drift
-out of date.
 
 ## Phase 4 re-measured: the hybrid result (historical, one checkpoint)
 
