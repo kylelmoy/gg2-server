@@ -77,6 +77,15 @@ public sealed class PolicyController : IMicroController
     /// which is what <see cref="HybridBot"/>'s per-class tier eligibility was
     /// built for and could not exercise while this read a static.
     /// </para>
+    /// <para>
+    /// ⚠️⚠️ <b>This equates "trained on" with "should drive", and the training
+    /// lane has a measured case where they differ</b> — see
+    /// <see cref="PolicyNetwork.TrainedClasses"/>. A class can be trained and
+    /// still mirror indistinguishably from the scripted bot it would replace, in
+    /// which case driving it buys nothing and costs the policy's decision budget.
+    /// Known and deliberately not modelled: a should-drive set is a second field
+    /// and their judgement, not a redefinition of the one the file carries.
+    /// </para>
     /// </remarks>
     public bool Drives(PlayerClass playerClass) => _policy.IsTrained(playerClass);
 

@@ -410,6 +410,15 @@ stamp moving, no handshake field disagreeing and no test failing. **The same
 failure class as `SIM_UUID` not covering the bot layer**: the information that
 would catch it was real, known, and on no surface the loader read.
 
+⚠️⚠️ **"Trained on" is not "should drive", and `Drives` equates them.** Measured
+by the training lane 2026-09-06: `rest3` records `ENGINEER,SPY,PYRO`, and its
+engineer mirrors at **50.67% against a 50% null with a 2·SE of 1.74** — nothing to
+choose against the scripted engineer it would replace. The set they would SHIP is
+`{pyro, spy}`, a strict subset of what the file records. ⛔ **Known and
+deliberately not modelled**: "what it trained on" is the honest content of
+`meta[7]`, and a should-drive set is a SECOND field and the training lane's
+judgement, not a narrowing this build should apply on its own.
+
 ⚠️ **A differing set is a ROUTING fact, not a safety one, and it is deliberately
 NOT on the stamp surface.** A policy trained on other classes is not invalid, it
 is differently applicable; refusing it would be wrong. Nothing refuses over the

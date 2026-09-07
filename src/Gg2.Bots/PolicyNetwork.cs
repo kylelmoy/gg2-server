@@ -97,7 +97,7 @@ public sealed class PolicyNetwork
     public static ReadOnlySpan<PlayerClass> DefaultTrainedClasses =>
         [PlayerClass.Scout, PlayerClass.Soldier, PlayerClass.Demoman, PlayerClass.Heavy];
 
-    /// <summary>The classes THIS checkpoint was trained on, and may drive.</summary>
+    /// <summary>The classes THIS checkpoint was trained on.</summary>
     /// <remarks>
     /// <b>A property of the file, because it always was one.</b> It is
     /// <c>meta[7]</c>, written by <c>gg2-rl</c>'s <c>Policy.save</c> from
@@ -124,6 +124,24 @@ public sealed class PolicyNetwork
     /// writes the field unconditionally and uses the empty string for "no set
     /// recorded", so the two cases stay distinguishable in the FILE even though
     /// this build treats them alike.
+    /// </para>
+    /// <para>
+    /// ⚠️⚠️ <b>"TRAINED ON" IS NOT "SHOULD DRIVE", and
+    /// <see cref="PolicyController.Drives"/> currently treats them as the same
+    /// thing.</b> A class can be trained and still not be worth driving: measured
+    /// by the training lane on 2026-09-06, <c>rest3</c> records
+    /// <c>ENGINEER,SPY,PYRO</c> and its ENGINEER mirrors at 50.67% against a 50%
+    /// null with a 2·SE of 1.74 — statistically indistinguishable from the
+    /// scripted engineer it would replace. The set they would SHIP is
+    /// <c>{pyro, spy}</c>, a strict subset of the set the file records.
+    /// <para>
+    /// ⛔ <b>That is a known limitation and NOT a reason to redefine this field.</b>
+    /// "What it trained on" is the honest content of <c>meta[7]</c> and a loader
+    /// that quietly narrowed it would be lying about the file. A should-drive set,
+    /// if one is ever wanted, is a SECOND field — and it is a judgement the
+    /// training lane owns, since it comes from their gate and not from anything
+    /// this build can see.
+    /// </para>
     /// </para>
     /// </remarks>
     public ReadOnlySpan<PlayerClass> TrainedClasses => _trainedClasses;

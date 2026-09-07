@@ -399,6 +399,7 @@ public sealed class FakeAuthServer : IDisposable
     private readonly List<byte[]> _requests = [];
     private readonly Lock _gate = new();
     private readonly CancellationTokenSource _shutdown = new();
+    private readonly Thread _accept;
 
     public FakeAuthServer(string rewards)
     {
@@ -409,7 +410,26 @@ public sealed class FakeAuthServer : IDisposable
 
         Port = ((IPEndPoint)_listener.LocalEndpoint).Port;
 
-        _ = Task.Run(AcceptAsync);
+        // ⛔ A REAL THREAD, for the reason RewardAuthClient's pump is one.
+        // `Task.Run(AcceptAsync)` put this loop — and every continuation after its
+        // first await, which is all of it — on the thread pool. Under a full-suite
+        // run the pool is saturated by thousands of other tests and grows by about
+        // a thread a second, so the ACCEPT could be delayed past the client's
+        // 20-second deadline. The client then timed out, returned null, and
+        // `entry.Rewards` never filled: "gave up after 47s waiting for the auth to
+        // come back", once in roughly twenty runs.
+        //
+        // ⚠️ The client was fixed first and this was still pool-bound, which is
+        // why the flake survived that fix. Both ends of a socket test have to be
+        // off the pool; fixing the half you own leaves the other half deciding
+        // whether the test passes.
+        _accept = new Thread(Accept)
+        {
+            IsBackground = true,
+            Name = "fake-auth-accept",
+        };
+
+        _accept.Start();
     }
 
     public int Port { get; }
@@ -440,40 +460,46 @@ public sealed class FakeAuthServer : IDisposable
         throw new TimeoutException("the auth server was never contacted");
     }
 
-    private async Task AcceptAsync()
+    /// <summary>Blocking accept loop, on its own thread. No scheduler under it.</summary>
+    private void Accept()
     {
         try
         {
             while (!_shutdown.IsCancellationRequested)
             {
-                using var client = await _listener.AcceptTcpClientAsync(_shutdown.Token).ConfigureAwait(false);
+                using var client = _listener.AcceptTcpClient();
                 var stream = client.GetStream();
 
                 // The header is 18 bytes: the UUID and the length. Everything
                 // after it is the length's business.
                 var header = new byte[18];
-                await stream.ReadExactlyAsync(header, _shutdown.Token).ConfigureAwait(false);
+                stream.ReadExactly(header);
 
                 var body = new byte[BitConverter.ToUInt16(header, 16)];
-                await stream.ReadExactlyAsync(body, _shutdown.Token).ConfigureAwait(false);
+                stream.ReadExactly(body);
 
                 lock (_gate)
                     _requests.Add([.. header, .. body]);
 
-                await stream.WriteAsync(Gg2Text.Encode(_rewards), _shutdown.Token).ConfigureAwait(false);
+                stream.Write(Gg2Text.Encode(_rewards));
                 client.Client.Shutdown(SocketShutdown.Send);
             }
         }
         catch (Exception e) when (e is OperationCanceledException or SocketException or IOException or ObjectDisposedException)
         {
-            // Shutdown, or a client that went away.
+            // Shutdown — Dispose closes the listener, which is what unblocks the
+            // accept — or a client that went away.
         }
     }
 
     public void Dispose()
     {
         _shutdown.Cancel();
+
+        // Closing the listener is what wakes the blocking accept; cancelling the
+        // token alone would leave it parked until somebody connected.
         _listener.Dispose();
+        _accept.Join(TimeSpan.FromSeconds(1));
         _shutdown.Dispose();
     }
 }

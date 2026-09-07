@@ -3913,6 +3913,39 @@ ticks) is what eventually bans the edge.
 blacklists did not fall towards the warm arm's, the spawn is not what is producing
 them and this attribution is wrong.
 
+#### ✅ PRICED: what it cost the bot layer, measured against a fixed checkpoint
+
+**The first bot-layer move in this project to be priced rather than assumed**,
+measured by the `gg2-rl` lane on 2026-09-06 when it re-pinned from `90cb383` to
+`c434229`. Same checkpoint files, same script, nine mirror cells against the
+scripted bot, 400 duels, four seeds:
+
+| | before | after | |
+|---|---|---|---|
+| scout, sniper, demoman, medic, engineer, heavy, spy, pyro | — | — | **identical to the digit, per seed too** |
+| soldier | 46.47 | **46.19** | −0.28, against its own 2·SE of **11.5** |
+
+⛔ **The eight unchanged classes are the finding, not the soldier.** They are what
+says the change did not drift anything it was not aimed at — a single moved cell
+with eight identical ones beside it is attribution; a single moved cell alone is a
+number. ⚠️ **Soldier stays UNDECIDED**: −0.28 is far inside the noise that made it
+undecided before, so the routing fix did not resolve it either way.
+
+⛔ **The instrument is a FIXED ARTEFACT, and a symmetric one cannot do this job.**
+The obvious control — scripted-soldier against scripted-soldier — is ~50% *by
+construction*: same class, same driver, both orientations averaged, so it returns
+the null whatever the absolute strength of either side. It would read 50% whether
+this fix worked or made things worse. What separates them is re-scoring the SAME
+checkpoint file at both commits: the weights are byte-identical, so any movement
+is the environment's. ⚠️ This session proposed the symmetric control first and was
+wrong; it is recorded because it looks like a control and is a tautology.
+
+⚠️ **This generalises past soldier.** The policy gate is scored against the
+scripted bot for every class, so ANY bot-layer move shifts the null under all
+nine — `CLAUDE.md`'s "re-score a known checkpoint when the bot layer moves" is
+usually read as a validity check on old numbers, and it is also the only way to
+attribute new ones.
+
 #### What found it, after four instruments did not
 
 The launch readings said the failures and the successes were indistinguishable in
