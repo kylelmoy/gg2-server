@@ -501,6 +501,33 @@ real Linux run is the test this section should be checked against.
   was doing, map loads included. `tools/bench/` is where a per-tick cost comes
   from.
 
+## ⚠️ KNOWN ISSUE: the accept and serve loops are thread-pool work
+
+`WebAdminServer.Start` runs `AcceptLoopAsync` as `Task.Run`, and each connection
+as another. ⛔ **`Task.Run` on an async method puts the loop AND every
+continuation after its first `await` on the thread pool**, so under a saturated
+pool an accept — or a response already in flight — can be delayed by seconds.
+
+**Observed 2026-09-06**, not theorised: `WebAdminTests.ThePageIsServedWithoutSigningIn`
+failed once in eight full-suite runs with `HttpClient.Timeout of 20 seconds
+elapsing`. The pool grows by roughly a thread a second once saturated, and a full
+suite saturates it.
+
+⚠️ **Third instance of the same class in this repo in one day.** The other two
+were fixed by giving the loop a real `Thread` with synchronous I/O:
+`RewardAuthClient`'s pump (`4a9fba2`) and `FakeAuthServer`'s accept (`28a8e5d`) —
+and the second is why the first did not settle it. **Both ends of a socket
+conversation have to be off the pool; fixing the end you own leaves the other end
+deciding the outcome.**
+
+**Not fixed here, deliberately.** The panel binds loopback by default and is a
+diagnostic, so the cost is a slow page under load rather than anything the match
+sees — its socket threads touch nothing, and commands are still drained on the
+tick thread. ⚠️ **But the failure mode is real for a busy host**, and a panel that
+stops answering exactly when the machine is loaded is a panel that is missing when
+it is most wanted. If it is taken up, the accept loop is the piece to move first
+and the per-connection serve second.
+
 ## Gates
 
 | | |

@@ -110,13 +110,29 @@ public static class MapDirectory
     /// </para>
     /// </para>
     /// </remarks>
-    public static string ResolveNav()
+    public static string ResolveNav() =>
+        ResolveNav(Environment.GetEnvironmentVariable("GG2_NAVCACHE"));
+
+    /// <summary>
+    /// <inheritdoc cref="ResolveNav()"/>, with the override supplied rather than
+    /// read from the process.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>Split out so a TEST can exercise the resolution without mutating the
+    /// process.</b> `GG2_NAVCACHE` is process-wide and xunit runs collections in
+    /// parallel, so a test that set it around an assertion handed its temp
+    /// directory to whatever else was running — observed 2026-09-06 as
+    /// <c>SpotBanTests</c> failing with "no nav graph for koth_valley area 1 in
+    /// …\Temp\gg2-nav-&lt;guid&gt;", a directory it has never heard of.
+    /// <para>
+    /// ⚠️ The parameterless overload is now the only thing that reads the
+    /// variable, and it is one line precisely so that nothing needs to test it.
+    /// </para>
+    /// </remarks>
+    public static string ResolveNav(string? overrideDirectory)
     {
-        if (Environment.GetEnvironmentVariable("GG2_NAVCACHE") is { Length: > 0 } fromEnv
-            && Directory.Exists(fromEnv))
-        {
+        if (overrideDirectory is { Length: > 0 } fromEnv && Directory.Exists(fromEnv))
             return fromEnv;
-        }
 
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
              directory is not null;

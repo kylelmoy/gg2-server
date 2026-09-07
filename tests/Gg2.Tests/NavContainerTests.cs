@@ -300,16 +300,17 @@ public sealed class NavContainerTests : IDisposable
 
         WriteCompressed("ctf_truefort_a1.txt.gz", RealGraphText());
 
-        var previous = Environment.GetEnvironmentVariable("GG2_NAVCACHE");
-        try
-        {
-            Environment.SetEnvironmentVariable("GG2_NAVCACHE", _directory);
-            Assert.Equal(_directory, MapDirectory.ResolveNav());
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("GG2_NAVCACHE", previous);
-        }
+        // ⛔ The overload, NOT the process variable. This used to set
+        // GG2_NAVCACHE around the assertion and restore it after — and
+        // GG2_NAVCACHE is process-wide while xunit runs collections in parallel,
+        // so for the width of that try block every other test resolved nav to this
+        // temp directory. Observed as SpotBanTests failing with "no nav graph for
+        // koth_valley area 1 in …\Temp\gg2-nav-<guid>", which is a directory it
+        // has never heard of and could not be debugged from.
+        // ⚠️ What this test is FOR is the globbing — that a directory holding only
+        // .gz resolves — and that is entirely in the overload. The one line that
+        // reads the variable is not covered and does not need to be.
+        Assert.Equal(_directory, MapDirectory.ResolveNav(_directory));
     }
 
     private static string RealGraphText() =>

@@ -143,6 +143,20 @@ if (Environment.GetEnvironmentVariable("BENCH_CMP") == "1")
     return;
 }
 
+if (Environment.GetEnvironmentVariable("BENCH_SMOKE") == "1")
+{
+    // ⚠️ ExitCode rather than `return n`: this is a top-level program, and giving
+    // one branch an int return value demands one from every other `return;` in
+    // the file. The status is the whole point of this mode — a smoke run nobody
+    // can script is a smoke run nobody runs — so it is set, not returned.
+    Environment.ExitCode = Bench.Smoke.Run(
+        maps,
+        Environment.GetEnvironmentVariable("GG2_NAV")!,
+        Environment.GetEnvironmentVariable("NPZ")!);
+
+    return;
+}
+
 if (Environment.GetEnvironmentVariable("BENCH_EVAL") is { } perMap)
 {
     Bench.PolicyEval.Run(maps, Environment.GetEnvironmentVariable("GG2_NAV")!, Environment.GetEnvironmentVariable("NPZ")!, int.Parse(perMap));
