@@ -142,8 +142,8 @@ questions:
 
 | | |
 |---|---|
-| `--bot-class-policy Soldier=scripted` | **who drives a class.** A checkpoint's file name without its extension, or `scripted`. Repeatable, and it only has to name the classes you are overriding. |
-| `--bot-classes driven` | **which classes bots play.** Restricts the draw to whatever the loaded policies drive, so every bot is the configuration under test rather than a mix of that and the all-scripted arm. |
+| `--bot-class-policy Soldier=scripted` | who drives a class. A checkpoint's file name without its extension, or `scripted`. Repeatable, and it only has to name the classes being overridden. |
+| `--bot-classes driven` | which classes bots play. Restricts the draw to whatever the loaded policies drive, so every bot is the configuration under test rather than a mix of that and the all-scripted arm. |
 
 A checkpoint is dated by the simulation it was trained against: the loader prints
 both stamps, the classes each will drive, and refuses a mismatch unless told

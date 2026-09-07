@@ -770,7 +770,7 @@ public sealed class ServerOptions
     /// class the file does not list is therefore legal and <b>warned about</b>: the
     /// warning cannot tell "the run never saw this class" from "the author narrowed
     /// it out", and neither can anything else in either repository.
-    /// <c>docs/TRAPS-BOTS.md</c>, "a should-drive set in a trained-on field".
+    /// <c>docs/TRAPS-BOTS.md</c>, "a should-drive set lives in a trained-on field".
     /// </para>
     /// <para>
     /// ⚠️ <b>Separate from <c>Bots.Classes</c> on purpose.</b> That one restricts

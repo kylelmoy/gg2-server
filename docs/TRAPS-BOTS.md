@@ -5005,177 +5005,81 @@ ask what would ever bring somebody into contact with the fact — and if the
 honest answer is nothing, check it by hand before writing it down.
 
 
-## ⛔ The two-tier ship bundle — received 2026-09-07
+## The shipped checkpoints and the class-routing settings
 
-The `gg2-rl` lane handed over two checkpoints and this repo learned to load more
-than one. What ships, how to run it, and every number behind it is
-`checkpoints/README.md`; `docs/BOTS.md`, "the shipped bundle", is the front door.
-What follows is the part that is a **trap** rather than a fact.
+`checkpoints/` holds two checkpoints driving five of the nine classes;
+`checkpoints/README.md` has the files, the measurements and their limits, and
+`docs/BOTS.md`, "the shipped bundle", is the operator-facing version. What
+belongs here is the part that is a trap.
 
-### ⛔ A should-drive set in a trained-on field, and nothing can tell them apart
+### A should-drive set lives in a trained-on field
 
-`tier2_pyro_rest3_s0.npz` carries `meta[7] = PYRO`. **The run trained
-`ENGINEER,SPY,PYRO`.** `gg2-rl`'s `scripts/ship_tier.py` minted it from
-`rest3_s0/ppo_iter12000.npz` with the weights byte-identical and only the
-metadata narrowed.
+`tier2_pyro_rest3_s0.npz` says `PYRO` in `meta[7]`. The run trained
+`ENGINEER,SPY,PYRO`. A checkpoint has one class-set field answering two
+questions — what the run trained, and what its author intends it to drive — so
+the file is true about the second and incomplete about the first, and nothing in
+either repository can distinguish them.
 
-⚠️ **This is the conflation the two lanes documented together as a known
-limitation, now deliberately exercised.** There is one field and it now carries
-two meanings:
+Consequences:
 
-| meaning | what the field says | true? |
-|---|---|---|
-| what this policy may DRIVE | `PYRO` | ✅ yes |
-| what this policy LEARNED | `PYRO` | ⛔ no — it learned three |
+- `PolicyNetwork.TrainedClasses` cannot be read as "what this learned". It is
+  what the file claims it should drive.
+- `[Bots] ClassPolicy` may name a class the file does not list, and that warns
+  rather than being refused. Refusing would make it impossible to drive engineer
+  or spy with `tier2_pyro`, which did train them.
+- The warning cannot say which case it is. Only someone who knows the checkpoint
+  can.
+- `gg2-rl`'s `ship_tier.py` refuses to widen a set, so the convention cannot make
+  a policy claim a class it never trained. That guard is entirely on the
+  producing side and nothing here can check it.
 
-`PolicyNetwork.TrainedClasses` and `PolicyController.Drives` read the same set,
-which is also why the should-drive question is unmeasurable on that bench (the
-section above). So the file is **true about what it may drive and incomplete
-about what it learned, and nothing in either repository can distinguish the
-two.**
+Delete this section if `gg2-rl` adds a second metadata field, rather than editing
+it.
 
-⛔ **The one guard is that `ship_tier.py` refuses to WIDEN a set** — a
-should-drive set may only ever narrow a trained one — so the convention cannot be
-used to make a policy claim a class it never trained. That refusal lives entirely
-in the producing repo. Nothing here can check it, and this side should not
-pretend otherwise: `ShippedCheckpointTests` pins what the file says it drives,
-which is the only half that is checkable from here.
+### Which classes bots play and who drives them are separate settings
 
-**What would show this has gone stale**: a second metadata field arriving on the
-`gg2-rl` side. `PolicyNetwork` should then read both, and this section should be
-**deleted rather than edited**. The training lane has not asked for it and has
-said so twice.
+`Bots.Classes` restricts the class draw. `Bots.ClassPolicy` assigns a class to a
+tier or to `scripted`. They must stay separate: a setting that answers both makes
+one of the two unreachable, and the unreachable one is silent.
 
-### ⚠️ Death share alone would have chosen the wrong engagement width — a third time
+`Bots.Classes = driven` cannot be resolved where it is read, because options are
+parsed before any `--policy` is opened and argument order is not guaranteed.
+`BotPopulationOptions.ClassDrawFollowsPolicy` carries the request and
+`BotBrain.Build` answers it against the loaded tiers. The general rule: **a
+setting that cannot be resolved where it is read must defer, not approximate** —
+a constant standing in for an unavailable answer decays silently, because nothing
+goes red when the real answer moves away from it.
 
-Q22, 21 maps × 100 matches × four widths × four seeds, on the shipped family:
+The failure mode this protects against is a roster that is a smaller but
+plausible subset of the right one. Every bot it draws is driven correctly, so
+there is no error, no missing class in any log line and no failing test; a tier
+is simply inert. Unlike a stranded bot or a bot on the wrong hill, it is only
+visible if you count.
 
-| | 80px | **150px** | 220px | 300px |
-|---|---|---|---|---|
-| death share Δ | −1.29 | −2.73 | ⛔ **−2.86** | −2.24 |
-| win share Δ | +0.52 | ✅ **+1.34** | −2.39 | ⛔ −10.23 |
-| ticks driven | 2.0% | 5.5% | 10.1% | 16.0% |
+`Bots.Classes` reads back as `driven` rather than as the classes it resolved to,
+so a save from the settings page does not pin one startup's answer into the file.
+The resolved list goes in the startup log, alongside one line per checkpoint
+naming the classes that checkpoint will drive.
 
-⛔ **220px is the best death share and costs 3.73 points of win share against
-150px.** Third reproduction of this on the third checkpoint family, and the first
-time it would have changed a decision that had already been made.
+### Rules the resolution follows
 
-⚠️ **The generalisation is not "prefer wins".** It is that *combat quality and
-match outcome are separate axes*, and a controller that holds the wheel longer
-buys the first with the second — the macro layer is what plays the objective, and
-every tick the policy holds is a tick it does not. Any future width, gate or
-handover-rule change has to be read on both axes or it is not being read.
+- The default is every checkpoint driving the classes its own file claims, so a
+  server that configures nothing is correct. `ClassPolicy` only names overrides.
+- An explicit assignment beats the file in both directions. `Class=scripted` is
+  the only way to drop a class a checkpoint claims without re-minting the file.
+- An explicit assignment also removes the class from every other tier, so it
+  resolves a tier overlap rather than adding to one.
+- Two tiers claiming the same class warns: list order then decides which weights
+  play it, and `HybridBot.Choose` takes the most capable eligible tier.
+- A tier left driving nothing warns. It is loaded, stamp-checked, reported and
+  never consulted, which is the defect the arbiter invariant refuses in its own
+  case; it is not refused here because turning a tier off to see what the rest do
+  is a real experiment.
+- `driven` with nothing driving is refused. The empty set would read as "no
+  restriction", which inverts the request.
+- A label naming no loaded checkpoint is refused, with the loaded names in the
+  message. A class assigned twice is refused rather than last-wins.
 
-### ⚠️ What "five of nine classes" is actually resting on
-
-Three of the five are on evidence that would not survive being restated as a
-result:
-
-- **Soldier ships UNDECIDED** — mirror 46.47, 2·SE 12.13, *below* the 50% null
-  and not clearing. It drives because *undecided means status quo*, not because
-  it measured well, and `combat4_s2` is the worst soldier of its four seeds in
-  two independent samples. ⚠️ **This is the first place to look if a playtest
-  makes a soldier look wrong**, and it will not be a surprise.
-- **Pyro as shipped has no match number at all.** Q21 and Q22 measured `rest3`
-  driving all three classes it trained; the shipped artefact drives pyro alone,
-  and the bench cannot produce a number for a narrower set. What supports it is
-  pyro's own mirror (74.90, 2·SE 3.66) and its nine-opponent row (82.70).
-- **Sniper and spy were dropped without a refutation** — 89.08 and 88.22, both
-  clearing. Sniper on a judgement about an attributable loss, spy on the user's
-  call.
-
-⛔ **So "five classes are on the policy" is a shipping decision with mixed
-support, not five independent wins.** Quoting it as the latter is the failure
-`CLAUDE.md` describes: a claim the repo makes about itself that nothing inside
-the repo can contradict.
-
-### ✅ What this side actually gates
-
-`tests/Gg2.Tests/ShippedCheckpointTests.cs` and
-`tests/Gg2.Tests/PolicyTierWiringTests.cs`, added with the handover:
-
-- both files present and **byte-identical to what was handed over** (md5s pinned
-  from the bundle's own README);
-- both load through `PolicyNetwork.Load` with **no stamp bypass**, so a
-  `SIM_UUID` move retires them on the run that moved it;
-- each drives exactly its claimed classes, **asserted in both directions across
-  all nine** — a checkpoint that drove nothing would otherwise be invisible,
-  because `HybridBot` falls back to a complete scripted bot;
-- the two sets are **disjoint**, which is what makes registration order moot;
-- `tier0` is byte-identical to the fixture `combat4_s2_iter12000.npz`, the
-  `MapCopyTests`-shaped guard on a deliberate duplicate;
-- **a real match per tier**, class-restricted so `MicroTicks > 0` attributes to
-  one tier, establishing the weights reach the wheel;
-- and the wiring: a second `--policy` **appends**, a config file's `Policy` list
-  reaches the brain, a flag **replaces** the file's whole list, every checkpoint
-  reports its own stamp line and class set, and an overlap **warns per class**
-  naming both files rather than being silently resolved by list order.
-
-⛔ **None of that is evidence a checkpoint plays well**, and no threshold in
-either file should ever be read as if it were.
-
-### ⛔ Two questions, one knob: `--bot-classes trained` was silently wrong
-
-**2026-09-07, the user's call after the bundle landed.** Which classes bots
-**play** and which controller **drives** a class are different questions, and
-until this they shared one setting.
-
-`--bot-classes trained` meant `PolicyNetwork.DefaultTrainedClasses` — a
-**compile-time** four-class set. That set stopped being any loaded checkpoint's
-on 2026-09-06, when the class set became a property of the file. On the shipped
-bundle the shorthand therefore drew scout, soldier, demoman and heavy, and
-**pyro never appeared, so the pyro tier never drove.**
-
-⚠️ **A smaller-but-plausible roster is the worst shape of wrong.** Every bot it
-does draw *is* driven correctly. There is no error, no missing class in any log
-line, no failing test, and no visible difference from a correctly configured
-server except that one of the two tiers is inert. Compare the failures this
-file already carries: a stranded bot is visible, a wrong-hill bot is visible.
-**This one is only visible if you count.**
-
-Why it could not be fixed where it was read: **options are parsed before any
-`--policy` is opened**, and argument order is not guaranteed. The word could not
-be resolved at the point it was written, so it was resolved against a constant
-instead — which is the shape of the bug, not an accident of it.
-
-#### What replaced it
-
-| setting | question | resolved |
-|---|---|---|
-| `[Bots] Classes` / `--bot-classes` | which classes bots PLAY | `driven` is deferred to `BotBrain.Build`, where the checkpoints are open |
-| `[Bots] ClassPolicy` / `--bot-class-policy` | who DRIVES a class | `Class=<label>` or `Class=scripted`; default is every checkpoint's own set |
-
-- ✅ **The default is "every checkpoint drives what its file claims"**, so a
-  server that configures nothing gets the intended behaviour. `ClassPolicy` only
-  ever has to name what is being overridden.
-- ⛔ **An explicit assignment beats the file in BOTH directions** — including
-  `Class=scripted`, which is the only way to drop a class a checkpoint claims
-  without re-minting the file. Soldier is the case that motivated it: it ships
-  driving on a mirror *below* its null.
-- ⛔ **Assigning a class the file does not list is legal and WARNS.** It has to
-  be legal: `tier2_pyro` trained engineer and spy and no longer says so, and
-  refusing would make putting them back impossible. The warning **cannot** say
-  which of the two cases it is — nothing in either repository can.
-- ✅ **An explicit assignment also resolves a tier overlap**, because the class
-  leaves every tier but the one named. So the overlap warning can only fire for
-  classes nobody assigned, and this setting is the *answer* to it rather than
-  another source of one.
-- ⚠️ **A tier left driving nothing warns** — loaded, stamp-checked, reported and
-  never consulted is the defect the arbiter invariant refuses in its own case.
-  Not refused here, because turning a tier off to see what the rest do is a real
-  experiment.
-- ⛔ **`driven` with nothing driving is REFUSED, not "all nine".** The empty set
-  would read as no restriction, which is the exact inversion of what was asked
-  for.
-- ⚠️ **`Classes` reads back as `driven`, not as the classes it resolved to.**
-  Otherwise a save from the settings page silently pins today's answer into the
-  file for ever. The resolved list goes in the startup log instead.
-
-#### The generalisation
-
-⛔ **A setting that cannot be resolved where it is read must defer, not
-approximate.** The constant was a stand-in for an answer that did not exist yet,
-and a stand-in for an unavailable answer decays silently — nothing goes red when
-the real answer moves away from it. `docs/BOTS.md`'s "the shipped bundle" has the
-operator-facing version; `BotPopulationOptions.ClassDrawFollowsPolicy` is the
-deferral itself.
+`PolicyMicroSpec` and `PolicyController` take the class set explicitly. A null
+set asks the checkpoint; an empty set means the tier drives nothing. Conflating
+those would silently re-enable every class an operator turned off.

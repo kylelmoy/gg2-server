@@ -170,7 +170,7 @@ public static class BotBrain
                             $"WARNING: {label} is configured to drive {playerClass}, which its "
                             + "own class set does not list. That is either a class it never "
                             + "trained on, or one a narrowed should-drive set dropped — the "
-                            + "file cannot say which. docs/TRAPS-BOTS.md, 'a should-drive set "
+                            + "file cannot say which. docs/TRAPS-BOTS.md, 'a should-drive set lives "
                             + "in a trained-on field'.");
                     }
                 }

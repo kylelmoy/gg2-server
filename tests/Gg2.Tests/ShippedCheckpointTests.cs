@@ -120,7 +120,7 @@ public sealed class ShippedCheckpointTests
     /// <c>ENGINEER,SPY,PYRO</c>. Nothing in either repository can tell the two
     /// apart, because there is one field — so what this test pins is what the
     /// server will do, which is the only half that is checkable here.
-    /// <c>docs/TRAPS-BOTS.md</c>, "a should-drive set in a trained-on field".
+    /// <c>docs/TRAPS-BOTS.md</c>, "a should-drive set lives in a trained-on field".
     /// </para>
     /// </remarks>
     [Fact]

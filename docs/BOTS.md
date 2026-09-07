@@ -163,67 +163,53 @@ world state and has no equivalent blind spot.
 current build. `RolloutSearch` carries no weights and re-derives from the
 simulation every decision, so it absorbs a physics change for free.
 
-### The shipped bundle — `checkpoints/`, received 2026-09-07
+### The shipped bundle — `checkpoints/`
 
-⛔ **A trained policy SHIPS from this repository as of 2026-09-07**, at the
-user's instruction, handed over by the `gg2-rl` lane. Two `IMicroController`
-tiers over `HybridBot`, 150px, `HandoverRule.MacroTask`, **five of the nine
-classes on the policy and the other four scripted**:
+A trained policy ships in `checkpoints/`: two `HybridBot` tiers at 150px under
+`HandoverRule.MacroTask`, covering five of the nine classes.
 
 | file | drives |
 |---|---|
 | `checkpoints/tier0_combat4_s2.npz` | scout, soldier, demoman, heavy |
 | `checkpoints/tier2_pyro_rest3_s0.npz` | pyro |
-| — | *sniper, spy, engineer, medic → scripted* |
+| — | sniper, spy, engineer, medic stay scripted |
 
 ```powershell
 dotnet run --project src/Gg2.Host -- --map ctf_truefort --bots 12 --bot-mode policy `
   --policy checkpoints/tier0_combat4_s2.npz --policy checkpoints/tier2_pyro_rest3_s0.npz
 ```
 
-`--policy` is repeatable and **appends**, one tier per checkpoint; `[Bots]
-Policy` takes the same list comma-separated. A checkpoint's class set is a
-property of the FILE, so two files is how five classes get covered by two
-families of weights, and **each drives the classes its own file claims with
-nothing further configured**.
+`--policy` is repeatable and appends, one tier per checkpoint; `[Bots] Policy`
+takes the same list comma-separated. A checkpoint's class set is a property of
+the file, so two files is how five classes get covered by two families of
+weights, and each drives the classes its own file claims with nothing further
+configured.
 
-#### Two settings, two questions — and they were one knob until 2026-09-07
+Two settings adjust that, and they answer different questions:
 
 | setting | question |
 |---|---|
-| `--bot-class-policy Class=name` / `[Bots] ClassPolicy` | **who drives a class**: a checkpoint's file name without its extension, or `scripted`. Only has to name what you are overriding. |
-| `--bot-classes driven` / `[Bots] Classes` | **which classes bots play**: restricts the draw to whatever the loaded policies drive, so every bot is the configuration under test rather than a mix of that and the all-scripted arm. |
+| `--bot-class-policy Class=name` / `[Bots] ClassPolicy` | who drives a class: a checkpoint's file name without its extension, or `scripted`. Only has to name what is being overridden. |
+| `--bot-classes driven` / `[Bots] Classes` | which classes bots play: restricts the draw to whatever the loaded policies drive, so every bot is the configuration under test rather than a mix of that and the all-scripted arm. |
 
-⛔ **Sharing one knob shipped a bug worth knowing about.** `--bot-classes
-trained` named a compile-time four-class set that had stopped being any loaded
-checkpoint's, so on this bundle it drew a plausible four-class roster and the
-pyro tier never drove. **A smaller-but-plausible roster is the worst shape of
-wrong** — every bot it does draw is driven correctly, so nothing looks broken.
-`driven` is now resolved in `BotBrain.Build`, where the checkpoints are open;
-`trained` still parses and means the same thing.
+`driven` is resolved in `BotBrain.Build`, where the checkpoints are open, because
+options are parsed before any `--policy` is loaded. `ClassPolicy` may name a
+class a checkpoint's file does not list; that warns rather than refusing, because
+`tier2_pyro` trained engineer and spy and no longer says so, and the warning
+cannot tell "never trained" from "narrowed out". `docs/TRAPS-BOTS.md`, "the
+shipped checkpoints and the class-routing settings".
 
-⚠️ **`ClassPolicy` may name a class the file does not list, and it warns rather
-than refusing.** It has to: `tier2_pyro` trained engineer and spy and no longer
-says so, and refusing would make putting them back impossible. The warning
-cannot tell "never trained" from "narrowed out" — nothing in either repository
-can. `docs/TRAPS-BOTS.md`, "a should-drive set in a trained-on field".
+Read `checkpoints/README.md` before quoting any number off these. What has a
+match number and what does not is not obvious from the files: the pyro tier as
+shipped has none of its own, soldier ships undecided with a mirror below its
+null, and sniper and spy were dropped on judgement rather than refutation.
 
-⛔ **`checkpoints/README.md` before quoting any number off these.** What has a
-match number and what does not is not obvious: the pyro tier as shipped —
-driving pyro alone — has none of its own and cannot be given one by that bench,
-soldier ships *undecided* with a mirror below its null, and sniper and spy were
-dropped on judgement rather than on refutation. `docs/TRAPS-BOTS.md`, "a
-should-drive set in a trained-on field", has the metadata trap that comes with
-tier 2.
-
-⚠️ **This repository gates presence and routing, not quality.**
-`ShippedCheckpointTests` pins both files' md5s, loads them through the ordinary
-stamp gate with no bypass, asserts each drives exactly its claimed classes in
-both directions across all nine, asserts the two sets are disjoint (which is
-what makes their registration order moot), and plays a real match per tier to
-establish the weights actually take the wheel. **It says nothing about whether
-either checkpoint plays well** — that evidence is the training lane's and is
-quoted, with its limits, in `checkpoints/README.md`.
+This repository gates presence and routing, not quality. `ShippedCheckpointTests`
+pins both md5s, loads them through the ordinary stamp gate with no bypass,
+asserts each drives exactly its claimed classes in both directions across all
+nine, asserts the two sets are disjoint, and plays a match per tier to establish
+that the weights take the wheel. It says nothing about whether either checkpoint
+plays well.
 
 **Current state, verified 2026-09-06 at `6126b34`: trained checkpoints for
 this build EXIST.** All four files in `tests/Gg2.Tests/Fixtures/policy/` carry
