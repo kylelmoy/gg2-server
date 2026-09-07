@@ -3931,6 +3931,17 @@ with eight identical ones beside it is attribution; a single moved cell alone is
 number. ⚠️ **Soldier stays UNDECIDED**: −0.28 is far inside the noise that made it
 undecided before, so the routing fix did not resolve it either way.
 
+⚠️⚠️ **THIS CONTROLS THE DUEL HARNESS AND THE SIMULATION. IT DOES NOT CONTROL THE
+MATCH HARNESS.** Eight identical mirror cells across a pin move say the physics
+and the duel path did not drift — and the duel path is not what changed on
+2026-09-06. `tools/bench`'s match-level modes were rewritten that day (the class
+roster, the arm construction, two null dereferences), they are not in `Gg2.sln`,
+and they have no tests. **So a green re-score is not clearance for a match-level
+number**, and the two are easy to read as one result because they arrived
+together. The rule the training lane wrote for their first match-level run after
+it: a surprising number is checked against the roster line and the arm
+construction BEFORE anything is concluded about the policy.
+
 ⛔ **The instrument is a FIXED ARTEFACT, and a symmetric one cannot do this job.**
 The obvious control — scripted-soldier against scripted-soldier — is ~50% *by
 construction*: same class, same driver, both orientations averaged, so it returns
