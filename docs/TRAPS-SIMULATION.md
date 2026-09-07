@@ -3997,3 +3997,42 @@ offset and walk the sub-block chain separately.
 which decodes to 1.0% solid and has not been put in front of the engine. Phase C
 is unrun — everything above used a 1x1 box, so the inclusive-bounds and
 class-box halves of the query are still only self-consistent.
+
+### ⛔ OPEN: a respawn rebuilds the whole player, and drops five fields with it
+
+`WorldState.Spawn` writes `Players[slot] = new PlayerState { Team, Class,
+RespawnTimer }`, so everything else in the struct goes back to zero on every
+spawn: `Stats`, `RoundStats`, `IsBot`, `Humiliated` and `QueueJump`. Only
+`RespawnTimer` is carried across, and `DeathmatchRespawnBypass` is dropped
+deliberately.
+
+**The reference destroys and recreates the CHARACTER, never the Player.**
+`Scripts/GameServer/doEventSpawn.gml:30-38` destroys `spawner.object` and
+`instance_create`s a new character into it; the `Player` instance that owns
+`stats[]` is untouched. `Objects/InGameElements/Player.events/Create.xml:28-40`
+zeroes the stat array, and a `Player` is created only on a join
+(`serviceJoiningPlayer.gml:117`, `GameServerCreate.gml:39`) — never on a
+respawn. So the port zeroes a scoreboard the reference keeps.
+
+Two measured consequences:
+
+| | |
+|---|---|
+| **The scoreboard resets on death** | `Deaths` is awarded to the victim and then wiped by the respawn that follows, so it reads 0 for everybody for ever; `Kills` and `Points` survive only until their owner next dies. Watched on a live 6-bot `ctf_truefort` server: three kills recorded across the roster, every `deaths` still 0, and one bot's `kills` dropped 1 → 0 over a death. |
+| **`--bot-engages-bots` does nothing** | `Handover.DistanceToNearestEnemy` filters on `world.Player(slot).IsBot`, which is false for every bot after its first spawn — so `EngageOpponents.HumansOnly`, the live server's default, degrades into `Anyone` and controllers drive against bots anyway. Measured on the same server: `engage: humans`, no humans connected, and three search bots at 44, 48 and 16 micro-driven ticks. |
+
+**Nothing in the suite goes red for either**, which is why this is written down
+rather than assumed known: no test asserts a stat across a respawn, and the arm
+measurements that would have noticed the second all run `EngageOpponents.Anyone`
+by design (`BotBrainSpec`'s own default).
+
+⚠️ **The fix moves pinned numbers and is not a one-liner to be slipped in.**
+Restoring `Deaths` changes what a match result reports, so `ScenarioSuiteTests.Baseline`
+and every death-share figure in `docs/BOTS.md` need a deliberate re-record;
+restoring `IsBot` changes what a live server actually plays. Each of the five
+fields also needs its own reference answer for what a respawn does to it —
+`Humiliated` and `QueueJump` have not been checked.
+
+⚠️ **A probe that settles it in seconds**: `AddPlayer(1)`, set
+`Players[1].IsBot`, `Scoring.Award(Kills, 3)`, then `Spawn` — both come back
+false and 0.

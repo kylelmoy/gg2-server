@@ -243,6 +243,22 @@
             <p class="hint">0 turns bots off. Humans always displace bots.</p>
             <p class="hint warn" id="bots-warn" hidden></p>
           </div>
+
+          <!--
+            Which brain the bots run. The mode is what was configured and the
+            tiers are what was built, and both are shown because they can
+            disagree — a reconcile that leaves no controller clears the brain,
+            and a panel showing the mode alone would report a policy server whose
+            bots are all scripted.
+          -->
+          <div class="brain" id="brain">
+            <div class="brain-head">
+              <span class="brain-key">brain</span>
+              <b id="brain-name">—</b>
+            </div>
+            <div class="brain-tiers" id="brain-tiers"></div>
+            <p class="hint" id="brain-note" hidden></p>
+          </div>
         </div>
       </article>
 

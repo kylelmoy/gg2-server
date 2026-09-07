@@ -604,6 +604,59 @@ kbd {
 .stepper input::-webkit-outer-spin-button,
 .stepper input::-webkit-inner-spin-button { appearance: none; margin: 0; }
 
+/* The bot brain. Same shape as the rotation block below it: a hairline rule, an
+   uppercase key, then the content. */
+.brain { border-top: var(--border-width) solid var(--separator); padding-top: 14px; }
+
+.brain-head { display: flex; align-items: baseline; gap: 8px; }
+
+.brain-key {
+  font: var(--label);
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+#brain-name {
+  font: 500 0.6875rem var(--font-mono);
+  color: var(--foreground);
+  overflow-wrap: anywhere;
+}
+
+.brain-tiers { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+
+.tier {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: baseline;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: var(--radius-md);
+  background: var(--default-soft);
+}
+
+.tier-name { font: 500 0.6875rem var(--font-mono); color: var(--foreground); }
+
+/* Truncated rather than wrapped: nine class names is a paragraph, and the row's
+   job is the count on its right. The full list is in the title. */
+.tier-classes {
+  font-size: var(--text-tiny);
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tier-live { font: 500 0.6875rem var(--font-mono); color: var(--muted); white-space: nowrap; }
+
+/* A controller is holding the wheel on the tick this snapshot was taken. It
+   blinks off constantly on a healthy server — the engagement window is a small
+   fraction of ticks — so it is a colour and never a count. */
+.tier-live.is-driving { color: var(--accent); }
+
+.tag.brain { background: var(--default); color: var(--muted); font-family: var(--font-mono); letter-spacing: 0; text-transform: none; }
+.tag.brain.is-driving { background: var(--accent-soft); color: var(--accent); }
+
 .rotation { border-top: var(--border-width) solid var(--separator); padding-top: 14px; }
 
 .rotation-key {

@@ -146,6 +146,7 @@ function render(next) {
   scores(next);
   tiles(next);
   kpis();
+  brains(next);
   roster(next);
   objective(next);
 
@@ -268,6 +269,123 @@ function tiles(s) {
 }
 
 /**
+ * Which brain the bots run, and whether it is actually driving.
+ *
+ * ⚠️ Three different questions, and the card answers all three because no one of
+ * them is enough. `bots.brain` is what was CONFIGURED. A tier's class list is
+ * which bots it is allowed to drive. The SHARE beside it is ticks a controller
+ * drove over ticks it was polled on — and that is the only one that says the
+ * controller is being consulted at all, because a tier can be loaded, named here
+ * and never admitted by the arbiter.
+ *
+ * ⚠️ A controller only holds the wheel inside the engagement window, so "driving
+ * right now" is zero most of the time on a perfectly healthy server. It is shown
+ * as a highlight on the count rather than as a number, so nobody reads a quiet
+ * moment as a broken brain.
+ */
+function brains(s) {
+  const all = s.players.filter((p) => p.bot);
+
+  $('brain-name').textContent = s.bots.brain;
+
+  const rows = document.createDocumentFragment();
+
+  for (const tier of s.bots.tiers) rows.appendChild(tierRow(tier, all, true));
+
+  // The bots no tier drives: a class every controller refuses, or a server whose
+  // mode is `scripted` and has no tiers at all. Shown only when there are some —
+  // "0 scripted" on a server whose tiers cover every class is noise, and on a
+  // scripted server this is the only row there is.
+  if (all.some((p) => p.brain === 'scripted')) {
+    rows.appendChild(tierRow({ name: 'scripted' }, all, false));
+  }
+
+  $('brain-tiers').replaceChildren(rows);
+
+  const note = $('brain-note');
+  const parts = [];
+
+  if (s.bots.arbiterMicroseconds !== undefined) {
+    // ⚠️ The budget IN FORCE, not the one configured: MicroBudgetController moves
+    // it while the server runs, so a number here that is not the one in the
+    // config file is the calibration working rather than a bug.
+    parts.push(`Arbiter ${s.bots.arbiterMicroseconds.toLocaleString()} µs a tick, `
+      + `${s.bots.arbiterSpentMicroseconds.toLocaleString()} spent on the last one.`);
+  }
+
+  if (all.length === 0 && s.bots.tiers.length > 0) {
+    parts.push('No bots are on the server, so nothing is driving.');
+  } else if (s.bots.engage === 'humans') {
+    // ⛔ The gate every tier is behind, and the reason a correctly configured
+    // brain can drive far less than an operator expects — a live server hands a
+    // controller the wheel for a HUMAN enemy only.
+    //
+    // ⚠️ Stated as the CONFIGURATION, never as a prediction that they will not
+    // drive. The share beside each tier above is the measurement, and it is the
+    // one to believe: as of 2026-09-07 the gate does not hold, because
+    // WorldState.Spawn rebuilds PlayerState and drops IsBot on the first
+    // respawn. See docs/TRAPS-SIMULATION.md, "a spawn rebuilds the player".
+    parts.push('Controllers take the wheel against a human enemy only '
+      + '(--bot-engages-bots opens them to bot fights).');
+  }
+
+  note.textContent = parts.join(' ');
+  note.hidden = parts.length === 0;
+}
+
+/**
+ * One brain, with what it is allowed to drive and what it has actually done.
+ *
+ * `share` is off for the scripted row: those bots' counters, when they have any,
+ * belong to whatever tier drove them under a class they have since changed away
+ * from, and a percentage on a row that by definition never drives would be read
+ * as one.
+ */
+function tierRow(tier, all, share) {
+  const mine = all.filter((p) => p.brain === tier.name);
+  const row = document.createElement('div');
+  row.className = 'tier';
+
+  const name = document.createElement('span');
+  name.className = 'tier-name';
+  name.textContent = tier.name;
+  row.appendChild(name);
+
+  const drives = document.createElement('span');
+  drives.className = 'tier-classes';
+  // Absent when the server has no bots on it: the class set is read off a live
+  // controller rather than re-derived, so with nothing built there is nothing to
+  // ask. See ControlCommands.AppendBots.
+  drives.textContent = tier.classes ? tier.classes.join(' · ') : '';
+  // The row truncates: nine class names is a paragraph, and the row's job is the
+  // count on its right.
+  if (tier.classes) drives.title = `Drives ${tier.classes.join(', ')}.`;
+  row.appendChild(drives);
+
+  const live = document.createElement('span');
+  live.className = 'tier-live';
+
+  const driving = mine.filter((p) => p.driving).length;
+  const micro = mine.reduce((sum, p) => sum + (p.microTicks || 0), 0);
+  const polls = micro + mine.reduce((sum, p) => sum + (p.scriptedTicks || 0), 0);
+
+  live.textContent = mine.length === 0
+    ? 'no bots'
+    : `${mine.length} bot${mine.length === 1 ? '' : 's'}`
+      + (share && polls > 0 ? ` · ${((micro / polls) * 100).toFixed(1)}%` : '');
+
+  live.classList.toggle('is-driving', driving > 0);
+
+  live.title = share
+    ? `${driving} driving right now. ${micro.toLocaleString()} of `
+      + `${polls.toLocaleString()} ticks driven since each bot spawned.`
+    : 'The macro layer alone — every controller refuses these classes.';
+
+  row.appendChild(live);
+  return row;
+}
+
+/**
  * The roster table.
  *
  * ⚠️ Rebuilt wholesale five times a second, and that is fine: it is at most 48
@@ -325,6 +443,22 @@ function row(player) {
   name.textContent = player.name;
 
   if (player.bot) name.appendChild(tag('BOT', 'bot'));
+
+  // ⚠️ The brain that WILL drive this slot, lit while it actually is. A
+  // controller holds the wheel only inside the engagement window, so an unlit
+  // badge is the ordinary case and not a brain that has stopped working — the
+  // Bots card carries the share that answers that.
+  if (player.bot && player.brain && player.brain !== 'scripted') {
+    const badge = tag(player.brain, 'brain' + (player.driving ? ' is-driving' : ''));
+    const polls = (player.microTicks || 0) + (player.scriptedTicks || 0);
+
+    badge.title = polls > 0
+      ? `${player.brain} has driven ${((player.microTicks / polls) * 100).toFixed(1)}% of `
+        + `this bot's ticks (${player.microTicks.toLocaleString()} of ${polls.toLocaleString()})`
+      : player.brain;
+
+    name.appendChild(badge);
+  }
   if (player.intel) name.appendChild(tag('INTEL', 'intel'));
 
   wrap.appendChild(name);

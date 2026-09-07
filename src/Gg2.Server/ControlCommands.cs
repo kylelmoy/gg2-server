@@ -645,6 +645,7 @@ public static class ControlCommands
         json.Append(",\"nextMap\":\"").Append(Escape(server.NextMap)).Append('"');
         json.Append(",\"changeIn\":").Append(server.MapChangeCountdown).Append('}');
 
+        AppendBots(json, server);
         AppendIntel(json, "redIntel", server, Team.Red);
         AppendIntel(json, "blueIntel", server, Team.Blue);
         AppendControlPoints(json, server);
@@ -652,6 +653,133 @@ public static class ControlCommands
 
         json.Append('}');
         return json.ToString();
+    }
+
+    /// <summary>
+    /// Which brain this server's bots run, and whether it is actually driving.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The mode is what was CONFIGURED and the tiers are what was BUILT</b>,
+    /// and both are sent because they can disagree — <c>BotBrain.Build</c> clears
+    /// the brain when a reconcile leaves no controller, so a panel showing the
+    /// mode alone would report a policy server whose bots are all scripted. That
+    /// is the failure this whole block exists to make visible: a controller that
+    /// is configured, reported and never consulted.
+    /// </para>
+    /// <para>
+    /// <b>The class sets are read off a live controller, never re-derived.</b>
+    /// <c>IMicroController.Drives</c> is the one place a tier's class set is
+    /// decided — a policy's own, narrowed by <c>[Bots] ClassPolicy</c> — and a
+    /// second copy here would be the copy nothing gates. The cost is that a
+    /// server with no bots on it sends no class sets, which is honest: with no
+    /// bot built there is no controller to ask.
+    /// </para>
+    /// <para>
+    /// <b>The arbiter's budget is read live, not from the options.</b>
+    /// <c>MicroBudgetController</c> moves <c>UnitsPerTick</c> while the server
+    /// runs, so the configured number and the one in force are different
+    /// questions and this answers the second.
+    /// </para>
+    /// </remarks>
+    private static void AppendBots(StringBuilder json, GameServer server)
+    {
+        var brain = server.Options.Bots.Brain;
+
+        json.Append(",\"bots\":{\"mode\":\"")
+            .Append(server.Options.BotMode.ToString().ToLowerInvariant()).Append('"');
+
+        // BotBrainSpec.Name — the same string tools/bench prints in a result
+        // table, so a bot watched on the panel and a number read off the bench
+        // name the same arm.
+        json.Append(",\"brain\":\"").Append(brain?.Name ?? ScriptedBrain).Append('"');
+
+        // ⛔ The gate every tier is behind, and the reason a correctly configured
+        // brain can drive nothing at all. HumansOnly is the LIVE SERVER's default
+        // (BotBrainSpec's own is Anyone), so on a server with no humans on it no
+        // controller is ever handed the wheel — a fact that looks exactly like a
+        // broken checkpoint from the outside.
+        // ⚠️ Absent, not "humans", when there is no brain: mode `scripted` has no
+        // gate at all, and a field naming one would describe a restriction that
+        // does not exist.
+        if (brain is not null)
+        {
+            json.Append(",\"engage\":\"")
+                .Append(brain.Engage == Gg2.Bots.EngageOpponents.Anyone ? "anyone" : "humans")
+                .Append('"');
+        }
+
+        json.Append(",\"tiers\":[");
+
+        if (brain is not null)
+        {
+            // The first wrapped bot on the roster. Every bot shares the tier
+            // ORDER and every controller of one tier was built from one spec, so
+            // any of them answers for all of them.
+            var built = LiveTiers(server);
+
+            for (var i = 0; i < brain.Tiers.Count; i++)
+            {
+                if (i > 0)
+                    json.Append(',');
+
+                json.Append("{\"name\":\"").Append(Escape(brain.Tiers[i].Name)).Append('"');
+
+                if (built is not null && i < built.Count)
+                    AppendDrives(json, built[i]);
+
+                json.Append('}');
+            }
+        }
+
+        json.Append(']');
+
+        if (brain?.Arbiter is Gg2.Bots.DecisionQuotaArbiter quota)
+        {
+            json.Append(",\"arbiterMicroseconds\":").Append(quota.UnitsPerTick);
+            json.Append(",\"arbiterSpentMicroseconds\":").Append(quota.SpentThisTick);
+        }
+
+        json.Append('}');
+    }
+
+    /// <summary>The tiers of the first wrapped bot on the roster, or null.</summary>
+    private static IReadOnlyList<Gg2.Bots.IMicroController>? LiveTiers(GameServer server)
+    {
+        for (var slot = 0; slot < server.RosterCount; slot++)
+        {
+            if (server.SourceOf(slot) is Gg2.Bots.HybridBot hybrid)
+                return hybrid.Tiers;
+        }
+
+        return null;
+    }
+
+    /// <summary>The classes a controller will drive, asked of the controller.</summary>
+    /// <remarks>
+    /// <b>Pyro is the ceiling</b>, the same one <c>BotBrain.ParseClassPolicies</c>
+    /// uses: <c>PlayerClass</c> runs past it into values no bot can be, and a
+    /// controller asked about one would answer for a class that cannot appear.
+    /// </remarks>
+    private static void AppendDrives(StringBuilder json, Gg2.Bots.IMicroController tier)
+    {
+        json.Append(",\"classes\":[");
+
+        var first = true;
+
+        for (var playerClass = PlayerClass.Scout; playerClass <= PlayerClass.Pyro; playerClass++)
+        {
+            if (!tier.Drives(playerClass))
+                continue;
+
+            if (!first)
+                json.Append(',');
+
+            first = false;
+            json.Append('"').Append(playerClass).Append('"');
+        }
+
+        json.Append(']');
     }
 
     private static void AppendIntel(StringBuilder json, string name, GameServer server, Team team)
@@ -714,8 +842,13 @@ public static class ControlCommands
             json.Append(",\"name\":\"").Append(Escape(server.NameOf(slot))).Append('"');
             json.Append(",\"team\":\"").Append(server.TeamOf(slot)).Append('"');
             json.Append(",\"class\":\"").Append(server.ClassOf(slot)).Append('"');
-            json.Append(",\"bot\":").Append(
-                Gg2.Bots.ScriptedBot.Of(server.SourceOf(slot)) is not null ? "true" : "false");
+            var source = server.SourceOf(slot);
+            var bot = Gg2.Bots.ScriptedBot.Of(source) is not null;
+
+            json.Append(",\"bot\":").Append(bot ? "true" : "false");
+
+            if (bot)
+                AppendBrain(json, source, server.ClassOf(slot), server.Options.Bots.Brain);
             json.Append(",\"connected\":").Append(server.IsConnected(slot) ? "true" : "false");
             json.Append(",\"address\":\"").Append(Escape(server.AddressOf(slot))).Append('"');
             json.Append(",\"alive\":").Append(server.IsAlive(slot) ? "true" : "false");
@@ -738,6 +871,71 @@ public static class ControlCommands
 
         json.Append(']');
     }
+
+    /// <summary>What is driving one bot, and whether it is driving right now.</summary>
+    /// <remarks>
+    /// <para>
+    /// <b><c>brain</c> is what COULD drive this slot and <c>driving</c> is what
+    /// did.</b> A controller only holds the wheel inside the engagement window —
+    /// a small fraction of ticks — so a panel showing the instant alone would
+    /// report a policy server as scripted almost all the time, and one showing
+    /// the configuration alone could not tell a working controller from one an
+    /// arbiter never admits. <c>microTicks</c> and <c>scriptedTicks</c> are the
+    /// running counts behind the second question: they differ by exactly the
+    /// ticks a controller drove, and a brain named here whose <c>microTicks</c>
+    /// stay at zero is a brain that is configured and never consulted.
+    /// </para>
+    /// <para>
+    /// <b>An unwrapped <c>ScriptedBot</c> reports the scripted brain rather than
+    /// nothing.</b> Bot mode <c>scripted</c> is arm 1 — a complete bot, not a
+    /// degraded one — and an absent field would read as a bot whose brain could
+    /// not be determined.
+    /// </para>
+    /// </remarks>
+    private static void AppendBrain(
+        StringBuilder json,
+        IInputSource source,
+        PlayerClass playerClass,
+        Gg2.Bots.BotBrainSpec? brain)
+    {
+        if (source is not Gg2.Bots.HybridBot hybrid)
+        {
+            json.Append(",\"brain\":\"").Append(ScriptedBrain).Append('"');
+            json.Append(",\"driving\":false");
+            return;
+        }
+
+        // -1 when every tier refuses this class — it falls back to the scripted
+        // layer entirely, which is a real answer and not an error.
+        var tier = hybrid.TierIndexFor(playerClass);
+
+        // ⛔ Named from the SPEC, not from the controller. Every PolicyController
+        // answers `policy` whatever checkpoint it holds, so a two-tier bundle
+        // would report both halves under one name and the panel's tier rows —
+        // which are the spec's — could not be matched to a single bot. The two
+        // lists are index-aligned by BotBrainSpec.Wrap; the length check is for a
+        // bot wrapped by some other spec, where the controller's own name is the
+        // only honest answer left.
+        json.Append(",\"brain\":\"").Append(Escape(
+            tier < 0 ? ScriptedBrain
+            : brain is not null && tier < brain.Tiers.Count ? brain.Tiers[tier].Name
+            : hybrid.Tiers[tier].Name)).Append('"');
+
+        json.Append(",\"driving\":").Append(hybrid.MicroDrove ? "true" : "false");
+        json.Append(",\"microTicks\":").Append(hybrid.MicroTicks);
+        json.Append(",\"scriptedTicks\":").Append(hybrid.ScriptedTicks);
+    }
+
+    /// <summary>
+    /// What the state calls the macro layer driving alone.
+    /// </summary>
+    /// <remarks>
+    /// <b>The same word <c>--bot-mode</c> takes and <c>BotBrainSpec.Name</c>
+    /// would never produce</b>, so a reader can compare a slot's brain against the
+    /// server's tier list without a second vocabulary. It is a bot brain, not the
+    /// absence of one.
+    /// </remarks>
+    private const string ScriptedBrain = "scripted";
 
     public static string Ok(string? extra = null) =>
         extra is null ? "{\"ok\":true}" : "{\"ok\":true," + extra + "}";

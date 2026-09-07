@@ -125,6 +125,40 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
     /// <summary>Whoever holds the wheel right now, or null when the macro layer does.</summary>
     public IMicroController? Driving => _driving < 0 ? null : _tiers[_driving];
 
+    /// <summary>
+    /// The index of the most capable tier that will drive this class, or -1 when
+    /// every tier refuses it and the scripted layer owns the slot outright.
+    /// </summary>
+    /// <remarks>
+    /// <b>For a diagnostic — the control port's roster, the panel — never for a
+    /// decision.</b> It is <see cref="Choose"/>'s answer with no arbiter, so under
+    /// one the tier it names can still be refused a decision on any given tick and
+    /// the bot fall to the scripted layer for it. <see cref="Driving"/> is what
+    /// actually held the wheel; this is what could.
+    /// <para>
+    /// <b>An INDEX rather than the controller, and that is what makes it
+    /// reportable.</b> <see cref="IMicroController.Name"/> is the controller's
+    /// own — every <see cref="PolicyController"/> answers <c>policy</c>, whatever
+    /// checkpoint it holds — so a caller naming a tier from it prints
+    /// <c>policy</c> for both halves of a two-tier bundle. The LABEL lives on
+    /// <see cref="MicroControllerSpec"/>, index-aligned with
+    /// <see cref="Tiers"/> by <see cref="BotBrainSpec.Wrap"/>, and an index is
+    /// what reaches it.
+    /// </para>
+    /// <para>
+    /// <b>Here rather than re-derived by the caller.</b> Eligibility is
+    /// <see cref="IMicroController.Drives"/> asked of the tiers in order, and a
+    /// second copy of that walk is a second place for the order to be got wrong —
+    /// the ordering IS the arbiter's whole input.
+    /// </para>
+    /// </remarks>
+    public int TierIndexFor(PlayerClass playerClass)
+    {
+        var eligible = EligibleTiers(playerClass);
+
+        return eligible == 0 ? -1 : BitOperations.TrailingZeroCount(eligible);
+    }
+
     /// <summary>The engagement window. The measured 150px by default.</summary>
     /// <remarks>
     /// <b>Settable so the frontier can be looked for, not so it can be tuned by

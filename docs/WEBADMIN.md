@@ -330,6 +330,39 @@ in the JS — is exactly how a theme drifts.
   the DOM through `textContent`, never `innerHTML`, and the CSP is the second
   net.
 
+## Which brain the bots run
+
+The Bots card names the arm and every tier in it, and each bot's row in the
+roster carries the brain that will drive it. Three separate questions, and the
+card answers all three because no one of them is enough on its own:
+
+| | Where | What it is |
+|---|---|---|
+| What was **configured** | `bots.mode`, `bots.brain` | The mode as given, and `BotBrainSpec.Name` — the same string `tools/bench` prints in a result table, so a bot watched here and a number read off the bench name the same arm. The mode alone is not enough: a reconcile that leaves no controller clears the brain, and a policy server whose bots are all scripted still reports mode `policy`. |
+| What each tier is **allowed** to drive | `bots.tiers[].classes` | Read off a live controller through `IMicroController.Drives`, never re-derived — that interface is the one place a tier's class set is decided, narrowed by `[Bots] ClassPolicy`. A server with no bots on it therefore sends no class sets, which is honest: with nothing built there is nothing to ask. |
+| What a brain has **actually done** | the share beside each tier | Ticks a controller drove over ticks it was polled on, summed over the bots it drives. It is the only one of the three that says the brain is consulted at all — a tier can be loaded, named on this card and never admitted by the arbiter. |
+
+**A slot's `brain` is the tier that will drive it, and `driving` is whether one
+held the wheel on the tick the snapshot was taken.** A controller only drives
+inside the engagement window, so the badge is unlit and the share is a few per
+cent on a perfectly healthy server. Nothing is shown as "0 driving": a quiet
+instant must not read as a broken brain. A share of exactly zero is the one that
+means something.
+
+**Two tiers claiming one class shows up here as a tier with no bots.** The
+roster reports the most capable eligible tier — `HybridBot.TierFor`, the same
+walk the arbiter's input comes from — so an overlapped tier is visibly driving
+nothing while the tier above it takes its classes. `BotBrain.Build` warns about
+this at startup; the card is where it stays visible afterwards.
+
+⛔ **`bots.engage` is the gate every tier is behind and it is stated as
+configuration, never as a prediction.** A live server hands a controller the
+wheel for a HUMAN enemy only (`--bot-engages-bots` opens it to bot fights), so an
+operator reading a low share wants to know that first. It does not say the bots
+will not drive, because as of 2026-09-07 they do:
+`docs/TRAPS-SIMULATION.md`, "a respawn rebuilds the whole player", has the
+`IsBot` field a spawn drops and what it costs.
+
 ## The settings page
 
 **Settings** in the top bar opens a modal over the dashboard: every key
@@ -632,6 +665,7 @@ and the per-connection serve second.
 | | |
 |---|---|
 | `WebAdminTests` | over a real socket with a real HTTP client: every route refuses an unauthenticated request, the CSRF header is required, the map route takes a map name and nothing else, a command reaches the tick thread, every control-port verb is reachable, the page is served, the security headers are present, nobody watching means no snapshots but does mean a performance history, every sample row matches the declared fields, and an open stream gets both |
+| `BotBrainStateTests` | the brain block and the per-slot fields the Bots card and the roster are built from: a scripted server names the scripted brain and no tier, a policy server names each tier and the classes a live controller says it drives, a class no tier drives falls back by name, the counters that say a brain is consulted are sent, the engagement gate is reported both ways, and two policy tiers are told apart on the bot as well as on the card |
 | `AdminSessionTests` | the password, the tokens, both timeouts, the lockout and its ceiling, per-address isolation, the session cap, and the generated password's alphabet — all on an injected clock, so no test sleeps |
 | `CliCoverageTests` | every `--web-*` flag moves the option it names; a settings flag with no `--web` is refused; `--web` alone is not remote; a config file alone overrides nothing and a flag beside it overrides exactly what it names |
 | `ServerRestartTests` | over a real `GameServer`: a saved setting is in the file and a rebuilt server reads it, `restart` ends `Run` and is not a shutdown, a restart works on a frozen server, saving with no `--config` is refused by name, an invalid value is refused and the file is untouched, saving does not promote the command line's overrides into the file, `config` reports the file and flags what is waiting for a restart, a pinned setting is never also pending, no secret's value is in the reply, a secret can still be written, and a generated admin password is carried while a configured one is not |
