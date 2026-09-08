@@ -104,9 +104,14 @@ public sealed class BotObjective
     /// stand. The caller owns the decision because only it can see the keys the
     /// bot actually pressed.
     /// </param>
+    /// <param name="repostSkip">
+    /// How many re-post candidates to pass over — see
+    /// <see cref="BotGoalSpot.Find"/>. The caller counts the ones that turned out
+    /// to have no route.
+    /// </param>
     public BotGoal Decide(
         in WorldView world, int slot, BotRole role, double spreadX, bool allowSpot,
-        int? target = null, bool reposting = false)
+        int? target = null, bool reposting = false, int repostSkip = 0)
     {
         if (!world.IsAlive(slot))
             return BotGoal.None;
@@ -424,14 +429,28 @@ public sealed class BotObjective
         // play as a bot standing still holding the trigger — the trigger is the
         // combat half, which goes on working perfectly while the bot cannot move.
         //
-        // ⚠️ A goal that has to be TOUCHED is excluded. Re-posting away from the
-        // enemy intel is how a round never ends, and it is the same mistake the
-        // spread already carries an exception for.
+        // ⚠️ A goal that has to be TOUCHED is NOT excluded, and the reasoning is
+        // worth keeping. The obvious rule is to exclude it — re-posting away from
+        // the enemy intel is how a round never ends, which is the mistake the
+        // spread carries its own exception for. But the two are not the same case:
+        // the spread applies to a bot that is WALKING to the intel and would stop
+        // short of it, and this applies to one that has been standing motionless
+        // for eight seconds having already arrived. It is not about to touch it.
+        //
+        // Measured on ctf_avanti, which is Invasion and has an 1,800-tick SETUP
+        // timer: eight of twelve bots walked to the enemy intel, arrived 3px off
+        // it, could not take it until setup expired, and stood there for the whole
+        // 1,600 ticks in between — then moved the instant the timer hit zero. The
+        // exclusion was the only thing holding them, and it can only ever hold a
+        // bot whose grab is already failing: one that CAN take the intel takes it
+        // on arrival and never parks.
         var avoidRadius = 0.0;
+        var avoidNode = -1;
 
-        if (reposting && !mustTouch)
+        if (reposting)
         {
             avoidRadius = BotConstants.RepostMinMove;
+            avoidNode = _graph.NodeFromWorld(self.X, self.Y);
 
             // The hold band, REPLACING whatever the class asked for rather than
             // narrowing it. It is the same band a defender on a held control point
@@ -465,7 +484,8 @@ public sealed class BotObjective
         {
             var spot = _spot.Find(
                 self.X, self.Y, anchorX, anchorY, spotMin, spotMax, spotLos, spotHigh,
-                world.Collision, CollisionFilter.ForBullet(), avoidRadius);
+                world.Collision, CollisionFilter.ForBullet(), avoidRadius, avoidNode,
+                reposting ? repostSkip : 0);
 
             if (spot.Node >= 0)
                 return new BotGoal(true, spot.X, spot.Y, IsSpot: true, mustTouch);

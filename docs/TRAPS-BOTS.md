@@ -51,10 +51,10 @@ What it licenses, and what it does not:
   and team clumping is down rather than up from the goal-less baseline.
 - ⚠️ **Conversion at 6v6 is 8%**, and nothing establishes whether that is
   *right*. There is no human baseline in this project.
-- ⚠️ **50 of 528 bot-matches still freeze a bot for 900+ ticks**, down from
-  116 — see "A bot that arrives stops moving" below. What is left is a bot whose
-  objective is unroutable from where it stands, which is a nav question rather
-  than an objective one, and one map that is a single room.
+- ⚠️ **7 of 528 bot-matches still freeze a bot for 900+ ticks**, down from 98 —
+  see "A bot that arrives stops moving" below. All seven are one fault: the bot
+  cannot route anywhere from where it stands, which is a nav-reachability
+  question rather than an objective one.
 
 
 Every ⚠️ in this file cost a session time. One section per item of phase 7, in
@@ -954,21 +954,64 @@ CTF map had three to five statues in it.
 #### Measured
 
 All 22 shipped maps, two seeds each, twelve bots, 4,000 ticks, counting bots with
-a 900-tick-or-longer motionless run:
+a 900-tick-or-longer motionless run **while the round was still running**:
 
 | | before | after |
 |---|---|---|
-| bot-matches frozen 900+ ticks | **116 of 528** | **50 of 528** |
+| bot-matches frozen 900+ ticks | **98 of 528** | **7 of 528** |
 | worst run, `ctf_orange` | 3,945 ticks | 313 |
 | worst run, `ctf_truefort` | 3,677 | 470 |
 | worst run, `koth_valley` | 1,318 | 565 |
 
-Every CTF map except `ctf_avanti` goes to zero. The residual is `gg_debug` 18
-(one room, unchanged), `dkoth_atalia` 10, `ctf_avanti` 8, `cp_egypt` 4,
-`arena_lumberyard` 3, and singles elsewhere. On `cp_egypt` the mechanism fires
-and finds nothing: those bots hold a goal on the point with `HasPath` false, so
-the objective is unroutable from where they stand and no destination change
-helps. That is a nav question and is not chased here.
+⛔ **Those totals were 116 and 50 until the harness was corrected.**
+`HeadlessMatch.Step` returns immediately once `RoundDecided`, so the world stops
+advancing and every bot reads as motionless for the rest of the tick budget — a
+finished match scored as a roster of statues. All 18 of `gg_debug`'s were that:
+its match decides at tick 1,355 and then sits still for 2,645 more. **A measure
+of "nothing is happening" has to establish that something was supposed to be
+happening**, and this one did not until it was asked to.
+
+#### The residual, chased: three more mechanisms, and what is left
+
+Getting from 31 to 7 took three further fixes, each found by tracing one bot
+rather than by reasoning about the code. **Every intermediate hypothesis was
+wrong** — an island node, a failure to resolve the bot's position to a node, a
+re-post landing inside its own node — and each was cheap to refute only because
+the trace was per-tick state rather than an end-of-match snapshot.
+
+- ⚠️ **A goal that must be TOUCHED was excluded from the re-post, and that was
+  too broad.** `ctf_avanti` is Invasion and carries an **1,800-tick setup
+  timer**: eight of twelve bots walked to the enemy intel, arrived 3px off it,
+  could not take it until setup expired, and stood still for the 1,600 ticks
+  between — then moved the instant it hit zero. The exclusion existed so a bot
+  would not wander off the enemy flag, but it can only ever bind a bot whose grab
+  is already failing: one that can take the intel takes it on arrival and never
+  parks.
+- ⛔ **The spot ban turned the re-post into one attempt every 300 ticks, at the
+  same unreachable node every time.** `BotGoalSpot.Find` is deterministic and
+  returns its best candidate, and a re-post spot that never planned set
+  `SpotBanUntil` — whose fallback is the plain objective, which for a parked bot
+  is *the node it is already standing on*. Traced on `dkoth_atalia`: node 126 →
+  re-post to node 60 → no route → ban → back to node 126, for 2,473 ticks.
+  `ScriptedBot._repostSkip` now walks down the ranked list instead.
+  ⚠️ **The ban is still needed once the whole list has been tried** — removing it
+  outright cost four bots on `ctf_oldfort` that it had been rescuing, which is
+  why it fires when the skip cycle wraps rather than never.
+- ⚠️ **An engagement CLEARED the parked counter, so a flickering target granted a
+  fresh eight seconds of standing still, indefinitely.** Bots sat motionless for
+  900-1,200 ticks with `WantsToEngage` true for 4-18% of them, scattered finely
+  enough that the counter never once reached its threshold. Standing to fight now
+  *pauses* the count rather than resetting it; only moving resets it.
+
+**What is left is seven, and it is one fault: the bot cannot route anywhere at
+all from where it is standing** — `cp_egypt` 3, `koth_harvest` 2,
+`dkoth_atalia` 1, `tdm_mantic` 1. Every goal it is given, objective or re-post,
+comes back with `HasPath` false, so no destination change can help; the two on
+`tdm_mantic` and `dkoth_atalia` do hold a route and still press nothing, which is
+the follower's own blind spot rather than the objective layer's. ⚠️ **These are
+not island nodes** — node 126 on `dkoth_atalia` reaches 257 of 315 nodes — so it
+is a reachability question about specific pairs, and it belongs to
+`docs/NAVGEN.md`'s territory rather than to this one. Not chased.
 
 #### And measured on a live server, which is the measurement that matters
 
@@ -980,6 +1023,14 @@ bot:
 |---|---|---|
 | bots motionless 100s+ | **4 of 10** (197s, 168s, 165s, 134s) | **0** |
 | worst run | 197s | **8s** |
+
+And again on `ctf_avanti` with twelve bots over 90 seconds, isolating the three
+residual fixes above from the first one:
+
+| | re-post only | plus the residual fixes |
+|---|---|---|
+| bots motionless 45s+ | **6 of 12** (53s, 52s, 51s, 51s, 50s, 46s) | **0** |
+| worst run | 53s | **18s** |
 
 ⚠️ **A default roster hides it.** The same instrument against eight bots of mixed
 classes on `ctf_truefort` read a worst run of 30 seconds before the fix — bad, but
@@ -999,6 +1050,9 @@ the engineer.
   near the bot *before* ranking them.
 - **`ScriptedBot.ApplyHolds` clears `WantsToEngage`** when the target is gone or
   out of sight.
+- **The re-post is allowed on a must-touch goal, walks the candidate list when a
+  spot has no route, and is paused rather than cleared by an engagement** — the
+  three below, found while chasing the residual.
 
 ⚠️ **Each of the three was individually insufficient, and the order they were
 found in is worth keeping.**

@@ -106,13 +106,43 @@ public sealed class BotGoalSpot
     /// search exactly as it was.
     /// </para>
     /// </param>
+    /// <param name="avoidNode">
+    /// Refuse this node outright — the one the bot is standing on.
+    /// <para>
+    /// <b>A distance is not enough, because a node is not a point.</b> A nav node
+    /// is a RUN of columns: <c>dkoth_atalia</c>'s node 126 spans 3,522 to 3,642,
+    /// so a spot 96px from a bot standing in the middle of it is still that same
+    /// node, <see cref="BotObjective.TryResolve"/> clamps the goal back into the
+    /// node's own columns, and start and goal are then one node with an empty
+    /// route between them.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Kept on the mechanism, NOT on a measurement.</b> Adding it moved the
+    /// frozen-bot count by exactly zero (31 of 528 either way) — the bots it was
+    /// reached for were held by something else, and it is <c>_repostSkip</c> that
+    /// freed them. It stays because the degenerate case above is real and cheap to
+    /// exclude, not because it was shown to fix anything.
+    /// </para>
+    /// </param>
+    /// <param name="skip">
+    /// Pass over this many otherwise-qualifying candidates before answering —
+    /// "give me the next-best one instead".
+    /// <para>
+    /// <b>For a caller that has learned the best one is no good, and reachability
+    /// is the case that needs it.</b> This search deliberately does not check
+    /// whether a route exists (see the type's remarks), so its first answer can be
+    /// a node in a part of the map the bot cannot get to. Without this the caller's
+    /// only recourse is to stop asking for spots at all, and it then re-asks for
+    /// the same unreachable node when the ban expires.
+    /// </para>
+    /// </param>
     public BotSpot Find(
         double fromX, double fromY,
         double targetX, double targetY,
         double minDistance, double maxDistance,
         BotLos los, double highBonus,
         CollisionWorld collision, in CollisionFilter filter,
-        double avoidRadius = 0)
+        double avoidRadius = 0, int avoidNode = -1, int skip = 0)
     {
         ArgumentNullException.ThrowIfNull(collision);
 
@@ -141,6 +171,9 @@ public sealed class BotGoalSpot
             // term is "walk less" — a node the bot is already standing on
             // scores zero there and wins by construction, which is exactly the
             // lock-in this parameter exists to break.
+            if (node == avoidNode)
+                continue;
+
             if (avoidRadius > 0 && Gml.PointDistance(fromX, fromY, x, y) < avoidRadius)
                 continue;
 
@@ -170,12 +203,19 @@ public sealed class BotGoalSpot
             return byRank != 0 ? byRank : a.Node.CompareTo(b.Node);
         });
 
+        var passed = 0;
+
         foreach (var (node, _) in _candidates)
         {
             var (x, y) = Stand(node, targetColumn);
 
             if (los == BotLos.Any)
+            {
+                if (passed++ < skip)
+                    continue;
+
                 return new BotSpot(node, x, y);
+            }
 
             Tries++;
 
@@ -187,7 +227,12 @@ public sealed class BotGoalSpot
                 wrong = !wrong;
 
             if (!wrong)
+            {
+                if (passed++ < skip)
+                    continue;
+
                 return new BotSpot(node, x, y);
+            }
 
             if (Tries >= BotConstants.SpotTries)
                 break;

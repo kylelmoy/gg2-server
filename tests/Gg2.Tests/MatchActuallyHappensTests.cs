@@ -348,25 +348,47 @@ public sealed class MatchActuallyHappensTests
     /// </para>
     /// <para>
     /// <b>Measured across all 22 shipped maps, two seeds, twelve bots, 4,000
-    /// ticks each: 116 of 528 bot-matches froze for 900+ consecutive ticks, and
-    /// 50 do now</b> — the worst run on these three maps went 3,945 ticks to 565.
-    /// The residual is concentrated on maps where the objective is genuinely
-    /// unroutable from where some bots stand (<c>cp_egypt</c>, <c>ctf_avanti</c>,
-    /// <c>dkoth_atalia</c>) and on <c>gg_debug</c>, whose whole map is one room;
-    /// those are a different fault and are written up in
-    /// <c>docs/TRAPS-BOTS.md</c>. This gates the maps the fix actually cleared, so
-    /// the bound can be a real one rather than the weakest that passes everywhere.
+    /// ticks each, counting only ticks the round was still running: 98 of 528
+    /// bot-matches froze for 900+ consecutive ticks, and 7 do now.</b> The worst
+    /// run on these maps went 3,945 ticks to 565.
+    /// </para>
+    /// <para>
+    /// The maps here are the modes the fixes actually repaired — CTF, KotH, Dual
+    /// KotH, Arena, and Invasion with its 1,800-tick setup timer, which was the
+    /// case that needed a re-post to be allowed on a goal that has to be touched.
+    /// <b>The four maps still carrying a statue are deliberately not listed</b>:
+    /// <c>cp_egypt</c> (3), <c>koth_harvest</c> (2), <c>dkoth_atalia</c> (1) and
+    /// <c>tdm_mantic</c> (1), where the bot cannot route anywhere at all from
+    /// where it is standing. That is a nav-reachability fault rather than an
+    /// objective one and is written up in <c>docs/TRAPS-BOTS.md</c>. Listing them
+    /// would mean weakening the bound until it proved nothing.
     /// </para>
     /// <para>
     /// 900 ticks is thirty seconds. A bot holding a firing position between
     /// re-posts reads 313-565 here, so this separates the two with margin at both
     /// ends rather than pinning bot quality.
     /// </para>
+    /// <para>
+    /// ⛔ <b>It stops at the decision, and that is not tidiness.</b>
+    /// <see cref="HeadlessMatch.Step"/> returns immediately once
+    /// <c>RoundDecided</c>, so the world stops advancing and <em>every</em> bot
+    /// reads as motionless for the rest of the budget — a finished match scored as
+    /// a roster of statues. Measured: counting those ticks reported 50 frozen
+    /// bot-matches across the shipped maps where 31 were real, all 18 of
+    /// <c>gg_debug</c>'s being a match that decided at tick 1,355 and then sat
+    /// still for 2,645 more. The three maps here do not decide inside 4,000 ticks
+    /// today, so this guard changes no result — which is exactly why it would have
+    /// been silent until a seed or a tuning change made one of them finish early,
+    /// and then it would have failed naming a bot that was doing nothing wrong.
+    /// </para>
     /// </remarks>
     [Theory]
     [InlineData("ctf_truefort")]
     [InlineData("ctf_orange")]
     [InlineData("koth_valley")]
+    [InlineData("ctf_avanti")]        // Invasion, and its setup timer
+    [InlineData("dkoth_sixties")]     // Dual King of the Hill
+    [InlineData("arena_lumberyard")]  // Arena, whose points lock for 1,800 ticks
     public void NoBotStandsStillForHalfAMinute(string map)
     {
         const int Length = 4000;
@@ -387,6 +409,10 @@ public sealed class MatchActuallyHappensTests
 
             for (var tick = 0; tick < Length; tick++)
             {
+                // The round is over; nothing below this is a bot standing still.
+                if (match.Outcome != MatchOutcome.Running)
+                    break;
+
                 match.Step();
 
                 for (var slot = 1; slot < WorldState.MaxSlots; slot++)
@@ -427,8 +453,8 @@ public sealed class MatchActuallyHappensTests
                 Assert.True(
                     longest[slot] < Ceiling,
                     $"{map} seed {seed}: {match.State.Players[slot].Class} in slot {slot} stood "
-                    + $"motionless for {longest[slot]} consecutive ticks of {Length}, against a "
-                    + $"ceiling of {Ceiling}");
+                    + $"motionless for {longest[slot]} consecutive ticks of {alive[slot]} it was "
+                    + $"alive for, against a ceiling of {Ceiling}");
             }
         }
     }

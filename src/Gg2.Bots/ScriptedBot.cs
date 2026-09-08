@@ -386,6 +386,34 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
     /// position, and comparing against it would call a bot standing at the origin
     /// parked on its first tick.
     /// </remarks>
+    /// <summary>
+    /// Which re-post candidate to take: how many of the ranked ones ahead of it
+    /// turned out to have no route.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>A re-post that never planned must NOT ban spots the way a class spot
+    /// does.</b> The ban's fallback is the plain objective, which is fine for a
+    /// standoff or a chokepoint and useless here: a parked bot's objective is the
+    /// node it is already standing on, so the ban hands it back exactly what it
+    /// was trying to leave and the re-post is reduced to one attempt every
+    /// <see cref="SpotBanTicks"/> — <em>at the same unreachable node every time</em>,
+    /// because the search is deterministic and its ranking has not changed.
+    /// <para>
+    /// Measured on <c>dkoth_atalia</c>: a bot on node 126 re-posted to node 60,
+    /// A* found no route, the spot ban fired for 300 ticks, and the loop repeated
+    /// for 2,473 ticks without ever trying a different candidate.
+    /// </para>
+    /// <para>
+    /// Cycled rather than grown without bound, so a bot whose whole band is
+    /// unreachable comes back round to the best candidate instead of walking off
+    /// the end of the list and never asking again.
+    /// </para>
+    /// </remarks>
+    private int _repostSkip;
+
+    /// <summary>Whether the goal in flight came from a re-post.</summary>
+    private bool _goalWasRepost;
+
     private double _parkedX = double.NaN;
 
     /// <inheritdoc cref="_parkedX"/>
@@ -432,6 +460,7 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
         _goalIsSpot = false;
         SpotBanUntil = 0;
         ParkedTicks = 0;
+        _repostSkip = 0;
         _parkedX = double.NaN;
         _parkedY = double.NaN;
 
@@ -492,6 +521,7 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
             Path.FreePath();
             AliveLast = false;
             ParkedTicks = 0;
+            _repostSkip = 0;
 
             // So the first tick of the next life is not compared against where
             // this one ended.
@@ -602,9 +632,7 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
         // counts a bot pressing a direction and going nowhere, and this one is
         // pressing nothing. Any test keyed on the follower's own state shares the
         // follower's blind spot, so this one is keyed on the position.
-        var idle = self.OnGround
-            && !WantsToEngage
-            && tick >= RegroupUntil
+        var still = self.OnGround
             && (navKeys & (PlayerKeys.Left | PlayerKeys.Right)) == 0
             && Gml.Equal(self.X, _parkedX)
             && Gml.Equal(self.Y, _parkedY);
@@ -612,7 +640,25 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
         _parkedX = self.X;
         _parkedY = self.Y;
 
-        ParkedTicks = idle ? ParkedTicks + 1 : 0;
+        if (!still)
+        {
+            // Moving is the only evidence a re-post worked, so it is what clears
+            // both the counter and the search's place in its candidate list.
+            ParkedTicks = 0;
+            _repostSkip = 0;
+        }
+        else if (!WantsToEngage && tick >= RegroupUntil)
+        {
+            ParkedTicks++;
+        }
+
+        // ⚠️ Standing to fight, or waiting out the regroup hold, PAUSES the count
+        // rather than clearing it — the `else if` above, with no `else`. Clearing
+        // it hands a bot a fresh eight seconds of standing still every time a
+        // target flickers into view, which is what a bot holding a quiet corner
+        // does all round: measured, several bots sat motionless for 900-1,200
+        // ticks with an engagement true for 4-18% of them, scattered finely
+        // enough that the counter never once reached the threshold.
 
         return PlayerInput.FromAim(navKeys | fireKeys, aim, aimDistance);
     }
@@ -649,7 +695,28 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
         // separates "planning failed" from "arrived": arrival clears the goal and
         // frees the path together, so a bot that got there has neither.
         if (_goalIsSpot && Path.HasGoal && !Path.HasPath)
-            SpotBanUntil = tick + SpotBanTicks;
+        {
+            if (_goalWasRepost)
+            {
+                // Take the next candidate instead of giving up on spots. See
+                // _repostSkip for why the ban is the wrong tool here.
+                _repostSkip = (_repostSkip + 1) % BotConstants.SpotTries;
+
+                // ⚠️ ...but the ban is still the right tool once the whole ranked
+                // list has been tried and every one of them was unreachable. The
+                // bot is stranded rather than badly positioned, and the objective
+                // it falls back to is at least a destination something else in the
+                // layer knows how to fail on. Without this the skip cycle replaced
+                // the ban's escape hatch and cost four bots on ctf_oldfort that
+                // the ban had been rescuing.
+                if (_repostSkip == 0)
+                    SpotBanUntil = tick + SpotBanTicks;
+            }
+            else
+            {
+                SpotBanUntil = tick + SpotBanTicks;
+            }
+        }
 
         // The reference's `(tick + player) mod BOT_OBJECTIVE_PERIOD == 0`: staggered
         // per bot so a server full of them does not pay every objective scan on one
@@ -668,7 +735,7 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
 
         var goal = Objective.Decide(
             in world, slot, Role, SpreadX, allowSpot: tick >= SpotBanUntil, target: foe,
-            reposting: reposting);
+            reposting: reposting, repostSkip: _repostSkip);
 
         // No spread on a re-post. The search has already picked the node to stand
         // on and excluded everything near the bot; a lateral offset of up to
@@ -698,6 +765,7 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
         }
 
         _goalIsSpot = goal.IsSpot;
+        _goalWasRepost = reposting && goal.IsSpot;
         SetGoal(x, y);
     }
 
