@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Net;
+using Gg2.Bots;
 using Gg2.Protocol;
 
 namespace Gg2.Server;
@@ -267,10 +268,10 @@ public sealed partial class GameServer
     /// server that was full (<c>GameServerBeginStep.gml:46-49</c>).
     /// <para>
     /// ⚠️ <b>The count is <see cref="OccupiedSlots"/>, which is humans.</b> Bots
-    /// are excluded from it and the packet's own bot field is a hard zero — so a
-    /// server full of bots advertises as empty. That is the reference's
-    /// behaviour, transcribed rather than improved; see
-    /// <see cref="LobbyRegistration"/>.
+    /// are excluded from it and announced separately, in the packet's own bot
+    /// field, which the browser renders as <c>players+bots/slots</c>. The
+    /// reference sends a hard zero there because it has no bots to count; see
+    /// <see cref="LobbyServerInfo.Bots"/> and <see cref="AnnouncedBotCount"/>.
     /// </para>
     /// </remarks>
     private void AnnounceToLobby()
@@ -286,8 +287,45 @@ public sealed partial class GameServer
             Port = checked((ushort)BoundPort),
             PlayerLimit = checked((ushort)_options.PlayerLimit),
             OccupiedSlots = checked((ushort)OccupiedSlots()),
+            Bots = checked((ushort)AnnouncedBotCount),
             Passworded = _options.Password.Length > 0,
         });
+    }
+
+    /// <summary>
+    /// The bot count to advertise: the bots that are running, or — when none
+    /// are — the bots the next player to join would find.
+    /// </summary>
+    /// <remarks>
+    /// <b>An idle server's real bot count is zero and advertising that hides the
+    /// game.</b> <c>BotPopulationOptions.MinHumans</c> keeps a server with nobody
+    /// on it from filling with bots, so a bot server sitting empty announces
+    /// <c>0/16</c> and reads as dead — while the moment somebody joins it becomes
+    /// a full game. The prospective count is
+    /// <c>BotPopulation.Target(humans + 1, …)</c>, which is that game as the
+    /// browser would show it: <c>0+7/16</c>.
+    /// <para>
+    /// <b>Asking for one more human rather than for <c>MinHumans</c> is what
+    /// keeps it honest.</b> A server needing three humans before any bot spawns
+    /// gets zero from this, because a single joiner really would arrive to an
+    /// empty map. Bots switched off get zero for the same reason.
+    /// </para>
+    /// <para>
+    /// Live bots win whenever there are any, so the number stops being a
+    /// prediction the instant it can be a fact.
+    /// </para>
+    /// </remarks>
+    public int AnnouncedBotCount
+    {
+        get
+        {
+            var live = BotSlots.Count;
+
+            if (live > 0)
+                return live;
+
+            return BotPopulation.Target(OccupiedSlots() + 1, _options.Bots);
+        }
     }
 
     private int OccupiedSlots()

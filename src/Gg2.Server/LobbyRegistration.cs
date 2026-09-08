@@ -33,6 +33,27 @@ public readonly record struct LobbyServerInfo
 
     public required ushort OccupiedSlots { get; init; }
 
+    /// <summary>
+    /// Bots to advertise alongside <see cref="OccupiedSlots"/>.
+    /// </summary>
+    /// <remarks>
+    /// <b>The reference always sends zero here and this port does not.</b> Stock
+    /// GG2's server has no bots to count, so its hard zero is the absence of a
+    /// number rather than a claim that there are none; a server that fills
+    /// itself with bots and announces zero tells the browser something false.
+    /// The field is rendered, not merely stored:
+    /// <c>LobbyController.events/Step.xml:78-82</c> shows
+    /// <c>players + "+" + bots + "/" + slots</c> when it is non-zero and
+    /// <c>players + "/" + slots</c> when it is not, so a real count reaches the
+    /// list as "0+7/16" and costs a stock client nothing.
+    /// <para>
+    /// It is separate from <see cref="OccupiedSlots"/>, which stays humans only
+    /// (<c>getNumberOfOccupiedSlots</c>) — the browser adds them itself, so
+    /// counting bots into both would double them.
+    /// </para>
+    /// </remarks>
+    public required ushort Bots { get; init; }
+
     public required bool Passworded { get; init; }
 }
 
@@ -166,12 +187,9 @@ public static class LobbyRegistration
         WriteUShort(packet, info.PlayerLimit);
         WriteUShort(packet, info.OccupiedSlots);
 
-        // Bots are announced as ZERO, and this port fills itself with them.
-        // Transcribed rather than corrected: the field's meaning is the lobby's,
-        // not ours, and a number the reference never sends is a number no client
-        // of that list has ever had to render. Worth revisiting WITH the lobby's
-        // owners rather than unilaterally — see docs/TRAPS-LIVEGAME.md.
-        WriteUShort(packet, 0);
+        // The reference hard-codes zero here because it has no bots. See
+        // LobbyServerInfo.Bots for why this port sends a real count instead.
+        WriteUShort(packet, info.Bots);
 
         WriteUShort(packet, info.Passworded ? (ushort)1 : (ushort)0);
 

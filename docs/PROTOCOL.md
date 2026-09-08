@@ -672,10 +672,20 @@ Not everything in the reference is load-bearing for a private headless server.
   frame-only cadence does not merely delist an idle server: it makes the
   delisting permanent, because the player whose arrival would restore the live
   rate cannot see the server to join it.
-  **A server full of bots advertises as empty**: the count is
-  `getNumberOfOccupiedSlots`, which is humans, and the packet's own bot field is a
-  hard zero in the reference. Transcribed rather than corrected — that field's
-  meaning belongs to the lobby, not to us.
+  **Bots are announced in the packet's own bot field, which the reference
+  leaves at zero.** The player count stays `getNumberOfOccupiedSlots`, humans
+  only; the browser renders the pair as `players+bots/slots`
+  (`LobbyController.events/Step.xml:78-82`) and falls back to `players/slots`
+  when the bot field is zero, so a real count needs nothing from a stock client.
+  Stock GG2's server has no bots, so its hard zero is the absence of a number
+  rather than a claim of none.
+  **An idle bot server announces the bots a joiner would find, not the zero it
+  is running.** `BotPopulationOptions.MinHumans` keeps an empty server from
+  filling with bots, so the live count is zero until somebody arrives and the
+  listing reads as dead. `GameServer.AnnouncedBotCount` sends the live count
+  whenever there is one and otherwise `BotPopulation.Target(humans + 1, …)` —
+  what one more player unlocks, which is zero when bots are off or when
+  `MinHumans` is above one. `LobbyBotCountTests`.
 - **Reward/auth** — implemented, behind `--rewards`, which defaults off.
   `RewardAuth` builds the packets, `RewardAuthClient` is the socket, and
   `GameServer` answers `REWARD_REQUEST` with a challenge, relays the response and

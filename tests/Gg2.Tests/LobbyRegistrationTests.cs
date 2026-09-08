@@ -31,6 +31,7 @@ public sealed class LobbyRegistrationTests
         ushort port = 8190,
         ushort playerLimit = 10,
         ushort occupied = 3,
+        ushort bots = 0,
         bool passworded = false) =>
         new()
         {
@@ -40,6 +41,7 @@ public sealed class LobbyRegistrationTests
             Port = port,
             PlayerLimit = playerLimit,
             OccupiedSlots = occupied,
+            Bots = bots,
             Passworded = passworded,
         };
 
@@ -89,7 +91,7 @@ public sealed class LobbyRegistrationTests
         Assert.Equal(10, BinaryPrimitives.ReadUInt16BigEndian(packet.AsSpan(51, 2)));
         Assert.Equal(3, BinaryPrimitives.ReadUInt16BigEndian(packet.AsSpan(53, 2)));
 
-        // Bots, always announced as zero — see LobbyRegistration's remarks.
+        // Bots, in their own field. Zero here because this packet has none.
         Assert.Equal(0, BinaryPrimitives.ReadUInt16BigEndian(packet.AsSpan(55, 2)));
 
         Assert.Equal(1, BinaryPrimitives.ReadUInt16BigEndian(packet.AsSpan(57, 2)));
@@ -102,6 +104,25 @@ public sealed class LobbyRegistrationTests
         // either way.
         Assert.Equal(0x12, packet[49]);
         Assert.Equal(0x34, packet[50]);
+    }
+
+    /// <summary>
+    /// Bots go in their own counter and are NOT added into the human count.
+    /// </summary>
+    /// <remarks>
+    /// <c>LobbyController.events/Step.xml:78-82</c> renders the two as
+    /// <c>players + "+" + bots</c>, so a bot counted into both would show up
+    /// twice. The reference sends a hard zero here because its server has no
+    /// bots; this port sends what it is running — see
+    /// <see cref="LobbyServerInfo.Bots"/>.
+    /// </remarks>
+    [Fact]
+    public void BotsAreAnnouncedInTheirOwnCounter()
+    {
+        var packet = LobbyRegistration.BuildRegister(Info(occupied: 3, bots: 7));
+
+        Assert.Equal(3, BinaryPrimitives.ReadUInt16BigEndian(packet.AsSpan(53, 2)));
+        Assert.Equal(7, BinaryPrimitives.ReadUInt16BigEndian(packet.AsSpan(55, 2)));
     }
 
     [Fact]
