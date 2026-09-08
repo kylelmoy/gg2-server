@@ -464,6 +464,13 @@ public sealed class BotObjective
             // it demands a sightline, and BOT_SPOT_TRIES stops the search after
             // twelve line tests. A class that has stood still for eight seconds
             // has already shown its perch is not paying for itself.
+            //
+            // ⚠️ The anchor stays on the OBJECTIVE even after a re-post has come
+            // back with no route. Moving it to the bot on the retry is the obvious
+            // next idea — if the objective is unreachable then so is everything
+            // near it — and it was tried and is REFUTED: the frozen count went 7
+            // to 8. Whatever holds those six is not the anchor, so do not reach
+            // for this again without a measurement.
             anchorX = wx;
             anchorY = wy;
             spotMin = BotConstants.ArriveTol;

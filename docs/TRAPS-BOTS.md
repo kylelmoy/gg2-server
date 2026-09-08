@@ -52,9 +52,10 @@ What it licenses, and what it does not:
 - ⚠️ **Conversion at 6v6 is 8%**, and nothing establishes whether that is
   *right*. There is no human baseline in this project.
 - ⚠️ **7 of 528 bot-matches still freeze a bot for 900+ ticks**, down from 98 —
-  see "A bot that arrives stops moving" below. All seven are one fault: the bot
-  cannot route anywhere from where it stands, which is a nav-reachability
-  question rather than an objective one.
+  see "A bot that arrives stops moving" below. Every one is a Demoman, Engineer
+  or Heavy handed an objective that **cannot be reached without a jump they do
+  not have**; the layer never asks whether a goal is reachable for the profile
+  that has to walk it.
 
 
 Every ⚠️ in this file cost a session time. One section per item of phase 7, in
@@ -1003,15 +1004,59 @@ the trace was per-tick state rather than an end-of-match snapshot.
   enough that the counter never once reached its threshold. Standing to fight now
   *pauses* the count rather than resetting it; only moving resets it.
 
-**What is left is seven, and it is one fault: the bot cannot route anywhere at
-all from where it is standing** — `cp_egypt` 3, `koth_harvest` 2,
-`dkoth_atalia` 1, `tdm_mantic` 1. Every goal it is given, objective or re-post,
-comes back with `HasPath` false, so no destination change can help; the two on
-`tdm_mantic` and `dkoth_atalia` do hold a route and still press nothing, which is
-the follower's own blind spot rather than the objective layer's. ⚠️ **These are
-not island nodes** — node 126 on `dkoth_atalia` reaches 257 of 315 nodes — so it
-is a reachability question about specific pairs, and it belongs to
-`docs/NAVGEN.md`'s territory rather than to this one. Not chased.
+**What is left is seven, and the cause is settled below.**
+
+#### ⛔ The last seven: an objective that can only be reached by jumping
+
+`cp_egypt` 3, `koth_harvest` 2, `dkoth_atalia` 1, `tdm_mantic` 1. Every one is a
+**Demoman, Engineer or Heavy** — never a Scout, Soldier or Pyro — and that is the
+whole finding.
+
+Measured **at the tick the freeze begins**, not at the end of the match, because
+gates open and shut (they were open in all seven, so gates are not involved):
+
+| map | bot's node | reaches | goal node | on foot | with double jump | with rocket jump |
+|---|---|---|---|---|---|---|
+| `cp_egypt` ×3 | 213 / 212 / 291 | 516 of 546 | 131 | **no** | **yes** | **yes** |
+| `koth_harvest` | 396 | 259 of 460 | 95 | **no** | **yes** | **yes** |
+| `dkoth_atalia` | 9 | 238 of 315 | 57 | no | no | no |
+| `tdm_mantic` | 260 | **3 of 261** | 168 | no | no | no |
+
+⚠️ **Six of the seven are standing somewhere richly connected** — 516 of 546
+nodes on `cp_egypt` — so "the bot is stranded" is the wrong picture and was the
+wrong first guess. What is unreachable is the **objective**, and for four of them
+it is unreachable *only because the bot cannot jump*: the same node pair connects
+for a Scout or a Soldier and not for them.
+
+**So a grounded class can be handed an objective it can never arrive at**, and
+nothing in the objective layer asks whether the goal is reachable for the profile
+that has to walk it. The bot re-plans, fails, re-posts around the same
+unreachable anchor, and stands there.
+
+⚠️ **Anchoring the re-post retry on the BOT instead of the objective is the
+obvious fix and is REFUTED** — it took the frozen count 7 to 8. It is left out
+deliberately; do not reach for it again without a measurement.
+
+Two of the seven are a different, smaller fault: `dkoth_atalia` node 9 → 57 and
+`tdm_mantic` node 260 → 168 do not connect for *any* profile, and `tdm_mantic`'s
+node 260 is a genuine one-way trap — it reaches **3 of 261** nodes.
+
+**Not chased, and the reason is where the fix lives.** Either the graphs grow
+ground routes to those objectives (`docs/NAVGEN.md`, and the generator is
+`src/Gg2.Nav`), or the objective layer learns to ask "can this profile reach
+that?" before committing — which `NavDistanceSet`'s per-profile tables could
+answer in O(1), but only on the arm that loads them, and `--no-nav-distances` is
+a different arm rather than a slower one.
+
+#### The trap-node census, since it was measured on the way past
+
+Nodes a grounded class can leave for less than a tenth of the graph, swept across
+every shipped cache: **409 of 9,653**. The worst offenders are `ctf_conflict`
+138, `ctf_oldfort` 57, `dkoth_sixties` 35, `ctf_orange` 33 and `ctf_truefort` 30.
+
+⚠️ **A trap node is not by itself a frozen bot** — `ctf_truefort` and
+`ctf_orange` carry thirty-odd each and freeze nobody, because bots rarely end up
+standing on one. The census is a map of where the risk lives, not a defect list.
 
 #### And measured on a live server, which is the measurement that matters
 
