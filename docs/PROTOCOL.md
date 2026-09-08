@@ -156,6 +156,53 @@ On `PLAYER_JOIN` the server does this, in order
    — so the joiner learns about *itself* here, after the replay of everyone else;
 4. optionally sends `MESSAGE_STRING` with the welcome message, to that socket only.
 
+### The four steps are one write, and splitting them kills the client
+
+Steps 1 to 4 must reach the joining socket together. A joiner that receives the
+burst without the `PLAYER_JOIN` naming itself dies on the first step it takes in
+the map room, with:
+
+```
+ERROR in action number 1 of End Step Event for object Spectator:
+Error in code at line 4:
+   if(global.myself.object != -1)
+at position 19: Unknown variable object
+```
+
+followed by the same error from `AmmoCounter`'s Draw at its line 8.
+
+The client stops reading the burst at the `CHANGE_MAP`: it sets `roomchange`
+(`ClientBeginStep.gml:471`) and the receive loop ends on it (`:654`), so the
+rest of the burst stays in the socket while the room change runs and
+`basicRoomSetup.gml:82` creates a `Spectator` in the new room. The client drains
+what is left on its next step. If its own `PLAYER_JOIN` is not in that drain,
+`ds_list_size(global.players)-1 == global.playerID` never holds
+(`ClientBeginStep.gml:205`) and `global.myself` is still the `-1` that
+`ClientCreate.gml:20` left. In GM8 `-1` is `self`, so `global.myself.object`
+reads `Spectator.object`, which does not exist. Neither that read nor
+`AmmoCounter`'s is guarded; only the `global.myself.team` line above the first
+one is.
+
+The reference never splits them, and not by intent: `serviceJoiningPlayer.gml:118`
+hands the socket to the new `Player` and sets `socket = -1`, so the `socket_send`
+at `:185` sends nothing. The burst waits in the socket's own buffer until
+`GameServerEndStep.gml:6-7` appends `global.sendBuffer` — carrying this player's
+broadcast `PLAYER_JOIN` — and sends both in one call.
+
+A port that flushes the burst on its own leaves the joiner one client step from
+the crash: the client survives by however long it waited to poll after the burst
+arrived, which is why the split passes on a LAN and fails on a link with jitter,
+or behind any tick that runs long. `GameServer.CompleteJoin` therefore sends the
+pending broadcast on the joining socket before it flushes, and advances that
+client's `SkipBroadcastBytes` past it so `FlushBroadcast` does not send it twice.
+The bytes and their order are unchanged; only when they leave.
+
+`JoinAndBroadcastTests.TheJoinerHearsAboutItselfInTheSameTickAsItsBurst` is the
+gate, and it goes red if a tick is inserted before the joiner's own
+`PLAYER_JOIN`. It was written from a live A/B: a stock GM8 client against a
+server stalled 150ms after the burst dies with the errors above when the two are
+split and joins cleanly when they are not.
+
 ## Roster indexing — the thing that breaks everything if you get it wrong
 
 Players are identified **by their index in `global.players`**, a dense list, not

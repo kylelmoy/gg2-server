@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Sockets;
 using Gg2.Protocol;
 
@@ -31,6 +32,23 @@ public sealed class LobbyAnnouncer : IDisposable
 
     private UdpClient? _socket = new();
 
+    /// <summary>
+    /// The lobby's address, resolved once and kept.
+    /// </summary>
+    /// <remarks>
+    /// <b>This runs on the tick thread</b> — <c>AnnounceToLobby</c> is called
+    /// from <c>CompleteJoin</c> and from the thirty-second housekeeping — and
+    /// <c>UdpClient.Send(byte[], int, string, int)</c> resolves the hostname on
+    /// every call. A resolver that takes a moment therefore stalls the tick, and
+    /// a stall on the join path delays the following tick's broadcast, which is
+    /// the one carrying the joiner's own PLAYER_JOIN.
+    /// <para>
+    /// Cleared on a send failure so a lobby that moves is picked up again rather
+    /// than being unreachable for the life of the process.
+    /// </para>
+    /// </remarks>
+    private IPEndPoint? _endpoint;
+
     public LobbyAnnouncer(IServerLog log)
     {
         ArgumentNullException.ThrowIfNull(log);
@@ -60,15 +78,29 @@ public sealed class LobbyAnnouncer : IDisposable
 
         try
         {
-            _socket.Send(packet, packet.Length, GameConstants.LobbyServerHost, GameConstants.LobbyServerPort);
+            _endpoint ??= Resolve();
+            _socket.Send(packet, packet.Length, _endpoint);
         }
         catch (Exception e) when (e is SocketException or ObjectDisposedException or InvalidOperationException)
         {
+            _endpoint = null;
+
             // Logged at info rather than warn: an unreachable lobby is an
             // ordinary condition for a server on a private network, and a
             // warning every 30 seconds would train everyone to ignore the log.
             _log.Warn($"lobby {what} failed: {e.Message}");
         }
+    }
+
+    private static IPEndPoint Resolve()
+    {
+        // The first address the resolver hands back, which is what
+        // UdpClient.Send(hostname) would have used.
+        var addresses = Dns.GetHostAddresses(GameConstants.LobbyServerHost);
+        if (addresses.Length == 0)
+            throw new SocketException((int)SocketError.HostNotFound);
+
+        return new IPEndPoint(addresses[0], GameConstants.LobbyServerPort);
     }
 
     public void Dispose()

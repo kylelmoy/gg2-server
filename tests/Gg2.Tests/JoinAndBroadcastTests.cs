@@ -63,8 +63,75 @@ public sealed class JoinAndBroadcastTests
         // 4. FULL_UPDATE, for the one player the client now knows about.
         ReadFullUpdate(client, playerCount: 1);
 
-        // 5. Only now does the joiner hear about itself, on the broadcast.
-        harness.TickUntil(() => client.Received.Count > 0, "the join broadcast");
+        // 5. And last, on the broadcast, the joiner hears about itself — in
+        //    this same tick, with no further ticking. TheJoinerHearsAboutItself
+        //    InTheSameTickAsItsBurst is where that matters.
+        Assert.Equal(MessageType.PlayerJoin, client.TakeMessageType());
+        Assert.Equal("joiner", client.TakeString1());
+    }
+
+    /// <summary>
+    /// The joiner's own <c>PLAYER_JOIN</c> leaves in the same write as its burst.
+    /// </summary>
+    /// <remarks>
+    /// <b>A stock client dies if it does not.</b> It stops reading at the burst's
+    /// <c>CHANGE_MAP</c> (<c>ClientBeginStep.gml:471</c> sets <c>roomchange</c>
+    /// and the loop at <c>:654</c> ends on it), enters the map room, and
+    /// <c>basicRoomSetup.gml:82</c> creates a <c>Spectator</c> there. On its next
+    /// step it drains the rest of the burst; if its own <c>PLAYER_JOIN</c> is not
+    /// in that drain, <c>global.myself</c> is still the <c>-1</c> that
+    /// <c>ClientCreate.gml:20</c> left, and <c>-1</c> is <c>self</c> in GM8 — so
+    /// the unguarded <c>global.myself.object</c> in <c>Spectator</c>'s End Step
+    /// reads <c>Spectator.object</c> and the client dies with "Unknown variable
+    /// object", <c>AmmoCounter</c>'s Draw behind it.
+    /// <para>
+    /// <c>CompleteJoin</c> runs below <c>FlushBroadcast</c>, so this is not free:
+    /// left in the broadcast buffer, the message goes out on the NEXT tick, 33ms
+    /// behind the burst and in a second TCP write. That is a race the client wins
+    /// by however long it waited to poll, which is why it survives on a LAN and
+    /// dies on a link with jitter.
+    /// </para>
+    /// <para>
+    /// Ticking is what the assertion turns on: every byte here must be present
+    /// after the tick that completed the join, so <b>do not add a tick to make
+    /// this pass</b>.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void TheJoinerHearsAboutItselfInTheSameTickAsItsBurst()
+    {
+        using var harness = new ServerHarness();
+        var client = harness.Connect();
+
+        client.SendHello();
+        harness.TickUntil(() => client.Received.Count > 0, "the greeting");
+        client.Take(client.Received.Count);
+
+        client.SendReserveSlot("joiner");
+        harness.TickUntil(() => client.Received.Count > 0, "the slot reservation");
+        client.Take(client.Received.Count);
+
+        client.SendPlayerJoin();
+        harness.TickUntil(() => harness.Server.PlayerCount > 1, "the join");
+
+        // Everything up to and including the FULL_UPDATE, unread.
+        Assert.Equal(MessageType.JoinUpdate, client.TakeMessageType());
+        Assert.Equal(1, client.TakeByte());
+        client.TakeByte();
+        Assert.Equal(MessageType.ChangeMap, client.TakeMessageType());
+        client.TakeString1();
+        client.TakeString1();
+        Assert.Equal(MessageType.PlayerJoin, client.TakeMessageType());
+        Assert.Equal("Server", client.TakeString1());
+        Assert.Equal(MessageType.PlayerChangeClass, client.TakeMessageType());
+        client.TakeByte();
+        client.TakeByte();
+        Assert.Equal(MessageType.PlayerChangeTeam, client.TakeMessageType());
+        client.TakeByte();
+        client.TakeByte();
+        ReadFullUpdate(client, playerCount: 1);
+
+        // The point of the test: no tick between the FULL_UPDATE and this.
         Assert.Equal(MessageType.PlayerJoin, client.TakeMessageType());
         Assert.Equal("joiner", client.TakeString1());
     }

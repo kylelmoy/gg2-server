@@ -416,12 +416,14 @@ public sealed partial class GameServer
         // Everything appended from here on, starting with this player's own
         // PLAYER_JOIN, is news the joiner has to have.
         // ClientPlayer.SkipBroadcastBytes has the two failures this prevents.
-        _clients.Add(new ClientPlayer
+        var client = new ClientPlayer
         {
             Connection = connection,
             Entry = entry,
             SkipBroadcastBytes = _broadcast.WrittenSpan.Length,
-        });
+        };
+
+        _clients.Add(client);
 
         _plugins.PlayerAdded(_roster.Count - 1);
 
@@ -436,6 +438,39 @@ public sealed partial class GameServer
             ServerMessages.MessageString(writer, _options.WelcomeMessage);
             connection.Send(writer.WrittenSpan);
         }
+
+        // 5. ⛔ THE JOINER'S OWN PLAYER_JOIN LEAVES WITH THE BURST, NOT A TICK
+        //    LATER, and a stock client dies if it does not. CompleteJoin runs
+        //    below FlushBroadcast, so anything appended above would sit in the
+        //    buffer until the next tick — 33ms behind the burst and in a second
+        //    TCP write.
+        //
+        //    The client stops reading at the burst's CHANGE_MAP
+        //    (ClientBeginStep.gml:471 sets roomchange, and the loop's
+        //    `until(roomchange)` at :654 leaves the rest of the burst in the
+        //    socket), enters the map room, and basicRoomSetup.gml:82 creates a
+        //    Spectator there. On its next step it drains what is left; if its
+        //    own PLAYER_JOIN is not in that drain, global.myself is still the
+        //    -1 ClientCreate.gml:20 left, and -1 is `self` in GM8 — so
+        //    Spectator's End Step reads Spectator.object and the client dies
+        //    with "Unknown variable object", followed by AmmoCounter's Draw.
+        //    Neither of those two reads is guarded; only the line above them is.
+        //
+        //    The reference never splits them: serviceJoiningPlayer.gml:118 hands
+        //    the socket to the Player and sets `socket = -1`, so the
+        //    socket_send at :185 sends nothing and the burst waits in the
+        //    socket's buffer for GameServerEndStep.gml:6-7, which appends
+        //    global.sendBuffer — carrying this player's PLAYER_JOIN — and sends
+        //    both in one write.
+        //
+        //    Sending the pending broadcast here and advancing the mark past it
+        //    reproduces that: identical bytes in identical order, one write,
+        //    and FlushBroadcast will not send them twice.
+        var pending = _broadcast.WrittenSpan[client.SkipBroadcastBytes..];
+        if (!pending.IsEmpty)
+            connection.Send(pending);
+
+        client.SkipBroadcastBytes = _broadcast.WrittenSpan.Length;
 
         connection.Flush();
 
