@@ -565,7 +565,17 @@ public sealed class DuelEnvTests
     /// <para>
     /// <c>ctf_2dfort</c> because it is genuinely unreachable and not merely far:
     /// both sampled spawns sit behind their own team gates, so A* correctly
-    /// returns no route at all, for the whole episode.
+    /// returns no route to the opponent at all.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>The premise is counted over the episode, not read off the end of
+    /// it.</b> A bot that has stood still for <c>ScriptedBot.RepostTicks</c>
+    /// re-posts to reachable ground nearby, so it finishes the episode holding a
+    /// perfectly good route to somewhere that is not the opponent — and an
+    /// end-state <c>HasPath</c> check therefore reported "the opponent turned out
+    /// to be reachable" when nothing of the sort had happened. Counting the
+    /// decisions that had no route is also strictly the stronger premise: an
+    /// end-state snapshot can be a momentary gap.
     /// </para>
     /// </remarks>
     [Fact]
@@ -574,13 +584,28 @@ public sealed class DuelEnvTests
         var env = NavEnv();
         env.Reset(Sampled("ctf_2dfort", EnvDriver.Scripted, EnvDriver.Idle, cap: 200), seed: 1);
 
+        var routeless = 0;
+        var decisions = 0;
+
         while (env.Termination == Termination.Running)
+        {
             env.Step(Idle, Idle);
+            decisions++;
+
+            if (env.BotFor(env.RedSlot) is ScriptedBot b && !b.Path.HasPath)
+                routeless++;
+        }
 
         var bot = (ScriptedBot)env.BotFor(env.RedSlot)!;
 
-        // The premise: it really is unreachable, so every search really did fail.
-        Assert.False(bot.Path.HasPath, "the opponent turned out to be reachable; this map no longer tests the throttle");
+        // The premise: it really is unreachable, so the searches really did fail.
+        // A quarter of the episode is well clear of the 67 of 200 measured and
+        // well clear of the nothing a reachable opponent would produce.
+        Assert.True(
+            routeless > decisions / 4,
+            $"only {routeless} of {decisions} decisions had no route; "
+            + "the opponent turned out to be reachable and this map no longer tests the throttle");
+
         Assert.True(bot.Path.HasGoal, "the deathmatch goal never set anything at all, so nothing here was tested");
 
         // The bound is the throttle's own, not a round number: BOT_REPLAN_TICKS

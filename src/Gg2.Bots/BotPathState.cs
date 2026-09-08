@@ -292,6 +292,18 @@ public sealed class BotPathState
 
     public int StuckFires { get; set; }
 
+    /// <summary>
+    /// How many times a re-post actually moved this bot — see
+    /// <c>ScriptedBot.ParkedTicks</c>.
+    /// </summary>
+    /// <remarks>
+    /// <b>Counted on the goal that was ISSUED, not on the ask.</b> A parked bot
+    /// asks on every objective tick until it gets somewhere, so the two numbers
+    /// differ by however long the spot search had nothing to offer, and only this
+    /// one says the bot moved.
+    /// </remarks>
+    public int Reposts { get; set; }
+
     public int OffRouteFires { get; set; }
 
     public int BlacklistFires { get; set; }

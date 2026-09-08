@@ -327,4 +327,109 @@ public sealed class MatchActuallyHappensTests
 
         Assert.True(moved.Count(m => m > 0) >= 4, "even gg_debug's bots stood still");
     }
+
+    /// <summary>
+    /// No bot stands on one pixel for half a minute.
+    /// </summary>
+    /// <remarks>
+    /// <b><see cref="EveryBotGoesSomewhere"/> cannot see this and never could.</b>
+    /// It measures the first 600 ticks and asks whether four of eight bots went
+    /// anywhere; a bot becomes a statue <em>after</em> it arrives, and four movers
+    /// out of eight is a pass with half the roster motionless. Reported from play
+    /// as bots standing still holding the trigger.
+    /// <para>
+    /// <b>The cause was structural, not a tuning miss.</b> Arrival frees the path
+    /// and clears the goal, so an arrived bot presses no movement key — and the
+    /// objective layer then re-decides the same point, which resolves to the node
+    /// the bot is standing on. Nothing re-tasked it for the rest of the round.
+    /// Defenders showed it because their objective never moves, but any bot whose
+    /// goal is a place to stand parks the same way. <c>ScriptedBot.ParkedTicks</c>
+    /// and <c>BotObjective.Decide</c>'s <c>reposting</c> are the fix.
+    /// </para>
+    /// <para>
+    /// <b>Measured across all 22 shipped maps, two seeds, twelve bots, 4,000
+    /// ticks each: 116 of 528 bot-matches froze for 900+ consecutive ticks, and
+    /// 50 do now</b> — the worst run on these three maps went 3,945 ticks to 565.
+    /// The residual is concentrated on maps where the objective is genuinely
+    /// unroutable from where some bots stand (<c>cp_egypt</c>, <c>ctf_avanti</c>,
+    /// <c>dkoth_atalia</c>) and on <c>gg_debug</c>, whose whole map is one room;
+    /// those are a different fault and are written up in
+    /// <c>docs/TRAPS-BOTS.md</c>. This gates the maps the fix actually cleared, so
+    /// the bound can be a real one rather than the weakest that passes everywhere.
+    /// </para>
+    /// <para>
+    /// 900 ticks is thirty seconds. A bot holding a firing position between
+    /// re-posts reads 313-565 here, so this separates the two with margin at both
+    /// ends rather than pinning bot quality.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData("ctf_truefort")]
+    [InlineData("ctf_orange")]
+    [InlineData("koth_valley")]
+    public void NoBotStandsStillForHalfAMinute(string map)
+    {
+        const int Length = 4000;
+        const int Ceiling = 900;
+
+        for (uint seed = 1; seed <= 2; seed++)
+        {
+            var match = HeadlessMatch.Load(
+                HeadlessMatchOptions.Default with { Map = map, Bots = 12, Seed = seed },
+                ReferenceTree.IncludedFiles,
+                ReferenceTree.NavCacheDirectory);
+
+            var lastX = new double[WorldState.MaxSlots];
+            var lastY = new double[WorldState.MaxSlots];
+            var alive = new int[WorldState.MaxSlots];
+            var run = new int[WorldState.MaxSlots];
+            var longest = new int[WorldState.MaxSlots];
+
+            for (var tick = 0; tick < Length; tick++)
+            {
+                match.Step();
+
+                for (var slot = 1; slot < WorldState.MaxSlots; slot++)
+                {
+                    // A dead bot is not a statue, and its slot is reused, so the
+                    // run has to break rather than carry across the respawn.
+                    if (!match.State.IsAlive(slot))
+                    {
+                        run[slot] = 0;
+                        continue;
+                    }
+
+                    ref readonly var c = ref match.State.Characters[slot];
+                    alive[slot]++;
+
+                    if (alive[slot] > 1
+                        && Math.Abs(c.X - lastX[slot]) < 0.01
+                        && Math.Abs(c.Y - lastY[slot]) < 0.01)
+                    {
+                        run[slot]++;
+                        longest[slot] = Math.Max(longest[slot], run[slot]);
+                    }
+                    else
+                    {
+                        run[slot] = 0;
+                    }
+
+                    lastX[slot] = c.X;
+                    lastY[slot] = c.Y;
+                }
+            }
+
+            for (var slot = 1; slot < WorldState.MaxSlots; slot++)
+            {
+                if (alive[slot] == 0)
+                    continue;
+
+                Assert.True(
+                    longest[slot] < Ceiling,
+                    $"{map} seed {seed}: {match.State.Players[slot].Class} in slot {slot} stood "
+                    + $"motionless for {longest[slot]} consecutive ticks of {Length}, against a "
+                    + $"ceiling of {Ceiling}");
+            }
+        }
+    }
 }

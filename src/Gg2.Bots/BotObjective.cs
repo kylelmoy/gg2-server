@@ -68,6 +68,7 @@ public sealed class BotObjective
     private readonly SpawnPoints _spawns;
     private readonly BotGoalSpot _spot;
 
+
     public BotObjective(NavGraph graph, SpawnPoints spawns)
     {
         ArgumentNullException.ThrowIfNull(graph);
@@ -96,9 +97,16 @@ public sealed class BotObjective
     /// position is measured relative to it. Null is "nothing", and the follow
     /// position is then simply the ally's own.
     /// </param>
+    /// <param name="reposting">
+    /// True when the caller has watched this bot stand completely still with
+    /// nothing to walk to for <see cref="ScriptedBot.RepostTicks"/> — see
+    /// <c>ScriptedBot.ParkedTicks</c>. It asks for a <em>different</em> place to
+    /// stand. The caller owns the decision because only it can see the keys the
+    /// bot actually pressed.
+    /// </param>
     public BotGoal Decide(
         in WorldView world, int slot, BotRole role, double spreadX, bool allowSpot,
-        int? target = null)
+        int? target = null, bool reposting = false)
     {
         if (!world.IsAlive(slot))
             return BotGoal.None;
@@ -400,11 +408,64 @@ public sealed class BotObjective
 
         // --- a place from which to do something, or the thing itself ----------
 
+        // --- the bot has been standing on this goal doing nothing -------------
+        //
+        // Arrival frees the path and clears the goal, so an arrived bot presses no
+        // movement key at all — and every later decision hands it back the same
+        // point, which resolves to the same node, which it is already standing on.
+        // Nothing in the loop moves it again for the rest of the round.
+        //
+        // ⚠️ It reads as a defender's bug and is not one: any bot whose goal is a
+        // place to STAND rather than a thing to touch parks the same way.
+        // Defenders show it because their objective never moves. Measured on
+        // ctf_orange, twelve bots, four seeds: 3-5 of them frozen on one pixel for
+        // 900-3,945 consecutive ticks of a 4,000-tick match, across Demoman,
+        // Engineer, Heavy, Medic, Pyro, Sniper and Soldier alike. Reported from
+        // play as a bot standing still holding the trigger — the trigger is the
+        // combat half, which goes on working perfectly while the bot cannot move.
+        //
+        // ⚠️ A goal that has to be TOUCHED is excluded. Re-posting away from the
+        // enemy intel is how a round never ends, and it is the same mistake the
+        // spread already carries an exception for.
+        var avoidRadius = 0.0;
+
+        if (reposting && !mustTouch)
+        {
+            avoidRadius = ScriptedBot.RepostMinMove;
+
+            // The hold band, REPLACING whatever the class asked for rather than
+            // narrowing it. It is the same band a defender on a held control point
+            // already gets, and for the same reason: ground near the thing rather
+            // than the pixel it sits on.
+            //
+            // ⚠️ Replacing rather than intersecting is what makes this work at
+            // all. Keeping the class band and only excluding the bot's own node
+            // was measured first and mostly missed — 133 of 166 asks on a
+            // ctf_truefort match found nothing, because a standoff band is narrow,
+            // it demands a sightline, and BOT_SPOT_TRIES stops the search after
+            // twelve line tests. A class that has stood still for eight seconds
+            // has already shown its perch is not paying for itself.
+            anchorX = wx;
+            anchorY = wy;
+            spotMin = BotConstants.ArriveTol;
+            spotMax = BotConstants.HoldRadius;
+            spotHigh = BotConstants.SpotHighBonus;
+
+            // Proximity is the whole requirement, as at the engineer's
+            // chokepoint. This is a place to wait, not a place to shoot the anchor
+            // from, and demanding a sightline to a briefcase lying on the floor of
+            // a base rejects most of the base — and a search with no sightline
+            // test cannot spend its try budget, so it answers or the band is
+            // empty.
+            spotLos = BotLos.Any;
+            useSpot = true;
+        }
+
         if (useSpot && allowSpot)
         {
             var spot = _spot.Find(
                 self.X, self.Y, anchorX, anchorY, spotMin, spotMax, spotLos, spotHigh,
-                world.Collision, CollisionFilter.ForBullet());
+                world.Collision, CollisionFilter.ForBullet(), avoidRadius);
 
             if (spot.Node >= 0)
                 return new BotGoal(true, spot.X, spot.Y, IsSpot: true, mustTouch);

@@ -95,12 +95,24 @@ public sealed class BotGoalSpot
     /// part of that which is cheap to ask for. No sightline graph, no cover map.
     /// </param>
     /// <param name="filter">What stops a bullet, for the sightline test.</param>
+    /// <param name="avoidRadius">
+    /// Refuse any candidate within this distance of <paramref name="fromX"/>,
+    /// <paramref name="fromY"/> — "somewhere other than where I am standing".
+    /// <para>
+    /// <b>Measured from the BOT, not from the anchor.</b> The band is what the
+    /// spot is <em>for</em>; this is what makes the answer a different one, so the
+    /// two cannot be one test. A bot parked on the best node in its band wants the
+    /// next best, not a wider band. Zero — the default — leaves the
+    /// search exactly as it was.
+    /// </para>
+    /// </param>
     public BotSpot Find(
         double fromX, double fromY,
         double targetX, double targetY,
         double minDistance, double maxDistance,
         BotLos los, double highBonus,
-        CollisionWorld collision, in CollisionFilter filter)
+        CollisionWorld collision, in CollisionFilter filter,
+        double avoidRadius = 0)
     {
         ArgumentNullException.ThrowIfNull(collision);
 
@@ -123,6 +135,13 @@ public sealed class BotGoalSpot
             var toTarget = Gml.PointDistance(x, y, targetX, targetY);
 
             if (toTarget < minDistance || toTarget > maxDistance)
+                continue;
+
+            // Refused BEFORE ranking rather than after, because the rank's first
+            // term is "walk less" — a node the bot is already standing on
+            // scores zero there and wins by construction, which is exactly the
+            // lock-in this parameter exists to break.
+            if (avoidRadius > 0 && Gml.PointDistance(fromX, fromY, x, y) < avoidRadius)
                 continue;
 
             // In world pixels throughout, so the three terms are comparable:

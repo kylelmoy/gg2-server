@@ -64,6 +64,33 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
     /// <remarks>The reference's own literal 300, ten seconds.</remarks>
     private const int SpotBanTicks = 300;
 
+    /// <summary>
+    /// How long a bot stands completely still before it asks for somewhere else
+    /// to stand — see <see cref="ParkedTicks"/>.
+    /// </summary>
+    /// <remarks>
+    /// Eight seconds. Long enough never to interrupt a bot holding a firing
+    /// position through one engagement, short enough that nobody watching sees a
+    /// statue.
+    /// <para>
+    /// ⚠️ <b>Here rather than in <c>BotConstants</c>, and not for tidiness.</b>
+    /// That table is on <c>SimulationStamp</c>'s GATING surface, so adding a
+    /// constant to it moves <c>SIM_UUID</c> and refuses every shipped checkpoint —
+    /// measured, 75 tests red on a stamp mismatch. A port-authored bot-tuning
+    /// number that cannot change what an action does does not belong on that
+    /// surface. <see cref="CarrierStuckTicks"/> is the same call.
+    /// </para>
+    /// </remarks>
+    public const int RepostTicks = 240;
+
+    /// <summary>How far a re-post has to move the bot to count as one.</summary>
+    /// <remarks>
+    /// Above <c>BOT_GOAL_RETARGET_DIST</c>, so a re-post is never a goal the
+    /// objective throttle would swallow, and an order of magnitude above the
+    /// arrival tolerance, so the bot walks rather than shuffles.
+    /// </remarks>
+    public const int RepostMinMove = 96;
+
     private PathFollower _follower;
     private NavGraph? _graph;
 
@@ -358,6 +385,39 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
     public int SpotBanUntil { get; set; }
 
     /// <summary>
+    /// Consecutive ticks this bot has stood on the ground with nothing to walk to
+    /// and no enemy to hold for.
+    /// </summary>
+    /// <remarks>
+    /// <b>What stops a bot becoming a statue.</b> Arrival frees the path and
+    /// clears the goal, so an arrived bot presses no movement key; the objective
+    /// layer then re-decides the same point and resolves it to the node the bot is
+    /// standing on, and nothing ever moves it again. At <see cref="RepostTicks"/>
+    /// this asks <see cref="BotObjective.Decide"/> for somewhere else to stand —
+    /// see that parameter for the measurement.
+    /// <para>
+    /// <b>A bot pressing a direction and going nowhere is NOT parked</b>, it is
+    /// stuck, and <see cref="BotPathState.StuckTicks"/> already owns that case
+    /// with a blacklist behind it. This one is pressing nothing, which is why
+    /// that counter cannot see it.
+    /// </para>
+    /// </remarks>
+    public int ParkedTicks { get; private set; }
+
+    /// <summary>
+    /// Where the bot was on the previous poll, for <see cref="ParkedTicks"/>.
+    /// </summary>
+    /// <remarks>
+    /// NaN rather than zero when there is no previous poll: zero is a world
+    /// position, and comparing against it would call a bot standing at the origin
+    /// parked on its first tick.
+    /// </remarks>
+    private double _parkedX = double.NaN;
+
+    /// <inheritdoc cref="_parkedX"/>
+    private double _parkedY = double.NaN;
+
+    /// <summary>
     /// Moves this bot to a new map.
     /// </summary>
     /// <remarks>
@@ -397,6 +457,9 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
         Objective = null;
         _goalIsSpot = false;
         SpotBanUntil = 0;
+        ParkedTicks = 0;
+        _parkedX = double.NaN;
+        _parkedY = double.NaN;
 
         // The lane goes with the graph it was derived for. Dropping it rather
         // than carrying it is what makes the failure safe: a bot with no lane
@@ -454,6 +517,13 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
             Occupancy?.Remove(Path);
             Path.FreePath();
             AliveLast = false;
+            ParkedTicks = 0;
+
+            // So the first tick of the next life is not compared against where
+            // this one ended.
+            _parkedX = double.NaN;
+            _parkedY = double.NaN;
+
             return PlayerInput.None;
         }
 
@@ -535,6 +605,41 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
         if (self.OnGround && BotReflex.RocketDodge(in world, slot))
             navKeys |= PlayerKeys.Jump;
 
+        // Grounded, nothing to walk to, and not deliberately standing to fight:
+        // this bot is parked rather than busy. Read here rather than anywhere
+        // earlier because this is the only line that has seen both halves decide
+        // — a bot held by the engage rule or by the regroup hold is standing still
+        // on purpose, and neither is a bot that needs a new destination.
+        //
+        // ⚠️ NOT cleared where a goal is issued, which is the trap this walked
+        // into once. A parked bot's objective tick re-issues the point it is
+        // already standing on every BOT_OBJECTIVE_PERIOD — arrival cleared the
+        // goal, so the retarget throttle has nothing to compare against and never
+        // fires. Clearing on the issue capped the counter at 30 and no re-post
+        // ever happened. This line clears itself instead, the moment the bot
+        // moves.
+        //
+        // ⚠️ It asks what the bot DID, not what it believed, and the difference
+        // is a whole second class of statue. A bot holding a live route it is
+        // making no progress on presses nothing and reports no goal trouble at
+        // all — measured on ctf_truefort, a defending pyro sat on leg 7 of 8 with
+        // `HasPath`, `StuckTicks` 0 and no key pressed for 1,629 ticks, waiting on
+        // a descent that never came. `StuckTicks` cannot see it: that detector
+        // counts a bot pressing a direction and going nowhere, and this one is
+        // pressing nothing. Any test keyed on the follower's own state shares the
+        // follower's blind spot, so this one is keyed on the position.
+        var idle = self.OnGround
+            && !WantsToEngage
+            && tick >= RegroupUntil
+            && (navKeys & (PlayerKeys.Left | PlayerKeys.Right)) == 0
+            && Gml.Equal(self.X, _parkedX)
+            && Gml.Equal(self.Y, _parkedY);
+
+        _parkedX = self.X;
+        _parkedY = self.Y;
+
+        ParkedTicks = idle ? ParkedTicks + 1 : 0;
+
         return PlayerInput.FromAim(navKeys | fireKeys, aim, aimDistance);
     }
 
@@ -585,10 +690,19 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
         // actually aiming at.
         var foe = Combat.Target.Kind == BotTargetKind.Character ? Combat.Target.Slot : (int?)null;
 
-        var goal = Objective.Decide(
-            in world, slot, Role, SpreadX, allowSpot: tick >= SpotBanUntil, target: foe);
+        var reposting = ParkedTicks >= RepostTicks;
 
-        if (!goal.Found || !Objective.TryResolve(in goal, goal.MustTouch ? 0 : SpreadX, out var x, out var y))
+        var goal = Objective.Decide(
+            in world, slot, Role, SpreadX, allowSpot: tick >= SpotBanUntil, target: foe,
+            reposting: reposting);
+
+        // No spread on a re-post. The search has already picked the node to stand
+        // on and excluded everything near the bot; a lateral offset of up to
+        // BOT_SPREAD_MAX would put the goal back inside the radius the search just
+        // cleared, and the bot would not move.
+        var spread = goal.MustTouch || reposting ? 0 : SpreadX;
+
+        if (!goal.Found || !Objective.TryResolve(in goal, spread, out var x, out var y))
             return;
 
         // The throttle is on the RESOLVED node position, not on the raw
@@ -597,6 +711,17 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
         // comparing anything else re-issues a goal that has not moved.
         if (Path.HasGoal && Gml.PointDistance(x, y, Path.GoalX, Path.GoalY) <= BotConstants.GoalRetargetDist)
             return;
+
+        // Counted only when the new goal is somewhere else. A re-post whose spot
+        // search found nothing falls through to the objective's own point, which
+        // for a parked bot is the node it is already standing on — issuing that
+        // is harmless and is not a re-post.
+        if (reposting
+            && Gml.PointDistance(x, y, world.Character(slot).X, world.Character(slot).Y)
+                > BotConstants.GoalRetargetDist)
+        {
+            Path.Reposts++;
+        }
 
         _goalIsSpot = goal.IsSpot;
         SetGoal(x, y);
@@ -646,7 +771,21 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
         }
 
         if (!Combat.Target.Exists || !Combat.Visible)
+        {
+            // ⚠️ CLEARED, not left alone. `WantsToEngage` is written only by the
+            // assignment below, so returning here used to leave the last live
+            // answer standing for as long as the bot had nothing in sight — which
+            // is the rest of the round for a defender in a quiet sector. The
+            // property documents itself as time-bounded by BOT_ENGAGE_TICKS and
+            // was not: `HybridBot`'s MacroTask handover reads it as a conjunct and
+            // was getting a constant true, and `ParkedTicks` could never start.
+            //
+            // Only this arm. The `free` return above is a bot in the air, where
+            // the hold cannot apply either way and the answer from the ground it
+            // left is still the right one to hand a controller mid-arc.
+            WantsToEngage = false;
             return navKeys;
+        }
 
         var target = Combat.Target;
         var distance = Gml.PointDistance(self.X, self.Y, target.X, target.Y);

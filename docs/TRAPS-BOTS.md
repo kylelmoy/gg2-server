@@ -51,6 +51,10 @@ What it licenses, and what it does not:
   and team clumping is down rather than up from the goal-less baseline.
 - ⚠️ **Conversion at 6v6 is 8%**, and nothing establishes whether that is
   *right*. There is no human baseline in this project.
+- ⚠️ **50 of 528 bot-matches still freeze a bot for 900+ ticks**, down from
+  116 — see "A bot that arrives stops moving" below. What is left is a bot whose
+  objective is unroutable from where it stands, which is a nav question rather
+  than an objective one, and one map that is a single room.
 
 
 Every ⚠️ in this file cost a session time. One section per item of phase 7, in
@@ -921,6 +925,153 @@ places no objective and `ScenarioRunner` hands the bot its goal directly, so
 (`botGoalLocked`). ⚠️ **But `ScenarioWorld` places generators now** (item 4e), so a
 bot given an objective in one *would* be retasked — why the objective layer is
 opt-in rather than on by default.
+
+### A bot that arrives stops moving, for the rest of the round
+
+**2026-09-08.** Reported from play as "the engineer bots aren't doing anything —
+standing still and holding down fire". It is not the engineer and it is not the
+firing: the combat half goes on working perfectly while the bot cannot move.
+
+**The mechanism.** Arrival frees the path and clears the goal, so an arrived bot
+presses no movement key at all. `BotObjective.Decide` then re-decides on its own
+cadence, hands back the same point, `TryResolve` snaps it to the node the bot is
+standing on, and `BotGoalSpot.Find`'s first rank term is *walk less* — which the
+node under the bot's feet scores zero on and therefore always wins. Nothing in
+the loop moves it again.
+
+⚠️ **It reads as a defender's bug and is not one.** Any bot whose goal is a
+place to *stand* rather than a thing to *touch* parks the same way; defenders
+show it because their objective never moves. The frozen bots were Demoman,
+Engineer, Heavy, Medic, Pyro, Sniper and Soldier alike, and both roles.
+
+⚠️ **The control-point branch was already immune, and that is why this
+survived.** `held` re-tasks a defender onto ground overlooking a point it owns —
+the comment there says "arrival is a STATE, not a terminus" in as many words. CTF
+has no equivalent: a briefcase on its base *is* an already-held point, and nothing
+was doing that job. So every KotH and CP map looked broadly healthy while every
+CTF map had three to five statues in it.
+
+#### Measured
+
+All 22 shipped maps, two seeds each, twelve bots, 4,000 ticks, counting bots with
+a 900-tick-or-longer motionless run:
+
+| | before | after |
+|---|---|---|
+| bot-matches frozen 900+ ticks | **116 of 528** | **50 of 528** |
+| worst run, `ctf_orange` | 3,945 ticks | 313 |
+| worst run, `ctf_truefort` | 3,677 | 470 |
+| worst run, `koth_valley` | 1,318 | 565 |
+
+Every CTF map except `ctf_avanti` goes to zero. The residual is `gg_debug` 18
+(one room, unchanged), `dkoth_atalia` 10, `ctf_avanti` 8, `cp_egypt` 4,
+`arena_lumberyard` 3, and singles elsewhere. On `cp_egypt` the mechanism fires
+and finds nothing: those bots hold a goal on the point with `HasPath` false, so
+the objective is unroutable from where they stand and no destination change
+helps. That is a nav question and is not chased here.
+
+#### And measured on a live server, which is the measurement that matters
+
+A Release `gg2-server --map ctf_orange --bots 10 --bot-classes Engineer`,
+sampled over the control port at 1 Hz for 200 seconds, longest motionless run per
+bot:
+
+| | before | after |
+|---|---|---|
+| bots motionless 100s+ | **4 of 10** (197s, 168s, 165s, 134s) | **0** |
+| worst run | 197s | **8s** |
+
+⚠️ **A default roster hides it.** The same instrument against eight bots of mixed
+classes on `ctf_truefort` read a worst run of 30 seconds before the fix — bad, but
+not obviously a bug from a graph. Forcing the class and the map is what turns the
+report into a reproduction, and a headless sweep is what says it was never about
+the engineer.
+
+#### The fix, in three parts
+
+- **`ScriptedBot.ParkedTicks`** counts consecutive ticks the bot spent grounded,
+  not engaging, not regrouping, pressing no horizontal key **and not having
+  moved**. At `ScriptedBot.RepostTicks` (240, eight seconds) it asks
+  `BotObjective.Decide` for somewhere else.
+- **`BotObjective.Decide`'s `reposting`** replaces the class's band with the hold
+  band, drops the sightline requirement, and passes `ScriptedBot.RepostMinMove`
+  (96px) as `BotGoalSpot.Find`'s new `avoidRadius`, which refuses candidates that
+  near the bot *before* ranking them.
+- **`ScriptedBot.ApplyHolds` clears `WantsToEngage`** when the target is gone or
+  out of sight.
+
+⚠️ **Each of the three was individually insufficient, and the order they were
+found in is worth keeping.**
+
+- Clearing `ParkedTicks` where a goal is *issued* capped it at 30 and the re-post
+  never fired once: a parked bot is re-issued the point it stands on every
+  `BOT_OBJECTIVE_PERIOD`, and the `BOT_GOAL_RETARGET_DIST` throttle cannot
+  suppress it, because arrival already cleared `HasGoal` and left it nothing to
+  compare against. The counter has to clear on the bot *moving*.
+- Keeping the class's own band and only excluding the bot's node **mostly
+  missed** — 133 of 166 asks on one `ctf_truefort` match found nothing, because a
+  standoff band is narrow, it demands a sightline, and `BOT_SPOT_TRIES` stops the
+  search after twelve line tests. Replacing the band is what made asks and
+  re-posts equal.
+- The spread is not applied to a re-post. `BOT_SPREAD_MAX` is enough to put the
+  goal back inside the radius the search just cleared.
+
+#### ⚠️ `WantsToEngage` was never time-bounded, whatever its doc comment said
+
+`ApplyHolds` writes it in exactly one place and returns early above that line
+when the target is gone or not visible — so it kept the last live answer for as
+long as the bot had nothing in sight, which is the rest of the round for a
+defender in a quiet sector. Its own remarks claim `BOT_ENGAGE_TICKS` bounds it.
+
+**Two things read it and both were getting a constant true**: `ParkedTicks`,
+which could never start, and `HybridBot`'s `HandoverRule.MacroTask`, whose
+`inRange && wantsToEngage` was reduced to `inRange` — the conjunct the rule
+exists for. Only the no-target arm is cleared; the airborne return still holds
+the answer from the ground the bot left, which is the right one to hand a
+controller mid-arc.
+
+#### ⚠️ `StuckTicks` is blind to this and always will be
+
+It counts a bot **pressing a direction and going nowhere**. A statue presses
+nothing, so `StuckTicks` reads 0 throughout — including for a bot holding a live
+route it is making no progress along (`ctf_truefort`, a defending pyro sat on leg
+7 of 8 with `HasPath` true, `StuckTicks` 0 and no key pressed for 1,629 ticks,
+waiting on a descent that never came). **Any parked test keyed on the follower's
+own state inherits the follower's blind spot**, which is why `ParkedTicks` is
+keyed on the position instead.
+
+#### ⛔ The two new constants are deliberately NOT in `BotConstants`
+
+`BotConstants` is on `SimulationStamp`'s **gating** surface, so adding a constant
+to it moves `SIM_UUID` and every shipped checkpoint refuses to load — measured,
+**75 tests red** on the stamp mismatch, none of them about bots standing still.
+`RepostTicks` and `RepostMinMove` live on `ScriptedBot` beside `CarrierStuckTicks`
+and `SpotBanTicks`, which is where this repo already puts port-authored bot
+tuning. A number that cannot change what an action does does not belong on a
+surface whose job is to invalidate learned mappings.
+
+#### The gate, and what it could not have caught
+
+`MatchActuallyHappensTests.NoBotStandsStillForHalfAMinute` — three maps, two
+seeds, twelve bots, 4,000 ticks, no bot motionless for 900. **Confirmed to fail
+with the fix reverted** (1,318 / 3,945 / 3,677) rather than assumed to.
+
+⚠️ **`EveryBotGoesSomewhere` was green throughout, and is not weak by
+accident**: it measures the first 600 ticks and asks whether four of eight bots
+moved 100px. A statue forms *after* it arrives, and four movers out of eight
+passes with half the roster motionless. The lesson is the one this repo keeps
+re-learning — a gate that asks "did anything happen" does not answer "did it keep
+happening".
+
+#### One test's premise moved, and it was the premise rather than the claim
+
+`DuelEnvTests.HuntingAnUnreachableOpponentDoesNotSearchEveryDecision` asserted
+`!Path.HasPath` at the end of the episode to show the opponent really was
+unreachable. A parked bot now re-posts to reachable ground nearby, so it finishes
+holding a perfectly good route to somewhere that is not the opponent. The claim
+under test — 16 re-plans against a throttled ceiling of 21 — never moved. The
+premise is now counted over the episode (67 of 200 decisions had no route), which
+is also strictly stronger: an end-state snapshot can be a momentary gap.
 
 ### Phase 7 item 4h: a server that fills itself, and the headroom number
 
