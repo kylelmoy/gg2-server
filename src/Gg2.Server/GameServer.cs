@@ -213,6 +213,31 @@ public sealed partial class GameServer : IDisposable, IPluginHost
     private long _frame;
 
     /// <summary>
+    /// <c>Environment.TickCount64</c> when the 30-second block in
+    /// <see cref="Tick"/> last ran, which is the wall-clock half of
+    /// <see cref="LobbyRegistration.IsReRegisterDue"/>.
+    /// </summary>
+    /// <remarks>
+    /// Seeded in <see cref="Start"/> rather than left at zero: the reading is
+    /// machine uptime, so a zero would make the very first tick believe the
+    /// block was decades overdue and re-announce immediately after the
+    /// registration <c>Start</c> has already sent.
+    /// </remarks>
+    private long _lastHousekeepingMs;
+
+    /// <summary>
+    /// How many times the 30-second block has run. For tests only.
+    /// </summary>
+    /// <remarks>
+    /// The block's real effects are a datagram to a third party, a ban sweep and
+    /// a flag refresh — none of which a test can watch without either sending
+    /// the datagram or waiting half a minute. This counter is what lets
+    /// <c>LobbyCadenceTests</c> establish that the wall-clock arm is wired at
+    /// all, which is the half that was missing rather than wrong.
+    /// </remarks>
+    internal long HousekeepingRuns { get; private set; }
+
+    /// <summary>
     /// Flushes performed. <b>Exactly one per tick that sent anything</b>, which
     /// is the reference's shape: <c>GameServerEndStep.gml:7-10</c> writes the
     /// buffer to every socket and clears it once, in one event.
@@ -740,6 +765,11 @@ public sealed partial class GameServer : IDisposable, IPluginHost
             $"listening on {BoundPort}, map {map.Name} ({_match.GameMode}, " +
             $"{map.Walkmask.Width}x{map.Walkmask.Height} cells), {_options.PlayerLimit} slots");
 
+        // The 30-second block's wall clock starts here, so its first firing is
+        // 30 seconds from now rather than immediately after the registration
+        // just below.
+        _lastHousekeepingMs = Environment.TickCount64;
+
         // Off unless asked for: this publishes the server's address to a third
         // party. The first registration goes out here rather than waiting for
         // the 30-second cadence, so a short-lived server still gets listed.
@@ -805,8 +835,16 @@ public sealed partial class GameServer : IDisposable, IPluginHost
         // GameServerBeginStep.gml:5-8, `frame mod 900`: the 30-second block at
         // the very top of the server's own Begin Step. Two things live in it,
         // and the second is not optional the way the first is.
-        if (_frame % LobbyRegistration.ReRegisterIntervalTicks == 0)
+        //
+        // ⚠️ Due on EITHER clock, and the wall-clock arm is the one the lobby
+        // needs: IdleWhenEmpty makes a tick 500ms rather than 33ms, at which
+        // 900 frames is seven and a half minutes and the listing has long since
+        // expired. LobbyRegistration.IsReRegisterDue has the whole argument.
+        if (LobbyRegistration.IsReRegisterDue(_frame, _nowMs, _lastHousekeepingMs))
         {
+            _lastHousekeepingMs = _nowMs;
+            HousekeepingRuns++;
+
             // Cheap to leave unguarded because _lobby is null unless --lobby
             // was passed, and the modulo runs either way.
             if (_lobby is not null)

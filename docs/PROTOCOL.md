@@ -655,12 +655,23 @@ Not everything in the reference is load-bearing for a private headless server.
   it is the one thing in this project not written through `NetWriter`. A
   little-endian packet is not rejected loudly; the server just never appears,
   which looks exactly like the flag being off.
-  **Verified against the GML, NOT against the live service.**
-  `ganggarrison.com:29944` is a third party, is not in the reference tree, and
-  was not contacted — `LobbyRegistrationTests` asserts this port agrees with
-  `sendLobbyRegistration.gml`, which is a different claim from "the lobby accepts
-  it". If a `--lobby` server never appears in the browser, check the service
-  before re-deriving the layout.
+  **The live service accepts the packet.** A `--lobby` server on a public
+  address appeared in the list read back over the list protocol
+  (`LobbyController.events/Create.xml` and `Step.xml`: a TCP connect to the same
+  host and port, the list protocol UUID `297d0df4-430c-bf61-640a-640897eaef57`
+  then the gg2 lobby UUID, and a big-endian count and length-prefixed blocks
+  back), measured 2026-09-07. `LobbyRegistrationTests` still asserts only that
+  this port agrees with `sendLobbyRegistration.gml`; the service is a third
+  party and no test contacts it.
+  **The cadence is REAL TIME, not a frame count**, and this port needs the
+  distinction where the reference does not. The lobby drops an entry it has not
+  heard from within under a minute — an announce seen in the list was gone from
+  it 45 seconds later — while `ServerOptions.IdleWhenEmpty` makes an empty
+  server's 900 ticks seven and a half minutes. `LobbyRegistration.IsReRegisterDue`
+  is therefore due on either clock, and `LobbyCadenceTests` pins it. A
+  frame-only cadence does not merely delist an idle server: it makes the
+  delisting permanent, because the player whose arrival would restore the live
+  rate cannot see the server to join it.
   **A server full of bots advertises as empty**: the count is
   `getNumberOfOccupiedSlots`, which is humans, and the packet's own bot field is a
   hard zero in the reference. Transcribed rather than corrected — that field's

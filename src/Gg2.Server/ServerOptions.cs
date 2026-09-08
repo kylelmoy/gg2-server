@@ -665,6 +665,15 @@ public sealed class ServerOptions
     /// <c>--time-limit</c>.
     /// </para>
     /// <para>
+    /// ⚠️ <b>Anything with a real-time contract outside this process has to say
+    /// so, because a tick is no longer a fixed length.</b> The lobby is the case
+    /// that exists: an entry expires in real seconds, so
+    /// <see cref="LobbyRegistration.IsReRegisterDue"/> is due on a wall clock as
+    /// well as on a frame count. A frame-only cadence delists an idle server
+    /// permanently — nobody can join what nobody can see, and nothing but a join
+    /// ends the idling.
+    /// </para>
+    /// <para>
     /// <b>An explicit <c>--speed</c> wins.</b> Idling is skipped entirely when
     /// the server is unpaced, because <c>--speed max</c> is a direct instruction
     /// about the tick rate and this must not quietly override it.

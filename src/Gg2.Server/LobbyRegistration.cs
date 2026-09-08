@@ -58,13 +58,12 @@ public readonly record struct LobbyServerInfo
 /// public list without being asked is not a default anyone should get.
 /// </para>
 /// <para>
-/// <b>Nothing here is verified against the real lobby server.</b> The layout
-/// is transcribed from the reference and asserted byte-for-byte, which proves
-/// this port agrees with the GML — not that the GML is what the live service
-/// accepts today. The service is not part of the reference tree and was not
-/// contacted. If a server built with <c>--lobby</c> never appears in the list,
-/// that is the thing to check first, and this comment is the reason not to
-/// re-derive the layout from scratch when it happens.
+/// <b>The live service accepts this packet</b> — a <c>--lobby</c> server on a
+/// public address was read back out of the real list on 2026-09-07,
+/// <c>docs/PROTOCOL.md</c>, "What a headless server can skip". No test contacts
+/// it: the layout is asserted byte-for-byte against the GML, which is a
+/// different claim, and the service is a third party. If a <c>--lobby</c> server
+/// never appears in the list, check the service before re-deriving the layout
 /// </para>
 /// </remarks>
 public static class LobbyRegistration
@@ -92,6 +91,46 @@ public static class LobbyRegistration
     /// <see cref="GameServer"/>.
     /// </remarks>
     public const int ReRegisterIntervalTicks = 900;
+
+    /// <summary>
+    /// How often the lobby has to hear from this server in REAL time, in
+    /// milliseconds.
+    /// </summary>
+    /// <remarks>
+    /// The same 30 seconds as <see cref="ReRegisterIntervalTicks"/>, counted the
+    /// other way, and it is the one that governs.
+    /// <para>
+    /// <b>A tick count cannot express this cadence, because a tick is not a
+    /// fixed length here.</b> <c>ServerOptions.IdleWhenEmpty</c> drops an empty
+    /// server to <c>ServerOptions.IdleTickRate</c>, at which 900 ticks is seven
+    /// and a half minutes. The lobby drops an entry it has not heard from within
+    /// something under a minute — measured against the live service, 2026-09-07 —
+    /// so a purely frame-counted cadence lists an empty server, loses it, and
+    /// never gets it back, because the player who would have un-idled it cannot
+    /// see it to join.
+    /// </para>
+    /// <para>
+    /// The reference has no idle rate, so its <c>frame mod 900</c> is 30 seconds
+    /// and this distinction never arises there.
+    /// </para>
+    /// </remarks>
+    public const int ReRegisterIntervalMs = 30_000;
+
+    /// <summary>
+    /// Whether the 30-second block is due, on either of its two clocks.
+    /// </summary>
+    /// <param name="frame">Ticks since start.</param>
+    /// <param name="nowMs">A monotonic millisecond reading, <c>Environment.TickCount64</c>.</param>
+    /// <param name="lastMs">The same reading from when the block last ran.</param>
+    /// <remarks>
+    /// <b>Two arms, and neither is redundant.</b> The wall clock is what the
+    /// lobby actually contracts on, per <see cref="ReRegisterIntervalMs"/>. The
+    /// frame count stays because every test and the control port drive
+    /// <c>GameServer.Tick</c> as fast as the machine allows, and against a real
+    /// clock those runs would never reach this block at all.
+    /// </remarks>
+    public static bool IsReRegisterDue(long frame, long nowMs, long lastMs) =>
+        frame % ReRegisterIntervalTicks == 0 || nowMs - lastMs >= ReRegisterIntervalMs;
 
     /// <summary>A fresh random server id.</summary>
     /// <remarks>
