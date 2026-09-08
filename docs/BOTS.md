@@ -213,10 +213,15 @@ plays well.
 
 **Current state, verified 2026-09-06 at `6126b34`: trained checkpoints for
 this build EXIST.** All four files in `tests/Gg2.Tests/Fixtures/policy/` carry
-`SIM_UUID 698913b5ea547d60`, which is exactly what `SimulationStampTests`
+`SIM_UUID f10afbdadc795d77`, which is exactly what `SimulationStampTests`
 pins this build's stamp to, and `rest3_s1_iter12000.npz` loads through
 `PolicyNetwork.Load` with **no** `ignoreSimulationStamp` (`TrainedClassesTests`,
 green at `6126b34`).
+⚠️ **They were trained against `698913b5ea547d60` and re-stamped on 2026-09-08**
+when `BotConstants` left the gating surface. No weight changed and no physics
+changed — `checkpoints/README.md` has what that did and did not mean, and
+`docs/TRAPS-BOTS.md`, "The `BOT_*` block does not belong on the gating surface",
+has why it was sound.
 ⚠️ **This paragraph asserted the opposite until 2026-09-06.** The layout v2
 bump on 2026-09-03 did retire the last one, and `gg2-rl` minted new ones
 against the bumped stamp three days later — checked in here as fixtures — with

@@ -99,7 +99,7 @@ public sealed class BotObjective
     /// </param>
     /// <param name="reposting">
     /// True when the caller has watched this bot stand completely still with
-    /// nothing to walk to for <see cref="ScriptedBot.RepostTicks"/> — see
+    /// nothing to walk to for <see cref="BotConstants.RepostTicks"/> — see
     /// <c>ScriptedBot.ParkedTicks</c>. It asks for a <em>different</em> place to
     /// stand. The caller owns the decision because only it can see the keys the
     /// bot actually pressed.
@@ -431,7 +431,7 @@ public sealed class BotObjective
 
         if (reposting && !mustTouch)
         {
-            avoidRadius = ScriptedBot.RepostMinMove;
+            avoidRadius = BotConstants.RepostMinMove;
 
             // The hold band, REPLACING whatever the class asked for rather than
             // narrowing it. It is the same band a defender on a held control point

@@ -64,33 +64,6 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
     /// <remarks>The reference's own literal 300, ten seconds.</remarks>
     private const int SpotBanTicks = 300;
 
-    /// <summary>
-    /// How long a bot stands completely still before it asks for somewhere else
-    /// to stand — see <see cref="ParkedTicks"/>.
-    /// </summary>
-    /// <remarks>
-    /// Eight seconds. Long enough never to interrupt a bot holding a firing
-    /// position through one engagement, short enough that nobody watching sees a
-    /// statue.
-    /// <para>
-    /// ⚠️ <b>Here rather than in <c>BotConstants</c>, and not for tidiness.</b>
-    /// That table is on <c>SimulationStamp</c>'s GATING surface, so adding a
-    /// constant to it moves <c>SIM_UUID</c> and refuses every shipped checkpoint —
-    /// measured, 75 tests red on a stamp mismatch. A port-authored bot-tuning
-    /// number that cannot change what an action does does not belong on that
-    /// surface. <see cref="CarrierStuckTicks"/> is the same call.
-    /// </para>
-    /// </remarks>
-    public const int RepostTicks = 240;
-
-    /// <summary>How far a re-post has to move the bot to count as one.</summary>
-    /// <remarks>
-    /// Above <c>BOT_GOAL_RETARGET_DIST</c>, so a re-post is never a goal the
-    /// objective throttle would swallow, and an order of magnitude above the
-    /// arrival tolerance, so the bot walks rather than shuffles.
-    /// </remarks>
-    public const int RepostMinMove = 96;
-
     private PathFollower _follower;
     private NavGraph? _graph;
 
@@ -392,9 +365,10 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
     /// <b>What stops a bot becoming a statue.</b> Arrival frees the path and
     /// clears the goal, so an arrived bot presses no movement key; the objective
     /// layer then re-decides the same point and resolves it to the node the bot is
-    /// standing on, and nothing ever moves it again. At <see cref="RepostTicks"/>
-    /// this asks <see cref="BotObjective.Decide"/> for somewhere else to stand —
-    /// see that parameter for the measurement.
+    /// standing on, and nothing ever moves it again. At
+    /// <see cref="BotConstants.RepostTicks"/>
+    /// this asks <see cref="BotObjective.Decide"/> for somewhere else to stand — see
+    /// that parameter for the measurement.
     /// <para>
     /// <b>A bot pressing a direction and going nowhere is NOT parked</b>, it is
     /// stuck, and <see cref="BotPathState.StuckTicks"/> already owns that case
@@ -690,7 +664,7 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
         // actually aiming at.
         var foe = Combat.Target.Kind == BotTargetKind.Character ? Combat.Target.Slot : (int?)null;
 
-        var reposting = ParkedTicks >= RepostTicks;
+        var reposting = ParkedTicks >= BotConstants.RepostTicks;
 
         var goal = Objective.Decide(
             in world, slot, Role, SpreadX, allowSpot: tick >= SpotBanUntil, target: foe,

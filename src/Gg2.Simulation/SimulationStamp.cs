@@ -185,7 +185,6 @@ public static class SimulationStamp
         // which is the single thing it most needs to catch.
         typeof(ClassStats),
         typeof(Gml),
-        typeof(BotConstants),
     ];
 
     /// <summary>
@@ -223,17 +222,29 @@ public static class SimulationStamp
     /// observation's geometry rays come from <c>Walkmask</c>, not from these.
     /// </para>
     /// <para>
-    /// <b><c>BotConstants</c> is arguably the same question and was NOT moved.</b>
-    /// It changes when the policy is handed the wheel rather than what an action
-    /// does, which is this surface's own description — but no measurement has been
-    /// taken across a <c>BotConstants</c> edit the way the nav edits were
-    /// measured, and moving it on the strength of the argument alone would be
-    /// widening an authorisation past its evidence. Open.
+    /// <b><c>BotConstants</c> is here too, and the argument that put it here is
+    /// checked rather than asserted.</b> Its 117 constants are read by the
+    /// scripted bot layer, by <c>Gg2.Nav</c> and by <c>HandoverRule</c> — and by
+    /// nothing else. <b>No part of <c>Gg2.Simulation</c> reads one</b>, so by
+    /// construction none of them can change what an action does; and no part of
+    /// the inference path does either — not <c>ObservationWriter</c>, not
+    /// <c>ActionDecoder</c>, not <c>PolicyNetwork</c>, <c>PolicyController</c>,
+    /// <c>HybridBot</c> or <c>Handover</c>. What they change is which states the
+    /// policy is asked about and when it is handed the wheel, which is this
+    /// surface's own description.
+    /// <para>
+    /// ⛔ <b><c>BotConstantsReachTests</c> is what keeps that true</b>, and it has
+    /// to be a SOURCE scan: a <c>const</c> is inlined at compile time, so the
+    /// reference is gone from the IL and no reflection or assembly-reference test
+    /// can see it. If that test is deleted, this paragraph becomes an unfalsifiable
+    /// claim about the repo — which is the failure mode <c>CLAUDE.md</c> names.
+    /// </para>
     /// </para>
     /// </remarks>
     private static readonly Type[] RoutingSources =
     [
         typeof(NavConstants),
+        typeof(BotConstants),
     ];
 
     private static readonly string Digest = Compute();

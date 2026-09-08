@@ -185,7 +185,7 @@ objective collapses faster: at 450px on one map the policy wins 4 rounds to 133.
 **That result is about one checkpoint, not about the method** — training
 variance across seeds is larger than the effect.
 **It is stamped `SIM_UUID 7ff5940d97aa7bed` and is HISTORY**: the 2026-09-02
-physics carry invalidated it, and this build is `698913b5ea547d60`.
+physics carry invalidated it, and this build is `f10afbdadc795d77`.
 
 **Re-measured against the current build on 2026-09-06** by the training lane
 (`gg2-rl`, pinned at `c434229`, cleared to master over the whole dependency

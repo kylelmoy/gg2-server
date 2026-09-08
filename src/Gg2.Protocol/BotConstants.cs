@@ -128,4 +128,28 @@ public static class BotConstants
     public const int EngageGoalNear = 260;   // BOT_ENGAGE_GOAL_NEAR
     public const int EngageStep = 16;   // BOT_ENGAGE_STEP
     public const int EngageDrop = 28;   // BOT_ENGAGE_DROP
+
+    // --- port-authored, with no BOT_* counterpart -----------------------------
+    //
+    // The reference has no re-post: a bot that arrived there stood on the spot for
+    // the rest of the round. docs/TRAPS-BOTS.md, "A bot that arrives stops moving".
+
+    /// <summary>
+    /// How long a bot stands completely still before it asks for somewhere else
+    /// to stand — <c>ScriptedBot.ParkedTicks</c>.
+    /// </summary>
+    /// <remarks>
+    /// Eight seconds. Long enough never to interrupt a bot holding a firing
+    /// position through one engagement, short enough that nobody watching sees a
+    /// statue.
+    /// </remarks>
+    public const int RepostTicks = 240;
+
+    /// <summary>How far a re-post has to move the bot to count as one.</summary>
+    /// <remarks>
+    /// Above <see cref="GoalRetargetDist"/>, so a re-post is never a goal the
+    /// objective throttle would swallow, and an order of magnitude above
+    /// <see cref="ArriveTol"/>, so the bot walks rather than shuffles.
+    /// </remarks>
+    public const int RepostMinMove = 96;
 }

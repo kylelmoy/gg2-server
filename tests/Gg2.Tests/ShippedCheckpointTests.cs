@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using System.Security.Cryptography;
 using Gg2.Bots;
 using Gg2.Protocol;
@@ -43,25 +44,40 @@ public sealed class ShippedCheckpointTests
     private static string Tier2 => Path.Combine(Directory, "tier2_pyro_rest3_s0.npz");
 
     /// <summary>
-    /// Both files are present and are the exact bytes that were handed over.
+    /// Both files are present, and their WEIGHTS are the ones that were handed
+    /// over.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>The md5s are the handover's own, quoted from the bundle's README
-    /// before anything here had read the files.</b> They are what makes "these are
-    /// the weights that were measured" checkable rather than asserted: every
-    /// number in <c>checkpoints/README.md</c> was measured against these bytes and
-    /// against nothing else, so a re-minted, re-trained or truncated file must
-    /// fail here rather than silently re-point the evidence.
+    /// ⛔ <b>Every number in <c>checkpoints/README.md</c> was measured against
+    /// these arrays and against nothing else</b>, so a re-minted, re-trained or
+    /// truncated file must fail here rather than silently re-point the evidence.
     /// <para>
     /// ⚠️ <b>What to do when this goes red is NOT to update the constant.</b> A
-    /// checkpoint that changed has new numbers or no numbers; take the README with
-    /// it, or the pin becomes a rubber stamp.
+    /// checkpoint whose weights changed has new numbers or no numbers; take the
+    /// README with it, or the pin becomes a rubber stamp.
+    /// </para>
+    /// <para>
+    /// <b>The digest is over every member EXCEPT <c>meta.npy</c>, and that is the
+    /// point.</b> It was the whole file's md5 until 2026-09-08, when
+    /// <c>BotConstants</c> left the gating surface and both checkpoints were
+    /// re-stamped: sixteen ASCII characters inside <c>meta.npy</c> changed, every
+    /// weight stayed byte-identical, and the pin went red anyway — which under its
+    /// own instruction above would have meant re-measuring a README whose numbers
+    /// could not have moved. A digest that a provenance edit can break is a digest
+    /// that gets updated by hand, and a pin updated by hand is the rubber stamp
+    /// the remark warns about.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>So the metadata is pinned separately, not dropped</b> — see
+    /// <see cref="TheShippedCheckpointsCarryTheMetadataTheyWereShippedWith"/>. A
+    /// re-stamp is expected to move that one and to leave this one alone; anything
+    /// that moves THIS is a different set of weights whatever the filename says.
     /// </para>
     /// </remarks>
     [Theory]
-    [InlineData("tier0_combat4_s2.npz", "3c6f997b222c37ce5cdc8eabbf724f90")]
-    [InlineData("tier2_pyro_rest3_s0.npz", "4229edb1b53cab8fc72315b343c5e36f")]
-    public void TheShippedCheckpointsAreTheBytesThatWereHandedOver(string name, string md5)
+    [InlineData("tier0_combat4_s2.npz", "2cc556117ade6d5f20b62cb9dab89ba6")]
+    [InlineData("tier2_pyro_rest3_s0.npz", "5493babe1dbccb513f40d751f3703e81")]
+    public void TheShippedCheckpointsAreTheWeightsThatWereHandedOver(string name, string md5)
     {
         var path = Path.Combine(Directory, name);
 
@@ -70,7 +86,66 @@ public sealed class ShippedCheckpointTests
             $"{path} is missing. checkpoints/ ships with this repository — see "
             + "checkpoints/README.md — and without it --bot-mode policy has nothing to load.");
 
-        Assert.Equal(md5, Convert.ToHexStringLower(MD5.HashData(File.ReadAllBytes(path))));
+        Assert.Equal(md5, WeightsDigest(path));
+    }
+
+    /// <summary>
+    /// The metadata each checkpoint ships with, pinned so a re-stamp is a
+    /// decision rather than a drift.
+    /// </summary>
+    /// <remarks>
+    /// Split off the weights pin above so the two failures mean different things:
+    /// this one moving is a provenance edit, that one moving is different weights.
+    /// Before the split a re-stamp broke the only pin there was, and the two were
+    /// indistinguishable from the failure message.
+    /// </remarks>
+    [Theory]
+    [InlineData("tier0_combat4_s2.npz", "e3e3045f4146afd36e47cd7c3f2e115f")]
+    [InlineData("tier2_pyro_rest3_s0.npz", "02746be6ad0f6f1ba929b3244a5cc802")]
+    public void TheShippedCheckpointsCarryTheMetadataTheyWereShippedWith(string name, string md5)
+    {
+        using var archive = ZipFile.OpenRead(Path.Combine(Directory, name));
+        using var meta = archive.GetEntry("meta.npy")!.Open();
+        using var buffer = new MemoryStream();
+
+        meta.CopyTo(buffer);
+
+        Assert.Equal(md5, Convert.ToHexStringLower(MD5.HashData(buffer.ToArray())));
+    }
+
+    /// <summary>
+    /// md5 over every member except <c>meta.npy</c>, names included, in a fixed
+    /// order.
+    /// </summary>
+    /// <remarks>
+    /// Names are hashed alongside the bytes so a renamed array cannot pass, and
+    /// the order is sorted rather than the archive's own so re-zipping a file
+    /// cannot move the digest either.
+    /// </remarks>
+    private static string WeightsDigest(string path)
+    {
+        using var archive = ZipFile.OpenRead(path);
+        using var md5 = MD5.Create();
+
+        foreach (var entry in archive.Entries
+            .Where(e => e.Name != "meta.npy")
+            .OrderBy(e => e.Name, StringComparer.Ordinal))
+        {
+            var name = System.Text.Encoding.UTF8.GetBytes(entry.Name);
+            md5.TransformBlock(name, 0, name.Length, null, 0);
+
+            using var stream = entry.Open();
+            using var buffer = new MemoryStream();
+
+            stream.CopyTo(buffer);
+
+            var bytes = buffer.ToArray();
+            md5.TransformBlock(bytes, 0, bytes.Length, null, 0);
+        }
+
+        md5.TransformFinalBlock([], 0, 0);
+
+        return Convert.ToHexStringLower(md5.Hash!);
     }
 
     /// <summary>

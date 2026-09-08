@@ -4,16 +4,50 @@ Two trained checkpoints from the `gg2-rl` lane, checked in for the reason `maps/
 and `nav/` are: without them a clone cannot run what this repository documents.
 They travel with a `dotnet publish`.
 
-| file | md5 | drives |
+| file | weights md5 | drives |
 |---|---|---|
-| `tier0_combat4_s2.npz` | `3c6f997b222c37ce5cdc8eabbf724f90` | scout, soldier, demoman, heavy |
-| `tier2_pyro_rest3_s0.npz` | `4229edb1b53cab8fc72315b343c5e36f` | pyro |
+| `tier0_combat4_s2.npz` | `2cc556117ade6d5f20b62cb9dab89ba6` | scout, soldier, demoman, heavy |
+| `tier2_pyro_rest3_s0.npz` | `5493babe1dbccb513f40d751f3703e81` | pyro |
 | — | — | sniper, spy, engineer, medic stay scripted |
 
-Both carry `SIM_UUID 698913b5ea547d60` — this build's, pinned by
+The digest is over every array in the archive **except `meta.npy`**, which is
+what every number below was measured against.
+`ShippedCheckpointTests.TheShippedCheckpointsAreTheWeightsThatWereHandedOver`
+pins it; the metadata is pinned separately, so a provenance edit and a different
+set of weights cannot produce the same failure.
+
+Both carry `SIM_UUID f10afbdadc795d77` — this build's, pinned by
 `SimulationStampTests` — with layout v2 (211 floats), encoding v2 and action
 repeat 4, trained at `gg2-rl` commit `c434229`. They run as two `HybridBot` tiers
 at 150px under `HandoverRule.MacroTask`, which are `BotBrainSpec`'s defaults.
+
+### They were re-stamped on 2026-09-08, and here is what that did and did not mean
+
+**Trained against `SIM_UUID 698913b5ea547d60`; re-stamped to `f10afbdadc795d77`
+without retraining.** The whole-file md5s as handed over were
+`3c6f997b222c37ce5cdc8eabbf724f90` and `4229edb1b53cab8fc72315b343c5e36f`; they
+are now `244961de4e9580f3a06aa80d706665e7` and `810334446f95d9fc36ed9eaf55631059`.
+The same edit was applied to the four fixtures under
+`tests/Gg2.Tests/Fixtures/policy/`.
+
+**What moved was the surface, not the simulation.** `BotConstants` left
+`SimulationStamp`'s gating surface for its routing one, which deletes 117 lines
+from the digest and moves it exactly as adding a physics constant would — but
+every remaining line was byte-identical either side of the move, so nothing a
+checkpoint's learned mapping depends on had changed. The physics, the class
+tables, the action encoding and the observation layout were all untouched.
+
+**Sixteen ASCII characters inside `meta.npy` changed and nothing else did**, in
+either file — verified member by member on the way through.
+
+⚠️ **Do not read this as a precedent for re-stamping in general.** It was sound
+here for one reason that will usually be absent: the retained surface was
+provably unchanged at that moment. A stamp move caused by a *physics* change
+retires these files, and re-stamping through one would make this README describe
+weights that were measured against a game that no longer exists — with nothing
+left to detect it, because the re-stamp is the operation that destroys the
+evidence for its own safety. That is why the original stamp is recorded above
+rather than replaced.
 
 The two class sets are disjoint, so exactly one tier is ever eligible for a class
 and registration order cannot change behaviour.
@@ -118,12 +152,16 @@ on both.
   a stable test input, a shipped artefact wants the best available policy. They
   will diverge when tier 0 next improves, at which point delete that test and say
   here that the two are no longer the same file.
-- A policy is dated by the physics it was trained against. A `SIM_UUID` move
-  retires both files; `PolicyNetwork.Load` refuses a foreign stamp and
-  `ShippedCheckpointTests` does not bypass it, so the retirement surfaces on the
-  run that moves the stamp.
-- `ShippedCheckpointTests` gates presence and routing only — the md5s, the stamp,
-  the class sets in both directions, disjointness, and a match per tier proving
-  the weights take the wheel. It says nothing about whether either checkpoint
+- A policy is dated by the physics it was trained against. `PolicyNetwork.Load`
+  refuses a foreign stamp and `ShippedCheckpointTests` does not bypass it, so a
+  `SIM_UUID` move surfaces on the run that causes it rather than on a playtester.
+  ⚠️ **Not every stamp move is a physics move**: removing a source from
+  `SimulationStamp.ConstantSources` moves the digest too, and that is a
+  bookkeeping change these weights survive. Ask which surface lines actually
+  differ before deciding between a re-stamp and a retrain — and if it was a
+  physics change, retrain. See the re-stamp note above.
+- `ShippedCheckpointTests` gates presence and routing only — the weights digest,
+  the metadata digest, the stamp, the class sets in both directions,
+  disjointness, and a match per tier proving the weights take the wheel. It says nothing about whether either checkpoint
   plays well. That evidence is the training lane's and is quoted above.
 - Canonical record on the producing side: `docs/STATUS.md` in `gg2-rl`.

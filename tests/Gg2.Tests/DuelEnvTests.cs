@@ -569,7 +569,7 @@ public sealed class DuelEnvTests
     /// </para>
     /// <para>
     /// ⚠️ <b>The premise is counted over the episode, not read off the end of
-    /// it.</b> A bot that has stood still for <c>ScriptedBot.RepostTicks</c>
+    /// it.</b> A bot that has stood still for <c>BotConstants.RepostTicks</c>
     /// re-posts to reachable ground nearby, so it finishes the episode holding a
     /// perfectly good route to somewhere that is not the opponent — and an
     /// end-state <c>HasPath</c> check therefore reported "the opponent turned out

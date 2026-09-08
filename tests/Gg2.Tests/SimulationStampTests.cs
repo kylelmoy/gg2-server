@@ -71,8 +71,21 @@ public sealed class SimulationStampTests(ITestOutputHelper output)
     /// updated <em>as</em> the bump, per this type's own rule, not repaired as a
     /// broken test.
     /// </para>
+    /// <para>
+    /// <b>And on 2026-09-08, when <c>BotConstants</c> left the gating surface for
+    /// the routing one</b> (698913b5ea547d60 to f10afbdadc795d77). ⚠️ <b>Removing
+    /// a source moves the digest exactly as adding a constant to one does</b> —
+    /// <c>Lines()</c> enumerates every literal of every source, so the 117
+    /// <c>BOT_*</c> entries simply left the list. The two shipped checkpoints were
+    /// <b>re-stamped rather than retrained</b>, which was sound at that moment and
+    /// only then: the retained surface was byte-identical either side of the move,
+    /// so nothing a checkpoint depends on had changed.
+    /// <c>checkpoints/README.md</c> records the original stamp, because the
+    /// re-stamp is the one operation that destroys the evidence for its own
+    /// safety.
+    /// </para>
     /// </remarks>
-    private const string Pinned = "698913b5ea547d60";
+    private const string Pinned = "f10afbdadc795d77";
 
     /// <summary>
     /// The stamp is stable, and not a per-process hash.
@@ -142,6 +155,13 @@ public sealed class SimulationStampTests(ITestOutputHelper output)
         Assert.Contains($"NavConstants.CellSize={NavConstants.CellSize}", routing);
         Assert.DoesNotContain($"NavConstants.CellSize={NavConstants.CellSize}", gating);
 
+        // The BOT_* block joined it on 2026-09-08. Both directions, for the same
+        // reason as nav: back on the gate strands checkpoints over a bot-tuning
+        // edit, and off both surfaces loses the record that the bots were retuned
+        // at all.
+        Assert.Contains($"BotConstants.EngageTicks={BotConstants.EngageTicks}", routing);
+        Assert.DoesNotContain($"BotConstants.EngageTicks={BotConstants.EngageTicks}", gating);
+
         // The physics is not in the routing surface. A split that quietly moved
         // gravity to the un-gated side would look exactly like this one.
         Assert.DoesNotContain($"ClassStats.Gravity={ClassStats.Gravity:R}", routing);
@@ -165,7 +185,7 @@ public sealed class SimulationStampTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void TheSurfaceCoversThePhysicsTheBotConstantsAndTheTables()
+    public void TheSurfaceCoversThePhysicsAndTheTables()
     {
         var surface = SimulationStamp.Surface();
 
@@ -180,10 +200,6 @@ public sealed class SimulationStampTests(ITestOutputHelper output)
             // GML's own arithmetic, which every trajectory runs through.
             $"Gml.Epsilon={Gml.Epsilon:R}",
             $"Gml.PointSix={Gml.PointSix:R}",
-
-            // The BOT_* block. NAV_* is on the routing surface instead — see
-            // TheRoutingSurfaceIsSeparateAndNotGated below.
-            $"BotConstants.EngageTicks={BotConstants.EngageTicks}",
 
             // The action encoding and the (undesigned) observation layout.
             $"action={SimulationStamp.ActionEncodingVersion}",
@@ -236,9 +252,14 @@ public sealed class SimulationStampTests(ITestOutputHelper output)
         Assert.NotEqual(surface[gravity], nudged[gravity]);
         Assert.NotEqual(here, Fnv(nudged));
 
-        // The same for a bot constant and for a class's hit points, so the claim
-        // is about the whole surface rather than about one entry.
-        foreach (var name in new[] { "BotConstants.EngageTicks=", "class.Heavy=" })
+        // The same for GML's own arithmetic and for a class's hit points, so the
+        // claim is about the whole surface rather than about one entry.
+        //
+        // ⚠️ This read BotConstants.EngageTicks until 2026-09-08. A test that
+        // reaches for a named entry silently stops testing the thing it names when
+        // that entry moves to another surface — it would have gone red here, but
+        // only because the entry vanished, which is not the same signal.
+        foreach (var name in new[] { "Gml.Epsilon=", "class.Heavy=" })
         {
             var at = surface.FindIndex(e => e.StartsWith(name, StringComparison.Ordinal));
             Assert.True(at >= 0, name);

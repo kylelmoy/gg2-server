@@ -991,10 +991,10 @@ the engineer.
 
 - **`ScriptedBot.ParkedTicks`** counts consecutive ticks the bot spent grounded,
   not engaging, not regrouping, pressing no horizontal key **and not having
-  moved**. At `ScriptedBot.RepostTicks` (240, eight seconds) it asks
+  moved**. At `BotConstants.RepostTicks` (240, eight seconds) it asks
   `BotObjective.Decide` for somewhere else.
 - **`BotObjective.Decide`'s `reposting`** replaces the class's band with the hold
-  band, drops the sightline requirement, and passes `ScriptedBot.RepostMinMove`
+  band, drops the sightline requirement, and passes `BotConstants.RepostMinMove`
   (96px) as `BotGoalSpot.Find`'s new `avoidRadius`, which refuses candidates that
   near the bot *before* ranking them.
 - **`ScriptedBot.ApplyHolds` clears `WantsToEngage`** when the target is gone or
@@ -1040,15 +1040,16 @@ waiting on a descent that never came). **Any parked test keyed on the follower's
 own state inherits the follower's blind spot**, which is why `ParkedTicks` is
 keyed on the position instead.
 
-#### ⛔ The two new constants are deliberately NOT in `BotConstants`
+#### ⛔ Adding the two constants moved `SIM_UUID`, and that was the real bug
 
-`BotConstants` is on `SimulationStamp`'s **gating** surface, so adding a constant
-to it moves `SIM_UUID` and every shipped checkpoint refuses to load — measured,
-**75 tests red** on the stamp mismatch, none of them about bots standing still.
-`RepostTicks` and `RepostMinMove` live on `ScriptedBot` beside `CarrierStuckTicks`
-and `SpotBanTicks`, which is where this repo already puts port-authored bot
-tuning. A number that cannot change what an action does does not belong on a
-surface whose job is to invalidate learned mappings.
+`BotConstants` was on `SimulationStamp`'s **gating** surface, so adding
+`RepostTicks` and `RepostMinMove` to it moved `SIM_UUID` and every shipped
+checkpoint refused to load — **75 tests red** on the stamp mismatch, none of them
+about bots standing still. They were parked on `ScriptedBot` to get past it.
+
+**That was the wrong fix and the surface was corrected instead** — see "The
+`BOT_*` block does not belong on the gating surface" below. The constants are
+back in `BotConstants`, where a `BOT_*`-shaped number belongs.
 
 #### The gate, and what it could not have caught
 
@@ -1072,6 +1073,77 @@ holding a perfectly good route to somewhere that is not the opponent. The claim
 under test — 16 re-plans against a throttled ceiling of 21 — never moved. The
 premise is now counted over the episode (67 of 200 decisions had no route), which
 is also strictly stronger: an end-state snapshot can be a momentary gap.
+
+### The `BOT_*` block does not belong on the gating surface
+
+**2026-09-08.** `SimulationStamp` splits two digests: `Uuid` **gates** — a
+mismatch refuses to load a checkpoint — and `RoutingUuid` is **reported**.
+`NavConstants` moved to the reported side when the split was built.
+`BotConstants` did not, and the code's own remark said why: the argument applied
+to it equally, but "no measurement has been taken across a `BotConstants` edit
+the way the nav edits were measured, and moving it on the strength of the
+argument alone would be widening an authorisation past its evidence. Open."
+
+**The measurement is cheap and it is decisive.**
+
+| question | answer |
+|---|---|
+| does any of `src/Gg2.Simulation` read a `BOT_*` constant? | **no** — so none can change what an action does |
+| does the inference path? (`ObservationWriter`, `ActionDecoder`, `PolicyNetwork`, `PolicyController`, `HybridBot`, `Handover`) | **no** |
+| who does, then? | `src/Gg2.Bots`, `src/Gg2.Nav`, `HandoverRule` — 27 files |
+
+That is verbatim the routing surface's own description: which states the policy
+is asked about, and when it is handed the wheel. `BotConstants` is now on it.
+
+⛔ **`BotConstantsReachTests` is what keeps that true, and it has to be a SOURCE
+scan.** A `const` is inlined by the compiler, so a read of
+`BotConstants.EngageTicks` leaves *nothing* in the IL — no member reference, and
+not even an assembly reference if it is the only use. Reflection, Cecil and an
+assembly-reference walk are all blind by construction. Confirmed to fire by
+adding one read to `Gg2.Simulation/Deaths.cs` and watching it name the file.
+
+#### ⚠️ Removing a source moves the digest exactly as adding a constant does
+
+`Lines()` enumerates every literal of every source, so dropping `BotConstants`
+deleted its 117 entries and took `SIM_UUID` 698913b5ea547d60 → f10afbdadc795d77.
+**A re-stamp is therefore the prerequisite for the move, not an alternative to
+it** — both directions cost the same one-time refusal, which is worth knowing
+before treating "just leave it on the gate" as the cheaper option. It is not
+cheaper; it is the same price, deferred, and paid again on every later
+bot-tuning edit.
+
+The two shipped checkpoints and the four fixtures under
+`tests/Gg2.Tests/Fixtures/policy/` were **re-stamped rather than retrained**:
+sixteen ASCII characters in `meta.npy`, verified member by member, every weight
+byte-identical. `checkpoints/README.md` records the original stamp and the
+original md5s, because the re-stamp is the operation that destroys the evidence
+for its own safety.
+
+⚠️ **Sound here for a reason that will usually be absent**: the retained surface
+was provably unchanged at that moment. A stamp move caused by a *physics* change
+retires those files, and re-stamping through one leaves nothing able to detect
+it.
+
+⚠️ **`gg2-rl` needed no change** — it receives the stamp over the env handshake
+(`EnvProtocol.SimulationUuid`) rather than computing it, so the trainer records
+whatever this build hands it.
+
+#### ⚠️ A whole-file md5 is the wrong pin for an artefact with a provenance field
+
+`ShippedCheckpointTests` pinned the md5 of the whole `.npz`, with the explicit
+instruction that going red must **not** be answered by updating the constant:
+"a checkpoint that changed has new numbers or no numbers; take the README with
+it, or the pin becomes a rubber stamp."
+
+**A re-stamp broke that pin while changing nothing the README measures**, so
+following the instruction literally would have meant re-measuring numbers that
+could not have moved — and not following it makes the pin a rubber stamp. The
+pin was the problem, not the instruction.
+
+It is now two pins: a digest over every member **except** `meta.npy` (what the
+README's numbers were measured against, and provably unmoved by a re-stamp), and
+a separate one over `meta.npy`. A provenance edit and a different set of weights
+now produce different failures instead of the same one.
 
 ### Phase 7 item 4h: a server that fills itself, and the headroom number
 
