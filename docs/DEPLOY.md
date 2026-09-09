@@ -10,7 +10,7 @@ deployment differs from a `dotnet run` out of the repository.
 
 | Claim | How it is held up |
 |---|---|
-| It compiles and links for Linux | `dotnet publish -r linux-x64` produces an ELF 64-bit LSB PIE executable |
+| It compiles, links and RUNS on Linux | `dotnet publish -r linux-x64` produces an ELF 64-bit LSB PIE executable, and one has served on Ubuntu 24.04 — box below |
 | No unguarded native call | `PortabilityTests.EveryNativeCallIsAnnotatedWindowsOnly`, plus the exact-set pin below it |
 | No hard-coded Windows path | `PortabilityTests.NoShippedAssemblyHardCodesAWindowsPath`, over the metadata #US heap |
 | SIGTERM stops gracefully | `DeploymentTests.SigtermRequestsAGracefulStop` |
@@ -19,17 +19,23 @@ deployment differs from a `dotnet run` out of the repository.
 | A nav graph matches its map | `NavManifestTests`, with a mutated-walkmask arm and an entities-only arm |
 | CPU and memory cost | Measured on Windows, table below |
 | `--version` says which commit is running | `BuildInfoTests`, against the regex `scripts/deploy.sh` parses it with; `ControlPortTests.StateReportsTheRoster` for the `state` reply |
-| A deploy reaches the hosts and flips them | Nothing — `scripts/deploy.sh`'s remote half has never run against a Linux host. See "what has not been run" |
+| A deploy reaches the hosts and flips them | Done once for real, 2026-09-08, `9daae8f` to Ubuntu 24.04. `--rollback` and the prune are still unrun; see "what a real deploy has and has not exercised" |
 
-**NOBODY HAS RUN THE BINARY ON LINUX.** Every row above is a static check, a
-unit test, or a measurement taken on Windows. They are the checks that would
-catch the *known* ways portability breaks; they are not a green run on the
-target, and they cannot see a case-sensitivity assumption, a file-permission
-difference, or a `glibc`/`musl` problem.
+**The binary runs on Linux.** First done 2026-09-08 on Ubuntu 24.04.4 LTS,
+x86-64, .NET 10.0.11, framework-dependent publish of `9daae8f` deployed by
+`scripts/deploy.sh`: it starts, loads `ctf_truefort`, reads its shipped nav
+tables (`4 table(s), 10.8 MB, 120 ms` — loaded, not derived), listens on 8190,
+announces to the lobby, serves the web panel, and logs no warning or error in
+the invocation. `journalctl -u gg2 _SYSTEMD_INVOCATION_ID=<id> -p warning` is
+empty. SIGTERM and the graceful stop were exercised by the restart.
 
-**What would make this section stale**: the first actual Linux run. When
-somebody does it, replace this box with what happened — including the boring
-answer — rather than deleting it.
+**What a Linux run still has not shown**: no client has connected to a
+Linux-hosted server in this repository's history, so nothing above is evidence
+about the wire, and no round has been played to completion on one. The
+case-sensitivity, file-permission and `glibc`/`musl` classes of problem are
+narrowed rather than closed — one distribution, one filesystem, one publish
+shape.
+
 
 ---
 
@@ -166,6 +172,7 @@ reach the repository.
 
 | Step | Why it is that way |
 |---|---|
+| **preflight the host before transferring** | passwordless `sudo`, the unit's existence and write access are all checkable in one round trip, and all three otherwise fail late — `sudo` after the symlink has already been flipped, which leaves a host carrying a release its service was never restarted onto. The failure prints the exact sudoers line to install. |
 | publish into a fresh `deploy/stage/<sha>` | `deploy/linux` accumulates `gg2.ini`, custom maps and generated nav. Staging somewhere disposable keeps the developer's copies of those off every host; the archive also excludes them by name, for `--from`. |
 | stream a `tar` over ssh, not `scp -r` | tar carries the mode bits, so the executable bit survives a copy from Windows and the `chmod +x` step disappears. Nothing is written to `/tmp` at either end. |
 | unpack to `releases/<sha>.incoming` | the running server never sees a half-written release. |
@@ -173,6 +180,18 @@ reach the repository.
 | flip `current`, record `previous` | `ln -sfn` onto a symlink-to-a-directory drops the new link *inside* it; a fresh link and `mv -Tf` is both correct and atomic. |
 | `systemctl restart`, then read the version back | `is-active` says a process is running, not which one. |
 | prune to `--keep` (default 5) | never `current` or `previous`, and never fatal. |
+
+⚠️ **Probing for passwordless sudo is harder than it looks, and two obvious
+checks are both wrong.** `sudo -n systemctl is-active gg2` exits 1 when sudo
+needs a password *and* when the unit is merely stopped, so a host with no
+sudoers rule reports as ready. `sudo -n true` fails on a host whose rule is
+perfectly good, because `true` is not one of the granted commands. And
+`sudo -n -l <command>` answers about authorisation without regard to whether a
+password would be wanted, so any member of the `sudo` group passes it. The
+preflight runs `sudo -n systemctl show <unit> -p LoadState --value`: it is
+granted by the rule, and `systemctl show` exits 0 whenever it runs — even for a
+unit that does not exist — so a non-zero status means sudo refused and nothing
+else.
 
 **Hosts are sequential and the first failure stops the run.** With several
 machines the property worth having is that a bad build reaches one of them
@@ -219,17 +238,32 @@ the tree.
 with. They are a shell script and a C# format string with nothing else between
 them.
 
-### What has not been run
+### What a real deploy has and has not exercised
 
-**The remote half of `deploy.sh` has never executed against a Linux host.** It
-was written on a Windows machine with no WSL and no Docker, so the flip, the
-restart, the rollback and the prune are unrun code. What has been exercised is
-the local half — host parsing, the dirty-tree refusal, `--dry-run`,
-`--print-unit` — and the version line the remote probe parses.
+First real deploy: 2026-09-08, `9daae8f` to one Ubuntu 24.04 host. **Run and
+working**: the preflight, the tar stream, the unpack into `.incoming`, the
+`--version` probe on the target, the flip, the `systemctl restart`, the
+post-restart version read-back, and `--status` against a deployed host.
 
-This is the same box as "NOBODY HAS RUN THE BINARY ON LINUX" above and comes off
-at the same time: replace this section with what happened on the first real
-deploy, including the boring answer.
+**Not yet run by anything**: `--rollback` and the prune, both of which need a
+second release on a host to have anything to do; and more than one host in a
+`hosts` file, so the sequential-stop and `--keep-going` paths are untested
+against a real failure.
+
+Three defects the first deploy found, all fixed, all of a kind no test in this
+repository could have caught:
+
+- **`set -e` is ignored inside a command whose status is tested.** The
+  per-host body was `if ! ( set -e; … )`, and the shell disables errexit for
+  the whole subshell there — the `!` included. A failing preflight ran the
+  transfer anyway, and a failing transfer would have flipped `current` onto a
+  release that was never unpacked, silently. Every step now checks with
+  `|| return 1`.
+- **The failure message asserted something it could not know.** It said
+  "nothing was flipped there" about a host that had been flipped. The flip now
+  announces itself and the message points at that line.
+- **Probing for passwordless sudo, three times wrong** — see the box under
+  "Updating many machines at once".
 
 ### Setting a host up the first time
 
