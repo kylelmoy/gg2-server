@@ -443,7 +443,14 @@ public sealed class BotPopulationService
         // without this call every bot stops playing after the first rotation and
         // the server carries on ticking, rotating and reporting matches as
         // completed with nobody in them.
-        Reteam(slots);
+        // ⚠️ And Retarget on the way out of it, because everything Retarget
+        // derives is derived FROM the team: MapChanged ran it one tick ago
+        // against a roster ResetForNewMap had just wiped, so every bot's role was
+        // counted across the two teams merged into one list. Not folded into the
+        // count check below — a rotation leaves `bots == target` true, which is
+        // exactly the case that returns early.
+        if (Reteam(slots))
+            Retarget();
 
         if (bots == target)
             return;
@@ -486,8 +493,15 @@ public sealed class BotPopulationService
     /// succeeded. Re-reading the team on the next call is what makes that safe.
     /// </para>
     /// </remarks>
-    private void Reteam(IReadOnlyList<int> slots)
+    /// <returns>
+    /// Whether any bot actually landed on a team, which is what the caller
+    /// re-derives the roles from. A refused request reports false and is retried
+    /// next tick, so nothing is re-derived from a placement that did not happen.
+    /// </returns>
+    private bool Reteam(IReadOnlyList<int> slots)
     {
+        var placed = false;
+
         foreach (var slot in slots)
         {
             if (_server.TeamOf(slot) is Team.Red or Team.Blue)
@@ -495,7 +509,13 @@ public sealed class BotPopulationService
 
             _server.CountTeams(out var red, out var blue);
             _server.RequestBotTeam(slot, BotPopulation.PickTeam(red, blue, ref _random));
+
+            // Read back rather than assumed: RequestBotTeam runs the reference's
+            // balance guard and refuses a request for the bigger team in silence.
+            placed |= _server.TeamOf(slot) is Team.Red or Team.Blue;
         }
+
+        return placed;
     }
 
     private bool TryAdd(in BotPopulationOptions options)

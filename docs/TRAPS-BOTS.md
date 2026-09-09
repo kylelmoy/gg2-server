@@ -5405,3 +5405,57 @@ naming the classes that checkpoint will drive.
 `PolicyMicroSpec` and `PolicyController` take the class set explicitly. A null
 set asks the checkpoint; an empty set means the tier drives nothing. Conflating
 those would silently re-enable every class an operator turned off.
+
+## ⛔ Everything derived from a bot's team is derived one tick too early
+
+A map change wipes the roster before it re-roles the bots, so anything the
+population manager takes *from* a team is taken while every team reads
+`Spectator`. `Rounds.ResetForNewMap` runs `with(Player) team = TEAM_SPECTATOR`,
+`OpenMap` calls `BotPopulationService.MapChanged` in the same tick, and
+`Reteam` — which puts a spectating bot back on a team — does not run until the
+next one.
+
+The stale field that matters is `ScriptedBot.Query.Team`.
+`NavGraph.GatePassable` refuses **both** team gates to a spectator, so a bot
+whose spawn-room exit is gated has no route out of it at all. It keeps
+targeting correctly (`BotObjective` reads `world.Player(slot).Team` live), so
+it wants somewhere it cannot plan to, and stands still for the whole map.
+`Role` goes stale in the same tick and more quietly: `Retarget`'s
+`earlierTeammates` filter is `TeamOf(other) == team`, so with the roster merged
+into one `Spectator` group every bot counts *both* teams' lower slots and the
+attack/defend mix is drawn from a list twice the right length.
+
+Measured on `00ee10b`, twelve bots, a control-port map change
+`ctf_truefort` → `ctf_orange`, sampling positions ten times at 200 ms:
+
+| | bot-samples that moved |
+|---|---|
+| before the change | 80/108 |
+| after the change | 15/108, and 0/108 once settled |
+| after any bot-count change | 99/99 |
+
+That last row is the whole of why the bug looks intermittent. Nothing
+re-derives the team-dependent state on its own, but `Service` calls `Retarget`
+whenever the population moves — so a human joining or leaving, or a bot count
+set from the panel, un-freezes every bot at once, minutes later, with no
+apparent cause.
+
+The fix is in two places and both are load-bearing:
+
+- `ScriptedBot.Poll` rebuilds `Query.Team` from `self.Team` every tick,
+  alongside the class arcs it already rebuilt there. This is the routing half,
+  and it also covers the case with no map change in it: the autobalance moves a
+  bot across mid-round and nothing told its query.
+- `BotPopulationService.Service` calls `Retarget` when `Reteam` actually placed
+  somebody. `Reteam` reads the team back rather than assuming, because
+  `RequestBotTeam` runs the reference's balance guard and refuses a request for
+  the bigger team in silence. It cannot be folded into the count check below
+  it — a rotation leaves `bots == target` true, which is exactly the branch that
+  returns early.
+
+`BotPopulationTests.ABotRoutesAsItsOwnTeamAfterARotation` is the gate, and it
+asserts the routing consequence rather than the assignment: the bot's roster
+team and `Query.Team` after a rotation. What would show this has gone stale is
+a second field derived from the team at add-time and never refreshed — the
+existing ones are `Role`, `SpreadX` and `Query`, and only `Query` is on the
+per-tick path.

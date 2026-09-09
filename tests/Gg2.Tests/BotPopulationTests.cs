@@ -439,6 +439,58 @@ public sealed class BotPopulationTests(ITestOutputHelper output)
         }
     }
 
+    /// <summary>
+    /// A bot plans as the team it is actually on after a rotation.
+    /// </summary>
+    /// <remarks>
+    /// <b><c>Rounds.ResetForNewMap</c> makes every player a spectator, and
+    /// <c>OpenMap</c> re-roles the bots in the same tick</b> — so the role, the
+    /// spread and above all <see cref="ScriptedBot.Query"/>'s team are all taken
+    /// while the whole roster reads <c>Spectator</c>. <c>Reteam</c> puts the bots
+    /// back on Red and Blue on the next tick, and nothing re-derives what was
+    /// taken from the team.
+    /// <para>
+    /// The team in the query is what <c>NavGraph.GatePassable</c> reads, and a
+    /// spectator passes NEITHER team gate — so a bot whose spawn room has a team
+    /// gate on its exit has no route out of it at all, and stands still for the
+    /// whole map. That is what this pins: not the assignment, the routing
+    /// consequence.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ABotRoutesAsItsOwnTeamAfterARotation()
+    {
+        using var harness = new ServerHarness(o =>
+        {
+            o.Map = "gg_debug";
+            o.MapRotation = ["gg_debug", Map];
+            o.NavCacheDirectory = ReferenceTree.NavCacheDirectory;
+            o.TimeLimitMinutes = 1;
+            o.Bots = new BotPopulationOptions(Enabled: true, FillToPlayers: 4, MaxBots: 4, MinHumans: 0);
+        });
+
+        harness.Tick(5);
+        Assert.Equal(4, harness.Server.BotSlots.Count);
+
+        harness.TickUntil(
+            () => harness.Server.CurrentMap == Map,
+            "the map to rotate",
+            maxTicks: 60 * 30 * 3);
+
+        // A few ticks past the change, because Reteam runs on the tick AFTER the
+        // map opens — this is about what is left standing once it has.
+        harness.Tick(10);
+
+        foreach (var slot in harness.Server.BotSlots)
+        {
+            var bot = (ScriptedBot)harness.Server.SourceOf(slot);
+            var team = harness.Server.TeamOf(slot);
+
+            Assert.True(team is Team.Red or Team.Blue, $"bot in slot {slot} is still {team}");
+            Assert.Equal(team, bot.Query.Team);
+        }
+    }
+
     // ------------------------------------------------------------------
     // Item 5: the headroom
     // ------------------------------------------------------------------

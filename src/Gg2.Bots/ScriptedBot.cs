@@ -562,8 +562,17 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
         // soldier's routes shed their rocket jumps on their own as it takes damage
         // — `hp > NAV_RJ_DAMAGE`, strictly greater, because the damage lands before
         // the bot does.
+        //
+        // ⚠️ The TEAM is live for the same reason and it is the one that traps a
+        // bot outright: NavGraph.GatePassable refuses both team gates to a
+        // spectator, so a stale team means no route out of a gated spawn room at
+        // all. It goes stale in two ways with no map involved — the autobalance
+        // moves a bot across mid-round — and one with: Rounds.ResetForNewMap wipes
+        // the whole roster to Spectator, and OpenMap re-roles the bots in that
+        // same tick, before anything has put them back on a team.
         Query = Query with
         {
+            Team = self.Team,
             CanDoubleJump = BotClassProfile.AirJump(self.Class),
             CanRocketJump = RocketModel.Capable(in self, in world.Weapon(slot)),
         };
