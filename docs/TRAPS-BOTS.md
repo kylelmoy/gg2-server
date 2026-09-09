@@ -51,12 +51,11 @@ What it licenses, and what it does not:
   and team clumping is down rather than up from the goal-less baseline.
 - ⚠️ **Conversion at 6v6 is 8%**, and nothing establishes whether that is
   *right*. There is no human baseline in this project.
-- ⚠️ **No full-match statue is left across 22 maps and 8 seeds**, but
-  `ctf_oldfort` seed 4242 still pins a Heavy for 11,012 ticks against an
-  objective its class cannot climb to. That is this list's "cannot be reached
-  without a jump they do not have" entry, not a nav fault — 136 of 275 nodes
-  are reachable from where it stands. See "A route that exists and a route a
-  bot can walk are different things".
+- ⚠️ **No full-match statue is left across 22 maps and 8 seeds**; the longest
+  single pinned run is 8,991 ticks on `tdm_mantic`, where nodes 258-260 form a
+  3-node pocket out of 261 that reaches nothing else. That one is genuine nav
+  isolation. See "A route that exists and a route a bot can walk are different
+  things".
 - ⚠️ **7 of 528 bot-matches still freeze a bot for 900+ ticks**, down from 98 —
   see "A bot that arrives stops moving" below. Every one is a Demoman, Engineer
   or Heavy handed an objective that **cannot be reached without a jump they do
@@ -5720,9 +5719,27 @@ a bot whose class cannot climb to its objective: `ctf_oldfort` seed 4242, a
 defending Heavy whose band lies entirely in the 139 graph nodes it cannot reach
 while 136 others are reachable from the node it stands on.
 
-Gated by `BotObjectiveTests.ARepostThatHasExhaustedItsBandAsksForGroundNearTheBot`,
-whose fixture stands the bot 3,099px from its objective — on a bot standing on
-its objective the two anchors coincide and the gate cannot tell them apart.
+⛔ **The last resort carries NO distance guard, and that is not a detail.** Once
+the anchor is the bot, `BOT_REPOST_MIN_MOVE` and `BOT_HOLD_RADIUS` are measured
+from the same point and become an annulus — and in the pockets this exists for
+that annulus is empty, so the search falls through to the objective's own point
+and hands a parked bot the node it is standing on. Measured on `ctf_oldfort`
+node 193: the nearest reachable node is 92px away, four pixels inside the 96px
+guard, and the next is 650px, far outside the 260px band. Restoring the guard
+takes that map's statue time from 0.7% back to 6.5%.
+
+What "somewhere else" means here is a different NODE, which `avoidNode` already
+enforces — a nav node is a run of columns, and a radius was only ever a proxy
+for that.
+
+Two gates, and they fail for different reasons:
+`BotObjectiveTests.ARepostThatHasExhaustedItsBandAsksForGroundNearTheBot` stands
+the bot 3,099px from its objective (on a bot standing on its objective the two
+anchors coincide and it cannot tell them apart), and
+`TheLastResortFindsGroundInsideTheDistanceGuard` stands it on the measured
+`ctf_oldfort` position and asserts the answer is a SPOT — falling through is
+invisible on position alone, because the fallback resolves within a few pixels
+of a bot that is standing on its objective.
 
 ### `BotGoalSpot.Find`'s skip WRAPS
 
@@ -5763,29 +5780,41 @@ control.
 The statue census — 22 maps, 8 seeds, ten-minute matches, longest run inside a
 16px circle — is `.claude/notes/probes-0909/ZzStatueCensus.cs`. Across it:
 
-| | Statue time | Full-match statues | Worst run > 5,000 |
-|---|---|---|---|
-| Before | 1.27% | 3 | 6 maps |
-| After | 0.75% | 0 | 2 maps |
+| | Statue time | Full-match statues | Worst run > 5,000 | Longest single run |
+|---|---|---|---|---|
+| Before | 1.27% | 3 | 6 maps | 17,688 |
+| After | 0.37% | 0 | 2 maps | 8,991 |
 
 ⚠️ **Use the longest single run, not the share**: the share counts a
 legitimately holding defender, and per-map numbers move in both directions
 between runs because a twelve-bot match diverges completely from any change.
-`tdm_mantic` is the one that got worse (8,575 → 12,287) while the aggregate
-improved.
+`ctf_waterway` is the one map left worse than it started (762 → 4,663), on a bot
+that otherwise travels 42,998px and engages for 1,577 ticks — a single long
+hold rather than a statue, and not traced.
 
 ⚠️ **The oscillation census (`ZzOscillationCensus.cs`) cannot see this class at
 all** — it requires more than 600px walked inside the window, and a bot pinned
 against a wall walks none of it. The two censuses measure different defects.
 
-### Still open: an objective the class cannot reach
+### What the graph says, and what is left
 
-No bot now holds one place for a whole match, but `ctf_oldfort` seed 4242 still
-pins its defending Heavy for 11,012 ticks and is the largest single contributor
-left. ⚠️ **It is not a nav-reachability fault** — that was the standing guess
-and asking the graph refuted it: 136 of 275 nodes are reachable from the node
-the bot stands on, over three routable edges. What is wrong is upstream, and is
-the known issue already recorded above: the objective layer hands a bot ground
-its class cannot climb to and never asks whether a goal is reachable for the
-profile that has to walk it. The re-post's bot-anchored last resort is a
-mitigation, not the fix.
+⚠️ **"The bot is stranded" was the standing guess for every one of these and it
+was wrong every time except once.** Ask the graph before believing it — a BFS
+from the bot's node over `NavGraph.EdgeRoutable` edges for its own `NavQuery`
+costs nothing and settles it:
+
+| Case | Reachable from where it stands | What it actually was |
+|---|---|---|
+| `ctf_oldfort` node 193 | 136 of 275 | the last resort's empty annulus |
+| `ctf_waterway` node 408 | 699 of 731 | not traced; every goal was reachable |
+| `tdm_mantic` node 260 | **3 of 261** | genuinely isolated |
+
+`tdm_mantic` is the one real pocket: nodes 258, 259 and 260 span 27px and reach
+nothing else, and every goal offered to a bot in it resolves to a node outside.
+A bot there is held until it dies. Nothing in the objective layer can fix that —
+it is a nav-graph or map-geometry question, and it is the map's remaining 4.1%.
+
+The other standing issue is upstream and unchanged: the objective layer never
+asks whether a goal is reachable for the profile that has to walk it, so a
+Heavy is handed ground only a jumping class can get to. The bot-anchored last
+resort is a mitigation for that, not the fix.

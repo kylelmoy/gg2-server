@@ -497,7 +497,21 @@ public sealed class BotObjective
 
         if (reposting)
         {
-            avoidRadius = BotConstants.RepostMinMove;
+            // ⚠️ NO distance guard on the last resort, and that is the whole of
+            // what makes it work. avoidRadius and the band are measured from the
+            // same point once the anchor is the bot, so BOT_REPOST_MIN_MOVE and
+            // BOT_HOLD_RADIUS become an annulus — and in the pockets this exists
+            // for that annulus is EMPTY. Measured on ctf_oldfort node 193: the
+            // nearest reachable node is 93px away, three pixels inside the 96px
+            // guard, and the next is 650px, far outside the 260px band. The search
+            // then finds nothing and falls through to the objective's own point,
+            // which for a parked bot is the node it is standing on.
+            //
+            // avoidNode is the guard that belongs here anyway — see BotGoalSpot's
+            // remark on it: a node is a RUN of columns, so refusing the bot's own
+            // node is what "somewhere else" actually means, and a radius was only
+            // ever a proxy for it.
+            avoidRadius = repostNearBot ? 0 : BotConstants.RepostMinMove;
             avoidNode = _graph.NodeFromWorld(self.X, self.Y);
 
             // The hold band, REPLACING whatever the class asked for rather than

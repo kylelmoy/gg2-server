@@ -33,9 +33,10 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
         LevelMap.FromPng(name, ReferenceTree.ReadMap(name));
 
     /// <summary>A CTF world with both briefcases on their bases.</summary>
-    private static (WorldState State, CollisionWorld World, SpawnPoints Spawns) Ctf()
+    private static (WorldState State, CollisionWorld World, SpawnPoints Spawns) Ctf(
+        string map = CtfMap)
     {
-        var level = Level(CtfMap);
+        var level = Level(map);
         var world = new CollisionWorld(level);
         var state = default(WorldState);
 
@@ -1055,7 +1056,17 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
 
         // The whole point: the last resort is ground the bot could plausibly walk
         // to, inside the same band it would have been given around its objective.
-        Assert.InRange(resort, BotConstants.RepostMinMove, BotConstants.HoldRadius);
+        // ⚠️ Bounded BELOW by the arrival tolerance rather than by
+        // BOT_REPOST_MIN_MOVE: the last resort carries no distance guard, because
+        // in the pockets it exists for the nearest reachable node is inside that
+        // radius and the annulus is empty. What makes it "somewhere else" is that
+        // it is a different NODE, asserted below.
+        Assert.InRange(resort, BotConstants.ArriveTol, BotConstants.HoldRadius);
+
+        // Somewhere else, by the guard that actually applies: a nav node is a run
+        // of columns, so a distance from the bot is not what "a different place to
+        // stand" means.
+        Assert.NotEqual(graph.NodeFromWorld(self.X, self.Y), graph.NodeFromWorld(nearBot.X, nearBot.Y));
 
         // And the control — the ordinary re-post is NOT that, so the flag is doing
         // the work rather than the band happening to sit on the bot.
@@ -1063,6 +1074,69 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
             ordinary > BotConstants.HoldRadius,
             $"the ordinary re-post already landed {ordinary:F0}px away, inside the "
             + "last resort's band, so this fixture cannot tell the two apart");
+    }
+
+    /// <summary>
+    /// The last resort carries no distance guard, because the ground it exists to
+    /// find is inside one.
+    /// </summary>
+    /// <remarks>
+    /// <b>Once the anchor is the bot, <c>BOT_REPOST_MIN_MOVE</c> and
+    /// <c>BOT_HOLD_RADIUS</c> are measured from the same point and become an
+    /// annulus — and in the pockets the last resort exists for that annulus is
+    /// EMPTY.</b> The search then finds nothing and falls through to the
+    /// objective's own point, which for a parked bot is the node it is standing
+    /// on, so the escape returns the bot to exactly where it was.
+    /// <para>
+    /// The fixture is the measured case, not a constructed one: on
+    /// <c>ctf_oldfort</c>, a bot standing at (1643, 690) on node 193 has its
+    /// nearest reachable node 92px away — <b>four pixels inside the 96px
+    /// guard</b> — and the next one 650px away, far outside the 260px band.
+    /// Restoring the guard makes this fall through, and across 22 maps and 8
+    /// seeds it took that map's statue time from 0.7% back to 6.5%.
+    /// </para>
+    /// <para>
+    /// What "somewhere else" means here is a different NODE, which is what
+    /// <c>avoidNode</c> already enforces — see <see cref="BotGoalSpot.Find"/>'s
+    /// remark on it. A radius was only ever a proxy for that, and a nav node is a
+    /// run of columns rather than a point.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void TheLastResortFindsGroundInsideTheDistanceGuard()
+    {
+        const string Map = "ctf_oldfort";
+
+        var (state, world, spawns) = Ctf(Map);
+        var graph = Graph(Map);
+        var objective = new BotObjective(graph, spawns);
+
+        // The measured position, to the pixel. Moving it lands the bot on a node
+        // whose neighbours are outside the guard and the fixture proves nothing.
+        var slot = Put(ref state, spawns, 1, PlayerClass.Soldier, Team.Red, 1643, 690);
+        var view = new WorldView(in state, world);
+
+        ref readonly var self = ref state.Characters[slot];
+        var standingOn = graph.NodeFromWorld(self.X, self.Y);
+
+        var nearBot = objective.Decide(
+            view, slot, BotRole.Defend, 0, allowSpot: true, reposting: true, repostNearBot: true);
+
+        Assert.True(nearBot.Found);
+
+        // A SPOT, not the objective's own point: falling through is the failure
+        // this gates, and it is invisible on position alone — the fallback
+        // resolves within a few pixels of a bot that is standing on its objective.
+        Assert.True(nearBot.IsSpot, "the last resort fell through to the objective's own point");
+
+        Assert.True(objective.TryResolve(in nearBot, 0, out var gx, out var gy));
+        Assert.NotEqual(standingOn, graph.NodeFromWorld(gx, gy));
+
+        // And it really is inside the guard, so the guard is what would exclude it.
+        Assert.True(
+            Gml.PointDistance(gx, gy, self.X, self.Y) < BotConstants.RepostMinMove,
+            "this fixture no longer stands on a node whose nearest neighbour is "
+            + "inside BOT_REPOST_MIN_MOVE, so it cannot tell the guard apart");
     }
 
     // ------------------------------------------------------------------
