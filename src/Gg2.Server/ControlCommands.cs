@@ -594,6 +594,14 @@ public static class ControlCommands
 
         // --- everything below exists for the web panel ------------------------
         json.Append(",\"server\":{\"name\":\"").Append(Escape(server.Options.ServerName)).Append('"');
+
+        // Which build is answering. A deploy that copied binaries and restarted
+        // is otherwise unverifiable from outside the host: `systemctl is-active`
+        // says a process is running, not which one. BuildInfo says why the
+        // commit here is HEAD-at-build-time and not a statement about the
+        // working tree it came from.
+        json.Append(",\"version\":\"").Append(Escape(BuildInfo.Version)).Append('"');
+        json.Append(",\"commit\":\"").Append(Escape(BuildInfo.Commit)).Append('"');
         json.Append(",\"port\":").Append(server.BoundPort);
         json.Append(",\"slots\":").Append(server.Options.PlayerLimit);
         json.Append(",\"uptimeSeconds\":").Append(Number(Math.Round(server.UptimeSeconds, 1)));

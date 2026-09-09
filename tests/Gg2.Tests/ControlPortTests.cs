@@ -3,6 +3,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using Gg2.Protocol;
+using Gg2.Server;
 
 namespace Gg2.Tests;
 
@@ -240,6 +241,15 @@ public sealed class ControlPortTests : IDisposable
         Assert.True(Ok(reply));
         Assert.Equal(_harness.Server.CurrentMap, reply.GetProperty("map").GetString());
         Assert.False(reply.GetProperty("frozen").GetBoolean());
+
+        // Which build is answering. A deploy that copied binaries and restarted
+        // is otherwise unverifiable from off the host — `systemctl is-active`
+        // says a process is running, not which one. BuildInfoTests covers the
+        // format; this covers it reaching the wire the panel and the control
+        // port both read.
+        var server = reply.GetProperty("server");
+        Assert.Equal(BuildInfo.Commit, server.GetProperty("commit").GetString());
+        Assert.Equal(BuildInfo.Version, server.GetProperty("version").GetString());
 
         var players = reply.GetProperty("players");
         Assert.Equal(_harness.Server.RosterCount, players.GetArrayLength());

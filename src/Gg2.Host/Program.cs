@@ -106,6 +106,20 @@ internal static class Program
             }
         }
 
+        // ⚠️ BEFORE the parser and before --help, and it answers without
+        // touching a socket, a map or a config file. This is the question a
+        // deployment asks of a binary it has just copied — `gg2-server
+        // --version` on the target names the commit AND proves the file
+        // executes on that machine, so a missing .NET 10 runtime or an x86-64
+        // publish on an arm64 box fails here rather than at the restart after
+        // the symlink has already been flipped. scripts/deploy.sh runs it in
+        // exactly that order.
+        if (args.Contains("--version"))
+        {
+            Console.WriteLine(BuildInfo.Description);
+            return 0;
+        }
+
         if (args.Contains("--help") || args.Contains("-h"))
         {
             CommandLine.PrintUsage();
@@ -195,6 +209,14 @@ internal static class Program
         // process, only while no password is configured, and it is logged when it
         // happens so nobody has to infer it.
         string? carriedWebPassword = null;
+
+        // ⚠️ OUTSIDE the loop: this identifies the PROCESS, and a control-port
+        // or panel restart rebuilds the server inside the same one. Logging it
+        // per generation would put a second, identical line in the journal
+        // saying a new build had started when none had — which is the one thing
+        // an operator reads this line to rule out. New binaries need a new
+        // process; docs/DEPLOY.md, "updating many machines at once".
+        log.Info(BuildInfo.Description);
 
         while (true)
         {

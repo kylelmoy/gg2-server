@@ -20,3 +20,10 @@ maps/*.png     binary
 *.trace        binary
 *.bin          binary
 *.npz          binary
+
+# Shell scripts are read by bash, and a CR at the end of every line is a syntax
+# error there rather than a cosmetic difference. core.autocrlf=true would put one
+# on every line at checkout, so the ending is pinned here instead of left to a
+# machine's configuration - scripts/deploy.sh also pipes its remote half through
+# `ssh host bash -s`, where the same CRs would arrive at a Linux shell.
+*.sh           text eol=lf

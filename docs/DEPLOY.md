@@ -18,6 +18,8 @@ deployment differs from a `dotnet run` out of the repository.
 | Nav ships with a publish | Nothing mechanical checks this — `dotnet publish` was inspected by hand; see "the nav graphs" |
 | A nav graph matches its map | `NavManifestTests`, with a mutated-walkmask arm and an entities-only arm |
 | CPU and memory cost | Measured on Windows, table below |
+| `--version` says which commit is running | `BuildInfoTests`, against the regex `scripts/deploy.sh` parses it with; `ControlPortTests.StateReportsTheRoster` for the `state` reply |
+| A deploy reaches the hosts and flips them | Nothing — `scripts/deploy.sh`'s remote half has never run against a Linux host. See "what has not been run" |
 
 **NOBODY HAS RUN THE BINARY ON LINUX.** Every row above is a static check, a
 unit test, or a measurement taken on Windows. They are the checks that would
@@ -112,12 +114,164 @@ dotnet publish src/Gg2.Host/Gg2.Host.csproj \
 Drop `-r linux-x64 --self-contained false` for a portable build that needs a
 .NET 10 runtime installed; add `--self-contained true` to carry one.
 
+`scripts/build-linux.sh` (and `scripts/build-linux.ps1`, for a machine with no
+bash) runs that command into `deploy/linux` and checks what came out: an ELF
+64-bit x86-64 binary, the maps, the nav graphs, `manifest.tsv`, and a warning
+when the `.dist.gz` tables are missing. Neither cleans its output directory,
+because a deployment directory accumulates state a publish has no business
+deleting.
+
+For one machine, that directory plus `scp` is the whole story:
+
 ```bash
 scp -r out/ server:/opt/gg2-server/
 ssh server chmod +x /opt/gg2-server/gg2-server
 ```
 
+**The executable bit does not survive `scp` from Windows**, which is what the
+second line is for.
+
+## Updating many machines at once
+
+`scp -r` over a live install is the thing that stops scaling, and not because of
+the copying. It overwrites in place, so there is nothing to roll back to; it
+carries whatever else is in the directory, including the developer's `gg2.ini`;
+and afterwards nothing on the host says which commit is running.
+
+`scripts/deploy.sh` answers all three. One release directory per commit, a
+`current` symlink the unit points at, and a `shared` directory the deploy never
+touches:
+
+```
+/opt/gg2-server/
+  releases/17bec29/     an immutable publish, named for the commit
+  releases/cba32ad/     the one before it, kept for --rollback
+  current  -> releases/17bec29
+  previous -> releases/cba32ad
+  shared/               gg2.ini, bans.txt, traces/, logs/, custom maps
+```
+
+```bash
+scripts/deploy.sh                # build HEAD, push to every host in deploy/hosts
+scripts/deploy.sh --status       # what is each host actually running?
+scripts/deploy.sh --rollback     # flip every host back one release
+scripts/deploy.sh -H gg2@1.2.3.4 # one host, ignoring the hosts file
+scripts/deploy.sh --print-unit   # the systemd unit for this layout
+```
+
+`deploy/hosts` is one ssh destination per line. A destination is whatever `ssh`
+accepts, so `~/.ssh/config` carries the ports, keys and jump hosts and this file
+stays a list of names. `deploy/` is excluded from git, so real addresses do not
+reach the repository.
+
+| Step | Why it is that way |
+|---|---|
+| publish into a fresh `deploy/stage/<sha>` | `deploy/linux` accumulates `gg2.ini`, custom maps and generated nav. Staging somewhere disposable keeps the developer's copies of those off every host; the archive also excludes them by name, for `--from`. |
+| stream a `tar` over ssh, not `scp -r` | tar carries the mode bits, so the executable bit survives a copy from Windows and the `chmod +x` step disappears. Nothing is written to `/tmp` at either end. |
+| unpack to `releases/<sha>.incoming` | the running server never sees a half-written release. |
+| **run `--version` there before flipping** | the only check that executes the binary on the machine it will run on. A missing .NET 10 runtime, a publish for the wrong architecture and a truncated transfer all fail here, while `current` still points at the release that works. |
+| flip `current`, record `previous` | `ln -sfn` onto a symlink-to-a-directory drops the new link *inside* it; a fresh link and `mv -Tf` is both correct and atomic. |
+| `systemctl restart`, then read the version back | `is-active` says a process is running, not which one. |
+| prune to `--keep` (default 5) | never `current` or `previous`, and never fatal. |
+
+**Hosts are sequential and the first failure stops the run.** With several
+machines the property worth having is that a bad build reaches one of them
+rather than all of them; `--keep-going` overrides it once you have watched it
+work somewhere.
+
+**It refuses a dirty working tree.** The commit is stamped into the assembly
+from git HEAD at build time, so a build with uncommitted edits reports a commit
+it is not, and the pre-flip check on the target would then agree with the
+release name and be wrong with it. `--allow-dirty` says you mean it.
+
+**It does not run the tests.** Gate on the suite's exit code yourself:
+
+```bash
+if dotnet test Gg2.sln > log; then scripts/deploy.sh; else cat log; fi
+```
+
+**A restart drops everyone connected.** The graceful path still runs — the
+lobby listing comes down, an in-flight `--record` segment is closed into a
+readable trace — but players in a match are disconnected without warning. The
+control port's `state` verb reports the roster if you want to wait for an empty
+server first.
+
+### Which build is running
+
+```
+$ gg2-server --version
+gg2-server 1.0.0 (17bec29), .NET 10.0.11, linux-x64
+```
+
+The same line is logged once at startup — once per **process**, not per
+in-process restart, because the control port's `restart` verb and the panel's
+button both rebuild the server without replacing the binary. The commit and the
+version are also in the control port's `state` reply, so the panel and the port
+both answer the question.
+
+The runtime and the architecture are on the line because those are the two
+deployment failures a commit hash cannot see. The commit is HEAD at build time
+and says nothing about the working tree it was built from, which is what
+`deploy.sh`'s dirty-tree refusal is for: it is the only check that can still see
+the tree.
+
+`BuildInfoTests` gates the format against the regex the deploy script reads it
+with. They are a shell script and a C# format string with nothing else between
+them.
+
+### What has not been run
+
+**The remote half of `deploy.sh` has never executed against a Linux host.** It
+was written on a Windows machine with no WSL and no Docker, so the flip, the
+restart, the rollback and the prune are unrun code. What has been exercised is
+the local half — host parsing, the dirty-tree refusal, `--dry-run`,
+`--print-unit` — and the version line the remote probe parses.
+
+This is the same box as "NOBODY HAS RUN THE BINARY ON LINUX" above and comes off
+at the same time: replace this section with what happened on the first real
+deploy, including the boring answer.
+
+### Setting a host up the first time
+
+```bash
+scripts/deploy.sh --print-unit > unit
+ssh HOST "sudo useradd -r -s /usr/sbin/nologin gg2 || true"
+ssh HOST "sudo mkdir -p /opt/gg2-server/shared && sudo chown -R gg2 /opt/gg2-server"
+ssh HOST "sudo tee /etc/systemd/system/gg2.service > /dev/null" < unit
+ssh HOST "sudo systemctl daemon-reload && sudo systemctl enable gg2"
+scripts/deploy.sh -H HOST
+```
+
+The unit is printed rather than installed: writing to `/etc` on somebody's
+server is a larger authority than "update the binaries", and the script
+deliberately does not take it.
+
+The ssh account needs two things and nothing else: ownership of
+`/opt/gg2-server`, and permission to restart the unit. The script reaches for
+`sudo -n` on `systemctl` alone, so one sudoers line covers it.
+
+```
+deploy ALL=(root) NOPASSWD: /bin/systemctl restart gg2, /bin/systemctl is-active gg2, /bin/systemctl show gg2 *
+```
+
+`--no-sudo` turns even that off, for an ssh user that is already root or for a
+`--user` unit.
+
+**`shared/` is where anything the server writes belongs.** `ProtectSystem=strict`
+with a `ReadWritePaths` naming only `shared` makes that mechanical rather than a
+convention: a release directory is read-only to the service, so a deploy cannot
+lose anything the server put there. Custom maps and their nav graphs go there
+too, reached with `--maps` and `--botnav` — and both **override** rather than
+add, so seed those directories from a release's `maps/` and `nav/` once or the
+23 shipped maps and 25 graphs stop being found.
+
 ### A systemd unit
+
+The flat form, for a single machine installed by hand. For the release
+layout above, take the unit from `scripts/deploy.sh --print-unit` instead:
+it is this file with `WorkingDirectory` and `ExecStart` going through
+`current`, and `ReadWritePaths` naming `shared` alone. Everything the
+comments below explain applies to both.
 
 ```ini
 [Unit]

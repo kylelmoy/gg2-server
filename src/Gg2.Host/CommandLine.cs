@@ -1194,6 +1194,11 @@ internal static class CommandLine
           --auth-server <host[:port]>
                             where --rewards authenticates
                             (default: ganggarrison.com:45022)
+          --version         print the build - version, commit, runtime and
+                            architecture - and exit. Running it on a machine you
+                            have just copied the binary to is what proves the
+                            copy executes there; a missing .NET runtime fails
+                            here rather than at the next restart.
 
         The built-in maps — 22 shipped plus the gg_debug2 debug range — are
         checked in at maps/ and are found automatically, so a clone serves a
