@@ -5459,3 +5459,75 @@ team and `Query.Team` after a rotation. What would show this has gone stale is
 a second field derived from the team at add-time and never refreshed — the
 existing ones are `Role`, `SpreadX` and `Query`, and only `Query` is on the
 per-tick path.
+
+### The frontline that never moved: "nearest unlocked point" is the point you just took
+
+Reported from play on cp_egypt: bots capture the first neutral point and then
+stay on their own points, never advancing to the next one.
+
+`BotObjective.ControlPoint` sent every bot to the nearest **unlocked** point.
+On a Control Points map the point a team has just captured is unlocked — that
+is precisely what `ControlPoints.RelockNeighbour` unlocks it for, since its
+neighbour is still the enemy's — and it is zero pixels from the bot standing in
+its zone. It wins "nearest unlocked" against every point left to take, for the
+rest of the round.
+
+The team does not look frozen, which is why nothing caught it: the attacker
+push (`held && !defending`) walks a bot 400px out toward the enemy spawn and
+holds it there, so a team that captured the middle and stopped reads as a team
+that advanced a little and dug in.
+
+The rule now depends on the role, and the two roles want opposite things:
+
+| Role | Wants |
+|---|---|
+| Defender | a point its own team holds |
+| Attacker | a point its team does **not** hold, or one of ours an enemy is standing on |
+
+On every single-point map — every KotH and Arena one — both resolve to the same
+point, and the split shows up in what a bot does once it is there rather than in
+where it goes. The lock rules make "nearest unlocked point that is not ours"
+exactly the frontline point, because a point two along is still locked.
+
+**Preference is a separate accumulator, not a distance penalty.** The defender's
+side of this used to be `d += 2000` on a point that is not ours, justified as
+"more than any map is wide". cp_egypt is 8,000px wide and its last two points
+are 2,034px apart, so an attacker on the fourth point with a 2,000px penalty
+prefers the fourth point and the bug survives on one map in the set. Three
+accumulators — nearest wanted unlocked, nearest unlocked, nearest of any —
+settle it exactly and drop the constant.
+
+The dkoth override below it is still load-bearing after the change, for a
+narrower reason than before. "Prefer a point we do not own" gets dkoth right
+while the enemy **owns** their hill; a neutral hill is un-owned for both teams,
+nearest then sends a red attacker to red's own, and a hill goes neutral on every
+recapture.
+
+Measured on cp_egypt, twelve bots, a full ten-minute match, three seeds:
+
+| Seed | Before: captures / points that changed hands | After |
+|---|---|---|
+| 11 | 1 / 1 | 8 / 2 |
+| 4242 | 1 / 1 | 7 / 3 |
+| 90210 | 1 / 1 | 3 / 3, red caps out at tick 3,685 |
+
+Every "before" match ran the full 18,000 ticks and ended on the clock with a
+winner, which is why the scoreboard gates were all green. cp_dirtbowl is
+byte-identical before and after: attack/defend locks a red point
+unconditionally and blue never takes anything back, so only one point is ever
+unlocked and the preference has nothing to choose between.
+
+Three gates, and the first is the one that matters:
+
+- `MatchActuallyHappensTests.TheControlPointsFrontlineMovesPastTheOpeningFight`
+  asserts that a point **other than the one that started neutral** changed
+  owner. A capture count is not enough — the middle point flipping back and
+  forth all match is the same stalemate one layer up. All three seeds fail on
+  the old code.
+- `BotObjectiveTests.AnAttackerAdvancesPastAPointItsTeamAlreadyHolds` pins both
+  ends of the map, `(2, 3)` and `(3, 4)`. The second is the test: it is the pair
+  2,034px apart, and a distance-penalty fix passes the first and fails it.
+- `BotObjectiveTests.ADefenderStaysOnThePointTheAttackerLeaves` and
+  `AnAttackerTurnsBackForAPointBeingTakenFromUs` are the other half — they pass
+  on the old code too, and exist to stop the fix taking the defender or the
+  back-cap response with it.

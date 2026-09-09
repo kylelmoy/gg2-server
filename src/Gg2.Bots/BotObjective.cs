@@ -824,25 +824,46 @@ public sealed class BotObjective
     {
         ref readonly var state = ref world.State;
 
-        // Everyone heads for whichever unlocked point is nearest to them, which
-        // naturally spreads bots across a multi-point map instead of everyone piling
-        // onto the same one.
+        // Everyone heads for whichever unlocked point they WANT that is nearest to
+        // them, which naturally spreads bots across a multi-point map instead of
+        // everyone piling onto the same one.
+        //
+        // What a bot wants is the whole objective on a control-point map, and the
+        // two roles want opposite things:
+        //
+        //   A DEFENDER wants a point its own team already holds. On a single-point
+        //   map (every KotH and Arena one) that is the same point either way, and
+        //   the split then shows up in what a defender does once it is there rather
+        //   than in where it goes.
+        //
+        //   AN ATTACKER wants a point its team does NOT hold — the next one along.
+        //   Without this an attacker that has just taken a point stands on it for
+        //   the rest of the round: the point it is standing on is unlocked, is zero
+        //   pixels away, and wins "nearest unlocked" against every point left to
+        //   take. Reported from play on cp_egypt as bots capturing the middle and
+        //   then never advancing. The lock rules make "nearest unlocked point that
+        //   is not ours" exactly the frontline point, because a point two along is
+        //   still locked; see ControlPoints.RelockNeighbour.
+        //
+        //   A point of OURS with an enemy standing on it is wanted by an attacker
+        //   too. It is where the round is being decided, and walking past it to the
+        //   next point hands back what the team just took.
+        //
+        // Preference is a SEPARATE ACCUMULATOR, not a distance penalty, because a
+        // penalty has to out-weigh the widest gap between two points on any map and
+        // there is no such constant: cp_egypt is 8,000px wide and its last two
+        // points are 2,034px apart, so a bot on the fourth point with a 2,000px
+        // penalty stays there and the bug comes back on one map in the set.
         //
         // Every point is locked for the first 900 ticks of a KotH round and 1,800
         // of an Arena one; a bot should be standing on the point the moment it
         // opens, the way a human walks out immediately. So the nearest point is
-        // tracked regardless of lock state as a fallback, and used only once no
-        // unlocked one exists.
-        //
-        // A defender prefers a point its own team already holds — the same loop
-        // with everything that is NOT ours pushed 2,000px away, which is more than
-        // any map is wide. Penalising the others rather than rewarding ours keeps
-        // every distance >= 0, which is what lets -1 go on meaning "no point found"
-        // in both accumulators. On a single-point map (every KotH map) it resolves to
-        // the same point either way, and the split then shows up in what a defender
-        // does once it is there rather than in where it goes.
+        // tracked regardless of lock state as a last fallback, and used only once
+        // no unlocked one exists.
         var best = -1.0;
         var target = -1;
+        var bestOpen = -1.0;
+        var open = -1;
         var bestAny = -1.0;
         var any = -1;
 
@@ -853,9 +874,11 @@ public sealed class BotObjective
 
             ref readonly var point = ref state.ControlPoints[i];
             var d = Gml.PointDistance(self.X, self.Y, zx, zy);
+            var ours = point.Owned && point.Team == team;
 
-            if (defending && (!point.Owned || point.Team != team))
-                d += 2000;
+            var wanted = defending
+                ? ours
+                : !ours || Contested(in point, team);
 
             if (bestAny < 0 || d < bestAny)
             {
@@ -863,12 +886,24 @@ public sealed class BotObjective
                 any = i;
             }
 
-            if (!point.Locked && (best < 0 || d < best))
+            if (point.Locked)
+                continue;
+
+            if (bestOpen < 0 || d < bestOpen)
+            {
+                bestOpen = d;
+                open = i;
+            }
+
+            if (wanted && (best < 0 || d < best))
             {
                 best = d;
                 target = i;
             }
         }
+
+        if (target < 0)
+            target = open;
 
         if (target < 0)
             target = any;
@@ -886,15 +921,18 @@ public sealed class BotObjective
         // clock while the ENEMY's point is yours. No amount of looking at
         // entities can recover that, because the entities are the same.
         //
-        // Both entity-shaped alternatives were rejected for being right by
-        // accident: "prefer a point we do not own" breaks single KotH, where
-        // holding the hill IS the objective; and "chase whichever point is making
-        // the enemy's clock run" has no signal in exactly the state these matches
-        // sit in for ten minutes, where both clocks are stopped.
+        // The attacker preference above gets this right only while the enemy
+        // OWNS their hill: a neutral hill is wanted by both teams, both are
+        // equally un-owned, and nearest then sends a red attacker to red's own.
+        // That is most of a dkoth round, since a hill goes neutral on every
+        // recapture. "Chase whichever point is making the enemy's clock run" was
+        // rejected as the entity-shaped alternative: it has no signal in exactly
+        // the state these matches sit in for ten minutes, where both clocks are
+        // stopped.
         //
         // A DEFENDER still wants its own hill — losing it starts the enemy's
-        // clock — so this is the attacker's rule only, and the +2000 penalty above
-        // already gives the defender the right answer.
+        // clock — so this is the attacker's rule only, and the ownership
+        // preference above already gives the defender the right answer.
         if (!defending
             && state.GameMode == GameMode.DualKingOfTheHill
             && state.ControlPointCount >= 2)

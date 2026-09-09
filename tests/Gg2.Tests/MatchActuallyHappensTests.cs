@@ -257,6 +257,97 @@ public sealed class MatchActuallyHappensTests
             + $"({started} -> {now}), with {ownerChanges} hill owner changes");
     }
 
+    /// <summary>
+    /// On a symmetrical Control Points map the frontline moves past the opening
+    /// fight.
+    /// </summary>
+    /// <remarks>
+    /// <b>Reported from play on cp_egypt: bots take the middle point and then
+    /// never advance.</b> The whole ten-minute match produced exactly one capture
+    /// on every seed tried, and nothing in the suite noticed — the match ends, on
+    /// the clock, with a winner, and every scoreboard assertion is satisfied by a
+    /// team that took one point in the first minute and stood on it.
+    /// <para>
+    /// <b>So the assertion is which points changed hands, not how many captures
+    /// there were.</b> A count is satisfied by the middle point flipping back and
+    /// forth all match, which is the same stalemate one layer up. A point OTHER
+    /// than the one that starts neutral changing owner means a team pushed into
+    /// ground the other side held, which is the thing the mode is about.
+    /// </para>
+    /// <para>
+    /// <b>cp_egypt and not cp_dirtbowl.</b> Dirtbowl is attack/defend with two
+    /// points, where a red point is locked unconditionally and blue never takes
+    /// anything back — one capture is a legitimate whole match there, and the same
+    /// assertion would be pinning the defending team's skill instead.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData(11u)]
+    [InlineData(4242u)]
+    [InlineData(90210u)]
+    public void TheControlPointsFrontlineMovesPastTheOpeningFight(uint seed)
+    {
+        var match = HeadlessMatch.Load(
+            HeadlessMatchOptions.Default with
+            {
+                Map = "cp_egypt",
+                Bots = 12,
+                Seed = seed,
+                TimeLimitMinutes = 10,
+                KillLimit = 4000,
+                MaxTicks = 30 * 60 * 10,
+            },
+            ReferenceTree.IncludedFiles,
+            ReferenceTree.NavCacheDirectory);
+
+        var count = match.State.ControlPointCount;
+        Assert.Equal(5, count);
+
+        var owners = new Team[count];
+        var changed = new bool[count];
+        var neutralAtStart = -1;
+
+        for (var i = 0; i < count; i++)
+        {
+            ref readonly var point = ref match.State.ControlPoints[i];
+            owners[i] = point.Owned ? point.Team : Team.Spectator;
+
+            if (!point.Owned)
+                neutralAtStart = i;
+        }
+
+        Assert.True(neutralAtStart >= 0, "no point started neutral, so there was no opening fight to move past");
+
+        while (match.Outcome == MatchOutcome.Running)
+        {
+            match.Step();
+
+            for (var i = 0; i < count; i++)
+            {
+                ref readonly var point = ref match.State.ControlPoints[i];
+                var now = point.Owned ? point.Team : Team.Spectator;
+
+                if (now == owners[i])
+                    continue;
+
+                owners[i] = now;
+                changed[i] = true;
+            }
+        }
+
+        var advanced = false;
+
+        for (var i = 0; i < count; i++)
+            if (changed[i] && i != neutralAtStart)
+                advanced = true;
+
+        Assert.True(
+            advanced,
+            $"seed {seed}: only the point that started neutral ({neutralAtStart}) ever changed hands in "
+            + $"{match.Result.Ticks} ticks — the teams took the middle and stopped. Final owners: "
+            + string.Join(", ", owners));
+    }
+
     [Fact]
     public void TeamDeathmatchBotsHuntEachOtherAndFight()
     {

@@ -27,6 +27,7 @@ namespace Gg2.Tests;
 public sealed class BotObjectiveTests(ITestOutputHelper output)
 {
     private const string CtfMap = "ctf_truefort";
+    private const string CpMap = "cp_egypt";
 
     private static LevelMap Level(string name) =>
         LevelMap.FromPng(name, ReferenceTree.ReadMap(name));
@@ -520,6 +521,155 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
         // point stood at 2544 while the zone ended at 2393, contesting nothing.
         var spread = Decide(in state, world, spawns, graph, slot, BotRole.Defend, spread: 90);
         Assert.Equal(centreX, spread.X);
+    }
+
+    /// <summary>
+    /// A five-point Control Points world with the middle point taken by red, and
+    /// one red soldier standing on it.
+    /// </summary>
+    /// <remarks>
+    /// The locks are what make this map interesting and they are computed by the
+    /// simulation, not set here: one tick of <see cref="MatchSimulation"/> settles
+    /// <c>ControlPoints.RelockNeighbour</c> over whatever ownership the caller
+    /// asked for, so a test that pins a target pins the target for a lock layout
+    /// the game would really produce.
+    /// </remarks>
+    private static (WorldState State, CollisionWorld World, SpawnPoints Spawns, NavGraph Graph, int Slot)
+        Egypt(int redOwnsUpTo, int standOn)
+    {
+        var level = Level(CpMap);
+        var world = new CollisionWorld(level);
+        var state = default(WorldState);
+
+        state.GameMode = GameModes.Of(level);
+        state.TimeLimitMinutes = 15;
+        state.RespawnTime = 0;
+
+        ControlPoints.Place(ref state, level, out var zones);
+        world.SetCaptureZones(zones);
+        Rounds.Start(ref state);
+
+        state.AddPlayer(0);
+        var spawns = new SpawnPoints(level);
+
+        for (var i = 0; i <= redOwnsUpTo; i++)
+        {
+            state.ControlPoints[i].Owned = true;
+            state.ControlPoints[i].Team = Team.Red;
+        }
+
+        var (atX, atY) = Zone(world, standOn);
+        var slot = Put(ref state, spawns, 1, PlayerClass.Soldier, Team.Red, atX, atY);
+
+        var events = default(TickEvents);
+        MatchSimulation.Tick(world, ref state, [], ref events);
+
+        return (state, world, spawns, Graph(CpMap), slot);
+    }
+
+    /// <summary>The middle of point <paramref name="index"/>'s capture zone.</summary>
+    private static (double X, double Y) Zone(CollisionWorld world, int index)
+    {
+        var zone = world.CaptureZones.Single(z => z.Point == index);
+        return ((zone.Left + zone.Right) / 2.0, (zone.Top + zone.Bottom) / 2.0);
+    }
+
+    /// <summary>
+    /// An attacker walks on to the next point instead of standing on the one it
+    /// has just taken.
+    /// </summary>
+    /// <remarks>
+    /// Reported from play on cp_egypt: bots capture the first neutral point and
+    /// then never advance. "Nearest unlocked point" is the whole cause — the point
+    /// a bot is standing on is unlocked the moment it becomes ours (its neighbour
+    /// is the enemy's, which is exactly what <c>RelockNeighbour</c> unlocks it
+    /// for), and zero pixels beats every point left to take. The bot is not stuck
+    /// and does not look stuck: the attacker push walks it 400px out toward the
+    /// enemy spawn and holds it there, which reads as a team that advanced a
+    /// little and stopped.
+    /// <para>
+    /// <b>Both ends of the map are pinned, and the second one is the test.</b> A
+    /// distance penalty on points we own passes the first case and fails the
+    /// second: cp_egypt's last two points are 2,034px apart, so the 2,000px
+    /// penalty this file uses elsewhere leaves a bot on the fourth point preferring
+    /// the fourth point. Preference is a separate accumulator for that reason.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData(2, 3)]
+    [InlineData(3, 4)]
+    public void AnAttackerAdvancesPastAPointItsTeamAlreadyHolds(int held, int next)
+    {
+        var (state, world, spawns, graph, slot) = Egypt(held, standOn: held);
+
+        Assert.False(state.ControlPoints[next].Locked, "the next point was not in play at all");
+
+        var goal = Decide(in state, world, spawns, graph, slot);
+
+        Assert.True(goal.Found);
+
+        var (nextX, nextY) = Zone(world, next);
+        Assert.Equal(nextX, goal.X);
+        Assert.Equal(nextY, goal.Y);
+    }
+
+    /// <summary>
+    /// A defender stays on the point the team just took while the attacker leaves.
+    /// </summary>
+    /// <remarks>
+    /// The two roles want opposite things on a multi-point map and the same thing
+    /// on a single-point one, so this is the half of the split that a KotH test
+    /// cannot see: on koth_valley "nearest ours" and "nearest not-ours" resolve to
+    /// the same hill.
+    /// </remarks>
+    [Fact]
+    public void ADefenderStaysOnThePointTheAttackerLeaves()
+    {
+        var (state, world, spawns, graph, slot) = Egypt(2, standOn: 2);
+        var (x, _) = Zone(world, 2);
+
+        var goal = Decide(in state, world, spawns, graph, slot, BotRole.Defend);
+
+        Assert.True(goal.Found);
+
+        // A defending soldier on its own quiet point takes an overlook rather than
+        // standing in the open on it, so the goal is a spot near the zone and not
+        // the zone centre — what matters here is that it is not the NEXT point.
+        var (nextX, _) = Zone(world, 3);
+        Assert.True(
+            Math.Abs(goal.X - x) < Math.Abs(goal.X - nextX),
+            $"a defender left its own point: goal {goal.X}, own point {x}, next point {nextX}");
+    }
+
+    /// <summary>
+    /// An attacker does not walk past a point of ours that the enemy is standing on.
+    /// </summary>
+    /// <remarks>
+    /// Presence is the signal, as everywhere else in this file — the meter takes a
+    /// second to move and by then a third of the point is gone. An attacker that
+    /// advances out of a back-cap hands back what the team just took, and the
+    /// contest is where the round is being decided.
+    /// </remarks>
+    [Fact]
+    public void AnAttackerTurnsBackForAPointBeingTakenFromUs()
+    {
+        var (state, world, spawns, graph, slot) = Egypt(2, standOn: 2);
+        var (x, y) = Zone(world, 2);
+
+        state.ControlPoints[2].BluePresence = 2;
+
+        var goal = Decide(in state, world, spawns, graph, slot);
+
+        Assert.True(goal.Found);
+        Assert.Equal(x, goal.X);
+        Assert.Equal(y, goal.Y);
+
+        // And it is the presence that did it, not the position: the same bot with
+        // nobody on the point advances.
+        state.ControlPoints[2].BluePresence = 0;
+
+        var quiet = Decide(in state, world, spawns, graph, slot);
+        Assert.NotEqual(x, quiet.X);
     }
 
     /// <summary>
