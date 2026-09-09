@@ -5577,8 +5577,9 @@ displacement:
 
 ⚠️ **The census is a symptom count, not a bug count** — a defender holding
 ground in a firefight scores the same way, which is why the per-map share moves
-less than the mechanism does. The residual on the CTF maps is NOT this bug and
-is not explained; see "What is still open" below.
+less than the mechanism does. The residual on the CTF maps is a DIFFERENT defect
+with the same symptom, described in the next section; this fix does not touch it
+and was not expected to.
 
 What the fix is worth downstream, same 8 seeds:
 
@@ -5627,3 +5628,85 @@ and after the fix, with only *which* seed failed moving — so three fixed seeds
 pin a coin flip and go red on a change that improved the aggregate. The
 thresholds are what have teeth: measured on the code that had the
 `ControlPoints` bug, **0 of 8** seeds advanced past the middle.
+
+
+## ⛔ OPEN: every recovery is keyed on the plan FAILING, so a route that cannot be walked has none
+
+Distinct from the section above, with the same symptom and none of the same
+cause. **Not fixed** — measured and root-caused on 2026-09-09, and the fix is a
+change to shipped recovery behaviour that wants its own measurement.
+
+### What it looks like
+
+`ctf_2dfort`, seed 11, 12 bots: a red Heavy sits at **exactly (79, 786) — hard
+against the left wall of the map — for all 18,000 ticks of a ten-minute match.**
+It never sees an enemy (`enemyWithin400 = 0`), never fires a shot, and is
+otherwise a full participant that its team is playing 5v6 without. Its goal is
+(168, 739), 89px to its RIGHT, and the key it holds is `Left`.
+
+Measured on the same bot, sampled every 3,000 ticks and identical at all six
+samples:
+
+| | |
+|---|---|
+| position | (79, 786), to the pixel, for 18,000 ticks |
+| `Path.Path.Count` | 2, at index 0 — **a route exists** |
+| `StuckTicks` | 0 |
+| `ParkedTicks` | 0 at every sample, but firing: `Reposts` climbs 8, 18, 28, 38, 48, 58 |
+| `_repostSkip` | **0** |
+| `SpotBanUntil` | **0** |
+
+It is not rare: the longest single pinned run on eight seeds is 17,623 ticks on
+`ctf_2dfort` and 17,861 on `ctf_orange`, and the bots holding them are Heavies,
+Snipers, Pyros, Soldiers and Demomen alike.
+
+### Why nothing recovers it
+
+Fifty-eight re-posts produced the identical goal, because **the escape hatch is
+gated on the plan failing**:
+
+```
+if (_goalIsSpot && Path.HasGoal && !Path.HasPath)   // ScriptedBot.UpdateObjective
+```
+
+`!Path.HasPath` is "the search came back empty". This bot's search comes back
+with a two-node route every time, so `_repostSkip` never advances and
+`SpotBanUntil` is never set — both confirmed at 0 for the whole match. The
+re-post therefore re-runs the same search from the same place and returns the
+same node, for ever.
+
+⚠️ **A route that exists and a route a bot can walk are different things**, and
+the whole recovery layer only knows the first. `BotGoalSpot`'s own remarks
+already say "a goal that resolves is not a route that exists"; this is the next
+step of the same sentence.
+
+### The second hole, and why the counters read zero
+
+`ScriptedBot`'s `still` requires that no direction key is held:
+
+```
+var still = self.OnGround && (navKeys & (Left | Right)) == 0 && <position unchanged>;
+```
+
+So a bot **pressing a direction and going nowhere is neither `still` nor
+moved**. It is not counted as parked, and — because `!still` also clears
+`_repostSkip` — pressing a key it cannot act on is taken as *evidence the
+re-post worked*. `StuckTicks` was supposed to cover that quadrant and does not
+here: the bot presses `Left` for only 2,295 of 18,000 ticks, and the follower
+zeroes the counter on the arrival band and on `steer.Abandon`.
+
+⚠️ **`still`'s comment says it "asks what the bot DID, not what it believed",
+and the key term contradicts that.** The key term is there so a bot deliberately
+holding station to fight is not counted as parked, but that job is already done
+by the separate `!WantsToEngage && tick >= RegroupUntil` test on the increment.
+
+### What a fix has to be measured against
+
+Both of the above are shipped behaviour with a wide blast radius, so neither
+should be changed without the census in
+`.claude/notes/probes-0909/ZzOscillationCensus.cs` re-run across all 22 maps:
+alive bot-ticks inside a 30-second window with more than 600px walked and less
+than 150px of net displacement. Post-fix baseline to beat, worst maps:
+`gen_destroy` 19.7%, `ctf_2dfort` 17.9%, `ctf_conflict` 16.8%, `dkoth_sixties`
+22.5%. ⚠️ **That census counts a legitimately holding defender too**, so the
+number to watch is the longest single pinned run rather than the share.
