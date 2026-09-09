@@ -239,6 +239,8 @@ public sealed class BotGoalSpot
         });
 
         var passed = 0;
+        var firstNode = -1;
+        double firstX = 0, firstY = 0;
 
         foreach (var (node, _) in _candidates)
         {
@@ -246,6 +248,13 @@ public sealed class BotGoalSpot
 
             if (Sightline(los, x, y, targetX, targetY, collision, in filter))
             {
+                if (firstNode < 0)
+                {
+                    firstNode = node;
+                    firstX = x;
+                    firstY = y;
+                }
+
                 if (passed++ < skip)
                     continue;
 
@@ -255,6 +264,21 @@ public sealed class BotGoalSpot
             if (Tries >= BotConstants.SpotTries)
                 break;
         }
+
+        // ⚠️ The skip WRAPS rather than walking off the end of the list. The
+        // caller cycles a fixed BOT_SPOT_TRIES candidates (ScriptedBot's
+        // _repostSkip) and this list is only as long as the band happens to be, so
+        // a band offering four candidates to a caller on its sixth try would
+        // otherwise answer "nothing anywhere" — and the caller reads that as no
+        // spot existing and falls back to the point the bot is already standing
+        // on. Measured on ctf_oldfort seed 4242: a defending Heavy sat on skip 6
+        // against a band that never offered six, motionless for 17,688 ticks.
+        //
+        // Returning the FIRST qualifying candidate rather than re-running the loop
+        // modulo its length: the ranking is already sorted, so the first is the one
+        // a fresh caller would have been given, which is what wrapping means here.
+        if (firstNode >= 0)
+            return new BotSpot(firstNode, firstX, firstY);
 
         return miss;
     }

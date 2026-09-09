@@ -583,4 +583,124 @@ public sealed class MatchActuallyHappensTests
             }
         }
     }
+
+    /// <summary>
+    /// A bot whose route cannot be walked is given somewhere else to go.
+    /// </summary>
+    /// <remarks>
+    /// <b>The sibling above cannot see this case, and that is the point.</b> It
+    /// asks for EXACT immobility — under 0.01px between two ticks — and the statue
+    /// this gate exists for is a bot whose follower alternates LEFT and RIGHT on a
+    /// two-tick limit cycle, moving 0.66px each way against a wall it cannot get
+    /// past. So the metric here is a 16px circle held over time rather than a
+    /// frozen coordinate, which catches both shapes.
+    /// <para>
+    /// <b>What it is gating.</b> Every recovery in the bot layer used to be keyed
+    /// on the PLAN failing, and a route that exists and cannot be walked fails
+    /// nothing: A* returns a route, the follower presses a direction, the position
+    /// changes, and <c>StuckTicks</c>, <c>ParkedTicks</c> and <c>_repostSkip</c>
+    /// each read that as progress. The re-post that would have rescued the bot was
+    /// then revoked by the very next objective tick, 23 ticks after it was issued —
+    /// long before the bot could walk the 90px it was sent. See
+    /// <c>ScriptedBot._repostUntil</c> and <c>_repostFromX</c>.
+    /// </para>
+    /// <para>
+    /// <b>The two theory rows are the measured reproductions</b>, and the ceiling
+    /// separates them from ordinary play at both ends. Over these 9,000 ticks:
+    /// <c>ctf_2dfort</c> seed 11 went 8,390 to 346 and <c>ctf_avanti</c> seed 11
+    /// went 8,640 to 763, while <c>ctf_orange</c> seed 2024 (567 to 470) and
+    /// <c>ctf_truefort</c> seed 1 (322 to 590) barely moved — the last two are
+    /// carried as controls so a ceiling that merely said "no bot ever holds
+    /// still" would fail them too.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>A bot legitimately holding a firing position reads in the hundreds
+    /// here</b>, so 2,700 ticks — a minute and a half in one 16px circle — is not
+    /// a bot-quality pin. It is far above honest play and far below the defect,
+    /// which held whole ten-minute matches.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData("ctf_2dfort", 11u)]   // a Heavy against the left wall at (79, 786)
+    [InlineData("ctf_avanti", 11u)]   // a Heavy holding a 45-node route at leg 0
+    [InlineData("ctf_orange", 2024u)] // control: ordinary play
+    [InlineData("ctf_truefort", 1u)]  // control: ordinary play
+    public void ABotWhoseRouteCannotBeWalkedIsGivenSomewhereElseToGo(string map, uint seed)
+    {
+        const int Ticks = 9000;
+        const int Ceiling = 2700;
+        const double Radius = 16;
+
+        var match = HeadlessMatch.Load(
+            HeadlessMatchOptions.Default with
+            {
+                Map = map,
+                Bots = 12,
+                Seed = seed,
+                TimeLimitMinutes = 10,
+                KillLimit = 4000,
+                CapLimit = 5,
+                MaxTicks = Ticks,
+            },
+            ReferenceTree.IncludedFiles,
+            ReferenceTree.NavCacheDirectory);
+
+        var anchorX = new double[WorldState.MaxSlots];
+        var anchorY = new double[WorldState.MaxSlots];
+        var run = new int[WorldState.MaxSlots];
+        var seen = new bool[WorldState.MaxSlots];
+        var worst = 0;
+        var where = "";
+
+        for (var tick = 0; tick < Ticks; tick++)
+        {
+            // Same reason as the sibling above: once the round is decided the
+            // world stops advancing and every bot reads as motionless.
+            if (match.Outcome != MatchOutcome.Running)
+                break;
+
+            match.Step();
+
+            for (var slot = 1; slot < WorldState.MaxSlots; slot++)
+            {
+                // A dead bot is not a statue, and its slot is reused, so the run
+                // breaks rather than carrying across the respawn.
+                if (!match.State.IsAlive(slot) || match.SourceOf(slot) is not ScriptedBot)
+                {
+                    seen[slot] = false;
+                    run[slot] = 0;
+                    continue;
+                }
+
+                ref readonly var c = ref match.State.Characters[slot];
+
+                if (seen[slot] && Gml.PointDistance(c.X, c.Y, anchorX[slot], anchorY[slot]) <= Radius)
+                {
+                    run[slot]++;
+
+                    if (run[slot] > worst)
+                    {
+                        worst = run[slot];
+                        where = $"{match.State.Players[slot].Class} in slot {slot} at "
+                            + $"({c.X:F0}, {c.Y:F0})";
+                    }
+
+                    continue;
+                }
+
+                // The anchor MOVES with the bot rather than being sampled on a
+                // fixed clock: a bot drifting 15px every window would otherwise
+                // reset the run for ever without going anywhere.
+                anchorX[slot] = c.X;
+                anchorY[slot] = c.Y;
+                run[slot] = 0;
+                seen[slot] = true;
+            }
+        }
+
+        Assert.True(
+            worst < Ceiling,
+            $"{map} seed {seed}: {where} stayed inside one {Radius}px circle for {worst} "
+            + $"consecutive ticks, against a ceiling of {Ceiling}");
+    }
 }

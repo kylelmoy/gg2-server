@@ -411,8 +411,88 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
     /// </remarks>
     private int _repostSkip;
 
+    /// <summary>
+    /// How many re-post candidates this bot is currently passing over —
+    /// <see cref="_repostSkip"/>, for a test that needs to see the cycle turn.
+    /// </summary>
+    internal int RepostSkip => _repostSkip;
+
     /// <summary>Whether the goal in flight came from a re-post.</summary>
     private bool _goalWasRepost;
+
+    /// <summary>
+    /// Where the bot stood when the re-post goal in flight was issued, so the
+    /// attempt can be judged on what it achieved.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Displacement is the ONLY evidence a re-post worked</b>, and this is
+    /// the pair of numbers that makes it measurable. Every cheaper signal has been
+    /// tried and each is defeated by the same case — a bot wedged in a pocket
+    /// whose route out exists and cannot be walked:
+    /// <list type="bullet">
+    /// <item><description><b>The plan failing</b> (<c>!Path.HasPath</c>) never
+    /// happens: A* returns a two-node route every time.</description></item>
+    /// <item><description><b>A per-tick position test</b>
+    /// (<see cref="ParkedTicks"/>) sees the follower alternate LEFT and RIGHT on a
+    /// two-tick limit cycle, moving 0.66px each way, and calls that
+    /// moving.</description></item>
+    /// <item><description><b>The follower's own stuck counter</b>
+    /// (<see cref="BotPathState.StuckTicks"/>) is defeated the same way: it wants
+    /// a bot that pressed and did not move, and this one moves every tick. It
+    /// alternates 0, 1, 0, 1 and never reaches
+    /// <see cref="BotConstants.StuckTicks"/>.</description></item>
+    /// </list>
+    /// <para>
+    /// Measured on <c>ctf_2dfort</c> seed 11: a red Heavy at (78, 786) re-posted
+    /// to the same node (168, 739) roughly every 277 ticks for the whole match —
+    /// steer for 23 ticks, abandon, park, re-post, forever. Answering "did it get
+    /// anywhere?" instead of "did it press anything?" is what breaks that loop.
+    /// </para>
+    /// </remarks>
+    private double _repostFromX;
+
+    /// <inheritdoc cref="_repostFromX"/>
+    private double _repostFromY;
+
+    /// <summary>
+    /// The tick a re-post goal stops being protected from the ordinary objective.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>A re-post is revoked by the very next objective tick without this,
+    /// and that is what made a parked bot permanent.</b> <c>reposting</c> is
+    /// recomputed from <see cref="ParkedTicks"/>, which zeroes the moment the bot
+    /// twitches — so one tick after the escape goal is issued the bot counts as
+    /// moving, the next decision is an ordinary one, and it resolves to the node
+    /// the bot is standing on. That is 6px away, the follower arrives at once, and
+    /// the bot is back where it started with its escape thrown away.
+    /// <para>
+    /// Measured on <c>ctf_2dfort</c> seed 11: the re-post goal 90px away survived
+    /// 23 ticks — exactly the gap to the next staggered objective tick — and the
+    /// cycle repeated every 277 ticks for 18,000 ticks. The bot was never given
+    /// long enough to walk anywhere.
+    /// </para>
+    /// <para>
+    /// Bounded rather than held to arrival, because a spot is chosen without
+    /// checking reachability: an unbounded commitment to a node the bot cannot
+    /// reach is the same statue with a different cause.
+    /// </para>
+    /// </remarks>
+    private int _repostUntil;
+
+    /// <summary>
+    /// Whether the re-post goal in flight has already been judged.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Separate from <see cref="_goalWasRepost"/> on purpose, and collapsing
+    /// the two is a real bug.</b> <c>_goalWasRepost</c> says how the goal was MADE
+    /// and has to stay true for as long as it is in flight, because it is also
+    /// what keeps the class-spot ban off a re-post — the two want opposite
+    /// answers to a goal that never planned. Clearing it to mean "judged" hands
+    /// the next tick's ban branch a re-post goal it reads as a class spot: measured
+    /// on <c>ctf_avanti</c> seed 1, an Engineer under a near-continuous 300-tick
+    /// spot ban stood motionless for 1,585 ticks.
+    /// </remarks>
+    private bool _repostJudged;
 
     private double _parkedX = double.NaN;
 
@@ -461,6 +541,7 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
         SpotBanUntil = 0;
         ParkedTicks = 0;
         _repostSkip = 0;
+        _goalWasRepost = false;
         _parkedX = double.NaN;
         _parkedY = double.NaN;
 
@@ -522,6 +603,10 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
             AliveLast = false;
             ParkedTicks = 0;
             _repostSkip = 0;
+
+            // The attempt in flight died with the bot: it comes back at a spawn,
+            // so the distance from where the re-post started says nothing.
+            _goalWasRepost = false;
 
             // So the first tick of the next life is not compared against where
             // this one ended.
@@ -651,10 +736,15 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
 
         if (!still)
         {
-            // Moving is the only evidence a re-post worked, so it is what clears
-            // both the counter and the search's place in its candidate list.
+            // ⚠️ This clears the PARK counter and nothing else. It used to clear
+            // the search's place in its candidate list too, on the reasoning that
+            // moving is evidence the re-post worked — and a bot wedged in a pocket
+            // moves 0.66px a tick for ever without going anywhere, so that reading
+            // handed it back candidate 0 every time and it re-posted to the same
+            // unreachable node for a whole match. What clears _repostSkip now is
+            // DISPLACEMENT, judged once per attempt in UpdateObjective; see
+            // _repostFromX.
             ParkedTicks = 0;
-            _repostSkip = 0;
         }
         else if (!WantsToEngage && tick >= RegroupUntil)
         {
@@ -699,27 +789,24 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
         if (Objective is null || GoalLocked)
             return;
 
-        // Notice a spot that never planned BEFORE deciding again, or the ban is
-        // always one objective tick behind the goal that earned it. HasGoal is what
-        // separates "planning failed" from "arrived": arrival clears the goal and
-        // frees the path together, so a bot that got there has neither.
+        // --- how a spot goal ends -------------------------------------------
+        //
+        // Two endings, and they are NOT interchangeable. The first is the search
+        // coming back empty, which costs nothing to detect and so is retried every
+        // tick. The second is the one that used to have no recovery at all: a
+        // route that exists and cannot be walked.
+        //
+        // Noticed BEFORE deciding again, or the ban is always one objective tick
+        // behind the goal that earned it. HasGoal is what separates "planning
+        // failed" from "arrived": arrival clears the goal and frees the path
+        // together, so a bot that got there has neither.
         if (_goalIsSpot && Path.HasGoal && !Path.HasPath)
         {
             if (_goalWasRepost)
             {
                 // Take the next candidate instead of giving up on spots. See
                 // _repostSkip for why the ban is the wrong tool here.
-                _repostSkip = (_repostSkip + 1) % BotConstants.SpotTries;
-
-                // ⚠️ ...but the ban is still the right tool once the whole ranked
-                // list has been tried and every one of them was unreachable. The
-                // bot is stranded rather than badly positioned, and the objective
-                // it falls back to is at least a destination something else in the
-                // layer knows how to fail on. Without this the skip cycle replaced
-                // the ban's escape hatch and cost four bots on ctf_oldfort that
-                // the ban had been rescuing.
-                if (_repostSkip == 0)
-                    SpotBanUntil = tick + SpotBanTicks;
+                AdvanceRepost(tick);
             }
             else
             {
@@ -727,10 +814,84 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
             }
         }
 
+        // ⚠️ A re-post is proved by the bot having GOT SOMEWHERE, not by a plan
+        // existing. The branch above only ever sees a search that came back empty,
+        // and the case that costs whole bots is the opposite one — see
+        // _repostFromX for the three counters it defeats and the trace it was
+        // measured on.
+        //
+        // Reached only when there IS a plan, because the empty-search branch above
+        // has already taken the other case. The attempt is over here when the goal
+        // has gone — arrived, or abandoned by the follower — or when its window has
+        // run out with the bot still holding it.
+        else if (_goalWasRepost && !_repostJudged
+            && (!Path.HasGoal || tick >= _repostUntil))
+        {
+            ref readonly var self = ref world.Character(slot);
+            var got = Gml.PointDistance(self.X, self.Y, _repostFromX, _repostFromY);
+
+            // Judged once per attempt: the bot parks after this and its position
+            // stops changing, so judging again every tick would burn the whole
+            // candidate list in twelve of them.
+            _repostJudged = true;
+
+            // GoalRetargetDist, not RepostMinMove, and the gap between them is
+            // deliberate. The search already refused everything within
+            // RepostMinMove of the bot, so an attempt that ARRIVED has moved about
+            // that far and one that failed has moved nothing at all; half way
+            // between them separates the two without calling a bot that arrived
+            // 95px short a failure.
+            if (got < BotConstants.GoalRetargetDist)
+            {
+                AdvanceRepost(tick);
+
+                // ⛔ LET GO of it. A failed attempt that keeps its goal is a
+                // permanent one: the retarget throttle refuses anything within
+                // GoalRetargetDist of a goal already in flight, and the search is
+                // deterministic, so the same node comes back and is refused for the
+                // rest of the round. Measured on ctf_avanti seed 11: a defending
+                // Heavy held a 45-node route it never took a step along, at leg 0,
+                // pressing nothing, for all 18,000 ticks.
+                //
+                // Freed through the occupancy first, as everywhere else: the edges
+                // can only be found through the path that is about to go.
+                Occupancy?.Remove(Path);
+                Path.FreePath();
+                Path.HasGoal = false;
+            }
+            else
+            {
+                // It worked. The next re-post starts from the best candidate
+                // again — this bot is somewhere else now, and the ranking it was
+                // walking away from no longer describes where it stands.
+                //
+                // ⚠️ This is the ONLY thing that clears the skip on a live bot.
+                // Moving used to, and a bot wedged in a pocket moves 0.66px a tick
+                // for ever without going anywhere, so that reading handed it back
+                // candidate 0 every time. The cost of the stricter rule is that a
+                // bot which failed a re-post here and later parks somewhere else
+                // entirely starts a few candidates down its list; the list is
+                // twelve long and cycles, so that is bounded and self-correcting.
+                _repostSkip = 0;
+            }
+        }
+
         // The reference's `(tick + player) mod BOT_OBJECTIVE_PERIOD == 0`: staggered
         // per bot so a server full of them does not pay every objective scan on one
         // frame.
         if ((tick + Combat.Stagger) % BotConstants.ObjectivePeriod != 0)
+            return;
+
+        // ⚠️ A re-post goal is HELD, not re-decided. See _repostUntil: without this
+        // the next ordinary decision hands the bot back the node it is standing on
+        // and the escape never gets walked. The judgement at the top of this method
+        // is what lets go — on arrival, on abandonment, or on the deadline.
+        //
+        // ⛔ HasPath is part of the test, not decoration. A re-post whose search
+        // came back empty is handled above and is never protected: holding a goal
+        // with no route behind it is the same statue with one more reason.
+        if (_goalWasRepost && !_repostJudged
+            && Path.HasGoal && Path.HasPath && tick < _repostUntil)
             return;
 
         // The combat half's target is handed over, and only the medic reads it:
@@ -775,7 +936,42 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
 
         _goalIsSpot = goal.IsSpot;
         _goalWasRepost = reposting && goal.IsSpot;
+
+        // Where the attempt starts, for the judgement at the top of this method.
+        // Read from the world rather than from _parkedX: that pair is the previous
+        // POLL's position and is NaN on the first one.
+        if (_goalWasRepost)
+        {
+            ref readonly var from = ref world.Character(slot);
+            _repostFromX = from.X;
+            _repostFromY = from.Y;
+            _repostUntil = tick + BotConstants.RepostTicks;
+            _repostJudged = false;
+        }
+
         SetGoal(x, y);
+    }
+
+    /// <summary>
+    /// Take the next re-post candidate, and ban spots once the whole ranked list
+    /// has been tried.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The ban is still the right tool once every candidate has been
+    /// tried.</b> The bot is stranded rather than badly positioned, and the
+    /// objective it falls back to is at least a destination something else in the
+    /// layer knows how to fail on. Without this the skip cycle replaced the ban's
+    /// escape hatch and cost four bots on <c>ctf_oldfort</c> that the ban had been
+    /// rescuing.
+    /// </remarks>
+    private void AdvanceRepost(int tick)
+    {
+        // Take the next candidate instead of giving up on spots. See _repostSkip
+        // for why the ban is the wrong tool on its own here.
+        _repostSkip = (_repostSkip + 1) % BotConstants.SpotTries;
+
+        if (_repostSkip == 0)
+            SpotBanUntil = tick + SpotBanTicks;
     }
 
     private PlayerKeys ApplyHolds(in WorldView world, int slot, int tick, PlayerKeys navKeys)

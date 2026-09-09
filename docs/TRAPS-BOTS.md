@@ -51,6 +51,12 @@ What it licenses, and what it does not:
   and team clumping is down rather than up from the goal-less baseline.
 - ⚠️ **Conversion at 6v6 is 8%**, and nothing establishes whether that is
   *right*. There is no human baseline in this project.
+- ⚠️ **One full-match statue is left across 22 maps and 8 seeds** —
+  `ctf_oldfort` seed 4242, a Heavy at (1631, 690) whose every re-post candidate
+  comes back with no route. The recovery layer works and correctly concludes
+  there is nowhere to go, so this is nav reachability rather than the objective
+  layer; see "A route that exists and a route a bot can walk are different
+  things".
 - ⚠️ **7 of 528 bot-matches still freeze a bot for 900+ ticks**, down from 98 —
   see "A bot that arrives stops moving" below. Every one is a Demoman, Engineer
   or Heavy handed an objective that **cannot be reached without a jump they do
@@ -5629,84 +5635,113 @@ pin a coin flip and go red on a change that improved the aggregate. The
 thresholds are what have teeth: measured on the code that had the
 `ControlPoints` bug, **0 of 8** seeds advanced past the middle.
 
+## A route that exists and a route a bot can walk are different things
 
-## ⛔ OPEN: every recovery is keyed on the plan FAILING, so a route that cannot be walked has none
+A bot's escape from standing still is a **re-post**: after
+`BOT_REPOST_TICKS` of going nowhere, `BotObjective.Decide` is asked for a
+different place to stand, at least `BOT_REPOST_MIN_MOVE` away and never the
+node the bot is on. Three rules make that escape actually reach the bot, and
+each was paid for by a bot that held one spot for a whole ten-minute match.
 
-Distinct from the section above, with the same symptom and none of the same
-cause. **Not fixed** — measured and root-caused on 2026-09-09, and the fix is a
-change to shipped recovery behaviour that wants its own measurement.
+### A re-post is judged on DISPLACEMENT, never on the plan
 
-### What it looks like
+`ScriptedBot._repostFromX/Y` record where the attempt started; when it ends the
+bot has either got somewhere or it has not. Everything cheaper is defeated by
+the same case — a bot wedged in a pocket whose route out exists and cannot be
+walked:
 
-`ctf_2dfort`, seed 11, 12 bots: a red Heavy sits at **exactly (79, 786) — hard
-against the left wall of the map — for all 18,000 ticks of a ten-minute match.**
-It never sees an enemy (`enemyWithin400 = 0`), never fires a shot, and is
-otherwise a full participant that its team is playing 5v6 without. Its goal is
-(168, 739), 89px to its RIGHT, and the key it holds is `Left`.
-
-Measured on the same bot, sampled every 3,000 ticks and identical at all six
-samples:
-
-| | |
+| Signal | Why it cannot see the case |
 |---|---|
-| position | (79, 786), to the pixel, for 18,000 ticks |
-| `Path.Path.Count` | 2, at index 0 — **a route exists** |
-| `StuckTicks` | 0 |
-| `ParkedTicks` | 0 at every sample, but firing: `Reposts` climbs 8, 18, 28, 38, 48, 58 |
-| `_repostSkip` | **0** |
-| `SpotBanUntil` | **0** |
+| `!Path.HasPath` — the plan failed | A\* returns a two-node route every time |
+| `ScriptedBot.ParkedTicks` | The follower alternates LEFT and RIGHT on a two-tick limit cycle, 0.66px each way; a per-tick position test calls that moving |
+| `BotPathState.StuckTicks` | Wants a bot that pressed and did not move; this one moves every tick, so it alternates 0, 1, 0, 1 and never reaches `BOT_STUCK_TICKS` |
 
-It is not rare: the longest single pinned run on eight seeds is 17,623 ticks on
-`ctf_2dfort` and 17,861 on `ctf_orange`, and the bots holding them are Heavies,
-Snipers, Pyros, Soldiers and Demomen alike.
+Displacement below `BOT_GOAL_RETARGET_DIST` is the failure test, and the gap to
+`BOT_REPOST_MIN_MOVE` is deliberate: the search already refused everything
+within the latter, so an attempt that arrived has moved about that far and one
+that failed has moved nothing.
 
-### Why nothing recovers it
+### A re-post goal is HELD, and a failed one is RELEASED
 
-Fifty-eight re-posts produced the identical goal, because **the escape hatch is
-gated on the plan failing**:
+`_repostUntil` protects the goal from the next ordinary decision for
+`BOT_REPOST_TICKS`. Without it `reposting` — recomputed from `ParkedTicks`,
+which zeroes the moment the bot twitches — is false one tick later, the next
+decision is an ordinary one, and it resolves to the node the bot is standing
+on. Measured on `ctf_2dfort` seed 11: the escape goal 90px away survived 23
+ticks, exactly the gap to the next staggered objective tick, and the cycle
+repeated every 277 ticks for 18,000. The bot was never given long enough to
+walk anywhere.
 
-```
-if (_goalIsSpot && Path.HasGoal && !Path.HasPath)   // ScriptedBot.UpdateObjective
-```
+The hold requires `Path.HasPath` — a goal with no route behind it is the same
+statue with one more reason — and a **failed** attempt frees its goal. A failed
+attempt that keeps its goal is permanent: the retarget throttle refuses
+anything within `BOT_GOAL_RETARGET_DIST` of a goal in flight and the search is
+deterministic, so the same node comes back and is refused for the rest of the
+round. Measured on `ctf_avanti` seed 11: a Heavy held a 45-node route it never
+took a step along, at leg 0, pressing nothing, for all 18,000 ticks.
 
-`!Path.HasPath` is "the search came back empty". This bot's search comes back
-with a two-node route every time, so `_repostSkip` never advances and
-`SpotBanUntil` is never set — both confirmed at 0 for the whole match. The
-re-post therefore re-runs the same search from the same place and returns the
-same node, for ever.
+⚠️ **`_repostJudged` and `_goalWasRepost` are separate on purpose.**
+`_goalWasRepost` says how the goal was made and stays true while it is in
+flight, because it is also what keeps the class-spot ban off a re-post — the
+two want opposite answers to a goal that never planned. Reusing it to mean
+"judged" hands the next tick's ban branch a re-post it reads as a class spot:
+measured on `ctf_avanti` seed 1, an Engineer under a near-continuous 300-tick
+ban stood motionless for 1,585 ticks.
 
-⚠️ **A route that exists and a route a bot can walk are different things**, and
-the whole recovery layer only knows the first. `BotGoalSpot`'s own remarks
-already say "a goal that resolves is not a route that exists"; this is the next
-step of the same sentence.
+### `BotGoalSpot.Find`'s skip WRAPS
 
-### The second hole, and why the counters read zero
+The caller cycles a fixed `BOT_SPOT_TRIES` candidates and the band is only as
+long as it happens to be. A skip past the end returns the first qualifying
+candidate rather than a miss, because the caller reads a miss as no spot
+existing anywhere and falls back to the point the bot is already standing on.
+Measured on `ctf_oldfort` seed 4242: a defending Heavy sat on skip 6 against a
+band that never offered six, motionless for 17,688 ticks. An **empty** band
+still misses at every skip.
 
-`ScriptedBot`'s `still` requires that no direction key is held:
+### What clears `_repostSkip`
 
-```
-var still = self.OnGround && (navKeys & (Left | Right)) == 0 && <position unchanged>;
-```
+Only a re-post that achieved displacement, and `Reset`/death. Movement does not:
+a wedged bot moves 0.66px a tick for ever without going anywhere, and reading
+that as success handed it back candidate 0 every time. The cost is that a bot
+which failed a re-post and later parks somewhere else starts a few candidates
+down its list; the list is twelve long and cycles, so that is bounded and
+self-correcting.
 
-So a bot **pressing a direction and going nowhere is neither `still` nor
-moved**. It is not counted as parked, and — because `!still` also clears
-`_repostSkip` — pressing a key it cannot act on is taken as *evidence the
-re-post worked*. `StuckTicks` was supposed to cover that quadrant and does not
-here: the bot presses `Left` for only 2,295 of 18,000 ticks, and the follower
-zeroes the counter on the arrival band and on `steer.Abandon`.
+### The gates, and how to re-measure
 
-⚠️ **`still`'s comment says it "asks what the bot DID, not what it believed",
-and the key term contradicts that.** The key term is there so a bot deliberately
-holding station to fight is not counted as parked, but that job is already done
-by the separate `!WantsToEngage && tick >= RegroupUntil` test on the increment.
+`MatchActuallyHappensTests.ABotWhoseRouteCannotBeWalkedIsGivenSomewhereElseToGo`
+holds two reproductions and two controls over 9,000 ticks, on a 16px circle
+rather than exact immobility — its sibling
+`NoBotStandsStillForHalfAMinute` asks for under 0.01px between ticks and is
+blind to the oscillating shape. `BotObjectiveTests.ASkipPastTheEndOfTheBandWrapsToItsBest`
+gates the wrap on a band with exactly two candidates, with an empty band as the
+control.
 
-### What a fix has to be measured against
+| Map, seed | Longest run in one 16px circle, before → after |
+|---|---|
+| `ctf_2dfort` 11 | 8,390 → 346 |
+| `ctf_avanti` 11 | 8,640 → 763 |
+| `ctf_orange` 2024 (control) | 567 → 470 |
+| `ctf_truefort` 1 (control) | 322 → 590 |
 
-Both of the above are shipped behaviour with a wide blast radius, so neither
-should be changed without the census in
-`.claude/notes/probes-0909/ZzOscillationCensus.cs` re-run across all 22 maps:
-alive bot-ticks inside a 30-second window with more than 600px walked and less
-than 150px of net displacement. Post-fix baseline to beat, worst maps:
-`gen_destroy` 19.7%, `ctf_2dfort` 17.9%, `ctf_conflict` 16.8%, `dkoth_sixties`
-22.5%. ⚠️ **That census counts a legitimately holding defender too**, so the
-number to watch is the longest single pinned run rather than the share.
+The statue census — 22 maps, 8 seeds, ten-minute matches, longest run inside a
+16px circle — is `.claude/notes/probes-0909/ZzStatueCensus.cs`. Across it,
+statue time went 1.27% → 0.90% of alive bot time, full-match statues 3 → 1, and
+maps with a worst run over 5,000 ticks 6 → 3. ⚠️ **Use the longest single run,
+not the share**: the share counts a legitimately holding defender, and per-map
+numbers move in both directions between runs because a twelve-bot match
+diverges completely from any change.
+
+⚠️ **The oscillation census (`ZzOscillationCensus.cs`) cannot see this class at
+all** — it requires more than 600px walked inside the window, and a bot pinned
+against a wall walks none of it. The two censuses measure different defects.
+
+### Still open: a bot with nowhere reachable to go
+
+`ctf_oldfort` seed 4242 holds the one remaining full-match statue: a defending
+Heavy at (1631, 690) that now re-posts 26 times a match instead of once and
+still cannot leave — every candidate in its band comes back with no route. The
+recovery layer is working and correctly concluding there is nowhere to go, so
+this is a nav-reachability fault at that position rather than an objective one.
+It is the largest single contributor left, and what would settle it is asking
+the graph what is reachable from the node the bot stands on.

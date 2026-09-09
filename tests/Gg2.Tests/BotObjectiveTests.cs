@@ -938,6 +938,70 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
         Assert.True(spot.Tries < BotConstants.SpotTries, $"the open search also paid {spot.Tries} tests");
     }
 
+    /// <summary>
+    /// A skip past the end of the band wraps to its best rather than missing.
+    /// </summary>
+    /// <remarks>
+    /// <b>The caller cycles a fixed twelve and the band is as long as it happens
+    /// to be.</b> <c>ScriptedBot._repostSkip</c> counts candidates that turned out
+    /// to have no route and runs 0-11; a band offering two would answer "nothing
+    /// anywhere" from the third try onward, and the caller reads that as no spot
+    /// existing at all and falls back to the point the bot is already standing on.
+    /// Measured on <c>ctf_oldfort</c> seed 4242: a defending Heavy sat on skip 6
+    /// against a band that never offered six, motionless for 17,688 ticks.
+    /// <para>
+    /// The fixture is a band with exactly TWO candidates, which is what makes the
+    /// wrap visible — on a band with twelve, every skip in range answers and
+    /// deleting the wrap leaves this green.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ASkipPastTheEndOfTheBandWrapsToItsBest()
+    {
+        var level = Level(CtfMap);
+        var world = new CollisionWorld(level);
+        var spot = new BotGoalSpot(Graph());
+        var filter = CollisionFilter.ForBullet();
+
+        // Measured: an 8-120px proximity band on ctf_truefort's red base holds
+        // exactly two nodes. BotLos.Any because that is what a re-post asks for —
+        // this is a place to wait, not a place to shoot from.
+        const double AnchorX = 380;
+        const double AnchorY = 268;
+
+        var best = spot.Find(
+            AnchorX, AnchorY, AnchorX, AnchorY, 8, 120, BotLos.Any, 0, world, filter, skip: 0);
+        var second = spot.Find(
+            AnchorX, AnchorY, AnchorX, AnchorY, 8, 120, BotLos.Any, 0, world, filter, skip: 1);
+
+        Assert.True(best.Node >= 0);
+        Assert.True(second.Node >= 0);
+        Assert.NotEqual(best.Node, second.Node);
+
+        // Past the end, every remaining try the caller can make comes back to the
+        // best candidate — an answer, never a miss.
+        for (var skip = 2; skip < BotConstants.SpotTries; skip++)
+        {
+            var wrapped = spot.Find(
+                AnchorX, AnchorY, AnchorX, AnchorY, 8, 120, BotLos.Any, 0, world, filter, skip: skip);
+
+            Assert.True(
+                wrapped.Node >= 0,
+                $"skip {skip} fell off a two-candidate band and answered nothing");
+            Assert.Equal(best.Node, wrapped.Node);
+        }
+
+        // The control, and the reason the wrap is not simply "always answer": a
+        // band with NOTHING in it still misses at every skip. Measured — no node on
+        // ctf_truefort stands 8-120px from (3570, 325).
+        for (var skip = 0; skip < BotConstants.SpotTries; skip++)
+        {
+            var empty = spot.Find(3570, 325, 3570, 325, 8, 120, BotLos.Any, 0, world, filter, skip: skip);
+
+            Assert.Equal(-1, empty.Node);
+        }
+    }
+
     // ------------------------------------------------------------------
     // The cadence
     // ------------------------------------------------------------------
