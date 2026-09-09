@@ -181,11 +181,18 @@ public sealed class SeparationBandTests(Xunit.Abstractions.ITestOutputHelper out
         // A failure here is the RE-RECORD, and it means the placement draw
         // moved — which makes every duel figure taken against the old one
         // incomparable. Say so in the commit.
+        // Re-recorded when BotObjective stopped re-deciding a spot from the bot's
+        // live position (BotGoalSpot.Find, the sticky-node block). All three totals
+        // rose — ctf_2dfort 1313.33 -> 1536.15, arena_lumberyard 1241.45 -> 1343.14,
+        // koth_harvest 791.14 -> 1007.01 — which is the direction that change
+        // predicts: a bot that is not walking back and forth between two candidate
+        // spots spends the time fighting instead. Scripted duels reaching a death
+        // went 18/24 to 22/24 over the same change.
         var expected = map switch
         {
-            "ctf_2dfort" => 1313.3266180934488,
-            "arena_lumberyard" => 1241.4484043251114,
-            "koth_harvest" => 791.13812994624141,
+            "ctf_2dfort" => 1536.1472365055804,
+            "arena_lumberyard" => 1343.1363440377258,
+            "koth_harvest" => 1007.0099686656572,
             _ => throw new ArgumentOutOfRangeException(nameof(map), map, "no recorded total for this map"),
         };
 

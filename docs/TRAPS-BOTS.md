@@ -5531,3 +5531,99 @@ Three gates, and the first is the one that matters:
   `AnAttackerTurnsBackForAPointBeingTakenFromUs` are the other half — they pass
   on the old code too, and exist to stop the fix taking the defender or the
   back-cap response with it.
+
+## ⛔ The spot search followed the bot that was walking to it
+
+`BotGoalSpot.Find` ranks candidate nodes with, as its first term, the
+straight-line distance from the bot. The winner is therefore a function of where
+the bot currently is — and a bot walks a graph route, not a straight line.
+Wherever the two disagree the search feeds back on itself: the route's opening
+legs lead away from the chosen spot, that spot's rank worsens while a rival's
+improves, the goal flips, the new route leads away from the new spot, and the bot
+walks back and forth between two candidates for the rest of the round.
+
+### Why nothing went red
+
+Neither stuck detector can see it, and between them they were believed to cover
+the case.
+
+| Detector | Wants | Sees this |
+|---|---|---|
+| `BotPathState.StuckTicks` | a bot pressing a direction and not moving | no — it moves |
+| `ScriptedBot.ParkedTicks` | a bot on the ground pressing nothing | no — it presses |
+
+The bot presses a direction every tick and its position changes every tick, so
+both counters sit at zero while it goes nowhere. Every scoreboard gate stayed
+green throughout: matches end, on the clock, with a winner.
+
+### Measured
+
+Found on `arena_montane`, seed 4242: the last two bots alive — one per team, both
+`Defend` Heavies — held station 652px apart from tick 3,600 to the 18,000-tick
+cap, so no round could ever end and the match finished 0-0 after ten minutes.
+Sampled every 600 ticks their positions were identical to the pixel; sampled
+every tick they were creeping between two goals 87px apart.
+
+Across all 22 maps at 12 bots and 8 seeds, counting alive bot-ticks inside a
+30-second window with more than 600px walked and less than 150px of net
+displacement:
+
+| | before | after |
+|---|---|---|
+| share of all alive bot time | 2.6-21.5% per map | 2.6-19.7% |
+| longest single pinned run | 17,074 ticks | 16,559 |
+| `arena_montane` | 14.7%, worst run 13,922 | 8.4%, worst run 9,591 |
+| `arena_lumberyard` | 10.9%, 1,331 goal flips | 7.6%, 614 |
+
+⚠️ **The census is a symptom count, not a bug count** — a defender holding
+ground in a firefight scores the same way, which is why the per-map share moves
+less than the mechanism does. The residual on the CTF maps is NOT this bug and
+is not explained; see "What is still open" below.
+
+What the fix is worth downstream, same 8 seeds:
+
+| | before | after |
+|---|---|---|
+| `arena_montane` matches that decide | 5 of 8 | 7 of 8 |
+| `cp_egypt` seeds advancing past the middle | 7 of 8 | 7 of 8 |
+| `cp_egypt` total points taken beyond the middle | 10 | 12 |
+| scripted duels reaching a death | 18 of 24 | 22 of 24 |
+| `SeparationBandTests` damage, `koth_harvest` | 791.14 | 1007.01 |
+
+### The fix
+
+`BotObjective` remembers the node it last returned and passes it to `Find`, which
+returns it unchanged while it still qualifies. The choice is made once per
+question rather than re-made from wherever the walk has reached.
+
+⛔ **The whole question has to match, not just the anchor.** A defender whose
+point is being taken keeps the same anchor and swaps a standoff band for the hold
+band, and a node chosen for the first is usually still inside the second — so an
+anchor-only test hands back the overlook at exactly the moment the bot is
+supposed to come back into the zone. That regressed
+`MatchActuallyHappensTests.TheControlPointsFrontlineMovesPastTheOpeningFight`
+when it was written that way. The band, the height bonus and the sightline mode
+are compared alongside the anchor.
+
+⛔ **A re-post passes no held node.** `ScriptedBot.ParkedTicks` exists to break a
+perch that is not paying for itself, and stickiness would defeat it.
+
+The cost went down rather than up: a held node returns before the O(nodes)
+scoring pass. Best of three `eval --matches 8` runs, Release: 491k ticks/s
+against 460k.
+
+### The gate
+
+`BotObjectiveTests.ASpotDoesNotFollowTheBotThatIsWalkingToIt` walks a defender
+along its own point and asks again, with one `BotObjective` reused as a real bot
+has. On the old code the goal tracked the bot — +32px of bot moved the goal
++60px, and at +256px the goal had moved 222px the same way. It is the mechanism
+itself rather than a match-level symptom, so it is deterministic and costs 58ms.
+
+⚠️ **Two match-level gates were changed from a fixed handful of seeds to a count
+over eight, and that is a strengthening, not a door.** Whether a particular seed
+resolves is a coin flip on these criteria — `cp_egypt` scored 7 of 8 both before
+and after the fix, with only *which* seed failed moving — so three fixed seeds
+pin a coin flip and go red on a change that improved the aggregate. The
+thresholds are what have teeth: measured on the code that had the
+`ControlPoints` bug, **0 of 8** seeds advanced past the middle.

@@ -455,31 +455,50 @@ public sealed class DuelEnvTests
     [Fact]
     public void TwoScriptedOpponentsFightAndTheirActionsComeBack()
     {
-        var env = NavEnv();
-        env.Reset(Sampled("gg_debug", EnvDriver.Scripted, EnvDriver.Scripted), seed: 1);
-
         var fired = 0;
         var moved = 0;
         var damage = 0.0;
+        var deaths = 0;
+        var capped = new List<uint>();
 
-        while (env.Termination == Termination.Running)
+        // Eight placements, not one. Whether a particular sampled pair kills each
+        // other inside the decision cap is a coin flip on the draw — measured over
+        // 24 seeds, 22 reach a death and two run out the clock — so pinning the
+        // property to a single seed fails on a bot change that improved the
+        // aggregate. The threshold is what has teeth; the seed is not.
+        for (var seed = 1u; seed <= 8u; seed++)
         {
-            var (red, blue) = env.Step(Idle, Idle);
+            var env = NavEnv();
+            env.Reset(Sampled("gg_debug", EnvDriver.Scripted, EnvDriver.Scripted), seed: seed);
 
-            damage += red.DamageDealt + blue.DamageDealt;
-
-            foreach (var r in new[] { red, blue })
+            while (env.Termination == Termination.Running)
             {
-                if (r.Action.Fire != 0)
-                    fired++;
+                var (red, blue) = env.Step(Idle, Idle);
 
-                if (r.Action.Horizontal != 0 || r.Action.Jump != 0)
-                    moved++;
+                damage += red.DamageDealt + blue.DamageDealt;
+
+                foreach (var r in new[] { red, blue })
+                {
+                    if (r.Action.Fire != 0)
+                        fired++;
+
+                    if (r.Action.Horizontal != 0 || r.Action.Jump != 0)
+                        moved++;
+                }
             }
+
+            if (env.Termination == Termination.Death)
+                deaths++;
+            else
+                capped.Add(seed);
         }
 
         // Somebody DIED. Not "the episode ended".
-        Assert.Equal(Termination.Death, env.Termination);
+        Assert.True(
+            deaths >= 6,
+            $"only {deaths} of 8 scripted duels ended in a death; seeds that ran out "
+            + $"the clock instead: {string.Join(", ", capped)}");
+
         Assert.True(damage > 0, "two scripted bots fought to a death and dealt no damage");
 
         // The second property gg2-rl asked for: what the bot chose comes back.

@@ -68,6 +68,48 @@ public sealed class BotObjective
     private readonly SpawnPoints _spawns;
     private readonly BotGoalSpot _spot;
 
+    /// <summary>
+    /// The nav node <see cref="Decide"/> last chose as a spot, and the anchor it
+    /// was chosen for.
+    /// </summary>
+    /// <remarks>
+    /// Per bot, because a <see cref="BotObjective"/> is. It exists so the spot
+    /// search is answered once per anchor rather than re-run from wherever the walk
+    /// has reached — see the sticky-node block in <see cref="BotGoalSpot.Find"/>
+    /// for what re-running it costs.
+    /// </remarks>
+    private int _spotNode = -1;
+
+    /// <inheritdoc cref="_spotNode"/>
+    private double _spotAnchorX;
+
+    /// <inheritdoc cref="_spotNode"/>
+    private double _spotAnchorY;
+
+    /// <summary>
+    /// The band and sightline <see cref="_spotNode"/> was chosen to satisfy.
+    /// </summary>
+    /// <remarks>
+    /// Held alongside the anchor because the node is only re-usable while the
+    /// QUESTION is unchanged, and the anchor alone does not say that. A defender
+    /// whose point is being taken keeps the anchor and swaps a standoff band for
+    /// the hold band; a node chosen for the first is often still inside the second,
+    /// so an anchor-only test would hand back the overlook exactly when the bot is
+    /// supposed to come back to the zone. Measured: cp_egypt seed 11 stopped
+    /// advancing past the middle again, which is
+    /// <c>MatchActuallyHappensTests.TheControlPointsFrontlineMovesPastTheOpeningFight</c>.
+    /// </remarks>
+    private double _spotMin;
+
+    /// <inheritdoc cref="_spotMin"/>
+    private double _spotMax;
+
+    /// <inheritdoc cref="_spotMin"/>
+    private double _spotHigh;
+
+    /// <inheritdoc cref="_spotMin"/>
+    private BotLos _spotLos;
+
 
     public BotObjective(NavGraph graph, SpawnPoints spawns)
     {
@@ -489,16 +531,43 @@ public sealed class BotObjective
 
         if (useSpot && allowSpot)
         {
+            // The node this bot already chose for this same anchor, so the search
+            // holds it instead of re-deciding from wherever the walk has got to.
+            // Passing -1 while re-posting is deliberate: that is the one caller
+            // that WANTS a different node. BotGoalSpot.Find has the measurement and
+            // the reason the choice cannot be re-made every objective tick.
+            var sameQuestion = _spotNode >= 0
+                && Gml.PointDistance(anchorX, anchorY, _spotAnchorX, _spotAnchorY)
+                    <= BotConstants.GoalRetargetDist
+                && Gml.Equal(spotMin, _spotMin)
+                && Gml.Equal(spotMax, _spotMax)
+                && Gml.Equal(spotHigh, _spotHigh)
+                && spotLos == _spotLos;
+
+            var sticky = !reposting && sameQuestion ? _spotNode : -1;
+
             var spot = _spot.Find(
                 self.X, self.Y, anchorX, anchorY, spotMin, spotMax, spotLos, spotHigh,
                 world.Collision, CollisionFilter.ForBullet(), avoidRadius, avoidNode,
-                reposting ? repostSkip : 0);
+                reposting ? repostSkip : 0, sticky);
 
             if (spot.Node >= 0)
+            {
+                _spotNode = spot.Node;
+                _spotAnchorX = anchorX;
+                _spotAnchorY = anchorY;
+                _spotMin = spotMin;
+                _spotMax = spotMax;
+                _spotHigh = spotHigh;
+                _spotLos = spotLos;
+
                 return new BotGoal(true, spot.X, spot.Y, IsSpot: true, mustTouch);
+            }
 
             // Nothing qualified: fall through to the objective's own point, which
-            // is what this did before the goal layer existed.
+            // is what this did before the goal layer existed. Forget the held node
+            // too — the band it was chosen for no longer has anything in it.
+            _spotNode = -1;
         }
 
         // The spread never applies to a goal that has to be TOUCHED. Standing

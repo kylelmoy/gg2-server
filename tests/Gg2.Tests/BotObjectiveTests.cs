@@ -524,6 +524,70 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
     }
 
     /// <summary>
+    /// The spot a bot is walking to does not move because the bot walked.
+    /// </summary>
+    /// <remarks>
+    /// <b><see cref="BotGoalSpot.Find"/> ranks candidates by, first, the
+    /// straight-line distance from the BOT.</b> So the winner is a function of
+    /// where the bot currently is — and a bot walks a graph route, not a straight
+    /// line. Wherever the two disagree the search feeds back on itself: the route's
+    /// first legs lead away from the chosen spot, that spot gets dearer and a rival
+    /// cheaper, the goal flips, the new route leads away from THAT one, and the bot
+    /// walks back and forth between two candidates for the rest of the round.
+    /// <para>
+    /// <b>Neither stuck detector can see it</b>, which is why it survived: the bot
+    /// is pressing a direction and it IS moving, so
+    /// <c>BotPathState.StuckTicks</c> (which wants a bot pressing and going
+    /// nowhere) and <c>ScriptedBot.ParkedTicks</c> (which wants one not pressing at
+    /// all) are both blind to it. Found on arena_montane, where the last two bots
+    /// alive held station 652px apart for 14,400 ticks and the round could not end;
+    /// across all 22 maps at 12 bots and 8 seeds it was 2.6-21.5% of all alive bot
+    /// time, with single bots pinned for up to 17,074 consecutive ticks.
+    /// </para>
+    /// <para>
+    /// This is the mechanism itself rather than a match-level symptom. Walking the
+    /// defender along its own point and asking again, the goal used to track it —
+    /// +32px of bot moved the goal +60px, and by +256px the goal had moved 222px
+    /// the same way, so the bot was chasing a destination running away from it. One
+    /// <see cref="BotObjective"/> per bot is what the server and
+    /// <c>HeadlessMatch</c> both build, so the memory that fixes it lives there.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ASpotDoesNotFollowTheBotThatIsWalkingToIt()
+    {
+        var (state, world, spawns, graph, slot) = Egypt(2, standOn: 2);
+
+        // ONE objective, reused — a bot has exactly one, and a fresh instance per
+        // call cannot hold anything.
+        var objective = new BotObjective(graph, spawns);
+
+        var startX = state.Characters[slot].X;
+
+        var first = objective.Decide(
+            new WorldView(in state, world), slot, BotRole.Defend, 0, allowSpot: true);
+
+        Assert.True(first.Found);
+        Assert.True(first.IsSpot, "the defender did not take a spot, so there is nothing to hold");
+
+        // Every displacement a walk to that spot could plausibly pass through,
+        // in both directions. The anchor — the point being defended — has not moved.
+        foreach (var dx in new[] { 32.0, 64, 96, 128, 160, 192, 224, 256, -32, -64, -96, -128, -160, -192, -256 })
+        {
+            state.Characters[slot].X = startX + dx;
+
+            var again = objective.Decide(
+                new WorldView(in state, world), slot, BotRole.Defend, 0, allowSpot: true);
+
+            Assert.True(again.Found);
+            Assert.True(
+                Gml.Equal(first.X, again.X) && Gml.Equal(first.Y, again.Y),
+                $"the goal moved because the bot did: at {dx:+0;-0}px the spot went from "
+                + $"({first.X:F0},{first.Y:F0}) to ({again.X:F0},{again.Y:F0})");
+        }
+    }
+
+    /// <summary>
     /// A five-point Control Points world with the middle point taken by red, and
     /// one red soldier standing on it.
     /// </summary>

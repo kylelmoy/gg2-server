@@ -142,7 +142,7 @@ public sealed class BotGoalSpot
         double minDistance, double maxDistance,
         BotLos los, double highBonus,
         CollisionWorld collision, in CollisionFilter filter,
-        double avoidRadius = 0, int avoidNode = -1, int skip = 0)
+        double avoidRadius = 0, int avoidNode = -1, int skip = 0, int stickyNode = -1)
     {
         ArgumentNullException.ThrowIfNull(collision);
 
@@ -156,6 +156,41 @@ public sealed class BotGoalSpot
 
         var middle = (minDistance + maxDistance) / 2;
         var targetColumn = NavGraph.AnchorColumn(targetX);
+
+        // --- keep the node already chosen for this anchor ---------------------
+        //
+        // The rank's first term is the straight-line distance from the BOT, so the
+        // winner is a function of where the bot currently is — and the bot is
+        // walking a graph route, not a straight line. Where the two disagree the
+        // search feeds back on itself: a route whose first legs lead away from the
+        // chosen spot makes that spot dearer every tick and a rival cheaper, the
+        // goal flips, the new route leads away from THAT one, and the bot walks a
+        // few pixels back and forth between two candidates for the rest of the
+        // round. It presses a direction and it moves, so neither
+        // BotPathState.StuckTicks (which wants a bot pressing and not moving) nor
+        // ScriptedBot.ParkedTicks (which wants one not pressing at all) can see it.
+        // Measured across all 22 maps at 12 bots and 8 seeds: 2.6-21.5% of all
+        // alive bot time went nowhere this way, with single bots pinned for up to
+        // 17,074 consecutive ticks — a whole match.
+        //
+        // So the choice is made ONCE per anchor and held while it still qualifies.
+        // The band test below is what lets go of it: when the objective moves, the
+        // held node leaves the band and the search runs normally. A re-post passes
+        // no sticky node at all — breaking a perch that is not paying for itself is
+        // the one thing that mechanism exists to do.
+        if (stickyNode >= 0 && stickyNode != avoidNode && stickyNode < _graph.NodeCount)
+        {
+            var (hx, hy) = Stand(stickyNode, targetColumn);
+            var held = Gml.PointDistance(hx, hy, targetX, targetY);
+
+            if (held >= minDistance
+                && held <= maxDistance
+                && (avoidRadius <= 0 || Gml.PointDistance(fromX, fromY, hx, hy) >= avoidRadius)
+                && Sightline(los, hx, hy, targetX, targetY, collision, in filter))
+            {
+                return new BotSpot(stickyNode, hx, hy);
+            }
+        }
 
         _candidates.Clear();
 
@@ -209,24 +244,7 @@ public sealed class BotGoalSpot
         {
             var (x, y) = Stand(node, targetColumn);
 
-            if (los == BotLos.Any)
-            {
-                if (passed++ < skip)
-                    continue;
-
-                return new BotSpot(node, x, y);
-            }
-
-            Tries++;
-
-            // "Wrong" is the sightline the caller did NOT ask for: a blocked line
-            // for Need, a clear one for Avoid.
-            var wrong = collision.CollisionLineBlocksBullets(x, y, targetX, targetY, filter);
-
-            if (los == BotLos.Avoid)
-                wrong = !wrong;
-
-            if (!wrong)
+            if (Sightline(los, x, y, targetX, targetY, collision, in filter))
             {
                 if (passed++ < skip)
                     continue;
@@ -256,6 +274,27 @@ public sealed class BotGoalSpot
     /// <c>NodeFromWorld</c> resolves back to this same node later.
     /// </para>
     /// </remarks>
+    /// <summary>Whether a candidate has the sightline the caller asked for.</summary>
+    /// <remarks>
+    /// "Wrong" is the sightline the caller did NOT ask for: a blocked line for
+    /// <see cref="BotLos.Need"/>, a clear one for <see cref="BotLos.Avoid"/>.
+    /// <see cref="BotLos.Any"/> pays for no line test at all, which is what lets a
+    /// proximity-only search answer without spending its try budget.
+    /// </remarks>
+    private bool Sightline(
+        BotLos los, double x, double y, double targetX, double targetY,
+        CollisionWorld collision, in CollisionFilter filter)
+    {
+        if (los == BotLos.Any)
+            return true;
+
+        Tries++;
+
+        var wrong = collision.CollisionLineBlocksBullets(x, y, targetX, targetY, filter);
+
+        return los == BotLos.Avoid ? wrong : !wrong;
+    }
+
     private (double X, double Y) Stand(int node, int targetColumn)
     {
         var n = _graph.Nodes[node];
