@@ -51,12 +51,12 @@ What it licenses, and what it does not:
   and team clumping is down rather than up from the goal-less baseline.
 - ⚠️ **Conversion at 6v6 is 8%**, and nothing establishes whether that is
   *right*. There is no human baseline in this project.
-- ⚠️ **One full-match statue is left across 22 maps and 8 seeds** —
-  `ctf_oldfort` seed 4242, a Heavy at (1631, 690) whose every re-post candidate
-  comes back with no route. The recovery layer works and correctly concludes
-  there is nowhere to go, so this is nav reachability rather than the objective
-  layer; see "A route that exists and a route a bot can walk are different
-  things".
+- ⚠️ **No full-match statue is left across 22 maps and 8 seeds**, but
+  `ctf_oldfort` seed 4242 still pins a Heavy for 11,012 ticks against an
+  objective its class cannot climb to. That is this list's "cannot be reached
+  without a jump they do not have" entry, not a nav fault — 136 of 275 nodes
+  are reachable from where it stands. See "A route that exists and a route a
+  bot can walk are different things".
 - ⚠️ **7 of 528 bot-matches still freeze a bot for 900+ ticks**, down from 98 —
   see "A bot that arrives stops moving" below. Every one is a Demoman, Engineer
   or Heavy handed an objective that **cannot be reached without a jump they do
@@ -5688,6 +5688,42 @@ two want opposite answers to a goal that never planned. Reusing it to mean
 measured on `ctf_avanti` seed 1, an Engineer under a near-continuous 300-tick
 ban stood motionless for 1,585 ticks.
 
+### The skip advances ONCE PER ATTEMPT, never once per tick
+
+`!Path.HasPath` is a level, not an event. A failed plan backs the follower off
+and the objective only re-decides every `BOT_OBJECTIVE_PERIOD`, so advancing on
+the level cycles all twelve candidates in twelve ticks against one stale
+failure — eleven of them never planned at all — and then bans spots. Measured
+on `ctf_oldfort` seed 4242: skip ran 0 to 11 and wrapped between ticks 589 and
+601, inside a single back-off.
+
+⚠️ **But it must not be SLOWER either.** A candidate that failed to plan costs
+one A\* to rule out, so the next one is issued on the next tick rather than at
+the next objective tick — `decideNow` in `UpdateObjective`, bypassing the
+cadence only for that ending and bounded by `BOT_SPOT_TRIES`. Waiting a full
+objective period per candidate spends 360 ticks ruling out a band with nothing
+reachable in it: measured on `tdm_mantic` seed 11, a Sniper spent all 600 ticks
+of the gate's budget on nine candidates without moving once, and
+`TeamDeathmatchBotsHuntEachOtherAndFight` went red on it.
+
+### A band with nothing reachable in it: anchor on the BOT
+
+Once the whole ranked band around the objective has been tried and every
+candidate came back with no route, the next re-post anchors its band on the bot
+(`_repostNearBot`, cleared by the first re-post that achieves displacement).
+
+⚠️ **This is a narrower claim than the one that is refuted.** Moving the anchor
+to the bot *on the retry* was tried and took the frozen count 7 → 8, and stays
+refuted. This says "nothing within `BOT_HOLD_RADIUS` of the objective can be
+reached at all", not "the objective is unreachable so try nearer". The case is
+a bot whose class cannot climb to its objective: `ctf_oldfort` seed 4242, a
+defending Heavy whose band lies entirely in the 139 graph nodes it cannot reach
+while 136 others are reachable from the node it stands on.
+
+Gated by `BotObjectiveTests.ARepostThatHasExhaustedItsBandAsksForGroundNearTheBot`,
+whose fixture stands the bot 3,099px from its objective — on a bot standing on
+its objective the two anchors coincide and the gate cannot tell them apart.
+
 ### `BotGoalSpot.Find`'s skip WRAPS
 
 The caller cycles a fixed `BOT_SPOT_TRIES` candidates and the band is only as
@@ -5725,23 +5761,31 @@ control.
 | `ctf_truefort` 1 (control) | 322 → 590 |
 
 The statue census — 22 maps, 8 seeds, ten-minute matches, longest run inside a
-16px circle — is `.claude/notes/probes-0909/ZzStatueCensus.cs`. Across it,
-statue time went 1.27% → 0.90% of alive bot time, full-match statues 3 → 1, and
-maps with a worst run over 5,000 ticks 6 → 3. ⚠️ **Use the longest single run,
-not the share**: the share counts a legitimately holding defender, and per-map
-numbers move in both directions between runs because a twelve-bot match
-diverges completely from any change.
+16px circle — is `.claude/notes/probes-0909/ZzStatueCensus.cs`. Across it:
+
+| | Statue time | Full-match statues | Worst run > 5,000 |
+|---|---|---|---|
+| Before | 1.27% | 3 | 6 maps |
+| After | 0.75% | 0 | 2 maps |
+
+⚠️ **Use the longest single run, not the share**: the share counts a
+legitimately holding defender, and per-map numbers move in both directions
+between runs because a twelve-bot match diverges completely from any change.
+`tdm_mantic` is the one that got worse (8,575 → 12,287) while the aggregate
+improved.
 
 ⚠️ **The oscillation census (`ZzOscillationCensus.cs`) cannot see this class at
 all** — it requires more than 600px walked inside the window, and a bot pinned
 against a wall walks none of it. The two censuses measure different defects.
 
-### Still open: a bot with nowhere reachable to go
+### Still open: an objective the class cannot reach
 
-`ctf_oldfort` seed 4242 holds the one remaining full-match statue: a defending
-Heavy at (1631, 690) that now re-posts 26 times a match instead of once and
-still cannot leave — every candidate in its band comes back with no route. The
-recovery layer is working and correctly concluding there is nowhere to go, so
-this is a nav-reachability fault at that position rather than an objective one.
-It is the largest single contributor left, and what would settle it is asking
-the graph what is reachable from the node the bot stands on.
+No bot now holds one place for a whole match, but `ctf_oldfort` seed 4242 still
+pins its defending Heavy for 11,012 ticks and is the largest single contributor
+left. ⚠️ **It is not a nav-reachability fault** — that was the standing guess
+and asking the graph refuted it: 136 of 275 nodes are reachable from the node
+the bot stands on, over three routable edges. What is wrong is upstream, and is
+the known issue already recorded above: the objective layer hands a bot ground
+its class cannot climb to and never asks whether a goal is reachable for the
+profile that has to walk it. The re-post's bot-anchored last resort is a
+mitigation, not the fix.

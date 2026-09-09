@@ -151,9 +151,15 @@ public sealed class BotObjective
     /// <see cref="BotGoalSpot.Find"/>. The caller counts the ones that turned out
     /// to have no route.
     /// </param>
+    /// <param name="repostNearBot">
+    /// Anchor the re-post band on the BOT rather than on its objective — the last
+    /// resort, after every candidate around the objective turned out to have no
+    /// route. See the anchor assignment for the measurement.
+    /// </param>
     public BotGoal Decide(
         in WorldView world, int slot, BotRole role, double spreadX, bool allowSpot,
-        int? target = null, bool reposting = false, int repostSkip = 0)
+        int? target = null, bool reposting = false, int repostSkip = 0,
+        bool repostNearBot = false)
     {
         if (!world.IsAlive(slot))
             return BotGoal.None;
@@ -507,14 +513,21 @@ public sealed class BotObjective
             // twelve line tests. A class that has stood still for eight seconds
             // has already shown its perch is not paying for itself.
             //
-            // ⚠️ The anchor stays on the OBJECTIVE even after a re-post has come
-            // back with no route. Moving it to the bot on the retry is the obvious
-            // next idea — if the objective is unreachable then so is everything
-            // near it — and it was tried and is REFUTED: the frozen count went 7
-            // to 8. Whatever holds those six is not the anchor, so do not reach
-            // for this again without a measurement.
-            anchorX = wx;
-            anchorY = wy;
+            // ⚠️ The anchor stays on the OBJECTIVE for an ordinary re-post, and
+            // moving it to the bot ON THE RETRY is REFUTED — tried, and the frozen
+            // count went 7 to 8. What is right is moving it only once the WHOLE
+            // ranked band around the objective has been tried and every candidate
+            // came back with no route (repostNearBot). That is a different claim:
+            // not "the objective is unreachable so try nearer", but "nothing
+            // within BOT_HOLD_RADIUS of the objective can be reached at all, so
+            // stop asking about the objective".
+            //
+            // Measured on ctf_oldfort seed 4242, the case it exists for: a
+            // defending Heavy at (1631, 690) whose band around the objective lies
+            // entirely in the 139 graph nodes it cannot reach, while 136 others
+            // are reachable from the node it is standing on.
+            anchorX = repostNearBot ? self.X : wx;
+            anchorY = repostNearBot ? self.Y : wy;
             spotMin = BotConstants.ArriveTol;
             spotMax = BotConstants.HoldRadius;
             spotHigh = BotConstants.SpotHighBonus;

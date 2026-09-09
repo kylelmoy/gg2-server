@@ -1002,6 +1002,69 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
         }
     }
 
+    /// <summary>
+    /// A re-post that has exhausted its objective's band asks for ground near the
+    /// bot instead.
+    /// </summary>
+    /// <remarks>
+    /// <b>The last resort, and it is a narrower claim than the one that was
+    /// refuted.</b> Moving the anchor to the bot ON THE RETRY was tried and took
+    /// the frozen count from 7 to 8. This moves it only once the whole ranked band
+    /// around the objective has been tried and <em>every</em> candidate came back
+    /// with no route — "nothing within `BOT_HOLD_RADIUS` of the objective can be
+    /// reached at all", not "the objective is unreachable so try nearer".
+    /// <para>
+    /// The case it exists for is a bot whose class cannot climb to its objective:
+    /// <c>ctf_oldfort</c> seed 4242, a defending Heavy at (1631, 690) whose band
+    /// lies entirely in the 139 graph nodes it cannot reach while 136 others are
+    /// reachable from the node it stands on. Across 22 maps, 8 seeds and
+    /// ten-minute matches it took full-match statues 1 to 0 and that bot's longest
+    /// pinned run 17,688 ticks to 11,012.
+    /// </para>
+    /// <para>
+    /// The bot here stands far from its objective on purpose: on a bot standing
+    /// ON its objective the two anchors coincide and deleting the flag leaves this
+    /// green.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ARepostThatHasExhaustedItsBandAsksForGroundNearTheBot()
+    {
+        var (state, world, spawns) = Ctf();
+        var graph = Graph();
+        var objective = new BotObjective(graph, spawns);
+
+        // Far from the red base, which is where a red defender's objective is.
+        var slot = Put(ref state, spawns, 1, PlayerClass.Heavy, Team.Red, 3400, 800);
+        var view = new WorldView(in state, world);
+
+        ref readonly var self = ref state.Characters[slot];
+
+        var onObjective = objective.Decide(
+            view, slot, BotRole.Defend, 0, allowSpot: true, reposting: true);
+        var nearBot = objective.Decide(
+            view, slot, BotRole.Defend, 0, allowSpot: true, reposting: true, repostNearBot: true);
+
+        Assert.True(onObjective.Found);
+        Assert.True(nearBot.Found);
+        Assert.True(onObjective.IsSpot);
+        Assert.True(nearBot.IsSpot);
+
+        var ordinary = Gml.PointDistance(onObjective.X, onObjective.Y, self.X, self.Y);
+        var resort = Gml.PointDistance(nearBot.X, nearBot.Y, self.X, self.Y);
+
+        // The whole point: the last resort is ground the bot could plausibly walk
+        // to, inside the same band it would have been given around its objective.
+        Assert.InRange(resort, BotConstants.RepostMinMove, BotConstants.HoldRadius);
+
+        // And the control — the ordinary re-post is NOT that, so the flag is doing
+        // the work rather than the band happening to sit on the bot.
+        Assert.True(
+            ordinary > BotConstants.HoldRadius,
+            $"the ordinary re-post already landed {ordinary:F0}px away, inside the "
+            + "last resort's band, so this fixture cannot tell the two apart");
+    }
+
     // ------------------------------------------------------------------
     // The cadence
     // ------------------------------------------------------------------

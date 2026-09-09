@@ -494,6 +494,19 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
     /// </remarks>
     private bool _repostJudged;
 
+    /// <summary>
+    /// Whether the next re-post anchors its band on the bot rather than on its
+    /// objective.
+    /// </summary>
+    /// <remarks>
+    /// The last resort, set only when the whole ranked band around the objective
+    /// has been tried and every candidate came back with no route, and cleared by
+    /// the first re-post that achieves any displacement. A bot whose objective is
+    /// ground its class cannot climb to would otherwise re-post for ever inside a
+    /// band that is entirely unreachable — <c>ctf_oldfort</c> seed 4242.
+    /// </remarks>
+    private bool _repostNearBot;
+
     private double _parkedX = double.NaN;
 
     /// <inheritdoc cref="_parkedX"/>
@@ -542,6 +555,7 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
         ParkedTicks = 0;
         _repostSkip = 0;
         _goalWasRepost = false;
+        _repostNearBot = false;
         _parkedX = double.NaN;
         _parkedY = double.NaN;
 
@@ -607,6 +621,7 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
             // The attempt in flight died with the bot: it comes back at a spawn,
             // so the distance from where the re-post started says nothing.
             _goalWasRepost = false;
+            _repostNearBot = false;
 
             // So the first tick of the next life is not compared against where
             // this one ended.
@@ -791,41 +806,32 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
 
         // --- how a spot goal ends -------------------------------------------
         //
-        // Two endings, and they are NOT interchangeable. The first is the search
-        // coming back empty, which costs nothing to detect and so is retried every
-        // tick. The second is the one that used to have no recovery at all: a
-        // route that exists and cannot be walked.
-        //
         // Noticed BEFORE deciding again, or the ban is always one objective tick
-        // behind the goal that earned it. HasGoal is what separates "planning
-        // failed" from "arrived": arrival clears the goal and frees the path
-        // together, so a bot that got there has neither.
-        if (_goalIsSpot && Path.HasGoal && !Path.HasPath)
-        {
-            if (_goalWasRepost)
-            {
-                // Take the next candidate instead of giving up on spots. See
-                // _repostSkip for why the ban is the wrong tool here.
-                AdvanceRepost(tick);
-            }
-            else
-            {
-                SpotBanUntil = tick + SpotBanTicks;
-            }
-        }
-
-        // ⚠️ A re-post is proved by the bot having GOT SOMEWHERE, not by a plan
-        // existing. The branch above only ever sees a search that came back empty,
-        // and the case that costs whole bots is the opposite one — see
-        // _repostFromX for the three counters it defeats and the trace it was
-        // measured on.
+        // behind the goal that earned it.
         //
-        // Reached only when there IS a plan, because the empty-search branch above
-        // has already taken the other case. The attempt is over here when the goal
-        // has gone — arrived, or abandoned by the follower — or when its window has
-        // run out with the bot still holding it.
-        else if (_goalWasRepost && !_repostJudged
-            && (!Path.HasGoal || tick >= _repostUntil))
+        // ⛔ ONCE PER ATTEMPT for a re-post, never once per tick, and the
+        // difference is the whole escape. `!Path.HasPath` is a LEVEL, not an
+        // event: a failed plan backs the follower off, and the objective only
+        // re-decides every BOT_OBJECTIVE_PERIOD, so a per-tick advance cycles all
+        // twelve candidates in twelve ticks against one stale failure — eleven of
+        // them never planned at all — and then bans spots. Measured on
+        // ctf_oldfort seed 4242: skip ran 0 to 11 and wrapped between ticks 589
+        // and 601, inside a single back-off, and the bot held (1631, 690)
+        // motionless for the whole match.
+        //
+        // ⚠️ A re-post is proved by the bot having GOT SOMEWHERE, not by a plan
+        // existing — see _repostFromX for the three counters that a route which
+        // exists and cannot be walked defeats. The attempt is over when its search
+        // came back empty, when the goal has gone (arrived, or abandoned by the
+        // follower), or when its window has run out.
+        // Set when the attempt ended because its search came back EMPTY, which is
+        // the one ending cheap enough to retry at once — see the cadence check
+        // below for why waiting would be worse than the per-tick advance this
+        // replaced.
+        var decideNow = false;
+
+        if (_goalWasRepost && !_repostJudged
+            && (!Path.HasPath || !Path.HasGoal || tick >= _repostUntil))
         {
             ref readonly var self = ref world.Character(slot);
             var got = Gml.PointDistance(self.X, self.Y, _repostFromX, _repostFromY);
@@ -853,11 +859,25 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
                 // Heavy held a 45-node route it never took a step along, at leg 0,
                 // pressing nothing, for all 18,000 ticks.
                 //
+                // It is also what PACES the candidate list: the next objective
+                // tick issues the next candidate, and issuing a goal forces the
+                // re-plan that actually tries it.
+                //
                 // Freed through the occupancy first, as everywhere else: the edges
                 // can only be found through the path that is about to go.
                 Occupancy?.Remove(Path);
                 Path.FreePath();
                 Path.HasGoal = false;
+
+                // A goal that never planned costs one A* to rule out, so the next
+                // candidate is tried on the NEXT TICK rather than at the next
+                // objective tick. Waiting would spend 30 ticks per candidate and
+                // 360 to rule out a band that has nothing reachable in it, and a
+                // bot standing still through all of them is worse than the
+                // per-tick cycle this replaced. Measured on tdm_mantic seed 11: a
+                // Sniper spent all 600 ticks of the budget on nine candidates
+                // without moving once.
+                decideNow = !Path.HasPath;
             }
             else
             {
@@ -873,13 +893,33 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
                 // entirely starts a few candidates down its list; the list is
                 // twelve long and cycles, so that is bounded and self-correcting.
                 _repostSkip = 0;
+
+                // The bot got somewhere, so the band around its objective is worth
+                // asking about again.
+                _repostNearBot = false;
             }
+        }
+
+        // A CLASS spot that never planned — the re-post case is taken above, and
+        // the two want opposite answers: see _repostSkip for why a ban is wrong
+        // for a re-post and right here. Left level-triggered, where it only
+        // refreshes a ban that is already running. HasGoal is what separates
+        // "planning failed" from "arrived": arrival clears the goal and frees the
+        // path together, so a bot that got there has neither.
+        else if (_goalIsSpot && Path.HasGoal && !Path.HasPath)
+        {
+            SpotBanUntil = tick + SpotBanTicks;
         }
 
         // The reference's `(tick + player) mod BOT_OBJECTIVE_PERIOD == 0`: staggered
         // per bot so a server full of them does not pay every objective scan on one
         // frame.
-        if ((tick + Combat.Stagger) % BotConstants.ObjectivePeriod != 0)
+        //
+        // ⚠️ Bypassed only for a re-post candidate that failed to plan, so ruling
+        // out a whole band costs a dozen ticks rather than a dozen objective
+        // periods. It is bounded by BOT_SPOT_TRIES and ends in the spot ban, so a
+        // bot cannot hold the cadence open.
+        if (!decideNow && (tick + Combat.Stagger) % BotConstants.ObjectivePeriod != 0)
             return;
 
         // ⚠️ A re-post goal is HELD, not re-decided. See _repostUntil: without this
@@ -905,7 +945,8 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
 
         var goal = Objective.Decide(
             in world, slot, Role, SpreadX, allowSpot: tick >= SpotBanUntil, target: foe,
-            reposting: reposting, repostSkip: _repostSkip);
+            reposting: reposting, repostSkip: _repostSkip,
+            repostNearBot: _repostNearBot);
 
         // No spread on a re-post. The search has already picked the node to stand
         // on and excluded everything near the bot; a lateral offset of up to
@@ -970,8 +1011,16 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
         // for why the ban is the wrong tool on its own here.
         _repostSkip = (_repostSkip + 1) % BotConstants.SpotTries;
 
-        if (_repostSkip == 0)
-            SpotBanUntil = tick + SpotBanTicks;
+        if (_repostSkip != 0)
+            return;
+
+        // The whole ranked band around the objective has now been tried and every
+        // candidate came back with no route. Ask the next one for ground near the
+        // BOT instead — see BotObjective.Decide's anchor assignment for why that
+        // is a different claim from the refuted "retry nearer the bot".
+        _repostNearBot = true;
+
+        SpotBanUntil = tick + SpotBanTicks;
     }
 
     private PlayerKeys ApplyHolds(in WorldView world, int slot, int tick, PlayerKeys navKeys)
