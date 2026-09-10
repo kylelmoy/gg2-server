@@ -56,6 +56,19 @@ public sealed partial class GameServer
         /// </para>
         /// </remarks>
         public int SkipBroadcastBytes { get; set; }
+
+        /// <summary>
+        /// This connection's analytics session, or null when analytics are off.
+        /// </summary>
+        /// <remarks>
+        /// ⚠️ <b>Held here rather than looked up on the way out.</b> The store
+        /// keys on a hash of the address, and by the time
+        /// <c>RemoveClient</c> runs the socket may already be faulted — so
+        /// re-deriving the key from <c>Connection.RemoteAddress</c> at that
+        /// point would silently lose the playtime of exactly the disconnections
+        /// that were not clean.
+        /// </remarks>
+        public AnalyticsSession? Analytics { get; set; }
     }
 
     private void ServiceClients()

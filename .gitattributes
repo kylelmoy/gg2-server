@@ -27,3 +27,8 @@ maps/*.png     binary
 # machine's configuration - scripts/deploy.sh also pipes its remote half through
 # `ssh host bash -s`, where the same CRs would arrive at a Linux shell.
 *.sh           text eol=lf
+
+# MaxMind DB fixtures are the geo reader's own oracle, built by the format's
+# authors and read byte-for-byte. Git detects them as binary anyway; saying so
+# keeps a mis-set core.autocrlf from corrupting one, as for the maps above.
+*.mmdb         binary

@@ -114,6 +114,7 @@ public sealed class WebAdminTests : IDisposable
     [InlineData("/api/perf")]
     [InlineData("/api/system")]
     [InlineData("/api/config")]
+    [InlineData("/api/analytics")]
     public async Task EveryApiRouteRefusesAnUnauthenticatedRequest(string path)
     {
         var reply = await _http.GetAsync(path);
@@ -313,6 +314,7 @@ public sealed class WebAdminTests : IDisposable
     [InlineData("""{"cmd":"ban","address":"198.51.100.7","minutes":1}""")]
     [InlineData("""{"cmd":"unban","address":"198.51.100.7"}""")]
     [InlineData("""{"cmd":"bans"}""")]
+    [InlineData("""{"cmd":"analytics"}""")]
     [InlineData("""{"cmd":"config"}""")]
 
     // ⚠️ Reachability only, as the whole theory is. The harness starts without
@@ -510,6 +512,12 @@ public sealed class WebAdminTests : IDisposable
     [InlineData("/app.css", "text/css", ":root")]
     [InlineData("/app.js", "text/javascript", "/api/events")]
     [InlineData("/favicon.svg", "image/svg+xml", "<svg")]
+
+    // ⚠️ Deliberately public, like the three above it. It is the analytics
+    // map's geometry — the same public-domain coastline for every server in the
+    // world — and says nothing about this one. What is drawn ON it is behind
+    // /api/analytics, which is in the refusal theory above.
+    [InlineData("/world.json", "application/json", "\"views\"")]
     public async Task ThePageIsServedWithoutSigningIn(string path, string type, string contains)
     {
         var reply = await _http.GetAsync(path);

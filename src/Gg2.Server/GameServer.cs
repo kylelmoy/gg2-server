@@ -455,6 +455,21 @@ public sealed partial class GameServer : IDisposable, IPluginHost
     public BanList Bans => _bans;
 
     /// <summary>
+    /// Who has played here, for how long, and roughly from where. Never null;
+    /// disabled unless <see cref="ServerOptions.AnalyticsFile"/> is set.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>Nothing in the simulation may read this.</b> It is a record of the
+    /// server's history, not of the match, and a bot or a physics stage that
+    /// consulted it would make the simulation depend on how long the process
+    /// had been running. It exists for the operator surfaces only.
+    /// </remarks>
+    private PlayerAnalytics _analytics = null!;
+
+    /// <summary>The analytics store, for the control surfaces.</summary>
+    public PlayerAnalytics Analytics => _analytics;
+
+    /// <summary>
     /// How many ticks have failed, and whether that is still survivable.
     /// </summary>
     /// <remarks>
@@ -512,6 +527,16 @@ public sealed partial class GameServer : IDisposable, IPluginHost
         // GameServer, and a test drives Tick directly. Start replaces it with
         // one that has read the file.
         _bans = new BanList(options.BanFile, _log);
+
+        // Same reason as the ban list above: the panel can ask for analytics
+        // before Start has run, and a non-null placeholder keeps every call
+        // site free of a null check.
+        //
+        // ⛔ DISABLED, whatever the options say, and not merely "not loaded
+        // yet". A disposed store flushes, and one that had never read its file
+        // would flush an empty history over the real one. Start builds the real
+        // store — reading the file is what makes it safe to write.
+        _analytics = new PlayerAnalytics(string.Empty, _log, geo: null);
 
         // Once up front as well as on the cadence, so the first thirty seconds
         // of a server started on April 1st are not the odd ones out.
@@ -752,6 +777,23 @@ public sealed partial class GameServer : IDisposable, IPluginHost
         _bans = new BanList(_options.BanFile, _log);
         _bans.Load();
 
+        // Before the listener, like the bans: the first connection accepted
+        // below is counted, and a store still reading its file when that
+        // happened would lose the join.
+        //
+        // ⚠️ The geo database is opened only when analytics are on. On its own
+        // --geoip resolves nothing and nobody asks it anything, so opening it
+        // would be a file handle held for no reason.
+        _analytics.Dispose();
+        _analytics = new PlayerAnalytics(
+            _options.AnalyticsFile,
+            _log,
+            _options.AnalyticsFile.Length != 0
+                ? GeoIpDatabase.Open(_options.GeoIpFile, _log)
+                : null);
+
+        _analytics.Load();
+
         _connectionRate = _limits.ConnectionBurstPerAddress > 0
             ? new ConnectionRateLimiter(_limits.ConnectionBurstPerAddress, _limits.ConnectionBurstWindow)
             : null;
@@ -857,6 +899,12 @@ public sealed partial class GameServer : IDisposable, IPluginHost
             // is not a bug; checking on every accept would be.
             if (_bans.Sweep(now) is var swept and > 0)
                 _log.Info($"{swept} ban(s) expired");
+
+            // On the same cadence and for the same reason: housekeeping
+            // nothing is waiting on. It writes at most every five minutes and
+            // hands the disk to its own thread, so what this call costs on the
+            // tick thread is a comparison — PlayerAnalytics.Flush.
+            _analytics.Housekeeping(now);
 
             // ⚠️ Said once per episode, and it matters: a rate limiter whose
             // table is full has quietly stopped limiting, which is worse than
@@ -1054,6 +1102,12 @@ public sealed partial class GameServer : IDisposable, IPluginHost
 
         _web?.Dispose();
         _web = null;
+
+        // ⚠️ BEFORE the connections are closed. Dispose ends every live session
+        // so the playtime of everybody still connected is counted; doing it
+        // after would be indistinguishable, but doing it here keeps the order
+        // "account for what happened, then tear down what it happened on".
+        _analytics.Dispose();
 
         foreach (var client in _clients)
             client.Connection.Dispose();

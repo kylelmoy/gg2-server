@@ -177,6 +177,11 @@ public sealed class CliCoverageTests
         ("Limits", ["--no-tcp-keepalive"], o => o.Limits.TcpKeepAlive),
 
         ("BanFile", ["--ban-file", "bans.txt"], o => o.BanFile),
+        ("AnalyticsFile", ["--analytics", "analytics.tsv"], o => o.AnalyticsFile),
+        // ⚠️ With --analytics beside it. On its own --geoip is REFUSED — it
+        // supplies geography for a store that is not being kept — the same rule
+        // a --web-* flag without --web follows.
+        ("GeoIpFile", ["--analytics", "a.tsv", "--geoip", "GeoLite2-City.mmdb"], o => o.GeoIpFile),
 
         // ⚠️ The flag that REMEMBERS its own argument rather than consuming it.
         // The panel's settings page writes back to this path, so a --config that
@@ -313,6 +318,32 @@ public sealed class CliCoverageTests
         // for a different and equally deliberate reason: a certificate password
         // with no certificate to open.
         CommandLine.Parse(["--web", "0", "--web-tls", "cert.pfx", flag, value]);
+    }
+
+    /// <summary>
+    /// <c>--geoip</c> with no <c>--analytics</c> is refused, not ignored.
+    /// </summary>
+    /// <remarks>
+    /// The same rule one feature over. On its own the flag opens a file, holds a
+    /// handle and answers nobody — accepted, dropped on the floor, and
+    /// indistinguishable from working until somebody opens the analytics view
+    /// and finds an empty map with no explanation.
+    /// </remarks>
+    [Fact]
+    public void AGeoDatabaseWithNoAnalyticsIsRefused()
+    {
+        var thrown = Assert.Throws<ArgumentException>(
+            () => CommandLine.Parse(["--geoip", "GeoLite2-City.mmdb"]));
+
+        Assert.Contains("--geoip", thrown.Message, StringComparison.Ordinal);
+        Assert.Contains("--analytics", thrown.Message, StringComparison.Ordinal);
+
+        // The control: with a store to supply geography for, the same flag is
+        // fine — and the order it is given in does not matter, because the check
+        // runs after the whole command line has been read.
+        Assert.Equal(
+            "GeoLite2-City.mmdb",
+            CommandLine.Parse(["--geoip", "GeoLite2-City.mmdb", "--analytics", "a.tsv"]).GeoIpFile);
     }
 
     /// <summary>

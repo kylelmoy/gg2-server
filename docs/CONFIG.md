@@ -251,6 +251,18 @@ name per key rather than a fixed set, and it is described above.
 | `AuthServerHost` | text | `ganggarrison.com` | The reward auth service. Only contacted when `Rewards` is on. |
 | `AuthServerPort` | integer | `45022` | That service's port. |
 
+### `[Analytics]`
+
+Both off by default, and grouped rather than left in `[Server]` because both are
+about keeping a record of people: an operator reading a config file should find
+that decision in one place. `docs/ANALYTICS.md` has what the file holds and what
+it deliberately does not.
+
+| Key | Type | Default | |
+|---|---|---|---|
+| `File` | path | *(empty)* | Count who plays here and keep it across restarts. Empty counts nothing and writes nothing. Addresses are stored as salted hashes, never as addresses. |
+| `GeoIpDatabase` | path | *(empty)* | A MaxMind `.mmdb` used to put players on the analytics map. **None ships with this server.** A country-level database resolves no US states. Only opened when `File` is set. |
+
 ### `[Classlimits]`
 
 Ten keys — `Scout`, `Pyro`, `Soldier`, `Heavy`, `Demoman`, `Medic`, `Engineer`,

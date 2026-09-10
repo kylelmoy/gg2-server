@@ -136,6 +136,38 @@ public sealed class ServerOptions
     /// </remarks>
     public string BanFile { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Where player analytics are kept, or empty to count nothing at all.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>Off unless a path is given</b>, like <see cref="RecordingDirectory"/>
+    /// and for the same reason: keeping a durable record of the people who
+    /// played on a server is a decision an operator makes, not a default they
+    /// discover afterwards. With no path nothing is counted and nothing is
+    /// written — the panel's analytics view says so and names this setting.
+    /// <para>
+    /// What the file holds and what it deliberately does not is
+    /// <see cref="PlayerAnalytics"/>; the short version is a salted hash of
+    /// each address rather than the address, and a country — a US state at
+    /// most — rather than a place.
+    /// </para>
+    /// </remarks>
+    public string AnalyticsFile { get; set; } = string.Empty;
+
+    /// <summary>
+    /// A MaxMind DB (<c>.mmdb</c>) to resolve addresses with, or empty for no
+    /// geography.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Nothing ships one.</b> Nothing freely redistributable is small
+    /// enough at US-state resolution, so the operator downloads one —
+    /// <c>docs/ANALYTICS.md</c> names two free sources. Without it the
+    /// analytics work and the map is empty; with a country-level one the map
+    /// works and no US state resolves. It is only consulted when
+    /// <see cref="AnalyticsFile"/> is set.
+    /// </remarks>
+    public string GeoIpFile { get; set; } = string.Empty;
+
     /// <summary>Size at which <see cref="LogFile"/> is rotated.</summary>
     public long LogMaxBytes { get; set; } = FileLog.DefaultMaxBytes;
 

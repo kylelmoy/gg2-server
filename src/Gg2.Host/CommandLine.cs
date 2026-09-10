@@ -414,6 +414,22 @@ internal static class CommandLine
                     options.BanFile = cursor.Take();
                     break;
 
+                // ⛔ Off unless this is passed, like --record: a durable record
+                // of who played on a server is a decision, not a default. What
+                // is kept is a salted hash of each address rather than the
+                // address, and a country — a US state at most — rather than a
+                // place. docs/ANALYTICS.md.
+                case "--analytics":
+                    options.AnalyticsFile = cursor.Take();
+                    break;
+
+                // ⚠️ Nothing ships a database and this reads whatever the
+                // operator downloaded. It only matters beside --analytics, and
+                // an unreadable file costs the geography rather than the start.
+                case "--geoip":
+                    options.GeoIpFile = cursor.Take();
+                    break;
+
                 // ⚠️ NOT --multi-client-limit. That bounds how many connections
                 // one address holds at once; this bounds how fast it opens them.
                 case "--connect-rate":
@@ -839,6 +855,17 @@ internal static class CommandLine
                 + "Add --web <port> to host one, or drop the flag.");
         }
 
+        // ⛔ The same rule one feature over: --geoip is only ever consulted by
+        // the analytics store, so on its own it opens a file, holds a handle and
+        // answers nobody. After the loop, so the flags' order does not matter and
+        // an [Analytics] File in --config counts as having turned it on.
+        if (options.GeoIpFile.Length != 0 && options.AnalyticsFile.Length == 0)
+        {
+            throw new ArgumentException(
+                "--geoip supplies geography for the player analytics and none are being kept. "
+                + "Add --analytics <path> to keep them, or drop the flag.");
+        }
+
         // ⚠️ AFTER the loop, so it beats --bots's own MinHumans = 0 wherever the
         // two appear relative to each other.
         if (botsMinHumans is { } minHumans)
@@ -1150,6 +1177,18 @@ internal static class CommandLine
                             (default 1)
           --record <path>   write replayable .trace recordings of this server's
                             broadcast stream to a directory (default: off)
+          --analytics <path>
+                            count who plays here and keep it across restarts:
+                            unique players all time and per day, playtime, peak
+                            concurrency, and where they connect from (default:
+                            off). Addresses are stored as salted hashes, never
+                            as addresses. Shown in the panel's Analytics view.
+          --geoip <path>    a MaxMind .mmdb to resolve addresses with, for the
+                            analytics map (default: off). None ships with this
+                            server; docs/ANALYTICS.md names two free ones. A
+                            country-level database resolves no US states.
+                            ⚠ Given without --analytics it is refused rather than
+                            ignored: on its own it has nothing to resolve for.
           --control-port <n>
                             open the loopback control port (default: off;
                             0 asks the OS for a free port)

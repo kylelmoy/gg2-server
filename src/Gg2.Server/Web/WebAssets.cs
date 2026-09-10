@@ -12,7 +12,7 @@ namespace Gg2.Server;
 /// the maps travel with a publish: a server deployed by copying one directory
 /// must not be able to end up with a working binary and a missing page. There is
 /// no <c>--web-root</c> and no directory served off disk, which also means there
-/// is no path-traversal surface at all — the routes name the four files by hand.
+/// is no path-traversal surface at all — the routes name the five files by hand.
 /// </para>
 /// <para>
 /// <b>No build step and no dependencies.</b> The page is hand-written HTML,

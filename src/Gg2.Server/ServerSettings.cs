@@ -348,6 +348,24 @@ public static class ServerSettings
             o => o.BanFile, (o, v) => o.BanFile = v, "bans.txt",
             "Where operator bans are kept. Empty means they do not survive a restart."));
 
+        // --- [Analytics] ------------------------------------------------------
+        //
+        // Its own section rather than two more keys in [Server], because both
+        // are off by default and both are about keeping a record of people:
+        // an operator reading a config file should find that decision in one
+        // place. docs/ANALYTICS.md.
+        settings.Add(PathRow(
+            "Analytics", "File", nameof(ServerOptions.AnalyticsFile),
+            o => o.AnalyticsFile, (o, v) => o.AnalyticsFile = v, "analytics.tsv",
+            "Count who plays here and keep it across restarts. Empty counts nothing. "
+            + "Addresses are stored as salted hashes, never as addresses."));
+
+        settings.Add(PathRow(
+            "Analytics", "GeoIpDatabase", nameof(ServerOptions.GeoIpFile),
+            o => o.GeoIpFile, (o, v) => o.GeoIpFile = v, "GeoLite2-City.mmdb",
+            "A MaxMind .mmdb used to put players on the analytics map. None ships with "
+            + "this server. A country-level database resolves no US states."));
+
         settings.Add(PathRow(
             "Server", "MapDirectory", nameof(ServerOptions.MapDirectory),
             o => o.MapDirectory, (o, v) => o.MapDirectory = v, "some/other/maps",

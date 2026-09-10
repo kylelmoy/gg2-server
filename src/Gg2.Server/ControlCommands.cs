@@ -138,6 +138,11 @@ public static class ControlCommands
 
         "bans" => Bans(server),
 
+        // Read-only, and here rather than in the panel for the rule this whole
+        // table exists for: the control port gets it too, so a script can pull
+        // the same figures the Analytics view draws without scraping a page.
+        "analytics" => Ok("\"analytics\":{" + server.Analytics.ToJson(DateTime.UtcNow) + "}"),
+
         // The configuration verbs. Like "kick" they have no client equivalent,
         // and like every verb here they live in ONE place so the control port and
         // the panel cannot drift into slightly different servers.

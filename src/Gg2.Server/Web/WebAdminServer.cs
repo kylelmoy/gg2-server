@@ -368,6 +368,14 @@ public sealed class WebAdminServer : IDisposable
             case ("GET", "/favicon.svg"):
                 return await AssetAsync(stream, "favicon.svg", "image/svg+xml", token);
 
+            // ⚠️ Served WITHOUT a session, like the page and the stylesheet, and
+            // for the same reason: it is a static asset of the application, the
+            // same eighty kilobytes of public-domain coastline for every server
+            // in the world. It says nothing about this one. The analytics it is
+            // drawn with are behind the session, below.
+            case ("GET", "/world.json"):
+                return await AssetAsync(stream, "world.json", "application/json", token);
+
             // The one endpoint that answers before sign-in, and it answers
             // with as little as it can: whether this browser is signed in, and
             // whether the connection is encrypted. The server's name is not a
@@ -445,6 +453,14 @@ public sealed class WebAdminServer : IDisposable
             // the settings page fetches it when it is opened.
             case ("GET", "/api/config"):
                 return await JsonAsync(stream, 200, await ExecuteAsync("{\"cmd\":\"config\"}"), token);
+
+            // ⚠️ Through the QUEUE, like "config" and for the same reason: it
+            // walks the analytics tables, which the tick thread writes on every
+            // join and leave. It is fetched when the Analytics view is opened
+            // and on a slow refresh, never on the state cadence — a walk over
+            // twenty thousand player records is not a per-tick cost.
+            case ("GET", "/api/analytics"):
+                return await JsonAsync(stream, 200, await ExecuteAsync("{\"cmd\":\"analytics\"}"), token);
 
             case ("POST", "/api/command"):
                 return await JsonAsync(stream, 200, await ExecuteAsync(request.Body), token);

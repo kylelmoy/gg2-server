@@ -425,6 +425,16 @@ public sealed partial class GameServer
 
         _clients.Add(client);
 
+        // ⚠️ AFTER the add, so `_clients.Count` is the concurrency this join
+        // reached — the number a peak is measured from. Bots are not in
+        // `_clients` at all, so this counts humans, which is what the figure
+        // claims to be.
+        //
+        // Off unless --analytics, in which case Begin returns null and every
+        // later call on it is a no-op.
+        client.Analytics = _analytics.Begin(
+            connection.RemoteAddress, entry.Name, DateTime.UtcNow, _clients.Count);
+
         _plugins.PlayerAdded(_roster.Count - 1);
 
         // 3. Broadcast to everyone *including* the joiner, which is how the

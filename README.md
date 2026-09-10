@@ -152,7 +152,7 @@ what has a match number and what does not is not obvious from the files.
 
 ### Offline tooling
 
-Five switches turn the server into a laboratory. All are off by default, and the
+Six switches turn the server into a laboratory. All are off by default, and the
 first two must stay off wherever a client is connected — clients pace themselves
 at 30 Hz and re-simulate between updates, so an unpaced server desynchronises
 every one of them at once.
@@ -163,6 +163,7 @@ every one of them at once.
 | `--control-port <n>` | A line-of-JSON control surface on 127.0.0.1 only — read state, freeze, step N ticks, change map, teleport, set the bot count. It executes commands against a live game. |
 | `--record <dir>` | Write replayable `.trace` recordings of the broadcast stream. Contains every player's keys and aim on every tick, so it is training data as well as a parity fixture. |
 | `--web <n>` | An admin panel in a browser: the roster, a live map, the round, performance graphs (tick time, CPU, memory, late ticks, bandwidth, load), the log, the same operator controls the control port has plus `kick`, and a settings page that edits every key of the `--config` file with a restart button that applies it. The only surface here meant to be reachable from the network. It binds `127.0.0.1` unless `--web-bind` says otherwise, the password cannot be turned off (one is generated and printed if you give none), and a non-loopback bind without `--web-tls` is warned about at every startup. |
+| `--analytics <path>` | Count who plays here and keep it across restarts: unique players all time and per day, playtime, peak concurrency, and — with a `--geoip` database the operator supplies — a map of where they connect from, by country and by US state. Shown in the panel's Analytics view. Addresses are stored as salted hashes, never as addresses; `docs/ANALYTICS.md` has what the file holds and what it deliberately does not. |
 | `eval` | A subcommand, not a switch: plays bot matches across maps and reports the results. `gg2-server eval --help`. |
 
 ## Other executables

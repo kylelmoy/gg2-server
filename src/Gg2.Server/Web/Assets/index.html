@@ -56,6 +56,7 @@
 
     <div class="topbar-right">
       <span class="live" id="live" data-state="connecting"><span class="live-dot"></span><span id="live-text">connecting</span></span>
+      <button class="btn btn-quiet" id="analytics-open" type="button">Analytics</button>
       <button class="btn btn-quiet" id="settings-open" type="button">Settings</button>
       <button class="btn btn-quiet btn-warn" id="restart" type="button">Restart</button>
       <button class="btn btn-quiet" id="logout" type="button">Sign out</button>
@@ -335,6 +336,125 @@
       <button class="btn btn-warn" id="settings-save-restart" type="button" disabled>Save &amp; restart</button>
     </div>
   </footer>
+</dialog>
+
+<!--
+  Who has played here, over the life of the file rather than of the process.
+
+  ⚠️ Everything in here is off unless the server was started with --analytics.
+  The "off" note is not an error state: nothing is counted and nothing is
+  written until an operator asks for it, so the panel's job is to say which
+  setting turns it on rather than to look broken.
+
+  ⛔ The map is a proportional-symbol map, not a choropleth, and the symbols sit
+  on a country's or a state's own centroid — never on a coordinate from the geo
+  database. The database can place an address to a city; the panel deliberately
+  cannot show that.
+-->
+<dialog class="sheet sheet-wide" id="analytics" aria-labelledby="analytics-title">
+  <header class="sheet-head">
+    <div>
+      <h3 id="analytics-title">Analytics</h3>
+      <p class="sheet-sub" id="analytics-sub">—</p>
+    </div>
+    <div class="sheet-tools">
+      <button class="btn btn-quiet" id="analytics-refresh" type="button">Refresh</button>
+      <button class="btn btn-quiet" id="analytics-close" type="button" aria-label="Close">Close</button>
+    </div>
+  </header>
+
+  <p class="sheet-note warn" id="an-off" hidden></p>
+
+  <div class="sheet-body" id="an-body">
+    <p class="sheet-empty" id="an-loading">Loading…</p>
+
+    <div id="an-content" hidden>
+      <div class="an-kpis" id="an-kpis"></div>
+
+      <section class="an-block">
+        <div class="an-head">
+          <h4>Per day</h4>
+          <div class="an-head-tools">
+            <div class="seg seg-sm" id="an-metric" role="group" aria-label="What to plot">
+              <button class="seg-btn is-on" data-metric="unique" type="button">players</button>
+              <button class="seg-btn" data-metric="new" type="button">new</button>
+              <button class="seg-btn" data-metric="sessions" type="button">joins</button>
+              <button class="seg-btn" data-metric="playtimeSeconds" type="button">playtime</button>
+              <button class="seg-btn" data-metric="peak" type="button">peak</button>
+            </div>
+            <div class="seg seg-sm" id="an-range" role="group" aria-label="Time range">
+              <button class="seg-btn" data-days="14" type="button">14d</button>
+              <button class="seg-btn is-on" data-days="30" type="button">30d</button>
+              <button class="seg-btn" data-days="90" type="button">90d</button>
+              <button class="seg-btn" data-days="0" type="button">all</button>
+            </div>
+          </div>
+        </div>
+        <div class="an-days-wrap">
+          <canvas id="an-days" class="an-days"></canvas>
+          <div class="map-tip" id="an-days-tip" hidden></div>
+        </div>
+        <p class="chart-axis"><span id="an-days-from"></span><span id="an-days-to"></span></p>
+      </section>
+
+      <section class="an-block">
+        <div class="an-head">
+          <h4>Where they connect from</h4>
+          <div class="an-head-tools">
+            <div class="seg seg-sm" id="an-view" role="group" aria-label="Map">
+              <button class="seg-btn is-on" data-view="world" type="button">World</button>
+              <button class="seg-btn" data-view="us" type="button">United States</button>
+            </div>
+          </div>
+        </div>
+        <div class="an-map-wrap">
+          <canvas id="an-map" class="an-map"></canvas>
+          <div class="map-tip" id="an-map-tip" hidden></div>
+        </div>
+        <p class="hint" id="an-map-note"></p>
+      </section>
+
+      <div class="an-cols">
+        <section class="an-block">
+          <h4>Places</h4>
+          <div class="table-wrap">
+            <table class="roster">
+              <thead>
+                <tr>
+                  <th class="c-name">Place</th>
+                  <th class="c-num">Players</th>
+                  <th class="c-num">Joins</th>
+                  <th class="c-num">Played</th>
+                </tr>
+              </thead>
+              <tbody id="an-places"></tbody>
+            </table>
+            <p class="empty" id="an-places-empty" hidden>Nowhere resolved yet.</p>
+          </div>
+        </section>
+
+        <section class="an-block">
+          <h4>Most time played</h4>
+          <div class="table-wrap">
+            <table class="roster">
+              <thead>
+                <tr>
+                  <th class="c-name">Player</th>
+                  <th class="c-num">Joins</th>
+                  <th class="c-num">Played</th>
+                  <th class="c-last">Last seen</th>
+                </tr>
+              </thead>
+              <tbody id="an-top"></tbody>
+            </table>
+            <p class="empty" id="an-top-empty" hidden>Nobody has connected yet.</p>
+          </div>
+        </section>
+      </div>
+
+      <p class="an-foot" id="an-foot"></p>
+    </div>
+  </div>
 </dialog>
 
 <dialog class="confirm" id="confirm">

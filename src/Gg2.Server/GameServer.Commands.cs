@@ -477,6 +477,13 @@ public sealed partial class GameServer
         // running total. See _bytesRetired.
         _bytesRetired += client.Connection.BytesSent;
 
+        // Every departure, whatever caused it — a clean quit, a lost
+        // connection, a kick, a ban. This is the ONLY place a session is
+        // closed, which is what makes "playtime" the time the socket was open
+        // rather than the time somebody chose to leave.
+        _analytics.End(client.Analytics, DateTime.UtcNow);
+        client.Analytics = null;
+
         _clients.RemoveAt(clientIndex);
 
         if (rosterIndex > 0)
