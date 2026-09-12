@@ -227,7 +227,31 @@ if dotnet test Gg2.sln > log; then scripts/deploy.sh; else cat log; fi
 lobby listing comes down, an in-flight `--record` segment is closed into a
 readable trace — but players in a match are disconnected without warning. The
 control port's `state` verb reports the roster if you want to wait for an empty
-server first.
+server first. `ss -tn state established '( sport = :8190 )'` answers the same
+question from a shell, without a password or a tunnel.
+
+⚠️ **On Ubuntu, the machine restarts this server on its own, and a deploy is not
+the only thing that drops your players.** `unattended-upgrades` is installed and
+enabled by default there, and a `libc6` update restarts every service linked
+against glibc — gg2 among them, in the same second as `containerd`, `cron`,
+`multipathd` and the rest. Observed 2026-09-12: glibc `2.39-0ubuntu8.8` ->
+`8.9` finished at 06:47:16 and `Stopping gg2.service` was logged at 06:47:17.
+Nothing is wrong when this happens; SIGTERM is handled and the unit comes back
+in under a second. But it is worth knowing three things about it:
+
+- **It is indistinguishable from a crash in `--status`**, which shows only that
+  the unit restarted. `journalctl -u gg2` plus `/var/log/apt/history.log` is
+  what tells the two apart — an ordinary `Stopping`/`Deactivated successfully`
+  pair is a deliberate stop, and `Restart=on-failure` firing is not.
+- **It applies staged configuration you had not finished with.** Every
+  subsystem reads its options once at `Start`, so an edit to `shared/gg2.ini`
+  is inert until a restart — and this restart is one you did not schedule.
+  Do not leave a half-made change in that file overnight.
+- **Debian does not do this**, at least not by default: neither
+  `unattended-upgrades` nor `needrestart` is installed on a stock Debian 12
+  image, so `apt-daily-upgrade.timer` being active means nothing on its own.
+  The trade is the obvious one — no surprise restarts, and no automatic
+  security updates either.
 
 ### Which build is running
 
