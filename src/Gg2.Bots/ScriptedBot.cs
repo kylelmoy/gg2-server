@@ -941,7 +941,22 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
         // actually aiming at.
         var foe = Combat.Target.Kind == BotTargetKind.Character ? Combat.Target.Slot : (int?)null;
 
-        var reposting = ParkedTicks >= BotConstants.RepostTicks;
+        // ⚠️ TWO thresholds, and the short one is not a tuning of the long one.
+        // The eight-second timer is for a bot that has quietly become a statue
+        // where nothing is at stake; a bot standing motionless while something
+        // shoots it has about three seconds to live, and giving that case the
+        // patient timer is what "stands still and takes damage until it dies"
+        // looked like from inside a game. Half a second of standing still under
+        // fire is enough to ask for somewhere else to stand.
+        //
+        // It cannot interrupt a bot that is fighting back: ParkedTicks stops
+        // counting while WantsToEngage is on, so a bot holding a firing position
+        // never reaches either threshold. What is left is exactly the bot with no
+        // answer — the shooter is outside its class's engage range, or behind
+        // something, or it is a sentry it cannot reach.
+        var reposting = ParkedTicks >= (UnderFireWithNoAnswer(in world, slot)
+            ? BotConstants.RepostUnderFireTicks
+            : BotConstants.RepostTicks);
 
         var goal = Objective.Decide(
             in world, slot, Role, SpreadX, allowSpot: tick >= SpotBanUntil, target: foe,
@@ -1157,6 +1172,40 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
         }
 
         return navKeys;
+    }
+
+    /// <summary>
+    /// Something is shooting this bot and it holds nothing it could shoot back at
+    /// from where it stands.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The second half is not redundant with <see cref="ParkedTicks"/>'
+    /// engage pause.</b> That pause is <see cref="WantsToEngage"/>, which is false
+    /// for a bot standing within <c>BOT_ENGAGE_GOAL_NEAR</c> of its own goal
+    /// however well it is fighting — the hold exists to stop a bot walking PAST an
+    /// enemy, and a bot that has arrived is not walking anywhere. So a defender
+    /// duelling on top of the thing it is defending counts as parked, and without
+    /// this test the short timer would pull it off its post mid-fight. Measured on
+    /// <c>arena_montane</c>, where that is most of the match.
+    /// <para>
+    /// "Could shoot back" is the class's own attention radius rather than
+    /// <see cref="BotTargeting.AttentionRange"/>: the widened one is what let the
+    /// bot SEE the shooter, and seeing a sniper 500px away is exactly the case that
+    /// has to move rather than stand.
+    /// </para>
+    /// </remarks>
+    private bool UnderFireWithNoAnswer(in WorldView world, int slot)
+    {
+        if (!BotTargeting.UnderFire(in world, slot))
+            return false;
+
+        if (!Combat.Target.Exists)
+            return true;
+
+        ref readonly var self = ref world.Character(slot);
+
+        return Gml.PointDistance(self.X, self.Y, Combat.Target.X, Combat.Target.Y)
+            > BotTargeting.ClassRange(self.Class);
     }
 
     /// <summary>How far the bot is from its goal, or past the engage threshold.</summary>

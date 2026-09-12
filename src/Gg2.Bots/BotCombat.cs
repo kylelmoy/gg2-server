@@ -90,7 +90,13 @@ public static class BotCombat
         }
 
         ref readonly var self = ref world.Character(slot);
-        var range = BotTargeting.ClassRange(self.Class);
+
+        // Widened while somebody is shooting at this bot — see
+        // BotTargeting.AttentionRange. Both the search and the keep test read the
+        // same number, so a target acquired because the bot was hit is dropped by
+        // the ordinary rule the moment the window closes, with no second piece of
+        // state to keep in step.
+        var range = BotTargeting.AttentionRange(in world, slot);
 
         KeepOrDropTarget(state, in world, slot, tick, range, in skill);
         LookForOne(state, in world, slot, tick, range, ref random);

@@ -420,6 +420,83 @@ public sealed class BotTargetingTests
         Assert.False(BotTargeting.EnemyWithin(new WorldView(in state, collision), 0, 50));
     }
 
+    // ------------------------------------------------------------------
+    // Being told, rather than looking
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// The attention radius widens while something is shooting at this bot.
+    /// </summary>
+    /// <remarks>
+    /// <b>A pyro at 200px is the case this exists for.</b> Anything past the class
+    /// radius is dropped by <see cref="BotTargeting.Find"/> before the
+    /// <c>shot me recently</c> bonus is applied, so a pyro shot from 400px had no
+    /// candidate at all and did nothing about it. See
+    /// <see cref="BotUnderFireTests"/> for the behaviour that follows from it.
+    /// </remarks>
+    [Fact]
+    public void BeingShotWidensWhatABotIsLookingFor()
+    {
+        var state = World(
+            (Team.Red, PlayerClass.Pyro, LeftX, FloorY),
+            (Team.Blue, PlayerClass.Sniper, LeftX + 400, FloorY));
+
+        var collision = Collision();
+
+        Assert.Equal(
+            BotTargeting.ClassRange(PlayerClass.Pyro),
+            BotTargeting.AttentionRange(new WorldView(in state, collision), 0));
+
+        state.Characters[0].LastDamageDealer = 1;
+        state.Characters[0].TimeUnscathed = 0;
+
+        Assert.Equal(
+            BotConstants.RetaliateRange,
+            BotTargeting.AttentionRange(new WorldView(in state, collision), 0));
+
+        // And that is what makes the sniper a candidate rather than a nothing.
+        Assert.True(
+            BotTargeting.Find(
+                new WorldView(in state, collision), 0,
+                BotTargeting.AttentionRange(new WorldView(in state, collision), 0)).Exists);
+    }
+
+    /// <summary>
+    /// The window closes on its own, and a rocket jump is not being shot at.
+    /// </summary>
+    /// <remarks>
+    /// Both cases are read off the simulation's own fields rather than remembered
+    /// per bot: <c>TimeUnscathed</c> is reset by every damage path and counted up
+    /// in the character's Step, and self-damage names the jumper as its own dealer.
+    /// A soldier that reacted to its own launch would widen its radius on every
+    /// rocket jump of the match.
+    /// </remarks>
+    [Fact]
+    public void SelfDamageAndAStaleHitAreNotBeingUnderFire()
+    {
+        var state = World(
+            (Team.Red, PlayerClass.Soldier, LeftX, FloorY),
+            (Team.Blue, PlayerClass.Scout, LeftX + 100, FloorY));
+
+        var collision = Collision();
+
+        state.Characters[0].LastDamageDealer = 1;
+        state.Characters[0].TimeUnscathed = 0;
+        Assert.True(BotTargeting.UnderFire(new WorldView(in state, collision), 0));
+
+        state.Characters[0].TimeUnscathed = BotConstants.UnderFireTicks + 1;
+        Assert.False(BotTargeting.UnderFire(new WorldView(in state, collision), 0));
+
+        // A rocket jump: the soldier is its own last damage dealer.
+        state.Characters[0].TimeUnscathed = 0;
+        state.Characters[0].LastDamageDealer = 0;
+        Assert.False(BotTargeting.UnderFire(new WorldView(in state, collision), 0));
+
+        // And a character nothing has touched since it spawned.
+        state.Characters[0].LastDamageDealer = CharacterState.Nobody;
+        Assert.False(BotTargeting.UnderFire(new WorldView(in state, collision), 0));
+    }
+
     /// <summary>The signed angle difference wraps the short way round.</summary>
     /// <remarks>
     /// The <c>+ 540</c> is what makes it work for a negative first difference

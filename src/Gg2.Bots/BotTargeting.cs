@@ -86,6 +86,69 @@ public static class BotTargeting
     };
 
     /// <summary>
+    /// Has this bot been hit recently by something that was not itself.
+    /// </summary>
+    /// <remarks>
+    /// <b>Read off the simulation's own fields, so nothing has to be remembered
+    /// per bot.</b> <c>TimeUnscathed</c> is reset by every damage path and counted
+    /// up in the character's Step, and <c>LastDamageDealer</c> is a roster slot
+    /// that <c>WorldState.RemoveSlot</c> renumbers — which is exactly what a
+    /// bot-side timer would get wrong after a disconnect.
+    /// <para>
+    /// <b>A rocket jump is not being under fire.</b> Self-damage names the jumper
+    /// as its own dealer, so the <c>!= slot</c> test is what keeps a soldier from
+    /// reacting to its own launch. Afterburn names whoever lit the fire, which IS
+    /// being under fire and is meant to count.
+    /// </para>
+    /// </remarks>
+    public static bool UnderFire(in WorldView world, int slot)
+    {
+        if (!world.IsAlive(slot))
+            return false;
+
+        ref readonly var self = ref world.Character(slot);
+
+        return self.TimeUnscathed <= BotConstants.UnderFireTicks
+            && self.LastDamageDealer != CharacterState.Nobody
+            && self.LastDamageDealer != slot;
+    }
+
+    /// <summary>
+    /// How far this bot is looking for something to shoot <em>right now</em>.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="ClassRange"/>, widened to <see cref="BotConstants.RetaliateRange"/>
+    /// while something is shooting at it. The class radius is an attention budget
+    /// — how far a bot scans on a quiet tick — and a bot being hit is not scanning,
+    /// it is being told. Without this a pyro (200px) or a scout (220px) shot from
+    /// 400px has no candidate at all: <see cref="Find"/> drops everything past the
+    /// radius before the attacker bonus is ever applied, so the whole
+    /// <c>shot me recently</c> term is unreachable at exactly the distance it is
+    /// for.
+    /// <para>
+    /// <b>The whole radius widens, not just the attacker.</b> Ranking is by threat
+    /// in pixels and the attacker already carries
+    /// <see cref="BotConstants.AttackerBonus"/>, so a bot that is being shot picks
+    /// whoever is worst for it — which may well be a nearer body than the shooter.
+    /// Widening one slot instead would have made the answer depend on the order the
+    /// roster happens to be in.
+    /// </para>
+    /// <para>
+    /// It widens the SEARCH and the keep test in <c>BotCombat</c>, and nothing
+    /// else. The engage hold, the class's standoff band and every fire gate stay
+    /// on <see cref="ClassRange"/> — a bot that has turned round to look at a
+    /// sniper 500px away must not also stop walking its route, and a pyro must not
+    /// flame at air. <c>docs/TRAPS-BOTS.md</c>, "standing still under fire".
+    /// </para>
+    /// </remarks>
+    public static double AttentionRange(in WorldView world, int slot)
+    {
+        var range = (double)ClassRange(world.Character(slot).Class);
+
+        return UnderFire(in world, slot) ? Math.Max(range, BotConstants.RetaliateRange) : range;
+    }
+
+    /// <summary>
     /// How close is too close for this class — <c>botClassMinBand.gml</c>.
     /// </summary>
     /// <remarks>

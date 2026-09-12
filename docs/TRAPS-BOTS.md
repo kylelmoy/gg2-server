@@ -5818,3 +5818,100 @@ The other standing issue is upstream and unchanged: the objective layer never
 asks whether a goal is reachable for the profile that has to walk it, so a
 Heavy is handed ground only a jumping class can get to. The bot-anchored last
 resort is a mitigation for that, not the fix.
+## Standing still under fire: a class radius decided what a bot could be told
+
+Reported from play on a control map: a defending pyro stood on the point and
+took fire from across the room without reacting at all — no aim, no keys, no
+step — until it died. It is not a control-point behaviour and not a pyro one.
+Any bot whose attacker is further away than its class's attention radius reacted
+to nothing, and the two shortest radii in the table are the pyro's 200px and the
+scout's 220px, so those are the two a player notices.
+
+`BotTargeting.Find` dropped every candidate past the radius it was given, and
+`BotCombat` gave it `ClassRange`. The scoring the search then applies already
+had a term for exactly this case — `-BOT_ATTACKER_BONUS` for "shot me recently",
+read off `CharacterState.LastDamageDealer` — and that term was unreachable
+beyond the radius, which is the only place it was ever needed. A radius is what
+a bot **scans** with. Damage arriving is being **told**, and the two are not the
+same question.
+
+### The two halves, and what is deliberately not widened
+
+| | what | where |
+|---|---|---|
+| see it | while under fire the attention radius widens to `BOT_RETALIATE_RANGE` (900px, a sniper's own radius — the widest distance anything in the class table pays attention to) | `BotTargeting.AttentionRange`, used by `BotCombat.Step` for both the search and the keep test |
+| do something about it | a bot standing still under fire that holds nothing it could shoot from where it stands re-posts after `BOT_REPOST_UNDER_FIRE_TICKS` (15) instead of `BOT_REPOST_TICKS` (240) | `ScriptedBot.UnderFireWithNoAnswer`, feeding the existing re-post machinery |
+
+Under fire is read off the simulation's own fields rather than remembered per
+bot: `TimeUnscathed` is reset by every damage path and counted up in the
+character's Step, and `LastDamageDealer` is a roster slot that
+`WorldState.RemoveSlot` renumbers — which is what a bot-side timer would get
+wrong after a disconnect. Self-damage names the jumper as its own dealer, so
+`!= slot` is what stops a soldier reacting to its own rocket jump; afterburn
+names whoever lit the fire, which is being under fire and counts.
+
+The engage hold, the fire gates and the class standoff bands all still read
+`ClassRange`, and widening any of them would be a different change:
+
+- The **engage hold** (`ScriptedBot.WantsToEngage`) strips the follower's
+  movement keys. Widened, a bot crossing a map under long-range fire would stop
+  walking its route — the reported symptom, moved to bots that were doing
+  something.
+- The **fire gates** are per class and per weapon. The pyro's is
+  `BOT_FLAME_REACH`, so a pyro that has turned round to look at a sniper 418px
+  away presses nothing, which is what `BotUnderFireTests` asserts. A scout's
+  scattergun has no such gate and does fire at that range; that is pre-existing
+  behaviour at any distance inside its radius, not something this introduced.
+- The **spot bands** decide where a class likes to stand. They are a positioning
+  opinion, not a reaction.
+
+### The re-post trigger needs BOTH conjuncts
+
+`ParkedTicks` already pauses while `WantsToEngage` is on, so the first version
+keyed the short timer on being shot alone and reasoned that a bot fighting back
+was covered. It is not: `WantsToEngage` is false for a bot standing within
+`BOT_ENGAGE_GOAL_NEAR` of its own goal however well it is fighting, because that
+hold exists to stop a bot walking *past* an enemy and a bot that has arrived is
+not walking anywhere. A defender duelling on top of the thing it defends
+therefore counted as parked, and the short timer pulled it off its post
+mid-fight. Measured on `arena_montane`, 128 matches: unfinished 26 → 38 and mean
+ticks 19,528 → 21,570 against the control. Adding "and holds nothing it could
+shoot from here" recovered it to 31 and 19,904.
+
+### Measured
+
+**The census** — `UnderFireCensusTests`, skipped by default, 23 maps x 2 seeds x
+12 bots at tier 5, capped at 9,000 ticks, Debug. Counted per alive bot-tick.
+
+| | alive bot-ticks | under fire | still, of fire | blind, of fire | still AND blind, of fire | deaths per alive kilotick |
+|---|---|---|---|---|---|---|
+| before | 3,754,705 | 13.00% | 19.15% | 22.97% | 2.28% | 0.930 |
+| after | 3,697,124 | 13.09% | 18.42% | 16.81% | 1.36% | 0.918 |
+
+The pathology is the "still AND blind" column, and it falls by 40%; "blind"
+falls by 27%. **The deaths column is the control**: a change that only made bots
+run away would show there, and it does not move. It also says what this fix is
+and is not — in a bot-vs-bot match both sides change and mortality is flat. The
+gain is against a *human* deliberately shooting from outside a short radius,
+which is what was reported and what no headless measurement contains.
+
+**The objective** — `eval --matches 32 --seed 1`, 736 matches per arm, Release.
+Decisive 522 → 522, draws 209 → 206, unfinished 5 → 8, mean of the per-map mean
+ticks 17,664 → 17,581. Per-map moves scatter in both directions. The one row
+that moves consistently is `arena_montane` (unfinished 4 → 6 of 32, and 26 → 31
+of 128), which is the residue of the widened attention rather than the re-post:
+an arm with the attention half alone reads 31 of 128 as well.
+
+### What would show this has gone stale
+
+- `BotUnderFireTests` fails on the unfixed code for the pyro and the scout and
+  passes for the heavy, and that was confirmed by reverting `src/` and running
+  it. A version of it that also passes for the pyro before the fix is measuring
+  the scenario, not the change.
+- The three pinned end-to-end measurements did **not** move, and that is
+  explained rather than lucky: `BotObjectiveTests`' intel run is one bot alone on
+  the map, and every scenario-suite leg that fires does so at a dummy that never
+  shoots back, so no bot in any of them is ever under fire.
+- If `BOT_RETALIATE_RANGE` were raised past a sniper's own radius, bots would
+  start turning to face attackers they have no way to reach, and the census's
+  "blind" column would fall while nothing else improved.

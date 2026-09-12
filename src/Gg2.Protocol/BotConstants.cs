@@ -145,6 +145,35 @@ public static class BotConstants
     /// </remarks>
     public const int RepostTicks = 240;
 
+    /// <summary>
+    /// How long after a hit a bot still counts as under fire —
+    /// <c>BotTargeting.UnderFire</c>.
+    /// </summary>
+    /// <remarks>
+    /// Three seconds, measured from the last hit rather than from the first, so
+    /// somebody still shooting keeps the window open. Shorter than the
+    /// simulation's own <c>ASSIST_TIME</c> because this is "am I in a fight", not
+    /// "who gets the kill".
+    /// </remarks>
+    public const int UnderFireTicks = 90;
+
+    /// <summary>
+    /// How far a bot will look for whoever is shooting it, whatever its class's
+    /// attention radius is.
+    /// </summary>
+    /// <remarks>
+    /// A class radius says how far a bot goes LOOKING; damage arriving is being
+    /// TOLD, and the two are not the same question. A pyro's 200px radius is what
+    /// makes it walk past a corner rather than scan the whole map, and it must not
+    /// also be what stops it turning round when a sniper hits it from 400px away.
+    /// <para>
+    /// A sniper's own radius is the ceiling: it is the widest distance anything in
+    /// the class table pays attention to, so nothing here can be told about
+    /// somebody further off than the game's own longest sightline.
+    /// </para>
+    /// </remarks>
+    public const int RetaliateRange = 900;
+
     /// <summary>How far a re-post has to move the bot to count as one.</summary>
     /// <remarks>
     /// Above <see cref="GoalRetargetDist"/>, so a re-post is never a goal the
@@ -152,4 +181,20 @@ public static class BotConstants
     /// <see cref="ArriveTol"/>, so the bot walks rather than shuffles.
     /// </remarks>
     public const int RepostMinMove = 96;
+    /// <summary>
+    /// How long a bot stands still <em>while being shot</em> before it asks for
+    /// somewhere else to stand.
+    /// </summary>
+    /// <remarks>
+    /// Half a second, against <see cref="RepostTicks"/>' eight. The long timer is
+    /// for a bot that has quietly become a statue and nothing is at stake in the
+    /// meantime; a bot taking fire it is not answering has about three seconds to
+    /// live, so the same eight-second patience is a death sentence.
+    /// <para>
+    /// It cannot interrupt a bot that IS answering: <c>ScriptedBot.ParkedTicks</c>
+    /// stops counting while the engage hold is on, so standing to fight pauses this
+    /// as it pauses the long one.
+    /// </para>
+    /// </remarks>
+    public const int RepostUnderFireTicks = 15;
 }
