@@ -19,7 +19,8 @@ deployment differs from a `dotnet run` out of the repository.
 | A nav graph matches its map | `NavManifestTests`, with a mutated-walkmask arm and an entities-only arm |
 | CPU and memory cost | Measured on Windows, table below |
 | `--version` says which commit is running | `BuildInfoTests`, against the regex `scripts/deploy.sh` parses it with; `ControlPortTests.StateReportsTheRoster` for the `state` reply |
-| A deploy reaches the hosts and flips them | Done once for real, 2026-09-08, `9daae8f` to Ubuntu 24.04. `--rollback` and the prune are still unrun; see "what a real deploy has and has not exercised" |
+| A deploy reaches the hosts and flips them | Done for real to three hosts, latest 2026-09-12, `0d04911` to two Debian 12 and one Ubuntu 24.04. `--rollback` and the prune are still unrun; see "what a real deploy has and has not exercised" |
+| A stock client joins one | Done 2026-09-12, all three hosts — the handshake and the plugin gate only. **Not** evidence about trajectories; see the box above |
 
 **The binary runs on Linux.** First done 2026-09-08 on Ubuntu 24.04.4 LTS,
 x86-64, .NET 10.0.11, framework-dependent publish of `9daae8f` deployed by
@@ -29,12 +30,25 @@ announces to the lobby, serves the web panel, and logs no warning or error in
 the invocation. `journalctl -u gg2 _SYSTEMD_INVOCATION_ID=<id> -p warning` is
 empty. SIGTERM and the graceful stop were exercised by the restart.
 
-**What a Linux run still has not shown**: no client has connected to a
-Linux-hosted server in this repository's history, so nothing above is evidence
-about the wire, and no round has been played to completion on one. The
-case-sensitivity, file-permission and `glibc`/`musl` classes of problem are
-narrowed rather than closed — one distribution, one filesystem, one publish
-shape.
+**A stock GM8 client joins a Linux-hosted server.** First done 2026-09-12 against
+all three hosts running `0d04911` — two Debian 12, one Ubuntu 24.04. The client
+reached each from the lobby listing, completed the handshake and picked a team.
+That also exercises the plugin gate: all three run `ServerPluginsRequired=1`, so a
+client that could not load `chat_v2_pr` could not have joined at all.
+
+**What a Linux run still has not shown**: nobody has *played* on one. The join was
+not followed by sustained movement, so **there is still no evidence about
+trajectory parity from a Linux host** — that is the claim the client's own
+re-simulation would falsify, and it is the one that matters, because the symptom
+is rubberbanding rather than an error anywhere. No round has been played to
+completion and no map change has happened under a connected client, so the
+rotation is unexercised on Linux too. The case-sensitivity, file-permission and
+`glibc`/`musl` classes of problem are narrowed rather than closed — two
+distributions now, one filesystem, one publish shape.
+
+⚠️ **A joining client is not a playing one, and the difference is the whole of
+phase 4.** Everything the join establishes is protocol; nothing it establishes is
+physics.
 
 
 ---
@@ -240,15 +254,27 @@ them.
 
 ### What a real deploy has and has not exercised
 
-First real deploy: 2026-09-08, `9daae8f` to one Ubuntu 24.04 host. **Run and
-working**: the preflight, the tar stream, the unpack into `.incoming`, the
-`--version` probe on the target, the flip, the `systemctl restart`, the
-post-restart version read-back, and `--status` against a deployed host.
+First real deploy: 2026-09-08, `9daae8f` to one Ubuntu 24.04 host. Latest:
+2026-09-12, `0d04911` to three — two Debian 12 and that Ubuntu 24.04.
 
-**Not yet run by anything**: `--rollback` and the prune, both of which need a
-second release on a host to have anything to do; and more than one host in a
-`hosts` file, so the sequential-stop and `--keep-going` paths are untested
-against a real failure.
+**Run and working**: the preflight, the tar stream, the unpack into `.incoming`,
+the `--version` probe on the target, the flip, the `systemctl restart`, the
+post-restart version read-back, `--status` against a deployed host, `--from`
+against a staged publish, **multiple hosts in one invocation**, **recording
+`previous`** (the Ubuntu host's advanced `9daae8f` -> `00ee10b`), and **the
+sequential stop**: two hosts were named, the first refused the preflight for want
+of passwordless sudo, and the second was never contacted.
+
+**Not yet run by anything**: `--rollback`, which now has a target on exactly one
+host; the prune, which needs more than `--keep` releases and the most any host has
+is three; and `--keep-going`, still untested against a real failure.
+
+⚠️ **A first deploy to a host is a migration, not an install, if anything is
+already there.** One host carried the flat pre-`--version` layout and needed its
+`gg2.ini` lifted into `shared/` and the flat tree removed before `deploy.sh` could
+run at all — the script deliberately does none of that. The preflight catches it
+as "cannot write `<root>`", because the old install is owned by the service user
+rather than the deploy user.
 
 Three defects the first deploy found, all fixed, all of a kind no test in this
 repository could have caught:
@@ -270,11 +296,28 @@ repository could have caught:
 ```bash
 scripts/deploy.sh --print-unit > unit
 ssh HOST "sudo useradd -r -s /usr/sbin/nologin gg2 || true"
-ssh HOST "sudo mkdir -p /opt/gg2-server/shared && sudo chown -R gg2 /opt/gg2-server"
+ssh HOST "sudo mkdir -p /opt/gg2-server/releases /opt/gg2-server/shared"
+# The deploy user owns the tree it writes; the SERVICE user owns only shared.
+ssh HOST "sudo chown -R \$USER /opt/gg2-server"
+ssh HOST "sudo chown gg2:\$USER /opt/gg2-server/shared && sudo chmod 2775 /opt/gg2-server/shared"
 ssh HOST "sudo tee /etc/systemd/system/gg2.service > /dev/null" < unit
 ssh HOST "sudo systemctl daemon-reload && sudo systemctl enable gg2"
 scripts/deploy.sh -H HOST
 ```
+
+⛔ **Do not `chown -R gg2` the whole tree.** The deploy writes `releases/` and the
+service only reads it, so the two directories want different owners. A tree owned
+by the service user fails the preflight with "cannot write `<root>`" — after the
+unit and the sudoers rule are already installed, which makes it look like a
+permissions problem with those instead.
+
+**`chmod 2775` on `shared/` is setgid and it is load-bearing.** The service writes
+there as `gg2` and the deploy account edits `gg2.ini` there as itself; setgid keeps
+the group on anything either of them creates. Without it an in-place edit that
+replaces the file — `sed -i` does — silently drops the group to the editor's own,
+and the panel's settings page can no longer save. Nothing announces that: the
+server reads the file fine and only a save fails. Give `gg2.ini` itself `664`
+for the same reason.
 
 The unit is printed rather than installed: writing to `/etc` on somebody's
 server is a larger authority than "update the binaries", and the script
@@ -285,8 +328,20 @@ The ssh account needs two things and nothing else: ownership of
 `sudo -n` on `systemctl` alone, so one sudoers line covers it.
 
 ```
-deploy ALL=(root) NOPASSWD: /bin/systemctl restart gg2, /bin/systemctl is-active gg2, /bin/systemctl show gg2 *
+deploy ALL=(root) NOPASSWD: /usr/bin/systemctl restart gg2, /usr/bin/systemctl is-active gg2, /usr/bin/systemctl show gg2 *
 ```
+
+⚠️ **The path has to be the one `command -v systemctl` prints on that host**, and
+a wrong one fails in the worst way: sudoers matches the literal path, so the rule
+parses clean under `visudo -c`, installs without complaint, and the preflight still
+reports "cannot run sudo without a password". `/usr/bin/systemctl` is right on
+Debian and Ubuntu; `/bin/systemctl` is a different string even where `/bin` is a
+symlink to `/usr/bin`. The preflight's own failure message builds the line with
+`command -v`, so copying it from there rather than from here cannot get this wrong.
+
+Anything needing this password has to be run from a real terminal. A Claude Code
+`!` command allocates no TTY, so `sudo` has nowhere to prompt and fails with
+"a terminal is required to read the password".
 
 `--no-sudo` turns even that off, for an ssh user that is already root or for a
 `--user` unit.
