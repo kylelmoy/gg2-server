@@ -655,9 +655,16 @@ continuation after its first `await` on the thread pool**, so under a saturated
 pool an accept — or a response already in flight — can be delayed by seconds.
 
 A full test suite saturates the pool (it grows by roughly a thread a second once
-saturated), which is why `WebAdminTests.ThePageIsServedWithoutSigningIn` has been
-seen to fail with `HttpClient.Timeout of 20 seconds elapsing` — about once in
-eight full-suite runs.
+saturated), which is why `WebAdminTests` fails with `HttpClient.Timeout of 20
+seconds elapsing`. **Which test fails moves between runs** — it is whichever web
+test asks for a connection while the pool has none to give — so it reads as an
+unrelated flake rather than as one cause.
+
+**The rate is a property of the machine, not a constant.** Measured 2026-09-12 on
+24 cores: **3 full-suite runs out of 3** red at the default pool floor, including
+one on a clean `1067363` with no working-tree changes. More cores means more
+concurrent xunit collections holding pool threads, so a faster machine fails this
+more often, not less.
 
 The fix elsewhere in this repo — `RewardAuthClient`'s pump and `FakeAuthServer`'s
 accept — is to give the loop a real `Thread` with synchronous I/O. **Both ends of
@@ -671,6 +678,36 @@ tick thread. **But the failure mode is real for a busy host**, and a panel that
 stops answering exactly when the machine is loaded is a panel that is missing when
 it is most wanted. If it is taken up, the accept loop is the piece to move first
 and the per-connection serve second.
+
+### Why the tests raise the ThreadPool floor
+
+`tests/Gg2.Tests/Gg2.Tests.csproj` sets `ThreadPoolMinThreads` to 128, which
+reaches the test process as `System.Threading.ThreadPool.MinThreads` in its
+`runtimeconfig.json`. Below the floor the pool hands out a thread immediately;
+above it the thread is what the suite waits one-to-two seconds each for, and the
+20s timeout is what runs out.
+
+Measured, full suite, 24 cores:
+
+| Arm | Result | Duration |
+|---|---|---|
+| default floor | red, 3 of 3 runs | 2m20s |
+| `xUnit.MaxParallelThreads=4` | green | 2m52s |
+| **`ThreadPoolMinThreads=128`** | **green** | **2m00s** |
+
+The floor is the arm that is both green and fastest, because the delay it removes
+was never CPU work — the panel's request is a millisecond of it, waiting on a
+thread that already exists.
+
+**This changes the test harness and nothing about the server, so the known issue
+above is unaffected.** A deployment cannot starve itself the way the suite does:
+the tick loop is a dedicated thread and the sockets are async I/O, and there is no
+equivalent of twenty-four CPU-bound test collections in a running server. What
+would show the issue is still live — and would not be caught by this suite — is a
+busy host whose panel stops answering while the game keeps ticking.
+
+Do not read a green `WebAdminTests` as evidence the panel is quick under load. It
+asserts behaviour on an unloaded socket, and the floor is what keeps the load out.
 
 ## Gates
 

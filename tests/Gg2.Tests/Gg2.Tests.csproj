@@ -2,6 +2,34 @@
 
   <PropertyGroup>
     <RootNamespace>Gg2.Tests</RootNamespace>
+
+    <!--
+      ⚠️ The ThreadPool floor, raised well above the core count, and it is not a
+      performance tweak: without it WebAdminTests fails intermittently and the
+      suite's exit code is red on a fast machine.
+
+      WebAdminServer schedules its accept loop and every connection with
+      Task.Run (WebAdminServer.cs:201, 276), so the panel under test answers on
+      ThreadPool threads. xunit runs one collection per core, and the match
+      tests among them hold a pool thread each for seconds at a time. The pool
+      then injects new threads at roughly one or two a second, which is slower
+      than the 20s HttpClient timeout WebAdminTests uses to mean "the panel is
+      hung" - so a request that would be answered in a millisecond on an idle
+      box is never scheduled at all, and a DIFFERENT web test times out on each
+      run.
+
+      Measured on a 24-core box, full suite, three runs per arm: default pool
+      floor fails 3 of 3 (2m20s); MaxParallelThreads=4 passes but costs 2m52s;
+      this floor passes at full parallelism in 2m00s. Diagnosing it from the
+      failure is near impossible - the assertion never runs, the panel is fine
+      in isolation (58/58), and the failing test moves.
+
+      Nothing in the SERVER needs this. The starvation is the test harness's own
+      parallelism, not something a deployment can do to itself: the tick loop is
+      a dedicated thread and the sockets are async I/O. docs/WEBADMIN.md, "why
+      the tests raise the ThreadPool floor".
+    -->
+    <ThreadPoolMinThreads>128</ThreadPoolMinThreads>
   </PropertyGroup>
 
   <ItemGroup>
