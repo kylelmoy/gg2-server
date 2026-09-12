@@ -24,6 +24,9 @@ public sealed class PluginWireTests
     private const string ChatPlugin = "chat_v2_pr";
     private const string ChatMd5 = "46d0937c9206dcf27e036100d1ea8685";
 
+    private const string ChatV6Plugin = "chat";
+    private const string ChatV6Md5 = "bad8081d64f0b808a2bb3a6d88978fb5";
+
     private static ServerHarness ChatServer(bool required = false) =>
         new(options =>
         {
@@ -190,6 +193,71 @@ public sealed class PluginWireTests
             "the de-duplicated name was never broadcast");
     }
 
+    // --- the other chat plugin -----------------------------------------------
+
+    /// <summary>
+    /// <c>chat</c> is a separate plugin with a separate hash, and the greeting
+    /// has to name the exact zip its server half was transcribed from.
+    /// </summary>
+    [Fact]
+    public void TheOtherChatPluginAdvertisesItsOwnHash()
+    {
+        using var harness = new ServerHarness(options => options.ServerPluginList = ChatV6Plugin);
+
+        harness.JoinClient("alice");
+
+        Assert.Equal($"{ChatV6Plugin}@{ChatV6Md5}", harness.Server.AdvertisedPlugins);
+    }
+
+    /// <summary>
+    /// <b>A different packet shape from <c>chat_v2_pr</c>'s, over the same
+    /// container.</b> Every server-to-client line here starts with a sender byte,
+    /// and a line the server composed uses 254. Get that byte wrong and the
+    /// client reads the length from the wrong offset and reports it, several
+    /// messages later, as "The Server sent unexpected data".
+    /// </summary>
+    [Fact]
+    public void TheOtherChatPluginsAnnouncementCarriesItsSenderByte()
+    {
+        using var harness = new ServerHarness(options => options.ServerPluginList = ChatV6Plugin);
+        var client = harness.JoinClient("alice");
+        Drain(client);
+
+        SendPluginPacket(client, packetId: 0, [0]);
+        harness.Tick(3);
+
+        Assert.False(client.IsClosed);
+
+        var text = Gg2Text.Encode("Oalice has joined chat!");
+        AssertReceivedPluginData(client, 0, [254, (byte)text.Length, .. text]);
+    }
+
+    /// <summary>
+    /// A player's own line carries their roster index, the audience and the
+    /// <b>raw</b> text — the client adds the name and the colour.
+    /// </summary>
+    [Fact]
+    public void TheOtherChatPluginRelaysTheRawTextAndTheSpeakersSlot()
+    {
+        using var harness = new ServerHarness(options => options.ServerPluginList = ChatV6Plugin);
+        var alice = harness.JoinClient("alice");
+        var bob = harness.JoinClient("bob");
+
+        SendPluginPacket(alice, 0, [0]);
+        SendPluginPacket(bob, 0, [0]);
+        harness.Tick(3);
+        Drain(alice);
+        Drain(bob);
+
+        SendPluginPacket(alice, 0, [1, 5, .. Gg2Text.Encode("hello")]);
+        harness.Tick(3);
+
+        // Slot 1 is alice; 0 is the everyone audience.
+        var text = Gg2Text.Encode("hello");
+        AssertReceivedPluginData(bob, 0, [1, 0, (byte)text.Length, .. text]);
+        AssertReceivedPluginData(alice, 0, [1, 0, (byte)text.Length, .. text]);
+    }
+
     // --- helpers -------------------------------------------------------------
 
     /// <summary>
@@ -228,17 +296,23 @@ public sealed class PluginWireTests
         data[0] = (byte)text.Length;
         text.CopyTo(data, 1);
 
+        AssertReceivedPluginData(client, packetId, data);
+    }
+
+    /// <summary>The same, for a plugin body that is not just a length-prefixed string.</summary>
+    private static void AssertReceivedPluginData(LoopbackClient client, byte packetId, ReadOnlySpan<byte> data)
+    {
         var length = data.Length + 1;
         var expected = new byte[4 + data.Length];
         expected[0] = (byte)MessageType.PluginPacket;
         expected[1] = (byte)(length & 0xFF);
         expected[2] = (byte)(length >> 8);
         expected[3] = packetId;
-        data.CopyTo(expected, 4);
+        data.CopyTo(expected.AsSpan(4));
 
         Assert.True(
             FindSubsequence(client.Received, expected),
-            $"the stream does not contain a plugin packet carrying \"{message}\"");
+            "the stream does not contain the expected plugin packet");
     }
 
     private static bool FindSubsequence(IReadOnlyList<byte> haystack, ReadOnlySpan<byte> needle)

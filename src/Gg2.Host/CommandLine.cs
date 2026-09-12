@@ -983,7 +983,7 @@ internal static class CommandLine
           --players <n>     seats for clients, 1..48 (default 10)
           --welcome <text>  message sent to each joiner
           --plugins <list>  server-sent plugins to ask clients to load,
-                            comma-separated (e.g. chat_v2_pr)
+                            comma-separated (e.g. chat, chat_v2_pr)
           --plugins-required
                             clients must load them to join
           --votable-maps <list|path>

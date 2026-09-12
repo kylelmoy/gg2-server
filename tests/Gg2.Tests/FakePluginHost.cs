@@ -26,10 +26,17 @@ public sealed class FakePluginHost : IPluginHost
         public string Name { get; set; } = Name;
 
         public Team Team { get; set; } = Team;
+
+        public int Points { get; set; }
     }
 
     private readonly List<Player> _players = [];
-    private long _nextStableId;
+    /// <summary>
+    /// Deliberately NOT starting at zero. A stable id that happened to equal the
+    /// slot it was handed out at would let a plugin keeping slot indices pass
+    /// every compaction test by coincidence.
+    /// </summary>
+    private long _nextStableId = 1000;
 
     /// <summary>Every <c>PluginPacketSendTo</c>, in order.</summary>
     public List<(int Slot, byte[] Data)> Sent { get; } = [];
@@ -55,6 +62,10 @@ public sealed class FakePluginHost : IPluginHost
 
     public IReadOnlyList<string> VotableMaps { get; set; } = [];
 
+    public IReadOnlyList<string> MapRotation { get; set; } = [];
+
+    public int CurrentMapIndex { get; set; }
+
     /// <summary>Seeded, so a shuffle or a tie-break is the same on every run.</summary>
     public Random Random { get; } = new(1234);
 
@@ -76,6 +87,11 @@ public sealed class FakePluginHost : IPluginHost
     public bool IsClient(int slot) => _players[slot].Client;
 
     public long StableIdOf(int slot) => _players[slot].StableId;
+
+    public int PointsOf(int slot) => _players[slot].Points;
+
+    /// <summary>Gives a player a score, for the player picker's bracketed number.</summary>
+    public void SetPoints(int slot, int points) => _players[slot].Points = points;
 
     public int SlotOfStableId(long stableId)
     {

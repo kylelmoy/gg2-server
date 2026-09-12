@@ -80,7 +80,7 @@ want:
 | `--config <path>` | | Read a reference-format `gg2.ini`. **Every** server setting can be set from it — `docs/CONFIG.md` has the key table. Applied before every flag, so a flag always wins. Only written back when the admin panel saves. |
 | `--name <text>` | | Server name shown to clients. |
 | `--welcome <text>` | | Message sent to each joiner. |
-| `--plugins <list>` | | Server-sent plugins clients are asked to load, comma-separated (e.g. `chat_v2_pr`). An entry may be pinned as `name@md5`. |
+| `--plugins <list>` | | Server-sent plugins clients are asked to load, comma-separated (e.g. `chat` — the chat console and vote dialog; `chat_v2_pr` is the other one). An entry may be pinned as `name@md5`. |
 | `--plugins-required` | off | Tell clients they must load them to join. Advisory only — the reference does not enforce it and neither does this. |
 | `--players <n>` | `10` | Seats for clients, 1–48. |
 | `--password <text>` | | Require a password to join. |

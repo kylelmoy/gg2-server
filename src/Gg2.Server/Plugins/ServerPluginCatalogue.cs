@@ -25,13 +25,21 @@ public static class ServerPluginCatalogue
 
     private static readonly Dictionary<string, Entry> Entries = new(StringComparer.Ordinal)
     {
+        // chat — "Lorgan3's chat plugin v6", from
+        // http://www.ganggarrison.com/plugins/chat@bad8081d64f0b808a2bb3a6d88978fb5.zip
+        // (md5 of the zip confirmed to equal the hash in its own filename).
+        // Re-check http://www.ganggarrison.com/plugins/chat.md5 before changing
+        // this implementation; a difference means the client half has moved and
+        // nobody has read the new GML.
+        ["chat"] = new("bad8081d64f0b808a2bb3a6d88978fb5", () => new ChatPlugin()),
+
         // chat_v2_pr — "chat_v2 by Lorgan, various fixes by PrOF", plugin.gml
         // dated 2017-04-10, from
         // http://www.ganggarrison.com/plugins/chat_v2_pr@46d0937c9206dcf27e036100d1ea8685.zip
         // (md5 of the zip confirmed to equal the hash in its own filename, and
         // to match http://www.ganggarrison.com/plugins/chat_v2_pr.md5).
-        // Re-check that URL before changing this implementation; a difference
-        // means the client half has moved and nobody has read the new GML.
+        // A DIFFERENT plugin from "chat" above, not an older one: separate
+        // hashes, separate packet formats, and no vote dialog.
         ["chat_v2_pr"] = new("46d0937c9206dcf27e036100d1ea8685", () => new ChatV2Plugin()),
     };
 

@@ -1,4 +1,5 @@
 using Gg2.Protocol;
+using Gg2.Simulation;
 using Gg2.Server.Plugins;
 
 namespace Gg2.Server;
@@ -99,6 +100,22 @@ public sealed partial class GameServer
             return _installedMaps ??= InstalledMaps();
         }
     }
+
+    /// <summary>
+    /// <c>global.map_rotation</c>, as configured. Empty when the server is not
+    /// rotating, which is the single-map default.
+    /// </summary>
+    IReadOnlyList<string> IPluginHost.MapRotation => _rotation;
+
+    /// <summary><c>GameServer.currentMapIndex</c>.</summary>
+    int IPluginHost.CurrentMapIndex => _rotationIndex;
+
+    /// <summary>
+    /// <c>Player.stats[POINTS]</c>. A read of the simulation, never a write —
+    /// see <see cref="IPluginHost"/>'s rule about what a plugin may reach.
+    /// </summary>
+    int IPluginHost.PointsOf(int slot) =>
+        (int)Math.Floor(Scoring.Get(_world, slot, StatIndex.Points));
 
     /// <summary>
     /// ⛔ <b>NOT <see cref="WorldState.Random"/>.</b> That stream is observable

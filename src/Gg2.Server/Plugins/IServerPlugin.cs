@@ -139,6 +139,28 @@ public interface IPluginHost
     IReadOnlyList<string> VotableMaps { get; }
 
     /// <summary>
+    /// <c>global.map_rotation</c>: the maps this server plays, in order.
+    /// </summary>
+    /// <remarks>
+    /// Distinct from <see cref="VotableMaps"/>, which falls back past the
+    /// rotation to everything on disk. <c>/maplist</c> reports the rotation
+    /// because that is what the next round will actually come from.
+    /// </remarks>
+    IReadOnlyList<string> MapRotation { get; }
+
+    /// <summary>
+    /// <c>GameServer.currentMapIndex</c>: where in <see cref="MapRotation"/> the
+    /// current round sits, or 0 when there is no rotation.
+    /// </summary>
+    int CurrentMapIndex { get; }
+
+    /// <summary>
+    /// <c>Player.stats[POINTS]</c>, floored — what the reference's player picker
+    /// puts in brackets after each name.
+    /// </summary>
+    int PointsOf(int slot);
+
+    /// <summary>
     /// A random source for a plugin's own shuffles and tie-breaks.
     /// </summary>
     /// <remarks>

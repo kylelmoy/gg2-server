@@ -17,6 +17,7 @@ namespace Gg2.Tests;
 public sealed class PluginListTests
 {
     private const string ChatMd5 = "46d0937c9206dcf27e036100d1ea8685";
+    private const string ChatV6Md5 = "bad8081d64f0b808a2bb3a6d88978fb5";
 
     private sealed class FixedHashes(string hash) : IPluginHashSource
     {
@@ -38,6 +39,7 @@ public sealed class PluginListTests
     // --- names ---------------------------------------------------------------
 
     [Theory]
+    [InlineData("chat", true)]
     [InlineData("chat_v2_pr", true)]
     [InlineData("a", true)]
     [InlineData("0", true)]
@@ -161,6 +163,22 @@ public sealed class PluginListTests
 
         Assert.Equal(ChatMd5, loaded[0].Md5);
         Assert.NotNull(loaded[0].Implementation);
+    }
+
+    /// <summary>
+    /// The same for <c>chat</c>, which is a separate plugin with a separate
+    /// hash rather than a newer <c>chat_v2_pr</c>.
+    /// </summary>
+    [Fact]
+    public void TheOtherChatPluginHasItsOwnPin()
+    {
+        var log = new RecordingLog();
+        var loaded = PluginHashes.Resolve(
+            PluginNames.ParseList("chat"), new RefusingHashes(), log, NoDebugDirectory());
+
+        Assert.Equal(ChatV6Md5, loaded[0].Md5);
+        Assert.NotNull(loaded[0].Implementation);
+        Assert.NotEqual(ChatMd5, ChatV6Md5);
     }
 
     [Fact]
