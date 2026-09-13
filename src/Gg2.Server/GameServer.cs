@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using Gg2.Maps;
@@ -785,6 +785,14 @@ public sealed partial class GameServer : IDisposable, IPluginHost
                 + "(docs/DEPLOY.md)");
         }
 
+        // ⛔ Configuration that is valid, applied, reported back and cannot do
+        // anything here. AFTER LoadPlugins, so it describes the server that was
+        // actually built. Warn rather than Info: the configuration asked for
+        // something this server cannot deliver. ConfigWarnings says why nothing
+        // else catches these.
+        foreach (var warning in ConfigWarnings.For(_options))
+            _log.Warn(warning);
+
         // Not _world.Random and not _spawnRandom. See IPluginHost.Random.
         _pluginRandom = new Random(_options.Port * 7919);
 
@@ -970,6 +978,10 @@ public sealed partial class GameServer : IDisposable, IPluginHost
         // Begin Step events, whose order against the server's own is a GM8
         // detail nothing observable turns on.
         _plugins.Tick();
+
+        // Immediately above Service, so the tick a /bots off window expires on is
+        // the tick the population starts coming back rather than the one after.
+        TickBotSuspension();
 
         // Before ServiceBots, so a bot added this tick is polled this tick
         // rather than pressing nothing for one frame. GameServerBeginStep.gml

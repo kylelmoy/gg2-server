@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using Gg2.Protocol;
 using Gg2.Simulation;
 
@@ -549,6 +549,86 @@ public sealed partial class GameServer
             FillToPlayers = fill,
             MaxBots = Math.Max(fill, _options.Bots.MaxBots),
         };
+
+        // ⛔ An operator setting a bot count ENDS a player's suspension rather
+        // than queueing behind it. Otherwise the panel's one bot control is a
+        // field that accepts a number, reports it back, and changes nothing for
+        // up to BotSuspendMinutes — the "button that does nothing" this file
+        // already carries two warnings about, with the additional twist that the
+        // operator has no way to see why.
+        ResumeBots();
+    }
+
+    /// <summary>
+    /// Ticks remaining on a <c>/bots off</c> suspension. Zero when none is
+    /// running.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Ticks, not wall clock.</b> A vote's clock in both chat plugins is
+    /// ticks and so is the round timer, so a suspension measured the same way
+    /// stops and starts with <c>freeze</c>, <c>step</c> and <c>--speed</c>
+    /// exactly as everything else a player can see does. On a live server at
+    /// 30 Hz the two agree; on a frozen one a suspension that expired while the
+    /// world was not moving would be a surprise.
+    /// </remarks>
+    public int BotSuspensionTicksLeft { get; private set; }
+
+    /// <summary>Whether the bot population is currently held at zero by <c>/bots off</c>.</summary>
+    public bool BotsSuspended => BotSuspensionTicksLeft > 0;
+
+    /// <summary>Seconds remaining on a suspension, rounded up. Zero when none is running.</summary>
+    public int BotSuspensionSecondsLeft => (BotSuspensionTicksLeft + GameConstants.TickRate - 1) / GameConstants.TickRate;
+
+    /// <summary>
+    /// Takes the bot population away for <paramref name="minutes"/>.
+    /// </summary>
+    /// <returns>False, and nothing changed, when the argument is not positive.</returns>
+    /// <remarks>
+    /// <b>It does not touch <see cref="ServerOptions.Bots"/>.</b> A suspension
+    /// that turned the population manager off would be indistinguishable
+    /// afterwards from an operator having done so, and the configuration the
+    /// server goes back to would be whatever it was overwritten with. This is a
+    /// clock, and <c>BotPopulationService.Service</c> reads it as a target of
+    /// zero for as long as it runs.
+    /// </remarks>
+    public bool SuspendBots(int minutes)
+    {
+        if (minutes <= 0)
+            return false;
+
+        BotSuspensionTicksLeft = minutes * 60 * GameConstants.TickRate;
+        return true;
+    }
+
+    /// <summary>Ends a suspension early.</summary>
+    /// <returns>False when none was running.</returns>
+    public bool ResumeBots()
+    {
+        if (BotSuspensionTicksLeft == 0)
+            return false;
+
+        BotSuspensionTicksLeft = 0;
+        _log.Info("bots: suspension ended, the population manager is back in charge");
+        return true;
+    }
+
+    /// <summary>
+    /// Runs the suspension clock down by one tick and says so when it expires.
+    /// </summary>
+    /// <remarks>
+    /// Called once a tick, immediately above <c>BotPopulationService.Service</c>,
+    /// so the tick a suspension expires on is the tick the bots start coming
+    /// back rather than the one after it.
+    /// </remarks>
+    private void TickBotSuspension()
+    {
+        if (BotSuspensionTicksLeft == 0)
+            return;
+
+        BotSuspensionTicksLeft--;
+
+        if (BotSuspensionTicksLeft == 0)
+            _log.Info("bots: suspension expired, the population manager is back in charge");
     }
 
     /// <summary>Sets the tick pacing. Infinity is unpaced.</summary>

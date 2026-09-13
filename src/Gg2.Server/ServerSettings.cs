@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using Gg2.Bots;
 using Gg2.Protocol;
 using Gg2.Simulation;
@@ -245,6 +245,18 @@ public static class ServerSettings
             "Server", "WelcomeMessage", nameof(ServerOptions.WelcomeMessage),
             o => o.WelcomeMessage, (o, v) => o.WelcomeMessage = v, "hello",
             "Sent to each joiner. Empty means none."));
+
+        // ⚠️ A DIFFERENT channel from WelcomeMessage above, not a second spelling
+        // of it: that one is a MESSAGE_STRING every client understands, this one
+        // is a line of chat only a client running a chat plugin ever sees. Chat
+        // is where a player types, which is why an instruction about a chat
+        // command belongs here rather than there.
+        settings.Add(TextRow(
+            "Server", "ChatJoinMessage", nameof(ServerOptions.ChatJoinMessage),
+            o => o.ChatJoinMessage, (o, v) => o.ChatJoinMessage = v, "type /help",
+            "A chat line sent to each player as they join chat. Empty means none. "
+            + "Needs a chat plugin in ServerPluginList; a client without one never "
+            + "sees it."));
 
         settings.Add(SecretRow(
             "Server", "Password", nameof(ServerOptions.Password),
@@ -597,6 +609,17 @@ public static class ServerSettings
             o => o.Bots.Difficulty, (o, v) => o.Bots = o.Bots with { Difficulty = v }, "3",
             "1 to 5. 5 is 'as good as the layer gets'; the lower tiers are a "
             + "deliberate handicap ladder."));
+
+        // ⚠️ ZERO MEANS THE COMMAND DOES NOT EXIST, and that is one key doing two
+        // jobs on purpose: a separate boolean would let a server be configured
+        // with /bots enabled and a window of zero minutes, which reads as working
+        // and does nothing.
+        settings.Add(IntRow(
+            "Bots", "SuspendMinutes", nameof(ServerOptions.BotSuspendMinutes),
+            o => o.BotSuspendMinutes, (o, v) => o.BotSuspendMinutes = v, "15",
+            "How long the /bots off chat command takes the bots away for, 0..1440. "
+            + "0 means the command does not exist on this server. Needs a chat plugin in "
+            + "ServerPluginList - it is the only way a player can type /bots."));
 
         settings.Add(TextRow(
             "Bots", "NamePrefix", "Bots",

@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using Gg2.Protocol;
 
 namespace Gg2.Server.Plugins;
@@ -182,6 +182,12 @@ public sealed partial class ChatPlugin
         ("votescramble", "Starts a vote to scramble the teams. Use /votescramble", true),
         ("votenextround", "Starts a vote to end the round. Use /votenextround", true),
         ("votemap", "Starts a vote to set the next map. Use /votemap [Mapname/Map prefix]", true),
+
+        // ⚠️ This port's own, and the only row here with no GML behind it. It is
+        // not a vote — see docs/PLUGINS.md, "the bot suspension" — so the Vote
+        // column is false and the one-minute vote cooldown does not apply.
+        ("bots", "Reports the bots, or turns them off for a while. "
+            + "Use /bots, /bots off or /bots on", false),
     ];
 
     // --- executeChat ---------------------------------------------------------
@@ -297,7 +303,142 @@ public sealed partial class ChatPlugin
             case "votemap":
                 CommandVoteMap(slot, argument);
                 break;
+
+            case "bots":
+                CommandBots(slot, argument);
+                break;
         }
+    }
+
+    // --- /bots ---------------------------------------------------------------
+
+    /// <summary>
+    /// This port's own command: report the bot population, or take it away for
+    /// <c>[Bots] SuspendMinutes</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Not a vote, deliberately.</b> Every other command here that changes the
+    /// server is one, and this one is not for a reason worth stating: the case it
+    /// exists for is a handful of people on a server whose bots are in the way,
+    /// which is exactly the roster size at which a 50% quorum of players in chat
+    /// is two people and a vote dialog is ceremony. What bounds it instead is the
+    /// clock — the window expires on its own, so the worst outcome is the bots
+    /// being away for <c>SuspendMinutes</c> and then coming back.
+    /// </para>
+    /// <para>
+    /// <b>Off by default.</b> <c>IPluginHost.Bots.CommandAllowed</c> is
+    /// <c>[Bots] SuspendMinutes &gt; 0</c>, and a server that has not set it
+    /// answers that the command does not exist here rather than pretending to
+    /// work.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>"No bots", "bots are suspended" and "this server does not run bots"
+    /// are three different replies</b> and the command gives all three. Collapsing
+    /// them into one produces the reading where a player types <c>/bots off</c> on
+    /// an empty server, is told it worked, and watches bots appear the moment
+    /// somebody joins.
+    /// </para>
+    /// </remarks>
+    private void CommandBots(int slot, string argument)
+    {
+        var bots = Host.Bots;
+
+        if (!bots.CommandAllowed)
+        {
+            Reply(slot, $"{ColourOrange}This server does not let bots be turned off from chat.");
+            return;
+        }
+
+        switch (argument.ToLowerInvariant())
+        {
+            case "":
+                Reply(slot, ColourOrange + BotReport(bots));
+                break;
+
+            case "off":
+                BotsOff(slot, bots);
+                break;
+
+            case "on":
+                BotsOn(slot);
+                break;
+
+            default:
+                Reply(slot, $"{ColourOrange}Use /bots, /bots off or /bots on.");
+                break;
+        }
+    }
+
+    /// <summary>What the population is doing, in one line.</summary>
+    private static string BotReport(BotStatus bots)
+    {
+        if (bots.Suspended)
+            return $"Bots are off for another {Minutes(bots.SecondsLeft)}. /bots on brings them back.";
+
+        if (!bots.Managed)
+            return "This server is not running bots.";
+
+        return bots.Count == 1
+            ? $"1 bot is playing. /bots off takes the bots away for {bots.SuspendMinutes} minutes."
+            : $"{bots.Count} bots are playing. /bots off takes them away for {bots.SuspendMinutes} minutes.";
+    }
+
+    private void BotsOff(int slot, BotStatus bots)
+    {
+        if (bots.Suspended)
+        {
+            // ⚠️ It does NOT re-arm the window. Otherwise one player typing this
+            // every few minutes is an indefinite switch, which is the one thing
+            // the clock is here to prevent.
+            Reply(slot, $"{ColourOrange}Bots are already off for another {Minutes(bots.SecondsLeft)}.");
+            return;
+        }
+
+        // ⚠️ Refused rather than reported as done. A suspension on a server whose
+        // population manager is off changes nothing a player can see — including
+        // any bot an operator added by hand, which no suspension removes.
+        if (!bots.Managed)
+        {
+            Reply(slot, $"{ColourOrange}This server is not running bots.");
+            return;
+        }
+
+        if (!Host.SuspendBots())
+        {
+            Reply(slot, $"{ColourOrange}The bots could not be turned off.");
+            return;
+        }
+
+        Notice(
+            $"{ColourOrange}{Sanitise(Host.NameOf(slot))} turned the bots off for "
+            + $"{bots.SuspendMinutes} minutes. /bots on brings them back.");
+    }
+
+    private void BotsOn(int slot)
+    {
+        if (!Host.ResumeBots())
+        {
+            Reply(slot, $"{ColourOrange}The bots are not turned off.");
+            return;
+        }
+
+        Notice($"{ColourOrange}{Sanitise(Host.NameOf(slot))} turned the bots back on.");
+    }
+
+    /// <summary>
+    /// A remaining suspension as something a player reads, never as a bare
+    /// number of seconds.
+    /// </summary>
+    private static string Minutes(int seconds)
+    {
+        if (seconds < 60)
+            return seconds == 1 ? "1 second" : $"{seconds} seconds";
+
+        // Rounded UP, so the last part-minute is still a minute: counting down to
+        // "0 minutes" while the bots are still away reads as a broken clock.
+        var minutes = (seconds + 59) / 60;
+        return minutes == 1 ? "1 minute" : $"{minutes} minutes";
     }
 
     /// <summary>

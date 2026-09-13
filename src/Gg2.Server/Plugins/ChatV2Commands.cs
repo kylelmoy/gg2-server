@@ -1,4 +1,4 @@
-using Gg2.Protocol;
+﻿using Gg2.Protocol;
 
 namespace Gg2.Server.Plugins;
 
@@ -128,6 +128,11 @@ public sealed partial class ChatV2Plugin
         ("vote", "Picks an option in a numbered vote. Use /vote <number>"),
         ("kick", "Kicks a player. Host only."),
         ("nextround", "Ends the round without a vote. Host only."),
+
+        // ⚠️ This port's own, and the only row here with no GML behind it.
+        // docs/PLUGINS.md, "the bot suspension".
+        ("bots", "Reports the bots, or turns them off for a while. "
+            + "Use /bots, /bots off or /bots on"),
     ];
 
     /// <summary>
@@ -197,6 +202,10 @@ public sealed partial class ChatV2Plugin
                 CommandVote(slot, argument);
                 return true;
 
+            case "bots":
+                CommandBots(slot, argument);
+                return true;
+
             case "kick":
             case "nextround":
                 // votekick.gml:107-110 and votemap.gml:301-304, verbatim. A
@@ -212,6 +221,142 @@ public sealed partial class ChatV2Plugin
                 Whisper(slot, $"{ColourOrange}Unknown command \"{name}\". Try /help.");
                 return true;
         }
+    }
+
+    // --- /bots ---------------------------------------------------------------
+
+    /// <summary>
+    /// This port's own command: report the bot population, or take it away for
+    /// <c>[Bots] SuspendMinutes</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Not a vote, deliberately</b>, and the same body as
+    /// <see cref="ChatPlugin"/>'s — see <c>ChatCommands.CommandBots</c> for why
+    /// the clock rather than a quorum is what bounds it. The two copies exist
+    /// because the wording is all these plugins share: the decisions are
+    /// <see cref="IPluginHost"/>'s, in one place, so the two cannot answer
+    /// differently about what actually happened.
+    /// </para>
+    /// <para>
+    /// <b>It counts towards this plugin's anti-spam limit</b>, like every other
+    /// command here and unlike anything on <c>chat</c>. Six messages in two
+    /// seconds is a mute whether or not they were commands.
+    /// </para>
+    /// </remarks>
+    private void CommandBots(int slot, string argument)
+    {
+        var bots = Host.Bots;
+
+        if (!bots.CommandAllowed)
+        {
+            Whisper(slot, $"{ColourOrange}This server does not let bots be turned off from chat.");
+            return;
+        }
+
+        switch (argument.ToLowerInvariant())
+        {
+            case "":
+                Whisper(slot, ColourOrange + BotReport(bots));
+                break;
+
+            case "off":
+                BotsOff(slot, bots);
+                break;
+
+            case "on":
+                BotsOn(slot);
+                break;
+
+            default:
+                Whisper(slot, $"{ColourOrange}Use /bots, /bots off or /bots on.");
+                break;
+        }
+    }
+
+    /// <summary>What the population is doing, in one line.</summary>
+    private static string BotReport(BotStatus bots)
+    {
+        if (bots.Suspended)
+            return $"Bots are off for another {Minutes(bots.SecondsLeft)}. /bots on brings them back.";
+
+        if (!bots.Managed)
+            return "This server is not running bots.";
+
+        return bots.Count == 1
+            ? $"1 bot is playing. /bots off takes the bots away for {bots.SuspendMinutes} minutes."
+            : $"{bots.Count} bots are playing. /bots off takes them away for {bots.SuspendMinutes} minutes.";
+    }
+
+    private void BotsOff(int slot, BotStatus bots)
+    {
+        if (bots.Suspended)
+        {
+            // ⚠️ It does NOT re-arm the window. Otherwise one player typing this
+            // every few minutes is an indefinite switch, which is the one thing
+            // the clock is here to prevent.
+            Whisper(slot, $"{ColourOrange}Bots are already off for another {Minutes(bots.SecondsLeft)}.");
+            return;
+        }
+
+        // ⚠️ Refused rather than reported as done. A suspension on a server whose
+        // population manager is off changes nothing a player can see — including
+        // any bot an operator added by hand, which no suspension removes.
+        if (!bots.Managed)
+        {
+            Whisper(slot, $"{ColourOrange}This server is not running bots.");
+            return;
+        }
+
+        if (!Host.SuspendBots())
+        {
+            Whisper(slot, $"{ColourOrange}The bots could not be turned off.");
+            return;
+        }
+
+        Deliver(
+            $"{ColourOrange}{SafeName(slot)} turned the bots off for {bots.SuspendMinutes} minutes. "
+            + "/bots on brings them back.",
+            TeamEveryone);
+    }
+
+    private void BotsOn(int slot)
+    {
+        if (!Host.ResumeBots())
+        {
+            Whisper(slot, $"{ColourOrange}The bots are not turned off.");
+            return;
+        }
+
+        Deliver($"{ColourOrange}{SafeName(slot)} turned the bots back on.", TeamEveryone);
+    }
+
+    /// <summary>
+    /// A player's name with this plugin's colour marker taken out of it.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The announcements transcribed from the reference do not do this</b>
+    /// and that is not an oversight to copy: they match GML that was written
+    /// without the thought. A `#` reaches the client half as the marker its
+    /// wrapping code looks for, so a player called <c>a#b</c> recolours the rest
+    /// of everyone's window from a line the server composed.
+    /// </remarks>
+    private string SafeName(int slot) =>
+        Host.NameOf(slot).Replace('#', ' ');
+
+    /// <summary>
+    /// A remaining suspension as something a player reads, never as a bare
+    /// number of seconds.
+    /// </summary>
+    private static string Minutes(int seconds)
+    {
+        if (seconds < 60)
+            return seconds == 1 ? "1 second" : $"{seconds} seconds";
+
+        // Rounded UP, so the last part-minute is still a minute: counting down to
+        // "0 minutes" while the bots are still away reads as a broken clock.
+        var minutes = (seconds + 59) / 60;
+        return minutes == 1 ? "1 minute" : $"{minutes} minutes";
     }
 
     // --- /help ---------------------------------------------------------------

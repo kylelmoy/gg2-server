@@ -1,4 +1,4 @@
-using Gg2.Protocol;
+﻿using Gg2.Protocol;
 
 namespace Gg2.Server.Plugins;
 
@@ -159,6 +159,50 @@ public interface IPluginHost
     /// puts in brackets after each name.
     /// </summary>
     int PointsOf(int slot);
+
+    // --- this port's own, and each one is a decision -------------------------
+    //
+    // ⚠️ Nothing below stands in for a GML surface. The reference's plugins
+    // could not reach any of it, because stock GG2 has no bots and no
+    // server-configured chat line. They are here rather than inside a plugin
+    // because both are SERVER state — one server, one bot population, one
+    // configured line — and a plugin holding either would give two loaded chat
+    // plugins two different answers.
+    // docs/PLUGINS.md, "the bot suspension and the join line".
+
+    /// <summary>
+    /// <c>[Server] ChatJoinMessage</c>: a line to send a player as they join
+    /// chat, or empty for none.
+    /// </summary>
+    /// <remarks>
+    /// A plain read of configuration. Sending it is the plugin's, because only
+    /// the plugin knows when a client has announced itself and what a line of
+    /// chat looks like on its own wire.
+    /// </remarks>
+    string ChatJoinMessage { get; }
+
+    /// <summary>What <c>/bots</c> may do, and what the population is doing.</summary>
+    BotStatus Bots { get; }
+
+    /// <summary>
+    /// Holds the bot population at zero for <see cref="BotStatus.SuspendMinutes"/>.
+    /// </summary>
+    /// <returns>
+    /// False, and nothing changed, when the server is not configured for it —
+    /// which is the default.
+    /// </returns>
+    /// <remarks>
+    /// ⛔ <b>It does not reach the simulation and it is not a client
+    /// capability.</b> What it moves is the population manager's target, which is
+    /// the server's own scheduling decision about how many sockets-that-are-not-
+    /// sockets to hold open. Removing a bot is the same path a disconnection
+    /// takes, so nothing here can produce a world a client could not.
+    /// </remarks>
+    bool SuspendBots();
+
+    /// <summary>Ends a running suspension early.</summary>
+    /// <returns>False when none was running.</returns>
+    bool ResumeBots();
 
     /// <summary>
     /// A random source for a plugin's own shuffles and tie-breaks.

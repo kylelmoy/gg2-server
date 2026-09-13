@@ -29,6 +29,32 @@ public sealed class ServerOptions
     public string WelcomeMessage { get; set; } = string.Empty;
 
     /// <summary>
+    /// A line sent to each player in the chat window as they join chat. Empty
+    /// means none.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>A different channel from <see cref="WelcomeMessage"/>, not a second
+    /// spelling of it.</b> That one is a <c>MESSAGE_STRING</c>, which every
+    /// client understands and draws its own way; this one is a chat line, which
+    /// only a client running a chat plugin sees at all. The distinction is the
+    /// point: chat is where a player types, so it is the only place an
+    /// instruction about a chat command can be read and acted on in one motion.
+    /// </para>
+    /// <para>
+    /// Delivered when the client announces the chat plugin rather than when the
+    /// roster entry appears — before the announcement there is nothing on the
+    /// other end to draw it. A player with no chat plugin never sees it, and
+    /// nothing here can tell.
+    /// </para>
+    /// <para>
+    /// Longer than 255 bytes arrives as several lines, which is the chat
+    /// protocol's own chunking and not a truncation.
+    /// </para>
+    /// </remarks>
+    public string ChatJoinMessage { get; set; } = string.Empty;
+
+    /// <summary>
     /// Seats for network clients. The reference clamps this to 48; slot 0 and
     /// bots do not count against it (<c>getNumberOfOccupiedSlots</c>).
     /// </summary>
@@ -677,6 +703,32 @@ public sealed class ServerOptions
     public bool BotHandoverBubbles { get; set; }
 
     /// <summary>
+    /// How long <c>/bots off</c> takes the bot population away for, in minutes.
+    /// Zero is the default and means the chat command does not exist.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>This port's own, and it is a decision rather than a transcription.</b>
+    /// Stock GG2 ships no bots, so there is no reference behaviour to match. It
+    /// exists because the people who can tell that a server's bots are in the way
+    /// are the ones playing on it, and the operator is usually not there —
+    /// <c>docs/PLUGINS.md</c>, "the bot suspension".
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>One key doing two jobs, deliberately.</b> Zero is off: a separate
+    /// boolean would let a server be configured with the command enabled and a
+    /// window of zero minutes, which is a state that reads as working and does
+    /// nothing.
+    /// </para>
+    /// <para>
+    /// <b>It is a window, not a mode.</b> The suspension expires on its own and
+    /// the population comes back, so the worst a player can do is take the bots
+    /// away for this long. Nothing persists it across a restart.
+    /// </para>
+    /// </remarks>
+    public int BotSuspendMinutes { get; set; }
+
+    /// <summary>
     /// Drop to a slow tick when nobody is connected and no bots are running.
     /// </summary>
     /// <remarks>
@@ -946,6 +998,17 @@ public sealed class ServerOptions
 
         if (LogKeep is < 0 or > 1000)
             throw new ArgumentOutOfRangeException(nameof(LogKeep), LogKeep, "must be 0..1000");
+
+        // A day is the ceiling because a suspension is a WINDOW: past it the
+        // thing a player asked for — "no bots for a while" — is better spelled
+        // as a server with Bots.Enabled off, which survives a restart and this
+        // does not.
+        if (BotSuspendMinutes is < 0 or > 1440)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(BotSuspendMinutes), BotSuspendMinutes,
+                "must be 0..1440 minutes; 0 means the /bots chat command does not exist");
+        }
 
         if (PlayerLimit is < 1 or > 48)
             throw new ArgumentOutOfRangeException(nameof(PlayerLimit), PlayerLimit, "player limit must be 1..48");

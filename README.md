@@ -80,6 +80,7 @@ want:
 | `--config <path>` | | Read a reference-format `gg2.ini`. **Every** server setting can be set from it — `docs/CONFIG.md` has the key table. Applied before every flag, so a flag always wins. Only written back when the admin panel saves. |
 | `--name <text>` | | Server name shown to clients. |
 | `--welcome <text>` | | Message sent to each joiner. |
+| `--chat-join-message <text>` | | A **chat** line sent to each player as they join chat — the place to tell them a command exists. Needs a chat plugin; a client without one never sees it. |
 | `--plugins <list>` | | Server-sent plugins clients are asked to load, comma-separated (e.g. `chat` — the chat console and vote dialog; `chat_v2_pr` is the other one). An entry may be pinned as `name@md5`. |
 | `--plugins-required` | off | Tell clients they must load them to join. Advisory only — the reference does not enforce it and neither does this. |
 | `--players <n>` | `10` | Seats for clients, 1–48. |
@@ -92,6 +93,7 @@ want:
 | `--no-autobalance` | on | Stop moving a player across when one team is two larger. |
 | `--bots <n>` | `0` | Fill target including humans, not a bot count — a server filling to 8 with 3 people on it runs 5 bots. |
 | `--bot-difficulty <1-5>` | `5` | How good they are. The lower tiers are a handicap ladder — aim error, an acquire delay, a hold-fire roll — so pass a lower one for beatable bots. |
+| `--bot-suspend-minutes <n>` | `0` | Let any player type `/bots off` in chat to take the bots away for this long. `0` means the command does not exist. `docs/PLUGINS.md`, "the bot suspension". |
 | `--lobby` | off | List the server publicly at ganggarrison.com so it appears in the client's browser. |
 | `--tick-stats` | off | Log a histogram of tick intervals every 30s. Safe with clients connected. |
 

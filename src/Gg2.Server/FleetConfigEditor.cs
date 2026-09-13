@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using System.Text.Json;
 
 namespace Gg2.Server;
@@ -420,6 +420,13 @@ public sealed class FleetConfigEditor
                 yield return $"{host} and {other} are both called \"{name}\" in the server browser";
             else
                 named[name] = host;
+
+            // ⛔ Settings this host's configuration asks for and cannot deliver.
+            // Said HERE as well as at the server's startup because this page is
+            // where somebody sets them, and the startup line only arrives after a
+            // push and a restart — by which time nobody is looking.
+            foreach (var warning in ConfigWarnings.For(effective[host]))
+                yield return $"{host}: {warning}";
         }
     }
 

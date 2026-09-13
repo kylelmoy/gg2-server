@@ -1,4 +1,4 @@
-using Gg2.Protocol;
+﻿using Gg2.Protocol;
 using Gg2.Server.Plugins;
 
 namespace Gg2.Tests;
@@ -20,6 +20,13 @@ namespace Gg2.Tests;
 /// </remarks>
 public sealed class ChatPluginTests
 {
+    /// <summary>
+    /// <c>plugin.gml:595-618</c>'s orange. Spelled here because every assertion
+    /// about a line the SERVER composed has to include it — see
+    /// <see cref="TheConfiguredJoinLineGoesToTheJoinerAlone"/>.
+    /// </summary>
+    private const string ColourOrange = "O";
+
     private const byte Hello = 0;
     private const byte GlobalChat = 1;
     private const byte TeamChat = 2;
@@ -452,5 +459,64 @@ public sealed class ChatPluginTests
         SayGlobal(plugin, alice, "still here");
 
         Assert.Equal([alice], host.Sent.ConvertAll(s => s.Slot));
+    }
+
+    // --- the configured join line --------------------------------------------
+
+    /// <summary>
+    /// <c>[Server] ChatJoinMessage</c> reaches a player when they announce chat,
+    /// and nobody else.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>On the hello, not on the roster entry.</b> Before the hello there is no
+    /// chat window on the other end to draw it into, and this port's own
+    /// <c>PlayerAdded</c> runs at the join — several ticks earlier, and for a
+    /// client that may have no chat plugin at all.
+    /// </para>
+    /// <para>
+    /// <b>As a 255, not a 254.</b> A client with "Display player info" off drops
+    /// every 254, and this is the line that tells a player what the server's
+    /// commands are.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void TheConfiguredJoinLineGoesToTheJoinerAlone()
+    {
+        var (host, plugin) = Fresh();
+        host.ChatJoinMessage = "Bots in the way? Type /bots off";
+
+        var alice = Join(host, plugin, "alice", Team.Red);
+        host.Sent.Clear();
+
+        var bob = Join(host, plugin, "bob", Team.Blue, address: "10.0.0.2");
+
+        // ⛔ THE LEADING COLOUR CODE IS LOAD BEARING, and asserting on the
+        // message alone is what let this ship broken. plugin.gml's draw loop ends
+        // `msg = string_copy(msg, 2, 255)`: character 1 of every line is eaten as
+        // a colour code whether or not one is there, so a line sent without one
+        // loses its first letter. Measured against a stock GM8 client, which
+        // drew "Welcome!..." as "elcome!...".
+        var toBob = LinesTo(host, bob);
+
+        Assert.Contains(
+            toBob,
+            line => line.Sender == 255 && line.Text == ColourOrange + host.ChatJoinMessage);
+
+        Assert.DoesNotContain(
+            TextTo(host, alice),
+            text => text.Contains(host.ChatJoinMessage, StringComparison.Ordinal));
+    }
+
+    /// <summary>An empty join line sends nothing at all.</summary>
+    [Fact]
+    public void NoJoinLineIsConfiguredAndNothingExtraIsSent()
+    {
+        var (host, plugin) = Fresh();
+
+        var alice = Join(host, plugin, "alice", Team.Red);
+
+        // The join announcement and nothing else.
+        Assert.Single(LinesTo(host, alice));
     }
 }

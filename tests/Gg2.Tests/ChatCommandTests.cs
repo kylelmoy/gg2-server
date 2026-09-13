@@ -1,4 +1,4 @@
-using Gg2.Protocol;
+﻿using Gg2.Protocol;
 using Gg2.Server.Plugins;
 
 namespace Gg2.Tests;
@@ -140,7 +140,11 @@ public sealed class ChatCommandTests
 
         var line = Assert.Single(TextTo(host, alice));
         Assert.StartsWith("OAvailable server commands: help, maplist", line, StringComparison.Ordinal);
-        Assert.Contains(" and votemap", line, StringComparison.Ordinal);
+        Assert.Contains(", votemap", line, StringComparison.Ordinal);
+
+        // The LAST entry, which is what the "a, b and c" join has to get right --
+        // and it is this port's own /bots rather than the reference's /votemap.
+        Assert.Contains(" and bots", line, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -946,5 +950,212 @@ public sealed class ChatCommandTests
         Assert.Equal(2, lines.Count);
         Assert.Equal(255, lines[0].Length);
         Assert.Contains(rotation[9], string.Concat(lines), StringComparison.Ordinal);
+    }
+
+    // --- /bots ---------------------------------------------------------------
+    //
+    // ⚠️ This port's own command, so there is no GML to compare against and no
+    // fixture that could gate it. What the tests hold instead is the set of
+    // replies: "no such command here", "nothing to suspend", "already off" and
+    // "done" are four different outcomes, and every one of them is a state a
+    // player can reach by typing three words.
+
+    /// <summary>
+    /// Off by default: a server that has not set <c>[Bots] SuspendMinutes</c>
+    /// says the command does not exist here.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>The refusal is the default and it has to be legible.</b> Silence, or
+    /// "this command does not exist", would be a player concluding the server is
+    /// broken; nothing in the repo would go red either way.
+    /// </remarks>
+    [Fact]
+    public void BotsIsRefusedUntilTheServerConfiguresAWindow()
+    {
+        var (host, plugin) = Fresh();
+        var alice = Join(host, plugin, "alice", Team.Red, "10.0.0.1");
+
+        host.Sent.Clear();
+        Say(plugin, alice, "/bots off");
+
+        Assert.Equal(
+            ["OThis server does not let bots be turned off from chat."],
+            TextTo(host, alice));
+
+        Assert.Empty(host.Suspensions);
+    }
+
+    /// <summary>
+    /// <c>/bots off</c> suspends, announces it to everybody, and <c>/bots on</c>
+    /// ends it.
+    /// </summary>
+    /// <remarks>
+    /// <b>The announcement goes to everybody and the suspension is asked of the
+    /// HOST.</b> A version of this that only replied to the caller would leave the
+    /// other players watching the bots vanish with no explanation, and a version
+    /// that composed a reply without calling <c>SuspendBots</c> would pass any
+    /// test that read only the text.
+    /// </remarks>
+    [Fact]
+    public void BotsOffSuspendsAndBotsOnEndsIt()
+    {
+        var (host, plugin) = Fresh();
+        host.SuspendMinutes = 15;
+        host.BotsManaged = true;
+        host.BotCount = 6;
+
+        var alice = Join(host, plugin, "alice", Team.Red, "10.0.0.1");
+        var bob = Join(host, plugin, "bob", Team.Blue, "10.0.0.2");
+
+        host.Sent.Clear();
+        Say(plugin, alice, "/bots off");
+
+        Assert.Equal([15], host.Suspensions);
+        Assert.Equal(0, host.BotCount);
+
+        var announcement = Assert.Single(TextTo(host, bob));
+        Assert.Contains("alice turned the bots off for 15 minutes", announcement, StringComparison.Ordinal);
+
+        host.Sent.Clear();
+        Say(plugin, bob, "/bots on");
+
+        Assert.Equal(1, host.Resumes);
+        Assert.Contains(
+            "bob turned the bots back on",
+            Assert.Single(TextTo(host, alice)),
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A second <c>/bots off</c> inside a running window does NOT re-arm it.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>The whole bound on the feature is that the window ends.</b> Re-arming
+    /// would make one player typing three words every few minutes an indefinite
+    /// switch, and the suspension would then be exactly the thing an operator
+    /// cannot see a reason for.
+    /// </remarks>
+    [Fact]
+    public void ASecondBotsOffDoesNotExtendTheWindow()
+    {
+        var (host, plugin) = Fresh();
+        host.SuspendMinutes = 15;
+        host.BotsManaged = true;
+        host.BotCount = 6;
+
+        var alice = Join(host, plugin, "alice", Team.Red, "10.0.0.1");
+
+        Say(plugin, alice, "/bots off");
+        host.BotSuspendSecondsLeft = 300;
+
+        host.Sent.Clear();
+        Say(plugin, alice, "/bots off");
+
+        Assert.Equal([15], host.Suspensions);
+        Assert.Equal(
+            ["OBots are already off for another 5 minutes."],
+            TextTo(host, alice));
+    }
+
+    /// <summary>
+    /// A server not running bots is told so, rather than told the suspension
+    /// worked.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>"There are no bots right now" and "this server does not run bots"
+    /// are different.</b> A suspension on a server whose population manager is off
+    /// changes nothing a player can see — including a bot an operator added by
+    /// hand, which no suspension removes — so reporting success would be the
+    /// command lying about what it did.
+    /// </remarks>
+    [Fact]
+    public void BotsOffOnAServerWithNoPopulationManagerIsRefused()
+    {
+        var (host, plugin) = Fresh();
+        host.SuspendMinutes = 15;
+        host.BotsManaged = false;
+
+        var alice = Join(host, plugin, "alice", Team.Red, "10.0.0.1");
+
+        host.Sent.Clear();
+        Say(plugin, alice, "/bots off");
+
+        Assert.Equal(["OThis server is not running bots."], TextTo(host, alice));
+        Assert.Empty(host.Suspensions);
+    }
+
+    /// <summary>Bare <c>/bots</c> reports, and reports the suspension while one runs.</summary>
+    [Fact]
+    public void BareBotsReportsThePopulation()
+    {
+        var (host, plugin) = Fresh();
+        host.SuspendMinutes = 15;
+        host.BotsManaged = true;
+        host.BotCount = 4;
+
+        var alice = Join(host, plugin, "alice", Team.Red, "10.0.0.1");
+
+        host.Sent.Clear();
+        Say(plugin, alice, "/bots");
+
+        Assert.Equal(
+            ["O4 bots are playing. /bots off takes them away for 15 minutes."],
+            TextTo(host, alice));
+
+        host.BotSuspendSecondsLeft = 61;
+        host.Sent.Clear();
+        Say(plugin, alice, "/bots");
+
+        // ⚠️ Rounded UP. 61 seconds left reported as "1 minute" would count down
+        // to "0 minutes" with the bots still away, which reads as a broken clock.
+        Assert.Equal(
+            ["OBots are off for another 2 minutes. /bots on brings them back."],
+            TextTo(host, alice));
+    }
+
+    /// <summary><c>/bots on</c> with nothing suspended says so rather than nothing.</summary>
+    [Fact]
+    public void BotsOnWithNothingSuspendedSaysSo()
+    {
+        var (host, plugin) = Fresh();
+        host.SuspendMinutes = 15;
+        host.BotsManaged = true;
+
+        var alice = Join(host, plugin, "alice", Team.Red, "10.0.0.1");
+
+        host.Sent.Clear();
+        Say(plugin, alice, "/bots on");
+
+        Assert.Equal(["OThe bots are not turned off."], TextTo(host, alice));
+        Assert.Equal(0, host.Resumes);
+    }
+
+    /// <summary>
+    /// It is in <c>/help</c>, which is the only way a player finds out it exists.
+    /// </summary>
+    /// <remarks>
+    /// <b>The command table and the dispatch are two lists that can disagree.</b>
+    /// A command that runs and is not listed is one nobody discovers; one that is
+    /// listed and does not run answers "this command does not exist" to a player
+    /// who read the help.
+    /// </remarks>
+    [Fact]
+    public void BotsIsListedInHelp()
+    {
+        var (host, plugin) = Fresh();
+        var alice = Join(host, plugin, "alice", Team.Red, "10.0.0.1");
+
+        host.Sent.Clear();
+        Say(plugin, alice, "/help");
+
+        Assert.Contains("bots", string.Concat(TextTo(host, alice)), StringComparison.Ordinal);
+
+        host.Sent.Clear();
+        Say(plugin, alice, "/help \"bots\"");
+
+        Assert.Contains(
+            "/bots off",
+            string.Concat(TextTo(host, alice)),
+            StringComparison.Ordinal);
     }
 }

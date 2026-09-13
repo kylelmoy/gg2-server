@@ -479,6 +479,7 @@ wire changed, and a client with no plugin at all is unaffected.
 | `/votemap [name]` | vote for the next map | yes | yes |
 | `/yes`, `/no`, `/vote <n>` | answer a vote | — | yes |
 | `/kick`, `/nextround` | host only — see below | — | yes |
+| `/bots [off|on]` | **this port's own** — see below | yes | yes |
 
 `/host`, `/me` and `/block` are **client** commands (`commands.gml:58-126`): the
 client runs them locally and the server never parses them. `/me` is the one with
@@ -533,6 +534,73 @@ against that player.
   the roster size rather than on whether anybody is left (`vote_api.gml:400`).
   The reference ships a message for exactly that case, which is evidence it
   happens there too. Transcribed.
+
+### The bot suspension and the join line
+
+Two things in this section have **no GML behind them at all**. Stock GG2 ships no
+bots and no server-configured chat line, so neither is a transcription and
+neither can be checked against the reference.
+
+**`/bots` — reporting and suspending the bot population.**
+
+| | |
+|---|---|
+| `/bots` | how many bots are playing, or how long a suspension has left |
+| `/bots off` | holds the population at zero for `[Bots] SuspendMinutes` |
+| `/bots on` | ends a suspension early |
+
+- **Off by default.** `[Bots] SuspendMinutes` is `0`, and the command then
+  answers "this server does not let bots be turned off from chat" rather than
+  behaving as though it had worked. One key rather than a boolean plus a
+  duration, because those two can be configured into a state that reads as
+  working and does nothing.
+- **Not a vote**, unlike every other command here that changes the server. The
+  case it exists for is a handful of people on a server whose bots are in the
+  way, which is the roster size at which a 50% quorum of players in chat is two
+  people and a dialog is ceremony. What bounds it is the clock: the window
+  expires by itself, so the worst outcome is the bots being away for
+  `SuspendMinutes` and then coming back. Nothing persists it across a restart.
+- **A second `/bots off` inside a running window does not re-arm it.** That is
+  the whole bound; re-arming would make one player typing three words every few
+  minutes an indefinite switch.
+- **Four different replies, deliberately.** "No such command here", "this server
+  is not running bots", "already off for another N minutes" and the announcement
+  are four states a player reaches by typing three words, and collapsing them
+  produces the reading where somebody suspends bots on a server that has none
+  and watches bots appear when the next person joins.
+- **An operator can always end it.** `SetBotFill` clears a suspension, so saving
+  a bot count in the admin panel does; the control port's `bots-suspend` with
+  `minutes` 0 does it directly. Without that the panel's one bot control would
+  accept a number, report it back and change nothing for up to a day with no way
+  to see why — so the panel states a running suspension where it already states
+  the `MinHumans` floor.
+- **The suspension is a target of zero, not `Bots.Enabled = false`.** The latter
+  means *do nothing* to `BotPopulationService` — it deliberately leaves a
+  hand-added bot alone — so reading it as a suspension would tell a player the
+  command worked while the bots carried on playing.
+- **It is a clock in ticks**, like a vote's and like the round timer, so it stops
+  with `freeze` and moves with `--speed`.
+
+**`[Server] ChatJoinMessage` — a line to each player as they join chat.** Sent on
+the plugin's hello, not on the roster entry: before the hello there is nothing on
+the other end to draw it into. It goes out as a 255 rather than a 254, because a
+client with "Display player info" off drops every 254 and this is the line that
+tells a player what the server's commands are. ⚠️ `#` is **not** the same
+character on the two plugins — on `chat` it is GM8's line break and is left
+alone, on `chat_v2_pr` it is the colour-continuation marker its client half looks
+for and is replaced with a space.
+
+⛔ **Both settings do nothing at all without a chat plugin, and
+`ServerPluginList` is empty by default** — so the obvious way to configure either
+is on a server that can never show it to anybody. `ConfigWarnings.For` names that
+combination and three surfaces say it: the server's log at startup, the fleet
+editor's notes, and `config render` before a push. It is a warning, not a
+refusal; `docs/CONFIG.md`, "settings that are valid and cannot do anything".
+
+⚠️ Both reach a plugin through `IPluginHost`, which is otherwise a stand-in for
+a GML surface. They are there rather than inside a plugin because both are
+**server** state — one server, one bot population, one configured line — and a
+plugin holding either would give two loaded chat plugins two different answers.
 
 ### Where this deliberately differs
 
@@ -589,6 +657,13 @@ other message. Six of anything in two seconds is a mute. `chat` has no anti-spam
 The vote commands are the reason `IPluginHost` grew: `Kick`, `SetTeam`,
 `EndRound`, `SetNextMap`, `VotableMaps`, `MapRotation`, `CurrentMapIndex`,
 `PointsOf`, `StableIdOf` / `SlotOfStableId`, and a `Random`.
+
+`ChatJoinMessage`, `Bots`, `SuspendBots` and `ResumeBots` are the exception and
+are named as one: nothing in the reference could reach them. `ChatJoinMessage` is
+a plain read of configuration. The other three move the **population manager's
+target**, which is the server's own scheduling decision about how many
+sockets-that-are-not-sockets to hold open; removing a bot takes the same path a
+disconnection does, so none of it can produce a world a client could not.
 
 **Every one routes through a `GameServer` method a client command or the control
 port already uses** — `ApplyChangeTeam`, `Rounds.Decide`, the same kick path — or
@@ -652,9 +727,38 @@ client *parses* these bytes, not only that this port composes them:
 | the 60-second vote cooldown | "Please wait 10 seconds before starting a vote." |
 | roster compaction under a live client | the population manager dropped a bot, moving one client from slot 2 to slot 1; its `hasChat` survived |
 
-⚠️ **What that run did NOT cover**: a vote decided by more than one human, a
-vote whose target disconnects mid-vote, `/votemap` against a real rotation, and
-the 255-byte chunking loop (nothing in the run composed a line that long).
+**`/bots` and `ChatJoinMessage` were driven this way on 2026-09-13**, against a
+stock client on **both** plugins in turn — `--plugins chat_v2_pr` then
+`--plugins chat`, each with `--bots 4 --bot-suspend-minutes 2` and a join line.
+Every assertion is the server's own roster or the client's `chatLog`, never a
+screenshot:
+
+| Verified | How it was read back |
+|---|---|
+| the join line reaches a client | last entry of `global.chatLog` after the join announcement, on both plugins |
+| `#` is a line break on `chat` and a space on `chat_v2_pr` | the `chat` client drew two lines; the `chat_v2_pr` log held one with spaces |
+| `/bots` reports the real population | "3 bots are playing" against a roster of exactly three |
+| `/bots off` removes them | roster 3 → 0, and the client's own team counters read RED×0 BLU×0 |
+| the announcement reaches everyone | `chatLog` carried "Player turned the bots off for 2 minutes" |
+| a second `/bots off` does not re-arm | the clock went on counting down (120 → 97) and answered "already off for another 2 minutes" |
+| `/bots on` | roster 0 → 3 in the same tick |
+| the window expiring by itself | a one-minute window, watched down 58 → 30 → 2 → gone, bots back, with a client connected throughout |
+| `/bots` is in `/help` | the list ends "votemap and bots" on `chat`, "/nextround /bots" on `chat_v2_pr` |
+
+⛔ **It found a bug no test could have.** `plugin.gml`'s draw loop ends
+`msg = string_copy(msg, 2, 255)`, so character 1 of every line is eaten as a
+colour code whether or not one is there — a join line sent without one lost its
+first letter, and a stock client drew `Welcome!` as `elcome!`. `chat_v2_pr` was
+unaffected because that path already prefixed one. The assertion that let it
+ship was comparing the sent text to the configured text; it now compares against
+`ColourOrange + ` the configured text.
+
+⚠️ **What the 2026-09-12 run did NOT cover**: a vote decided by more than one
+human, a vote whose target disconnects mid-vote, `/votemap` against a real
+rotation, and the 255-byte chunking loop (nothing in the run composed a line that
+long). ⚠️ **What the 2026-09-13 one did not**: a suspension surviving a map
+rotation, two humans racing `/bots off` against `/bots on`, and a join line long
+enough to chunk.
 
 **Before you blame your change for a client dying: read the section below.**
 A rotation kills every connected client on a server with bots, it has nothing to

@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -127,6 +127,38 @@ public sealed class FleetConfigTests : IDisposable
         var warnings = FleetConfig.Warnings(ConfigDir, ["a", "b"]);
         Assert.Contains(warnings, w => w.Contains("a has no", StringComparison.Ordinal));
         Assert.Contains(warnings, w => w.Contains("both named \"Same\"", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// A host whose rendered configuration asks for something it cannot deliver
+    /// is warned about BEFORE the push.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>The server says the same thing at startup, and that is too late.</b>
+    /// It lands in a log on a machine nobody is watching at the moment the
+    /// configuration arrives; this is the render an operator is looking at.
+    /// <c>ConfigWarnings</c> owns the wording, so the three surfaces cannot drift.
+    /// </remarks>
+    [Fact]
+    public void AHostThatSetsAChatSettingWithNoChatPluginIsWarnedAboutBeforeThePush()
+    {
+        Common("[Server]\nServerName=Solo\nChatJoinMessage=type /bots\n");
+        Overlay("a", "[Bots]\nSuspendMinutes=15\n");
+
+        var warnings = FleetConfig.Warnings(ConfigDir, ["a"]);
+
+        Assert.Contains(warnings, w => w.Contains("a: ChatJoinMessage", StringComparison.Ordinal));
+        Assert.Contains(warnings, w => w.Contains("a: Bots.SuspendMinutes", StringComparison.Ordinal));
+
+        // And the half that keeps it from being a line nobody can clear: adding
+        // the plugin silences both, so it is the configuration being described
+        // and not the feature existing.
+        Common("[Server]\nServerName=Solo\nChatJoinMessage=type /bots\n"
+            + "ServerPluginList=chat_v2_pr\n");
+
+        Assert.DoesNotContain(
+            FleetConfig.Warnings(ConfigDir, ["a"]),
+            w => w.Contains("no chat plugin", StringComparison.Ordinal));
     }
 
     [Fact]

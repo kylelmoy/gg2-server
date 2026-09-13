@@ -292,6 +292,14 @@ internal static class CommandLine
                 case "--welcome":
                     options.WelcomeMessage = cursor.Take();
                     break;
+
+                // ⚠️ Not --welcome's twin. That is a MESSAGE_STRING every client
+                // draws; this is a line of chat, which only a client running a
+                // chat plugin sees at all. Chat is where the player types, so it
+                // is where an instruction about a chat command has to land.
+                case "--chat-join-message":
+                    options.ChatJoinMessage = cursor.Take();
+                    break;
                 case "--plugins":
                     options.ServerPluginList = cursor.Take();
                     break;
@@ -592,6 +600,13 @@ internal static class CommandLine
                 // bots looks full in the lobby list and is not.
                 case "--bots-min-humans":
                     botsMinHumans = cursor.TakeInt();
+                    break;
+
+                // How long `/bots off` takes the bot population away for.
+                // ⚠️ ZERO, the default, means the chat command does not exist —
+                // one knob rather than a flag and a duration that can disagree.
+                case "--bot-suspend-minutes":
+                    options.BotSuspendMinutes = cursor.TakeInt();
                     break;
 
                 // ⚠️ ON by default. An empty server has no characters, no clients
@@ -982,6 +997,10 @@ internal static class CommandLine
           --password <text> require a password
           --players <n>     seats for clients, 1..48 (default 10)
           --welcome <text>  message sent to each joiner
+          --chat-join-message <text>
+                            a CHAT line sent to each player as they join chat.
+                            Needs a chat plugin; a client without one never sees
+                            it. Not --welcome, which every client draws.
           --plugins <list>  server-sent plugins to ask clients to load,
                             comma-separated (e.g. chat, chat_v2_pr)
           --plugins-required
@@ -1111,6 +1130,10 @@ internal static class CommandLine
                             (default 0 with --bots). Below it the target is ZERO
                             rather than the fill, so 1 means "only run bots when
                             somebody is actually playing".
+          --bot-suspend-minutes <n>
+                            how long the /bots off chat command takes the bots
+                            away for, 0..1440. 0 (the default) means the command
+                            does not exist on this server.
           --fixed-bot-budget
                             keep the bot controller budget pinned at
                             --bot-arbiter. By default the server walks it down

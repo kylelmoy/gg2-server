@@ -1,4 +1,4 @@
-using Gg2.Protocol;
+﻿using Gg2.Protocol;
 using Gg2.Simulation;
 using Gg2.Server.Plugins;
 
@@ -116,6 +116,37 @@ public sealed partial class GameServer
     /// </summary>
     int IPluginHost.PointsOf(int slot) =>
         (int)Math.Floor(Scoring.Get(_world, slot, StatIndex.Points));
+
+    /// <summary>
+    /// <c>[Server] ChatJoinMessage</c>, read straight off the options.
+    /// </summary>
+    string IPluginHost.ChatJoinMessage => _options.ChatJoinMessage;
+
+    /// <summary>
+    /// What <c>/bots</c> may do and what the population is doing.
+    /// </summary>
+    /// <remarks>
+    /// <b><c>Managed</c> is <c>Bots.Enabled</c> and <c>Count</c> is the roster</b>,
+    /// and the command needs both because they disagree in the case that matters:
+    /// a bot added by hand on a server with the manager off is a bot no suspension
+    /// will take away, and answering "done" there would be the command lying.
+    /// </remarks>
+    BotStatus IPluginHost.Bots => new(
+        CommandAllowed: _options.BotSuspendMinutes > 0,
+        SuspendMinutes: _options.BotSuspendMinutes,
+        Managed: _options.Bots.Enabled,
+        Count: BotSlots.Count,
+        SecondsLeft: BotSuspensionSecondsLeft);
+
+    /// <summary>
+    /// ⛔ <b>Refused outright when <c>[Bots] SuspendMinutes</c> is zero</b>, which
+    /// is the default. The gate is here rather than in the plugin so that the two
+    /// chat plugins cannot answer differently, and so that an operator turning the
+    /// command off turns it off everywhere at once.
+    /// </summary>
+    bool IPluginHost.SuspendBots() => SuspendBots(_options.BotSuspendMinutes);
+
+    bool IPluginHost.ResumeBots() => ResumeBots();
 
     /// <summary>
     /// ⛔ <b>NOT <see cref="WorldState.Random"/>.</b> That stream is observable

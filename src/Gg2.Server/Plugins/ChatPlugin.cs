@@ -1,4 +1,4 @@
-using Gg2.Protocol;
+﻿using Gg2.Protocol;
 
 namespace Gg2.Server.Plugins;
 
@@ -317,6 +317,32 @@ public sealed partial class ChatPlugin : ServerPlugin
                 // plugin.gml:455-482: a client that arrives mid-vote is given
                 // the question, the clock and the tallies so far.
                 SendPollResync(slot);
+
+                // This port's own, and HERE rather than in PlayerAdded: before
+                // the hello there is no chat window on the other end to draw it
+                // into. Reply, not Announce — a 254 is suppressible by the
+                // client, and this is the line that tells a player which commands
+                // the server has.
+                //
+                // ⛔ THE COLOUR CODE IS NOT DECORATION. plugin.gml's draw loop
+                // ends `msg = string_copy(msg, 2, 255)`, so character 1 of every
+                // line is consumed as a colour code whether or not one is there —
+                // without this the operator's first letter is eaten and never
+                // drawn. Measured against a stock client: "Welcome!" rendered as
+                // "elcome!". Orange, like every other line this server composes.
+                //
+                // ⚠️ The message itself is NOT Sanitise'd. That escapes `#`, and
+                // `#` is GM8's own line break: an operator writing "Bots in the
+                // way?#Type /bots off" means two lines and gets them. Only the
+                // characters GM8 does not draw at all are replaced. ⛔ It is
+                // composed by the operator, not by a player — a player's own text
+                // never passes through here.
+                if (Host.ChatJoinMessage.Length != 0)
+                {
+                    Reply(slot, ColourOrange
+                        + Host.ChatJoinMessage.Replace('\n', ' ').Replace('\r', ' '));
+                }
+
                 break;
 
             case KindGlobalChat:

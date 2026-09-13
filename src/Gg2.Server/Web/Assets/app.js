@@ -257,11 +257,23 @@ function tiles(s) {
   // ⚠️ Below --bots-min-humans the population manager's target is zero rather
   // than the fill, so setting a bot count on an empty server can look like a
   // button that does nothing. Say which it is.
+  //
+  // ⚠️ And a SECOND reason, which an operator cannot otherwise see at all: a
+  // player typed /bots off and the population is held at zero until the window
+  // ends. It is checked first because it overrides the fill outright, and it is
+  // the one with an action attached — "bots-suspend" with minutes 0 ends it, and
+  // so does saving a bot count.
+  const suspended = s.server.botSuspendSeconds > 0;
   const blocked = s.server.botFill > 0 && humans < s.server.botMinHumans;
   const warn = $('bots-warn');
 
-  warn.hidden = !blocked;
-  warn.textContent = blocked
+  warn.hidden = !suspended && !blocked;
+  warn.textContent = suspended
+    ? `A player turned the bots off with /bots for another `
+      + `${Math.ceil(s.server.botSuspendSeconds / 60)} minute`
+      + `${Math.ceil(s.server.botSuspendSeconds / 60) === 1 ? '' : 's'}. `
+      + 'Setting a bot count here ends it.'
+    : blocked
     ? `No bots will spawn until ${s.server.botMinHumans} human`
       + `${s.server.botMinHumans === 1 ? '' : 's'} are connected `
       + '(--bots-min-humans). There are ' + humans + '.'

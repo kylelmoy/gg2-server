@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using Gg2.Host;
 using Gg2.Protocol;
 using Gg2.Server;
@@ -71,6 +71,7 @@ public sealed class CliCoverageTests
         ("Port", ["--port", "8191"], o => o.Port),
         ("Password", ["--password", "hunter2"], o => o.Password),
         ("WelcomeMessage", ["--welcome", "hello"], o => o.WelcomeMessage),
+        ("ChatJoinMessage", ["--chat-join-message", "type /bots"], o => o.ChatJoinMessage),
         ("ServerPluginList", ["--plugins", "chat_v2_pr"], o => o.ServerPluginList),
         ("ServerPluginsRequired", ["--plugins-required"], o => o.ServerPluginsRequired),
         ("VotableMaps", ["--votable-maps", "ctf_truefort,koth_valley"], o => string.Join(',', o.VotableMaps)),
@@ -88,6 +89,7 @@ public sealed class CliCoverageTests
         ("Autobalance", ["--no-autobalance"], o => o.Autobalance),
         ("BotEngagesBotsToo", ["--bot-engages-bots"], o => o.BotEngagesBotsToo),
         ("BotHandoverBubbles", ["--bot-handover-bubbles"], o => o.BotHandoverBubbles),
+        ("BotSuspendMinutes", ["--bot-suspend-minutes", "15"], o => o.BotSuspendMinutes),
         ("IdleWhenEmpty", ["--no-idle-when-empty"], o => o.IdleWhenEmpty),
         ("AdaptiveBotBudget", ["--fixed-bot-budget"], o => o.AdaptiveBotBudget),
         ("AnnounceToLobby", ["--lobby"], o => o.AnnounceToLobby),

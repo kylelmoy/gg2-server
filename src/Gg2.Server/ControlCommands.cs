@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using Gg2.Protocol;
@@ -106,6 +106,16 @@ public static class ControlCommands
         "speed" => Do(() => server.SetSpeed(Speed(request))),
 
         "bots" => Do(() => server.SetBotFill(Int(request, "fill", 0))),
+
+        // The operator's end of the /bots chat command. ⛔ It is here rather
+        // than only in the chat plugins because otherwise a player can take the
+        // bots away for up to a day and the operator has no verb that ends it:
+        // the panel's bot field would accept a number, report it back and change
+        // nothing, which is this file's recurring failure with no way to see the
+        // cause. `minutes` 0, or absent, resumes.
+        // ⚠️ It ignores [Bots] SuspendMinutes. That gates what a PLAYER may ask
+        // for; an operator naming a duration is naming it.
+        "bots-suspend" => BotsSuspend(server, Int(request, "minutes", 0)),
 
         "map" => server.RequestMapChange(Text(request, "name"), Int(request, "area", 1))
             ? Ok()
@@ -593,6 +603,28 @@ public static class ControlCommands
     /// question unanswerable.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// Holds the bot population at zero for a while, or ends a suspension.
+    /// </summary>
+    /// <remarks>
+    /// Answered with the state that resulted rather than with a bare <c>ok</c>:
+    /// "resume" on a server that was not suspended and "suspend" for zero minutes
+    /// are both no-ops, and a caller that could not tell them apart from a
+    /// successful one would have no way to check its own request landed.
+    /// </remarks>
+    private static string BotsSuspend(GameServer server, int minutes)
+    {
+        if (minutes < 0 || minutes > 1440)
+            return Error("minutes must be 0..1440; 0 resumes");
+
+        if (minutes == 0)
+            server.ResumeBots();
+        else
+            server.SuspendBots(minutes);
+
+        return Ok($"\"suspendedSeconds\":{server.BotSuspensionSecondsLeft}");
+    }
+
     public static string State(GameServer server)
     {
         var json = new StringBuilder(4096);
@@ -653,7 +685,15 @@ public static class ControlCommands
         // is ZERO rather than the fill, so an empty server with the default of 1
         // stays empty. The panel says so rather than leaving an operator to
         // conclude the button is broken.
-        json.Append(",\"botMinHumans\":").Append(server.Options.Bots.MinHumans).Append('}');
+        json.Append(",\"botMinHumans\":").Append(server.Options.Bots.MinHumans);
+
+        // The second reason a bot count set from the panel can appear to do
+        // nothing, and the one an operator cannot otherwise see at all: a player
+        // typed /bots off and the population is being held at zero until this
+        // reaches zero. Sent unconditionally, so the panel can say which of the
+        // two explanations applies.
+        json.Append(",\"botSuspendSeconds\":").Append(server.BotSuspensionSecondsLeft);
+        json.Append(",\"botSuspendMinutes\":").Append(server.Options.BotSuspendMinutes).Append('}');
 
         json.Append(",\"match\":{\"mode\":\"").Append(server.GameMode).Append('"');
         json.Append(",\"width\":").Append(server.MapWidth);

@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using Gg2.Bots;
 using Gg2.Protocol;
 using Gg2.Server;
@@ -625,5 +625,119 @@ public sealed class BotPopulationTests(ITestOutputHelper output)
         Assert.Equal(skills[0], skills[1]);
 
         return skills[0];
+    }
+
+    // ------------------------------------------------------------------
+    // The /bots suspension
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// A suspension actually removes the bots, and they come back when the
+    /// window ends.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Asserted from the server's roster, not from the suspension clock.</b>
+    /// The failure this exists for is a player being told the command worked
+    /// while twelve bots carry on playing — a state every unit test of the chat
+    /// reply would pass through without noticing, because the reply is composed
+    /// from the plugin's side of the call.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Both directions.</b> A suspension that removed the bots and never
+    /// gave them back would look correct for the whole of any test that stopped at
+    /// the removal, and would leave a live server bot-less until it was restarted.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ASuspensionRemovesTheBotsAndTheWindowGivesThemBack()
+    {
+        using var harness = Filled(fill: 4);
+
+        harness.Tick(5);
+        Assert.Equal(4, harness.Server.BotSlots.Count);
+
+        Assert.True(harness.Server.SuspendBots(1));
+        harness.Tick(2);
+
+        Assert.Empty(harness.Server.BotSlots);
+        Assert.True(harness.Server.BotsSuspended);
+
+        // One minute at 30 Hz, and the two ticks already spent.
+        harness.Tick(60 * 30);
+
+        Assert.False(harness.Server.BotsSuspended);
+        Assert.Equal(4, harness.Server.BotSlots.Count);
+    }
+
+    /// <summary>Ending a suspension early brings the bots straight back.</summary>
+    [Fact]
+    public void ResumingEndsTheSuspensionEarly()
+    {
+        using var harness = Filled(fill: 4);
+
+        harness.Tick(5);
+        harness.Server.SuspendBots(60);
+        harness.Tick(2);
+        Assert.Empty(harness.Server.BotSlots);
+
+        Assert.True(harness.Server.ResumeBots());
+        harness.Tick(2);
+
+        Assert.Equal(4, harness.Server.BotSlots.Count);
+
+        // And a second resume says there was nothing to resume, rather than
+        // reporting success for a no-op.
+        Assert.False(harness.Server.ResumeBots());
+    }
+
+    /// <summary>
+    /// An operator setting a bot count ends a player's suspension.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>Otherwise the panel's one bot control is a field that accepts a
+    /// number, reports it back and changes nothing</b> for up to the whole
+    /// window, with no way for the operator to see why. The player's window is
+    /// deliberately the weaker claim.
+    /// </remarks>
+    [Fact]
+    public void SettingTheBotFillEndsASuspension()
+    {
+        using var harness = Filled(fill: 4);
+
+        harness.Tick(5);
+        harness.Server.SuspendBots(60);
+        harness.Tick(2);
+        Assert.Empty(harness.Server.BotSlots);
+
+        harness.Server.SetBotFill(4);
+        harness.Tick(2);
+
+        Assert.False(harness.Server.BotsSuspended);
+        Assert.Equal(4, harness.Server.BotSlots.Count);
+    }
+
+    /// <summary>
+    /// A suspension of no minutes is refused rather than treated as forever or
+    /// as a resume.
+    /// </summary>
+    /// <remarks>
+    /// <c>[Bots] SuspendMinutes</c> defaults to zero, and zero is what reaches
+    /// here from a server that never configured the command. A window of zero
+    /// ticks would be a suspension that "ran" and expired on the same tick, which
+    /// is indistinguishable in a log from the command being broken.
+    /// </remarks>
+    [Fact]
+    public void ASuspensionOfNoMinutesIsRefused()
+    {
+        using var harness = Filled(fill: 4);
+
+        harness.Tick(5);
+
+        Assert.False(harness.Server.SuspendBots(0));
+        Assert.False(harness.Server.BotsSuspended);
+
+        harness.Tick(2);
+        Assert.Equal(4, harness.Server.BotSlots.Count);
     }
 }

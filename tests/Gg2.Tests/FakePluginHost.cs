@@ -1,4 +1,4 @@
-using Gg2.Protocol;
+﻿using Gg2.Protocol;
 using Gg2.Server.Plugins;
 
 namespace Gg2.Tests;
@@ -68,6 +68,64 @@ public sealed class FakePluginHost : IPluginHost
 
     /// <summary>Seeded, so a shuffle or a tie-break is the same on every run.</summary>
     public Random Random { get; } = new(1234);
+
+    // --- the bot suspension and the join line --------------------------------
+    //
+    // Modelled rather than stubbed, for the same reason RemoveAt compacts: what a
+    // /bots test can get wrong is answering a player about a state the server is
+    // not actually in, so the state lives here and the two calls move it.
+
+    /// <summary><c>[Server] ChatJoinMessage</c>.</summary>
+    public string ChatJoinMessage { get; set; } = string.Empty;
+
+    /// <summary><c>[Bots] SuspendMinutes</c>. Zero, the default, is "no such command".</summary>
+    public int SuspendMinutes { get; set; }
+
+    /// <summary>Whether the population manager is running at all.</summary>
+    public bool BotsManaged { get; set; }
+
+    /// <summary>How many roster entries a <c>/bots</c> reply should call bots.</summary>
+    public int BotCount { get; set; }
+
+    /// <summary>What is left of a suspension, in seconds.</summary>
+    public int BotSuspendSecondsLeft { get; set; }
+
+    /// <summary>Every accepted <see cref="SuspendBots"/>, in minutes.</summary>
+    public List<int> Suspensions { get; } = [];
+
+    /// <summary>How many times a suspension was ended early.</summary>
+    public int Resumes { get; private set; }
+
+    public BotStatus Bots => new(
+        CommandAllowed: SuspendMinutes > 0,
+        SuspendMinutes: SuspendMinutes,
+        Managed: BotsManaged,
+        Count: BotCount,
+        SecondsLeft: BotSuspendSecondsLeft);
+
+    public bool SuspendBots()
+    {
+        if (SuspendMinutes <= 0)
+            return false;
+
+        Suspensions.Add(SuspendMinutes);
+        BotSuspendSecondsLeft = SuspendMinutes * 60;
+
+        // The real server removes them, so the fake does too: a command that
+        // reported success while the count stayed put is the bug under test.
+        BotCount = 0;
+        return true;
+    }
+
+    public bool ResumeBots()
+    {
+        if (BotSuspendSecondsLeft == 0)
+            return false;
+
+        BotSuspendSecondsLeft = 0;
+        Resumes++;
+        return true;
+    }
 
     public int Add(string name, Team team, string address = "10.0.0.1", bool client = true)
     {

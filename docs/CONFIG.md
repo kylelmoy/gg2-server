@@ -116,6 +116,34 @@ testing nothing. Booleans carry the `<flip>` sentinel instead of a literal,
 because `TcpKeepAlive` defaults on and `TickStats` defaults off and one fixed
 string would be a silent no-op for half of them.
 
+## Settings that are valid and cannot do anything
+
+A different failure from an invalid value, and none of the gates above catch it.
+`Validate` refuses a value that is out of range; `EverySettableOptionIsReachable`
+proves a key reaches its property. Both pass for a setting that is perfectly
+valid and delivered by a subsystem this server is not running — the operator sets
+it, the settings page shows it back, a restart applies it, and nothing happens.
+
+`ConfigWarnings.For` is the one place those combinations are named, and three
+surfaces read it so they cannot drift into saying different things about the same
+server:
+
+| Surface | When |
+|---|---|
+| the server's log, `Warn` | at startup, after the plugins are loaded |
+| the fleet editor's notes | on the page where somebody sets them |
+| `config render` warnings | before a push, which is the last point anybody is looking |
+
+**A warning, never a refusal.** Setting a join line before adding the plugin that
+carries it is a reasonable order to work in, and a configuration that will not
+start is worse than one that says what it is missing.
+
+What it currently names: `[Server] ChatJoinMessage` and `[Bots] SuspendMinutes`
+on a server whose `ServerPluginList` loads no chat plugin. Both are delivered by
+a chat plugin and by nothing else, and that list is **empty by default**.
+`ConfigWarningsTests` gates each one in both directions — a warning that fired
+whatever was configured would be noise an operator learns to skip.
+
 ## Writing it back
 
 `ServerConfigFile.Write` is what the admin panel's save calls. **It edits; it
@@ -285,6 +313,7 @@ name per key rather than a fixed set, and it is described above.
 |---|---|---|---|
 | `ServerName` | text | `My Server` | Shown in the client's server browser and on join. |
 | `WelcomeMessage` | text | *(empty)* | Sent to each joiner. Empty means none. |
+| `ChatJoinMessage` | text | *(empty)* | A **chat** line sent to each player as they join chat. Empty means none. A different channel from `WelcomeMessage`: that one is a `MESSAGE_STRING` every client draws, this one needs a chat plugin in `ServerPluginList` and a client without one never sees it — ⚠️ set without one it is **warned about**, not refused. On `chat`, `#` starts a new line; on `chat_v2_pr` it becomes a space, because that plugin's renderer uses `#` as a colour marker. |
 | `Password` | secret | *(empty)* | The game password. Empty means none, and no `PASSWORD_REQUEST`. |
 | `Map` | text | `ctf_truefort` | The map to open on. Empty means the first entry of the rotation. |
 | `Rotation` | list | *(empty)* | The map rotation, in order. A map may appear more than once. |
@@ -380,6 +409,7 @@ a way to give an attacker more room.
 | `MinHumans` | integer | `1` | Humans that must be connected before **any** bot is spawned. ⚠️ Below it the target is **zero**, not the fill — an empty server full of bots looks full in the lobby list and is not. |
 | `Difficulty` | integer | `5` | 1 to 5. 5 is "as good as the layer gets"; the lower tiers are a deliberate handicap ladder. |
 | `NamePrefix` | text | `[BOT] ` | What a bot's name starts with. ⚠️ The trailing space is real — see the quoting rule above. |
+| `SuspendMinutes` | integer | `0` | How long the `/bots off` chat command takes the bot population away for, 0..1440. ⚠️ **0 means the command does not exist on this server**, which is the default — one key rather than a flag and a duration that can disagree. Needs a chat plugin in `ServerPluginList`, which is the only way a player can type `/bots`; set without one it is **warned about**, not refused, and the control port's `bots-suspend` still works. An operator ends a running suspension by saving a bot count in the admin panel, or with `bots-suspend` at 0 minutes. `docs/PLUGINS.md`, "the bot suspension". |
 | `Classes` | list | *(empty)* | Restrict which classes bots **play**. Empty draws all nine, which runs a **mix** of the hybrid arm and the all-scripted one, because a controller only engages on the classes it drives. `driven` restricts the draw to whatever the loaded policies drive, resolved at startup from the loaded checkpoints. `trained` is accepted as a synonym and reads back as `driven`. |
 | `ClassPolicy` | list | *(empty)* | Which controller **drives** each class — `Class=name` entries, where name is a checkpoint's file name without its extension or `scripted`. Anything not named keeps the default: whichever loaded checkpoint's own class set claims it, scripted if none does. Naming a class the file does not list is legal and warns, because the file cannot say whether the run never trained it or a narrowed should-drive set dropped it. |
 | `Occupancy` | boolean | `1` | Price an edge a team-mate is already walking above its honest cost, so a squad fans out. ⛔ A **behaviour** switch: off, match dispersion falls 0.785 → 0.634 and nothing replaces it. |

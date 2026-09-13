@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Gg2.Bots;
 using Gg2.Maps;
@@ -427,7 +427,14 @@ public sealed class BotPopulationService
         if (!options.Enabled)
             return;
 
-        var target = BotPopulation.Target(_server.HumanCount, in options);
+        // ⚠️ Zero rather than an early return, and the difference is the whole
+        // feature: a suspension has to REMOVE the bots that are already here,
+        // where `!options.Enabled` above deliberately leaves them alone. A player
+        // who typed /bots off and watched twelve bots carry on playing has been
+        // told the command worked and shown that it did not.
+        var target = _server.BotsSuspended
+            ? 0
+            : BotPopulation.Target(_server.HumanCount, in options);
         var slots = _server.BotSlots;
         var bots = slots.Count;
 

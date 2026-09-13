@@ -197,7 +197,7 @@ All JSON, all under the session cookie except the first four.
 | `POST /api/logout` | — | clears it |
 | `GET /api/state` | — | one fresh state object, run on the tick thread |
 | `GET /api/events` | — | server-sent events: `state` snapshots, `log` lines and `perf` samples |
-| `POST /api/command` | a control-port command | freeze, resume, step, speed, bots, map, teleport, kick, command, ban, unban, bans, analytics, config-set, restart |
+| `POST /api/command` | a control-port command | freeze, resume, step, speed, bots, bots-suspend, map, teleport, kick, command, ban, unban, bans, analytics, config-set, restart |
 | `GET /api/config` | — | every setting, its value **in the config file**, and which are pinned or pending |
 | `GET /api/analytics` | — | who has played here, for how long and from where — `docs/ANALYTICS.md` |
 | `GET /api/maps` | — | what this server could change to, plus its rotation |
@@ -335,6 +335,11 @@ in the JS — is exactly how a theme drifts.
   fill**, so a bot count set on an empty server does nothing. The panel says
   which it is, because the default is 1 and the first thing anybody tries is
   setting bots on an empty server.
+- **A player may have turned the bots off.** `/bots off` holds the population
+  at zero for `[Bots] SuspendMinutes`, and nothing else on the page would say
+  so. The same warning line states it, and saving a bot count ends it — as does
+  the `bots-suspend` verb with `minutes` 0. `docs/PLUGINS.md`, "the bot
+  suspension".
 - **A player's name is whatever they typed into their own client.** It reaches
   the DOM through `textContent`, never `innerHTML`, and the CSP is the second
   net.

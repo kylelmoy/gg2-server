@@ -1,4 +1,4 @@
-using Gg2.Protocol;
+﻿using Gg2.Protocol;
 using Gg2.Server.Plugins;
 
 namespace Gg2.Tests;
@@ -842,5 +842,167 @@ public sealed class ChatV2CommandTests
         RunVoteToEnd(plugin);
 
         Assert.Equal([("bob", "vote kicked")], host.Kicked);
+    }
+
+    // --- /bots ---------------------------------------------------------------
+    //
+    // ⚠️ This port's own command, so there is no GML to compare against. The same
+    // four outcomes as ChatCommandTests' copy, against this plugin's own wire.
+
+    /// <summary>Off until the server sets <c>[Bots] SuspendMinutes</c>.</summary>
+    [Fact]
+    public void BotsIsRefusedUntilTheServerConfiguresAWindow()
+    {
+        var (host, plugin) = Fresh();
+        var alice = Join(host, plugin, "alice");
+        host.Sent.Clear();
+
+        Say(plugin, alice, "/bots off");
+
+        Assert.Contains(
+            "OThis server does not let bots be turned off from chat.",
+            host.MessagesTo(alice));
+
+        Assert.Empty(host.Suspensions);
+    }
+
+    /// <summary>
+    /// <c>/bots off</c> suspends and announces it; <c>/bots on</c> ends it.
+    /// </summary>
+    /// <remarks>
+    /// <b>The suspension is asked of the HOST, and the announcement goes to
+    /// everybody.</b> A version that composed a reply without calling
+    /// <c>SuspendBots</c> passes any test that reads only the text, and a version
+    /// that whispered would leave everyone else watching the bots vanish with no
+    /// explanation.
+    /// </remarks>
+    [Fact]
+    public void BotsOffSuspendsAndBotsOnEndsIt()
+    {
+        var (host, plugin) = Fresh();
+        host.SuspendMinutes = 15;
+        host.BotsManaged = true;
+        host.BotCount = 6;
+
+        var alice = Join(host, plugin, "alice");
+        var bob = Join(host, plugin, "bob", Team.Blue, "10.0.0.2");
+        host.Sent.Clear();
+
+        Say(plugin, alice, "/bots off");
+
+        Assert.Equal([15], host.Suspensions);
+        Assert.Equal(0, host.BotCount);
+        Assert.Contains(
+            host.MessagesTo(bob),
+            m => m.Contains("alice turned the bots off for 15 minutes", StringComparison.Ordinal));
+
+        host.Sent.Clear();
+        Say(plugin, bob, "/bots on");
+
+        Assert.Equal(1, host.Resumes);
+        Assert.Contains(
+            host.MessagesTo(alice),
+            m => m.Contains("bob turned the bots back on", StringComparison.Ordinal));
+    }
+
+    /// <summary>A second <c>/bots off</c> inside the window does not re-arm it.</summary>
+    [Fact]
+    public void ASecondBotsOffDoesNotExtendTheWindow()
+    {
+        var (host, plugin) = Fresh();
+        host.SuspendMinutes = 15;
+        host.BotsManaged = true;
+        host.BotCount = 6;
+
+        var alice = Join(host, plugin, "alice");
+
+        Say(plugin, alice, "/bots off");
+        host.BotSuspendSecondsLeft = 300;
+
+        host.Sent.Clear();
+        Say(plugin, alice, "/bots off");
+
+        Assert.Equal([15], host.Suspensions);
+        Assert.Contains("OBots are already off for another 5 minutes.", host.MessagesTo(alice));
+    }
+
+    /// <summary>A server not running bots is told so rather than told it worked.</summary>
+    [Fact]
+    public void BotsOffOnAServerWithNoPopulationManagerIsRefused()
+    {
+        var (host, plugin) = Fresh();
+        host.SuspendMinutes = 15;
+        host.BotsManaged = false;
+
+        var alice = Join(host, plugin, "alice");
+        host.Sent.Clear();
+
+        Say(plugin, alice, "/bots off");
+
+        Assert.Contains("OThis server is not running bots.", host.MessagesTo(alice));
+        Assert.Empty(host.Suspensions);
+    }
+
+    /// <summary>Bare <c>/bots</c> reports, including the running suspension.</summary>
+    [Fact]
+    public void BareBotsReportsThePopulation()
+    {
+        var (host, plugin) = Fresh();
+        host.SuspendMinutes = 15;
+        host.BotsManaged = true;
+        host.BotCount = 1;
+
+        var alice = Join(host, plugin, "alice");
+        host.Sent.Clear();
+
+        Say(plugin, alice, "/bots");
+
+        Assert.Contains(
+            "O1 bot is playing. /bots off takes the bots away for 15 minutes.",
+            host.MessagesTo(alice));
+    }
+
+    /// <summary>
+    /// It is in <c>/help</c>, which is the only way a player finds out it exists.
+    /// </summary>
+    [Fact]
+    public void BotsIsListedInHelp()
+    {
+        var (host, plugin) = Fresh();
+        var alice = Join(host, plugin, "alice");
+        host.Sent.Clear();
+
+        Say(plugin, alice, "/help");
+
+        Assert.Contains(host.MessagesTo(alice), m => m.Contains("bots", StringComparison.Ordinal));
+    }
+
+    // --- the configured join line --------------------------------------------
+
+    /// <summary>
+    /// <c>[Server] ChatJoinMessage</c> reaches a player when they announce chat,
+    /// and nobody else.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b><c>#</c> becomes a space here, unlike on <c>chat</c>.</b> This
+    /// plugin's client half reads the last <c>#</c> in a line to decide which
+    /// colour a wrapped continuation starts in, so a <c>#</c> the server sent
+    /// would recolour the rest of everyone's window.
+    /// </remarks>
+    [Fact]
+    public void TheConfiguredJoinLineGoesToTheJoinerAloneWithNoColourMarker()
+    {
+        var (host, plugin) = Fresh();
+        host.ChatJoinMessage = "Bots in the way?#Type /bots off";
+
+        var alice = Join(host, plugin, "alice");
+        host.Sent.Clear();
+
+        var bob = Join(host, plugin, "bob", Team.Blue, "10.0.0.2");
+
+        Assert.Contains("OBots in the way? Type /bots off", host.MessagesTo(bob));
+        Assert.DoesNotContain(
+            host.MessagesTo(alice),
+            m => m.Contains("Bots in the way", StringComparison.Ordinal));
     }
 }

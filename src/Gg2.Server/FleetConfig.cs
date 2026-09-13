@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text;
 
 namespace Gg2.Server;
@@ -194,12 +194,19 @@ public static class FleetConfig
                     + $"so it gets {CommonFileName} unchanged");
             }
 
-            var name = Load(Render(directory, destination), directory).ServerName;
+            var options = Load(Render(directory, destination), directory);
+            var name = options.ServerName;
 
             if (names.TryGetValue(name, out var other))
                 warnings.Add($"{destination} and {other} are both named \"{name}\" in the server browser");
             else
                 names[name] = destination;
+
+            // ⛔ Before the push, not after the restart. This is the deploy path;
+            // the server's own copy of these lines lands in a log on a machine
+            // nobody is watching at the moment the configuration reaches it.
+            foreach (var warning in ConfigWarnings.For(options))
+                warnings.Add($"{destination}: {warning}");
         }
 
         return warnings;

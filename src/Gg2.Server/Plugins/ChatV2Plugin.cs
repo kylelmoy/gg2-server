@@ -1,4 +1,4 @@
-using Gg2.Protocol;
+﻿using Gg2.Protocol;
 
 namespace Gg2.Server.Plugins;
 
@@ -210,6 +210,24 @@ public sealed partial class ChatV2Plugin : ServerPlugin
                 chatter.NameBackup = Host.NameOf(slot);
 
                 Deliver($"{ColourOrange}{chatter.NameBackup} has joined chat!", TeamEveryone);
+
+                // This port's own, and HERE rather than in PlayerAdded: before
+                // the hello there is no chat window on the other end to draw it
+                // into.
+                //
+                // ⚠️ `#` becomes a space rather than a line break, unlike the
+                // `chat` plugin's copy of this. It is not a free choice: this
+                // plugin's client half uses the LAST `#` in a line to decide
+                // which colour a wrapped continuation starts in (Format's
+                // remarks), so a `#` here would recolour the rest of the window.
+                if (Host.ChatJoinMessage.Length != 0)
+                {
+                    Whisper(slot, ColourOrange + Host.ChatJoinMessage
+                        .Replace('#', ' ')
+                        .Replace('\n', ' ')
+                        .Replace('\r', ' '));
+                }
+
                 break;
 
             case KindGlobalChat:
