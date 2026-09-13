@@ -109,6 +109,25 @@ public sealed class JoiningConnection(
     public DateTime StartedAt => _startedAt;
 
     /// <summary>
+    /// Bytes received during the handshake that it has not consumed.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>These belong to the player this connection is about to become, and
+    /// dropping them desynchronises the framer for the rest of the session.</b>
+    /// The reference has nothing to hand over because there is nothing to hand:
+    /// <c>serviceJoiningPlayer.gml:118</c> gives the <em>socket</em> to the
+    /// <c>Player</c>, so the one receive buffer carries straight on. Here the
+    /// handshake and the in-game framer are different objects with different
+    /// buffers, so the carry-over has to be done on purpose.
+    /// <para>
+    /// Non-empty whenever a client puts a command in the same TCP segment as
+    /// the message that finishes its handshake — which it is entitled to do,
+    /// and which no round trip prevents.
+    /// </para>
+    /// </remarks>
+    public ReadOnlySpan<byte> Unconsumed => _received.Buffered;
+
+    /// <summary>
     /// Advances the handshake as far as the bytes available allow.
     /// </summary>
     /// <param name="context">What the server needs to answer with.</param>

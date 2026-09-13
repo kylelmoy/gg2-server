@@ -197,6 +197,35 @@ pending broadcast on the joining socket before it flushes, and advances that
 client's `SkipBroadcastBytes` past it so `FlushBroadcast` does not send it twice.
 The bytes and their order are unchanged; only when they leave.
 
+### `PLAYER_JOIN` does not arrive alone
+
+The client writes `PLAYER_JOIN` and then, into the same buffer and before a
+single `socket_send`, two optional commands (`ClientBeginStep.gml:162-176`):
+
+| Command | Sent when | Shape |
+|---|---|---|
+| `REWARD_REQUEST` | `global.rewardKey` and `global.rewardId` are both set | length-prefixed, up to 255 bytes |
+| `CLIENT_SETTINGS` | `global.queueJumping` is on — the `Queued Jumping` option | one payload byte |
+
+So the segment that finishes a handshake routinely carries in-game commands
+behind it, and **whatever the handshake reader does not consume belongs to the
+player it is about to create.** The reference has no handover to get wrong:
+`serviceJoiningPlayer.gml:118` gives the *socket* to the `Player`, so one receive
+buffer serves the handshake and then the game.
+
+A port that gives the new client a fresh buffer drops those bytes, and the damage
+is worse than the command it loses. A write can be split, so the dropped tail can
+be the first part of a command whose remainder arrives afterwards — and the
+framer then resumes in the middle of one, reading payload as command bytes and
+skipping them (`ConnectionLimits.MaxInvalidCommandBytes` counts exactly that, and
+eventually disconnects for it).
+
+`GameServer.CompleteJoin` appends `JoiningConnection.Unconsumed` to the new
+client's buffer before it is serviced.
+`JoinAndBroadcastTests.KeepsACommandThatArrivedWithThePlayerJoin` is the gate; it
+fails without that line, leaving the client in `Spectator` with its
+`PLAYER_CHANGETEAM` gone.
+
 `JoinAndBroadcastTests.TheJoinerHearsAboutItselfInTheSameTickAsItsBurst` is the
 gate, and it goes red if a tick is inserted before the joiner's own
 `PLAYER_JOIN`. It was written from a live A/B: a stock GM8 client against a

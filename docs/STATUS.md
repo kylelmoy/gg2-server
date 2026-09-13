@@ -40,6 +40,7 @@ upstream after any reference bump.**
 | The April Fools chat-bubble substitution was missing | wrong bubble on one day, a relayed bubble the reference drops on the other 364 | `NameAndBubbleTests` |
 | Rewards were answered with silence | nobody's badges, hats or capes rendered | `RewardAuthTests`, behind `--rewards` |
 | Every connected stock client died on a gamemode-changing rotation | `StateUpdateWriter` captured `MatchState` once at `Start` and kept writing the previous map's HUD block after a rotation | fixed; see `docs/PARITY.md` |
+| Commands pipelined behind `PLAYER_JOIN` were dropped | a client with `Queued Jumping` on had the setting discarded at join, so the server dead-reckoned it on the wrong jump rule for the whole session; a reward request travels the same way | `JoinAndBroadcastTests.KeepsACommandThatArrivedWithThePlayerJoin`; measured live A/B, `docs/PROTOCOL.md` |
 
 **A claim is only as strong as the thing that was actually done.** "A stock
 client has played a round start to finish" was true of exactly one round; the

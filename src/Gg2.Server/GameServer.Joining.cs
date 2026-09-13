@@ -423,6 +423,16 @@ public sealed partial class GameServer
             SkipBroadcastBytes = _broadcast.WrittenSpan.Length,
         };
 
+        // ⛔ Whatever the handshake read and did not consume is the first of
+        // this player's command stream, not spare bytes. A client may put a
+        // command in the same segment as the message that finishes its
+        // handshake, and dropping those bytes leaves the framer starting in the
+        // middle of one — every byte of it read as a command byte, skipped, and
+        // counted against ConnectionLimits.MaxInvalidCommandBytes.
+        // JoiningConnection.Unconsumed says why the reference has no equivalent
+        // step: there, the socket and its buffer are what change hands.
+        client.Received.Append(joining.Unconsumed);
+
         _clients.Add(client);
 
         // ⚠️ AFTER the add, so `_clients.Count` is the concurrency this join

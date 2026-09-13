@@ -236,6 +236,53 @@ public sealed class JoinAndBroadcastTests
     }
 
     /// <summary>
+    /// ⛔ <b>A command sharing a segment with the message that finishes the
+    /// handshake belongs to the player, and losing it desynchronises the framer
+    /// for the rest of the session.</b>
+    /// </summary>
+    /// <remarks>
+    /// The reference cannot have this bug: <c>serviceJoiningPlayer.gml:118</c>
+    /// hands the <em>socket</em> to the <c>Player</c>, so one receive buffer
+    /// serves the handshake and then the game. Here they are two objects with
+    /// two buffers, and the handover is a step that has to be taken.
+    /// <para>
+    /// The damage is not one lost command. The framer resumes in the middle of
+    /// one, reads its payload as command bytes and skips them — which is what
+    /// <c>ConnectionLimits.MaxInvalidCommandBytes</c> counts, and eventually
+    /// disconnects a client for.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void KeepsACommandThatArrivedWithThePlayerJoin()
+    {
+        using var harness = new ServerHarness();
+        harness.JoinClient("watcher");
+
+        var joiner = harness.Connect();
+
+        joiner.SendHello();
+        harness.TickUntil(() => joiner.Received.Count > 0, "the greeting");
+        joiner.Take(joiner.Received.Count);
+
+        joiner.SendReserveSlot("pipelined");
+        harness.TickUntil(() => joiner.Received.Count > 0, "the slot reservation");
+        joiner.Take(joiner.Received.Count);
+
+        // ONE write, so both land in the read that finishes the handshake.
+        var writer = new NetWriter(8);
+        writer.WriteMessageType(MessageType.PlayerJoin);
+        writer.WriteMessageType(MessageType.PlayerChangeTeam);
+        writer.WriteUByte((byte)Team.Blue);
+        joiner.Send(writer.WrittenSpan);
+
+        harness.TickUntil(() => harness.Server.PlayerCount > 2, "the join");
+        harness.Tick(3);
+
+        Assert.False(joiner.IsClosed);
+        Assert.Equal(Team.Blue, harness.Server.TeamOf(2));
+    }
+
+    /// <summary>
     /// An unrecognised command byte is ignored and the stream carries on — the
     /// reference does not resynchronise and does not kick
     /// (<c>processClientCommands.gml</c>). A stricter port would disconnect
