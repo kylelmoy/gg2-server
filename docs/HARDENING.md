@@ -321,6 +321,28 @@ on purpose — an unrecorded decision gets retried.
   test and says nothing about a thousand connections a second from a thousand
   addresses.
 
+### The one guard that has been seen to fire on a stock client
+
+`MaxInvalidCommandBytes` is the port's own addition; the reference has no
+equivalent and tolerates unrecognised bytes for ever. A stock GM8 client soaked
+against this port reached 4099 of them in 949 s and was dropped, and **what it
+sent has never been established.** Four controlled reproductions through a
+framing proxy produced zero across about 59,000 messages — but the original kick
+was on a direct connection, and a proxy re-splits the stream, so it is the wrong
+instrument if the cause is how the bytes are coalesced.
+
+Every kick and the first skip on any connection now carry
+`InvalidCommandReport`: how many runs, what each one followed, and the start of
+each run's bytes. A run is the unit that tells the two cases apart — one long
+run means alignment was lost and the bytes are a real message this framer
+mis-sized; many short runs of one shape mean the sender is emitting something
+the table does not have.
+
+⛔ **Until a report exists, the ceiling is not the thing to change.** Raising it
+and removing it are different bets on the same unknown, and one of the two makes
+the port silently tolerate a framing bug. What would settle it is one report
+from a real client.
+
 ---
 
 ## What the defences actually cost, measured

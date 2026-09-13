@@ -332,6 +332,54 @@ a map change, as the reference does, and a client that picked its team through
 the UI does not re-pick itself. The client stays connected and keeps
 deserialising, so the run looks clean because nothing is being predicted.
 
+### The client must be taken off the team-select screen, or it sends nothing
+
+`--keep-teamed` puts a client on a team through the control port, which is the
+server acting; the client's own `TeamSelectController` is still up, and
+`PlayerControl`'s Begin Step drops every movement key while
+`TeamSelectController` or `ClassSelectController` exists. So the client holds a
+character, predicts it, and presses nothing — `INPUTSTATE` goes out with a
+constant key byte for the whole run.
+
+A map change re-opens both menus, so closing them once is not enough. The only
+per-frame hook is a watch, and this one closes whichever is open by the menu's
+own path rather than by destroying it:
+
+```
+execute_string("global.wMenu = 0;
+if (instance_exists(TeamSelectController)) { with (TeamSelectController) {
+  if (!done) { global.wMenu = 1; team = TEAM_ANY; event_user(1) } } }
+if (instance_exists(ClassSelectController)) { with (ClassSelectController) {
+  if (!done) { global.wMenu = global.wMenu + 2; class = CLASS_SCOUT; event_user(1) } } }
+") * 0 + global.wMenu
+```
+
+Each menu's User Event 1 sends the change if it differs, sets `done`, and the
+Step event slides it away and destroys it. Neither dereferences anything that a
+map change can make `-1` in a way that throws: both compare against
+`global.myself.<field>`, and with `global.myself` at `-1` that reads the
+controller's own `team`/`class`, which is what was just assigned — so the guard
+is "equal, send nothing", not an error. `gg2_input press right;press jump` then
+holds through the rest of the run.
+
+### An invalid-byte kick now explains itself
+
+`CommandStream` records the first eight *runs* of unrecognised bytes — where each
+started, what command it followed, how long it ran and its first bytes — and
+`InvalidCommandReport` puts that in the log the first time a connection skips
+anything, and again in the kick reason. A run is the unit that separates the two
+causes: one long run means the framer lost alignment and the bytes are a real
+message it mis-sized; many short runs of one shape mean the sender is emitting
+something the table does not have.
+
+One cause has been found and fixed since — a client pipelines `REWARD_REQUEST`
+and `CLIENT_SETTINGS` behind its `PLAYER_JOIN`, and the port dropped whatever the
+handshake had not consumed (`docs/PROTOCOL.md`, "`PLAYER_JOIN` does not arrive
+alone"). Whether it is the cause of the 4099-byte kick is **not** established:
+that client's `Queued Jumping` setting was never recorded, and a lost whole
+command costs a command rather than alignment. The report is what would settle a
+recurrence.
+
 ### Churning real players, not bots
 
 `soak-transitions.js --plan churn` moves the bot fill up and down, which compacts

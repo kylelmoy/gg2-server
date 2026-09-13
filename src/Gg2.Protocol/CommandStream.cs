@@ -16,6 +16,57 @@ public readonly ref struct ClientCommand(byte command, ReadOnlySpan<byte> payloa
 }
 
 /// <summary>
+/// One run of consecutive unrecognised command bytes, with the context that
+/// says what the sender had just done.
+/// </summary>
+/// <remarks>
+/// ⚠️ <b>The run, not the byte, is the unit that identifies the cause.</b> A
+/// framer that has lost alignment produces one long run; a sender emitting a
+/// command this server does not know produces a short run of the same shape
+/// over and over. Counting bytes alone cannot tell those apart, and
+/// <see cref="CommandStream.InvalidBytesSkipped"/> is what the connection guard
+/// acts on — so when it fires, this is the evidence that says whether the
+/// number or the sender is the thing at fault.
+/// </remarks>
+public struct InvalidRun
+{
+    /// <summary>Byte values kept from the start of a run.</summary>
+    public const int SampleBytes = 8;
+
+    /// <summary>Bytes the stream had consumed before this run's first byte.</summary>
+    public long Offset;
+
+    /// <summary>
+    /// The last command completed before this run, or -1 when the run precedes
+    /// every completed command — which is itself the answer when a connection
+    /// never gets framed at all.
+    /// </summary>
+    public int AfterCommand;
+
+    /// <summary>Payload length of <see cref="AfterCommand"/>.</summary>
+    public int AfterPayloadLength;
+
+    /// <summary>Commands completed on this stream before the run.</summary>
+    public long AfterCommandCount;
+
+    /// <summary>Consecutive unrecognised bytes in the run.</summary>
+    public int Length;
+
+    /// <summary>Values from the start of the run; <see cref="SampleCount"/> are set.</summary>
+    public InvalidRunSample Sample;
+
+    /// <summary>How many of <see cref="Sample"/> are set.</summary>
+    public int SampleCount;
+}
+
+/// <summary>The first <see cref="InvalidRun.SampleBytes"/> bytes of a run.</summary>
+[System.Runtime.CompilerServices.InlineArray(InvalidRun.SampleBytes)]
+public struct InvalidRunSample
+{
+    private byte _first;
+}
+
+/// <summary>
 /// Reassembles a client's byte stream into framed commands.
 /// </summary>
 /// <remarks>
@@ -56,6 +107,25 @@ public sealed class CommandStream
     private int _expected = 1;
     private byte _command;
 
+    /// <summary>How many runs are kept. Enough to see a pattern, small enough to allocate once.</summary>
+    private const int MaxRecordedRuns = 8;
+
+    private long _consumed;
+    private long _completed;
+    private int _lastCommand = -1;
+    private int _lastPayloadLength;
+
+    // Allocated on the first unrecognised byte and never after, so a
+    // connection that frames cleanly never pays for this at all.
+    private InvalidRun[]? _runs;
+    private int _recordedRuns;
+    private long _runsSeen;
+
+    // -1 while the previous byte was not an unrecognised one; otherwise the
+    // index of the run being extended, or int.MinValue once MaxRecordedRuns
+    // runs have been recorded and the current one is being counted only.
+    private int _openRun = -1;
+
     /// <summary>How many bytes must arrive before the framer can make progress.</summary>
     public int ExpectedBytes => _expected;
 
@@ -73,13 +143,42 @@ public sealed class CommandStream
     /// one path through the framer that consumes buffered bytes without
     /// producing a command, so the reference's own flood control does not
     /// rate-limit it at all — a client sending nothing but garbage makes the
-    /// server scan every byte of it, every tick, for free. A stock client sends
-    /// exactly zero of these in a session, so a total this high is a statement
-    /// about the client rather than about the network.
+    /// server scan every byte of it, every tick, for free.
     /// <c>ConnectionLimits.MaxInvalidCommandBytes</c> is where it is enforced.
+    /// </para>
+    /// <para>
+    /// ⛔ <b>Do not assume a stock client sends none.</b> One soaked against
+    /// this port reached 4099 in 949 s and was disconnected by the guard, and
+    /// what it sent has never been established — four controlled reproductions
+    /// through a framing proxy produced zero across about 59,000 messages, and a
+    /// proxy is the wrong instrument if the cause is how the stream is split.
+    /// <see cref="InvalidRuns"/> is what the server logs instead of guessing:
+    /// the count says a threshold was crossed, the runs say by what.
+    /// docs/TRAPS-LIVEGAME.md, "Soaking a stock client against the port".
     /// </para>
     /// </remarks>
     public long InvalidBytesSkipped { get; private set; }
+
+    /// <summary>
+    /// Runs of unrecognised bytes recorded from this stream, oldest first, at
+    /// most <see cref="MaxRecordedRuns"/> of them.
+    /// </summary>
+    /// <remarks>
+    /// The cap is on what is <em>kept</em>, not on what is counted:
+    /// <see cref="InvalidRunsSeen"/> and <see cref="InvalidBytesSkipped"/> keep
+    /// rising after it. Bounded because this is a per-connection buffer filled
+    /// by whatever the peer sends, which is the one thing a connection must not
+    /// be able to make the server hold without limit.
+    /// </remarks>
+    public ReadOnlySpan<InvalidRun> InvalidRuns =>
+        _runs is null ? default : _runs.AsSpan(0, _recordedRuns);
+
+    /// <summary>Runs of unrecognised bytes seen, including those past the cap.</summary>
+    public long InvalidRunsSeen => _runsSeen;
+
+    /// <summary>Commands this stream has framed.</summary>
+    public long CommandsFramed => _completed;
+
 
     /// <summary>
     /// Pulls the next complete command out of <paramref name="source"/>,
@@ -90,6 +189,8 @@ public sealed class CommandStream
     {
         while (source.TryTake(_expected, out var bytes))
         {
+            _consumed += bytes.Length;
+
             switch (_state)
             {
                 case State.Command:
@@ -100,16 +201,20 @@ public sealed class CommandStream
                         case CommandLength.Invalid:
                             // Ignore it and wait for another command byte.
                             InvalidBytesSkipped++;
+                            NoteInvalid(_command);
                             continue;
                         case CommandLength.Prefixed1:
+                            _openRun = -1;
                             _state = State.Length1;
                             _expected = 1;
                             continue;
                         case CommandLength.Prefixed2:
+                            _openRun = -1;
                             _state = State.Length2;
                             _expected = 2;
                             continue;
                         default:
+                            _openRun = -1;
                             _state = State.Payload;
                             _expected = ClientCommands.FixedLengthOf(_command);
                             continue;
@@ -129,11 +234,57 @@ public sealed class CommandStream
                     command = new ClientCommand(_command, bytes);
                     _state = State.Command;
                     _expected = 1;
+                    _completed++;
+                    _lastCommand = _command;
+                    _lastPayloadLength = bytes.Length;
                     return true;
             }
         }
 
         command = default;
         return false;
+    }
+
+    /// <summary>
+    /// Records one unrecognised byte against the run it belongs to.
+    /// </summary>
+    /// <remarks>
+    /// Off the path a stock client takes: the first call is the only one that
+    /// allocates, and a session that frames cleanly never makes it.
+    /// </remarks>
+    private void NoteInvalid(byte value)
+    {
+        if (_openRun == -1)
+        {
+            _runsSeen++;
+
+            if (_recordedRuns < MaxRecordedRuns)
+            {
+                _runs ??= new InvalidRun[MaxRecordedRuns];
+                _openRun = _recordedRuns++;
+                _runs[_openRun] = new InvalidRun
+                {
+                    // The byte has already been consumed, so the run starts one back.
+                    Offset = _consumed - 1,
+                    AfterCommand = _lastCommand,
+                    AfterPayloadLength = _lastPayloadLength,
+                    AfterCommandCount = _completed,
+                };
+            }
+            else
+            {
+                // Still a run in progress, just not one being written down.
+                _openRun = int.MinValue;
+            }
+        }
+
+        if (_openRun < 0)
+            return;
+
+        ref var run = ref _runs![_openRun];
+        run.Length++;
+
+        if (run.SampleCount < InvalidRun.SampleBytes)
+            run.Sample[run.SampleCount++] = value;
     }
 }

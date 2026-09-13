@@ -18,6 +18,16 @@ public sealed partial class GameServer
         public CommandStream Commands { get; } = new();
 
         /// <summary>
+        /// Whether this connection's unrecognised bytes have been reported.
+        /// </summary>
+        /// <remarks>
+        /// One line per connection, not per run: the line carries the first
+        /// runs and the running totals, so a second one for the same connection
+        /// would repeat the evidence while adding a rate a peer chooses.
+        /// </remarks>
+        public bool ReportedInvalidCommands { get; set; }
+
+        /// <summary>
         /// Bytes already standing in the broadcast buffer when this client
         /// joined, which its next flush must skip.
         /// </summary>
@@ -342,10 +352,41 @@ public sealed partial class GameServer
         // reference's own flood control does not rate-limit at all. It makes the
         // server scan every byte, every tick, for nothing.
         //
-        // A stock client sends zero of these in a whole session, so the
-        // threshold is unreachable by accident and a stray byte is still free.
+        // A stray byte is free, and a client that sends nothing but garbage is
+        // not. What sits between those is not settled: a stock client has hit
+        // the threshold once (ConnectionLimits.MaxInvalidCommandBytes), which is
+        // why the line below carries the evidence and not just the count.
+        //
+        // The line goes out the FIRST time this connection skips anything,
+        // while it is still up, because that is the only moment the claim above
+        // is checkable: waiting for the threshold means learning nothing until
+        // 4096 bytes have gone past, and learning it as the evidence is being
+        // disconnected. InvalidCommandReport says what a run's shape means.
+        if (client.Commands.InvalidBytesSkipped > 0 && !client.ReportedInvalidCommands)
+        {
+            client.ReportedInvalidCommands = true;
+
+            if (_invalidCommandLog.ShouldLog(_nowMs, out var suppressed))
+            {
+                _log.Warn(
+                    $"{LogText.Safe(client.Entry.Name)}: "
+                    + InvalidCommandReport.Describe(client.Commands)
+                    + Suffix(suppressed));
+            }
+        }
+
         if (client.Commands.InvalidBytesSkipped > _limits.MaxInvalidCommandBytes)
         {
+            // ⚠️ The report goes in a line of its own, not in the close reason.
+            // The reason reaches the log through LogText.Safe, which caps a
+            // client-controlled string at 64 characters — so a report handed to
+            // it is clipped mid-run, in the one line an operator is most likely
+            // to read. The reason stays the short count it has always been.
+            // (Nothing here reaches the wire: Close only records the reason.)
+            _log.Warn(
+                $"{LogText.Safe(client.Entry.Name)}: dropping - "
+                + InvalidCommandReport.Describe(client.Commands));
+
             client.Connection.Close(
                 $"{client.Commands.InvalidBytesSkipped} unrecognised command bytes");
         }

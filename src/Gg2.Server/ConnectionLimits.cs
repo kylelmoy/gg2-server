@@ -115,10 +115,19 @@ public sealed record ConnectionLimits
     /// the one path through the framer that consumes buffered bytes without
     /// producing a command, so a client sending nothing but garbage is not
     /// rate-limited by the ten-command budget at all — it makes the server scan
-    /// every byte it sends, every tick, for free. A stock client sends exactly
-    /// zero invalid bytes in a session, so any threshold above a handful is
-    /// unreachable by accident; 4096 is generous enough that a genuinely
-    /// confused client is still tolerated for a while.
+    /// every byte it sends, every tick, for free. 4096 is generous enough that a
+    /// confused client is tolerated for a while, and small enough that a sender
+    /// doing nothing else stops being scanned.
+    /// </para>
+    /// <para>
+    /// ⛔ <b>This threshold has been reached by a stock client, once.</b> A soak
+    /// against this port lost one at 4099 bytes in 949 s, and what it sent has
+    /// never been established. Until it is, <b>the number is not the thing to
+    /// change</b>: the reference tolerates invalid bytes for ever and has no
+    /// equivalent guard, so raising the ceiling and dropping it are different
+    /// bets on the same unknown. <c>InvalidCommandReport</c> is what the kick
+    /// line carries so the next occurrence settles it instead of repeating it;
+    /// docs/HARDENING.md has the standing entry.
     /// </para>
     /// </remarks>
     public int MaxInvalidCommandBytes { get; init; } = 4096;

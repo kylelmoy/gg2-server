@@ -447,6 +447,26 @@ public sealed partial class GameServer : IDisposable, IPluginHost
     private readonly LogThrottle _churnLog = new(burst: 30, per: TimeSpan.FromSeconds(10));
 
     /// <summary>
+    /// Rate limit on the "unrecognised command bytes" line.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The most valuable line here is the one nobody expected to see, so
+    /// it is written the FIRST time a connection skips a byte and not only when
+    /// the guard fires.</b> A stock client is expected to send none for a whole
+    /// session, and has been seen not to; the expectation is only checkable if a
+    /// single stray byte says so while the connection is still up. Waiting for
+    /// <c>ConnectionLimits.MaxInvalidCommandBytes</c> means learning nothing
+    /// until 4096 have gone by, and learning it at the moment the evidence is
+    /// being disconnected.
+    /// <para>
+    /// One line per connection is still client-driven — reconnecting is free —
+    /// so it shares the shape of the other two and keeps its own bucket. Small
+    /// burst: unlike a join, there is no ordinary case for this to pass.
+    /// </para>
+    /// </remarks>
+    private readonly LogThrottle _invalidCommandLog = new(burst: 3, per: TimeSpan.FromSeconds(10));
+
+    /// <summary>
     /// Addresses an operator has refused. Empty unless somebody put one in.
     /// </summary>
     /// <remarks>
