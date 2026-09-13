@@ -120,15 +120,19 @@ public sealed record ConnectionLimits
     /// doing nothing else stops being scanned.
     /// </para>
     /// <para>
-    /// ⛔ <b>A stock client reaches this by playing normally, and the number is
-    /// not what is wrong.</b> Measured over a WAN link, a client emits one stray
-    /// byte per frame without ever losing framing, so any lifetime ceiling is
-    /// reached eventually — 4096 takes about 4096 frames. A cumulative total
-    /// cannot separate that from the thing this defends against, which is a
-    /// sender making the server scan bytes for free; only a RATE can.
-    /// <c>InvalidCommandReport</c> carries the evidence in the log.
-    /// docs/HARDENING.md, "The one guard that has been seen to fire on a stock
-    /// client", has the measurement and what it implies.
+    /// ⚠️ <b>This has fired on a real GM8 client, and the client was in a
+    /// runaway state.</b> It was sending about 293 commands a second against a
+    /// 30 Hz tick, emitting one unrecognised byte per command; the controlled
+    /// re-run — same build, same 58 ms link, <c>room_speed</c> read back as 30 —
+    /// produced zero in 15 minutes. So the ceiling bounded a sender at ten times
+    /// the tick rate, which is what it is for.
+    /// <para>
+    /// ⚠️ <b>It is still a total with no time term</b>, so a slow enough trickle
+    /// reaches any ceiling eventually and a rate would say what is meant. Latent,
+    /// not observed. <c>InvalidCommandReport</c> puts the evidence in the log
+    /// either way; docs/HARDENING.md, "The one guard that has been seen to fire
+    /// on a stock client", has the measurements.
+    /// </para>
     /// </para>
     /// </remarks>
     public int MaxInvalidCommandBytes { get; init; } = 4096;

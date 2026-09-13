@@ -372,20 +372,30 @@ causes: one long run means the framer lost alignment and the bytes are a real
 message it mis-sized; many short runs of one shape mean the sender is emitting
 something the table does not have.
 
-The recurrence happened, and the report settled the shape of it. Against a
-remote server the client emits **exactly one stray `00` per framed command**
-from about command #854 onward; runs are one byte each and the next command
-frames correctly, so nothing is desynchronised. ⚠️ It was sending ~293 commands
-a second against a nominal 30 fps, unexplained and never read back, so **per
-command** is the measured ratio and **per frame** is not. `docs/HARDENING.md`, "The
-one guard that has been seen to fire on a stock client", has the log line and
-what it means for the guard.
+The recurrence happened, and the report settled it. A client emits **exactly one
+stray `00` per framed command** from about command #854 onward; runs are one byte
+each and the next command frames correctly, so nothing is desynchronised.
 
-⛔ **A loopback soak cannot find this.** 49 minutes at 4x with the same client
-build, the same plugin, 862 joins and 120 map changes produced zero. The same
-client against a VPS 58 ms away produced it inside a minute, twice. Anything
-about how a client's writes reach this server has to be measured over a real
-path; loopback answers a different question.
+⛔ **The trigger is the client's send RATE, not the link.** It was sending ~293
+commands a second against a nominal 30 fps — close to this hardware's ~346 fps
+ceiling — and had simultaneously stopped answering its own agent bridge. The
+control says so directly:
+
+| Arm | Client | Link | Result |
+|---|---|---|---|
+| loopback soak, 49 min at 4x, 862 joins, 120 map changes | healthy | loopback | 0 |
+| runaway client, 14 s | ~293 cmd/s, bridge unresponsive | 58 ms | 4099 |
+| controlled re-run, 15 min | `room_speed` read back as 30 and watched | 58 ms | **0** |
+
+So latency is **not** what produces it, and neither is the plugin, the map
+rotation or a busy roster. What puts a client into that state is **not**
+established; it had just reconnected after a server restart. `docs/HARDENING.md`,
+"The one guard that has been seen to fire on a stock client", has the log line.
+
+⚠️ **Read a client's `room_speed` back before drawing any conclusion from its
+traffic.** Both sightings were of a client whose rate nobody had checked, and the
+first write-up called the cadence "one per frame" on that basis. It is one per
+*command*; the frame rate was ten times what was assumed.
 
 The pipelining bug found alongside it (`docs/PROTOCOL.md`, "`PLAYER_JOIN` does
 not arrive alone") is **not** the cause — a lost whole command costs a command,
@@ -430,6 +440,27 @@ Baseline, 30 fps arm, 251,576 corrections over about two hours of game time:
 | x | 0.70 px | 55.6 | 11.9% | 1.3% | 0 |
 | y | 0.34 px | 70 | 4.5% | 0.8% | 3 |
 | hp | 0.10 hp | 55 | 2.0% | 1.6% | 0.3% |
+
+Over a **real 58 ms link** (US West VPS, 1x, `room_speed` 30, 9 players,
+31,387 corrections):
+
+| field | mean | max | over 1 px / 0.5 hp | over 8 px / 1 hp | over 64 px / 5 hp |
+|---|---|---|---|---|---|
+| x | 0.21 px | 15.9 | 5.3% | 7 | 0 |
+| y | 0.09 px | 43.4 | 0.8% | 13 | 0 |
+| hp | 0.16 hp | 32 | 4.0% | 2.5% | 1.1% |
+
+**Latency does not visibly degrade dead reckoning at this RTT** — the client
+re-simulates between updates, so what a round trip costs is staleness, not
+divergence, and the corrections are smaller than the loopback baseline's rather
+than larger.
+
+⚠️ **Not a controlled comparison.** The baseline ran at 8x with twelve bots and
+constant churn; this is 1x on one map with a lighter roster, so fewer respawns
+and collisions means smaller corrections regardless of the link. What it
+establishes is an upper bound on the WAN arm, not a difference between arms. The
+control that would isolate latency is the same roster and boost on both sides of
+the link.
 
 The same numbers came back at two different boost factors, which is what rules
 the boost out as an influence on the measurement. A max in the tens of pixels is

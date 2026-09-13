@@ -147,15 +147,15 @@ public sealed class CommandStream
     /// <c>ConnectionLimits.MaxInvalidCommandBytes</c> is where it is enforced.
     /// </para>
     /// <para>
-    /// ⛔ <b>A stock client does NOT send none.</b> Measured over a 58 ms link,
-    /// it emits exactly one stray <c>0x00</c> per framed command from a few
-    /// hundred commands in. Each run is a single byte and the
-    /// next command frames correctly, so nothing is desynchronised; the
-    /// reference skips them for ever, while this port's guard reaches 4096 and
-    /// disconnects a client that is playing normally.
-    /// <see cref="InvalidRuns"/> is what made that legible, and a loopback soak
-    /// never reproduced it. docs/HARDENING.md, "The one guard that has been seen
-    /// to fire on a stock client".
+    /// ⚠️ <b>A stock client sends none while it is healthy, and one per command
+    /// once it is not.</b> A client in a runaway state — about 293 commands a
+    /// second against a 30 Hz tick — emitted exactly one stray <c>0x00</c> per
+    /// framed command; each run is a single byte and the next command frames
+    /// correctly, so nothing is desynchronised. The controlled re-run at
+    /// <c>room_speed</c> 30 over the same link produced zero in 15 minutes.
+    /// <see cref="InvalidRuns"/> is what made the difference legible.
+    /// docs/HARDENING.md, "The one guard that has been seen to fire on a stock
+    /// client".
     /// </para>
     /// </remarks>
     public long InvalidBytesSkipped { get; private set; }

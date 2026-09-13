@@ -355,24 +355,34 @@ client running unthrottled may be the trigger rather than the link itself. The
 run that produced this had no `agentRate` boost set, which is what makes the
 rate unexplained.
 
-**The guard's shape is therefore wrong, not its number.** A lifetime total
-cannot tell "one byte per frame for two minutes" from "a megabyte in a second",
-and only the second is the thing this defends against — a sender making the
-server scan bytes for free. 4096 is reached by a client playing normally in
-about 4096 frames. Raising it only delays the kick.
+**The guard fired on a runaway client, which is what it is for.** The control
+that settles this: the same client build, the same 58 ms link, the same server,
+with `room_speed` read back as 30 and watched for the whole run — **zero
+unrecognised bytes in 15 minutes**, one join, no disconnect. The client that
+tripped the guard was sending ~293 commands a second against a nominal 30, and
+had simultaneously stopped answering its own agent bridge. So this is a client in
+a runaway state, not a client playing normally, and a sender at ten times the
+tick rate is exactly the case the ceiling exists to bound.
+
+⚠️ **A lifetime total still cannot tell a fast sender from a long-lived one** —
+it has no time term at all, so a slow trickle reaches any ceiling eventually. A
+rate would express the intent directly. That is a latent weakness rather than an
+observed failure, and nothing measured so far reaches it.
 
 ⚠️ **The report keeps only the first eight runs, all from the onset**, so
 nothing here says whether the pattern held or changed over the remaining 4091.
 Keeping a few of the most recent runs as well as the earliest is what would
 answer that.
 
-⚠️ **Reproducing it needs the real network path.** 49 minutes of loopback soak
-with the same plugin, the same client build, 862 joins and 120 map changes
-produced zero; the WAN run produced it twice within a minute of joining. What
-emits the byte is **not** established, and both observations used a client
-carrying the `gg2-agent` payload — whose own writes go to its bridge socket, not
-`global.serverSocket`. The experiment that would settle it is a clean,
-un-injected client against a remote server.
+**What is established:** the byte appears only from a client sending far above
+the tick rate. Loopback soaking never produced it (49 min at 4x, 862 joins, 120
+map changes); nor did a healthy 30 fps client over a WAN (15 min). Only the
+runaway client did, and then at exactly one byte per command.
+
+**What is not:** what emits the byte, and what puts a client into that state —
+it had just reconnected after a server restart. Both sightings used a client
+carrying the `gg2-agent` payload, whose own writes go to its bridge socket and
+not to `global.serverSocket`; a clean, un-injected client has not been tried.
 
 ---
 
