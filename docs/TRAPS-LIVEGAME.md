@@ -332,6 +332,29 @@ a map change, as the reference does, and a client that picked its team through
 the UI does not re-pick itself. The client stays connected and keeps
 deserialising, so the run looks clean because nothing is being predicted.
 
+### Churning real players, not bots
+
+`soak-transitions.js --plan churn` moves the bot fill up and down, which compacts
+the roster inside the server and puts nothing on the wire: a bot is an
+`IInputSource` with no socket, so it never reaches `RESERVE_SLOT`, the join burst,
+`SkipBroadcastBytes`' flush ordering, or a disconnect driving `PLAYER_LEAVE`.
+
+`tools/soak/` is a fleet of real TCP clients that join, switch team and class,
+and leave on a seeded schedule, 70% by `PLAYER_LEAVE` and FIN and 30% by RST. Its
+README carries the server flags it needs — two per-address limits refuse a fleet
+from `127.0.0.1` by default, and the refusal reads as the tool not working.
+
+What it is for is the off-by-one in CLAUDE.md: a departure from a low slot
+renumbers every slot above it, and a watching client tracks that with one line
+(`ClientBeginStep.gml:218`). Nothing inside this repo can check that line is
+still right. The invariant a watching client should hold is
+
+    global.myself == ds_list_find_value(global.players, global.playerID)
+
+and the README has the guarded watch expression for it. Measured over 72 joins and
+72 departures with a stock client attached: the invariant never broke, no
+`DESYNC` was recorded, and the client tracked roster sizes 4 through 10.
+
 ### What the client's prediction error actually is
 
 `agentSnap` records `|predicted - authoritative|` for x, y, hspeed, vspeed and
