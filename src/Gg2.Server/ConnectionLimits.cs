@@ -120,14 +120,15 @@ public sealed record ConnectionLimits
     /// doing nothing else stops being scanned.
     /// </para>
     /// <para>
-    /// ⛔ <b>This threshold has been reached by a stock client, once.</b> A soak
-    /// against this port lost one at 4099 bytes in 949 s, and what it sent has
-    /// never been established. Until it is, <b>the number is not the thing to
-    /// change</b>: the reference tolerates invalid bytes for ever and has no
-    /// equivalent guard, so raising the ceiling and dropping it are different
-    /// bets on the same unknown. <c>InvalidCommandReport</c> is what the kick
-    /// line carries so the next occurrence settles it instead of repeating it;
-    /// docs/HARDENING.md has the standing entry.
+    /// ⛔ <b>A stock client reaches this by playing normally, and the number is
+    /// not what is wrong.</b> Measured over a WAN link, a client emits one stray
+    /// byte per frame without ever losing framing, so any lifetime ceiling is
+    /// reached eventually — 4096 takes about 4096 frames. A cumulative total
+    /// cannot separate that from the thing this defends against, which is a
+    /// sender making the server scan bytes for free; only a RATE can.
+    /// <c>InvalidCommandReport</c> carries the evidence in the log.
+    /// docs/HARDENING.md, "The one guard that has been seen to fire on a stock
+    /// client", has the measurement and what it implies.
     /// </para>
     /// </remarks>
     public int MaxInvalidCommandBytes { get; init; } = 4096;

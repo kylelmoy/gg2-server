@@ -147,14 +147,15 @@ public sealed class CommandStream
     /// <c>ConnectionLimits.MaxInvalidCommandBytes</c> is where it is enforced.
     /// </para>
     /// <para>
-    /// ⛔ <b>Do not assume a stock client sends none.</b> One soaked against
-    /// this port reached 4099 in 949 s and was disconnected by the guard, and
-    /// what it sent has never been established — four controlled reproductions
-    /// through a framing proxy produced zero across about 59,000 messages, and a
-    /// proxy is the wrong instrument if the cause is how the stream is split.
-    /// <see cref="InvalidRuns"/> is what the server logs instead of guessing:
-    /// the count says a threshold was crossed, the runs say by what.
-    /// docs/TRAPS-LIVEGAME.md, "Soaking a stock client against the port".
+    /// ⛔ <b>A stock client does NOT send none.</b> Measured over a 58 ms link,
+    /// it emits one stray <c>0x00</c> after every <c>INPUTSTATE</c> — one per
+    /// frame — from a few hundred commands in. Each run is a single byte and the
+    /// next command frames correctly, so nothing is desynchronised; the
+    /// reference skips them for ever, while this port's guard reaches 4096 and
+    /// disconnects a client that is playing normally.
+    /// <see cref="InvalidRuns"/> is what made that legible, and a loopback soak
+    /// never reproduced it. docs/HARDENING.md, "The one guard that has been seen
+    /// to fire on a stock client".
     /// </para>
     /// </remarks>
     public long InvalidBytesSkipped { get; private set; }

@@ -324,24 +324,40 @@ on purpose — an unrecorded decision gets retried.
 ### The one guard that has been seen to fire on a stock client
 
 `MaxInvalidCommandBytes` is the port's own addition; the reference has no
-equivalent and tolerates unrecognised bytes for ever. A stock GM8 client soaked
-against this port reached 4099 of them in 949 s and was dropped, and **what it
-sent has never been established.** Four controlled reproductions through a
-framing proxy produced zero across about 59,000 messages — but the original kick
-was on a direct connection, and a proxy re-splits the stream, so it is the wrong
-instrument if the cause is how the bytes are coalesced.
+equivalent and tolerates unrecognised bytes for ever. Every kick and the first
+skip on any connection carry `InvalidCommandReport`: how many runs, what each
+followed, and the start of each run's bytes.
 
-Every kick and the first skip on any connection now carry
-`InvalidCommandReport`: how many runs, what each one followed, and the start of
-each run's bytes. A run is the unit that tells the two cases apart — one long
-run means alignment was lost and the bytes are a real message this framer
-mis-sized; many short runs of one shape mean the sender is emitting something
-the table does not have.
+**What the report says, measured against a GM8 client on a WAN link (58 ms RTT,
+US West VPS, 2026-09-13):**
 
-⛔ **Until a report exists, the ceiling is not the thing to change.** Raising it
-and removing it are different bets on the same unknown, and one of the two makes
-the port silently tolerate a framing bug. What would settle it is one report
-from a real client.
+```
+4100 unrecognised command bytes in 4099 runs, after 4953 framed commands;
+first 8 runs: @4267 after InputState+4 (#854): 1 byte 00
+            | @4273 after InputState+4 (#855): 1 byte 00
+            | @4279 after InputState+4 (#856): 1 byte 00 | ...
+```
+
+The offsets are **exactly six apart** and an `INPUTSTATE` is five bytes, so from
+command #854 onward the client emits **one stray `00` after every INPUTSTATE —
+one per frame.** Each run is a single byte and the command after it frames
+correctly, so **the stream is never desynchronised**: this is not a mis-sized
+message and not a coalescing artifact. It is a spurious byte the reference would
+skip for ever.
+
+**The guard's shape is therefore wrong, not its number.** A lifetime total
+cannot tell "one byte per frame for two minutes" from "a megabyte in a second",
+and only the second is the thing this defends against — a sender making the
+server scan bytes for free. 4096 is reached by a client playing normally in
+about 4096 frames. Raising it only delays the kick.
+
+⚠️ **Reproducing it needs the real network path.** 49 minutes of loopback soak
+with the same plugin, the same client build, 862 joins and 120 map changes
+produced zero; the WAN run produced it twice within a minute of joining. What
+emits the byte is **not** established, and both observations used a client
+carrying the `gg2-agent` payload — whose own writes go to its bridge socket, not
+`global.serverSocket`. The experiment that would settle it is a clean,
+un-injected client against a remote server.
 
 ---
 

@@ -372,13 +372,22 @@ causes: one long run means the framer lost alignment and the bytes are a real
 message it mis-sized; many short runs of one shape mean the sender is emitting
 something the table does not have.
 
-One cause has been found and fixed since — a client pipelines `REWARD_REQUEST`
-and `CLIENT_SETTINGS` behind its `PLAYER_JOIN`, and the port dropped whatever the
-handshake had not consumed (`docs/PROTOCOL.md`, "`PLAYER_JOIN` does not arrive
-alone"). Whether it is the cause of the 4099-byte kick is **not** established:
-that client's `Queued Jumping` setting was never recorded, and a lost whole
-command costs a command rather than alignment. The report is what would settle a
-recurrence.
+The recurrence happened, and the report settled the shape of it. Against a
+remote server the client emits **one stray `00` after every `INPUTSTATE`, one per
+frame**, from about command #854 onward; runs are one byte each and the next
+command frames correctly, so nothing is desynchronised. `docs/HARDENING.md`, "The
+one guard that has been seen to fire on a stock client", has the log line and
+what it means for the guard.
+
+⛔ **A loopback soak cannot find this.** 49 minutes at 4x with the same client
+build, the same plugin, 862 joins and 120 map changes produced zero. The same
+client against a VPS 58 ms away produced it inside a minute, twice. Anything
+about how a client's writes reach this server has to be measured over a real
+path; loopback answers a different question.
+
+The pipelining bug found alongside it (`docs/PROTOCOL.md`, "`PLAYER_JOIN` does
+not arrive alone") is **not** the cause — a lost whole command costs a command,
+not alignment, and these runs never lose alignment.
 
 ### Churning real players, not bots
 

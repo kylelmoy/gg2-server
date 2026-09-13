@@ -39,6 +39,20 @@ gg2-server --port 8191 --control-port 8192 --bots 4 \
 The tally reports `refusedServerFull` and `refusedPerAddress` separately so a
 refusal names which one it was.
 
+⛔ **`--multi-client-limit 0` does not mean "no limit". It means "refuse every
+non-loopback connection."** `ExceedsMultiClientLimit` counts the candidate
+itself, so the test is `1 > 0` for the first connection from any address. It
+works above only because **loopback is exempt and never reaches the check** — a
+local fleet would be let in whatever the value were. Point the fleet at a remote
+server with this setting and the server refuses everyone with
+`KICK`/`KICK_MULTI_CLIENT`, which reads as the server being broken. Use a number
+above the fleet size instead, e.g. `--multi-client-limit 64`.
+
+⚠️ **`--connect-rate 0` really does mean off**, so the two flags read the same
+digit in opposite directions. `ConnectionLimits.ConnectionBurstPerAddress` says
+"Zero turns the rate limit off"; `ServerOptions.MultiClientLimit` has no such
+escape value.
+
 ## Why not `--bots`
 
 A bot is an `IInputSource` with no socket. It never reaches `RESERVE_SLOT`, the
