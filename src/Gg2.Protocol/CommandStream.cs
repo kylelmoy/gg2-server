@@ -148,8 +148,8 @@ public sealed class CommandStream
     /// </para>
     /// <para>
     /// ⛔ <b>A stock client does NOT send none.</b> Measured over a 58 ms link,
-    /// it emits one stray <c>0x00</c> after every <c>INPUTSTATE</c> — one per
-    /// frame — from a few hundred commands in. Each run is a single byte and the
+    /// it emits exactly one stray <c>0x00</c> per framed command from a few
+    /// hundred commands in. Each run is a single byte and the
     /// next command frames correctly, so nothing is desynchronised; the
     /// reference skips them for ever, while this port's guard reaches 4096 and
     /// disconnects a client that is playing normally.

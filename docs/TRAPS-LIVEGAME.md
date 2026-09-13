@@ -373,9 +373,11 @@ message it mis-sized; many short runs of one shape mean the sender is emitting
 something the table does not have.
 
 The recurrence happened, and the report settled the shape of it. Against a
-remote server the client emits **one stray `00` after every `INPUTSTATE`, one per
-frame**, from about command #854 onward; runs are one byte each and the next
-command frames correctly, so nothing is desynchronised. `docs/HARDENING.md`, "The
+remote server the client emits **exactly one stray `00` per framed command**
+from about command #854 onward; runs are one byte each and the next command
+frames correctly, so nothing is desynchronised. ⚠️ It was sending ~293 commands
+a second against a nominal 30 fps, unexplained and never read back, so **per
+command** is the measured ratio and **per frame** is not. `docs/HARDENING.md`, "The
 one guard that has been seen to fire on a stock client", has the log line and
 what it means for the guard.
 

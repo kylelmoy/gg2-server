@@ -339,17 +339,32 @@ first 8 runs: @4267 after InputState+4 (#854): 1 byte 00
 ```
 
 The offsets are **exactly six apart** and an `INPUTSTATE` is five bytes, so from
-command #854 onward the client emits **one stray `00` after every INPUTSTATE —
-one per frame.** Each run is a single byte and the command after it frames
-correctly, so **the stream is never desynchronised**: this is not a mis-sized
-message and not a coalescing artifact. It is a spurious byte the reference would
-skip for ever.
+command #854 onward the client emits **exactly one stray `00` per framed
+command.** The two log lines pin that ratio without relying on the eight kept
+runs: 9 strays at 863 commands and 4099 strays at 4953, and 863-854 = 9 while
+4953-854 = 4099. Each run is a single byte and the command after it frames
+correctly, so **the stream is never desynchronised**: not a mis-sized message,
+not a coalescing artifact. It is a spurious byte the reference would skip for
+ever.
+
+⚠️ **The client was sending about 293 commands a second** — 4099 of them in the
+14 s between the two lines — against a nominal 30 fps, and close to the ~346 fps
+ceiling this hardware reaches. Its `room_speed` was never read before it was
+dropped. **So "one per command" is measured and "one per frame" is not**, and a
+client running unthrottled may be the trigger rather than the link itself. The
+run that produced this had no `agentRate` boost set, which is what makes the
+rate unexplained.
 
 **The guard's shape is therefore wrong, not its number.** A lifetime total
 cannot tell "one byte per frame for two minutes" from "a megabyte in a second",
 and only the second is the thing this defends against — a sender making the
 server scan bytes for free. 4096 is reached by a client playing normally in
 about 4096 frames. Raising it only delays the kick.
+
+⚠️ **The report keeps only the first eight runs, all from the onset**, so
+nothing here says whether the pattern held or changed over the remaining 4091.
+Keeping a few of the most recent runs as well as the earliest is what would
+answer that.
 
 ⚠️ **Reproducing it needs the real network path.** 49 minutes of loopback soak
 with the same plugin, the same client build, 862 joins and 120 map changes
