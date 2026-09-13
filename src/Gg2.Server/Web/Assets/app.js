@@ -1560,6 +1560,29 @@ async function openSettings() {
       + 'these fields become editable.';
   }
 
+  // A file pushed by scripts/deploy.sh --config. Saving here still works — it
+  // is the right tool for a change that cannot wait — but the change lives only
+  // on this server, and the next push stops for it until it is forced. Said
+  // before the operator types, not after they wonder where their edit went.
+  const managed = $('settings-managed');
+
+  if (config.managed) {
+    const parts = [
+      'This file is managed by scripts/deploy.sh --config. A save here applies to '
+      + 'this server only, and the next push will stop for it until it is copied into '
+      + 'deploy/config or the push is forced.',
+    ];
+    if (config.editedSincePush) parts.push('It has been edited here since it was last pushed.');
+    if (config.pushWaiting) {
+      parts.push('A pushed configuration is waiting: the server applies it the next time '
+        + 'nobody is connected.');
+    }
+    managed.textContent = parts.join(' ');
+    managed.hidden = false;
+  } else {
+    managed.hidden = true;
+  }
+
   renderSettings();
 }
 

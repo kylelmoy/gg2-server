@@ -392,6 +392,12 @@ applies it. The three things that *can* change on a live server — the map, the
 bot count, the speed — have had their own `ControlCommands` verbs since phase 8
 and are still their own controls.
 
+**A file pushed by `scripts/deploy.sh --config` is marked as managed** (the
+`config` verb's `managed`, `editedSincePush` and `pushWaiting`). Saving still
+works, and is the right tool for a change that cannot wait, but the next push
+refuses this server until the change is copied into `deploy/config` or the push
+is forced. `docs/CONFIG.md`, "Many servers, one configuration".
+
 ### The four things it had to be told
 
 - **A secret is never sent to the browser.** Five settings are marked

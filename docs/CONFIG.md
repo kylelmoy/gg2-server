@@ -208,6 +208,60 @@ positions, music — which have no meaning here.
   An empty secret field is not submitted, or opening the page and pressing save
   would erase the admin password.
 
+## Many servers, one configuration
+
+Several hosts that share a configuration except for a few keys (normally
+`ServerName` and `WelcomeMessage`) are configured from one directory on the
+operator's machine and pushed. Nothing here is reachable from the network.
+
+```
+deploy/config/common.ini              every setting the servers share
+deploy/config/hosts/<dest>.ini        one host's own keys; they win over common.ini
+```
+
+`<dest>` is the ssh destination as `deploy/hosts` names it, with every character
+outside `[A-Za-z0-9._@-]` replaced by `_` (`FleetConfig.OverlayFileName`, and the
+same `sed` in `deploy.sh`; `FleetConfigTests` pins the two together).
+
+| Command | What it does |
+|---|---|
+| `gg2-server config edit` | a local page (loopback, one-run token in the printed URL) for writing `common.ini` and each host's overrides. A save validates every host's result before writing any file. |
+| `gg2-server config render --out <dir>` | writes each host's `gg2.ini`, validated. `deploy.sh` calls it. |
+| `scripts/deploy.sh --config --check` | renders, diffs each host's current `gg2.ini` against it (passwords masked), writes nothing |
+| `scripts/deploy.sh --config` | writes `shared/gg2.ini` and `shared/gg2.ini.pushed` on each host that changed |
+| `scripts/deploy.sh --config --restart` | the same, then restarts at once, dropping anyone connected |
+| `scripts/deploy.sh --status` | adds a `config` line: not managed, edited on the host, in force, or waiting |
+
+**A rendered file is `common.ini` followed by the overlay, verbatim.** The reader
+keeps the last value of a repeated key, so the concatenation means "the overlay
+wins" by the reader's own rules. Applying the two files one after the other is
+not equivalent: an overlay with no `Map` key empties a `Map` that `common.ini`
+set, because a file with a rotation and no `Map` opens on the rotation.
+`FleetConfigTests.AnOverlayThatDoesNotNameTheMapKeepsCommonsMap` has both arms.
+
+**`[Server] MapRotation` is refused at render**: it names a file beside the
+config, and only the config is pushed. Use `[Server] Rotation`.
+
+**A push is applied by the server, the first time nobody is connected**
+(`PushedConfigWatcher`). Every 15 seconds the server reads `gg2.ini.pushed`; when
+it names the hash of the current file and that is not the file the server started
+from, the server re-validates the file and does the panel's in-process restart
+once no player, spectator or joining connection remains. At start it writes the
+hash it started from to `gg2.ini.applied`, which is what `--status` compares.
+Only a pushed file triggers this: a panel save changes the file and not the
+marker, so it is never applied behind the operator's back. A release that
+predates this code never applies a push by itself; `--restart` does.
+
+**A host whose file was edited there since the last push is refused**, with the
+diff of what a push would undo, until `--force`. The same applies to a first push
+over a file `--config` never wrote. The admin panel's settings page says when its
+file is managed, edited since the push, or has a push waiting.
+
+What would show this has gone stale: `deploy.sh --status` reporting "waiting" on a
+host that has been empty for more than a minute on a release built from this code,
+or a push that `--check` reports as up to date while the host's server name
+differs from the overlay's.
+
 ## Every key
 
 ⚠️ **Generated from `ServerSettings.All` — if a key here disagrees with the code,

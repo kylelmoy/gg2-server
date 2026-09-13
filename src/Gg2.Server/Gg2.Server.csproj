@@ -52,6 +52,14 @@
     <EmbeddedResource Include="Web\Assets\favicon.svg" LogicalName="Gg2.Server.Web.Assets.favicon.svg" />
 
     <!--
+      gg2-server config edit's page — ConfigEditorServer. It runs on the
+      operator's machine, not a server, and borrows app.css and the favicon.
+    -->
+    <EmbeddedResource Include="Web\Assets\editor.html" LogicalName="Gg2.Server.Web.Assets.editor.html" />
+    <EmbeddedResource Include="Web\Assets\editor.css" LogicalName="Gg2.Server.Web.Assets.editor.css" />
+    <EmbeddedResource Include="Web\Assets\editor.js" LogicalName="Gg2.Server.Web.Assets.editor.js" />
+
+    <!--
       The analytics map's geometry: Natural Earth coastlines, country markers
       and US states, already projected into a unit box. Public domain, generated
       by tools/gen-geo-assets.js, and CHECKED IN rather than fetched at runtime —

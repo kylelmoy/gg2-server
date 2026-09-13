@@ -253,6 +253,22 @@ in under a second. But it is worth knowing three things about it:
   The trade is the obvious one — no surprise restarts, and no automatic
   security updates either.
 
+### Configuration, as opposed to builds
+
+`scripts/deploy.sh --config` pushes `shared/gg2.ini` to every host from one
+`deploy/config` directory (a shared `common.ini` and one overlay per host),
+written with `gg2-server config edit`. It never touches `releases/`, needs no
+sudo unless `--restart` is given, and refuses a host whose file was edited
+there since the last push. A server built from a commit that includes this
+applies a push by itself the first time nobody is connected; an older release
+needs `--restart`. `docs/CONFIG.md`, "Many servers, one configuration", has the
+layout, the rules and what `--status` reports.
+
+The first push to each host is a `--force`: `--check` shows the diff against the
+hand-maintained file it replaces, and anything worth keeping belongs in
+`deploy/config` first. To start from one host's existing file, copy its
+`shared/gg2.ini` to `deploy/config/common.ini`.
+
 ### Which build is running
 
 ```

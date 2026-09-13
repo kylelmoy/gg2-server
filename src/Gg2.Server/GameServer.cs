@@ -40,6 +40,15 @@ public sealed partial class GameServer : IDisposable, IPluginHost
     /// <summary>Null unless <c>--web</c> was given — off by default.</summary>
     private WebAdminServer? _web;
 
+    /// <summary>
+    /// Null unless the server was started with <c>--config</c>. Applies a file
+    /// pushed by <c>deploy.sh --config</c> once nobody is connected.
+    /// </summary>
+    private PushedConfigWatcher? _pushedConfig;
+
+    /// <inheritdoc cref="_pushedConfig"/>
+    internal PushedConfigWatcher? PushedConfig => _pushedConfig;
+
     /// <summary>The panel's scrollback. Null unless <c>--web</c> was given.</summary>
     private readonly LogRing? _webLog;
 
@@ -851,6 +860,9 @@ public sealed partial class GameServer : IDisposable, IPluginHost
             _web.Start();
         }
 
+        if (_options.ConfigFile.Length != 0)
+            _pushedConfig = new PushedConfigWatcher(_options.ConfigFile, _log, Environment.TickCount64);
+
         // Last, and after OpenMap: the first segment's preamble is a
         // FULL_UPDATE of the world, so there has to be a world.
         if (_options.RecordingDirectory.Length != 0)
@@ -1047,6 +1059,15 @@ public sealed partial class GameServer : IDisposable, IPluginHost
         // reading must never be able to stall a tick, which is exactly what
         // servicing it here would allow.
         _web?.Pump(_frame);
+
+        // Anybody connected at all defers it, a spectator or a half-finished join
+        // included. PushedConfigWatcher has the rule for what counts as pushed.
+        if (_pushedConfig is not null
+            && !_restartRequested
+            && _pushedConfig.ShouldRestart(_nowMs, _clients.Count + _joining.Count != 0))
+        {
+            RequestRestart();
+        }
 
         AcceptConnections(now);
         ServiceJoiningConnections(now);

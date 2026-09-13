@@ -1,0 +1,115 @@
+/*
+ * gg2-server config edit. The panel's app.css supplies the tokens, buttons,
+ * fields and the settings sheet's field grid; this is only the two-column frame
+ * around them and the host-override affordances.
+ */
+
+.ed { display: grid; grid-template-columns: 280px minmax(0, 1fr); height: 100dvh; }
+
+.ed-side {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 20px 16px;
+  border-right: var(--border-width) solid var(--separator);
+  background: var(--surface);
+  overflow-y: auto;
+}
+
+.ed-brand h1 { font-size: var(--text-medium); margin-bottom: 4px; }
+
+.ed-scopes { display: flex; flex-direction: column; gap: 4px; }
+
+.ed-scope {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--foreground);
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: var(--radius-xl);
+  cursor: pointer;
+  font: inherit;
+}
+
+.ed-scope:hover { background: var(--default-soft); }
+.ed-scope[aria-current='true'] { background: var(--accent-soft); }
+
+.ed-scope strong { display: block; font-weight: 500; }
+.ed-scope span { display: block; font: var(--text-tiny) var(--font-mono); color: var(--muted); word-break: break-all; }
+.ed-scope.is-dirty strong::after { content: ' •'; color: var(--accent); }
+.ed-scope.is-bad span { color: var(--danger); }
+
+.ed-scopes-label {
+  font: var(--label);
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 12px 12px 4px;
+}
+
+.ed-push { margin-top: auto; display: flex; flex-direction: column; gap: 6px; }
+
+.ed-push code {
+  font: var(--text-tiny) var(--font-mono);
+  background: var(--background);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 6px 8px;
+  user-select: all;
+}
+
+.ed-main { display: flex; flex-direction: column; min-height: 0; background: var(--overlay); }
+
+.ed-only { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: var(--text-tiny); white-space: nowrap; }
+.ed-only .sheet-check { align-self: center; }
+
+.ed-note {
+  margin: 0;
+  padding: 10px 24px;
+  font-size: var(--text-tiny);
+  border-bottom: var(--border-width) solid var(--separator);
+}
+
+.ed-note.warn { color: var(--warning); background: color-mix(in oklab, var(--warning) 8%, transparent); }
+.ed-note.bad { color: var(--danger); background: var(--danger-soft); }
+
+.ed-row-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+
+.ed-override {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font: var(--label);
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+}
+
+.ed-override:hover { color: var(--foreground); background: var(--default-soft); }
+
+/* A host's own value. Accent, because it is the thing this page exists to show. */
+.sheet-field.is-host > label { color: var(--accent); }
+.sheet-field.is-host .ed-override { color: var(--accent); }
+
+/* Inherited from common.ini: shown, not editable until overridden. */
+.sheet-field.is-inherited input:disabled,
+.sheet-field.is-inherited select:disabled { opacity: 0.55; }
+
+.ed-where { font-size: var(--text-tiny); color: var(--muted); }
+
+.ed-pre {
+  margin: 16px 0 0;
+  font: var(--text-tiny) / 1.55 var(--font-mono);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+@media (max-width: 760px) {
+  .ed { grid-template-columns: 1fr; height: auto; }
+  .ed-side { border-right: none; border-bottom: var(--border-width) solid var(--separator); }
+  .sheet-fields { grid-template-columns: 1fr; }
+}

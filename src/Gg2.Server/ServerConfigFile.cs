@@ -78,7 +78,17 @@ public static class ServerConfigFile
         if (!File.Exists(path))
             throw new FileNotFoundException($"no config file at {path}", path);
 
-        ApplySettings(options, Parse(File.ReadAllLines(path)), path);
+        ApplyLines(options, File.ReadAllLines(path), path);
+    }
+
+    /// <summary>
+    /// <see cref="Apply"/> over lines already in memory. <paramref name="path"/>
+    /// is still needed: a relative <c>[Server] MapRotation</c> resolves against it.
+    /// </summary>
+    internal static void ApplyLines(ServerOptions options, string[] lines, string path)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        ApplySettings(options, Parse(lines), path);
     }
 
     /// <summary>
@@ -183,9 +193,26 @@ public static class ServerConfigFile
         ArgumentNullException.ThrowIfNull(options);
         ArgumentException.ThrowIfNullOrEmpty(path);
 
-        var lines = File.Exists(path)
-            ? new List<string>(File.ReadAllLines(path))
-            : [];
+        var lines = Edit(options, File.Exists(path) ? File.ReadAllLines(path) : [], path);
+
+        // ⚠️ Same directory as the target, not the temp directory: File.Move
+        // across a volume boundary is a copy, which is not atomic and defeats the
+        // whole point. GetDirectoryName is null only for a bare filename, where
+        // the current directory is the right answer.
+        var directory = Path.GetDirectoryName(Path.GetFullPath(path)) ?? ".";
+        var temporary = Path.Combine(directory, Path.GetFileName(path) + ".tmp");
+
+        File.WriteAllLines(temporary, lines, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+        File.Move(temporary, path, overwrite: true);
+    }
+
+    /// <summary>
+    /// <see cref="Write"/>'s edit, over lines in memory: what the file would say
+    /// after saving <paramref name="options"/> into it.
+    /// </summary>
+    internal static List<string> Edit(ServerOptions options, string[] existing, string path)
+    {
+        var lines = new List<string>(existing);
 
         // ⚠️ What the file ALREADY says, so this can write a minimal diff.
         //
@@ -217,16 +244,7 @@ public static class ServerConfigFile
         }
 
         RemoveShadowedRotationSources(lines, options, path);
-
-        // ⚠️ Same directory as the target, not the temp directory: File.Move
-        // across a volume boundary is a copy, which is not atomic and defeats the
-        // whole point. GetDirectoryName is null only for a bare filename, where
-        // the current directory is the right answer.
-        var directory = Path.GetDirectoryName(Path.GetFullPath(path)) ?? ".";
-        var temporary = Path.Combine(directory, Path.GetFileName(path) + ".tmp");
-
-        File.WriteAllLines(temporary, lines, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
-        File.Move(temporary, path, overwrite: true);
+        return lines;
     }
 
     /// <summary>
@@ -249,7 +267,7 @@ public static class ServerConfigFile
     /// ordinary file stays free of quotes an operator did not type.
     /// </para>
     /// </remarks>
-    private static string Quote(string value) =>
+    internal static string Quote(string value) =>
         value != value.Trim() || (value.Length >= 2 && value[0] == '"' && value[^1] == '"')
             ? '"' + value + '"'
             : value;
@@ -263,7 +281,7 @@ public static class ServerConfigFile
     /// two would write a value the reader then ignores — a save that appears to
     /// work and changes nothing.
     /// </remarks>
-    private static void Put(List<string> lines, string section, string key, string value)
+    internal static void Put(List<string> lines, string section, string key, string value)
     {
         var line = $"{key}={value}";
         var inSection = section.Length == 0;
@@ -362,7 +380,7 @@ public static class ServerConfigFile
             RemoveSection(lines, "Maps");
     }
 
-    private static void Remove(List<string> lines, string section, string key)
+    internal static void Remove(List<string> lines, string section, string key)
     {
         for (var i = lines.Count - 1; i >= 0; i--)
         {
@@ -533,7 +551,7 @@ public static class ServerConfigFile
     /// first rather than replacing it.
     /// </para>
     /// </remarks>
-    private static Dictionary<string, Dictionary<string, string>> Parse(string[] lines)
+    internal static Dictionary<string, Dictionary<string, string>> Parse(string[] lines)
     {
         var ini = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
         var section = string.Empty;

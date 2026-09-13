@@ -329,6 +329,15 @@ public static class ControlCommands
         // into thirty fields — not after they press save.
         json.Append(",\"writable\":").Append(writable ? "true" : "false");
 
+        // Whether this file is managed by deploy.sh --config, and what that means
+        // for a save here: kept, but the next push stops for this server until it
+        // is forced. See PushedConfigWatcher and docs/CONFIG.md, "Many servers,
+        // one configuration".
+        var (managed, edited, waiting) = server.PushedConfig?.Describe() ?? (false, false, false);
+        json.Append(",\"managed\":").Append(managed ? "true" : "false");
+        json.Append(",\"editedSincePush\":").Append(edited ? "true" : "false");
+        json.Append(",\"pushWaiting\":").Append(waiting ? "true" : "false");
+
         json.Append(",\"overridden\":[");
 
         for (var i = 0; i < running.CommandLineOverrides.Count; i++)

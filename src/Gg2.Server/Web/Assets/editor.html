@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="robots" content="noindex, nofollow">
+<title>Server configuration — gg2-server</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/app.css">
+<link rel="stylesheet" href="/editor.css">
+</head>
+<body>
+
+<!--
+  gg2-server config edit. Writes deploy/config/common.ini and one overlay per
+  host; scripts/deploy.sh --config pushes the result. FleetConfigEditor is the
+  logic and the rules; this page only draws them.
+-->
+<div class="ed">
+  <aside class="ed-side">
+    <div class="ed-brand">
+      <h1>Server configuration</h1>
+      <p class="sheet-sub" id="ed-directory">—</p>
+    </div>
+
+    <nav class="ed-scopes" id="ed-scopes" aria-label="What to edit"></nav>
+
+    <div class="ed-push">
+      <p class="hint">Saving writes files on this machine only. To send them to the servers:</p>
+      <code>scripts/deploy.sh --config --check</code>
+      <code>scripts/deploy.sh --config</code>
+      <p class="hint">Each server applies a push the next time nobody is connected.</p>
+    </div>
+  </aside>
+
+  <main class="ed-main">
+    <header class="sheet-head">
+      <div>
+        <h3 id="ed-title">—</h3>
+        <p class="sheet-sub" id="ed-file">—</p>
+      </div>
+      <div class="sheet-tools">
+        <label class="ed-only" id="ed-only-wrap" hidden>
+          <input type="checkbox" id="ed-only" class="sheet-check"> overridden only
+        </label>
+        <input type="search" id="ed-filter" placeholder="Filter settings"
+               spellcheck="false" autocomplete="off" aria-label="Filter settings">
+        <button class="btn btn-quiet" id="ed-preview" type="button" hidden>Preview gg2.ini</button>
+      </div>
+    </header>
+
+    <div id="ed-notes"></div>
+
+    <div class="sheet-body" id="ed-body"><p class="sheet-empty">Loading…</p></div>
+
+    <footer class="sheet-foot">
+      <p class="hint" id="ed-status">No changes.</p>
+      <div class="btn-row">
+        <button class="btn" id="ed-revert" type="button" disabled>Revert</button>
+        <button class="btn btn-primary" id="ed-save" type="button" disabled>Save</button>
+      </div>
+    </footer>
+  </main>
+</div>
+
+<dialog class="sheet" id="ed-preview-dialog" aria-labelledby="ed-preview-title">
+  <header class="sheet-head">
+    <div>
+      <h3 id="ed-preview-title">gg2.ini</h3>
+      <p class="sheet-sub" id="ed-preview-sub">—</p>
+    </div>
+    <div class="sheet-tools">
+      <button class="btn btn-quiet" id="ed-preview-close" type="button">Close</button>
+    </div>
+  </header>
+  <p class="sheet-note">What this server is sent, as saved on disk — unsaved edits are not in it. Passwords are masked.</p>
+  <div class="sheet-body"><pre class="ed-pre" id="ed-preview-text"></pre></div>
+</dialog>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script src="/editor.js"></script>
+</body>
+</html>

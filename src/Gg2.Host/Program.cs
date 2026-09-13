@@ -106,6 +106,31 @@ internal static class Program
             }
         }
 
+        // `gg2-server config ...` edits and renders the configuration that
+        // scripts/deploy.sh --config pushes to several servers. It serves no game.
+        if (args.Length > 0 && args[0] == "config")
+        {
+            var rest = args[1..];
+
+            if (rest.Length == 0 || rest.Contains("--help") || rest.Contains("-h"))
+            {
+                ConfigTool.PrintUsage();
+                return rest.Length == 0 ? 2 : 0;
+            }
+
+            try
+            {
+                return ConfigTool.Run(rest);
+            }
+            catch (Exception e) when (e is ArgumentException or FormatException or IOException)
+            {
+                Console.Error.WriteLine(e.Message);
+                Console.Error.WriteLine();
+                ConfigTool.PrintUsage();
+                return 2;
+            }
+        }
+
         // ⚠️ BEFORE the parser and before --help, and it answers without
         // touching a socket, a map or a config file. This is the question a
         // deployment asks of a binary it has just copied — `gg2-server
