@@ -5001,6 +5001,37 @@ nothing ever asked. ✅ **It was found because `gg2-rl` insisted the exit criter
 be evaluated per map on every shipped map** rather than on the six that were
 screened.
 
+### The override yields when the enemy holds both hills
+
+**The cross-lock makes "attack the enemy's hill" wrong in exactly one state.**
+`ControlPoints.Relock` locks a team's own hill while that team holds the other
+one, so a team holding BOTH leaves one hill in play: the losing team's own, with
+the winner's clock running on it. An unconditional override sends the loser's
+attackers to the winner's locked hill, where nothing can be captured, and the
+winner's clock runs out unopposed. So the override applies only while the enemy's
+hill is unlocked, or while no hill is (the pregame). Otherwise the ownership
+preference picks the attacker's own hill, because it is the one unlocked point
+the team does not own. Defenders were never affected: nothing is theirs, so they
+fall back to the nearest open point.
+
+`BotObjectiveTests.ADualKothAttackerRetakesItsOwnHillWhenTheEnemyHoldsBoth` pins
+both directions, with the locks settled by a simulation tick. It fails without
+the guard.
+
+What it does to matches (`eval`, 20 matches, 12 bots, seed 1, Release):
+
+| map | red / blue / unfinished, without | mean ticks | red / blue / unfinished, with | mean ticks |
+|---|---|---|---|---|
+| `dkoth_atalia` | 10 / 10 / 0 | 9,450 | 3 / 2 / 15 | 31,395 |
+| `dkoth_sixties` | 11 / 9 / 0 | 7,775 | 10 / 10 / 0 | 19,365 |
+
+**The unfinished atalia matches are contested rounds, not stuck ones.** Two were
+instrumented: 12 and 17 hill owner changes, both clocks draining in chunks, and
+each team retaking its home hill whenever the other held both. One was decided
+at tick 35,238; the other reached `MaxTicks` (36,000) with clocks at 2,531 and
+3,572. What would show otherwise is an unfinished match with no owner changes
+after the pregame, or with bots of one team on a locked hill.
+
 
 ## ⚠️ The observation encoder lied twice, and neither lie could go red
 

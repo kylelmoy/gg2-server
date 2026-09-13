@@ -1029,6 +1029,16 @@ public sealed class BotObjective
         // A DEFENDER still wants its own hill — losing it starts the enemy's
         // clock — so this is the attacker's rule only, and the ownership
         // preference above already gives the defender the right answer.
+        //
+        // NOT WHILE THE ENEMY'S HILL IS LOCKED AND OURS IS OPEN. The cross-lock
+        // (ControlPoints.Relock) locks a team's own hill while it holds the
+        // other's, so an enemy holding BOTH leaves our own hill the only one in
+        // play — and the enemy's clock running on it. Sending attackers to the
+        // enemy's hill then parks them on a point nobody can capture; reported
+        // from play as blue standing on red's locked hill while red held both.
+        // The preference above already picks our hill in that state (not ours,
+        // unlocked). The pregame, with both locked, keeps the override, so a bot
+        // is already on the enemy's hill when it opens.
         if (!defending
             && state.GameMode == GameMode.DualKingOfTheHill
             && state.ControlPointCount >= 2)
@@ -1036,7 +1046,10 @@ public sealed class BotObjective
             // Index 0 is KothRedControlPoint and index 1 is KothBlueControlPoint —
             // ControlPoints.Place puts them in that order and Rounds.StepDkoth
             // keys the clocks on it.
-            target = team == Team.Red ? 1 : 0;
+            var enemyHill = team == Team.Red ? 1 : 0;
+
+            if (!state.ControlPoints[enemyHill].Locked || open < 0)
+                target = enemyHill;
         }
 
         if (target < 0 || !TryZoneCentre(world.Collision, target, out wx, out wy))

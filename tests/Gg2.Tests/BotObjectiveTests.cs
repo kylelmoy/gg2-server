@@ -738,6 +738,90 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
     }
 
     /// <summary>
+    /// A dual-KotH attacker whose enemy holds BOTH hills goes home to retake its
+    /// own, instead of standing on the enemy's locked one.
+    /// </summary>
+    /// <remarks>
+    /// Reported from play on dkoth_atalia: red had both points and the blue bots
+    /// were standing on red's hill, which cannot be captured. The cross-lock
+    /// (<c>ControlPoints.Relock</c>) locks a team's own hill while it holds the
+    /// enemy's, so a team that holds both leaves exactly one hill in play — the
+    /// loser's own. "Attackers go to the enemy's hill" is right in every other
+    /// state, and pinned here too so the fix cannot be to drop it.
+    /// <para>
+    /// The locks are settled by one tick of the simulation rather than set by
+    /// hand, so the layout is one the game really produces.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData(Team.Red, 0)]
+    [InlineData(Team.Blue, 1)]
+    public void ADualKothAttackerRetakesItsOwnHillWhenTheEnemyHoldsBoth(Team loser, int ownHill)
+    {
+        const string map = "dkoth_atalia";
+        var enemyHill = 1 - ownHill;
+        var winner = loser == Team.Red ? Team.Blue : Team.Red;
+
+        var level = Level(map);
+        var world = new CollisionWorld(level);
+        var state = default(WorldState);
+
+        state.GameMode = GameModes.Of(level);
+        state.TimeLimitMinutes = 15;
+        state.RespawnTime = 0;
+
+        ControlPoints.Place(ref state, level, out var zones);
+        world.SetCaptureZones(zones);
+        Rounds.Start(ref state);
+        Assert.Equal(GameMode.DualKingOfTheHill, state.GameMode);
+
+        state.ControlPointUnlock = 0;
+        state.AddPlayer(0);
+        var spawns = new SpawnPoints(level);
+
+        // dkoth_atalia gives a hill more than one zone, so Zone's Single does not
+        // apply; the goal is the FIRST zone's middle, as BotObjective.TryZoneCentre
+        // takes it.
+        static (double X, double Y) Zone(CollisionWorld world, int index)
+        {
+            var zone = world.CaptureZones.First(z => z.Point == index);
+            return ((zone.Left + zone.Right) / 2.0, (zone.Top + zone.Bottom) / 2.0);
+        }
+
+        // Standing where the report had them: on the enemy's hill.
+        var (atX, atY) = Zone(world, enemyHill);
+        var slot = Put(ref state, spawns, 1, PlayerClass.Soldier, loser, atX, atY);
+        var graph = Graph(map);
+
+        // The ordinary state first: each team holds its own, and the attacker's
+        // target is the enemy's hill.
+        var events = default(TickEvents);
+        MatchSimulation.Tick(world, ref state, [], ref events);
+        Assert.False(state.ControlPoints[enemyHill].Locked);
+
+        var (enemyX, enemyY) = Zone(world, enemyHill);
+        var ordinary = Decide(in state, world, spawns, graph, slot);
+        Assert.True(ordinary.Found);
+        Assert.Equal(enemyX, ordinary.X);
+        Assert.Equal(enemyY, ordinary.Y);
+
+        // Now the winner takes the loser's hill and holds both.
+        state.ControlPoints[ownHill].Owned = true;
+        state.ControlPoints[ownHill].Team = winner;
+        MatchSimulation.Tick(world, ref state, [], ref events);
+
+        Assert.True(state.ControlPoints[enemyHill].Locked, "the cross-lock did not engage");
+        Assert.False(state.ControlPoints[ownHill].Locked);
+
+        var goal = Decide(in state, world, spawns, graph, slot);
+        var (ownX, ownY) = Zone(world, ownHill);
+
+        Assert.True(goal.Found);
+        Assert.Equal(ownX, goal.X);
+        Assert.Equal(ownY, goal.Y);
+    }
+
+    /// <summary>
     /// An attacker's generator goal is a firing position, not the generator.
     /// </summary>
     /// <remarks>
