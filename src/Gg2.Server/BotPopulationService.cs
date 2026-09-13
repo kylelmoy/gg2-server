@@ -44,8 +44,6 @@ public sealed class BotPopulationService
     // Its own, and not the match's. See the remarks above.
     private GmlRandom _random;
 
-    private int _nameCounter;
-
     public BotPopulationService(GameServer server, IServerLog log, uint seed)
     {
         ArgumentNullException.ThrowIfNull(server);
@@ -533,8 +531,12 @@ public sealed class BotPopulationService
             ? BotPopulation.PickClass(ref _random, allowed)
             : BotPopulation.PickClass(ref _random);
 
-        _nameCounter++;
-        var name = options.NamePrefix + _nameCounter.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        // Named for the class, not numbered: a counter that only ever grows reads
+        // as "[BOT] 147" an hour in. Nothing in the bot layer changes a bot's class
+        // after it joins; the one path that can is a team change under a binding
+        // class limit (ApplyChangeTeam's reclass), which would leave the name
+        // stale. Two bots of one class share a name, which the game allows.
+        var name = options.NamePrefix + playerClass.ToString();
 
         // The stagger is the roster slot the bot is about to land in, and it is
         // load-bearing twice over: it phases the objective and combat cadences so a

@@ -137,8 +137,8 @@ does not regenerate.**
 - ⚠️ **Values whose text would not read back are quoted.** The case that made
   this necessary is a **trailing space**, and it is a default:
   `[Bots] NamePrefix` is `"[BOT] "`, the reader trims every value, and an
-  unquoted round trip renamed every bot on the server from `[BOT] 1` to
-  `[BOT]1`. `ini_write_string` quotes unconditionally; this quotes only when it
+  unquoted round trip renames every bot on the server from `[BOT] Scout` to
+  `[BOT]Scout`. `ini_write_string` quotes unconditionally; this quotes only when it
   changes the answer, so an ordinary file stays free of quotes nobody typed.
 - ⚠️ **Written through a temporary file and moved into place.** The config file
   is the thing the admin password is in; truncating it is how a panel locks its
