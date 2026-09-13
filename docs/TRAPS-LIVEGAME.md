@@ -316,3 +316,126 @@ bot and the next probe measures nothing at all. Restore it last.
 To bring a bot server up: set `[Bots] Enabled=1`, `FillToPlayers=4`,
 `MinHumans=0` in `gg2.ini`, start the server, and put the ini back when you
 are finished with the game.
+
+## Soaking a stock client against the port
+
+The instrumentation is in `gg2-agent`'s payload, not a fork of the game:
+`agentRate`, `agentSnap` and `agentSoak`, all off by default, plus
+`agentRateArm()` and `agentSnapReport()` to read back over `gg2_evalx`. That
+repo's `docs/CLIENTDEBUG.md` has the patch sites. What belongs here is what a
+soak measures and what ends one early.
+
+`tools/soak-transitions.js --keep-teamed <name>` keeps a human slot on a team
+for the length of a run. Without it a soak measures a spectator from its first
+map change onward: the port puts every roster entry back to `Team.Spectator` on
+a map change, as the reference does, and a client that picked its team through
+the UI does not re-pick itself. The client stays connected and keeps
+deserialising, so the run looks clean because nothing is being predicted.
+
+### What the client's prediction error actually is
+
+`agentSnap` records `|predicted - authoritative|` for x, y, hspeed, vspeed and
+hp at the moment a correction lands, inside the frame that lands it. That is the
+only place it can be taken: between updates a client's state *is* its
+prediction, so an external sampler comparing client against server measures the
+dead-reckoning gap plus two round trips of skew and can never report the
+correction itself.
+
+Baseline, 30 fps arm, 251,576 corrections over about two hours of game time:
+
+| field | mean | max | over 1 px / 0.5 hp | over 8 px / 1 hp | over 64 px / 5 hp |
+|---|---|---|---|---|---|
+| x | 0.70 px | 55.6 | 11.9% | 1.3% | 0 |
+| y | 0.34 px | 70 | 4.5% | 0.8% | 3 |
+| hp | 0.10 hp | 55 | 2.0% | 1.6% | 0.3% |
+
+The same numbers came back at two different boost factors, which is what rules
+the boost out as an influence on the measurement. A max in the tens of pixels is
+a respawn teleport, not drift; the statistic that matters is that the tail stays
+flat as a run gets longer.
+
+**hp is corrected by under a hit point most of the time, and that is the
+"health flickers between two values" report.** The wire carries `ceil(hp)` while
+the server holds a double, and a client re-simulates hp between updates — a
+medic beam moves it 0.667 hp a tick — so the readout alternates between the
+client's fraction and the server's integer about four times a second. It is the
+wire format, not a divergence, and it needs a continuous hp term to be visible.
+
+### The 60 fps arm diverges about twice as far
+
+`[Settings] Framerate=1` in `gg2.ini` gives a client `global.delta_factor = 1/2`
+and `ticks_per_virtual = 2`: the simulation still advances 30 virtual ticks a
+second, in two half-steps. The port is hard-wired to the 30 Hz arm
+(`Movement.cs`, `ClassStats.cs`). Controlled against the 30 arm at the same
+server speed, the same virtual tick rate and matched sample counts:
+
+| | 30 arm (89,611) | 60 arm (92,448) |
+|---|---|---|
+| x mean | 0.70 px | 1.38 px |
+| x max | 55.6 px | 200.8 px |
+| x over 64 px | 0 | 102 |
+| hp mean | 0.10 hp | 0.22 hp |
+| hp over 1 hp | 1.61% | 3.04% |
+
+This does not establish that the port is wrong. GG2's 60 fps mode is a
+sub-stepping approximation, so a 60 fps client may diverge from a stock 30 Hz
+server by a similar amount. **The control that would settle it is a 60 fps
+client against the reference GM8 server**, and it should be run before any
+physics change is made on the strength of these numbers.
+
+In the 60 arm the simulation advances at `room_speed / ticks_per_virtual`, so
+matching a boosted client to a boosted server means matching virtual ticks, not
+frames.
+
+### What ends a soak early
+
+Every timer the game counts in frames arrives sooner in wall-clock time by
+exactly the boost factor, so a run long enough to be interesting in game time
+trips clocks a real session never reaches.
+
+| Clock | Frames | At 30 fps | At 240 fps |
+|---|---|---|---|
+| `PlayerControl` AFK | 1800 | 60 s | 7.5 s |
+| `Spectator` self-disconnect | 9000 | 5 min | 38 s |
+
+`agentSoak` pins both. Pin `afktimer` as well as `afktimeout` on each: the
+timeout is only the value the countdown is reset to, and pinning it alone leaves
+the countdown running and still drops the client.
+
+A GM8 client on this hardware tops out near 346 fps. Leave headroom — a client
+held at its ceiling drops frames irregularly, and a dialog it has to dismiss
+while boosted can stall it long enough for the server to close the connection
+with `ConnectionReset`.
+
+### A watch expression that can throw is fatal at a boosted rate
+
+`gg2_watch` evaluates every frame, so an expression that raises does so every
+frame, and the launcher dismisses a dialog for each one. At 240 fps that ended a
+client's connection. Verify an expression as a one-shot `gg2_evalx` before
+installing it as a watch, and guard every dereference: `global.myself` is `-1`
+during a map change, and in GM8 `-1` is `self`, so `global.myself.object` then
+reads a variable off whatever object is running the expression.
+
+`execute_string` returns a real, so `execute_string(...) + "text"` is a type
+error and `execute_string(...) * 0 + value` is how a watch runs statements and
+still reports a number.
+
+### `Music=3` does not cover every audio call site
+
+`WinBanner.events/Create.xml` reaches `AudioControlPlaySong` unguarded, so a
+**round ending** raises `Unknown variable currentSong` on a machine where that
+variable is absent — with `Music=3` set, which only guards
+`basicRoomSetup.gml:79`. Observed at every round end, sixteen dialogs in one
+soak. The lost sound costs nothing (the call is the last statement in the event,
+after `teamoffset` and every player's `humiliated` flag); the dialog is what
+costs, because dismissing one while boosted stalls the client.
+
+`agentAudioStopSong` replaces that line, makes the stock script safe to call and
+then does what the stock line did: zero occurrences across nine round ends in
+both fps arms afterwards.
+
+**Why the variable goes missing is not established.** It is present on
+`AudioControl` at the menu, and the misplaced parenthesis in
+`AudioControl.events/Create.xml` — `if(instance_number(AudioControl)) > 1 {` — is
+**not** the cause: GM8 parses it as intended, measured by running the same shape
+against an object with exactly one instance and watching the body not fire.

@@ -24,6 +24,7 @@
 // Usage:
 //   node tools/soak-transitions.js --control 8192 [--plan areas|maps|mixed|churn|all]
 //                                  [--dwell 12] [--cycles 0] [--log <path>]
+//                                  [--keep-teamed <roster name>]
 //
 //   --plan areas   cp_dirtbowl 1->2->3 only. The open intermittent client fatal
 //                  in docs/PARITY.md is an area-advance bug; this is its repro.
@@ -55,6 +56,17 @@ const PLAN = arg('plan', 'mixed');
 const DWELL = Number(arg('dwell', 12)) * 1000;
 const CYCLES = Number(arg('cycles', 0));
 const LOGPATH = arg('log', null);
+
+// The roster name of a human client to keep on a team for the whole run.
+//
+// ⚠️ Without this an unattended soak measures a SPECTATOR after its first
+// transition. A map change puts every roster entry back to Team.Spectator — the
+// port doing what the reference's `with(Player) ... team = TEAM_SPECTATOR` does —
+// and a client that picked its team through the UI does not re-pick itself. So
+// the client keeps its connection, keeps deserialising, and has no character
+// from the first map change onward: every later measurement is of a client with
+// nothing to predict, which reads as "clean" for the wrong reason.
+const KEEP_TEAMED = arg('keep-teamed', null);
 
 const fs = require('fs');
 function log(...parts) {
@@ -162,8 +174,45 @@ async function churn(tag) {
   }
 }
 
+// Puts KEEP_TEAMED back on a team whenever it is sitting in Spectator. Runs as
+// its own loop rather than inside the transition cycle, because the window that
+// matters opens at a map change and the driver is asleep in `dwell` for most of
+// one.
+//
+// ⚠️ It asks for the SMALLER team, never a named one. `ResolveRequestedTeam`
+// refuses a request for the bigger team in silence (the reference's balance
+// block), so a fixed choice works until the bots happen to fill that side and
+// then fails without saying anything.
+async function keepTeamed() {
+  let placed = 0;
+
+  while (true) {
+    await sleep(2000);
+
+    try {
+      const st = await send({ cmd: 'state' });
+      const me = (st.players || []).find(p => p.name === KEEP_TEAMED);
+      if (!me || me.team !== 'Spectator') continue;
+
+      const red = st.players.filter(p => p.team === 'Red').length;
+      const blue = st.players.filter(p => p.team === 'Blue').length;
+
+      await send({ cmd: 'command', slot: me.slot, kind: 'ChangeTeam', argument: red <= blue ? 0 : 1 });
+      placed++;
+      log(`keep-teamed ${KEEP_TEAMED} slot=${me.slot} -> ${red <= blue ? 'Red' : 'Blue'} (#${placed})`);
+    } catch (e) {
+      log(`keep-teamed ERROR: ${e.message}`);
+    }
+  }
+}
+
 (async () => {
   log(`soak-transitions start plan=${PLAN} dwell=${DWELL}ms cycles=${CYCLES || 'unbounded'}`);
+
+  if (KEEP_TEAMED) {
+    log(`keep-teamed armed for "${KEEP_TEAMED}"`);
+    keepTeamed();
+  }
   let n = 0;
   while (CYCLES === 0 || n < CYCLES) {
     n++;
