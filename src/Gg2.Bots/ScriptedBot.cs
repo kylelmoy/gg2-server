@@ -963,13 +963,15 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
             reposting: reposting, repostSkip: _repostSkip,
             repostNearBot: _repostNearBot);
 
-        // No spread on a re-post. The search has already picked the node to stand
-        // on and excluded everything near the bot; a lateral offset of up to
-        // BOT_SPREAD_MAX would put the goal back inside the radius the search just
-        // cleared, and the bot would not move.
-        var spread = goal.MustTouch || reposting ? 0 : SpreadX;
-
-        if (!goal.Found || !Objective.TryResolve(in goal, spread, out var x, out var y))
+        // ⚠️ The lateral offset is the GOAL's own, never SpreadX. Decide adds the
+        // defend radius on top of the spread, zeroes both for anything touched or
+        // contested, and a spot carries none — a spot is already the node to stand
+        // on, and a spread of up to BOT_SPREAD_MAX would put a re-post back inside
+        // the radius its search just cleared. A caller supplying SpreadX handed
+        // TryResolve a base 220px off the flag, which on ctf_2dfort drops off the
+        // intel room to the spawn-room floor beneath it: every red defender stood
+        // in its own spawn, re-posted after eight seconds, and was sent back.
+        if (!goal.Found || !Objective.TryResolve(in goal, out var x, out var y))
             return;
 
         // The throttle is on the RESOLVED node position, not on the raw

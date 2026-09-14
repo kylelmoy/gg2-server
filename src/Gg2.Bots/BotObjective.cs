@@ -619,7 +619,7 @@ public sealed class BotObjective
         else if (defending)
             spreadX += spreadX >= 0 ? BotConstants.DefendRadius : -BotConstants.DefendRadius;
 
-        return new BotGoal(true, wx + spreadX, wy, IsSpot: false, mustTouch);
+        return new BotGoal(true, wx + spreadX, wy, IsSpot: false, mustTouch, Offset: spreadX);
     }
 
     /// <summary>
@@ -645,7 +645,7 @@ public sealed class BotObjective
     /// a spread can still cross between two runs that meet at a step.
     /// </para>
     /// </remarks>
-    public bool TryResolve(in BotGoal goal, double spreadX, out double x, out double y)
+    public bool TryResolve(in BotGoal goal, out double x, out double y)
     {
         x = 0;
         y = 0;
@@ -653,6 +653,7 @@ public sealed class BotObjective
         if (!goal.Found)
             return false;
 
+        var spreadX = goal.Offset;
         var baseX = goal.X - spreadX;
         var node = _graph.SnapObjective(baseX, goal.Y).Node;
 

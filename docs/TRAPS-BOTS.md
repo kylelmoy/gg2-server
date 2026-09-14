@@ -903,6 +903,17 @@ told to it.
   spread at `ctf_orange` node 1 drops **636px**, most of the map. The guard
   ("within a body's height") means "same level" rather than "same surface", so a
   spread can still cross a step.
+- **The guard needs the WHOLE offset, and the goal carries it** (`BotGoal.Offset`:
+  spread plus `BOT_DEFEND_RADIUS`, zero for a spot, a chase or anything touched).
+  A caller that re-supplies its spread alone resolves a defender's base 220px off
+  the flag. On `ctf_2dfort` that point is inside the intel room's wall and the
+  snap lands on the spawn-room floor 204px below, so every defender stood in its
+  own spawn, re-posted, and was sent back. Nine CTF maps, three seeds, 12,000
+  ticks: bots motionless 150+ ticks on a spawn point's node, 90 with the spread
+  alone and 12 with the offset (70 and 0 on `ctf_2dfort`; the 12 are
+  `ctf_waterway`, whose forward spawn shares a floor with its flag).
+  `BotObjectiveTests.ADefenderGuardsFromTheFlagsLevelNotFromTheSpawnRoomBelow`
+  goes red if the radius drops out of the offset again.
 - ⚠️ **An unchanged objective is not reissued** — issuing forces an immediate
   re-plan and would fight the follower's own timer. Deleting the throttle takes
   the end-to-end leg from 41 re-plans to 58 and 10 off-route events to 19, and

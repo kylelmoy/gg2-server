@@ -235,8 +235,8 @@ public sealed class SpotBanTests(ITestOutputHelper output)
         Assert.True(perch.IsSpot, "the defender was not offered a perch, so no spot can be banned");
         Assert.False(plain.IsSpot);
 
-        Assert.True(objective.TryResolve(in perch, 0, out var sx, out var sy));
-        Assert.True(objective.TryResolve(in plain, 0, out var fx, out var fy));
+        Assert.True(objective.TryResolve(in perch, out var sx, out var sy));
+        Assert.True(objective.TryResolve(in plain, out var fx, out var fy));
 
         var apart = Gml.PointDistance(sx, sy, fx, fy);
         output.WriteLine(

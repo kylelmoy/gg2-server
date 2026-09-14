@@ -1213,7 +1213,7 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
         // resolves within a few pixels of a bot that is standing on its objective.
         Assert.True(nearBot.IsSpot, "the last resort fell through to the objective's own point");
 
-        Assert.True(objective.TryResolve(in nearBot, 0, out var gx, out var gy));
+        Assert.True(objective.TryResolve(in nearBot, out var gx, out var gy));
         Assert.NotEqual(standingOn, graph.NodeFromWorld(gx, gy));
 
         // And it really is inside the guard, so the guard is what would exclude it.
@@ -1380,9 +1380,9 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
             graph.StandY(cliff) - graph.StandY(home) > NavConstants.BoxH * NavConstants.CellSize,
             $"{map} ({x},{y}) is not a ledge: the offset lands {graph.StandY(cliff) - graph.StandY(home):0}px below");
 
-        var goal = new BotGoal(Found: true, x + Spread, y, IsSpot: false, MustTouch: false);
+        var goal = new BotGoal(Found: true, x + Spread, y, IsSpot: false, MustTouch: false, Offset: Spread);
 
-        Assert.True(objective.TryResolve(in goal, Spread, out var gx, out var gy));
+        Assert.True(objective.TryResolve(in goal, out var gx, out var gy));
 
         Assert.Equal(graph.StandY(home), gy);
         Assert.True(
@@ -1392,14 +1392,76 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
         // The control: a spread that stays on the same level is KEPT. Without it
         // this passes on an implementation that ignores the spread entirely, which
         // would silently undo the whole reason it exists.
-        var flatGoal = new BotGoal(Found: true, x - Spread, y, IsSpot: false, MustTouch: false);
+        var flatGoal = new BotGoal(Found: true, x - Spread, y, IsSpot: false, MustTouch: false, Offset: -Spread);
         var flat = graph.SnapObjective(x - Spread, y).Node;
 
         if (flat >= 0
             && Math.Abs(graph.StandY(flat) - graph.StandY(home)) <= NavConstants.BoxH * NavConstants.CellSize)
         {
-            Assert.True(objective.TryResolve(in flatGoal, -Spread, out var fx, out _));
+            Assert.True(objective.TryResolve(in flatGoal, out var fx, out _));
             Assert.True(fx < x, $"a level spread was dropped too: {fx:0} against {x:0}");
+        }
+    }
+
+    /// <summary>
+    /// A defender guards its flag from the flag's own level, not from the spawn
+    /// room underneath it.
+    /// </summary>
+    /// <remarks>
+    /// <b>The defend radius is part of the offset the ledge guard checks.</b>
+    /// <c>Decide</c> puts a defender <c>BOT_DEFEND_RADIUS</c> plus its spread beside
+    /// the flag, and the guard resolves the objective's own node first only if it
+    /// knows the whole of that offset. Handed the spread alone, it resolved a base
+    /// 220px off the flag. On <c>ctf_2dfort</c> that point is inside the wall of
+    /// the intel room, and the downward snap lands on the floor of the spawn room
+    /// 204px below. Every red defender then stood in its own spawn room, re-posted
+    /// after eight seconds, and was sent straight back. Measured over nine CTF maps,
+    /// three seeds and 12,000 ticks each: bots motionless for 150+ ticks on a spawn
+    /// point's node went from 90 to 12, and from 70 to 0 on this map.
+    /// <para>
+    /// Every spread a bot can have is tried, because the zero-spread defender is
+    /// already 220px out and a single fixture would not show that the radius is
+    /// the part that matters.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ADefenderGuardsFromTheFlagsLevelNotFromTheSpawnRoomBelow()
+    {
+        const string Map = "ctf_2dfort";
+
+        var (state, world, spawns) = Ctf(Map);
+        var graph = Graph(Map);
+        var objective = new BotObjective(graph, spawns);
+
+        Assert.True(spawns.TryGet(Team.Red, 0, 0, out var spawnX, out var spawnY));
+
+        var slot = Put(ref state, spawns, 1, PlayerClass.Soldier, Team.Red, spawnX, spawnY);
+        var view = new WorldView(in state, world);
+
+        var flagNode = graph.SnapObjective(state.RedIntel.X, state.RedIntel.Y).Node;
+        var spawnNode = graph.SnapObjective(spawnX, spawnY).Node;
+
+        // The premise: the spawn room is a different, lower floor, so standing in it
+        // is not "beside the flag" by any reading.
+        Assert.True(flagNode >= 0 && spawnNode >= 0 && flagNode != spawnNode);
+        Assert.True(
+            graph.StandY(spawnNode) - graph.StandY(flagNode) > NavConstants.BoxH * NavConstants.CellSize,
+            "ctf_2dfort's red spawn room is no longer below its flag, so this fixture proves nothing");
+
+        foreach (var spread in new[] { -BotConstants.SpreadMax, 0.0, BotConstants.SpreadMax })
+        {
+            var goal = objective.Decide(view, slot, BotRole.Defend, spread, allowSpot: false);
+
+            Assert.True(goal.Found);
+            Assert.False(goal.IsSpot);
+            Assert.True(objective.TryResolve(in goal, out var gx, out var gy));
+
+            var node = graph.NodeFromWorld(gx, gy);
+
+            Assert.NotEqual(spawnNode, node);
+            Assert.True(
+                Math.Abs(gy - graph.StandY(flagNode)) <= NavConstants.BoxH * NavConstants.CellSize,
+                $"spread {spread}: the defender was sent to ({gx:0},{gy:0}), off the flag's level at {graph.StandY(flagNode):0}");
         }
     }
 
