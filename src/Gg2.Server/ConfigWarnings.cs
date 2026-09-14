@@ -1,3 +1,4 @@
+using Gg2.Protocol;
 using Gg2.Server.Plugins;
 
 namespace Gg2.Server;
@@ -62,6 +63,30 @@ public static class ConfigWarnings
                     $"Bots.SuspendMinutes is {options.BotSuspendMinutes} but no chat plugin is "
                     + "loaded, so no player can type /bots. Add chat or chat_v2_pr to "
                     + "ServerPluginList; the control port's bots-suspend still works");
+            }
+        }
+
+        // ⚠️ Limits that cannot seat the fill stop the population short of it, in
+        // silence: the manager simply finds no class with room and adds nobody.
+        // 255 is unlimited, so any class left at 255 can seat everyone.
+        if (options.Bots.Enabled)
+        {
+            var wanted = Math.Min(options.Bots.MaxBots, options.Bots.FillToPlayers);
+            var perTeam = 0;
+            var unlimited = false;
+
+            foreach (var limit in options.Bots.EffectiveClassLimits[..((int)PlayerClass.Pyro + 1)])
+            {
+                unlimited |= limit == 255;
+                perTeam += limit;
+            }
+
+            if (!unlimited && perTeam * 2 < wanted)
+            {
+                warnings.Add(
+                    $"BotClasslimits seat at most {perTeam} bots a team, {perTeam * 2} in all, "
+                    + $"but the bot fill asks for up to {wanted}. The population will stop at "
+                    + $"{perTeam * 2}; raise a limit or lower Bots.FillToPlayers");
             }
         }
 

@@ -895,9 +895,8 @@ public sealed class ServerOptions
     /// <c>docs/TRAPS-BOTS.md</c>, "a should-drive set lives in a trained-on field".
     /// </para>
     /// <para>
-    /// ⚠️ <b>Separate from <c>Bots.Classes</c> on purpose.</b> That one restricts
+    /// ⚠️ <b>Separate from <c>[BotClasslimits]</c> on purpose.</b> That one decides
     /// which classes bots PLAY; this one decides who drives a class that is played.
-    /// The two were one knob until 2026-09-07 and the entanglement shipped a bug.
     /// </para>
     /// </remarks>
     public IReadOnlyList<string> BotClassPolicies { get; set; } = [];

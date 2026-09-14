@@ -442,10 +442,9 @@ still drives every class. The bench is not in `Gg2.sln` and has no tests of
 its own, so this seam is the only part a suite can hold; the five call sites
 are held by review.
 
-`--bot-classes trained` cannot ask the file: options are parsed before
-`--policy` is loaded and argument order is not guaranteed. For a checkpoint
-outside the default family that shorthand names a roster the policy does not
-actually drive; pass the classes explicitly instead.
+A live server's played classes are `[BotClasslimits]`, which nothing derives
+from a checkpoint: for a checkpoint outside the default family, set the limits
+to the classes the startup log says it drives.
 
 ## The checkpoint is a fixture, not a policy
 

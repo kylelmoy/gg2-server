@@ -190,10 +190,9 @@ Two settings adjust that, and they answer different questions:
 | setting | question |
 |---|---|
 | `--bot-class-policy Class=name` / `[Bots] ClassPolicy` | who drives a class: a checkpoint's file name without its extension, or `scripted`. Only has to name what is being overridden. |
-| `--bot-classes driven` / `[Bots] Classes` | which classes bots play: restricts the draw to whatever the loaded policies drive, so every bot is the configuration under test rather than a mix of that and the all-scripted arm. |
+| `--bot-class-limit class=n` / `[BotClasslimits]` | which classes bots play: how many bots of each class one team may hold, 0 keeping bots off a class. Nothing derives it from the driven set, so to make every bot the configuration under test rather than a mix of that and the all-scripted arm, set the classes no checkpoint drives to 0 — the startup log names each checkpoint's classes. |
 
-`driven` is resolved in `BotBrain.Build`, where the checkpoints are open, because
-options are parsed before any `--policy` is loaded. `ClassPolicy` may name a
+`ClassPolicy` may name a
 class a checkpoint's file does not list; that warns rather than refusing, because
 `tier2_pyro` trained engineer and spy and no longer says so, and the warning
 cannot tell "never trained" from "narrowed out". `docs/TRAPS-BOTS.md`, "the

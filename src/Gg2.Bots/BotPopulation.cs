@@ -1,4 +1,5 @@
 using Gg2.Protocol;
+using Gg2.Simulation;
 
 namespace Gg2.Bots;
 
@@ -29,39 +30,24 @@ namespace Gg2.Bots;
 /// </para>
 /// </param>
 /// <param name="NamePrefix">What a bot's name starts with.</param>
-/// <param name="AllowedClasses">
-/// Null draws the reference's own <c>irandom(8)</c>; a non-empty set restricts the
-/// draw to it.
+/// <param name="ClassLimits">
+/// How many BOTS of each class one team may hold, indexed by
+/// <see cref="PlayerClass"/> — the <c>[BotClasslimits]</c> section. Null is
+/// <see cref="BotPopulation.DefaultClassLimits"/>.
 /// </param>
 /// <remarks>
-/// <b>Restricting the class DRAW and choosing which controller drives a class are
-/// SEPARATE decisions, and keeping them separate is the whole point of this
-/// field.</b> A <c>Brain</c>'s tiers each answer
-/// <see cref="IMicroController.Drives"/> per class, so a server drawing all nine
-/// runs a MIX of the hybrid arm and the all-scripted one — which is a perfectly
-/// good live server and a useless measurement, because a playtester cannot tell
-/// which bot they just fought. Restricting the draw is what makes every bot the
-/// configuration under test. <b>Say which you ran.</b>
+/// <b>Separate from the server's <c>[Classlimits]</c>, and it counts bots only.</b>
+/// Those limits bind humans and bots alike and reach every client's HUD; these are
+/// the population manager's own draw and nothing outside it sees them. A bot is
+/// still subject to both: this decides what is asked for, <c>checkClasslimits</c>
+/// decides what is granted.
 /// <para>
-/// ⚠️ <b>The two were entangled until 2026-09-07 and it caused a real bug.</b>
-/// <c>--bot-classes trained</c> named a compile-time set that had stopped being
-/// any loaded checkpoint's, so it silently dropped a class the shipped bundle
-/// drives. The draw restriction is now resolved from the loaded tiers
-/// (<c>ClassDrawFollowsPolicy</c>), and which tier drives a class is configured
-/// separately by <c>[Bots] ClassPolicy</c>.
+/// <b>Choosing which classes bots PLAY and which controller DRIVES a class are
+/// separate decisions.</b> The second is <c>[Bots] ClassPolicy</c>. A server whose
+/// limits draw classes no tier drives runs a MIX of the hybrid arm and the
+/// all-scripted one, which is a fine live server and a useless measurement — to
+/// make every bot the configuration under test, bar the classes nothing drives.
 /// </para>
-/// </remarks>
-/// <param name="ClassDrawFollowsPolicy">
-/// Draw only the classes the configured <see cref="Brain"/> actually drives —
-/// <c>--bot-classes driven</c>.
-/// </param>
-/// <remarks>
-/// ⛔ <b>A DEFERRED <see cref="AllowedClasses"/>, not a second restriction.</b> It
-/// exists because the answer is not known when the flag or the config key is read:
-/// options are parsed before any checkpoint is opened, and which classes a tier
-/// drives is a property of the file plus the operator's per-class configuration.
-/// <c>BotBrain.Build</c> resolves it into <see cref="AllowedClasses"/> at the end
-/// of parsing and this goes back to false, so nothing downstream ever sees it set.
 /// </remarks>
 /// <param name="Brain">
 /// Non-null gives every bot the micro-controllers in it inside its engagement
@@ -92,10 +78,17 @@ public readonly record struct BotPopulationOptions(
     int MinHumans = 1,
     int Difficulty = 5,
     string NamePrefix = "[BOT] ",
-    PlayerClass[]? AllowedClasses = null,
-    BotBrainSpec? Brain = null,
-    bool ClassDrawFollowsPolicy = false)
+    byte[]? ClassLimits = null,
+    BotBrainSpec? Brain = null)
 {
+    /// <summary>
+    /// <see cref="ClassLimits"/>, or the default when none were configured.
+    /// </summary>
+    public ReadOnlySpan<byte> EffectiveClassLimits =>
+        ClassLimits is { Length: TeamBalance.ClassCount } limits
+            ? limits
+            : BotPopulation.DefaultClassLimits;
+
     /// <summary>
     /// The reference's own <c>[Bots]</c> defaults.
     /// </summary>
@@ -128,9 +121,8 @@ public readonly record struct BotPopulationOptions(
         MinHumans: 1,
         Difficulty: 5,
         NamePrefix: "[BOT] ",
-        AllowedClasses: null,
-        Brain: null,
-        ClassDrawFollowsPolicy: false);
+        ClassLimits: null,
+        Brain: null);
 }
 
 /// <summary>
@@ -227,6 +219,70 @@ public static class BotPopulation
 
             if (picked != PlayerClass.Spy)
                 return picked;
+        }
+    }
+
+    /// <summary>
+    /// The <c>[BotClasslimits]</c> a server gets when it configures none: every
+    /// class unlimited except the spy, which is barred, and Quote, which no bot is.
+    /// </summary>
+    /// <remarks>
+    /// <b>This is <see cref="PickClass(ref GmlRandom)"/>'s own roster written as
+    /// limits</b>, and with none of them binding
+    /// <see cref="PickClass(ref GmlRandom, ReadOnlySpan{byte}, ReadOnlySpan{int})"/>
+    /// consumes the stream draw for draw the way that overload does — so a server
+    /// that configures nothing picks exactly the classes it picked before the
+    /// setting existed. The spy's reasons are on that overload.
+    /// </remarks>
+    public static ReadOnlySpan<byte> DefaultClassLimits => [255, 255, 255, 255, 255, 255, 255, 0, 255, 0];
+
+    /// <summary>
+    /// A class for a new bot on a team already holding <paramref name="botsOfClass"/>
+    /// bots of each class, or null when every class is at its limit.
+    /// </summary>
+    /// <param name="limits">Per class, indexed by <see cref="PlayerClass"/>.</param>
+    /// <param name="botsOfClass">
+    /// BOTS of each class on the team the new one joins — humans are
+    /// <c>[Classlimits]</c>' business, not this one's.
+    /// </param>
+    /// <remarks>
+    /// <b>Rejection sampling over <c>irandom(8)</c>, checked for possibility
+    /// first</b>, for the reason the <paramref name="limits"/>-free overload below
+    /// gives: a set with no room would spin, and a hung picker looks exactly like a
+    /// hung server. Null is the refusal, and the caller does not add a bot.
+    /// <para>
+    /// ⚠️ <b>Enforced when a bot JOINS, and only then.</b> A bot moved to the other
+    /// team — the reference's autobalance, or the reclass a team change under a
+    /// binding <c>[Classlimits]</c> does — is not re-checked, so a team can briefly
+    /// hold one bot of a class more than its limit until that bot leaves.
+    /// <c>docs/TRAPS-BOTS.md</c>, "Bot class limits".
+    /// </para>
+    /// </remarks>
+    public static PlayerClass? PickClass(
+        ref GmlRandom random, ReadOnlySpan<byte> limits, ReadOnlySpan<int> botsOfClass)
+    {
+        var possible = false;
+
+        for (var i = 0; i <= (int)PlayerClass.Pyro; i++)
+        {
+            if (botsOfClass[i] < limits[i])
+            {
+                possible = true;
+                break;
+            }
+        }
+
+        if (!possible)
+            return null;
+
+        while (true)
+        {
+            // `irandom(8)` — the same draw the unrestricted overload makes, so an
+            // unbinding set of limits leaves the stream where that one would.
+            var picked = random.NextInclusive(8);
+
+            if (botsOfClass[picked] < limits[picked])
+                return (PlayerClass)picked;
         }
     }
 

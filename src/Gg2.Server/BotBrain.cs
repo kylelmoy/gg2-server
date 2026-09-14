@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using System.Text;
 using Gg2.Bots;
 using Gg2.Protocol;
@@ -105,7 +105,6 @@ public static class BotBrain
         // single checkpoint is opened so a typo costs no file I/O and, more to the
         // point, so the error names the setting rather than a load failure.
         var assigned = ParseClassPolicies(options.BotClassPolicies);
-        var driven = new List<PlayerClass>();
 
         if (mode.UsesPolicy())
         {
@@ -194,7 +193,6 @@ public static class BotBrain
                 // half above arrives in dictionary order, and a stamp line whose
                 // class list reshuffles between runs is a diff nobody can read.
                 drives.Sort((left, right) => ((int)left).CompareTo((int)right));
-                driven.AddRange(drives);
 
                 // ⛔ ALWAYS reported, not only when overridden. A run whose stamps
                 // agree says so; a run that bypassed the guard says THAT, loudly, on
@@ -314,58 +312,12 @@ public static class BotBrain
                 + "without one the first tier always drives and the rest are dead weight");
         }
 
-        // ⛔ THE DEFERRED ROSTER, resolved here because here is the first place the
-        // answer exists: options are parsed before any checkpoint is opened, so
-        // `--bot-classes driven` cannot be answered where it is read.
-        //
-        // ⚠️ This is the bug that made the setting necessary. Until 2026-09-07 the
-        // word was `trained` and it meant PolicyNetwork.DefaultTrainedClasses — a
-        // compile-time set that had stopped being any loaded checkpoint's, so on
-        // the shipped bundle it silently dropped pyro and the pyro tier never
-        // drove. A roster that is a smaller-but-plausible subset is the worst kind
-        // of wrong: every bot it does draw is driven correctly, so nothing looks
-        // broken.
-        var allowedClasses = options.Bots.AllowedClasses;
-
-        if (options.Bots.ClassDrawFollowsPolicy)
-        {
-            // ⛔ Refused rather than silently meaning "all nine". An operator asking
-            // for the driven classes on a server that drives none has asked for
-            // something impossible, and the empty set would read as no restriction
-            // — the exact inversion of what they wrote.
-            if (driven.Count == 0)
-            {
-                throw new ArgumentException(
-                    "bot classes 'driven' restricts the draw to the classes a policy drives, "
-                    + $"and bot mode '{mode.ToString().ToLowerInvariant()}' drives none; name "
-                    + "the classes, drop the setting, or use bot mode policy or tiered with a "
-                    + "checkpoint.");
-            }
-
-            // Distinct and ordered: two tiers may overlap (it warns, it does not
-            // refuse), and a roster listing a class twice would weight the draw
-            // towards it.
-            allowedClasses = [.. driven.Distinct().OrderBy(playerClass => (int)playerClass)];
-
-            report?.Invoke($"bot classes: drawing {Classes(allowedClasses)} — the driven set");
-        }
-
         // ⚠️ CLEARED when there is no controller, not left alone. Reconciling twice
         // — which a restart does — must be idempotent, and a brain left over from a
         // previous mode is a server running a controller its own settings say it is
         // not.
         options.Bots = options.Bots with
         {
-            AllowedClasses = allowedClasses,
-
-            // ⛔ KEPT set, not cleared, and the difference is visible to an
-            // operator. It is what `Bots.Classes` reads back as, so a settings page
-            // shows `driven` — the request — rather than the five class names it
-            // resolved to this time, and saving from that page does not silently
-            // pin today's answer into the file for ever. Re-resolving on a second
-            // Build (a panel restart does one) is correct rather than merely
-            // harmless: if the checkpoints changed, the roster should change with
-            // them.
             Brain = tiers.Count == 0
                 ? null
                 : new BotBrainSpec
@@ -467,9 +419,7 @@ public static class BotBrain
     /// A checkpoint's class set, for the stamp line.
     /// </summary>
     /// <remarks>
-    /// Comma-separated, the same shape the <c>Bots.Classes</c> config key takes, so
-    /// the line can be pasted into a file when an operator wants a roster matching
-    /// what the checkpoints drive. <c>ReadOnlySpan</c> in, so no LINQ and no copy.
+    /// Comma-separated. <c>ReadOnlySpan</c> in, so no LINQ and no copy.
     /// </remarks>
     private static string Classes(ReadOnlySpan<PlayerClass> classes)
     {

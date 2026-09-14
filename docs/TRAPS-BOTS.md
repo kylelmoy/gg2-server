@@ -1065,7 +1065,7 @@ standing on one. The census is a map of where the risk lives, not a defect list.
 
 #### And measured on a live server, which is the measurement that matters
 
-A Release `gg2-server --map ctf_orange --bots 10 --bot-classes Engineer`,
+A Release `gg2-server --map ctf_orange --bots 10 --bot-class-limit 0 --bot-class-limit engineer=255`,
 sampled over the control port at 1 Hz for 200 seconds, longest motionless run per
 bot:
 
@@ -1317,7 +1317,18 @@ the *simulation* never special-cases a bot.
   team-mates route around a fight it is standing in, and its whole value is a
   backstab (one branch behind a range test); a bot doing that badly is
   indistinguishable from a bot that is broken. Quote is out too: `irandom(8)` is
-  nine classes and stops short of it.
+  nine classes and stops short of it. The spy's exclusion is a **default**, not
+  a rule: `[BotClasslimits] Spy` is 0 unless set, and the limited picker draws
+  from the stream exactly as the unrestricted one does while no limit binds
+  (`BotClassLimitTests`).
+- ⚠️ **Bot class limits.** `[BotClasslimits]` counts the bots of each class on
+  the team a new bot joins, and draws only from classes with room; with none, no
+  bot is added and the fill stops short, which `ConfigWarnings` reports at
+  startup when the limits cannot seat the fill at all. **Known gap: enforced on
+  join only.** A bot moved to the other team — autobalance, or the reclass a
+  team change under a binding `[Classlimits]` does — is not re-checked, so a team
+  can hold one bot of a class more than its limit until a bot leaves. What would
+  show it mattering: a roster over its limit for longer than a round.
 - ⚠️ **A record struct's primary-constructor defaults do NOT apply to
   `new T()`.** That form resolves to the implicit *zeroing* constructor, so a
   "defaulted" `BotPopulationOptions` has a fill target of 0, a difficulty of 0
@@ -5396,28 +5407,17 @@ it.
 
 ### Which classes bots play and who drives them are separate settings
 
-`Bots.Classes` restricts the class draw. `Bots.ClassPolicy` assigns a class to a
-tier or to `scripted`. They must stay separate: a setting that answers both makes
-one of the two unreachable, and the unreachable one is silent.
+`[BotClasslimits]` decides which classes bots play. `Bots.ClassPolicy` assigns a
+class to a tier or to `scripted`. They must stay separate: a setting that answers
+both makes one of the two unreachable, and the unreachable one is silent.
 
-`Bots.Classes = driven` cannot be resolved where it is read, because options are
-parsed before any `--policy` is opened and argument order is not guaranteed.
-`BotPopulationOptions.ClassDrawFollowsPolicy` carries the request and
-`BotBrain.Build` answers it against the loaded tiers. The general rule: **a
-setting that cannot be resolved where it is read must defer, not approximate** —
-a constant standing in for an unavailable answer decays silently, because nothing
-goes red when the real answer moves away from it.
-
-The failure mode this protects against is a roster that is a smaller but
-plausible subset of the right one. Every bot it draws is driven correctly, so
-there is no error, no missing class in any log line and no failing test; a tier
-is simply inert. Unlike a stranded bot or a bot on the wrong hill, it is only
-visible if you count.
-
-`Bots.Classes` reads back as `driven` rather than as the classes it resolved to,
-so a save from the settings page does not pin one startup's answer into the file.
-The resolved list goes in the startup log, alongside one line per checkpoint
-naming the classes that checkpoint will drive.
+Nothing derives the played classes from the driven ones. A server whose limits
+draw a class no tier drives runs that class scripted, which is correct for a
+live server and wrong for a measurement: to make every bot the configuration
+under test, set the classes nothing drives to 0, reading the driven set off the
+startup log's one line per checkpoint. **A roster that is a smaller but
+plausible subset of the right one** is the failure to count for — every bot it
+draws is driven correctly, so no log line, error or test says a tier is inert.
 
 ### Rules the resolution follows
 

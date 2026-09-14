@@ -627,37 +627,9 @@ public static class ServerSettings
             (o, v) => o.Bots = o.Bots with { NamePrefix = v }, "[AI] ",
             "What a bot's name starts with."));
 
-        // ⛔ 'trained' is the DEFAULT trained set, not the loaded checkpoint's, and
-        // ⛔ WHICH CLASSES BOTS PLAY. Which controller drives one is ClassPolicy
-        // below, and the two were one knob until 2026-09-07 — see DrivenClasses for
-        // the bug that cost.
-        //
-        // ⚠️ ClassDrawFollowsPolicy wins the read-back, so a server started with
-        // 'driven' reads back as 'driven' rather than as the classes it resolved to
-        // this time. Otherwise a save from the settings page would quietly pin
-        // today's answer into the file for ever.
-        settings.Add(new ServerSetting
-        {
-            Section = "Bots",
-            Key = "Classes",
-            Property = "Bots",
-            Kind = SettingKind.List,
-            Get = o => o.Bots.ClassDrawFollowsPolicy
-                ? DrivenClasses
-                : o.Bots.AllowedClasses is { } classes
-                    ? string.Join(',', classes.Select(c => c.ToString()))
-                    : string.Empty,
-            Set = (o, v) => o.Bots = Classes(o.Bots, v),
-            Probe = "Scout,Soldier",
-            Help = "Restrict which classes bots PLAY. Empty draws all nine, which runs a "
-                + "MIX of the hybrid arm and the all-scripted one because a controller only "
-                + $"engages on the classes it drives. '{DrivenClasses}' is shorthand for "
-                + "whatever the loaded policies drive, resolved at startup.",
-        });
-
-        // ⛔ WHICH CONTROLLER DRIVES A CLASS — the other half, and a different
-        // question from the row above. Default is every checkpoint's own set, so
-        // this only ever has to be written to override one.
+        // ⛔ WHICH CONTROLLER DRIVES A CLASS — a different question from which
+        // classes bots play, which is [BotClasslimits]. Default is every
+        // checkpoint's own set, so this only ever has to be written to override one.
         settings.Add(ListRow(
             "Bots", "ClassPolicy", nameof(ServerOptions.BotClassPolicies),
             o => o.BotClassPolicies, (o, v) => o.BotClassPolicies = v,
@@ -748,6 +720,31 @@ public static class ServerSettings
             o => o.SearchThreads, (o, v) => o.SearchThreads = v, "2",
             "Threads the rollout search uses. Threads change NO decision, so this is a "
             + "pure cost knob."));
+
+        // --- [BotClasslimits] -------------------------------------------------
+        //
+        // WHICH CLASSES BOTS PLAY, as a per-team count of BOTS. The same encoding
+        // as [Classlimits] on purpose — 0 bars, 255 unlimits — so the two sections
+        // cannot be read the wrong way round from each other. Quote has no key:
+        // the draw is irandom(8) and never reaches it.
+        //
+        // ⚠️ Spy defaults to 0, which is BotPopulation.PickClass's own roster
+        // written as a limit; a server configuring nothing draws what it always did.
+        foreach (var (key, playerClass) in ClassLimitKeys)
+        {
+            if (playerClass == PlayerClass.Quote)
+                continue;
+
+            var index = (int)playerClass;
+
+            settings.Add(IntRow(
+                "BotClasslimits", key, "Bots",
+                o => o.Bots.EffectiveClassLimits[index],
+                (o, v) => o.Bots = BotClassLimit(o.Bots, index, (byte)Math.Clamp(v, 0, 255)),
+                "1",
+                $"How many {key} BOTS one team may hold. Humans do not count and are not "
+                + "limited by this. 255 is unlimited; 0 keeps bots off the class."));
+        }
 
         // --- [Web] ------------------------------------------------------------
         //
@@ -1050,63 +1047,18 @@ public static class ServerSettings
     };
 
     /// <summary>
-    /// The bot class draw: names, the word <c>trained</c>, or empty for all nine.
-    /// </summary>
-    /// <summary>
-    /// The word <c>Bots.Classes</c> and <c>--bot-classes</c> both accept for
-    /// "whatever the loaded policies drive".
+    /// Writes one <c>[BotClasslimits]</c> value, copying the array first.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>It used to be spelled <c>trained</c> and it used to mean
-    /// <c>PolicyNetwork.DefaultTrainedClasses</c> — a compile-time set.</b> That
-    /// stopped being any loaded checkpoint's set on 2026-09-06, when the class set
-    /// became a property of the file, and on the ship bundle it silently dropped
-    /// pyro: a plausible four-class roster on a server whose fifth tier then never
-    /// drove. The word is now <c>driven</c>, it is resolved in
-    /// <see cref="BotBrain.Build"/> where the checkpoints are actually open, and it
-    /// asks the loaded tiers rather than a constant.
-    /// <para>
-    /// <c>trained</c> is still accepted as the old spelling, and deliberately reads
-    /// back as <c>driven</c>: a file written from a running server should say what
-    /// the setting now means.
-    /// </para>
+    /// Copied for the reason <c>ClassLimit</c> below gives: an options object may
+    /// share its array with another, and the coverage gate's before-and-after
+    /// comparison needs two arrays to compare.
     /// </remarks>
-    public const string DrivenClasses = "driven";
-
-    private static BotPopulationOptions Classes(BotPopulationOptions bots, string value)
+    public static BotPopulationOptions BotClassLimit(BotPopulationOptions bots, int index, byte limit)
     {
-        var text = value.Trim();
-
-        if (text.Length == 0)
-            return bots with { AllowedClasses = null, ClassDrawFollowsPolicy = false };
-
-        if (text.Equals(DrivenClasses, StringComparison.OrdinalIgnoreCase)
-
-            // The 2026-09-06 spelling, kept working. It named a set that no longer
-            // exists as a constant, so mapping it here is the only reading left.
-            || text.Equals("trained", StringComparison.OrdinalIgnoreCase))
-        {
-            return bots with { AllowedClasses = null, ClassDrawFollowsPolicy = true };
-        }
-
-        var names = Split(text);
-        var picked = new PlayerClass[names.Length];
-
-        for (var i = 0; i < names.Length; i++)
-        {
-            if (!Enum.TryParse(names[i], ignoreCase: true, out PlayerClass playerClass)
-                || playerClass > PlayerClass.Pyro)
-            {
-                throw new FormatException(
-                    $"Bots.Classes: '{names[i]}' is not a class a bot can be. "
-                    + "Scout, Pyro, Soldier, Heavy, Demoman, Medic, Engineer, Spy, Sniper, "
-                    + $"or '{DrivenClasses}' for whatever the loaded policies drive.");
-            }
-
-            picked[i] = playerClass;
-        }
-
-        return bots with { AllowedClasses = picked, ClassDrawFollowsPolicy = false };
+        var limits = bots.EffectiveClassLimits.ToArray();
+        limits[index] = limit;
+        return bots with { ClassLimits = limits };
     }
 
     /// <summary>A number, or the word <c>max</c> — the same grammar <c>--speed</c> takes.</summary>

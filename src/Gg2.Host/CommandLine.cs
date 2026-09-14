@@ -168,27 +168,59 @@ internal static class CommandLine
         return limits;
     }
 
-    /// <summary>A comma-separated class list, or a clear error naming the bad one.</summary>
-    private static PlayerClass[] ParseClasses(string flag, string text)
+    /// <summary>
+    /// <c>--bot-class-limit</c>: one number for every class a bot can be, or
+    /// <c>name=n</c> pairs applied over <paramref name="bots"/>' current limits.
+    /// </summary>
+    /// <remarks>
+    /// The grammar <c>--class-limit</c> takes, with two differences: Quote is
+    /// refused, since no bot is drawn as one, and pairs start from what is already
+    /// configured rather than from unlimited — otherwise <c>medic=1</c> would
+    /// quietly un-bar the spy.
+    /// </remarks>
+    private static BotPopulationOptions ParseBotClassLimits(string flag, string text, BotPopulationOptions bots)
     {
-        var names = text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var picked = new PlayerClass[names.Length];
-
-        for (var i = 0; i < names.Length; i++)
+        if (byte.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var everyClass))
         {
-            if (!Enum.TryParse(names[i], ignoreCase: true, out PlayerClass playerClass)
+            var uniform = new byte[TeamBalance.ClassCount];
+            Array.Fill(uniform, everyClass, 0, (int)PlayerClass.Pyro + 1);
+            return bots with { ClassLimits = uniform };
+        }
+
+        foreach (var pair in text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var separator = pair.IndexOf('=', StringComparison.Ordinal);
+
+            if (separator < 0)
+            {
+                throw new ArgumentException(
+                    $"{flag}: '{pair}' is neither a number for every class nor a "
+                    + "<class>=<limit> pair, such as 'medic=1,spy=2'.");
+            }
+
+            var className = pair[..separator].Trim();
+            var limitText = pair[(separator + 1)..].Trim();
+
+            // ⚠️ The ceiling is Pyro: PlayerClass runs on to Quote, which
+            // Enum.TryParse accepts and no bot is ever drawn as.
+            if (!Enum.TryParse(className, ignoreCase: true, out PlayerClass playerClass)
                 || playerClass > PlayerClass.Pyro)
             {
                 throw new ArgumentException(
-                    $"{flag}: '{names[i]}' is not a class a bot can be. "
-                    + "Scout, Pyro, Soldier, Heavy, Demoman, Medic, Engineer, Spy, Sniper, "
-                    + "or 'driven' for whatever the loaded policies drive.");
+                    $"{flag}: '{className}' is not a class a bot can be. "
+                    + "Scout, Pyro, Soldier, Heavy, Demoman, Medic, Engineer, Spy or Sniper.");
             }
 
-            picked[i] = playerClass;
+            if (!byte.TryParse(limitText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var limit))
+            {
+                throw new FormatException(
+                    $"{flag}: the limit for {className} must be 0-255, not '{limitText}'.");
+            }
+
+            bots = ServerSettings.BotClassLimit(bots, (int)playerClass, limit);
         }
 
-        return picked;
+        return bots;
     }
 
     /// <summary>
@@ -688,35 +720,13 @@ internal static class CommandLine
                     options.PolicyIgnoreStamp = true;
                     break;
 
-                // ⚠️ WHICH CLASSES BOTS PLAY, and SEPARATE from which controller
-                // drives one — that is --bot-class-policy below. A controller engages
-                // only on the classes it drives, so a server drawing all nine runs a
-                // MIX of the hybrid arm and the all-scripted one and a playtester
-                // cannot tell which bot they just fought. Restricting the draw is what
-                // makes every bot the configuration under test. Say which you ran.
-                //
-                // ⛔ "driven" is RESOLVED IN BotBrain.Build, not here, because here
-                // the answer does not exist yet: flags are parsed before any --policy
-                // is opened and argument order is not guaranteed. That deferral is the
-                // fix for a real bug — the word used to be "trained" and used to mean
-                // a compile-time set, which on the shipped bundle silently dropped
-                // pyro and left its tier never driving. "trained" is still accepted.
-                case "--bot-classes":
-                {
-                    var text = cursor.Take();
-
-                    var followsPolicy =
-                        string.Equals(text, ServerSettings.DrivenClasses, StringComparison.OrdinalIgnoreCase)
-                        || string.Equals(text, "trained", StringComparison.OrdinalIgnoreCase);
-
-                    options.Bots = options.Bots with
-                    {
-                        AllowedClasses = followsPolicy ? null : ParseClasses(name, text),
-                        ClassDrawFollowsPolicy = followsPolicy,
-                    };
-
+                // WHICH CLASSES BOTS PLAY, as a per-team count of BOTS: one number
+                // for all nine, or `scout=2,spy=1`. Pairs apply OVER what is already
+                // set — the defaults or --config — so `medic=1` leaves the spy barred.
+                // Which controller drives a class is --bot-class-policy below.
+                case "--bot-class-limit":
+                    options.Bots = ParseBotClassLimits(name, cursor.Take(), options.Bots);
                     break;
-                }
 
                 // ⛔ WHICH CONTROLLER DRIVES A CLASS: Class=name, where name is a
                 // checkpoint's file name without its extension, or "scripted".
@@ -1160,13 +1170,13 @@ internal static class CommandLine
                             a bot-vs-bot fight stays scripted, which is a COST
                             saving and not a skill one. Every recorded arm
                             measurement was taken with this behaviour.
-          --bot-classes <list|driven>
-                            restrict which classes bots PLAY (default: the
-                            reference's own draw of eight). 'driven' is whatever
-                            the loaded policies drive, resolved at startup - pass
-                            it to make EVERY bot the configuration under test
-                            rather than a mix of that and the all-scripted arm.
-                            'trained' is accepted as the old spelling.
+          --bot-class-limit <n|class=n,...>
+                            how many BOTS of a class one team may hold, like
+                            --class-limit but counting bots only. One number
+                            for all nine, or pairs over the defaults: every
+                            class unlimited (255) except spy, which is 0. 0
+                            keeps bots off a class. e.g. --bot-class-limit
+                            medic=1,spy=1
           --bot-class-policy <Class=name,...>
                             choose who drives a class: a checkpoint's file name
                             without its extension, or 'scripted'. Repeatable, and

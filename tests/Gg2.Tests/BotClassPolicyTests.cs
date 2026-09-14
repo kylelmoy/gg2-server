@@ -6,16 +6,11 @@ using Gg2.Server;
 namespace Gg2.Tests;
 
 /// <summary>
-/// Who drives which class: the default, the per-class override, and the roster
-/// that follows them.
+/// Who drives which class: the default and the per-class override.
 /// </summary>
 /// <remarks>
-/// <b>Two questions that were one knob until 2026-09-07.</b> <c>Bots.Classes</c>
-/// restricts which classes bots PLAY; <c>Bots.ClassPolicy</c> decides who DRIVES
-/// a class that is played. Sharing one setting between them shipped a real bug —
-/// <c>--bot-classes trained</c> named a compile-time set that had stopped being
-/// any loaded checkpoint's, so on the shipped bundle it silently drew a plausible
-/// four-class roster and the fifth tier never drove.
+/// <c>Bots.ClassPolicy</c> decides who DRIVES a class that is played; which
+/// classes bots play is <c>[BotClasslimits]</c>, gated by <c>BotClassLimitTests</c>.
 /// <para>
 /// ⛔ <b>The default is the thing to protect.</b> Every checkpoint drives the
 /// classes its own file claims, and a server that configures nothing gets that —
@@ -263,124 +258,9 @@ public sealed class BotClassPolicyTests
             StringComparison.Ordinal);
     }
 
-    /// <summary>
-    /// ⛔ <c>--bot-classes driven</c> is the union of what the tiers actually drive.
-    /// </summary>
-    /// <remarks>
-    /// <b>THE REGRESSION GATE for the bug that motivated all of this.</b> The word
-    /// used to be <c>trained</c> and used to mean
-    /// <c>PolicyNetwork.DefaultTrainedClasses</c> — four classes, resolved before
-    /// any checkpoint was opened. Here the two tiers drive seven classes between
-    /// them and none of the second tier's three are in that default, so an
-    /// implementation still reading the constant returns four and fails. ⚠️ A
-    /// smaller-but-plausible roster is the worst shape of wrong: every bot it does
-    /// draw is driven correctly, so nothing looks broken.
-    /// </remarks>
+    /// <summary>A config file reaches the setting.</summary>
     [Fact]
-    public void DrivenDrawsTheClassesTheLoadedTiersActuallyDrive()
-    {
-        var options = Parse(
-            "--bot-mode", "policy",
-            "--policy", PolicyFixture.Checkpoint,
-            "--policy", PolicyFixture.EightFieldCheckpoint,
-            "--bot-classes", "driven");
-
-        // ⚠️ In CLASS order, not tier order — the roster is sorted by the protocol's
-        // own class numbering so a stamp line and a config file do not reshuffle
-        // between runs. Written the other way round first, and it failed here.
-        Assert.Equal(
-            [
-                PlayerClass.Scout, PlayerClass.Soldier, PlayerClass.Demoman,
-                PlayerClass.Engineer, PlayerClass.Heavy, PlayerClass.Spy, PlayerClass.Pyro,
-            ],
-            options.Bots.AllowedClasses);
-    }
-
-    /// <summary>And it follows the per-class overrides, not just the files.</summary>
-    /// <remarks>
-    /// <b>The two settings compose, and this is the only test that says so.</b>
-    /// A roster resolved from the checkpoints' own sets rather than from the
-    /// RESOLVED sets would draw a class that has been sent back to the scripted
-    /// layer — putting a scripted bot into a roster whose whole purpose is that
-    /// every bot in it is the configuration under test.
-    /// </remarks>
-    [Fact]
-    public void DrivenFollowsThePerClassOverrides()
-    {
-        var options = Parse(
-            "--bot-mode", "policy",
-            "--policy", PolicyFixture.Checkpoint,
-            "--bot-class-policy", "Soldier=scripted",
-            "--bot-classes", "driven");
-
-        Assert.Equal(
-            [PlayerClass.Scout, PlayerClass.Demoman, PlayerClass.Heavy],
-            options.Bots.AllowedClasses);
-    }
-
-    /// <summary>
-    /// ⛔ <c>driven</c> on a server that drives nothing is refused, not "all nine".
-    /// </summary>
-    /// <remarks>
-    /// <b>The empty set would read as no restriction — the exact inversion of what
-    /// was asked for.</b> An operator writing <c>Classes=driven</c> on a scripted
-    /// server has asked for something impossible, and silently giving them the
-    /// widest possible roster is the worst available answer.
-    /// </remarks>
-    [Fact]
-    public void DrivenWithNothingDrivingIsRefused()
-    {
-        var options = new ServerOptions
-        {
-            MapDirectory = "maps",
-            BotMode = BotMode.Scripted,
-            Bots = BotPopulationOptions.Default with { ClassDrawFollowsPolicy = true },
-        };
-
-        Assert.Contains(
-            "drives none",
-            Assert.Throws<ArgumentException>(() => BotBrain.Build(options)).Message,
-            StringComparison.Ordinal);
-    }
-
-    /// <summary>
-    /// The old spelling still works and reads back as the new one.
-    /// </summary>
-    /// <remarks>
-    /// <b>Accepted because a config file written before 2026-09-07 says
-    /// <c>trained</c></b>, and the reading it had — a fixed four-class set — no
-    /// longer exists to be honoured. It reads BACK as <c>driven</c> deliberately: a
-    /// file written from a running server should say what the setting now means.
-    /// </remarks>
-    [Fact]
-    public void TheOldTrainedSpellingStillWorksAndReadsBackAsDriven()
-    {
-        var options = Parse(
-            "--bot-mode", "policy",
-            "--policy", PolicyFixture.Checkpoint,
-            "--bot-classes", "trained");
-
-        Assert.Equal(
-            [PlayerClass.Scout, PlayerClass.Soldier, PlayerClass.Demoman, PlayerClass.Heavy],
-            options.Bots.AllowedClasses);
-
-        var row = ServerSettings.All.Single(setting => setting.Id == "Bots.Classes");
-
-        Assert.Equal(ServerSettings.DrivenClasses, row.Get(options));
-    }
-
-    /// <summary>
-    /// A config file reaches both settings, and the pair survives a round trip.
-    /// </summary>
-    /// <remarks>
-    /// ⚠️ <b><c>Bots.Classes</c> reads back as <c>driven</c> rather than as the
-    /// five class names it resolved to</b>, and that is the point: the settings
-    /// page shows the REQUEST, so saving from it does not silently pin today's
-    /// answer into the file for ever. A resolved list would look more informative
-    /// and would be a worse file.
-    /// </remarks>
-    [Fact]
-    public void AConfigFileReachesBothSettings()
+    public void AConfigFileReachesTheSetting()
     {
         var config = CliCoverageTests.WriteConfig(
             $"""
@@ -388,20 +268,12 @@ public sealed class BotClassPolicyTests
              Mode=policy
              Policy={PolicyFixture.Checkpoint}
              ClassPolicy=Soldier=scripted
-             Classes=driven
              """);
 
         var options = CommandLine.Parse(["--config", config]);
 
         Assert.Equal(["Soldier=scripted"], options.BotClassPolicies);
-
-        Assert.Equal(
-            [PlayerClass.Scout, PlayerClass.Demoman, PlayerClass.Heavy],
-            options.Bots.AllowedClasses);
-
-        var row = ServerSettings.All.Single(setting => setting.Id == "Bots.Classes");
-
-        Assert.Equal(ServerSettings.DrivenClasses, row.Get(options));
+        Assert.DoesNotContain(PlayerClass.Soldier, DrivenBy(options, 0));
     }
 
     /// <summary>

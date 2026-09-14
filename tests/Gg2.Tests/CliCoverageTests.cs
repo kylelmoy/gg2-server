@@ -146,14 +146,10 @@ public sealed class CliCoverageTests
              "--bot-class-policy", "Sniper=scripted"],
             o => string.Join(',', o.BotClassPolicies)),
 
-        // WHICH CLASSES BOTS PLAY, in its deferred form. A row of its own because
-        // `driven` takes a different branch from a class list and is the one that
-        // was silently wrong: it needs a checkpoint loaded, since Build refuses to
-        // let it mean "all nine" when nothing drives anything.
-        ("Bots",
-            ["--bot-mode", "policy", "--policy", PolicyFixture.Checkpoint,
-             "--bot-classes", "driven"],
-            o => o.Bots.AllowedClasses is null ? "" : string.Join(',', o.Bots.AllowedClasses)),
+        // WHICH CLASSES BOTS PLAY. Both grammars, because they are different
+        // branches: a bare number fills all nine, a pair applies over the defaults.
+        ("Bots", ["--bot-class-limit", "2"], o => string.Join(',', o.Bots.EffectiveClassLimits.ToArray())),
+        ("Bots", ["--bot-class-limit", "spy=1"], o => string.Join(',', o.Bots.EffectiveClassLimits.ToArray())),
 
         ("BotArbiterMicroseconds",
             ["--bot-mode", "search", "--bot-arbiter", "7500"],

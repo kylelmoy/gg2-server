@@ -531,12 +531,25 @@ public sealed class BotPopulationService
         _server.CountTeams(out var red, out var blue);
 
         var team = BotPopulation.PickTeam(red, blue, ref _random);
-        // Restricted only when asked. The unrestricted draw is the reference's
-        // irandom(8) and every recorded match depends on its stream — the same rule
-        // HeadlessMatch follows, for the same reason.
-        var playerClass = options.AllowedClasses is { Length: > 0 } allowed
-            ? BotPopulation.PickClass(ref _random, allowed)
-            : BotPopulation.PickClass(ref _random);
+
+        // [BotClasslimits] counts the BOTS already on the team this one joins.
+        // Indexed loop, not foreach: BotSlots is an interface and this runs for
+        // every bot added.
+        Span<int> botsOfClass = stackalloc int[TeamBalance.ClassCount];
+        var slots = _server.BotSlots;
+
+        for (var i = 0; i < slots.Count; i++)
+        {
+            if (_server.TeamOf(slots[i]) == team)
+                botsOfClass[(int)_server.ClassOf(slots[i])]++;
+        }
+
+        // ⚠️ Null means every class is at its limit on that team, and the bot is
+        // not added. The fill then stops short of its target, which is what the
+        // operator configured — ConfigWarnings says so at startup when the limits
+        // cannot reach the fill at all.
+        if (BotPopulation.PickClass(ref _random, options.EffectiveClassLimits, botsOfClass) is not { } playerClass)
+            return false;
 
         // Named for the class, not numbered: a counter that only ever grows reads
         // as "[BOT] 147" an hour in. Nothing in the bot layer changes a bot's class

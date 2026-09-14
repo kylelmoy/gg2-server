@@ -55,7 +55,7 @@ bytes per second` is a real key in a real `gg2.ini`
 (`Scripts/Game/game_init.gml:66-106`). They are transcribed rather than tidied so
 an inherited config works here.
 
-`[Limits]`, `[Log]`, `[Nav]`, `[Bots]`, `[Web]` and `[Runtime]` are **this
+`[Limits]`, `[Log]`, `[Nav]`, `[Bots]`, `[BotClasslimits]`, `[Web]` and `[Runtime]` are **this
 port's own**: stock GG2 has no connection bounds, no log rotation, no nav
 graphs, no admin panel and no pacing control, so there was nothing to transcribe.
 
@@ -410,7 +410,6 @@ a way to give an attacker more room.
 | `Difficulty` | integer | `5` | 1 to 5. 5 is "as good as the layer gets"; the lower tiers are a deliberate handicap ladder. |
 | `NamePrefix` | text | `[BOT] ` | What a bot's name starts with. ⚠️ The trailing space is real — see the quoting rule above. |
 | `SuspendMinutes` | integer | `0` | How long the `/bots off` chat command takes the bot population away for, 0..1440. ⚠️ **0 means the command does not exist on this server**, which is the default — one key rather than a flag and a duration that can disagree. Needs a chat plugin in `ServerPluginList`, which is the only way a player can type `/bots`; set without one it is **warned about**, not refused, and the control port's `bots-suspend` still works. An operator ends a running suspension by saving a bot count in the admin panel, or with `bots-suspend` at 0 minutes. `docs/PLUGINS.md`, "the bot suspension". |
-| `Classes` | list | *(empty)* | Restrict which classes bots **play**. Empty draws all nine, which runs a **mix** of the hybrid arm and the all-scripted one, because a controller only engages on the classes it drives. `driven` restricts the draw to whatever the loaded policies drive, resolved at startup from the loaded checkpoints. `trained` is accepted as a synonym and reads back as `driven`. |
 | `ClassPolicy` | list | *(empty)* | Which controller **drives** each class — `Class=name` entries, where name is a checkpoint's file name without its extension or `scripted`. Anything not named keeps the default: whichever loaded checkpoint's own class set claims it, scripted if none does. Naming a class the file does not list is legal and warns, because the file cannot say whether the run never trained it or a narrowed should-drive set dropped it. |
 | `Occupancy` | boolean | `1` | Price an edge a team-mate is already walking above its honest cost, so a squad fans out. ⛔ A **behaviour** switch: off, match dispersion falls 0.785 → 0.634 and nothing replaces it. |
 | `EngageBots` | boolean | `0` | Run the expensive micro-controller in bot-vs-bot fights too. It does not make the bots better; it makes those fights cost more. |
@@ -429,15 +428,31 @@ line. They exist as settings because a `BotBrainSpec` holds a loaded
 `PolicyNetwork` — megabytes of weights with no textual form — so it cannot
 round-trip and the inputs can.
 
-`Classes` and `ClassPolicy` answer different questions and must stay separate
-keys: `Classes` says which classes bots **play**, `ClassPolicy` says who
-**drives** one that is played.
+`[BotClasslimits]` and `ClassPolicy` answer different questions and must stay
+separate: the limits say which classes bots **play**, `ClassPolicy` says who
+**drives** one that is played. A server drawing classes no tier drives runs a
+mix of the hybrid arm and the all-scripted one; to make every bot the
+configuration under test, set the classes nothing drives to 0.
 
-`Classes = driven` is resolved at startup rather than where the key is read,
-because options are parsed before any checkpoint is opened. It reads back as
-`driven` rather than as the classes it resolved to, so a save from the settings
-page does not pin one startup's answer into the file. The startup log prints the
-resolved list, and one line per checkpoint saying which classes it will drive.
+### `[BotClasslimits]`
+
+Nine keys — `Scout`, `Pyro`, `Soldier`, `Heavy`, `Demoman`, `Medic`, `Engineer`,
+`Spy`, `Sniper` — each an integer: how many **bots** of that class one team may
+hold. The encoding is `[Classlimits]`' own: **0 keeps bots off the class, 255
+is unlimited**. Every key defaults to `255` except **`Spy`, which defaults to
+`0`** — the population manager's own roster, so a server that sets nothing draws
+what it always drew (`BotPopulation.DefaultClassLimits`). There is no `Quote`
+key; no bot is drawn as one. `--bot-class-limit` is the flag: one number for all
+nine, or `class=n` pairs applied over whatever is already configured.
+
+- **Bots only, and in addition to `[Classlimits]`.** Humans neither count
+  towards these nor are limited by them; a bot is still subject to the server's
+  own limits, which decide what it is granted.
+- **Enforced when a bot joins.** The class is drawn from those with room on the
+  team the bot is joining; when none has room, no bot is added and the fill
+  stops short. Limits that cannot seat the fill at all are warned about at
+  startup. A bot moved between teams afterwards is not re-checked
+  (`docs/TRAPS-BOTS.md`, "Bot class limits").
 
 ### `[Web]`
 

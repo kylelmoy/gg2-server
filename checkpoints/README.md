@@ -73,10 +73,11 @@ Two settings adjust it:
 - `--bot-class-policy Soldier=scripted` — who drives a class. The value is a
   checkpoint's file name without its extension, or `scripted`. Repeatable, and it
   only has to name the classes being overridden.
-- `--bot-classes driven` — which classes bots play. Restricts the draw to
-  whatever the loaded policies drive, following any `ClassPolicy` overrides, so
-  every bot is the configuration under test rather than a mix of that and the
-  all-scripted arm.
+- `--bot-class-limit class=n` / `[BotClasslimits]` — which classes bots play:
+  how many bots of each class one team may hold, 0 keeping bots off a class.
+  Nothing derives it from the driven set, so to make every bot the configuration
+  under test rather than a mix of that and the all-scripted arm, set the classes
+  no checkpoint drives to 0.
 
 ## `tier2_pyro_rest3_s0.npz` carries a should-drive set in a trained-on field
 
