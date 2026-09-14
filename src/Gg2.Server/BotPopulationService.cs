@@ -457,6 +457,10 @@ public sealed class BotPopulationService
         if (Reteam(slots))
             Retarget();
 
+        // Above the count check for the reason Reteam is: a server at its target
+        // returns early, and that is every tick of an ordinary match.
+        Reclass(slots, in options);
+
         if (bots == target)
             return;
 
@@ -523,6 +527,95 @@ public sealed class BotPopulationService
         return placed;
     }
 
+    /// <summary>
+    /// Gives every bot that died since the last call a random class for its next
+    /// life, within both sets of class limits, and names it for that class.
+    /// </summary>
+    /// <remarks>
+    /// <b>Only on the tick a death is first seen, and only with the respawn
+    /// counting down.</b> <c>PlayerCommands.ChangeClass</c> on a characterless
+    /// player with no respawn pending spawns it this tick, so a dead bot outside
+    /// that window — waiting out a map change, say — is left alone.
+    /// <para>
+    /// ⚠️ <b>Both limits, counted differently.</b> <c>[BotClasslimits]</c> counts
+    /// the team's bots; <c>[Classlimits]</c> counts everybody on it, and the class
+    /// change itself does not check it — neither does the reference's, the stock
+    /// client's menu does — so it is asked here, as the menu would. The bot does
+    /// not count against its own class, so a bot within its limit may keep it.
+    /// </para>
+    /// <para>
+    /// A bot over its limit — a rotation or the autobalance put it there — is
+    /// re-classed on the same terms at the first tick it is dead, so the limit is
+    /// broken for at most one life.
+    /// </para>
+    /// <para>
+    /// The draw may land on the class the bot already plays; then nothing is sent.
+    /// Its own stream, never <c>WorldState.Random</c> — see the class remarks.
+    /// </para>
+    /// </remarks>
+    private void Reclass(IReadOnlyList<int> slots, in BotPopulationOptions options)
+    {
+        var changed = false;
+        Span<int> botsOfClass = stackalloc int[TeamBalance.ClassCount];
+        Span<byte> limits = stackalloc byte[TeamBalance.ClassCount];
+
+        for (var i = 0; i < slots.Count; i++)
+        {
+            var slot = slots[i];
+            var entry = _server.EntryOf(slot);
+            var alive = _server.IsAlive(slot);
+            var died = entry.BotWasAlive && !alive;
+
+            entry.BotWasAlive = alive;
+
+            if (entry.Team is not (Team.Red or Team.Blue) || !_server.AwaitingRespawn(slot))
+                continue;
+
+            botsOfClass.Clear();
+            options.EffectiveClassLimits.CopyTo(limits);
+
+            for (var j = 0; j < slots.Count; j++)
+            {
+                if (slots[j] != slot && _server.TeamOf(slots[j]) == entry.Team)
+                    botsOfClass[(int)_server.ClassOf(slots[j])]++;
+            }
+
+            for (var c = 0; c <= (int)PlayerClass.Pyro; c++)
+            {
+                if (!_server.ClassHasRoom(slot, entry.Team, (PlayerClass)c))
+                    limits[c] = 0;
+            }
+
+            // ⚠️ A bot OVER its limit is re-classed too, dead or newly dead. A team
+            // goes over without anybody dying: a rotation makes every bot a
+            // spectator and Reteam deals them back out by team size, not class,
+            // and the autobalance moves one mid-life. Measured: without this, three
+            // scouts on a team allowed two within 5,200 ticks of gg_debug.
+            var own = (int)entry.Class;
+            var over = own >= TeamBalance.ClassCount || botsOfClass[own] >= limits[own];
+
+            if (!(died || over))
+                continue;
+
+            if (BotPopulation.PickClass(ref _random, limits, botsOfClass) is not { } playerClass
+                || playerClass == entry.Class)
+            {
+                continue;
+            }
+
+            _server.RequestBotClass(slot, playerClass);
+            _server.RenameBot(slot, options.NamePrefix + playerClass.ToString());
+            changed = true;
+        }
+
+        // Roles only: a role counts a bot's place among team-mates of its class
+        // group, so one bot's change can move the roles of the bots after it.
+        // Retarget would also hand every bot a fresh objective, throwing away live
+        // objective state on every death.
+        if (changed)
+            Rerole();
+    }
+
     private bool TryAdd(in BotPopulationOptions options)
     {
         if (_server.RosterCount >= WorldState.MaxSlots)
@@ -552,9 +645,9 @@ public sealed class BotPopulationService
             return false;
 
         // Named for the class, not numbered: a counter that only ever grows reads
-        // as "[BOT] 147" an hour in. Nothing in the bot layer changes a bot's class
-        // after it joins; the one path that can is a team change under a binding
-        // class limit (ApplyChangeTeam's reclass), which would leave the name
+        // as "[BOT] 147" an hour in. Reclass renames a bot whenever it changes
+        // class after this; a team change under a binding [Classlimits]
+        // (ApplyChangeTeam's reclass) is the one path that still leaves the name
         // stale. Two bots of one class share a name, which the game allows.
         var name = options.NamePrefix + playerClass.ToString();
 
@@ -611,6 +704,11 @@ public sealed class BotPopulationService
         // heavy walks past every edge it could have flown.
         bot.Query = new NavQuery(_server.TeamOf(slot), CanDoubleJump: BotClassProfile.AirJump(_server.ClassOf(slot)));
 
+        // And the name follows it: the join broadcast already went out under the
+        // class asked for, before [Classlimits] answered.
+        if (_server.ClassOf(slot) != playerClass)
+            _server.RenameBot(slot, options.NamePrefix + _server.ClassOf(slot).ToString());
+
         return true;
     }
 
@@ -663,6 +761,32 @@ public sealed class BotPopulationService
     /// its lean group with them.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// <see cref="Retarget"/>'s role pass alone, leaving every objective in place.
+    /// </summary>
+    private void Rerole()
+    {
+        var earlier = new List<PlayerClass>();
+        var slots = _server.BotSlots;
+
+        for (var i = 0; i < slots.Count; i++)
+        {
+            if (ScriptedBot.Of(_server.SourceOf(slots[i])) is not { } bot)
+                continue;
+
+            var team = _server.TeamOf(slots[i]);
+            earlier.Clear();
+
+            for (var j = 0; j < i; j++)
+            {
+                if (_server.TeamOf(slots[j]) == team)
+                    earlier.Add(_server.ClassOf(slots[j]));
+            }
+
+            bot.Role = BotRoles.Assign(_server.ClassOf(slots[i]), CollectionsMarshal.AsSpan(earlier));
+        }
+    }
+
     public void Retarget()
     {
         var earlier = new List<PlayerClass>();

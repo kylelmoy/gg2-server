@@ -105,6 +105,74 @@ public sealed class BotClassLimitTests
         }
     }
 
+    /// <summary>
+    /// A bot that dies comes back as a random class within its limits, named for it.
+    /// </summary>
+    /// <remarks>
+    /// Eight bots, four a team, over three classes allowed two each: every team
+    /// always has room to move, so the draw is exercised rather than pinned. Read
+    /// off the server's roster every tick, so a class that went over a limit for
+    /// one tick is caught. ⚠️ The count of changes is what stops this passing on a
+    /// server that never re-classes anybody.
+    /// </remarks>
+    [Fact]
+    public void ADeadBotComesBackAsARandomClassWithinItsLimitsAndNamedForIt()
+    {
+        var limits = new byte[TeamBalance.ClassCount];
+        limits[(int)PlayerClass.Scout] = 2;
+        limits[(int)PlayerClass.Soldier] = 2;
+        limits[(int)PlayerClass.Pyro] = 2;
+
+        using var harness = new ServerHarness(o =>
+        {
+            o.Map = "gg_debug";
+            o.NavCacheDirectory = ReferenceTree.NavCacheDirectory;
+            o.Bots = BotPopulationOptions.Default with
+            {
+                Enabled = true, FillToPlayers = 8, MaxBots = 8, MinHumans = 0, ClassLimits = limits,
+            };
+        });
+
+        var server = harness.Server;
+        var last = new Dictionary<long, PlayerClass>();
+        var alive = new Dictionary<long, bool>();
+        var changes = 0;
+
+        for (var tick = 0; tick < 12_000; tick++)
+        {
+            harness.Tick();
+
+            foreach (var team in new[] { Team.Red, Team.Blue })
+            {
+                foreach (var playerClass in Enum.GetValues<PlayerClass>())
+                {
+                    var count = server.BotSlots.Count(s => server.TeamOf(s) == team && server.ClassOf(s) == playerClass);
+                    Assert.True(count <= limits[(int)playerClass], $"{count} {playerClass} bots on {team} at tick {tick}");
+                }
+            }
+
+            foreach (var slot in server.BotSlots)
+            {
+                var entry = server.EntryOf(slot);
+
+                if (last.TryGetValue(entry.StableId, out var before) && before != entry.Class)
+                {
+                    changes++;
+
+                    // Changed while dead, never by killing a live character.
+                    Assert.False(alive[entry.StableId], $"{entry.Name} changed class while alive");
+                }
+
+                Assert.Equal(BotPopulationOptions.Default.NamePrefix + entry.Class, entry.Name);
+
+                last[entry.StableId] = entry.Class;
+                alive[entry.StableId] = server.IsAlive(slot);
+            }
+        }
+
+        Assert.True(changes >= 6, $"only {changes} class changes in 12,000 ticks");
+    }
+
     /// <summary>A pair on the command line applies over the defaults, so the spy stays barred.</summary>
     [Fact]
     public void APairAppliesOverTheDefaults()

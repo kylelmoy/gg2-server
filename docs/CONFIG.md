@@ -448,11 +448,13 @@ nine, or `class=n` pairs applied over whatever is already configured.
 - **Bots only, and in addition to `[Classlimits]`.** Humans neither count
   towards these nor are limited by them; a bot is still subject to the server's
   own limits, which decide what it is granted.
-- **Enforced when a bot joins.** The class is drawn from those with room on the
-  team the bot is joining; when none has room, no bot is added and the fill
-  stops short. Limits that cannot seat the fill at all are warned about at
-  startup. A bot moved between teams afterwards is not re-checked
-  (`docs/TRAPS-BOTS.md`, "Bot class limits").
+- **Checked when a bot joins and at every death.** A joining bot's class is
+  drawn from those with room on its team; when none has room, no bot is added
+  and the fill stops short, and limits that cannot seat the fill at all are
+  warned about at startup. A bot that dies comes back as a random class with
+  room under both these and `[Classlimits]`, and is renamed `NamePrefix` plus
+  the class. A living bot moved over a limit by a rotation or the autobalance
+  keeps its class until it dies (`docs/TRAPS-BOTS.md`, "Bot class limits").
 
 ### `[Web]`
 

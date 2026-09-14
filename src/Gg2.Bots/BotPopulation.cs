@@ -251,10 +251,9 @@ public static class BotPopulation
     /// gives: a set with no room would spin, and a hung picker looks exactly like a
     /// hung server. Null is the refusal, and the caller does not add a bot.
     /// <para>
-    /// ⚠️ <b>Enforced when a bot JOINS, and only then.</b> A bot moved to the other
-    /// team — the reference's autobalance, or the reclass a team change under a
-    /// binding <c>[Classlimits]</c> does — is not re-checked, so a team can briefly
-    /// hold one bot of a class more than its limit until that bot leaves.
+    /// ⚠️ <b>Asked when a bot joins and each time one is dead awaiting respawn</b>
+    /// (<c>BotPopulationService.Reclass</c>). A living bot moved over a limit — a
+    /// rotation's re-teaming or the autobalance — keeps its class until it dies.
     /// <c>docs/TRAPS-BOTS.md</c>, "Bot class limits".
     /// </para>
     /// </remarks>

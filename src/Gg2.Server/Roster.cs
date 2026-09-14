@@ -40,6 +40,17 @@ public sealed class RosterEntry
     public bool IsBot { get; init; }
 
     /// <summary>
+    /// Whether this bot was alive the last time the population manager looked —
+    /// how it sees a death, to re-class the bot for its next life.
+    /// </summary>
+    /// <remarks>
+    /// On the entry rather than in a slot-indexed array because the entry moves
+    /// with the player when the roster compacts, and a slot would hand one bot's
+    /// death to whoever slid into its place.
+    /// </remarks>
+    internal bool BotWasAlive { get; set; }
+
+    /// <summary>
     /// Where this player's per-tick input comes from.
     /// </summary>
     /// <remarks>

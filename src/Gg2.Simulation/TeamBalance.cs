@@ -395,6 +395,18 @@ public static class Classlimits
     }
 
     /// <summary>
+    /// Whether <paramref name="team"/> has room for one more
+    /// <paramref name="playerClass"/>, not counting <paramref name="slot"/> — the
+    /// test <see cref="Pick"/> opens with, and nothing more.
+    /// </summary>
+    /// <remarks>
+    /// For a caller choosing a class itself, which the stock client does in its
+    /// class menu. It draws nothing, so asking it leaves the shared stream alone.
+    /// </remarks>
+    public static bool HasRoom(in WorldState state, int slot, Team team, PlayerClass playerClass) =>
+        CountExcept(state, slot, team, playerClass) < LimitFor(state, playerClass);
+
+    /// <summary>
     /// <c>countClassmembersExcept</c>: how many of a team already have this
     /// class, not counting the player asking.
     /// </summary>

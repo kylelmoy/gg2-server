@@ -1,5 +1,6 @@
 ﻿using System.Net;
 using Gg2.Protocol;
+using Gg2.Server.Plugins;
 using Gg2.Simulation;
 
 namespace Gg2.Server;
@@ -469,6 +470,49 @@ public sealed partial class GameServer
 
         ExecuteChangeTeam(_roster[slot], team);
     }
+
+    /// <summary>
+    /// Changes a bot's class the way a client's <c>PLAYER_CHANGECLASS</c> does.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>Through <c>ExecuteChangeClass</c>, the socket switch's own body</b>,
+    /// for <see cref="RequestBotTeam"/>'s reason. That body does not check
+    /// <c>[Classlimits]</c> — neither does the reference's; the stock client's
+    /// class menu does — so a caller choosing a class asks
+    /// <see cref="ClassHasRoom"/> first, as the menu would.
+    /// </remarks>
+    public void RequestBotClass(int slot, PlayerClass playerClass)
+    {
+        if (slot <= 0 || slot >= _roster.Count || !_roster[slot].IsBot)
+            throw new ArgumentOutOfRangeException(nameof(slot), slot, "not a bot slot");
+
+        ExecuteChangeClass(_roster[slot], playerClass);
+    }
+
+    /// <summary>Renames a bot, with the broadcast a rename is.</summary>
+    /// <remarks>
+    /// The plugin rename's body, truncation included, rather than
+    /// <c>ExecuteChangeName</c>: that one is a socket's, kicks over the length and
+    /// throttles on a wall clock, and a bot has no socket to kick.
+    /// </remarks>
+    public void RenameBot(int slot, string name)
+    {
+        if (slot <= 0 || slot >= _roster.Count || !_roster[slot].IsBot)
+            throw new ArgumentOutOfRangeException(nameof(slot), slot, "not a bot slot");
+
+        ((IPluginHost)this).Rename(slot, name);
+    }
+
+    /// <summary>
+    /// Whether <c>[Classlimits]</c> leaves room on <paramref name="team"/> for
+    /// <paramref name="playerClass"/>, not counting <paramref name="slot"/>.
+    /// </summary>
+    public bool ClassHasRoom(int slot, Team team, PlayerClass playerClass) =>
+        Classlimits.HasRoom(in _world, slot, team, playerClass);
+
+    /// <summary>Whether a slot is dead with its respawn counting down.</summary>
+    public bool AwaitingRespawn(int slot) =>
+        !_world.IsAlive(slot) && _world.Players[slot].RespawnTimer > 0;
 
     /// <summary>
     /// Ends the round now, with nobody winning, and rotates.

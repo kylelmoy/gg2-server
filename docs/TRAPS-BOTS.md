@@ -1335,11 +1335,24 @@ the *simulation* never special-cases a bot.
 - ⚠️ **Bot class limits.** `[BotClasslimits]` counts the bots of each class on
   the team a new bot joins, and draws only from classes with room; with none, no
   bot is added and the fill stops short, which `ConfigWarnings` reports at
-  startup when the limits cannot seat the fill at all. **Known gap: enforced on
-  join only.** A bot moved to the other team — autobalance, or the reclass a
-  team change under a binding `[Classlimits]` does — is not re-checked, so a team
-  can hold one bot of a class more than its limit until a bot leaves. What would
-  show it mattering: a roster over its limit for longer than a round.
+  startup when the limits cannot seat the fill at all.
+- ⚠️ **A bot re-classes on every death** (`BotPopulationService.Reclass`): a
+  random class with room under `[BotClasslimits]` (its team's bots) and
+  `[Classlimits]` (everybody on its team), through the same class change a
+  client sends, then a rename to `NamePrefix` + class. Only while the respawn is
+  counting down: a class change on a characterless player with none pending
+  spawns it on the spot. The draw can land on the bot's own class, and then
+  nothing is sent. Only roles are recomputed afterwards, never objectives —
+  `Retarget` would throw away every bot's live objective state on each death.
+- ⚠️ **A team goes over a class limit without anybody dying.** A rotation
+  makes every bot a spectator and `Reteam` deals them back by team size, not by
+  class; the autobalance moves one mid-life. `Reclass` therefore also re-classes
+  any dead bot that is over its limit, whether or not it just died. Without that,
+  `gg_debug` put three bots of a class allowed two on one team within ~5,200
+  ticks (`BotClassLimitTests`). **A living bot over its limit keeps its class
+  until it dies** — the limit can be broken for one life.
+- **Headless matches do not re-class.** `HeadlessMatch` picks a class once per
+  bot, so `eval`, the bench and every training rollout keep a fixed roster.
 - ⚠️ **A record struct's primary-constructor defaults do NOT apply to
   `new T()`.** That form resolves to the implicit *zeroing* constructor, so a
   "defaulted" `BotPopulationOptions` has a fill target of 0, a difficulty of 0
