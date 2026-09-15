@@ -1024,6 +1024,11 @@ public sealed class ServerOptions
                 nameof(ClassLimits));
         }
 
+        // The brain refusals that need no checkpoint opened. Here, not only in
+        // BotBrain.Build, because this is the one check the panel's save runs
+        // before it writes — see BotBrain.CheckSettings.
+        BotBrain.CheckSettings(this);
+
         if (MapDirectory.Length == 0)
         {
             // Reachable only if the checked-in maps/ is missing AND nothing

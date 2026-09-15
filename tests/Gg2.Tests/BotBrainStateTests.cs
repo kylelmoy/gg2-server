@@ -150,9 +150,12 @@ public sealed class BotBrainStateTests
 
         var brain = parsed.Bots.Brain!;
 
+        // The mode and its checkpoints travel together, as the host's own options
+        // do: ServerOptions.Validate refuses a policy mode with no checkpoint.
         using var harness = new ServerHarness(o =>
         {
             o.BotMode = parsed.BotMode;
+            o.PolicyPaths = parsed.PolicyPaths;
             o.Bots = o.Bots with { Brain = brain };
         });
 
@@ -193,6 +196,7 @@ public sealed class BotBrainStateTests
         var harness = new ServerHarness(o =>
         {
             o.BotMode = parsed.BotMode;
+            o.PolicyPaths = parsed.PolicyPaths;
             o.Bots = o.Bots with { Brain = brain };
         });
 
