@@ -57,6 +57,80 @@ public sealed class TraceTests
         Assert.Equal(original.Stream, decoded.Stream);
     }
 
+    /// <summary>The roster labels survive the container.</summary>
+    [Fact]
+    public void RosterLabelsRoundTrip()
+    {
+        var original = new Trace
+        {
+            Header = Header(TraceHeader.CurrentFormatVersion),
+            Stream = [1, 2, 3],
+            Roster =
+            [
+                new TraceRosterNote
+                {
+                    Tick = 0,
+                    Slot = 0,
+                    Participant = TraceParticipant.Bot,
+                    Controller = "reserved",
+                    Name = "Server",
+                },
+                new TraceRosterNote
+                {
+                    Tick = 417,
+                    Slot = 3,
+                    Participant = TraceParticipant.Human,
+                    Controller = string.Empty,
+                    Name = "somebody",
+                },
+            ],
+        };
+
+        var decoded = Trace.Decode(original.Encode());
+
+        Assert.Equal(original.Roster, decoded.Roster);
+    }
+
+    /// <summary>
+    /// A v1 trace still decodes, and still encodes to the bytes it always did.
+    /// </summary>
+    /// <remarks>
+    /// <b>The checked-in fixture corpus is v1 and is not re-recorded.</b> Those
+    /// traces came off the running game, so re-taking them to add a field none
+    /// of them needs would be days of live measurement — which makes "v1 is
+    /// still read" a load-bearing claim rather than politeness, and the
+    /// byte-identical half of it is what stops a v2 tail being appended to a
+    /// header that says 1.
+    /// </remarks>
+    [Fact]
+    public void AVersionOneTraceIsStillReadAndStillWritesTheSameBytes()
+    {
+        var old = new Trace { Header = Header(1), Stream = [9, 8, 7] };
+        var bytes = old.Encode();
+
+        var decoded = Trace.Decode(bytes);
+
+        Assert.Equal(1, decoded.Header.FormatVersion);
+        Assert.Equal(old.Stream, decoded.Stream);
+        Assert.Empty(decoded.Roster);
+
+        // No tail: the whole file is the header plus the stream, so a v2 reader
+        // handed a v1 file finds nothing after the last stream byte to mistake
+        // for a label count.
+        Assert.Equal(bytes.Length, decoded.Encode().Length);
+        Assert.Equal(bytes, decoded.Encode());
+    }
+
+    private static TraceHeader Header(int version) => new()
+    {
+        FormatVersion = version,
+        ReferenceVersion = GameConstants.Version,
+        Map = "ctf_truefort",
+        MapMd5 = string.Empty,
+        Source = "a test",
+        RecordedUtc = new DateTime(2026, 8, 24, 12, 34, 56, DateTimeKind.Utc),
+    };
+
     /// <summary>
     /// A timestamp past 2038 in ticks overflowed an int in the first draft of
     /// the codec, which decoded to an out-of-range <c>DateTime</c> and took the
@@ -94,7 +168,16 @@ public sealed class TraceTests
     {
         var trace = LoadTrace(BotTrace);
 
-        Assert.Equal(TraceHeader.CurrentFormatVersion, trace.Header.FormatVersion);
+        // ⚠️ READABLE, not CURRENT. The checked-in corpus is written in v1 and
+        // is deliberately not re-recorded: v2 added the roster labels, which say
+        // which slots were people, and a fixture of the reference has no bots in
+        // it and no use for the answer. Pinning this to the current version
+        // would mean re-recording the whole corpus against the running game
+        // every time the container gained a field.
+        Assert.InRange(
+            trace.Header.FormatVersion,
+            TraceHeader.OldestReadableFormatVersion,
+            TraceHeader.CurrentFormatVersion);
         Assert.Equal(GameConstants.Version, trace.Header.ReferenceVersion);
         Assert.Equal("ctf_truefort", trace.Header.Map);
         Assert.Equal(string.Empty, trace.Header.MapMd5); // built-in

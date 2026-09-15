@@ -40,7 +40,18 @@ public static class NpyFile
     /// CHARACTER U+0093, which UTF-8 encodes as two bytes, so the literal is seven
     /// bytes long and matches nothing.
     /// </remarks>
-    private static ReadOnlySpan<byte> Magic => [0x93, (byte)'N', (byte)'U', (byte)'M', (byte)'P', (byte)'Y'];
+    /// <summary>
+    /// numpy's six-byte preamble.
+    /// </summary>
+    /// <remarks>
+    /// <b>Not a UTF-8 literal.</b> The first byte is 0x93, which a <c>u8</c>
+    /// string encodes as the two bytes 0xC2 0x93 — a file that looks right in a
+    /// hex dump's ASCII column and that numpy refuses. Shared with
+    /// <see cref="NpyWriter"/> so the reader and the writer cannot disagree
+    /// about it.
+    /// </remarks>
+    internal static ReadOnlySpan<byte> Magic =>
+        [0x93, (byte)'N', (byte)'U', (byte)'M', (byte)'P', (byte)'Y'];
 
     /// <summary>One array out of an <c>.npy</c> stream: its shape and its values.</summary>
     public readonly record struct Array2(int Rows, int Columns, float[] Values)
@@ -118,6 +129,26 @@ public static class NpyFile
             case "<f8":
                 for (var i = 0; i < count; i++)
                     values[i] = (float)BitConverter.ToDouble(npy, at + (i * 8));
+
+                break;
+
+            // The integer dtypes NpyWriter emits for a dataset's index and
+            // label columns. Widened into the float array the rest of this
+            // reader speaks, which is exact for |u1 and — at 24 bits of
+            // mantissa — for any <i4 below 16,777,216. A tick index is well
+            // inside that (a 32 MB segment is a few hundred thousand ticks),
+            // and a consumer that needs more reads the file in numpy, which is
+            // what the format is for.
+            case "|u1":
+            case "|i1":
+                for (var i = 0; i < count; i++)
+                    values[i] = npy[at + i];
+
+                break;
+
+            case "<i4":
+                for (var i = 0; i < count; i++)
+                    values[i] = BitConverter.ToInt32(npy, at + (i * 4));
 
                 break;
 

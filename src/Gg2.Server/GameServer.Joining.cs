@@ -15,6 +15,64 @@ public sealed partial class GameServer
         return writer.WrittenSpan.ToArray();
     }
 
+    /// <summary>
+    /// Who occupies each roster slot, for <see cref="MatchRecorder.SyncRoster"/>.
+    /// </summary>
+    /// <remarks>
+    /// <b>The one thing a recording cannot get from the wire.</b> A bot joins as
+    /// an ordinary player and <c>PLAYER_JOIN</c> carries a name and nothing else,
+    /// which is <c>docs/BOTAI.md</c> item 4 working as intended — and which
+    /// leaves a recorded trace unable to say whose keys are whose.
+    /// <para>
+    /// <b>Slot 0 is included and is not a person.</b> It is the server's own
+    /// reserved player, it exists on a headless server too, and it presses
+    /// nothing — but it is on the roster, so leaving it out would make its slot
+    /// the one unlabelled index in an otherwise complete table, which reads
+    /// downstream as "a human whose rows are all idle".
+    /// </para>
+    /// </remarks>
+    private IReadOnlyList<RecordedSlot> RecordedRoster()
+    {
+        var occupants = new List<RecordedSlot>(_roster.Count);
+
+        for (var slot = 0; slot < _roster.Count && slot <= byte.MaxValue; slot++)
+        {
+            var entry = _roster[slot];
+
+            // ⚠️ Slot 0 is asked about explicitly rather than read off IsBot.
+            // The reserved player is built by Roster's constructor without it,
+            // and `IsBot` defaults to FALSE MEANING HUMAN on purpose
+            // (PlayerState.IsBot: a missed assignment should engage the
+            // controller too often, never too rarely). That default is the safe
+            // direction for a handover and the wrong one here — it labels the
+            // server's own slot a person, and a slot that presses nothing for a
+            // whole recording is the worst possible row to have in a corpus
+            // about how people play.
+            var bot = slot == 0 || entry.IsBot;
+
+            occupants.Add(new RecordedSlot(
+                (byte)slot,
+                bot ? TraceParticipant.Bot : TraceParticipant.Human,
+
+                // The configured mode, not the brain this particular bot ended
+                // up running: BotMode.Both hands a decision to whichever
+                // controller the arbiter let spend one, which varies per tick and
+                // is not a property of the slot. A row labelled with the mode is
+                // answerable; one labelled with a per-tick outcome is not.
+                // "reserved" for slot 0, which is driven by no brain at all —
+                // it is a seat the reference keeps for the host's local player
+                // and a headless server never fills. Naming it says so; an empty
+                // controller on a bot row would read as a bot whose mode went
+                // unrecorded.
+                slot == 0 ? "reserved"
+                    : entry.IsBot ? _options.BotMode.ToString()
+                    : string.Empty,
+                entry.Name));
+        }
+
+        return occupants;
+    }
+
     // --- joining -------------------------------------------------------------
 
     private void AcceptConnections(DateTime now)

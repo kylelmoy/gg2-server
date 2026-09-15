@@ -24,7 +24,7 @@ namespace Gg2.Env;
 /// </remarks>
 public sealed record EnvOptions
 {
-    /// <summary><c>serve</c> or <c>smoke</c>.</summary>
+    /// <summary><c>serve</c>, <c>smoke</c> or <c>dataset</c>.</summary>
     public required string Command { get; init; }
 
     /// <summary>The port to bind. 0 asks the OS for a free one.</summary>
@@ -50,6 +50,21 @@ public sealed record EnvOptions
     /// </remarks>
     public string? Nav { get; init; }
 
+    /// <summary>Where <c>dataset</c> writes its <c>.npy</c> files.</summary>
+    public string? Output { get; init; }
+
+    /// <summary>The traces <c>dataset</c> reads — files, or directories of them.</summary>
+    public IReadOnlyList<string> Inputs { get; init; } = [];
+
+    /// <summary>
+    /// Ticks a decision is held for. <c>HumanDataset.Options.ActionRepeat</c>
+    /// has why this is a sampling stride and not a post-processing choice.
+    /// </summary>
+    public int ActionRepeat { get; init; } = 1;
+
+    /// <summary>Emit this server's own bots alongside the people.</summary>
+    public bool IncludeBots { get; init; }
+
     /// <summary>Where the maps live if neither <c>--maps</c> nor the env var says.</summary>
     public static string DefaultMaps =>
         Environment.GetEnvironmentVariable("GG2_REFERENCE") is { Length: > 0 } root
@@ -73,20 +88,36 @@ public sealed record EnvOptions
             return false;
         }
 
-        if (args[0] is not ("serve" or "smoke"))
+        if (args[0] is not ("serve" or "smoke" or "dataset"))
         {
             error = $"unknown command '{args[0]}'; try --help";
             return false;
         }
 
         var parsed = options with { Command = args[0] };
+        var inputs = new List<string>();
 
         for (var i = 1; i < args.Length; i++)
         {
-            // Every option takes a value, so a trailing flag would read past
-            // the end. Refused with the flag's own name rather than an
-            // IndexOutOfRangeException from inside a parse.
-            if (args[i].StartsWith("--", StringComparison.Ordinal) && i + 1 >= args.Length)
+            // A bare word is an input path for `dataset` and an error anywhere
+            // else. Collected rather than refused so a shell glob of traces can
+            // be passed the obvious way.
+            if (!args[i].StartsWith("--", StringComparison.Ordinal))
+            {
+                if (parsed.Command != "dataset")
+                {
+                    error = $"unexpected argument '{args[i]}'";
+                    return false;
+                }
+
+                inputs.Add(args[i]);
+                continue;
+            }
+
+            // Every option but the switches takes a value, so a trailing flag
+            // would read past the end. Refused with the flag's own name rather
+            // than an IndexOutOfRangeException from inside a parse.
+            if (args[i] is not "--include-bots" && i + 1 >= args.Length)
             {
                 error = $"'{args[i]}' wants a value";
                 return false;
@@ -110,6 +141,24 @@ public sealed record EnvOptions
 
                 case "--nav":
                     parsed = parsed with { Nav = args[++i] };
+                    break;
+
+                case "--out":
+                    parsed = parsed with { Output = args[++i] };
+                    break;
+
+                case "--include-bots":
+                    parsed = parsed with { IncludeBots = true };
+                    break;
+
+                case "--action-repeat":
+                    if (!int.TryParse(args[++i], out var repeat) || repeat < 1)
+                    {
+                        error = $"--action-repeat wants a positive number, got '{args[i]}'";
+                        return false;
+                    }
+
+                    parsed = parsed with { ActionRepeat = repeat };
                     break;
 
                 case "--worlds":
@@ -148,8 +197,52 @@ public sealed record EnvOptions
             }
         }
 
+        parsed = parsed with { Inputs = inputs };
+
+        // Checked here rather than in Program.cs, for the reason the class
+        // remarks give: a requirement enforced in a top-level statement is a
+        // requirement no test can drive.
+        if (parsed.Command == "dataset")
+        {
+            if (inputs.Count == 0)
+            {
+                error = "dataset wants at least one trace file or directory";
+                return false;
+            }
+
+            if (parsed.Output is null)
+            {
+                error = "dataset wants --out <dir>";
+                return false;
+            }
+        }
+
         options = parsed;
         return true;
+    }
+
+    /// <summary>
+    /// Every trace <see cref="Inputs"/> names, with directories expanded.
+    /// </summary>
+    /// <remarks>
+    /// Sorted, so two runs over the same corpus produce the same row order and
+    /// a dataset can be compared against another. A directory listing is not
+    /// ordered by anything a caller can rely on.
+    /// </remarks>
+    public IReadOnlyList<string> ResolveTraces()
+    {
+        var found = new List<string>();
+
+        foreach (var input in Inputs)
+        {
+            if (Directory.Exists(input))
+                found.AddRange(Directory.GetFiles(input, "*.trace"));
+            else
+                found.Add(input);
+        }
+
+        found.Sort(StringComparer.Ordinal);
+        return found;
     }
 
     /// <summary>

@@ -198,6 +198,32 @@ public sealed class Replayer(ITraceSimulation simulation)
     public int DumpTo { get; init; } = int.MaxValue;
 
     /// <summary>
+    /// Called once per tick, with that tick's index, just before its inputs are
+    /// consumed.
+    /// </summary>
+    /// <remarks>
+    /// <b>For reading the reconstructed world, not for steering it.</b> The
+    /// recorded stream is the only thing that decides what a replay does; this
+    /// exists so a caller can pair the state at the start of a tick with the
+    /// action the recording says was taken on it, which is the
+    /// <c>(observation, action)</c> a dataset is made of.
+    /// <para>
+    /// <b>The instant is chosen and not incidental.</b> Placed after the tick's
+    /// roster and spawn events have been applied and after an open-loop anchor
+    /// has put the recorded positions back, and before <c>Advance</c> — so the
+    /// state is what the player was looking at when they pressed the keys this
+    /// tick carries. A hook after <c>Advance</c> would pair every action with
+    /// the state it produced rather than the one that caused it, which is a
+    /// one-tick lag no consumer could detect and every consumer would train on.
+    /// </para>
+    /// <para>
+    /// The simulation is not passed in: the caller built it, so it can close
+    /// over its own instance and read whatever that concrete type exposes.
+    /// </para>
+    /// </remarks>
+    public Action<int>? OnTick { get; init; }
+
+    /// <summary>
     /// Replays <paramref name="ticks"/> and reports what disagreed.
     /// </summary>
     /// <param name="traceName">For the report.</param>
@@ -302,6 +328,10 @@ public sealed class Replayer(ITraceSimulation simulation)
             {
                 ReconcileControlPoints(tick, mismatches);
             }
+
+            // The last look at the world before this tick's keys are consumed —
+            // see OnTick for why the instant matters.
+            OnTick?.Invoke(tick.Index);
 
             // The inputs may come from a DIFFERENT tick — see InputLag. At
             // the default of 0 this is `ticks[index]`, i.e. `tick` itself.

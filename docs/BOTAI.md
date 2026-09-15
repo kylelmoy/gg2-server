@@ -149,24 +149,62 @@ small: reaction-time and dodge-direction priors conditioned on a handful of
 local features, over an action space of one byte of keys and a quantised aim. A
 dozen recorded rounds clears it.
 
-### Tabled
+### The precondition has fired
 
-**"There are zero active players of this game world wide."** No public game
-with strangers is expected, so the deadline above (data not collected during
-the port's first public games does not exist afterwards) has no precondition to
-fire on, and no longer carries a clock. **Do not silently re-open this as a
-queue item** — a session about to spend time on human data is looking at a
-decision to put back to the user, not a gap to fill.
+The operator runs a three-host public fleet and strangers join it, so the
+"zero active players world wide" that tabled this no longer holds. What the
+deadline said still does: play not recorded while it happens does not exist
+afterwards.
 
-**It is not critical.** Item 3 serves exactly one thing — the opponent model in
+**It is still not critical.** Item 3 serves one thing — the opponent model in
 the aim problem this document opens with — and the fallback is self-play,
-through items 8, 10 and 11, all of which are built. What is lost is not the
-ability to train; it is that every behaviour the trainer ever sees will have
-been written by somebody in this repo, a *quality* cost rather than a blocker.
-Nothing needs doing to keep the option open: the recorder above already covers
-it, including the "record from any host" route. **One human is not the data it
-wants** — the item asks for `p(action | state)` over real *opponents*, and a
-solo session is repeatable whenever, while a game with strangers is not.
+through items 8, 10 and 11, all of which are built. What is lost without it is
+not the ability to train; it is that every behaviour the trainer ever sees was
+written by somebody in this repo, a quality cost rather than a blocker.
+
+**One human is not the data it wants.** The item asks for `p(action | state)`
+over real *opponents*: a solo session is repeatable whenever, a game with
+strangers is not.
+
+### A recording says who was a person
+
+A bot joins as an ordinary player and `PLAYER_JOIN` carries a name and nothing
+else, which is item 4 working as intended — so on a bot-filled server the
+broadcast holds a person's keys and the scripted layer's keys in the same
+fields with nothing to separate them. A dataset built from an unlabelled trace
+of such a server is mostly this project's own bots, fed back in as
+demonstration data, and every row of it is a valid row: nothing downstream can
+detect the substitution.
+
+Trace format v2 carries a `TraceParticipant` per slot per tick, written by the
+recorder from `RosterEntry.IsBot` and re-taken at every segment roll so a
+segment stands alone. Slot 0 is labelled a bot: `IsBot` defaults to false
+meaning human — the safe direction for `Handover.ShouldEngage`, the wrong one
+here — and an unlabelled reserved slot reads downstream as a person who never
+pressed anything.
+
+A v1 trace has no labels, and every consumer refuses one rather than assuming
+its slots were people. The checked-in fixture corpus stays v1: those traces
+came off the running game and have no bots in them.
+
+### From a trace to training rows
+
+`gg2-env dataset <trace|dir>... --out <dir>` replays a recording through
+`Gg2.Parity`'s `Replayer` — the same replay the parity fixtures run, so there
+is one path from a trace to a world — and writes `(observation, action)` as
+`.npy`. Human rows only unless `--include-bots`, and every row carries its own
+participant column either way.
+
+| Choice | Why |
+|---|---|
+| Open-loop replay | A trace of this server's own play should reconstruct exactly, but a reconstruction that had drifted would emit observations of a world nobody saw. Open-loop re-anchors to the recorded positions every seventh tick. |
+| `--action-repeat k` samples every k-th tick | A policy at repeat k turns once per k ticks against a fixed per-decision cap, so the aim delta is measured over the same span. Taking every k-th row of a per-tick dataset under-reports every turn by a factor of k. |
+| Both the binned aim head and the raw signed degrees | A mouse is unbounded and the head is not, so a person's flick has no head that reproduces it. `saturated` counts the rows the action space could not express, and that rate is what phase 5's turn-rate cap is fitted to. |
+| The manifest carries `SIM_UUID` and the observation layout version | An observation is the output of one physics and one encoder. Rows from another stamp describe a different game, and without it two corpora merge silently. |
+
+`ActionEncoder` is the inverse of `ActionDecoder` and lives beside it: a pair
+that disagrees produces a dataset labelled in an action space no policy is
+trained in.
 
 ## 4. Keep the action space exactly the wire action
 
