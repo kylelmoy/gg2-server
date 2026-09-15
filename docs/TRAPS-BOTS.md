@@ -56,12 +56,14 @@ What it licenses, and what it does not:
   3-node pocket out of 261 that reaches nothing else. That one is genuine nav
   isolation. See "A route that exists and a route a bot can walk are different
   things".
-- ⚠️ **`koth_corinth`'s climb out of the pit costs twice what its own mirror
-  does.** Flown alone, `202->176` arrives in 98 ticks against `203->177`'s 48 at
-  the identical `needVx` and flight time, which is longer than the 45-89 tick
-  re-plan interval, so in a match the approach restarts instead of finishing. Not
-  settled. See "A route planned against a gate the body does not agree about",
-  "Still open".
+- ⚠️ **A node's anchor column is one pixel past the last x a body can stand
+  at**, on the 6,613 shipped nodes that are one column wide, and the in-air
+  tracker aims there. 22,645 of 59,958 arcs (37.8%) aim at a spot with no floor
+  under it. A hazard rather than a failure rate — the tracker is a hint and most
+  arcs land anyway — but it is what `koth_corinth` 202->176 is, and
+  `EveryShippedNodeCanHoldACharacter` cannot see it because it asserts
+  `PlaceFree` and never asks for floor. Not fixed. See "the anchor column is not
+  a place to stand".
 - ⚠️ **7 of 528 bot-matches still freeze a bot for 900+ ticks**, down from 98 —
   see "A bot that arrives stops moving" below. Every one is a Demoman, Engineer
   or Heavy handed an objective that **cannot be reached without a jump they do
@@ -6389,19 +6391,106 @@ which has no setup gates, and `BotObjectiveTests`' intel run stops at the grab.
   "somebody actually carried" assertion is what stops the test passing on
   unfixed code by comparing false to false — 1,495 carrying bot-ticks.
 
-### Still open: koth_corinth is a different cause
+### koth_corinth is a different cause, and it is the anchor column
 
 `koth_corinth` does not move at all, and nothing about it involves a gate. Its
-shuttle is the climb out of the pit at node 202 (a wide floor at y 906) onto
-node 176, a one-column ledge 48px above it, and on to node 134. Flown on its own
-from the node midpoint with `EdgeFlights`, `202->176` **arrives** — so the arc is
-not a fiction — but it takes **98 ticks and 90 of them steering that edge**,
-against **48 and 45** for `203->177`, the mirror-image edge on the other side of
-the map with the identical `needVx` 0.73 and 8.2-tick flight. `176->134` costs
-103.
+shuttle is the climb out of node 202 (a wide floor at y 906) onto node 176, a
+one-column ledge 48px above it, and on to node 134.
 
-That is the shape of it: the approach needs about twice as long as its own
-mirror, and the re-plan interval is 45-89 ticks, so in a match the bot is
-re-planned before it ever finishes one. Why the same arc costs twice as much
-from node 202 is not settled and is the next thing to measure — the approach is
-6 cells against the mirror's 7, so it is not the walk length.
+Flown alone with `EdgeFlights`, `202->176` **arrives** — the arc is not a
+fiction — but takes 98 ticks against 48 for `203->177`, the mirror edge with an
+identical `needVx` of 0.73 and 8.2-tick flight. Traced tick by tick, the first
+two jumps both fail the same way and the arrival on the third is a re-plan onto
+a different edge, not a flight of this one.
+
+See "the anchor column is not a place to stand", below.
+
+## The anchor column is not a place to stand
+
+A node's anchor is `NavGraph.ColumnWorldX` of its column, and the follower
+treats that x as a place to be: it is what `SetGoal` snaps to, what
+`EdgeFlights` starts and finishes a flight at, and — the one that matters on an
+arc — where `SteerJump` clamps `TrackX`:
+
+```
+steer.TrackX = ColumnWorldX(takeoff) + jumpDir * min(jumpDistance, needVx * AirTicks)
+```
+
+**On a one-column node that x is one pixel past the last x a body can stand
+at.** A soldier's box is `[x-6, x+6]` and needs one pixel of it over floor, so a
+single-column run's standable band is `ColumnWorldX(X0) - 6 .. ColumnWorldX(X1) - 1`
+and the anchor is the first x outside it. Measured directly on `koth_corinth`
+node 176 (column 232, `ColumnWorldX` 1404):
+
+| x | free | floor under | |
+|---|---|---|---|
+| 1392-1397 | no | — | box overlaps the step |
+| **1398-1403** | **yes** | **yes** | the whole standable band, six pixels |
+| 1404 | yes | **no** | the node's own anchor |
+| 1405+ | yes | no | past the ledge |
+
+So the tracker holds the bot at 1404 for the whole arc, and 1404 is the first x
+outside the band it has to reach — six pixels short of it, on the wrong side.
+It hovers there, falls past the ledge and comes back down to node 202. It lands
+only when drift, an overshoot or a re-plan puts it left of the anchor, which on
+the traced flight took two failed jumps and a re-plan onto a different edge.
+
+⚠️ **Measured with the SOLDIER box, and that is the NARROWEST at ±6.** Widths
+run 6, 7 and 9, so a Heavy loses three more pixels on the right and every number
+below understates every wider class.
+
+### How much of the corpus this describes
+
+`LandingAnchorCensus` (skipped by default, mirrors `RunupCensus`), soldier box,
+**area 1 of each of the 23 shipped maps** — 9,583 of the corpus's 11,327 nodes,
+the rest being `cp_dirtbowl`'s other stages:
+
+| | count | |
+|---|---|---|
+| nodes | 9,583 | of which 6,613 are one column wide |
+| node midpoints that are free with no floor under them | **3,339** | 34.8% |
+| Jump/DoubleJump arcs | 59,958 | |
+| arcs whose tracker aim point is free with no floor under it | **22,645** | 37.8% |
+| ...of the 46,446 with a narrow (<=2 column) landing | **21,968** | 47.3% |
+
+⚠️ **This is a HAZARD and not a failure rate, and reading it as one would be
+wrong.** The tracker is a direction hint that gravity and the landing collision
+finish, so a bot carrying leftover momentum drifts onto the standable part and
+lands anyway — `EdgeFlightTests` strands about 535 flights against 31,500
+arrivals. It bites only where the arc is slow enough and long enough for the
+tracker to actually hold the bot at the aim point for the whole flight, which is
+what `koth_corinth` 202->176 is: 0.73 px/tick over 8.2 ticks onto six pixels of
+floor.
+
+⛔ **`EdgeFlightTests.EveryShippedNodeCanHoldACharacter` does not cover this and
+cannot.** Its two assertions are `PlaceFreeInMask` at `StandY` and at
+`StandingY` — the node is not inside terrain — and neither asks whether there is
+floor under the box. **Every one of the 3,339 nodes counted above passes it, by
+construction**: the census only counts a midpoint that is free, so it is free in
+the mask too. That is the shape CLAUDE.md warns about — a green gate that is not
+gating the thing it reads as gating — and the fix for the test is an assertion
+it does not currently make, not a stricter version of one it does.
+
+### Not fixed here, and what a fix would have to do
+
+The obvious repair is to aim at a standable x inside the landing node rather
+than at its anchor column, in the three places that use the anchor as a
+position. That is not a two-line change and it is not free:
+
+- It moves `SteerJump`'s clamp, which every flown arc goes through, so the whole
+  of `EdgeFlightTests` and both `ScenarioSuiteTests` arms re-record.
+- `EdgeFlights.Midpoint` is a harness premise with its own written argument for
+  being the midpoint (`StartUnresolved`), so changing it changes what the
+  corpus sweep is a measurement *of*.
+- The generator's own proof is stated in column terms too, and the arcs were
+  costed against it — see `NavGraphBuilder`'s "NOT credited here: the six px of
+  intra-cell lead", which took out a relaxation of exactly this kind after
+  measuring that it put `ctf_oldfort` back to 18% of red's routes crossing an
+  arc it cannot fly.
+
+⚠️ **The gate already credits the intra-cell lead and the tracker does not**, and
+that asymmetry is the narrowest statement of the defect: `Gate` subtracts
+`jumpDir * (character.X - ColumnWorldX(takeoff))` clamped to one cell from the
+distance it demands, on the argument that "a column is not a point"; `SteerJump`
+then aims at the anchor as though it were. Whichever way it is repaired, those
+two want to agree.
