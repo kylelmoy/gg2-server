@@ -189,6 +189,15 @@ if (Environment.GetEnvironmentVariable("BENCH_ARMS") is { } armsN)
     return;
 }
 
+if (Environment.GetEnvironmentVariable("BENCH_SEARCHCLASSES") is { } searchClassesN)
+{
+    Bench.SearchClassesEval.Run(
+        maps,
+        Environment.GetEnvironmentVariable("GG2_NAV")!,
+        int.Parse(searchClassesN));
+    return;
+}
+
 if (Environment.GetEnvironmentVariable("BENCH_CHURN") is { } churnN)
 {
     Bench.ChurnBench.Run(
