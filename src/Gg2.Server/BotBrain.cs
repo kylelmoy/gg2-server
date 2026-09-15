@@ -62,23 +62,10 @@ public static class BotBrain
     {
         ArgumentNullException.ThrowIfNull(options);
 
+        CheckSettings(options);
+
         var mode = options.BotMode;
         var policyPaths = options.PolicyPaths;
-
-        if (mode.UsesPolicy() && policyPaths.Count == 0)
-        {
-            throw new ArgumentException(
-                $"bot mode '{mode.ToString().ToLowerInvariant()}' drives bots with a trained "
-                + "checkpoint and none was given; add --policy <path> (or a [Bots] Policy key), "
-                + "or use bot mode scripted or search.");
-        }
-
-        if (!mode.UsesPolicy() && policyPaths.Count > 0)
-        {
-            throw new ArgumentException(
-                $"a policy checkpoint was given but bot mode '{mode.ToString().ToLowerInvariant()}' "
-                + "never consults one; use bot mode policy or tiered, or drop the checkpoint.");
-        }
 
         var arbiterUnits = options.BotArbiterMicroseconds;
 
@@ -98,19 +85,18 @@ public static class BotBrain
 
         var tiers = new List<MicroControllerSpec>();
 
-        if (mode.UsesSearch())
-            tiers.Add(new SearchMicroSpec(new RolloutOptions(Threads: options.SearchThreads)));
-
         // The operator's per-class assignments, parsed and validated before a
         // single checkpoint is opened so a typo costs no file I/O and, more to the
         // point, so the error names the setting rather than a load failure.
         var assigned = ParseClassPolicies(options.BotClassPolicies);
 
+        // Which policy tier already claimed each class, so an OVERLAP is named
+        // rather than silently resolved by list order — and, afterwards, so the
+        // search can take the classes no policy drives.
+        var claimedBy = new Dictionary<PlayerClass, string>();
+
         if (mode.UsesPolicy())
         {
-            // Which tier already claimed each class, so an OVERLAP is named rather
-            // than silently resolved by list order.
-            var claimedBy = new Dictionary<PlayerClass, string>();
             var labels = new List<string>();
 
             foreach (var policyPath in policyPaths)
@@ -282,15 +268,18 @@ public static class BotBrain
                     + $"'{Scripted}' to leave the class to the scripted layer.");
             }
         }
-        else if (assigned.Count > 0)
+
+        if (mode.UsesSearch())
         {
-            // Same argument as the checkpoint-with-no-policy-mode refusal above: a
-            // setting that is read, validated and then cannot possibly apply is a
-            // server saying it is doing something it is not.
-            throw new ArgumentException(
-                $"bot class policies were configured but bot mode "
-                + $"'{mode.ToString().ToLowerInvariant()}' runs no policy; use bot mode policy "
-                + "or tiered, or drop them.");
+            var searched = SearchClasses(claimedBy, assigned);
+
+            // ⚠️ FIRST, inserted after the policies were built: most capable first
+            // is the arbiter's whole input, and the set could not be known before
+            // the policies had claimed theirs.
+            tiers.Insert(0, new SearchMicroSpec(
+                new RolloutOptions(Threads: options.SearchThreads), TrainedClasses: searched));
+
+            report?.Invoke($"search: drives {Classes(searched)}");
         }
 
         // ⛔ Unreachable from the settings now — NeedsArbiter defaults the budget
@@ -340,6 +329,115 @@ public static class BotBrain
                     Arbiter = arbiterUnits is { } units ? new DecisionQuotaArbiter(units) : null,
                 },
         };
+    }
+
+    /// <summary>
+    /// Which classes the search tier drives on a live server.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The policy's default trained set, plus every class no policy tier
+    /// drives</b> — so all nine in search mode, where there is no policy. The
+    /// search holds no checkpoint and can drive any class. The restriction to a
+    /// trained set that <see cref="SearchMicroSpec"/> defaults to exists to hold
+    /// class coverage still between a search arm and a policy arm in a bench
+    /// comparison, and nothing on a live server is that comparison: leaving it on
+    /// made Pyro, Medic, Engineer, Spy and Sniper bots scripted in search mode, and
+    /// in tiered mode left every class no tier named with no controller at all.
+    /// </para>
+    /// <para>
+    /// <b>The default four are KEPT in tiered mode</b> even where a policy drives
+    /// them, because that overlap is the shipped fallback ladder: the search leads
+    /// on those classes and the arbiter drops to the policy under pressure. A
+    /// class a policy claims outside the four stays the policy's alone. A class the
+    /// operator pinned to <see cref="Scripted"/> is not unclaimed and is left
+    /// alone.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Measured before shipping, on the five new classes</b>, with
+    /// <c>tools/bench</c>'s <c>BENCH_SEARCHCLASSES</c> (2026-09-15, 21 maps, 420
+    /// matches an arm, 8 bots, 5-minute cap, no arbiter). Rostered with Pyro,
+    /// Medic, Engineer, Spy and Sniper, the search hybrid's death share fell from
+    /// 50.0% to 47.3% (pooled z -4.89; match-level Welch t -3.39) and its win
+    /// share rose from 57.9% to 64.6% (z +1.45). Every one of the five classes
+    /// moved the right way — Spy -5.1 points and Engineer -3.5 the largest, Medic
+    /// -1.3 the smallest — though none is significant alone at match level. The
+    /// control, the same instrument on the default four, reproduced the known
+    /// direction only weakly (death share 49.3% to 48.6%, t -0.69), so the new
+    /// classes gain at least as much as the old. What would show this wrong is
+    /// that mode's per-class death share or win share going against the
+    /// all-scripted control for one of those classes at a larger match count.
+    /// </para>
+    /// </remarks>
+    private static PlayerClass[] SearchClasses(
+        Dictionary<PlayerClass, string> claimedByPolicy, Dictionary<PlayerClass, string> assigned)
+    {
+        var classes = new List<PlayerClass>(PolicyNetwork.DefaultTrainedClasses.ToArray());
+
+        for (var playerClass = PlayerClass.Scout; playerClass <= PlayerClass.Pyro; playerClass++)
+        {
+            if (classes.Contains(playerClass)
+                || claimedByPolicy.ContainsKey(playerClass)
+                || assigned.ContainsKey(playerClass))
+            {
+                continue;
+            }
+
+            classes.Add(playerClass);
+        }
+
+        classes.Sort((left, right) => ((int)left).CompareTo((int)right));
+        return [.. classes];
+    }
+
+    /// <summary>
+    /// The refusals <see cref="Build"/> makes from the settings alone, with no
+    /// checkpoint opened.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>Called from <see cref="ServerOptions.Validate"/>, and that is the
+    /// point.</b> The panel's save, the fleet renderer and the pushed-config
+    /// watcher all decide "this file will start" with <c>Validate</c> alone, so a
+    /// refusal only <see cref="Build"/> made let the panel write
+    /// <c>Mode=search</c> beside a leftover <c>Policy</c> key, and "Save &amp;
+    /// restart" then ended the process with exit 2. Nothing here may touch the
+    /// disk: the renderer validates on a machine where the checkpoint paths do not
+    /// exist.
+    /// </remarks>
+    public static void CheckSettings(ServerOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+
+        var mode = options.BotMode;
+        var policyPaths = options.PolicyPaths;
+
+        if (mode.UsesPolicy() && policyPaths.Count == 0)
+        {
+            throw new ArgumentException(
+                $"bot mode '{mode.ToString().ToLowerInvariant()}' drives bots with a trained "
+                + "checkpoint and none was given; add --policy <path> (or a [Bots] Policy key), "
+                + "or use bot mode scripted or search.");
+        }
+
+        if (!mode.UsesPolicy() && policyPaths.Count > 0)
+        {
+            throw new ArgumentException(
+                $"a policy checkpoint was given but bot mode '{mode.ToString().ToLowerInvariant()}' "
+                + "never consults one; use bot mode policy or tiered, or drop the checkpoint.");
+        }
+
+        var assigned = ParseClassPolicies(options.BotClassPolicies);
+
+        if (!mode.UsesPolicy() && assigned.Count > 0)
+        {
+            // Same argument as the checkpoint-with-no-policy-mode refusal above: a
+            // setting that is read, validated and then cannot possibly apply is a
+            // server saying it is doing something it is not.
+            throw new ArgumentException(
+                $"bot class policies were configured but bot mode "
+                + $"'{mode.ToString().ToLowerInvariant()}' runs no policy; use bot mode policy "
+                + "or tiered, or drop them.");
+        }
     }
 
     /// <summary>

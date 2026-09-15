@@ -100,6 +100,37 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
     /// </remarks>
     private byte? _bubble;
 
+    /// <summary>
+    /// <see cref="PollCommands"/> calls between two bubbles this bot sends.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>Hard-coded against the server's per-player bubble throttle</b>,
+    /// <c>ConnectionLimits.ChatBubbleIntervalMs</c> (250 ms), which drops a bubble
+    /// in silence. A search bot releases and re-takes the wheel a couple of ticks
+    /// apart at the edge of the range, so without this the throttle ate the take
+    /// bubble after nearly every release, and a client was left showing <c>z2</c>
+    /// over a bot the search was driving — 6 of 9 <c>z3</c> lost in a measured
+    /// 60 s search match. Nine ticks is 300 ms at 30 Hz: 8 would be 267 ms, too
+    /// close to 250 with the server reading <c>Environment.TickCount64</c> at its
+    /// ~15.6 ms resolution. A diagnostic, so a constant rather than the live
+    /// setting: an operator who raises the throttle gets dropped bubbles again.
+    /// </remarks>
+    internal const int BubbleSpacingPolls = 9;
+
+    /// <summary><see cref="PollCommands"/> calls so far — this bot's own clock.</summary>
+    /// <remarks>
+    /// Counted rather than read from the <c>tick</c> argument, which a caller may
+    /// restart from zero (a test's drain loop does) and which would then read as
+    /// time running backwards.
+    /// </remarks>
+    private long _commandPolls;
+
+    /// <summary>The poll the last bubble went out on.</summary>
+    private long _bubbleSentAt = long.MinValue / 2;
+
+    /// <summary>The last bubble sent, which is what clients are showing.</summary>
+    private byte? _bubbleShown;
+
     public HybridBot(IMicroController micro, ScriptedBot scripted, IMicroArbiter? arbiter = null)
         : this([micro], scripted, arbiter)
     {
@@ -273,14 +304,34 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
     public void PollCommands(in WorldView world, int slot, int tick, ref PlayerCommandBuffer commands)
     {
         _scripted.PollCommands(in world, slot, tick, ref commands);
+        _commandPolls++;
+
+        if (_bubble is not { } image)
+            return;
+
+        var spaced = _commandPolls - _bubbleSentAt >= BubbleSpacingPolls;
+
+        // Back to what clients already show before the last one could go out —
+        // a release and re-take inside the window. Nothing to correct.
+        if (!spaced)
+        {
+            if (image == _bubbleShown)
+                _bubble = null;
+
+            return;
+        }
 
         // ⛔ AFTER the macro layer, never before. The buffer has a ceiling —
         // ClientCommands.PerTickLimit, the same one a socket gets — and Push
         // silently fails at it, so a debugging aid pushed first could displace a
         // real objective command. Dropping the bubble instead is the right way
         // round: nothing that matters is lost, and the aid is only ever an aid.
-        if (_bubble is { } image && commands.Push(PlayerCommand.ChatBubble(image)))
+        if (commands.Push(PlayerCommand.ChatBubble(image)))
+        {
             _bubble = null;
+            _bubbleShown = image;
+            _bubbleSentAt = _commandPolls;
+        }
     }
 
     public PlayerInput Poll(in WorldView world, int slot, int tick)
@@ -494,10 +545,11 @@ public sealed class HybridBot : IInputSource, ICommandSource, IWrapsScriptedBot
     /// here would be a handover the aid cannot see.
     /// <para>
     /// ⚠️ <b>The pending bubble is overwritten, not queued.</b> Two handovers
-    /// inside one tick — possible only under <see cref="HandoverRule.HeadSplit"/>
-    /// — send the second, which is the one describing the state the bot is
-    /// actually in. A queue would put the aid permanently behind the thing it is
-    /// describing.
+    /// before it can go out — inside one tick under
+    /// <see cref="HandoverRule.HeadSplit"/>, or inside
+    /// <see cref="BubbleSpacingPolls"/> under any rule — send the last, which is
+    /// the one describing the state the bot is actually in. A queue would put the
+    /// aid permanently behind the thing it is describing.
     /// </para>
     /// </remarks>
     private void NoteHandover(int next)
