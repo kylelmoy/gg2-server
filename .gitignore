@@ -48,3 +48,6 @@ traces/
 # coupled the test suite to one particular checkout of a fork.
 # ReferenceTree.NavCacheDirectory looks at nav/, or at GG2_NAVCACHE.
 TestResults/
+
+# Fleet analytics collected by scripts/fleet-analytics.sh. Player names; never commit.
+deploy/analytics/

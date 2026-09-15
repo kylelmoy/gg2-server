@@ -190,7 +190,7 @@ All JSON, all under the session cookie except the first four.
 
 | | | |
 |---|---|---|
-| `GET /`, `/app.css`, `/app.js`, `/favicon.svg` | — | the page, embedded in the assembly |
+| `GET /`, `/app.css`, `/common.js`, `/analytics.js`, `/app.js`, `/favicon.svg` | — | the page, embedded in the assembly |
 | `GET /world.json` | — | the analytics map's coastlines and markers, embedded. **Served without a session**, like the page: it is the same public-domain geometry for every server in the world and says nothing about this one |
 | `GET /api/session` | — | signed in?, TLS?, server name, CSRF token if signed in |
 | `POST /api/login` | `{password}` | sets the cookie, returns the CSRF token |
@@ -252,7 +252,15 @@ is verified by opening it.
 
 **Embedded rather than served off disk**, so a deployment cannot end up with a
 working binary and a missing page, and so there is no directory to traverse: the
-routes name the four files by hand.
+routes name the six files by hand.
+
+**Three scripts in one global scope**, loaded in order: `common.js` (the element
+lookup, cell builders, theme tokens, number formats), `analytics.js` (the
+Analytics view, which draws an object and never fetches one), then `app.js`.
+The view is its own file because `scripts/fleet-analytics.sh` inlines it into
+the fleet page too. `WebAssetTests` scans the files together for a name declared
+twice, and checks that every id the fleet page's scripts ask for is inside the
+analytics sheet that page cuts out of `index.html`.
 
 Two rules hold `app.js` together: **state arrives on one event stream and is
 applied by `render()`** — nothing else writes to the DOM from a timer, so the

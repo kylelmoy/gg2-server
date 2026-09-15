@@ -49,46 +49,75 @@ public sealed class WebAssetTests
     [InlineData("index.html")]
     [InlineData("app.css")]
     [InlineData("app.js")]
+    [InlineData("common.js")]
+    [InlineData("analytics.js")]
     [InlineData("favicon.svg")]
     [InlineData("world.json")]
     public void EveryAssetIsEmbedded(string name) => Assert.NotEmpty(Asset(name));
 
+    /// <summary>The panel's scripts, in the order index.html loads them.</summary>
+    private static readonly string[] PanelScripts = ["common.js", "analytics.js", "app.js"];
+
     /// <summary>
-    /// ⛔ <b>No two top-level declarations share a name.</b> The page is one
-    /// script in one scope, so the second one wins and the first one's callers
-    /// break somewhere else entirely.
+    /// The line <c>scripts/fleet-analytics.sh</c> cuts the analytics sheet out
+    /// of index.html from, up to the first <c>&lt;/dialog&gt;</c> after it.
+    /// </summary>
+    private const string AnalyticsSheetStart = "<dialog class=\"sheet sheet-wide\" id=\"analytics\"";
+
+    private static string RepoFile(params string[] parts) =>
+        File.ReadAllText(Path.Combine([RepoRoot(), .. parts]));
+
+    /// <summary>
+    /// ⛔ <b>No two top-level declarations share a name, across every script a
+    /// page loads.</b> Classic scripts share one global scope, so a second
+    /// <c>function</c> replaces the first and its callers break somewhere else
+    /// entirely, and a second <c>const</c> stops the whole later file running.
     /// </summary>
     [Fact]
     public void NoTopLevelNameIsDeclaredTwice()
     {
-        var declared = new Dictionary<string, int>(StringComparer.Ordinal);
-        var duplicates = new List<string>();
-        var line = 0;
-
-        foreach (var text in Asset("app.js").Split('\n'))
-        {
-            line++;
-
-            // Column zero only: anything indented is inside a function or a
-            // block, where shadowing is legal and often deliberate.
-            var match = Regex.Match(text, @"^(?:function|const|let|var)\s+([A-Za-z_$][\w$]*)");
-
-            if (!match.Success)
-                continue;
-
-            var name = match.Groups[1].Value;
-
-            if (declared.TryGetValue(name, out var first))
-                duplicates.Add($"'{name}' at line {line} was already declared at line {first}");
-            else
-                declared[name] = line;
-        }
-
-        Assert.True(duplicates.Count == 0, string.Join("; ", duplicates));
+        var panel = PanelScripts.Select(name => (name, Asset(name))).ToArray();
+        var declared = Declarations(panel);
 
         // The vacuity control: this only means anything if the scan found the
         // declarations at all.
-        Assert.True(declared.Count > 50, $"only {declared.Count} top-level names found — the scan is broken");
+        Assert.True(declared > 50, $"only {declared} top-level names found — the scan is broken");
+
+        // The fleet page loads common.js, analytics.js and its own fleet.js.
+        Declarations([panel[0], panel[1], ("fleet.js", RepoFile("scripts", "fleet-analytics", "fleet.js"))]);
+    }
+
+    private static int Declarations((string Name, string Text)[] scripts)
+    {
+        var declared = new Dictionary<string, string>(StringComparer.Ordinal);
+        var duplicates = new List<string>();
+
+        foreach (var (file, script) in scripts)
+        {
+            var line = 0;
+
+            foreach (var text in script.Split('\n'))
+            {
+                line++;
+
+                // Column zero only: anything indented is inside a function or a
+                // block, where shadowing is legal and often deliberate.
+                var match = Regex.Match(text, @"^(?:async\s+)?(?:function|const|let|var)\s+([A-Za-z_$][\w$]*)");
+
+                if (!match.Success)
+                    continue;
+
+                var name = match.Groups[1].Value;
+
+                if (declared.TryGetValue(name, out var first))
+                    duplicates.Add($"'{name}' at {file}:{line} was already declared at {first}");
+                else
+                    declared[name] = $"{file}:{line}";
+            }
+        }
+
+        Assert.True(duplicates.Count == 0, string.Join("; ", duplicates));
+        return declared.Count;
     }
 
     /// <summary>
@@ -102,25 +131,76 @@ public sealed class WebAssetTests
     [Fact]
     public void EveryIdTheScriptAsksForIsInThePage()
     {
-        var html = Asset("index.html");
-
-        var present = new HashSet<string>(
-            Regex.Matches(html, @"\sid=""([^""]+)""").Select(m => m.Groups[1].Value),
-            StringComparer.Ordinal);
-
-        var script = Asset("app.js");
-
-        var wanted = Regex.Matches(script, @"\$\('([^']+)'\)")
-            .Select(m => m.Groups[1].Value)
-            .Concat(Regex.Matches(script, @"getElementById\('([^']+)'\)").Select(m => m.Groups[1].Value))
-            .Distinct(StringComparer.Ordinal)
-            .ToList();
+        var present = Ids(Asset("index.html"));
+        var wanted = WantedIds(string.Concat(PanelScripts.Select(Asset)));
 
         Assert.True(wanted.Count > 40, $"only {wanted.Count} literal ids found — the scan is broken");
 
         var missing = wanted.Where(id => !present.Contains(id)).ToList();
 
         Assert.True(missing.Count == 0, $"not in index.html: {string.Join(", ", missing)}");
+    }
+
+    /// <summary>
+    /// ⛔ <b>The fleet page's cut of index.html has every id its scripts ask
+    /// for.</b> That page is the analytics sheet ALONE, so an id the view uses
+    /// that lives anywhere else in index.html passes the test above and throws
+    /// on the fleet page.
+    /// </summary>
+    /// <remarks>
+    /// The other ids allowed are the fleet page's own: the two JSON blocks the
+    /// build script writes, and the elements fleet.js creates.
+    /// </remarks>
+    [Fact]
+    public void TheFleetPageHasEveryIdItsScriptsAskFor()
+    {
+        var html = Asset("index.html");
+        var start = html.IndexOf(AnalyticsSheetStart, StringComparison.Ordinal);
+
+        Assert.True(start >= 0, "the analytics sheet's opening line is not in index.html; scripts/fleet-analytics.sh cuts on it");
+        Assert.Equal(start, html.LastIndexOf(AnalyticsSheetStart, StringComparison.Ordinal));
+
+        var sheet = html[start..html.IndexOf("</dialog>", start, StringComparison.Ordinal)];
+        var fleet = RepoFile("scripts", "fleet-analytics", "fleet.js");
+        var build = RepoFile("scripts", "fleet-analytics.sh");
+
+        // The script cuts on the same line and writes the two blocks it is credited with.
+        Assert.Contains(AnalyticsSheetStart, build, StringComparison.Ordinal);
+        Assert.Contains("id=\"fleet-data\"", build, StringComparison.Ordinal);
+        Assert.Contains("id=\"fleet-world\"", build, StringComparison.Ordinal);
+
+        var present = Ids(sheet);
+        present.UnionWith(["fleet-data", "fleet-world"]);
+        present.UnionWith(Regex.Matches(fleet, @"\.id = '([^']+)'").Select(m => m.Groups[1].Value));
+
+        var wanted = WantedIds(Asset("analytics.js") + fleet);
+
+        Assert.True(wanted.Count > 15, $"only {wanted.Count} literal ids found — the scan is broken");
+
+        var missing = wanted.Where(id => !present.Contains(id)).ToList();
+
+        Assert.True(missing.Count == 0, $"not in the fleet page: {string.Join(", ", missing)}");
+    }
+
+    private static HashSet<string> Ids(string html) =>
+        new(Regex.Matches(html, @"\sid=""([^""]+)""").Select(m => m.Groups[1].Value), StringComparer.Ordinal);
+
+    private static List<string> WantedIds(string script) =>
+        Regex.Matches(script, @"\$\('([^']+)'\)")
+            .Select(m => m.Groups[1].Value)
+            .Concat(Regex.Matches(script, @"getElementById\('([^']+)'\)").Select(m => m.Groups[1].Value))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+    private static string RepoRoot()
+    {
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "Gg2.sln")))
+                return directory.FullName;
+        }
+
+        throw new InvalidOperationException("no Gg2.sln above the test binaries");
     }
 
     /// <summary>

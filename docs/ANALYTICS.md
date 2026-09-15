@@ -229,6 +229,46 @@ eight hundred days of six named fields is mostly repeated key names, the same
 trade `PerfHistory` makes. `PlayerAnalyticsTests.EveryRowMatchesItsDeclaredFields`
 is what stops a list and its rows drifting apart.
 
+## The whole fleet
+
+`scripts/fleet-analytics.sh` collects every host in `deploy/hosts` and builds one
+page, `deploy/analytics/fleet-analytics.html`: each server on its own, or all of
+them added together. It is read-only on the hosts.
+
+```sh
+scripts/fleet-analytics.sh                 # collect from every host, build the page
+scripts/fleet-analytics.sh --open          # and open it
+scripts/fleet-analytics.sh -H gg2-us-east  # collect one host; the page still shows every saved host
+scripts/fleet-analytics.sh --no-collect    # rebuild the page from what is saved
+```
+
+| | |
+|---|---|
+| **How it reads a host** | Over ssh, it logs into that host's panel on loopback with the port and password from the host's own `shared/gg2.ini` — `fleet-state.sh`'s route — and sends `state` (for the server's name) and `analytics`. That is the running server, so sessions still open are counted; the file on disk is up to five minutes behind and has none. |
+| **What it keeps** | `deploy/analytics/<host>.json`, the last successful reply per host. A host that does not answer keeps its previous reply, and the page names it and the time its figures are from. The directory is gitignored: it holds player names. |
+| **The page** | Self-contained, opened from disk: `app.css`, `world.json`, the panel's `analytics.js` and `common.js`, and the analytics sheet's markup cut out of `index.html`, with `scripts/fleet-analytics/fleet.js` adding the server switch and the sum. There is no second copy of the view to go stale. A reply's `<` is escaped before it goes into the page, because a player name can spell `</script>`. |
+
+**What "all servers" adds, and what it cannot.**
+
+| Figure | In the sum |
+|---|---|
+| Joins, time played, per-day joins and playtime, per-place joins and playtime, connected now | Added. Exact. |
+| Players (all time, per day, first-time, per place) | Added, and an **over-count**: each host salts its hashes with its own random salt, so the same address on two hosts is two keys and nothing can join them. |
+| Peak at once, and each day's peak | The busiest **single** server's. Per-server peaks happened at different moments, so their sum is a crowd that never existed. |
+| Most time played | Each host's top 25, merged and cut to 25, labelled with the host. The same person on two hosts is two rows. |
+
+The page states the over-count and the peak rule under the figures. **What would
+make the player sum exact** is a salt shared across the fleet, which this
+deliberately does not do: a per-file salt is what stops one server's table being
+cross-referenced against another's.
+
+**Verified by opening it**, against the three live hosts: the sum's joins,
+players, peak and per-day rows matched each host's `!meta` and `!day` records by
+hand, and a host that did not answer was named above the figures.
+`WebAssetTests.TheFleetPageHasEveryIdItsScriptsAskFor` and
+`NoTopLevelNameIsDeclaredTwice` are the mechanical half; nothing runs the sum
+itself.
+
 ## Gates
 
 | | |
@@ -236,7 +276,7 @@ is what stops a list and its rows drifting apart.
 | `PlayerAnalyticsTests` | counting, per-day uniqueness across a day boundary, playtime including sessions still open, the salt and every total surviving a reload, the cap and its effect on the all-time count, a live player never being trimmed, geography by country and by US state, and the three claims a reader would act on: no address is in the file, a name cannot forge the format, and a store that never read its file cannot write one |
 | `AnalyticsServerTests` | the same store as a running `GameServer` drives it, over a real socket: a join and a disconnect are counted, bots never are, the history survives a whole server restart, no file appears without the flag, and the `analytics` verb reports what happened |
 | `GeoIpDatabaseTests` | the MaxMind DB reader against **MaxMind's own test database** — an oracle rather than a mirror, because a reader tested against an encoder by the same author passes whenever both misread the specification the same way |
-| `WebAssetTests` | the panel's files, checked the way a build step would: no top-level name declared twice, every literal `$('id')` present in the HTML, and the map geometry's shape and antimeridian |
+| `WebAssetTests` | the panel's files, checked the way a build step would: no top-level name declared twice across the scripts a page loads, every literal `$('id')` present in the HTML (for the fleet page, inside the analytics sheet it cuts out), and the map geometry's shape and antimeridian |
 | `CliCoverageTests`, `ConfigFileCoverageTests` | both settings are reachable from a flag and from a config file, and each moves the option it names |
 
 **What no test here catches**, and cannot: anything that needs the panel's
