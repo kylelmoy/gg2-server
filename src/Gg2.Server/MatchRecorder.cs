@@ -50,6 +50,7 @@ public sealed class MatchRecorder : IDisposable
     private readonly string _source;
     private readonly IServerLog _log;
     private readonly Func<byte[]> _preamble;
+    private readonly Func<IReadOnlyList<RecordedSlot>> _roster;
 
     private FileStream? _segment;
     private string _map = string.Empty;
@@ -57,6 +58,32 @@ public sealed class MatchRecorder : IDisposable
     private int _index;
     private long _total;
     private bool _full;
+
+    /// <summary>
+    /// Ticks appended to the open segment, which is the index
+    /// <see cref="TraceParser"/> will give the next one.
+    /// </summary>
+    /// <remarks>
+    /// <b>Counts <see cref="Append"/> and not the preamble</b>, which is what
+    /// makes it agree with the parser: a flush carries exactly one
+    /// <c>INPUTSTATE</c> or <c>QUICK_UPDATE</c> (<c>WriteStateUpdate</c> appends
+    /// every tick), and the preamble's <c>FULL_UPDATE</c> is a tick to neither
+    /// side.
+    /// </remarks>
+    private int _ticks;
+
+    /// <summary>The open segment's roster labels, in the order they were noted.</summary>
+    private readonly List<TraceRosterNote> _notes = [];
+
+    /// <summary>
+    /// What <see cref="SyncRoster"/> last wrote down for each slot, so an
+    /// unchanged roster produces no notes.
+    /// </summary>
+    /// <remarks>
+    /// Cleared at every roll: a new segment re-labels every occupied slot from
+    /// tick 0, because it has to stand alone.
+    /// </remarks>
+    private readonly Dictionary<byte, RecordedSlot> _known = [];
 
     /// <summary>
     /// Bytes of broadcast per segment before it rolls. Thirty-two megabytes is
@@ -83,14 +110,141 @@ public sealed class MatchRecorder : IDisposable
     /// than a value because it has to be re-taken at every roll, against the
     /// world as it is then.
     /// </param>
-    public MatchRecorder(string directory, string source, IServerLog log, Func<byte[]> preamble)
+    /// <param name="roster">
+    /// Produces who currently occupies each slot. <b>Re-taken at every roll for
+    /// the same reason the preamble is</b>: a segment that opened mid-game has
+    /// to carry the labels for players who joined before it started, or every
+    /// segment but the first describes its bots as people.
+    /// </param>
+    public MatchRecorder(
+        string directory,
+        string source,
+        IServerLog log,
+        Func<byte[]> preamble,
+        Func<IReadOnlyList<RecordedSlot>>? roster = null)
     {
         _directory = directory;
         _source = source;
         _log = log;
         _preamble = preamble;
+        _roster = roster ?? (static () => []);
 
         Directory.CreateDirectory(directory);
+
+        // ⚠️ The cap bounds the DIRECTORY, not this process's own writing. A
+        // server restarts — a deploy, a config push, a crash loop — and a cap
+        // that started again from zero each time would bound nothing at all on
+        // the one kind of host this exists for: an unattended public server,
+        // which is also the kind that restarts most.
+        _total = ExistingBytes(directory);
+
+        if (_total > 0)
+        {
+            _log.Info(
+                $"recording into {directory}, which already holds " +
+                $"{_total / (1024 * 1024)}MB of the {MaxTotalBytes / (1024 * 1024)}MB cap");
+        }
+    }
+
+    /// <summary>
+    /// What the directory already holds, so a restart resumes against the cap
+    /// rather than beneath it.
+    /// </summary>
+    /// <remarks>
+    /// Counts the <c>.part</c> of an interrupted segment too: those bytes are on
+    /// the disk this bound is about, whether or not they ever became a trace. A
+    /// directory that cannot be read counts as empty and says so — refusing to
+    /// record because a listing failed is the worse failure, the same call
+    /// <see cref="Truncate"/> makes about an over-long source.
+    /// </remarks>
+    private long ExistingBytes(string directory)
+    {
+        try
+        {
+            var total = 0L;
+
+            foreach (var file in Directory.EnumerateFiles(directory, "*.trace*"))
+                total += new FileInfo(file).Length;
+
+            return total;
+        }
+        catch (IOException e)
+        {
+            _log.Warn($"could not size {directory} against the recording cap: {e.Message}");
+            return 0;
+        }
+        catch (UnauthorizedAccessException e)
+        {
+            _log.Warn($"could not size {directory} against the recording cap: {e.Message}");
+            return 0;
+        }
+    }
+
+    /// <summary>
+    /// Takes the roster as it stands and records whatever changed since the
+    /// last look.
+    /// </summary>
+    /// <remarks>
+    /// <b>A diff of a snapshot, not a hook on each join — deliberately.</b> A
+    /// player reaches the roster from three places (a socket join, a bot the
+    /// population manager added, the server's own reserved slot 0) and leaves
+    /// from more, and <c>WorldState.RemoveSlot</c> renumbers everyone above a
+    /// departure. Hooking each site is the "add it in three places" rule
+    /// <c>CLAUDE.md</c> records for client commands, and the failure mode here
+    /// is worse than a missing feature: an unhooked site produces a recording
+    /// whose labels are silently attached to the wrong slots.
+    /// <para>
+    /// Comparing up to <c>Roster.MaxSlots</c> entries once a tick costs
+    /// nothing against a 33.3 ms budget, and only when recording is on.
+    /// </para>
+    /// <para>
+    /// <b>Called before the tick's flush</b>, so a label lands on the tick whose
+    /// state it describes rather than on the one after it.
+    /// </para>
+    /// </remarks>
+    public void SyncRoster(IReadOnlyList<RecordedSlot> occupants)
+    {
+        if (_segment is null)
+            return;
+
+        for (var i = 0; i < occupants.Count; i++)
+        {
+            var occupant = occupants[i];
+
+            if (_known.TryGetValue(occupant.Slot, out var was) && was == occupant)
+                continue;
+
+            _known[occupant.Slot] = occupant;
+            Note(occupant);
+        }
+
+        // A slot nobody occupies any more is left in _known on purpose: the next
+        // occupant of it differs from this one and gets its own note, and a slot
+        // that empties needs none — the stream's own PLAYER_LEAVE already says
+        // so, and a label for an absent player is a row no consumer can use.
+    }
+
+    private void Note(in RecordedSlot occupant)
+    {
+        // Dropped rather than grown without bound, like the broadcast beside it.
+        // Unreachable by legitimate churn — see Trace.MaxRosterNotes — so a
+        // recording that hits it is one worth saying something about.
+        if (_notes.Count >= Trace.MaxRosterNotes)
+        {
+            if (_notes.Count == Trace.MaxRosterNotes)
+                _log.Warn($"{Path.GetFileName(CurrentPath)} hit the roster-label cap; later joins are unlabelled");
+
+            return;
+        }
+
+        _notes.Add(new TraceRosterNote
+        {
+            Tick = _ticks,
+            Slot = occupant.Slot,
+            Participant = occupant.Participant,
+            Controller = Truncate(occupant.Controller),
+            Name = Truncate(occupant.Name),
+        });
     }
 
     /// <summary>Segments written so far, including the one open.</summary>
@@ -140,8 +294,23 @@ public sealed class MatchRecorder : IDisposable
         // Until then the segment file holds raw broadcast and nothing else.
         _segment = new FileStream(CurrentPath + ".part", FileMode.Create, FileAccess.Write);
         _written = 0;
+        _ticks = 0;
+        _notes.Clear();
+        _known.Clear();
 
-        Append(_preamble());
+        // The preamble goes in WITHOUT counting as a tick — it is a join burst
+        // ending in a FULL_UPDATE, which TraceParser keeps as the anchor rather
+        // than as tick 0. Counting it here would put every label in this segment
+        // one tick ahead of the state it describes.
+        AppendRaw(_preamble());
+
+        // AFTER the preamble, so the labels describe the world the segment
+        // actually opens on, and at tick 0, because that is where this segment's
+        // history starts. Every occupied slot, not just the ones that change
+        // later: the roll is the only place a mid-game segment can learn who was
+        // already playing, and _known was just cleared so every one of them is a
+        // change.
+        SyncRoster(_roster());
     }
 
     /// <summary>Appends one broadcast flush.</summary>
@@ -153,6 +322,23 @@ public sealed class MatchRecorder : IDisposable
     /// find the next boundary.
     /// </remarks>
     public void Append(ReadOnlySpan<byte> bytes)
+    {
+        // Counted BEFORE the write, and before any roll it triggers. A flush is
+        // one tick, so the labels this tick produced — taken during the tick,
+        // ahead of the flush that ends it — are the ones already sitting at
+        // index _ticks; incrementing afterwards would leave the next tick's
+        // labels pointing at this one.
+        if (_segment is not null && !bytes.IsEmpty)
+            _ticks++;
+
+        AppendRaw(bytes);
+    }
+
+    /// <summary>
+    /// Appends without counting a tick: the preamble, which carries no state
+    /// update of its own.
+    /// </summary>
+    private void AppendRaw(ReadOnlySpan<byte> bytes)
     {
         if (_segment is null || bytes.IsEmpty)
             return;
@@ -192,12 +378,27 @@ public sealed class MatchRecorder : IDisposable
                 RecordedUtc = DateTime.UtcNow,
             },
             Stream = stream,
+            Roster = _notes.ToArray(),
         };
 
         File.WriteAllBytes(CurrentPath, trace.Encode());
         File.Delete(part);
 
-        _log.Info($"recorded {stream.Length} bytes to {Path.GetFileName(CurrentPath)}");
+        // The human count is in the line because it is the one number that says
+        // whether the segment is worth keeping. A recording of twelve bots
+        // playing each other is a large file and no training data at all, and an
+        // operator reading "0 human" has been told that without opening it.
+        var humans = 0;
+        foreach (var note in _notes)
+        {
+            if (note.Participant == TraceParticipant.Human)
+                humans++;
+        }
+
+        _log.Info(
+            $"recorded {stream.Length} bytes, {_ticks} ticks, {_notes.Count} roster label(s) " +
+            $"({humans} human) to {Path.GetFileName(CurrentPath)}");
+
         CurrentPath = null;
     }
 
@@ -219,3 +420,26 @@ public sealed class MatchRecorder : IDisposable
             ? value
             : value[..TraceHeader.MaxStringLength];
 }
+
+/// <summary>
+/// Who is behind one roster slot, as the server knows it.
+/// </summary>
+/// <remarks>
+/// <b>The server's side of <see cref="TraceRosterNote"/>, without the tick</b>
+/// — the recorder stamps that, because only it knows where the segment has got
+/// to. Kept a separate type so <c>GameServer</c> never has to reason about
+/// trace tick indices to report a join.
+/// </remarks>
+/// <param name="Slot">The roster index.</param>
+/// <param name="Participant">Person or bot.</param>
+/// <param name="Controller">
+/// The bot mode driving it, or empty for a person. Free text rather than an
+/// enum because it is written to a file a later build has to read: an unknown
+/// mode should arrive as a string nobody recognises, not fail to parse.
+/// </param>
+/// <param name="Name">The name the wire announced, for cross-checking.</param>
+public readonly record struct RecordedSlot(
+    byte Slot,
+    TraceParticipant Participant,
+    string Controller,
+    string Name);

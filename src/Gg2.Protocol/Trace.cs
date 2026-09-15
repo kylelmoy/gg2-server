@@ -13,7 +13,17 @@ namespace Gg2.Protocol;
 public sealed record TraceHeader
 {
     /// <summary>Bumped whenever the on-disk layout changes.</summary>
-    public const int CurrentFormatVersion = 1;
+    /// <remarks>
+    /// <b>Version 2 added <see cref="Trace.Roster"/>.</b> A v1 trace is still
+    /// read — <see cref="Trace.Decode"/> accepts both — because the checked-in
+    /// fixture corpus is written in v1 and re-recording it against the running
+    /// game to gain a field none of those traces has any use for would be a
+    /// week of live measurement for nothing.
+    /// </remarks>
+    public const int CurrentFormatVersion = 2;
+
+    /// <summary>The oldest layout <see cref="Trace.Decode"/> still reads.</summary>
+    public const int OldestReadableFormatVersion = 1;
 
     /// <summary>
     /// The longest string a header field can hold.
@@ -58,6 +68,95 @@ public sealed record TraceHeader
 }
 
 /// <summary>
+/// Who was behind a roster slot: a person at a keyboard, or something this
+/// server was driving.
+/// </summary>
+/// <remarks>
+/// <b>The wire cannot say.</b> A bot joins as an ordinary player and
+/// <c>PLAYER_JOIN</c> carries a name and nothing else (docs/PROTOCOL.md), which
+/// is deliberate — <c>docs/BOTAI.md</c> item 4 makes a bot's action exactly a
+/// client's action, so a recording of the broadcast holds a bot's keys and a
+/// person's keys in the same field with nothing to tell them apart.
+/// <para>
+/// That is fatal to the one thing a recording of a public game is <em>for</em>.
+/// <c>docs/BOTAI.md</c> item 3 wants <c>p(action | state)</c> over real
+/// opponents; a dataset built from an unlabelled trace of a server that fills
+/// with bots is mostly this project's own scripted layer, fed back in as if it
+/// were human play. Nothing downstream can detect that.
+/// </para>
+/// </remarks>
+public enum TraceParticipant : byte
+{
+    /// <summary>
+    /// No label. <b>Expected only on a v1 trace</b>, which predates the labels
+    /// entirely — a v2 recording labels every occupied slot, so this reaching a
+    /// consumer means the trace is older than the question being asked of it.
+    /// </summary>
+    Unknown = 0,
+
+    /// <summary>A person on a socket.</summary>
+    Human = 1,
+
+    /// <summary>An <c>IInputSource</c> this server was driving.</summary>
+    Bot = 2,
+}
+
+/// <summary>
+/// One slot's occupant, from one tick onwards.
+/// </summary>
+/// <remarks>
+/// <b>Tick-indexed, not a flat table, because a slot is reused.</b> A roster
+/// index is positional and compacts on <c>PLAYER_LEAVE</c>
+/// (<c>WorldState.RemoveSlot</c>), so across a half-hour recording slot 3 is
+/// several different people. A table keyed by slot alone would attribute all of
+/// them to whoever was there last.
+/// </remarks>
+public sealed record TraceRosterNote
+{
+    /// <summary>
+    /// The <see cref="TraceTick.Index"/> this label takes effect at, counted
+    /// the way <see cref="TraceParser"/> counts.
+    /// </summary>
+    /// <remarks>
+    /// <b>The number of state-update-delimited ticks recorded before it</b>, so
+    /// it lines up with the parser by construction: the recorder counts the same
+    /// broadcast flushes the parser turns into ticks, and the opening
+    /// <c>FULL_UPDATE</c> is a tick to neither.
+    /// </remarks>
+    public required int Tick { get; init; }
+
+    public required byte Slot { get; init; }
+
+    public required TraceParticipant Participant { get; init; }
+
+    /// <summary>
+    /// What was driving a <see cref="TraceParticipant.Bot"/> — the bot mode the
+    /// server was running. Empty for a person.
+    /// </summary>
+    /// <remarks>
+    /// <b>Separate from the human/bot split because the two answer different
+    /// questions.</b> "Was this a person" decides whether a row belongs in a
+    /// human dataset at all; "which brain" decides what a bot row is evidence
+    /// about, and a policy-driven bot's keys are not interchangeable with a
+    /// scripted one's.
+    /// </remarks>
+    public required string Controller { get; init; }
+
+    /// <summary>
+    /// The player's name, as <c>PLAYER_JOIN</c> announced it.
+    /// </summary>
+    /// <remarks>
+    /// <b>Redundant with the stream, and kept for exactly that reason.</b> The
+    /// labels are the one part of a trace not derived from the bytes beside
+    /// them, so a misalignment between the two has nothing to catch it — and a
+    /// label attached to the wrong slot is silent and ruins the dataset. A
+    /// consumer compares this against the name the stream gave that slot and
+    /// refuses the trace when they disagree.
+    /// </remarks>
+    public required string Name { get; init; }
+}
+
+/// <summary>
 /// A recorded broadcast stream, with the header needed to read it back.
 /// </summary>
 /// <remarks>
@@ -83,6 +182,34 @@ public sealed class Trace
 
     /// <summary>The recorded stream, exactly as it arrived.</summary>
     public required byte[] Stream { get; init; }
+
+    /// <summary>
+    /// Who occupied each roster slot, and from when. Always empty on a v1
+    /// trace.
+    /// </summary>
+    /// <remarks>
+    /// <b>In the container rather than in a sidecar file</b>, and that is the
+    /// point of putting it here. A <c>.labels</c> beside a <c>.trace</c> is one
+    /// copy away from being separated from it, and a trace that has lost its
+    /// labels does not look broken — it looks like a trace, and everything
+    /// downstream reads every bot in it as a person.
+    /// <para>
+    /// Ordered by <see cref="TraceRosterNote.Tick"/>, then by slot.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyList<TraceRosterNote> Roster { get; init; } = [];
+
+    /// <summary>
+    /// A ceiling on the labels one trace carries, so a corrupt length cannot
+    /// make <see cref="Decode"/> allocate without bound.
+    /// </summary>
+    /// <remarks>
+    /// Generous rather than tight: a segment rolls at 32 MB and a join costs a
+    /// few hundred bytes of broadcast, so the cap is unreachable by legitimate
+    /// churn. It bounds a hostile file; it is not a policy about how much roster
+    /// movement is worth recording.
+    /// </remarks>
+    public const int MaxRosterNotes = 65535;
 
     private static ReadOnlySpan<byte> Magic => "GG2TRACE"u8;
 
@@ -118,6 +245,30 @@ public sealed class Trace
         writer.WriteInt(Stream.Length);
         writer.WriteBytes(Stream);
 
+        // AFTER the stream, so the labels are a tail a v1 reader never reaches.
+        // A header that still says 1 writes none, which is what keeps a v1
+        // Trace encoding to the exact bytes it did before v2 existed — the
+        // fixture corpus round-trips unchanged rather than being re-recorded.
+        if (Header.FormatVersion >= 2)
+        {
+            if (Roster.Count > MaxRosterNotes)
+            {
+                throw new ProtocolException(
+                    $"a trace carries at most {MaxRosterNotes} roster labels, not {Roster.Count}");
+            }
+
+            writer.WriteInt(Roster.Count);
+
+            foreach (var note in Roster)
+            {
+                writer.WriteInt(note.Tick);
+                writer.WriteUByte(note.Slot);
+                writer.WriteUByte((byte)note.Participant);
+                writer.WriteString1(note.Controller);
+                writer.WriteString1(note.Name);
+            }
+        }
+
         return writer.WrittenSpan.ToArray();
     }
 
@@ -129,9 +280,13 @@ public sealed class Trace
             throw new ProtocolException("not a gg2 trace: magic mismatch");
 
         var formatVersion = reader.ReadInt();
-        if (formatVersion != TraceHeader.CurrentFormatVersion)
+        if (formatVersion is < TraceHeader.OldestReadableFormatVersion
+                          or > TraceHeader.CurrentFormatVersion)
+        {
             throw new ProtocolException(
-                $"trace format version {formatVersion}, expected {TraceHeader.CurrentFormatVersion}");
+                $"trace format version {formatVersion}, expected " +
+                $"{TraceHeader.OldestReadableFormatVersion}-{TraceHeader.CurrentFormatVersion}");
+        }
 
         var header = new TraceHeader
         {
@@ -147,8 +302,56 @@ public sealed class Trace
         if (length < 0 || length > reader.Remaining)
             throw new ProtocolException($"trace claims {length} stream bytes, has {reader.Remaining}");
 
-        return new Trace { Header = header, Stream = reader.ReadBytes(length).ToArray() };
+        var stream = reader.ReadBytes(length).ToArray();
+
+        // ⚠️ A v2 trace whose label tail is TRUNCATED is refused, rather than
+        // read as far as it goes — the opposite of what TraceParser does to the
+        // stream, and deliberately. A half-read stream is still a recording of
+        // everything before the cut. A half-read label table is a roster with
+        // some of its bots silently unlabelled, which is the exact failure
+        // TraceParticipant exists to prevent and is invisible downstream.
+        var roster = formatVersion >= 2 ? ReadRoster(ref reader) : [];
+
+        return new Trace { Header = header, Stream = stream, Roster = roster };
     }
+
+    private static TraceRosterNote[] ReadRoster(ref NetReader reader)
+    {
+        var count = reader.ReadInt();
+
+        if (count < 0 || count > MaxRosterNotes)
+            throw new ProtocolException($"trace claims {count} roster labels");
+
+        var roster = new TraceRosterNote[count];
+
+        for (var i = 0; i < count; i++)
+        {
+            roster[i] = new TraceRosterNote
+            {
+                Tick = reader.ReadInt(),
+                Slot = reader.ReadUByte(),
+                Participant = ParticipantOf(reader.ReadUByte()),
+                Controller = reader.ReadString1(),
+                Name = reader.ReadString1(),
+            };
+        }
+
+        return roster;
+    }
+
+    /// <summary>Maps a recorded participant byte onto the enum.</summary>
+    /// <remarks>
+    /// <b>An unrecognised value becomes <see cref="TraceParticipant.Unknown"/>
+    /// rather than throwing.</b> A label written by a later build, naming a kind
+    /// this one has never heard of, still says "this slot was labelled";
+    /// refusing the whole recording over it would discard a trace for carrying
+    /// more information than the reader wanted. Unknown is a value every
+    /// consumer already handles, because a v1 trace is nothing but.
+    /// </remarks>
+    private static TraceParticipant ParticipantOf(byte value) =>
+        Enum.IsDefined(typeof(TraceParticipant), value)
+            ? (TraceParticipant)value
+            : TraceParticipant.Unknown;
 }
 
 /// <summary>One roster slot's contribution to one tick.</summary>

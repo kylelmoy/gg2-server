@@ -896,7 +896,7 @@ public sealed partial class GameServer : IDisposable, IPluginHost
         if (_options.RecordingDirectory.Length != 0)
         {
             _recorder = new MatchRecorder(
-                _options.RecordingDirectory, _options.ServerName, _log, JoinBurstBytes);
+                _options.RecordingDirectory, _options.ServerName, _log, JoinBurstBytes, RecordedRoster);
 
             _recorder.StartSegment(_currentMap);
             _log.Info($"recording to {_options.RecordingDirectory}");
@@ -1073,6 +1073,13 @@ public sealed partial class GameServer : IDisposable, IPluginHost
         // of its own join burst — JoinAndBroadcastTests and FullUpdateLayoutTests
         // both catch that. The join sequence is a separate contract and this
         // change is not licensed to move it.
+        //
+        // The recorder's roster labels are taken BEFORE the flush, because the
+        // flush is what advances its tick counter: a label taken afterwards
+        // would name the tick after the one whose state it describes. Nothing is
+        // written to the wire, and nothing runs at all when recording is off.
+        _recorder?.SyncRoster(RecordedRoster());
+
         FlushBroadcast();
 
         // AFTER THE FLUSH, and measured — see BroadcastEndStepEvents. The

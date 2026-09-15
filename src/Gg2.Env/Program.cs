@@ -16,6 +16,8 @@ if (args.Length == 0 || args[0] is "--help" or "-h")
 
           serve [--port <n>] [--maps <path>] [--nav <path>]
           smoke [--worlds <n>] [--duels <n>] [--threads <n>] [--maps <path>]
+          dataset <trace|dir>... --out <dir> [--action-repeat <k>]
+                  [--include-bots] [--maps <path>]
 
         Binds 127.0.0.1 only and serves one client. A port of 0 asks the OS for
         a free one and prints which it got.
@@ -26,6 +28,13 @@ if (args.Length == 0 || args[0] is "--help" or "-h")
         --nav points at gg2-nav-gen's cache directory. Without it a served world
         has no nav graph, and an EnvDriver.Scripted side is refused rather than
         quietly downgraded to a bot that cannot walk.
+
+        dataset turns traces written by `gg2-server --record` into (observation,
+        action) rows for gg2-rl. HUMAN ROWS ONLY unless --include-bots: a
+        recording of a bot-filled public server is mostly this project's own
+        scripted layer, and feeding that back in as demonstration data is
+        undetectable downstream. A trace older than format v2 carries no labels
+        and is refused rather than assumed to be people.
         """);
 
     return 0;
@@ -51,6 +60,25 @@ if (options.Nav is { } nav && !Directory.Exists(nav))
     Console.Error.WriteLine($"warning: no nav caches at {nav}; an EnvDriver.Scripted side will be refused");
 else if (options.Nav is null && options.Command == "serve")
     Console.Error.WriteLine("warning: no --nav given; an EnvDriver.Scripted side will be refused");
+
+if (options.Command == "dataset")
+{
+    var report = HumanDataset.Build(options.ResolveTraces(), new HumanDataset.Options
+    {
+        Maps = options.Maps,
+        Output = options.Output!,
+        ActionRepeat = options.ActionRepeat,
+        IncludeBots = options.IncludeBots,
+    });
+
+    Console.WriteLine(report);
+
+    // A run that produced nothing exits non-zero. "0 rows" printed on a
+    // successful exit is the shape of result a script reads as "it worked" and
+    // a person reads as "it worked", and neither finds out until the training
+    // run on an empty corpus does something strange.
+    return report.Rows > 0 ? 0 : 1;
+}
 
 if (options.Command == "smoke")
 {

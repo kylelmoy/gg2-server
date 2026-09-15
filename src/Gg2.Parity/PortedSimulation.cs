@@ -131,6 +131,31 @@ public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSim
     /// </remarks>
     public Dictionary<int, AnchorNudge> Nudges { get; } = [];
 
+    /// <summary>
+    /// The world this replay has reconstructed, for a caller that wants to
+    /// observe it rather than compare it.
+    /// </summary>
+    /// <remarks>
+    /// <b><c>ref readonly</c>, not a copy.</b> A <c>WorldState</c> is about a
+    /// kilobyte of inline arrays and the caller it exists for reads it on every
+    /// tick of every trace; handing back a copy would be a kilobyte memcpy per
+    /// tick to observe a state nobody is allowed to write. The <c>readonly</c>
+    /// is what says a reader cannot steer the replay — the recorded stream is
+    /// the only thing that may.
+    /// </remarks>
+    public ref readonly WorldState State => ref _state;
+
+    /// <summary>
+    /// The collision world of the loaded map, or null before
+    /// <see cref="LoadMap"/>.
+    /// </summary>
+    /// <remarks>
+    /// The other half of a <c>WorldView</c>: a view is a state plus the geometry
+    /// it is standing in, and the observation's ray fan and walkmask patch come
+    /// entirely from here.
+    /// </remarks>
+    public CollisionWorld? Collision => _world;
+
     public void LoadMap(string map)
     {
         // Area 1: a recording is of a fresh round, and the replayer has no

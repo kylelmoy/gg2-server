@@ -19,6 +19,47 @@ from.
   never needs a C# rebuild.
 - **v0 is duels only**, wrapping `ScenarioWorld`. Full matches through the
   same protocol are not built; `gg2-rl` asked for duels first.
+- **`gg2-env dataset` is the offline half**: recorded play in, `.npy` rows
+  out. It shares this file's action encoding and observation layout rather
+  than restating them.
+
+## `gg2-env dataset` — recorded play as rows
+
+Turns traces written by `gg2-server --record` into `(observation, action)`
+pairs. `docs/BOTAI.md` item 3 has the why and the trace-format side; this is
+the seam.
+
+```
+gg2-env dataset <trace|dir>... --out <dir> [--action-repeat k]
+                [--include-bots] [--maps <path>]
+```
+
+Human rows only by default. A trace older than format v2 carries no
+participant labels and is refused rather than read as if every slot were a
+person. An empty result exits non-zero, because "0 rows" on a successful exit
+reads as success to a script and to a reader.
+
+Output, one `.npy` per column, all `N` rows in the same order:
+
+| File | dtype | What |
+|---|---|---|
+| `observation.npy` | `float32` `(N, 211)` | `ObservationWriter`'s vector, at the start of the decision |
+| `action.npy` | `uint8` `(N, 6)` | the heads, in `ActionDecoder.HeadShape` order |
+| `turn_degrees.npy` | `float32` | the real signed turn, unclamped and unbinned |
+| `saturated.npy` | `uint8` | whether that turn exceeded the per-decision cap |
+| `participant.npy` | `uint8` | 1 human, 2 bot |
+| `slot.npy`, `tick.npy`, `trace.npy`, `life.npy` | | where the row came from; `life` cuts sequences at a death |
+| `manifest.txt` | | `SIM_UUID`, layout version, action-encoding constants, and every trace read or refused |
+
+The observation is captured after the tick's roster and spawn events and
+before its inputs are consumed, so a row pairs an action with the state that
+caused it rather than the state it produced. A one-tick slip there is
+undetectable downstream and every consumer would train on it.
+
+`turn_degrees` and `saturated` exist because the aim head is the one lossy
+column: a mouse is unbounded and the head is not. The saturation rate over a
+corpus is what decides whether `MaxTurnDegreesPerDecision` is constraining
+anything, and it is not recoverable from the binned action.
 
 ## Damage accumulators in `TickEvents`
 
