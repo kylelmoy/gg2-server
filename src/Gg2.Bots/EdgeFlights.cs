@@ -875,11 +875,17 @@ public static class EdgeFlights
 
             ref readonly var self = ref world.Character(slot);
 
-            // Rebuilt from live state every tick, exactly as ScriptedBot does.
+            // Rebuilt from live state every tick, as ScriptedBot does.
             // CanRocketJump is the weapon plus an hp test, so a soldier that has
             // just cost itself 30hp sheds its rocket jumps mid-route — and
             // BotPathState.PlanQuery is what stops that unplanning the arc it is
             // already in.
+            //
+            // ⚠️ The two GATE terms ScriptedBot also rebuilds are deliberately NOT
+            // rebuilt here, and it costs this harness nothing: a scenario world
+            // runs no setup timer and a flight starts empty-handed, so both would
+            // be false every tick anyway. QueryFor owns this query, and a flight
+            // is a question about an arc rather than about a round.
             _query = _query with
             {
                 CanDoubleJump = BotClassProfile.AirJump(self.Class),

@@ -56,6 +56,16 @@ What it licenses, and what it does not:
   3-node pocket out of 261 that reaches nothing else. That one is genuine nav
   isolation. See "A route that exists and a route a bot can walk are different
   things".
+- ⚠️ **A node's anchor column is one pixel past the last x a body can stand
+  at**, on the 6,613 shipped nodes that are one column wide, and the in-air
+  tracker aims there. 22,645 of 59,958 arcs (37.8%) aim at a spot with no floor
+  under it. A hazard rather than a failure rate — the tracker is a hint and most
+  arcs land anyway — but it is what `koth_corinth` 202->176 is, and
+  `EveryShippedNodeCanHoldACharacter` cannot see it because it asserts
+  `PlaceFree` and never asks for floor. ⛔ **Re-aiming the tracker was tried both
+  ways and both are rejected with numbers** — the repair belongs in what the
+  generator costs an arc TO, not in what the follower aims AT. See "the anchor
+  column is not a place to stand".
 - ⚠️ **7 of 528 bot-matches still freeze a bot for 900+ ticks**, down from 98 —
   see "A bot that arrives stops moving" below. Every one is a Demoman, Engineer
   or Heavy handed an objective that **cannot be reached without a jump they do
@@ -6263,3 +6273,269 @@ the reach model wants against what the available run actually delivers.
 The deeper version of the question is that the generator emits one arc model for
 every class, so an edge is flyable or not without reference to who has to fly it.
 That is recorded under item 4b-ii and is not changed here.
+
+## A route planned against a gate the body does not agree about
+
+Reported as a follow-on from the staircase shuttle: `ctf_avanti` and
+`koth_corinth` were the two maps whose run-up repeats did not move when that was
+fixed. They have nothing in common. `ctf_avanti` is this section; `koth_corinth`
+is a different cause and is still open, at the end.
+
+`NavGraph.GatePassable` is one half of a rule whose other half is
+`SolidRect.IsSolidTo`. The graph stamps every edge that crosses a gate and the
+simulation decides whether that gate is solid right now. They agree only if the
+`NavQuery` a bot plans with carries the same live facts the collision filter is
+built from.
+
+### Two fields went stale, and both name something solid
+
+`ScriptedBot` rebuilds its query from live state every tick — team, and the two
+class-arc bits. It did not rebuild either gate term, so both sat at the record's
+default of `false` for a bot's whole life.
+
+| field | what stands behind it | what the default meant |
+|---|---|---|
+| `SetupGatesClosed` | `SolidKind.SetupGate => filter.SetupGatesClosed`, mirrored onto the character every tick from `state.SetupTimer > 0` | every bot routed through shut setup gates for the whole setup phase — 1,800 ticks on Invasion, 900 on attack/defend |
+| `HasIntel` | `SolidKind.TeamGate` is solid to a character of its **own** team once that character is carrying, which is the `&& !hasIntel` in `NavGate.TeamRed`/`TeamBlue` | a carrier routed home through its own team gate |
+
+Neither is a graph bug. On `ctf_avanti` all four edges into node 165 carry
+`NavGate.Setup`, correctly; the bot simply asked the wrong question of them.
+
+### What it looked like from inside
+
+`ctf_avanti` seed 1, a red Sniper, traced tick by tick. The staircase up to
+node 165 is four one-column steps, 6px of rise and 6px of run each:
+
+| node | columns | floor y |
+|---|---|---|
+| 189 | 168-171 | 708 |
+| 183 | 172 | 702 |
+| 178 | 173 | 696 |
+| 173 | 174 | 690 |
+| 165 | 175-178 | 684 |
+
+A `SetupGate` stands at (1068, 606). The bot flies `189->165`, presses RIGHT for
+ten airborne ticks against x ≈ 1061.5 without moving a pixel, slides down the
+gate's face and lands on node 173. Off-route fires; it re-plans; the route back
+up is `173->178->183->165` — two steps back **down** the staircase and then a
+jump over all three — because the direct `173->165` walk and the short
+`178->165` jump are both on the blacklist by then, banned by a stuck detector
+that was watching the bot shove a gate. The run-up for `183->165` walks it onto
+node 189, where the next re-plan picks `189->165` again. The lap is about 46
+ticks and it ran for the whole setup phase.
+
+⚠️ **The run-up repeats the census counts here are a symptom of a routing loop,
+not of a takeoff loop**, which is the opposite of what the same counter measures
+on `ctf_truefort`. Every refusal in the `ctf_avanti` table is `GateBackwards`
+with a constant `along` — the gate watching a bot start a run-up it will not
+finish — where truefort's are `GateShort`. A counter that names the same
+symptom on two maps is not evidence of the same cause.
+
+### The fix
+
+Two fields added to `ScriptedBot`'s per-tick `Query with`, from the character's
+own mirrored flags: `HasIntel = self.CarryingIntel` and
+`SetupGatesClosed = self.SetupGatesClosed`.
+
+⚠️ **The tables are not keyed on gates and this does not touch them.**
+`NavDistanceSet.KeyOf` uses only the three class-arc bits, so a query whose gate
+terms change mid-round still hits the same precomputed next-hop table. A fix
+that added a gate bit to that key would cost a derive at every setup boundary.
+
+### Measured
+
+`ZzWallCensus` (`.claude/notes/probes-0915/`, gitignored): bot-ticks spent
+pressing a direction, on the ground, going nowhere — the player-visible symptom
+of a route through something solid. 23 maps x 2 seeds x 12 bots, 9,000 ticks,
+Release.
+
+| | wall-ticks | of those, in setup | worst streak |
+|---|---|---|---|
+| ctf_avanti before | 1,388 | 1,249 | 20 |
+| ctf_avanti after | **142** | **7** | 11 |
+| cp_dirtbowl before | 786 | 680 | 22 |
+| cp_dirtbowl after | **113** | **9** | 1 |
+| corpus before | 9,672 | 1,929 | 251 |
+| corpus after | **7,753** | **16** | 251 |
+
+**The other 21 maps are byte-identical**, which is the check worth having: they
+are exactly the maps with no `NavGate.Setup` edge, so the change did only what it
+claims. `ctf_avanti` and `cp_dirtbowl` are the only two that have any — 76 and 5
+respectively, against zero everywhere else — and no shipped graph carries an
+`IntelRed`/`IntelBlue` edge at all, so `HasIntel` is decided entirely by team
+gates here (`ctf_truefort` has 117 and 118 of them).
+
+Run-up repeats over the same corpus slice: `ctf_avanti` **412 to 90**, worst
+streak **35 to 5**, and the `178->165` family that dominated its table is gone.
+`koth_corinth` 155 to 155 and `ctf_truefort` 78 to 78, both byte-identical.
+
+`dotnet test Gg2.sln`: 3,502 passed, 0 failed, 14 skipped. **No pinned
+measurement moved** — the three end-to-end bot pins all live on `ctf_truefort`,
+which has no setup gates, and `BotObjectiveTests`' intel run stops at the grab.
+
+### The gates, and both directions
+
+`BotGateTests`, two tests, both failing on the unfixed code:
+
+- `ABotDoesNotPlanThroughASetupGateThatIsStillShut`. The query is snapshotted
+  **before** the step, because it is built inside `Poll` and the tick rewrites
+  the mirrored flag afterwards — the same one-tick skew as "everything derived
+  from a bot's team is derived one tick too early", and comparing against the
+  post-tick value fails on tick 0 whatever the code does. Asserts the flag both
+  during setup and after it, so reporting the gates shut for ever does not pass;
+  asserts both counts are non-trivial, so neither direction is vacuous; and
+  counts wall-shoving separately, **540 unfixed against 5 fixed**, so a follower
+  that walked into the gates anyway would still fail.
+- `ACarrierPlansAsSomebodyItsOwnTeamGateWillNotLetThrough`. ⚠️ Alive **before**
+  the step as well: `Poll` returns early for a dead bot without touching the
+  query, so on the tick a shot carrier respawns the query still says it is
+  carrying, and asserting there measures the early return. The
+  "somebody actually carried" assertion is what stops the test passing on
+  unfixed code by comparing false to false — 1,495 carrying bot-ticks.
+
+### koth_corinth is a different cause, and it is the anchor column
+
+`koth_corinth` does not move at all, and nothing about it involves a gate. Its
+shuttle is the climb out of node 202 (a wide floor at y 906) onto node 176, a
+one-column ledge 48px above it, and on to node 134.
+
+Flown alone with `EdgeFlights`, `202->176` **arrives** — the arc is not a
+fiction — but takes 98 ticks against 48 for `203->177`, the mirror edge with an
+identical `needVx` of 0.73 and 8.2-tick flight. Traced tick by tick, the first
+two jumps both fail the same way and the arrival on the third is a re-plan onto
+a different edge, not a flight of this one.
+
+See "the anchor column is not a place to stand", below.
+
+## The anchor column is not a place to stand
+
+A node's anchor is `NavGraph.ColumnWorldX` of its column, and the follower
+treats that x as a place to be: it is what `SetGoal` snaps to, what
+`EdgeFlights` starts and finishes a flight at, and — the one that matters on an
+arc — where `SteerJump` clamps `TrackX`:
+
+```
+steer.TrackX = ColumnWorldX(takeoff) + jumpDir * min(jumpDistance, needVx * AirTicks)
+```
+
+**On a one-column node that x is one pixel past the last x a body can stand
+at.** A soldier's box is `[x-6, x+6]` and needs one pixel of it over floor, so a
+single-column run's standable band is `ColumnWorldX(X0) - 6 .. ColumnWorldX(X1) - 1`
+and the anchor is the first x outside it. Measured directly on `koth_corinth`
+node 176 (column 232, `ColumnWorldX` 1404):
+
+| x | free | floor under | |
+|---|---|---|---|
+| 1392-1397 | no | — | box overlaps the step |
+| **1398-1403** | **yes** | **yes** | the whole standable band, six pixels |
+| 1404 | yes | **no** | the node's own anchor |
+| 1405+ | yes | no | past the ledge |
+
+So the tracker holds the bot at 1404 for the whole arc, and 1404 is the first x
+outside the band it has to reach — six pixels short of it, on the wrong side.
+It hovers there, falls past the ledge and comes back down to node 202. It lands
+only when drift, an overshoot or a re-plan puts it left of the anchor, which on
+the traced flight took two failed jumps and a re-plan onto a different edge.
+
+⚠️ **Measured with the SOLDIER box, and that is the NARROWEST at ±6.** Widths
+run 6, 7 and 9, so a Heavy loses three more pixels on the right and every number
+below understates every wider class.
+
+### How much of the corpus this describes
+
+`LandingAnchorCensus` (skipped by default, mirrors `RunupCensus`), soldier box,
+**area 1 of each of the 23 shipped maps** — 9,583 of the corpus's 11,327 nodes,
+the rest being `cp_dirtbowl`'s other stages:
+
+| | count | |
+|---|---|---|
+| nodes | 9,583 | of which 6,613 are one column wide |
+| node midpoints that are free with no floor under them | **3,339** | 34.8% |
+| Jump/DoubleJump arcs | 59,958 | |
+| arcs whose tracker aim point is free with no floor under it | **22,645** | 37.8% |
+| ...of the 46,446 with a narrow (<=2 column) landing | **21,968** | 47.3% |
+
+⚠️ **This is a HAZARD and not a failure rate, and reading it as one would be
+wrong.** The tracker is a direction hint that gravity and the landing collision
+finish, so a bot carrying leftover momentum drifts onto the standable part and
+lands anyway — `EdgeFlightTests` strands about 535 flights against 31,500
+arrivals. It bites only where the arc is slow enough and long enough for the
+tracker to actually hold the bot at the aim point for the whole flight, which is
+what `koth_corinth` 202->176 is: 0.73 px/tick over 8.2 ticks onto six pixels of
+floor.
+
+⛔ **`EdgeFlightTests.EveryShippedNodeCanHoldACharacter` does not cover this and
+cannot.** Its two assertions are `PlaceFreeInMask` at `StandY` and at
+`StandingY` — the node is not inside terrain — and neither asks whether there is
+floor under the box. **Every one of the 3,339 nodes counted above passes it, by
+construction**: the census only counts a midpoint that is free, so it is free in
+the mask too. That is the shape CLAUDE.md warns about — a green gate that is not
+gating the thing it reads as gating — and the fix for the test is an assertion
+it does not currently make, not a stricter version of one it does.
+
+### Re-aiming the tracker was tried twice, measured, and rejected
+
+⛔ **Both arms below are rejections. Do not retry either without new evidence.**
+The instrument is `EdgeFlightTests.EveryEdgeOfEveryShippedGraphIsFlownOnTheShippingArm`,
+which flies every edge of every shipped graph and pins a fifteen-field tally —
+about four seconds an arm, so the cost of asking is nearly nothing.
+
+Both arms bias `SteerJump`'s `TrackX`, ramped in by `travelled / jumpDistance`
+so the takeoff end is untouched, and only on an arc whose landing anchor has no
+floor under it.
+
+| | arrived | stranded | flown | ticks | blacklists |
+|---|---|---|---|---|---|
+| shipping | 31,520 | **535** | 3,626 | 1,474,882 | 7,963 |
+| A: toward lower x (the true band) | 31,263 | **792** | 3,536 | 1,578,272 | 9,689 |
+| B: further along the jump | 31,502 | **553** | 3,643 | 1,483,925 | 7,729 |
+
+**A aims at the band the body can actually stand in, and is much worse** — 257
+more strandings and 1,726 more blacklists. For an arc travelling right onto such
+a node, the band is *behind* the anchor, so aiming at it is aiming short of the
+distance the arc was costed for; arcs are routinely costed with no margin at all
+(koth_gallery n86 → n58 is 0.70 px/tick over 17.2 ticks against a 12px gap), and
+a bot told to aim six pixels short of one brakes and falls out of it.
+
+**B never aims short, and is a wash** — 18 more strandings against 234 fewer
+blacklists, ticks up 9,000.
+
+⚠️ **The diagnosis is right even though both repairs fail, and it is worth
+keeping the two apart.** On arm B the edge this was diagnosed from goes
+**98 ticks to 40**, beating its own mirror `203->177` at 49, with `ranEdge` 90 to
+39 — the hover is real and re-aiming does remove it. What it costs is elsewhere:
+`135->66` on the same map goes **61 to 96** and picks up a blacklist.
+
+### What that leaves
+
+The tension is not resolvable in the follower. An arc is **costed** anchor to
+anchor by the generator, the body **cannot stand** on the anchor of half the
+one-column nodes, and aiming at the place it can stand is aiming short of the
+distance the arc was proved to carry. Aim at the anchor and a slow arc onto a
+narrow ledge hovers; aim at the floor and every tight arc falls short.
+
+So the repair belongs in what the arc is costed TO, not in what the follower
+aims AT — and that is the generator, which already refused a relaxation of this
+shape once (`NavGraphBuilder`, "NOT credited here: the six px of intra-cell
+lead": built, measured, removed, because it put `ctf_oldfort` back to 18% of
+red's routes crossing an arc it cannot fly). ⛔ **Read that comment, and
+`docs/NAVGEN.md`, before proposing anything there**, and note that
+`NavGeneratorTests` rebuilds all 25 graphs character for character — changing
+what a node's anchor means is a graph format change, not a tuning change.
+
+### The narrowest statement of the defect
+
+⚠️ **`Gate` credits the intra-cell lead and `SteerJump` does not.** `Gate`
+subtracts `jumpDir * (character.X - ColumnWorldX(takeoff))`, clamped to one
+cell, from the distance it demands, on the stated argument that "a column is not
+a point"; `SteerJump` then aims at the landing anchor as though it were one.
+Whichever way this is repaired, those two want to agree — but note that the two
+arms above are precisely the attempts to make them agree in the follower, and
+both failed.
+
+The other two users of an anchor-as-a-position would move with any repair, and
+each costs something: `SteerJump`'s clamp is on every flown arc (all of
+`EdgeFlightTests` and both `ScenarioSuiteTests` arms re-record), and
+`EdgeFlights.Midpoint` is a harness **premise** with its own written argument
+for being the midpoint (`StartUnresolved`), so changing it changes what the
+corpus sweep is a measurement of.

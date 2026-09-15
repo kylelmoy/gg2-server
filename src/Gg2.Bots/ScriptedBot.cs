@@ -670,9 +670,27 @@ public sealed class ScriptedBot : IInputSource, ICommandSource, IScenarioSubject
         // moves a bot across mid-round — and one with: Rounds.ResetForNewMap wipes
         // the whole roster to Spectator, and OpenMap re-roles the bots in that
         // same tick, before anything has put them back on a team.
+        //
+        // ⚠️ The two GATE terms are live for the same reason, and each has a
+        // solid object standing behind it that the route has no other way to know
+        // about. NavGraph.GatePassable is the graph's half of a rule whose other
+        // half is SolidRect.IsSolidTo, and the two have to be asked the same
+        // question or a bot is routed through something it will walk into:
+        //
+        //   - SetupGatesClosed. `SolidKind.SetupGate => filter.SetupGatesClosed`,
+        //     and the character's own flag is written every tick from
+        //     `state.SetupTimer > 0`. Left at its default the bot believes the
+        //     gates are open for the whole setup phase — 1,800 ticks on Invasion,
+        //     900 on attack/defend.
+        //   - HasIntel. `SolidKind.TeamGate` is solid to a character of its OWN
+        //     team once that character is carrying, which is exactly the
+        //     `&& !hasIntel` in NavGate.TeamRed/TeamBlue. Left at its default a
+        //     carrier is routed home through its own team gate.
         Query = Query with
         {
             Team = self.Team,
+            HasIntel = self.CarryingIntel,
+            SetupGatesClosed = self.SetupGatesClosed,
             CanDoubleJump = BotClassProfile.AirJump(self.Class),
             CanRocketJump = RocketModel.Capable(in self, in world.Weapon(slot)),
         };
