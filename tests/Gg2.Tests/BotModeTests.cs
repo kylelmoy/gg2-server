@@ -1,4 +1,5 @@
 using Gg2.Bots;
+using Gg2.Protocol;
 using Gg2.Host;
 
 namespace Gg2.Tests;
@@ -95,6 +96,74 @@ public sealed class BotModeTests
 
         var arbiter = Assert.IsType<DecisionQuotaArbiter>(brain.Arbiter);
         Assert.Equal(DecisionQuotaArbiter.DefaultTieredBudgetMicroseconds, arbiter.UnitsPerTick);
+    }
+
+    private static PlayerClass[] Playable =>
+        [.. Enum.GetValues<PlayerClass>().Where(c => c <= PlayerClass.Pyro)];
+
+    private static PlayerClass[] DrivenBy(MicroControllerSpec tier)
+    {
+        var controller = tier.Create();
+        return [.. Playable.Where(controller.Drives)];
+    }
+
+    /// <summary>
+    /// Search mode drives every class: there is no policy whose trained set it
+    /// would need to match.
+    /// </summary>
+    /// <remarks>
+    /// The restriction <see cref="SearchMicroSpec"/> defaults to is a bench
+    /// comparison's, and without this the live server left five classes scripted
+    /// in the mode an operator picked to get the search.
+    /// </remarks>
+    [Fact]
+    public void SearchModeDrivesEveryClass()
+    {
+        var brain = Assert.IsType<BotBrainSpec>(BrainOf("--bot-mode", "search"));
+
+        Assert.Equal(Playable, DrivenBy(Assert.Single(brain.Tiers)));
+    }
+
+    /// <summary>
+    /// Tiered: the search keeps the default four and takes every class no policy
+    /// drives, so no class is left without a controller.
+    /// </summary>
+    /// <remarks>
+    /// The <c>rest3</c> fixture drives Engineer, Spy and Pyro, which is disjoint
+    /// from the default four — the case that used to leave Medic and Sniper with
+    /// nothing. The policy's own classes stay the policy's alone.
+    /// </remarks>
+    [Fact]
+    public void TieredGivesTheSearchEveryClassNoPolicyDrives()
+    {
+        var brain = Assert.IsType<BotBrainSpec>(BrainOf(
+            "--bot-mode", "tiered", "--policy", PolicyFixture.EightFieldCheckpoint));
+
+        var search = DrivenBy(brain.Tiers[0]);
+        var policy = DrivenBy(brain.Tiers[1]);
+
+        Assert.Equal(
+            [PlayerClass.Scout, PlayerClass.Soldier, PlayerClass.Sniper, PlayerClass.Demoman, PlayerClass.Medic, PlayerClass.Heavy],
+            search);
+        Assert.Equal([PlayerClass.Engineer, PlayerClass.Spy, PlayerClass.Pyro], policy);
+        Assert.Equal(Playable, search.Union(policy).Order().ToArray());
+    }
+
+    /// <summary>A class the operator pinned to the scripted layer is not handed to the search.</summary>
+    [Fact]
+    public void AClassPinnedToScriptedStaysOutOfTheSearch()
+    {
+        var brain = Assert.IsType<BotBrainSpec>(BrainOf(
+            "--bot-mode", "tiered", "--policy", PolicyFixture.EightFieldCheckpoint,
+            "--bot-class-policy", "Medic=scripted"));
+
+        Assert.DoesNotContain(PlayerClass.Medic, DrivenBy(brain.Tiers[0]));
+
+        // The control: the same brain without the pin does hand the search Medic.
+        var unpinned = Assert.IsType<BotBrainSpec>(BrainOf(
+            "--bot-mode", "tiered", "--policy", PolicyFixture.EightFieldCheckpoint));
+
+        Assert.Contains(PlayerClass.Medic, DrivenBy(unpinned.Tiers[0]));
     }
 
     /// <summary>An explicit <c>--bot-arbiter</c> still wins over the default.</summary>
