@@ -135,6 +135,82 @@ public sealed class HandoverBubbleTests
     }
 
     /// <summary>
+    /// The spacing clears the server's bubble throttle, so no bubble a bot sends
+    /// is dropped there.
+    /// </summary>
+    /// <remarks>
+    /// At 30 Hz, with one <c>Environment.TickCount64</c> step (~15.6 ms) of
+    /// slack. If the throttle's default is raised, this goes red rather than the
+    /// aid quietly losing bubbles again.
+    /// </remarks>
+    [Fact]
+    public void TheSpacingClearsTheServersBubbleThrottle() =>
+        Assert.True(
+            HybridBot.BubbleSpacingPolls * (1000.0 / 30) - 16 >= ConnectionLimits.Default.ChatBubbleIntervalMs,
+            $"{HybridBot.BubbleSpacingPolls} polls against a {ConnectionLimits.Default.ChatBubbleIntervalMs} ms throttle");
+
+    /// <summary>
+    /// A release right after a take is delayed to clear the throttle, not lost.
+    /// </summary>
+    /// <remarks>
+    /// The search's own pattern at the edge of the range: the wheel changes hands
+    /// a couple of ticks apart. Each bubble that goes out must be at least
+    /// <see cref="HybridBot.BubbleSpacingPolls"/> after the last, and the final one
+    /// must describe where the bot ended up.
+    /// </remarks>
+    [Fact]
+    public void AHandoverInsideTheWindowIsDelayedNotLost()
+    {
+        var world = World();
+        var bot = Wrap(world, new Stub("search"), bubbles: true);
+
+        var red = world.Place(PlayerClass.Soldier, Team.Red, 600, 850);
+        var blue = world.Place(PlayerClass.Soldier, Team.Blue, 680, 850);
+        world.Step(20);
+
+        // In range for 2 polls, then out for good.
+        var (sent, _) = Schedule(bot, world, red, blue, tick => tick < 2, ticks: 30);
+
+        Assert.Equal([HandoverBubble.TookSearch, HandoverBubble.LeftAController], sent.Select(s => s.Image));
+        Assert.True(sent[1].Poll - sent[0].Poll >= HybridBot.BubbleSpacingPolls, $"{sent[0].Poll} then {sent[1].Poll}");
+    }
+
+    /// <summary>
+    /// A wheel that flaps is described, not narrated: every bubble clears the
+    /// throttle, none repeats the last, and the last names who is driving.
+    /// </summary>
+    /// <remarks>
+    /// <b>Properties rather than tick positions</b>, because when the scripted
+    /// layer next wants to engage is its own cadence and a schedule pinned to it
+    /// breaks on any change there. The control is the handover count: more
+    /// changes of hands than bubbles sent is what says coalescing happened, rather
+    /// than a wheel that changed hands slowly enough to need none.
+    /// </remarks>
+    [Fact]
+    public void AFlappingWheelEndsOnTheBubbleForWhoeverDrives()
+    {
+        var world = World();
+        var bot = Wrap(world, new Stub("search"), bubbles: true);
+
+        var red = world.Place(PlayerClass.Soldier, Team.Red, 600, 850);
+        var blue = world.Place(PlayerClass.Soldier, Team.Blue, 680, 850);
+        world.Step(20);
+
+        // In and out every other tick for 3 s, then in range for 2 s to settle.
+        var (sent, handovers) = Schedule(bot, world, red, blue, tick => tick >= 90 || tick % 4 < 2, ticks: 150);
+
+        for (var i = 1; i < sent.Count; i++)
+        {
+            Assert.True(sent[i].Poll - sent[i - 1].Poll >= HybridBot.BubbleSpacingPolls, $"{sent[i - 1].Poll} then {sent[i].Poll}");
+            Assert.NotEqual(sent[i - 1].Image, sent[i].Image);
+        }
+
+        Assert.NotNull(bot.Driving);
+        Assert.Equal(HandoverBubble.TookSearch, sent[^1].Image);
+        Assert.True(handovers > sent.Count, $"{handovers} handovers, {sent.Count} bubbles");
+    }
+
+    /// <summary>
     /// Off by default, and the control is that a handover really happened.
     /// </summary>
     [Fact]
@@ -237,6 +313,49 @@ public sealed class HandoverBubbleTests
     /// the other way round would hide the one-tick lag this aid has, and a test
     /// that hid it would let a change to the tick order go unnoticed.
     /// </remarks>
+    /// <summary>
+    /// Runs the bot in the server's order with the opponent in or out of range
+    /// per tick, and returns every bubble sent and how many times the wheel
+    /// actually changed hands.
+    /// </summary>
+    private static (List<(int Poll, byte Image)> Sent, int Handovers) Schedule(
+        HybridBot bot, ScenarioWorld world, int red, int blue, Func<int, bool> inRange, int ticks)
+    {
+        var sent = new List<(int, byte)>();
+        var commands = default(PlayerCommandBuffer);
+        var handovers = 0;
+        var driving = bot.Driving;
+
+        for (var tick = 0; tick < ticks; tick++)
+        {
+            // Placed before the polls, so the Poll on this tick sees it. Y is held
+            // too: out of range is far along the floor, not a fall.
+            world.State.Characters[blue].X = inRange(tick) ? 680 : 3000;
+
+            var view = new WorldView(in world.State, world.Collision);
+
+            commands.Clear();
+            bot.PollCommands(in view, red, tick, ref commands);
+
+            for (var i = 0; i < commands.Count; i++)
+            {
+                if (commands[i].Kind == PlayerCommandKind.ChatBubble)
+                    sent.Add((tick, commands[i].Argument));
+            }
+
+            bot.Poll(in view, red, tick);
+            world.Step();
+
+            if (!ReferenceEquals(bot.Driving, driving))
+            {
+                handovers++;
+                driving = bot.Driving;
+            }
+        }
+
+        return (sent, handovers);
+    }
+
     private static List<byte> Drain(HybridBot bot, ScenarioWorld world, int slot, int ticks)
     {
         var seen = new List<byte>();
