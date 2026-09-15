@@ -56,6 +56,12 @@ What it licenses, and what it does not:
   3-node pocket out of 261 that reaches nothing else. That one is genuine nav
   isolation. See "A route that exists and a route a bot can walk are different
   things".
+- ⚠️ **`koth_corinth`'s climb out of the pit costs twice what its own mirror
+  does.** Flown alone, `202->176` arrives in 98 ticks against `203->177`'s 48 at
+  the identical `needVx` and flight time, which is longer than the 45-89 tick
+  re-plan interval, so in a match the approach restarts instead of finishing. Not
+  settled. See "A route planned against a gate the body does not agree about",
+  "Still open".
 - ⚠️ **7 of 528 bot-matches still freeze a bot for 900+ ticks**, down from 98 —
   see "A bot that arrives stops moving" below. Every one is a Demoman, Engineer
   or Heavy handed an objective that **cannot be reached without a jump they do
@@ -6263,3 +6269,139 @@ the reach model wants against what the available run actually delivers.
 The deeper version of the question is that the generator emits one arc model for
 every class, so an edge is flyable or not without reference to who has to fly it.
 That is recorded under item 4b-ii and is not changed here.
+
+## A route planned against a gate the body does not agree about
+
+Reported as a follow-on from the staircase shuttle: `ctf_avanti` and
+`koth_corinth` were the two maps whose run-up repeats did not move when that was
+fixed. They have nothing in common. `ctf_avanti` is this section; `koth_corinth`
+is a different cause and is still open, at the end.
+
+`NavGraph.GatePassable` is one half of a rule whose other half is
+`SolidRect.IsSolidTo`. The graph stamps every edge that crosses a gate and the
+simulation decides whether that gate is solid right now. They agree only if the
+`NavQuery` a bot plans with carries the same live facts the collision filter is
+built from.
+
+### Two fields went stale, and both name something solid
+
+`ScriptedBot` rebuilds its query from live state every tick — team, and the two
+class-arc bits. It did not rebuild either gate term, so both sat at the record's
+default of `false` for a bot's whole life.
+
+| field | what stands behind it | what the default meant |
+|---|---|---|
+| `SetupGatesClosed` | `SolidKind.SetupGate => filter.SetupGatesClosed`, mirrored onto the character every tick from `state.SetupTimer > 0` | every bot routed through shut setup gates for the whole setup phase — 1,800 ticks on Invasion, 900 on attack/defend |
+| `HasIntel` | `SolidKind.TeamGate` is solid to a character of its **own** team once that character is carrying, which is the `&& !hasIntel` in `NavGate.TeamRed`/`TeamBlue` | a carrier routed home through its own team gate |
+
+Neither is a graph bug. On `ctf_avanti` all four edges into node 165 carry
+`NavGate.Setup`, correctly; the bot simply asked the wrong question of them.
+
+### What it looked like from inside
+
+`ctf_avanti` seed 1, a red Sniper, traced tick by tick. The staircase up to
+node 165 is four one-column steps, 6px of rise and 6px of run each:
+
+| node | columns | floor y |
+|---|---|---|
+| 189 | 168-171 | 708 |
+| 183 | 172 | 702 |
+| 178 | 173 | 696 |
+| 173 | 174 | 690 |
+| 165 | 175-178 | 684 |
+
+A `SetupGate` stands at (1068, 606). The bot flies `189->165`, presses RIGHT for
+ten airborne ticks against x ≈ 1061.5 without moving a pixel, slides down the
+gate's face and lands on node 173. Off-route fires; it re-plans; the route back
+up is `173->178->183->165` — two steps back **down** the staircase and then a
+jump over all three — because the direct `173->165` walk and the short
+`178->165` jump are both on the blacklist by then, banned by a stuck detector
+that was watching the bot shove a gate. The run-up for `183->165` walks it onto
+node 189, where the next re-plan picks `189->165` again. The lap is about 46
+ticks and it ran for the whole setup phase.
+
+⚠️ **The run-up repeats the census counts here are a symptom of a routing loop,
+not of a takeoff loop**, which is the opposite of what the same counter measures
+on `ctf_truefort`. Every refusal in the `ctf_avanti` table is `GateBackwards`
+with a constant `along` — the gate watching a bot start a run-up it will not
+finish — where truefort's are `GateShort`. A counter that names the same
+symptom on two maps is not evidence of the same cause.
+
+### The fix
+
+Two fields added to `ScriptedBot`'s per-tick `Query with`, from the character's
+own mirrored flags: `HasIntel = self.CarryingIntel` and
+`SetupGatesClosed = self.SetupGatesClosed`.
+
+⚠️ **The tables are not keyed on gates and this does not touch them.**
+`NavDistanceSet.KeyOf` uses only the three class-arc bits, so a query whose gate
+terms change mid-round still hits the same precomputed next-hop table. A fix
+that added a gate bit to that key would cost a derive at every setup boundary.
+
+### Measured
+
+`ZzWallCensus` (`.claude/notes/probes-0915/`, gitignored): bot-ticks spent
+pressing a direction, on the ground, going nowhere — the player-visible symptom
+of a route through something solid. 23 maps x 2 seeds x 12 bots, 9,000 ticks,
+Release.
+
+| | wall-ticks | of those, in setup | worst streak |
+|---|---|---|---|
+| ctf_avanti before | 1,388 | 1,249 | 20 |
+| ctf_avanti after | **142** | **7** | 11 |
+| cp_dirtbowl before | 786 | 680 | 22 |
+| cp_dirtbowl after | **113** | **9** | 1 |
+| corpus before | 9,672 | 1,929 | 251 |
+| corpus after | **7,753** | **16** | 251 |
+
+**The other 21 maps are byte-identical**, which is the check worth having: they
+are exactly the maps with no `NavGate.Setup` edge, so the change did only what it
+claims. `ctf_avanti` and `cp_dirtbowl` are the only two that have any — 76 and 5
+respectively, against zero everywhere else — and no shipped graph carries an
+`IntelRed`/`IntelBlue` edge at all, so `HasIntel` is decided entirely by team
+gates here (`ctf_truefort` has 117 and 118 of them).
+
+Run-up repeats over the same corpus slice: `ctf_avanti` **412 to 90**, worst
+streak **35 to 5**, and the `178->165` family that dominated its table is gone.
+`koth_corinth` 155 to 155 and `ctf_truefort` 78 to 78, both byte-identical.
+
+`dotnet test Gg2.sln`: 3,502 passed, 0 failed, 14 skipped. **No pinned
+measurement moved** — the three end-to-end bot pins all live on `ctf_truefort`,
+which has no setup gates, and `BotObjectiveTests`' intel run stops at the grab.
+
+### The gates, and both directions
+
+`BotGateTests`, two tests, both failing on the unfixed code:
+
+- `ABotDoesNotPlanThroughASetupGateThatIsStillShut`. The query is snapshotted
+  **before** the step, because it is built inside `Poll` and the tick rewrites
+  the mirrored flag afterwards — the same one-tick skew as "everything derived
+  from a bot's team is derived one tick too early", and comparing against the
+  post-tick value fails on tick 0 whatever the code does. Asserts the flag both
+  during setup and after it, so reporting the gates shut for ever does not pass;
+  asserts both counts are non-trivial, so neither direction is vacuous; and
+  counts wall-shoving separately, **540 unfixed against 5 fixed**, so a follower
+  that walked into the gates anyway would still fail.
+- `ACarrierPlansAsSomebodyItsOwnTeamGateWillNotLetThrough`. ⚠️ Alive **before**
+  the step as well: `Poll` returns early for a dead bot without touching the
+  query, so on the tick a shot carrier respawns the query still says it is
+  carrying, and asserting there measures the early return. The
+  "somebody actually carried" assertion is what stops the test passing on
+  unfixed code by comparing false to false — 1,495 carrying bot-ticks.
+
+### Still open: koth_corinth is a different cause
+
+`koth_corinth` does not move at all, and nothing about it involves a gate. Its
+shuttle is the climb out of the pit at node 202 (a wide floor at y 906) onto
+node 176, a one-column ledge 48px above it, and on to node 134. Flown on its own
+from the node midpoint with `EdgeFlights`, `202->176` **arrives** — so the arc is
+not a fiction — but it takes **98 ticks and 90 of them steering that edge**,
+against **48 and 45** for `203->177`, the mirror-image edge on the other side of
+the map with the identical `needVx` 0.73 and 8.2-tick flight. `176->134` costs
+103.
+
+That is the shape of it: the approach needs about twice as long as its own
+mirror, and the re-plan interval is 45-89 ticks, so in a match the bot is
+re-planned before it ever finishes one. Why the same arc costs twice as much
+from node 202 is not settled and is the next thing to measure — the approach is
+6 cells against the mirror's 7, so it is not the walk length.
