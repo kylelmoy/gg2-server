@@ -1,6 +1,6 @@
 # Working on the bots
 
-**The front door for bot development.** `docs/TRAPS-BOTS.md` is 3,200 lines
+**The front door for bot development.** `docs/TRAPS-BOTS.md` is the long form,
 indexed by phase-7 item number — useful once you know what you're touching, not
 before you start.
 

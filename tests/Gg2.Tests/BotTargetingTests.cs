@@ -346,6 +346,56 @@ public sealed class BotTargetingTests
     }
 
     /// <summary>
+    /// A sentry that is shooting this bot outranks the engineer who built it,
+    /// even with the engineer nearer.
+    /// </summary>
+    /// <remarks>
+    /// <b>The attacker bonus is a partition between the two candidate loops, not
+    /// a term that is applied twice.</b> A turret's damage is credited to its
+    /// OWNER's roster slot, so <c>LastDamageDealer</c> names the engineer whether
+    /// the engineer shot or the gun did, and <c>LastDamageSource</c> is the only
+    /// field that separates the two cases.
+    /// <para>
+    /// Both directions are asserted here, and that is the whole point: awarding
+    /// the bonus to the sentry <em>as well as</em> the engineer leaves the
+    /// engineer winning anyway (250 - 60 - 150 = 40 against 400 - 200 - 150 = 50),
+    /// so a test that only checked the sentry case would pass on the version that
+    /// double-counts. The engineer is placed 150px NEARER than its own sentry, so
+    /// nothing here can be satisfied by distance.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ASentryThatIsShootingOutranksTheEngineerWhoBuiltIt()
+    {
+        var state = World(
+            (Team.Red, PlayerClass.Soldier, LeftX, FloorY),
+            (Team.Blue, PlayerClass.Engineer, LeftX + 250, FloorY));
+
+        state.Sentries[1] = SentryState.Build(Team.Blue, LeftX + 400, FloorY, 1);
+        state.HasSentry[1] = true;
+
+        // The turret hit this bot: the dealer is the engineer's slot, because
+        // that is who a sentry's damage is credited to, and the source is what
+        // says it was the gun.
+        state.Characters[0].LastDamageDealer = 1;
+        state.Characters[0].LastDamageSource = DamageSource.SentryTurret;
+
+        var shotByTheGun = BotTargeting.Find(new WorldView(in state, Collision()), 0, 800);
+
+        Assert.Equal(BotTargetKind.Sentry, shotByTheGun.Kind);
+        Assert.Equal(1, shotByTheGun.Slot);
+
+        // The control, and the direction that must NOT move: the same engineer
+        // shooting its own shotgun keeps the bonus and wins on the same geometry.
+        state.Characters[0].LastDamageSource = DamageSource.Shotgun;
+
+        var shotByTheEngineer = BotTargeting.Find(new WorldView(in state, Collision()), 0, 800);
+
+        Assert.Equal(BotTargetKind.Character, shotByTheEngineer.Kind);
+        Assert.Equal(1, shotByTheEngineer.Slot);
+    }
+
+    /// <summary>
     /// The generator is only ever chosen when nothing live is available.
     /// </summary>
     /// <remarks>

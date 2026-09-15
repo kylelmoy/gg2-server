@@ -530,6 +530,14 @@ where to point but presses no key.
   `BOT_SENTRY_BONUS` ahead of an equidistant player (unlike a player, it
   can't be walked away from); a generator sits at `BOT_GEN_THREAT` 4,000,
   chosen only when nothing live is available.
+- ⚠️ **The attacker term is a PARTITION across the two candidate loops, and
+  needs both damage fields.** A turret's damage is credited to its **owner's**
+  roster slot, so `LastDamageDealer` names the engineer whether the engineer
+  shot or the gun did; `LastDamageSource == SentryTurret` is the only thing
+  that separates them. The character loop takes the bonus when the source is
+  *not* the turret and the sentry loop takes it when it is, so exactly one
+  candidate holds it — because exactly one of them shot. See "a sentry is
+  credited to its engineer" below.
 - ⚠️ **`AngleDelta` answers -180 for exactly opposite, not +180** (range
   `[-180, 180)`) — decides which way a bot turns to face directly behind it.
 - ⚠️ **The ballistics table is the bot's MODEL, not the weapon** — a
@@ -5970,3 +5978,122 @@ an arm with the attention half alone reads 31 of 128 as well.
 - If `BOT_RETALIATE_RANGE` were raised past a sniper's own radius, bots would
   start turning to face attackers they have no way to reach, and the census's
   "blind" column would fall while nothing else improved.
+
+## A sentry is credited to its engineer, so "shot me recently" named the wrong thing
+
+Reported from play: bots handle a sentry badly, and stand still while one shoots
+them. Two separate questions, and the answers differ.
+
+**Bots do target sentries.** `BotTargeting.Find` has always scored every live
+enemy sentry as a candidate in its own right at `distance - BOT_SENTRY_BONUS`
+(200), aimed at the centre of its box, and `BotCombat` keeps the lock. That half
+was never missing.
+
+**What was missing is that sentry fire could not point a bot at the sentry.** A
+turret's damage is dealt by `Sentries`' own fire and credited to the sentry's
+**owner**: it writes `LastDamageDealer = <owner slot>` and
+`LastDamageSource = SentryTurret`. The attacker term existed only in the
+character loop, keyed on the dealer slot alone, so the whole
+`BOT_ATTACKER_BONUS` (150) went to the engineer — who may be round a corner with
+a wrench — while the gun actually doing the shooting got only the flat sentry
+bonus.
+
+### The fix is a partition, not a second term
+
+The obvious repair is to add an attacker term to the sentry loop. That does not
+work, and the arithmetic says why. An engineer 250px away with its sentry at
+400px scores `250 - 60 - 150 = 40` against the sentry's `400 - 200 - 150 = 50`:
+adding the term leaves the engineer winning anyway, because the engineer is
+still collecting a bonus for damage it did not deal.
+
+So the bonus **moves** rather than being duplicated. The character loop takes it
+when the source is not the turret, the sentry loop takes it when it is, and
+exactly one candidate can hold it because exactly one of them shot. On the same
+geometry the sentry now scores 1 against the engineer's 90.
+
+Pairing the two fields is sound rather than convenient: `Timers`' alarm 3 clears
+`LastDamageDealer` to `Nobody` and `LastDamageSource` to `None` on the same
+tick, so whenever the dealer is set at all the source names what that dealer's
+last hit was.
+
+### Measured
+
+| | ticks aimed at the sentry | at the engineer | nothing |
+|---|---|---|---|
+| before | 166 / 300 | 106 | 28 |
+| after | 286 / 300 | 0 | 14 |
+
+A tier-5 heavy holding koth_valley's point, a sentry 260px off it and that
+sentry's engineer at 150px — the engineer deliberately the nearer of the two, so
+nothing here is satisfied by the distance term.
+`BotUnderFireTests.ABotOnThePointAnswersTheSentryRatherThanItsBuilder`.
+
+`eval --matches 32 --seed 1`, 736 matches: **identical to the baseline on every
+one of the 23 map rows and on the total tick count** (14,312,832), the wall-clock
+line being the only difference in the output. That is expected rather than
+disappointing — it needs an engineer
+who has built a sentry, a bot inside both their radii, and the engineer nearer
+than its own gun, which bot-vs-bot eval almost never produces. Like the
+"standing still under fire" fix above, the gain is against a human playing
+behind a sentry nest, and no headless measurement contains one.
+
+### What would show this has gone stale
+
+- Both new tests fail on the unfixed code and on the add-rather-than-move
+  version; both were confirmed by reverting `src/` and running them. A version
+  of either that passes on the double-counting arm is measuring the sentry bonus
+  and not the attacker term.
+- `ASentryThatIsShootingOutranksTheEngineerWhoBuiltIt` asserts the control
+  direction too: the same engineer shooting its own shotgun keeps the bonus and
+  wins on the same geometry. If that half ever fails, the source test has been
+  widened past the turret.
+- The scenario test asserts the engineer's count is **zero**, not merely lower.
+  "The sentry won more ticks" passes on both arms (166 to 106 before the fix),
+  which is what the first version of the test asserted and why it gated nothing.
+
+### Rejected: making an out-of-reach target stop counting as an answer
+
+`ScriptedBot.UnderFireWithNoAnswer` gives a shot-at bot the short 15-tick
+re-post only while it holds no target inside its class radius. The proposal was
+to measure against the class's `BotClassProfile.CloseIn` where it has one, so
+that a pyro holding a sentry at 180px — inside its 200px radius, outside its
+165px flame — counts as having no answer and re-posts.
+
+**It is not shipped, and the motivating case does not exist.** Measured on the
+koth_valley post harness at a true 150/180/190px, a pyro under fire at those
+ranges walks 315-421px and flames for 50-85 of 300 ticks: its own spot search
+wanders enough that `ParkedTicks` never reaches either threshold, so which
+threshold applies never arises. The two arms are byte-identical on that
+scenario.
+
+Across the corpus it is not inert — it moves 13 of 23 maps, because it changes
+every pyro — but the moves scatter in both directions and the aggregate is
+noise: decisive 489 to 491, draws 213 to 210, unfinished 34 to 35, mean of the
+per-map mean ticks 19,447 to 19,497 (`eval --matches 32 --seed 1`, 736 matches
+per arm, Release). That is an ungated change to shipped behaviour with a
+measurable perturbation and no demonstrated benefit, which is the same bar the
+engage hold's own minimum-band exception failed; the comment in
+`ScriptedBot.EngageKeys` records that one.
+
+If it is revisited, the thing to establish first is a bot that genuinely parks
+out of its own reach — the reasoning that produced this proposal assumed one
+without measuring it.
+
+### The measuring trap: a ring, not a horizontal offset
+
+`BotUnderFireTests.FiringPosition` sweeps `x = post +/- ShotFrom` over a range
+of vertical offsets, so `ShotFrom` is a **horizontal component and not a
+distance**. koth_valley's point sits in a hollow and the first clear line is
+260px above it, so its 418px shooter actually stands about 493px away.
+
+Parameterising that helper to ask for shorter ranges is how the pyro probe above
+was first written, and every probe came back byte-identical at four different
+ranges because all four were the same long-range scenario — the in-radius case
+could not be constructed at all. The sentry scenario therefore has its own
+`RingPosition`, which sweeps a true-distance ring and asserts the distance it
+returns.
+
+Leave `FiringPosition` alone rather than merging the two: the three tests above
+it are calibrated against its position, and swapping in a true-distance ring
+moves the heavy's control assertion from holding its post to leaving it by
+369px. That is the fixture moving, not the claim failing.

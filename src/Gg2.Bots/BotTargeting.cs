@@ -48,9 +48,12 @@ public readonly record struct BotTarget(
 /// raw distance:
 /// <code>
 /// threat = distance - 300 × carrying the intel
-///                   - 150 × shot me recently
+///                   - 150 × shot me PERSONALLY recently
 ///                   - 120 × Medic - 60 × Engineer
 ///                   - 100 × already wounded
+///                   + range × inside my class's minimum band
+///
+/// sentry = distance - 200 - 150 × this sentry is what is shooting me
 ///                   + range × inside my class's minimum band
 /// </code>
 /// <para>
@@ -58,6 +61,13 @@ public readonly record struct BotTarget(
 /// the intel carrier means being willing to walk 300px past someone harmless to
 /// reach them, and a medic is worth 120px of that because leaving one alive
 /// undoes everything else the bot is about to do.
+/// </para>
+/// <para>
+/// <b>"Shot me recently" is a partition, not a term that appears once.</b> A
+/// sentry's damage is credited to its OWNER's roster slot, so the dealer slot
+/// alone cannot tell an engineer's shotgun from the gun it built;
+/// <c>LastDamageSource</c> is what separates them. Exactly one of the two loops
+/// awards the bonus on any given tick, because exactly one of the two shot.
 /// </para>
 /// </remarks>
 public static class BotTargeting
@@ -284,8 +294,19 @@ public static class BotTargeting
             // than a scoring opportunity, and answering them is what a player
             // does before anything else. LastDamageDealer is a roster slot and is
             // cleared on its own timer, so this decays without a timer here.
-            if (other == self.LastDamageDealer)
+            //
+            // ⚠️ The source test is what stops this naming the wrong thing. A
+            // sentry's damage is credited to its OWNER's slot, so an engineer
+            // whose gun is shooting somebody reads here as shooting them
+            // personally — and the bonus would go to a player round a corner with
+            // a wrench instead of to the turret actually doing it. The bonus is
+            // MOVED to the sentry loop below rather than added there: exactly one
+            // of the two can hold it, because exactly one of them shot.
+            if (other == self.LastDamageDealer
+                && self.LastDamageSource != DamageSource.SentryTurret)
+            {
                 threat -= BotConstants.AttackerBonus;
+            }
 
             if (candidate.Class == PlayerClass.Medic)
                 threat -= 120;
@@ -332,6 +353,21 @@ public static class BotTargeting
                 continue;
 
             var threat = distance - BotConstants.SentryBonus;
+
+            // The other half of the character loop's "shot me recently", and the
+            // half that needs both fields. A turret's damage names its OWNER as the
+            // dealer, so the dealer slot alone cannot tell a sentry's fire from its
+            // engineer's shotgun; the source is what separates them.
+            //
+            // Pairing the two fields is sound rather than a guess: Timers.cs's
+            // alarm 3 clears LastDamageDealer to Nobody and LastDamageSource to
+            // None on the same tick, so whenever the dealer is set at all the
+            // source names what that dealer's last hit was.
+            if (owner == self.LastDamageDealer
+                && self.LastDamageSource == DamageSource.SentryTurret)
+            {
+                threat -= BotConstants.AttackerBonus;
+            }
 
             if (distance < minBand)
                 threat += range;
