@@ -6097,3 +6097,169 @@ Leave `FiringPosition` alone rather than merging the two: the three tests above
 it are calibrated against its position, and swapping in a true-distance ring
 moves the heavy's control assertion from holding its post to leaving it by
 369px. That is the fixture moving, not the claim failing.
+
+## A gate that fires before the run is finished, and the shuttle on a staircase
+
+Reported from play: a heavy on ctf_truefort's staircase up to the intel dithers
+on each landing, rocking back and forth, before eventually making the jump to
+the next flight.
+
+The reading was right. It is a run-up that cannot deliver, retried until
+something else breaks the loop.
+
+### What happens, tick by tick
+
+`SteerJump` hands the bot to `Gate` once it is within `BOT_JUMP_LEAD` cells of
+the takeoff column, and `BOT_JUMP_LEAD` is 1. So the gate judges the bot's speed
+up to one cell -- six pixels -- before it reaches the column the arc is costed
+from. When the gate refuses for being short, the answer was always a run-up:
+back off `BOT_RUNUP_CELLS`, turn round, and come at it again.
+
+For a class whose acceleration needs the whole run, that is a loop with no exit.
+Measured on edge 597->557, the first landing:
+
+| | |
+|---|---|
+| takeoff column | 146 (x 888), landing column 132 (x 804) |
+| gap, needVx, flight | 84px, 4.32 px/tick, 19.4 ticks |
+| along needed to clear | heavy 3.5, soldier 2.5, scout 0 (standstill) |
+| run-up available | 6 cells, the full `BOT_RUNUP_CELLS` |
+| heavy's speed at column 147 | **3.19** |
+| heavy's speed at column 146 | about 3.55, roughly two ticks later |
+
+The heavy comes off the full run-up at 3.19 at column 147, is refused, runs up
+again, and arrives at 3.19 again. It shuttled over the same 22px five times,
+ticks 192-298, and left only when a re-plan routed round it. A scout clears the
+arc from a standstill and never sees any of this, which is why it reads as a
+heavy problem rather than a map one.
+
+### Why the escape hatch does not fire
+
+`BOT_TAKEOFF_PATIENCE` is 60 and `TakeoffTicks` reached 14. Two things starve it,
+and only the first was written down:
+
+- A re-plan zeroes the budget, and the re-plan interval is 45-89 ticks. That is
+  the ceiling already recorded under item 4b-ii.
+- `TakeoffTicks` is incremented in `Gate` and only there, on purpose -- counting
+  the approach would fire a jump from the middle of a run. But a shuttling bot is
+  at the gate for about six ticks in every twenty-four, so the budget accrues at
+  a quarter speed, and 60 is out of reach even between re-plans.
+
+Neither is wrong on its own. Together they mean the refusal is not merely slow to
+resolve, it does not resolve.
+
+### The fix: finish the run before abandoning it
+
+In the short branch, a bot that is **behind the takeoff column along the jump
+direction** and **already moving toward the jump** is told to keep walking to the
+takeoff column instead of starting a run-up. It has not finished the run it is
+on; the run-up throws that run away and rebuilds it identically.
+
+Walking the last cell is safe in the way that walking on *from* the takeoff
+column is not. That column is the lip, and pressing forward there walks off it --
+which is what the existing comment is about. This is the cell behind the lip,
+which is still floor.
+
+`BOT_JUMP_LEAD` is left alone. Setting it to 0 also removes this loop, and is the
+wrong fix: the bot then has to land exactly on a six-pixel column to be gated at
+all, and off-route fires on the truefort intel run go 25 to 241.
+
+### Measured
+
+The reported leg first, because it is the one that says whether the fix works.
+`BotStaircaseTests`: a heavy walking ctf_truefort's red spawn to the blue intel,
+swept over 8 re-plan staggers x 4 start positions, 24 arriving runs per arm.
+
+| heavy | mean | median | min | max | worst streak | runs that shuttled |
+|---|---|---|---|---|---|---|
+| before | 2,064 | 2,051 | 1,807 | 2,346 | 11 | 23 of 24 |
+| after | 1,841 | 1,822 | 1,751 | 2,091 | 2 | 0 of 24 |
+
+Faster at every order statistic, and the shuttle is gone. A soldier is the
+control and does not move (1,606 to 1,609, identical min and max): it clears
+these arcs at 2.5 px/tick and never reaches the branch. Eight of the thirty-two
+starts never arrive on either arm, which is those start positions rather than
+anything here.
+
+⚠️⚠️ **One run is not a measurement of this leg, and reading one as a measurement
+inverted the conclusion.** A single (stagger, start x) pair reads 1,851 before
+against 2,091 after, which was written up as a 240-tick regression on the very
+case the fix is for. It is a lucky baseline draw against its own mean of 2,064,
+and the 2,091 is the worst of the fixed arm's distribution. A path follower is
+chaotic in its start state: the fix reaches the flag's 3,000px ring 91 ticks
+EARLIER, and everything after that meets a different re-plan phase. The whole
+apparent loss appeared between the 1,200px and 800px rings, in the enemy base,
+nowhere near the edge that changed. A progress-ring profile is what localises
+that; the sweep is what settles it.
+
+`RunupCensus`, 23 maps x 2 seeds x 12 bots, capped at 9,000 ticks, Debug. A
+"repeat" is a run-up started for the same edge the previous one was for, per bot,
+consecutively -- the shuttle. An isolated run-up is ordinary and is not counted.
+
+| | run-up ticks | episodes | repeats | worst streak |
+|---|---|---|---|---|
+| before | 67,441 | 8,780 | 2,378 (27.1%) | 42 |
+| after | 64,272 | 8,425 | 2,099 (24.9%) | 37 |
+
+On ctf_truefort itself, which is the reported map: repeats 130 to 72, **worst
+streak 42 to 7**. The heavy's own intel run drops from 105 run-up ticks to 58 and
+from 11 run-up episodes to 7, and edge 597->557 goes from five consecutive
+episodes over 106 ticks to one of 14.
+
+`eval --matches 32`, 736 matches per arm, Release, both seeds:
+
+| | decisive | draws | unfinished | mean of per-map mean ticks |
+|---|---|---|---|---|
+| seed 1 before | 489 | 213 | 34 | 19,447 |
+| seed 1 after | 483 | 219 | 34 | 19,331 |
+| seed 2 before | 466 | 229 | 41 | 19,898 |
+| seed 2 after | 469 | 230 | 37 | 19,771 |
+
+Decisive moves -6 then +3, which is scatter rather than direction; faster on both
+seeds; unfinished no worse. The second seed was run because the first alone
+looked directional, and one seed would not have told the difference.
+
+`EdgeFlightTests`, both routing arms: one more edge arrives, one fewer is
+stranded (536 to 535 and 579 to 578), fewer blacklists, and about 1,300 ticks
+quicker. `ScenarioSuiteTests`' rocket-jump count does not move.
+
+### What was re-recorded, and which way each went
+
+Six pinned numbers move. Each was checked for direction before being updated, and
+two of them are costs rather than gains.
+
+| pin | before | after | |
+|---|---|---|---|
+| `BotObjectiveTests` intel run | 1,598 | 1,578 ticks | faster |
+| ...its re-plan count | 32 | 31 | fewer |
+| `ScenarioSuiteTests` truefort-spawn-to-intel | 1,568 | 1,548 | faster |
+| `ScenarioSuiteTests` gallery-pit-climb | 216 | 261 | **slower** |
+| `SeparationBandTests` ctf_2dfort | 1,536.15 | 1,478.61 | **less damage** |
+| `EdgeFlightTests`, both arms | | | one more arrival, one fewer stranded, fewer blacklists, faster |
+
+`gallery-pit-climb` is itself a heavy on one-column staircases, in a V-shaped pit,
+and it pays the walk to the lip on every lap. It is +45 ticks in every variant
+tried, so the cost is the core behaviour rather than the condition guarding it;
+the same map's census repeats fall 114 to 57 and the leg still arrives well inside
+its 600-tick budget.
+
+`SeparationBandTests` is total damage over eight scripted duels, so lower means
+less fighting: -3.7% on ctf_2dfort, with arena_lumberyard and koth_harvest
+unmoved. That is the one number here pointing the wrong way with no compensating
+reading on its own map.
+
+`ScenarioSuiteTests`' rocket-jump count does NOT move. An earlier version of this
+change took it 10 to 11; the shipped one leaves it at 10, which is worth knowing
+because that assertion sits before the cost-drift one and masks it when it fails.
+
+### Still open
+
+The corpus worst streak is 35 after the fix, so the shuttle has other causes.
+`ctf_avanti` (397 repeats, worst 35) and `koth_corinth` (156, worst 31) barely
+move, and neither was investigated. What would settle them is the same method
+used here: dump the edge, its needVx and flight ticks, and the per-class `along`
+the reach model wants against what the available run actually delivers.
+
+The deeper version of the question is that the generator emits one arc model for
+every class, so an edge is flyable or not without reference to who has to fly it.
+That is recorded under item 4b-ii and is not changed here.

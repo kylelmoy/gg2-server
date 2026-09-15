@@ -190,7 +190,7 @@ public sealed class SeparationBandTests(Xunit.Abstractions.ITestOutputHelper out
         // went 18/24 to 22/24 over the same change.
         var expected = map switch
         {
-            "ctf_2dfort" => 1536.1472365055804,
+            "ctf_2dfort" => 1478.6076793534305,
             "arena_lumberyard" => 1343.1363440377258,
             "koth_harvest" => 1007.0099686656572,
             _ => throw new ArgumentOutOfRangeException(nameof(map), map, "no recorded total for this map"),

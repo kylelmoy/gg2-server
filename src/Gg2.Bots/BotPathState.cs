@@ -235,6 +235,38 @@ public sealed class BotPathState
     /// </remarks>
     public int TakeoffTicks { get; set; }
 
+    /// <summary>
+    /// How many run-ups have been started for the edge currently being prepared.
+    /// </summary>
+    /// <remarks>
+    /// <b>The second one is the one that means something.</b> A first run-up is
+    /// ordinary — a bot arrives at a takeoff too slow and backs off to build
+    /// speed. A second for the same edge says the first one <em>delivered the bot
+    /// back at a speed the gate refused again</em>, and a third says it will keep
+    /// doing that: the run is a fixed length, so every lap of the loop ends at the
+    /// same speed as the last.
+    /// <para>
+    /// ⚠️ <b>Keyed to the edge it belongs to rather than cleared with the rest of
+    /// the per-arc state, and that is the whole reason it works.</b> A re-plan
+    /// calls <see cref="FreePath"/>, which sets <see cref="EdgeFrom"/> to -1, and
+    /// the change-of-edge test in <c>PathFollower</c> then zeroes the per-arc
+    /// state next tick — so anything reset there inherits the re-plan interval
+    /// (45-89 ticks) as a ceiling. That is what makes
+    /// <c>BOT_TAKEOFF_PATIENCE</c> unreachable, recorded under phase 7 item
+    /// 4b-ii, and a counter cleared the same way lets one shuttle lap through per
+    /// re-plan: measured, ctf_truefort's worst streak came back from 7 to 25.
+    /// <see cref="RunupsEdgeFrom"/> and <see cref="RunupsEdgeTo"/> say which edge
+    /// the count is for, so a re-plan that produces the same edge keeps it.
+    /// </para>
+    /// </remarks>
+    public int RunupsStarted { get; set; }
+
+    /// <summary>Which edge <see cref="RunupsStarted"/> is counting for.</summary>
+    public int RunupsEdgeFrom { get; set; } = -1;
+
+    /// <inheritdoc cref="RunupsEdgeFrom"/>
+    public int RunupsEdgeTo { get; set; } = -1;
+
     /// <summary>The column being backed up to for a run-up, or -1.</summary>
     /// <remarks>
     /// Resolved once per edge and remembered, because working it out walks the
@@ -548,7 +580,10 @@ public sealed class BotPathState
         // — botPathFree.gml does not touch it — and the distinction is not
         // academic: it is zeroed a moment later anyway, by FollowEdge's
         // change-of-edge test, because this just set EdgeFrom to -1. See
-        // PathFollower.Plan for why that matters.
+        // PathFollower.Plan for why that matters. RunupsStarted is NOT reset
+        // here either, and for a sharper version of the same reason: it is keyed
+        // to its own edge, so a re-plan that lands on the same arc keeps the
+        // count that says the run-up has already been tried.
         RunupAt = -1;
     }
 

@@ -1560,8 +1560,8 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
         // `UnsupportedEdgeTicks` does not see this: the ban is one of the counters
         // above, and it stays at zero because the dispatch switch saw a type it
         // handles.
-        Assert.Equal(1598, grabbedAt);
-        Assert.Equal(32, bot.Path.Replans);
+        Assert.Equal(1578, grabbedAt);
+        Assert.Equal(31, bot.Path.Replans);
         Assert.Equal(0, bot.Path.StuckFires);
         Assert.Equal(10, bot.Path.OffRouteFires);
         Assert.Equal(0, bot.Path.BlacklistFires);

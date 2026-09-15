@@ -282,7 +282,8 @@ public sealed partial class PathFollower
 
         Gate(
             state, in character, in weapon, in edge, from: current, to: next, in from,
-            takeoff, needVx, flightTicks, jumpDir, along, tick, in query, occupancy, ref steer);
+            takeoff, needVx, flightTicks, jumpDir, along, column, tick, in query, occupancy,
+            ref steer);
     }
 
     /// <summary>Walking toward the takeoff column, or backing up to a run-up mark.</summary>
@@ -367,7 +368,7 @@ public sealed partial class PathFollower
         BotPathState state, in CharacterState character, in WeaponState weapon, in NavEdge edge,
         int from, int to,
         in NavNode fromNode, int takeoff, double needVx, double flightTicks, int jumpDir,
-        double along, int tick, in NavQuery query,
+        double along, int column, int tick, in NavQuery query,
         BotOccupancy? occupancy, ref Steering steer)
     {
         // ⚠️ Counted here and nowhere else. The budget is ticks spent AT the gate
@@ -375,6 +376,16 @@ public sealed partial class PathFollower
         // long walk and fire a jump from the middle of the run, which is what
         // broke valley-spawn-to-point the first time the reference wrote this.
         state.TakeoffTicks++;
+
+        // Re-key the run-up count if this is a different arc from the one it was
+        // counting for. Done here rather than on the change-of-edge test so it
+        // survives a re-plan onto the same edge — see BotPathState.RunupsStarted.
+        if (state.RunupsEdgeFrom != from || state.RunupsEdgeTo != to)
+        {
+            state.RunupsEdgeFrom = from;
+            state.RunupsEdgeTo = to;
+            state.RunupsStarted = 0;
+        }
 
         // ⚠️ How much ground this jump has to cover, measured from the takeoff
         // COLUMN and not from the bot's x — the difference is not cosmetic. The
@@ -623,18 +634,66 @@ public sealed partial class PathFollower
             // first place — the bot arcs out with its old momentum still on it and
             // lands back where it started.
             //
-            // ⚠️ This used to clamp the run-up into the node's OWN columns, and
-            // that clamp was the bug the whole change is about: a node one anchor
-            // column wide, which is what the top step of a staircase is, resolves
-            // the clamp back to the column the bot is already standing on, so the
-            // run-up was a no-op and the jump happened from a standstill anyway.
-            // JumpModel.RunupColumn follows WALK edges instead.
-            state.RunupAt = state.RunupAt >= 0
-                ? state.RunupAt
-                : JumpModel.RunupColumn(
-                    _graph, from, takeoff, jumpDir, BotConstants.RunupCells, in query);
+            // ⚠️ A bot still SHORT OF the takeoff column and still gaining on the
+            // jump does not need a run-up. It needs the rest of the run it is
+            // already on, and starting a run-up here throws that run away.
+            //
+            // The gate opens BOT_JUMP_LEAD cells out, so a class whose
+            // acceleration needs the whole run is judged up to a cell before it
+            // gets there — and the refusal is self-perpetuating, because the
+            // run-up puts it back at the same mark to arrive at the same speed.
+            // Measured on ctf_truefort's staircase to the intel: a heavy comes off
+            // the full six-cell run-up at 3.19 px/tick at column 147 against the
+            // 3.5 that edge 597->557 wants, and clears 3.5 about two ticks later
+            // at the takeoff column itself. Before this it shuttled over the same
+            // 22px five times, ~106 ticks, and only left when a re-plan routed
+            // round it.
+            //
+            // ⚠️ Walking the last cell is safe in the way that walking on FROM the
+            // takeoff column is not. The comment above is about the lip: the
+            // takeoff column is where the run ends, and pressing forward there
+            // walks off it. This is the cell BEHIND that, which is still floor —
+            // it is the approach, arriving one tick late.
+            //
+            // ⚠️ Only once a run-up has already been spent AND has stopped
+            // helping, and both halves are load-bearing.
+            //
+            // On a first approach a bot may be short for any number of reasons and
+            // a run-up is the right answer; walking to the lip first to find out is
+            // a wasted round trip, and without the count it cost gallery-pit-climb
+            // 216 ticks -> 260 and truefort-spawn-to-intel 1,568 -> 1,606.
+            //
+            // ⚠️ Tried and dropped: also requiring that the last run-up failed to
+            // improve the speed at the gate, so a run-up still doing its job could
+            // repeat. It sounds strictly better and measures worse — census repeats
+            // 2,152 -> 2,163, koth_gallery's own repeats 57 -> 66, and
+            // truefort-spawn-to-intel 1,548 -> 1,609 — because an approach that
+            // merely TIES the best is the common case and the extra condition
+            // mostly just delays the fix by a lap. docs/TRAPS-BOTS.md has the table.
+            var shortOfTakeoff = (takeoff - column) * jumpDir > 0;
 
-            steer.TargetColumn = state.RunupAt;
+            if (along > 0 && shortOfTakeoff && state.RunupsStarted > 0)
+            {
+                steer.TargetColumn = takeoff;
+            }
+            else
+            {
+                // ⚠️ This used to clamp the run-up into the node's OWN columns, and
+                // that clamp was the bug the whole change is about: a node one anchor
+                // column wide, which is what the top step of a staircase is, resolves
+                // the clamp back to the column the bot is already standing on, so the
+                // run-up was a no-op and the jump happened from a standstill anyway.
+                // JumpModel.RunupColumn follows WALK edges instead.
+                if (state.RunupAt < 0)
+                {
+                    state.RunupAt = JumpModel.RunupColumn(
+                        _graph, from, takeoff, jumpDir, BotConstants.RunupCells, in query);
+
+                    state.RunupsStarted++;
+                }
+
+                steer.TargetColumn = state.RunupAt;
+            }
         }
 
         // ⚠️ The escape hatch, because a gate that can refuse is a gate that can
@@ -741,5 +800,11 @@ public sealed partial class PathFollower
         state.TakeoffTicks = 0;
         state.RunupAt = -1;
         state.Rejumped = false;
+
+        // The arc was flown, so whatever it took to get off the ground is spent
+        // and the next approach to it starts again.
+        state.RunupsStarted = 0;
+        state.RunupsEdgeFrom = -1;
+        state.RunupsEdgeTo = -1;
     }
 }
