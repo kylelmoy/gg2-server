@@ -62,8 +62,10 @@ What it licenses, and what it does not:
   under it. A hazard rather than a failure rate — the tracker is a hint and most
   arcs land anyway — but it is what `koth_corinth` 202->176 is, and
   `EveryShippedNodeCanHoldACharacter` cannot see it because it asserts
-  `PlaceFree` and never asks for floor. Not fixed. See "the anchor column is not
-  a place to stand".
+  `PlaceFree` and never asks for floor. ⛔ **Re-aiming the tracker was tried both
+  ways and both are rejected with numbers** — the repair belongs in what the
+  generator costs an arc TO, not in what the follower aims AT. See "the anchor
+  column is not a place to stand".
 - ⚠️ **7 of 528 bot-matches still freeze a bot for 900+ ticks**, down from 98 —
   see "A bot that arrives stops moving" below. Every one is a Demoman, Engineer
   or Heavy handed an objective that **cannot be reached without a jump they do
@@ -6471,26 +6473,69 @@ the mask too. That is the shape CLAUDE.md warns about — a green gate that is n
 gating the thing it reads as gating — and the fix for the test is an assertion
 it does not currently make, not a stricter version of one it does.
 
-### Not fixed here, and what a fix would have to do
+### Re-aiming the tracker was tried twice, measured, and rejected
 
-The obvious repair is to aim at a standable x inside the landing node rather
-than at its anchor column, in the three places that use the anchor as a
-position. That is not a two-line change and it is not free:
+⛔ **Both arms below are rejections. Do not retry either without new evidence.**
+The instrument is `EdgeFlightTests.EveryEdgeOfEveryShippedGraphIsFlownOnTheShippingArm`,
+which flies every edge of every shipped graph and pins a fifteen-field tally —
+about four seconds an arm, so the cost of asking is nearly nothing.
 
-- It moves `SteerJump`'s clamp, which every flown arc goes through, so the whole
-  of `EdgeFlightTests` and both `ScenarioSuiteTests` arms re-record.
-- `EdgeFlights.Midpoint` is a harness premise with its own written argument for
-  being the midpoint (`StartUnresolved`), so changing it changes what the
-  corpus sweep is a measurement *of*.
-- The generator's own proof is stated in column terms too, and the arcs were
-  costed against it — see `NavGraphBuilder`'s "NOT credited here: the six px of
-  intra-cell lead", which took out a relaxation of exactly this kind after
-  measuring that it put `ctf_oldfort` back to 18% of red's routes crossing an
-  arc it cannot fly.
+Both arms bias `SteerJump`'s `TrackX`, ramped in by `travelled / jumpDistance`
+so the takeoff end is untouched, and only on an arc whose landing anchor has no
+floor under it.
 
-⚠️ **The gate already credits the intra-cell lead and the tracker does not**, and
-that asymmetry is the narrowest statement of the defect: `Gate` subtracts
-`jumpDir * (character.X - ColumnWorldX(takeoff))` clamped to one cell from the
-distance it demands, on the argument that "a column is not a point"; `SteerJump`
-then aims at the anchor as though it were. Whichever way it is repaired, those
-two want to agree.
+| | arrived | stranded | flown | ticks | blacklists |
+|---|---|---|---|---|---|
+| shipping | 31,520 | **535** | 3,626 | 1,474,882 | 7,963 |
+| A: toward lower x (the true band) | 31,263 | **792** | 3,536 | 1,578,272 | 9,689 |
+| B: further along the jump | 31,502 | **553** | 3,643 | 1,483,925 | 7,729 |
+
+**A aims at the band the body can actually stand in, and is much worse** — 257
+more strandings and 1,726 more blacklists. For an arc travelling right onto such
+a node, the band is *behind* the anchor, so aiming at it is aiming short of the
+distance the arc was costed for; arcs are routinely costed with no margin at all
+(koth_gallery n86 → n58 is 0.70 px/tick over 17.2 ticks against a 12px gap), and
+a bot told to aim six pixels short of one brakes and falls out of it.
+
+**B never aims short, and is a wash** — 18 more strandings against 234 fewer
+blacklists, ticks up 9,000.
+
+⚠️ **The diagnosis is right even though both repairs fail, and it is worth
+keeping the two apart.** On arm B the edge this was diagnosed from goes
+**98 ticks to 40**, beating its own mirror `203->177` at 49, with `ranEdge` 90 to
+39 — the hover is real and re-aiming does remove it. What it costs is elsewhere:
+`135->66` on the same map goes **61 to 96** and picks up a blacklist.
+
+### What that leaves
+
+The tension is not resolvable in the follower. An arc is **costed** anchor to
+anchor by the generator, the body **cannot stand** on the anchor of half the
+one-column nodes, and aiming at the place it can stand is aiming short of the
+distance the arc was proved to carry. Aim at the anchor and a slow arc onto a
+narrow ledge hovers; aim at the floor and every tight arc falls short.
+
+So the repair belongs in what the arc is costed TO, not in what the follower
+aims AT — and that is the generator, which already refused a relaxation of this
+shape once (`NavGraphBuilder`, "NOT credited here: the six px of intra-cell
+lead": built, measured, removed, because it put `ctf_oldfort` back to 18% of
+red's routes crossing an arc it cannot fly). ⛔ **Read that comment, and
+`docs/NAVGEN.md`, before proposing anything there**, and note that
+`NavGeneratorTests` rebuilds all 25 graphs character for character — changing
+what a node's anchor means is a graph format change, not a tuning change.
+
+### The narrowest statement of the defect
+
+⚠️ **`Gate` credits the intra-cell lead and `SteerJump` does not.** `Gate`
+subtracts `jumpDir * (character.X - ColumnWorldX(takeoff))`, clamped to one
+cell, from the distance it demands, on the stated argument that "a column is not
+a point"; `SteerJump` then aims at the landing anchor as though it were one.
+Whichever way this is repaired, those two want to agree — but note that the two
+arms above are precisely the attempts to make them agree in the follower, and
+both failed.
+
+The other two users of an anchor-as-a-position would move with any repair, and
+each costs something: `SteerJump`'s clamp is on every flown arc (all of
+`EdgeFlightTests` and both `ScenarioSuiteTests` arms re-record), and
+`EdgeFlights.Midpoint` is a harness **premise** with its own written argument
+for being the midpoint (`StartUnresolved`), so changing it changes what the
+corpus sweep is a measurement of.
