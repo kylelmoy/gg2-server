@@ -121,6 +121,17 @@ public static class BotConstants
     public const int LosAvoid = 2;   // BOT_LOS_AVOID
     public const int DefendKeen = 2;   // BOT_DEFEND_KEEN
     public const int DefendAverse = 6;   // BOT_DEFEND_AVERSE
+
+    /// <summary>
+    /// A <see cref="DefendEvery"/> period meaning this class never defends.
+    /// </summary>
+    /// <remarks>
+    /// Port-authored, and the one veto in a table the reference deliberately made
+    /// out of periods rather than vetoes. <c>BotRoles.Assign</c> tests for it
+    /// before the modulo, which is also what keeps a zero period from dividing by
+    /// zero. See <c>BotClassProfile.DefendEvery</c> for why the medic gets it.
+    /// </remarks>
+    public const int DefendNever = 0;
     public const double SpotNearFrac = 0.5;   // BOT_SPOT_NEAR_FRAC
     public const int SpotHighSniper = 3;   // BOT_SPOT_HIGH_SNIPER
     public const int CpCloseIn = 12;   // BOT_CP_CLOSE_IN

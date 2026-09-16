@@ -250,6 +250,87 @@ public sealed class BotTargetingTests
         Assert.False(BotTargeting.Find(new WorldView(in state, Collision()), 0, 800).Exists);
     }
 
+    /// <summary>A cloaked spy mid-stab is a candidate again, from in front.</summary>
+    /// <remarks>
+    /// <b>The knife is drawn over the cloak.</b> <c>StabAnim</c>'s own alpha owes
+    /// nothing to <c>cloakAlpha</c>, so for the whole
+    /// <see cref="Weapons.StabFreezeTicks"/> freeze a player sees an opaque spy
+    /// standing still — and the hitbox is not armed until tick 32 of it. A bot
+    /// that cannot take that target has no way to answer a backstab it can
+    /// plainly see coming.
+    /// </remarks>
+    [Fact]
+    public void ASpyMidStabIsACandidateFromInFront()
+    {
+        var state = World(
+            (Team.Red, PlayerClass.Soldier, LeftX, FloorY),
+            (Team.Blue, PlayerClass.Spy, LeftX + 100, FloorY));
+
+        // Facing is image_xscale and CharacterState.Fresh spawns it at +1, so the
+        // soldier is already looking towards a spy 100px to its right.
+        Assert.Equal(1, state.Characters[0].Facing);
+
+        state.Characters[1].Cloak = true;
+        state.Characters[1].Stabbing = true;
+
+        Assert.Equal(1, BotTargeting.Find(new WorldView(in state, Collision()), 0, 800).Slot);
+        Assert.True(BotTargeting.EnemyWithin(new WorldView(in state, Collision()), 0, 800));
+    }
+
+    /// <summary>
+    /// The same spy, behind the same soldier, is not a candidate — which is the
+    /// backstab.
+    /// </summary>
+    /// <remarks>
+    /// <c>StabAnim</c>'s Draw and its End Step both exit on <c>owner.invisible</c>,
+    /// and <c>Spy.events/End Step.xml</c> sets that for any enemy viewer whose
+    /// <c>image_xscale</c> points away from the spy. Without this half of the rule
+    /// the previous test would hand every bot the one thing the backstab is built
+    /// out of.
+    /// </remarks>
+    [Theory]
+    [InlineData(-1, 100)]   // looking left, spy 100px to the right
+    [InlineData(1, -100)]   // looking right, spy 100px to the left
+    public void ASpyMidStabBehindTheBotIsNotACandidate(int facing, double offset)
+    {
+        var state = World(
+            (Team.Red, PlayerClass.Soldier, LeftX, FloorY),
+            (Team.Blue, PlayerClass.Spy, LeftX + offset, FloorY));
+
+        state.Characters[0].Facing = facing;
+        state.Characters[1].Cloak = true;
+        state.Characters[1].Stabbing = true;
+
+        Assert.False(BotTargeting.Find(new WorldView(in state, Collision()), 0, 800).Exists);
+        Assert.False(BotTargeting.EnemyWithin(new WorldView(in state, Collision()), 0, 800));
+    }
+
+    /// <summary>
+    /// A stabbing spy on exactly the bot's own x is in front, whichever way the
+    /// bot faces.
+    /// </summary>
+    /// <remarks>
+    /// <c>sign(x - myself.x)</c> is 0 there and 0 is neither <c>-1</c> nor
+    /// <c>1</c>, so the reference's test fails and the spy is drawn. The edge is
+    /// worth pinning because the obvious rewrite — "is the spy on the far side"
+    /// as a single comparison — silently picks a side for it.
+    /// </remarks>
+    [Theory]
+    [InlineData(1)]
+    [InlineData(-1)]
+    public void ASpyMidStabDirectlyOverheadIsACandidate(int facing)
+    {
+        var state = World(
+            (Team.Red, PlayerClass.Soldier, LeftX, FloorY),
+            (Team.Blue, PlayerClass.Spy, LeftX, FloorY - 40));
+
+        state.Characters[0].Facing = facing;
+        state.Characters[1].Cloak = true;
+        state.Characters[1].Stabbing = true;
+
+        Assert.True(BotTargeting.Find(new WorldView(in state, Collision()), 0, 800).Exists);
+    }
+
     /// <summary>
     /// A target behind a wall is still a target, inside the blind radius.
     /// </summary>
