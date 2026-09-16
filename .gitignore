@@ -51,3 +51,20 @@ TestResults/
 
 # Fleet analytics collected by scripts/fleet-analytics.sh. Player names; never commit.
 deploy/analytics/
+
+# scripts/ is the OPERATOR's tooling, not the project's: the fleet deploy, the
+# Linux/Windows build wrappers, the fleet-state and analytics readers, and the
+# one-line admin-panel tunnels. It is specific to the three hosts this
+# repository's author personally runs, so it was untracked on 2026-09-15 and
+# left on disk. Nothing secret was in it -- every password is read from the
+# host's own gg2.ini and masked before it reaches a terminal -- so the history
+# was deliberately NOT rewritten; the files are simply no longer carried.
+#
+# docs/DEPLOY.md, CONFIG.md, WEBADMIN.md and ANALYTICS.md still describe these
+# scripts. That is on purpose: they document how the fleet is actually run, and
+# the layout they describe is reproducible without them.
+#
+# Anchored with a leading slash: a bare `scripts/` matches a directory of that
+# name at ANY depth, so a future src/Something/scripts/ would be ignored
+# silently and nothing would go red.
+/scripts/
