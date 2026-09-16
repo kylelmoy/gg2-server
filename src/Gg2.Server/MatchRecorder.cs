@@ -38,10 +38,12 @@ namespace Gg2.Server;
 /// </para>
 /// <para>
 /// <b>Bounded, because a public game runs for hours.</b> Segments roll at
-/// <see cref="SegmentBytes"/> and stop after <see cref="MaxSegments"/>; the cap
-/// is a disk-space bound, not a policy about how much play is worth keeping.
-/// The recorder also rolls on a map change, so a segment is always one map —
-/// which keeps its header's map name honest.
+/// <see cref="SegmentBytes"/> and recording stops once the directory holds
+/// <see cref="MaxTotalBytes"/>; the cap is a disk-space bound, not a policy
+/// about how much play is worth keeping. It bounds the directory rather than
+/// the process, re-read at every roll, so collecting segments off a running
+/// server gives it its budget back. The recorder also rolls on a map change, so
+/// a segment is always one map — which keeps its header's map name honest.
 /// </para>
 /// </remarks>
 public sealed class MatchRecorder : IDisposable
@@ -136,6 +138,9 @@ public sealed class MatchRecorder : IDisposable
         // that started again from zero each time would bound nothing at all on
         // the one kind of host this exists for: an unattended public server,
         // which is also the kind that restarts most.
+        //
+        // StartSegment re-takes this, so the bound keeps tracking the directory
+        // for the life of the process rather than only at its start.
         _total = ExistingBytes(directory);
 
         if (_total > 0)
@@ -250,7 +255,16 @@ public sealed class MatchRecorder : IDisposable
     /// <summary>Segments written so far, including the one open.</summary>
     public int SegmentCount => _index;
 
-    /// <summary>Bytes of broadcast written across every segment.</summary>
+    /// <summary>
+    /// What the recording directory holds, as of the open segment's start, plus
+    /// what has been written into it since.
+    /// </summary>
+    /// <remarks>
+    /// <b>Not a count of broadcast bytes.</b> It is re-anchored to the directory
+    /// at every <see cref="StartSegment"/>, so it tracks the disk the cap is
+    /// about — including the trace headers a segment gains on close, and
+    /// excluding segments an operator has collected and removed.
+    /// </remarks>
     public long TotalBytes => _total;
 
     /// <summary>True once <see cref="MaxTotalBytes"/> is reached and nothing more is kept.</summary>
@@ -271,16 +285,39 @@ public sealed class MatchRecorder : IDisposable
     {
         Close();
 
-        if (_full)
-            return;
+        // ⚠️ Re-taken from the directory rather than carried forward, and that
+        // is what makes the cap a bound on the DIRECTORY rather than on this
+        // process's lifetime writing. Collecting segments off a live server is
+        // the expected case on the hosts this exists for, not an unusual one; a
+        // running total would mean a server that had once written a gigabyte
+        // never recorded again, however empty the directory had since become.
+        //
+        // Once per segment: a directory listing per roll or map change, on a
+        // thread where Close() has just rewritten up to SegmentBytes.
+        _total = ExistingBytes(_directory);
 
         if (_total >= MaxTotalBytes)
         {
-            _full = true;
-            _log.Info(
-                $"recording stopped: {_total / (1024 * 1024)}MB written to {_directory}, "
-                + "which is the cap");
+            // Logged on the transition only — StartSegment still runs at every
+            // map change while full, because that is the moment a directory
+            // that has since been collected gets to resume.
+            if (!_full)
+            {
+                _full = true;
+                _log.Info(
+                    $"recording stopped: {_directory} holds {_total / (1024 * 1024)}MB, "
+                    + "which is the cap; collecting segments off it resumes recording");
+            }
+
             return;
+        }
+
+        if (_full)
+        {
+            _full = false;
+            _log.Info(
+                $"recording resumed: {_directory} is back under the cap at "
+                + $"{_total / (1024 * 1024)}MB");
         }
 
         _map = map;
@@ -381,8 +418,17 @@ public sealed class MatchRecorder : IDisposable
             Roster = _notes.ToArray(),
         };
 
-        File.WriteAllBytes(CurrentPath, trace.Encode());
+        var encoded = trace.Encode();
+
+        File.WriteAllBytes(CurrentPath, encoded);
         File.Delete(part);
+
+        // The segment counted against the cap as the raw bytes appended to its
+        // .part; on disk it is now a trace with a header and its roster labels.
+        // Correcting the difference keeps TotalBytes equal to what the directory
+        // holds between here and the next StartSegment, which is the only window
+        // where nothing re-reads it.
+        _total += encoded.Length - _written;
 
         // The human count is in the line because it is the one number that says
         // whether the segment is worth keeping. A recording of twelve bots

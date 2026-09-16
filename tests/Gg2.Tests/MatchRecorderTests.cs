@@ -192,10 +192,72 @@ public sealed class MatchRecorderTests : IDisposable
 
         Assert.False(recorder.IsFull, "the recorder stopped after 200 rolls of a few bytes each");
         Assert.Equal(200, recorder.SegmentCount);
-
-        // Six bytes a segment — the four-byte preamble and the two appended.
-        Assert.Equal(200 * 6, recorder.TotalBytes);
         Assert.True(recorder.TotalBytes < MatchRecorder.MaxTotalBytes);
+
+        // Against the directory rather than against 200 x 6 bytes of broadcast:
+        // the cap bounds the disk, so what it counts includes the header each
+        // segment gains on close.
+        var onDisk = new DirectoryInfo(_directory)
+            .EnumerateFiles("*.trace*")
+            .Sum(file => file.Length);
+
+        Assert.Equal(onDisk, recorder.TotalBytes);
+        Assert.True(
+            recorder.TotalBytes > 200 * 6,
+            "a segment costs more disk than the broadcast in it — it also carries a header");
+    }
+
+    /// <summary>
+    /// Collecting segments off a full directory lets recording resume, because
+    /// the cap is re-read rather than carried forward.
+    /// </summary>
+    /// <remarks>
+    /// <b>The case this is about is the operating one.</b> The fleet's
+    /// recordings are pulled off by a collector on a timer, and a cap that only
+    /// ever counted up would mean a host that had once filled its directory
+    /// stopped recording until somebody restarted it — silently, since the
+    /// directory an operator looks at is empty.
+    /// <para>
+    /// Uses a directory pre-filled past the cap rather than one written through
+    /// the recorder, so the test costs a stat rather than a gigabyte.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void CollectingSegmentsOffAFullDirectoryResumesRecording()
+    {
+        Directory.CreateDirectory(_directory);
+
+        var hog = Path.Combine(_directory, "collected.trace");
+        using (var file = new FileStream(hog, FileMode.Create, FileAccess.Write))
+            file.SetLength(MatchRecorder.MaxTotalBytes);
+
+        var log = new RecordingLog();
+        var recorder = new MatchRecorder(_directory, "test", log, () => [0x01, 0x02]);
+
+        recorder.StartSegment("ctf_truefort");
+
+        Assert.True(recorder.IsFull, "a directory already at the cap did not stop the recorder");
+        Assert.Contains(log.Lines, line => line.Contains("recording stopped", StringComparison.Ordinal));
+
+        // What the collector does: the completed segment leaves, the recorder
+        // is not restarted, and the next map change rolls a segment.
+        File.Delete(hog);
+
+        recorder.StartSegment("koth_valley");
+        recorder.Append([0x03, 0x04]);
+        recorder.Dispose();
+
+        Assert.False(recorder.IsFull, "the recorder stayed full after the directory was collected");
+        Assert.Contains(log.Lines, line => line.Contains("recording resumed", StringComparison.Ordinal));
+
+        var written = Directory.GetFiles(_directory, "*.trace");
+        Assert.Single(written);
+
+        // And it is a real segment, not an empty file that merely terminates:
+        // the map it names is the one the resume rolled on.
+        var trace = Trace.Decode(File.ReadAllBytes(written[0]));
+        Assert.Equal("koth_valley", trace.Header.Map);
+        Assert.Equal([0x01, 0x02, 0x03, 0x04], trace.Stream);
     }
 
     /// <summary>And the bound does stop it, so the test above is not vacuous.</summary>
