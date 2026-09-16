@@ -84,6 +84,140 @@ public sealed class BotAllyTests(ITestOutputHelper output)
     }
 
     /// <summary>
+    /// Anyone hurt outranks anyone at full health, however tough or near.
+    /// </summary>
+    /// <remarks>
+    /// <b>A partition, and the <c>- maxHp</c> term is why it has to be one.</b>
+    /// That term is worth 200 points across the class table while the health term
+    /// is worth 1,000 across a whole bar, so on the plain score a full-health
+    /// heavy (1000 - 300) beat a scout anywhere above 82.5% (1000h - 125): a medic
+    /// stood topping up an untouched heavy while a team-mate bled beside it. The
+    /// fixture puts the heavy NEARER as well, so nothing but the partition can
+    /// produce this answer.
+    /// <para>
+    /// ⛔ The full-health ally is still a candidate and the second half says so.
+    /// Beaming one charges the uber at 1.75 a tick (2.5 during setup), so "never
+    /// instead of somebody hurt" is the rule and "never" is not.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void AnyoneHurtOutranksAnyoneAtFullHealth()
+    {
+        var world = Load();
+        var medic = world.Place(PlayerClass.Medic, Team.Red, StandX, StandY);
+
+        // The heavy is nearer AND tougher AND at full health; the scout is barely
+        // scratched and further away. Every term in the plain score favours the
+        // heavy and the partition still has to pick the scout.
+        var heavy = world.Place(PlayerClass.Heavy, Team.Red, StandX + 20, StandY);
+        var scout = world.Place(PlayerClass.Scout, Team.Red, StandX + 260, StandY);
+
+        var scoutMax = ClassStats.For(PlayerClass.Scout).MaxHp;
+        world.State.Characters[scout].Hp = scoutMax - 1;
+
+        Assert.Equal(scout, BotAlly.Find(View(world), medic, 700, skipFollowers: false));
+
+        // The control: heal that last point off and the heavy wins on everything
+        // it was already winning on. Without it this passes on a search that has
+        // simply stopped choosing heavies.
+        world.State.Characters[scout].Hp = scoutMax;
+
+        Assert.Equal(heavy, BotAlly.Find(View(world), medic, 700, skipFollowers: false));
+    }
+
+    /// <summary>
+    /// A person is preferred to a bot at comparable health, and not to one that is
+    /// dying.
+    /// </summary>
+    /// <remarks>
+    /// <b>A bonus rather than a second partition</b>, worth 30% of a health bar
+    /// against the score's 1,000 across a whole one. Both halves matter: a medic
+    /// that always picked the person would let a bot bleed out beside it, and one
+    /// that never did would spend a live server's heals on its own team-mates.
+    /// <para>
+    /// ⚠️ <c>PlayerState.IsBot</c> defaults to FALSE MEANING HUMAN and
+    /// <c>ScenarioWorld</c> sets it for nobody, so this fixture has to mark the
+    /// bot explicitly. That default is also why the term does nothing in a
+    /// scenario or a headless match, where every candidate is the same kind — it
+    /// discriminates only on a live server, which is the only place it is for.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void APersonIsPreferredToABotAtComparableHealth()
+    {
+        var world = Load();
+        var medic = world.Place(PlayerClass.Medic, Team.Red, StandX, StandY);
+
+        // Two scouts, equally hurt, the bot nearer.
+        var bot = world.Place(PlayerClass.Scout, Team.Red, StandX + 40, StandY);
+        var person = world.Place(PlayerClass.Scout, Team.Red, StandX + 200, StandY);
+
+        var max = ClassStats.For(PlayerClass.Scout).MaxHp;
+
+        world.State.Characters[bot].Hp = max * 0.5;
+        world.State.Characters[person].Hp = max * 0.5;
+        world.State.Players[bot].IsBot = true;
+
+        Assert.Equal(person, BotAlly.Find(View(world), medic, 700, skipFollowers: false));
+
+        // The control, and the direction that must NOT move: the bot is now dying
+        // and the person has a scratch. 300 points is 30% of a bar, so a gap this
+        // wide is well past what it can bridge.
+        world.State.Characters[bot].Hp = max * 0.1;
+        world.State.Characters[person].Hp = max * 0.9;
+
+        Assert.Equal(bot, BotAlly.Find(View(world), medic, 700, skipFollowers: false));
+    }
+
+    /// <summary>
+    /// A cloaked team-mate is never the patient, and stops being one mid-beam.
+    /// </summary>
+    /// <remarks>
+    /// <b>The reason is on the CLIENT, not in the heal.</b>
+    /// <c>Medigun.events/Draw.xml</c> draws the beam as a plain
+    /// <c>draw_line_width_color</c> straight to the patient's x/y, gated on
+    /// nothing but the medic's own taunt — not on the patient's cloak and not on
+    /// <c>invisible</c>. So beaming a cloaked spy paints a five-pixel line at
+    /// whatever it is creeping up on. The heal itself works perfectly
+    /// (<c>Healing</c> has no cloak test either), which is exactly why nothing
+    /// else in the layer stops this.
+    /// <para>
+    /// <see cref="BotAlly.StillValid"/> is asked separately because
+    /// <see cref="BotAlly.Find"/> runs on a cadence: a spy that cloaks mid-beam
+    /// has to lose it on that tick, not up to <c>BOT_TARGET_PERIOD</c> later.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ACloakedTeamMateIsNeverThePatient()
+    {
+        var world = Load();
+        var medic = world.Place(PlayerClass.Medic, Team.Red, StandX, StandY);
+
+        // The spy is the better patient by every term: hurt, and nearer than the
+        // healthy scout behind it.
+        var spy = world.Place(PlayerClass.Spy, Team.Red, StandX + 40, StandY);
+        var scout = world.Place(PlayerClass.Scout, Team.Red, StandX + 200, StandY);
+
+        world.State.Characters[spy].Hp = ClassStats.For(PlayerClass.Spy).MaxHp / 2.0;
+
+        Assert.Equal(spy, BotAlly.Find(View(world), medic, 700, skipFollowers: false));
+        Assert.True(BotAlly.StillValid(View(world), medic, spy));
+
+        // The cloak goes up and both answers change on the same tick — the search
+        // falls through to the scout rather than to nobody, and the beam already
+        // on the spy drops immediately.
+        world.State.Characters[spy].Cloak = true;
+
+        Assert.Equal(scout, BotAlly.Find(View(world), medic, 700, skipFollowers: false));
+        Assert.False(BotAlly.StillValid(View(world), medic, spy));
+
+        // ⚠️ The cloak and not the fade: CloakAlpha is still 1 here, so a rule
+        // written against the alpha would have let the beam sit on the spy for the
+        // twenty ticks it takes to disappear — which is the whole approach.
+        Assert.Equal(1, world.State.Characters[spy].CloakAlpha);
+    }
+
+    /// <summary>
     /// An enemy, a corpse and somebody out of range are all not allies.
     /// </summary>
     [Fact]

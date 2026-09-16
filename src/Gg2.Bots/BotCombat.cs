@@ -266,7 +266,7 @@ public static class BotCombat
         ref readonly var self = ref world.Character(slot);
         var team = world.Player(slot).Team;
 
-        if (!StillWorthShootingAt(state, in world, team, out var x, out var y))
+        if (!StillWorthShootingAt(state, in world, in self, team, out var x, out var y))
         {
             state.DropTarget();
             return;
@@ -304,15 +304,28 @@ public static class BotCombat
         state.LastSeenAt = tick;
     }
 
-    /// <summary>Is the target still alive, still an enemy, and still not cloaked.</summary>
+    /// <summary>Is the target still alive, still an enemy, and still visible.</summary>
     /// <remarks>
     /// A sentry and a generator have hp and a team and nothing else this chain
     /// reads — no cloak, no ground, no player — so their checks are a character's
     /// minus the fields they do not have. In GM8 getting that wrong is not a
     /// crash, it is a silent read of some other instance's variable.
+    /// <para>
+    /// <b>It asks <see cref="BotVisibility.CanSee"/>, the same question the
+    /// search asked</b>, which is why <paramref name="self"/> is threaded down
+    /// here: a spy that re-cloaks mid-stab, or that walks round behind the bot
+    /// while the animation runs, stops being a target on the tick it stops being
+    /// on the screen rather than being held by a lock the search could not have
+    /// made.
+    /// </para>
     /// </remarks>
     private static bool StillWorthShootingAt(
-        BotCombatState state, in WorldView world, Team team, out double x, out double y)
+        BotCombatState state,
+        in WorldView world,
+        in CharacterState self,
+        Team team,
+        out double x,
+        out double y)
     {
         x = 0;
         y = 0;
@@ -328,7 +341,9 @@ public static class BotCombat
 
                 ref readonly var candidate = ref world.Character(other);
 
-                if (candidate.Hp <= 0 || candidate.Cloak || world.Player(other).Team == team)
+                if (candidate.Hp <= 0
+                    || !BotVisibility.CanSee(in self, in candidate)
+                    || world.Player(other).Team == team)
                     return false;
 
                 x = candidate.X;

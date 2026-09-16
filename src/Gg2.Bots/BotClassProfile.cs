@@ -147,11 +147,33 @@ public static class BotClassProfile
     /// <c>capStrength</c> 2 makes the scout the fastest capper in the game, and a
     /// spy standing next to its own flag is a spy doing a job any class could do.
     /// </para>
+    /// <para>
+    /// ⚠️ <b>The medic is the one veto, and it is a veto rather than a long
+    /// period for a reason the argument above does not cover.</b> Every other
+    /// class picks a <em>place</em> to be, so making the class choose how often is
+    /// enough. A medic does not: its goal is whoever it is beaming
+    /// (<see cref="BotAlly"/>), and that person is wherever the fight is. A
+    /// defending medic is told to stand at its own objective and then follows a
+    /// patient off it anyway, so the role buys nothing and the two layers spend
+    /// the round disagreeing — and whichever wins, the team has lost the heals.
+    /// The failure the period design was protecting against does not apply here
+    /// either: an all-medic team runs all attackers, which is a team with nobody
+    /// defending and not a team with nobody playing.
+    /// </para>
+    /// <para>
+    /// <see cref="BotConstants.DefendNever"/> is 0, so it also drops medics out of
+    /// every other class's lean-group count for free — no real period is ever 0,
+    /// so the <c>DefendEvery(other) == every</c> test in <c>BotRoles.Assign</c>
+    /// cannot match one. That matters: a medic left in a pool would occupy the
+    /// place that pool's defender was going to come from, and the group would end
+    /// up with none.
+    /// </para>
     /// </remarks>
     public static int DefendEvery(PlayerClass playerClass) => playerClass switch
     {
         PlayerClass.Engineer or PlayerClass.Heavy => BotConstants.DefendKeen,
         PlayerClass.Scout or PlayerClass.Spy => BotConstants.DefendAverse,
+        PlayerClass.Medic => BotConstants.DefendNever,
         _ => BotConstants.DefendEvery,
     };
 

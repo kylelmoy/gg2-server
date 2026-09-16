@@ -52,7 +52,8 @@ public static class BotMines
         // The CHARACTER's team, which is what the reference reads. A player's
         // and their character's agree everywhere except across the tick a team
         // change lands, and the mines belong to the body that lobbed them.
-        var team = world.Character(slot).Team;
+        ref readonly var self = ref world.Character(slot);
+        var team = self.Team;
 
         ref readonly var state = ref world.State;
 
@@ -67,7 +68,7 @@ public static class BotMines
             if (mine.Kind != ProjectileKind.Mine || mine.OwnerSlot != slot)
                 continue;
 
-            if (AnyCharacterOn(in world, in mine, team)
+            if (AnyCharacterOn(in world, in mine, in self, team)
                 || AnySentryOn(in world, in mine, team)
                 || AnyGeneratorOn(in world, in mine, team))
             {
@@ -79,7 +80,15 @@ public static class BotMines
     }
 
     /// <summary><c>with(Character)</c>: centre to centre, and <c>&lt;=</c>.</summary>
-    private static bool AnyCharacterOn(in WorldView world, in ProjectileState mine, Team team)
+    /// <remarks>
+    /// <paramref name="self"/> is the demoman, and it is here only for
+    /// <see cref="BotVisibility.CanSee"/> — which is a question about a viewer,
+    /// and the demoman is the one deciding. So a mine in a doorway can be sprung
+    /// on a spy the demoman can see stabbing across the room, and not on one it
+    /// cannot, however close the mine is to either.
+    /// </remarks>
+    private static bool AnyCharacterOn(
+        in WorldView world, in ProjectileState mine, in CharacterState self, Team team)
     {
         for (var other = 0; other < WorldState.MaxSlots; other++)
         {
@@ -88,11 +97,15 @@ public static class BotMines
 
             ref readonly var candidate = ref world.Character(other);
 
-            // A cloaked spy is not a reason to spend the stock. It is the same
-            // exclusion the target search makes, and for the same reason: nothing
-            // else in the bot layer can see one either, so detonating on one would
-            // be the only place a bot acted on information it does not have.
-            if (candidate.Team == team || candidate.Cloak || !Gml.Greater(candidate.Hp, 0))
+            // A spy this bot cannot see is not a reason to spend the stock. It is
+            // the same exclusion the target search makes, and for the same reason:
+            // nothing else in the bot layer can see one either, so detonating on
+            // one would be the only place a bot acted on information it does not
+            // have. A spy mid-stab in front of the demoman IS visible, and is worth
+            // the stock as much as anything standing on a mine is.
+            if (candidate.Team == team
+                || !BotVisibility.CanSee(in self, in candidate)
+                || !Gml.Greater(candidate.Hp, 0))
                 continue;
 
             if (Gml.LessOrEqual(

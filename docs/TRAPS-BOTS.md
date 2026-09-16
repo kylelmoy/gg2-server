@@ -1812,10 +1812,11 @@ The reference is `botMinesArmed.gml` and `botClassKeys.gml:89-93`.
   `distance_to_object` is what the engine's own damage block uses on both.
 - ⚠️ **The detonation carries no `hasSubject` test**, alone among the firing
   branches in `BotClassKeys` — a mined doorway is worth springing on whoever
-  walks into it, often not the thing the demoman is aiming at. **A cloaked spy
-  is the one exception**: target selection skips a cloaked candidate everywhere
+  walks into it, often not the thing the demoman is aiming at. **A spy this bot cannot
+  see is the one exception**: target selection skips such a candidate everywhere
   else, and detonating on one would be the sole spot a bot acted on information
-  it does not have.
+  it does not have. "Cannot see" is `BotVisibility.CanSee` and not the cloak
+  flag — see "the cloak is not the whole of what a bot cannot see".
 
 ⚠️ **The reference's comment is only half true: a STUCK mine has no
 quarter-radius cutoff.** "Anything at 30 of box distance takes nothing" holds for
@@ -6539,3 +6540,206 @@ each costs something: `SteerJump`'s clamp is on every flown arc (all of
 `EdgeFlights.Midpoint` is a harness **premise** with its own written argument
 for being the midpoint (`StartUnresolved`), so changing it changes what the
 corpus sweep is a measurement of.
+
+## The cloak is not the whole of what a bot cannot see
+
+`Gg2.Bots.BotVisibility`, and the four candidate loops that call it —
+`BotTargeting.EnemyWithin`, `BotTargeting.Find`, `BotCombat.StillWorthShootingAt`
+and `BotMines.AnyCharacterOn`. All four used to spell the question as
+`candidate.Cloak`, which is right for a spy walking and wrong for a spy stabbing.
+
+**A stab is drawn over the cloak.** The knife is a separate instance and it
+draws the spy's torso and legs at its own alpha, which owes nothing to
+`cloakAlpha`: `Objects/Projectiles/StabAnim.events/Step.xml` ramps that alpha up
+0.1 a tick from 0.01, holds it at 1 while `image_index` climbs to 32, then fades
+it back out. `Character.events/Draw.xml:36` meanwhile subtracts the same alpha
+*squared* from the spy's own body, so the two cross-fade and what a player sees
+is an opaque spy standing still. That covers the whole `StabFreezeTicks` freeze —
+and the hitbox is not armed until tick 32 of it (`StabWindUp`), so a bot that can
+see the animation has about a second against a stationary 100 hp target that
+cannot move.
+
+**And the animation is hidden from exactly the player being stabbed.** Both
+`StabAnim`'s Draw and its End Step gate on `owner.invisible`, which
+`Objects/Characters/Spy.events/End Step.xml` sets per viewer: an enemy spy whose
+`x` is on the side the viewer's `image_xscale` points away from is not drawn at
+all. That is GG2's spy — invisible from behind, cloak or no cloak — so
+`CanSee` is a question about a *pair*, not about a character. The two halves are
+one change: without the facing test, seeing the animation hands every bot the one
+thing the backstab is built out of, and `BotVsSpyTests`' second arm is what says
+so.
+
+| | in front of the bot | behind the bot |
+|---|---|---|
+| cloaked, walking | invisible | invisible |
+| cloaked, stabbing | **visible** | invisible |
+| uncloaked | visible | visible (see below) |
+
+⚠️ **Deliberately not modelled, and the second one is the load-bearing
+omission.** The cloak takes 20 ticks to fade and `dealFlicker` pushes
+`cloakAlpha` back to 0.3 for three, so this is a tick or two pessimistic at each
+edge of a toggle and blind to the flicker. And a bot still sees an *uncloaked*
+spy standing behind it, which a player does not. Extending `invisible` to that
+case is what the reference does, but a player shot in the back turns round and
+the spy appears, and a bot has no such reflex: its facing is its aim, its aim
+follows a target it would no longer be allowed to have, and the blind spot would
+be permanent rather than momentary. **That rule needs a "turn round when
+something hits you from nowhere" before it is an improvement**, and it is not
+worth having on its own.
+
+⚠️ **The intel clause of the reference's `invisible` is unreachable from here and
+is not transcribed.** `CharacterPhysics.CloakStep` refuses the toggle to a
+carrier and `Intel.cs` drops the cloak on pickup, so a cloaked spy never has the
+briefcase. `CanSee` reads `Cloak` first, so the clause could only matter to a
+spy that is both cloaked and carrying — which the simulation cannot produce.
+
+⛔ **The policy observation has no visibility test at all, and this change did
+not give it one.** `WorldView.NearestEnemies` filters on team, alive and
+distance and says nothing about the cloak, so `ObservationWriter.WriteEnemies`
+hands a `PolicyNetwork` the position, velocity, class, hp and aim of a fully
+invisible spy — the opposite of the bug above, in the arm the scripted layer does
+not run. It is not fixed here because the observation is the env contract
+(`docs/ENV.md`): changing what those floats mean invalidates every checkpoint
+trained against them, and a policy is already DATED by the simulation. **It bites
+only where a checkpoint is driving** — `--bot-class-policy` is off unless
+configured, so a stock `--bots` server is entirely scripted and entirely subject
+to the rule above. What would show this has been dealt with: `NearestEnemies`
+growing a viewer-aware skip, or the observation growing a "can see" float, and
+either needs a retrain.
+
+⚠️ **The mine's viewer is the demoman, not the mine.** `BotMines.AnyCharacterOn`
+now takes the demoman's `CharacterState` for no reason other than this question,
+because `invisible` is per viewer and the demoman is the one deciding. So a mine
+in a doorway is sprung on a spy the demoman can see stabbing across the room and
+not on one it cannot, however close the mine is to either.
+
+### The fixture that measured itself twice over
+
+`BotVsSpyTests` drives a real `ScriptedBot` against a spy pressing real keys,
+because everything between a candidate and a corpse — keep-or-drop, the aim
+solve, the class's fire gate, the weapon, the damage path — sits between the
+predicate and the behaviour, and a green predicate says nothing about any of it.
+Three ways the fixture was wrong first, each of which still "passed" something:
+
+- ⚠️ **A spy placed inside the bot's minimum engagement band is a target for the
+  ticks before it cloaks**, and the bot backs away from it — which leaves the bot
+  aiming, and so facing, in the one direction that makes every later answer
+  "behind". The approach has to be a walk from outside the band.
+- ⚠️ **The stab sets `runPower` to 0 and does nothing about the `hspeed` already
+  there.** A spy that walks to touching distance and presses ATTACK slides about
+  thirty pixels further while frozen, straight past its victim and out the other
+  side of it — so the knife lands from the far side. Which side the spy is on is
+  the whole of what the fixture varies, so that slide swapped the two arms over
+  and both still passed something. The spy stops short and waits for `HSpeed` to
+  reach zero, and the side it actually committed from is asserted rather than
+  assumed.
+- ⚠️ **A `ScriptedBot` with a nav graph walks its route and its aim goes with
+  it**, so which way it faces is decided by the map rather than by the fixture.
+  The bot is given no graph, which is what leaves the two arms differing in
+  exactly one thing.
+
+Both directions are pinned. Dropping the stab clause reddens the front arm and
+the three `BotTargetingTests` stab cases; dropping the facing clause reddens the
+backstab arm and `ASpyMidStabBehindTheBotIsNotACandidate`. Neither half is
+decoration.
+
+## The medic: who it beams, and the one role it never takes
+
+Three rules, all in `Gg2.Bots.BotAlly` and `BotClassProfile.DefendEvery`. They
+arrived together from one report — a person playing spy and medic against bots —
+and each is independently gated.
+
+### A cloaked team-mate is never the patient
+
+⛔ **The reason is on the CLIENT and not in the heal.**
+`Objects/Weapons/Medigun.events/Draw.xml` draws the beam as a plain
+`draw_line_width_color` straight to `healTarget.object.x/y`, gated on nothing but
+`owner.taunting` — not on the patient's cloak and not on `invisible`. So beaming
+a cloaked spy paints a five-pixel line at whatever it is creeping up on. The heal
+itself works perfectly (`Healing` has no cloak test either), which is exactly why
+nothing else in the layer stopped it.
+
+⚠️ **`Cloak` and not `CloakAlpha`.** The flag goes up on the tick the key is
+pressed and the alpha takes 20 ticks to fade; a rule written against the alpha
+leaves the beam on the spy for the whole approach, which is the part that
+matters. And `BotAlly.StillValid` asks separately from `BotAlly.Find`, because
+`Find` runs on `BOT_TARGET_PERIOD` — half a second of a line drawn at a spy that
+thinks it has just disappeared.
+
+### Anyone hurt outranks anyone at full health
+
+The score is `1000 * hp/maxHp + distance - maxHp`, minimised. ⚠️ **The `- maxHp`
+term is worth 200 across the class table and the health term 1,000 across a whole
+bar, so a full-health heavy (1000 - 300) beat a scout anywhere above 82.5%
+(1000h - 125).** A medic stood topping up an untouched heavy while a team-mate
+bled next to it. `BotAlly.FullHealth` is a bucket in front of the score, sized at
+4,000 against the ~1,800 the rest of the expression can span — unbridgeable on
+purpose, so the figure itself stops mattering.
+
+⛔ **A full-health team-mate is still a candidate, and beaming one is not waste.**
+It charges the uber at 1.75 a tick against a hurt patient's 2.5
+(`Healing.UberChargeHealthy`), and **during setup at the full 2.5** — the
+reference's own `or setup` clause, which exists because nobody is damaged yet and
+it is the only way to bank charge before the gates open. So the rule is "never
+instead of somebody hurt", not "never". A hard skip would cost a medic its uber
+on a quiet team and on every Invasion setup phase.
+
+### A person is preferred to a bot, but not over a dying one
+
+`BotAlly.HumanPatient` is 300 — 30% of a health bar — subtracted for a candidate
+whose `PlayerState.IsBot` is false. **A bonus and not a second partition**: a
+person at 60% beats a bot at 30%, and a bot at 10% still beats a person at 50%.
+
+⚠️ **It does nothing in any world that sets no flags.** `IsBot` defaults to false
+meaning human and `ScenarioWorld` marks nobody, so every candidate in a scenario
+or a duel is a "person" and the term cancels out; `HeadlessMatch` marks every bot,
+so it cancels there too. It discriminates only on a live server with both in it,
+which is the only place it is for — and is why no fixture catches a regression in
+it except the one that sets the flag by hand.
+
+⚠️ **The same default is why the follower exclusion must stay a CLASS test.**
+`BotAlly.Find` now reads `IsBot` two lines below the `skipFollowers` branch, so
+spelling the reference's `player.isBot and Follows(class)` exactly is one word
+away. Do not: in `ScenarioWorld` the test would be vacuously false, exclude
+nothing, and put the two-medic follow deadlock straight back into the harness the
+argument exists for. The old comment there claimed no such flag existed, which
+stopped being true when `PlayerState.IsBot` was added for `Handover`.
+
+### The medic never defends
+
+`BotClassProfile.DefendEvery(Medic)` is `BotConstants.DefendNever` (0), and
+`BotRoles.Assign` tests for it before the modulo — which is also what keeps a
+zero period from dividing by zero.
+
+**The one veto in a table the reference deliberately made out of periods.** That
+design exists because "engineers defend, scouts attack" leaves an all-engineer
+team with nobody attacking, and `botPickClass` rolls `irandom(8)`. The medic is
+not that case: every other class picks a **place** and a medic picks a **person**
+(`BotAlly`), who is wherever the fight is. A defending medic is told to hold its
+own objective and then follows a patient off it, so the two layers spend the
+round disagreeing and the team loses the heals whichever wins. An all-medic team
+runs all attackers — a team with nobody defending, not a team with nobody
+playing.
+
+⚠️ **`DefendNever` being 0 also drops medics out of every other class's lean
+group, and that is load-bearing rather than incidental.** No real period is 0, so
+`DefendEvery(other) == every` can never match one. A medic that *were* counted
+would still come back `Attack`, but it would have taken the place its pool's next
+defender was going to come from and the pool would end up with none — every
+individual answer still looking right. `AMedicNeverDefends` pins that with two
+soldiers either side of a medic against the same pair either side of a pyro.
+
+### What did and did not move
+
+`dotnet test Gg2.sln`: 3,540 passed, 0 failed, 15 skipped. **None of the three
+pinned end-to-end measurements moved, and they could not have** — `Scenarios.cs`
+places only Soldier, Heavy and Sniper, so no scenario has a medic in it at all.
+That is the honest reason rather than an unmoved pin nobody checked.
+`RouteDiversityMatchTests` does run `BotPopulation`-composed matches that include
+medics, but its assertions are inequalities rather than exact pins, so it cannot
+see a composition change either.
+
+Each rule was falsified by removing it and watching its own test go red:
+`ACloakedTeamMateIsNeverThePatient`, `AnyoneHurtOutranksAnyoneAtFullHealth`,
+`APersonIsPreferredToABotAtComparableHealth`, `AMedicNeverDefends`. All four fail
+without their clause; none is decoration.

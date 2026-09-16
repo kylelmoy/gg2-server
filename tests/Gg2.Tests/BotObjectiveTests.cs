@@ -141,6 +141,54 @@ public sealed class BotObjectiveTests(ITestOutputHelper output)
     }
 
     /// <summary>
+    /// The medic never defends, at any place and in any company.
+    /// </summary>
+    /// <remarks>
+    /// <b>The one veto in a table built out of periods.</b> Every other class
+    /// picks a place to stand, so "how often" is enough; a medic picks a
+    /// <em>person</em> and follows them wherever the fight is, so a defending
+    /// medic is told to hold its own objective and leaves it on the next patient.
+    /// <c>BotClassProfile.DefendEvery</c> carries the argument.
+    /// <para>
+    /// The second half is the part that would break silently: a medic must not be
+    /// in anyone else's lean group either. <c>DefendNever</c> is 0 and no real
+    /// period is, so it cannot match — but a medic that DID count would take the
+    /// place its pool's next defender was going to come from, and the pool would
+    /// end up with none while every individual answer still looked right.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void AMedicNeverDefends()
+    {
+        for (var place = 0; place < 24; place++)
+            Assert.Equal(BotRole.Attack, BotRoles.Assign(PlayerClass.Medic, place));
+
+        // An all-medic team: all attackers, which is a team with nobody defending
+        // and not the team-with-nobody-playing the period design guards against.
+        ReadOnlySpan<PlayerClass> medics =
+            [PlayerClass.Medic, PlayerClass.Medic, PlayerClass.Medic];
+
+        Assert.Equal(BotRole.Attack, BotRoles.Assign(PlayerClass.Medic, medics));
+
+        // ⚠️ The one that would go wrong quietly. Two soldiers and a medic between
+        // them: the third soldier is at lean position 2 and defends. Counting the
+        // medic would put it at 3 and the group would have no defender at all.
+        ReadOnlySpan<PlayerClass> withMedic =
+            [PlayerClass.Soldier, PlayerClass.Medic, PlayerClass.Soldier];
+
+        Assert.Equal(BotRole.Defend, BotRoles.Assign(PlayerClass.Soldier, withMedic));
+
+        // And the control: the same two soldiers with a PYRO between them, which
+        // shares the soldier's default period and is counted. Lean position 3, so
+        // Attack. Without this the test above passes on a search that never
+        // counts anything.
+        ReadOnlySpan<PlayerClass> withPyro =
+            [PlayerClass.Soldier, PlayerClass.Pyro, PlayerClass.Soldier];
+
+        Assert.Equal(BotRole.Attack, BotRoles.Assign(PlayerClass.Soldier, withPyro));
+    }
+
+    /// <summary>
     /// The count is over the bot's own lean group, not over the whole team.
     /// </summary>
     /// <remarks>

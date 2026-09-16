@@ -547,7 +547,9 @@ not invalidate a checkpoint, and a change to what an observation *means* does.
 | a rocket jump that leaves the ground and does nothing | same — "The rocket that does not go off". ✅ **Fixed**: the blast tilts back along the run when the terrain says nothing is under the muzzle (`PathFollower.LipAimDegrees`) |
 | whether a bot can actually follow the graph | same — "The corpus sweep" and "The route sample". ⛔ **28% of edges is the ceiling for a per-edge sweep**: A\* routes around the rest, and driving them anyway credits a walk to an arm that did nothing |
 | targeting, aim, the combat controller | same, items 4c-i, 4c-ii |
+| what a bot is allowed to SEE — the cloak, the spy | same — "the cloak is not the whole of what a bot cannot see". `BotVisibility.CanSee` is the one predicate; a candidate loop that tests `Cloak` itself has half the rule |
 | the objective layer | same, item 4g, plus "Dual King of the Hill is unwinnable by bots" |
+| the medic — who it beams, the attack/defend split | same — "The medic: who it beams, and the one role it never takes". ⛔ A full-health patient still charges the uber (2.5 during setup), so "never instead of somebody hurt" is the rule and "never" is not |
 | the env, the observation, the action space | `docs/ENV.md` |
 | anything the client can observe | `docs/SIMULATION.md` — the contract |
 | a weapon, a projectile, a gamemode | `docs/TRAPS-SIMULATION.md` — the section for it |

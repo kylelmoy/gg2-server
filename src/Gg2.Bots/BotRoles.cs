@@ -32,6 +32,13 @@ public enum BotRole
 /// sometimes just does not happen" is not a thing anyone can debug from a
 /// screenshot.
 /// </para>
+/// <para>
+/// ⚠️ <b>The medic never defends, and it is the only class with a veto rather
+/// than a period.</b> <c>BotClassProfile.DefendEvery</c> carries the argument:
+/// every other class picks a place to stand and a medic picks a person, so the
+/// role and <see cref="BotAlly"/> spend the round pulling a defending medic in
+/// two directions and the team loses the heals whichever wins.
+/// </para>
 /// </remarks>
 public static class BotRoles
 {
@@ -63,6 +70,13 @@ public static class BotRoles
     {
         var every = BotClassProfile.DefendEvery(playerClass);
 
+        // ⛔ Before the modulo, and load-bearing twice over: it is the medic veto
+        // (BotClassProfile.DefendEvery says why a medic is a veto and everything
+        // else is a period), and `% 0` is a DivideByZeroException rather than a
+        // role nobody wanted.
+        if (every <= BotConstants.DefendNever)
+            return BotRole.Attack;
+
         return (placeInGroup + 1) % every == 0 ? BotRole.Defend : BotRole.Attack;
     }
 
@@ -78,6 +92,16 @@ public static class BotRoles
     public static BotRole Assign(PlayerClass mine, ReadOnlySpan<PlayerClass> earlier)
     {
         var every = BotClassProfile.DefendEvery(mine);
+
+        // Answered without counting, so a class that never defends is not merely
+        // never chosen — it is not in a lean group at all. A medic that WERE
+        // counted would still come back Attack from the test below, but it would
+        // have taken the place its group's next defender was going to come from
+        // and the group would end up with none. The `== every` test below cannot
+        // match one either, since DefendNever is 0 and no real period is.
+        if (every <= BotConstants.DefendNever)
+            return BotRole.Attack;
+
         var place = 0;
 
         foreach (var other in earlier)

@@ -178,9 +178,16 @@ public static class BotTargeting
     };
 
     /// <summary>
-    /// Is any live, uncloaked enemy within this radius —
+    /// Is any live enemy this bot can see within this radius —
     /// <c>botEnemyWithin.gml</c>.
     /// </summary>
+    /// <remarks>
+    /// <see cref="BotVisibility.CanSee"/> rather than a cloak test, so the spy
+    /// this answers "yes" to is the same one <see cref="Find"/> would return.
+    /// This is what a class's own keys ask before they do anything about
+    /// company — the spy's cloak toggle among them — and the two disagreeing
+    /// would have a bot uncloak at something it cannot then target.
+    /// </remarks>
     public static bool EnemyWithin(in WorldView world, int slot, double range)
     {
         if (!world.IsAlive(slot))
@@ -196,7 +203,9 @@ public static class BotTargeting
 
             ref readonly var candidate = ref world.Character(other);
 
-            if (world.Player(other).Team == team || candidate.Cloak || candidate.Hp <= 0)
+            if (world.Player(other).Team == team
+                || !BotVisibility.CanSee(in self, in candidate)
+                || candidate.Hp <= 0)
                 continue;
 
             if (Gml.PointDistance(candidate.X, candidate.Y, self.X, self.Y) <= range)
@@ -270,7 +279,8 @@ public static class BotTargeting
         var count = 0;
 
         // Characters. A cloaked spy is not a candidate at all — not merely a
-        // worse one.
+        // worse one — until its knife animation puts it back on the screen in
+        // front of this bot. BotVisibility.CanSee is the whole of that rule.
         for (var other = 0; other < WorldState.MaxSlots; other++)
         {
             if (other == slot || !world.State.Alive[other])
@@ -278,7 +288,9 @@ public static class BotTargeting
 
             ref readonly var candidate = ref world.Character(other);
 
-            if (candidate.Cloak || world.Player(other).Team == team || candidate.Hp <= 0)
+            if (!BotVisibility.CanSee(in self, in candidate)
+                || world.Player(other).Team == team
+                || candidate.Hp <= 0)
                 continue;
 
             var distance = Gml.PointDistance(candidate.X, candidate.Y, self.X, self.Y);
