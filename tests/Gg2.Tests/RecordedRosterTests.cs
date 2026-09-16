@@ -319,6 +319,13 @@ public sealed class RecordedRosterTests : IDisposable
         recorder.Append([1, 2, 3]);
         recorder.Dispose();
 
-        Assert.Equal(4096 + 3, recorder.TotalBytes);
+        // The pre-existing file plus the segment as it lands on disk — a trace
+        // costs its header as well as its stream, and the cap bounds the disk.
+        var onDisk = new DirectoryInfo(_directory)
+            .EnumerateFiles("*.trace*")
+            .Sum(file => file.Length);
+
+        Assert.Equal(onDisk, recorder.TotalBytes);
+        Assert.True(recorder.TotalBytes > 4096 + 3, "the segment's header went uncounted");
     }
 }
