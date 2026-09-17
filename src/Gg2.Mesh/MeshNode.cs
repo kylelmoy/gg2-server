@@ -54,10 +54,30 @@ public sealed class MeshNode
     /// </remarks>
     private readonly Snapshot[] _snapshots;
 
+    /// <summary>What each tick produced, indexed the same way as the snapshots.</summary>
+    private readonly Outcome[] _outcomes;
+
     /// <summary>One tick's world, on the heap so the window can be an array.</summary>
     private sealed class Snapshot
     {
         public WorldState State;
+    }
+
+    /// <summary>
+    /// What each tick of the window reported, and whether that tick was run on
+    /// facts alone.
+    /// </summary>
+    /// <remarks>
+    /// <b>This is what makes holding an irreversible event possible.</b> A tick
+    /// simulated with a guess in it may be re-simulated into a different tick,
+    /// so the death it reported may never have happened; a tick every one of
+    /// whose inputs was known cannot change, because a rewind is only ever
+    /// scheduled by an input contradicting a GUESS. Releasing the second kind
+    /// and holding the first is the whole rule.
+    /// </remarks>
+    private sealed class Outcome
+    {
+        public TickEvents Events;
     }
 
     /// <summary>
@@ -115,9 +135,15 @@ public sealed class MeshNode
         _head = startTick;
 
         _snapshots = new Snapshot[_options.MaxRollbackTicks];
+        _outcomes = new Outcome[_options.MaxRollbackTicks];
 
         for (var i = 0; i < _snapshots.Length; i++)
+        {
             _snapshots[i] = new Snapshot();
+            _outcomes[i] = new Outcome();
+        }
+
+        Confirmed = startTick;
 
         _rows = _options.MaxRollbackTicks * 2;
         _inputs = new PlayerInput[_rows * WorldState.MaxSlots];
@@ -138,6 +164,77 @@ public sealed class MeshNode
 
     /// <summary>A 64-bit summary, for asking a peer whether it agrees.</summary>
     public ulong Digest => StateDigest.Of(in _state);
+
+    /// <summary>
+    /// The first tick whose outcome is not yet final. Everything before it ran
+    /// on facts alone and can no longer change.
+    /// </summary>
+    public int Confirmed { get; private set; }
+
+    /// <summary>
+    /// The tick a caller has released events up to, which never passes
+    /// <see cref="Confirmed"/>.
+    /// </summary>
+    private int _released;
+
+    /// <summary>
+    /// Takes the next confirmed tick's events, in order, or reports that there
+    /// are none left to take.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ⛔ <b>This is the only safe source for anything a client cannot be told
+    /// twice.</b> A death starts a respawn, a capture moves the score, an intel
+    /// pickup attaches the briefcase — none of them can be taken back on a stock
+    /// client. A tick simulated with a guess in it may be re-simulated into a
+    /// tick where that death never happened, so its events are provisional;
+    /// these are not.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Positions are the opposite case and must NOT wait for this.</b> The
+    /// client is built to be corrected several times a second and holding
+    /// movement until it was certain would hand back the whole latency saving
+    /// the design exists for. Send movement provisionally; hold what cannot be
+    /// unsaid. `docs/MESH.md`.
+    /// </para>
+    /// </remarks>
+    public bool TryTakeConfirmed(out int tick, out TickEvents events)
+    {
+        if (_released >= Confirmed)
+        {
+            tick = -1;
+            events = default;
+            return false;
+        }
+
+        // Older than the window: the outcome has been overwritten by a later
+        // tick, so a caller that stopped draining has lost events rather than
+        // delayed them. Skipping to what is still held is the honest recovery,
+        // and TooLate is where it is visible.
+        if (_released <= Tick - _snapshots.Length)
+        {
+            _tooLate++;
+            _released = Tick - _snapshots.Length + 1;
+        }
+
+        tick = _released;
+        events = _outcomes[_released % _snapshots.Length].Events;
+        _released++;
+
+        return true;
+    }
+
+    /// <summary>
+    /// What the most recent tick reported, whether or not it is final.
+    /// </summary>
+    /// <remarks>
+    /// <b>For movement and for a node's own diagnostics, never for an
+    /// irreversible event</b> — see <see cref="TryTakeConfirmed"/>. It is
+    /// exposed so a caller can send a provisional world without also being
+    /// handed a provisional death by accident.
+    /// </remarks>
+    public ref readonly TickEvents LastEvents =>
+        ref _outcomes[(Tick - 1 + _snapshots.Length) % _snapshots.Length].Events;
 
     public MeshStats Stats => new(_ticks, _rollbacks, _resimulated, _deepest, _tooLate);
 
@@ -206,6 +303,7 @@ public sealed class MeshNode
             Rewind();
 
         Step();
+        Confirm();
     }
 
     /// <summary>
@@ -225,6 +323,8 @@ public sealed class MeshNode
     {
         if (_rewindTo >= 0)
             Rewind();
+
+        Confirm();
     }
 
     /// <summary>Simulates <paramref name="ticks"/> ticks.</summary>
@@ -238,14 +338,76 @@ public sealed class MeshNode
 
     private void Step()
     {
-        _snapshots[Tick % _snapshots.Length].State = _state;
+        var slot = Tick % _snapshots.Length;
 
-        BuildInputs(Tick);
-        MatchSimulation.Tick(_world, ref _state, _scratch, _spawnPoints);
+        _snapshots[slot].State = _state;
+
+        var certain = BuildInputs(Tick);
+
+        // The events are captured rather than discarded, because a caller that
+        // has to hold a death until its tick is certain needs the death.
+        var events = default(TickEvents);
+        MatchSimulation.Tick(_world, ref _state, _scratch, ref events, _spawnPoints);
+
+        _outcomes[slot].Events = events;
+        _ = certain;
 
         Tick++;
         _head = Math.Max(_head, Tick);
         _ticks++;
+
+        Confirm();
+    }
+
+    /// <summary>
+    /// Walks the confirmed mark forward over every tick that ran on facts alone.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>It stops at the first uncertain tick and never steps over one.</b> A
+    /// later tick being certain says nothing about an earlier one: a rewind to
+    /// the earlier tick re-runs everything after it, so releasing out of order
+    /// would publish an event that a rewind then unmade.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Certainty is recomputed from the ledger, not recorded when the tick
+    /// ran.</b> The common case is a guess that turns out to have been RIGHT:
+    /// the input arrives, contradicts nothing, and the tick is never
+    /// re-simulated — so a flag written while the tick ran would say "guessed"
+    /// for ever and the node would confirm nothing at all. Measured: it
+    /// confirmed exactly nothing across a 600-tick match before this was a
+    /// recomputation.
+    /// </para>
+    /// </remarks>
+    private void Confirm()
+    {
+        while (Confirmed < Tick && Confirmed > Tick - _snapshots.Length && IsCertain(Confirmed))
+            Confirmed++;
+    }
+
+    /// <summary>
+    /// Whether every player who was alive at the start of a tick has had their
+    /// real input heard for it.
+    /// </summary>
+    /// <remarks>
+    /// The aliveness comes from that tick's own snapshot rather than from the
+    /// live state, because who was playing is itself a thing that changes: a
+    /// slot that has since died would otherwise stop a long-finished tick from
+    /// ever being confirmed.
+    /// </remarks>
+    private bool IsCertain(int tick)
+    {
+        var row = Row(tick);
+        var origin = row * WorldState.MaxSlots;
+        ref readonly var world = ref _snapshots[tick % _snapshots.Length].State;
+
+        for (var slot = 0; slot < WorldState.MaxSlots; slot++)
+        {
+            if (world.IsAlive(slot) && !_known[origin + slot])
+                return false;
+        }
+
+        return true;
     }
 
     /// <summary>
@@ -288,6 +450,10 @@ public sealed class MeshNode
     /// Fills <see cref="_scratch"/> with one tick's inputs: what is known, and a
     /// guess for everything else.
     /// </summary>
+    /// <returns>
+    /// Whether every live slot's input for this tick was known rather than
+    /// guessed, which is what makes the tick's outcome final.
+    /// </returns>
     /// <remarks>
     /// <b>The guess is "they are still holding what they were holding", which is
     /// measured rather than assumed</b> — at the two or three ticks one way
@@ -299,20 +465,31 @@ public sealed class MeshNode
     /// a rewind has to be able to tell what it ran with from what it was told.
     /// </para>
     /// </remarks>
-    private void BuildInputs(int tick)
+    private bool BuildInputs(int tick)
     {
         var row = Row(tick);
         var origin = row * WorldState.MaxSlots;
+        var certain = true;
 
         for (var slot = 0; slot < WorldState.MaxSlots; slot++)
         {
             var index = origin + slot;
 
             if (!_known[index])
+            {
                 _inputs[index] = _options.Predict ? _latest[slot] : default;
+
+                // ⚠️ Only a LIVE slot's missing input makes a tick uncertain. An
+                // empty slot has nobody to hear from, and counting it would
+                // leave every tick of every match provisional for ever.
+                if (_state.IsAlive(slot))
+                    certain = false;
+            }
 
             _scratch[slot] = _inputs[index];
         }
+
+        return certain;
     }
 
     /// <summary>
