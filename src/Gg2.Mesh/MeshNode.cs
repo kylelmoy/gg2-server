@@ -166,6 +166,26 @@ public sealed class MeshNode
     public ulong Digest => StateDigest.Of(in _state);
 
     /// <summary>
+    /// A digest of the world as it stood at the start of a past tick, or null if
+    /// that tick is no longer in the window.
+    /// </summary>
+    /// <remarks>
+    /// <b>This is what a peer's digest has to be compared against.</b> Comparing
+    /// against the LIVE state instead compares two provisional worlds — each
+    /// node is still guessing about the other's most recent ticks — and two
+    /// nodes in perfect agreement about the match will differ there for as long
+    /// as the link is longer than nothing. Ask about a confirmed tick and the
+    /// answer means something.
+    /// </remarks>
+    public ulong? DigestAt(int tick)
+    {
+        if (tick < 0 || tick >= Tick || tick <= Tick - _snapshots.Length)
+            return null;
+
+        return StateDigest.Of(in _snapshots[tick % _snapshots.Length].State);
+    }
+
+    /// <summary>
     /// The first tick whose outcome is not yet final. Everything before it ran
     /// on facts alone and can no longer change.
     /// </summary>

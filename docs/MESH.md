@@ -150,6 +150,44 @@ skip the holding; it says the failure is rare at that range and ordinary further
 out. The rows are different matches, because bots seeing different worlds make
 different decisions.
 
+## It has been run across the real internet
+
+`gg2-server mesh` plays one match across two nodes and a real link. Both ends
+fill the match with bots, own half the roster, send their own players' inputs
+and receive the other half; each sends a digest of a confirmed tick once a
+second and says so loudly if the peer disagrees.
+
+**barbara (Ubuntu, home) to us-west (Debian, VPS), 58ms RTT, 900 ticks, twelve
+bots:**
+
+| | barbara | us-west |
+|---|---|---|
+| Final digest | `873a7b9014e7bfb8` | `873a7b9014e7bfb8` |
+| Confirmed ticks | 899 | 900 |
+| Ticks simulated | 1,559 | 1,516 |
+| Rollbacks | 659 | 601 |
+| Deepest rewind | 1 | 2 |
+| Inputs outside the window | 0 | 0 |
+| Digest checks | 29 agreed, 0 diverged | 29 agreed, 0 diverged |
+
+**The two machines ended in the same world**, having exchanged nothing but
+inputs. The re-simulation cost, 1.73x and 1.68x, is what the lab measurement
+predicted. The deepest rewind is one or two ticks rather than the link's
+1.7-tick round trip, because what a node waits for is one WAY.
+
+**And the check catches a real divergence.** The same run between a Windows node
+and a Linux one — the pair `docs/SIMULATION.md` measures as disagreeing in the
+last bit of `cos` — reported `DIVERGED at tick 468` after 18 checked ticks had
+agreed. The safety mechanism is not a stub that always prints zero; it has been
+seen to fire, on the one case whose answer was known in advance.
+
+⚠️ **Two nodes must agree what tick it is**, and a local counter each is not
+agreement. The listener names a wall-clock origin when the peer ARRIVES — not
+when it started waiting — and both derive the tick from the clock after that.
+Measured while getting this wrong: a node whose origin was in the past sprinted
+through a backlog while its peer sent it the present, and refused all 4,032
+inputs it received.
+
 ## What is NOT built
 
 ⛔ **Nothing here reaches a socket or a client yet.** Two pieces stand between

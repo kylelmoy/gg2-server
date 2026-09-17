@@ -33,6 +33,11 @@
       cycle, and an on-the-fly graph is the file's graph by construction.
     -->
     <ProjectReference Include="..\Gg2.Nav\Gg2.Nav.csproj" />
+
+    <!-- The rollback engine. Gg2.Mesh has no I/O on purpose, so the socket that
+         carries inputs between two nodes lives here, where every other socket
+         in the project lives. -->
+    <ProjectReference Include="..\Gg2.Mesh\Gg2.Mesh.csproj" />
   </ItemGroup>
 
 

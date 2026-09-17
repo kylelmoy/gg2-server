@@ -79,6 +79,33 @@ internal static class Program
             }
         }
 
+        // `gg2-server mesh ...` plays one match across two nodes and a real link
+        // between them. A subcommand for the same reason eval is one: it shares
+        // almost none of the server's options, and it serves no clients.
+        if (args.Length > 0 && args[0] == "mesh")
+        {
+            var rest = args[1..];
+
+            if (rest.Contains("--help") || rest.Contains("-h"))
+            {
+                MeshRun.PrintUsage();
+                return 0;
+            }
+
+            try
+            {
+                return MeshRun.Run(rest);
+            }
+            catch (Exception e) when (e is ArgumentException or FormatException or IOException
+                or System.Net.Sockets.SocketException)
+            {
+                Console.Error.WriteLine(e.Message);
+                Console.Error.WriteLine();
+                MeshRun.PrintUsage();
+                return 2;
+            }
+        }
+
         // `gg2-server navgen ...` builds the bot nav graphs instead of serving.
         // A subcommand for the same reason `eval` is one: it shares almost none
         // of the server's options, and the ones it looks like it shares (--maps,
