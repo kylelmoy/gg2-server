@@ -51,11 +51,11 @@ public static class ServerPluginCatalogue
 
         // chat2026 — not on ganggarrison.com yet. The pin is the md5 of
         // dist/chat2026.zip built by `node tools/build.js` at gg2-chat2026 commit
-        // 7bd8139 (D:\Code\gg2-chat2026), whose PROTOCOL.md version 1 is what
+        // b46bbea (D:\Code\gg2-chat2026), whose PROTOCOL.md version 1 is what
         // Chat2026Plugin speaks. Until it is published, clients load it from
         // ServerPluginsDebug/chat2026.zip, and so must this server
         // (PluginHashes.Resolve's second choice), or they will disagree on the hash.
-        ["chat2026"] = new("9b692cb48b6cfdf2b16efc49a29c3f58", true, () => new Chat2026Plugin()),
+        ["chat2026"] = new("f5c27638f1eedebe1faa72c187726ed9", true, () => new Chat2026Plugin()),
     };
 
     /// <summary>Every plugin name this port can serve, ascending.</summary>

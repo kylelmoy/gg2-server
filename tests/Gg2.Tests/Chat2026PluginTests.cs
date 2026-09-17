@@ -853,7 +853,7 @@ public sealed class Chat2026PluginTests
     public void TheCatalogueServesChat2026WithItsPin()
     {
         Assert.IsType<Chat2026Plugin>(ServerPluginCatalogue.Create("chat2026"));
-        Assert.Equal("9b692cb48b6cfdf2b16efc49a29c3f58", ServerPluginCatalogue.PinnedMd5("chat2026"));
+        Assert.Equal("f5c27638f1eedebe1faa72c187726ed9", ServerPluginCatalogue.PinnedMd5("chat2026"));
         Assert.True(ServerPluginCatalogue.ListHasChatConsole("chat2026"));
     }
 }
