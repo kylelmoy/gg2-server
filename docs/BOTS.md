@@ -501,6 +501,13 @@ times here".
 - ⚠️ **A per-map comparability flag is a property of the measurement, not of
   the map.** The set of untrustworthy rows changes with the cap.
 
+- ⚠️ **A machine can be the difference.** `eval --digest` prints a 64-bit
+  digest per map and one for the batch — every character's position, velocity
+  and health at the end of every match. Two runs of the same flags agree or
+  something is not deterministic. Same-OS machines agree; Windows and Linux do
+  not, so a before-and-after taken on two different operating systems is two
+  experiments. `docs/SIMULATION.md`, "The same build on two machines".
+
 `tools/bench/README.md` has the modes. `docs/ENV.md`, "Phase 4 re-measured",
 has the worked examples behind every bullet above.
 
