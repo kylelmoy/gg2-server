@@ -41,3 +41,52 @@ worth holding rather than predicting.
 ⚠️ **Three people.** The recordings carry three human names across 48 segments,
 so this is an estimate of how *these* players behave, not of humanity. A fourth
 regular could move it.
+
+## What a miss costs, in pixels
+
+`--cost` runs the counterfactual: at tick t, copy the replayed world into two
+scratch simulations, run both forward, one on the inputs the recording carries
+and one on tick t's inputs held, and compare. The prediction arm is compared
+against the other simulation and never against the recording, so replay drift,
+anchoring and the wire's `x*5` quantisation are common to both arms and cancel.
+
+    dotnet run --project tools/inputpredict -c Release -- --cost <directory>
+    dotnet run --project tools/inputpredict -c Release -- --cost --control <directory>
+
+`--control` feeds both arms the recorded inputs. Every error must then read
+`0.00`; it is what says the instrument measures the prediction rather than two
+simulations drifting apart on their own. Measured: exactly 0.00 at every
+staleness, max 0.0.
+
+**Staleness is one less than the window.** The first tick after an anchor is
+simulated from the input the node has just received, so it is correct in both
+arms by construction; only the ticks after it are predicted.
+
+### Measured, 8 fleet recordings, 2026-09-17
+
+Euclidean position error at the end of one prediction cycle, 16,350 human
+samples per row and 85,000 bot:
+
+| stale | human mean | p90 | p99 | max | over 8px |
+|---|---|---|---|---|---|
+| 1 tick | 0.14 px | 0.00 | 6.09 | 14.6 | 0.23% |
+| 2 ticks | 0.45 px | 0.05 | 14.00 | 33.5 | 1.36% |
+| 3 ticks | 0.95 px | 2.38 | 21.40 | 46.2 | 3.54% |
+| 5 ticks | 2.61 px | 9.71 | 34.00 | 76.0 | 11.88% |
+
+Bots are worse at every row — 0.67 px mean and 1.44% over 8px at two ticks
+against the people's 0.45 and 1.36% — the same direction as the miss rates
+above.
+
+**The comparison that matters** is against what a GG2 client already absorbs.
+`docs/TRAPS-LIVEGAME.md`, "What the client's prediction error actually is",
+measured a stock client's own dead reckoning at 251,576 corrections: x mean
+0.70 px, 1.3% over 8 px. A two-tick prediction here reads 0.45 px mean and
+1.36% over 8 px. Not the same statistic — this is Euclidean over both axes,
+that one is per-axis — but the same order, which puts the correction a
+transatlantic prediction would need inside the range the client is already
+snapping through several times a second in ordinary play.
+
+⚠️ A correction is not free just because it is small: these are averages over
+every character, and the tail is what a player sees. At two ticks, 1 sample in
+74 exceeds 8 px.
