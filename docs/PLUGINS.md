@@ -753,7 +753,7 @@ Two reads, both reference capabilities (`DESIGN.md` section 9 named the first):
 - **Not on ganggarrison.com.** Until it is, clients and this server must both
   have `ServerPluginsDebug/chat2026.zip`; with it present this server advertises
   the local file's hash and warns if it differs from the pin.
-- The pin is `dist/chat2026.zip` from gg2-chat2026 commit `b46bbea`. A change to
+- The pin is `dist/chat2026.zip` from gg2-chat2026 commit `4e62b8f`. A change to
   the GML moves it; move the pin in the same breath and re-run
   `Chat2026PluginTests`.
 
