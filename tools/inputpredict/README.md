@@ -90,3 +90,47 @@ snapping through several times a second in ordinary play.
 ⚠️ A correction is not free just because it is small: these are averages over
 every character, and the tail is what a player sees. At two ticks, 1 sample in
 74 exceeds 8 px.
+
+## Is there a better cheap guess than "keep holding"?
+
+`--predictor <name>` swaps what the prediction arm assumes about a tick it has
+not heard yet. Measured on the same 8 recordings, human rows, mean pixels at
+two ticks of staleness:
+
+| predictor | mean px | over 8px | |
+|---|---|---|---|
+| `Hold` | 0.45 | 1.36% | repeat the last input — the baseline |
+| `HoldNoJump` | 0.45 | 1.36% | identical to `Hold`, to the digit |
+| `MoveOnly` | 0.45 | 1.36% | dropping attack/special changes nothing measurable |
+| `Release` | 1.90 | 2.02% | 4x worse |
+
+**No cheap rule beats repeat-last-key**, and one of them cannot differ from it
+at all: `HoldNoJump` is byte-identical because a jump fires on the PRESSED edge
+(`CLAUDE.md`), so a held jump key never fires twice. A missed jump is always a
+press the predictor did not know about, never a stale one it kept holding.
+
+Dropping the attack bits does not move a character either, which is the
+measured version of why holding fire until it is confirmed costs nothing
+positionally.
+
+So the headroom is not in rules over the last keystate. It is in predicting
+*changes* — when a player releases or presses — which needs either context or a
+model, and the numbers above are what such a thing has to beat.
+
+## What a correction looks like when it happens
+
+The unconditional rows above mix every exact hit in with the misses, so they
+answer "what is the average correction" rather than "what does a correction
+look like". Restricted to windows where a key really was mispredicted, human
+rows:
+
+| stale | share of windows | mean px | p50 | p90 | p99 | max |
+|---|---|---|---|---|---|---|
+| 1 tick | 9.7% | 1.39 | 0.76 | 6.29 | 11.40 | 14.6 |
+| 2 ticks | 17.4% | 2.55 | 0.83 | 8.00 | 16.30 | 33.5 |
+| 3 ticks | 24.4% | 3.87 | 1.07 | 11.71 | 23.26 | 46.2 |
+| 5 ticks | 34.9% | 7.45 | 3.24 | 22.20 | 40.20 | 76.0 |
+
+At the transatlantic figure — two ticks — a correction is due on about one
+window in six, is under a pixel half the time it is due, and exceeds 8 px on
+8% of those, or about 1.4% of all windows. The worst seen is 33 px.
