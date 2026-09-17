@@ -61,6 +61,10 @@ public sealed partial class GameServer
 
     bool IPluginHost.IsClient(int slot) => _roster[slot].Connection is not null;
 
+    bool IPluginHost.IsAlive(int slot) => _world.IsAlive(slot);
+
+    bool IPluginHost.RoundOver => _world.MapChanging || _world.RoundDecided;
+
     long IPluginHost.CurrentTimeMilliseconds => _pluginClock;
 
     void IPluginHost.Log(string message) => _log.Info(message);

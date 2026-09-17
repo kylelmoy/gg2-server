@@ -695,6 +695,68 @@ offset was added and the mutation finally went red.
 
 ---
 
+## `chat2026` — a new plugin, with a versioned wire
+
+A third chat plugin, written for this project rather than inherited, whose GML
+lives at `D:\Code\gg2-chat2026` (`DESIGN.md` is the why, `PROTOCOL.md` the wire,
+and both halves cite the latter). TF2-style chat: `*DEAD*` / `*SPEC*` / `(TEAM)`,
+join/leave/rename/team-change lines the client filters by category, a token-bucket
+spam limit, a command console and a numbered vote dialog.
+
+**It differs from the two above in the one way that matters here: HELLO and
+WELCOME carry a protocol version.** A client on a different version stops sending
+and says so; this server ignores SAY and VOTE from a client that greeted with
+another version. So a re-release is detectable at this end rather than "chat
+sometimes doesn't work". The catalogue still pins the zip, because the version
+byte only moves when the wire does.
+
+`Chat2026Plugin` (`Chat2026Commands.cs`, `Chat2026Votes.cs`) is transcribed from
+the GML's `src/host/`, `src/commands/` and `src/votes/`, file by file — each
+method names the GML file it stands for. `Chat2026PluginTests` holds it to the
+reply strings the GML half produced in its own live run against a GM8 host.
+
+### What it needed from `IPluginHost`
+
+Two reads, both reference capabilities (`DESIGN.md` section 9 named the first):
+
+| Member | GML | Why |
+|---|---|---|
+| `IsAlive(slot)` | `player.object != -1` | a dead sender's line is tagged `*DEAD*` and routed by gravetalk |
+| `RoundOver` | `global.mapchanging` | a running vote is cancelled when the round ends, and none can start |
+
+### Where it differs from the GML host
+
+- **Slot 0 never greets**, so it never receives, votes, or counts towards a
+  quorum. On a dedicated GM8 host the GML does the same (`chat_vote_host`
+  defaults off there). "The host" in a reply (`The host cannot be kicked.`) means
+  slot 0.
+- **A map vote calls `SetNextMap`.** The GML points `GameServer.currentMapIndex`
+  at the slot before the map so the game's own rotation lands on it; the outcome
+  is the same. Map votes and the map picker offer `VotableMaps`, not only the
+  rotation, so a single-map server can vote on a map.
+- **`/map` is one path.** The GML reaches rotation maps and other maps
+  differently; `SetNextMap` covers both.
+- **Scramble uses `SetTeam`**, which is the server's own team switch; the GML
+  reproduces those steps by hand.
+
+### Open
+
+- ⚠️ **Its settings are not reachable from `--config` yet.** The GML reads
+  `[Plugins] chat_gravetalk`, `chat_unique_names`, `chat_mute_minutes`,
+  `chat_votes`, `chat_vote_kick_percent`, `chat_vote_mute_percent`,
+  `chat_kickban_minutes` and `chat_admin_password`. `Chat2026Settings` has them all,
+  but the catalogue builds the plugin with the defaults, so on this server
+  `/login` is always disabled and nobody is an admin. Wiring them belongs in
+  `ServerSettings.All`, which `ConfigFileCoverageTests` gates.
+- **The MOTD is `[Server] ChatJoinMessage`**, sent in WELCOME. The GML reads
+  `chat_motd` and falls back to `WelcomeMessage`.
+- **Not on ganggarrison.com.** Until it is, clients and this server must both
+  have `ServerPluginsDebug/chat2026.zip`; with it present this server advertises
+  the local file's hash and warns if it differs from the pin.
+- The pin is `dist/chat2026.zip` from gg2-chat2026 commit `7bd8139`. A change to
+  the GML moves it; move the pin in the same breath and re-run
+  `Chat2026PluginTests`.
+
 ## Verifying against a real client
 
 **The test suite cannot do this and it is the half that matters.** Everything

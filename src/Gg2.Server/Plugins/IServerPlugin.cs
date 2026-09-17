@@ -56,6 +56,27 @@ public interface IPluginHost
     bool IsClient(int slot);
 
     /// <summary>
+    /// Whether the player at <paramref name="slot"/> has a character: GML's
+    /// <c>player.object != -1</c>.
+    /// </summary>
+    /// <remarks>
+    /// A plain read of the simulation, never a write. <c>chat2026</c> tags a dead
+    /// player's line <c>*DEAD*</c> and routes it by gravetalk, which is TF2's rule
+    /// and the reason this exists.
+    /// </remarks>
+    bool IsAlive(int slot);
+
+    /// <summary>
+    /// Whether this round is decided and the map is about to change: GML's
+    /// <c>global.mapchanging</c>.
+    /// </summary>
+    /// <remarks>
+    /// <c>chat2026</c> cancels a running vote at this point, so a vote started on
+    /// one map never acts on the next, and refuses to start one.
+    /// </remarks>
+    bool RoundOver { get; }
+
+    /// <summary>
     /// GML's <c>current_time</c>: milliseconds since the process started.
     /// </summary>
     /// <remarks>
