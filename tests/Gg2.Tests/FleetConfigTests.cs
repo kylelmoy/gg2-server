@@ -216,15 +216,38 @@ public sealed class FleetConfigTests : IDisposable
     [Fact]
     public void TheOverlayNameMatchesDeployShsSedExpression()
     {
-        var script = File.ReadAllText(Path.Combine(RepoRoot(), "scripts", "deploy.sh"));
-        var match = Regex.Match(script, @"overlay_name\(\) \{ printf '%s' ""\$1"" \| sed 's/(\[\^[^\]]+\])/_/g'");
+        // The rule both sides implement, as a literal. This half runs
+        // everywhere, so the invariant is gated on any machine — including one
+        // that has never seen the deploy script.
+        const string CharacterClass = "[^A-Za-z0-9._@-]";
+
+        var rule = new Regex(CharacterClass);
+        string[] destinations = ["barbara", "kyle@203.0.113.7", "host:2222", "[::1]", "a b", "Ω"];
+
+        foreach (var destination in destinations)
+            Assert.Equal(rule.Replace(destination, "_") + ".ini", FleetConfig.OverlayFileName(destination));
+
+        // ⚠️ `/scripts/` is GITIGNORED — the operator's fleet tooling, not the
+        // project's — so the script is absent from a fresh clone and from any
+        // copy taken through git. Reading it unguarded turned "this machine has
+        // never run a deploy" into a red suite with a DirectoryNotFoundException
+        // that said nothing about the cross-check it was doing. Where the script
+        // IS present the drift check still runs, which is the machine where a
+        // drift could be introduced.
+        var path = Path.Combine(RepoRoot(), "scripts", "deploy.sh");
+
+        if (!File.Exists(path))
+            return;
+
+        var match = Regex.Match(
+            File.ReadAllText(path),
+            @"overlay_name\(\) \{ printf '%s' ""\$1"" \| sed 's/(\[\^[^\]]+\])/_/g'");
 
         Assert.True(match.Success, "deploy.sh no longer defines overlay_name the way this test reads it");
 
-        var sed = new Regex(match.Groups[1].Value);
-
-        foreach (var destination in new[] { "barbara", "kyle@203.0.113.7", "host:2222", "[::1]", "a b", "Ω" })
-            Assert.Equal(sed.Replace(destination, "_") + ".ini", FleetConfig.OverlayFileName(destination));
+        // The script's own class, against the literal above: the two drifting
+        // apart is the failure this test exists for.
+        Assert.Equal(CharacterClass, match.Groups[1].Value);
     }
 
     // --- the editor ------------------------------------------------------------
