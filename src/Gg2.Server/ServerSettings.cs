@@ -717,7 +717,7 @@ public static class ServerSettings
 
         settings.Add(IntRow(
             "Bots", "SearchThreads", nameof(ServerOptions.SearchThreads),
-            o => o.SearchThreads, (o, v) => o.SearchThreads = v, "2",
+            o => o.SearchThreads, (o, v) => o.SearchThreads = v, OtherNumberProbe,
             "Threads the rollout search uses. Threads change NO decision, so this is a "
             + "pure cost knob."));
 
@@ -974,6 +974,25 @@ public static class ServerSettings
     public const string FlipProbe = "<flip>";
 
     /// <summary>
+    /// The probe marker a row carries when its DEFAULT depends on the machine.
+    /// </summary>
+    /// <remarks>
+    /// The same failure <see cref="FlipProbe"/> exists for, one type along. A
+    /// literal probe is only a probe while it differs from the default, and
+    /// <c>SearchThreads</c> defaults to <c>ProcessorCount / 3</c> clamped to
+    /// [1, 8] — which is exactly 2 on a 6- to 8-core box. A literal <c>"2"</c>
+    /// therefore turns "this setting round-trips" into "this setting is
+    /// unreachable" on the machines most people have, and the gate says the
+    /// setting is broken rather than that the probe is.
+    /// <para>
+    /// Resolves to 1, or to 2 when the current value is already 1, so it is
+    /// always a different value and always inside the range any thread-count
+    /// setting accepts.
+    /// </para>
+    /// </remarks>
+    public const string OtherNumberProbe = "<other>";
+
+    /// <summary>
     /// The probe value to use against <paramref name="options"/>, resolving
     /// <see cref="FlipProbe"/> against the current value.
     /// </summary>
@@ -981,9 +1000,15 @@ public static class ServerSettings
     {
         ArgumentNullException.ThrowIfNull(setting);
 
-        return setting.Probe == FlipProbe
-            ? setting.Get(options) == "0" ? "1" : "0"
-            : setting.Probe;
+        if (setting.Probe == FlipProbe)
+            return setting.Get(options) == "0" ? "1" : "0";
+
+        // A machine-derived default cannot be probed with a literal — see
+        // OtherNumberProbe.
+        if (setting.Probe == OtherNumberProbe)
+            return setting.Get(options) == "1" ? "2" : "1";
+
+        return setting.Probe;
     }
 
     // --- value parsing -------------------------------------------------------

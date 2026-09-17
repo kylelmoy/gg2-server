@@ -64,6 +64,18 @@ public sealed class CliCoverageTests
     /// reference comparison would pass for a flag that replaced the value with
     /// an identical one, and fail for one that mutated it in place.
     /// </remarks>
+    /// <summary>
+    /// A <c>--search-threads</c> value this machine's default is not.
+    /// </summary>
+    /// <remarks>
+    /// <c>BotBrain.DefaultSearchThreads</c> is clamped to at least 1, so 1 is
+    /// only ever the default on a machine with fewer than six cores, and 2 is
+    /// never the answer there. Two candidates are enough to always have one
+    /// that differs.
+    /// </remarks>
+    private static string NotTheDefaultSearchThreads =>
+        BotBrain.DefaultSearchThreads == 1 ? "2" : "1";
+
     private static readonly (string Property, string[] Args, Func<ServerOptions, object?> Read)[] Table =
     [
         ("ServerName", ["--name", "a test server"], o => o.ServerName),
@@ -154,7 +166,14 @@ public sealed class CliCoverageTests
         ("BotArbiterMicroseconds",
             ["--bot-mode", "search", "--bot-arbiter", "7500"],
             o => o.BotArbiterMicroseconds),
-        ("SearchThreads", ["--search-threads", "2"], o => o.SearchThreads),
+        // ⚠️ The probe value is COMPUTED, because this option's default is
+        // derived from the machine: BotBrain.DefaultSearchThreads is
+        // ProcessorCount / 3 clamped to [1, 8], which is exactly 2 on a 6- to
+        // 8-core box. A literal "2" therefore asserts that a flag changed
+        // nothing on precisely the machines most people have, and the failure
+        // reads as a broken flag rather than a broken test. Measured: green on
+        // a 24-core Windows box, red on an 8-core Linux one, same commit.
+        ("SearchThreads", ["--search-threads", NotTheDefaultSearchThreads], o => o.SearchThreads),
 
         // One row per LIMITS FLAG, for the reason the Web rows below give: a
         // single row would leave four of the five ungated, and a flag that
