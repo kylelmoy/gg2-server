@@ -188,6 +188,47 @@ Measured while getting this wrong: a node whose origin was in the past sprinted
 through a backlog while its peer sent it the present, and refused all 4,032
 inputs it received.
 
+## Smoothing a correction
+
+A node can reproduce exactly what each of its clients believes, because the
+client's dead reckoning is the same deterministic simulation. So a correction
+does not have to be a teleport: `CorrectionSmoother` sends a position part of
+the way from the belief toward the truth, closing a fixed fraction of the error
+each update.
+
+⛔ **This deliberately sends a position that is not the server's**, which is the
+one place in this project that is on purpose. It is bounded and temporary, and
+the justification is that the client is ALREADY somewhere wrong — the choice is
+between arriving abruptly and arriving smoothly, not between wrong and right.
+
+⚠️ **A correction larger than four character widths is sent whole.** A respawn
+crosses the map, and the client simulates from whatever position it is given, so
+gliding it there would walk a body through walls.
+
+### What it buys and what it costs
+
+Modelled over the real correction stream — every seventh tick, the cadence a
+position update rides, on the windows where a key really was mispredicted:
+
+| | unsmoothed | retain 0.5 | retain 0.75 |
+|---|---|---|---|
+| mean jump | 2.55 px | 2.54 | 2.51 |
+| p99 jump | 16.30 | 11.89 | 8.12 |
+| worst jump | 33.5 | 20.6 | 12.9 |
+| jumps over 8 px | 7.8% | 5.7% | 1.2% |
+| standing offset from truth | none | 2.54 mean | 7.54 mean |
+
+**The mean jump does not move**, and it cannot: the same error has to be
+absorbed either way. What smoothing does is trade a rare large jump for a small
+permanent offset — at retain 0.75 the worst correction a player sees falls from
+33.5 px to 12.9 px and the over-8px rate from 7.8% to 1.2%, and the price is a
+client that sits about 7 px behind the truth all the time.
+
+⚠️ **That is a model of a client, not a measurement of one.** It assumes the
+client holds the position it was last sent and dead-reckons from there, which is
+what the GG2 client does — but which of those two shapes a player prefers is not
+a thing this table can say.
+
 ## What is NOT built
 
 ⛔ **Nothing here reaches a socket or a client yet.** Two pieces stand between
@@ -195,11 +236,10 @@ this and a playable match:
 
 1. **The input link.** Sockets between nodes, a shared tick timeline, and clock
    offset estimation.
-2. **Correction smoothing.** A node can reproduce exactly what each of its
-   clients believes, because the client's dead reckoning is the same
-   deterministic simulation — so it can spread a correction over several ticks
-   instead of teleporting. Unmeasured and unimplemented; whether a 16 px
-   correction reads as a snap needs a person watching a stock client.
+2. **Whether a correction is VISIBLE.** The magnitudes are measured and the
+   smoothing is written; whether an 8 px nudge reads as a snap or as nothing is
+   a question about a person watching a screen, and no measurement here answers
+   it. `docs/TRAPS-LIVEGAME.md` and a playtest.
 
 A fourth thing is decided but unwritten: **non-input events** — joins, leaves,
 chat, map changes — need a consistent order across nodes, which means either
