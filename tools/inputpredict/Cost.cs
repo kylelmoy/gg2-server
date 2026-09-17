@@ -57,9 +57,61 @@ internal static class Cost
     /// </summary>
     private static bool _control;
 
+    /// <summary>
+    /// Which guess the prediction arm makes about a tick it has not heard yet.
+    /// </summary>
+    /// <remarks>
+    /// <b>Hold is the baseline every other one has to beat</b>, and it is what a
+    /// rollback scheme starts from. The rest are cheap rules, measured rather
+    /// than argued: the point of running them is to find out how much room a
+    /// smarter predictor would have before anything as heavy as a learned model
+    /// is worth building.
+    /// </remarks>
+    private enum Predictor
+    {
+        /// <summary>Repeat the last input verbatim.</summary>
+        Hold,
+
+        /// <summary>Repeat it, but let go of jump after the first predicted tick.</summary>
+        HoldNoJump,
+
+        /// <summary>Repeat the movement keys and drop attack, special and taunt.</summary>
+        MoveOnly,
+
+        /// <summary>Assume every key was released.</summary>
+        Release,
+    }
+
+    private static Predictor _predictor = Predictor.Hold;
+
+    /// <summary>
+    /// The input the prediction arm uses for a tick <paramref name="step"/>
+    /// after the anchor, given what was pressed at the anchor.
+    /// </summary>
+    private static PlayerInput Predict(in PlayerInput anchor, int step) => _predictor switch
+    {
+        // Step 0 is the tick the node has just heard about, so it is never a
+        // guess and every predictor agrees there.
+        _ when step == 0 => anchor,
+
+        Predictor.HoldNoJump => new PlayerInput(
+            anchor.Keys & ~PlayerKeys.Jump, anchor.NetAimDirection, anchor.AimDistance),
+
+        Predictor.MoveOnly => new PlayerInput(
+            anchor.Keys & (PlayerKeys.Left | PlayerKeys.Right | PlayerKeys.Jump | PlayerKeys.Down),
+            anchor.NetAimDirection,
+            anchor.AimDistance),
+
+        Predictor.Release => new PlayerInput(
+            PlayerKeys.None, anchor.NetAimDirection, anchor.AimDistance),
+
+        _ => anchor,
+    };
+
     public static int Run(string[] args)
     {
         _control = args.Contains("--control");
+        _predictor = Enum.Parse<Predictor>(Flag(args, "--predictor") ?? "Hold", ignoreCase: true);
         var mapDirectory = Flag(args, "--maps") ?? MapDirectory.Resolve();
         var limit = int.Parse(Flag(args, "--limit") ?? "6", CultureInfo.InvariantCulture);
         var files = new List<string>();
@@ -88,25 +140,40 @@ internal static class Cost
         var human = new Error("human");
         var bot = new Error("bot");
 
+        // The same samples, restricted to the windows where the guess was
+        // actually wrong about a key. The unconditional rows mix those in with
+        // a large majority of exact hits, so they answer "what is the average
+        // correction" and not "what does a correction look like" — and it is
+        // the second one a player sees.
+        var humanMissed = new Error("human*");
+        var botMissed = new Error("bot*");
+
         foreach (var file in chosen)
         {
             Console.Error.WriteLine($"  {Path.GetFileName(file)}");
-            Measure(file, mapDirectory, human, bot);
+            Measure(file, mapDirectory, human, bot, humanMissed, botMissed);
         }
 
         Console.WriteLine();
         Console.WriteLine(
             $"{chosen.Length} trace(s), a counterfactual every {Stride} ticks"
-            + (_control ? " - CONTROL: both arms on the recorded inputs, expect 0.00" : string.Empty));
+            + (_control
+                ? " - CONTROL: both arms on the recorded inputs, expect 0.00"
+                : $" - predictor {_predictor}"));
         Console.WriteLine();
         Error.PrintHeader();
         human.Print();
         bot.Print();
+        Console.WriteLine();
+        Console.WriteLine("  * only the windows where a key was actually mispredicted");
+        humanMissed.Print();
+        botMissed.Print();
 
         return human.Any ? 0 : 1;
     }
 
-    private static void Measure(string file, string mapDirectory, Error human, Error bot)
+    private static void Measure(
+        string file, string mapDirectory, Error human, Error bot, Error humanMissed, Error botMissed)
     {
         var trace = Trace.Decode(File.ReadAllBytes(file));
         var maps = 0;
@@ -144,6 +211,10 @@ internal static class Cost
 
         var inputs = new PlayerInput[WorldSlots];
         var held = new PlayerInput[WorldSlots];
+        var guess = new PlayerInput[WorldSlots];
+
+        // Per slot, whether any tick in the current window was guessed wrong.
+        var missed = new bool[WorldSlots];
 
         void Probe(int t)
         {
@@ -160,6 +231,7 @@ internal static class Cost
                 held[slot] = slot < here.Length ? here[slot].Input : PlayerInput.None;
 
             var next = 0;
+            Array.Clear(missed);
 
             for (var step = 0; step < Windows[^1]; step++)
             {
@@ -170,10 +242,24 @@ internal static class Cost
 
                 truth.Tick(inputs);
 
-                // The prediction never learns anything: tick t's keys, all the
-                // way to the horizon. Under --control it learns everything, and
-                // the answer must be zero.
-                predicted.Tick(_control ? inputs : held);
+                // The prediction never learns anything after the anchor. Under
+                // --control it learns everything, and the answer must be zero.
+                if (_control)
+                {
+                    predicted.Tick(inputs);
+                }
+                else
+                {
+                    for (var slot = 0; slot < guess.Length; slot++)
+                    {
+                        guess[slot] = Predict(in held[slot], step);
+
+                        if (guess[slot].Keys != inputs[slot].Keys)
+                            missed[slot] = true;
+                    }
+
+                    predicted.Tick(guess);
+                }
 
                 if (next < Windows.Length && step + 1 == Windows[next])
                     Record(Windows[next++] - 1, t);
@@ -194,7 +280,14 @@ internal static class Cost
                     _ => null,
                 };
 
-                stats?.Observe(staleness, Math.Sqrt(((a.X - b.X) * (a.X - b.X)) + ((a.Y - b.Y) * (a.Y - b.Y))));
+                var error = Math.Sqrt(((a.X - b.X) * (a.X - b.X)) + ((a.Y - b.Y) * (a.Y - b.Y)));
+                stats?.Observe(staleness, error);
+
+                if (!missed[slot])
+                    continue;
+
+                var only = owner(t, slot) == TraceParticipant.Human ? humanMissed : botMissed;
+                only.Observe(staleness, error);
             }
         }
 
