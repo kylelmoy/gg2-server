@@ -67,6 +67,10 @@ internal static class Program
             return 2;
         }
 
+        // The pixel cost of a miss, rather than how often one happens.
+        if (args.Contains("--cost"))
+            return Cost.Run(args);
+
         var mapDirectory = Flag(args, "--maps") ?? MapDirectory.Resolve();
         var files = new List<string>();
 

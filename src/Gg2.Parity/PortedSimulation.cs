@@ -146,6 +146,27 @@ public sealed class PortedSimulation(Func<string, LevelMap> loadMap) : ITraceSim
     public ref readonly WorldState State => ref _state;
 
     /// <summary>
+    /// Installs a whole world, for running a counterfactual beside a replay.
+    /// </summary>
+    /// <remarks>
+    /// <b>Not a way to steer a replay, and never call it on the simulation a
+    /// <c>Replayer</c> is driving</b> — the recorded stream is the only thing
+    /// that decides what a replay does, which is what <see cref="State"/>'s
+    /// <c>readonly</c> says. This exists for the opposite shape: a SECOND
+    /// simulation, seeded from the first at one tick and advanced on inputs the
+    /// recording does not contain, to answer what would have happened. A
+    /// <c>WorldState</c> holds no reference to anything, so a copy is a whole
+    /// world and not a view onto the original's.
+    /// <para>
+    /// The map is not part of it. A copy taken from a simulation on one map and
+    /// installed in one that loaded another is a world whose characters stand
+    /// in another map's walls, so the caller owns keeping the two on the same
+    /// <see cref="LoadMap"/>.
+    /// </para>
+    /// </remarks>
+    public void SetState(in WorldState state) => _state = state;
+
+    /// <summary>
     /// The collision world of the loaded map, or null before
     /// <see cref="LoadMap"/>.
     /// </summary>
