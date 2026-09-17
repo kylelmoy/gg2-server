@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Gg2.Protocol;
@@ -295,17 +296,51 @@ public sealed class MotionSampleTests
     }
 
     /// <summary>
+    /// Bit-for-bit on Windows, and within one ULP anywhere else. See the
+    /// remarks on <see cref="TheSnapIsExactAndItsThresholdIsOneTenThousandth"/>
+    /// for why the platform is part of the claim.
+    /// </summary>
+    private static void Same(string label, string field, double engine, double ported)
+    {
+        if (engine.Equals(ported))
+            return;
+
+        Assert.False(
+            RuntimeInformation.IsOSPlatform(OSPlatform.Windows),
+            $"{label}: {field} {ported:R} != engine {engine:R}");
+
+        var ulps = Math.Abs(
+            BitConverter.DoubleToInt64Bits(engine) - BitConverter.DoubleToInt64Bits(ported));
+
+        Assert.True(
+            ulps <= 1,
+            $"{label}: {field} {ported:R} is {ulps} ULP from engine {engine:R}, and off "
+            + "Windows only the platform math library's last bit is allowed to differ");
+    }
+
+    /// <summary>
     /// The snap is exact, and it fires <b>below 1e-4 and not at it</b>.
     /// </summary>
     /// <remarks>
     /// This is the one rule in <see cref="Motion"/> that changes a value by
     /// something a human could see — up to 1e-4, a billion times GML's
     /// comparison fuzz — so it is asserted bit-for-bit rather than to a bound.
-    /// The <c>snap</c> family is built so that it can be: every row is either
-    /// aimed along an axis, where <c>cos</c> is exactly 1 and <c>sin</c> exactly
-    /// 0, or writes a component directly. No trig runs, so nothing in
+    /// Most of the <c>snap</c> family is built so that it can be: a row aimed
+    /// along an axis has <c>cos</c> exactly 1 and <c>sin</c> exactly 0, or
+    /// writes a component directly, so nothing in
     /// <see cref="ComponentsAndSpeedStayWithinTheMeasuredBound"/>'s bound can
-    /// hide a wrong threshold here.
+    /// hide a wrong threshold.
+    /// <para>
+    /// ⚠️ <b>Some rows DO run trig</b> — <c>direction 45.001 then speed 5</c> is
+    /// one — and for those the bit-exact comparison is against the platform
+    /// math library as much as against the snap. Windows agrees with the
+    /// recorded engine, which is also a Windows program; Linux returns a
+    /// different last bit for <c>cos</c> on about 3% of inputs, so the exact
+    /// assertion is a Windows one and every other platform is held to one ULP
+    /// instead. That is still a gate — a real regression moves a trajectory by
+    /// far more — and it is the only claim the evidence supports.
+    /// docs/SIMULATION.md, "The same build on two machines".
+    /// </para>
     /// <para>
     /// The sweep steps the offset from an integer in units of 2^-30, which
     /// straddles 1e-4 at 107374.1824 of them — so the rows at 107374 and 107375
@@ -322,15 +357,9 @@ public sealed class MotionSampleTests
         {
             var motion = Replay(sample.Ops);
 
-            Assert.True(
-                sample.HSpeed.Value.Equals(motion.HSpeed),
-                $"{sample.Label}: hspeed {motion.HSpeed:R} != engine {sample.HSpeed.Value:R}");
-            Assert.True(
-                sample.VSpeed.Value.Equals(motion.VSpeed),
-                $"{sample.Label}: vspeed {motion.VSpeed:R} != engine {sample.VSpeed.Value:R}");
-            Assert.True(
-                sample.Speed.Value.Equals(motion.Speed),
-                $"{sample.Label}: speed {motion.Speed:R} != engine {sample.Speed.Value:R}");
+            Same(sample.Label, "hspeed", sample.HSpeed.Value, motion.HSpeed);
+            Same(sample.Label, "vspeed", sample.VSpeed.Value, motion.VSpeed);
+            Same(sample.Label, "speed", sample.Speed.Value, motion.Speed);
         }
 
         // And the bracket itself, named rather than left implicit: the fixture
