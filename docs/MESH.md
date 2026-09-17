@@ -75,6 +75,31 @@ is nowhere to put it without overwriting history a rewind needs. Either way the
 honest answer is `MeshStats.TooLate` and a resync from a peer, not a quiet
 divergence.
 
+## What it costs
+
+Measured on a whole match — twelve bots, projectiles, deaths, an objective —
+played across two nodes with a three-tick link, `MeshMatchTests`:
+
+| | |
+|---|---|
+| Live ticks | 600 |
+| Ticks actually simulated | 2,127 |
+| Rollbacks | 509 |
+| Re-simulated ticks | 1,527 |
+| Deepest rollback | 3 |
+| Inputs outside the window | 0 |
+
+**0.72 extra ticks of work per live tick, so about 1.7x a plain server.** A
+twelve-bot tick costs 0.151ms in Release against a 33.3ms budget, so a node's
+tick is about 0.26ms — under 1% of the budget. The deepest rewind is exactly the
+link's delay, which is what it should be: nothing ever needs to go back further
+than the oldest input still in flight.
+
+⚠️ **A human-populated match would rewind LESS than this.** Bots change their
+keys about twice as often as people do — measured, `tools/inputpredict` — so a
+bot match is the pessimistic case for a scheme whose whole cost is driven by how
+often a guess is contradicted.
+
 ## What is NOT built
 
 ⛔ **Nothing here reaches a socket or a client yet.** Three pieces stand between
