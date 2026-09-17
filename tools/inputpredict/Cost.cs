@@ -58,6 +58,20 @@ internal static class Cost
     private static bool _control;
 
     /// <summary>
+    /// How much of each correction to leave for later, when asked to model a
+    /// smoothed client. 0 is what an unsmoothed node sends.
+    /// </summary>
+    /// <remarks>
+    /// <b>The corrections here arrive at exactly the cadence a real one would</b>
+    /// — every seventh tick, the same as a position update — so the residual a
+    /// smoother carries between them is the real thing rather than a model of
+    /// it. What is modelled is the client, which is assumed to hold whatever
+    /// position it was last sent and dead-reckon from there: that is what the
+    /// GG2 client does between updates.
+    /// </remarks>
+    private static double _retain;
+
+    /// <summary>
     /// Which guess the prediction arm makes about a tick it has not heard yet.
     /// </summary>
     /// <remarks>
@@ -112,6 +126,8 @@ internal static class Cost
     {
         _control = args.Contains("--control");
         _predictor = Enum.Parse<Predictor>(Flag(args, "--predictor") ?? "Hold", ignoreCase: true);
+        _retain = double.Parse(
+            Flag(args, "--smooth") ?? "0", System.Globalization.CultureInfo.InvariantCulture);
         var mapDirectory = Flag(args, "--maps") ?? MapDirectory.Resolve();
         var limit = int.Parse(Flag(args, "--limit") ?? "6", CultureInfo.InvariantCulture);
         var files = new List<string>();
@@ -140,6 +156,13 @@ internal static class Cost
         var human = new Error("human");
         var bot = new Error("bot");
 
+        // What the client is actually asked to swallow, once a smoother has had
+        // its say, and how far from the truth it sits as a result. Both matter:
+        // a smoother that never moved anybody would win the first and lose the
+        // second.
+        var jump = new Error("jump");
+        var residual = new Error("resid");
+
         // The same samples, restricted to the windows where the guess was
         // actually wrong about a key. The unconditional rows mix those in with
         // a large majority of exact hits, so they answer "what is the average
@@ -151,7 +174,7 @@ internal static class Cost
         foreach (var file in chosen)
         {
             Console.Error.WriteLine($"  {Path.GetFileName(file)}");
-            Measure(file, mapDirectory, human, bot, humanMissed, botMissed);
+            Measure(file, mapDirectory, human, bot, humanMissed, botMissed, jump, residual);
         }
 
         Console.WriteLine();
@@ -164,6 +187,14 @@ internal static class Cost
         Error.PrintHeader();
         human.Print();
         bot.Print();
+
+        if (_retain > 0)
+        {
+            Console.WriteLine();
+            Console.WriteLine($"  a client smoothed with retain {_retain:0.00} (human slots)");
+            jump.Print();
+            residual.Print();
+        }
         Console.WriteLine();
         Console.WriteLine("  * only the windows where a key was actually mispredicted");
         humanMissed.Print();
@@ -173,7 +204,8 @@ internal static class Cost
     }
 
     private static void Measure(
-        string file, string mapDirectory, Error human, Error bot, Error humanMissed, Error botMissed)
+        string file, string mapDirectory, Error human, Error bot, Error humanMissed, Error botMissed,
+        Error jump, Error residual)
     {
         var trace = Trace.Decode(File.ReadAllBytes(file));
         var maps = 0;
@@ -215,6 +247,10 @@ internal static class Cost
 
         // Per slot, whether any tick in the current window was guessed wrong.
         var missed = new bool[WorldSlots];
+
+        // Per slot, how far behind the truth a smoothed client still is, carried
+        // from one correction to the next exactly as the real one would be.
+        var carried = new double[WorldSlots];
 
         void Probe(int t)
         {
@@ -288,6 +324,17 @@ internal static class Cost
 
                 var only = owner(t, slot) == TraceParticipant.Human ? humanMissed : botMissed;
                 only.Observe(staleness, error);
+
+                // Modelled on the staleness a transatlantic link implies, and
+                // only for people, since that is who would be watching.
+                if (_retain > 0 && staleness == 2 && owner(t, slot) == TraceParticipant.Human)
+                {
+                    var off = carried[slot] + error;
+
+                    jump.Observe(staleness, off * (1 - _retain));
+                    carried[slot] = off * _retain;
+                    residual.Observe(staleness, carried[slot]);
+                }
             }
         }
 
