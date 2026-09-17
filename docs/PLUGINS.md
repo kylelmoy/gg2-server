@@ -741,13 +741,13 @@ Two reads, both reference capabilities (`DESIGN.md` section 9 named the first):
 
 ### Open
 
-- ⚠️ **Its settings are not reachable from `--config` yet.** The GML reads
-  `[Plugins] chat_gravetalk`, `chat_unique_names`, `chat_mute_minutes`,
+- **Its settings are `[Plugins] chat_*` in `--config`**, the same keys and defaults
+  the GML half reads (`chat_gravetalk`, `chat_unique_names`, `chat_mute_minutes`,
   `chat_votes`, `chat_vote_kick_percent`, `chat_vote_mute_percent`,
-  `chat_kickban_minutes` and `chat_admin_password`. `Chat2026Settings` has them all,
-  but the catalogue builds the plugin with the defaults, so on this server
-  `/login` is always disabled and nobody is an admin. Wiring them belongs in
-  `ServerSettings.All`, which `ConfigFileCoverageTests` gates.
+  `chat_kickban_minutes`, `chat_admin_password`), so one `gg2.ini` configures both
+  halves. They are `ServerOptions.Chat2026`, rows in `ServerSettings.All`, and reach
+  the plugin through `IPluginHost.Chat2026` when it attaches. There are no
+  command-line flags for them. `chat_vote_host` has no row: slot 0 never votes here.
 - **The MOTD is `[Server] ChatJoinMessage`**, sent in WELCOME. The GML reads
   `chat_motd` and falls back to `WelcomeMessage`.
 - **Not on ganggarrison.com.** Until it is, clients and this server must both

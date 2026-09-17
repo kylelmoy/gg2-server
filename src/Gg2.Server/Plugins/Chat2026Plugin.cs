@@ -8,9 +8,8 @@ namespace Gg2.Server.Plugins;
 /// are the GML plugin's own defaults for the same <c>[Plugins]</c> keys.
 /// </summary>
 /// <remarks>
-/// ⚠️ <b>Not yet reachable from <c>--config</c>.</b> The catalogue builds the
-/// plugin with these defaults; wiring the keys through <c>ServerSettings</c> is
-/// recorded as open in <c>docs/PLUGINS.md</c>, "chat2026".
+/// Set from <c>[Plugins]</c> in <c>--config</c> as <see cref="ServerOptions.Chat2026"/>
+/// and handed to the plugin by <see cref="IPluginHost.Chat2026"/> when it attaches.
 /// </remarks>
 public sealed record Chat2026Settings
 {
@@ -37,6 +36,22 @@ public sealed record Chat2026Settings
 
     /// <summary><c>chat_admin_password</c>; empty disables <c>/login</c>.</summary>
     public string AdminPassword { get; init; } = string.Empty;
+
+    /// <summary>The ranges the GML clamps to, refused up front here.</summary>
+    public void Validate()
+    {
+        if (MuteMinutes is < 1 or > 1440)
+            throw new ArgumentOutOfRangeException(nameof(MuteMinutes), MuteMinutes, "chat_mute_minutes must be 1..1440");
+
+        if (KickBanMinutes is < 0 or > 1440)
+            throw new ArgumentOutOfRangeException(nameof(KickBanMinutes), KickBanMinutes, "chat_kickban_minutes must be 0..1440");
+
+        if (VoteKickPercent is < 1 or > 100)
+            throw new ArgumentOutOfRangeException(nameof(VoteKickPercent), VoteKickPercent, "chat_vote_kick_percent must be 1..100");
+
+        if (VoteMutePercent is < 1 or > 100)
+            throw new ArgumentOutOfRangeException(nameof(VoteMutePercent), VoteMutePercent, "chat_vote_mute_percent must be 1..100");
+    }
 }
 
 /// <summary>
@@ -160,7 +175,7 @@ public sealed partial class Chat2026Plugin(Chat2026Settings? settings = null) : 
         public bool Admin;
     }
 
-    private readonly Chat2026Settings _settings = settings ?? new Chat2026Settings();
+    private Chat2026Settings _settings = settings ?? new Chat2026Settings();
 
     private readonly PluginPlayerTable<Chatter> _chatters = new(() => new Chatter());
 
@@ -175,6 +190,13 @@ public sealed partial class Chat2026Plugin(Chat2026Settings? settings = null) : 
     private string _currentMap = string.Empty;
 
     public override string Name => "chat2026";
+
+    /// <summary>Settings passed to the constructor win; otherwise the server's.</summary>
+    public override void Attach(PluginChannel channel)
+    {
+        base.Attach(channel);
+        _settings = settings ?? channel.Host.Chat2026;
+    }
 
     /// <summary>Players dropped on arrival by a kick-ban, for tests and the log.</summary>
     public int KickBanDrops { get; private set; }

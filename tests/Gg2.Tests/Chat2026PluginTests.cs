@@ -803,6 +803,53 @@ public sealed class Chat2026PluginTests
     }
 
     [Fact]
+    public void ACataloguePluginTakesTheServersChatSettings()
+    {
+        var host = new FakePluginHost { Chat2026 = new Chat2026Settings { AdminPassword = "from-config", VotesEnabled = false } };
+        var plugin = (Chat2026Plugin)ServerPluginCatalogue.Create("chat2026")!;
+        plugin.Attach(new PluginChannel(host, 0));
+        host.Add("Server", Team.Spectator, address: string.Empty, client: false);
+        plugin.PlayerAdded(0);
+        var alice = Join(host, plugin, "alice", Team.Red);
+
+        Speak(plugin, alice, "/login from-config");
+        Speak(plugin, alice, "/votescramble");
+
+        Assert.Equal("WELCOME v1 flags=1 burst=3 seconds=2 motd=", To(host, alice)[0]);
+        Assert.Equal(["You are now an admin for this session.", "Voting is disabled on this server."], Log(host, alice));
+    }
+
+    [Fact]
+    public void TheChatSettingsAreReadFromPluginsInTheConfigFile()
+    {
+        var options = new Gg2.Server.ServerOptions();
+        foreach (var setting in Gg2.Server.ServerSettings.All)
+        {
+            switch (setting.Key)
+            {
+                case "chat_gravetalk": setting.Set(options, "0"); break;
+                case "chat_unique_names": setting.Set(options, "1"); break;
+                case "chat_mute_minutes": setting.Set(options, "5"); break;
+                case "chat_votes": setting.Set(options, "0"); break;
+                case "chat_vote_kick_percent": setting.Set(options, "75"); break;
+                case "chat_vote_mute_percent": setting.Set(options, "70"); break;
+                case "chat_kickban_minutes": setting.Set(options, "30"); break;
+                case "chat_admin_password": setting.Set(options, "pw"); break;
+            }
+        }
+
+        Assert.Equal(
+            new Chat2026Settings
+            {
+                Gravetalk = false, UniqueNames = true, MuteMinutes = 5, VotesEnabled = false,
+                VoteKickPercent = 75, VoteMutePercent = 70, KickBanMinutes = 30, AdminPassword = "pw",
+            },
+            options.Chat2026);
+        Assert.All(Gg2.Server.ServerSettings.All.Where(s => s.Key.StartsWith("chat_", StringComparison.Ordinal)),
+            s => Assert.Equal("Plugins", s.Section));
+    }
+
+    [Fact]
     public void TheCatalogueServesChat2026WithItsPin()
     {
         Assert.IsType<Chat2026Plugin>(ServerPluginCatalogue.Create("chat2026"));

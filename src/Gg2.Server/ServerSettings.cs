@@ -258,6 +258,56 @@ public static class ServerSettings
             + "Needs a chat plugin in ServerPluginList; a client without one never "
             + "sees it."));
 
+        // [Plugins] chat_* — the chat2026 plugin's settings, under the same keys its
+        // GML half reads, so one gg2.ini configures both halves. Read only when
+        // chat2026 is in ServerPluginList.
+        settings.Add(BoolRow(
+            "Plugins", "chat_gravetalk", nameof(ServerOptions.Chat2026),
+            o => o.Chat2026.Gravetalk, (o, v) => o.Chat2026 = o.Chat2026 with { Gravetalk = v },
+            "chat2026: whether the living hear dead players and spectators. Off, those "
+            + "are heard only by each other."));
+
+        settings.Add(BoolRow(
+            "Plugins", "chat_unique_names", nameof(ServerOptions.Chat2026),
+            o => o.Chat2026.UniqueNames, (o, v) => o.Chat2026 = o.Chat2026 with { UniqueNames = v },
+            "chat2026: rename a player whose name is taken to the lowest free number "
+            + "(bob2). Every client sees the rename, with the plugin or without."));
+
+        settings.Add(IntRow(
+            "Plugins", "chat_mute_minutes", nameof(ServerOptions.Chat2026),
+            o => o.Chat2026.MuteMinutes, (o, v) => o.Chat2026 = o.Chat2026 with { MuteMinutes = v }, "5",
+            "chat2026: how long a vote mute lasts, and /mute with no minutes, 1..1440. "
+            + "A mute follows the address across reconnects until it runs out."));
+
+        settings.Add(BoolRow(
+            "Plugins", "chat_votes", nameof(ServerOptions.Chat2026),
+            o => o.Chat2026.VotesEnabled, (o, v) => o.Chat2026 = o.Chat2026 with { VotesEnabled = v },
+            "chat2026: whether players may call votes (/votekick, /votemute, /votescramble, "
+            + "/votenextround, /votemap)."));
+
+        settings.Add(IntRow(
+            "Plugins", "chat_vote_kick_percent", nameof(ServerOptions.Chat2026),
+            o => o.Chat2026.VoteKickPercent, (o, v) => o.Chat2026 = o.Chat2026 with { VoteKickPercent = v }, "75",
+            "chat2026: the share of Yes a kick vote needs, 1..100. At least half the "
+            + "voters, and at least two, must answer."));
+
+        settings.Add(IntRow(
+            "Plugins", "chat_vote_mute_percent", nameof(ServerOptions.Chat2026),
+            o => o.Chat2026.VoteMutePercent, (o, v) => o.Chat2026 = o.Chat2026 with { VoteMutePercent = v }, "75",
+            "chat2026: the share of Yes a mute vote needs, 1..100."));
+
+        settings.Add(IntRow(
+            "Plugins", "chat_kickban_minutes", nameof(ServerOptions.Chat2026),
+            o => o.Chat2026.KickBanMinutes, (o, v) => o.Chat2026 = o.Chat2026 with { KickBanMinutes = v }, "30",
+            "chat2026: how long a vote-kicked address is refused, 0..1440. It is an "
+            + "address, so everyone behind the same NAT is refused with it."));
+
+        settings.Add(SecretRow(
+            "Plugins", "chat_admin_password", nameof(ServerOptions.Chat2026),
+            o => o.Chat2026.AdminPassword, (o, v) => o.Chat2026 = o.Chat2026 with { AdminPassword = v }, "hunter2",
+            "chat2026: the password for /login, which gives /say, /kick, /mute, /unmute, "
+            + "/nextround and /map for the session. Empty disables /login."));
+
         settings.Add(SecretRow(
             "Server", "Password", nameof(ServerOptions.Password),
             o => o.Password, (o, v) => o.Password = v, "hunter2",

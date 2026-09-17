@@ -126,6 +126,9 @@ public sealed partial class GameServer
     /// </summary>
     string IPluginHost.ChatJoinMessage => _options.ChatJoinMessage;
 
+    /// <summary><c>[Plugins] chat_*</c>, read straight off the options.</summary>
+    Chat2026Settings IPluginHost.Chat2026 => _options.Chat2026;
+
     /// <summary>
     /// What <c>/bots</c> may do and what the population is doing.
     /// </summary>
