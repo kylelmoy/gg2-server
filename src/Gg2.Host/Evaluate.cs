@@ -56,6 +56,12 @@ internal static class Evaluate
         var matches = Int(args, "--matches", 4);
         var threads = Int(args, "--threads", Environment.ProcessorCount);
 
+        // Off by default because it is not what eval is for: a digest says
+        // whether two runs were the same run, never whether the bots played
+        // well. It is a determinism instrument, and reading a behavioural
+        // conclusion out of it is the one misuse worth naming.
+        var digests = args.Contains("--digest");
+
         var options = HeadlessMatchOptions.Default with
         {
             Bots = Int(args, "--bots", HeadlessMatchOptions.Default.Bots),
@@ -91,10 +97,16 @@ internal static class Evaluate
             $"{maps.Length} map(s) x {matches} match(es), {options.Bots} bots, "
             + $"seed {options.Seed}, {threads} thread(s)");
         Console.WriteLine();
-        Console.WriteLine($"{"map",-26} {"red",4} {"blue",4} {"drew",4} {"unfin",5} {"mean ticks",10}  nav");
+        Console.WriteLine(
+            $"{"map",-26} {"red",4} {"blue",4} {"drew",4} {"unfin",5} {"mean ticks",10}  "
+            + (digests ? $"{"nav",-6}  digest" : "nav"));
 
         var clock = System.Diagnostics.Stopwatch.StartNew();
         long totalTicks = 0;
+
+        // Folded across maps in the order they ran, so the final number covers
+        // the whole batch rather than the last map of it.
+        var batch = BatchDigest.Seed;
 
         foreach (var name in maps)
         {
@@ -152,9 +164,13 @@ internal static class Evaluate
             var summary = MatchRunner.Summarise(results);
             totalTicks += summary.TotalTicks;
 
+            var mapDigest = BatchDigest.Of(name, results);
+            batch = BatchDigest.Mix(batch, mapDigest);
+
             Console.WriteLine(
                 $"{name,-26} {summary.RedWins,4} {summary.BlueWins,4} {summary.Draws,4} "
-                + $"{summary.Exhausted,5} {summary.MeanTicks,10:0}  {navSource}");
+                + $"{summary.Exhausted,5} {summary.MeanTicks,10:0}  "
+                + (digests ? $"{navSource,-6}  {mapDigest:x16}" : navSource));
         }
 
         clock.Stop();
@@ -164,6 +180,16 @@ internal static class Evaluate
         Console.WriteLine(
             $"{totalTicks} ticks of match in {seconds:0.0}s = "
             + $"{totalTicks / seconds / 30:0}x real time on {threads} thread(s)");
+
+        if (digests)
+        {
+            // ⚠️ The batch line is the one to compare, not the per-map column:
+            // a single map agreeing says nothing about the other twenty-two,
+            // and this covers the maps that ran AND the order they ran in.
+            // Two runs of the same flags that disagree here did not play the
+            // same matches, whatever their scoreboards say.
+            Console.WriteLine($"batch digest {batch:x16}");
+        }
 
         return 0;
     }
@@ -191,6 +217,12 @@ internal static class Evaluate
                             how good they are (default 5)
           --max-ticks <n>   ceiling per match (default 36000, twenty minutes)
           --seed <n>        batch seed (default 1)
+          --digest          print a 64-bit digest per map and one for the whole
+                            batch: every character's position, velocity and
+                            health at the end of every match, bit for bit. Two
+                            runs of the same flags agree or something is not
+                            deterministic. It says nothing about how well the
+                            bots played.
           --maps <path>     where the built-in map PNGs live
           --botnav <path>   where the bot nav caches live
           --no-navgen       do not build a graph for a map that has none

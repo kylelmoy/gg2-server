@@ -402,6 +402,66 @@ Port that decoder rather than re-deriving the format.
   comparisons are fuzzy.** Both are measured; both change trajectories. See the
   two sections below.
 
+## The same build on two machines
+
+Determinism holds across x86-64 machines of the same operating system family
+and breaks across operating systems. Both halves are measured, with identical
+published bits on every arm (`md5` of `gg2-server.dll` equal), one thread, and
+`gg2-server eval --digest` as the instrument.
+
+**Linux to Linux: identical.** Three hosts spanning two CPU vendors, three
+microarchitectures and two runtime patch levels produced the same batch digest
+on both workloads, twice each:
+
+| host | CPU | AVX-512 | .NET |
+|---|---|---|---|
+| barbara | Intel i5-8259U, Coffee Lake | no | 10.0.12 |
+| gg2-us-west | AMD Ryzen 9 9900X, Zen 5 | yes | 10.0.11 |
+| gg2-us-east | Intel Xeon Gold 6152, Skylake-SP | yes | 10.0.12 |
+
+23 maps x 2 matches x 3000 ticks gave `6562d88c2eb81583` and 4 x 18000 ticks on
+`ctf_truefort` gave `4748070f38b4f093` on all three. Neither the vendor, the
+microarchitecture, the AVX-512 width nor a runtime patch moved a bit.
+
+**Windows to Linux: diverges, on about a fifth of maps within 100 seconds of
+game time.** The same breadth batch: 5 of 23 maps disagreed (`cp_egypt`,
+`gg_debug`, `gg_debug2`, `koth_gallery`, `tdm_mantic`), 18 agreed bit for bit,
+and `ctf_truefort` alone still agreed at 3000 ticks. The scoreboards stayed
+identical where the digests differed — `gg_debug` ended 1-1 at tick 1076 on both
+— so **nothing but a positional digest would have noticed**, which is what
+`MatchResult.Digest` exists for.
+
+The mechanism is the platform math library. Windows and Linux return different
+results for the transcendentals, measured over 100,001 samples per function
+with the same published assembly:
+
+| function | inputs differing | worst |
+|---|---|---|
+| `tan` | 4.12% | 1 ULP |
+| `cos` | 3.26% | 1 ULP |
+| `sin` | 2.99% | 1 ULP |
+| `atan2` | 0.71% | 1 ULP |
+| `exp` | 0.50% | 1 ULP |
+| `pow` | 0.08% | 1 ULP |
+| `log` | 0.01% | 1 ULP |
+| `sqrt`, `floor`, `round` | none | exact |
+
+`sqrt`, `floor` and `round` are IEEE-exact operations and agree; everything
+correctly rounded by the runtime rather than the hardware does not. The
+simulation calls the affected functions from 29 sites, so a match diverges as
+soon as one lands on a differing input and the 1 ULP compounds.
+
+What this rules in and out: a physics divergence between two machines is an
+operating-system difference, not a CPU one, and not a JIT one. What would show
+it has gone stale: run `eval --digest` on two hosts with identical published
+bits and compare the batch line.
+
+The practical rule is that any set of machines required to agree bit for bit —
+a fixture recorded on one and replayed on another, anything that compares a
+digest across hosts — has to be one operating system family. The fleet is
+Debian and Ubuntu and is uniform in this sense; a Windows development machine
+is not part of that set.
+
 ## GM8 semantics that will bite
 
 Collected because each of these has already cost someone real time; several are
