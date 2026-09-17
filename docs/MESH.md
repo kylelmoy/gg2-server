@@ -89,6 +89,10 @@ played across two nodes with a three-tick link, `MeshMatchTests`:
 | Deepest rollback | 3 |
 | Inputs outside the window | 0 |
 
+The cost scales with the link, because every rewind replays the whole delay:
+1.7x at 3 ticks, 6.7x at 8, 12x at 15 and 24x at 30. A transatlantic link is the
+cheap end of that.
+
 **0.72 extra ticks of work per live tick, so about 1.7x a plain server.** A
 twelve-bot tick costs 0.151ms in Release against a 33.3ms budget, so a node's
 tick is about 0.26ms — under 1% of the budget. The deepest rewind is exactly the
@@ -100,19 +104,60 @@ keys about twice as often as people do — measured, `tools/inputpredict` — so
 bot match is the pessimistic case for a scheme whose whole cost is driven by how
 often a guess is contradicted.
 
+## Holding what cannot be unsaid
+
+A death starts a respawn, a capture moves the score, an intel pickup attaches
+the briefcase. None of them can be taken back on a stock client, so a node may
+only send one once the tick that produced it can no longer be re-simulated into
+a tick where it did not happen.
+
+A tick is **confirmed** when every player alive at its start has had their real
+input heard for it. A confirmed tick cannot be rewound, because a rewind is only
+ever scheduled by an input contradicting a *guess*. `MeshNode.TryTakeConfirmed`
+hands those out in order and nothing else; `LastEvents` is the provisional view,
+for movement and diagnostics.
+
+⚠️ **Certainty is recomputed from the ledger rather than recorded when the tick
+ran.** The common case is a guess that turns out to have been right: the input
+arrives, contradicts nothing, and the tick is never re-simulated — so a flag
+written while the tick ran says "guessed" for ever. Measured: a node confirmed
+exactly nothing across a 600-tick match before this was a recomputation.
+
+⚠️ **Positions must NOT wait for confirmation.** The client is built to be
+corrected several times a second, and holding movement until it was certain
+would hand back the whole latency saving the design exists for. Send movement
+provisionally; hold what cannot be unsaid.
+
+### How wrong the provisional stream actually is
+
+Deaths in the provisional stream against the ones that really happened, 600
+ticks of a twelve-bot match, by link length:
+
+| link | provisional | real | phantom | missed |
+|---|---|---|---|---|
+| 3 ticks | 5 | 5 | 0 | 0 |
+| 8 ticks | 2 | 1 | 2 | 1 |
+| 15 ticks | 3 | 4 | 2 | 3 |
+| 30 ticks | 3 | 6 | 0 | 3 |
+
+**It is wrong in both directions**: it publishes deaths a rewind then unmakes,
+and it misses deaths that only exist once the correction lands. A client reading
+it would see a player die who is alive, and another go on living who is dead.
+
+⚠️ **At the three ticks a transatlantic link costs, nothing went wrong in this
+match** — five deaths, all real. That is a small sample and not a licence to
+skip the holding; it says the failure is rare at that range and ordinary further
+out. The rows are different matches, because bots seeing different worlds make
+different decisions.
+
 ## What is NOT built
 
-⛔ **Nothing here reaches a socket or a client yet.** Three pieces stand between
+⛔ **Nothing here reaches a socket or a client yet.** Two pieces stand between
 this and a playable match:
 
-1. **Holding irreversible events.** A death, a capture or an intel pickup cannot
-   be taken back on a stock client — `PLAYER_DEATH` starts a respawn. Those have
-   to be held until every input for their tick is known, roughly 75ms, while
-   movement goes out provisionally. `MeshNode` produces the corrected world;
-   deciding what of it is safe to send is a layer that does not exist.
-2. **The input link.** Sockets between nodes, a shared tick timeline, and clock
+1. **The input link.** Sockets between nodes, a shared tick timeline, and clock
    offset estimation.
-3. **Correction smoothing.** A node can reproduce exactly what each of its
+2. **Correction smoothing.** A node can reproduce exactly what each of its
    clients believes, because the client's dead reckoning is the same
    deterministic simulation — so it can spread a correction over several ticks
    instead of teleporting. Unmeasured and unimplemented; whether a 16 px

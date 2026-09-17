@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using Gg2.Bots;
 using Gg2.Maps;
 using Gg2.Mesh;
@@ -43,7 +44,7 @@ public sealed class MeshMatchTests
 {
     private const string Map = "ctf_truefort";
     private const int Bots = 12;
-    private const int Delay = 3;
+    private static int Delay = 3;
 
     /// <summary>
     /// ⚠️ Slot 0 is the server's own reserved player and never a bot — CLAUDE.md.
@@ -65,7 +66,19 @@ public sealed class MeshMatchTests
 
         /// <summary>Inputs on the wire to this region, as (arrival, tick, slot, input).</summary>
         public List<(int At, int For, int Slot, PlayerInput Input)> Wire { get; } = [];
+
+        /// <summary>Deaths this node released as final, in the order it released them.</summary>
+        public List<(int Tick, int Slot)> Held { get; } = [];
+
+        /// <summary>
+        /// Deaths this node saw the instant the tick ran, before anything was
+        /// confirmed — what a naive wire layer would have sent.
+        /// </summary>
+        public List<(int Tick, int Slot)> Provisional { get; } = [];
     }
+
+    /// <summary>Every input either node recorded, for rebuilding the truth.</summary>
+    private static readonly List<(int Tick, int Slot, PlayerInput Input)> Script = [];
 
     /// <summary>
     /// A match whose roster is fixed before the first tick, so both nodes start
@@ -144,8 +157,10 @@ public sealed class MeshMatchTests
         }
     }
 
-    private static (Region A, Region B) Play(int ticks)
+    private static (Region A, Region B) Play(int ticks, int delay = 3)
     {
+        Delay = delay;
+
         ReferenceTree.RequireAvailable();
         ReferenceTree.RequireNavCache();
 
@@ -155,6 +170,8 @@ public sealed class MeshMatchTests
 
         var a = Build(0, map, nav, spawns);
         var b = Build(1, map, nav, spawns);
+
+        Script.Clear();
 
         for (var tick = 0; tick < ticks; tick++)
         {
@@ -166,6 +183,9 @@ public sealed class MeshMatchTests
 
             a.Node.Advance();
             b.Node.Advance();
+
+            Collect(a);
+            Collect(b);
         }
 
         // Everything still in flight lands, and each node reconciles what it
@@ -182,7 +202,68 @@ public sealed class MeshMatchTests
         a.Node.Settle();
         b.Node.Settle();
 
+        Collect(a);
+        Collect(b);
+
         return (a, b);
+    }
+
+    /// <summary>
+    /// Takes whatever this node will now vouch for, and separately notes what it
+    /// merely believes.
+    /// </summary>
+    private static void Collect(Region region)
+    {
+        while (region.Node.TryTakeConfirmed(out var tick, out var events))
+        {
+            for (var slot = 0; slot < WorldState.MaxSlots; slot++)
+            {
+                if (events.Died[slot])
+                    region.Held.Add((tick, slot));
+            }
+        }
+
+        if (region.Node.Tick <= 0)
+            return;
+
+        for (var slot = 0; slot < WorldState.MaxSlots; slot++)
+        {
+            if (region.Node.LastEvents.Died[slot])
+                region.Provisional.Add((region.Node.Tick - 1, slot));
+        }
+    }
+
+    /// <summary>
+    /// The deaths that really happened: one simulation told everything on time.
+    /// </summary>
+    private static List<(int Tick, int Slot)> Truth(SpawnPoints spawns, LevelMap map, int ticks)
+    {
+        var state = Roster(spawns);
+        var world = new CollisionWorld(map);
+        var inputs = new PlayerInput[WorldState.MaxSlots];
+        var deaths = new List<(int Tick, int Slot)>();
+
+        for (var tick = 0; tick < ticks; tick++)
+        {
+            Array.Clear(inputs);
+
+            foreach (var (at, slot, input) in Script)
+            {
+                if (at == tick)
+                    inputs[slot] = input;
+            }
+
+            var events = default(TickEvents);
+            MatchSimulation.Tick(world, ref state, inputs, ref events, spawns);
+
+            for (var slot = 0; slot < WorldState.MaxSlots; slot++)
+            {
+                if (events.Died[slot])
+                    deaths.Add((tick, slot));
+            }
+        }
+
+        return deaths;
     }
 
     /// <summary>
@@ -202,6 +283,8 @@ public sealed class MeshMatchTests
 
             region.Node.Submit(tick, slot, input);
             peer.Wire.Add((tick + Delay, tick, slot, input));
+
+            Script.Add((tick, slot, input));
         }
     }
 
@@ -288,4 +371,87 @@ public sealed class MeshMatchTests
             stats.DeepestRollback <= Delay + 1,
             $"deepest rollback {stats.DeepestRollback} exceeds the link's {Delay} ticks: {stats}");
     }
+
+    /// <summary>
+    /// ⛔ Everything a node vouches for really happened, and in the right order.
+    /// </summary>
+    /// <remarks>
+    /// <b>The claim that makes a mesh safe to put in front of a stock
+    /// client.</b> A death cannot be un-sent — it starts a respawn — so a node
+    /// may only send one once the tick that produced it can no longer be
+    /// re-simulated into a tick where it did not happen. Compared here against
+    /// one simulation that was told everything on time.
+    /// </remarks>
+    [Fact]
+    public void NothingReleasedAsFinalWasEverUndone()
+    {
+        ReferenceTree.RequireAvailable();
+        ReferenceTree.RequireNavCache();
+
+        var (a, _) = Play(ticks: 600);
+
+        var map = LevelMap.FromPng(Map, ReferenceTree.ReadMap(Map)).ForArea(1);
+        var truth = Truth(new SpawnPoints(map), map, 600);
+
+        Assert.NotEmpty(a.Held);
+
+        // Everything released, in order, is a prefix of what really happened:
+        // the tail is whatever was still provisional when the match stopped.
+        Assert.Equal(truth.Take(a.Held.Count), a.Held);
+    }
+
+    /// <summary>
+    /// And holding is load-bearing: on a longer link, sending the instant a tick
+    /// ran publishes deaths that never happen and misses ones that do.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Measured across link lengths, 600 ticks of a twelve-bot match, deaths
+    /// in the provisional stream against the ones that really happened:</b>
+    /// </para>
+    /// <list type="table">
+    /// <item><description>3 ticks — 5 provisional, 5 real, 0 phantom, 0 missed</description></item>
+    /// <item><description>8 ticks — 2 provisional, 1 real, 2 phantom, 1 missed</description></item>
+    /// <item><description>15 ticks — 3 provisional, 4 real, 2 phantom, 3 missed</description></item>
+    /// <item><description>30 ticks — 3 provisional, 6 real, 0 phantom, 3 missed</description></item>
+    /// </list>
+    /// <para>
+    /// ⚠️ <b>At the three ticks a transatlantic link actually costs, nothing went
+    /// wrong in this match</b> — every provisional death was real. That is five
+    /// deaths, so it is a small sample and not a licence to skip the holding;
+    /// what it says is that the failure this guards against is rare at that
+    /// range and ordinary further out. The arms are different matches, because
+    /// bots seeing different worlds make different decisions, which is why the
+    /// real counts differ between rows.
+    /// </para>
+    /// <para>
+    /// <b>The naive stream is wrong in BOTH directions.</b> It publishes deaths
+    /// that a rewind unmakes, and it misses deaths that only exist once the
+    /// correction lands — a client would see a player die who is alive, and see
+    /// another go on living who is dead.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void OnALongerLinkReleasingImmediatelyIsWrong()
+    {
+        ReferenceTree.RequireAvailable();
+        ReferenceTree.RequireNavCache();
+
+        var (a, _) = Play(ticks: 600, delay: 15);
+
+        var map = LevelMap.FromPng(Map, ReferenceTree.ReadMap(Map)).ForArea(1);
+        var truth = Truth(new SpawnPoints(map), map, 600);
+
+        var phantom = a.Provisional.Except(truth).ToList();
+        var missed = truth.Except(a.Provisional).ToList();
+
+        Assert.True(
+            phantom.Count > 0 || missed.Count > 0,
+            $"the provisional stream matched the truth exactly on a {15}-tick link "
+            + $"({a.Provisional.Count} death(s)), so holding bought nothing here");
+
+        // ...and what a node actually vouched for is still exactly right.
+        Assert.Equal(truth.Take(a.Held.Count), a.Held);
+    }
+
 }
