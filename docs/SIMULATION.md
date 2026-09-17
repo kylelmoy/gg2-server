@@ -462,6 +462,42 @@ digest across hosts — has to be one operating system family. The fleet is
 Debian and Ubuntu and is uniform in this sense; a Windows development machine
 is not part of that set.
 
+### What this costs the engine oracles
+
+The recorded GM8 samples were taken from a Windows program, so a test that
+compares the port against them bit-for-bit is comparing two Windows math
+libraries. `MotionSampleTests.TheSnapIsExactAndItsThresholdIsOneTenThousandth`
+is the one that notices: the `snap` family's `direction 45.001 then speed 5`
+runs `cos`, and on Linux the result is one ULP from the recording. The
+assertion is therefore bit-exact on Windows and within one ULP elsewhere, which
+is the only claim the evidence supports; a real regression moves a trajectory
+by far more than a ULP and still fails on both.
+
+**So the port's exactness against the engine is established on Windows, and the
+fleet runs Linux.** What the fleet's own physics is, is answered separately and
+more strongly: three Linux hosts agree with each other bit for bit, and the
+clients they serve re-simulate from the same inputs rather than from a
+recording.
+
+### A runtime bug this codebase can trip over
+
+⛔ **A method that takes a `WorldState` BY VALUE and then builds a `WorldView`
+over it in a loop is rejected by the .NET 10 runtime on linux-x64**, with
+`InvalidProgramException: Common Language Runtime detected an invalid program`.
+Passing the state by `in` makes the identical loop run.
+
+Measured with one assembly compiled on Windows and run everywhere: it runs on
+Windows and throws on all three Linux hosts, across two CPU vendors and both
+10.0.11 and 10.0.12 — so it is the runtime, not the compiler, the patch level
+or the machine. A single `BotCombat.Step` call is fine, a by-value `WorldState`
+parameter on its own is fine; it takes the combination.
+
+Nothing shipped hits it, because the simulation and the server pass a
+`WorldState` by `ref` or `in` everywhere — which is why the fleet runs bots on
+Linux perfectly while three `BotCombatTests` could not start. `CLAUDE.md` calls
+a `WorldState` cheaply copyable and it is; this is the one place where copying
+it into a parameter is not free.
+
 ## GM8 semantics that will bite
 
 Collected because each of these has already cost someone real time; several are

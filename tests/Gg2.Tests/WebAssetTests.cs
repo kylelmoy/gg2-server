@@ -68,6 +68,25 @@ public sealed class WebAssetTests
         File.ReadAllText(Path.Combine([RepoRoot(), .. parts]));
 
     /// <summary>
+    /// A repo file that may not be there, because <c>/scripts/</c> is gitignored
+    /// operator tooling.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Absent from a fresh clone, and from any copy taken through git.</b>
+    /// Reading one unguarded turned "this machine has never run a deploy" into a
+    /// red suite with a <c>DirectoryNotFoundException</c> that said nothing
+    /// about the cross-check it was doing. The same shape as
+    /// <c>FleetConfigTests</c>: the checks that need only what git carries run
+    /// everywhere, and the cross-check against the operator's scripts runs where
+    /// those scripts are — which is the machine where a drift can be introduced.
+    /// </remarks>
+    private static string? OperatorFile(params string[] parts)
+    {
+        var path = Path.Combine([RepoRoot(), .. parts]);
+        return File.Exists(path) ? File.ReadAllText(path) : null;
+    }
+
+    /// <summary>
     /// ⛔ <b>No two top-level declarations share a name, across every script a
     /// page loads.</b> Classic scripts share one global scope, so a second
     /// <c>function</c> replaces the first and its callers break somewhere else
@@ -84,7 +103,8 @@ public sealed class WebAssetTests
         Assert.True(declared > 50, $"only {declared} top-level names found — the scan is broken");
 
         // The fleet page loads common.js, analytics.js and its own fleet.js.
-        Declarations([panel[0], panel[1], ("fleet.js", RepoFile("scripts", "fleet-analytics", "fleet.js"))]);
+        if (OperatorFile("scripts", "fleet-analytics", "fleet.js") is { } fleet)
+            Declarations([panel[0], panel[1], ("fleet.js", fleet)]);
     }
 
     private static int Declarations((string Name, string Text)[] scripts)
@@ -161,8 +181,13 @@ public sealed class WebAssetTests
         Assert.Equal(start, html.LastIndexOf(AnalyticsSheetStart, StringComparison.Ordinal));
 
         var sheet = html[start..html.IndexOf("</dialog>", start, StringComparison.Ordinal)];
-        var fleet = RepoFile("scripts", "fleet-analytics", "fleet.js");
-        var build = RepoFile("scripts", "fleet-analytics.sh");
+
+        if (OperatorFile("scripts", "fleet-analytics", "fleet.js") is not { } fleet
+            || OperatorFile("scripts", "fleet-analytics.sh") is not { } build)
+        {
+            // Everything above this line checked index.html, which git carries.
+            return;
+        }
 
         // The script cuts on the same line and writes the two blocks it is credited with.
         Assert.Contains(AnalyticsSheetStart, build, StringComparison.Ordinal);

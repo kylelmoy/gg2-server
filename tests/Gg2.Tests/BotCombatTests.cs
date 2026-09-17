@@ -66,8 +66,26 @@ public sealed class BotCombatTests
     /// Runs the controller for a number of ticks and reports the first tick each
     /// gate opened on.
     /// </summary>
+    /// <remarks>
+    /// ⛔ <b><c>in WorldState</c>, never by value, and this is not a
+    /// micro-optimisation.</b> A method that takes a <c>WorldState</c> BY VALUE
+    /// and then builds a <see cref="WorldView"/> over it inside a loop that
+    /// calls <see cref="BotCombat.Step"/> is rejected by the .NET 10 runtime on
+    /// linux-x64 with <c>InvalidProgramException: Common Language Runtime
+    /// detected an invalid program</c> — the same assembly runs on Windows.
+    /// Reproduced on three Linux hosts across two CPU vendors and both 10.0.11
+    /// and 10.0.12, with IL compiled on Windows, so it is the runtime and
+    /// neither the compiler nor the machine. Passing the state by <c>in</c>
+    /// makes the identical loop run.
+    /// <para>
+    /// Nothing shipped hits it: the server and the simulation pass a
+    /// <c>WorldState</c> by <c>ref</c> or <c>in</c> everywhere, which is why the
+    /// fleet runs bots on Linux perfectly while these three tests could not
+    /// even start. docs/SIMULATION.md, "The same build on two machines".
+    /// </para>
+    /// </remarks>
     private static (int Acquired, int Aimed, int Fired) Chain(
-        WorldState state, BotSkill skill, int ticks = 400, int stagger = 0)
+        in WorldState state, BotSkill skill, int ticks = 400, int stagger = 0)
     {
         var collision = Collision();
         var combat = new BotCombatState { Stagger = stagger };
