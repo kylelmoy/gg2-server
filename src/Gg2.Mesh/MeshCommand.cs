@@ -40,6 +40,21 @@ public enum MeshCommandKind : byte
     /// <summary>Give them a class.</summary>
     SetClass = 2,
 
+    /// <summary>
+    /// They asked to change team, with everything that follows from it.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>Not the same as <see cref="SetTeam"/>, and the difference is the
+    /// point.</b> Setting the field writes a team; asking to change team drops
+    /// the intel, kills the character and arms a respawn — <c>PlayerCommands</c>
+    /// does all of it. Both nodes have to do all of it, or one of them is
+    /// carrying an intel the other dropped.
+    /// </remarks>
+    ChangeTeam = 5,
+
+    /// <summary>They asked to change class, with everything that follows.</summary>
+    ChangeClass = 6,
+
     /// <summary>Put a character in the world for them.</summary>
     Spawn = 3,
 
@@ -104,6 +119,14 @@ public readonly record struct MeshCommand(
 
     public static MeshCommand SetClass(int slot, PlayerClass playerClass) =>
         new(MeshCommandKind.SetClass, (byte)slot, (byte)playerClass, 0);
+
+    /// <summary>A player asking to change team, as a client does.</summary>
+    public static MeshCommand ChangeTeam(int slot, Team team) =>
+        new(MeshCommandKind.ChangeTeam, (byte)slot, (byte)team, 0);
+
+    /// <summary>A player asking to change class, as a client does.</summary>
+    public static MeshCommand ChangeClass(int slot, PlayerClass playerClass) =>
+        new(MeshCommandKind.ChangeClass, (byte)slot, (byte)playerClass, 0);
 
     /// <summary>Spawns <paramref name="slot"/> at a spawnpoint and group.</summary>
     public static MeshCommand Spawn(int slot, int spawnpointId = 0, int group = 0) =>

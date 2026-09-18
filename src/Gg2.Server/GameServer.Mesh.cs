@@ -21,6 +21,9 @@ public sealed partial class GameServer
     /// <summary>This node's own count of joins, which names them to the peer.</summary>
     private int _meshSequence;
 
+    /// <summary>The first tick whose landed commands have not been told to clients.</summary>
+    private int _meshDrained = -1;
+
     /// <summary>
     /// Asks the mesh for a roster place for a joiner, and parks them until it
     /// arrives.
@@ -88,11 +91,67 @@ public sealed partial class GameServer
             ServerMessages.PlayerJoin(_broadcast, entry.Name);
         }
 
+        DrainMeshCommands();
+
         // A departure at the far end shortens the world, and the roster follows.
         // ⚠️ RemoveSlot has already renumbered everything above it in the world,
         // so the roster is corrected from the end rather than by index.
         while (_roster.Count > 1 && !_world.HasPlayer[_roster.Count - 1])
             _roster.RemoveAt(_roster.Count - 1);
+    }
+
+    /// <summary>
+    /// Tells this node's clients about the roster changes that have just landed.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Both halves of a command happen at the same tick, on both nodes.</b>
+    /// The world half is the node's — it runs the real
+    /// <c>PlayerCommands</c> so a team change drops the intel and kills the
+    /// character everywhere. The half here is presentation: the roster copy a
+    /// joiner's <c>FULL_UPDATE</c> is built from, and the message that tells
+    /// clients. Splitting them is what lets a change that came from the PEER
+    /// reach this node's clients at all.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Drained by tick, once, in order.</b> A rewind re-applies a tick's
+    /// commands — that is the point of a schedule — so anything that broadcast
+    /// per application would send a team change again every time the tick was
+    /// replayed. The high-water mark is what makes it once.
+    /// </para>
+    /// </remarks>
+    private void DrainMeshCommands()
+    {
+        if (_meshDrained < 0)
+            _meshDrained = _mesh!.Node.Tick;
+
+        for (; _meshDrained < _mesh!.Node.Tick; _meshDrained++)
+        {
+            foreach (var command in _mesh.Node.ScheduledFor(_meshDrained))
+            {
+                var slot = command.Slot;
+
+                if (slot >= _roster.Count)
+                    continue;
+
+                switch (command.Kind)
+                {
+                    case MeshCommandKind.ChangeTeam:
+                        _roster[slot].Team = (Team)command.A;
+                        ServerMessages.PlayerChangeTeam(_broadcast, (byte)slot, (Team)command.A);
+                        break;
+
+                    case MeshCommandKind.ChangeClass:
+                        _roster[slot].Class = (PlayerClass)command.A;
+                        ServerMessages.PlayerChangeClass(
+                            _broadcast, (byte)slot, (PlayerClass)command.A);
+                        break;
+
+                    default:
+                        break;
+                }
+            }
+        }
     }
 
     /// <summary>

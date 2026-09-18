@@ -1,3 +1,4 @@
+using Gg2.Mesh;
 using Gg2.Protocol;
 using Gg2.Simulation;
 
@@ -111,6 +112,21 @@ public sealed partial class GameServer
     {
         var slot = IdOf(entry);
 
+        // ⛔ In a mesh the world is not changed here. A team change drops the
+        // intel and kills the character, and the peer has to do all of it at the
+        // same tick — so it is scheduled, and both nodes tell their own clients
+        // when it lands. GameServer.Mesh.cs, DrainMeshCommands.
+        //
+        // ⚠️ The balance pass does NOT run on a meshed change yet: the scheduled
+        // command is PlayerCommands.ChangeTeam, not ChangeTeamWithBalance. Both
+        // nodes agree, so the match is consistent — but a meshed server does not
+        // rebalance on a team change the way a standalone one does.
+        if (_mesh is not null)
+        {
+            _mesh.Schedule(MeshCommand.ChangeTeam(slot, team));
+            return;
+        }
+
         // getCharacterObject(player.class) != -1 or TEAM_SPECTATOR:
         // every class the port accepts has a character object, so the
         // clause is always true here.
@@ -154,6 +170,14 @@ public sealed partial class GameServer
         // death precedes the class message, the reference's order. A
         // characterless player is queued to spawn in this same tick's
         // alarm stage.
+        // ⛔ Scheduled in a mesh, for the reason ApplyChangeTeam gives: a class
+        // change is a death, and both nodes have to see the same one.
+        if (_mesh is not null)
+        {
+            _mesh.Schedule(MeshCommand.ChangeClass(slot, requested));
+            return;
+        }
+
         if (PlayerCommands.ChangeClass(ref _world, slot, requested, _collision) is PlayerDeathEvent death)
             ServerMessages.PlayerDeath(
                 _broadcast, (byte)slot, death.Killer, death.Assistant, death.Source);
