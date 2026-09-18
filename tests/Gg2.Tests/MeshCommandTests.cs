@@ -440,4 +440,60 @@ public sealed class MeshCommandTests
         Assert.Equal(2, first);
         Assert.Equal(3, second);
     }
+
+    /// <summary>
+    /// ⛔ A departure renumbers the slot a join was given, and who owns it.
+    /// </summary>
+    /// <remarks>
+    /// <b>CLAUDE.md's oldest trap, in a new place.</b> A removal compacts the
+    /// roster, so every slot above it moves down — and anything that NAMES a
+    /// player has to move with it. Two tables here name players: which slot a
+    /// join was assigned, and which node owns each slot. Left alone, both point
+    /// one place too high the moment somebody leaves, so a node would drive the
+    /// wrong player and send the wrong one's keys.
+    /// </remarks>
+    [Fact]
+    public void ADepartureRenumbersTheSlotsAboveIt()
+    {
+        ReferenceTree.RequireAvailable();
+
+        var node = Node();
+
+        // Three joins: the fixture holds 0 and 1, so these take 2, 3 and 4.
+        node.Schedule(5, MeshCommand.AddPlayer(origin: 0, sequence: 1));
+        node.Schedule(5, MeshCommand.AddPlayer(origin: 1, sequence: 1));
+        node.Schedule(5, MeshCommand.AddPlayer(origin: 0, sequence: 2));
+        node.Advance(7);
+
+        Assert.True(node.TryGetAssignedSlot(0, 1, out var first));
+        Assert.True(node.TryGetAssignedSlot(1, 1, out var middle));
+        Assert.True(node.TryGetAssignedSlot(0, 2, out var last));
+
+        // ⚠️ The places follow the canonical ORDER, not the order they were
+        // scheduled in: origin sorts before sequence, so node 0's two joins take
+        // 2 and 3 and node 1's takes 4. Two joins from one node are not
+        // necessarily adjacent once the other node is joining too.
+        Assert.Equal(2, first);
+        Assert.Equal(3, last);
+        Assert.Equal(4, middle);
+
+        Assert.Equal(1, node.OriginOf(middle));
+        Assert.Equal(0, node.OriginOf(last));
+
+        // The one in the middle place leaves.
+        node.Schedule(10, MeshCommand.RemovePlayer(last));
+        node.Advance(6);
+
+        // The one above it moved down, and its owner moved with it.
+        Assert.True(node.TryGetAssignedSlot(1, 1, out var moved));
+        Assert.Equal(middle - 1, moved);
+        Assert.Equal(1, node.OriginOf(moved));
+
+        // The one below did not move.
+        Assert.True(node.TryGetAssignedSlot(0, 1, out var stayed));
+        Assert.Equal(first, stayed);
+
+        // ...and the player who left is gone from both tables.
+        Assert.False(node.TryGetAssignedSlot(0, 2, out _));
+    }
 }

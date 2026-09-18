@@ -294,6 +294,22 @@ a real link produces — each hears its own first — and asserts they agree abo
 both slots *and* that the slots differ. The second half is the one that bites:
 handing one place to both people satisfies every equality otherwise.
 
+### Ownership follows the issuer, and a departure renumbers
+
+⛔ **"My player" is read off who issued the join, never off the slot number.**
+That was the same thing while slots were handed out by parity; once a join takes
+the lowest free place, either node's player can land on any number. A node
+guessing from parity would predict inputs for a player it is itself driving —
+and never send that player's keys to the peer, which is the same player going
+silent on the other side of the link.
+
+⚠️ **A departure renumbers every slot above it**, and anything that NAMES a
+player has to move with it — `CLAUDE.md`'s oldest trap, in a new place. Two
+tables here name players: which slot a join was assigned, and which node owns
+each slot. Left alone, both point one place too high the moment somebody leaves.
+Names are keyed by issuer and counter for the same reason, and resolved to a
+slot through the assignment.
+
 ### A gate that could not fail
 
 The first version of the test for this asserted that a player still existed
