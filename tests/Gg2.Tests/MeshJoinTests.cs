@@ -1051,13 +1051,15 @@ public sealed class MeshJoinTests
         Assert.False(joiner.Server.MeshFillsBots);
         Assert.True(listener.Server.MeshFillsBots);
 
-        // ⚠️ NOT asserted: that the listener still drives somebody. It does not —
-        // it sheds its own bots to nothing once the joiner adds players. The
-        // cause is a rollback rewriting a tick's removals after the roster has
-        // already acted on them, which leaves the roster holding entries the
-        // world no longer has. docs/MESH.md, "Roster changes are drained on
-        // tick, not on confirmation". A red suite is not a substitute for a
-        // written-down bug, and the fix is a design change rather than a patch.
+        // ⛔ THE LISTENER DOES NOT STARVE ITSELF. Its target counts the whole
+        // shared roster, so the joiner's players push it to shed some of its own
+        // — and it used to shed every one, ending up driving nobody. The cause
+        // was a rewind restoring the world without the tables that NAME players,
+        // so a re-applied departure resolved to nobody and left the roster and
+        // the world disagreeing about who was here.
+        Assert.True(
+            listener.Server.MeshOwnedSlots > 0,
+            "the listener removed its way down to driving nobody");
 
     }
 

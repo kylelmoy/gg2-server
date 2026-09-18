@@ -62,6 +62,23 @@ public sealed class MeshNode
     private sealed class Snapshot
     {
         public WorldState State;
+
+        /// <summary>
+        /// The join-to-slot table as it stood before the tick.
+        /// </summary>
+        /// <remarks>
+        /// ⛔ <b>A rewind has to restore this with the world, and not doing so was
+        /// a silent corruption.</b> Re-applying a tick's <c>RemovePlayer</c>
+        /// resolves its join key through this table; if the first application
+        /// already deleted that key, the second resolves to NOBODY — so the world
+        /// keeps a player the server has already told its clients left, and the
+        /// roster re-adds them as a stranger. Every other slot's assignment is
+        /// decremented twice on the way, which is how a node ends up owning
+        /// nothing and calling its peer's players "player".
+        /// </remarks>
+        public readonly Dictionary<int, int> Assigned = [];
+
+        public readonly byte[] SlotOrigin = new byte[WorldState.MaxSlots];
     }
 
     /// <summary>
@@ -497,7 +514,19 @@ public sealed class MeshNode
     {
         var slot = Tick % _snapshots.Length;
 
-        _snapshots[slot].State = _state;
+        var snapshot = _snapshots[slot];
+
+        snapshot.State = _state;
+
+        // ⛔ The tables that NAME players are part of the tick's state, so they
+        // are saved with it. See Snapshot.Assigned. Copied into the existing
+        // containers rather than replaced, because a tick may not allocate.
+        snapshot.Assigned.Clear();
+
+        foreach (var (key, at) in _assigned)
+            snapshot.Assigned[key] = at;
+
+        _slotOrigin.CopyTo(snapshot.SlotOrigin, 0);
 
         // ⚠️ AFTER the snapshot and BEFORE the tick. The snapshot is the world a
         // rewind returns to, so it has to be the world as it stood before this
@@ -867,7 +896,20 @@ public sealed class MeshNode
             return;
         }
 
-        _state = _snapshots[from % _snapshots.Length].State;
+        var restored = _snapshots[from % _snapshots.Length];
+
+        _state = restored.State;
+
+        // ⛔ AND THE TABLES THAT NAME PLAYERS. Restoring the world alone leaves a
+        // re-applied join or departure resolving against a table that was never
+        // rewound — see Snapshot.Assigned for what that costs.
+        _assigned.Clear();
+
+        foreach (var (key, at) in restored.Assigned)
+            _assigned[key] = at;
+
+        restored.SlotOrigin.CopyTo(_slotOrigin, 0);
+
         Tick = from;
 
         _rollbacks++;

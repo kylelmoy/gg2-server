@@ -469,6 +469,70 @@ public sealed class MeshCommandTests
     }
 
     /// <summary>
+    /// ⛔ A departure inside a rewound window still takes the player it named,
+    /// and leaves every other slot owned by whoever owned it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>A rewind has to restore the tables that NAME players, not just the
+    /// world.</b> A removal resolves its join key through the node's
+    /// assignment table; re-applying the tick after a rewind that restored only
+    /// the world finds the key already deleted, resolves to NOBODY, and leaves
+    /// the player in the world — after the server has already told its clients
+    /// they left. Every other slot's assignment is decremented twice on the way.
+    /// </para>
+    /// <para>
+    /// ⚠️ Found on a live two-host run as a node that owned NOTHING and called
+    /// its peer's players "player": both are this table going wrong, not the
+    /// ownership rule or the name table.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ADepartureSurvivesARewindOfItsOwnTick()
+    {
+        ReferenceTree.RequireAvailable();
+
+        var node = Node();
+
+        node.Schedule(4, MeshCommand.AddPlayer(origin: 0, sequence: 1));
+        node.Schedule(4, MeshCommand.AddPlayer(origin: 1, sequence: 1));
+        node.Schedule(4, MeshCommand.AddPlayer(origin: 0, sequence: 2));
+        node.Advance(6);
+
+        // Ordered by origin within the tick: (0,1) takes 2, (0,2) takes 3 and
+        // (1,1) takes 4 — slots 0 and 1 are already occupied.
+        Assert.True(node.TryGetAssignedSlot(1, 1, out var theirs));
+        Assert.Equal(4, theirs);
+
+        // Somebody leaves at a tick we are about to rewind through.
+        node.Schedule(8, MeshCommand.RemovePlayer(origin: 0, sequence: 1));
+        node.Advance(12);
+
+        Assert.False(node.TryGetAssignedSlot(0, 1, out _));
+        Assert.True(node.TryGetAssignedSlot(1, 1, out var moved));
+        Assert.Equal(3, moved);
+
+        // ⛔ A late input for a tick BEFORE the departure forces the rewind to
+        // replay it.
+        node.Submit(7, 1, new PlayerInput(PlayerKeys.Left, 900, 40));
+        node.Advance(2);
+
+        // The same player is still the one who left, the survivors are still
+        // where they belong, and their owners came back with them.
+        Assert.False(node.TryGetAssignedSlot(0, 1, out _));
+
+        Assert.True(node.TryGetAssignedSlot(1, 1, out var afterwards));
+        Assert.Equal(3, afterwards);
+        Assert.Equal(1, node.OriginOf(3));
+
+        Assert.True(node.TryGetAssignedSlot(0, 2, out var other));
+        Assert.Equal(0, node.OriginOf(other));
+
+        // ⛔ And the world did not quietly keep the player it was told to drop.
+        Assert.False(node.State.HasPlayer[4]);
+    }
+
+    /// <summary>
     /// A departure said twice is a no-op the second time, not somebody else's.
     /// </summary>
     /// <remarks>

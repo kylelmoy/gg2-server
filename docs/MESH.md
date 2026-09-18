@@ -685,22 +685,33 @@ over-adding one way (a target of four produced forty-eight) and over-removing
 the other. `RemoveOne` also skips anybody already leaving, or it picks the same
 bot every pass and the duplicates are refused.
 
-### ⛔ Roster changes are drained on tick, not on confirmation
+### A rewind restores the tables that NAME players, not just the world
 
-**This is the open bug.** `DrainMeshCommands` acts on `MeshNode.RemovedAt(T)` as
-soon as the node passes T — but a rollback can re-simulate T afterwards and
-remove somebody else, or nobody. The roster has already acted, so it keeps
-entries the world no longer has, and the next roster walk re-adds those slots as
-PEER players: entries with no `IsBot`, named "player".
+⛔ **The node's join-to-slot table and its slot-to-owner table are part of a
+tick's state, and a rewind restores them with the world.** Without that, a
+re-applied `RemovePlayer` resolves its join key through a table that was never
+rewound: the first application deleted the key, so the second resolves to
+NOBODY. The world then keeps a player the server has already told its clients
+left, and the next roster walk re-adds that slot as a stranger — no `IsBot`, no
+input source, named "player". Every other slot's assignment is decremented twice
+on the way.
 
-Seen as a listener that sheds its own bots to nothing while its peer adds
-players: `owns 0, bots 0, roster 10, joinerBots 3`. Reproduce by filling the
-listener to six and calling `bot-add` three times on the joiner.
+**Seen on a live two-host run as three separate-looking symptoms**, all of them
+this one cause: a node that owned NOTHING and so sent its peer no inputs at all,
+a node calling its peer's players "player", and a listener shedding its own bots
+to nothing while its peer added players.
 
-**It is the same problem the events had**, and it wants the same answer:
-a roster change should be told to clients only once its tick is confirmed, the
-way `TryTakeConfirmed` already gates deaths and captures. Until then a meshed
-match with players arriving on BOTH nodes will drift.
+⚠️ **It is the same rule the world already has**, one level out: CLAUDE.md's
+"anything that names a player has to be renumbered" when a slot is removed, and
+equally, anything that names a player has to be REWOUND when a tick is. A table
+that outlives a rollback is not state, it is a leak.
+
+⚠️ **This corrected an earlier diagnosis in this file.** The symptom was first
+written down as roster changes being drained on tick rather than on
+confirmation, which is a real tension but not what was breaking: the schedule
+for a past tick is immutable (a command for an already-simulated tick is
+refused), so a tick's roster changes ARE stable — as long as the tables they
+resolve against are.
 
 ## What is NOT built
 
