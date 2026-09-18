@@ -617,6 +617,33 @@ public sealed class ServerOptions
     public int ControlPort { get; set; }
 
     /// <summary>
+    /// The port to wait for a mesh peer on, when <see cref="MeshEnabled"/> is set.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>Off by default, and a server left alone is not a mesh node at
+    /// all.</b> Everything about the mesh is opt-in: with neither this nor
+    /// <see cref="MeshConnect"/> given, the simulation runs exactly as it always
+    /// has, through <c>MatchSimulation.Tick</c> with no rollback machinery
+    /// anywhere near it. `docs/MESH.md`.
+    /// </remarks>
+    public int MeshListenPort { get; set; }
+
+    /// <summary>
+    /// The peer to join, as <c>host:port</c>, instead of waiting for one.
+    /// </summary>
+    public string MeshConnect { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Whether this server is one node of a match running in more than one
+    /// place. <b>Off by default.</b>
+    /// </summary>
+    /// <remarks>
+    /// A separate flag from the port for the reason
+    /// <see cref="ControlPortEnabled"/> gives: zero is a port people want.
+    /// </remarks>
+    public bool MeshEnabled { get; set; }
+
+    /// <summary>
     /// Whether to open the control port at all. <b>Off by default.</b>
     /// </summary>
     /// <remarks>

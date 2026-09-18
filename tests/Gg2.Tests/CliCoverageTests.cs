@@ -122,6 +122,13 @@ public sealed class CliCoverageTests
         ("SpeedMultiplier", ["--speed", "max"], o => o.SpeedMultiplier),
         ("RecordingDirectory", ["--record", "some/traces"], o => o.RecordingDirectory),
         ("ControlPort", ["--control-port", "9001"], o => o.ControlPort),
+
+        // ⛔ The mesh is opt-in in both directions: a port turns it on, --no-mesh
+        // turns it back off. A server given none of these is standalone, which is
+        // what MeshIsOptionalTests asserts from the other side.
+        ("MeshListenPort", ["--mesh-listen", "27600"], o => o.MeshListenPort),
+        ("MeshConnect", ["--mesh-connect", "gg2-us-west:27600"], o => o.MeshConnect),
+        ("MeshEnabled", ["--mesh-listen", "27600"], o => o.MeshEnabled),
         ("ControlPortEnabled", ["--control-port", "0"], o => o.ControlPortEnabled),
         ("TickStats", ["--tick-stats"], o => o.TickStats),
         ("Bots", ["--bots", "8"], o => o.Bots),

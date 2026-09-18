@@ -801,6 +801,24 @@ internal static class CommandLine
                     options.ControlPortEnabled = true;
                     break;
 
+                // ⛔ The mesh is OPT-IN and there is no default that turns it
+                // on. A server given neither of these runs its simulation the
+                // way it always has; nothing about the rollback machinery is
+                // reachable from a standalone server. docs/MESH.md.
+                case "--mesh-listen":
+                    options.MeshListenPort = cursor.TakeInt();
+                    options.MeshEnabled = true;
+                    break;
+
+                case "--mesh-connect":
+                    options.MeshConnect = cursor.Take();
+                    options.MeshEnabled = true;
+                    break;
+
+                case "--no-mesh":
+                    options.MeshEnabled = false;
+                    break;
+
                 // ⚠️ The one surface that can be reachable from the network, so
                 // every flag around it defaults to the safe answer: loopback,
                 // and a password generated and printed rather than absent.
