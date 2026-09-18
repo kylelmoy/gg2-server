@@ -395,7 +395,7 @@ public sealed class MeshCommandTests
         // Slot 3 changes team; slot 2 leaves. Both were named against the roster
         // as it stands NOW, which is what the ordering has to preserve.
         node.Schedule(10, MeshCommand.ChangeTeam(3, Team.Red));
-        node.Schedule(10, MeshCommand.RemovePlayer(2));
+        node.Schedule(10, MeshCommand.RemovePlayer(origin: 0, sequence: 1));
         node.Advance(12);
 
         // The player that was slot 3 is slot 2 now, and is the one on Red.
@@ -404,6 +404,99 @@ public sealed class MeshCommandTests
         // And the player that was slot 4 — who shifted into 3, where the team
         // change would have landed had the removal gone first — was not touched.
         Assert.NotEqual(Team.Red, node.State.Players[3].Team);
+    }
+
+    /// <summary>
+    /// ⛔ Two departures in flight at once land on the two people who left.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The case that decides how a departure is named.</b> Each node schedules
+    /// a removal against the roster it can see, and neither has heard the
+    /// other's yet — so by the time the second applies, the first has renumbered
+    /// every slot above it. A command carrying a SLOT would take whoever shifted
+    /// down into that number.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Nothing about that would show up as a divergence</b>: both nodes
+    /// compute the same wrong answer, agree with each other perfectly, and the
+    /// digests match. Only asserting WHO is left can catch it, which is why this
+    /// checks the survivors by their join keys rather than counting the roster.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void TwoDeparturesInFlightAtOnceTakeTheRightPlayers()
+    {
+        ReferenceTree.RequireAvailable();
+
+        var node = Node();
+
+        // Four joins: slots 2 and 4 from this node, 3 and 5 from the peer —
+        // interleaved, because they are ordered by origin within each tick.
+        node.Schedule(4, MeshCommand.AddPlayer(origin: 0, sequence: 1));
+        node.Schedule(4, MeshCommand.AddPlayer(origin: 1, sequence: 1));
+        node.Schedule(5, MeshCommand.AddPlayer(origin: 0, sequence: 2));
+        node.Schedule(5, MeshCommand.AddPlayer(origin: 1, sequence: 2));
+        node.Advance(8);
+
+        Assert.True(node.TryGetAssignedSlot(0, 1, out var mineLow));
+        Assert.True(node.TryGetAssignedSlot(1, 2, out var theirsHigh));
+        Assert.Equal(2, mineLow);
+        Assert.Equal(5, theirsHigh);
+
+        // Both leave, scheduled against the roster as each node sees it now and
+        // landing a tick apart — so the second one's slot number is already
+        // stale when it applies.
+        node.Schedule(10, MeshCommand.RemovePlayer(origin: 0, sequence: 1));
+        node.Schedule(11, MeshCommand.RemovePlayer(origin: 1, sequence: 2));
+        node.Advance(14);
+
+        // ⛔ The two who stayed are the two who did not leave, and they are now
+        // slots 2 and 3. Under slot naming the second removal would have said
+        // "5", which after the first removal is nobody, and the peer's first
+        // player would still be here.
+        Assert.False(node.TryGetAssignedSlot(0, 1, out _));
+        Assert.False(node.TryGetAssignedSlot(1, 2, out _));
+
+        Assert.True(node.TryGetAssignedSlot(1, 1, out var theirsLow));
+        Assert.True(node.TryGetAssignedSlot(0, 2, out var mineHigh));
+        Assert.Equal(2, theirsLow);
+        Assert.Equal(3, mineHigh);
+
+        Assert.Equal(1, node.OriginOf(2));
+        Assert.Equal(0, node.OriginOf(3));
+        Assert.False(node.State.HasPlayer[4]);
+    }
+
+    /// <summary>
+    /// A departure said twice is a no-op the second time, not somebody else's.
+    /// </summary>
+    /// <remarks>
+    /// <b>The property that makes a removal safe to repeat.</b> A join key that
+    /// has already been removed resolves to nothing; a slot number always
+    /// resolves to whoever is standing there now.
+    /// </remarks>
+    [Fact]
+    public void RemovingTheSamePlayerTwiceRemovesOnlyThem()
+    {
+        ReferenceTree.RequireAvailable();
+
+        var node = Node();
+
+        node.Schedule(4, MeshCommand.AddPlayer(origin: 0, sequence: 1));
+        node.Schedule(4, MeshCommand.AddPlayer(origin: 0, sequence: 2));
+        node.Advance(6);
+
+        Assert.True(node.State.HasPlayer[3]);
+
+        node.Schedule(8, MeshCommand.RemovePlayer(origin: 0, sequence: 1));
+        node.Schedule(9, MeshCommand.RemovePlayer(origin: 0, sequence: 1));
+        node.Advance(12);
+
+        // The other one is still here, in the place it shifted down to.
+        Assert.True(node.TryGetAssignedSlot(0, 2, out var survivor));
+        Assert.Equal(2, survivor);
+        Assert.False(node.State.HasPlayer[3]);
     }
 
     /// <summary>
@@ -529,7 +622,7 @@ public sealed class MeshCommandTests
         Assert.Equal(0, node.OriginOf(last));
 
         // The one in the middle place leaves.
-        node.Schedule(10, MeshCommand.RemovePlayer(last));
+        node.Schedule(10, MeshCommand.RemovePlayer(origin: 0, sequence: 2));
         node.Advance(6);
 
         // The one above it moved down, and its owner moved with it.

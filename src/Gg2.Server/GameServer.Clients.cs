@@ -182,24 +182,13 @@ public sealed partial class GameServer
             }
             catch (Exception e)
             {
-                // ⚠️ A meshed bot cannot be removed (see RemoveBot), so it will
-                // fault again next tick and every tick after — which is the log
-                // line every 33 ms this catch exists to avoid. One line, then
-                // silence, and the bot stands there faulting harmlessly.
-                if (_mesh is not null && !_meshRefusedRemoval.Add(entry.StableId))
+                // ⚠️ A meshed removal takes effect some ticks later, so this bot
+                // is polled — and faults — again before it goes. One line per
+                // bot rather than one every 33 ms until it does.
+                if (_mesh is not null && !_meshLeaving.Add(entry.StableId))
                     continue;
 
                 _log.Error($"removing bot {LogText.Safe(entry.Name)} in slot {slot}: it faulted", e);
-
-                if (_mesh is not null)
-                {
-                    _log.Warn(
-                        $"bot {LogText.Safe(entry.Name)} cannot be removed while meshed and will "
-                        + "keep faulting silently. docs/MESH.md, \"What is NOT built\"");
-
-                    continue;
-                }
-
                 _faultedBots.Add(entry);
                 continue;
             }
@@ -355,27 +344,15 @@ public sealed partial class GameServer
 
         var name = _roster[slot].Name;
 
-        // ⛔ A DEPARTURE IS NOT MESHED YET, so this refuses rather than
-        // corrupting. Removing here would compact this node's roster while the
-        // node's world — which the world is copied from every tick — still held
-        // the player, and the two would then name different people at every slot
+        // ⛔ In a mesh the world is the node's, so a departure is a scheduled
+        // command like a join: both nodes remove the player at the same tick,
+        // and the roster half happens here when it lands. Removing directly
+        // would compact this node's roster while the node's world still held the
+        // player, and the two would then name different people at every slot
         // above the hole.
-        //
-        // ⚠️ Scheduling a RemovePlayer is not enough on its own either, and the
-        // reason is worth keeping: a command names a SLOT, a removal renumbers
-        // every slot above it, and two removals in flight at once — one from each
-        // node, which is the ordinary case — means the second was numbered
-        // against a roster the first has already changed. Both nodes agree on the
-        // wrong player, so no digest goes red. docs/MESH.md, "What is NOT built".
         if (_mesh is not null)
         {
-            if (_meshRefusedRemoval.Add(_roster[slot].StableId))
-            {
-                _log.Warn(
-                    $"bot {LogText.Safe(name)} cannot be removed while meshed: a departure has "
-                    + "no agreed order across nodes yet, so it stays in the match. docs/MESH.md");
-            }
-
+            MeshRemove(slot, $"bot {LogText.Safe(name)}");
             return;
         }
 
