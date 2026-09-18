@@ -892,25 +892,30 @@ public sealed partial class GameServer : IDisposable, IPluginHost
 
         // ⛔ EXPERIMENTAL and off unless asked for. What works: the simulation
         // runs through a rollback node, this server's own players' inputs go to
-        // the peer, and the two nodes' worlds are compared once a second. What
-        // does NOT work yet is named out loud rather than discovered: a client
-        // cannot join a meshed server, because carrying a roster change across
-        // the link means scheduling it as a MeshCommand through the join path,
-        // and that is not wired; and irreversible events still go out
-        // provisionally rather than through MeshNode.TryTakeConfirmed.
+        // the peer, the two nodes' worlds are compared once a second, and
+        // clients and bots join, pick a team and play through scheduled
+        // MeshCommands. What does NOT work is named out loud rather than
+        // discovered: irreversible events still go out provisionally rather
+        // than through MeshNode.TryTakeConfirmed, so a rewind can unmake a
+        // death that has already been broadcast.
         if (_options.MeshEnabled)
         {
             _mesh = MeshSession.Start(_options, _collision, in _world, _spawnPoints);
 
             _log.Warn(
-                "MESH MODE IS EXPERIMENTAL: no client may join, and events are not held "
-                + "until confirmed. docs/MESH.md");
+                "MESH MODE IS EXPERIMENTAL: events are broadcast before they are confirmed, "
+                + "so a rewind can unmake one. docs/MESH.md");
 
+            // ⚠️ Which SLOTS a node owns is not a parity and never was after
+            // slots became order-assigned: a slot belongs to whichever node's
+            // AddPlayer created it, which MeshNode.OriginOf records. What
+            // listening decides is this node's ORIGIN, the number that names it
+            // in every command it issues.
             _log.Info(
                 _options.MeshConnect.Length > 0
-                    ? $"mesh: joining {_options.MeshConnect}, this node owns the odd slots"
-                    : $"mesh: waiting for a peer on {_options.MeshListenPort}, "
-                        + "this node owns the even slots");
+                    ? $"mesh: joining {_options.MeshConnect} as origin {_mesh.Origin}"
+                    : $"mesh: waiting for a peer on {_options.MeshListenPort} "
+                        + $"as origin {_mesh.Origin}");
         }
 
         // Loopback only and off unless configured — it executes commands

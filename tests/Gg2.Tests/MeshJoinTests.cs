@@ -1,4 +1,5 @@
 using System.Net;
+using Gg2.Bots;
 using Gg2.Maps;
 using Gg2.Mesh;
 using Gg2.Protocol;
@@ -96,11 +97,19 @@ public sealed class MeshJoinTests
 
         public bool Has(int slot) => _synchronised && Node.State.HasPlayer[slot];
 
+        public bool IsBot(int slot) => _synchronised && Node.State.Players[slot].IsBot;
+
         public int OriginOf(int slot) => Node.OriginOf(slot);
 
         public Team TeamOf(int slot) => Node.State.Players[slot].Team;
 
         public void Dispose() => _link.Dispose();
+    }
+
+    /// <summary>A bot that never presses anything — this is about the roster.</summary>
+    private sealed class Idle : IInputSource
+    {
+        public PlayerInput Poll(in WorldView world, int slot, int tick) => default;
     }
 
     private static LevelMap Map() =>
@@ -223,5 +232,141 @@ public sealed class MeshJoinTests
 
         Assert.Equal(Team.Red, harness.Server.TeamOf(slot));
         Assert.Equal(Team.Red, peer.TeamOf(slot));
+    }
+
+    /// <summary>
+    /// ⛔ A meshed server's own bot is agreed with the peer, plays, and is still
+    /// there a hundred ticks later.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The tail of this test is the part that bites.</b> A bot added the
+    /// standalone way writes the roster and the world directly — and in a mesh
+    /// the world is COPIED FROM THE NODE at every tick, so such a bot exists for
+    /// one tick and is then erased by a world that never heard of it. Asserting
+    /// only that the bot appears would pass against exactly that: the ticks
+    /// afterwards are what say it is real.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>And that it is ALIVE.</b> A slot in the roster is not a bot playing;
+    /// a character in the world is, and it only gets one because
+    /// <c>CompleteMeshBot</c> schedules the real <c>ChangeTeam</c>, which arms
+    /// the respawn.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void AMeshedServersBotIsAgreedWithThePeerAndKeepsPlaying()
+    {
+        using var harness = new ServerHarness(options =>
+        {
+            options.MeshEnabled = true;
+            options.MeshListenPort = 0;
+        });
+
+        using var peer = new Peer(harness.Server.MeshPort, Map());
+        harness.AfterTick = peer.Tick;
+
+        harness.Tick(20);
+
+        var landed = -1;
+
+        var returned = harness.Server.AddBot(
+            "[BOT] scout", Team.Red, PlayerClass.Scout, new Idle(),
+            slot => landed = slot);
+
+        // ⛔ There is no slot to give: a roster place is the mesh's to agree, and
+        // a caller that used this return value would be naming slot -1.
+        Assert.Equal(GameServer.MeshPending, returned);
+        Assert.Equal(-1, landed);
+
+        for (var i = 0; i < MeshSession.CommandLead + 80; i++)
+        {
+            harness.Tick();
+
+            if (landed > 0 && peer.IsBot(landed) && harness.Server.IsAlive(landed))
+                break;
+        }
+
+        Assert.True(landed > 0, "the mesh never gave the bot a slot");
+        Assert.True(harness.Server.EntryOf(landed).IsBot);
+        Assert.Equal(Team.Red, harness.Server.TeamOf(landed));
+
+        Assert.True(peer.Has(landed), "the peer never heard about the bot");
+        Assert.True(peer.IsBot(landed), "the peer reads this node's bot as a person");
+        Assert.Equal(Team.Red, peer.TeamOf(landed));
+        Assert.True(harness.Server.IsAlive(landed), "the bot never got a character");
+
+        harness.Tick(100);
+
+        Assert.True(peer.Has(landed), "the bot vanished from the peer");
+        Assert.True(peer.IsBot(landed), "the bot flag did not survive");
+        Assert.Equal(Team.Red, harness.Server.TeamOf(landed));
+        Assert.True(harness.Server.IsAlive(landed), "the bot lost its character");
+    }
+
+    /// <summary>
+    /// ⛔ A meshed bot cannot be removed, and the server SAYS so instead of
+    /// corrupting the roster.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>A departure is the half of the roster a mesh cannot yet agree.</b>
+    /// Removing locally would compact this node's roster while the node's world
+    /// still held the player, and the two would then name different people at
+    /// every slot above the hole. Scheduling a <c>RemovePlayer</c> is not enough
+    /// either: a command names a SLOT, a removal renumbers every slot above it,
+    /// and two removals in flight at once means the second was numbered against
+    /// a roster the first has already changed.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>The gate is that the refusal is STATED.</b> A silent refusal and a
+    /// silent corruption look identical from outside the process, and this
+    /// became reachable the moment a meshed server could have bots at all — the
+    /// population manager removes one whenever a person takes its place.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void AMeshedBotCannotLeaveAndTheServerSaysSo()
+    {
+        using var harness = new ServerHarness(options =>
+        {
+            options.MeshEnabled = true;
+            options.MeshListenPort = 0;
+        });
+
+        using var peer = new Peer(harness.Server.MeshPort, Map());
+        harness.AfterTick = peer.Tick;
+
+        harness.Tick(20);
+
+        var landed = -1;
+
+        harness.Server.AddBot(
+            "[BOT] scout", Team.Red, PlayerClass.Scout, new Idle(), slot => landed = slot);
+
+        for (var i = 0; i < MeshSession.CommandLead + 80 && landed < 0; i++)
+            harness.Tick();
+
+        Assert.True(landed > 0);
+
+        var before = harness.Server.RosterCount;
+
+        harness.Server.RemoveBot(landed);
+
+        // Still there, on both sides, and the roster did not shrink under the
+        // world — which is the corruption being refused.
+        Assert.Equal(before, harness.Server.RosterCount);
+        Assert.True(harness.Server.EntryOf(landed).IsBot);
+
+        harness.Tick(20);
+
+        Assert.True(peer.Has(landed));
+        Assert.Equal(before, harness.Server.RosterCount);
+
+        // ⛔ And it was said out loud. A gap recorded only in a code comment is a
+        // gap nobody is tracking.
+        Assert.Contains(
+            harness.Log.Warnings,
+            line => line.Contains("cannot be removed while meshed", StringComparison.Ordinal));
     }
 }

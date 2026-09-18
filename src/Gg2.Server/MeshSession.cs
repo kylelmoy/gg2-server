@@ -70,9 +70,17 @@ public sealed class MeshSession : IDisposable
 
     /// <summary>Whether this node waited for the peer rather than joining it.</summary>
     /// <remarks>
-    /// <b>Which half of the roster a node owns has to be decided the same way on
-    /// both machines</b>, and the only asymmetry two nodes have for free is which
-    /// of them listened. The listener takes the even slots.
+    /// <b>A node's <see cref="Origin"/> has to be decided the same way on both
+    /// machines</b>, and the only asymmetry two nodes have for free is which of
+    /// them listened: the listener is origin 0.
+    /// <para>
+    /// ⚠️ <b>Which SLOTS a node owns is not a parity.</b> A slot belongs to
+    /// whoever's <c>AddPlayer</c> created it — <see cref="Owns"/> reads
+    /// <c>MeshNode.OriginOf</c> — because a join takes the lowest free place and
+    /// a departure renumbers everything above it. The <c>mesh</c> subcommand
+    /// does split a fixed roster by parity, but that is a synthetic match with
+    /// nobody joining or leaving.
+    /// </para>
     /// </remarks>
     public bool Listening { get; }
 

@@ -24,9 +24,10 @@ namespace Gg2.Mesh;
 /// ⚠️ <b>The ORDER within a tick has to be decided by the data, not by
 /// arrival.</b> Two nodes can each schedule something for the same tick and hear
 /// the other's afterwards, so an order that depended on arrival would differ on
-/// the two machines. <see cref="MeshCommandKind"/> is declared in the order
-/// commands are applied, and ties break on slot and payload — a total order
-/// every node computes for itself.
+/// the two machines. <see cref="MeshCommandKind"/>'s VALUES are the order
+/// commands are applied in — the members are declared to match, but it is the
+/// numbers <see cref="MeshCommand.CompareTo"/> compares — and ties break on
+/// origin, slot and payload: a total order every node computes for itself.
 /// </para>
 /// </remarks>
 public enum MeshCommandKind : byte
@@ -39,6 +40,27 @@ public enum MeshCommandKind : byte
 
     /// <summary>Give them a class.</summary>
     SetClass = 2,
+
+    /// <summary>
+    /// Mark the slot as a bot, so bot code at BOTH ends can tell a person from
+    /// a bot.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>After <see cref="AddPlayer"/>, never with it.</b>
+    /// <c>WorldState.AddPlayer</c> writes <c>PlayerState.Fresh</c> over the
+    /// slot, which would erase a flag set alongside it.
+    /// <para>
+    /// It is meshed rather than written locally because a node copies its world
+    /// FROM its node every tick: a flag set outside the node survives until the
+    /// next copy and no longer. Meshing it also stops the peer's bots reading
+    /// this node's bots as people —
+    /// <c>Handover.ShouldEngage</c> under <c>EngageOpponents.HumansOnly</c>.
+    /// </para>
+    /// </remarks>
+    SetBot = 3,
+
+    /// <summary>Put a character in the world for them.</summary>
+    Spawn = 4,
 
     /// <summary>
     /// They asked to change team, with everything that follows from it.
@@ -55,18 +77,19 @@ public enum MeshCommandKind : byte
     /// <summary>They asked to change class, with everything that follows.</summary>
     ChangeClass = 6,
 
-    /// <summary>Put a character in the world for them.</summary>
-    Spawn = 3,
-
     /// <summary>
     /// Take the slot away and compact the roster.
     /// </summary>
     /// <remarks>
-    /// ⚠️ <b>Last, and that is not arbitrary.</b> A removal renumbers every slot
-    /// above it, so anything else in the same tick has to have been applied
-    /// while the slot numbers still meant what the sender meant.
+    /// ⚠️ <b>Last, and the NUMBER is what makes it last.</b> A removal renumbers
+    /// every slot above it, so anything else in the same tick has to have been
+    /// applied while the slot numbers still meant what the sender meant. The
+    /// order is <see cref="MeshCommand.CompareTo"/>'s comparison of these
+    /// values, not the order they are declared in — a value below
+    /// <see cref="ChangeTeam"/> would put a removal FIRST and hand the team
+    /// change to whoever shifted down into the slot.
     /// </remarks>
-    RemovePlayer = 4,
+    RemovePlayer = 7,
 }
 
 /// <summary>One scheduled change to the roster.</summary>
@@ -127,6 +150,10 @@ public readonly record struct MeshCommand(
     /// <summary>A player asking to change class, as a client does.</summary>
     public static MeshCommand ChangeClass(int slot, PlayerClass playerClass) =>
         new(MeshCommandKind.ChangeClass, (byte)slot, (byte)playerClass, 0);
+
+    /// <summary>Marks <paramref name="slot"/> as a bot on every node.</summary>
+    public static MeshCommand SetBot(int slot) =>
+        new(MeshCommandKind.SetBot, (byte)slot, 1, 0);
 
     /// <summary>Spawns <paramref name="slot"/> at a spawnpoint and group.</summary>
     public static MeshCommand Spawn(int slot, int spawnpointId = 0, int group = 0) =>

@@ -335,14 +335,19 @@ server and never mentioning the mesh.
 
 | Flag | Config key | Effect |
 |---|---|---|
-| `--mesh-listen <port>` | `[Mesh] ListenPort` | wait for a peer; owns the EVEN slots |
-| `--mesh-connect <host:port>` | `[Mesh] Connect` | join a peer; owns the ODD slots |
+| `--mesh-listen <port>` | `[Mesh] ListenPort` | wait for a peer; this node is origin 0 |
+| `--mesh-connect <host:port>` | `[Mesh] Connect` | join a peer; this node is origin 1 |
 | `--no-mesh` | `[Mesh] Enabled` | off, whatever else was set |
 
-Which half of the roster a node owns is decided by which end listened — the only
-asymmetry two nodes have for free. Anything else is a thing an operator can get
-wrong on one machine, and two nodes that both think they own slot 4 would each
-be guessing at a player the other is driving.
+Which end listened decides a node's ORIGIN — the only asymmetry two nodes have
+for free. Anything else is a thing an operator can get wrong on one machine, and
+two nodes that both think they own slot 4 would each be guessing at a player the
+other is driving.
+
+⚠️ **Ownership is not a slot parity.** A slot belongs to whichever node's
+`AddPlayer` created it, which `MeshNode.OriginOf` records and `MeshSession.Owns`
+reads. It cannot be a parity because a join takes the lowest free place and a
+departure renumbers everything above it.
 
 ⚠️ **In a mesh, the NODE owns the world.** The server's own `_world` becomes a
 per-tick copy of the node's, so the 140-odd places that read it go on reading
@@ -399,19 +404,80 @@ application would re-send the change on every replay.
 `PlayerCommands.ChangeTeam`, not the balancing variant. Both nodes agree, which
 is what the mesh needs, but it differs from a standalone server.
 
+### Bots
+
+A bot takes the same route a person does — the simulation never special-cases
+one, and a mesh is one more place that has to hold. `AddBot` schedules
+`AddPlayer` and parks the bot; when the slot lands, the roster half happens
+locally and `SetBot`, `ChangeTeam` and `ChangeClass` are scheduled into the
+node.
+
+⛔ **`AddBot` returns `GameServer.MeshPending` in a mesh**, because there is no
+slot to return: a caller that used the return value would be naming slot -1.
+Post-add work goes in the `onAdded` callback, which runs inline standalone and
+some ticks later meshed, so one piece of calling code serves both.
+
+⚠️ **`ChangeTeam`, not `SetTeam`.** The real player command arms the respawn
+that puts a character in the world, which is what a standalone `AddBot` does
+with `RespawnTimer = 1`. Setting the field leaves a bot standing nowhere for
+ever.
+
+⚠️ **A meshed bot gets no `checkClasslimits`, and that is forced.**
+`Classlimits.Pick` draws from `WorldState.Random` — the observable stream every
+client re-derives weapon spreads from — so a node that ran it where its peer did
+not would put the two streams in different places and break the mesh outright.
+Running it inside the node instead would work and is not done; a meshed bot
+takes the class it asked for.
+
+⚠️ **`SetBot` is meshed rather than written locally** because the world is
+copied from the node every tick, so a flag written outside the node lasts
+exactly one tick. Meshing it also stops the peer's bots reading this node's bots
+as people — `Handover.ShouldEngage` under `EngageOpponents.HumansOnly`.
+
+### The order within a tick
+
+`MeshCommandKind`'s VALUES are the apply order, not the order the members are
+declared in: `CompareTo` compares the numbers. A removal renumbers every slot
+above it, so it sorts last — a value below `ChangeTeam` puts the removal first
+and hands the team change to whoever shifted down into the slot. Both nodes
+agree either way, so no digest goes red and nothing diverges; it is simply the
+wrong player. `MeshCommandTests.ARemovalIsAppliedAfterEverythingElseInItsTick`.
+
 ## What is NOT built
 
-⛔ **Nothing here reaches a socket or a client yet.** Two pieces stand between
-this and a playable match:
+A client can join a meshed server, pick a team and play, and a meshed server can
+fill itself with bots. What is still missing:
 
-1. **The input link.** Sockets between nodes, a shared tick timeline, and clock
-   offset estimation.
-2. **Whether a correction is VISIBLE.** The magnitudes are measured and the
+1. ⛔ **A departure has no agreed order across nodes**, so a meshed server
+   refuses one and says so rather than corrupting the roster: a disconnecting
+   client keeps its place and stands there pressing nothing, and
+   `RemoveBot` returns without removing. Removing locally would compact this
+   node's roster while the node's world still held the player, and the two would
+   then name different people at every slot above the hole.
+
+   ⚠️ **Scheduling a `RemovePlayer` is not enough on its own**, which is the
+   part worth keeping: a command names a SLOT, a removal renumbers every slot
+   above it, and two removals in flight at once — one from each node, the
+   ordinary case — means the second was numbered against a roster the first has
+   already changed. Both nodes agree on the wrong player, so no digest goes red.
+   Ordering removals by descending slot fixes the same-tick case and not the
+   cross-tick one. The fix is to name a departure by the `(origin, sequence)`
+   that created the slot, as `AddPlayer` already is, and resolve it to a slot at
+   apply time; the drain then needs the node to report which slot each removal
+   resolved to, keyed by tick the way the schedule itself is.
+2. **Irreversible events are broadcast provisionally.** The server reads
+   `MeshNode.LastEvents`, not `TryTakeConfirmed`, so a death or a capture can be
+   published and then unmade by a rewind. The holding layer exists and is
+   gated — what it needs is for the broadcast to emit a past tick's events
+   during the current tick's, which is a change to the broadcast path rather
+   than to the mesh.
+3. **Whether a correction is VISIBLE.** The magnitudes are measured and the
    smoothing is written; whether an 8 px nudge reads as a snap or as nothing is
    a question about a person watching a screen, and no measurement here answers
    it. `docs/TRAPS-LIVEGAME.md` and a playtest.
+4. **Chat and map changes are not scheduled**, so they have no agreed order
+   across nodes. They are rare enough to afford a round trip.
 
-A fourth thing is decided but unwritten: **non-input events** — joins, leaves,
-chat, map changes — need a consistent order across nodes, which means either
-scheduling them at an agreed future tick or giving one node the job of
-sequencing them. They are rare enough to afford a round trip.
+Two differences from a standalone server are deliberate and measured rather than
+missing: a meshed team change does not rebalance, and a meshed bot gets no
+class limits. Both are above, with why.

@@ -182,7 +182,24 @@ public sealed partial class GameServer
             }
             catch (Exception e)
             {
+                // ⚠️ A meshed bot cannot be removed (see RemoveBot), so it will
+                // fault again next tick and every tick after — which is the log
+                // line every 33 ms this catch exists to avoid. One line, then
+                // silence, and the bot stands there faulting harmlessly.
+                if (_mesh is not null && !_meshRefusedRemoval.Add(entry.StableId))
+                    continue;
+
                 _log.Error($"removing bot {LogText.Safe(entry.Name)} in slot {slot}: it faulted", e);
+
+                if (_mesh is not null)
+                {
+                    _log.Warn(
+                        $"bot {LogText.Safe(entry.Name)} cannot be removed while meshed and will "
+                        + "keep faulting silently. docs/MESH.md, \"What is NOT built\"");
+
+                    continue;
+                }
+
                 _faultedBots.Add(entry);
                 continue;
             }
@@ -249,14 +266,38 @@ public sealed partial class GameServer
     /// What this bot presses. May also implement <see cref="ICommandSource"/>
     /// and <see cref="IBatchInputSource"/>.
     /// </param>
-    /// <returns>The roster slot the bot landed in.</returns>
-    public int AddBot(string name, Team team, PlayerClass playerClass, IInputSource source)
+    /// <param name="onAdded">
+    /// Run once the bot has a slot, with that slot. ⚠️ <b>The only safe way to
+    /// do anything with the slot in a mesh</b>, where the roster place is not
+    /// this server's to give and the return value is
+    /// <see cref="MeshPending"/> — see <see cref="MeshAddBot"/>. Standalone it
+    /// runs inline, before this returns, so a caller written against it behaves
+    /// the same either way.
+    /// </param>
+    /// <returns>
+    /// The roster slot the bot landed in, or <see cref="MeshPending"/> if a mesh
+    /// has yet to agree one.
+    /// </returns>
+    public int AddBot(
+        string name,
+        Team team,
+        PlayerClass playerClass,
+        IInputSource source,
+        Action<int>? onAdded = null)
     {
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(source);
 
         if (_roster.Count >= WorldState.MaxSlots)
             throw new InvalidOperationException($"the roster is full at {WorldState.MaxSlots} slots");
+
+        // ⛔ In a mesh the roster place comes from a command both nodes apply at
+        // an agreed tick, exactly as a client's does. Everything below writes
+        // _world directly, and _world is COPIED FROM THE NODE every tick — so
+        // done here it would last one tick and then vanish, which is what a
+        // meshed --bots server used to do.
+        if (_mesh is not null)
+            return MeshAddBot(name, team, playerClass, source, onAdded);
 
         var entry = new RosterEntry { Name = name, IsBot = true, Source = source };
         var slot = _roster.Add(entry);
@@ -290,6 +331,8 @@ public sealed partial class GameServer
             _world.Players[slot].RespawnTimer = 1;
 
         _log.Info($"bot {LogText.Safe(name)} added as player {slot} ({team}, {allowed})");
+
+        onAdded?.Invoke(slot);
         return slot;
     }
 
@@ -311,6 +354,30 @@ public sealed partial class GameServer
             throw new ArgumentOutOfRangeException(nameof(slot), slot, "not a bot slot");
 
         var name = _roster[slot].Name;
+
+        // ⛔ A DEPARTURE IS NOT MESHED YET, so this refuses rather than
+        // corrupting. Removing here would compact this node's roster while the
+        // node's world — which the world is copied from every tick — still held
+        // the player, and the two would then name different people at every slot
+        // above the hole.
+        //
+        // ⚠️ Scheduling a RemovePlayer is not enough on its own either, and the
+        // reason is worth keeping: a command names a SLOT, a removal renumbers
+        // every slot above it, and two removals in flight at once — one from each
+        // node, which is the ordinary case — means the second was numbered
+        // against a roster the first has already changed. Both nodes agree on the
+        // wrong player, so no digest goes red. docs/MESH.md, "What is NOT built".
+        if (_mesh is not null)
+        {
+            if (_meshRefusedRemoval.Add(_roster[slot].StableId))
+            {
+                _log.Warn(
+                    $"bot {LogText.Safe(name)} cannot be removed while meshed: a departure has "
+                    + "no agreed order across nodes yet, so it stays in the match. docs/MESH.md");
+            }
+
+            return;
+        }
 
         // ⛔ BEFORE the removal, so a plugin's per-player table compacts with the
         // roster rather than after it. PluginPlayerTable says what goes wrong
