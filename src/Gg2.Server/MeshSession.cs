@@ -293,6 +293,27 @@ public sealed class MeshSession : IDisposable
         Node = new MeshNode(collision, start, new MeshOptions(), spawns, startTick: Node.Tick);
     }
 
+    /// <summary>
+    /// Chat bubbles the peer's players made, for this server to show its own
+    /// clients.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Forwarded rather than scheduled.</b> A bubble never reaches
+    /// <c>WorldState</c>, so there is nothing for two nodes to agree about and
+    /// nothing a rewind could unmake — it is not held either. What it needs is
+    /// to arrive, so that a player in one region can see one from the other.
+    /// </remarks>
+    public Queue<(int Slot, byte Image)> ChatFromPeer { get; } = [];
+
+    /// <summary>Tells the peer about a bubble one of this node's players made.</summary>
+    public void SendChat(int slot, byte image) => _link.SendChat(slot, image);
+
+    private void HearChat(int slot, byte image)
+    {
+        if ((uint)slot < WorldState.MaxSlots)
+            ChatFromPeer.Enqueue((slot, image));
+    }
+
     /// <summary>Snapshots refused as malformed. Zero unless the builds differ.</summary>
     public int Refused { get; private set; }
 
@@ -346,7 +367,7 @@ public sealed class MeshSession : IDisposable
         // so a tick that checked for a connection before servicing would never
         // find one. Measured as a deadlock — the server sat for 200 ticks with a
         // peer waiting on the other end of a socket it had not accepted.
-        _link.Service(Node, Compare, Hear, Adopt);
+        _link.Service(Node, Compare, Hear, Adopt, HearChat);
 
         // ⚠️ Reset when the link goes, so a peer that reconnects is caught up
         // again rather than left running a match it was never told about.

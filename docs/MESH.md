@@ -576,19 +576,37 @@ for a player's name. Twenty bytes, and the longest map shipped here is sixteen.
 learn of the change when the command lands. Only the listener's clients see the
 countdown.
 
+### Chat
+
+⚠️ **Forwarded, never scheduled, and the difference is the point.** A bubble
+never reaches `WorldState` — it is rewritten and relayed — so two nodes showing
+it at slightly different moments is not a divergence, there is nothing to agree
+about, and nothing a rewind could unmake. It is not held with the deaths and it
+does not wait for a tick. What it needs is to arrive, because otherwise a mesh
+splits the only social channel the game has along the same line it splits the
+regions.
+
+⛔ **The slot is checked against the receiving node's roster before it goes out.**
+It was resolved against the sender's, which is the same roster only for as long
+as both nodes are in step.
+
+The throttle stays on the originating node, so what crosses the link is what
+that node's own clients saw and no more.
+
 ## What is NOT built
 
 A client can join a meshed server, pick a team, play and leave; a meshed server
 can fill itself with bots and remove them again; nothing irreversible reaches a
 client before it is certain; a peer can connect to a match already in progress;
-and both nodes change map together. What is still missing:
+both nodes change map together, and a chat bubble made in one region is seen in
+the other. What is still missing:
 
 1. **Whether a correction is VISIBLE.** The magnitudes are measured and the
    smoothing is written; whether an 8 px nudge reads as a snap or as nothing is
    a question about a person watching a screen, and no measurement here answers
-   it. `docs/TRAPS-LIVEGAME.md` and a playtest.
-2. **Chat is not scheduled**, so it has no agreed order across nodes. It is rare
-   enough to afford a round trip.
+   it. `docs/TRAPS-LIVEGAME.md` and a playtest — and it is the only thing left
+   that a test in this repo cannot settle.
+
 
 Three differences from a standalone server are deliberate rather than missing: a
 meshed team change does not rebalance, a meshed departure does not rebalance

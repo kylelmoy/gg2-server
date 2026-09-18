@@ -82,6 +82,19 @@ public sealed class MeshLink : IDisposable
     /// </remarks>
     private const int MaxStateFrame = 1 << 20;
 
+    /// <summary>
+    /// A chat bubble, forwarded so the other region can see it.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Forwarded, never scheduled, and the difference matters.</b> A
+    /// bubble never reaches <c>WorldState</c> — it is rewritten and relayed —
+    /// so two nodes showing it at slightly different moments is not a
+    /// divergence and there is nothing to agree about. What it needs is to
+    /// arrive at all, which without this it does not: a player in one region
+    /// could not see a bubble from the other.
+    /// </remarks>
+    private const byte ChatFrame = 6;
+
     private readonly TcpListener? _listener;
     private readonly List<byte> _pending = [];
     private readonly ArrayBufferWriter<byte> _out = new();
@@ -222,6 +235,20 @@ public sealed class MeshLink : IDisposable
     }
 
     /// <summary>
+    /// Queues a chat bubble for the peer to show its own clients.
+    /// </summary>
+    public void SendChat(int slot, byte image)
+    {
+        var body = _out.GetSpan(3);
+
+        body[0] = ChatFrame;
+        body[1] = (byte)slot;
+        body[2] = image;
+
+        _out.Advance(3);
+    }
+
+    /// <summary>
     /// Queues a whole match for a peer that has just attached.
     /// </summary>
     public void SendState(ReadOnlySpan<byte> snapshot)
@@ -267,7 +294,8 @@ public sealed class MeshLink : IDisposable
         MeshNode node,
         Action<int, ulong>? onDigest = null,
         Action<int, MeshCommand, string>? onCommand = null,
-        Func<byte[], MeshNode?>? onState = null)
+        Func<byte[], MeshNode?>? onState = null,
+        Action<int, byte>? onChat = null)
     {
         ArgumentNullException.ThrowIfNull(node);
 
@@ -286,7 +314,7 @@ public sealed class MeshLink : IDisposable
             return;
         }
 
-        Receive(node, onDigest, onCommand, onState);
+        Receive(node, onDigest, onCommand, onState, onChat);
         Flush();
     }
 
@@ -294,7 +322,8 @@ public sealed class MeshLink : IDisposable
         MeshNode node,
         Action<int, ulong>? onDigest,
         Action<int, MeshCommand, string>? onCommand,
-        Func<byte[], MeshNode?>? onState)
+        Func<byte[], MeshNode?>? onState,
+        Action<int, byte>? onChat)
     {
         var buffer = ArrayPool<byte>.Shared.Rent(4096);
 
@@ -321,7 +350,7 @@ public sealed class MeshLink : IDisposable
             ArrayPool<byte>.Shared.Return(buffer);
         }
 
-        Parse(node, onDigest, onCommand, onState);
+        Parse(node, onDigest, onCommand, onState, onChat);
     }
 
     /// <summary>
@@ -339,7 +368,8 @@ public sealed class MeshLink : IDisposable
         MeshNode node,
         Action<int, ulong>? onDigest,
         Action<int, MeshCommand, string>? onCommand,
-        Func<byte[], MeshNode?>? onState)
+        Func<byte[], MeshNode?>? onState,
+        Action<int, byte>? onChat)
     {
         var at = 0;
 
@@ -430,6 +460,16 @@ public sealed class MeshLink : IDisposable
                 Stats = Stats with { CommandsReceived = Stats.CommandsReceived + 1 };
 
                 at += 11 + nameLength;
+                continue;
+            }
+
+            if (kind == ChatFrame)
+            {
+                if (_pending.Count - at < 3)
+                    break;
+
+                onChat?.Invoke(_pending[at + 1], _pending[at + 2]);
+                at += 3;
                 continue;
             }
 

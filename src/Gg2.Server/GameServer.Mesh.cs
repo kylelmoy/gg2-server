@@ -297,6 +297,7 @@ public sealed partial class GameServer
         // appears one tick later instead. The order is worth keeping and is not
         // worth a claim that it prevents corruption.
         DrainMeshCommands();
+        DrainMeshChat();
 
         while (_roster.Count < WorldState.MaxSlots && _world.HasPlayer[_roster.Count])
         {
@@ -341,6 +342,30 @@ public sealed partial class GameServer
             _log.Warn(
                 $"mesh: the roster holds {_roster.Count} players and the world does not — "
                 + "a player left the world without a RemovePlayer. docs/MESH.md");
+        }
+    }
+
+    /// <summary>
+    /// Shows this node's clients the bubbles the peer's players made.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Not scheduled and not held.</b> A bubble never reaches
+    /// <c>WorldState</c>, so there is nothing for two nodes to agree about and
+    /// nothing a rewind could unmake — it is shown when it arrives.
+    /// <para>
+    /// ⛔ <b>The slot is checked against THIS roster before it goes out.</b> It
+    /// was resolved against the peer's, which is the same roster only for as
+    /// long as both nodes are in step; a stale one would put somebody else's
+    /// bubble over a player's head, and a slot past the end would name a player
+    /// no client has.
+    /// </para>
+    /// </remarks>
+    private void DrainMeshChat()
+    {
+        while (_mesh!.ChatFromPeer.TryDequeue(out var bubble))
+        {
+            if (bubble.Slot > 0 && bubble.Slot < _roster.Count)
+                ServerMessages.ChatBubble(_broadcast, (byte)bubble.Slot, bubble.Image);
         }
     }
 
