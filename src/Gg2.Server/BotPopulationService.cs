@@ -436,7 +436,12 @@ public sealed class BotPopulationService
             ? 0
             : BotPopulation.Target(_server.HumanCount, in options);
         var slots = _server.BotSlots;
-        var bots = slots.Count;
+
+        // ⚠️ Joins still in flight count as bots, or a meshed server fills the
+        // same shortfall again on every tick until the first one lands. See
+        // GameServer.BotsPending; zero on a standalone server, where a join is
+        // immediate and this is exactly slots.Count.
+        var bots = slots.Count + _server.BotsPending;
 
         // ABOVE the count check: a spectating bot is still a bot, so
         // `bots == target` holds and the early return below would leave it

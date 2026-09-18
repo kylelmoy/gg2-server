@@ -99,6 +99,17 @@ public sealed class MeshSession : IDisposable
     /// <summary>Ticks where this node and its peer disagreed about the world.</summary>
     public int Disagreements { get; private set; }
 
+    /// <summary>
+    /// Digests that arrived for a tick this node had not confirmed yet.
+    /// </summary>
+    /// <remarks>
+    /// Not a fault: the two nodes confirm a tick at slightly different moments,
+    /// so a sample can simply be early. It is counted because a run where EVERY
+    /// sample is early would otherwise look like a run where the two nodes
+    /// never compared anything, and those need telling apart.
+    /// </remarks>
+    public int Unconfirmed { get; private set; }
+
     /// <summary>Ticks where they agreed, so a zero above means something.</summary>
     public int Agreements { get; private set; }
 
@@ -179,9 +190,31 @@ public sealed class MeshSession : IDisposable
     /// </remarks>
     public int Schedule(in MeshCommand command, ReadOnlySpan<char> name = default)
     {
-        var at = Node.Tick + CommandLead;
+        // ⛔ REFUSED UNTIL THE TWO NODES ARE IN STEP. Before a joiner adopts the
+        // match its node is a fresh one near tick zero, so "ten ticks from now"
+        // is hundreds of ticks in the peer's past and every command sent from
+        // here is refused at the far end — silently, because a refusal is only a
+        // counter. Measured on a live two-host run: a joiner filled eight bots
+        // on its first tick and all eight were rejected as too late, leaving two
+        // servers that never agreed about who was playing.
+        if (!Synchronised)
+            return Refusal;
 
-        Node.Schedule(at, command);
+        // ⛔ AHEAD OF THE PEER'S CLOCK, NOT OUR OWN, and this is the difference
+        // between a mesh that works across the internet and one that does not.
+        // A node scheduling ten ticks ahead of ITSELF sends a tick already in
+        // the past of a peer that is further along, and the peer refuses it —
+        // silently, and unrecoverably, because it applied it here.
+        //
+        // Measured on a live two-host run over a real link: the joiner sat about
+        // nineteen ticks behind the listener, every command it sent landed nine
+        // ticks in the listener's past, and the two ran different matches from
+        // the first bot onwards.
+        var at = Math.Max(Node.Tick, PeerTickNow) + CommandLead;
+
+        if (!Node.Schedule(at, command))
+            return Refusal;
+
         _link.SendCommand(at, command, name);
 
         // ⚠️ OUR OWN joins are remembered too, not just the peer's. A snapshot
@@ -286,11 +319,17 @@ public sealed class MeshSession : IDisposable
     /// is no longer loaded. Both nodes rebuild at the same tick from the same
     /// reset world, so there is nothing before it either of them still needs.
     /// </remarks>
-    public void Rebuild(CollisionWorld collision, in WorldState start, SpawnPoints? spawns)
+    public void Rebuild(CollisionWorld collision, in WorldState start, SpawnPoints? spawns, int atTick)
     {
         ArgumentNullException.ThrowIfNull(collision);
 
-        Node = new MeshNode(collision, start, new MeshOptions(), spawns, startTick: Node.Tick);
+        // ⛔ AT THE TICK THE COMMAND LANDED, never at this node's own tick. The
+        // two nodes drain the change at the same tick but are not on the same
+        // tick when they do it — one is always a little ahead — so rebuilding
+        // "here" restarts the two matches at different numbers, and every input
+        // afterwards is applied to a different moment on each side. Measured:
+        // the digests disagreed from the rebuild onwards.
+        Node = new MeshNode(collision, start, new MeshOptions(), spawns, startTick: atTick);
     }
 
     /// <summary>
@@ -308,11 +347,122 @@ public sealed class MeshSession : IDisposable
     /// <summary>Tells the peer about a bubble one of this node's players made.</summary>
     public void SendChat(int slot, byte image) => _link.SendChat(slot, image);
 
+    /// <summary>
+    /// Names the peer's players have been given, for this server to show its own
+    /// clients.
+    /// </summary>
+    public Queue<(int Slot, string Name)> NamesFromPeer { get; } = [];
+
+    /// <summary>Tells the peer that one of this node's players was renamed.</summary>
+    public void SendName(int slot, ReadOnlySpan<char> name)
+    {
+        Remember(slot, new string(name));
+        _link.SendName(slot, name);
+    }
+
+    private void HearName(int slot, string name)
+    {
+        if ((uint)slot >= WorldState.MaxSlots)
+            return;
+
+        Remember(slot, name);
+        NamesFromPeer.Enqueue((slot, name));
+    }
+
+    /// <summary>
+    /// Keeps the name table current, so a SNAPSHOT carries what a player is
+    /// called now.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>Without this a rename is lost to everyone who was not listening when
+    /// it happened.</b> The table is written when a join is scheduled and a
+    /// snapshot is built from it, so a peer attaching later would be handed the
+    /// name every player had at the moment they joined — which on a live run was
+    /// every bot, because <c>checkClasslimits</c> renames one the moment it
+    /// re-classes it.
+    /// </remarks>
+    private void Remember(int slot, string name)
+    {
+        if (Node.TryGetJoinKey(slot, out var origin, out var sequence))
+            PeerNames[Key(origin, sequence)] = name;
+    }
+
     private void HearChat(int slot, byte image)
     {
         if ((uint)slot < WorldState.MaxSlots)
             ChatFromPeer.Enqueue((slot, image));
     }
+
+    /// <summary>
+    /// Commands from the peer this node could not apply at the tick they name.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>Any value but zero means the two nodes are running different
+    /// matches.</b> The sender applied it; this node did not; nothing recovers
+    /// from that.
+    /// </remarks>
+    public int RefusedFromPeer { get; private set; }
+
+    /// <summary>How far outside the window the worst refusal was, in ticks.</summary>
+    public int WorstRefusalSkew { get; private set; }
+
+    /// <summary>
+    /// Where the peer's clock is now, as best this node can tell.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The tick it last announced, plus the ticks this node has run since.</b>
+    /// Both nodes advance at 30 Hz, so the error is the transport delay plus at
+    /// most one announcement interval — small, and always an UNDER-estimate of
+    /// how far the peer has got, which is the safe direction: scheduling further
+    /// ahead costs a little latency, scheduling behind loses the command.
+    /// </para>
+    /// <para>
+    /// ⚠️ Falls back to this node's own tick before anything has been heard, so
+    /// a node with no peer schedules exactly as it always did.
+    /// </para>
+    /// </remarks>
+    public int PeerTickNow
+    {
+        get
+        {
+            if (_peerTickHeard < 0)
+                return Node.Tick;
+
+            // ⛔ CLAMPED, and both ends of the clamp were paid for on a live
+            // run. Extrapolating forward covers the transport delay, so a node
+            // does not schedule into its peer's past; capping it stops a node
+            // that is ticking SLOWER than real time — a loaded server, or a test
+            // harness — from assuming its peer has run away, catching up to a
+            // moment the peer has not reached, and then scheduling into a future
+            // the peer will refuse. Measured both ways round: nine ticks into
+            // the past first, then fifty-nine into the future.
+            var elapsed = (int)((Environment.TickCount64 - _heardAtMs) * TicksPerMs);
+
+            return _peerTickHeard + Math.Clamp(elapsed, 0, CommandLead);
+        }
+    }
+
+    /// <summary>
+    /// ⛔ Extrapolated on the WALL CLOCK, never on this node's own tick count.
+    /// </summary>
+    /// <remarks>
+    /// Measured, after getting it wrong the other way on a live run: a joiner
+    /// catching up advances its own tick in jumps, so an estimate that added
+    /// "ticks I have run since" grew every time the catch-up ran — which drove
+    /// more catch-up, which grew it further. The estimate ran 59 ticks past the
+    /// peer and every command was refused for being too far in its FUTURE,
+    /// having previously been refused for being in its past. Wall-clock time
+    /// does not move when a node re-simulates, which is exactly the property
+    /// this needs.
+    /// </remarks>
+    private const double TicksPerMs = 30.0 / 1000.0;
+
+    private int _peerTickHeard = -1;
+    private long _heardAtMs;
+
+    /// <summary>What <see cref="Schedule"/> returns when it would not be heard.</summary>
+    public const int Refusal = -1;
 
     /// <summary>Snapshots refused as malformed. Zero unless the builds differ.</summary>
     public int Refused { get; private set; }
@@ -367,12 +517,23 @@ public sealed class MeshSession : IDisposable
         // so a tick that checked for a connection before servicing would never
         // find one. Measured as a deadlock — the server sat for 200 ticks with a
         // peer waiting on the other end of a socket it had not accepted.
-        _link.Service(Node, Compare, Hear, Adopt, HearChat);
+        _link.Service(Node, Compare, Hear, Adopt, HearChat, HearName);
 
         // ⚠️ Reset when the link goes, so a peer that reconnects is caught up
         // again rather than left running a match it was never told about.
         if (!_link.Connected)
+        {
             _sent = false;
+            _peerTickHeard = -1;
+        }
+
+        // Where the peer said it was, and where this node was when it heard —
+        // the two numbers PeerTickNow extrapolates from.
+        if (_link.PeerOrigin is { } announced && (int)announced != _peerTickHeard)
+        {
+            _peerTickHeard = (int)announced;
+            _heardAtMs = Environment.TickCount64;
+        }
 
         // ⚠️ A joiner does not advance until it has been handed the match.
         // Advancing would be simulating one the peer is not in, and every tick
@@ -391,9 +552,9 @@ public sealed class MeshSession : IDisposable
         // rollback is for: the peer's real ones are still in flight and correct
         // them when they land. Bounded by the window, because beyond it there is
         // nothing to roll back to.
-        if (!Listening && _link.PeerOrigin is { } theirs)
+        if (!Listening && _peerTickHeard >= 0)
         {
-            var behind = Math.Min((int)theirs - Node.Tick, new MeshOptions().MaxRollbackTicks - 1);
+            var behind = Math.Min(PeerTickNow - Node.Tick, new MeshOptions().MaxRollbackTicks - 1);
 
             for (var i = 0; i < behind; i++)
                 Node.Advance();
@@ -413,7 +574,11 @@ public sealed class MeshSession : IDisposable
         // clients are playing on it. It announces its tick while one is
         // connected: a Hello is nine bytes and hearing it twice is harmless,
         // which is cheaper than a handshake with states in it.
-        if (Listening && _link.Connected && Node.Tick % 5 == 0)
+        // ⛔ BOTH ENDS announce their tick, not just the listener. A command is
+        // scheduled against the PEER's clock (see Schedule), so each node has to
+        // know where the other is — and the node that is behind is not always
+        // the joiner.
+        if (_link.Connected && Node.Tick % 5 == 0)
             _link.SendHello(Node.Tick);
 
         var tick = Node.Tick;
@@ -452,6 +617,20 @@ public sealed class MeshSession : IDisposable
     /// </remarks>
     private void Compare(int tick, ulong theirs)
     {
+        // ⛔ ONLY AT A TICK THIS NODE HAS ALSO CONFIRMED. The peer sends a digest
+        // of a tick IT has confirmed, but confirmation is per node: this one may
+        // still be guessing an input for that tick, and its world then differs
+        // for an entirely correct reason that a rollback is about to fix.
+        // Comparing anyway reports a divergence on every sample — measured on a
+        // live two-host run, where two nodes that were in step and refusing
+        // nothing still reported "agreed 0/6" because the samples all landed
+        // before this node had confirmed the tick.
+        if (tick >= Node.Confirmed)
+        {
+            Unconfirmed++;
+            return;
+        }
+
         if (Node.DigestAt(tick) is not { } ours)
             return;
 
@@ -479,7 +658,25 @@ public sealed class MeshSession : IDisposable
     private void Hear(int tick, MeshCommand command, string name)
     {
         if (!Node.Schedule(tick, command))
+        {
+            // ⛔ AN UNRECOVERABLE DIVERGENCE, and it used to be a silent return.
+            // The sender applied this to its own node; refusing it here leaves
+            // two nodes running different matches, which is the one failure the
+            // whole scheme exists to avoid. It cannot be applied at a different
+            // tick either — that would be a third match.
+            //
+            // The skew is kept because it is the only number that says WHY: a
+            // command lands outside the window when the two clocks have drifted
+            // further apart than CommandLead covers.
+            RefusedFromPeer++;
+
+            var skew = tick - Node.Tick;
+
+            if (Math.Abs(skew) > Math.Abs(WorstRefusalSkew))
+                WorstRefusalSkew = skew;
+
             return;
+        }
 
         // ⚠️ Keyed by WHO SAID IT and their counter, not by a slot: a join
         // carries no slot, and a slot is renumbered the moment somebody below it

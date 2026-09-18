@@ -190,6 +190,12 @@ public sealed partial class GameServer
 
         _roster[slot].Name = name;
         ServerMessages.PlayerChangeName(_broadcast, checked((byte)slot), name);
+
+        // ⚠️ The peer's clients call this player something too. A name never
+        // reaches WorldState, so this is forwarded rather than scheduled — but a
+        // node that never hears it shows a stale name for ever, which on a live
+        // run was every bot re-classed by checkClasslimits.
+        _mesh?.SendName(slot, name);
     }
 
     /// <summary>

@@ -95,6 +95,20 @@ public sealed class MeshLink : IDisposable
     /// </remarks>
     private const byte ChatFrame = 6;
 
+    /// <summary>
+    /// A player's name changed, forwarded so both regions call them the same
+    /// thing.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Forwarded like a bubble, not scheduled like a join.</b> A name
+    /// never reaches <c>WorldState</c>, so nothing diverges if the two nodes
+    /// apply it a tick apart — but a node that never hears it shows a stale
+    /// name for ever. Measured on a live two-host run: a bot re-classed by
+    /// <c>checkClasslimits</c> is renamed to match, and the peer went on calling
+    /// it by the name it had at the moment it joined.
+    /// </remarks>
+    private const byte NameFrame = 7;
+
     private readonly TcpListener? _listener;
     private readonly List<byte> _pending = [];
     private readonly ArrayBufferWriter<byte> _out = new();
@@ -249,6 +263,24 @@ public sealed class MeshLink : IDisposable
     }
 
     /// <summary>
+    /// Queues a name change for the peer to show its own clients.
+    /// </summary>
+    public void SendName(int slot, ReadOnlySpan<char> name)
+    {
+        var length = Math.Min(name.Length, MaxName);
+        var body = _out.GetSpan(3 + length);
+
+        body[0] = NameFrame;
+        body[1] = (byte)slot;
+        body[2] = (byte)length;
+
+        for (var i = 0; i < length; i++)
+            body[3 + i] = (byte)name[i];
+
+        _out.Advance(3 + length);
+    }
+
+    /// <summary>
     /// Queues a whole match for a peer that has just attached.
     /// </summary>
     public void SendState(ReadOnlySpan<byte> snapshot)
@@ -295,7 +327,8 @@ public sealed class MeshLink : IDisposable
         Action<int, ulong>? onDigest = null,
         Action<int, MeshCommand, string>? onCommand = null,
         Func<byte[], MeshNode?>? onState = null,
-        Action<int, byte>? onChat = null)
+        Action<int, byte>? onChat = null,
+        Action<int, string>? onName = null)
     {
         ArgumentNullException.ThrowIfNull(node);
 
@@ -314,7 +347,7 @@ public sealed class MeshLink : IDisposable
             return;
         }
 
-        Receive(node, onDigest, onCommand, onState, onChat);
+        Receive(node, onDigest, onCommand, onState, onChat, onName);
         Flush();
     }
 
@@ -323,7 +356,8 @@ public sealed class MeshLink : IDisposable
         Action<int, ulong>? onDigest,
         Action<int, MeshCommand, string>? onCommand,
         Func<byte[], MeshNode?>? onState,
-        Action<int, byte>? onChat)
+        Action<int, byte>? onChat,
+        Action<int, string>? onName)
     {
         var buffer = ArrayPool<byte>.Shared.Rent(4096);
 
@@ -350,7 +384,7 @@ public sealed class MeshLink : IDisposable
             ArrayPool<byte>.Shared.Return(buffer);
         }
 
-        Parse(node, onDigest, onCommand, onState, onChat);
+        Parse(node, onDigest, onCommand, onState, onChat, onName);
     }
 
     /// <summary>
@@ -369,7 +403,8 @@ public sealed class MeshLink : IDisposable
         Action<int, ulong>? onDigest,
         Action<int, MeshCommand, string>? onCommand,
         Func<byte[], MeshNode?>? onState,
-        Action<int, byte>? onChat)
+        Action<int, byte>? onChat,
+        Action<int, string>? onName)
     {
         var at = 0;
 
@@ -460,6 +495,32 @@ public sealed class MeshLink : IDisposable
                 Stats = Stats with { CommandsReceived = Stats.CommandsReceived + 1 };
 
                 at += 11 + nameLength;
+                continue;
+            }
+
+            if (kind == NameFrame)
+            {
+                if (_pending.Count - at < 3)
+                    break;
+
+                var nameLength = _pending[at + 2];
+
+                if (nameLength > MaxName)
+                {
+                    Drop();
+                    return;
+                }
+
+                if (_pending.Count - at < 3 + nameLength)
+                    break;
+
+                var chars = new char[nameLength];
+
+                for (var i = 0; i < nameLength; i++)
+                    chars[i] = (char)_pending[at + 3 + i];
+
+                onName?.Invoke(_pending[at + 1], new string(chars));
+                at += 3 + nameLength;
                 continue;
             }
 

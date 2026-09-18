@@ -963,6 +963,8 @@ public sealed partial class GameServer : IDisposable, IPluginHost
 
         _frame++;
 
+        ReportMesh();
+
         // GameServerBeginStep.gml:5-8, `frame mod 900`: the 30-second block at
         // the very top of the server's own Begin Step. Two things live in it,
         // and the second is not optional the way the first is.
