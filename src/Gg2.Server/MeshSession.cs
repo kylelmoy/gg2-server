@@ -68,6 +68,9 @@ public sealed class MeshSession : IDisposable
     /// </remarks>
     public bool Synchronised { get; private set; }
 
+    /// <summary>Whether the attached peer has been handed this node's match.</summary>
+    private bool _sent;
+
     /// <summary>Whether this node waited for the peer rather than joining it.</summary>
     /// <remarks>
     /// <b>A node's <see cref="Origin"/> has to be decided the same way on both
@@ -181,8 +184,87 @@ public sealed class MeshSession : IDisposable
         Node.Schedule(at, command);
         _link.SendCommand(at, command, name);
 
+        // ⚠️ OUR OWN joins are remembered too, not just the peer's. A snapshot
+        // has to name every player in the match, and this node's own names live
+        // in the GameServer's roster where a snapshot cannot reach them.
+        if (command.Kind == MeshCommandKind.AddPlayer && name.Length > 0)
+            PeerNames[Key(command.Origin, command.Sequence)] = new string(name);
+
         return at;
     }
+
+    /// <summary>
+    /// This node's whole match, for a peer that has just attached.
+    /// </summary>
+    private MeshSnapshot Snapshot() =>
+        new()
+        {
+            Tick = Node.Tick,
+            State = Node.State,
+            Members = Node.Assignments()
+                .Select(join => new MeshMember(
+                    join.Origin,
+                    join.Sequence,
+                    join.Slot,
+                    PeerNames.TryGetValue(Key(join.Origin, join.Sequence), out var name)
+                        ? name
+                        : string.Empty))
+                .ToArray(),
+        };
+
+    /// <summary>
+    /// Takes on the match a peer is already running, replacing this node
+    /// wholesale.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ⛔ <b>Returns the new node so the LINK can keep parsing into it.</b> The
+    /// frames after a snapshot in the same read are the inputs for the tick it
+    /// was taken at; handed to the node being discarded they are gone, and a
+    /// lost input is a permanent divergence rather than a late correction.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>A listener never adopts, and nobody adopts twice.</b> One end holds
+    /// the match and the other takes it; two nodes each adopting the other would
+    /// be two nodes each waiting to be told.
+    /// </para>
+    /// </remarks>
+    private MeshNode? Adopt(byte[] bytes)
+    {
+        if (Listening || Synchronised)
+            return null;
+
+        if (MeshSnapshot.Decode(bytes) is not { } snapshot)
+        {
+            // A frame that is the right shape and the wrong content. Saying so
+            // is the difference between "the peer is old" and "nothing
+            // happened".
+            Refused++;
+            return null;
+        }
+
+        Node = new MeshNode(
+            _collision, snapshot.State, new MeshOptions(), _spawns, startTick: snapshot.Tick);
+
+        Node.Adopt(snapshot.Members);
+
+        // Every player in the snapshot is the peer's, by definition: this node
+        // had none. Their names are what this server's own clients will see.
+        foreach (var member in snapshot.Members)
+        {
+            if (member.Name.Length > 0)
+                PeerNames[Key(member.Origin, member.Sequence)] = member.Name;
+        }
+
+        Synchronised = true;
+
+        return Node;
+    }
+
+    /// <summary>Snapshots refused as malformed. Zero unless the builds differ.</summary>
+    public int Refused { get; private set; }
+
+    private static int Key(int origin, int sequence) => (origin << 16) | (sequence & 0xFFFF);
 
     public static MeshSession Start(
         ServerOptions options, CollisionWorld collision, in WorldState start, SpawnPoints? spawns)
@@ -232,20 +314,46 @@ public sealed class MeshSession : IDisposable
         // so a tick that checked for a connection before servicing would never
         // find one. Measured as a deadlock — the server sat for 200 ticks with a
         // peer waiting on the other end of a socket it had not accepted.
-        _link.Service(Node, Compare, Hear);
+        _link.Service(Node, Compare, Hear, Adopt);
 
-        // ⚠️ A joiner does not advance until the two nodes agree what tick it
-        // is. Advancing would be simulating a match the peer is not in, and
-        // every tick of it is thrown away by the rebuild.
+        // ⚠️ Reset when the link goes, so a peer that reconnects is caught up
+        // again rather than left running a match it was never told about.
+        if (!_link.Connected)
+            _sent = false;
+
+        // ⚠️ A joiner does not advance until it has been handed the match.
+        // Advancing would be simulating one the peer is not in, and every tick
+        // of it is thrown away by the adoption.
         if (!Synchronised)
+            return;
+
+        // ⛔ A JOINER CATCHES UP, and this is not a nicety. Adopting a snapshot
+        // leaves it on the tick the snapshot was taken while the peer has moved
+        // on, and a node that stays behind schedules its roster changes against
+        // its OWN clock — so a command it sends for "ten ticks from now" is
+        // already in the peer's past by however far behind it is, and is refused
+        // as too late. Measured as a join whose team change never arrived.
+        //
+        // ⚠️ The catch-up ticks are simulated on GUESSED inputs, which is what
+        // rollback is for: the peer's real ones are still in flight and correct
+        // them when they land. Bounded by the window, because beyond it there is
+        // nothing to roll back to.
+        if (!Listening && _link.PeerOrigin is { } theirs)
         {
-            if (_link.PeerOrigin is not { } theirs)
-                return;
+            var behind = Math.Min((int)theirs - Node.Tick, new MeshOptions().MaxRollbackTicks - 1);
 
-            Node = new MeshNode(
-                _collision, _start, new MeshOptions(), _spawns, startTick: (int)theirs);
+            for (var i = 0; i < behind; i++)
+                Node.Advance();
+        }
 
-            Synchronised = true;
+        // ⛔ Queued BEFORE this tick's inputs, on the first tick a peer is
+        // attached, so the snapshot reaches them ahead of any input frame. The
+        // other order hands a joiner inputs for a match it has not got yet, and
+        // an input parsed by the node about to be discarded is lost for good.
+        if (Listening && _link.Connected && !_sent)
+        {
+            _link.SendState(Snapshot().Encode());
+            _sent = true;
         }
 
         // ⚠️ A listener keeps running with no peer — it is a server, and its own

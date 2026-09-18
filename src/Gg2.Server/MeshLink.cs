@@ -59,6 +59,29 @@ public sealed class MeshLink : IDisposable
     /// </summary>
     private const int MaxFrame = 4096;
 
+    /// <summary>
+    /// A whole match, sent once when a peer attaches.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>The only frame a node cannot start without, and the only big one.</b>
+    /// Without it a peer joining mid-match runs a different roster from the one
+    /// it is exchanging inputs about.
+    /// </remarks>
+    private const byte StateFrame = 5;
+
+    /// <summary>
+    /// The bound on a snapshot, which is a world plus one line per player.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>This is the one frame whose length a PEER chooses</b>, so the bound
+    /// is what stops a corrupt or hostile length making this node hold an
+    /// arbitrary amount — the same rule as every other length on a socket
+    /// (docs/HARDENING.md). A world is about 157 KB and the members add a few
+    /// hundred bytes, so a megabyte is room to grow and nowhere near room to
+    /// hurt.
+    /// </remarks>
+    private const int MaxStateFrame = 1 << 20;
+
     private readonly TcpListener? _listener;
     private readonly List<byte> _pending = [];
     private readonly ArrayBufferWriter<byte> _out = new();
@@ -199,6 +222,23 @@ public sealed class MeshLink : IDisposable
     }
 
     /// <summary>
+    /// Queues a whole match for a peer that has just attached.
+    /// </summary>
+    public void SendState(ReadOnlySpan<byte> snapshot)
+    {
+        if (snapshot.Length > MaxStateFrame)
+            throw new ArgumentException("snapshot is too large to send", nameof(snapshot));
+
+        var body = _out.GetSpan(5 + snapshot.Length);
+
+        body[0] = StateFrame;
+        WriteInt(body[1..], snapshot.Length);
+        snapshot.CopyTo(body[5..]);
+
+        _out.Advance(5 + snapshot.Length);
+    }
+
+    /// <summary>
     /// Queues what this node believes the world looked like at a tick, so the
     /// peer can notice that it disagrees.
     /// </summary>
@@ -226,7 +266,8 @@ public sealed class MeshLink : IDisposable
     public void Service(
         MeshNode node,
         Action<int, ulong>? onDigest = null,
-        Action<int, MeshCommand, string>? onCommand = null)
+        Action<int, MeshCommand, string>? onCommand = null,
+        Func<byte[], MeshNode?>? onState = null)
     {
         ArgumentNullException.ThrowIfNull(node);
 
@@ -245,12 +286,15 @@ public sealed class MeshLink : IDisposable
             return;
         }
 
-        Receive(node, onDigest, onCommand);
+        Receive(node, onDigest, onCommand, onState);
         Flush();
     }
 
     private void Receive(
-        MeshNode node, Action<int, ulong>? onDigest, Action<int, MeshCommand, string>? onCommand)
+        MeshNode node,
+        Action<int, ulong>? onDigest,
+        Action<int, MeshCommand, string>? onCommand,
+        Func<byte[], MeshNode?>? onState)
     {
         var buffer = ArrayPool<byte>.Shared.Rent(4096);
 
@@ -277,7 +321,7 @@ public sealed class MeshLink : IDisposable
             ArrayPool<byte>.Shared.Return(buffer);
         }
 
-        Parse(node, onDigest, onCommand);
+        Parse(node, onDigest, onCommand, onState);
     }
 
     /// <summary>
@@ -292,7 +336,10 @@ public sealed class MeshLink : IDisposable
     /// link, which is the worst place to find out.
     /// </remarks>
     private void Parse(
-        MeshNode node, Action<int, ulong>? onDigest, Action<int, MeshCommand, string>? onCommand)
+        MeshNode node,
+        Action<int, ulong>? onDigest,
+        Action<int, MeshCommand, string>? onCommand,
+        Func<byte[], MeshNode?>? onState)
     {
         var at = 0;
 
@@ -383,6 +430,43 @@ public sealed class MeshLink : IDisposable
                 Stats = Stats with { CommandsReceived = Stats.CommandsReceived + 1 };
 
                 at += 11 + nameLength;
+                continue;
+            }
+
+            if (kind == StateFrame)
+            {
+                if (_pending.Count - at < 5)
+                    break;
+
+                var length = ReadInt(at + 1);
+
+                // ⛔ Checked BEFORE it is used for anything. A negative or absurd
+                // length from a corrupt or hostile peer would otherwise size an
+                // allocation here.
+                if (length < 0 || length > MaxStateFrame)
+                {
+                    Drop();
+                    return;
+                }
+
+                if (_pending.Count - at < 5 + length)
+                    break;
+
+                var snapshot = new byte[length];
+
+                for (var i = 0; i < length; i++)
+                    snapshot[i] = _pending[at + 5 + i];
+
+                // ⛔ THE NODE IS REPLACED HERE, mid-batch, and that is the
+                // point. A snapshot is followed on the wire by the inputs for
+                // the tick it was taken at, in the same read — handed to the
+                // node being discarded, those inputs are GONE, and the adopting
+                // node guesses a tick nobody will ever correct it about. A lost
+                // input is a permanent divergence, not a late one.
+                if (onState?.Invoke(snapshot) is { } adopted)
+                    node = adopted;
+
+                at += 5 + length;
                 continue;
             }
 
