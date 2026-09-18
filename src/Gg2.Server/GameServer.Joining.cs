@@ -157,22 +157,6 @@ public sealed partial class GameServer
             // connections per address — and a hundred addresses is three hundred
             // sockets, each with a receive buffer and an 8 KB scratch array, all
             // held for as long as the handshake allows.
-            // ⛔ A meshed server turns everybody away, on purpose and loudly.
-            // A join changes the roster, and a roster change has to be a
-            // MeshCommand scheduled for a tick both nodes agree on — otherwise
-            // the peer never hears about the player and the two nodes are
-            // running different matches, which is the one divergence that does
-            // NOT converge. Refusing is the honest state of the work: the
-            // scheduling exists (MeshNode.Schedule), the join path does not use
-            // it yet. docs/MESH.md.
-            if (_mesh is not null)
-            {
-                var meshed = new NetWriter(2);
-                ServerMessages.ServerFull(meshed);
-                Refuse(connection, meshed.WrittenSpan, "this server is a mesh node; joins are not carried across the link yet");
-                continue;
-            }
-
             if (_joining.Count >= _limits.MaxJoiningConnections)
             {
                 // SERVER_FULL rather than a KICK: it is the message that already
@@ -319,7 +303,15 @@ public sealed partial class GameServer
 
                 case JoinOutcome.Joined:
                     _joining.RemoveAt(i);
-                    CompleteJoin(joining);
+                    // ⛔ In a mesh a roster place is not this server's to give:
+                    // it comes from a command both nodes apply at an agreed
+                    // tick, so the joiner waits while the peer is told. Nothing
+                    // about them reaches the wire until MirrorMeshRoster sees
+                    // their place arrive. GameServer.Mesh.cs.
+                    if (_mesh is not null)
+                        MeshAdmit(joining);
+                    else
+                        CompleteJoin(joining);
                     break;
 
                 case JoinOutcome.Finished:
@@ -480,7 +472,13 @@ public sealed partial class GameServer
         //    a fresh spectator whose respawn alarm is at rest.
         var entry = new RosterEntry { Name = joining.Name, Connection = connection };
         _roster.Add(entry);
-        _world.AddPlayer(_roster.Count - 1);
+
+        // ⚠️ In a mesh the world already HAS this player: the scheduled command
+        // put them there, at a tick the peer applied too, which is the whole
+        // reason the join waited. Adding them again here would be a second
+        // player in the next free slot that the peer has never heard of.
+        if (_mesh is null)
+            _world.AddPlayer(_roster.Count - 1);
 
         // ⚠️ TAKEN BEFORE THE PLAYER_JOIN BELOW, and that is the whole point of
         // the mark: everything standing in the broadcast buffer right now was
