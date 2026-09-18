@@ -359,6 +359,54 @@ public sealed class MeshCommandTests
     }
 
     /// <summary>
+    /// ⛔ A removal shares a tick with a change, and the change still reaches the
+    /// player it named.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>A removal renumbers every slot above it</b>, so it has to be the last
+    /// thing a tick applies — everything else was written while the slot numbers
+    /// still meant what the sender meant. Two nodes would agree either way, so
+    /// nothing here diverges and no digest goes red: it silently hands the team
+    /// change to whoever shifted down into the slot.
+    /// </para>
+    /// <para>
+    /// The order is the numeric comparison of <see cref="MeshCommandKind"/>, not
+    /// the order the members are declared in, which is why this asserts the
+    /// behaviour and not the enum.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ARemovalIsAppliedAfterEverythingElseInItsTick()
+    {
+        ReferenceTree.RequireAvailable();
+
+        var node = Node();
+
+        // Three more, so there is somebody above the hole to be mistaken for the
+        // player the change names.
+        node.Schedule(4, MeshCommand.AddPlayer(origin: 0, sequence: 1));
+        node.Schedule(4, MeshCommand.AddPlayer(origin: 0, sequence: 2));
+        node.Schedule(4, MeshCommand.AddPlayer(origin: 0, sequence: 3));
+        node.Advance(6);
+
+        Assert.True(node.State.HasPlayer[4]);
+
+        // Slot 3 changes team; slot 2 leaves. Both were named against the roster
+        // as it stands NOW, which is what the ordering has to preserve.
+        node.Schedule(10, MeshCommand.ChangeTeam(3, Team.Red));
+        node.Schedule(10, MeshCommand.RemovePlayer(2));
+        node.Advance(12);
+
+        // The player that was slot 3 is slot 2 now, and is the one on Red.
+        Assert.Equal(Team.Red, node.State.Players[2].Team);
+
+        // And the player that was slot 4 — who shifted into 3, where the team
+        // change would have landed had the removal gone first — was not touched.
+        Assert.NotEqual(Team.Red, node.State.Players[3].Team);
+    }
+
+    /// <summary>
     /// ⛔ Two joins on one tick, one from each node, take the same two slots on
     /// both machines.
     /// </summary>

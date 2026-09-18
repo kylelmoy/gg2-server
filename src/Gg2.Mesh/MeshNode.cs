@@ -590,6 +590,15 @@ public sealed class MeshNode
                     _state.Players[slot].Class = (PlayerClass)command.A;
                     break;
 
+                // ⛔ Nothing in MatchSimulation may read this — it is for bot
+                // code only, and BotIsNotVisibleToTheSimulationTests is the
+                // gate. It is meshed because a server copies its world from
+                // here every tick, so a flag written outside the node lasts
+                // exactly one tick.
+                case MeshCommandKind.SetBot:
+                    _state.Players[slot].IsBot = command.A != 0;
+                    break;
+
                 case MeshCommandKind.Spawn when _spawnPoints is not null:
                     _state.Spawn(
                         _spawnPoints, slot, _state.Players[slot].Class, _state.Players[slot].Team,

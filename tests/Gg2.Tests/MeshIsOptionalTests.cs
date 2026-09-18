@@ -1,5 +1,8 @@
 using Gg2.Host;
+using Gg2.Maps;
+using Gg2.Mesh;
 using Gg2.Server;
+using Gg2.Simulation;
 using Xunit;
 
 namespace Gg2.Tests;
@@ -96,26 +99,53 @@ public sealed class MeshIsOptionalTests
     }
 
     /// <summary>
-    /// Which half of the roster a node owns is decided by which end listened.
+    /// ⛔ A slot belongs to the node whose join created it, whichever place it
+    /// landed in.
     /// </summary>
     /// <remarks>
-    /// <b>The only asymmetry two nodes have for free.</b> Anything else — a
-    /// configured id, a coin toss — is a thing an operator can get wrong on one
-    /// machine, and two nodes that both think they own slot 4 would each be
-    /// guessing at a player the other is driving.
+    /// <para>
+    /// <b>Ownership is what decides whose inputs are real and whose are
+    /// guessed</b>, so two nodes that both thought they owned slot 4 would each
+    /// be predicting a player the other is driving. It cannot be a slot parity:
+    /// a join takes the lowest free place, and a departure renumbers everything
+    /// above it, so the two nodes' players interleave in whatever order people
+    /// arrived.
+    /// </para>
+    /// <para>
+    /// ⚠️ Asserted against a real <see cref="MeshNode"/> rather than against a
+    /// local copy of the rule. A test that reimplements the thing it is checking
+    /// passes whatever the real code goes on to do — which is what the parity
+    /// version of this test did after ownership stopped being a parity.
+    /// </para>
     /// </remarks>
     [Fact]
-    public void TheListenerOwnsTheEvenSlots()
+    public void ASlotBelongsToTheNodeWhoseJoinCreatedIt()
     {
-        Assert.True(Owns(listening: true, slot: 0));
-        Assert.False(Owns(listening: true, slot: 1));
-        Assert.False(Owns(listening: false, slot: 0));
-        Assert.True(Owns(listening: false, slot: 1));
-    }
+        ReferenceTree.RequireAvailable();
 
-    /// <summary>
-    /// Mirrors <c>MeshSession.Owns</c> without needing a socket, so the rule can
-    /// be asserted from both sides of the link at once.
-    /// </summary>
-    private static bool Owns(bool listening, int slot) => slot % 2 == (listening ? 0 : 1);
+        var map = LevelMap.FromPng("ctf_truefort", ReferenceTree.ReadMap("ctf_truefort")).ForArea(1);
+        var state = default(WorldState);
+        state.AddPlayer(0);
+
+        var node = new MeshNode(
+            new CollisionWorld(map), state, new MeshOptions(), new SpawnPoints(map));
+
+        // One join from each end, landing on the same tick. They take
+        // consecutive places, ordered by origin — and each place is owned by
+        // whoever asked for it.
+        node.Schedule(4, MeshCommand.AddPlayer(origin: 1, sequence: 1));
+        node.Schedule(4, MeshCommand.AddPlayer(origin: 0, sequence: 1));
+        node.Advance(6);
+
+        Assert.Equal(0, node.OriginOf(1));
+        Assert.Equal(1, node.OriginOf(2));
+
+        // ⛔ And a departure moves ownership with the slot. Under a parity rule
+        // slot 1 would still be the listener's; here it is the joiner's player,
+        // shifted down.
+        node.Schedule(10, MeshCommand.RemovePlayer(1));
+        node.Advance(12);
+
+        Assert.Equal(1, node.OriginOf(1));
+    }
 }

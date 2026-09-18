@@ -696,18 +696,29 @@ public sealed class BotPopulationService
         // picks between its tiers per decision.
         IInputSource source = options.Brain is { } brain ? brain.Wrap(bot) : bot;
 
-        var slot = _server.AddBot(name, team, playerClass, source);
+        // `options` is an in-parameter and a lambda cannot capture one; the
+        // prefix is all the completion needs.
+        var prefix = options.NamePrefix;
 
-        // The query has to carry the class the server actually gave it, which
-        // is checkClasslimits' answer and not the one asked for — the search's
-        // double-jump and rocket-jump arcs are per class, and a scout routed as a
-        // heavy walks past every edge it could have flown.
-        bot.Query = new NavQuery(_server.TeamOf(slot), CanDoubleJump: BotClassProfile.AirJump(_server.ClassOf(slot)));
+        // ⚠️ Through the callback rather than the return value, because in a MESH
+        // there is no slot yet: the roster place comes from a command both nodes
+        // apply at an agreed tick, so this runs some ticks later. Standalone it
+        // runs inline and the two paths are the same code.
+        _server.AddBot(name, team, playerClass, source, slot =>
+        {
+            // The query has to carry the class the server actually gave it, which
+            // is checkClasslimits' answer and not the one asked for — the search's
+            // double-jump and rocket-jump arcs are per class, and a scout routed as a
+            // heavy walks past every edge it could have flown.
+            bot.Query = new NavQuery(
+                _server.TeamOf(slot),
+                CanDoubleJump: BotClassProfile.AirJump(_server.ClassOf(slot)));
 
-        // And the name follows it: the join broadcast already went out under the
-        // class asked for, before [Classlimits] answered.
-        if (_server.ClassOf(slot) != playerClass)
-            _server.RenameBot(slot, options.NamePrefix + _server.ClassOf(slot).ToString());
+            // And the name follows it: the join broadcast already went out under the
+            // class asked for, before [Classlimits] answered.
+            if (_server.ClassOf(slot) != playerClass)
+                _server.RenameBot(slot, prefix + _server.ClassOf(slot).ToString());
+        });
 
         return true;
     }
