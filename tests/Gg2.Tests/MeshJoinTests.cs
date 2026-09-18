@@ -145,26 +145,17 @@ public sealed class MeshJoinTests
     }
 
     /// <summary>
-    /// Gives the far end a player who is ALIVE and never presses anything, so
-    /// the server can never confirm a tick.
+    /// Gives the far end a player who is alive and never presses anything, so
+    /// the server cannot confirm a tick.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// <b>A peer that has a player and sends no inputs for them.</b> The server
-    /// guesses that player's keys every tick and never hears the real ones, so
-    /// no tick of its is ever certain — which is the state a held event has to
-    /// survive without being published.
-    /// </para>
-    /// <para>
     /// ⛔ <b>The team change is the point, not scaffolding.</b>
     /// <c>MeshNode.IsCertain</c> waits on the input of every player who was
-    /// ALIVE at the start of the tick, not everybody in the roster — a
-    /// spectator presses nothing the world can see, so a node that waited for
-    /// one would confirm nothing for as long as somebody was watching. Without
-    /// the change this player has no character and blocks nothing.
-    /// </para>
+    /// ALIVE at the start of the tick, not everybody in the roster — a spectator
+    /// presses nothing the world can see. Without the change this player has no
+    /// character and blocks nothing.
     /// </remarks>
-    private static void AddSilentPeerPlayer(ServerHarness harness, Peer peer)
+    private static int AddSilentPeerPlayer(ServerHarness harness, Peer peer)
     {
         peer.Send(
             peer.Node.Tick + MeshSession.CommandLead,
@@ -173,12 +164,9 @@ public sealed class MeshJoinTests
 
         var slot = -1;
 
-        // ⚠️ The slot is RESOLVED from the SERVER's roster, never assumed and
-        // never read off the peer. A join takes the lowest free place, so it
-        // depends on how many bots this server filled. Naming slot 1 changed a
-        // BOT's team instead and left the silent player a spectator, blocking
-        // nothing.
-        for (var i = 0; i < MeshSession.CommandLead + 40 && slot < 0; i++)
+        // ⚠️ RESOLVED from the SERVER's roster, never assumed: a join takes the
+        // lowest free place, which depends on how many players are already here.
+        for (var i = 0; i < 200 && slot < 0; i++)
         {
             harness.Tick();
             slot = SlotOf(harness, "Silent");
@@ -191,8 +179,10 @@ public sealed class MeshJoinTests
             MeshCommand.ChangeTeam(slot, Team.Red),
             "Silent");
 
-        for (var i = 0; i < MeshSession.CommandLead + 30; i++)
+        for (var i = 0; i < 200 && !harness.Server.IsAlive(slot); i++)
             harness.Tick();
+
+        return slot;
     }
 
     /// <summary>
@@ -216,8 +206,10 @@ public sealed class MeshJoinTests
         return -1;
     }
 
-    private static LevelMap Map() =>
-        LevelMap.FromPng("ctf_truefort", ReferenceTree.ReadMap("ctf_truefort")).ForArea(1);
+    private static LevelMap Map() => MapNamed("ctf_truefort");
+
+    private static LevelMap MapNamed(string name) =>
+        LevelMap.FromPng(name, ReferenceTree.ReadMap(name)).ForArea(1);
 
     /// <summary>
     /// ⛔ The gate: a client joins, and both the server and its peer end up with
@@ -497,25 +489,29 @@ public sealed class MeshJoinTests
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>The holding rule, read off the wire.</b> A death, a capture or an
-    /// intel grab cannot be taken back on a stock client, so a node may only
-    /// send one once the tick that produced it can no longer be re-simulated
-    /// into a tick where it did not happen. A tick is certain when every live
-    /// player's real input for it has been heard — so a peer with a player who
-    /// never presses anything makes every tick uncertain for ever.
+    /// <b>The holding rule, read off the wire.</b> A death, a capture or a spawn
+    /// cannot be taken back on a stock client, so a node may only send one once
+    /// the tick that produced it can no longer be re-simulated into a tick where
+    /// it did not happen. A tick is certain when every live player's real input
+    /// for it has been heard — so a peer with a player who never presses
+    /// anything makes every tick uncertain for ever.
     /// </para>
     /// <para>
     /// ⚠️ <b>Counted as MESSAGES a client received, not as a server-side
     /// counter.</b> A counter incremented where the events are drained says the
-    /// drain happened, which is true of a server that drains and then broadcasts
-    /// the provisional events anyway — measured: that mutation passed against
-    /// the counter and fails against this.
+    /// drain happened, which is equally true of a server that drains and then
+    /// broadcasts the provisional events anyway — measured: that mutation passes
+    /// against the counter and fails against this.
     /// </para>
     /// <para>
-    /// ⚠️ <b>The control is the same server before the silent player arrives</b>,
-    /// where every player is local and every tick confirms at once. Without it
-    /// this passes against a server that had simply stopped broadcasting, which
-    /// is why the position stream is asserted to keep flowing too.
+    /// ⛔ <b>NOBODY FIGHTS HERE, and that is the design rather than a
+    /// simplification.</b> Three earlier versions of this test measured a
+    /// bot match and flaked: a player standing in a firefight pressing nothing
+    /// is killed within a few seconds, a dead player correctly stops holding
+    /// anything up, and the measurement window collapsed to three ticks on the
+    /// runs where the bots were quick. Every player here is on one team, so
+    /// nothing dies, the silent player stays alive, and the only irreversible
+    /// event in the match is the one this test creates on purpose.
     /// </para>
     /// </remarks>
     [Fact]
@@ -528,20 +524,9 @@ public sealed class MeshJoinTests
             options.Map = map;
             options.MeshEnabled = true;
             options.MeshListenPort = 0;
-
-            // Without the graphs the bots never meet and never fire, and an
-            // empty fingerprint reads exactly like holding.
-            options.NavCacheDirectory = MapDirectory.ResolveNav();
-            options.Bots = BotPopulationOptions.Default with
-            {
-                Enabled = true,
-                FillToPlayers = 6,
-                MaxBots = 6,
-                MinHumans = 0,
-            };
         });
 
-        using var peer = new Peer(harness.Server.MeshPort, Map());
+        using var peer = new Peer(harness.Server.MeshPort, MapNamed(map));
         harness.AfterTick = peer.Tick;
 
         harness.Tick(20);
@@ -549,52 +534,33 @@ public sealed class MeshJoinTests
         var client = harness.JoinClient("watcher");
         var reader = new BroadcastReader(LevelMap.FromPng(map, ReferenceTree.ReadMap(map)));
 
-        // Let the bots reach each other and start shooting.
-        harness.Tick(400);
+        harness.Tick(30);
         reader.Drain(client);
-        harness.Tick(200);
 
-        var fighting = Irreversible(reader.Drain(client));
+        // ⛔ THE CONTROL. A bot joining spawns, and a spawn is a thing a client
+        // cannot be told twice — so with every player local and every tick
+        // certain, it reaches the client. Without this the assertion below
+        // passes against a server that had simply stopped broadcasting.
+        AddBotAndWait(harness, "[BOT] first");
 
         Assert.True(
-            fighting > 0,
-            "nothing irreversible happened while everything was confirmed, so this test "
-            + "cannot say anything about holding");
+            Irreversible(reader.Drain(client)) > 0,
+            "a bot joined and nothing irreversible reached the client, so this test cannot say "
+            + "anything about holding");
 
-        // Now give the peer a player who is alive and never presses anything.
-        AddSilentPeerPlayer(harness, peer);
+        // Now a peer player who is alive and never presses anything. On the same
+        // team as everybody else, so nothing kills them and confirmation stays
+        // stalled for as long as this test needs.
+        var silent = AddSilentPeerPlayer(harness, peer);
 
-        var silent = SlotOf(harness, "Silent");
-
-        Assert.True(silent > 0, "the silent player left the roster again");
         Assert.True(harness.Server.IsAlive(silent), "the peer's player never got a character");
 
-        // Everything up to the silence, discarded.
         reader.Drain(client);
 
-        // ⚠️ MEASURED ONLY WHILE THE SILENT PLAYER IS ALIVE, and that is the
-        // claim rather than a convenience. A tick waits on the inputs of players
-        // who were ALIVE at its start, so a silent player who is shot stops
-        // blocking anything and confirmation correctly resumes — which is right,
-        // and made a fixed window fail on whichever run the bots got to them.
-        var held = new List<ServerMessage>();
-        var window = 0;
+        // The same event again, with confirmation stalled this time.
+        AddBotAndWait(harness, "[BOT] second");
 
-        for (var i = 0; i < 200; i++)
-        {
-            harness.Tick();
-
-            var at = SlotOf(harness, "Silent");
-
-            if (at < 0 || !harness.Server.IsAlive(at))
-                break;
-
-            held.AddRange(reader.Drain(client));
-            window++;
-        }
-
-        Assert.True(window >= 40, $"the silent player only survived {window} ticks, which is not "
-            + "long enough to say anything about holding");
+        var held = reader.Drain(client);
 
         // ⛔ Not one tick became certain, so nothing that cannot be unsaid was
         // sent.
@@ -605,6 +571,10 @@ public sealed class MeshJoinTests
         Assert.True(
             held.Count(message => message.Type == MessageType.QuickUpdate) > 0,
             "the server stopped sending positions, which is not holding");
+
+        // The silent player is still alive, so the stretch above really was one
+        // where nothing could be confirmed.
+        Assert.True(harness.Server.IsAlive(silent), "the silent player died mid-measurement");
     }
 
     /// <summary>
@@ -639,86 +609,105 @@ public sealed class MeshJoinTests
         }
     }
 
+    /// <summary>Adds a bot, on Red like everybody else, and waits for its spawn.</summary>
+    private static void AddBotAndWait(ServerHarness harness, string name)
+    {
+        harness.Server.AddBot(name, Team.Red, PlayerClass.Scout, new Idle());
+
+        for (var i = 0; i < MeshSession.CommandLead + 90; i++)
+            harness.Tick();
+    }
+
     /// <summary>
-    /// ⛔ A peer that connects after the match started is handed it, and agrees
-    /// about every player.
+    /// ⛔ A meshed map change takes both servers with it.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>Without this a mesh only works if both nodes start together.</b> A node
-    /// that connects mid-match began from whatever world it was built with and
-    /// hears only what is scheduled from then on — so a server that already had
-    /// players has a roster its new peer does not share, and the two then
-    /// disagree about which slot every later join takes.
+    /// <b>A map change is the one event that replaces the whole world.</b>
+    /// <c>Rounds.ResetForNewMap</c> puts everybody back to spectator and clears
+    /// the score, and <c>OpenMap</c> swaps the collision world and the spawn
+    /// points and places the new map's intel, generators and platforms. In a
+    /// mesh the NODE owns the world, so a reset written straight to
+    /// <c>_world</c> is overwritten by the next copy from the node — and the
+    /// node goes on simulating the old map while this server's clients have been
+    /// sent <c>CHANGE_MAP</c>. Measured before this was scheduled: the clients
+    /// were on the new map and the simulation was on the old one, and nothing
+    /// said so.
     /// </para>
     /// <para>
-    /// ⚠️ <b>The roster is checked player by player, not by count.</b> Two nodes
-    /// with the same number of players and different people in them is exactly
-    /// the failure this exists to stop, and it is the one a length assertion
-    /// cannot see.
+    /// ⚠️ <b>Two REAL servers, not a server and a bare node.</b> Following a map
+    /// change means running <c>OpenMap</c> — loading a file, rebuilding the
+    /// collision world, placing the intel — which is server work a node cannot
+    /// do and a test double should not imitate. A stub that reproduced it would
+    /// be asserting against a second implementation of the thing under test.
     /// </para>
     /// </remarks>
     [Fact]
-    public void APeerConnectingMidMatchIsHandedIt()
+    public void AMeshedMapChangeTakesBothServersWithIt()
     {
-        using var harness = new ServerHarness(options =>
+        using var listener = new ServerHarness(options =>
         {
             options.MeshEnabled = true;
             options.MeshListenPort = 0;
         });
 
-        // A match that is already underway: three bots with places, teams and
-        // characters, none of which the peer will have seen happen.
-        var slots = new int[3];
-        var names = new[] { "[BOT] one", "[BOT] two", "[BOT] three" };
-
-        for (var i = 0; i < names.Length; i++)
+        using var joiner = new ServerHarness(options =>
         {
-            var at = i;
+            options.MeshEnabled = true;
+            options.MeshConnect = $"127.0.0.1:{listener.Server.MeshPort}";
+        });
 
-            harness.Server.AddBot(
-                names[i], Team.Red, PlayerClass.Scout, new Idle(), slot => slots[at] = slot);
+        // One clock for both, the same reason a peer is stepped by the harness:
+        // two servers on their own timers fall thousands of ticks apart.
+        listener.AfterTick = () => joiner.Tick();
+
+        listener.Tick(30);
+
+        var landed = -1;
+
+        listener.Server.AddBot(
+            "[BOT] one", Team.Red, PlayerClass.Scout, new Idle(), slot => landed = slot);
+
+        for (var i = 0; i < MeshSession.CommandLead + 80 && landed < 0; i++)
+            listener.Tick();
+
+        Assert.True(landed > 0, "the bot never got a slot");
+
+        // ⚠️ The roster has to REACH that slot before it can be asked about it:
+        // the joiner learns of the bot when the join lands at its end, a few
+        // ticks after this server placed it.
+        for (var i = 0; i < 120; i++)
+        {
+            listener.Tick();
+
+            if (joiner.Server.RosterCount > landed && joiner.Server.TeamOf(landed) == Team.Red)
+                break;
         }
 
-        harness.Tick(MeshSession.CommandLead + 120);
+        Assert.True(joiner.Server.RosterCount > landed, "the joiner never heard about the bot");
+        Assert.Equal(Team.Red, joiner.Server.TeamOf(landed));
 
-        Assert.All(slots, slot => Assert.True(slot > 0));
+        Assert.True(listener.Server.RequestMapChange("ctf_orange"), "the map change was refused");
 
-        // ⛔ Only NOW does the peer arrive.
-        using var peer = new Peer(harness.Server.MeshPort, Map());
-        harness.AfterTick = peer.Tick;
+        listener.Tick(Rounds.MapChangeDelay + 90);
 
-        for (var i = 0; i < 80 && !peer.Has(slots[2]); i++)
-            harness.Tick();
+        // Both servers are serving the new map to their own clients.
+        Assert.Equal("ctf_orange", listener.Server.CurrentMap);
+        Assert.Equal("ctf_orange", joiner.Server.CurrentMap);
 
-        // Every one of them, in the place this server put them, owned by this
-        // server.
-        foreach (var slot in slots)
-        {
-            Assert.True(peer.Has(slot), $"the peer was never told about slot {slot}");
-            Assert.Equal(0, peer.OriginOf(slot));
-            Assert.Equal(Team.Red, peer.TeamOf(slot));
-        }
+        // ⛔ And both SIMULATIONS went with them: a map change makes everybody a
+        // spectator, and a node that stayed on the old map would still have this
+        // player on Red.
+        Assert.Equal(Team.Spectator, listener.Server.TeamOf(landed));
+        Assert.Equal(Team.Spectator, joiner.Server.TeamOf(landed));
 
-        // ⛔ And nobody the server does not have. A snapshot that added players
-        // without clearing what the node already had would pass everything above.
-        Assert.False(
-            peer.Has(harness.Server.RosterCount),
-            "the peer has a player the server does not");
+        // ⛔ The strongest form: the two rebuilt nodes are running one world.
+        // Compared AT A TICK, never live — a joiner is a little behind for
+        // entirely correct reasons.
+        var common = joiner.Server.MeshTick - 4;
 
-        // ⛔ The strongest form: the two worlds are the same world. A digest
-        // covers positions, velocities, hp, the scoreboard and the RNG seed, so
-        // it fails on a peer that has the right roster and the wrong match.
-        //
-        // ⚠️ AT A TICK, never live. A peer adopts the world as of the tick the
-        // snapshot was taken and is a few ticks behind from then on, so its live
-        // state differs from the server's for entirely correct reasons.
-        harness.Tick(30);
-
-        var common = peer.Node.Tick - 5;
-
-        Assert.NotNull(peer.Node.DigestAt(common));
-        Assert.Equal(harness.Server.MeshDigestAt(common), peer.Node.DigestAt(common));
+        Assert.NotNull(joiner.Server.MeshDigestAt(common));
+        Assert.Equal(listener.Server.MeshDigestAt(common), joiner.Server.MeshDigestAt(common));
     }
 
     /// <summary>

@@ -190,6 +190,9 @@ public sealed class MeshSession : IDisposable
         if (command.Kind == MeshCommandKind.AddPlayer && name.Length > 0)
             PeerNames[Key(command.Origin, command.Sequence)] = new string(name);
 
+        if (command.Kind == MeshCommandKind.ChangeMap && name.Length > 0)
+            _maps[at] = new string(name);
+
         return at;
     }
 
@@ -259,6 +262,35 @@ public sealed class MeshSession : IDisposable
         Synchronised = true;
 
         return Node;
+    }
+
+    /// <summary>
+    /// The map each scheduled change names, by the tick it lands at.
+    /// </summary>
+    /// <remarks>
+    /// A <see cref="MeshCommand"/> is five bytes with nowhere to put a name, so
+    /// the map rides in the frame's name field and is remembered here — by both
+    /// ends, because both have to load it.
+    /// </remarks>
+    private readonly Dictionary<int, string> _maps = [];
+
+    /// <summary>The map a change landing at this tick names, or null.</summary>
+    public string? MapChangeAt(int tick) => _maps.TryGetValue(tick, out var map) ? map : null;
+
+    /// <summary>
+    /// Replaces the node around a new map, keeping the tick.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>A map change is a BARRIER, and the rollback history goes with it.</b>
+    /// Rewinding across one would mean restoring a world belonging to a map that
+    /// is no longer loaded. Both nodes rebuild at the same tick from the same
+    /// reset world, so there is nothing before it either of them still needs.
+    /// </remarks>
+    public void Rebuild(CollisionWorld collision, in WorldState start, SpawnPoints? spawns)
+    {
+        ArgumentNullException.ThrowIfNull(collision);
+
+        Node = new MeshNode(collision, start, new MeshOptions(), spawns, startTick: Node.Tick);
     }
 
     /// <summary>Snapshots refused as malformed. Zero unless the builds differ.</summary>
@@ -433,6 +465,10 @@ public sealed class MeshSession : IDisposable
         // leaves. NameOf resolves it through the assignment instead.
         if (name.Length > 0)
             PeerNames[(command.Origin << 16) | (command.Sequence & 0xFFFF)] = name;
+
+        // A map change's "name" is the map, and this end has to load it too.
+        if (command.Kind == MeshCommandKind.ChangeMap && name.Length > 0)
+            _maps[tick] = name;
 
         FromPeer.Enqueue((tick, command, name));
     }

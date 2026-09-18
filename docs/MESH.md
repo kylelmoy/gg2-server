@@ -544,19 +544,51 @@ has to measure only while that player lives.
 ⚠️ **Two nodes are only comparable AT A TICK**, never live, for exactly that
 reason. `MeshNode.DigestAt` is the right comparison and `Digest` is not.
 
+### Changing map
+
+⛔ **A map change replaces the whole world, so in a mesh it is scheduled like a
+join.** `Rounds.ResetForNewMap` puts everybody back to spectator and clears the
+score, and `OpenMap` swaps the collision world and the spawn points and places
+the new map's intel, generators and platforms. Written straight to `_world`, all
+of that is overwritten by the next copy from the node — leaving a server whose
+clients have been sent `CHANGE_MAP` and whose simulation is still on the old
+map. Measured, not supposed.
+
+⛔ **One node owns the rotation, and it is the listener.** Two nodes each
+deciding would pick from their own shuffled rotations and schedule two different
+maps. The usual guard cannot stop it either: `_world.MapChanging` is written to a
+world the node overwrites every tick, so in a mesh it never sticks, and the local
+countdown is what says a change is already pending.
+
+⛔ **The node ignores the command and the SERVERS act on it.** A node cannot load
+a map — that is file I/O, which the simulation may not do, and the collision
+world and spawn points are read-only inputs it is given. Both servers see the
+command land at the same tick, run the same `PerformMapChange`, and rebuild their
+nodes around the new map from the same reset world.
+
+⚠️ **A map change is a BARRIER and the rollback history goes with it.** Rewinding
+across one would restore a world belonging to a map that is no longer loaded.
+
+⚠️ **The map name rides in the command frame's name field**, the one a join uses
+for a player's name. Twenty bytes, and the longest map shipped here is sixteen.
+
+⚠️ The listener runs the ten-second `MAP_END` countdown; the joiner's clients
+learn of the change when the command lands. Only the listener's clients see the
+countdown.
+
 ## What is NOT built
 
 A client can join a meshed server, pick a team, play and leave; a meshed server
 can fill itself with bots and remove them again; nothing irreversible reaches a
-client before it is certain; and a peer can connect to a match already in
-progress. What is still missing:
+client before it is certain; a peer can connect to a match already in progress;
+and both nodes change map together. What is still missing:
 
 1. **Whether a correction is VISIBLE.** The magnitudes are measured and the
    smoothing is written; whether an 8 px nudge reads as a snap or as nothing is
    a question about a person watching a screen, and no measurement here answers
    it. `docs/TRAPS-LIVEGAME.md` and a playtest.
-2. **Chat and map changes are not scheduled**, so they have no agreed order
-   across nodes. They are rare enough to afford a round trip.
+2. **Chat is not scheduled**, so it has no agreed order across nodes. It is rare
+   enough to afford a round trip.
 
 Three differences from a standalone server are deliberate rather than missing: a
 meshed team change does not rebalance, a meshed departure does not rebalance

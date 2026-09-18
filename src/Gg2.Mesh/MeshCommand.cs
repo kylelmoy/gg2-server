@@ -90,6 +90,24 @@ public enum MeshCommandKind : byte
     /// change to whoever shifted down into the slot.
     /// </remarks>
     RemovePlayer = 7,
+
+    /// <summary>
+    /// Replace the map, and with it the whole world.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>The node cannot apply this one and deliberately ignores it.</b> A
+    /// map change swaps the collision world and the spawn points, which are
+    /// read-only inputs a node is GIVEN — and loading a map is file I/O, which
+    /// the simulation may not do. So the servers watch for it landing and
+    /// rebuild their nodes around the new map together, at the same tick, from
+    /// the same reset world.
+    /// <para>
+    /// ⚠️ <b>The map NAME rides in the command frame's name field</b>, the same
+    /// one a join uses for a player's name. Twenty bytes, and the longest map
+    /// this server ships is sixteen.
+    /// </para>
+    /// </remarks>
+    ChangeMap = 8,
 }
 
 /// <summary>One scheduled change to the roster.</summary>
@@ -184,6 +202,10 @@ public readonly record struct MeshCommand(
     /// which is what makes a departure safe to say twice.
     /// </para>
     /// </remarks>
+    /// <summary>A map change, whose name travels beside it as the frame's name.</summary>
+    public static MeshCommand ChangeMap(int area) =>
+        new(MeshCommandKind.ChangeMap, 0, (byte)area, 0);
+
     public static MeshCommand RemovePlayer(int origin, int sequence) =>
         new(
             MeshCommandKind.RemovePlayer,
