@@ -245,7 +245,7 @@ public sealed partial class GameServer
             return;
         }
 
-        PerformMapChange();
+        PerformMapChange(_mesh?.Node.Tick ?? 0);
     }
 
     /// <summary>
@@ -262,7 +262,7 @@ public sealed partial class GameServer
     /// sequence no client has ever been sent.
     /// </para>
     /// </remarks>
-    private void PerformMapChange()
+    private void PerformMapChange(int atTick)
     {
         Rounds.ResetForNewMap(ref _world, firstArea: _nextArea == 1);
 
@@ -301,7 +301,7 @@ public sealed partial class GameServer
         // just reset. Everything above wrote _world and the roster; without this
         // the node would go on simulating the old map and overwrite all of it on
         // the next tick.
-        _mesh?.Rebuild(_collision, in _world, _spawnPoints);
+        _mesh?.Rebuild(_collision, in _world, _spawnPoints, atTick);
     }
 
     /// <summary>

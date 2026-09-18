@@ -97,6 +97,13 @@ public sealed class MeshJoinTests
             }
 
             Node.Advance();
+
+            // ⚠️ A real node announces where its clock is, and BOTH ends do:
+            // the server schedules its commands ahead of the peer's tick rather
+            // than its own, so a peer that never said where it was would be sent
+            // commands for moments it had already passed.
+            if (Node.Tick % 5 == 0)
+                _link.SendHello(Node.Tick);
         }
 
         /// <summary>
@@ -619,6 +626,301 @@ public sealed class MeshJoinTests
     }
 
     /// <summary>
+    /// ⛔ A meshed server fills to its bot target ONCE, not once per tick while
+    /// the joins are in flight.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Found on a live two-host run, not here.</b> A server told to fill to
+    /// four added FORTY-EIGHT bots and then spent the next minute removing them
+    /// again. The population manager fills by comparing the roster against its
+    /// target every tick, and a meshed join takes about ten ticks to reach the
+    /// roster — so it asked for the whole shortfall again on every one of those
+    /// ticks.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Nothing failed while it happened</b>, which is why no local test
+    /// caught it: the joins all landed, the departures all worked, and the two
+    /// nodes agreed throughout. It was correct and absurd, and only visible to
+    /// somebody reading the log of a real server.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void AMeshedServerFillsToItsBotTargetOnce()
+    {
+        using var harness = new ServerHarness(options =>
+        {
+            options.Map = "gg_debug";
+            options.MeshEnabled = true;
+            options.MeshListenPort = 0;
+            options.NavCacheDirectory = MapDirectory.ResolveNav();
+            options.Bots = BotPopulationOptions.Default with
+            {
+                Enabled = true,
+                FillToPlayers = 4,
+                MaxBots = 4,
+                MinHumans = 0,
+            };
+        });
+
+        using var peer = new Peer(harness.Server.MeshPort, MapNamed("gg_debug"));
+        harness.AfterTick = peer.Tick;
+
+        // Well past the lead a join waits out, so every one of them has landed.
+        harness.Tick(MeshSession.CommandLead + 200);
+
+        // ⛔ Four bots, and nothing pending behind them. The roster is the whole
+        // claim: an overshoot shows up here as a roster several times the target.
+        Assert.Equal(4, harness.Server.BotSlots.Count);
+        Assert.Equal(0, harness.Server.BotsPending);
+
+        // ⚠️ And it did not get there by adding a crowd and removing most of
+        // them again, which is what the bug actually did. A join says so in the
+        // log exactly once per bot.
+        var asked = harness.Log.Lines.Count(
+            line => line.Contains("asked the mesh for a slot", StringComparison.Ordinal));
+
+        Assert.Equal(4, asked);
+    }
+
+    /// <summary>
+    /// ⛔ Two meshed servers show their clients the SAME roster: same names,
+    /// same teams, same classes, slot for slot.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Found on a live two-host run, and it is the failure the world's own
+    /// digest cannot see.</b> The two nodes agreed about the world perfectly
+    /// while one server showed four players on Red and Blue and the other showed
+    /// the same four slots as spectators under the names they had joined with.
+    /// Everything a client sees about a player — name, team, class — lives in
+    /// the ROSTER, and none of it was crossing the link.
+    /// </para>
+    /// <para>
+    /// ⚠️ Team and class are now copied from the world every tick, because the
+    /// world is the thing that decides them and cannot drift. A name is not in
+    /// the world at all, so it is forwarded like a chat bubble.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void TwoMeshedServersShowTheSameRoster()
+    {
+        const string map = "gg_debug";
+
+        using var listener = new ServerHarness(options =>
+        {
+            options.Map = map;
+            options.MeshEnabled = true;
+            options.MeshListenPort = 0;
+        });
+
+        listener.Tick(20);
+
+        var landed = -1;
+
+        listener.Server.AddBot(
+            "[BOT] one", Team.Red, PlayerClass.Soldier, new Idle(), slot => landed = slot);
+
+        for (var i = 0; i < MeshSession.CommandLead + 120 && landed < 0; i++)
+            listener.Tick();
+
+        Assert.True(landed > 0, "the bot never got a slot");
+
+        // A rename, which is what a re-class does on a real server. This one
+        // happens while nobody is listening.
+        listener.Server.RenameBot(landed, "[BOT] early");
+
+        // Let the team change land before anybody is listening.
+        listener.Tick(60);
+
+        Assert.Equal(Team.Red, listener.Server.TeamOf(landed));
+
+        // ⛔ ONLY NOW does the peer arrive, so everything above reaches it as a
+        // SNAPSHOT rather than as commands it watched happen. That is the live
+        // case: a snapshot carries the world, and a team is in the world, but
+        // the roster a client is served is not the world.
+        using var joiner = new ServerHarness(options =>
+        {
+            options.Map = map;
+            options.MeshEnabled = true;
+            options.MeshConnect = $"127.0.0.1:{listener.Server.MeshPort}";
+        });
+
+        listener.AfterTick = () => joiner.Tick();
+
+        for (var i = 0; i < 160; i++)
+            listener.Tick();
+
+        Assert.True(joiner.Server.RosterCount > landed, "the joiner never heard about the bot");
+
+        // ⛔ The rename that happened BEFORE the peer existed reached it, which
+        // it can only have done in the snapshot.
+        Assert.Equal("[BOT] early", joiner.Server.NameOf(landed));
+
+        // ⛔ And one AFTER it arrived reaches it too, which is the forward.
+        listener.Server.RenameBot(landed, "[BOT] late");
+
+        for (var i = 0; i < 60; i++)
+            listener.Tick();
+
+        Assert.Equal("[BOT] late", listener.Server.NameOf(landed));
+        Assert.Equal("[BOT] late", joiner.Server.NameOf(landed));
+
+        Assert.Equal(Team.Red, listener.Server.TeamOf(landed));
+        Assert.Equal(Team.Red, joiner.Server.TeamOf(landed));
+
+        Assert.Equal(listener.Server.ClassOf(landed), joiner.Server.ClassOf(landed));
+
+        // And the rosters are the same length, so those slots mean the same
+        // thing on both.
+        Assert.Equal(listener.Server.RosterCount, joiner.Server.RosterCount);
+    }
+
+    /// <summary>
+    /// ⛔ A node that is BEHIND its peer still gets its commands heard.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The failure a real link produced and a loopback one never did.</b> A
+    /// node schedules a roster change for "a few ticks from now"; if it is
+    /// itself behind its peer by more than that lead, the tick it names is
+    /// already in the peer's PAST and the peer refuses it — while the sender has
+    /// applied it. The two then run different matches, and the only sign is a
+    /// digest that never agrees again.
+    /// </para>
+    /// <para>
+    /// Measured across two hosts: the joiner sat about nineteen ticks behind the
+    /// listener, every command it sent landed nine ticks in the listener's past,
+    /// and the rosters diverged from the first bot onwards. The fix is to
+    /// schedule ahead of the PEER's clock rather than one's own.
+    /// </para>
+    /// <para>
+    /// ⚠️ The skew here is forced rather than hoped for: the peer is advanced by
+    /// hand well past the server before anything is scheduled.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ANodeBehindItsPeerStillGetsItsCommandsHeard()
+    {
+        using var harness = new ServerHarness(options =>
+        {
+            options.MeshEnabled = true;
+            options.MeshListenPort = 0;
+        });
+
+        using var peer = new Peer(harness.Server.MeshPort, Map());
+        harness.AfterTick = peer.Tick;
+
+        harness.Tick(20);
+
+        // ⛔ Put the PEER well ahead of this server — further than CommandLead,
+        // which is exactly the case a real link produced.
+        var ahead = MeshSession.CommandLead + 9;
+
+        for (var i = 0; i < ahead; i++)
+            peer.Node.Advance();
+
+        // Let the server hear where the peer now is.
+        harness.Tick(20);
+
+        var landed = -1;
+
+        harness.Server.AddBot(
+            "[BOT] one", Team.Red, PlayerClass.Scout, new Idle(), slot => landed = slot);
+
+        for (var i = 0; i < MeshSession.CommandLead + ahead + 120 && landed < 0; i++)
+            harness.Tick();
+
+        Assert.True(landed > 0, "the server never gave the bot a slot");
+
+        // ⛔ And the PEER applied the same join, which is the half that used to
+        // be dropped: a slot the sender has and the peer refused is a divergence
+        // nothing recovers from.
+        for (var i = 0; i < 120 && !peer.Has(landed); i++)
+            harness.Tick();
+
+        Assert.True(peer.Has(landed), "the peer refused the join as too late");
+    }
+
+    /// <summary>
+    /// ⛔ A meshed server never idles, however empty it looks.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The deadlock a live two-host run actually hit.</b> An empty server
+    /// drops to 2 Hz to save a machine that nobody is playing on. A meshed one
+    /// is not empty — its peer is running a match at 30 Hz — and a node that
+    /// idles falls fifteen ticks behind for every second it does, so the next
+    /// roster change it schedules names a tick its peer passed long ago and is
+    /// refused.
+    /// </para>
+    /// <para>
+    /// ⛔ It feeds itself: the joiner's own bots were refused, which left its
+    /// roster empty, which kept it idle, which kept its clock behind, which got
+    /// the next join refused. It never acquired a single player in five minutes.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void AMeshedServerNeverIdles()
+    {
+        using var meshed = new ServerHarness(options =>
+        {
+            options.MeshEnabled = true;
+            options.MeshListenPort = 0;
+        });
+
+        // Nobody is connected and there are no bots, which is exactly when an
+        // ordinary server idles.
+        Assert.False(meshed.Server.IsIdle, "a meshed server called itself idle");
+
+        // ⚠️ The control: the same empty server without a mesh DOES idle, so
+        // this is the mesh doing it and not the harness.
+        using var standalone = new ServerHarness();
+
+        Assert.True(standalone.Server.IsIdle, "an empty standalone server should idle");
+    }
+
+    /// <summary>
+    /// ⛔ A running mesh says whether the two nodes agree.
+    /// </summary>
+    /// <remarks>
+    /// <b>Without this the one claim the design rests on is unobservable.</b>
+    /// The digests are exchanged and compared every second, and the result went
+    /// into a counter with no log line, no control verb and nothing on the
+    /// panel — so a live mesh could be diverging and the only way to find out
+    /// was to read the source. Found while trying to watch a real match across
+    /// two hosts, which is where a missing view of a claim actually bites.
+    /// </remarks>
+    [Fact]
+    public void AMeshedServerSaysWhetherTheNodesAgree()
+    {
+        using var harness = new ServerHarness(options =>
+        {
+            options.MeshEnabled = true;
+            options.MeshListenPort = 0;
+        });
+
+        using var peer = new Peer(harness.Server.MeshPort, Map());
+        harness.AfterTick = peer.Tick;
+
+        // The report is on a ten-second cadence, so this has to cross one.
+        harness.Tick(320);
+
+        Assert.Contains(
+            harness.Log.Lines,
+            line => line.Contains("mesh: tick", StringComparison.Ordinal)
+                && line.Contains("agreed", StringComparison.Ordinal));
+
+        // ⛔ And it says the two are LINKED and IN STEP, which is the part an
+        // operator acts on. A report that always said "NO PEER" would satisfy a
+        // test that only looked for the word "mesh".
+        Assert.Contains(
+            harness.Log.Lines,
+            line => line.Contains("linked", StringComparison.Ordinal)
+                && line.Contains("in step", StringComparison.Ordinal));
+    }
+
+    /// <summary>
     /// ⛔ A chat bubble made in one region is seen in the other.
     /// </summary>
     /// <remarks>
@@ -780,9 +1082,29 @@ public sealed class MeshJoinTests
         // ⛔ The strongest form: the two rebuilt nodes are running one world.
         // Compared AT A TICK, never live — a joiner is a little behind for
         // entirely correct reasons.
-        var common = joiner.Server.MeshTick - 4;
+        // ⚠️ A tick BOTH nodes still hold, waited for rather than assumed. Either
+        // can be the one behind, and a node REBUILT by the map change has no
+        // history at all until it has run a few ticks past it — so this runs on
+        // until both can answer for the same moment.
+        var common = 0;
 
-        Assert.NotNull(joiner.Server.MeshDigestAt(common));
+        for (var i = 0; i < 300; i++)
+        {
+            listener.Tick();
+            common = Math.Min(listener.Server.MeshTick, joiner.Server.MeshTick) - 4;
+
+            if (common > 0
+                && listener.Server.MeshDigestAt(common) is not null
+                && joiner.Server.MeshDigestAt(common) is not null)
+            {
+                break;
+            }
+        }
+
+        var gap = $"listener {listener.Server.MeshTick}, joiner {joiner.Server.MeshTick}, common {common}";
+
+        Assert.True(listener.Server.MeshDigestAt(common) is not null, $"listener has no digest: {gap}");
+        Assert.True(joiner.Server.MeshDigestAt(common) is not null, $"joiner has no digest: {gap}");
         Assert.Equal(listener.Server.MeshDigestAt(common), joiner.Server.MeshDigestAt(common));
     }
 

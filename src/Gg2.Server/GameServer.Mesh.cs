@@ -30,6 +30,20 @@ public sealed partial class GameServer
         IInputSource Source,
         Action<int>? OnAdded);
 
+    /// <summary>
+    /// Bots whose roster place a mesh has not agreed yet.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>The population manager has to count these as already added.</b> A
+    /// meshed join takes about ten ticks to land, and the manager fills by
+    /// comparing the roster against its target every tick — so without this it
+    /// asks for the whole shortfall again on every one of those ticks.
+    /// Measured on a live two-host run: a server told to fill to four added
+    /// FORTY-EIGHT bots and then spent the next minute removing them again.
+    /// Zero unless this server is meshed.
+    /// </remarks>
+    public int BotsPending => _meshBots.Count;
+
     /// <summary>This node's own count of joins, which names them to the peer.</summary>
     private int _meshSequence;
 
@@ -133,6 +147,56 @@ public sealed partial class GameServer
     }
 
     /// <summary>
+    /// Says, once every ten seconds, whether the two nodes still agree.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ⛔ <b>Without this a running mesh cannot be observed at all.</b> The
+    /// digests are exchanged and compared every second and the result went
+    /// nowhere: no log line, no control verb, nothing on the panel. The one
+    /// claim the whole design rests on — that two nodes reach the same world —
+    /// was true or false in a counter nobody could read, which is exactly the
+    /// shape of claim CLAUDE.md warns about.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>A disagreement is reported at WARNING and never recovered from.</b>
+    /// Nothing here repairs a divergence and nothing should: it means a bug, or
+    /// two different operating systems (docs/SIMULATION.md), and the honest
+    /// response is to say so loudly rather than to paper over it.
+    /// </para>
+    /// </remarks>
+    private void ReportMesh()
+    {
+        // Ten seconds. Quiet enough to leave on, often enough that an operator
+        // watching a match sees the two nodes agreeing rather than inferring it.
+        if (_mesh is null || _frame % 300 != 0)
+            return;
+
+        var stats = _mesh.Node.Stats;
+
+        var line =
+            $"mesh: tick {_mesh.Node.Tick}, "
+            + $"{(_mesh.Connected ? "linked" : "NO PEER")}, "
+            + $"{(_mesh.Synchronised ? "in step" : "WAITING FOR THE MATCH")}, "
+            + $"agreed {_mesh.Agreements}/{_mesh.Agreements + _mesh.Disagreements} "
+            + $"({_mesh.Unconfirmed} early), "
+            + $"rollbacks {stats.Rollbacks} ({stats.ResimulatedTicks} ticks re-simulated, "
+            + $"deepest {stats.DeepestRollback}), "
+            + $"late {stats.TooLate}, "
+            + $"events {MeshEventsReleased} released / {MeshEventsHeld} held";
+
+        if (_mesh.RefusedFromPeer > 0)
+        {
+            line += $", REFUSED {_mesh.RefusedFromPeer} (worst skew {_mesh.WorstRefusalSkew} ticks)";
+        }
+
+        if (_mesh.Disagreements > 0 || _mesh.RefusedFromPeer > 0)
+            _log.Warn($"{line} — THE TWO NODES DISAGREE");
+        else
+            _log.Info(line);
+    }
+
+    /// <summary>
     /// Asks the mesh for a roster place for a joiner, and parks them until it
     /// arrives.
     /// </summary>
@@ -140,7 +204,17 @@ public sealed partial class GameServer
     {
         var sequence = ++_meshSequence;
 
-        _mesh!.Schedule(MeshCommand.AddPlayer(_mesh.Origin, sequence), joining.Name);
+        // ⛔ Refused rather than parked behind a command nobody will hear — see
+        // MeshAddBot. A client that arrives in the seconds before two nodes are
+        // in step is turned away and can try again, which is recoverable; a
+        // client parked for a slot that is never agreed is not.
+        if (_mesh!.Schedule(MeshCommand.AddPlayer(_mesh.Origin, sequence), joining.Name)
+            == MeshSession.Refusal)
+        {
+            joining.Connection.Close("the mesh is not ready yet");
+            return;
+        }
+
         _meshJoining.Add((sequence, joining));
     }
 
@@ -173,7 +247,18 @@ public sealed partial class GameServer
     {
         var sequence = ++_meshSequence;
 
-        _mesh!.Schedule(MeshCommand.AddPlayer(_mesh.Origin, sequence), name);
+        // ⛔ NOT PARKED IF THE MESH WOULD NOT CARRY IT. A command sent before the
+        // two nodes are in step is refused at the far end, and a bot parked
+        // behind one waits for a slot that is never coming — which also inflates
+        // BotsPending for ever and stops the population manager ever filling
+        // again. Dropping it instead leaves the manager free to ask once more
+        // next tick, which it does until the mesh is ready.
+        if (_mesh!.Schedule(MeshCommand.AddPlayer(_mesh.Origin, sequence), name)
+            == MeshSession.Refusal)
+        {
+            return MeshPending;
+        }
+
         _meshBots.Add(new MeshBot(sequence, name, team, playerClass, source, onAdded));
 
         _log.Info($"bot {LogText.Safe(name)} asked the mesh for a slot ({team}, {playerClass})");
@@ -298,6 +383,7 @@ public sealed partial class GameServer
         // worth a claim that it prevents corruption.
         DrainMeshCommands();
         DrainMeshChat();
+        DrainMeshNames();
 
         while (_roster.Count < WorldState.MaxSlots && _world.HasPlayer[_roster.Count])
         {
@@ -328,6 +414,22 @@ public sealed partial class GameServer
             _roster.Add(entry);
             _plugins.PlayerAdded(slot);
             ServerMessages.PlayerJoin(_broadcast, entry.Name);
+        }
+
+        // ⛔ THE WORLD IS AUTHORITATIVE FOR TEAM AND CLASS, so the roster is
+        // brought into line with it every tick rather than only when a command
+        // lands. A peer's player reaches this roster through a snapshot or a
+        // join, neither of which carries what team they are on — and the team is
+        // what every client is told. Measured on a live two-host run: one node
+        // showed four players on Red and Blue and the other showed the same four
+        // as spectators, while the two worlds agreed perfectly.
+        //
+        // ⚠️ Cheap and self-healing: it is a handful of slots, and it cannot
+        // drift because it is copied from the thing that decides.
+        for (var slot = 1; slot < _roster.Count && slot < WorldState.MaxSlots; slot++)
+        {
+            _roster[slot].Team = _world.Players[slot].Team;
+            _roster[slot].Class = _world.Players[slot].Class;
         }
 
         // ⛔ NO TRIM FROM THE END. A departure is drained by the slot the node
@@ -366,6 +468,22 @@ public sealed partial class GameServer
         {
             if (bubble.Slot > 0 && bubble.Slot < _roster.Count)
                 ServerMessages.ChatBubble(_broadcast, (byte)bubble.Slot, bubble.Image);
+        }
+    }
+
+    /// <summary>
+    /// Renames the peer's players here, so both regions call them the same
+    /// thing.
+    /// </summary>
+    private void DrainMeshNames()
+    {
+        while (_mesh!.NamesFromPeer.TryDequeue(out var renamed))
+        {
+            if (renamed.Slot <= 0 || renamed.Slot >= _roster.Count)
+                continue;
+
+            _roster[renamed.Slot].Name = renamed.Name;
+            ServerMessages.PlayerChangeName(_broadcast, (byte)renamed.Slot, renamed.Name);
         }
     }
 
@@ -428,7 +546,9 @@ public sealed partial class GameServer
                         _mapChangeCountdown = -1;
 
                         _log.Info($"mesh: changing to {LogText.Safe(map)} area {_nextArea}");
-                        PerformMapChange();
+                        // ⛔ Rebuilt at the tick AFTER the one the change landed
+                        // at, which both nodes compute the same way.
+                        PerformMapChange(_meshDrained + 1);
 
                         // ⛔ Nothing after this in the tick's commands can mean
                         // anything: the roster has been reset and the node

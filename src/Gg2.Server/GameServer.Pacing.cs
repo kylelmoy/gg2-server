@@ -29,6 +29,20 @@ public sealed partial class GameServer
             if (_clients.Count != 0 || _joining.Count != 0)
                 return false;
 
+            // ⛔ A MESHED SERVER IS NEVER IDLE, however empty it looks. Its peer
+            // is running a match at 30 Hz and the two clocks have to stay
+            // together: a node that drops to 2 Hz falls fifteen ticks behind for
+            // every second it idles, and a roster change it schedules then names
+            // a tick its peer passed long ago and is refused.
+            //
+            // ⚠️ That is a DEADLOCK, not a slowdown, and it is how a live
+            // two-host run actually failed. The joiner's own bots were refused,
+            // which left its roster empty, which kept it idle, which kept its
+            // clock behind, which got the next join refused. It never acquired a
+            // single player.
+            if (_mesh is not null)
+                return false;
+
             for (var i = 0; i < _roster.Count; i++)
             {
                 if (_roster[i].IsBot)

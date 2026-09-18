@@ -593,6 +593,33 @@ as both nodes are in step.
 The throttle stays on the originating node, so what crosses the link is what
 that node's own clients saw and no more.
 
+## What a live run across two hosts found
+
+Two servers, one in US East and one in US West, exchanging inputs over a real
+internet link. **Every one of these was invisible to 3,600 local tests** and
+each now has a gate that fails without its fix.
+
+| What broke | Why no local test saw it |
+|---|---|
+| A server told to fill 4 bots added **48** | A meshed join takes ~10 ticks to reach the roster, and the population manager re-asked for the whole shortfall every tick. Locally, bots were added by hand and waited for. |
+| A refused command was a silent `return` | The sender had already applied it, so the two ran different matches with nothing said. Now counted, reported, and named with the skew. |
+| Team and class never crossed | One node showed four players on Red and Blue, the other showed the same four as spectators, **while the two worlds agreed perfectly**. The world was in step; the roster a client is served was not. |
+| Renames never crossed | `checkClasslimits` renames a bot the moment it re-classes it, and the peer went on using the name it joined with. Snapshots carried the joining name too. |
+| Commands scheduled against the SENDER's clock | A node behind its peer names a tick the peer has passed. Over a real link the joiner sat ~19 ticks back and every command it sent was refused. |
+| A map change rebuilt each node at ITS OWN tick | The two nodes drain the change at the same tick but are never on the same tick when they do, so the rebuilt matches started at different numbers. |
+| **A meshed server idled** | An empty server drops to 2 Hz. A meshed one is not empty — its peer is playing — and idling costs 15 ticks of skew a second. It deadlocks: refused joins leave the roster empty, which keeps it idle, which gets the next join refused. |
+
+⛔ **The mesh still does not agree across a real link.** After all seven fixes
+the two nodes stay in step and refuse nothing, but their digests disagree and
+their rosters end up different lengths — joins land on one node and not the
+other with no refusal reported. That is where the next investigation starts, and
+it is further in than this one began.
+
+⚠️ **Nothing in this repo can currently prove the mesh works.** The suite proves
+the pieces work against each other in one process; it took two hosts and a real
+link to find any of the above, and the digest is the only thing that reports the
+failure that is left.
+
 ## What is NOT built
 
 A client can join a meshed server, pick a team, play and leave; a meshed server
