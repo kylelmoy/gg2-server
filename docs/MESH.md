@@ -349,12 +349,31 @@ per-tick copy of the node's, so the 140-odd places that read it go on reading
 it. The corollary is the limit below: anything that changes the world between
 ticks is overwritten by that copy.
 
-⛔ **A meshed server refuses every client**, with a log line saying so at
-startup. A join changes the roster, and a roster change has to be a scheduled
-`MeshCommand` or the peer never hears about the player — the one divergence that
-does not converge. The scheduling exists; the join path does not use it yet.
-Refusing is the honest state of the work rather than accepting somebody into a
-match the other node disagrees about.
+### A client joining a meshed server
+
+A roster place is not a meshed server's to give. The join path schedules
+`AddPlayer` and parks the connection; nothing about that player reaches the wire
+until both nodes have applied the command at the agreed tick — a third of a
+second, against the seconds a GG2 join already takes. `MirrorMeshRoster` then
+brings the roster into line with the world: a parked client of ours completes
+the ordinary join sequence, and somebody who joined at the far end is added with
+no socket, which is the shape a bot already has.
+
+⛔ **The roster and the world must agree slot for slot.** A state update's
+player count comes from the ROSTER and each block from the world, so a roster
+longer than the world asks for a character that does not exist. The mirror runs
+before the update is written, so within one tick the three agree.
+
+⛔ **Two nodes must agree what tick it is**, and the session had no handshake
+until a client tried to join: the server scheduled ten ticks ahead of its OWN
+count, its peer was already past that, and every command was refused as too
+late. The listener names its tick and the joiner adopts it by rebuilding its
+node at that number.
+
+⚠️ **The link is serviced FIRST in a tick, always** — that call is where a
+listener ACCEPTS. Checking for a connection before servicing deadlocks: measured
+as a server sitting for 200 ticks with a peer waiting on a socket it had never
+accepted.
 
 ## What is NOT built
 

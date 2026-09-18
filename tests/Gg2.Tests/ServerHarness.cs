@@ -55,14 +55,30 @@ public sealed class ServerHarness : IDisposable
         return client;
     }
 
+    /// <summary>
+    /// Run after every tick, for a test that has something else to step in
+    /// lockstep with the server.
+    /// </summary>
+    /// <remarks>
+    /// <b>Added for a mesh peer, and the reason is the point.</b> A harness tick
+    /// is as fast as the machine allows, while a real server paces itself at
+    /// 30 Hz — so anything on its own timer races the server by orders of
+    /// magnitude, and two nodes that are supposed to be on the same tick end up
+    /// thousands apart. A test that needs a second node steps it here.
+    /// </remarks>
+    public Action? AfterTick { get; set; }
+
     /// <summary>Runs <paramref name="count"/> ticks, polling every client after each.</summary>
     public void Tick(int count = 1)
     {
         for (var i = 0; i < count; i++)
         {
             Server.Tick();
+
             foreach (var client in _clients)
                 client.Poll();
+
+            AfterTick?.Invoke();
         }
     }
 

@@ -31,15 +31,42 @@ public sealed class MeshSession : IDisposable
     private readonly List<int> _slots = [];
     private readonly List<PlayerInput> _inputs = [];
 
-    private MeshSession(MeshLink link, MeshNode node, bool listening)
+    private readonly CollisionWorld _collision;
+    private readonly SpawnPoints? _spawns;
+    private readonly WorldState _start;
+
+    private MeshSession(
+        MeshLink link, MeshNode node, bool listening,
+        CollisionWorld collision, in WorldState start, SpawnPoints? spawns)
     {
         _link = link;
+        _collision = collision;
+        _spawns = spawns;
+        _start = start;
         Node = node;
         Listening = listening;
+
+        // The listener names the tick and is therefore synchronised from the
+        // start; the joiner has to be told.
+        Synchronised = listening;
     }
 
     /// <summary>The rollback node. The world lives here while a mesh is running.</summary>
-    public MeshNode Node { get; }
+    public MeshNode Node { get; private set; }
+
+    /// <summary>
+    /// Whether the two nodes agree what tick it is.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>Two nodes must be on the SAME tick, and a local counter each is not
+    /// agreement.</b> Measured before this existed: a server scheduled a join
+    /// ten ticks ahead of its own count, its peer was already past that tick,
+    /// and the command was refused as too late — so the peer never heard about a
+    /// player who had already joined. The listener names its tick, the joiner
+    /// adopts it by rebuilding its node at that number, and both advance one per
+    /// tick from there.
+    /// </remarks>
+    public bool Synchronised { get; private set; }
 
     /// <summary>Whether this node waited for the peer rather than joining it.</summary>
     /// <remarks>
@@ -160,7 +187,13 @@ public sealed class MeshSession : IDisposable
             ? MeshLink.Listen(System.Net.IPAddress.Any, options.MeshListenPort)
             : Connect(options.MeshConnect);
 
-        return new MeshSession(link, new MeshNode(collision, start, new MeshOptions(), spawns), listening);
+        return new MeshSession(
+            link,
+            new MeshNode(collision, start, new MeshOptions(), spawns),
+            listening,
+            collision,
+            in start,
+            spawns);
     }
 
     private static MeshLink Connect(string target)
@@ -187,6 +220,33 @@ public sealed class MeshSession : IDisposable
     /// </remarks>
     public void Tick(ReadOnlySpan<PlayerInput> inputs, int liveSlots)
     {
+        // ⛔ Serviced FIRST, always: this is where a listener ACCEPTS its peer,
+        // so a tick that checked for a connection before servicing would never
+        // find one. Measured as a deadlock — the server sat for 200 ticks with a
+        // peer waiting on the other end of a socket it had not accepted.
+        _link.Service(Node, Compare, Hear);
+
+        // ⚠️ A joiner does not advance until the two nodes agree what tick it
+        // is. Advancing would be simulating a match the peer is not in, and
+        // every tick of it is thrown away by the rebuild.
+        if (!Synchronised)
+        {
+            if (_link.PeerOrigin is not { } theirs)
+                return;
+
+            Node = new MeshNode(
+                _collision, _start, new MeshOptions(), _spawns, startTick: (int)theirs);
+
+            Synchronised = true;
+        }
+
+        // ⚠️ A listener keeps running with no peer — it is a server, and its own
+        // clients are playing on it. It announces its tick while one is
+        // connected: a Hello is nine bytes and hearing it twice is harmless,
+        // which is cheaper than a handshake with states in it.
+        if (Listening && _link.Connected && Node.Tick % 5 == 0)
+            _link.SendHello(Node.Tick);
+
         var tick = Node.Tick;
 
         _slots.Clear();
@@ -209,7 +269,6 @@ public sealed class MeshSession : IDisposable
         if (tick % 30 == 0 && Node.Confirmed > 0 && Node.DigestAt(Node.Confirmed - 1) is { } mine)
             _link.SendDigest(Node.Confirmed - 1, mine);
 
-        _link.Service(Node, Compare, Hear);
         Node.Advance();
     }
 

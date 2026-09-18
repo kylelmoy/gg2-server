@@ -610,6 +610,15 @@ public sealed partial class GameServer : IDisposable, IPluginHost
     public int RosterCount => _roster.Count;
 
     /// <summary>
+    /// The port this node waits for a mesh peer on, or 0 when there is no mesh.
+    /// </summary>
+    /// <remarks>
+    /// Worth exposing for the same reason the game port is: a server asked for
+    /// port 0 got one from the OS, and something has to be able to say which.
+    /// </remarks>
+    public int MeshPort => _mesh?.Port ?? 0;
+
+    /// <summary>
     /// The name at <paramref name="slot"/>, as clients know it.
     /// </summary>
     /// <remarks>
@@ -1067,6 +1076,12 @@ public sealed partial class GameServer : IDisposable, IPluginHost
                     _world.Characters[slot].ApplyInput(_inputs[slot]);
             }
         }
+
+        // ⚠️ BEFORE the state update, so that within one tick the roster, the
+        // world and the update all describe the same set of people: the update's
+        // player count comes from the ROSTER and its blocks from the world.
+        // Does nothing at all unless this server is a mesh node.
+        MirrorMeshRoster();
 
         // Order matters and is the reference's. GameServerBeginStep.gml
         // serialises the update *before* any Character's Step runs, so one
