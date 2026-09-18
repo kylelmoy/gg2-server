@@ -82,6 +82,11 @@ public sealed partial class GameServer
     public int MeshEventsHeld => _meshEvents.Count;
 
     /// <summary>
+    /// The tick this node's mesh is on, or -1 when there is no mesh.
+    /// </summary>
+    public int MeshTick => _mesh?.Node.Tick ?? -1;
+
+    /// <summary>
     /// This node's world at a PAST tick as one number, or null if that tick is
     /// outside the window.
     /// </summary>
@@ -385,6 +390,26 @@ public sealed partial class GameServer
                         ServerMessages.PlayerChangeClass(
                             _broadcast, (byte)slot, (PlayerClass)command.A);
                         break;
+
+                    // ⛔ The node ignores this one — it cannot load a map, and
+                    // the collision world and spawn points are read-only inputs
+                    // it is given. So the SERVERS do it, both of them, at the
+                    // tick the command landed at, from the same reset world.
+                    case MeshCommandKind.ChangeMap
+                        when _mesh.MapChangeAt(_meshDrained) is { Length: > 0 } map:
+                    {
+                        _nextMap = map;
+                        _nextArea = Math.Max(1, (int)command.A);
+                        _mapChangeCountdown = -1;
+
+                        _log.Info($"mesh: changing to {LogText.Safe(map)} area {_nextArea}");
+                        PerformMapChange();
+
+                        // ⛔ Nothing after this in the tick's commands can mean
+                        // anything: the roster has been reset and the node
+                        // replaced. Both nodes stop here for the same reason.
+                        return;
+                    }
 
                     default:
                         break;

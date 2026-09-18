@@ -1,4 +1,5 @@
 using Gg2.Maps;
+using Gg2.Mesh;
 using Gg2.Protocol;
 using Gg2.Simulation;
 
@@ -195,7 +196,15 @@ public sealed partial class GameServer
         if (_mapChangeCountdown > 0)
             _mapChangeCountdown--;
 
-        if (_world.RoundDecided && !_world.MapChanging)
+        // ⛔ ONE NODE OWNS THE ROTATION, and it is the listener. Two nodes each
+        // deciding would pick from their own shuffled rotations and schedule two
+        // different maps, and the guard below cannot stop it: _world.MapChanging
+        // is written to a world the node overwrites every tick, so in a mesh it
+        // never sticks. The local countdown is what says a change is already
+        // pending here.
+        var mayDecide = _mesh is null || (_mesh.Listening && _mapChangeCountdown < 0);
+
+        if (mayDecide && _world.RoundDecided && !_world.MapChanging)
         {
             // `if(global.winners == TEAM_RED and global.currentMapArea <
             // global.totalMapAreas)` — red pushing through an Invasion map's
@@ -222,12 +231,39 @@ public sealed partial class GameServer
         if (_mapChangeCountdown != 0)
             return;
 
-        // `if(impendingMapChange == 0)`: the change itself. The reset clears
-        // mapchanging, the room reloads, and every player is given
-        // `alarm[5] = 1` so the whole server spawns in this same tick's alarm
-        // stage.
         _mapChangeCountdown = -1;
 
+        // ⛔ In a mesh the change is SCHEDULED, not done here. It replaces the
+        // whole world, and the world belongs to the node — a reset written to
+        // _world would be overwritten by the next copy from it, leaving this
+        // server's clients on a map its own simulation has never heard of.
+        // Both nodes do it at the same tick, from the same reset world, when the
+        // command lands. DrainMeshCommands.
+        if (_mesh is not null)
+        {
+            _mesh.Schedule(MeshCommand.ChangeMap(_nextArea), _nextMap);
+            return;
+        }
+
+        PerformMapChange();
+    }
+
+    /// <summary>
+    /// Loads the next map and resets the world onto it.
+    /// </summary>
+    /// <remarks>
+    /// <c>if(impendingMapChange == 0)</c>: the change itself. The reset clears
+    /// mapchanging, the room reloads, and every player is given
+    /// <c>alarm[5] = 1</c> so the whole server spawns in this same tick's alarm
+    /// stage.
+    /// <para>
+    /// ⚠️ <b>Shared by the standalone path and the meshed one</b>, which is the
+    /// point: a meshed change that took a different route would produce a
+    /// sequence no client has ever been sent.
+    /// </para>
+    /// </remarks>
+    private void PerformMapChange()
+    {
         Rounds.ResetForNewMap(ref _world, firstArea: _nextArea == 1);
 
         // The roster's own copy of the team, which the wire and the joining
@@ -259,6 +295,13 @@ public sealed partial class GameServer
         // and the new segment's preamble is taken against the world OpenMap has
         // just built, before anything broadcasts on it.
         _recorder?.StartSegment(map.Name);
+
+        // ⛔ LAST, and only in a mesh: the node is rebuilt around the new map's
+        // collision world and spawn points, carrying the world this method has
+        // just reset. Everything above wrote _world and the roster; without this
+        // the node would go on simulating the old map and overwrite all of it on
+        // the next tick.
+        _mesh?.Rebuild(_collision, in _world, _spawnPoints);
     }
 
     /// <summary>
