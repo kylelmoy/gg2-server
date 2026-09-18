@@ -12,6 +12,9 @@ namespace Gg2.Mesh;
 /// </remarks>
 public readonly record struct MeshMember(byte Origin, int Sequence, int Slot, string Name);
 
+/// <summary>A command already agreed for a tick that has not happened yet.</summary>
+public readonly record struct MeshPending(int Tick, MeshCommand Command, string Name);
+
 /// <summary>
 /// Everything a node needs to start where another node already is.
 /// </summary>
@@ -43,6 +46,16 @@ public sealed class MeshSnapshot
     /// <summary>Who is playing, where, and under whose join.</summary>
     public required IReadOnlyList<MeshMember> Members { get; init; }
 
+    /// <summary>
+    /// What has been agreed for ticks still to come.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ Without these a joiner loses everything that was in flight when it
+    /// attached: the frames were dropped for want of a peer, and the snapshot
+    /// was taken before they landed.
+    /// </remarks>
+    public required IReadOnlyList<MeshPending> Pending { get; init; }
+
     /// <summary>A name is twenty bytes on the GG2 wire and no more here.</summary>
     public const int MaxName = 20;
 
@@ -54,10 +67,13 @@ public sealed class MeshSnapshot
         var state = State;
         var world = MemoryMarshal.AsBytes(new ReadOnlySpan<WorldState>(in state));
 
-        var size = 8 + world.Length;
+        var size = 12 + world.Length;
 
         foreach (var member in Members)
             size += 5 + Math.Min(member.Name.Length, MaxName);
+
+        foreach (var pending in Pending)
+            size += 10 + Math.Min(pending.Name.Length, MaxName);
 
         var bytes = new byte[size];
         var at = 0;
@@ -73,6 +89,24 @@ public sealed class MeshSnapshot
             bytes[at++] = (byte)(member.Sequence & 0xFF);
             bytes[at++] = (byte)((member.Sequence >> 8) & 0xFF);
             bytes[at++] = (byte)member.Slot;
+            bytes[at++] = (byte)name.Length;
+
+            for (var i = 0; i < name.Length; i++)
+                bytes[at++] = (byte)name[i];
+        }
+
+        Write(bytes, ref at, Pending.Count);
+
+        foreach (var pending in Pending)
+        {
+            var name = pending.Name.Length > MaxName ? pending.Name[..MaxName] : pending.Name;
+
+            Write(bytes, ref at, pending.Tick);
+            bytes[at++] = (byte)pending.Command.Kind;
+            bytes[at++] = pending.Command.Slot;
+            bytes[at++] = pending.Command.A;
+            bytes[at++] = pending.Command.B;
+            bytes[at++] = pending.Command.Origin;
             bytes[at++] = (byte)name.Length;
 
             for (var i = 0; i < name.Length; i++)
@@ -134,6 +168,40 @@ public sealed class MeshSnapshot
             members[i] = new MeshMember(origin, sequence, slot, new string(chars));
         }
 
+        if (bytes.Length - at < 4)
+            return null;
+
+        var pendingCount = Read(bytes, ref at);
+
+        if (pendingCount < 0 || pendingCount > 512)
+            return null;
+
+        var pending = new MeshPending[pendingCount];
+
+        for (var i = 0; i < pendingCount; i++)
+        {
+            if (bytes.Length - at < 10)
+                return null;
+
+            var pendingTick = Read(bytes, ref at);
+            var command = new MeshCommand(
+                (MeshCommandKind)bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3], bytes[at + 4]);
+            var nameLength = bytes[at + 5];
+
+            at += 6;
+
+            if (nameLength > MaxName || bytes.Length - at < nameLength || pendingTick < 0)
+                return null;
+
+            var chars = new char[nameLength];
+
+            for (var c = 0; c < nameLength; c++)
+                chars[c] = (char)bytes[at + c];
+
+            at += nameLength;
+            pending[i] = new MeshPending(pendingTick, command, new string(chars));
+        }
+
         if (bytes.Length - at != StateBytes)
             return null;
 
@@ -142,6 +210,7 @@ public sealed class MeshSnapshot
             Tick = tick,
             State = MemoryMarshal.Read<WorldState>(bytes[at..]),
             Members = members,
+            Pending = pending,
         };
     }
 

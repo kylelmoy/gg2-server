@@ -44,6 +44,16 @@ public sealed partial class GameServer
     /// </remarks>
     public int BotsPending => _meshBots.Count;
 
+    /// <summary>
+    /// Whether this node is the one that fills the match with bots.
+    /// </summary>
+    /// <remarks>
+    /// True for a standalone server and for a mesh LISTENER; false for a joiner,
+    /// which shares the listener's roster and would otherwise fill it a second
+    /// time. See <c>BotPopulationService.Service</c> for what that cost.
+    /// </remarks>
+    public bool MeshFillsBots => _mesh is null || _mesh.Listening;
+
     /// <summary>This node's own count of joins, which names them to the peer.</summary>
     private int _meshSequence;
 
@@ -94,6 +104,9 @@ public sealed partial class GameServer
 
     /// <summary>How many are waiting, which is 0 or 1 unless confirmation stalled.</summary>
     public int MeshEventsHeld => _meshEvents.Count;
+
+    /// <summary>Slots this node sent inputs for on the last tick. Zero is a fault.</summary>
+    public int MeshOwnedSlots => _mesh?.Owned ?? 0;
 
     /// <summary>
     /// The tick this node's mesh is on, or -1 when there is no mesh.

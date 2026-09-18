@@ -711,6 +711,30 @@ public sealed class MeshNode
         _assigned.TryGetValue(Key(origin, sequence), out slot);
 
     /// <summary>
+    /// Commands agreed for ticks that have not happened yet.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>A snapshot without these is a match that loses whatever was already
+    /// in flight.</b> A node queues a command for ten ticks ahead; if its peer
+    /// attaches in between, the frame was dropped for want of a peer and the
+    /// snapshot is taken before the command lands — so the joiner gets neither.
+    /// Measured: a listener's startup bots reached the joiner by no route at all.
+    /// </remarks>
+    public IEnumerable<(int Tick, MeshCommand Command)> Pending()
+    {
+        for (var row = 0; row < _rows; row++)
+        {
+            var tick = _scheduledTick[row];
+
+            if (tick < Tick)
+                continue;
+
+            foreach (var command in _scheduled[row])
+                yield return (tick, command);
+        }
+    }
+
+    /// <summary>
     /// Every join this node has applied, as (origin, sequence, slot).
     /// </summary>
     /// <remarks>

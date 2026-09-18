@@ -881,6 +881,80 @@ public sealed class MeshJoinTests
     }
 
     /// <summary>
+    /// ⛔ Two meshed servers both told to fill six produce SIX, and the node
+    /// that owns them never stops sending their inputs.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Found on a direct two-host link, and it is what stopped the mesh
+    /// agreeing.</b> The two nodes share a roster, so two population managers
+    /// both filling to six made twelve and then raced to remove them — and
+    /// <c>RemoveOne</c> only ever takes a node's OWN bots, because a peer's
+    /// player arrives as a plain roster entry with no <c>IsBot</c>. The listener
+    /// removed every bot it owned, ended up owning NOTHING, and stopped sending
+    /// inputs; its peer went on guessing players that were no longer its to
+    /// drive, and confirmation stalled on both sides.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>The second assertion is the one that matters.</b> A roster of the
+    /// right size is satisfied by the broken version too, a moment before it
+    /// removes the wrong six — what says it is right is that the owner still has
+    /// players to send.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void TwoMeshedServersFillOneMatchBetweenThem()
+    {
+        const string map = "gg_debug";
+
+        static void Filling(ServerOptions options)
+        {
+            options.Map = map;
+            options.MeshEnabled = true;
+            options.NavCacheDirectory = MapDirectory.ResolveNav();
+            options.Bots = BotPopulationOptions.Default with
+            {
+                Enabled = true,
+                FillToPlayers = 6,
+                MaxBots = 6,
+                MinHumans = 0,
+            };
+        }
+
+        using var listener = new ServerHarness(options =>
+        {
+            Filling(options);
+            options.MeshListenPort = 0;
+        });
+
+        using var joiner = new ServerHarness(options =>
+        {
+            Filling(options);
+            options.MeshConnect = $"127.0.0.1:{listener.Server.MeshPort}";
+        });
+
+        listener.AfterTick = () => joiner.Tick();
+
+        // Well past the lead, and long enough for any churn to show up.
+        listener.Tick(MeshSession.CommandLead + 400);
+
+        // ⛔ Six between them, not six each.
+        Assert.Equal(6, listener.Server.BotSlots.Count);
+
+        // ⛔ And the node that owns them is still driving them. `owned 0` is what
+        // the live failure looked like, and everything downstream of it — the
+        // peer guessing players nobody drives, confirmation stalling — follows
+        // from exactly this number being zero.
+        Assert.True(
+            listener.Server.MeshOwnedSlots > 0,
+            "the listener owns no slots, so it is telling its peer nothing about its own players");
+
+        // The joiner shares the roster and fills none of it itself.
+        Assert.Empty(joiner.Server.BotSlots);
+        Assert.Equal(listener.Server.RosterCount, joiner.Server.RosterCount);
+    }
+
+    /// <summary>
     /// ⛔ A running mesh says whether the two nodes agree.
     /// </summary>
     /// <remarks>

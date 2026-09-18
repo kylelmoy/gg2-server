@@ -257,6 +257,21 @@ public sealed class MeshSession : IDisposable
                         ? name
                         : string.Empty))
                 .ToArray(),
+
+            // ⛔ What is already agreed for ticks still to come. Without it a
+            // joiner loses whatever was in flight when it attached: those frames
+            // were dropped for want of a peer, and this snapshot predates them
+            // landing, so it would reach the joiner by no route at all.
+            Pending = Node.Pending()
+                .Select(p => new MeshPending(
+                    p.Tick,
+                    p.Command,
+                    p.Command.Kind == MeshCommandKind.ChangeMap
+                        ? MapChangeAt(p.Tick) ?? string.Empty
+                        : PeerNames.TryGetValue(Key(p.Command.Origin, p.Command.Sequence), out var n)
+                            ? n
+                            : string.Empty))
+                .ToArray(),
         };
 
     /// <summary>
@@ -294,6 +309,21 @@ public sealed class MeshSession : IDisposable
             _collision, snapshot.State, new MeshOptions(), _spawns, startTick: snapshot.Tick);
 
         Node.Adopt(snapshot.Members);
+
+        // ⛔ And everything already agreed for ticks still to come, with the
+        // names and map that came with them.
+        foreach (var pending in snapshot.Pending)
+        {
+            Node.Schedule(pending.Tick, pending.Command);
+
+            if (pending.Name.Length == 0)
+                continue;
+
+            if (pending.Command.Kind == MeshCommandKind.ChangeMap)
+                _maps[pending.Tick] = pending.Name;
+            else
+                PeerNames[Key(pending.Command.Origin, pending.Command.Sequence)] = pending.Name;
+        }
 
         // Every player in the snapshot is the peer's, by definition: this node
         // had none. Their names are what this server's own clients will see.

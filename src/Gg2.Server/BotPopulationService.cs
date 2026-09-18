@@ -44,6 +44,9 @@ public sealed class BotPopulationService
     // Its own, and not the match's. See the remarks above.
     private GmlRandom _random;
 
+    /// <summary>Whether the "this node does not fill" line has been said.</summary>
+    private bool _saidNotFilling;
+
     public BotPopulationService(GameServer server, IServerLog log, uint seed)
     {
         ArgumentNullException.ThrowIfNull(server);
@@ -426,6 +429,35 @@ public sealed class BotPopulationService
         // of zero would remove it on the very next tick.
         if (!options.Enabled)
             return;
+
+        // ⛔ ONE NODE FILLS THE MATCH, and in a mesh it is the listener. The two
+        // nodes SHARE a roster, so two managers both filling to six make twelve
+        // and then race to remove them — and RemoveOne only ever takes a node's
+        // OWN bots, because a peer's player arrives as a plain roster entry with
+        // no IsBot. Measured on a direct two-host link: the listener removed
+        // every bot it owned, ended up owning NOTHING, and stopped sending
+        // inputs; its peer went on guessing players that were no longer its to
+        // drive, and confirmation stalled on both sides.
+        //
+        // ⚠️ The listener rather than a split, because a bot has no round trip
+        // to save. A player is driven from their own region so their keys do not
+        // cross an ocean before anything moves; a bot's keys are produced inside
+        // the tick that uses them, so driving one from the far node buys nothing
+        // and costs link traffic. docs/MESH.md, "Two population managers, one
+        // roster".
+        if (!_server.MeshFillsBots)
+        {
+            if (!_saidNotFilling)
+            {
+                _saidNotFilling = true;
+
+                _log.Info(
+                    "mesh: this node does not fill bots — the listening node fills the match for "
+                    + "both, so --bots here is ignored. docs/MESH.md");
+            }
+
+            return;
+        }
 
         // ⚠️ Zero rather than an early return, and the difference is the whole
         // feature: a suspension has to REMOVE the bots that are already here,

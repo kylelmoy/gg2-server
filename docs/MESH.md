@@ -626,16 +626,44 @@ recover from that.
 The fill target has to be agreed rather than applied twice — one node deciding
 for the match, or each node filling its own half of the target.
 
-⛔ **The mesh still does not agree across a real link.** After all seven fixes
-the two nodes stay in step and refuse nothing, but their digests disagree and
-their rosters end up different lengths — joins land on one node and not the
-other with no refusal reported. That is where the next investigation starts, and
-it is further in than this one began.
+### It agrees across a real link
 
-⚠️ **Nothing in this repo can currently prove the mesh works.** The suite proves
-the pieces work against each other in one process; it took two hosts and a real
-link to find any of the above, and the digest is the only thing that reports the
-failure that is left.
+Two servers, US East and US West, 72.7 ms RTT (mdev 0.098 ms — about 1.1 ticks
+each way), bots on the listener, a 90-second match:
+
+| | listener | joiner |
+|---|---|---|
+| digests compared | 85 | 90 |
+| **disagreements** | **0** | **0** |
+| in step | yes | yes |
+| refused commands | 0 | 0 |
+| inputs outside the window | 0 | 1 |
+| slots it drives | 6 | 0 |
+
+⚠️ **What this run does NOT exercise is the rollback.** Every player is the
+listener's, so the joiner has nothing to mispredict and both nodes report zero
+rollbacks. It proves the two nodes reach the same world over a real link and
+stay there; it does not yet prove they recover from a contradicted guess over
+one. That needs players on both sides.
+
+⚠️ **A joiner that cannot reach its peer exits** rather than retrying, so the
+listener has to be up first. `unable to start: Connection refused`.
+
+⛔ **Two population managers over one roster was the last thing stopping it.**
+Each node filled to its own target against a roster they share, so two nodes
+told to fill six made twelve and then raced to remove them — and `RemoveOne`
+only ever takes a node's OWN bots. The listener removed every bot it owned,
+ended up owning nothing, and stopped sending inputs.
+
+**One node fills the match, and it is the listener.** A bot has no round trip to
+save: a player is driven from their own region so their keys do not cross an
+ocean before anything moves, but a bot's keys are produced inside the tick that
+uses them. Driving one from the far node buys nothing and costs link traffic.
+
+⚠️ **Nothing in this repo can prove the mesh works by itself.** The suite proves
+the pieces work against each other in one process; every one of the failures
+above took two hosts and a real link to find, and the ten-second report is the
+only thing that shows a running mesh agreeing or not.
 
 ## What is NOT built
 
