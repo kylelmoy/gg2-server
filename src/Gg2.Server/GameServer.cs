@@ -179,6 +179,17 @@ public sealed partial class GameServer : IDisposable, IPluginHost
     // seeds — only the parity replayer does — so it stays a pure output here.
     private TickEvents _events;
 
+    /// <summary>
+    /// This server's half of a match running in more than one place, or null.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>Null is the normal case and the default.</b> A server given no mesh
+    /// setting never builds one and never touches a line of rollback code; the
+    /// tick below branches on this being null and takes the same path it always
+    /// has. `docs/MESH.md`, and `MeshIsOptionalTests` holds it down.
+    /// </remarks>
+    private MeshSession? _mesh;
+
     // Seeds the simulation's stream once, in Start, and is read nowhere else —
     // ⚠️ its name and its old comment both said "which spawn point a player gets",
     // which it has not decided for as long as `git log -S` can see. Server-side
@@ -868,6 +879,29 @@ public sealed partial class GameServer : IDisposable, IPluginHost
         {
             _rewards = new RewardAuthClient(_log, _options.AuthServerHost, _options.AuthServerPort);
             _log.Info($"reward auth via {_options.AuthServerHost}:{_options.AuthServerPort}");
+        }
+
+        // ⛔ EXPERIMENTAL and off unless asked for. What works: the simulation
+        // runs through a rollback node, this server's own players' inputs go to
+        // the peer, and the two nodes' worlds are compared once a second. What
+        // does NOT work yet is named out loud rather than discovered: a client
+        // cannot join a meshed server, because carrying a roster change across
+        // the link means scheduling it as a MeshCommand through the join path,
+        // and that is not wired; and irreversible events still go out
+        // provisionally rather than through MeshNode.TryTakeConfirmed.
+        if (_options.MeshEnabled)
+        {
+            _mesh = MeshSession.Start(_options, _collision, in _world, _spawnPoints);
+
+            _log.Warn(
+                "MESH MODE IS EXPERIMENTAL: no client may join, and events are not held "
+                + "until confirmed. docs/MESH.md");
+
+            _log.Info(
+                _options.MeshConnect.Length > 0
+                    ? $"mesh: joining {_options.MeshConnect}, this node owns the odd slots"
+                    : $"mesh: waiting for a peer on {_options.MeshListenPort}, "
+                        + "this node owns the even slots");
         }
 
         // Loopback only and off unless configured — it executes commands

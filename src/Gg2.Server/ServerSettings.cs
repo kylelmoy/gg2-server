@@ -858,6 +858,50 @@ public static class ServerSettings
                 + "0 asks the OS for a free one. It executes commands against a live game.",
         });
 
+        settings.Add(new ServerSetting
+        {
+            Section = "Mesh",
+            Key = "ListenPort",
+            Property = nameof(ServerOptions.MeshListenPort),
+            Kind = SettingKind.Integer,
+            Get = o => o.MeshListenPort.ToString(CultureInfo.InvariantCulture),
+            Set = (o, v) =>
+            {
+                o.MeshListenPort = Number("Mesh.ListenPort", v);
+                o.MeshEnabled = true;
+            },
+            Probe = "27600",
+            Help = "Wait for a mesh peer on this port. Naming it at all turns the mesh ON. "
+                + "⛔ A server with no mesh setting is an ordinary standalone server.",
+        });
+
+        settings.Add(new ServerSetting
+        {
+            Section = "Mesh",
+            Key = "Connect",
+            Property = nameof(ServerOptions.MeshConnect),
+            Kind = SettingKind.Text,
+            Get = o => o.MeshConnect,
+            Set = (o, v) =>
+            {
+                o.MeshConnect = v.Trim();
+                o.MeshEnabled = o.MeshEnabled || o.MeshConnect.Length > 0;
+            },
+            Probe = "gg2-us-west:27600",
+            Help = "Join a mesh peer at host:port instead of waiting for one. Naming it "
+                + "turns the mesh ON.",
+        });
+
+        // ⚠️ AFTER the two above, for the reason [Runtime] ControlPortEnabled comes
+        // after ControlPort: naming a port turns the mesh on, so the explicit
+        // switch has to be able to turn it back off.
+        settings.Add(BoolRow(
+            "Mesh", "Enabled", nameof(ServerOptions.MeshEnabled),
+            o => o.MeshEnabled, (o, v) => o.MeshEnabled = v,
+            "Run as one node of a match happening in more than one place. A ListenPort "
+            + "or Connect key on its own turns it on; this is how it is turned back off.",
+            probe: "1"));
+
         // ⚠️ AFTER ControlPort, for the reason [Web] Enabled comes after [Web] Port:
         // the port's setter turns it on, so the explicit switch has to be second.
         // ⛔ A separate key rather than "a non-zero port means on", because zero is a

@@ -30,7 +30,27 @@ public sealed partial class GameServer
         // see the method.
         RequestGeneratorScoreboardSync();
 
-        MatchSimulation.Tick(_collision, ref _world, _inputs.AsSpan(0, count), ref _events, _spawnPoints);
+        if (_mesh is null)
+        {
+            MatchSimulation.Tick(
+                _collision, ref _world, _inputs.AsSpan(0, count), ref _events, _spawnPoints);
+        }
+        else
+        {
+            // ⛔ In a mesh the NODE owns the world, because it is the thing that
+            // can rewind to a past copy of it. This server's own field becomes a
+            // per-tick snapshot of the node's — one struct assignment, paid only
+            // in this mode — so the 140-odd places that read `_world` go on
+            // reading it and nothing else in the file has to know.
+            //
+            // ⚠️ The corollary is the reason a client cannot join yet: anything
+            // that changes `_world` between ticks is overwritten here, so a join
+            // has to become a scheduled MeshCommand before it can work at all.
+            _mesh.Tick(_inputs.AsSpan(0, count), count);
+
+            _world = _mesh.Node.State;
+            _events = _mesh.Node.LastEvents;
+        }
 
         // ⚠️ And this one after it, equally deliberately. Same method-level
         // reasoning, opposite answer.

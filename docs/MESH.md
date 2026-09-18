@@ -265,6 +265,38 @@ place within a few ticks. The gate bites only once it asserts *when* the player
 appears, while that is still observable. Mutation score 2 of 6 before, 3 of 7
 after.
 
+## Turning it on
+
+⛔ **The mesh is opt-in and a server given no mesh setting is an ordinary
+standalone server.** The tick branches on one null field; with nothing
+configured it runs `MatchSimulation.Tick` exactly as it always has, and no
+rollback code is reachable. `MeshIsOptionalTests` asserts that from one side and
+the other 3,500-odd tests assert it from the other, by exercising a standalone
+server and never mentioning the mesh.
+
+| Flag | Config key | Effect |
+|---|---|---|
+| `--mesh-listen <port>` | `[Mesh] ListenPort` | wait for a peer; owns the EVEN slots |
+| `--mesh-connect <host:port>` | `[Mesh] Connect` | join a peer; owns the ODD slots |
+| `--no-mesh` | `[Mesh] Enabled` | off, whatever else was set |
+
+Which half of the roster a node owns is decided by which end listened — the only
+asymmetry two nodes have for free. Anything else is a thing an operator can get
+wrong on one machine, and two nodes that both think they own slot 4 would each
+be guessing at a player the other is driving.
+
+⚠️ **In a mesh, the NODE owns the world.** The server's own `_world` becomes a
+per-tick copy of the node's, so the 140-odd places that read it go on reading
+it. The corollary is the limit below: anything that changes the world between
+ticks is overwritten by that copy.
+
+⛔ **A meshed server refuses every client**, with a log line saying so at
+startup. A join changes the roster, and a roster change has to be a scheduled
+`MeshCommand` or the peer never hears about the player — the one divergence that
+does not converge. The scheduling exists; the join path does not use it yet.
+Refusing is the honest state of the work rather than accepting somebody into a
+match the other node disagrees about.
+
 ## What is NOT built
 
 ⛔ **Nothing here reaches a socket or a client yet.** Two pieces stand between
