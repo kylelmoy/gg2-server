@@ -98,6 +98,8 @@ public sealed class MeshJoinTests
 
         public int OriginOf(int slot) => Node.OriginOf(slot);
 
+        public Team TeamOf(int slot) => Node.State.Players[slot].Team;
+
         public void Dispose() => _link.Dispose();
     }
 
@@ -166,5 +168,60 @@ public sealed class MeshJoinTests
         harness.JoinClient("Vindicator");
 
         Assert.Equal("Vindicator", harness.Server.NameOf(harness.Server.RosterCount - 1));
+    }
+
+    /// <summary>
+    /// ⛔ A meshed client can pick a team, and the peer applies the same change.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Joining is not playing.</b> A client that can reach the roster but
+    /// whose team change is silently reverted on the next copy from the node is
+    /// worse than one that was refused: it looks like it works. A team change
+    /// mutates the world outside the tick, so in a mesh it has to be a scheduled
+    /// command like a join.
+    /// </para>
+    /// <para>
+    /// ⚠️ What this does NOT assert is autobalance: a meshed change runs
+    /// <c>PlayerCommands.ChangeTeam</c>, not the balancing variant, so a meshed
+    /// server does not rebalance on a team change the way a standalone one does.
+    /// Both nodes agree, which is what matters for the mesh; the difference from
+    /// standalone is real and written down rather than discovered.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void AMeshedClientCanPickATeamAndThePeerAgrees()
+    {
+        using var harness = new ServerHarness(options =>
+        {
+            options.MeshEnabled = true;
+            options.MeshListenPort = 0;
+        });
+
+        using var peer = new Peer(harness.Server.MeshPort, Map());
+        harness.AfterTick = peer.Tick;
+
+        harness.Tick(20);
+
+        var client = harness.JoinClient("Vindicator");
+
+        var slot = -1;
+
+        for (var i = 1; i < harness.Server.RosterCount; i++)
+        {
+            if (harness.Server.NameOf(i) == "Vindicator")
+                slot = i;
+        }
+
+        Assert.True(slot > 0);
+
+        client.SendChangeTeam(Team.Red);
+
+        // The change waits for its agreed tick, like the join did.
+        for (var i = 0; i < MeshSession.CommandLead + 40; i++)
+            harness.Tick();
+
+        Assert.Equal(Team.Red, harness.Server.TeamOf(slot));
+        Assert.Equal(Team.Red, peer.TeamOf(slot));
     }
 }

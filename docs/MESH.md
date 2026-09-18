@@ -375,6 +375,30 @@ listener ACCEPTS. Checking for a connection before servicing deadlocks: measured
 as a server sitting for 200 ticks with a peer waiting on a socket it had never
 accepted.
 
+### Playing, not just joining
+
+A team or class change mutates the world outside the tick, so in a mesh it is a
+scheduled command like a join. Without that a client could reach the roster and
+then have every team change silently reverted by the next copy from the node —
+worse than being refused, because it looks like it works.
+
+⛔ **A mesh command is the REAL player command, not a field write.** A team
+change drops the intel, kills the character and arms a respawn, and both nodes
+must do all of it from the same state at the same tick. A node that only set the
+team field would be carrying an intel the other had dropped.
+
+Each server does the presentation half for its own clients: its roster copy and
+its own `PLAYER_CHANGETEAM`. That split is what lets a change that originated at
+the PEER reach this node's clients at all.
+
+⚠️ **Drained by tick, once, behind a high-water mark.** A rewind re-applies a
+tick's commands — that is what a schedule is for — so anything broadcasting per
+application would re-send the change on every replay.
+
+⚠️ **A meshed team change does not rebalance.** It runs
+`PlayerCommands.ChangeTeam`, not the balancing variant. Both nodes agree, which
+is what the mesh needs, but it differs from a standalone server.
+
 ## What is NOT built
 
 ⛔ **Nothing here reaches a socket or a client yet.** Two pieces stand between

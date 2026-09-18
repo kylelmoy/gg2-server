@@ -596,6 +596,19 @@ public sealed class MeshNode
                         command.A, command.B);
                     break;
 
+                // ⛔ The real command, not a field write: a team change drops
+                // the intel, kills the character and arms a respawn. Both nodes
+                // run all of it, from the same state, at the same tick — so a
+                // node that only set the field would be carrying an intel the
+                // other had dropped.
+                case MeshCommandKind.ChangeTeam:
+                    PlayerCommands.ChangeTeam(ref _state, slot, (Team)command.A);
+                    break;
+
+                case MeshCommandKind.ChangeClass:
+                    PlayerCommands.ChangeClass(ref _state, slot, (PlayerClass)command.A, _world);
+                    break;
+
                 case MeshCommandKind.RemovePlayer:
                 {
                     if (!_state.HasPlayer[slot])
