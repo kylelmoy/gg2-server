@@ -251,6 +251,30 @@ removal renumbers every slot above it.
 `MeshStats.TooLate`. Applying it would mean rewinding to a tick the peer never
 rewound to, over a change the peer has never heard of.
 
+### Crossing the link
+
+A command is scheduled on the node that decided it **and** sent to the peer in
+one call — `MeshSession.Schedule`. Both halves or neither: scheduling without
+sending leaves the peer in a different match, sending without scheduling leaves
+this node in one, and no ordering between them makes a half-done roster change
+safe.
+
+The lead is ten ticks, a third of a second. It has to exceed the link's worst
+one-way delay plus jitter, because a command for a tick already simulated is
+refused rather than applied on one machine only. The only thing it delays is how
+soon a joining player appears, against the seconds a GG2 join already takes.
+
+⚠️ **The name rides with the command**, because the peer tells its OWN clients
+who joined and a slot number is not a person. It is written as bytes and not
+re-encoded: a GG2 name is twenty arbitrary bytes, control characters included.
+
+⛔ **The length byte goes BEFORE the name.** The first version put it after and
+scanned for it, which mis-frames on any name whose bytes equal their own index —
+invisible on loopback, and on a real link it eats the stream's alignment so
+every later frame is read from the wrong offset. The gate sends exactly that
+name and then asserts the NEXT frame still reads, because alignment damage only
+shows downstream.
+
 ### A gate that could not fail
 
 The first version of the test for this asserted that a player still existed

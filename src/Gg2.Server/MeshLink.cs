@@ -39,6 +39,21 @@ public sealed class MeshLink : IDisposable
     private const byte HelloFrame = 3;
 
     /// <summary>
+    /// A roster change, scheduled for a tick.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>A command must cross the link or it is not a mesh change at all.</b>
+    /// A join applied on one node and never told to the other leaves two nodes
+    /// running different matches, and unlike a mispredicted key that does not
+    /// converge. The name rides with it because a peer has to tell its OWN
+    /// clients who joined, and a slot number is not a person.
+    /// </remarks>
+    private const byte CommandFrame = 4;
+
+    /// <summary>A player name is twenty arbitrary bytes on the GG2 wire.</summary>
+    private const int MaxName = 20;
+
+    /// <summary>
     /// Inputs and digests only, so a frame is small; the cap is a sanity bound
     /// on a corrupt length rather than a protocol limit.
     /// </summary>
@@ -128,6 +143,42 @@ public sealed class MeshLink : IDisposable
     }
 
     /// <summary>
+    /// Queues a roster change for a tick, with the name when there is one.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>The tick has to be far enough ahead that the peer hears it before
+    /// reaching it</b>, which is the caller's job — a command that arrives for a
+    /// tick already simulated is refused by the node at the other end, and
+    /// counted, rather than applied on one machine only.
+    /// </remarks>
+    public void SendCommand(int tick, in MeshCommand command, ReadOnlySpan<char> name = default)
+    {
+        var length = Math.Min(name.Length, MaxName);
+        var body = _out.GetSpan(10 + length);
+
+        body[0] = CommandFrame;
+        WriteInt(body[1..], tick);
+        body[5] = (byte)command.Kind;
+        body[6] = command.Slot;
+        body[7] = command.A;
+        body[8] = command.B;
+
+        // ⛔ The length goes BEFORE the name. An earlier version put it after and
+        // scanned for it, which mis-frames on any name whose own bytes happen to
+        // equal their index — a corruption that never shows on loopback and
+        // eats the stream's alignment on a real link.
+        body[9] = (byte)length;
+
+        // ⚠️ Written as bytes, not re-encoded: a GG2 name is twenty ARBITRARY
+        // bytes and may be anything at all. LogText.Safe is what a log line
+        // needs; a wire does not get to be fussy about it.
+        for (var i = 0; i < length; i++)
+            body[10 + i] = (byte)name[i];
+
+        _out.Advance(10 + length);
+    }
+
+    /// <summary>
     /// Announces the wall-clock instant this node calls tick zero.
     /// </summary>
     public void SendHello(long originUnixMs)
@@ -167,7 +218,10 @@ public sealed class MeshLink : IDisposable
     /// <param name="onDigest">
     /// Called with (tick, peer digest) for each digest frame. Null ignores them.
     /// </param>
-    public void Service(MeshNode node, Action<int, ulong>? onDigest = null)
+    public void Service(
+        MeshNode node,
+        Action<int, ulong>? onDigest = null,
+        Action<int, MeshCommand, string>? onCommand = null)
     {
         ArgumentNullException.ThrowIfNull(node);
 
@@ -186,11 +240,12 @@ public sealed class MeshLink : IDisposable
             return;
         }
 
-        Receive(node, onDigest);
+        Receive(node, onDigest, onCommand);
         Flush();
     }
 
-    private void Receive(MeshNode node, Action<int, ulong>? onDigest)
+    private void Receive(
+        MeshNode node, Action<int, ulong>? onDigest, Action<int, MeshCommand, string>? onCommand)
     {
         var buffer = ArrayPool<byte>.Shared.Rent(4096);
 
@@ -217,7 +272,7 @@ public sealed class MeshLink : IDisposable
             ArrayPool<byte>.Shared.Return(buffer);
         }
 
-        Parse(node, onDigest);
+        Parse(node, onDigest, onCommand);
     }
 
     /// <summary>
@@ -231,7 +286,8 @@ public sealed class MeshLink : IDisposable
     /// read was one frame would work on loopback and desynchronise over a real
     /// link, which is the worst place to find out.
     /// </remarks>
-    private void Parse(MeshNode node, Action<int, ulong>? onDigest)
+    private void Parse(
+        MeshNode node, Action<int, ulong>? onDigest, Action<int, MeshCommand, string>? onCommand)
     {
         var at = 0;
 
@@ -286,6 +342,41 @@ public sealed class MeshLink : IDisposable
 
                 onDigest?.Invoke(tick, digest);
                 at += 13;
+                continue;
+            }
+
+            if (kind == CommandFrame)
+            {
+                if (_pending.Count - at < 10)
+                    break;
+
+                var nameLength = _pending[at + 9];
+
+                if (nameLength > MaxName)
+                {
+                    Drop();
+                    return;
+                }
+
+                if (_pending.Count - at < 10 + nameLength)
+                    break;
+
+                var commandTick = ReadInt(at + 1);
+                var command = new MeshCommand(
+                    (MeshCommandKind)_pending[at + 5],
+                    _pending[at + 6],
+                    _pending[at + 7],
+                    _pending[at + 8]);
+
+                var chars = new char[nameLength];
+
+                for (var i = 0; i < nameLength; i++)
+                    chars[i] = (char)_pending[at + 10 + i];
+
+                onCommand?.Invoke(commandTick, command, new string(chars));
+                Stats = Stats with { CommandsReceived = Stats.CommandsReceived + 1 };
+
+                at += 10 + nameLength;
                 continue;
             }
 
@@ -381,8 +472,10 @@ public sealed class MeshLink : IDisposable
 }
 
 /// <summary>What a link has carried.</summary>
-public readonly record struct MeshLinkStats(int InputsReceived, int FramesSent, int Disagreements)
+public readonly record struct MeshLinkStats(
+    int InputsReceived, int FramesSent, int Disagreements, int CommandsReceived)
 {
     public override string ToString() =>
-        $"{InputsReceived} input(s) in, {FramesSent} frame(s) out, {Disagreements} disagreement(s)";
+        $"{InputsReceived} input(s) in, {CommandsReceived} command(s) in, "
+        + $"{FramesSent} frame(s) out, {Disagreements} disagreement(s)";
 }

@@ -224,4 +224,81 @@ public sealed class MeshLinkTests
         Assert.Equal(a.Tick, b.Tick);
         Assert.Equal(a.Digest, b.Digest);
     }
+
+    /// <summary>
+    /// A roster change crosses the link, name and all, and lands on its tick.
+    /// </summary>
+    /// <remarks>
+    /// <b>The name rides with the command because a slot number is not a
+    /// person.</b> The peer has to tell its OWN clients who joined, and it has
+    /// no other way to learn that.
+    /// </remarks>
+    [Fact]
+    public void ACommandCrossesTheWireWithItsName()
+    {
+        ReferenceTree.RequireAvailable();
+
+        var (host, peer) = Pair();
+        using var _ = host;
+        using var __ = peer;
+
+        var node = new MeshNode(Collision(), World());
+        var heard = new List<(int Tick, MeshCommand Command, string Name)>();
+
+        peer.SendCommand(40, MeshCommand.AddPlayer(5), "Vindicator");
+        peer.SendCommand(40, MeshCommand.SetTeam(5, Team.Blue));
+        peer.Service(node);
+
+        for (var i = 0; i < 20 && heard.Count < 2; i++)
+        {
+            host.Service(node, null, (tick, command, name) => heard.Add((tick, command, name)));
+            Thread.Sleep(5);
+        }
+
+        Assert.Equal(2, heard.Count);
+        Assert.Equal((40, MeshCommand.AddPlayer(5), "Vindicator"), heard[0]);
+        Assert.Equal((40, MeshCommand.SetTeam(5, Team.Blue), string.Empty), heard[1]);
+    }
+
+    /// <summary>
+    /// ⛔ A name whose bytes look like a length does not corrupt the stream.
+    /// </summary>
+    /// <remarks>
+    /// <b>The bug this exists for was in the first version of the frame.</b> The
+    /// length byte sat AFTER the name and the reader scanned for it, so a name
+    /// containing a byte equal to its own index framed short — and every frame
+    /// after it was read from the wrong offset. A GG2 name is twenty arbitrary
+    /// bytes, control characters included, so that is not a hypothetical input.
+    /// </remarks>
+    [Fact]
+    public void ANameFullOfAwkwardBytesStillFrames()
+    {
+        ReferenceTree.RequireAvailable();
+
+        var (host, peer) = Pair();
+        using var _ = host;
+        using var __ = peer;
+
+        var node = new MeshNode(Collision(), World());
+        var heard = new List<(int Tick, MeshCommand Command, string Name)>();
+
+        // Exactly the shape that defeated the scanning reader: byte i == i.
+        var awkward = new string([(char)0, (char)1, (char)2, (char)3, (char)4]);
+
+        peer.SendCommand(11, MeshCommand.AddPlayer(6), awkward);
+        peer.SendCommand(12, MeshCommand.Spawn(6), "after");
+        peer.Service(node);
+
+        for (var i = 0; i < 20 && heard.Count < 2; i++)
+        {
+            host.Service(node, null, (tick, command, name) => heard.Add((tick, command, name)));
+            Thread.Sleep(5);
+        }
+
+        Assert.Equal(2, heard.Count);
+        Assert.Equal(awkward, heard[0].Name);
+
+        // The frame AFTER it is the one that proves alignment survived.
+        Assert.Equal((12, MeshCommand.Spawn(6), "after"), heard[1]);
+    }
 }
