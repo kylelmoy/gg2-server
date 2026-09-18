@@ -626,7 +626,33 @@ recover from that.
 The fill target has to be agreed rather than applied twice — one node deciding
 for the match, or each node filling its own half of the target.
 
-### It agrees across a real link
+### It agrees across a real link, with the rewind working
+
+Two servers, US East and US West, 72.7 ms RTT (mdev 0.098 ms — about 1.1 ticks
+each way), **players on both nodes**, a 130-second match:
+
+| | listener | joiner |
+|---|---|---|
+| digests compared | 127 | 130 |
+| **disagreements** | **0** | **0** |
+| rollbacks | 2,285 | 19 |
+| ticks re-simulated | 9,181 | 19 |
+| deepest rewind | 5 | 1 |
+| refused commands | 0 | 0 |
+| slots it drives | 4 | 2 |
+| events held | 1 | 30 |
+
+**This is the whole claim.** Two nodes on different continents-worth of latency,
+each driving its own players, each guessing the other's, each rewinding when a
+guess is contradicted — and agreeing on every sample. The deepest rewind is 5
+ticks, which is what a 1.1-tick link plus scheduling jitter should cost.
+
+The events held are the holding rule working: neither node published a death it
+could still have had to unmake.
+
+### An earlier run that agreed and proved less
+
+
 
 Two servers, US East and US West, 72.7 ms RTT (mdev 0.098 ms — about 1.1 ticks
 each way), bots on the listener, a 90-second match:
