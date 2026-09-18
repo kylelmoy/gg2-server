@@ -60,11 +60,44 @@ public enum MeshCommandKind : byte
 /// in a schedule as an input does, and so two nodes comparing schedules are
 /// comparing numbers.
 /// </remarks>
-public readonly record struct MeshCommand(MeshCommandKind Kind, byte Slot, byte A, byte B)
+public readonly record struct MeshCommand(
+    MeshCommandKind Kind, byte Slot, byte A, byte B, byte Origin = 0)
     : IComparable<MeshCommand>
 {
-    public static MeshCommand AddPlayer(int slot) =>
-        new(MeshCommandKind.AddPlayer, (byte)slot, 0, 0);
+    /// <summary>
+    /// A join, whose SLOT is decided by applying it rather than by asking for
+    /// one.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ⛔ <b>A GG2 roster is dense and positional</b> — the wire numbers players
+    /// by their place in it, and every client tracks that. So two nodes cannot
+    /// each pick a slot for somebody joining: they would pick the same one, and
+    /// the second join would land on top of the first.
+    /// </para>
+    /// <para>
+    /// Instead a join names WHO issued it and their own counter, and the slot
+    /// falls out of the order every node already computes: the lowest free slot,
+    /// assigned as the command is applied. Two joins landing on the same tick
+    /// from opposite ends of the link therefore take consecutive slots, in the
+    /// same order, on both machines, with nobody having coordinated anything.
+    /// </para>
+    /// <para>
+    /// <paramref name="origin"/> is which node issued it — the listener is 0 —
+    /// and <paramref name="sequence"/> is that node's own count, which is what
+    /// lets the issuer find out afterwards which slot its player got.
+    /// </para>
+    /// </remarks>
+    public static MeshCommand AddPlayer(int origin, int sequence) =>
+        new(
+            MeshCommandKind.AddPlayer,
+            0,
+            (byte)(sequence & 0xFF),
+            (byte)((sequence >> 8) & 0xFF),
+            (byte)origin);
+
+    /// <summary>The issuer's own count, for finding the slot it was given.</summary>
+    public int Sequence => A | (B << 8);
 
     public static MeshCommand SetTeam(int slot, Team team) =>
         new(MeshCommandKind.SetTeam, (byte)slot, (byte)team, 0);
@@ -80,14 +113,26 @@ public readonly record struct MeshCommand(MeshCommandKind Kind, byte Slot, byte 
         new(MeshCommandKind.RemovePlayer, (byte)slot, 0, 0);
 
     /// <summary>
-    /// The order two nodes both compute: kind first, then slot, then payload.
+    /// The order two nodes both compute: kind, then who issued it, then slot,
+    /// then payload.
     /// </summary>
+    /// <remarks>
+    /// <b>Origin comes before slot because a join has no slot yet.</b> Two joins
+    /// on one tick are ordered by which node issued them and that node's own
+    /// counter, which is the whole of what decides who gets the lower roster
+    /// place — and it has to be decided the same way on both machines.
+    /// </remarks>
     public int CompareTo(MeshCommand other)
     {
         var kind = Kind.CompareTo(other.Kind);
 
         if (kind != 0)
             return kind;
+
+        var origin = Origin.CompareTo(other.Origin);
+
+        if (origin != 0)
+            return origin;
 
         var slot = Slot.CompareTo(other.Slot);
 

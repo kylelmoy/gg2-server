@@ -154,7 +154,7 @@ public sealed class MeshLink : IDisposable
     public void SendCommand(int tick, in MeshCommand command, ReadOnlySpan<char> name = default)
     {
         var length = Math.Min(name.Length, MaxName);
-        var body = _out.GetSpan(10 + length);
+        var body = _out.GetSpan(11 + length);
 
         body[0] = CommandFrame;
         WriteInt(body[1..], tick);
@@ -163,19 +163,24 @@ public sealed class MeshLink : IDisposable
         body[7] = command.A;
         body[8] = command.B;
 
+        // ⚠️ Which node issued it, and it is not decoration: a join's ROSTER
+        // PLACE is decided by this, so a frame that dropped it would have two
+        // nodes handing the same slot to different people.
+        body[9] = command.Origin;
+
         // ⛔ The length goes BEFORE the name. An earlier version put it after and
         // scanned for it, which mis-frames on any name whose own bytes happen to
         // equal their index — a corruption that never shows on loopback and
         // eats the stream's alignment on a real link.
-        body[9] = (byte)length;
+        body[10] = (byte)length;
 
         // ⚠️ Written as bytes, not re-encoded: a GG2 name is twenty ARBITRARY
         // bytes and may be anything at all. LogText.Safe is what a log line
         // needs; a wire does not get to be fussy about it.
         for (var i = 0; i < length; i++)
-            body[10 + i] = (byte)name[i];
+            body[11 + i] = (byte)name[i];
 
-        _out.Advance(10 + length);
+        _out.Advance(11 + length);
     }
 
     /// <summary>
@@ -347,10 +352,10 @@ public sealed class MeshLink : IDisposable
 
             if (kind == CommandFrame)
             {
-                if (_pending.Count - at < 10)
+                if (_pending.Count - at < 11)
                     break;
 
-                var nameLength = _pending[at + 9];
+                var nameLength = _pending[at + 10];
 
                 if (nameLength > MaxName)
                 {
@@ -358,7 +363,7 @@ public sealed class MeshLink : IDisposable
                     return;
                 }
 
-                if (_pending.Count - at < 10 + nameLength)
+                if (_pending.Count - at < 11 + nameLength)
                     break;
 
                 var commandTick = ReadInt(at + 1);
@@ -366,17 +371,18 @@ public sealed class MeshLink : IDisposable
                     (MeshCommandKind)_pending[at + 5],
                     _pending[at + 6],
                     _pending[at + 7],
-                    _pending[at + 8]);
+                    _pending[at + 8],
+                    _pending[at + 9]);
 
                 var chars = new char[nameLength];
 
                 for (var i = 0; i < nameLength; i++)
-                    chars[i] = (char)_pending[at + 10 + i];
+                    chars[i] = (char)_pending[at + 11 + i];
 
                 onCommand?.Invoke(commandTick, command, new string(chars));
                 Stats = Stats with { CommandsReceived = Stats.CommandsReceived + 1 };
 
-                at += 10 + nameLength;
+                at += 11 + nameLength;
                 continue;
             }
 

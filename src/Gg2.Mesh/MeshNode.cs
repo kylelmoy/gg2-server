@@ -110,6 +110,17 @@ public sealed class MeshNode
     private readonly List<MeshCommand>[] _scheduled;
     private readonly int[] _scheduledTick;
 
+    /// <summary>
+    /// Which slot each join was given, by the issuer and their own counter.
+    /// </summary>
+    /// <remarks>
+    /// <b>The issuer cannot know its player's slot until the join is applied</b>,
+    /// because the slot falls out of the order every node computes rather than
+    /// being asked for. This is where it finds out. Keyed by (origin, sequence)
+    /// so a rewind that re-applies the join writes the same answer again.
+    /// </remarks>
+    private readonly Dictionary<int, int> _assigned = [];
+
     /// <summary>The newest input heard for each slot, which is what a guess repeats.</summary>
     private readonly PlayerInput[] _latest;
     private readonly int[] _latestTick;
@@ -529,8 +540,24 @@ public sealed class MeshNode
             switch (command.Kind)
             {
                 case MeshCommandKind.AddPlayer:
-                    _state.AddPlayer(slot);
+                {
+                    // ⛔ The lowest free slot, not the one asked for: a GG2
+                    // roster is dense and positional, so a join takes the next
+                    // place in it and both nodes compute the same place from the
+                    // same order. Slot 0 is the server's own reserved player and
+                    // is never handed out.
+                    var free = 1;
+
+                    while (free < WorldState.MaxSlots && _state.HasPlayer[free])
+                        free++;
+
+                    if (free >= WorldState.MaxSlots)
+                        break;
+
+                    _state.AddPlayer(free);
+                    _assigned[Key(command.Origin, command.Sequence)] = free;
                     break;
+                }
 
                 case MeshCommandKind.SetTeam:
                     _state.Players[slot].Team = (Team)command.A;
@@ -555,6 +582,19 @@ public sealed class MeshNode
             }
         }
     }
+
+    /// <summary>
+    /// The slot a join was given, once it has been applied.
+    /// </summary>
+    /// <remarks>
+    /// <b>Both nodes get the same answer</b>, because both applied the same
+    /// commands in the same order. The issuer uses it to bind the slot to a
+    /// socket; its peer uses it to know whose name goes with which roster place.
+    /// </remarks>
+    public bool TryGetAssignedSlot(int origin, int sequence, out int slot) =>
+        _assigned.TryGetValue(Key(origin, sequence), out slot);
+
+    private static int Key(int origin, int sequence) => (origin << 16) | (sequence & 0xFFFF);
 
     /// <summary>
     /// Puts the world back to the start of the contradicted tick and replays
