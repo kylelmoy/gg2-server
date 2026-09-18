@@ -54,6 +54,43 @@ public sealed partial class GameServer
     /// </remarks>
     public bool MeshFillsBots => _mesh is null || _mesh.Listening;
 
+    /// <summary>
+    /// Adds one bot to this node, bypassing the population manager.
+    /// </summary>
+    /// <remarks>
+    /// For a mesh joiner, which does not fill the match — see
+    /// <see cref="MeshFillsBots"/>. Works on a standalone server too, where it
+    /// is simply one more bot than the target asked for and the manager will
+    /// remove it again.
+    /// </remarks>
+    public bool AddMeshBot() => _population?.AddOne() ?? false;
+
+    /// <summary>
+    /// Players whose departure has been scheduled and has not landed yet.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>The mirror of <see cref="BotsPending"/>, and it bites the same
+    /// way.</b> A meshed removal takes about ten ticks to leave the roster, and
+    /// the population manager compares the roster against its target every tick
+    /// — so without this it asks for the same removal again on every one of
+    /// those ticks. Measured on a live two-host run: a listener that needed to
+    /// drop four bots dropped ALL SIX, ended up driving nobody, and its peer had
+    /// nothing left to correct it about.
+    /// </remarks>
+    public int BotsLeaving => _meshLeaving.Count;
+
+    /// <summary>
+    /// Whether this player's departure has been scheduled and not landed yet.
+    /// </summary>
+    /// <remarks>
+    /// Always false on a standalone server, where a removal is immediate and
+    /// there is no window in which to ask twice.
+    /// </remarks>
+    public bool IsLeaving(int slot) =>
+        _mesh is not null
+        && (uint)slot < _roster.Count
+        && _meshLeaving.Contains(_roster[slot].StableId);
+
     /// <summary>This node's own count of joins, which names them to the peer.</summary>
     private int _meshSequence;
 
@@ -356,7 +393,17 @@ public sealed partial class GameServer
             return;
         }
 
-        _mesh.Schedule(MeshCommand.RemovePlayer(origin, sequence), _roster[slot].Name);
+        // ⛔ FORGOTTEN AGAIN IF THE MESH WILL NOT CARRY IT, exactly as a parked
+        // bot is. A departure whose command was refused never lands, so the id
+        // would sit here for ever — and BotsLeaving is what tells the population
+        // manager it is already shedding, so one leaked id stops it ever
+        // removing another. Measured: a server stuck two bots above its target
+        // with no way down.
+        if (_mesh.Schedule(MeshCommand.RemovePlayer(origin, sequence), _roster[slot].Name)
+            == MeshSession.Refusal)
+        {
+            _meshLeaving.Remove(_roster[slot].StableId);
+        }
     }
 
     /// <summary>

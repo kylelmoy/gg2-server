@@ -105,7 +105,22 @@ public static class ControlCommands
 
         "speed" => Do(() => server.SetSpeed(Speed(request))),
 
-        "bots" => Do(() => server.SetBotFill(Int(request, "fill", 0))),
+        // ⛔ REFUSED on a mesh joiner rather than accepted and ignored. The
+        // listener fills the match for both nodes, so a fill set here changes
+        // nothing — and a field that accepts a number, reports it back and does
+        // nothing is this file's recurring failure. `bot-add` is what puts a
+        // player on THIS node.
+        "bots" => server.MeshFillsBots
+            ? Do(() => server.SetBotFill(Int(request, "fill", 0)))
+            : Error("this node does not fill bots: the listening node fills the match for both"),
+
+        // ⛔ One bot on THIS node, which is the only way to give a mesh joiner
+        // players of its own. It bypasses the population manager deliberately —
+        // the manager fills a shared roster from one end, and this is for the
+        // other end.
+        "bot-add" => server.AddMeshBot()
+            ? Ok()
+            : Error("the roster is full, or the mesh has not agreed a place yet"),
 
         // The operator's end of the /bots chat command. ⛔ It is here rather
         // than only in the chat plugins because otherwise a player can take the

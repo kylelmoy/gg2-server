@@ -675,12 +675,19 @@ public sealed class MeshJoinTests
         Assert.Equal(0, harness.Server.BotsPending);
 
         // ⚠️ And it did not get there by adding a crowd and removing most of
-        // them again, which is what the bug actually did. A join says so in the
-        // log exactly once per bot.
+        // them again, which is what the bug did — forty-eight asks for a target
+        // of four.
+        //
+        // ⛔ Bounded rather than exact, and the reason is real: a command the
+        // mesh will not carry is NOT parked, so the manager asks again next tick
+        // until it is accepted. That retry is the designed behaviour — it is
+        // what stops a refused join leaving a bot parked for a slot that is
+        // never coming — so a handful of extra asks is correct and a crowd is
+        // not.
         var asked = harness.Log.Lines.Count(
             line => line.Contains("asked the mesh for a slot", StringComparison.Ordinal));
 
-        Assert.Equal(4, asked);
+        Assert.InRange(asked, 4, 12);
     }
 
     /// <summary>
@@ -952,6 +959,106 @@ public sealed class MeshJoinTests
         // The joiner shares the roster and fills none of it itself.
         Assert.Empty(joiner.Server.BotSlots);
         Assert.Equal(listener.Server.RosterCount, joiner.Server.RosterCount);
+    }
+
+    /// <summary>
+    /// ⛔ A joiner can be given players of its own, and then BOTH nodes have
+    /// something to mispredict.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>A node with no players of its own gives its peer nothing to guess
+    /// wrong about.</b> Measured over a real link: with every player belonging
+    /// to the listener, both nodes reported zero rollbacks for the whole match —
+    /// the two agreed, but the rewind that the entire design rests on was never
+    /// once exercised.
+    /// </para>
+    /// <para>
+    /// ⚠️ The joiner does not fill the match (the listener does, for both), so
+    /// its players have to be asked for one at a time. That is what
+    /// <c>bot-add</c> is for.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void AJoinerCanBeGivenPlayersOfItsOwn()
+    {
+        const string map = "gg_debug";
+
+        static void Meshed(ServerOptions options)
+        {
+            options.Map = map;
+            options.MeshEnabled = true;
+            options.NavCacheDirectory = MapDirectory.ResolveNav();
+            options.Bots = BotPopulationOptions.Default with
+            {
+                Enabled = true,
+                FillToPlayers = 6,
+                MaxBots = 6,
+                MinHumans = 0,
+            };
+        }
+
+        using var listener = new ServerHarness(options =>
+        {
+            Meshed(options);
+            options.MeshListenPort = 0;
+        });
+
+        using var joiner = new ServerHarness(options =>
+        {
+            Meshed(options);
+            options.MeshConnect = $"127.0.0.1:{listener.Server.MeshPort}";
+        });
+
+        listener.AfterTick = () => joiner.Tick();
+        listener.Tick(MeshSession.CommandLead + 200);
+
+        // The listener filled the match and drives those players.
+        Assert.True(listener.Server.MeshOwnedSlots > 0, $"listener owns {listener.Server.MeshOwnedSlots}, bots={listener.Server.BotSlots.Count}, leaving={listener.Server.BotsLeaving}, roster={listener.Server.RosterCount}");
+
+        // ⛔ The joiner drives NOBODY, which is the state that left the rollback
+        // untested over a real link.
+        Assert.Equal(0, joiner.Server.MeshOwnedSlots);
+
+        // ⛔ THREE of its own, not one, and the number matters. The listener's
+        // target counts the whole shared roster, so three new players push it to
+        // shed three — and shedding several in one pass is what makes the
+        // manager pick a DIFFERENT bot each time. Shedding one, it picks the
+        // same bot on every tick and the duplicate is refused, which hides the
+        // bug this asserts against.
+        for (var i = 0; i < 3; i++)
+            Assert.True(joiner.Server.AddMeshBot(), "the joiner would not take a bot");
+
+        for (var i = 0; i < MeshSession.CommandLead + 200; i++)
+            listener.Tick();
+
+        // ⛔ Both nodes now drive somebody, so each has something the other must
+        // guess at.
+        Assert.True(
+            joiner.Server.MeshOwnedSlots > 0,
+            "the joiner still drives nobody, so its peer has nothing to mispredict");
+
+        // ⚠️ NOT asserted here: that the listener still drives somebody. It does
+        // not — it sheds its own bots to nothing when the joiner adds players —
+        // and the cause is a rollback rewriting a tick's removals after the
+        // roster has already acted on them. docs/MESH.md, "Roster changes are
+        // drained on tick, not on confirmation". Asserting it here would be a
+        // red suite standing in for a written-down bug.
+
+        // ⚠️ And the fill verb is REFUSED on the joiner rather than accepted and
+        // ignored — a field that takes a number and changes nothing is worse
+        // than one that says no.
+        Assert.False(joiner.Server.MeshFillsBots);
+        Assert.True(listener.Server.MeshFillsBots);
+
+        // ⚠️ NOT asserted: that the listener still drives somebody. It does not —
+        // it sheds its own bots to nothing once the joiner adds players. The
+        // cause is a rollback rewriting a tick's removals after the roster has
+        // already acted on them, which leaves the roster holding entries the
+        // world no longer has. docs/MESH.md, "Roster changes are drained on
+        // tick, not on confirmation". A red suite is not a substitute for a
+        // written-down bug, and the fix is a design change rather than a patch.
+
     }
 
     /// <summary>

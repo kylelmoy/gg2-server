@@ -665,6 +665,43 @@ the pieces work against each other in one process; every one of the failures
 above took two hosts and a real link to find, and the ten-second report is the
 only thing that shows a running mesh agreeing or not.
 
+### Giving a joiner players of its own
+
+The joiner does not fill the match, so its players come from a real client or
+from `bot-add` on the control port, one at a time. Without them the joiner
+drives nobody, and **a node with no players of its own gives its peer nothing to
+mispredict** — measured over a real link, both nodes reported zero rollbacks for
+a whole match while agreeing perfectly.
+
+⛔ **`bots` is REFUSED on a joiner** rather than accepted and ignored. The
+listener fills for both, so a fill set on the joiner changes nothing, and a
+field that takes a number and does nothing is the failure `ControlCommands`
+already warns about twice.
+
+⚠️ **A roster change in flight counts, in both directions.** A join still
+arriving is already here; a departure still arriving is already gone. Without
+that the manager asks for the same change on every tick until it lands —
+over-adding one way (a target of four produced forty-eight) and over-removing
+the other. `RemoveOne` also skips anybody already leaving, or it picks the same
+bot every pass and the duplicates are refused.
+
+### ⛔ Roster changes are drained on tick, not on confirmation
+
+**This is the open bug.** `DrainMeshCommands` acts on `MeshNode.RemovedAt(T)` as
+soon as the node passes T — but a rollback can re-simulate T afterwards and
+remove somebody else, or nobody. The roster has already acted, so it keeps
+entries the world no longer has, and the next roster walk re-adds those slots as
+PEER players: entries with no `IsBot`, named "player".
+
+Seen as a listener that sheds its own bots to nothing while its peer adds
+players: `owns 0, bots 0, roster 10, joinerBots 3`. Reproduce by filling the
+listener to six and calling `bot-add` three times on the joiner.
+
+**It is the same problem the events had**, and it wants the same answer:
+a roster change should be told to clients only once its tick is confirmed, the
+way `TryTakeConfirmed` already gates deaths and captures. Until then a meshed
+match with players arriving on BOTH nodes will drift.
+
 ## What is NOT built
 
 A client can join a meshed server, pick a team, play and leave; a meshed server

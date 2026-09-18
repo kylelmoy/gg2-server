@@ -473,7 +473,19 @@ public sealed class BotPopulationService
         // same shortfall again on every tick until the first one lands. See
         // GameServer.BotsPending; zero on a standalone server, where a join is
         // immediate and this is exactly slots.Count.
-        var bots = slots.Count + _server.BotsPending;
+        // ⚠️ TWO COUNTS, because the two directions need different ones. A
+        // meshed roster change takes about ten ticks to land, and the manager
+        // compares against its target every tick — so a change still in flight
+        // has to be remembered or the same one is asked for again on every one
+        // of those ticks.
+        //
+        // A join in flight is already HERE for both questions. A departure in
+        // flight is still here for "should I add?" — it has not left yet — and
+        // already gone for "should I remove?", which is what stops a listener
+        // that needs to shed four shedding all six. Both are zero on a
+        // standalone server, where a roster change is immediate.
+        var present = slots.Count + _server.BotsPending;
+        var bots = present;
 
         // ABOVE the count check: a spectating bot is still a bot, so
         // `bots == target` holds and the early return below would leave it
@@ -498,20 +510,19 @@ public sealed class BotPopulationService
         // returns early, and that is every tick of an ordinary match.
         Reclass(slots, in options);
 
-        if (bots == target)
-            return;
+        var leaving = present - _server.BotsLeaving;
 
-        if (bots < target)
+        if (present < target)
         {
-            for (var i = bots; i < target; i++)
+            for (var i = present; i < target; i++)
             {
                 if (!TryAdd(in options))
                     break;
             }
         }
-        else
+        else if (leaving > target)
         {
-            for (var i = bots; i > target; i--)
+            for (var i = leaving; i > target; i--)
                 RemoveOne();
         }
 
@@ -653,6 +664,18 @@ public sealed class BotPopulationService
             Rerole();
     }
 
+    /// <summary>
+    /// Adds one bot to THIS node, whatever the population target says.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>The only way to give a mesh joiner players of its own.</b> The
+    /// population manager fills a shared roster from one end — the listener —
+    /// so a joiner that wants local players has to ask for them one at a time.
+    /// It is also how the rollback gets exercised in both directions: a node
+    /// with no players of its own gives its peer nothing to mispredict.
+    /// </remarks>
+    public bool AddOne() => TryAdd(_server.Options.Bots);
+
     private bool TryAdd(in BotPopulationOptions options)
     {
         if (_server.RosterCount >= WorldState.MaxSlots)
@@ -770,11 +793,17 @@ public sealed class BotPopulationService
         // Prefer a bot that is already dead. A body vanishing in the middle of
         // a fight is the thing the reference's removal timeout exists to avoid,
         // and taking the dead first gets the same outcome without a wall clock.
+        // ⛔ A bot already on its way out is not a candidate. A meshed removal
+        // takes about ten ticks to leave the roster, so within one pass — and on
+        // every tick until it lands — this would otherwise pick the SAME bot
+        // again, the duplicate would be refused, and the manager would go on
+        // asking. Measured: a listener needing to shed three shed all six,
+        // ending up driving nobody.
         var pick = -1;
 
         foreach (var slot in slots)
         {
-            if (!_server.IsAlive(slot))
+            if (!_server.IsLeaving(slot) && !_server.IsAlive(slot))
             {
                 pick = slot;
                 break;
@@ -782,7 +811,20 @@ public sealed class BotPopulationService
         }
 
         if (pick < 0)
-            pick = slots[^1];
+        {
+            for (var i = slots.Count - 1; i >= 0; i--)
+            {
+                if (_server.IsLeaving(slots[i]))
+                    continue;
+
+                pick = slots[i];
+                break;
+            }
+        }
+
+        // Everybody left is already going.
+        if (pick < 0)
+            return;
 
         // `botNavRelease`'s half of the bookkeeping: a bot that is gone is no
         // longer walking its route, and leaving the counts up charges every future
