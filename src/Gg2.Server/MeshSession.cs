@@ -51,6 +51,11 @@ public sealed class MeshSession : IDisposable
 
     public bool Connected => _link.Connected;
 
+    /// <summary>
+    /// The port this node is waiting on, which matters when zero was asked for.
+    /// </summary>
+    public int Port => _link.Port;
+
     public MeshLinkStats LinkStats => _link.Stats;
 
     /// <summary>Ticks where this node and its peer disagreed about the world.</summary>
@@ -59,8 +64,59 @@ public sealed class MeshSession : IDisposable
     /// <summary>Ticks where they agreed, so a zero above means something.</summary>
     public int Agreements { get; private set; }
 
+    /// <summary>
+    /// How far ahead a roster change is scheduled, in ticks.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>Must exceed the link's worst one-way delay plus its jitter.</b> The
+    /// peer has to have the command in hand before it reaches the tick, because
+    /// a command for a tick already simulated is refused rather than applied on
+    /// one machine only. Ten ticks is a third of a second — far past the two or
+    /// three a transatlantic link costs, and cheap: the only thing it delays is
+    /// how soon a joining player appears, which nobody can perceive against the
+    /// seconds a GG2 join already takes.
+    /// </remarks>
+    public const int CommandLead = 10;
+
+    /// <summary>
+    /// Names the peer has told this node about, by slot.
+    /// </summary>
+    /// <remarks>
+    /// <b>A peer's player has to be nameable here</b>, because this node tells
+    /// its OWN clients who joined and a slot number is not a person. Kept beside
+    /// the node rather than inside it: a <c>WorldState</c> holds no references,
+    /// and a name is a string.
+    /// </remarks>
+    public Dictionary<int, string> PeerNames { get; } = [];
+
+    /// <summary>
+    /// Roster changes the peer scheduled, in the order they were heard, for the
+    /// server to mirror into its own roster.
+    /// </summary>
+    public Queue<(int Tick, MeshCommand Command, string Name)> FromPeer { get; } = [];
+
     /// <summary>Whether a roster slot is this node's to drive.</summary>
     public bool Owns(int slot) => slot % 2 == (Listening ? 0 : 1);
+
+    /// <summary>
+    /// Schedules a roster change on this node and tells the peer, so both apply
+    /// it at the same tick.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Both halves or neither.</b> Scheduling locally without sending
+    /// leaves the peer in a different match; sending without scheduling leaves
+    /// this node in one. There is no ordering between them that makes a
+    /// half-done roster change safe, which is why they are one call.
+    /// </remarks>
+    public int Schedule(in MeshCommand command, ReadOnlySpan<char> name = default)
+    {
+        var at = Node.Tick + CommandLead;
+
+        Node.Schedule(at, command);
+        _link.SendCommand(at, command, name);
+
+        return at;
+    }
 
     public static MeshSession Start(
         ServerOptions options, CollisionWorld collision, in WorldState start, SpawnPoints? spawns)
@@ -122,7 +178,7 @@ public sealed class MeshSession : IDisposable
         if (tick % 30 == 0 && Node.Confirmed > 0 && Node.DigestAt(Node.Confirmed - 1) is { } mine)
             _link.SendDigest(Node.Confirmed - 1, mine);
 
-        _link.Service(Node, Compare);
+        _link.Service(Node, Compare, Hear);
         Node.Advance();
     }
 
@@ -148,6 +204,28 @@ public sealed class MeshSession : IDisposable
 
         Disagreements++;
         _link.NoteDisagreement();
+    }
+
+    /// <summary>
+    /// Takes a roster change the peer scheduled: applies it to this node and
+    /// queues it for the server to mirror into its own roster.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Refused by the node means refused here too, and it is counted
+    /// rather than papered over.</b> A command that arrived too late to be
+    /// applied at its agreed tick cannot be applied at a different one: the two
+    /// nodes would then be running different matches, which is the failure the
+    /// whole scheme exists to avoid.
+    /// </remarks>
+    private void Hear(int tick, MeshCommand command, string name)
+    {
+        if (!Node.Schedule(tick, command))
+            return;
+
+        if (name.Length > 0)
+            PeerNames[command.Slot] = name;
+
+        FromPeer.Enqueue((tick, command, name));
     }
 
     public void Dispose() => _link.Dispose();
