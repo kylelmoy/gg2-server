@@ -300,6 +300,12 @@ public sealed partial class GameServer
 
         entry.LastChatBubbleMs = _nowMs;
         ServerMessages.ChatBubble(_broadcast, IdOf(entry), image);
+
+        // ⚠️ Forwarded to the peer AFTER the throttle, so the other region sees
+        // what this one's clients saw and no more. A bubble never reaches
+        // WorldState, so it is not scheduled and not held: there is nothing for
+        // two nodes to agree about and nothing a rewind could unmake.
+        _mesh?.SendChat(IdOf(entry), image);
     }
 
     /// <summary>

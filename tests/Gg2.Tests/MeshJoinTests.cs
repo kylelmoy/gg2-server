@@ -619,6 +619,82 @@ public sealed class MeshJoinTests
     }
 
     /// <summary>
+    /// ⛔ A chat bubble made in one region is seen in the other.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Forwarded, never scheduled, and the difference is the point.</b> A
+    /// bubble never reaches <c>WorldState</c> — it is rewritten and relayed — so
+    /// two nodes showing it at slightly different moments is not a divergence,
+    /// there is nothing to agree about, and nothing a rewind could unmake. It is
+    /// not held with the deaths and it does not wait for a tick.
+    /// </para>
+    /// <para>
+    /// ⚠️ What it needs is to ARRIVE. Without this a mesh splits the only social
+    /// channel the game has along the same line it splits the regions, which is
+    /// the one thing players would notice immediately.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void AChatBubbleCrossesTheMesh()
+    {
+        const string map = "gg_debug";
+
+        using var listener = new ServerHarness(options =>
+        {
+            options.Map = map;
+            options.MeshEnabled = true;
+            options.MeshListenPort = 0;
+        });
+
+        using var joiner = new ServerHarness(options =>
+        {
+            options.Map = map;
+            options.MeshEnabled = true;
+            options.MeshConnect = $"127.0.0.1:{listener.Server.MeshPort}";
+        });
+
+        listener.AfterTick = () => joiner.Tick();
+        listener.Tick(30);
+
+        // A player on the LISTENER, and somebody watching on the JOINER.
+        var talker = listener.JoinClient("talker");
+        var watcher = joiner.JoinClient("watcher");
+
+        listener.Tick(60);
+
+        var talkerSlot = -1;
+
+        for (var i = 1; i < listener.Server.RosterCount; i++)
+        {
+            if (listener.Server.NameOf(i) == "talker")
+                talkerSlot = i;
+        }
+
+        Assert.True(talkerSlot > 0, "the talker never joined");
+
+        // The watcher has to know about them before a bubble over their head
+        // means anything.
+        for (var i = 0; i < 120 && joiner.Server.RosterCount <= talkerSlot; i++)
+            listener.Tick();
+
+        Assert.True(joiner.Server.RosterCount > talkerSlot, "the joiner never heard about the talker");
+
+        var reader = new BroadcastReader(LevelMap.FromPng(map, ReferenceTree.ReadMap(map)));
+        reader.Drain(watcher);
+
+        talker.SendCommand(MessageType.ChatBubble);
+        talker.Send([(byte)MessageType.ChatBubble, 1]);
+
+        listener.Tick(30);
+
+        // ⛔ It reached a client on the OTHER node, naming the player who made it.
+        var seen = reader.Drain(watcher);
+
+        Assert.Contains(seen, message => message.Type == MessageType.ChatBubble);
+    }
+
+    /// <summary>
     /// ⛔ A meshed map change takes both servers with it.
     /// </summary>
     /// <remarks>
