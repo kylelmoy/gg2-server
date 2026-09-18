@@ -97,6 +97,19 @@ public sealed class MeshNode
     /// <summary>Which tick each ledger row currently holds, so a wrap clears rather than lies.</summary>
     private readonly int[] _rowTick;
 
+    /// <summary>
+    /// Roster changes waiting for their tick, one list per ledger row.
+    /// </summary>
+    /// <remarks>
+    /// <b>Kept by tick rather than applied on arrival, which is what makes a
+    /// rewind safe.</b> A tick that is re-simulated runs its commands again
+    /// because they are part of what that tick IS, in the same order both nodes
+    /// compute from the data. Applied on arrival instead, a join inside a
+    /// rewound window would be undone by the rewind and never come back.
+    /// </remarks>
+    private readonly List<MeshCommand>[] _scheduled;
+    private readonly int[] _scheduledTick;
+
     /// <summary>The newest input heard for each slot, which is what a guess repeats.</summary>
     private readonly PlayerInput[] _latest;
     private readonly int[] _latestTick;
@@ -149,10 +162,17 @@ public sealed class MeshNode
         _inputs = new PlayerInput[_rows * WorldState.MaxSlots];
         _known = new bool[_rows * WorldState.MaxSlots];
         _rowTick = new int[_rows];
+        _scheduled = new List<MeshCommand>[_rows];
+        _scheduledTick = new int[_rows];
+
+        for (var i = 0; i < _rows; i++)
+            _scheduled[i] = [];
+
         _latest = new PlayerInput[WorldState.MaxSlots];
         _latestTick = new int[WorldState.MaxSlots];
 
         Array.Fill(_rowTick, -1);
+        Array.Fill(_scheduledTick, -1);
         Array.Fill(_latestTick, -1);
     }
 
@@ -314,6 +334,64 @@ public sealed class MeshNode
     }
 
     /// <summary>
+    /// Schedules a roster change for a tick that has not been simulated yet.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ⛔ <b>The tick must be in the FUTURE, far enough ahead that the peer
+    /// hears about it first.</b> A command scheduled for a tick this node has
+    /// already run would have to rewind to apply — and the peer, which never saw
+    /// it, would not. Two nodes disagreeing about whether a player exists is not
+    /// a divergence that converges; it is two different matches.
+    /// </para>
+    /// <para>
+    /// A command for a past tick is refused and counted in
+    /// <see cref="MeshStats.TooLate"/>, which is the honest answer: the schedule
+    /// is what both nodes agree on, and one that arrived too late to be agreed
+    /// on cannot be quietly applied by one of them.
+    /// </para>
+    /// </remarks>
+    public bool Schedule(int tick, in MeshCommand command)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(tick);
+
+        if (tick < Tick || tick >= Tick + _options.MaxRollbackTicks)
+        {
+            _tooLate++;
+            return false;
+        }
+
+        var list = ScheduleFor(tick);
+
+        // Sorted on insertion, so the list IS the order both nodes apply in and
+        // no node has to remember when it heard anything.
+        var at = list.BinarySearch(command);
+
+        list.Insert(at < 0 ? ~at : at, command);
+
+        return true;
+    }
+
+    /// <summary>What is scheduled for a tick, in the order it will be applied.</summary>
+    public IReadOnlyList<MeshCommand> ScheduledFor(int tick) =>
+        tick < 0 || tick >= Tick + _options.MaxRollbackTicks || tick <= Tick - _snapshots.Length
+            ? []
+            : ScheduleFor(tick);
+
+    private List<MeshCommand> ScheduleFor(int tick)
+    {
+        var row = tick % _rows;
+
+        if (_scheduledTick[row] != tick)
+        {
+            _scheduled[row].Clear();
+            _scheduledTick[row] = tick;
+        }
+
+        return _scheduled[row];
+    }
+
+    /// <summary>
     /// Simulates one tick, rewinding first if something arrived that contradicts
     /// a guess.
     /// </summary>
@@ -361,6 +439,12 @@ public sealed class MeshNode
         var slot = Tick % _snapshots.Length;
 
         _snapshots[slot].State = _state;
+
+        // ⚠️ AFTER the snapshot and BEFORE the tick. The snapshot is the world a
+        // rewind returns to, so it has to be the world as it stood before this
+        // tick's commands — otherwise replaying the tick would apply them twice,
+        // and a join would arrive as two players.
+        Apply(ScheduleFor(Tick));
 
         var certain = BuildInputs(Tick);
 
@@ -428,6 +512,48 @@ public sealed class MeshNode
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Applies one tick's roster changes, in the order every node computes.
+    /// </summary>
+    private void Apply(List<MeshCommand> commands)
+    {
+        foreach (var command in commands)
+        {
+            var slot = command.Slot;
+
+            if (slot >= WorldState.MaxSlots)
+                continue;
+
+            switch (command.Kind)
+            {
+                case MeshCommandKind.AddPlayer:
+                    _state.AddPlayer(slot);
+                    break;
+
+                case MeshCommandKind.SetTeam:
+                    _state.Players[slot].Team = (Team)command.A;
+                    break;
+
+                case MeshCommandKind.SetClass:
+                    _state.Players[slot].Class = (PlayerClass)command.A;
+                    break;
+
+                case MeshCommandKind.Spawn when _spawnPoints is not null:
+                    _state.Spawn(
+                        _spawnPoints, slot, _state.Players[slot].Class, _state.Players[slot].Team,
+                        command.A, command.B);
+                    break;
+
+                case MeshCommandKind.RemovePlayer:
+                    _state.RemoveSlot(slot);
+                    break;
+
+                default:
+                    break;
+            }
+        }
     }
 
     /// <summary>
