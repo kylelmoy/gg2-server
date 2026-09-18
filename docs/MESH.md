@@ -229,6 +229,42 @@ client holds the position it was last sent and dead-reckons from there, which is
 what the GG2 client does — but which of those two shapes a player prefers is not
 a thing this table can say.
 
+## Joins, leaves and class changes
+
+A key press can be guessed at and corrected. A join cannot: either slot 4 exists
+or it does not, and two nodes that disagree are not running the same match.
+
+So a roster change is a `MeshCommand` **scheduled for a future tick** rather than
+applied when it arrives. The node that decides picks a tick far enough ahead
+that its peer hears first, both apply it at exactly that tick, and a rewind
+through that tick applies it again — because it lives in a schedule keyed by
+tick, not in whatever order the sockets delivered it.
+
+⚠️ **The order within a tick comes from the data, not from arrival.** Two nodes
+can each schedule something for the same tick and hear the other's afterwards.
+`MeshCommandKind` is declared in application order — `AddPlayer`, `SetTeam`,
+`SetClass`, `Spawn`, `RemovePlayer` — and ties break on slot and payload, so
+every node computes the same order for itself. `RemovePlayer` is last because a
+removal renumbers every slot above it.
+
+⛔ **A command for a tick already simulated is refused**, and counted in
+`MeshStats.TooLate`. Applying it would mean rewinding to a tick the peer never
+rewound to, over a change the peer has never heard of.
+
+### A gate that could not fail
+
+The first version of the test for this asserted that a player still existed
+after a rewind through their join tick. Mutated to apply commands on arrival —
+the exact bug the schedule exists to prevent — **it passed**: both arms were
+wrong the same way, so nothing distinguished them.
+
+What distinguishes them is the case that actually happens: two nodes told the
+same thing at different moments. Even then the digest alone is blind, because a
+character that spawns with nobody pressing anything settles to the same resting
+place within a few ticks. The gate bites only once it asserts *when* the player
+appears, while that is still observable. Mutation score 2 of 6 before, 3 of 7
+after.
+
 ## What is NOT built
 
 ⛔ **Nothing here reaches a socket or a client yet.** Two pieces stand between
