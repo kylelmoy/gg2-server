@@ -90,13 +90,44 @@ public sealed class MeshSession : IDisposable
     public Dictionary<int, string> PeerNames { get; } = [];
 
     /// <summary>
+    /// The name the peer gave a slot's player, if that player is theirs.
+    /// </summary>
+    /// <remarks>
+    /// Resolved through the assignment rather than stored against a slot: a join
+    /// has no slot when it is sent, and a removal renumbers every slot above it.
+    /// </remarks>
+    public string NameOf(int slot)
+    {
+        foreach (var (key, name) in PeerNames)
+        {
+            if (Node.TryGetAssignedSlot(key >> 16, key & 0xFFFF, out var at) && at == slot)
+                return name;
+        }
+
+        return string.Empty;
+    }
+
+    /// <summary>
     /// Roster changes the peer scheduled, in the order they were heard, for the
     /// server to mirror into its own roster.
     /// </summary>
     public Queue<(int Tick, MeshCommand Command, string Name)> FromPeer { get; } = [];
 
-    /// <summary>Whether a roster slot is this node's to drive.</summary>
-    public bool Owns(int slot) => slot % 2 == (Listening ? 0 : 1);
+    /// <summary>This node's number: the listener is 0.</summary>
+    public int Origin => Listening ? 0 : 1;
+
+    /// <summary>
+    /// Whether a roster slot is this node's to drive.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>Read off who issued the join, never off the slot number.</b> A join
+    /// takes the lowest free place in a dense roster, so this node's own player
+    /// can land on any slot at all. Guessing from parity would have a node
+    /// predicting inputs for a player it is itself driving — and never sending
+    /// that player's keys to the peer, which is the same player going silent on
+    /// the other side of the link.
+    /// </remarks>
+    public bool Owns(int slot) => Node.OriginOf(slot) == Origin;
 
     /// <summary>
     /// Schedules a roster change on this node and tells the peer, so both apply
@@ -222,8 +253,11 @@ public sealed class MeshSession : IDisposable
         if (!Node.Schedule(tick, command))
             return;
 
+        // ⚠️ Keyed by WHO SAID IT and their counter, not by a slot: a join
+        // carries no slot, and a slot is renumbered the moment somebody below it
+        // leaves. NameOf resolves it through the assignment instead.
         if (name.Length > 0)
-            PeerNames[command.Slot] = name;
+            PeerNames[(command.Origin << 16) | (command.Sequence & 0xFFFF)] = name;
 
         FromPeer.Enqueue((tick, command, name));
     }

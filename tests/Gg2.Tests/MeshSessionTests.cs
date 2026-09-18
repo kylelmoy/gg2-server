@@ -91,7 +91,7 @@ public sealed class MeshSessionTests
         Assert.Equal(slot, theirs);
         Assert.True(host.Node.State.HasPlayer[slot]);
         Assert.True(peer.Node.State.HasPlayer[slot]);
-        Assert.Equal("Vindicator", peer.PeerNames[0]);
+        Assert.Equal("Vindicator", peer.NameOf(slot));
 
         // ...and the peer can mirror it into its own roster, which is what the
         // server above will do with it.

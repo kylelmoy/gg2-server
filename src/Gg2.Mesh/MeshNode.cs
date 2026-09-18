@@ -1,3 +1,4 @@
+using System.Linq;
 using Gg2.Maps;
 using Gg2.Protocol;
 using Gg2.Simulation;
@@ -120,6 +121,27 @@ public sealed class MeshNode
     /// so a rewind that re-applies the join writes the same answer again.
     /// </remarks>
     private readonly Dictionary<int, int> _assigned = [];
+
+    /// <summary>
+    /// Which node issued the join that owns each slot, or 255 for nobody.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>Ownership follows the ISSUER, not the slot number.</b> It used to be
+    /// read off the slot's parity, which was right only while slots were handed
+    /// out by parity — once a join takes the lowest free place instead, a node's
+    /// own player can land on any number at all. A node that guessed ownership
+    /// from parity would predict inputs for a player it is itself driving, and
+    /// never send that player's keys to the peer.
+    /// </remarks>
+    private readonly byte[] _slotOrigin = BuildOrigins();
+
+    private static byte[] BuildOrigins()
+    {
+        var origins = new byte[WorldState.MaxSlots];
+        Array.Fill(origins, (byte)255);
+
+        return origins;
+    }
 
     /// <summary>The newest input heard for each slot, which is what a guess repeats.</summary>
     private readonly PlayerInput[] _latest;
@@ -556,6 +578,7 @@ public sealed class MeshNode
 
                     _state.AddPlayer(free);
                     _assigned[Key(command.Origin, command.Sequence)] = free;
+                    _slotOrigin[free] = command.Origin;
                     break;
                 }
 
@@ -574,8 +597,33 @@ public sealed class MeshNode
                     break;
 
                 case MeshCommandKind.RemovePlayer:
+                {
+                    if (!_state.HasPlayer[slot])
+                        break;
+
                     _state.RemoveSlot(slot);
+
+                    // ⚠️ A REMOVAL RENUMBERS EVERY SLOT ABOVE IT — CLAUDE.md's
+                    // rule, and anything that names a player has to be renumbered
+                    // with it. These two tables name players, so they are part of
+                    // "anything": left alone, the slot a join was assigned and
+                    // the node that owns it would both point one place too high
+                    // the moment somebody leaves.
+                    for (var above = slot; above < WorldState.MaxSlots - 1; above++)
+                        _slotOrigin[above] = _slotOrigin[above + 1];
+
+                    _slotOrigin[WorldState.MaxSlots - 1] = 255;
+
+                    foreach (var key in _assigned.Keys.ToArray())
+                    {
+                        if (_assigned[key] == slot)
+                            _assigned.Remove(key);
+                        else if (_assigned[key] > slot)
+                            _assigned[key]--;
+                    }
+
                     break;
+                }
 
                 default:
                     break;
@@ -593,6 +641,17 @@ public sealed class MeshNode
     /// </remarks>
     public bool TryGetAssignedSlot(int origin, int sequence, out int slot) =>
         _assigned.TryGetValue(Key(origin, sequence), out slot);
+
+    /// <summary>
+    /// Which node issued the join that holds a slot, or 255 if nobody does.
+    /// </summary>
+    /// <remarks>
+    /// <b>This is what "my player" means in a mesh</b>, and it is not the slot's
+    /// parity: a join takes the lowest free place, so either node's player can
+    /// land on any number.
+    /// </remarks>
+    public int OriginOf(int slot) =>
+        (uint)slot < WorldState.MaxSlots ? _slotOrigin[slot] : 255;
 
     private static int Key(int origin, int sequence) => (origin << 16) | (sequence & 0xFFFF);
 
