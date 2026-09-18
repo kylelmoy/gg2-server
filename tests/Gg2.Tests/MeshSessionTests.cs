@@ -66,22 +66,32 @@ public sealed class MeshSessionTests
         ReferenceTree.RequireAvailable();
 
         var (host, peer) = Pair();
-        using var _ = host;
-        using var __ = peer;
+        using var hostLease = host;
+        using var peerLease = peer;
 
         // Let the link come up before anything is said over it.
         Pump(host, peer, 5);
 
-        var at = host.Schedule(MeshCommand.AddPlayer(2), "Vindicator");
-        host.Schedule(MeshCommand.SetTeam(2, Team.Blue));
+        // ⚠️ The slot is not asked for — it falls out of applying the join, so
+        // the issuer only learns it afterwards. That is the real sequence a
+        // server follows: schedule the join, wait for it to land, then say
+        // anything about the player.
+        var at = host.Schedule(MeshCommand.AddPlayer(origin: 0, sequence: 1), "Vindicator");
 
         Pump(host, peer, MeshSession.CommandLead + 10);
 
-        Assert.True(host.Node.State.HasPlayer[2], "the node that scheduled it never applied it");
-        Assert.True(peer.Node.State.HasPlayer[2], "the peer never heard about the join");
+        Assert.True(
+            host.Node.TryGetAssignedSlot(0, 1, out var slot),
+            "the node that scheduled the join never applied it");
 
-        Assert.Equal(Team.Blue, peer.Node.State.Players[2].Team);
-        Assert.Equal("Vindicator", peer.PeerNames[2]);
+        Assert.True(
+            peer.Node.TryGetAssignedSlot(0, 1, out var theirs),
+            "the peer never heard about the join");
+
+        Assert.Equal(slot, theirs);
+        Assert.True(host.Node.State.HasPlayer[slot]);
+        Assert.True(peer.Node.State.HasPlayer[slot]);
+        Assert.Equal("Vindicator", peer.PeerNames[0]);
 
         // ...and the peer can mirror it into its own roster, which is what the
         // server above will do with it.
@@ -105,11 +115,11 @@ public sealed class MeshSessionTests
         ReferenceTree.RequireAvailable();
 
         var (host, peer) = Pair();
-        using var _ = host;
-        using var __ = peer;
+        using var hostLease = host;
+        using var peerLease = peer;
 
         Pump(host, peer, 5);
-        host.Schedule(MeshCommand.AddPlayer(2), "Vindicator");
+        host.Schedule(MeshCommand.AddPlayer(origin: 0, sequence: 1), "Vindicator");
 
         int? hostAt = null;
         int? peerAt = null;
@@ -120,8 +130,8 @@ public sealed class MeshSessionTests
             host.Tick(none, WorldState.MaxSlots);
             peer.Tick(none, WorldState.MaxSlots);
 
-            hostAt ??= host.Node.State.HasPlayer[2] ? host.Node.Tick : null;
-            peerAt ??= peer.Node.State.HasPlayer[2] ? peer.Node.Tick : null;
+            hostAt ??= host.Node.TryGetAssignedSlot(0, 1, out _) ? host.Node.Tick : null;
+            peerAt ??= peer.Node.TryGetAssignedSlot(0, 1, out _) ? peer.Node.Tick : null;
 
             Thread.Sleep(2);
         }
@@ -140,17 +150,21 @@ public sealed class MeshSessionTests
         ReferenceTree.RequireAvailable();
 
         var (host, peer) = Pair();
-        using var _ = host;
-        using var __ = peer;
+        using var hostLease = host;
+        using var peerLease = peer;
 
         Pump(host, peer, 5);
 
-        host.Schedule(MeshCommand.AddPlayer(2), "Vindicator");
-        host.Schedule(MeshCommand.SetTeam(2, Team.Blue));
-        host.Schedule(MeshCommand.SetClass(2, PlayerClass.Scout));
-        host.Schedule(MeshCommand.Spawn(2));
+        host.Schedule(MeshCommand.AddPlayer(origin: 0, sequence: 1), "Vindicator");
+        Pump(host, peer, MeshSession.CommandLead + 5);
 
-        Pump(host, peer, MeshSession.CommandLead + 30);
+        Assert.True(host.Node.TryGetAssignedSlot(0, 1, out var slot));
+
+        host.Schedule(MeshCommand.SetTeam(slot, Team.Blue));
+        host.Schedule(MeshCommand.SetClass(slot, PlayerClass.Scout));
+        host.Schedule(MeshCommand.Spawn(slot));
+
+        Pump(host, peer, MeshSession.CommandLead + 25);
 
         host.Node.Settle();
         peer.Node.Settle();

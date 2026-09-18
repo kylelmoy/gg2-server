@@ -68,7 +68,7 @@ public sealed class MeshCommandTests
 
         var node = Node();
 
-        Assert.True(node.Schedule(10, MeshCommand.AddPlayer(2)));
+        Assert.True(node.Schedule(10, MeshCommand.AddPlayer(origin: 0, sequence: 2)));
         Assert.True(node.Schedule(10, MeshCommand.SetTeam(2, Team.Blue)));
 
         node.Advance(10);
@@ -99,7 +99,7 @@ public sealed class MeshCommandTests
         // because the tick is far enough ahead.
         foreach (var node in new[] { a, b })
         {
-            node.Schedule(JoinAt, MeshCommand.AddPlayer(2));
+            node.Schedule(JoinAt, MeshCommand.AddPlayer(origin: 0, sequence: 2));
             node.Schedule(JoinAt, MeshCommand.SetTeam(2, Team.Blue));
             node.Schedule(JoinAt, MeshCommand.SetClass(2, PlayerClass.Scout));
             node.Schedule(JoinAt, MeshCommand.Spawn(2));
@@ -167,7 +167,7 @@ public sealed class MeshCommandTests
 
         MeshCommand[] join =
         [
-            MeshCommand.AddPlayer(2),
+            MeshCommand.AddPlayer(origin: 0, sequence: 2),
             MeshCommand.SetTeam(2, Team.Blue),
             MeshCommand.SetClass(2, PlayerClass.Scout),
             MeshCommand.Spawn(2),
@@ -222,7 +222,7 @@ public sealed class MeshCommandTests
 
         var node = Node();
 
-        node.Schedule(5, MeshCommand.AddPlayer(2));
+        node.Schedule(5, MeshCommand.AddPlayer(origin: 0, sequence: 2));
         node.Schedule(5, MeshCommand.SetTeam(2, Team.Blue));
         node.Schedule(5, MeshCommand.SetClass(2, PlayerClass.Scout));
         node.Schedule(5, MeshCommand.Spawn(2));
@@ -260,7 +260,7 @@ public sealed class MeshCommandTests
 
         var node = Node();
 
-        node.Schedule(5, MeshCommand.AddPlayer(2));
+        node.Schedule(5, MeshCommand.AddPlayer(origin: 0, sequence: 2));
         node.Schedule(5, MeshCommand.SetTeam(2, Team.Blue));
         node.Schedule(5, MeshCommand.SetClass(2, PlayerClass.Scout));
         node.Schedule(5, MeshCommand.Spawn(2));
@@ -268,7 +268,7 @@ public sealed class MeshCommandTests
         node.Advance(12);
 
         var straight = Node();
-        straight.Schedule(5, MeshCommand.AddPlayer(2));
+        straight.Schedule(5, MeshCommand.AddPlayer(origin: 0, sequence: 2));
         straight.Schedule(5, MeshCommand.SetTeam(2, Team.Blue));
         straight.Schedule(5, MeshCommand.SetClass(2, PlayerClass.Scout));
         straight.Schedule(5, MeshCommand.Spawn(2));
@@ -313,7 +313,7 @@ public sealed class MeshCommandTests
         var node = Node();
         node.Advance(20);
 
-        Assert.False(node.Schedule(5, MeshCommand.AddPlayer(2)));
+        Assert.False(node.Schedule(5, MeshCommand.AddPlayer(origin: 0, sequence: 2)));
         Assert.False(node.State.HasPlayer[2]);
         Assert.Equal(1, node.Stats.TooLate);
     }
@@ -337,7 +337,7 @@ public sealed class MeshCommandTests
 
         MeshCommand[] join =
         [
-            MeshCommand.AddPlayer(2),
+            MeshCommand.AddPlayer(origin: 0, sequence: 2),
             MeshCommand.SetTeam(2, Team.Blue),
             MeshCommand.SetClass(2, PlayerClass.Scout),
             MeshCommand.Spawn(2),
@@ -356,5 +356,88 @@ public sealed class MeshCommandTests
 
         Assert.Equal(PlayerClass.Scout, forwards.State.Players[2].Class);
         Assert.Equal(forwards.Digest, backwards.Digest);
+    }
+
+    /// <summary>
+    /// ⛔ Two joins on one tick, one from each node, take the same two slots on
+    /// both machines.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The reason a join does not name its slot.</b> A GG2 roster is dense
+    /// and positional — the wire numbers players by their place in it — so two
+    /// nodes that each picked a slot for somebody joining would pick the same
+    /// one, and the second join would land on top of the first. Instead the slot
+    /// falls out of the order both nodes already compute, and consecutive places
+    /// go to the joins in that order.
+    /// </para>
+    /// <para>
+    /// The two nodes hear the two joins in OPPOSITE orders here, which is the
+    /// case a real link produces: each hears its own first.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void TwoJoinsOnOneTickTakeTheSameSlotsOnBothNodes()
+    {
+        ReferenceTree.RequireAvailable();
+
+        var listener = Node();
+        var joiner = Node();
+
+        var fromListener = MeshCommand.AddPlayer(origin: 0, sequence: 1);
+        var fromJoiner = MeshCommand.AddPlayer(origin: 1, sequence: 1);
+
+        // Each node hears its own join first and the peer's second.
+        listener.Schedule(12, fromListener);
+        listener.Schedule(12, fromJoiner);
+
+        joiner.Schedule(12, fromJoiner);
+        joiner.Schedule(12, fromListener);
+
+        listener.Advance(14);
+        joiner.Advance(14);
+
+        Assert.True(listener.TryGetAssignedSlot(0, 1, out var listenersPlayer));
+        Assert.True(listener.TryGetAssignedSlot(1, 1, out var joinersPlayer));
+
+        Assert.True(joiner.TryGetAssignedSlot(0, 1, out var alsoListeners));
+        Assert.True(joiner.TryGetAssignedSlot(1, 1, out var alsoJoiners));
+
+        // The same two people, in the same two places, on both machines.
+        Assert.Equal(listenersPlayer, alsoListeners);
+        Assert.Equal(joinersPlayer, alsoJoiners);
+
+        // ...and they are two DIFFERENT places, which is the failure this
+        // guards: one slot handed to both would satisfy every equality above.
+        Assert.NotEqual(listenersPlayer, joinersPlayer);
+
+        Assert.Equal(listener.Digest, joiner.Digest);
+    }
+
+    /// <summary>
+    /// A join takes the lowest free place, and never slot 0.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Slot 0 is the server's own reserved player</b> and always exists —
+    /// CLAUDE.md. A join that took it would hand a person the slot every
+    /// defaulted "nobody" already points at.
+    /// </remarks>
+    [Fact]
+    public void AJoinTakesTheLowestFreePlaceAndNeverSlotZero()
+    {
+        ReferenceTree.RequireAvailable();
+
+        var node = Node();
+
+        // The fixture already holds slots 0 and 1, so the next place is 2.
+        node.Schedule(5, MeshCommand.AddPlayer(origin: 0, sequence: 1));
+        node.Schedule(5, MeshCommand.AddPlayer(origin: 0, sequence: 2));
+        node.Advance(7);
+
+        Assert.True(node.TryGetAssignedSlot(0, 1, out var first));
+        Assert.True(node.TryGetAssignedSlot(0, 2, out var second));
+
+        Assert.Equal(2, first);
+        Assert.Equal(3, second);
     }
 }

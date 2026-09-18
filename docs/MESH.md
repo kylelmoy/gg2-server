@@ -275,6 +275,25 @@ every later frame is read from the wrong offset. The gate sends exactly that
 name and then asserts the NEXT frame still reads, because alignment damage only
 shows downstream.
 
+### A join does not name its slot
+
+⛔ **A GG2 roster is dense and positional** — the wire numbers players by their
+place in it, and every client tracks that. So two nodes cannot each pick a slot
+for somebody joining: they would pick the same one, and the second join would
+land on top of the first.
+
+Instead a join names **who issued it and that node's own counter**, and the slot
+falls out of the order both nodes already compute: the lowest free place,
+assigned as the command is applied, never slot 0. Two joins landing on one tick
+from opposite ends of the link take consecutive places, in the same order, on
+both machines, with nobody having coordinated anything. The issuer finds out
+which place its player got from `MeshNode.TryGetAssignedSlot`.
+
+The gate has the two nodes hear the two joins in OPPOSITE orders, which is what
+a real link produces — each hears its own first — and asserts they agree about
+both slots *and* that the slots differ. The second half is the one that bites:
+handing one place to both people satisfies every equality otherwise.
+
 ### A gate that could not fail
 
 The first version of the test for this asserted that a player still existed

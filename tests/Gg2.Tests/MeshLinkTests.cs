@@ -245,7 +245,7 @@ public sealed class MeshLinkTests
         var node = new MeshNode(Collision(), World());
         var heard = new List<(int Tick, MeshCommand Command, string Name)>();
 
-        peer.SendCommand(40, MeshCommand.AddPlayer(5), "Vindicator");
+        peer.SendCommand(40, MeshCommand.AddPlayer(origin: 0, sequence: 5), "Vindicator");
         peer.SendCommand(40, MeshCommand.SetTeam(5, Team.Blue));
         peer.Service(node);
 
@@ -256,7 +256,7 @@ public sealed class MeshLinkTests
         }
 
         Assert.Equal(2, heard.Count);
-        Assert.Equal((40, MeshCommand.AddPlayer(5), "Vindicator"), heard[0]);
+        Assert.Equal((40, MeshCommand.AddPlayer(origin: 0, sequence: 5), "Vindicator"), heard[0]);
         Assert.Equal((40, MeshCommand.SetTeam(5, Team.Blue), string.Empty), heard[1]);
     }
 
@@ -285,7 +285,7 @@ public sealed class MeshLinkTests
         // Exactly the shape that defeated the scanning reader: byte i == i.
         var awkward = new string([(char)0, (char)1, (char)2, (char)3, (char)4]);
 
-        peer.SendCommand(11, MeshCommand.AddPlayer(6), awkward);
+        peer.SendCommand(11, MeshCommand.AddPlayer(origin: 0, sequence: 6), awkward);
         peer.SendCommand(12, MeshCommand.Spawn(6), "after");
         peer.Service(node);
 
