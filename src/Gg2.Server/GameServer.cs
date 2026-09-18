@@ -901,7 +901,7 @@ public sealed partial class GameServer : IDisposable, IPluginHost
         // world a few ticks stale.
         if (_options.MeshEnabled)
         {
-            _mesh = MeshSession.Start(_options, _collision, in _world, _spawnPoints);
+            _mesh = MeshSession.Start(_options, _collision, in _world, _spawnPoints, _log);
 
             _log.Warn(
                 "MESH MODE IS EXPERIMENTAL: a node that joins an existing match stays a few "

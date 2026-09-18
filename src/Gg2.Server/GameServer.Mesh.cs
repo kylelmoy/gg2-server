@@ -183,7 +183,8 @@ public sealed partial class GameServer
             + $"rollbacks {stats.Rollbacks} ({stats.ResimulatedTicks} ticks re-simulated, "
             + $"deepest {stats.DeepestRollback}), "
             + $"late {stats.TooLate}, "
-            + $"events {MeshEventsReleased} released / {MeshEventsHeld} held";
+            + $"events {MeshEventsReleased} released / {MeshEventsHeld} held, "
+            + $"owned {_mesh.Owned}, link [{_mesh.LinkStats}]";
 
         if (_mesh.RefusedFromPeer > 0)
         {

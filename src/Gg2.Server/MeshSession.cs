@@ -31,15 +31,17 @@ public sealed class MeshSession : IDisposable
     private readonly List<int> _slots = [];
     private readonly List<PlayerInput> _inputs = [];
 
+    private readonly IServerLog _log;
     private readonly CollisionWorld _collision;
     private readonly SpawnPoints? _spawns;
     private readonly WorldState _start;
 
     private MeshSession(
         MeshLink link, MeshNode node, bool listening,
-        CollisionWorld collision, in WorldState start, SpawnPoints? spawns)
+        CollisionWorld collision, in WorldState start, SpawnPoints? spawns, IServerLog log)
     {
         _link = link;
+        _log = log;
         _collision = collision;
         _spawns = spawns;
         _start = start;
@@ -216,6 +218,15 @@ public sealed class MeshSession : IDisposable
             return Refusal;
 
         _link.SendCommand(at, command, name);
+
+        // ⛔ Every roster change is logged at BOTH ends, sent and heard, with the
+        // join key and the tick. They are rare — a handful per match — and they
+        // are the only thing whose loss cannot be recovered from, so the two
+        // logs being diffable is what turns "the rosters ended up different" into
+        // a specific command that went missing.
+        _log.Info(
+            $"mesh sent {command.Kind} origin {command.Origin} seq {command.Sequence} "
+            + $"slot {command.Slot} for tick {at} (now {Node.Tick}) {LogText.Safe(new string(name))}");
 
         // ⚠️ OUR OWN joins are remembered too, not just the peer's. A snapshot
         // has to name every player in the match, and this node's own names live
@@ -461,6 +472,17 @@ public sealed class MeshSession : IDisposable
     private int _peerTickHeard = -1;
     private long _heardAtMs;
 
+    /// <summary>
+    /// Slots this node sent inputs for on the last tick.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ Zero means this node is telling its peer NOTHING about its own
+    /// players, which the peer then guesses for ever and can never be corrected
+    /// about. The peer's confirmation stalls and the two worlds part company
+    /// with no refusal and no late input to show for it.
+    /// </remarks>
+    public int Owned { get; private set; }
+
     /// <summary>What <see cref="Schedule"/> returns when it would not be heard.</summary>
     public const int Refusal = -1;
 
@@ -470,9 +492,11 @@ public sealed class MeshSession : IDisposable
     private static int Key(int origin, int sequence) => (origin << 16) | (sequence & 0xFFFF);
 
     public static MeshSession Start(
-        ServerOptions options, CollisionWorld collision, in WorldState start, SpawnPoints? spawns)
+        ServerOptions options, CollisionWorld collision, in WorldState start, SpawnPoints? spawns,
+        IServerLog log)
     {
         ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(log);
 
         var listening = options.MeshConnect.Length == 0;
 
@@ -486,7 +510,8 @@ public sealed class MeshSession : IDisposable
             listening,
             collision,
             in start,
-            spawns);
+            spawns,
+            log);
     }
 
     private static MeshLink Connect(string target)
@@ -596,6 +621,7 @@ public sealed class MeshSession : IDisposable
             _inputs.Add(inputs[slot]);
         }
 
+        Owned = _slots.Count;
         _link.SendInputs(tick, _slots.ToArray(), _inputs.ToArray());
 
         // A digest a second, of a tick this node has confirmed — so the peer
@@ -670,6 +696,10 @@ public sealed class MeshSession : IDisposable
             // further apart than CommandLead covers.
             RefusedFromPeer++;
 
+            _log.Warn(
+                $"mesh REFUSED {command.Kind} origin {command.Origin} seq {command.Sequence} "
+                + $"for tick {tick} (now {Node.Tick}) — the peer applied it and this node cannot");
+
             var skew = tick - Node.Tick;
 
             if (Math.Abs(skew) > Math.Abs(WorstRefusalSkew))
@@ -687,6 +717,10 @@ public sealed class MeshSession : IDisposable
         // A map change's "name" is the map, and this end has to load it too.
         if (command.Kind == MeshCommandKind.ChangeMap && name.Length > 0)
             _maps[tick] = name;
+
+        _log.Info(
+            $"mesh heard {command.Kind} origin {command.Origin} seq {command.Sequence} "
+            + $"slot {command.Slot} for tick {tick} (now {Node.Tick}) {LogText.Safe(name)}");
 
         FromPeer.Enqueue((tick, command, name));
     }

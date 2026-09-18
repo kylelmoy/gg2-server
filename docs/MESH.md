@@ -609,6 +609,23 @@ each now has a gate that fails without its fix.
 | A map change rebuilt each node at ITS OWN tick | The two nodes drain the change at the same tick but are never on the same tick when they do, so the rebuilt matches started at different numbers. |
 | **A meshed server idled** | An empty server drops to 2 Hz. A meshed one is not empty — its peer is playing — and idling costs 15 ticks of skew a second. It deadlocks: refused joins leave the roster empty, which keeps it idle, which gets the next join refused. |
 
+### Two population managers, one roster
+
+⛔ **Each node fills to its own bot target against a roster they SHARE**, so
+two nodes told to fill to six produce twelve and then race to remove them —
+and `RemoveOne` only ever takes a node's OWN bots, because a peer's player
+arrives as a plain roster entry with no `IsBot`. Measured on a direct link: the
+listener removed every bot it owned, ended up owning **nothing**, and from then
+on sent no inputs at all. Its peer went on guessing players that were no longer
+its to drive.
+
+⚠️ **`owned 0` in the report is the symptom to look for.** A node owning no
+slots tells its peer nothing about its own players, and nothing downstream can
+recover from that.
+
+The fill target has to be agreed rather than applied twice — one node deciding
+for the match, or each node filling its own half of the target.
+
 ⛔ **The mesh still does not agree across a real link.** After all seven fixes
 the two nodes stay in step and refuse nothing, but their digests disagree and
 their rosters end up different lengths — joins land on one node and not the

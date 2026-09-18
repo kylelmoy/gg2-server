@@ -37,7 +37,7 @@ public sealed class MeshSessionTests
     private static (MeshSession Host, MeshSession Peer) Pair()
     {
         var listen = new ServerOptions { MeshEnabled = true, MeshListenPort = 0 };
-        var host = MeshSession.Start(listen, Collision(), World(), Spawns());
+        var host = MeshSession.Start(listen, Collision(), World(), Spawns(), new RecordingLog());
 
         var join = new ServerOptions
         {
@@ -45,7 +45,7 @@ public sealed class MeshSessionTests
             MeshConnect = $"127.0.0.1:{host.Port}",
         };
 
-        return (host, MeshSession.Start(join, Collision(), World(), Spawns()));
+        return (host, MeshSession.Start(join, Collision(), World(), Spawns(), new RecordingLog()));
     }
 
     private static void Pump(MeshSession a, MeshSession b, int ticks)
