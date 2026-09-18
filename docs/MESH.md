@@ -128,6 +128,25 @@ corrected several times a second, and holding movement until it was certain
 would hand back the whole latency saving the design exists for. Send movement
 provisionally; hold what cannot be unsaid.
 
+**A meshed server does this on the wire.** `GameServer` takes its world from
+the node every tick and its events from `TryTakeConfirmed`, a tick at a time,
+so positions are current and nothing irreversible is sent before it is certain.
+A node whose peer has gone quiet therefore publishes no deaths, no fires and no
+spawns while going on publishing positions — which is what
+`MeshJoinTests.ASilentPeerHoldsEveryEventAndStopsNothingElse` asserts, by
+counting the messages a client received.
+
+⚠️ **Count messages, not drains.** A server-side counter incremented where the
+events are taken says the drain happened, which is equally true of a server
+that drains and then broadcasts the provisional events anyway. That mutation
+passes against the counter and fails against the client's stream; the counters
+`MeshEventsReleased` and `MeshEventsHeld` are diagnostics only.
+
+⚠️ **One tick's events per tick.** They queue when confirmation stalls and drain
+one at a time afterwards, so one tick's events stay in one tick's packet rather
+than a backlog emptying into a single flush. In the steady state one tick
+confirms for every tick simulated and the queue holds nothing.
+
 ### How wrong the provisional stream actually is
 
 Deaths in the provisional stream against the ones that really happened, 600
@@ -484,12 +503,13 @@ and only the node may do that.
 A client can join a meshed server, pick a team, play and leave; a meshed server
 can fill itself with bots and remove them again. What is still missing:
 
-1. **Irreversible events are broadcast provisionally.** The server reads
-   `MeshNode.LastEvents`, not `TryTakeConfirmed`, so a death or a capture can be
-   published and then unmade by a rewind. The holding layer exists and is
-   gated — what it needs is for the broadcast to emit a past tick's events
-   during the current tick's, which is a change to the broadcast path rather
-   than to the mesh.
+1. ⛔ **A peer that connects mid-match is handed no state.** Its node starts
+   from the world it was built with and hears only what is scheduled from then
+   on, so a server that already had bots and players has a roster its new peer
+   does not share — and the two disagree about which slot every later join takes.
+   Nothing detects it but the digest, which reports it as a divergence without
+   saying why. Two nodes that start together and stay up are the only
+   arrangement that works today.
 2. **Whether a correction is VISIBLE.** The magnitudes are measured and the
    smoothing is written; whether an 8 px nudge reads as a snap or as nothing is
    a question about a person watching a screen, and no measurement here answers

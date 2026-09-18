@@ -43,13 +43,26 @@ public sealed partial class GameServer
             // in this mode — so the 140-odd places that read `_world` go on
             // reading it and nothing else in the file has to know.
             //
-            // ⚠️ The corollary is the reason a client cannot join yet: anything
-            // that changes `_world` between ticks is overwritten here, so a join
-            // has to become a scheduled MeshCommand before it can work at all.
+            // ⚠️ The corollary: anything that changes `_world` between ticks is
+            // overwritten here, which is why a join, a team change and a
+            // departure are all scheduled MeshCommands rather than field writes.
             _mesh.Tick(_inputs.AsSpan(0, count), count);
 
             _world = _mesh.Node.State;
-            _events = _mesh.Node.LastEvents;
+
+            // ⛔ THE WORLD IS PROVISIONAL AND THE EVENTS ARE NOT. A client is
+            // built to be corrected several times a second, so positions go out
+            // as soon as they are simulated — that is the whole latency saving.
+            // A death, a capture or an intel grab cannot be taken back on a
+            // stock client, so those wait until the tick that produced them can
+            // no longer be re-simulated into a tick where it did not happen.
+            //
+            // ⚠️ LastEvents is the provisional view and is deliberately NOT used
+            // here. Measured at an 8-tick link over 600 ticks: it published two
+            // deaths that a rewind then unmade and missed one that only existed
+            // once the correction landed. docs/MESH.md, "How wrong the
+            // provisional stream actually is".
+            _events = TakeMeshEvents();
         }
 
         // ⚠️ And this one after it, equally deliberately. Same method-level
