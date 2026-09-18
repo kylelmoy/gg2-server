@@ -82,6 +82,18 @@ public sealed partial class GameServer
     public int MeshEventsHeld => _meshEvents.Count;
 
     /// <summary>
+    /// This node's world at a PAST tick as one number, or null if that tick is
+    /// outside the window.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>At a tick, never live.</b> Two nodes are only comparable at the same
+    /// tick — one that is a few ticks behind has a different world for entirely
+    /// correct reasons, and comparing the two live states reports that as a
+    /// divergence.
+    /// </remarks>
+    public ulong? MeshDigestAt(int tick) => _mesh?.Node.DigestAt(tick);
+
+    /// <summary>
     /// The next confirmed tick's events, or none at all while nothing is
     /// certain.
     /// </summary>

@@ -498,23 +498,64 @@ the survivors by name for that reason.
 runs `TeamBalance.Check` (`GameServerBeginStep.gml:70`). It writes the world,
 and only the node may do that.
 
+### Joining a match already in progress
+
+The listener hands a new peer the whole match — the world, the tick, and every
+player's place with the join that owns it — as one frame, once, before any input
+frame reaches them. The joiner builds its node from that instead of from the
+world it was started with.
+
+⛔ **Without it two nodes had to start together.** A node that connected
+mid-match began from whatever world it was built with and heard only what was
+scheduled from then on, so a server that already had players had a roster its
+new peer did not share — and the two then disagreed about which slot every later
+join took. Only the digest noticed, and it reports a divergence without saying
+which node is wrong.
+
+⛔ **The snapshot replaces the node MID-PARSE**, which is why the link's callback
+hands a node back. A snapshot is followed on the wire by the inputs for the tick
+it was taken at, in the same read; given to the node being discarded those inputs
+are gone, and the adopting node then guesses a tick nobody will ever correct it
+about. **A lost input is a permanent divergence, not a late one.**
+
+⚠️ **The world crosses as raw struct bytes**, sound here for the reason the mesh
+already depends on: both nodes run bit-identical builds on the same OS family,
+or their physics diverges anyway. It is not a portable format and must never be
+written to disk. `MeshSnapshot.Decode` validates every length before using it
+and returns null rather than throwing, because this is the one frame whose size
+a peer chooses.
+
+⛔ **A joiner catches up, and that is not a nicety.** Adopting leaves it on the
+tick the snapshot was taken while the peer has moved on, and a node that stays
+behind schedules its roster changes against its OWN clock — so a command it
+sends for "ten ticks from now" is already in the peer's past by however far
+behind it is, and is refused as too late. Measured as a join whose team change
+never arrived. It advances the difference each tick, bounded by the rollback
+window, using the tick the listener announces in its Hello.
+
+⚠️ **The catch-up ticks are simulated on guessed inputs**, which is what rollback
+is for: the peer's real ones are still in flight and correct them when they land.
+
+⚠️ **A dead player blocks nothing, and that is correct.** A tick waits on the
+inputs of players who were ALIVE at its start, so a remote player who is shot
+stops holding confirmation up and events resume. Anything measuring the holding
+has to measure only while that player lives.
+
+⚠️ **Two nodes are only comparable AT A TICK**, never live, for exactly that
+reason. `MeshNode.DigestAt` is the right comparison and `Digest` is not.
+
 ## What is NOT built
 
 A client can join a meshed server, pick a team, play and leave; a meshed server
-can fill itself with bots and remove them again. What is still missing:
+can fill itself with bots and remove them again; nothing irreversible reaches a
+client before it is certain; and a peer can connect to a match already in
+progress. What is still missing:
 
-1. ⛔ **A peer that connects mid-match is handed no state.** Its node starts
-   from the world it was built with and hears only what is scheduled from then
-   on, so a server that already had bots and players has a roster its new peer
-   does not share — and the two disagree about which slot every later join takes.
-   Nothing detects it but the digest, which reports it as a divergence without
-   saying why. Two nodes that start together and stay up are the only
-   arrangement that works today.
-2. **Whether a correction is VISIBLE.** The magnitudes are measured and the
+1. **Whether a correction is VISIBLE.** The magnitudes are measured and the
    smoothing is written; whether an 8 px nudge reads as a snap or as nothing is
    a question about a person watching a screen, and no measurement here answers
    it. `docs/TRAPS-LIVEGAME.md` and a playtest.
-3. **Chat and map changes are not scheduled**, so they have no agreed order
+2. **Chat and map changes are not scheduled**, so they have no agreed order
    across nodes. They are rare enough to afford a round trip.
 
 Three differences from a standalone server are deliberate rather than missing: a

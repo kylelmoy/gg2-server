@@ -896,15 +896,16 @@ public sealed partial class GameServer : IDisposable, IPluginHost
         // clients and bots join, pick a team, play and LEAVE through scheduled
         // MeshCommands, and nothing irreversible reaches a client before the
         // tick that produced it is certain. What does NOT work is named out
-        // loud rather than discovered: a peer that connects mid-match is handed
-        // no state, so two nodes have to start together and stay up.
+        // loud rather than discovered: a joiner adopts the world as of the tick
+        // the snapshot was taken and never closes that gap, so its clients see a
+        // world a few ticks stale.
         if (_options.MeshEnabled)
         {
             _mesh = MeshSession.Start(_options, _collision, in _world, _spawnPoints);
 
             _log.Warn(
-                "MESH MODE IS EXPERIMENTAL: a peer that connects mid-match is handed no state, "
-                + "so both nodes must start together. docs/MESH.md");
+                "MESH MODE IS EXPERIMENTAL: a node that joins an existing match stays a few "
+                + "ticks behind it. docs/MESH.md");
 
             // ⚠️ Which SLOTS a node owns is not a parity and never was after
             // slots became order-assigned: a slot belongs to whichever node's

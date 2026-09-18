@@ -711,6 +711,47 @@ public sealed class MeshNode
         _assigned.TryGetValue(Key(origin, sequence), out slot);
 
     /// <summary>
+    /// Every join this node has applied, as (origin, sequence, slot).
+    /// </summary>
+    /// <remarks>
+    /// What a node joining mid-match has to be TOLD rather than recompute: the
+    /// joins that produced these places happened before it was listening, and a
+    /// slot depends on every one of them in order.
+    /// </remarks>
+    public IEnumerable<(byte Origin, int Sequence, int Slot)> Assignments()
+    {
+        foreach (var (key, slot) in _assigned)
+            yield return ((byte)(key >> 16), key & 0xFFFF, slot);
+    }
+
+    /// <summary>
+    /// Takes on a match already in progress: who is playing, where, and under
+    /// whose join.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>The world and the tick come from the constructor and these come from
+    /// here</b>, because a node adopting a match is built fresh — there is no
+    /// half-adopted state where the world is one match's and the ownership table
+    /// another's.
+    /// </remarks>
+    public void Adopt(IEnumerable<MeshMember> members)
+    {
+        ArgumentNullException.ThrowIfNull(members);
+
+        _assigned.Clear();
+        Array.Fill(_slotOrigin, (byte)255);
+
+        foreach (var member in members)
+        {
+            if ((uint)member.Slot >= WorldState.MaxSlots)
+                continue;
+
+            _assigned[Key(member.Origin, member.Sequence)] = member.Slot;
+            _slotOrigin[member.Slot] = member.Origin;
+        }
+    }
+
+    /// <summary>
     /// The join that created a slot, which is how a departure names it.
     /// </summary>
     /// <remarks>
