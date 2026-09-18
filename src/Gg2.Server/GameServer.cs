@@ -894,17 +894,17 @@ public sealed partial class GameServer : IDisposable, IPluginHost
         // runs through a rollback node, this server's own players' inputs go to
         // the peer, the two nodes' worlds are compared once a second, and
         // clients and bots join, pick a team, play and LEAVE through scheduled
-        // MeshCommands. What does NOT work is named out loud rather than
-        // discovered: irreversible events still go out provisionally rather
-        // than through MeshNode.TryTakeConfirmed, so a rewind can unmake a
-        // death that has already been broadcast.
+        // MeshCommands, and nothing irreversible reaches a client before the
+        // tick that produced it is certain. What does NOT work is named out
+        // loud rather than discovered: a peer that connects mid-match is handed
+        // no state, so two nodes have to start together and stay up.
         if (_options.MeshEnabled)
         {
             _mesh = MeshSession.Start(_options, _collision, in _world, _spawnPoints);
 
             _log.Warn(
-                "MESH MODE IS EXPERIMENTAL: events are broadcast before they are confirmed, "
-                + "so a rewind can unmake one. docs/MESH.md");
+                "MESH MODE IS EXPERIMENTAL: a peer that connects mid-match is handed no state, "
+                + "so both nodes must start together. docs/MESH.md");
 
             // ⚠️ Which SLOTS a node owns is not a parity and never was after
             // slots became order-assigned: a slot belongs to whichever node's

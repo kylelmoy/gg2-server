@@ -55,6 +55,67 @@ public sealed partial class GameServer
     private readonly HashSet<long> _meshLeaving = [];
 
     /// <summary>
+    /// Confirmed ticks' events, waiting their turn on the wire.
+    /// </summary>
+    /// <remarks>
+    /// One tick confirms for every tick simulated once inputs are flowing, so
+    /// this holds nothing in the steady state. It fills when confirmation
+    /// stalls — a peer gone quiet — and drains a tick at a time afterwards,
+    /// which keeps one tick's events in one tick's packet rather than emptying
+    /// a backlog into a single flush.
+    /// </remarks>
+    private readonly Queue<TickEvents> _meshEvents = new();
+
+    /// <summary>
+    /// Confirmed event-ticks handed to the broadcast.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>Diagnostic, and NOT a gate.</b> It counts the drain, which a server
+    /// that drains and then broadcasts the provisional events anyway would also
+    /// do — measured: that mutation passes against this counter and fails
+    /// against <c>MeshJoinTests.ASilentPeerHoldsEveryEventAndStopsNothingElse</c>,
+    /// which counts what a client actually received.
+    /// </remarks>
+    public long MeshEventsReleased { get; private set; }
+
+    /// <summary>How many are waiting, which is 0 or 1 unless confirmation stalled.</summary>
+    public int MeshEventsHeld => _meshEvents.Count;
+
+    /// <summary>
+    /// The next confirmed tick's events, or none at all while nothing is
+    /// certain.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ⛔ <b>Nothing is the right answer when nothing is confirmed.</b> A node
+    /// whose peer has gone quiet cannot know whether the deaths it is
+    /// simulating will survive the inputs still in flight, so it says nothing
+    /// about them and goes on sending positions. The client sees players moving
+    /// and no deaths, which is recoverable; the alternative is a death it can
+    /// never take back.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>A tick is confirmed when every live player's real input for it has
+    /// been heard</b>, which cannot be rewound because a rewind is only ever
+    /// scheduled by an input contradicting a GUESS. With no peer connected every
+    /// player is local, so every tick confirms at once and this is a queue of
+    /// one.
+    /// </para>
+    /// </remarks>
+    private TickEvents TakeMeshEvents()
+    {
+        while (_mesh!.Node.TryTakeConfirmed(out _, out var events))
+            _meshEvents.Enqueue(events);
+
+        if (_meshEvents.Count == 0)
+            return default;
+
+        MeshEventsReleased++;
+
+        return _meshEvents.Dequeue();
+    }
+
+    /// <summary>
     /// Asks the mesh for a roster place for a joiner, and parks them until it
     /// arrives.
     /// </summary>

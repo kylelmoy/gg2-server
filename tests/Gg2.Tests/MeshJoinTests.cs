@@ -95,6 +95,13 @@ public sealed class MeshJoinTests
             Node.Advance();
         }
 
+        /// <summary>Schedules a command on the server as a real peer would.</summary>
+        public void Send(int tick, in MeshCommand command, string name)
+        {
+            _link.SendCommand(tick, command, name);
+            Node.Schedule(tick, command);
+        }
+
         public bool Has(int slot) => _synchronised && Node.State.HasPlayer[slot];
 
         public bool IsBot(int slot) => _synchronised && Node.State.Players[slot].IsBot;
@@ -110,6 +117,66 @@ public sealed class MeshJoinTests
     private sealed class Idle : IInputSource
     {
         public PlayerInput Poll(in WorldView world, int slot, int tick) => default;
+    }
+
+    /// <summary>
+    /// Gives the far end a player who is ALIVE and never presses anything, so
+    /// the server can never confirm a tick.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>A peer that has a player and sends no inputs for them.</b> The server
+    /// guesses that player's keys every tick and never hears the real ones, so
+    /// no tick of its is ever certain — which is the state a held event has to
+    /// survive without being published.
+    /// </para>
+    /// <para>
+    /// ⛔ <b>The team change is the point, not scaffolding.</b>
+    /// <c>MeshNode.IsCertain</c> waits on the input of every player who was
+    /// ALIVE at the start of the tick, not everybody in the roster — a
+    /// spectator presses nothing the world can see, so a node that waited for
+    /// one would confirm nothing for as long as somebody was watching. Without
+    /// the change this player has no character and blocks nothing.
+    /// </para>
+    /// </remarks>
+    private static int AddSilentPeerPlayer(ServerHarness harness, Peer peer)
+    {
+        peer.Send(
+            peer.Node.Tick + MeshSession.CommandLead,
+            MeshCommand.AddPlayer(origin: 1, sequence: 1),
+            "Silent");
+
+        var slot = -1;
+
+        // ⚠️ The slot is RESOLVED from the SERVER's roster, never assumed and
+        // never read off the peer. A join takes the lowest free place, so it
+        // depends on how many bots this server filled — and the peer's own node
+        // does not even agree about that, because it connected after those bots
+        // had joined and a mesh transfers no history. Naming slot 1 changed a
+        // BOT's team instead and left the silent player a spectator, blocking
+        // nothing.
+        for (var i = 0; i < MeshSession.CommandLead + 40 && slot < 0; i++)
+        {
+            harness.Tick();
+
+            for (var at = 1; at < harness.Server.RosterCount; at++)
+            {
+                if (harness.Server.NameOf(at) == "Silent")
+                    slot = at;
+            }
+        }
+
+        Assert.True(slot > 0, "the peer's join never reached the server's roster");
+
+        peer.Send(
+            peer.Node.Tick + MeshSession.CommandLead,
+            MeshCommand.ChangeTeam(slot, Team.Red),
+            "Silent");
+
+        for (var i = 0; i < MeshSession.CommandLead + 30; i++)
+            harness.Tick();
+
+        return slot;
     }
 
     private static LevelMap Map() =>
@@ -385,6 +452,131 @@ public sealed class MeshJoinTests
         // exist.
         for (var slot = 1; slot < harness.Server.RosterCount; slot++)
             Assert.True(peer.Has(slot), $"the peer has no player in slot {slot}");
+    }
+
+    /// <summary>
+    /// ⛔ A node whose peer has gone quiet publishes nothing irreversible, and
+    /// goes on publishing positions.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The holding rule, read off the wire.</b> A death, a capture or an
+    /// intel grab cannot be taken back on a stock client, so a node may only
+    /// send one once the tick that produced it can no longer be re-simulated
+    /// into a tick where it did not happen. A tick is certain when every live
+    /// player's real input for it has been heard — so a peer with a player who
+    /// never presses anything makes every tick uncertain for ever.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Counted as MESSAGES a client received, not as a server-side
+    /// counter.</b> A counter incremented where the events are drained says the
+    /// drain happened, which is true of a server that drains and then broadcasts
+    /// the provisional events anyway — measured: that mutation passed against
+    /// the counter and fails against this.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>The control is the same server before the silent player arrives</b>,
+    /// where every player is local and every tick confirms at once. Without it
+    /// this passes against a server that had simply stopped broadcasting, which
+    /// is why the position stream is asserted to keep flowing too.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ASilentPeerHoldsEveryEventAndStopsNothingElse()
+    {
+        const string map = "gg_debug";
+
+        using var harness = new ServerHarness(options =>
+        {
+            options.Map = map;
+            options.MeshEnabled = true;
+            options.MeshListenPort = 0;
+
+            // Without the graphs the bots never meet and never fire, and an
+            // empty fingerprint reads exactly like holding.
+            options.NavCacheDirectory = MapDirectory.ResolveNav();
+            options.Bots = BotPopulationOptions.Default with
+            {
+                Enabled = true,
+                FillToPlayers = 6,
+                MaxBots = 6,
+                MinHumans = 0,
+            };
+        });
+
+        using var peer = new Peer(harness.Server.MeshPort, Map());
+        harness.AfterTick = peer.Tick;
+
+        harness.Tick(20);
+
+        var client = harness.JoinClient("watcher");
+        var reader = new BroadcastReader(LevelMap.FromPng(map, ReferenceTree.ReadMap(map)));
+
+        // Let the bots reach each other and start shooting.
+        harness.Tick(400);
+        reader.Drain(client);
+        harness.Tick(200);
+
+        var fighting = Irreversible(reader.Drain(client));
+
+        Assert.True(
+            fighting > 0,
+            "nothing irreversible happened while everything was confirmed, so this test "
+            + "cannot say anything about holding");
+
+        // Now give the peer a player who is alive and never presses anything.
+        var silent = AddSilentPeerPlayer(harness, peer);
+
+        Assert.True(harness.Server.IsAlive(silent), $"slot {silent}: roster={harness.Server.RosterCount} peerHas={peer.Has(silent)} peerTeam={peer.TeamOf(silent)} serverTeam={harness.Server.TeamOf(silent)} name={harness.Server.NameOf(silent)}");
+
+        // Everything up to the silence, discarded.
+        reader.Drain(client);
+
+        harness.Tick(200);
+
+        var held = reader.Drain(client);
+
+        // ⛔ Not one tick became certain, so nothing that cannot be unsaid was
+        // sent.
+        Assert.Equal(0, Irreversible(held));
+
+        // ⚠️ And the server did not simply stop: the positions kept going, which
+        // is the provisional stream the whole design exists to keep.
+        Assert.True(
+            held.Count(message => message.Type == MessageType.QuickUpdate) > 0,
+            "the server stopped sending positions, which is not holding");
+    }
+
+    /// <summary>
+    /// The messages a rewind could unmake and a stock client could not take
+    /// back.
+    /// </summary>
+    private static int Irreversible(IEnumerable<ServerMessage> messages) =>
+        messages.Count(message => message.Type
+            is MessageType.WeaponFire
+            or MessageType.PlayerDeath
+            or MessageType.PlayerSpawn);
+
+    /// <summary>Reads framed messages out of a client's byte stream.</summary>
+    private sealed class BroadcastReader
+    {
+        private readonly ServerStream _stream = new();
+        private readonly ReceiveBuffer _buffer = new();
+
+        public BroadcastReader(LevelMap map) => _stream.SetShape(GameModes.ShapeOf(map));
+
+        public List<ServerMessage> Drain(LoopbackClient client)
+        {
+            client.Poll();
+            _buffer.Append(client.Take(client.Received.Count));
+
+            var messages = new List<ServerMessage>();
+
+            while (_stream.TryRead(_buffer, out var message))
+                messages.Add(message);
+
+            return messages;
+        }
     }
 
     /// <summary>
