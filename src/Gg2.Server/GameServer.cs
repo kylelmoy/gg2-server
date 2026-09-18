@@ -893,7 +893,7 @@ public sealed partial class GameServer : IDisposable, IPluginHost
         // ⛔ EXPERIMENTAL and off unless asked for. What works: the simulation
         // runs through a rollback node, this server's own players' inputs go to
         // the peer, the two nodes' worlds are compared once a second, and
-        // clients and bots join, pick a team and play through scheduled
+        // clients and bots join, pick a team, play and LEAVE through scheduled
         // MeshCommands. What does NOT work is named out loud rather than
         // discovered: irreversible events still go out provisionally rather
         // than through MeshNode.TryTakeConfirmed, so a rewind can unmake a

@@ -135,6 +135,26 @@ public sealed class MeshNode
     /// </remarks>
     private readonly byte[] _slotOrigin = BuildOrigins();
 
+    /// <summary>
+    /// Which slots a tick's removals actually took, keyed by tick.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ⛔ <b>A removal cannot be resolved after the fact.</b> The command names a
+    /// join, applying it deletes that join's entry from
+    /// <see cref="_assigned"/>, and the slot it named has been renumbered away —
+    /// so a server draining the schedule a tick later has no way to work out
+    /// whose roster place to take. It has to be told, and this is the telling.
+    /// </para>
+    /// <para>
+    /// Kept in the same ring the schedule uses, and rewritten whenever the tick
+    /// is applied again, so a rewind through a departure leaves the answer the
+    /// re-application produced rather than the first one.
+    /// </para>
+    /// </remarks>
+    private readonly List<byte>[] _removed;
+    private readonly int[] _removedTick;
+
     private static byte[] BuildOrigins()
     {
         var origins = new byte[WorldState.MaxSlots];
@@ -197,15 +217,21 @@ public sealed class MeshNode
         _rowTick = new int[_rows];
         _scheduled = new List<MeshCommand>[_rows];
         _scheduledTick = new int[_rows];
+        _removed = new List<byte>[_rows];
+        _removedTick = new int[_rows];
 
         for (var i = 0; i < _rows; i++)
+        {
             _scheduled[i] = [];
+            _removed[i] = [];
+        }
 
         _latest = new PlayerInput[WorldState.MaxSlots];
         _latestTick = new int[WorldState.MaxSlots];
 
         Array.Fill(_rowTick, -1);
         Array.Fill(_scheduledTick, -1);
+        Array.Fill(_removedTick, -1);
         Array.Fill(_latestTick, -1);
     }
 
@@ -552,6 +578,12 @@ public sealed class MeshNode
     /// </summary>
     private void Apply(List<MeshCommand> commands)
     {
+        // ⚠️ Cleared rather than appended to, because a rewind runs this tick
+        // again: the answer that stands has to be the last application's, not
+        // the first's plus every replay since.
+        var removed = RemovedFor(Tick);
+        removed.Clear();
+
         foreach (var command in commands)
         {
             var slot = command.Slot;
@@ -620,10 +652,24 @@ public sealed class MeshNode
 
                 case MeshCommandKind.RemovePlayer:
                 {
-                    if (!_state.HasPlayer[slot])
+                    // ⛔ The command names the JOIN, not the place. Resolving it
+                    // here is what makes two removals in flight at once land on
+                    // the people they were meant for: the first renumbers this
+                    // table, so the second resolves against a roster that has
+                    // already changed rather than against the one its sender
+                    // was looking at. Gone already means a second removal of the
+                    // same player, which is a no-op rather than somebody else's
+                    // departure.
+                    if (!_assigned.TryGetValue(Key(command.Origin, command.Sequence), out var at)
+                        || !_state.HasPlayer[at])
+                    {
                         break;
+                    }
+
+                    slot = (byte)at;
 
                     _state.RemoveSlot(slot);
+                    removed.Add(slot);
 
                     // ⚠️ A REMOVAL RENUMBERS EVERY SLOT ABOVE IT — CLAUDE.md's
                     // rule, and anything that names a player has to be renumbered
@@ -663,6 +709,60 @@ public sealed class MeshNode
     /// </remarks>
     public bool TryGetAssignedSlot(int origin, int sequence, out int slot) =>
         _assigned.TryGetValue(Key(origin, sequence), out slot);
+
+    /// <summary>
+    /// The join that created a slot, which is how a departure names it.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>The reverse of <see cref="TryGetAssignedSlot"/>, and the only safe
+    /// way to say "this player leaves".</b> A slot number means what it meant
+    /// when it was read, and a removal anywhere below it changes that; a join
+    /// key does not move. A linear scan because the table holds one entry per
+    /// player in the match.
+    /// </remarks>
+    public bool TryGetJoinKey(int slot, out int origin, out int sequence)
+    {
+        foreach (var (key, at) in _assigned)
+        {
+            if (at != slot)
+                continue;
+
+            origin = key >> 16;
+            sequence = key & 0xFFFF;
+
+            return true;
+        }
+
+        origin = 255;
+        sequence = 0;
+
+        return false;
+    }
+
+    /// <summary>
+    /// The slots a tick's removals took, in the order they were applied.
+    /// </summary>
+    /// <remarks>
+    /// <b>Only a past tick can be asked</b>, because the answer is what applying
+    /// it produced. A server drains this to take the same roster places its node
+    /// took from the world, which it cannot work out for itself: the command
+    /// names a join, and applying it deleted that join's entry.
+    /// </remarks>
+    public IReadOnlyList<byte> RemovedAt(int tick) =>
+        tick < 0 || tick >= Tick || tick <= Tick - _rows ? [] : RemovedFor(tick);
+
+    private List<byte> RemovedFor(int tick)
+    {
+        var row = tick % _rows;
+
+        if (_removedTick[row] != tick)
+        {
+            _removed[row].Clear();
+            _removedTick[row] = tick;
+        }
+
+        return _removed[row];
+    }
 
     /// <summary>
     /// Which node issued the join that holds a slot, or 255 if nobody does.

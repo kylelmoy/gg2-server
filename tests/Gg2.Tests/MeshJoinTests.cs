@@ -305,28 +305,25 @@ public sealed class MeshJoinTests
     }
 
     /// <summary>
-    /// ⛔ A meshed bot cannot be removed, and the server SAYS so instead of
-    /// corrupting the roster.
+    /// ⛔ A meshed bot leaves, the peer agrees, and the roster still matches the
+    /// world slot for slot.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>A departure is the half of the roster a mesh cannot yet agree.</b>
-    /// Removing locally would compact this node's roster while the node's world
+    /// <b>A departure is the half of the roster that cannot be done locally.</b>
+    /// Removing here would compact this node's roster while the node's world
     /// still held the player, and the two would then name different people at
-    /// every slot above the hole. Scheduling a <c>RemovePlayer</c> is not enough
-    /// either: a command names a SLOT, a removal renumbers every slot above it,
-    /// and two removals in flight at once means the second was numbered against
-    /// a roster the first has already changed.
+    /// every slot above the hole — counts agreeing while every entry above it is
+    /// somebody else.
     /// </para>
     /// <para>
-    /// ⚠️ <b>The gate is that the refusal is STATED.</b> A silent refusal and a
-    /// silent corruption look identical from outside the process, and this
-    /// became reachable the moment a meshed server could have bots at all — the
-    /// population manager removes one whenever a person takes its place.
+    /// ⚠️ <b>The survivors are checked by NAME, not by count.</b> A roster that
+    /// lost the wrong entry is exactly as long as one that lost the right entry,
+    /// so a length assertion passes against the corruption this is about.
     /// </para>
     /// </remarks>
     [Fact]
-    public void AMeshedBotCannotLeaveAndTheServerSaysSo()
+    public void AMeshedBotLeavesAndTakesItsOwnPlaceWithIt()
     {
         using var harness = new ServerHarness(options =>
         {
@@ -339,34 +336,106 @@ public sealed class MeshJoinTests
 
         harness.Tick(20);
 
-        var landed = -1;
+        // Three, so there is somebody above the leaver to be mistaken for them.
+        var slots = new int[3];
+        var names = new[] { "[BOT] one", "[BOT] two", "[BOT] three" };
 
-        harness.Server.AddBot(
-            "[BOT] scout", Team.Red, PlayerClass.Scout, new Idle(), slot => landed = slot);
+        for (var i = 0; i < names.Length; i++)
+        {
+            var at = i;
 
-        for (var i = 0; i < MeshSession.CommandLead + 80 && landed < 0; i++)
+            harness.Server.AddBot(
+                names[i], Team.Red, PlayerClass.Scout, new Idle(), slot => slots[at] = slot);
+        }
+
+        for (var i = 0; i < MeshSession.CommandLead + 80 && slots[2] == 0; i++)
             harness.Tick();
 
-        Assert.True(landed > 0);
+        Assert.All(slots, slot => Assert.True(slot > 0));
 
+        var leaver = slots[0];
         var before = harness.Server.RosterCount;
 
-        harness.Server.RemoveBot(landed);
+        harness.Server.RemoveBot(leaver);
 
-        // Still there, on both sides, and the roster did not shrink under the
-        // world — which is the corruption being refused.
+        // ⛔ Not gone yet: the place goes when the command lands, on both nodes
+        // at the same tick. A server that took it here would be a tick ahead of
+        // its own node.
         Assert.Equal(before, harness.Server.RosterCount);
-        Assert.True(harness.Server.EntryOf(landed).IsBot);
+
+        for (var i = 0; i < MeshSession.CommandLead + 40 && harness.Server.RosterCount == before; i++)
+            harness.Tick();
+
+        Assert.Equal(before - 1, harness.Server.RosterCount);
+
+        // ⛔ The two who stayed are the two who did not leave, and they shifted
+        // down into the hole. This is the assertion a trailing trim fails.
+        Assert.Equal("[BOT] two", harness.Server.NameOf(leaver));
+        Assert.Equal("[BOT] three", harness.Server.NameOf(leaver + 1));
+        Assert.DoesNotContain(
+            names[0],
+            Enumerable.Range(0, harness.Server.RosterCount).Select(harness.Server.NameOf));
+
+        // The peer removed the same player, so both worlds are the same length.
+        Assert.False(peer.Has(harness.Server.RosterCount));
+        Assert.True(peer.Has(harness.Server.RosterCount - 1));
+
+        // And the roster still agrees with the world slot for slot — a roster
+        // longer than the world asks a client for a character that does not
+        // exist.
+        for (var slot = 1; slot < harness.Server.RosterCount; slot++)
+            Assert.True(peer.Has(slot), $"the peer has no player in slot {slot}");
+    }
+
+    /// <summary>
+    /// A disconnecting client leaves a meshed match, rather than standing there
+    /// for ever.
+    /// </summary>
+    /// <remarks>
+    /// <b>The path a real server actually takes.</b> The socket is gone at once
+    /// — nothing can be done about that — but the roster place waits for the
+    /// tick both nodes remove it at, which is the same lead a join already waits
+    /// out.
+    /// </remarks>
+    [Fact]
+    public void ADisconnectingClientLeavesAMeshedMatch()
+    {
+        using var harness = new ServerHarness(options =>
+        {
+            options.MeshEnabled = true;
+            options.MeshListenPort = 0;
+        });
+
+        using var peer = new Peer(harness.Server.MeshPort, Map());
+        harness.AfterTick = peer.Tick;
 
         harness.Tick(20);
 
-        Assert.True(peer.Has(landed));
-        Assert.Equal(before, harness.Server.RosterCount);
+        var client = harness.JoinClient("Vindicator");
 
-        // ⛔ And it was said out loud. A gap recorded only in a code comment is a
-        // gap nobody is tracking.
-        Assert.Contains(
-            harness.Log.Warnings,
-            line => line.Contains("cannot be removed while meshed", StringComparison.Ordinal));
+        var slot = -1;
+
+        for (var i = 1; i < harness.Server.RosterCount; i++)
+        {
+            if (harness.Server.NameOf(i) == "Vindicator")
+                slot = i;
+        }
+
+        Assert.True(slot > 0);
+
+        var before = harness.Server.RosterCount;
+
+        client.Dispose();
+
+        for (var i = 0; i < MeshSession.CommandLead + 60 && harness.Server.RosterCount == before; i++)
+            harness.Tick();
+
+        Assert.Equal(before - 1, harness.Server.RosterCount);
+        Assert.DoesNotContain(
+            "Vindicator",
+            Enumerable.Range(0, harness.Server.RosterCount).Select(harness.Server.NameOf));
+
+        // The peer let them go too, at the tick the command named.
+        Assert.False(peer.Has(slot));
     }
 }

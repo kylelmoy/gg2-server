@@ -43,15 +43,16 @@ public sealed partial class GameServer
     private int _meshDrained = -1;
 
     /// <summary>
-    /// Players whose removal a mesh has refused, so it is said once rather than
-    /// every tick.
+    /// Players whose departure has been scheduled and has not landed yet.
     /// </summary>
     /// <remarks>
-    /// Keyed by <see cref="RosterEntry.StableId"/> and not by slot, because a
-    /// slot is a position and the whole reason a departure is hard here is that
-    /// positions move.
+    /// ⚠️ <b>Keyed by <see cref="RosterEntry.StableId"/>, never by slot</b>,
+    /// because a slot is a position and positions move under exactly the thing
+    /// this is tracking. It stops a second <c>RemovePlayer</c> being scheduled
+    /// for somebody already on their way out — harmless in the node, which
+    /// resolves the second to nothing, but it would say so twice on the wire.
     /// </remarks>
-    private readonly HashSet<long> _meshRefusedRemoval = [];
+    private readonly HashSet<long> _meshLeaving = [];
 
     /// <summary>
     /// Asks the mesh for a roster place for a joiner, and parks them until it
@@ -145,6 +146,43 @@ public sealed partial class GameServer
     }
 
     /// <summary>
+    /// Schedules a departure, naming the player by the join that created their
+    /// place.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ⛔ <b>Named by the join, never by the slot.</b> A removal renumbers every
+    /// slot above it, so a command carrying a slot number is only right until
+    /// somebody below it leaves — and with two nodes there is always somebody
+    /// else's departure that might land first. Both nodes would then agree on
+    /// the wrong player, which no digest can catch because they still agree.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>The roster place is NOT taken here.</b> It goes when the command
+    /// lands, in <see cref="DrainMeshCommands"/>, so this node and its node
+    /// remove the same person at the same tick. Until then the player is still
+    /// in the match — pressing nothing, if their socket has gone.
+    /// </para>
+    /// </remarks>
+    private void MeshRemove(int slot, string who)
+    {
+        if (!_meshLeaving.Add(_roster[slot].StableId))
+            return;
+
+        if (!_mesh!.Node.TryGetJoinKey(slot, out var origin, out var sequence))
+        {
+            // Nothing in the node's table claims this slot, so there is no join
+            // to name. Slot 0 is the reserved player and never leaves; anything
+            // else here is a roster and a node that have come apart, which is
+            // worth a line rather than a silent no-op.
+            _log.Warn($"{who} cannot leave the mesh: no join owns slot {slot}");
+            return;
+        }
+
+        _mesh.Schedule(MeshCommand.RemovePlayer(origin, sequence), _roster[slot].Name);
+    }
+
+    /// <summary>
     /// Brings the roster into line with the world, which in a mesh is the thing
     /// that decides who is playing.
     /// </summary>
@@ -173,6 +211,14 @@ public sealed partial class GameServer
     {
         if (_mesh is null)
             return;
+
+        // Drained BEFORE the walk so a place vacated this tick can be filled by
+        // this tick's join rather than the next one's. ⚠️ Not a correctness
+        // rule: drained afterwards the walk simply finds nothing to add — the
+        // world is already a player shorter than the roster — and the newcomer
+        // appears one tick later instead. The order is worth keeping and is not
+        // worth a claim that it prevents corruption.
+        DrainMeshCommands();
 
         while (_roster.Count < WorldState.MaxSlots && _world.HasPlayer[_roster.Count])
         {
@@ -205,13 +251,19 @@ public sealed partial class GameServer
             ServerMessages.PlayerJoin(_broadcast, entry.Name);
         }
 
-        DrainMeshCommands();
-
-        // A departure at the far end shortens the world, and the roster follows.
-        // ⚠️ RemoveSlot has already renumbered everything above it in the world,
-        // so the roster is corrected from the end rather than by index.
-        while (_roster.Count > 1 && !_world.HasPlayer[_roster.Count - 1])
-            _roster.RemoveAt(_roster.Count - 1);
+        // ⛔ NO TRIM FROM THE END. A departure is drained by the slot the node
+        // reports it took, because trimming the tail would take the LAST roster
+        // entry instead of the one that left: the counts would agree while every
+        // entry above the hole named the wrong person, which is the shape of
+        // corruption a state update cannot show. If the two lengths still
+        // disagree here, something removed a player without a command and that
+        // is worth saying rather than papering over.
+        if (_roster.Count > 1 && !_world.HasPlayer[_roster.Count - 1])
+        {
+            _log.Warn(
+                $"mesh: the roster holds {_roster.Count} players and the world does not — "
+                + "a player left the world without a RemovePlayer. docs/MESH.md");
+        }
     }
 
     /// <summary>
@@ -264,6 +316,41 @@ public sealed partial class GameServer
                     default:
                         break;
                 }
+            }
+
+            // ⛔ The removals come from the NODE, not from the commands, and
+            // that is the whole reason RemovedAt exists: a RemovePlayer names a
+            // join, applying it deleted that join's entry, and the slot it
+            // resolved to has been renumbered away. Nothing here could work it
+            // out afterwards — it has to be told which places were taken.
+            //
+            // ⚠️ In the node's own order, which is descending nowhere and
+            // arbitrary everywhere: each removal renumbers the ones after it on
+            // both sides at once, so replaying them in the same order against
+            // the roster is what keeps the two in step.
+            foreach (var slot in _mesh.Node.RemovedAt(_meshDrained))
+            {
+                if (slot == 0 || slot >= _roster.Count)
+                    continue;
+
+                var leaving = _roster[slot];
+
+                // ⛔ BEFORE the removal, so a plugin's per-player table compacts
+                // with the roster rather than after it — see RemoveBot.
+                _plugins.PlayerRemoving(slot);
+
+                _roster.RemoveAt(slot);
+                _meshLeaving.Remove(leaving.StableId);
+
+                ServerMessages.PlayerLeave(_broadcast, slot);
+
+                _log.Info($"{LogText.Safe(leaving.Name)} left player {slot} by the mesh");
+
+                // ⚠️ No TeamBalance.Check, where a standalone departure runs one
+                // (GameServerBeginStep.gml:70). It writes the world, and only
+                // the node may do that; balancing here would be a change the
+                // peer never made. The same difference from standalone as a
+                // meshed team change not rebalancing. docs/MESH.md.
             }
         }
     }

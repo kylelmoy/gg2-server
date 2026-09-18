@@ -143,7 +143,7 @@ public sealed class MeshIsOptionalTests
         // ⛔ And a departure moves ownership with the slot. Under a parity rule
         // slot 1 would still be the listener's; here it is the joiner's player,
         // shifted down.
-        node.Schedule(10, MeshCommand.RemovePlayer(1));
+        node.Schedule(10, MeshCommand.RemovePlayer(origin: 0, sequence: 1));
         node.Advance(12);
 
         Assert.Equal(1, node.OriginOf(1));

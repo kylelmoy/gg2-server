@@ -443,41 +443,61 @@ and hands the team change to whoever shifted down into the slot. Both nodes
 agree either way, so no digest goes red and nothing diverges; it is simply the
 wrong player. `MeshCommandTests.ARemovalIsAppliedAfterEverythingElseInItsTick`.
 
+### A departure
+
+A departure is a scheduled command like a join, and the roster place goes when
+it lands rather than when the socket does. A disconnecting client's connection
+is dropped at once — nothing can be done about that — and their player stands
+there pressing nothing for the ten-odd ticks until both nodes remove them at the
+same tick.
+
+⛔ **A departure is named by the JOIN that created the place, never by the
+place.** A removal renumbers every slot above it, so two removals in flight at
+once — one from each node, which is the ordinary case — means the second was
+numbered against a roster the first has already changed. **Nothing about that
+shows up as a divergence**: both nodes compute the same wrong answer, agree
+with each other, and the digests match. `MeshCommand.RemovePlayer(origin,
+sequence)` resolves to a slot at apply time, on both nodes, from the same state.
+Ordering removals by descending slot fixes the same-tick case and not the
+cross-tick one, which is why the naming is the fix rather than the sort.
+
+A consequence worth having: a removal said twice resolves to nothing the second
+time, so a departure is safe to repeat.
+
+⛔ **The node reports which slot each removal took** — `MeshNode.RemovedAt(tick)`,
+kept in the same ring the schedule uses and rewritten whenever the tick is
+applied again. A server cannot work it out afterwards: the command names a join,
+applying it deleted that join's entry, and the slot has been renumbered away.
+
+⚠️ **The roster is never trimmed from the end.** Taking the last entry when the
+world shrinks leaves the counts agreeing while every entry above the hole names
+the wrong person — corruption a state update cannot show, because it is the
+right length. `MeshJoinTests.AMeshedBotLeavesAndTakesItsOwnPlaceWithIt` checks
+the survivors by name for that reason.
+
+⚠️ **A meshed departure does not rebalance the teams**, where a standalone one
+runs `TeamBalance.Check` (`GameServerBeginStep.gml:70`). It writes the world,
+and only the node may do that.
+
 ## What is NOT built
 
-A client can join a meshed server, pick a team and play, and a meshed server can
-fill itself with bots. What is still missing:
+A client can join a meshed server, pick a team, play and leave; a meshed server
+can fill itself with bots and remove them again. What is still missing:
 
-1. ⛔ **A departure has no agreed order across nodes**, so a meshed server
-   refuses one and says so rather than corrupting the roster: a disconnecting
-   client keeps its place and stands there pressing nothing, and
-   `RemoveBot` returns without removing. Removing locally would compact this
-   node's roster while the node's world still held the player, and the two would
-   then name different people at every slot above the hole.
-
-   ⚠️ **Scheduling a `RemovePlayer` is not enough on its own**, which is the
-   part worth keeping: a command names a SLOT, a removal renumbers every slot
-   above it, and two removals in flight at once — one from each node, the
-   ordinary case — means the second was numbered against a roster the first has
-   already changed. Both nodes agree on the wrong player, so no digest goes red.
-   Ordering removals by descending slot fixes the same-tick case and not the
-   cross-tick one. The fix is to name a departure by the `(origin, sequence)`
-   that created the slot, as `AddPlayer` already is, and resolve it to a slot at
-   apply time; the drain then needs the node to report which slot each removal
-   resolved to, keyed by tick the way the schedule itself is.
-2. **Irreversible events are broadcast provisionally.** The server reads
+1. **Irreversible events are broadcast provisionally.** The server reads
    `MeshNode.LastEvents`, not `TryTakeConfirmed`, so a death or a capture can be
    published and then unmade by a rewind. The holding layer exists and is
    gated — what it needs is for the broadcast to emit a past tick's events
    during the current tick's, which is a change to the broadcast path rather
    than to the mesh.
-3. **Whether a correction is VISIBLE.** The magnitudes are measured and the
+2. **Whether a correction is VISIBLE.** The magnitudes are measured and the
    smoothing is written; whether an 8 px nudge reads as a snap or as nothing is
    a question about a person watching a screen, and no measurement here answers
    it. `docs/TRAPS-LIVEGAME.md` and a playtest.
-4. **Chat and map changes are not scheduled**, so they have no agreed order
+3. **Chat and map changes are not scheduled**, so they have no agreed order
    across nodes. They are rare enough to afford a round trip.
 
-Two differences from a standalone server are deliberate and measured rather than
-missing: a meshed team change does not rebalance, and a meshed bot gets no
-class limits. Both are above, with why.
+Three differences from a standalone server are deliberate rather than missing: a
+meshed team change does not rebalance, a meshed departure does not rebalance
+either, and a meshed bot gets no class limits. All three are above, with why —
+and all three are the same reason, that only the node may write the world.

@@ -510,20 +510,14 @@ public sealed partial class GameServer
 
         _clients.RemoveAt(clientIndex);
 
-        // ⛔ A DEPARTURE IS NOT MESHED YET — see RemoveBot for why a scheduled
-        // RemovePlayer is not enough on its own. The socket is gone either way,
-        // so the connection is dropped above and only the roster place is held:
-        // the player stands there pressing nothing until the mesh learns how to
-        // agree a departure. docs/MESH.md, "What is NOT built".
+        // ⛔ In a mesh the roster place is not this node's to take back: it goes
+        // when a scheduled RemovePlayer lands, on both nodes at the same tick.
+        // The socket is gone either way — dropped above — so for the ten-odd
+        // ticks in between the player stands there pressing nothing, which is
+        // the same lead a join already waits out.
         if (rosterIndex > 0 && _mesh is not null)
         {
-            if (_meshRefusedRemoval.Add(_roster[rosterIndex].StableId))
-            {
-                _log.Warn(
-                    $"{LogText.Safe(_roster[rosterIndex].Name)} disconnected but cannot leave a "
-                    + "meshed match: a departure has no agreed order across nodes yet, so their "
-                    + "player stays in the roster. docs/MESH.md");
-            }
+            MeshRemove(rosterIndex, LogText.Safe(_roster[rosterIndex].Name));
         }
         else if (rosterIndex > 0)
         {

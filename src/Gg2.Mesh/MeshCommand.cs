@@ -159,8 +159,38 @@ public readonly record struct MeshCommand(
     public static MeshCommand Spawn(int slot, int spawnpointId = 0, int group = 0) =>
         new(MeshCommandKind.Spawn, (byte)slot, (byte)spawnpointId, (byte)group);
 
-    public static MeshCommand RemovePlayer(int slot) =>
-        new(MeshCommandKind.RemovePlayer, (byte)slot, 0, 0);
+    /// <summary>
+    /// A departure, named by the join that created the place rather than by the
+    /// place.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ⛔ <b>A slot cannot name a departure, and this is the trap that cost the
+    /// most to see.</b> A removal renumbers every slot above it, so two removals
+    /// in flight at once — one from each node, which is the ordinary case —
+    /// means the second was numbered against a roster the first has already
+    /// changed. Both nodes then agree on the WRONG player, so nothing diverges
+    /// and no digest goes red: it is simply somebody else who leaves.
+    /// </para>
+    /// <para>
+    /// Ordering removals by descending slot fixes that within one tick and not
+    /// across ticks, which is why the naming is the fix rather than the sort.
+    /// The join key is stable under renumbering — <c>MeshNode</c> renumbers its
+    /// table with the roster — so it is resolved to a slot at APPLY time, on
+    /// both nodes, from the same state.
+    /// </para>
+    /// <para>
+    /// A second removal of the same player resolves to nothing and is a no-op,
+    /// which is what makes a departure safe to say twice.
+    /// </para>
+    /// </remarks>
+    public static MeshCommand RemovePlayer(int origin, int sequence) =>
+        new(
+            MeshCommandKind.RemovePlayer,
+            0,
+            (byte)(sequence & 0xFF),
+            (byte)((sequence >> 8) & 0xFF),
+            (byte)origin);
 
     /// <summary>
     /// The order two nodes both compute: kind, then who issued it, then slot,
