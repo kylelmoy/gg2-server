@@ -324,6 +324,74 @@ public sealed class MeshNodeTests
     }
 
     /// <summary>
+    /// ⛔ A node started part-way through a match will not rewind to a tick it
+    /// never held.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The snapshot ring starts full of default worlds.</b> A rewind restores
+    /// a ring slot by tick number, so a slot that was never written restores a
+    /// <see cref="WorldState"/> with no players in it and clears both tables
+    /// that name them — silently, and total. Every other guard here is about a
+    /// tick that has fallen out of the window behind; this is about the ticks in
+    /// front of a node's own beginning, which are inside the window by
+    /// arithmetic and outside its history in fact.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>A map change is what makes this reachable.</b> The node is rebuilt
+    /// at the tick the change landed while the peer goes on sending inputs for
+    /// the ticks just before it. Measured on two real servers before the floor
+    /// existed: the world went from eight players to none in the tick after the
+    /// rebuild, ownership fell to zero on both nodes, and no digest caught it —
+    /// both nodes emptied themselves identically and went on agreeing.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ANodeStartedMidMatchWillNotRewindPastItsOwnBeginning()
+    {
+        ReferenceTree.RequireAvailable();
+
+        // The shape a map change produces: a fresh node handed a world that is
+        // already part-way through a match.
+        var node = new MeshNode(
+            Collision(), World(), new MeshOptions { MaxRollbackTicks = 8 }, startTick: 1000);
+
+        node.Advance(3);
+
+        Assert.Equal(1003, node.Tick);
+        Assert.Equal(2, CountPlayers(node));
+
+        // Inside the window (1003 - 8 = 995) and before this node existed.
+        node.Submit(998, Remote, InputFor(Remote, 998));
+
+        Assert.Equal(1, node.Stats.TooLate);
+        Assert.Equal(0, node.Stats.Rollbacks);
+
+        node.Advance();
+
+        // ⛔ The claim: the players are still there. Without the floor the
+        // rewind restores an unwritten snapshot and this reads zero.
+        Assert.Equal(2, CountPlayers(node));
+
+        // And the node cannot answer for a tick it never held, rather than
+        // answering with the digest of an empty world.
+        Assert.Null(node.DigestAt(998));
+    }
+
+    private static int CountPlayers(MeshNode node)
+    {
+        var count = 0;
+
+        for (var slot = 0; slot < WorldState.MaxSlots; slot++)
+        {
+            if (node.State.HasPlayer[slot])
+                count++;
+        }
+
+        return count;
+    }
+
+    /// <summary>
     /// A rewind restores the whole world, not just the characters: the same
     /// inputs re-run from a restored snapshot reach the same digest.
     /// </summary>
@@ -375,4 +443,126 @@ public sealed class MeshNodeTests
         Assert.Equal(straight.Digest, rewound.Digest);
     }
 
+    /// <summary>
+    [Fact]
+    public void ATickStillInsideTheWindowIsNotConfirmedEarly()
+    {
+        ReferenceTree.RequireAvailable();
+
+        const int window = 16;
+
+        var node = new MeshNode(Collision(), World(), new MeshOptions { MaxRollbackTicks = window });
+
+        // Four ticks, with Remote never heard from. All four are inside the
+        // window, so none of them is final and none may be confirmed.
+        for (var tick = 0; tick < 4; tick++)
+        {
+            node.Submit(tick, Local, InputFor(Local, tick));
+            node.Advance();
+        }
+
+        Assert.Equal(4, node.Tick);
+        Assert.True(
+            node.Confirmed < node.Tick,
+            $"confirmed {node.Confirmed} of {node.Tick} ticks while a live player's "
+                + "input was still outstanding and still rewindable");
+    }
+
+    /// <summary>
+    /// ⛔ Commands booked for ticks after a rebuild survive it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>A command is ALWAYS scheduled in the future.</b>
+    /// <c>MeshSession.CommandLead</c> is 10, so at any moment there are joins,
+    /// team changes and departures booked for ticks that have not happened yet.
+    /// A map change replaces the node, and a fresh node's schedule is empty — so
+    /// without carrying them, every one of those is lost.
+    /// </para>
+    /// <para>
+    /// ⛔ <b>The two nodes lose DIFFERENT commands, which is what makes it a
+    /// divergence.</b> They rebuild at the same TICK but at different wall-clock
+    /// moments, so whichever registered a command before its own swap keeps it
+    /// and the other does not; they then apply different roster changes at the
+    /// same tick and their worlds part for good. Measured over a two-node soak:
+    /// the divergence entered 8-10 ticks after a rebuild — exactly
+    /// <c>CommandLead</c> — in about 63% of runs, and fell to 0 in 10 with this.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>This is what an INPUT carry could not do.</b> An input is only ever
+    /// for a tick already reached, so there are none in the future to lose; a
+    /// version of this fix that carried inputs moved nothing and reported
+    /// carrying zero on every run. The asymmetry is the whole point.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void CommandsBookedBeyondARebuildSurviveIt()
+    {
+        ReferenceTree.RequireAvailable();
+
+        var node = new MeshNode(Collision(), World(), new MeshOptions());
+
+        node.Advance(20);
+
+        // Booked ahead, the way MeshSession books everything.
+        var at = node.Tick + 10;
+
+        Assert.True(node.Schedule(at, MeshCommand.AddPlayer(origin: 1, sequence: 7)));
+
+        // What a rebuild hands to the replacement.
+        var carried = new List<(int Tick, MeshCommand Command)>();
+
+        node.ExportCommandsFrom(node.Tick, carried);
+
+        Assert.Single(carried);
+        Assert.Equal(at, carried[0].Tick);
+        Assert.Equal(MeshCommandKind.AddPlayer, carried[0].Command.Kind);
+        Assert.Equal(7, carried[0].Command.Sequence);
+
+        // ⛔ The control, and it is the half that matters: the export must not
+        // CONSUME what it reads. ScheduledFor clears a row whose tick does not
+        // match, so an export written through it would empty the schedule of the
+        // node it was rescuing — the rebuild would then carry the commands and
+        // the old node would have lost them anyway.
+        var again = new List<(int Tick, MeshCommand Command)>();
+
+        node.ExportCommandsFrom(node.Tick, again);
+
+        Assert.Single(again);
+        Assert.Equal(at, again[0].Tick);
+    }
+
+    /// <summary>
+    /// ⛔ The control: a command for a tick BEFORE the rebuild is not carried.
+    /// </summary>
+    /// <remarks>
+    /// <b>A carry that took everything would re-apply history.</b> The rebuilt
+    /// node starts at the change's tick with a world that has already absorbed
+    /// everything before it, so re-scheduling an older command would apply it a
+    /// second time — a join that happened once becoming two players, or a
+    /// departure taking a second slot. Only the future may be carried.
+    /// </remarks>
+    [Fact]
+    public void CommandsFromBeforeARebuildAreNotCarried()
+    {
+        ReferenceTree.RequireAvailable();
+
+        var node = new MeshNode(Collision(), World(), new MeshOptions());
+
+        node.Advance(5);
+
+        var past = node.Tick + 2;
+
+        Assert.True(node.Schedule(past, MeshCommand.AddPlayer(origin: 1, sequence: 3)));
+
+        // Run past it, so it is now history.
+        node.Advance(10);
+
+        var carried = new List<(int Tick, MeshCommand Command)>();
+
+        // A rebuild at the node's current tick carries only what is still ahead.
+        node.ExportCommandsFrom(node.Tick, carried);
+
+        Assert.DoesNotContain(carried, c => c.Tick == past);
+    }
 }

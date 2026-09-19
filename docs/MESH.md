@@ -483,6 +483,11 @@ cross-tick one, which is why the naming is the fix rather than the sort.
 A consequence worth having: a removal said twice resolves to nothing the second
 time, so a departure is safe to repeat.
 
+⛔ **Where the naming comes FROM matters as much as that it is used** — the join
+key is recorded when the player is admitted and never read back off the node,
+because the node renumbers a tick ahead of the roster. "The join key is recorded
+at admission" below has the window and the gate.
+
 ⛔ **The node reports which slot each removal took** — `MeshNode.RemovedAt(tick)`,
 kept in the same ring the schedule uses and rewritten whenever the tick is
 applied again. A server cannot work it out afterwards: the command names a join,
@@ -739,6 +744,162 @@ for a past tick is immutable (a command for an already-simulated tick is
 refused), so a tick's roster changes ARE stable — as long as the tables they
 resolve against are.
 
+## What a soak under real client churn found
+
+`tools/soak` against two local nodes, real TCP clients joining, playing and
+leaving on both sides at once. The suite proves the pieces work against each
+other; this is the first thing here that drives them the way a server is
+actually used, and it found a defect no test and no live run had reached.
+
+⛔ **A map change emptied both nodes' worlds, and the digests went on agreeing.**
+A rebuilt node starts at the tick the change landed with a snapshot ring that
+has never been written — the ring is allocated full of default `WorldState`s.
+Its peer is still sending inputs for the ticks just before the rebuild, which
+are inside the rollback window by arithmetic and outside the node's history in
+fact. The first one to contradict a guess rewound into an unwritten slot and
+restored a world with no players in it, clearing both tables that name players
+with it.
+
+| | before the fix | after |
+|---|---|---|
+| players in the world after a rebuild | 0 of 8 | 8 of 8 |
+| `owned`, listener | 4 falling to 0 | 4, unchanged |
+| `owned`, joiner | 3 falling to 1 | 3, unchanged |
+| roster-versus-world warnings | 964 a side | 0 |
+| digests disagreeing | **0** | 0 |
+
+⚠️ **The digest column is the point.** Both nodes emptied themselves
+identically, so the one check the design rests on stayed green through it. A
+mesh that agrees is not a mesh that works, and `owned` is the number that says
+which — `MeshJoinTests.AMeshedMapChangeKeepsWhoOwnsWhom` asserts ownership
+across a map change for exactly that reason, while the digest test beside it
+passes either way.
+
+The floor is `MeshNode`'s `_floor`: a node refuses to rewind to, or answer for,
+a tick before the first one it ever held, and counts the refusal as
+`MeshStats.TooLate`. `MeshSession.Rebuild` separately carries the assignment
+table across the rebuild, because a fresh node's is empty and an ownerless
+player is one whose inputs are never sent and whose departure can never be
+scheduled. Both are needed: each was removed on its own and the ownership gate
+failed either way.
+
+### A rebuild carries the schedule, not just the assignments
+
+⛔ **A command is always scheduled in the FUTURE.** `MeshSession.CommandLead` is
+10, so every join, team change, class change and departure is registered for a
+tick ten ahead of where the nodes are. A map change replaces the node, and a
+fresh node's schedule is empty — so `MeshSession.Rebuild` carries the booked
+commands into the replacement (`MeshNode.ExportCommandsFrom`) exactly as it
+carries the assignments, and the rebuild line reports how many.
+
+**Without it the two nodes lose DIFFERENT commands.** They rebuild at the same
+tick but at different wall-clock moments, so whichever registered a command
+before its own swap keeps it and the other does not. They then apply different
+roster changes at the same tick, and the worlds part permanently.
+
+Measured, two nodes with eight synthetic players a side and a one-minute round:
+the divergence entered **8-10 ticks after a rebuild — exactly `CommandLead`** —
+in **12 of 19 runs**. With the schedule carried, **2 of 10**. The probe that
+settled it compared each node's world, RNG seed, known-input mask, input values
+and scheduled commands at the same CONFIRMED tick: everything matched except the
+commands, one tick before the worlds parted.
+
+⛔ **63% to 20% is a large reduction and it is NOT a fix.** Both arms are ten
+runs of the same soak; the improvement is real and the residual is real.
+
+⚠️ **The two runs that still diverged do not share a signature**, so at least one
+more cause remains and it may not be one cause:
+
+| run | froze at | relative to a rebuild | commands carried |
+|---|---|---|---|
+| conly-8 | comparison 53 | **before the first** (tick ~1800) | 2, 9, 0 |
+| conly-9 | comparison 138 | **at the second** (tick 4222) | 3, 2, 0 |
+
+A map-change divergence freezes at comparison 70, where the first rebuild lands.
+So one of these parted during ordinary play and the other parted at a rebuild
+the carry did not save. **Do not read this section as "the mesh agrees now."**
+
+⚠️ **Only the future is carried.** The rebuilt node starts at the change's tick
+with a world that has already absorbed everything before it, so re-scheduling an
+older command would apply it twice — a join becoming two players, a departure
+taking a second slot. `MeshNodeTests.CommandsFromBeforeARebuildAreNotCarried`.
+
+⚠️ **The export reads the ring directly**, because `ScheduledFor` CLEARS a row
+whose tick does not match. An export written through it would empty the schedule
+of the node it was rescuing.
+
+⚠️ **Carrying the INPUTS instead does nothing**, and was tried: an input is only
+ever for a tick already reached, so there are none in the future to lose. That
+version reported carrying zero on every run and changed no outcome. The
+asymmetry between inputs and commands is the whole of this bug.
+
+### The submit loop is bounded by the WORLD, not the roster
+
+`MeshSession.Tick` submits inputs for every slot up to
+`Math.Max(liveSlots, PlayersInWorld())`, where `liveSlots` is the server's
+roster count and `PlayersInWorld` is one past the highest slot the node's world
+holds.
+
+⛔ **The roster is not the world, and it trails in both directions.** The node's
+world gains a player the moment it applies `AddPlayer`; the roster catches up in
+`MirrorMeshRoster` at the top of the NEXT tick. For that one tick the world
+holds a player the roster does not — and a loop bounded by the roster skips that
+slot before the `HasPlayer` check can see it.
+
+**What that cost.** Nobody submits an input for a player who is already ALIVE,
+so `IsCertain` waits on them for ever, `Confirmed` stops, and once it falls a
+whole window behind `Confirm` cannot advance again. Event release stops dead:
+**no death, capture or spawn reaches any client for the rest of the match**,
+while every other number on the server looks healthy — the node ticks, the link
+is up, ownership is right, and the digest reports a tidy `agreed N/N` that has
+simply stopped growing.
+
+Measured, two nodes with eight synthetic players a side and no map change at
+all: **5 of 40 runs before, 0 of 40 after**, with every node in the fixed batch
+releasing a full ~6,296 events. It is always the TOP slot, because a join takes
+the highest free place; it hits whichever node admitted the player, listener or
+joiner alike; and the owning node reports `owned` one short while it happens.
+
+⚠️ **A slot past the end of the input span submits a DEFAULT input** — pressing
+nothing — because a player with no roster entry has no input source yet. That is
+exactly what someone who has just appeared is doing, and it is what lets the
+tick confirm.
+
+⚠️ **The bound is a MAXIMUM of the two for a reason.** A departure leaves the
+roster longer than the world, and a loop bounded only by the world would stop
+submitting for a player who is still present — the same bug in the other
+direction. `MeshSessionTests.TheSubmitBoundIsNeverNarrowedByASmallerWorld`.
+
+⛔ **Anything in a mesh that iterates players by `_roster.Count` is suspect.**
+Two separate faults have now come from it: this one, and a departure named by a
+slot the node had already renumbered (`GameServer._meshJoinKey`).
+
+### ⛔ Confirmation must never be advanced on a timer
+
+`Confirm()` cannot advance once `Confirmed` falls a whole window behind: its own
+guard `Confirmed > Tick - MaxRollbackTicks` is then false. The tempting fix —
+step `Confirmed` up to the window's trailing edge, on the grounds that a tick
+which can no longer be rewound is final — **is wrong and must not be
+reintroduced.**
+
+It breaks the holding rule. A peer that has gone quiet is not gone, it is LATE;
+releasing its ticks after 32 ticks publishes a death on a guess, and when the
+peer speaks the two nodes disagree about something a stock client cannot take
+back. `MeshJoinTests.ASilentPeerHoldsEveryEventAndStopsNothingElse` fails
+against it, which is the suite catching exactly what it exists to catch.
+
+**The stall it was aimed at is real and is fixed at its cause**, above: a player
+the roster had not caught up to was never submitted for. Confirmation now keeps
+up on its own.
+
+⚠️ **If a stall is ever seen again, find what stopped a tick confirming.** The
+report line carries `confirmed N (tick-M)` and, when it stops moving,
+`CONFIRMATION STUCK at N ... waiting on slot S (origin O, ours|theirs, "name")`.
+A lag that is merely large is normal; a `confirmed` that does not move is not.
+⚠️ The blocked-slot answer is only meaningful while the tick is still inside the
+window — past that the ring has recycled and the mask reads 0, which is
+indistinguishable from "nothing is blocking".
+
 ## What is NOT built
 
 A client can join a meshed server, pick a team, play and leave; a meshed server
@@ -752,6 +913,25 @@ the other. What is still missing:
    a question about a person watching a screen, and no measurement here answers
    it. `docs/TRAPS-LIVEGAME.md` and a playtest — and it is the only thing left
    that a test in this repo cannot settle.
+2. **A residual divergence across a map change.** Carrying the schedule took
+   that rate from 63% to 20%, and it stops there: **1 of 20** runs with map
+   changes on still parted (`agreed 140/209`), against 0 of 20 for the
+   confirmation wedge in the same batch.
+   ⛔ **It is a SEPARATE fault from the wedge, and the submit-bound fix does not
+   clear it.** That run released a full 6,296 events — nothing stalled — while
+   its worlds disagreed 69 times. The guess that one fix would cover both is
+   measured and wrong.
+   ⚠️ **Read agreement and event release as two signals, never one verdict.** A
+   run can be perfect on either while failing the other, and the two faults are
+   only distinguishable that way.
+   ⚠️ 1 of 20 against the earlier 2 of 10 is not evidence the rate fell; both
+   are too small. At this frequency twenty runs is the minimum worth reporting.
+3. **More than two nodes.** `MeshSession.Origin` is `Listening ? 0 : 1` and
+   `MeshLink` holds one socket, so the topology is two by construction. The data
+   model would take more — `_slotOrigin` is a byte per slot — but node identity
+   would have to be negotiated rather than fall out of which end listened, a tick
+   would confirm only when the SLOWEST peer's inputs had landed, and the one node
+   that fills the match with bots would have to be named rather than assumed.
 
 
 Three differences from a standalone server are deliberate rather than missing: a

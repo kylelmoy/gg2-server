@@ -262,8 +262,17 @@ public sealed partial class GameServer
     /// sequence no client has ever been sent.
     /// </para>
     /// </remarks>
+
     private void PerformMapChange(int atTick)
     {
+
+        // ⛔ DO NOT reset from the node's world at atTick instead of the live
+        // one. It looks like the fix for the provisional-world divergence
+        // (docs/MESH.md) and it introduces a worse bug: the world rewinds and
+        // the ROSTER does not, so everybody who joined between atTick and now is
+        // in the roster and absent from the world. Measured — the roster/world
+        // guard fired in the same millisecond as the rebuild, 17 against 16, and
+        // the gap compounded over later map changes.
         Rounds.ResetForNewMap(ref _world, firstArea: _nextArea == 1);
 
         // The roster's own copy of the team, which the wire and the joining

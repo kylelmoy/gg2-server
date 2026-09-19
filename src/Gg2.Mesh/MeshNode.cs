@@ -1,4 +1,3 @@
-using System.Linq;
 using Gg2.Maps;
 using Gg2.Protocol;
 using Gg2.Simulation;
@@ -28,12 +27,11 @@ namespace Gg2.Mesh;
 /// non-negotiable is what this is built on.
 /// </para>
 /// <para>
-/// ⚠️ <b>What a node does NOT do yet:</b> hold irreversible events. A death, a
-/// capture or an intel pickup cannot be taken back on a stock client, so a
-/// deployment has to delay those until every input for their tick is known while
-/// movement goes out provisionally. This type produces the corrected world;
-/// deciding what of it is safe to send is the next layer's job and is not
-/// written. `docs/MESH.md`.
+/// <b>Irreversible events are held here.</b> A death, a capture or an intel
+/// pickup cannot be taken back on a stock client, so <see cref="TryTakeConfirmed"/>
+/// hands out a tick's events only once that tick can no longer be re-simulated,
+/// while the corrected world goes out provisionally for movement. `docs/MESH.md`,
+/// "Holding what cannot be unsaid".
 /// </para>
 /// </remarks>
 public sealed class MeshNode
@@ -195,6 +193,30 @@ public sealed class MeshNode
     /// <summary>The furthest tick ever simulated, which is what says a Step is new ground.</summary>
     private int _head;
 
+    /// <summary>
+    /// The first tick this node ever held, and the floor on any rewind.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ⛔ <b>A node cannot rewind to a tick it never simulated.</b> The snapshot
+    /// ring is allocated full of default <see cref="WorldState"/>s — no players,
+    /// no assignments — so restoring a slot that has never been written does not
+    /// fail, it silently installs an EMPTY WORLD and clears both tables that
+    /// name players.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Zero for a node that started a match, and non-zero for one rebuilt
+    /// by a map change</b>, which is the case that bites: a rebuilt node starts
+    /// at the tick the change landed with an empty ring, while its peer is still
+    /// sending inputs for the ticks just before it. Those are inside the window
+    /// by arithmetic and outside this node's history in fact. Measured over a
+    /// real map change — the world went from eight players to none in the tick
+    /// after the rebuild, ownership fell to zero on both nodes, and the digests
+    /// went on agreeing throughout because both nodes did it identically.
+    /// </para>
+    /// </remarks>
+    private readonly int _floor;
+
     private int _ticks;
     private int _rollbacks;
     private int _resimulated;
@@ -216,6 +238,7 @@ public sealed class MeshNode
         _state = start;
         Tick = startTick;
         _head = startTick;
+        _floor = startTick;
 
         _snapshots = new Snapshot[_options.MaxRollbackTicks];
         _outcomes = new Outcome[_options.MaxRollbackTicks];
@@ -275,17 +298,124 @@ public sealed class MeshNode
     /// </remarks>
     public ulong? DigestAt(int tick)
     {
-        if (tick < 0 || tick >= Tick || tick <= Tick - _snapshots.Length)
+        // ⚠️ _floor for the same reason Rewind has one: the ring starts full of
+        // default WorldStates, so a tick this node never held reads as a real
+        // answer for an empty world rather than as no answer. A node rebuilt by
+        // a map change is asked for the ticks just before it by a peer that has
+        // not rebuilt yet, and answering produced exactly one spurious
+        // disagreement per map change — enough to put THE TWO NODES DISAGREE on
+        // every subsequent report, for a mesh that was in step.
+        if (tick < 0 || tick < _floor || tick >= Tick || tick <= Tick - _snapshots.Length)
             return null;
 
         return StateDigest.Of(in _snapshots[tick % _snapshots.Length].State);
     }
 
     /// <summary>
+    /// Every command this node has scheduled for <paramref name="fromTick"/>
+    /// onward.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ⛔ <b>A COMMAND IS ALWAYS SCHEDULED IN THE FUTURE, and a rebuild throws
+    /// the future away.</b> <c>MeshSession.CommandLead</c> is 10, so a join, a
+    /// team change or a departure is registered for a tick ten ahead of where
+    /// the nodes are — and a map change replaces the node with one whose
+    /// schedule is empty. Every command already registered for a tick after the
+    /// rebuild is lost with the old node.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>The two nodes lose DIFFERENT commands</b>, because they rebuild at
+    /// the same tick but at different wall-clock moments: whichever node
+    /// registered a command before its own swap keeps it, and the other does
+    /// not. They then apply different roster changes at the same tick and their
+    /// worlds part for good. Measured — the listener held
+    /// <c>RemovePlayer/o1/q12</c> at tick 2121 and the joiner, which ISSUED it,
+    /// held it at no tick at all; the worlds diverged one tick later.
+    /// </para>
+    /// <para>
+    /// ⚠️ This is why carrying the INPUTS across a rebuild changed nothing: an
+    /// input is only ever for a tick that has already been reached, so there are
+    /// none in the future to lose. Commands are the opposite.
+    /// </para>
+    /// </remarks>
+    public void ExportCommandsFrom(int fromTick, List<(int Tick, MeshCommand Command)> into)
+    {
+        ArgumentNullException.ThrowIfNull(into);
+
+        for (var tick = Math.Max(fromTick, Tick - _rows + 1); tick < Tick + _rows; tick++)
+        {
+            var row = tick % _rows;
+
+            // ⚠️ Read the ring directly: ScheduledFor CLEARS a row whose tick
+            // does not match, and an export must not mutate what it reads.
+            if (_scheduledTick[row] != tick)
+                continue;
+
+            foreach (var command in _scheduled[row])
+                into.Add((tick, command));
+        }
+    }
+    /// <summary>
+
+    /// <summary>
     /// The first tick whose outcome is not yet final. Everything before it ran
     /// on facts alone and can no longer change.
     /// </summary>
     public int Confirmed { get; private set; }
+
+    /// <summary>
+    /// The slots stopping <see cref="Confirmed"/> from advancing: alive at that
+    /// tick, with no real input ever heard for it. One bit per slot.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ⛔ <b>A confirmation that stops advancing halts event release outright</b>
+    /// — no death, capture or spawn reaches a client again — and the server
+    /// otherwise looks perfectly healthy while it happens. Knowing THAT it
+    /// stopped is not enough to act on; the slot has to be named, because the
+    /// only fix is to find why that player stopped being heard from.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>A blocked FRONTIER is normal.</b> The newest tick almost always has
+    /// slots whose inputs have not landed yet — that is what the window is for.
+    /// This is a fault only when <see cref="Confirmed"/> stops moving, so read it
+    /// beside that number and never on its own.
+    /// </para>
+    /// <para>
+    /// Zero outside the window, the same as <see cref="DigestAt"/>: a tick this
+    /// node never held has no answer, and a defaulted one would read as "nothing
+    /// is blocked".
+    /// </para>
+    /// </remarks>
+    public ulong BlockedAt(int tick)
+    {
+        if (tick < 0 || tick < _floor || tick >= Tick || tick <= Tick - _snapshots.Length)
+            return 0;
+
+        // ⛔ READ THE RING DIRECTLY. Row() CLEARS a row whose tick does not
+        // match and re-tags it, so asking it here would erase the very input
+        // knowledge this is reporting on — and erasing it makes the tick
+        // uncertain, which is the fault being diagnosed. A read-only query must
+        // never go through Row(); ExportCommandsFrom avoids it for the same
+        // reason, and that is three places now.
+        var row = tick % _rows;
+
+        if (_rowTick[row] != tick)
+            return 0;
+
+        var origin = row * WorldState.MaxSlots;
+        ref readonly var world = ref _snapshots[tick % _snapshots.Length].State;
+        var blocked = 0UL;
+
+        for (var slot = 0; slot < 64 && slot < WorldState.MaxSlots; slot++)
+        {
+            if (world.IsAlive(slot) && !_known[origin + slot])
+                blocked |= 1UL << slot;
+        }
+
+        return blocked;
+    }
 
     /// <summary>
     /// The tick a caller has released events up to, which never passes
@@ -377,7 +507,13 @@ public sealed class MeshNode
         // swallowed — a node seeing these has a link worse than its
         // configuration says, and the answer is a resync from a peer, not a
         // quiet divergence.
-        if (tick < Tick - _options.MaxRollbackTicks || tick >= Tick + _options.MaxRollbackTicks)
+        // ⚠️ _floor, not just the window. A node rebuilt by a map change starts
+        // part-way through a match with an empty snapshot ring, so the ticks
+        // immediately before it are inside the window by arithmetic and are
+        // ticks this node never held. Rewinding into them restores a default
+        // WorldState — see _floor.
+        if (tick < Math.Max(_floor, Tick - _options.MaxRollbackTicks)
+            || tick >= Tick + _options.MaxRollbackTicks)
         {
             _tooLate++;
             return;
@@ -808,11 +944,23 @@ public sealed class MeshNode
     /// The join that created a slot, which is how a departure names it.
     /// </summary>
     /// <remarks>
-    /// ⛔ <b>The reverse of <see cref="TryGetAssignedSlot"/>, and the only safe
-    /// way to say "this player leaves".</b> A slot number means what it meant
-    /// when it was read, and a removal anywhere below it changes that; a join
-    /// key does not move. A linear scan because the table holds one entry per
-    /// player in the match.
+    /// <para>
+    /// The reverse of <see cref="TryGetAssignedSlot"/>. A join key is what a
+    /// departure must name, because a slot number means what it meant when it
+    /// was read and a removal anywhere below it changes that; a join key does
+    /// not move. A linear scan because the table holds one entry per player in
+    /// the match.
+    /// </para>
+    /// <para>
+    /// ⛔ <b>THE ANSWER IS ONLY AS CURRENT AS THE SLOT ASKED ABOUT.</b> This
+    /// resolves against the node's table as it is NOW, so a caller holding a
+    /// slot from a roster the node has since renumbered gets a confident answer
+    /// naming somebody else. It is not the place to resolve a departure from: a
+    /// server records the key when it admits the player and keeps it
+    /// (<c>GameServer._meshJoinKey</c>), because its roster runs a tick behind
+    /// this table by construction. Ask here only where the slot came from the
+    /// node itself, or at the moment the two are known to be in step.
+    /// </para>
     /// </remarks>
     public bool TryGetJoinKey(int slot, out int origin, out int sequence)
     {
@@ -885,6 +1033,16 @@ public sealed class MeshNode
 
         if (depth <= 0)
             return;
+
+        // ⛔ Belt and braces with Submit's floor check, and deliberately not
+        // merged into it: Submit is the only way a rewind is ever scheduled
+        // today, but restoring an unwritten snapshot is silent and total, so the
+        // place that does the restoring refuses it too.
+        if (from < _floor)
+        {
+            _tooLate++;
+            return;
+        }
 
         if (depth > _snapshots.Length)
         {

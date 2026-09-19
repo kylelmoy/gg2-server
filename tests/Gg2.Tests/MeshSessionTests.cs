@@ -174,4 +174,115 @@ public sealed class MeshSessionTests
         Assert.True(common > MeshSession.CommandLead, "the run was too short to have proved anything");
         Assert.Equal(host.Node.DigestAt(common), peer.Node.DigestAt(common));
     }
+
+    /// <summary>
+    /// ⛔ A player the WORLD has and the roster has not still gets their input
+    /// submitted.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The node's world gains a player the moment it applies
+    /// <c>AddPlayer</c>; the server's roster catches up at the top of the NEXT
+    /// tick.</b> For that one tick the world is one player longer than the
+    /// roster — and a submit loop bounded by the roster's count skips the new
+    /// slot entirely.
+    /// </para>
+    /// <para>
+    /// ⛔ <b>The consequence is permanent and total.</b> Nobody submits for a
+    /// player who is already ALIVE, so <c>IsCertain</c> waits on them for ever,
+    /// <c>Confirmed</c> stops, and once it falls a whole window behind
+    /// <c>Confirm</c> cannot advance again — no death, capture or spawn reaches
+    /// any client for the rest of the match while the server otherwise looks
+    /// perfectly healthy. Measured at ~10% of 200-second two-node soaks, always
+    /// on the TOP slot, with the owning node reporting <c>owned</c> one short.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>`liveSlots` is deliberately passed SHORT here</b>, which is what a
+    /// server does on the tick after a join: it is the roster's count, and the
+    /// roster has not caught up. Passing the true count would test nothing.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void APlayerTheWorldHasAndTheRosterDoesNotIsStillSubmittedFor()
+    {
+        ReferenceTree.RequireAvailable();
+
+        var listen = new ServerOptions { MeshEnabled = true, MeshListenPort = 0 };
+
+        using var host = MeshSession.Start(
+            listen, Collision(), World(), Spawns(), new RecordingLog());
+
+        var inputs = new PlayerInput[WorldState.MaxSlots];
+
+        // ⚠️ Through the MESH, not straight into the world: a slot is only
+        // OWNED if a join put it there, and an unowned slot is submitted for by
+        // nobody — which is a different bug with the same symptom.
+        Assert.NotEqual(MeshSession.Refusal, host.Schedule(MeshCommand.AddPlayer(host.Origin, 1)));
+
+        // Run until the node has applied it and the world holds two.
+        for (var i = 0; i < MeshSession.CommandLead + 40 && CountPlayers(host) < 2; i++)
+            host.Tick(inputs, WorldState.MaxSlots);
+
+        Assert.Equal(2, CountPlayers(host));
+
+        // ⛔ liveSlots = 1: the roster knows about slot 0 only, exactly as it
+        // does for the one tick after a join lands.
+        host.Tick(inputs, 1);
+
+        // ⛔ The claim: slot 1 was submitted for anyway, because the WORLD has
+        // it. A loop bounded by `liveSlots` covers slot 0 alone and reports
+        // ZERO, because slot 0 is not owned — it was put straight into the
+        // starting world rather than joined through the mesh, so only the
+        // mesh-joined slot 1 is this node's to drive.
+        Assert.Equal(1, host.Owned);
+    }
+
+    /// <summary>
+    /// ⛔ The control: the bound never shrinks below what the roster says.
+    /// </summary>
+    /// <remarks>
+    /// <b>The same asymmetry bites the other way on a departure.</b> The roster
+    /// still holds a player the world has dropped, so a loop bounded only by the
+    /// world would stop submitting for somebody who is still there. The bound is
+    /// the MAXIMUM of the two for that reason, and this pins it: a generous
+    /// `liveSlots` must not be narrowed by a smaller world.
+    /// </remarks>
+    [Fact]
+    public void TheSubmitBoundIsNeverNarrowedByASmallerWorld()
+    {
+        ReferenceTree.RequireAvailable();
+
+        var listen = new ServerOptions { MeshEnabled = true, MeshListenPort = 0 };
+
+        using var host = MeshSession.Start(
+            listen, Collision(), World(), Spawns(), new RecordingLog());
+
+        var inputs = new PlayerInput[WorldState.MaxSlots];
+
+        Assert.NotEqual(MeshSession.Refusal, host.Schedule(MeshCommand.AddPlayer(host.Origin, 1)));
+
+        for (var i = 0; i < MeshSession.CommandLead + 40 && CountPlayers(host) < 2; i++)
+            host.Tick(inputs, WorldState.MaxSlots);
+
+        // The roster claims far more than the world holds, which is the shape of
+        // the tick after a departure. Nothing throws, and the owned slot is
+        // still submitted for rather than being narrowed away.
+        host.Tick(inputs, WorldState.MaxSlots);
+
+        Assert.Equal(1, host.Owned);
+    }
+
+    /// <summary>Players the node's world holds, for the bound tests above.</summary>
+    private static int CountPlayers(MeshSession session)
+    {
+        var count = 0;
+
+        for (var slot = 0; slot < WorldState.MaxSlots; slot++)
+        {
+            if (session.Node.State.HasPlayer[slot])
+                count++;
+        }
+
+        return count;
+    }
 }

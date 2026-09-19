@@ -1292,6 +1292,88 @@ public sealed class MeshJoinTests
     }
 
     /// <summary>
+    /// ⛔ A map change does not orphan the players that live through it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>A map change replaces the world and the node; it does not replace the
+    /// people.</b> <c>Rounds.ResetForNewMap</c> clears each character and puts
+    /// everybody back to spectator, but <c>HasPlayer</c> stays set and nobody
+    /// moves slot — so the same players are still in the same places and still
+    /// belong to whoever let them in. A node rebuilt with empty tables makes
+    /// every one of them ownerless: this node submits no inputs for its own
+    /// players, its peer guesses them for ever, and no departure can ever be
+    /// scheduled for them because there is no join left to name.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>THE DIGESTS GO ON AGREEING WHILE THAT IS TRUE</b>, which is why
+    /// <see cref="AMeshedMapChangeTakesBothServersWithIt"/> stayed green through
+    /// it: both nodes guess the orphans identically and reach the same world. A
+    /// map change that agrees is not a map change that worked, so this asserts
+    /// ownership rather than agreement. Measured against two real servers over a
+    /// real map change before the fix — <c>owned</c> fell 4 to 0 on the listener
+    /// and 3 to 1 on the joiner, with zero disagreements reported and 964
+    /// roster-versus-world warnings a side.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void AMeshedMapChangeKeepsWhoOwnsWhom()
+    {
+        using var listener = new ServerHarness(options =>
+        {
+            options.MeshEnabled = true;
+            options.MeshListenPort = 0;
+        });
+
+        using var joiner = new ServerHarness(options =>
+        {
+            options.MeshEnabled = true;
+            options.MeshConnect = $"127.0.0.1:{listener.Server.MeshPort}";
+        });
+
+        listener.AfterTick = () => joiner.Tick();
+
+        listener.Tick(30);
+
+        var landed = -1;
+
+        listener.Server.AddBot(
+            "[BOT] one", Team.Red, PlayerClass.Scout, new Idle(), slot => landed = slot);
+
+        for (var i = 0; i < MeshSession.CommandLead + 80 && landed < 0; i++)
+            listener.Tick();
+
+        Assert.True(landed > 0, "the bot never got a slot");
+
+        for (var i = 0; i < 120 && joiner.Server.RosterCount <= landed; i++)
+            listener.Tick();
+
+        Assert.True(joiner.Server.RosterCount > landed, "the joiner never heard about the bot");
+
+        // The listener let this player in, so the listener drives it. Asserted
+        // before the change so a zero afterwards cannot be read as "it never
+        // owned anything in the first place".
+        var ownedBefore = listener.Server.MeshOwnedSlots;
+
+        Assert.True(ownedBefore > 0, "the listener owned nobody before the map change");
+
+        Assert.True(listener.Server.RequestMapChange("ctf_orange"), "the map change was refused");
+
+        listener.Tick(Rounds.MapChangeDelay + 90);
+
+        Assert.Equal("ctf_orange", listener.Server.CurrentMap);
+        Assert.Equal("ctf_orange", joiner.Server.CurrentMap);
+
+        // ⛔ The claim. The bot is the listener's on both sides of the change,
+        // and a rebuilt node that forgot so reports zero here while every other
+        // assertion in the neighbouring test still passes.
+        Assert.True(
+            listener.Server.MeshOwnedSlots >= ownedBefore,
+            $"the map change orphaned the listener's players: owned {ownedBefore} "
+                + $"before, {listener.Server.MeshOwnedSlots} after");
+    }
+
+    /// <summary>
     /// A disconnecting client leaves a meshed match, rather than standing there
     /// for ever.
     /// </summary>
@@ -1341,5 +1423,117 @@ public sealed class MeshJoinTests
 
         // The peer let them go too, at the tick the command named.
         Assert.False(peer.Has(slot));
+    }
+
+    /// <summary>
+    /// ⛔ A departure that is decided while the node is a tick ahead of the
+    /// roster still takes the player it named.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The window is real and it is one tick wide.</b> The node applies a
+    /// removal at the bottom of a tick, in <c>AdvanceSimulation</c>;
+    /// <c>DrainMeshCommands</c> replays it against the roster at the top of the
+    /// next one. <c>ServiceClients</c> and <c>ServiceBots</c> run above that
+    /// drain, so a disconnect or a bot removal decided in that tick reads its
+    /// slot off a roster that still holds the departed player and resolves it
+    /// against a node that has already renumbered every slot above the hole.
+    /// </para>
+    /// <para>
+    /// ⛔ <b>The failure is silent and the digests agree through it.</b> Both
+    /// nodes are told to remove the join that now sits at that slot, so both
+    /// remove the same wrong person and their worlds go on matching perfectly.
+    /// Nothing but naming the departure by the join recorded at admission
+    /// catches it — <c>GameServer._meshJoinKey</c>.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Five bots, not four.</b> With four, the stale slot resolves to
+    /// nothing and the departure is merely refused, which a count assertion
+    /// would catch anyway. The fifth is what makes the stale slot name a real
+    /// player, which is the corruption this is about: the test asserts the
+    /// named bot left AND that its neighbour stayed, because the bug satisfies
+    /// the count either way.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ADepartureDecidedWhileTheNodeIsAheadTakesTheRightPlayer()
+    {
+        using var harness = new ServerHarness(options =>
+        {
+            options.MeshEnabled = true;
+            options.MeshListenPort = 0;
+        });
+
+        using var peer = new Peer(harness.Server.MeshPort, Map());
+        harness.AfterTick = peer.Tick;
+
+        harness.Tick(20);
+
+        var names = new[] { "[BOT] one", "[BOT] two", "[BOT] three", "[BOT] four", "[BOT] five" };
+        var slots = new int[names.Length];
+
+        for (var i = 0; i < names.Length; i++)
+        {
+            var at = i;
+
+            harness.Server.AddBot(
+                names[i], Team.Red, PlayerClass.Scout, new Idle(), slot => slots[at] = slot);
+        }
+
+        for (var i = 0; i < MeshSession.CommandLead + 120 && slots[^1] == 0; i++)
+            harness.Tick();
+
+        Assert.All(slots, slot => Assert.True(slot > 0, "a bot never reached the roster"));
+
+        var before = harness.Server.RosterCount;
+
+        // The first departure, which is the one that renumbers the node.
+        harness.Server.RemoveBot(SlotOf(harness, names[0]));
+
+        // ⛔ Tick INTO the window and stop there. A world shorter than the
+        // roster is exactly "the node has applied a removal the roster has not
+        // drained", which is the state the next tick's client and bot servicing
+        // would run in. Ticking one more would close it.
+        var reached = false;
+
+        for (var i = 0; i < MeshSession.CommandLead + 120 && !reached; i++)
+        {
+            harness.Tick();
+            reached = harness.Server.RosterCount > harness.Server.WorldPlayerCount;
+        }
+
+        // ⚠️ Asserted rather than assumed. A gate whose premise never fires
+        // passes for the wrong reason, and this one's premise is a single tick.
+        Assert.True(reached, "the test never reached the tick where the node leads the roster");
+        Assert.Equal(before, harness.Server.RosterCount);
+
+        // Decided in the window, the way a disconnect in ServiceClients is.
+        // Slot 4 is "[BOT] four" in the roster and "[BOT] five" in the node.
+        var departing = SlotOf(harness, names[3]);
+
+        harness.Server.RemoveBot(departing);
+
+        for (var i = 0; i < MeshSession.CommandLead + 120 && harness.Server.RosterCount > before - 2; i++)
+            harness.Tick();
+
+        Assert.Equal(before - 2, harness.Server.RosterCount);
+
+        var left = Enumerable.Range(0, harness.Server.RosterCount)
+            .Select(harness.Server.NameOf)
+            .ToArray();
+
+        // ⛔ The claim, in both directions. The bug removes names[4] and leaves
+        // names[3] standing, so a "two bots left" count passes against it.
+        Assert.DoesNotContain(names[0], left);
+        Assert.DoesNotContain(names[3], left);
+        Assert.Contains(names[4], left);
+        Assert.Contains(names[1], left);
+        Assert.Contains(names[2], left);
+
+        // And both worlds still describe the same people, slot for slot.
+        for (var slot = 1; slot < harness.Server.RosterCount; slot++)
+            Assert.True(peer.Has(slot), $"the peer has no player in slot {slot}");
+
+        Assert.False(peer.Has(harness.Server.RosterCount));
     }
 }

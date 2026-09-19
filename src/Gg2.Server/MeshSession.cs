@@ -370,7 +370,87 @@ public sealed class MeshSession : IDisposable
         // "here" restarts the two matches at different numbers, and every input
         // afterwards is applied to a different moment on each side. Measured:
         // the digests disagreed from the rebuild onwards.
+        //
+        // ⛔ THE ASSIGNMENTS SURVIVE THE REBUILD, and nothing else here restores
+        // them. A map change replaces the world and the node; it does not
+        // replace the PEOPLE. Rounds.ResetForNewMap clears each character and
+        // puts everybody back to spectator, but HasPlayer stays set and nobody
+        // moves slot — so the same players are still in the same places, owned
+        // by whoever let them in. A fresh node's tables are empty, which makes
+        // every one of them ownerless: Owns() is false for every slot, so this
+        // node submits no inputs for its own players and its peer guesses them
+        // for ever, and TryGetJoinKey finds nothing, so none of them can ever be
+        // scheduled to leave.
+        //
+        // ⚠️ The digests go on agreeing while that is true, which is why no
+        // existing gate caught it: both nodes guess the orphans the same way and
+        // reach the same world. Measured over a real map change — `owned` fell
+        // 4 -> 0 on the listener and 3 -> 1 on the joiner, with 0 disagreements
+        // and 964 roster/world warnings a side. docs/MESH.md.
+        var was = Node.Tick;
+        var carried = new List<MeshMember>();
+
+        foreach (var (origin, sequence, slot) in Node.Assignments())
+        {
+            carried.Add(new MeshMember(
+                origin,
+                sequence,
+                slot,
+                PeerNames.TryGetValue(Key(origin, sequence), out var name) ? name : string.Empty));
+        }
+
+        var players = 0;
+
+        for (var slot = 0; slot < WorldState.MaxSlots; slot++)
+        {
+            if (start.HasPlayer[slot])
+                players++;
+        }
+
+        // ⛔ THE INPUTS SURVIVE THE REBUILD TOO, and for the same reason the
+        // assignments do: a map change replaces the node, not the match. The
+        // peer sends a tick's inputs ONCE — so an input already received for a
+        // tick at or after the rebuild is gone for good if the replacement does
+        // not inherit it, and the new node then guesses that tick with nothing
+        // able to correct it.
+        //
+        // ⚠️ The two nodes discard DIFFERENT inputs without this. They rebuild at
+        // the same TICK but at different wall-clock moments, so each has
+        // received a different amount of the other's traffic by the time it
+        // swaps — which turns a shared, harmless gap into two nodes resuming an
+        // identical world from different facts. Measured: the rebuild origins
+        // are byte-identical on both nodes in every run, seed included, and the
+        // nodes still diverged in 4 runs of 9. docs/MESH.md.
+        // ⛔ THE SCHEDULE SURVIVES THE REBUILD. A command is always registered
+        // for a tick CommandLead ahead of where the nodes are, so at any moment
+        // there are commands booked for ticks that have not happened yet — and a
+        // fresh node's schedule is empty. Without this, every command already
+        // booked for a tick after the rebuild is lost with the old node.
+        //
+        // ⚠️ The two nodes lose DIFFERENT ones. They rebuild at the same TICK
+        // but at different wall-clock moments, so whichever registered a command
+        // before its own swap keeps it and the other does not; they then apply
+        // different roster changes at the same tick and the worlds part for
+        // good. Measured: the listener held RemovePlayer/o1/q12 at tick 2121 and
+        // the joiner, which ISSUED it, held it at no tick at all — the worlds
+        // diverged at 2122. docs/MESH.md.
+        var commands = new List<(int Tick, MeshCommand Command)>();
+        Node.ExportCommandsFrom(atTick, commands);
+
         Node = new MeshNode(collision, start, new MeshOptions(), spawns, startTick: atTick);
+        Node.Adopt(carried);
+
+        foreach (var (tick, command) in commands)
+            Node.Schedule(tick, command);
+
+        // ⚠️ `from` is the tick the world being reset actually belongs to, and it
+        // is NOT atTick. The two nodes drain the change at the same tick and are
+        // never on the same tick when they do, so each rebuilds from a world of
+        // its own age unless something makes them agree.
+        _log.Info(
+            $"mesh: node rebuilt at tick {atTick} from a world at tick {was} "
+            + $"carrying {carried.Count} assignment(s) for {players} player(s) "
+            + $"and {commands.Count} command(s)");
     }
 
     /// <summary>
@@ -532,7 +612,10 @@ public sealed class MeshSession : IDisposable
 
         var link = listening
             ? MeshLink.Listen(System.Net.IPAddress.Any, options.MeshListenPort)
-            : Connect(options.MeshConnect);
+            : Connect(
+                options.MeshConnect,
+                TimeSpan.FromSeconds(Math.Max(0, options.MeshConnectPatienceSeconds)),
+                log);
 
         return new MeshSession(
             link,
@@ -544,7 +627,29 @@ public sealed class MeshSession : IDisposable
             log);
     }
 
-    private static MeshLink Connect(string target)
+    /// <summary>
+    /// One past the highest slot the node's world holds a player in.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>The world's extent, not the roster's count.</b> These differ for one
+    /// tick after every join — the node applies <c>AddPlayer</c> and the roster
+    /// catches up next tick — and a player alive in that gap whose input nobody
+    /// submits wedges confirmation permanently. A COUNT would not do: slots are
+    /// dense in practice but the bound has to be an index, and reading the
+    /// highest occupied one cannot be wrong if they ever are not.
+    /// </remarks>
+    private int PlayersInWorld()
+    {
+        for (var slot = WorldState.MaxSlots - 1; slot >= 0; slot--)
+        {
+            if (Node.State.HasPlayer[slot])
+                return slot + 1;
+        }
+
+        return 0;
+    }
+
+    private static MeshLink Connect(string target, TimeSpan patience, IServerLog log)
     {
         var colon = target.LastIndexOf(':');
 
@@ -553,7 +658,9 @@ public sealed class MeshSession : IDisposable
 
         return MeshLink.Connect(
             target[..colon],
-            int.Parse(target[(colon + 1)..], System.Globalization.CultureInfo.InvariantCulture));
+            int.Parse(target[(colon + 1)..], System.Globalization.CultureInfo.InvariantCulture),
+            patience,
+            log.Info);
     }
 
     /// <summary>
@@ -641,14 +748,47 @@ public sealed class MeshSession : IDisposable
         _slots.Clear();
         _inputs.Clear();
 
-        for (var slot = 0; slot < liveSlots && slot < inputs.Length; slot++)
+        // ⛔ BOUNDED BY THE WORLD, NOT BY THE ROSTER. The node's world gains a
+        // player the moment it applies AddPlayer; the server's roster catches up
+        // in MirrorMeshRoster at the top of the NEXT tick. So for exactly one
+        // tick the world holds a player the roster does not — and a loop bounded
+        // by `liveSlots` (which IS `_roster.Count`) skips that slot before the
+        // HasPlayer check below can see it.
+        //
+        // ⛔ The consequence is permanent. Nobody submits an input for a player
+        // who is already ALIVE, so IsCertain waits on them for ever, Confirmed
+        // stops advancing, and once it falls a whole window behind Confirm()
+        // cannot advance again — no death, capture or spawn reaches a client for
+        // the rest of the match. Measured: it is always the TOP slot, because a
+        // join takes the highest free place; ~10% of 200-second soaks; and the
+        // owning node reports `owned` one short of its true count while it
+        // happens.
+        //
+        // ⚠️ A slot with no roster entry yet has no input source, so it submits
+        // a default input — pressing nothing — which is exactly what a player
+        // who has just appeared is doing, and is what lets the tick confirm.
+        //
+        // ⚠️ THE SAME ASYMMETRY BITES THE OTHER WAY ON A DEPARTURE, where the
+        // roster still holds a player the world has dropped (see
+        // GameServer._meshJoinKey). In a mesh the world is authoritative and the
+        // roster trails it in both directions: anything here that iterates
+        // players by `_roster.Count` is a bug waiting to be found.
+        var slots = Math.Min(WorldState.MaxSlots, Math.Max(liveSlots, PlayersInWorld()));
+
+        for (var slot = 0; slot < slots; slot++)
         {
             if (!Owns(slot) || !Node.State.HasPlayer[slot])
                 continue;
 
-            Node.Submit(tick, slot, inputs[slot]);
+            // ⚠️ A slot past the end of the span is one the world has and the
+            // roster has not, so there is no input source for it yet and the
+            // right answer is "pressing nothing". Indexing the span for it would
+            // throw; skipping it is what caused the wedge.
+            var input = slot < inputs.Length ? inputs[slot] : default;
+
+            Node.Submit(tick, slot, input);
             _slots.Add(slot);
-            _inputs.Add(inputs[slot]);
+            _inputs.Add(input);
         }
 
         Owned = _slots.Count;

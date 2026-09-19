@@ -91,6 +91,34 @@ public sealed partial class GameServer
         && (uint)slot < _roster.Count
         && _meshLeaving.Contains(_roster[slot].StableId);
 
+    /// <summary>
+    /// How many players the world holds, which in a mesh is the node's answer
+    /// rather than this server's roster.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>It LEADS the roster by a tick, and that is not a fault.</b> The node
+    /// applies a removal when it advances, at the bottom of a tick;
+    /// <see cref="DrainMeshCommands"/> replays it against the roster at the top
+    /// of the next one. So a world one shorter than the roster is the ordinary
+    /// state for exactly one tick after every departure. A gap that persists is
+    /// the fault <see cref="MirrorMeshRoster"/>'s warning reports.
+    /// </remarks>
+    public int WorldPlayerCount
+    {
+        get
+        {
+            var inWorld = 0;
+
+            for (var slot = 0; slot < WorldState.MaxSlots; slot++)
+            {
+                if (_world.HasPlayer[slot])
+                    inWorld++;
+            }
+
+            return inWorld;
+        }
+    }
+
     /// <summary>This node's own count of joins, which names them to the peer.</summary>
     private int _meshSequence;
 
@@ -99,6 +127,15 @@ public sealed partial class GameServer
     /// through <c>onAdded</c>.
     /// </summary>
     public const int MeshPending = -1;
+
+    /// <summary>The rollback window, past which a blocked-slot answer is meaningless.</summary>
+    private const int MeshOptionsWindow = 32;
+
+    /// <summary>Last tick's confirmation lag, so the moment it jumps is reported once.</summary>
+    private int _meshLagWas;
+
+    /// <summary>What Confirmed read at the previous report, so a STUCK one is visible.</summary>
+    private int _meshConfirmedWas = -1;
 
     /// <summary>The first tick whose landed commands have not been told to clients.</summary>
     private int _meshDrained = -1;
@@ -114,6 +151,39 @@ public sealed partial class GameServer
     /// resolves the second to nothing, but it would say so twice on the wire.
     /// </remarks>
     private readonly HashSet<long> _meshLeaving = [];
+
+    /// <summary>
+    /// The join that gave each player their place, by
+    /// <see cref="RosterEntry.StableId"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ⛔ <b>Recorded when the player is admitted, and never re-derived.</b> A
+    /// departure names the join that created the place rather than the slot it
+    /// currently occupies (<see cref="MeshRemove"/>), and the node's own table
+    /// is the wrong place to ask for that later: the node applies a removal at
+    /// the bottom of a tick and <see cref="DrainMeshCommands"/> replays it
+    /// against the roster at the top of the next one. For that one tick every
+    /// slot above the hole means a different player to each of them — and
+    /// <c>ServiceClients</c> and <c>ServiceBots</c> both run above the drain, so
+    /// a disconnect is decided in exactly that window.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>The failure it prevents is silent.</b> Both nodes are told to
+    /// remove the join the stale slot resolved to, so both remove the same wrong
+    /// person and their worlds go on agreeing — no digest can see it.
+    /// <c>MeshJoinTests.ADepartureDecidedWhileTheNodeIsAheadTakesTheRightPlayer</c>
+    /// is the gate, and it asserts the neighbour STAYED as well as that the
+    /// named player left, because the count is right either way.
+    /// </para>
+    /// <para>
+    /// Keyed by <c>StableId</c> for the same reason <see cref="_meshLeaving"/>
+    /// is: a slot is a position, and positions move under exactly the thing this
+    /// is tracking. The key survives a map change, because a rebuild carries the
+    /// assignments and moves nobody.
+    /// </para>
+    /// </remarks>
+    private readonly Dictionary<long, (int Origin, int Sequence)> _meshJoinKey = [];
 
     /// <summary>
     /// Confirmed ticks' events, waiting their turn on the wire.
@@ -215,11 +285,70 @@ public sealed partial class GameServer
     /// response is to say so loudly rather than to paper over it.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// <summary>
+    /// Names each slot holding confirmation up, and WHO OWNS IT.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ <b>Ownership is the question a blocked slot raises.</b> A slot nobody
+    /// owns gets inputs from nowhere: this node guesses it because it is the
+    /// peer's, the peer guesses it because it is ours, and it stays alive and
+    /// unheard-from for ever — so its tick never confirms and event release
+    /// stops for the rest of the match. <c>MeshNode.OriginOf</c> returns 255 for
+    /// nobody, which is the answer that would explain everything.
+    /// </remarks>
+    private string DescribeBlocked(ulong mask)
+    {
+        if (mask == 0)
+            return "nothing";
+
+        var parts = new List<string>();
+
+        for (var slot = 0; slot < 64 && slot < WorldState.MaxSlots; slot++)
+        {
+            if ((mask & (1UL << slot)) == 0)
+                continue;
+
+            var origin = _mesh!.Node.OriginOf(slot);
+            var name = slot < _roster.Count ? LogText.Safe(_roster[slot].Name) : "<past roster>";
+
+            parts.Add(
+                $"slot {slot} (origin {(origin == 255 ? "NOBODY" : origin.ToString())}, "
+                + $"{(_mesh.Owns(slot) ? "ours" : "theirs")}, \"{name}\")");
+        }
+
+        return string.Join(" + ", parts);
+    }
+
     private void ReportMesh()
     {
+        if (_mesh is null)
+            return;
+
+        // ⛔ EVERY TICK, not every report. Measured: a wedged run goes from under
+        // four ticks behind to past the whole 32-tick window inside one
+        // 300-tick reporting gap — confirmation does not drift, it JUMPS. A
+        // check that runs only with the report cannot see the moment, and the
+        // blocking slot is unnameable a window later because the ring has
+        // recycled by then. Said ONCE per episode, so a wedge costs one line
+        // rather than one every tick for the rest of the match.
+        var lag = _mesh.Node.Tick - _mesh.Node.Confirmed;
+
+        if (lag >= 4 && _meshLagWas < 4)
+        {
+            _log.Warn(
+                $"mesh: confirmation fell behind at tick {_mesh.Node.Tick} — "
+                + $"confirmed {_mesh.Node.Confirmed}, {lag} behind, "
+                + $"waiting on {DescribeBlocked(_mesh.Node.BlockedAt(_mesh.Node.Confirmed))}, "
+                + $"owned {_mesh.Owned}, roster {_roster.Count}, "
+                + $"world {WorldPlayerCount}");
+        }
+
+        _meshLagWas = lag;
+
         // Ten seconds. Quiet enough to leave on, often enough that an operator
         // watching a match sees the two nodes agreeing rather than inferring it.
-        if (_mesh is null || _frame % 300 != 0)
+        if (_frame % 300 != 0)
             return;
 
         var stats = _mesh.Node.Stats;
@@ -234,7 +363,55 @@ public sealed partial class GameServer
             + $"deepest {stats.DeepestRollback}), "
             + $"late {stats.TooLate}, "
             + $"events {MeshEventsReleased} released / {MeshEventsHeld} held, "
-            + $"owned {_mesh.Owned}, link [{_mesh.LinkStats}]";
+            + $"owned {_mesh.Owned}, "
+            // ⛔ The confirmation frontier belongs on this line. Everything else
+            // here can look healthy while it is stuck — and when it is stuck,
+            // nothing irreversible reaches a client again. `events released`
+            // freezing is the same fault seen one step later; this is the cause
+            // rather than the symptom, and the gap against `tick` is the size of
+            // the problem.
+            + $"confirmed {_mesh.Node.Confirmed} (tick-{_mesh.Node.Tick - _mesh.Node.Confirmed}), "
+            + $"link [{_mesh.LinkStats}]";
+
+        // ⛔ A WEDGED CONFIRMATION IS INVISIBLE WITHOUT THIS. Once Confirmed
+        // stops advancing nothing irreversible is ever published again, and
+        // every other number on this line stays healthy — the node ticks, the
+        // link is up, ownership is fine. Measured: a run froze at tick 289 and
+        // ran on for 5,700 more looking perfectly well. The slot is named
+        // because the only fix is to find why that player stopped being heard.
+        //
+        // ⚠️ Only when it is STUCK. A blocked frontier is the ordinary state of
+        // the newest tick, so reporting it unconditionally would cry wolf on
+        // every healthy server.
+        var behind = _mesh.Node.Tick - _mesh.Node.Confirmed;
+
+        if (_mesh.Node.Confirmed == _meshConfirmedWas && behind > 1)
+        {
+            // ⛔ THE MASK IS ONLY MEANINGFUL INSIDE THE WINDOW. BlockedAt returns
+            // 0 for a tick outside the ring, which is indistinguishable from
+            // "nothing is blocking" — and by the time a wedge is noticed,
+            // Confirmed is thousands of ticks behind and every answer is 0.
+            // Measured: three wedged runs all reported `slots 0` while stuck
+            // 2,653 to 4,088 ticks back, which says nothing at all.
+            var mask = behind < MeshOptionsWindow
+                ? $"waiting on slots {_mesh.Node.BlockedAt(_mesh.Node.Confirmed):x}"
+                : "PAST THE WINDOW — the blocking slot can no longer be named";
+
+            line += $", ⛔ CONFIRMATION STUCK at {_mesh.Node.Confirmed} "
+                + $"({behind} ticks behind), {mask}";
+        }
+        else if (behind >= 4 && behind < MeshOptionsWindow)
+        {
+            // ⚠️ THE ONSET, which is the only moment worth logging. A wedge is
+            // permanent once Confirmed falls a whole window back — Confirm()'s
+            // own guard then refuses to advance — so the cause has to be caught
+            // while it is still falling. Four ticks is past ordinary link lag
+            // and well short of the window.
+            line += $", ⚠️ confirmation lagging {behind}, "
+                + $"waiting on slots {_mesh.Node.BlockedAt(_mesh.Node.Confirmed):x}";
+        }
+
+        _meshConfirmedWas = _mesh.Node.Confirmed;
 
         if (_mesh.RefusedFromPeer > 0)
         {
@@ -380,18 +557,34 @@ public sealed partial class GameServer
     /// </remarks>
     private void MeshRemove(int slot, string who)
     {
-        if (!_meshLeaving.Add(_roster[slot].StableId))
+        var id = _roster[slot].StableId;
+
+        if (!_meshLeaving.Add(id))
             return;
 
-        if (!_mesh!.Node.TryGetJoinKey(slot, out var origin, out var sequence))
+        // ⛔ FROM THIS SERVER'S OWN TABLE, never by asking the node about the
+        // slot. The node renumbers a tick ahead of the roster, and both callers
+        // of this method run inside that tick — so a slot resolved here against
+        // the node names whoever shifted down into the place, and BOTH nodes
+        // then remove that person while their digests agree. See _meshJoinKey.
+        if (!_meshJoinKey.TryGetValue(id, out var join))
         {
-            // Nothing in the node's table claims this slot, so there is no join
-            // to name. Slot 0 is the reserved player and never leaves; anything
+            // No join was ever recorded for this player, so there is nothing to
+            // name. Slot 0 is the reserved player and never leaves; anything
             // else here is a roster and a node that have come apart, which is
             // worth a line rather than a silent no-op.
-            _log.Warn($"{who} cannot leave the mesh: no join owns slot {slot}");
+            //
+            // ⚠️ The id comes back out, exactly as a refusal below puts it back.
+            // BotsLeaving is what tells the population manager it is already
+            // shedding, and one id left behind here stops it ever removing
+            // another.
+            _meshLeaving.Remove(id);
+            _log.Warn($"{who} cannot leave the mesh: no join was recorded for player {slot}");
             return;
         }
+
+        var origin = join.Origin;
+        var sequence = join.Sequence;
 
         // ⛔ FORGOTTEN AGAIN IF THE MESH WILL NOT CARRY IT, exactly as a parked
         // bot is. A departure whose command was refused never lands, so the id
@@ -399,10 +592,10 @@ public sealed partial class GameServer
         // manager it is already shedding, so one leaked id stops it ever
         // removing another. Measured: a server stuck two bots above its target
         // with no way down.
-        if (_mesh.Schedule(MeshCommand.RemovePlayer(origin, sequence), _roster[slot].Name)
+        if (_mesh!.Schedule(MeshCommand.RemovePlayer(origin, sequence), _roster[slot].Name)
             == MeshSession.Refusal)
         {
-            _meshLeaving.Remove(_roster[slot].StableId);
+            _meshLeaving.Remove(id);
         }
     }
 
@@ -455,26 +648,41 @@ public sealed partial class GameServer
                 // A client of ours, whose place has now been agreed with the
                 // peer. Everything from here is the ordinary join sequence.
                 CompleteJoin(joining);
-                continue;
             }
-
-            if (TakeMeshBot(slot) is { } bot)
+            else if (TakeMeshBot(slot) is { } bot)
             {
                 CompleteMeshBot(slot, bot);
-                continue;
+            }
+            else
+            {
+                // Somebody who joined at the other end of the link. They have no
+                // socket here — the same shape a bot has — and this node's own
+                // clients have to be told they exist.
+                var entry = new RosterEntry
+                {
+                    Name = _mesh.NameOf(slot) is { Length: > 0 } named ? named : "player",
+                };
+
+                _roster.Add(entry);
+                _plugins.PlayerAdded(slot);
+                ServerMessages.PlayerJoin(_broadcast, entry.Name);
             }
 
-            // Somebody who joined at the other end of the link. They have no
-            // socket here — the same shape a bot has — and this node's own
-            // clients have to be told they exist.
-            var entry = new RosterEntry
+            // ⛔ HERE, and nowhere later. This is the one moment the roster and
+            // the node are known to describe the same people: the drain above
+            // has just replayed every removal the node has applied, and this
+            // walk is putting the new arrival at the slot the node gave it. From
+            // the next removal onwards the node leads the roster and the same
+            // question gets a different answer — see _meshJoinKey.
+            //
+            // ⚠️ The peer's players are recorded too, though only our own can be
+            // removed from here. It costs a dictionary entry and it means a
+            // missing key is always a fault rather than sometimes the norm.
+            if (slot < _roster.Count
+                && _mesh.Node.TryGetJoinKey(slot, out var origin, out var sequence))
             {
-                Name = _mesh.NameOf(slot) is { Length: > 0 } named ? named : "player",
-            };
-
-            _roster.Add(entry);
-            _plugins.PlayerAdded(slot);
-            ServerMessages.PlayerJoin(_broadcast, entry.Name);
+                _meshJoinKey[_roster[slot].StableId] = (origin, sequence);
+            }
         }
 
         // ⛔ THE WORLD IS AUTHORITATIVE FOR TEAM AND CLASS, so the roster is
@@ -502,9 +710,14 @@ public sealed partial class GameServer
         // is worth saying rather than papering over.
         if (_roster.Count > 1 && !_world.HasPlayer[_roster.Count - 1])
         {
+            // ⚠️ The world's count goes in the line. "The roster is longer"
+            // alone cannot be acted on: it does not say whether the world lost
+            // one player or all of them, and those have different causes.
+            var inWorld = WorldPlayerCount;
+
             _log.Warn(
-                $"mesh: the roster holds {_roster.Count} players and the world does not — "
-                + "a player left the world without a RemovePlayer. docs/MESH.md");
+                $"mesh: the roster holds {_roster.Count} players and the world holds "
+                + $"{inWorld} — a player left the world without a RemovePlayer. docs/MESH.md");
         }
     }
 
@@ -568,6 +781,7 @@ public sealed partial class GameServer
     /// replayed. The high-water mark is what makes it once.
     /// </para>
     /// </remarks>
+
     private void DrainMeshCommands()
     {
         if (_meshDrained < 0)
@@ -645,6 +859,12 @@ public sealed partial class GameServer
 
                 _roster.RemoveAt(slot);
                 _meshLeaving.Remove(leaving.StableId);
+
+                // The join that made this place is spent, and the id is never
+                // reissued — so this is the only thing that keeps the table the
+                // size of the match rather than the size of everyone who has
+                // ever played on it.
+                _meshJoinKey.Remove(leaving.StableId);
 
                 ServerMessages.PlayerLeave(_broadcast, slot);
 
