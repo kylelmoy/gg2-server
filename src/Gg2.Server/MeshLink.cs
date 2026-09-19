@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using Gg2.Mesh;
@@ -132,13 +133,74 @@ public sealed class MeshLink : IDisposable
     }
 
     /// <summary>Connects to a peer that is already listening.</summary>
-    public static MeshLink Connect(string host, int port)
-    {
-        var tcp = new TcpClient();
-        tcp.Connect(host, port);
+    public static MeshLink Connect(string host, int port) =>
+        Connect(host, port, TimeSpan.Zero, null);
 
-        return new MeshLink(null, tcp);
+    /// <summary>
+    /// Connects to a peer, waiting up to <paramref name="patience"/> for one to
+    /// start listening.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ⛔ <b>The ONE place a mesh blocks a thread, and it is before the server
+    /// is running.</b> Called from <c>MeshSession.Create</c>, which
+    /// <c>GameServer.Start</c> runs before the first tick — so nothing is being
+    /// starved while this waits, and nothing is connected to be desynchronised
+    /// by it. Retrying from inside the tick loop instead would mean a server
+    /// that ticks a match it has no peer for, which is the standalone behaviour
+    /// this mode exists to not be.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>Only a refusal is retried.</b> A refused connection means nothing
+    /// is listening THERE YET, which time fixes. An unknown host, a bad address
+    /// family or a denied permission are operator errors that time does not
+    /// fix, and retrying them for thirty seconds buries the message that says
+    /// so.
+    /// </para>
+    /// </remarks>
+    public static MeshLink Connect(string host, int port, TimeSpan patience, Action<string>? waiting)
+    {
+        // Monotonic, because this is a duration and the wall clock can step.
+        var until = Stopwatch.GetTimestamp() + (long)(patience.TotalSeconds * Stopwatch.Frequency);
+        var said = false;
+
+        while (true)
+        {
+            var tcp = new TcpClient();
+
+            try
+            {
+                tcp.Connect(host, port);
+
+                return new MeshLink(null, tcp);
+            }
+            catch (SocketException e) when (
+                e.SocketErrorCode is SocketError.ConnectionRefused or SocketError.TimedOut
+                && Stopwatch.GetTimestamp() < until)
+            {
+                tcp.Dispose();
+
+                // ⚠️ Once, not once a second. This is a startup path with a
+                // human watching, and a line a second for thirty seconds buries
+                // whatever the peer says when it does come up.
+                if (!said)
+                {
+                    waiting?.Invoke($"waiting for a mesh peer at {host}:{port}");
+                    said = true;
+                }
+
+                Thread.Sleep(RetryDelayMs);
+            }
+            catch
+            {
+                tcp.Dispose();
+                throw;
+            }
+        }
     }
+
+    /// <summary>How long to wait between connection attempts, in milliseconds.</summary>
+    private const int RetryDelayMs = 500;
 
     /// <summary>
     /// The tick origin the peer announced, as Unix milliseconds, or null until

@@ -129,6 +129,11 @@ public sealed class CliCoverageTests
         ("MeshListenPort", ["--mesh-listen", "27600"], o => o.MeshListenPort),
         ("MeshConnect", ["--mesh-connect", "gg2-us-west:27600"], o => o.MeshConnect),
         ("MeshEnabled", ["--mesh-listen", "27600"], o => o.MeshEnabled),
+
+        // ⚠️ The one mesh flag that does NOT turn the mesh on — it only says how
+        // long --mesh-connect waits for something to be listening.
+        ("MeshConnectPatienceSeconds", ["--mesh-connect-patience", "60"],
+            o => o.MeshConnectPatienceSeconds),
         ("ControlPortEnabled", ["--control-port", "0"], o => o.ControlPortEnabled),
         ("TickStats", ["--tick-stats"], o => o.TickStats),
         ("Bots", ["--bots", "8"], o => o.Bots),

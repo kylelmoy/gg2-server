@@ -815,6 +815,13 @@ internal static class CommandLine
                     options.MeshEnabled = true;
                     break;
 
+                // ⚠️ Does NOT turn the mesh on, where the two above do. It only
+                // says how long --mesh-connect waits for something to be
+                // listening, which is meaningless on its own.
+                case "--mesh-connect-patience":
+                    options.MeshConnectPatienceSeconds = cursor.TakeInt();
+                    break;
+
                 case "--no-mesh":
                     options.MeshEnabled = false;
                     break;

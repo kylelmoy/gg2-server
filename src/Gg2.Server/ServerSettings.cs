@@ -892,6 +892,21 @@ public static class ServerSettings
                 + "turns the mesh ON.",
         });
 
+        settings.Add(new ServerSetting
+        {
+            Section = "Mesh",
+            Key = "ConnectPatienceSeconds",
+            Property = nameof(ServerOptions.MeshConnectPatienceSeconds),
+            Kind = SettingKind.Integer,
+            Get = o => o.MeshConnectPatienceSeconds.ToString(CultureInfo.InvariantCulture),
+            Set = (o, v) => o.MeshConnectPatienceSeconds =
+                Number("Mesh.ConnectPatienceSeconds", v),
+            Probe = "60",
+            Help = "How long a joiner keeps trying to reach its peer before giving up. "
+                + "⚠️ Does NOT turn the mesh on, unlike the two keys above — it only "
+                + "says how patient Connect is. 0 fails on the first refusal.",
+        });
+
         // ⚠️ AFTER the two above, for the reason [Runtime] ControlPortEnabled comes
         // after ControlPort: naming a port turns the mesh on, so the explicit
         // switch has to be able to turn it back off.

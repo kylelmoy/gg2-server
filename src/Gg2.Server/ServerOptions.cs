@@ -634,6 +634,28 @@ public sealed class ServerOptions
     public string MeshConnect { get; set; } = string.Empty;
 
     /// <summary>
+    /// How many seconds a joiner keeps trying to reach
+    /// <see cref="MeshConnect"/> before giving up.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ⚠️ <b>A joiner has to be started second, and this is what stops that
+    /// being a race.</b> A listener is up the moment it binds; a joiner that
+    /// finds nothing listening has no work it could do alone, so with zero
+    /// patience the pair can only be brought up in one order, by hand. Neither
+    /// end can start a match without the other, so waiting costs nothing that
+    /// exiting does not cost more.
+    /// </para>
+    /// <para>
+    /// Zero retries nothing and fails on the first refusal, which is what a test
+    /// wants when it is asserting the failure. The default is thirty seconds —
+    /// long enough to cover a peer still loading its map, short enough that a
+    /// wrong address is reported while somebody is still watching.
+    /// </para>
+    /// </remarks>
+    public int MeshConnectPatienceSeconds { get; set; } = 30;
+
+    /// <summary>
     /// Whether this server is one node of a match running in more than one
     /// place. <b>Off by default.</b>
     /// </summary>

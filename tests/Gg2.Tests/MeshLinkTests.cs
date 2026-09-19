@@ -301,4 +301,150 @@ public sealed class MeshLinkTests
         // The frame AFTER it is the one that proves alignment survived.
         Assert.Equal((12, MeshCommand.Spawn(6), "after"), heard[1]);
     }
+
+    /// <summary>
+    /// A port nothing is listening on, reserved and released so the number is
+    /// free right now.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Inherently a small race</b> — something else could take the number
+    /// between the release and the use. There is no way to ask for "a port that
+    /// will be free in a moment", and a hard-coded number is worse because it
+    /// collides with whatever is already running. A failure here is a
+    /// collision, not a regression in the code under test.
+    /// </remarks>
+    private static int FreePort()
+    {
+        var probe = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
+
+        probe.Start();
+
+        var port = ((IPEndPoint)probe.LocalEndpoint).Port;
+
+        probe.Stop();
+
+        return port;
+    }
+
+    /// <summary>
+    /// What ONE refused connection costs on this machine.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <b>Measured rather than assumed, because the platforms disagree by two
+    /// orders of magnitude.</b> A closed loopback port refuses immediately on
+    /// Linux and takes about two seconds on Windows, which retransmits the SYN
+    /// before giving up. Both gates below are about whether a RETRY happened, so
+    /// both calibrate against this instead of against a constant — a constant
+    /// picked on either platform is wrong on the other, and picking the larger
+    /// makes the gate stop biting on the faster one.
+    /// </remarks>
+    private static TimeSpan OneRefusedAttempt()
+    {
+        var started = System.Diagnostics.Stopwatch.StartNew();
+
+        try
+        {
+            using var _ = MeshLink.Connect("127.0.0.1", FreePort());
+        }
+        catch (System.Net.Sockets.SocketException)
+        {
+            // Expected — nothing is listening. The timing is the answer.
+        }
+
+        return started.Elapsed;
+    }
+
+    /// <summary>
+    /// ⛔ A joiner waits for its peer to come up rather than exiting the moment
+    /// it finds nothing listening.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Neither end can run a match alone</b>, so a joiner that gives up on
+    /// the first refusal makes the startup ORDER load-bearing: the listener has
+    /// to be up first, arranged by hand, which is exactly what an unattended run
+    /// of two nodes cannot do. Waiting costs nothing that exiting does not cost
+    /// more.
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>The listener is deliberately LATE, by more than one attempt
+    /// costs.</b> A test that starts it first passes whether or not anything
+    /// retries, which is the failure this gate exists to catch. So does one
+    /// that starts it inside the first attempt's own window: on Windows a
+    /// refused connect blocks for about two seconds, and a listener that binds
+    /// during it is picked up by that same attempt with nothing having retried.
+    /// The delay is derived from <see cref="OneRefusedAttempt"/> for that
+    /// reason.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void AJoinerWaitsForAPeerThatIsNotListeningYet()
+    {
+        var attempt = OneRefusedAttempt();
+        var port = FreePort();
+        var said = new List<string>();
+
+        MeshLink? listening = null;
+
+        // ⛔ Longer than one attempt, so the first one MUST have failed and a
+        // second one MUST have been made. That is the whole claim.
+        var delay = attempt + attempt + TimeSpan.FromSeconds(1);
+
+        // ⚠️ A Thread rather than a Task: this blocks on purpose, and the
+        // analyser is right that awaiting a Task from a test body deadlocks.
+        var late = new Thread(() =>
+        {
+            Thread.Sleep(delay);
+            listening = MeshLink.Listen(IPAddress.Loopback, port);
+        });
+
+        late.Start();
+
+        using var joined = MeshLink.Connect(
+            "127.0.0.1", port, delay + TimeSpan.FromSeconds(30), said.Add);
+
+        late.Join(TimeSpan.FromSeconds(30));
+
+        Assert.True(joined.Connected, "the joiner did not end up connected");
+
+        // ⚠️ Said once, not once per attempt: this is a startup path with a
+        // person watching, and a line every retry buries what the peer says
+        // when it finally does come up.
+        Assert.Single(said);
+        Assert.Contains(port.ToString(System.Globalization.CultureInfo.InvariantCulture), said[0]);
+
+        listening?.Dispose();
+    }
+
+    /// <summary>
+    /// ⛔ The control: with no patience a refusal is still reported at once.
+    /// </summary>
+    /// <remarks>
+    /// <b>This is what stops the retry swallowing a wrong address.</b> An
+    /// operator who typed the wrong host wants to be told, and a gate that only
+    /// checked "it eventually connects" would pass against a Connect that
+    /// retried for ever. It also pins the one-argument overload as the
+    /// no-waiting one, which every existing caller relies on.
+    /// </remarks>
+    [Fact]
+    public void WithNoPatienceARefusalIsReportedImmediately()
+    {
+        var attempt = OneRefusedAttempt();
+        var port = FreePort();
+        var started = System.Diagnostics.Stopwatch.StartNew();
+
+        Assert.ThrowsAny<System.Net.Sockets.SocketException>(
+            () => MeshLink.Connect("127.0.0.1", port));
+
+        // ⛔ Inside ONE attempt plus a margin, so a Connect that made a second
+        // one — which costs another attempt and a sleep between them — fails
+        // this on either platform. The margin is what keeps it meaningful on
+        // Linux, where an attempt itself is free.
+        var ceiling = attempt + attempt + TimeSpan.FromMilliseconds(300);
+
+        Assert.True(
+            started.Elapsed < ceiling,
+            $"a refusal took {started.ElapsedMilliseconds}ms against a "
+                + $"{ceiling.TotalMilliseconds:F0}ms ceiling, so something retried");
+    }
 }

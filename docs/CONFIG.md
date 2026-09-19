@@ -483,3 +483,16 @@ from the network.
 | `ControlPort` | integer | `0` | The loopback-only JSON control port. Naming it at all turns it **on**; `0` asks the OS for a free one. It executes commands against a live game. |
 | `ControlPortEnabled` | boolean | `0` | Open the control port at all. A `ControlPort` key on its own turns it on; this is how it is turned back off. |
 
+### `[Mesh]`
+
+⛔ **Opt-in in both directions.** A server given none of these runs its
+simulation the way it always has, with none of the rollback machinery reachable
+— `docs/MESH.md`. Naming `ListenPort` or `Connect` turns the mesh on; `Enabled`
+is how it is turned back off.
+
+| Key | Type | Default | |
+|---|---|---|---|
+| `ListenPort` | integer | `0` | Wait for a mesh peer on this port. Naming it at all turns the mesh **on**. |
+| `Connect` | text | *(empty)* | Join a mesh peer at `host:port` instead of waiting for one. Naming it turns the mesh **on**. |
+| `ConnectPatienceSeconds` | integer | `30` | How long a joiner keeps trying to reach its peer before giving up. ⚠️ Does **not** turn the mesh on, unlike the two above. `0` fails on the first refusal. Only a refusal is retried — an unknown host is reported at once. |
+| `Enabled` | boolean | `0` | Run as one node of a match happening in more than one place. A `ListenPort` or `Connect` key on its own turns it on; this is how it is turned back off. |
