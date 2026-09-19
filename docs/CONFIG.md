@@ -292,9 +292,12 @@ differs from the overlay's.
 
 ## Every key
 
-⚠️ **Generated from `ServerSettings.All` — if a key here disagrees with the code,
-the code is right and this table is stale.** `[Maps]` is not in it: it is a map
-name per key rather than a fixed set, and it is described above.
+⚠️ **Written by hand from `ServerSettings.All` — if a key here disagrees with the
+code, the code is right and this table is stale.** `ConfigKeyReferenceTests` is
+what stops a key being added to the code and never reaching this list; it checks
+that every setting is NAMED under its own section, not that what is said about it
+is true. `[Maps]` is exempt: it is a map name per key rather than a fixed set,
+and it is described above.
 
 ### `[Settings]`
 
@@ -479,3 +482,4 @@ from the network.
 | `TickStats` | boolean | `0` | Log a histogram of tick intervals every 30 seconds. Pacing only, so it is safe with players on. |
 | `ControlPort` | integer | `0` | The loopback-only JSON control port. Naming it at all turns it **on**; `0` asks the OS for a free one. It executes commands against a live game. |
 | `ControlPortEnabled` | boolean | `0` | Open the control port at all. A `ControlPort` key on its own turns it on; this is how it is turned back off. |
+
