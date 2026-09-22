@@ -417,9 +417,18 @@ public sealed class MeshSession : IDisposable
         // works.
         //
         // ⚠️ MeshNode.Submit DOES accept a tick up to MaxRollbackTicks ahead, so
-        // the ring can hold a future input in principle. It does not happen in
-        // practice, and that is a measurement rather than an invariant: if a
-        // link ever sends ahead of its own tick, re-measure before trusting this.
+        // the ring can hold a future input in principle. It does not happen, and
+        // now for a reason rather than a loopback accident: a rebuild runs with
+        // atTick == Node.Tick (DrainMeshCommands catches _meshDrained up to the
+        // node's own tick first), and a peer sends the inputs for the tick IT is
+        // on, which a link delay pushes further into this node's past, never its
+        // future. Re-measured with GG2_MESH_DELAY_TICKS=3: zero inputs booked
+        // ahead at all three rebuilds of a 200s run.
+        //
+        // ⛔ So do not "fix" a post-rebuild wedge by carrying the inputs. That
+        // was tried on the theory that latency would make them exist; the
+        // instrument now has latency and they still do not. The frontier
+        // stopping at atTick + 1 is something else.
         //
         // ⛔ THE SCHEDULE SURVIVES THE REBUILD. A command is always registered
         // for a tick CommandLead ahead of where the nodes are, so at any moment
