@@ -975,11 +975,29 @@ the other. What is still missing:
    `confirmed 2090 (tick-9)`, rebuild at 2111, then `confirmed 2112` for the
    remaining 4,000 ticks. The same shape recurs at the second rebuild on slot 5.
 
-   ⚠️ **The mismatch explains both faults, in opposite directions.** A slot
-   NEITHER node claims is driven by nobody and wedges confirmation; a slot BOTH
-   claim is driven by two different players at once and parts the worlds. That
-   is a hypothesis about the divergence and is not yet measured — the ownership
-   disagreement itself is.
+   **And why the tables disagree: a command misses its tick by one.** Identical
+   in both wedged runs, on the listener only:
+
+       REFUSED RemovePlayer origin 1 seq 12 for tick 2118 (now 2119)
+               - the peer applied it and this node cannot   (worst skew -1)
+
+   The joiner books a departure for its own tick plus `CommandLead`, which is
+   10. The link costs three ticks, and the listener — which rebuilt first and
+   stalled through `OpenMap` — is at 2119 when it arrives. It refuses, correctly:
+   a command for a tick already simulated cannot be applied on one machine
+   alone. But the joiner DID apply it, so from that moment the two rosters
+   differ by one player, every slot above the departure is numbered differently
+   on the two nodes, and `slot 3` is a different person on each. Hence the
+   ownership disagreement above.
+
+   ⛔ **`CommandLead` is a steady-state margin and a map change is not steady
+   state.** Ten ticks is a third of a second, comfortably past a transatlantic
+   link — but a rebuild loads a map, and the node does not tick while it does.
+   `REFUSED` appears in exactly the two wedged runs of 20 and nowhere else.
+
+   ⚠️ **The mismatch would explain the divergence too, in the opposite
+   direction** — a slot BOTH nodes claim is driven by two different players at
+   once. Not measured; the ownership disagreement and the refusal are.
 
    ⚠️ **Read agreement and event release as two signals, never one verdict.** A
    run can be perfect on either while failing the other, and the two faults are

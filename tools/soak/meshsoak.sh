@@ -158,6 +158,10 @@ for side in listener joiner; do
   echo "  rebuilds:        $(grep -c 'node rebuilt at tick' "$out/$side.log")"
   echo "  roster vs world: $(grep -c 'a player left the world without' "$out/$side.log")"
   echo "  stale departure: $(grep -c 'cannot leave the mesh' "$out/$side.log")"
+  # ⛔ NONZERO IS A ROSTER SPLIT, not a curiosity. A refused command is one the
+  # peer applied and this node could not, so the two rosters differ by a player
+  # from that moment on and every slot above it is numbered differently. It
+  # appeared in exactly the two wedged runs of a 20-run batch. docs/MESH.md.
   echo "  refused command: $(grep -c 'REFUSED' "$out/$side.log")"
   # ⚠️ NOT the last sample. The fleet has gone home by the time the last line is
   # written, so a final `owned 1` means "one player left", not "ownership
