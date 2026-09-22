@@ -332,9 +332,20 @@ public sealed partial class GameServer
         // blocking slot is unnameable a window later because the ring has
         // recycled by then. Said ONCE per episode, so a wedge costs one line
         // rather than one every tick for the rest of the match.
+        //
+        // ⛔ THE THRESHOLD IS HALF THE WINDOW, and that is not a number chosen
+        // for taste. A healthy frontier sits about one round trip back — nine
+        // ticks on a three-tick link — so the four this used to be is BELOW the
+        // ordinary lag of any real link: it fires in the first seconds of a
+        // match and, being once per episode, can then never fire again, wedge or
+        // no wedge. Measured on a batch where two runs wedged and neither
+        // produced a line. Half the window clears any sane link's lag and is
+        // still inside the ring, which is the last moment BlockedAt can name a
+        // slot at all.
         var lag = _mesh.Node.Tick - _mesh.Node.Confirmed;
+        var alarm = MeshOptionsWindow / 2;
 
-        if (lag >= 4 && _meshLagWas < 4)
+        if (lag >= alarm && _meshLagWas < alarm)
         {
             _log.Warn(
                 $"mesh: confirmation fell behind at tick {_mesh.Node.Tick} — "
@@ -400,13 +411,14 @@ public sealed partial class GameServer
             line += $", ⛔ CONFIRMATION STUCK at {_mesh.Node.Confirmed} "
                 + $"({behind} ticks behind), {mask}";
         }
-        else if (behind >= 4 && behind < MeshOptionsWindow)
+        else if (behind >= alarm && behind < MeshOptionsWindow)
         {
-            // ⚠️ THE ONSET, which is the only moment worth logging. A wedge is
-            // permanent once Confirmed falls a whole window back — Confirm()'s
-            // own guard then refuses to advance — so the cause has to be caught
-            // while it is still falling. Four ticks is past ordinary link lag
-            // and well short of the window.
+            // ⚠️ STILL FALLING, and still nameable. A wedge is permanent once
+            // Confirmed is a whole window back — Confirm()'s own guard then
+            // refuses to advance — so the cause has to be caught before that.
+            // ⚠️ Half the window rather than four ticks, for the reason the
+            // per-tick check above gives: on a real link four is the ordinary
+            // lag, and this printed on 378 healthy report lines in one batch.
             line += $", ⚠️ confirmation lagging {behind}, "
                 + $"waiting on slots {_mesh.Node.BlockedAt(_mesh.Node.Confirmed):x}";
         }
